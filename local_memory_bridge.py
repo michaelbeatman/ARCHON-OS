@@ -7,6 +7,15 @@ import time
 import math
 from typing import List, Dict, Optional, Any
 
+class _ClosingMemoryConn(sqlite3.Connection):
+    """SQLite-Verbindung, die beim Verlassen eines `with`-Blocks automatisch schliesst."""
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            return super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
+
+
 class LocalMemoryBridge:
     def __init__(self, db_path=None, vault_path=None):
         if not vault_path:
@@ -45,7 +54,7 @@ class LocalMemoryBridge:
         self._init_db()
 
     def _get_conn(self):
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
+        conn = sqlite3.connect(self.db_path, timeout=10.0, factory=_ClosingMemoryConn)
         conn.execute("PRAGMA busy_timeout=5000;")
         conn.row_factory = sqlite3.Row
         return conn
@@ -156,8 +165,8 @@ class LocalMemoryBridge:
             cur.execute("SELECT COUNT(*) FROM user_profile")
             if cur.fetchone()[0] == 0:
                 defaults = [
-                    ("user_name", "Michael Keller"),
-                    ("os_environment", "Windows 11 (Archon OS Runtime)"),
+                    ("user_name", os.environ.get("ARCHON_USER_NAME", "Admin")),
+                    ("os_environment", "Archon OS Runtime"),
                     ("obsidian_vault", self.vault_path),
                     ("communication_style", "Praezise, faktenbasiert, aktiv, keine Floskeln"),
                     ("active_project", "Archon OS / AgenticOS 2026")
@@ -270,7 +279,7 @@ tags: ["learning", "memory", "{agent_id}"]
                         SELECT role, content, timestamp FROM (
                             SELECT id, role, content, timestamp 
                             FROM conversations 
-                            WHERE agent_id = ? AND session_id = ?
+                            WHERE agent_id = ? AND (session_id = ? OR session_id IS NULL)
                             ORDER BY id DESC LIMIT ?
                         ) ORDER BY id ASC
                     """, (agent_id, sess_id, limit))
@@ -305,7 +314,7 @@ tags: ["learning", "memory", "{agent_id}"]
 
         context_lines = [
             "### [SYSTEM MEMORY & USER CONTEXT]",
-            f"- Benutzer: {profile.get('user_name', 'Michael Keller')}",
+            f"- Benutzer: {profile.get('user_name', os.environ.get('ARCHON_USER_NAME', 'Admin'))}",
             f"- System: {profile.get('os_environment', 'Windows 11')}",
             f"- Obsidian Second Brain: `{self.vault_path}`",
             f"- Aktuelles Projekt: {profile.get('active_project', 'Archon OS')}"

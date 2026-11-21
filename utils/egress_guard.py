@@ -31,7 +31,7 @@ from urllib.parse import urlparse
 
 from archon.core.config import config
 
-__all__ = ["EgressBlocked", "check_target_url", "allowed_targets"]
+__all__ = ["EgressBlocked", "check_target_url", "check_public_url", "allowed_targets"]
 
 # Hosts, die per Definition lokal sind (eingebettete UIs im Container).
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
@@ -150,3 +150,68 @@ def check_target_url(url: str, *, allowed: Optional[Iterable[str]] = None) -> st
     raise EgressBlocked(
         f"Host '{host}' nicht in der Allowlist (ARCHON_PROXY_ALLOWED_TARGETS)", target
     )
+
+
+def check_public_url(url: str, *, allow_private_targets: Optional[Iterable[str]] = None) -> str:
+    """Prueft eine externe Web-URL gegen SSRF (nur http/https, keine privaten/internen/Metadaten-IPs).
+
+    Gedacht fuer Web-Browsing-/Scraping-Agenten (z. B. VisualWebAgent), die oeffentliche
+    Seiten abrufen duerfen, aber niemals interne Dienste (localhost, Docker-Netz, RFC1918,
+    Cloud-Metadaten 169.254.169.254) oder `file://` erreichen duerfen.
+    """
+    target = (url or "").strip()
+    if not target:
+        raise EgressBlocked("leere URL", target)
+
+    parsed = urlparse(target)
+    if parsed.scheme not in ("http", "https"):
+        raise EgressBlocked(f"Schema '{parsed.scheme or '?'}' nicht erlaubt (nur http/https)", target)
+    if parsed.username or parsed.password:
+        raise EgressBlocked("URL mit Zugangsdaten ist nicht erlaubt", target)
+
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if not host:
+        raise EgressBlocked("URL ohne Host", target)
+
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError as err:
+        raise EgressBlocked(f"Ungueltiger Port in URL: {err}", target)
+
+    explicit = set(_env_targets() if allow_private_targets is None else allow_private_targets)
+    if host in _LOCAL_HOSTS or host.endswith(".local") or host.endswith(".internal"):
+        if not _match_allowlist(host, port, explicit):
+            raise EgressBlocked(f"Interner Host '{host}' fuer Web-Egress blockiert", target)
+
+    def _reject_if_internal(ip: ipaddress._BaseAddress) -> None:
+        if _is_never_allowed(ip):
+            raise EgressBlocked(f"Metadaten-/Link-Local-Adresse {ip} ist nie erlaubt", target)
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            if not _match_allowlist(host, port, explicit):
+                raise EgressBlocked(f"Private/interne Ziel-IP {ip} ist fuer Web-Egress blockiert", target)
+
+    try:
+        literal_ip = ipaddress.ip_address(host)
+    except ValueError:
+        literal_ip = None
+
+    if literal_ip is not None:
+        _reject_if_internal(literal_ip)
+        return target
+
+    try:
+        addr_info = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as err:
+        raise EgressBlocked(f"DNS-Aufloesung fuer '{host}' fehlgeschlagen (Fail-Closed): {err}", target)
+
+    for _fam, _type, _proto, _canon, sockaddr in addr_info:
+        _reject_if_internal(ipaddress.ip_address(sockaddr[0]))
+
+    return target

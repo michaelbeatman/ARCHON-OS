@@ -3,14 +3,46 @@ import { NextRequest, NextResponse } from 'next/server';
 const MEDIA_PB_URL = process.env.INTERNAL_POCKETBASE_MEDIA_URL || 'http://pocketbase-media:8090';
 const HOST_DOCKER_URL = 'http://host.docker.internal:8092';
 const LOCALHOST_URL = 'http://127.0.0.1:8092';
+const ALLOWED_ORIGIN = process.env.NEXT_PUBLIC_APP_ORIGIN || 'http://localhost:3000';
+
+function getCorsHeaders(req: NextRequest): Record<string, string> {
+  const origin = req.headers.get('origin');
+  const allowed = origin && (origin === ALLOWED_ORIGIN || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))
+    ? origin
+    : ALLOWED_ORIGIN;
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Vary': 'Origin',
+  };
+}
+
+function hasAuthorizedSession(req: NextRequest): boolean {
+  const auth = req.headers.get('authorization');
+  if (auth && auth.trim().length > 0) return true;
+  if (req.cookies.get('archon_session')?.value || req.cookies.get('pb_auth')?.value) return true;
+  // Allow same-origin browser requests when running in local dev without explicit token
+  const secFetchSite = req.headers.get('sec-fetch-site');
+  if (secFetchSite === 'same-origin') return true;
+  return false;
+}
+
+function sanitizePathSegments(segments: string[]): string | null {
+  for (const seg of segments) {
+    if (!seg || seg === '.' || seg === '..' || seg.includes('..') || seg.includes('\\')) {
+      return null;
+    }
+  }
+  return segments.join('/');
+}
 
 async function forwardRequest(method: string, url: string, req: NextRequest, bodyBuffer?: ArrayBuffer) {
   const headers: Record<string, string> = {};
   const authHeader = req.headers.get('authorization');
   if (authHeader) headers['Authorization'] = authHeader;
-  
+
+  // Content-Type inklusive multipart/form-data boundary zwingend beibehalten
   const contentType = req.headers.get('content-type');
-  if (contentType && !contentType.includes('multipart/form-data')) {
+  if (contentType) {
     headers['Content-Type'] = contentType;
   }
 
@@ -31,8 +63,14 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  if (!hasAuthorizedSession(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const { path } = await params;
-  const pathStr = path.join('/');
+  const pathStr = sanitizePathSegments(path);
+  if (!pathStr) {
+    return NextResponse.json({ error: 'Invalid media path' }, { status: 400 });
+  }
   const search = request.nextUrl.search;
 
   const targetUrls = [
@@ -61,7 +99,7 @@ export async function GET(
       });
 
       const responseHeaders: Record<string, string> = {
-        'Access-Control-Allow-Origin': '*',
+        ...getCorsHeaders(request),
       };
 
       const contentType = response.headers.get('content-type');
@@ -76,9 +114,8 @@ export async function GET(
       const contentLength = response.headers.get('content-length');
       if (contentLength) responseHeaders['Content-Length'] = contentLength;
 
-      const body = await response.arrayBuffer();
-
-      return new NextResponse(body, {
+      // Stream response body directly instead of buffering full video/audio files into RAM
+      return new NextResponse(response.body, {
         status: response.status,
         headers: responseHeaders,
       });
@@ -97,8 +134,14 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  if (!hasAuthorizedSession(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const { path } = await params;
-  const pathStr = path.join('/');
+  const pathStr = sanitizePathSegments(path);
+  if (!pathStr) {
+    return NextResponse.json({ error: 'Invalid media path' }, { status: 400 });
+  }
   const search = request.nextUrl.search;
   const bodyBuffer = await request.arrayBuffer();
 
@@ -114,13 +157,12 @@ export async function POST(
     try {
       const response = await forwardRequest('POST', url, request, bodyBuffer);
       const contentType = response.headers.get('content-type') || 'application/json';
-      const body = await response.arrayBuffer();
 
-      return new NextResponse(body, {
+      return new NextResponse(response.body, {
         status: response.status,
         headers: {
           'Content-Type': contentType,
-          'Access-Control-Allow-Origin': '*',
+          ...getCorsHeaders(request),
         },
       });
     } catch (err: any) {
@@ -138,8 +180,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  if (!hasAuthorizedSession(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const { path } = await params;
-  const pathStr = path.join('/');
+  const pathStr = sanitizePathSegments(path);
+  if (!pathStr) {
+    return NextResponse.json({ error: 'Invalid media path' }, { status: 400 });
+  }
   const search = request.nextUrl.search;
   const bodyBuffer = await request.arrayBuffer();
 
@@ -155,13 +203,12 @@ export async function PATCH(
     try {
       const response = await forwardRequest('PATCH', url, request, bodyBuffer);
       const contentType = response.headers.get('content-type') || 'application/json';
-      const body = await response.arrayBuffer();
 
-      return new NextResponse(body, {
+      return new NextResponse(response.body, {
         status: response.status,
         headers: {
           'Content-Type': contentType,
-          'Access-Control-Allow-Origin': '*',
+          ...getCorsHeaders(request),
         },
       });
     } catch (err: any) {
@@ -179,8 +226,14 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  if (!hasAuthorizedSession(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const { path } = await params;
-  const pathStr = path.join('/');
+  const pathStr = sanitizePathSegments(path);
+  if (!pathStr) {
+    return NextResponse.json({ error: 'Invalid media path' }, { status: 400 });
+  }
   const search = request.nextUrl.search;
 
   const targetUrls = [
@@ -195,13 +248,12 @@ export async function DELETE(
     try {
       const response = await forwardRequest('DELETE', url, request);
       const contentType = response.headers.get('content-type') || 'application/json';
-      const body = await response.arrayBuffer();
 
-      return new NextResponse(body, {
+      return new NextResponse(response.body, {
         status: response.status,
         headers: {
           'Content-Type': contentType,
-          'Access-Control-Allow-Origin': '*',
+          ...getCorsHeaders(request),
         },
       });
     } catch (err: any) {

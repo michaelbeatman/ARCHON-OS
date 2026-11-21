@@ -49,8 +49,8 @@ def get_session_actor(request: Optional[Request], fallback: str = "admin") -> st
         user = get_current_user_from_request(request)
         if isinstance(user, dict) and user.get("username"):
             return str(user["username"]).strip()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[RBAC] Session-Actor konnte nicht ermittelt werden, nutze Fallback '{fallback}': {exc}")
     return fallback
 
 

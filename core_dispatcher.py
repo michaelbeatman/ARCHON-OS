@@ -3,10 +3,13 @@ import sys
 import time
 import datetime
 import json
+import logging
 import httpx
 import asyncio
 import sqlite3
 from typing import Any, Optional
+
+logger = logging.getLogger("archon.core_dispatcher")
 
 # --- External Agent URLs ---
 # Defaulting to docker network hostnames, but can be overridden by env vars
@@ -30,8 +33,8 @@ def detect_target_action(text: str, frontmatter: str = "") -> str:
             c = jev_router.classify_prompt(text)
             if c.get("action") == "direct_command":
                 return c.get("intent", "none")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[Dispatcher] JEV-Router-Klassifikation uebersprungen: {exc}")
 
     combined = f"{frontmatter}\n{text}".upper()
     import re
@@ -99,15 +102,15 @@ def _clean_dispatch_output(text: Any) -> str:
     try:
         from backend.secret_masker import mask_sensitive_text
         s, _ = mask_sensitive_text(s)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"[Dispatcher] Secret-Masking fehlgeschlagen: {exc}")
     try:
         from backend.output_policy_linter import output_policy_linter
         linted = output_policy_linter.lint_and_clean(s)
         if isinstance(linted, dict) and linted.get("cleaned_text") is not None:
             s = linted["cleaned_text"]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"[Dispatcher] Output-Policy-Linter fehlgeschlagen: {exc}")
     return s
 
 
@@ -129,16 +132,16 @@ def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt:
             )
     except ZeroEgressBlockedError:
         raise
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"[Dispatcher] Compliance-Check fehlgeschlagen: {exc}")
 
     explicit_cat = ""
     try:
         from backend.data_classifier import DataClassifier
         if not DataClassifier.classify(prompt or "").get("cloud_llm_allowed", True):
             explicit_cat = "confidential"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"[Dispatcher] DataClassifier fehlgeschlagen: {exc}")
 
     gate = evaluate_and_gate_llm_dispatch(
         agent_id=aid,
@@ -196,8 +199,8 @@ async def _dispatch_to_container_endpoint(
                         cost_usd=0.0,
                         tools_invoked=[f"core_dispatcher.dispatch_to_{provider}"],
                     )
-                except Exception:
-                    pass
+                except Exception as log_exc:
+                    logger.debug(f"[Dispatcher] Audit-Log fehlgeschlagen ({provider}): {log_exc}")
                 return {"status": "success", "content": content}
             return {"status": "error", "content": f"{provider.capitalize()} Error (HTTP {resp.status_code}): {resp.text}"}
     except Exception as e:
@@ -280,8 +283,8 @@ def parse_omniroute_response(resp_text: str) -> str:
                     return clean_think_tags(str(content))
             if "content" in data and data["content"]:
                 return clean_think_tags(str(data["content"]))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[Dispatcher] JSON-Antwort-Extraktion fehlgeschlagen: {exc}")
 
     # Server-Sent Events Parsing (data: {...})
     collected_content = []
@@ -372,8 +375,8 @@ def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, 
                             input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd
                         ) VALUES (?, 'agent_task', ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
                     """, (s_id, unique_title, unique_title, model, agent_id, now, in_tok, out_tok, cost_usd, cost_usd))
-                except Exception:
-                    pass
+                except sqlite3.Error as db_exc:
+                    logger.debug(f"[Dispatcher] Session-Insert fuer Usage-Logging uebersprungen: {db_exc}")
             
             conn.execute("""
                 INSERT INTO session_model_usage (
@@ -413,8 +416,8 @@ def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, 
                 cost_usd=float(cost_usd),
                 tools_invoked=["core_dispatcher"],
             )
-        except Exception:
-            pass
+        except Exception as log_exc:
+            logger.debug(f"[Dispatcher] Usage-Audit-Log fehlgeschlagen: {log_exc}")
     except Exception as e:
         print(f"[DISPATCHER] Token telemetry write error: {e}", file=sys.stderr)
 
@@ -428,8 +431,8 @@ def _extract_tokens_usage(resp_text: str, prompt_str: str, reply_str: str):
             if isinstance(u, dict):
                 inp = u.get("prompt_tokens") or u.get("input_tokens") or inp
                 out = u.get("completion_tokens") or u.get("output_tokens") or out
-    except Exception:
-        pass
+    except (ValueError, TypeError, AttributeError) as exc:
+        logger.debug(f"[Dispatcher] Token-Usage-Parsing fehlgeschlagen, nutze Schaetzung: {exc}")
     return int(inp), int(out)
 
 async def dispatch_to_omniroute_or_container(
@@ -504,8 +507,8 @@ async def dispatch_to_omniroute_or_container(
                         status="OK" if is_ok else "ERROR"
                     )
                     tracer.end_trace(tr_id, status="OK" if is_ok else "ERROR")
-                except Exception:
-                    pass
+                except Exception as tr_exc:
+                    logger.debug(f"[Dispatcher] Trace-Abschluss fehlgeschlagen: {tr_exc}")
 
             if res.get("status") in ("success", "error") and used_model:
                 try:
@@ -515,8 +518,8 @@ async def dispatch_to_omniroute_or_container(
                         success=is_ok,
                         latency_ms=duration_ms,
                     )
-                except Exception:
-                    pass
+                except Exception as bn_exc:
+                    logger.debug(f"[Dispatcher] Bandit-Feedback fehlgeschlagen: {bn_exc}")
 
             return res
     finally:
@@ -524,8 +527,8 @@ async def dispatch_to_omniroute_or_container(
             try:
                 from backend.concurrency_throttle import concurrency_throttle
                 await concurrency_throttle.release_slot(slot_id)
-            except Exception:
-                pass
+            except Exception as th_exc:
+                logger.warning(f"[Dispatcher] Throttle-Slot {slot_id} konnte nicht freigegeben werden: {th_exc}")
 
 AUTO_MODEL_MAP = {
     "auto/best-reasoning": "deepseek/deepseek-r1",
@@ -582,8 +585,7 @@ async def _dispatch_to_omniroute_or_container_exec(
     # Pillar 4 & Punkt 4: Aktive Memory-Injection (Erkenntnisse aus agentic_memory.db)
     memory_context_addon = ""
     try:
-        from local_memory_bridge import LocalMemoryBridge
-        bridge = LocalMemoryBridge()
+        from local_memory_bridge import memory_bridge as bridge
         # Hole die wichtigsten und relevantesten Erkenntnisse für diesen Agenten
         query_hint = prompt[:100] if prompt else ""
         learnings = bridge.search_learnings(query_hint, limit=4)
@@ -592,7 +594,7 @@ async def _dispatch_to_omniroute_or_container_exec(
             if lines:
                 memory_context_addon = "\n\n### [RELEVANTE ERKENNTNISSE AUS DEINEM LANGZEITGEDÄCHTNIS]:\n" + "\n".join(lines)
     except Exception as mem_err:
-        pass
+        logger.debug(f"[Dispatcher] Memory-Injection uebersprungen: {mem_err}")
 
     # Spekulatives Vorladen von Entitaeten (CRM, ERP, relevante Notizen)
     prefetch_addon = ""
@@ -610,8 +612,8 @@ async def _dispatch_to_omniroute_or_container_exec(
             p_lines.append(f"- ERP-Dokument: {d.get('doc_number', '')} ({d.get('type', '')}) [Status: {d.get('status', '')}]")
         if p_lines:
             prefetch_addon = "\n\n### [SPEKULATIV VORGELADENE KONTEXT-DATEN]:\n" + "\n".join(p_lines)
-    except Exception:
-        pass
+    except Exception as pf_err:
+        logger.debug(f"[Dispatcher] Spekulatives Prefetching uebersprungen: {pf_err}")
 
     # Prompt-Registry & Canary-Routing
     effective_prompt_info = None
@@ -623,8 +625,8 @@ async def _dispatch_to_omniroute_or_container_exec(
             effective_prompt_info = eff
             if eff.get("model") and not model:
                 model = eff["model"]
-    except Exception:
-        pass
+    except Exception as pr_err:
+        logger.debug(f"[Dispatcher] Prompt-Registry Lookup uebersprungen: {pr_err}")
 
     # Core Working Memory Blocks (letzte 2-3 gepinnte Blöcke)
     core_mem_addon = ""
@@ -633,8 +635,8 @@ async def _dispatch_to_omniroute_or_container_exec(
         cm_xml = core_memory_manager.compile_system_prompt_injection(agent_id=agent_id)
         if cm_xml:
             core_mem_addon = f"\n\n{cm_xml}"
-    except Exception:
-        pass
+    except Exception as cm_err:
+        logger.debug(f"[Dispatcher] Core-Memory-Injection uebersprungen: {cm_err}")
 
     # Bandit Model Router (opt-in über auto/bandit)
     if model in ("auto/bandit", "auto/best-bandit"):
@@ -643,8 +645,8 @@ async def _dispatch_to_omniroute_or_container_exec(
             b_res = bandit_model_router.select_best_model()
             if b_res.get("enabled") and b_res.get("selected_model"):
                 model = b_res["selected_model"]
-        except Exception:
-            pass
+        except Exception as bn_err:
+            logger.debug(f"[Dispatcher] Bandit-Router Auswahl uebersprungen: {bn_err}")
 
     full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{core_mem_addon}{memory_context_addon}{prefetch_addon}".strip()
 
@@ -666,8 +668,8 @@ async def _dispatch_to_omniroute_or_container_exec(
     try:
         import api_provider
         collected_keys = api_provider.collect_keys()
-    except Exception:
-        pass
+    except Exception as key_err:
+        logger.warning(f"[Dispatcher] API-Keys aus api_provider konnten nicht geladen werden: {key_err}")
 
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY") or collected_keys.get("OPENROUTER_API_KEY") or ""
     groq_api_key = os.getenv("GROQ_API_KEY") or collected_keys.get("GROQ_API_KEY") or ""
@@ -684,7 +686,7 @@ async def _dispatch_to_omniroute_or_container_exec(
     elif model and model.startswith("auto/"):
         selected_model = AUTO_MODEL_MAP.get(model, "deepseek/deepseek-chat")
     else:
-        selected_model = model.strip() if (model and model not in ("free-forever", "gpt-4o-mini", "default")) else "deepseek/deepseek-chat"
+        selected_model = model.strip() if (model and model not in ("free-forever", "default")) else "deepseek/deepseek-chat"
 
     # Zero-Egress & Privacy-Router Pre-Flight Gate + EU AI Act + DataClassifier
     from backend.llm_egress_guard import (
@@ -704,8 +706,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                 "error_code": chk.get("error_code") or "COMPLIANCE_BLOCKED",
                 "content": f"🛑 [COMPLIANCE GUARDRAIL BLOCK]: {chk.get('reason')}",
             }
-    except Exception:
-        pass
+    except Exception as cmp_err:
+        logger.warning(f"[Dispatcher] Compliance-Engine Pruefung fuer '{agent_id}' fehlgeschlagen: {cmp_err}")
 
     classified_cat = ""
     try:
@@ -713,8 +715,8 @@ async def _dispatch_to_omniroute_or_container_exec(
         cls_res = DataClassifier.classify(prompt or "")
         if not cls_res.get("cloud_llm_allowed", True):
             classified_cat = "confidential"
-    except Exception:
-        pass
+    except Exception as cls_err:
+        logger.warning(f"[Dispatcher] DataClassifier fehlgeschlagen: {cls_err}")
 
     try:
         preflight_gate = evaluate_and_gate_llm_dispatch(
@@ -744,8 +746,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                 messages = [{"role": "system", "content": full_system_prompt}] + chat_history_turns + [
                     {"role": "user", "content": prompt},
                 ]
-        except Exception:
-            pass
+        except Exception as priv_err:
+            logger.warning(f"[Dispatcher] Privacy-Config Pruefung fuer Prefetch-Stripping fehlgeschlagen: {priv_err}")
 
     async def _audited_post(http_client: httpx.AsyncClient, url: str, *, provider_id: str, model_id: str, headers: dict | None = None, json_body: dict | None = None, timeout: float | None = None):
         from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
@@ -756,6 +758,7 @@ async def _dispatch_to_omniroute_or_container_exec(
             messages=messages,
             role=role,
             intended_url=url,
+            explicit_category=classified_cat,
         )
         enforce_egress_firewall_for_url(url, agent_id=agent_id)
         _, _, ep_zone = sanitize_llm_endpoint(url)
@@ -915,7 +918,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                         "system": [
                             {
                                 "type": "text",
-                                "text": f"Du bist {agent_name} (Rolle: {role}). {full_system_prompt}".strip(),
+                                "text": full_system_prompt.strip(),
                                 "cache_control": {"type": "ephemeral"}
                             }
                         ],
@@ -1071,8 +1074,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                     return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": or_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
-        except Exception:
-            pass
+        except Exception as or_err:
+            logger.warning(f"[Dispatcher] OpenRouter-Dispatch fehlgeschlagen ({or_model}): {or_err}")
 
     # 3c. Lokaler Ollama-Fallback (falls OmniRoute offline & kein OpenRouter-Key konfiguriert)
     if not (preflight_gate.get("routed_to_local") or prov_lower in ("local", "ollama", "lmstudio", "vllm")):
@@ -1098,8 +1101,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                     return {"status": "success", "content": fb_content, "input_tokens": i_tok, "output_tokens": o_tok, "model": fb_model, "provider": "ollama"}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
-        except Exception:
-            pass
+        except Exception as fb_err:
+            logger.warning(f"[Dispatcher] Ollama-Fallback fehlgeschlagen ({fb_model}): {fb_err}")
 
     # 4. Direkte Container-Endpunkte
     direct_urls = [
@@ -1558,7 +1561,7 @@ async def stream_boardroom_debate(
                     _k_conn.commit()
                     _k_conn.close()
                 except Exception as _e_rep:
-                    pass
+                    logger.debug(f"[Dispatcher] Boardroom-Turn Kanban-Protokollierung fehlgeschlagen: {_e_rep}")
 
                 yield res_event
         else:

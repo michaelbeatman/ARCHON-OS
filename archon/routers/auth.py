@@ -203,8 +203,8 @@ def api_auth_toggle(request: Request, payload: dict = Body(...)):
                 alt_s["auth"]["enabled"] = enabled
                 alt_s["auth"]["mode"] = s["auth"]["mode"]
                 _save_json_helper(alt, alt_s)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"[Auth] Spiegel-Sync fuer {alt} fehlgeschlagen: {exc}")
     return {
         "status": "success",
         "auth_enabled": enabled,

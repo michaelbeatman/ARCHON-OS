@@ -275,8 +275,8 @@ def get_hermes_profiles_base_dirs() -> List[str]:
         primary = HERMES_PROFILES_BASE if os.path.exists(OPT_DATA_DIR) else os.path.expanduser("~/.hermes/profiles")
         try:
             os.makedirs(primary, exist_ok=True)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.warning(f"[Profiles] Profil-Basisverzeichnis {primary} konnte nicht erstellt werden: {exc}")
         valid_dirs.append(primary)
     return valid_dirs
 
@@ -297,8 +297,8 @@ def _compute_profiles_mtime() -> float:
         ap_file = os.path.join(APP_ROOT, "agent_profiles.json")
         if os.path.exists(ap_file):
             max_m = max(max_m, os.path.getmtime(ap_file))
-    except Exception:
-        pass
+    except OSError as exc:
+        logger.debug(f"[Profiles] mtime-Ermittlung fehlgeschlagen: {exc}")
     return max_m
 
 try:
@@ -439,8 +439,8 @@ def api_get_hermes_profiles(lang: Optional[str] = None):
             try:
                 with open(cfg_path, "r", encoding="utf-8") as f:
                     cdata = yaml.safe_load(f) or {}
-            except Exception:
-                pass
+            except (OSError, yaml.YAMLError) as exc:
+                logger.warning(f"[Profiles] YAML-Config {cfg_path} nicht lesbar: {exc}")
 
         soul_prompt = ""
         soul_path = os.path.join(prof_dir, "SOUL.md")
@@ -448,8 +448,8 @@ def api_get_hermes_profiles(lang: Optional[str] = None):
             try:
                 with open(soul_path, "r", encoding="utf-8", errors="ignore") as f:
                     soul_prompt = f.read().strip()
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.warning(f"[Profiles] SOUL-Datei {soul_path} nicht lesbar: {exc}")
 
         # Skills auflösen: Wenn profile.yaml explizit 'skills' definiert, ist das der SSOT
         skills_sub = os.path.join(prof_dir, "skills")
@@ -549,8 +549,8 @@ def api_get_hermes_profiles(lang: Optional[str] = None):
             try:
                 with open(soul_path, "w", encoding="utf-8") as f:
                     f.write(prompt + "\n")
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.warning(f"[Profiles] SOUL-Datei {soul_path} konnte nicht geschrieben werden: {exc}")
 
         if not os.path.exists(yaml_path):
             try:
@@ -574,8 +574,8 @@ def api_get_hermes_profiles(lang: Optional[str] = None):
                 }
                 with open(yaml_path, "w", encoding="utf-8") as f:
                     yaml.dump(y_payload, f, allow_unicode=True, sort_keys=False)
-            except Exception:
-                pass
+            except (OSError, yaml.YAMLError) as exc:
+                logger.warning(f"[Profiles] YAML-Profil {yaml_path} konnte nicht geschrieben werden: {exc}")
 
         profile_data = dict(fallback)
         profile_data.update({
@@ -650,14 +650,14 @@ def create_rolling_backup(filepath: str, max_backups: int = 3):
             if os.path.exists(src_bak):
                 try:
                     shutil.copy2(src_bak, dst_bak)
-                except Exception:
-                    pass
+                except OSError as exc:
+                    logger.debug(f"[Profiles] Backup-Rotation {src_bak} -> {dst_bak} fehlgeschlagen: {exc}")
         primary_bak = f"{filepath}.bak"
         if os.path.exists(primary_bak):
             try:
                 shutil.copy2(primary_bak, f"{filepath}.bak.1")
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[Profiles] Backup-Rotation {primary_bak} -> .bak.1 fehlgeschlagen: {exc}")
         shutil.copy2(filepath, primary_bak)
     except Exception as e:
         logger.warning(f"[Rolling Backup] Could not create backup for {filepath}: {e}")
@@ -736,8 +736,8 @@ def save_all_agent_profiles(profiles_list: List[Dict[str, Any]]):
             abs_c = os.path.abspath(cand)
             if os.path.exists(abs_c) and not os.path.islink(abs_c):
                 _atomic_write_json(cand)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.warning(f"[Profiles] Konnte Profil-Spiegel {cand} nicht aktualisieren: {exc}")
 
 
 __all__ = [

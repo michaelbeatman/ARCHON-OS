@@ -472,19 +472,28 @@ def api_rename_chat_session(request: Request, session_id: str, req: RenameSessio
 def api_chat_upload(request: Request, file: UploadFile = File(...)):
     """Empfängt Datei-Uploads und legt sie im Agent-Workspace (/projects/ bzw. ./agent_workspace) ab."""
     require_admin_or_503(request)
+    max_upload_bytes = int(os.environ.get("ARCHON_MAX_CHAT_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+    dest_path = None
     try:
         target_dir = "/projects" if os.path.exists("/projects") else os.path.join(WORKSPACE_DIR, "uploads")
         os.makedirs(target_dir, exist_ok=True)
         
-        safe_filename = re.sub(r'[^a-zA-Z0-9_\.\-]', '_', file.filename)
+        safe_filename = re.sub(r'[^a-zA-Z0-9_\.\-]', '_', file.filename or "upload.bin")
         timestamp_prefix = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         final_filename = f"{timestamp_prefix}_{safe_filename}"
         dest_path = os.path.join(target_dir, final_filename)
         
+        file_size = 0
         with open(dest_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            while True:
+                chunk = file.file.read(65536)
+                if not chunk:
+                    break
+                file_size += len(chunk)
+                if file_size > max_upload_bytes:
+                    raise HTTPException(status_code=413, detail=f"Datei ueberschreitet das Upload-Limit ({max_upload_bytes // (1024 * 1024)} MB).")
+                buffer.write(chunk)
             
-        file_size = os.path.getsize(dest_path)
         logger.info(f"[Chat Upload] Datei gespeichert: {dest_path} ({file_size} Bytes)")
         add_ticker("Chat Upload", f"Datei '{file.filename}' im Workspace abgelegt.")
         
@@ -495,6 +504,13 @@ def api_chat_upload(request: Request, file: UploadFile = File(...)):
             "path": dest_path,
             "size": file_size
         }
+    except HTTPException:
+        if dest_path and os.path.exists(dest_path):
+            try:
+                os.remove(dest_path)
+            except OSError as rm_exc:
+                logger.debug(f"[Chat Upload] Uebergrosse Temp-Datei {dest_path} nicht entfernt: {rm_exc}")
+        raise
     except Exception as e:
         logger.error(f"[Chat Upload] Upload fehlgeschlagen: {e}")
         raise HTTPException(status_code=500, detail={"code": "chat_upload_failed", "params": {"error": str(e)}})
@@ -615,6 +631,15 @@ async def api_chat_stream(req: ChatStreamRequest):
 
     if not user_msg:
         raise HTTPException(status_code=400, detail={"code": "chat_message_empty", "params": {}})
+
+    if user_msg.lower().startswith("/termin ") or user_msg.lower().startswith("/kalender "):
+        from backend.operations_calendar import operations_calendar
+        query_txt = user_msg.split(" ", 1)[1].strip() if " " in user_msg else ""
+        msg = operations_calendar.handle_calendar_nl_query(query_txt)
+        async def _cal_sse():
+            yield f"data: {json.dumps({'type': 'chunk', 'content': msg})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        return StreamingResponse(_cal_sse(), media_type="text/event-stream")
 
     ctx = await asyncio.to_thread(
         _prepare_chat_stream_context,
@@ -763,6 +788,7 @@ async def api_chat_stream(req: ChatStreamRequest):
                     allowed_attach_roots = [
                         r for r in (
                             WORKSPACE_DIR,
+                            "/projects" if os.path.exists("/projects") else None,
                             os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "uploads"),
                             os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"),
                             OBSIDIAN_VAULT_DIR,
@@ -986,7 +1012,7 @@ async def api_chat_stream(req: ChatStreamRequest):
         # Parse total_cost if possible
         try:
             total_cost_val = float(cost_str)
-        except:
+        except (ValueError, TypeError):
             total_cost_val = 0.0
 
         if not provider_failed:

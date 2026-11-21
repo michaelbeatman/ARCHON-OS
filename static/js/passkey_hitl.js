@@ -212,7 +212,12 @@
     });
     const verData = await verRes.json();
     if (!verRes.ok) throw new Error(verData.detail || 'Signaturprüfung fehlgeschlagen');
-    return { required: true, verified: true, proof: verData.proof };
+    return {
+      required: true,
+      verified: true,
+      proof: verData.proof,
+      proof_token: verData.proof && verData.proof.proof_token ? verData.proof.proof_token : null,
+    };
   }
   window.requirePasskeyForHitl = requirePasskeyForHitl;
 

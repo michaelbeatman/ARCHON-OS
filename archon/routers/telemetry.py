@@ -43,8 +43,8 @@ def _read_recent_turns(agent_id: str) -> list[str]:
             ).fetchall()
             for r in reversed(rows):
                 recent_turns.append(f"[{r[2]}] {r[0].upper()}: {r[1][:140]}")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[Telemetry] Konnte letzte Chat-Turns fuer '{agent_id}' nicht laden: {exc}")
     finally:
         if conn:
             conn.close()
@@ -76,8 +76,8 @@ def api_get_agent_activity(agent_id: str):
                         line.strip() for line in all_lines[-40:] if line.strip()
                     ]
                 break
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[Telemetry] Logdatei nicht lesbar: {exc}")
 
     recent_turns = _read_recent_turns(clean_id)
 
@@ -110,8 +110,8 @@ def api_get_agent_projects(agent_id: str):
     try:
         roles_list = app_main.api_get_hermes_profiles()
         prof = next((p for p in roles_list if p.get("id") == agent_id), None)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[Telemetry] Profil-Lookup fuer '{agent_id}' fehlgeschlagen: {exc}")
 
     agent_id_clean = agent_id.strip().lower()
     # 19.11.2026: person_name kann im Profil None sein -> AttributeError beim .strip() (Live-Log)
@@ -223,10 +223,10 @@ def api_get_agent_projects(agent_id: str):
                                 "file": fname,
                             }
                         )
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except OSError as f_exc:
+                    logger.debug(f"[Telemetry] Obsidian-Datei {fname} nicht lesbar: {f_exc}")
+        except OSError as d_exc:
+            logger.debug(f"[Telemetry] Obsidian-Projektordner nicht lesbar: {d_exc}")
 
     personalakten_dirs = [
         os.path.join(app_main.OBSIDIAN_VAULT_DIR, "00_HR_Agenten", "Personalakten")
@@ -269,8 +269,8 @@ def api_get_agent_projects(agent_id: str):
                                         "file": f"{agent_id_clean}.md",
                                     }
                                 )
-            except Exception:
-                pass
+            except OSError as hr_exc:
+                logger.debug(f"[Telemetry] HR-Personalakte fuer '{agent_id_clean}' nicht lesbar: {hr_exc}")
             break
 
     if agent_id_clean in ["micha", "michael_keller"] and not any(
@@ -351,8 +351,8 @@ def _collect_hud_telemetry_sync(app_main: Any):
         if isinstance(idx, dict):
             for s_name in list(idx.keys())[:12]:
                 skills_active.append({"name": s_name, "status": "active", "category": "skill"})
-    except Exception:
-        pass
+    except Exception as sk_exc:
+        logger.debug(f"[Telemetry] Skill-Index fuer Telemetrie nicht verfuegbar: {sk_exc}")
     return v_notes, mem_records, tot_inp, tot_out, tot_cache, tot_cost, skills_active
 
 
@@ -376,8 +376,8 @@ async def get_hud_telemetry():
                     writer.close()
                     try:
                         await writer.wait_closed()
-                    except Exception:
-                        pass
+                    except OSError as cls_exc:
+                        logger.debug(f"[Telemetry] Socket-Close-Hinweis: {cls_exc}")
                     is_up = True
                     break
                 except Exception:
@@ -464,8 +464,8 @@ def _count_running_containers() -> int:
                         break
                 except Exception:
                     continue
-        except Exception:
-            pass
+        except Exception as dk_exc:
+            logger.debug(f"[Telemetry] Docker-Container-Zaehlung fehlgeschlagen: {dk_exc}")
     _TELEMETRY_CACHE.update({"ts": now, "containers": count})
     return count
 

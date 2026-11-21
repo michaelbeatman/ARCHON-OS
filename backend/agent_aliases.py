@@ -19,6 +19,17 @@ ALIASES = {
     "hermes_orchestrator": "system_architect_orchestrator",
     "finance_lead": "finance_lead",
     "legal_counsel": "legal_counsel",
+    # Kurz-Handles aus Workflow-Templates & Content-Pipelines
+    "research": "research_scout",
+    "writer": "storyteller_ghostwriter",
+    "copywriter": "direct_response_copywriter",
+    "qa": "qa_test_engineer",
+    "engineer": "senior_fullstack_engineer",
+    "analyst": "bi_controller",
+    "security": "devops_cloud_sec_specialist",
+    "seo": "seo_geo_specialist",
+    "video": "video_script_architect",
+    "repurposing": "content_repurposing_specialist",
 }
 
 

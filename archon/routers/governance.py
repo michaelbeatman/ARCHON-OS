@@ -158,8 +158,8 @@ def api_export_verfahrensdokumentation_pdf(company_id: Optional[str] = None):
                 "size_bytes": len(pdf_bytes),
             },
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"[Governance] Audit-Log fuer Compliance-PDF fehlgeschlagen: {exc}")
 
     filename = f"Archon_Verfahrensdokumentation_GoBD_EU_AI_Act_{snap['tenant_id']}.pdf"
     return Response(
@@ -416,8 +416,8 @@ async def test_agent_profile_governance(agent_id: str):
     try:
         from backend.audit_log import chained_audit_log
         chained_audit_log.record_event("governance", "promptfoo_eval", agent_id, {"score": score_str, "passed": passed_count, "total": total_count})
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"[Governance] Audit-Log fuer Promptfoo-Eval fehlgeschlagen: {exc}")
     add_ticker("Governance", f"Testsuite für {agent_name}: {score_str}")
 
     return {

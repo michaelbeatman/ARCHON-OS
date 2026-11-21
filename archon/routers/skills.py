@@ -129,8 +129,8 @@ def build_skills_file_index(force: bool = False):
                 _SKILL_FILE_INDEX = json.load(f)
                 _SKILL_FILE_INDEX_TIME = now
                 return _SKILL_FILE_INDEX
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            logger.debug(f"[Skills] Disk-Index Cache nicht lesbar, baue neu: {exc}")
     
     index = {}
     search_dirs = get_all_skill_search_roots()
@@ -169,8 +169,8 @@ def build_skills_file_index(force: bool = False):
     try:
         with open(_SKILL_INDEX_DISK_PATH, "w", encoding="utf-8") as f:
             json.dump(index, f)
-    except Exception:
-        pass
+    except OSError as exc:
+        logger.debug(f"[Skills] Disk-Index Cache konnte nicht geschrieben werden: {exc}")
     return index
 
 
@@ -205,8 +205,8 @@ def find_skill_file(skill_id: str) -> Optional[str]:
                 safe_direct = safe_path_within(direct, [root], must_exist=True, allow_dirs=False)
                 index[clean_skill_id] = safe_direct
                 return safe_direct
-            except PathJailError:
-                pass
+            except PathJailError as pj_err:
+                logger.debug(f"[Skills] Direkter Skill-Pfad ausserhalb Jail/nicht vorhanden ({direct}): {pj_err}")
             try:
                 for sub in os.listdir(root):
                     sub_path = os.path.join(root, sub)
@@ -216,10 +216,10 @@ def find_skill_file(skill_id: str) -> Optional[str]:
                             safe_target = safe_path_within(target, [root], must_exist=True, allow_dirs=False)
                             index[clean_skill_id] = safe_target
                             return safe_target
-                        except PathJailError:
-                            pass
-            except Exception:
-                pass
+                        except PathJailError as pj_sub_err:
+                            logger.debug(f"[Skills] Unterverzeichnis-Skill-Pfad verworfen ({target}): {pj_sub_err}")
+            except OSError as dir_err:
+                logger.debug(f"[Skills] Skill-Root {root} nicht lesbar: {dir_err}")
     return None
 
 
@@ -252,8 +252,8 @@ def parse_skill_frontmatter_and_content(raw_content: str, default_id: str):
                     h_tags = fm_data["metadata"]["hermes"].get("tags", [])
                     if isinstance(h_tags, list):
                         tags = [str(x).strip() for x in h_tags if x]
-        except Exception:
-            pass
+        except Exception as fm_err:
+            logger.debug(f"[Skills] Frontmatter-Parsing fuer '{default_id}' fehlgeschlagen: {fm_err}")
             
     # Fallback für description falls nicht vorhanden oder leer
     if not description:
@@ -335,8 +335,8 @@ def api_get_hermes_skills(force: bool = False):
                     _HERMES_SKILLS_CACHE = data
                     _HERMES_SKILLS_CACHE_TIME = now
                     return data
-        except Exception:
-            pass
+        except (OSError, ValueError) as cache_err:
+            logger.debug(f"[Skills] Skills-Disk-Cache nicht lesbar: {cache_err}")
 
     index = build_skills_file_index(force=force)
     discovered_skills = []
@@ -360,8 +360,8 @@ def api_get_hermes_skills(force: bool = False):
                 "tags": parsed["tags"] or [parsed["category"].split(" ")[0]],
                 "file_path": file_path
             })
-        except Exception:
-            pass
+        except Exception as parse_err:
+            logger.debug(f"[Skills] Skill-Datei uebersprungen ({file_path}): {parse_err}")
 
     if not discovered_skills:
         discovered_skills = GLOBAL_HERMES_SKILLS
@@ -371,8 +371,8 @@ def api_get_hermes_skills(force: bool = False):
     try:
         with open(_SKILLS_CACHE_DISK_PATH, "w", encoding="utf-8") as f:
             json.dump(discovered_skills, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    except OSError as save_err:
+        logger.debug(f"[Skills] Skills-Disk-Cache konnte nicht gespeichert werden: {save_err}")
     return discovered_skills
 
 
@@ -582,7 +582,8 @@ def api_skills_obsidian_search(query: str):
 
 
 @router.post("/api/v1/skills/obsidian/changelog")
-def api_skills_obsidian_changelog(version: str = Body(...), changes: List[str] = Body(...)):
+def api_skills_obsidian_changelog(request: Request, version: str = Body(...), changes: List[str] = Body(...)):
+    require_admin_or_503(request)
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     return _DEPS["skills_engine"].obsidian.update_changelog(version, changes)
@@ -596,7 +597,8 @@ def api_skills_rag_query(prompt: str):
 
 
 @router.post("/api/v1/skills/rag/store")
-def api_skills_rag_store(event_data: Dict = Body(...)):
+def api_skills_rag_store(request: Request, event_data: Dict = Body(...)):
+    require_admin_or_503(request)
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     return _DEPS["skills_engine"].rag.store_system_metric(event_data)

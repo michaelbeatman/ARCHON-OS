@@ -67,8 +67,8 @@ def _get_hermes_config_paths():
                     pyaml = os.path.join(prof_dir, entry, "config.yaml")
                     if os.path.exists(pyaml) and pyaml not in found_configs:
                         found_configs.append(pyaml)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[HermesConfig] Profilverzeichnis {prof_dir} nicht lesbar: {exc}")
 
     if not active_path and found_configs:
         active_path = found_configs[0]
@@ -328,16 +328,26 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
         elif "base_url" in m_dict:
             del m_dict["base_url"]
 
+    def _set_int(dst: Dict[str, Any], dst_key: str, src_key: str) -> None:
+        if src_key in settings:
+            try:
+                dst[dst_key] = int(settings[src_key])
+            except (ValueError, TypeError) as exc:
+                logger.debug(f"[HermesConfig] Ungueltiger Integer-Wert fuer '{src_key}': {exc}")
+
+    def _set_float(dst: Dict[str, Any], dst_key: str, src_key: str) -> None:
+        if src_key in settings:
+            try:
+                dst[dst_key] = float(settings[src_key])
+            except (ValueError, TypeError) as exc:
+                logger.debug(f"[HermesConfig] Ungueltiger Float-Wert fuer '{src_key}': {exc}")
+
     # Sektion 2: Agent
     a_dict = _ensure_dict(existing_data, "agent")
     if "reasoning_effort" in settings:
         a_dict["reasoning_effort"] = str(settings["reasoning_effort"]).strip()
     for int_key in ("max_context_tokens", "max_history_messages", "task_timeout_seconds", "max_turns"):
-        if int_key in settings:
-            try:
-                a_dict[int_key] = int(settings[int_key])
-            except Exception:
-                pass
+        _set_int(a_dict, int_key, int_key)
     for bool_key in ("verify_on_stop", "verbose"):
         if bool_key in settings:
             a_dict[bool_key] = bool(settings[bool_key])
@@ -379,16 +389,8 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
     if "command_allowlist" in settings and isinstance(settings["command_allowlist"], list):
         existing_data["command_allowlist"] = settings["command_allowlist"]
     ce_dict = _ensure_dict(existing_data, "code_execution")
-    if "code_max_tool_calls" in settings:
-        try:
-            ce_dict["max_tool_calls"] = int(settings["code_max_tool_calls"])
-        except Exception:
-            pass
-    if "code_timeout" in settings:
-        try:
-            ce_dict["timeout"] = int(settings["code_timeout"])
-        except Exception:
-            pass
+    _set_int(ce_dict, "max_tool_calls", "code_max_tool_calls")
+    _set_int(ce_dict, "timeout", "code_timeout")
 
     # Sektion 6: Terminal & Container
     t_dict = _ensure_dict(existing_data, "terminal")
@@ -396,16 +398,8 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
         if s_k in settings:
             t_dict[y_k] = str(settings[s_k]).strip()
     for s_k, y_k in (("terminal_timeout", "timeout"), ("terminal_container_memory", "container_memory"), ("terminal_container_disk", "container_disk"), ("terminal_lifetime_seconds", "lifetime_seconds")):
-        if s_k in settings:
-            try:
-                t_dict[y_k] = int(settings[s_k])
-            except Exception:
-                pass
-    if "terminal_container_cpu" in settings:
-        try:
-            t_dict["container_cpu"] = float(settings["terminal_container_cpu"])
-        except Exception:
-            pass
+        _set_int(t_dict, y_k, s_k)
+    _set_float(t_dict, "container_cpu", "terminal_container_cpu")
     if "terminal_container_persistent" in settings:
         t_dict["container_persistent"] = bool(settings["terminal_container_persistent"])
     if "terminal_docker_mount_cwd" in settings:
@@ -419,35 +413,19 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
         lg_dict["hard_stop_enabled"] = bool(settings["loop_hard_stop_enabled"])
     wa_dict = _ensure_dict(lg_dict, "warn_after")
     for s_k, y_k in (("warn_exact_failure", "exact_failure"), ("warn_same_tool_failure", "same_tool_failure"), ("warn_idempotent_no_progress", "idempotent_no_progress")):
-        if s_k in settings:
-            try:
-                wa_dict[y_k] = int(settings[s_k])
-            except Exception:
-                pass
+        _set_int(wa_dict, y_k, s_k)
     sa_dict = _ensure_dict(lg_dict, "hard_stop_after")
     for s_k, y_k in (("stop_exact_failure", "exact_failure"), ("stop_same_tool_failure", "same_tool_failure"), ("stop_idempotent_no_progress", "idempotent_no_progress")):
-        if s_k in settings:
-            try:
-                sa_dict[y_k] = int(settings[s_k])
-            except Exception:
-                pass
+        _set_int(sa_dict, y_k, s_k)
 
     # Sektion 8: Kontext-Kompression & Prompt-Caching
     cp_dict = _ensure_dict(existing_data, "compression")
     if "compression_enabled" in settings:
         cp_dict["enabled"] = bool(settings["compression_enabled"])
     for s_k, y_k in (("compression_threshold", "threshold"), ("compression_target_ratio", "target_ratio")):
-        if s_k in settings:
-            try:
-                cp_dict[y_k] = float(settings[s_k])
-            except Exception:
-                pass
+        _set_float(cp_dict, y_k, s_k)
     for s_k, y_k in (("compression_protect_last_n", "protect_last_n"), ("compression_protect_first_n", "protect_first_n")):
-        if s_k in settings:
-            try:
-                cp_dict[y_k] = int(settings[s_k])
-            except Exception:
-                pass
+        _set_int(cp_dict, y_k, s_k)
     if "compression_codex_autoraise" in settings:
         cp_dict["codex_gpt55_autoraise"] = bool(settings["compression_codex_autoraise"])
     if "prompt_cache_ttl" in settings:
@@ -459,44 +437,25 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
         if s_k in settings:
             mm_dict[s_k] = bool(settings[s_k])
     for s_k, y_k in (("memory_char_limit", "memory_char_limit"), ("user_char_limit", "user_char_limit"), ("memory_flush_min_turns", "flush_min_turns"), ("memory_nudge_interval", "nudge_interval")):
-        if s_k in settings:
-            try:
-                mm_dict[y_k] = int(settings[s_k])
-            except Exception:
-                pass
+        _set_int(mm_dict, y_k, s_k)
     sr_dict = _ensure_dict(existing_data, "session_reset")
     if "session_reset_mode" in settings:
         sr_dict["mode"] = str(settings["session_reset_mode"]).strip()
     for s_k, y_k in (("session_reset_at_hour", "at_hour"), ("session_reset_idle_minutes", "idle_minutes")):
-        if s_k in settings:
-            try:
-                sr_dict[y_k] = int(settings[s_k])
-            except Exception:
-                pass
+        _set_int(sr_dict, y_k, s_k)
     if "skills_creation_nudge_interval" in settings:
-        try:
-            _ensure_dict(existing_data, "skills")["creation_nudge_interval"] = int(settings["skills_creation_nudge_interval"])
-        except Exception:
-            pass
+        _set_int(_ensure_dict(existing_data, "skills"), "creation_nudge_interval", "skills_creation_nudge_interval")
 
     # Sektion 10: Delegation & MoA
     dl_dict = _ensure_dict(existing_data, "delegation")
     for s_k, y_k in (("delegation_max_iterations", "max_iterations"), ("delegation_max_concurrent_children", "max_concurrent_children")):
-        if s_k in settings:
-            try:
-                dl_dict[y_k] = int(settings[s_k])
-            except Exception:
-                pass
+        _set_int(dl_dict, y_k, s_k)
     moa_dict = _ensure_dict(existing_data, "moa")
     if "moa_enabled" in settings:
         moa_dict["enabled"] = bool(settings["moa_enabled"])
     if "moa_fanout" in settings:
         moa_dict["fanout"] = str(settings["moa_fanout"]).strip()
-    if "moa_max_tokens" in settings:
-        try:
-            moa_dict["max_tokens"] = int(settings["moa_max_tokens"])
-        except Exception:
-            pass
+    _set_int(moa_dict, "max_tokens", "moa_max_tokens")
     if "moa_degraded_policy" in settings:
         moa_dict["degraded_reference_policy"] = str(settings["moa_degraded_policy"]).strip()
     moa_agg_dict = _ensure_dict(moa_dict, "aggregator")
@@ -520,11 +479,7 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
 
     # Sektion 12: Browser & Tool-Search
     br_dict = _ensure_dict(existing_data, "browser")
-    if "browser_inactivity_timeout" in settings:
-        try:
-            br_dict["inactivity_timeout"] = int(settings["browser_inactivity_timeout"])
-        except Exception:
-            pass
+    _set_int(br_dict, "inactivity_timeout", "browser_inactivity_timeout")
     if "browser_cloud_provider" in settings:
         br_dict["cloud_provider"] = str(settings["browser_cloud_provider"]).strip()
     if "browser_use_gateway" in settings:
@@ -532,16 +487,8 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
     ts_dict = _ensure_dict(_ensure_dict(existing_data, "tools"), "tool_search")
     if "tool_search_enabled" in settings:
         ts_dict["enabled"] = str(settings["tool_search_enabled"]).strip()
-    if "tool_search_threshold_pct" in settings:
-        try:
-            ts_dict["threshold_pct"] = int(settings["tool_search_threshold_pct"])
-        except Exception:
-            pass
-    if "tool_search_limit" in settings:
-        try:
-            ts_dict["search_default_limit"] = int(settings["tool_search_limit"])
-        except Exception:
-            pass
+    _set_int(ts_dict, "threshold_pct", "tool_search_threshold_pct")
+    _set_int(ts_dict, "search_default_limit", "tool_search_limit")
     if "tool_search_listing" in settings:
         ts_dict["listing"] = str(settings["tool_search_listing"]).strip()
 
@@ -567,11 +514,7 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
     up_dict = _ensure_dict(existing_data, "updates")
     if "updates_pre_backup" in settings:
         up_dict["pre_update_backup"] = bool(settings["updates_pre_backup"])
-    if "updates_backup_keep" in settings:
-        try:
-            up_dict["backup_keep"] = int(settings["updates_backup_keep"])
-        except Exception:
-            pass
+    _set_int(up_dict, "backup_keep", "updates_backup_keep")
     if "updates_local_changes" in settings:
         up_dict["non_interactive_local_changes"] = str(settings["updates_local_changes"]).strip()
 
@@ -706,8 +649,8 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
                         if os.path.exists(ap_tmp):
                             try:
                                 os.unlink(ap_tmp)
-                            except OSError:
-                                pass
+                            except OSError as rm_exc:
+                                logger.debug(f"[HermesConfig] Temp-Datei {ap_tmp} nicht entfernt: {rm_exc}")
             _sync_fn = _DEPS.get("_sync_org_hierarchy_node")
             if _sync_fn:
                 _sync_fn(prof_id, provider=m_prov or None, model=m_def or None, reasoning_level=r_eff or None)
@@ -717,8 +660,8 @@ def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
 
     try:
         add_ticker("Hermes Core", f"Einstellungen gespeichert für: {os.path.basename(target_path)}")
-    except Exception:
-        pass
+    except Exception as tk_exc:
+        logger.debug(f"[HermesConfig] Ticker-Meldung (save settings) fehlgeschlagen: {tk_exc}")
 
     return {
         "status": "success",
@@ -819,8 +762,8 @@ def api_save_hermes_raw_config(request: Request, payload: dict = Body(...)):
     # 4. Hermes Daemon Ticker
     try:
         add_ticker("Hermes Core", f"Hermes-Konfiguration aktualisiert: {os.path.basename(target_path)}")
-    except Exception:
-        pass
+    except Exception as tk_exc:
+        logger.debug(f"[HermesConfig] Ticker-Meldung (update config) fehlgeschlagen: {tk_exc}")
         
     return {
         "status": "success",

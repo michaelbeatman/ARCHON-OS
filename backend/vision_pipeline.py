@@ -13,7 +13,14 @@ import asyncio
 from typing import Dict, Any, Optional
 
 def analyze_image_file(image_path: str, focus_prompt: str = "Beschreibe den Inhalt dieses Screenshots oder Bildes detailliert.") -> Dict[str, Any]:
-    abs_path = os.path.abspath(image_path)
+    from utils.path_jail import PathJailError, safe_path
+
+    try:
+        abs_path = safe_path(image_path, must_exist=True, allow_dirs=False)
+    except PathJailError as exc:
+        return {"status": "blocked", "message": f"Zugriff ausserhalb erlaubter Verzeichnisse verweigert: {exc}"}
+    except FileNotFoundError:
+        return {"status": "error", "message": f"Datei {image_path} existiert nicht."}
     if not os.path.exists(abs_path):
         return {"status": "error", "message": f"Datei {image_path} existiert nicht."}
 

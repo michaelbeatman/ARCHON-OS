@@ -25,10 +25,13 @@ import sqlite3
 import time
 from typing import Any, Dict, Iterator, List, Optional
 
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "compartment_vault.db")
 DEFAULT_KEY_PATH = os.path.join(WORKSPACE_DIR, "data", "compartment.key")
 VEC_DIM = 64
+_AESGCM_MAGIC = b"AGCM1"
 
 
 def load_or_create_vault_key(key_path: Optional[str] = None) -> bytes:
@@ -45,10 +48,14 @@ def load_or_create_vault_key(key_path: Optional[str] = None) -> bytes:
     key = secrets.token_bytes(32)
     with open(path, "wb") as f:
         f.write(key)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     return key
 
 
-def _keystream(enc_key: bytes, nonce: bytes, length: int) -> bytes:
+def _legacy_keystream(enc_key: bytes, nonce: bytes, length: int) -> bytes:
     out = bytearray()
     counter = 0
     while len(out) < length:
@@ -59,16 +66,27 @@ def _keystream(enc_key: bytes, nonce: bytes, length: int) -> bytes:
 
 
 def aead_encrypt(key: bytes, plaintext: bytes, aad: bytes = b"") -> bytes:
-    enc_key = hashlib.sha256(key + b"enc").digest()
-    mac_key = hashlib.sha256(key + b"mac").digest()
-    nonce = secrets.token_bytes(16)
-    ks = _keystream(enc_key, nonce, len(plaintext))
-    ct = bytes(a ^ b for a, b in zip(plaintext, ks))
-    tag = hmac.new(mac_key, aad + nonce + ct, hashlib.sha256).digest()
-    return nonce + tag + ct
+    """Authentifizierte Verschluesselung mit Standard AES-256-GCM."""
+    aes_key = hashlib.sha256(key + b"aes256gcm").digest()
+    nonce = secrets.token_bytes(12)
+    ct = AESGCM(aes_key).encrypt(nonce, plaintext, aad or None)
+    return _AESGCM_MAGIC + nonce + ct
 
 
 def aead_decrypt(key: bytes, blob: bytes, aad: bytes = b"") -> bytes:
+    """Entschluesselt AES-256-GCM Blobs (und abwaertskompatibel Legacy-Blobs)."""
+    if blob.startswith(_AESGCM_MAGIC):
+        if len(blob) < len(_AESGCM_MAGIC) + 12 + 16:
+            raise ValueError("Ungueltiges AES-GCM Ciphertext-Format.")
+        aes_key = hashlib.sha256(key + b"aes256gcm").digest()
+        nonce = blob[len(_AESGCM_MAGIC):len(_AESGCM_MAGIC) + 12]
+        ct = blob[len(_AESGCM_MAGIC) + 12:]
+        try:
+            return AESGCM(aes_key).decrypt(nonce, ct, aad or None)
+        except Exception as exc:
+            raise ValueError("AEAD-Integritaetspruefung fehlgeschlagen (Manipulation oder falscher Key).") from exc
+
+    # Abwaertskompatibilitaet fuer bestehende Legacy-Eintraege vor AES-256-GCM-Migration
     if len(blob) < 48:
         raise ValueError("Ungueltiges AEAD-Ciphertext-Format.")
     enc_key = hashlib.sha256(key + b"enc").digest()
@@ -77,7 +95,7 @@ def aead_decrypt(key: bytes, blob: bytes, aad: bytes = b"") -> bytes:
     expected = hmac.new(mac_key, aad + nonce + ct, hashlib.sha256).digest()
     if not hmac.compare_digest(tag, expected):
         raise ValueError("AEAD-Integritaetspruefung fehlgeschlagen (Manipulation oder falscher Key).")
-    ks = _keystream(enc_key, nonce, len(ct))
+    ks = _legacy_keystream(enc_key, nonce, len(ct))
     return bytes(a ^ b for a, b in zip(ct, ks))
 
 

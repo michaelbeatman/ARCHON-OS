@@ -1,12 +1,12 @@
 from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
 """Sub-Router fuer Mahnwesen & Debitorenmanagement (Dunning Engine).
 
 Ausgelagert aus backend/operations_api.py.
 """
 
 from typing import Any, Dict
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Request
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -68,8 +68,9 @@ def api_dunning_generate_draft(req: Dict[str, Any] = Body(...)):
 
 
 @router.post("/dunning/approve")
-def api_dunning_approve(req: Dict[str, Any] = Body(...)):
+def api_dunning_approve(request: Request, req: Dict[str, Any] = Body(...)):
     """Gibt einen Mahnentwurf frei und aktualisiert den Rechnungsstatus (HITL-Freigabe)."""
+    require_admin_or_503(request)
     dunning_id = req.get("dunning_id", "").strip()
     if not dunning_id:
         raise HTTPException(status_code=400, detail={"code": "dunning_id_required", "params": {}})
@@ -83,8 +84,9 @@ def api_dunning_approve(req: Dict[str, Any] = Body(...)):
 
 
 @router.post("/dunning/mark-paid")
-def api_dunning_mark_paid(req: Dict[str, Any] = Body(...)):
+def api_dunning_mark_paid(request: Request, req: Dict[str, Any] = Body(...)):
     """Markiert eine Ausgangsrechnung als bezahlt."""
+    require_admin_or_503(request)
     invoice_id = req.get("invoice_id", "").strip()
     if not invoice_id:
         raise HTTPException(status_code=400, detail={"code": "dunning_invoice_id_required_2", "params": {}})

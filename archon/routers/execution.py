@@ -1,5 +1,5 @@
 from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
 """Router /api/execution — ausgelagerte Routen.
 
 Automatisch aus main.py extrahiert (Critical-Hardening / Modularisierung).
@@ -32,7 +32,8 @@ from archon.core.runtime import (  # noqa: F401
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 @router.post("/api/execution/map-reduce")
-async def api_execute_map_reduce(payload: Dict = Body(...)):
+async def api_execute_map_reduce(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)
     from backend.map_reduce_executor import map_reduce_executor
     return await map_reduce_executor.execute_map_reduce(
         task_title=payload.get("task_title", "Map-Reduce Batch"),
@@ -104,7 +105,8 @@ def api_dry_run_simulate(payload: Dict = Body(...)):
 
 
 @router.post("/api/execution/dlq/enqueue")
-def api_dlq_enqueue(payload: Dict = Body(...)):
+def api_dlq_enqueue(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.enqueue_failed_job(
         job_type=payload.get("job_type", "webhook_delivery"),
@@ -115,7 +117,8 @@ def api_dlq_enqueue(payload: Dict = Body(...)):
 
 
 @router.post("/api/execution/dlq/replay")
-def api_dlq_replay(payload: Dict = Body(...)):
+def api_dlq_replay(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.replay_job(
         dlq_id=payload.get("dlq_id", ""),

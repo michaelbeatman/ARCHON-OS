@@ -478,8 +478,9 @@ except Exception as e:
 
 try:
     from local_memory_bridge import LocalMemoryBridge
+    from backend.db_paths import resolve_db as _resolve_db_path
     memory_bridge = LocalMemoryBridge(
-        db_path=os.path.join(MEMORY_DIR, "agentic_memory.db"),
+        db_path=_resolve_db_path("agentic_memory.db"),
         vault_path=OBSIDIAN_VAULT_DIR
     )
 except Exception as e:
@@ -1081,6 +1082,7 @@ _delegation_configure(
     _save_message_to_db=_save_message_to_db,
     _spawn_background=_spawn_background,
     register_decision=register_decision,
+    fan_in=lambda pid: _fan_in_maybe_start_synthesis(pid),
 )
 
 _GUARDIAN_STATS_CACHE = {}
@@ -2033,7 +2035,8 @@ except Exception as _err_hyg:
     logger.warning(f"[Router] epistemic_hygiene nicht geladen: {_err_hyg}")
 
 try:
-    from archon.routers.operations_calendar import router as _cal_r
+    from archon.routers.operations_calendar import router as _cal_r, ws_router as _cal_ws_r
     app.include_router(_cal_r)
+    app.include_router(_cal_ws_r)
 except Exception as _err_cal:
     logger.warning(f"[Router] operations_calendar nicht geladen: {_err_cal}")

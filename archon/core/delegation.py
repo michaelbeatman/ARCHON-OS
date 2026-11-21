@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import html as _html
 import json
 import os
 import re
@@ -25,8 +26,9 @@ from archon.core.mission_control import (
     mc_get_parent_context_sqlite,
     mc_link_subtask_sqlite,
     mc_update_task_sqlite,
+    update_mission_control_data,
 )
-from archon.core.orchestration import _fan_in_maybe_start_synthesis
+from archon.core.orchestration import _fan_in_maybe_start_synthesis, _run_synthesis_cascade
 from archon.core.profiles import api_get_hermes_profiles
 from archon.core.paths import OPT_DATA_DIR
 from archon.core.runtime import WORKSPACE_DIR, broadcast_event, logger
@@ -56,6 +58,22 @@ def _spawn_background(coro, name: str = ""):
     if main_mod and hasattr(main_mod, "_spawn_background"):
         return main_mod._spawn_background(coro, name=name)
     return asyncio.create_task(coro, name=name)
+
+
+async def _invoke_fan_in(parent_pid: str) -> None:
+    """Startet die Fan-In-Synthese ueber den konfigurierten main-Wrapper (mit update_mc)."""
+    fn = _DEPS.get("fan_in")
+    if callable(fn):
+        await fn(parent_pid)
+        return
+    main_mod = sys.modules.get("main")
+    if main_mod and hasattr(main_mod, "_fan_in_maybe_start_synthesis"):
+        await main_mod._fan_in_maybe_start_synthesis(parent_pid)
+        return
+    await _fan_in_maybe_start_synthesis(
+        parent_pid,
+        run_cascade=lambda pid: _run_synthesis_cascade(pid, update_mc=update_mission_control_data),
+    )
 
 
 def _ensure_session_exists(conn: sqlite3.Connection, session_id: str, profile_id: str, model: str, title: str):
@@ -439,14 +457,18 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
             html_filename = f"{clean_proj_name}_Abschlussbericht.html"
             html_full_path = os.path.join(end_dir, html_filename)
             
+            safe_proj_name = _html.escape(clean_proj_name, quote=True)
             task_items_html = ""
             for r_id, r_title, r_assignee, r_res, r_stat in rows:
-                snippet = (r_res or "").strip()[:500].replace("\n", "<br>")
+                safe_id = _html.escape(str(r_id or ""), quote=True)
+                safe_title = _html.escape(str(r_title or ""), quote=True)
+                safe_assignee = _html.escape(str(r_assignee or ""), quote=True)
+                snippet = _html.escape((r_res or "").strip()[:500], quote=True).replace("\n", "<br>")
                 task_items_html += f"""
                 <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; margin-bottom: 14px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <strong style="color: #38bdf8;">Task #{r_id}: {r_title}</strong>
-                        <span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(16,185,129,0.2); color: #34d399; font-weight: bold;">@{r_assignee}</span>
+                        <strong style="color: #38bdf8;">Task #{safe_id}: {safe_title}</strong>
+                        <span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(16,185,129,0.2); color: #34d399; font-weight: bold;">@{safe_assignee}</span>
                     </div>
                     <div style="font-size: 13px; color: #cbd5e1; line-height: 1.5;">{snippet}...</div>
                 </div>
@@ -456,7 +478,7 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Abschlussbericht: {clean_proj_name}</title>
+  <title>Abschlussbericht: {safe_proj_name}</title>
   <style>
     body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #09090b; color: #f4f4f5; line-height: 1.6; padding: 40px 20px; }}
     .container {{ max-width: 860px; margin: 0 auto; background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
@@ -470,7 +492,7 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
 <body>
   <div class="container">
     <div class="badge">● Projekt Vollständig Abgeschlossen</div>
-    <h1>Projekt: {clean_proj_name} — Abschlussbericht</h1>
+    <h1>Projekt: {safe_proj_name} — Abschlussbericht</h1>
     <div style="font-size: 13px; color: #a1a1aa; margin-bottom: 20px;">Autonom koordiniert durch <strong>Robert (Executive Decision Architect)</strong> | {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}</div>
     
     <div class="summary">
@@ -534,17 +556,22 @@ async def _watch_delegated_task(
         clean_tid = safe_identifier(task_id, "task_id")
         deadline = time.time() + 1200  # max 20 Minuten beobachten
         final = None
+        def _poll_kanban_row():
+            from backend.operations_api import _get_kanban_connection as _kgc
+            kc = _kgc()
+            try:
+                return kc.execute("SELECT status, result, title FROM tasks WHERE id = ?", (task_id,)).fetchone()
+            finally:
+                kc.close()
+
         while time.time() < deadline:
             try:
-                from backend.operations_api import _get_kanban_connection as _kgc
-                kc = _kgc()
-                row = kc.execute("SELECT status, result, title FROM tasks WHERE id = ?", (task_id,)).fetchone()
-                kc.close()
+                row = await asyncio.to_thread(_poll_kanban_row)
                 if row and row[0] in ("done", "blocked", "review", "failed"):
                     final = row
                     break
-            except Exception:
-                pass
+            except Exception as poll_err:
+                logger.debug(f"[Delegation] Kanban-Poll fuer {task_id} fehlgeschlagen: {poll_err}")
             await asyncio.sleep(10)
         if final is None:
             _save_message_to_db(s_id, "assistant",
@@ -635,7 +662,7 @@ async def _watch_delegated_task(
                 proj_title = fan_parent_title if (fan_parent and fan_parent_title) else title
                 p_herkunft = (f"Teilauftrag von Projekt `{fan_parent}`" if fan_parent
                               else f"Delegation über Archon OS (Task `{task_id}`)")
-                p_parent_line = f'parent_project: "{fan_parent}"' if fan_parent else ""
+                p_parent_line = f'parent_project: "{fan_parent}"\n' if fan_parent else ""
                 try:
                     with open(os.path.join(proj_folder, "PROJEKT.md"), "x", encoding="utf-8") as f:
                         f.write("---\nproject_folder: \"" + os.path.basename(proj_folder) + "\"\ncreated_at: \""
@@ -728,20 +755,21 @@ async def _watch_delegated_task(
         except Exception as tg_err:
             logger.warning(f"[Telegram] Delegations-Ping für Task {task_id} fehlgeschlagen: {tg_err}")
 
-        if status == "done":
+        if status in ("done", "blocked", "failed"):
             try:
                 fan_parent, _ = await asyncio.to_thread(mc_get_parent_context_sqlite, task_id)
+                mc_status = "completed" if status == "done" else ("blocked" if status == "blocked" else "failed")
                 await asyncio.to_thread(
                     mc_update_task_sqlite,
                     task_id,
                     {
-                        "status": "completed",
+                        "status": mc_status,
                         "result_summary": (result or "")[:800],
                         "completed_at": time.time(),
                     },
                 )
                 if fan_parent:
-                    _spawn_background(_fan_in_maybe_start_synthesis(fan_parent), name=f"fan_in_{fan_parent}")
+                    _spawn_background(_invoke_fan_in(fan_parent), name=f"fan_in_{fan_parent}")
             except Exception as fan_err:
                 logger.warning(f"[Delegation] Fan-in-Ruecklauf fehlgeschlagen: {fan_err}")
     except Exception as e:
@@ -773,9 +801,10 @@ async def resume_pending_delegation_watchers() -> int:
             except Exception:
                 meta = {}
             delegator = meta.get("delegator") or "executive_decision_architect"
-            tgt_sess = f"sub_{delegator}_{assignee}_{tid}"
+            tgt_sess = meta.get("tgt_session_id") or f"sub_{delegator}_{assignee}_{tid}"
+            origin_sess = meta.get("origin_session_id") or None
             _spawn_background(
-                _watch_delegated_task(tid, tgt_sess, assignee or "default", None, delegator, project_id or None),
+                _watch_delegated_task(tid, tgt_sess, assignee or "default", origin_sess, delegator, project_id or None),
                 name=f"bg_watch_{tid}",
             )
             restarted += 1
@@ -836,7 +865,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     isolated_scope = resolve_isolated_execution_scope(ziel, requested_model=t_model, profiles=profiles)
     isolation_header = build_isolated_system_prompt_header(isolated_scope)
 
-    tgt_sess = f"mc_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{ziel}"
+    tgt_sess = f"mc_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{ziel}_{secrets.token_hex(3)}"
     msg_text = f"{isolation_header}\nMessage from 🤖 {d_name} (@{delegator_id}): {auftrag}"
     with _get_state_db() as conn:
         _ensure_session_exists(conn, tgt_sess, ziel, t_model, auftrag[:50])
@@ -863,6 +892,8 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     "assignee": ziel,
                     "via": "delegation_engine_v2",
                     "delegator": delegator_id,
+                    "tgt_session_id": tgt_sess,
+                    "origin_session_id": origin_session_id,
                     "reasoning_level": reasoning_lvl,
                     "isolated": True,
                     "allowed_tools": isolated_scope["allowed_tools"],

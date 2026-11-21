@@ -157,7 +157,8 @@ def api_semantic_cache_stats():
 
 
 @router.delete("/api/cache/semantic-clear")
-def api_semantic_cache_clear():
+def api_semantic_cache_clear(request: Request):
+    _require_admin(request)
     from backend.semantic_cache import semantic_cache_manager
 
     return semantic_cache_manager.clear()

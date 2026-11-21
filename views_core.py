@@ -1022,76 +1022,45 @@ async def run_showroom_code(request: Request, payload: CodeRunPayload):
     if not code_to_run.strip():
         raise HTTPException(status_code=400, detail="Kein Quellcode zur Ausfuehrung uebergeben.")
 
-    if lang == "python":
+    if lang in ("python", "bash", "sh"):
+        from backend.ephemeral_sandbox import ephemeral_sandbox
+
+        sbx_lang = "python" if lang == "python" else "bash"
         start_time = time.perf_counter()
 
-        def _apply_sandbox_limits():
-            try:
-                import resource
-                resource.setrlimit(resource.RLIMIT_CPU, (12, 12))
-                resource.setrlimit(resource.RLIMIT_FSIZE, (4 * 1024 * 1024, 4 * 1024 * 1024))
-                resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
-            except Exception:
-                pass
+        def _run_in_ephemeral_sandbox():
+            return ephemeral_sandbox.execute_in_sandbox(
+                code=code_to_run,
+                language=sbx_lang,
+                timeout_seconds=12,
+                network_enabled=False,
+            )
 
-        def _run_python_sync():
-            """Synchroner Teil — läuft isoliert im TemporaryDirectory mit `-I`, ohne Host-Secrets und mit POSIX-rlimits."""
-            with tempfile.TemporaryDirectory(prefix="archon_showroom_sbx_") as sbx_dir:
-                sbx_script = os.path.join(sbx_dir, "snippet.py")
-                with open(sbx_script, "w", encoding="utf-8") as f:
-                    f.write(code_to_run)
-                safe_env = {
-                    "PATH": "/usr/local/bin:/usr/bin:/bin",
-                    "HOME": sbx_dir,
-                    "TMPDIR": sbx_dir,
-                    "PYTHONNOUSERSITE": "1",
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                }
-                try:
-                    res = subprocess.run(
-                        [sys.executable or "python3", "-I", sbx_script],
-                        capture_output=True,
-                        text=True,
-                        timeout=12,
-                        cwd=sbx_dir,
-                        env=safe_env,
-                        preexec_fn=_apply_sandbox_limits if os.name == "posix" else None,
-                        input=payload.stdin or "",
-                    )
-                    elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
-                    return {
-                        "status": "success" if res.returncode == 0 else "error",
-                        "exit_code": res.returncode,
-                        "stdout": res.stdout,
-                        "stderr": res.stderr,
-                        "duration_ms": elapsed_ms,
-                        "language": "python"
-                    }
-                except subprocess.TimeoutExpired:
-                    elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
-                    return {
-                        "status": "timeout",
-                        "exit_code": 124,
-                        "stdout": "",
-                        "stderr": "Ausfuehrung nach 12 Sekunden abgebrochen (Timeout).",
-                        "duration_ms": elapsed_ms,
-                        "language": "python"
-                    }
-
-        # P-02: Bis zu 12 s blockierender subprocess.run im async-Handler
-        # friert den Event-Loop ein (SSE, laufende Chats). Der Lauf geht
-        # deshalb in einen Thread.
         try:
-            return await asyncio.to_thread(_run_python_sync)
+            sbx_res = await asyncio.to_thread(_run_in_ephemeral_sandbox)
         except Exception as ex:
-            return {
-                "status": "error",
-                "exit_code": 1,
-                "stdout": "",
-                "stderr": f"Fehler bei Ausfuehrung: {ex}",
-                "duration_ms": 0,
-                "language": "python"
-            }
+            raise HTTPException(
+                status_code=501,
+                detail=f"Isolierte Docker-Sandbox nicht verfuegbar (S6 Fail-Closed): {ex}",
+            )
+
+        if sbx_res.get("engine") == "unavailable" or sbx_res.get("status") == "disabled":
+            raise HTTPException(
+                status_code=501,
+                detail=sbx_res.get("error") or "Showroom-Codeausfuehrung ohne Docker-Sandbox blockiert (S6 Fail-Closed).",
+            )
+
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
+        sbx_status = sbx_res.get("status", "error")
+        return {
+            "status": "success" if sbx_status == "success" else ("timeout" if sbx_status == "timeout" else "error"),
+            "exit_code": sbx_res.get("exit_code", 1 if sbx_status != "timeout" else 124),
+            "stdout": sbx_res.get("stdout", ""),
+            "stderr": sbx_res.get("stderr") or sbx_res.get("error") or "",
+            "duration_ms": elapsed_ms,
+            "language": lang,
+            "engine": sbx_res.get("engine", "docker_micro_container"),
+        }
 
     return {
         "status": "error",

@@ -131,8 +131,8 @@ async def _check_service_health(name: str, url_candidates: List[str], client: ht
             latency = round((time.time() - t0) * 1000, 1)
             if resp.status_code == 200 and resp.json().get("State", {}).get("Running"):
                 return {"status": "up", "latency_ms": latency, "endpoint": "container://hermes-agent"}
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[SystemHealth] Hermes-Container-Check fehlgeschlagen: {exc}")
     return {"status": "down", "latency_ms": 0.0}
 
 
@@ -463,7 +463,8 @@ async def api_get_latest_morning_standup():
 
 
 @router.post("/api/system/deadlock-check")
-def api_deadlock_check(timeout_seconds: int = 45):
+def api_deadlock_check(request: Request, timeout_seconds: int = 45):
+    _require_admin(request)
     from backend.deadlock_supervisor import deadlock_supervisor
     return deadlock_supervisor.detect_and_resolve_deadlocks(stagnation_threshold_seconds=timeout_seconds)
 
@@ -502,7 +503,8 @@ def api_generate_dossier():
 
 
 @router.post("/api/system/consolidate-memory")
-def api_trigger_memory_consolidation(payload: Dict = Body(default={})):
+def api_trigger_memory_consolidation(request: Request, payload: Dict = Body(default={})):
+    _require_admin(request)
     from backend.memory_consolidator import run_sleep_cycle_consolidation
     force = bool(payload.get("force", True))
     return run_sleep_cycle_consolidation(force=force)
@@ -519,7 +521,8 @@ def api_write_batcher_enqueue(payload: Dict = Body(...)):
 
 
 @router.post("/api/system/write-batcher/flush")
-def api_write_batcher_flush():
+def api_write_batcher_flush(request: Request):
+    _require_admin(request)
     from backend.async_write_batcher import async_write_batcher
     return async_write_batcher.flush()
 

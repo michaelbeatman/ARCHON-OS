@@ -385,15 +385,15 @@
       b.onclick = async () => {
         const txId = b.getAttribute("data-pay-approve");
         try {
-          let passkeyVerified = false;
+          let passkeyProofToken = null;
           if (_overview?.passkey_payments_required && typeof window.requirePasskeyForHitl === "function") {
-            const ok = await window.requirePasskeyForHitl("payments");
-            if (!ok) return;
-            passkeyVerified = true;
+            const pkRes = await window.requirePasskeyForHitl("payments", "Zahlung freigeben");
+            if (!pkRes || !pkRes.verified) return;
+            passkeyProofToken = pkRes.proof_token || pkRes.proof?.proof_token || null;
           }
           await apiJson(`/api/v2/treasury/payments/${encodeURIComponent(txId)}/approve`, {
             method: "POST",
-            body: JSON.stringify({ passkey_verified: passkeyVerified }),
+            body: JSON.stringify({ passkey_proof_token: passkeyProofToken }),
           });
           await window.loadTreasuryStudio();
         } catch (err) {

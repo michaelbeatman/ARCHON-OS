@@ -43,7 +43,7 @@ CreateDecision = Callable[..., Any]
 
 # Pfad-Konstanten (können via paths-Dict überschrieben werden)
 DEFAULT_OBSIDIAN_VAULT_DIR = OBSIDIAN_VAULT
-DEFAULT_WORKSPACE_DIR = "/mnt/raid/AgenticOS-2026"
+DEFAULT_WORKSPACE_DIR = APP_ROOT
 
 
 def _task_by_id(data: dict, task_id: str):
@@ -191,7 +191,7 @@ async def _execute_mission_control_task(
             )
 
     agent_id = task.get("agent_id", "founder")
-    agent_name = task.get("agent_name", "Michael Keller")
+    agent_name = task.get("agent_name") or agent_id or "Founder"
     task_title = task.get("title", "Aufgabe")
     prompt_text = task.get("capture_input") or task_title
 
@@ -488,11 +488,21 @@ async def _trigger_sandy_staffing_nomination(
     sandy_model = (sandy_prof.get("model") if sandy_prof else None) or "anthropic/claude-3.7-sonnet"
     sandy_sys = (sandy_prof.get("system_prompt") if sandy_prof else None) or "Du bist Sandy Hooks, Staffing-Directorin von Archon OS."
 
+    roster_lines = [
+        f"- {p.get('id')}: {p.get('person_name') or p.get('name') or p.get('id')} ({p.get('role') or p.get('category') or 'Spezialist'})"
+        for p in (profiles or [])
+        if p.get("id") and p.get("id") not in ("default", "telegram_bot")
+    ][:60]
+    roster_text = "\n".join(roster_lines) if roster_lines else "- research_scout\n- senior_fullstack_engineer\n- storyteller_ghostwriter"
+
     prompt = f"""Als HR- & Staffing-Directorin nominiere bitte für folgende Strategie 2 bis 3 spezialisierte Fachagenten zur operativen Umsetzung:
 
 PROJEKT: {parent_title}
 STRATEGIE:
 {strategy_content}
+
+VERFUEGBARE AGENTEN-IDS IM KADER (waehle AUSSCHLIESSLICH exakt aus dieser Liste):
+{roster_text}
 
 Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
 ```json
@@ -500,14 +510,13 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
   "project_title": "{parent_title}",
   "nominated_agents": [
     {{
-      "agent_id": "<profil_id_aus_hermes>",
+      "agent_id": "<exakte_id_aus_obiger_liste>",
       "role": "<rollenbezeichnung>",
       "mandate": "<konkreter operativer Auftrag für diesen Agenten>"
     }}
   ]
 }}
-```
-Wähle passende Agenten aus dem Agentenpool (z.B. copywriter_marketing_lead, fullstack_core_architect, prompt_engineer, etc.)."""
+```"""
 
     ticker("Sandy Hooks", f"Nominiert Umsetzungsteam für #{parent_id}: '{parent_title[:30]}...'")
     try:
@@ -767,7 +776,17 @@ async def _fan_in_maybe_start_synthesis(
                 return
             if parent.get("synthesis_started"):
                 return
-            if not all(s.get("status") == "completed" for s in siblings):
+            terminal_states = {"completed", "failed", "blocked", "error"}
+            if not all(s.get("status") in terminal_states for s in siblings):
+                return
+            failed_siblings = [s for s in siblings if s.get("status") != "completed"]
+            if failed_siblings:
+                failed_ids = ", ".join(str(s.get("id") or "?") for s in failed_siblings)
+                parent["status"] = "blocked"
+                parent["phase"] = "blocked"
+                parent["failure_reason"] = f"Teilaufgaben fehlgeschlagen/blockiert: {failed_ids}"
+                await asyncio.to_thread(write_mc_atomic, data)
+                logger.warning(f"[Fan-in] Parent '{parent_pid}' eskaliert/blockiert wegen fehlgeschlagener Geschwister: {failed_ids}")
                 return
             parent["synthesis_started"] = True
             await asyncio.to_thread(write_mc_atomic, data)
@@ -880,7 +899,7 @@ async def _run_synthesis_cascade(
             build_dossier = None
     if create_decision is None:
         try:
-            from backend.kanban_db import create_decision as create_decision
+            from archon.routers.decisions import create_decision as create_decision
         except Exception:
             create_decision = None
     if finalize_approval is None:

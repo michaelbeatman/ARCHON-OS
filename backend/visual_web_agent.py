@@ -39,7 +39,22 @@ class VisualWebAgent:
         except Exception:
             pass
 
-        task_dir = os.path.join(self.traces_dir, task_id)
+        # SSRF- & Path-Traversal-Schutz (Fail-Closed vor jeglichem Netz- oder Dateizugriff)
+        from utils.egress_guard import EgressBlocked, check_public_url
+        from utils.path_jail import PathJailError, safe_identifier, safe_path_within
+
+        try:
+            target_url = check_public_url(target_url)
+            clean_task_id = safe_identifier(task_id, label="task_id")
+            task_dir = safe_path_within(
+                os.path.join(self.traces_dir, clean_task_id),
+                [self.traces_dir],
+                allow_write=True,
+                allow_dirs=True,
+            )
+        except (EgressBlocked, PathJailError) as sec_err:
+            return {"status": "blocked", "target_url": target_url, "error": str(sec_err)}
+
         os.makedirs(task_dir, exist_ok=True)
 
         steps_log = []

@@ -181,7 +181,7 @@ def api_get_guardian_stats(timeframe: str = "all"):
                     "models": list(p_models.values())
                 })
         except Exception as e:
-            pass
+            logger.debug(f"[Guardian] State-DB-Statistik uebersprungen: {e}")
         finally:
             if con:
                 con.close()
@@ -263,8 +263,8 @@ def api_get_guardian_config():
         try:
             with open(config_file, "r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
-        except Exception:
-            pass
+        except (OSError, yaml.YAMLError) as exc:
+            logger.warning(f"[Guardian] Hermes config.yaml nicht lesbar ({config_file}): {exc}")
             
     plugins_cfg = cfg.get("plugins", {})
     enabled_plugins = plugins_cfg.get("enabled", [])
@@ -280,8 +280,8 @@ def api_get_guardian_config():
         try:
             with open(cost_budget_file, "r", encoding="utf-8") as f:
                 budget_data = json.load(f)
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            logger.warning(f"[Guardian] cost-budget.json nicht lesbar ({cost_budget_file}): {exc}")
 
     # Guardian limits json & config.yaml sync
     limits_file = os.path.join(MEMORY_DIR, "guardian_limits.json")
@@ -300,8 +300,8 @@ def api_get_guardian_config():
         try:
             with open(limits_file, "r", encoding="utf-8") as f:
                 limits.update(json.load(f))
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            logger.warning(f"[Guardian] guardian_limits.json nicht lesbar ({limits_file}): {exc}")
 
     # Dynamische Plugin-Erkennung aus allen Plugin-Ordnern
     plugins_dir = os.path.expanduser("~/.hermes/plugins")
@@ -427,8 +427,8 @@ def api_get_guardian_config():
                     "version": str(p_info.get("version", "2.6.0")),
                     "enabled": is_enabled
                 })
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"[Guardian] Plugin-Metadaten-Eintrag uebersprungen: {exc}")
 
     try:
         from backend.plugin_manager import get_plugin_manager
@@ -816,8 +816,8 @@ def api_get_plugin_config(plugin_id: str):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     data.update(json.load(f))
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.warning(f"[Guardian] {plugin_id} Config nicht lesbar ({path}): {exc}")
 
     elif plugin_id == "evey-cache":
         limits_file = os.path.join(MEMORY_DIR, "guardian_limits.json")
@@ -829,8 +829,8 @@ def api_get_plugin_config(plugin_id: str):
                         data["cache_ttl_hours"] = cur["cache_ttl_hours"]
                     if "max_cache_entries" in cur:
                         data["max_cache_entries"] = cur["max_cache_entries"]
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.warning(f"[Guardian] {plugin_id} Limits nicht lesbar ({limits_file}): {exc}")
 
     elif plugin_id == "evey-autonomy":
         path = os.path.expanduser("~/.hermes/evey-autonomy.json")
@@ -840,8 +840,8 @@ def api_get_plugin_config(plugin_id: str):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     data.update(json.load(f))
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.warning(f"[Guardian] {plugin_id} Config nicht lesbar ({path}): {exc}")
 
     elif plugin_id == "evey-watchdog":
         path = os.path.expanduser("~/.hermes/workspace/watchdog-state.json")
@@ -851,8 +851,8 @@ def api_get_plugin_config(plugin_id: str):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     data.update(json.load(f))
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.warning(f"[Guardian] {plugin_id} State nicht lesbar ({path}): {exc}")
 
     elif plugin_id == "evey-proactive":
         path = os.path.expanduser("~/.hermes/workspace/manager/proactive-state.json")
@@ -862,8 +862,8 @@ def api_get_plugin_config(plugin_id: str):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     data.update(json.load(f))
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.warning(f"[Guardian] {plugin_id} State nicht lesbar ({path}): {exc}")
 
     elif plugin_id == "evey-sandbox":
         path = os.path.expanduser("~/.hermes/config/sandbox.yaml")
@@ -876,8 +876,8 @@ def api_get_plugin_config(plugin_id: str):
                     if isinstance(ydata, dict):
                         data["allowed_folders"] = ydata.get("allowed_folders", data.get("allowed_folders", []))
                         data["pii_filter"] = ydata.get("pii", {}).get("enabled", True)
-            except Exception:
-                pass
+            except (OSError, yaml.YAMLError) as exc:
+                logger.warning(f"[Guardian] {plugin_id} sandbox.yaml nicht lesbar ({path}): {exc}")
         if isinstance(data.get("allowed_folders"), list):
             data["allowed_folders_str"] = ", ".join(data["allowed_folders"])
 
@@ -889,8 +889,8 @@ def api_get_plugin_config(plugin_id: str):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     data.update(json.load(f))
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.warning(f"[Guardian] {plugin_id} Wallet-Datei nicht lesbar ({path}): {exc}")
 
     elif plugin_id == "evey-telegram-ux":
         # Synchronisiere mit echter Telegram-Bot-Umgebung wenn vorhanden
@@ -911,8 +911,8 @@ def api_get_plugin_config(plugin_id: str):
                             data["bot_token_set"] = bool(_tok)
                         elif line.startswith("TELEGRAM_ALLOWED_USERS="):
                             data["allowed_chat_ids"] = line.split("=", 1)[1].strip()
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.warning(f"[Guardian] Telegram .env nicht lesbar ({tg_env}): {exc}")
 
     # 3. Gespeicherte individuelle Plugin-Konfiguration laden
     generic_dir = os.path.join(MEMORY_DIR, "plugins_config")
@@ -924,8 +924,8 @@ def api_get_plugin_config(plugin_id: str):
                 saved = json.load(f)
                 if isinstance(saved, dict):
                     data.update(saved)
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            logger.warning(f"[Guardian] Plugin-Config {gfile} nicht lesbar: {exc}")
 
     # 4. Überlagere mit echten Live-Schwellenwerten aus backend/autonomy_settings.py (settings.json)
     try:
@@ -955,8 +955,8 @@ def api_get_plugin_config(plugin_id: str):
             data["daily_digest_time"] = aut.get("inbox_watcher", {}).get("standup_time", "08:00")
         elif plugin_id == "evey-status":
             data["cpu_threshold_percent"] = int(aut.get("resource_backpressure", {}).get("max_cpu_pct", 85))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[Guardian] Autonomy-Live-Overlay fuer '{plugin_id}' uebersprungen: {exc}")
 
     for _secret_key in ("github_pat", "api_bearer_token", "api_key", "bot_token"):
         _sv = data.get(_secret_key)
@@ -1016,8 +1016,8 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
                 try:
                     with open(limits_file, "r", encoding="utf-8") as f:
                         cur = json.load(f)
-                except Exception:
-                    pass
+                except (OSError, ValueError) as exc:
+                    logger.warning(f"[Guardian] guardian_limits.json vor Cache-Speichern nicht lesbar: {exc}")
                 cur["cache_ttl_hours"] = int(cfg.get("cache_ttl_hours", 24))
                 cur["max_cache_entries"] = int(cfg.get("max_cache_entries", 100))
                 with open(limits_file, "w", encoding="utf-8") as f:
@@ -1185,8 +1185,8 @@ def api_clear_guardian_cache():
         try:
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump({}, f)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.warning(f"[Guardian] Cache-Datei {cache_file} konnte nicht geleert werden: {exc}")
     add_ticker("Guardian", "Delegations- & Prompt-Cache geleert.")
     return {"status": "success", "message": "Cache erfolgreich geleert"}
 

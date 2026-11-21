@@ -43,6 +43,7 @@ DEFAULT_PRIVACY_CONFIG: Dict[str, Any] = {
         "contracts", "verträge", "vertraege", "legal",
         "crm", "kunden", "contacts",
         "gdpr", "dsgvo", "personalakte", "hr",
+        "confidential", "strictly_confidential", "vertraulich", "geheim",
     ],
 }
 
@@ -52,6 +53,7 @@ _CANONICAL_SENSITIVE_ALIASES = frozenset({
     "contract", "contracts", "vertrag", "verträge", "vertraege", "legal", "nda",
     "crm", "kunde", "kunden", "contact", "contacts", "lead", "leads",
     "gdpr", "dsgvo", "datenschutz", "personalakte", "hr", "personal",
+    "confidential", "strictly_confidential", "vertraulich", "geheim", "secret", "secrets",
 })
 
 _LOCAL_PING_CACHE: Dict[str, Any] = {
@@ -93,8 +95,8 @@ def get_privacy_config() -> Dict[str, Any]:
             priv_block = sdata.get("privacy") if isinstance(sdata, dict) else None
             if isinstance(priv_block, dict) and "zero_egress" in priv_block:
                 merged["zero_egress_strict"] = bool(priv_block.get("zero_egress"))
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            logger.warning(f"[PrivacyRouter] settings.json privacy-Block nicht lesbar: {exc}")
 
     has_explicit_local_url = False
     if os.path.exists(PRIVACY_CFG_FILE):
@@ -260,8 +262,8 @@ def check_local_llm_status(force: bool = False) -> Dict[str, Any]:
                     raw_data = resp.read().decode("utf-8", errors="ignore")
                     data = json.loads(raw_data)
                     models = [m.get("id") or m.get("name") for m in data.get("data", [])] if isinstance(data, dict) else []
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[PrivacyRouter] Lokale Modellliste nicht abrufbar ({models_url}): {exc}")
 
         _LOCAL_PING_CACHE.update({
             "ts": now,
@@ -309,8 +311,8 @@ def test_endpoint_sync(provider: str, url: str, api_key: Optional[str] = None, m
                         raw_data = resp.read().decode("utf-8", errors="ignore")
                         data = json.loads(raw_data)
                         models = [m.get("id") or m.get("name") for m in data.get("data", [])] if isinstance(data, dict) else []
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"[PrivacyRouter] Lokale Modellliste (Probe) nicht abrufbar: {exc}")
 
             return {"available": True, "latency_ms": max(1, latency), "models": models[:10], "error": None}
 
@@ -369,8 +371,8 @@ def get_overall_privacy_status() -> Dict[str, Any]:
         import api_provider
         ac = api_provider.read_active_config()
         active_provider = (ac.get("provider") or "groq").lower().strip()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[PrivacyRouter] Aktiver Provider nicht lesbar, Fallback auf groq: {exc}")
 
     mistral_configured = bool(cfg.get("mistral_api_key") or os.environ.get("MISTRAL_API_KEY"))
 

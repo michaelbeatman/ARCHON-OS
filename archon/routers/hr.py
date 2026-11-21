@@ -114,8 +114,8 @@ def api_save_personalakte(request: Request, agent_id: str, req: SavePersonalakte
                 with open(fp, "w", encoding="utf-8") as f:
                     f.write(req.markdown)
                 saved_paths.append(fp)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.warning(f"[HR] Spiegel-Speichern nach {fp} fehlgeschlagen: {exc}")
 
     return {"status": "success", "agent_id": agent_id, "file_paths": saved_paths}
 
@@ -254,8 +254,8 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
                     try:
                         with open(m_path, "w", encoding="utf-8") as fm:
                             fm.write(req.markdown)
-                    except Exception:
-                        pass
+                    except OSError as exc:
+                        logger.warning(f"[HR] HR-Spiegeldatei {m_path} konnte nicht geschrieben werden: {exc}")
 
         # Synchronisiere prompt/system_prompt in agent_profiles.json und leere den 30s-Cache
         try:

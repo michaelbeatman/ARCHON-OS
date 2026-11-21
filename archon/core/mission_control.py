@@ -90,8 +90,8 @@ def _resolve_kanban_db_path() -> str:
         ops_path = getattr(ops_api, "KANBAN_DB_PATH", None)
         if ops_path and os.path.exists(ops_path):
             return ops_path
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[MissionControl] Fallback bei Kanban-Pfadermittlung: {exc}")
     for candidate in (
         "/opt/data/kanban.db",
         os.path.join(OPT_DATA_DIR, "kanban.db"),
@@ -128,8 +128,8 @@ def _connect_kanban(db_path: Optional[str] = None) -> sqlite3.Connection:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
             _KANBAN_PRAGMA_INITIALIZED.add(path)
-        except Exception:
-            pass
+        except sqlite3.Error as exc:
+            logger.warning(f"[MissionControl] SQLite WAL-PRAGMA fehlgeschlagen ({path}): {exc}")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -168,6 +168,8 @@ def _ensure_mc_tables(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS task_links (
             parent_id TEXT NOT NULL,
             child_id TEXT NOT NULL,
+            kind TEXT DEFAULT 'subtask',
+            created_at TEXT,
             PRIMARY KEY (parent_id, child_id)
         );
         CREATE TABLE IF NOT EXISTS task_events (
@@ -191,6 +193,14 @@ def _ensure_mc_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_mc_events_kind ON task_events(kind, id);
         """
     )
+    try:
+        tl_cols = {r[1] for r in conn.execute("PRAGMA table_info(task_links)").fetchall()}
+        if "kind" not in tl_cols:
+            conn.execute("ALTER TABLE task_links ADD COLUMN kind TEXT DEFAULT 'subtask'")
+        if "created_at" not in tl_cols:
+            conn.execute("ALTER TABLE task_links ADD COLUMN created_at TEXT")
+    except sqlite3.Error as exc:
+        logger.warning(f"[MissionControl] task_links Schema-Migration fehlgeschlagen: {exc}")
     if db_file:
         _MC_TABLES_INITIALIZED.add(db_file)
 
@@ -234,7 +244,7 @@ def _parse_epoch(value: Any, fallback: Optional[int] = None) -> int:
         try:
             return int(float(s))
         except ValueError:
-            pass
+            logger.debug(f"[MissionControl] Zeitstempel nicht numerisch: {s!r}")
         for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
             try:
                 return int(datetime.datetime.strptime(s[:19], fmt).timestamp())
@@ -243,7 +253,7 @@ def _parse_epoch(value: Any, fallback: Optional[int] = None) -> int:
         try:
             return int(datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
         except ValueError:
-            pass
+            logger.debug(f"[MissionControl] ISO-Zeitstempel nicht parsbar: {s!r}")
     return fallback if fallback is not None else int(time.time())
 
 
@@ -255,8 +265,8 @@ def _format_created_str(epoch_val: Any, stored_str: Optional[str] = None) -> str
             return datetime.datetime.fromtimestamp(float(epoch_val)).strftime("%Y-%m-%d %H:%M")
         if isinstance(epoch_val, str) and epoch_val.strip():
             return epoch_val.strip()[:16]
-    except Exception:
-        pass
+    except (ValueError, TypeError, OSError) as exc:
+        logger.debug(f"[MissionControl] Zeitstempel-Formatierung fehlgeschlagen ({epoch_val!r}): {exc}")
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
@@ -490,8 +500,8 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
                 parsed = json.loads(r["meta_json"])
                 if isinstance(parsed, dict):
                     meta = parsed
-            except Exception:
-                pass
+            except (ValueError, TypeError) as exc:
+                logger.warning(f"[MissionControl] Beschaedigtes meta_json uebersprungen: {exc}")
 
         mc_status = _db_status_to_mc(r["status"], meta.get("mc_status"))
         agent_id = r["assignee"] or "system"
@@ -558,8 +568,8 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
             item = json.loads(er["payload"] or "{}")
             if isinstance(item, dict):
                 audit_logs.append(item)
-        except Exception:
-            pass
+        except (ValueError, TypeError) as exc:
+            logger.debug(f"[MissionControl] Ungueltiges audit_log JSON uebersprungen: {exc}")
 
     state: Dict[str, Any] = {
         "tasks": tasks,
@@ -577,8 +587,8 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
     for kv in kv_rows:
         try:
             state[kv["key"]] = json.loads(kv["value_json"])
-        except Exception:
-            pass
+        except (ValueError, TypeError) as exc:
+            logger.warning(f"[MissionControl] Ungueltiges mc_kv JSON fuer Key {kv['key']!r}: {exc}")
 
     return state
 
@@ -682,8 +692,8 @@ def _load_single_task_from_conn(conn: sqlite3.Connection, task_id: str) -> Optio
             parsed = json.loads(r["meta_json"])
             if isinstance(parsed, dict):
                 meta = parsed
-        except Exception:
-            pass
+        except (ValueError, TypeError) as exc:
+            logger.warning(f"[MissionControl] Beschaedigtes Einzel-Task meta_json: {exc}")
 
     mc_status = _db_status_to_mc(r["status"], meta.get("mc_status"))
     agent_id = r["assignee"] or "system"
@@ -1024,8 +1034,8 @@ def _write_mc_atomic(data: dict):
         except BaseException:
             try:
                 os.unlink(_tmp)
-            except OSError:
-                pass
+            except OSError as rm_exc:
+                logger.debug(f"[MissionControl] Temp-Datei {_tmp} konnte nicht entfernt werden: {rm_exc}")
             raise
 
 

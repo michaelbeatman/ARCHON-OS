@@ -24,6 +24,9 @@ PASSKEY_FILE = os.path.join(CONFIG_DIR, "passkey_hitl.json")
 _LOCK = threading.Lock()
 _CHALLENGES: Dict[str, Dict[str, Any]] = {}
 _CHALLENGE_TTL_SECONDS = 300
+_PROOF_TOKENS: Dict[str, Dict[str, Any]] = {}
+_PROOF_TTL_SECONDS = 120
+_HIGH_RISK_CATEGORIES = {"payments", "destructive_actions"}
 
 DEFAULT_CATEGORIES = {
     "payments": True,
@@ -142,6 +145,28 @@ def _cleanup_challenges() -> None:
     expired = [k for k, v in _CHALLENGES.items() if now - v.get("created_ts", 0) > _CHALLENGE_TTL_SECONDS]
     for k in expired:
         _CHALLENGES.pop(k, None)
+    expired_proofs = [k for k, v in _PROOF_TOKENS.items() if now - v.get("created_ts", 0) > _PROOF_TTL_SECONDS]
+    for k in expired_proofs:
+        _PROOF_TOKENS.pop(k, None)
+
+
+def consume_hitl_proof_token(token: Optional[str], user_id: str, category: str = "all") -> bool:
+    """Prueft und verbraucht ein serverseitig ausgestelltes Einmal-Passkey-Proof-Token."""
+    raw = str(token or "").strip()
+    if not raw:
+        return False
+    uid = str(user_id or "admin").strip() or "admin"
+    with _LOCK:
+        _cleanup_challenges()
+        entry = _PROOF_TOKENS.pop(raw, None)
+    if not entry:
+        return False
+    if entry.get("user_id") != uid:
+        return False
+    token_cat = str(entry.get("category") or "all")
+    if category != "all" and token_cat not in ("all", category):
+        return False
+    return True
 
 
 def create_registration_options(user_id: str, username: str, rp_id: str) -> Dict[str, Any]:
@@ -266,7 +291,7 @@ def create_hitl_assertion_options(
         "challenge": challenge_b64,
         "rpId": rp_id,
         "timeout": 60000,
-        "userVerification": "preferred",
+        "userVerification": "required" if category in _HIGH_RISK_CATEGORIES else "preferred",
         "allowCredentials": allow,
     }
 
@@ -279,6 +304,7 @@ def verify_hitl_assertion(
     authenticator_data_b64: str,
     signature_b64: str,
     expected_origin: Optional[str] = None,
+    require_uv: Optional[bool] = None,
 ) -> Dict[str, Any]:
     uid = str(user_id or "admin").strip() or "admin"
     client_raw = _b64u_decode(client_data_b64)
@@ -305,6 +331,11 @@ def verify_hitl_assertion(
     flags = auth_data[32]
     if not (flags & 0x01):  # User Present (UP)
         raise ValueError("User-Presence-Flag fehlt.")
+    cat = ch.get("category") or "all"
+    must_uv = (cat in _HIGH_RISK_CATEGORIES) if require_uv is None else bool(require_uv)
+    uv_ok = bool(flags & 0x04)  # User Verified (UV: Biometrie/PIN)
+    if must_uv and not uv_ok:
+        raise ValueError("User-Verification-Flag (Biometrie/PIN) fuer diese Risikokategorie erforderlich.")
 
     sign_count = int.from_bytes(auth_data[33:37], "big")
     sig_bytes = _b64u_decode(signature_b64)
@@ -331,11 +362,23 @@ def verify_hitl_assertion(
         cred["last_used_at"] = datetime.datetime.now().isoformat()
         _save_store(store)
 
+        proof_token = secrets.token_urlsafe(32)
+        _cleanup_challenges()
+        _PROOF_TOKENS[proof_token] = {
+            "user_id": uid,
+            "credential_id": credential_id,
+            "category": cat,
+            "uv_verified": uv_ok,
+            "created_ts": time.time(),
+        }
+
     return {
         "verified": True,
+        "uv_verified": uv_ok,
+        "proof_token": proof_token,
         "user_id": uid,
         "credential_id": credential_id,
-        "category": ch.get("category") or "all",
+        "category": cat,
         "action_label": ch.get("action_label") or "",
         "verified_at": datetime.datetime.now().isoformat(),
     }

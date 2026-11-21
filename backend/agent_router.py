@@ -77,8 +77,8 @@ class AgentRouter:
             from archon.core.paths import HERMES_PROFILES_BASE, STATE_DB_PATH
             dbs.extend(glob.glob(os.path.join(HERMES_PROFILES_BASE, "*", "state.db")))
             dbs.append(STATE_DB_PATH)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[AgentRouter] Konnte Hermes-State-DB-Pfade nicht aufloesen: {exc}")
         dbs.extend(glob.glob("/opt/data/profiles/*/state.db"))
         dbs.append("/opt/data/state.db")
         dbs.append(os.path.expanduser("~/.hermes/state.db"))
@@ -123,8 +123,8 @@ class AgentRouter:
             if os.path.exists(cost_file):
                 with open(cost_file, "r", encoding="utf-8") as f:
                     return bool(json.load(f).get("override", False))
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            logger.warning(f"[AgentRouter] cost-budget.json Override nicht lesbar: {exc}")
         return False
 
     def _warn_budget_once(self, spend: float, budget: float) -> None:
@@ -175,8 +175,8 @@ class AgentRouter:
                 with open(cost_file, "r", encoding="utf-8") as f:
                     bdata = json.load(f)
                     daily_budget = float(bdata.get("daily_budget", 2.0))
-        except Exception:
-            pass
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning(f"[AgentRouter] cost-budget.json nicht lesbar, nutze Default-Budget: {exc}")
 
         try:
             workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -185,8 +185,8 @@ class AgentRouter:
                 with open(limits_file, "r", encoding="utf-8") as f:
                     ldata = json.load(f)
                     max_context_tokens = int(ldata.get("max_context_tokens", 32000))
-        except Exception:
-            pass
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning(f"[AgentRouter] guardian_limits.json nicht lesbar, nutze Default: {exc}")
 
         current_spend, spend_ok = self._daily_spend_usd()
 
@@ -194,8 +194,8 @@ class AgentRouter:
         try:
             from backend.autonomy_settings import get_module_config
             cb_cfg = get_module_config("circuit_breaker")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[AgentRouter] Circuit-Breaker-Config Fallback auf Defaults: {exc}")
 
         self._guardian_cache = {
             "ts": now,
@@ -344,14 +344,23 @@ class AgentRouter:
                                 "reason": f"Zirkuläre Konversation erkannt (Ähnlichkeit > 90% über {max_identical_turns} Runden)."
                             }
 
-        # 2. Schrittgrenzen-Prüfung (max_steps_per_task)
+        # 2. Schrittgrenzen-Prüfung (max_steps_per_task):
+        # Nur bei autonomen Agenten-Ketten (viele aufeinanderfolgende Assistant-/Tool-Schritte ohne neue User-Nachricht)
+        # oder extrem langen Runs ausloesen — normale interaktive Nutzer-Chats duerfen > 15 Runden haben.
         max_steps = int(policy.get("max_steps_per_task", 15))
-        if len(messages) > max_steps * 2:
-            logger.error(f"[CircuitBreaker] Maximale Schrittanzahl ({max_steps}) für Task überschritten.")
+        trailing_agent_steps = 0
+        for m in reversed(messages):
+            role = (m.get("role") or "").lower()
+            if role in ("assistant", "tool"):
+                trailing_agent_steps += 1
+            elif role == "user":
+                break
+        if trailing_agent_steps > max_steps:
+            logger.error(f"[CircuitBreaker] Maximale autonome Schrittanzahl ({max_steps}) überschritten ({trailing_agent_steps}).")
             return {
                 "loop_detected": True,
                 "tripped": True,
-                "reason": f"Task-Limit erreicht: {len(messages)//2} Interaktionsschritte überschreiten max_steps ({max_steps})."
+                "reason": f"Task-Limit erreicht: {trailing_agent_steps} autonome Folgeschritte überschreiten max_steps ({max_steps})."
             }
 
         return {"loop_detected": False, "tripped": False}
@@ -519,8 +528,8 @@ class AgentRouter:
                 try:
                     from backend.privacy_router import get_privacy_config
                     m_key = get_privacy_config().get("mistral_api_key", "")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"[AgentRouter] Mistral-Key aus Privacy-Config nicht lesbar: {exc}")
             if not m_key:
                 raise ValueError("Kein Mistral API-Key hinterlegt.")
             request_headers["Authorization"] = f"Bearer {m_key}"
@@ -557,13 +566,19 @@ class AgentRouter:
                 client_payload["thinking_config"] = {"thinking_budget": or_tokens}
 
         elif provider == "openai":
-            if lvl in ("off", "none", "minimal", "low"):
-                client_payload["reasoning_effort"] = "low"
-            elif lvl == "medium":
-                client_payload["reasoning_effort"] = "medium"
-            else:
-                client_payload["reasoning_effort"] = "high"
-        
+            m_low = model.lower().split("/")[-1]
+            is_openai_reasoning = (
+                m_low.startswith(("o1", "o3", "o4", "gpt-5"))
+                and not m_low.startswith("gpt-4")
+            )
+            if is_openai_reasoning and lvl not in ("off", "none"):
+                if lvl in ("minimal", "low"):
+                    client_payload["reasoning_effort"] = "low"
+                elif lvl == "medium":
+                    client_payload["reasoning_effort"] = "medium"
+                else:
+                    client_payload["reasoning_effort"] = "high"
+
         if provider == "anthropic":
             sys_msg = [m["content"] for m in messages if m["role"] == "system"]
             user_msgs = [m for m in messages if m["role"] != "system"]
@@ -575,7 +590,9 @@ class AgentRouter:
             }
             if sys_msg:
                 client_payload["system"] = "\n\n".join(str(s) for s in sys_msg if s)
-            if lvl not in ("off", "none"):
+            m_low = model.lower()
+            supports_thinking = any(tok in m_low for tok in ("claude-3-7", "claude-3.7", "claude-4", "sonnet-4", "opus-4", "haiku-4"))
+            if supports_thinking and lvl not in ("off", "none"):
                 ant_budget = max(1024, or_tokens)
                 client_payload["thinking"] = {"type": "enabled", "budget_tokens": ant_budget}
                 if max_tokens <= ant_budget:
@@ -601,8 +618,8 @@ class AgentRouter:
                 )
         except ZeroEgressBlockedError:
             raise
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"[AgentRouter] Compliance-Check fuer '{agent_id}' fehlgeschlagen: {exc}")
 
         eff_cat = category
         if not eff_cat:
@@ -617,8 +634,8 @@ class AgentRouter:
                     cls_res = DataClassifier.classify(user_text)
                     if not cls_res.get("cloud_llm_allowed", True):
                         eff_cat = "confidential"
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"[AgentRouter] DataClassifier fehlgeschlagen: {exc}")
         return eff_cat
 
     @staticmethod
@@ -633,22 +650,22 @@ class AgentRouter:
                 rehyd = pii_scrubber.rehydrate_text(text, session_id=session_id)
                 if isinstance(rehyd, dict) and "text" in rehyd:
                     text = rehyd["text"]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"[AgentRouter] PII-Rehydrierung fehlgeschlagen: {exc}")
         try:
             from backend.secret_masker import mask_sensitive_text
             masked, _ = mask_sensitive_text(text)
             if isinstance(masked, str):
                 text = masked
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"[AgentRouter] Secret-Masking fehlgeschlagen: {exc}")
         try:
             from backend.output_policy_linter import output_policy_linter
             linted = output_policy_linter.lint_and_clean(text)
             if isinstance(linted, dict) and linted.get("cleaned_text") is not None:
                 text = linted["cleaned_text"]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"[AgentRouter] Output-Policy-Linter fehlgeschlagen: {exc}")
         return text
 
     async def chat_completion(
@@ -768,8 +785,8 @@ class AgentRouter:
                             cost_usd=0.0,
                             tools_invoked=["agent_router.chat_completion"],
                         )
-                    except Exception:
-                        pass
+                    except Exception as log_exc:
+                        logger.debug(f"[AgentRouter] Audit-Logging (chat_completion) fehlgeschlagen: {log_exc}")
                     return raw_text
                 except ZeroEgressBlockedError:
                     raise
@@ -931,8 +948,8 @@ class AgentRouter:
                                                 cleaned = self._finalize_output_guard(ready, hop_sid, is_local_hop)
                                                 if cleaned:
                                                     yield cleaned
-                                    except json.JSONDecodeError:
-                                        pass
+                                    except json.JSONDecodeError as dec_err:
+                                        logger.debug(f"[AgentRouter] Ungueltiger SSE-Chunk uebersprungen: {dec_err}")
                             if stream_buf:
                                 cleaned_tail = self._finalize_output_guard(stream_buf, hop_sid, is_local_hop)
                                 if cleaned_tail:
@@ -948,8 +965,8 @@ class AgentRouter:
                                     cost_usd=0.0,
                                     tools_invoked=["agent_router.stream_chat_completion"],
                                 )
-                            except Exception:
-                                pass
+                            except Exception as log_exc:
+                                logger.debug(f"[AgentRouter] Audit-Logging (stream) fehlgeschlagen: {log_exc}")
                             return
             except Exception as e:
                 if idx < len(candidate_models) - 1:

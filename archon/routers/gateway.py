@@ -123,8 +123,8 @@ async def _gateway_idle_stop_loop():
                             if idle_min >= timeout_min:
                                 await asyncio.to_thread(_run_docker_exec, ["hermes", "gateway", "stop", pid])
                                 print(f"[GatewayManager] Auto-stopped idle gateway: {pid} (idle {idle_min:.0f}m)")
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.warning(f"[GatewayManager] Idle-Stop fuer Profil '{pid}' fehlgeschlagen: {exc}")
             except Exception as e:
                 print(f"[GatewayManager] Idle-stop loop error: {e}")
     finally:
@@ -167,8 +167,8 @@ def _get_all_installed_profiles() -> list[str]:
                     if "default" not in entries:
                         entries.insert(0, "default")
                     return sorted(entries)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[GatewayManager] Profilverzeichnis nicht lesbar: {exc}")
     return ["default"]
 
 
@@ -217,8 +217,8 @@ def api_gateway_list():
         try:
             gw_data = app_main._load_json(gw_state_file, {})
             is_master_running = gw_data.get("gateway_state") == "running"
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[GatewayManager] Gateway-State-Datei nicht lesbar: {exc}")
 
     profiles = []
     for pid in all_profiles:
@@ -307,8 +307,8 @@ def api_save_gateway_config_endpoint(request: Request, payload: Dict = Body(...)
     if "idle_timeout_minutes" in payload:
         try:
             cfg["idle_timeout_minutes"] = max(1, int(payload["idle_timeout_minutes"]))
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            logger.debug(f"[GatewayManager] Ungueltiger idle_timeout_minutes-Wert ignoriert: {exc}")
     if "autostart" in payload and isinstance(payload["autostart"], dict):
         cfg["autostart"].update(payload["autostart"])
     app_main._save_gateway_config(cfg)
@@ -344,8 +344,8 @@ def api_gateway_stop_all(request: Request):
         app_main._update_profile_status(pid, "standby")
         try:
             app_main._run_docker_exec(["hermes", "--profile", pid, "gateway", "stop"])
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"[GatewayManager] Stop fuer Profil '{pid}' fehlgeschlagen: {exc}")
         stopped.append(pid)
     app_main._save_gateway_config(cfg)
     return {"ok": True, "stopped": stopped}

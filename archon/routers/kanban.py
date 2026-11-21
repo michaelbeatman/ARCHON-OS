@@ -56,10 +56,8 @@ def _resolve_active_kanban_db() -> str:
         cand_db = os.path.join(hermes_home, "kanban.db")
         return cand_db if os.path.exists(cand_db) else (KANBAN_DB_PATH if os.path.exists(KANBAN_DB_PATH) else cand_db)
     try:
-        from backend.tenant_context import tenant_context, PRIMARY_TENANT_IDS
-        tid = tenant_context.get_active_tenant_id()
-        if tid not in PRIMARY_TENANT_IDS:
-            return tenant_context.resolve_active_db("kanban.db", tid)
+        from backend.tenant_context import tenant_context
+        return tenant_context.resolve_active_db("kanban.db")
     except Exception as exc:
         logger.warning(f"Tenant-Kontext nicht ermittelbar, falle auf Standard-Kanban-DB zurueck: {exc}")
     cand_db = os.path.join(hermes_home, "kanban.db")

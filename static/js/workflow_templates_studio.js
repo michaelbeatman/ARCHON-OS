@@ -239,10 +239,13 @@
 
   function addStation(type) {
     if (!_activeTpl) return;
-    const idx = _activeTpl.nodes.length + 1;
-    let nid = `step_${idx}`;
+    let counter = _activeTpl.nodes.length + 1;
+    let nid = `step_${counter}`;
     const existing = new Set(_activeTpl.nodes.map((n) => n.id));
-    while (existing.has(nid)) nid = `step_${++_activeTpl.nodes.length + 1}`;
+    while (existing.has(nid)) {
+      counter += 1;
+      nid = `step_${counter}`;
+    }
 
     let maxX = 40;
     let lastY = 40;

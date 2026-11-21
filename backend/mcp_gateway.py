@@ -595,17 +595,37 @@ class ArchonMcpGateway:
         if not allowed and pending is not None:
             return 0, pending
 
-        if name == "archon__list_specialists":
-            return 0, self._tool_list_specialists(arguments)
-        if name == "archon__ask_specialist":
-            return 0, self._tool_ask_specialist(arguments)
-        if name == "archon__search_vault":
-            return 0, self._tool_search_vault(arguments)
-        if name == "archon__compress_agent_context":
-            return 0, self._tool_compress_agent_context(arguments)
+        # Zentraler ToolRuntime-Chokepoint (M75 Isolation + M89 Taint + Event-Bus)
+        try:
+            from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
+            rt_session = str(key_info.get("session_id") or key_info.get("name") or "mcp_gateway")
+            rt_agent = str(key_info.get("agent_id") or "")
+            gate = enforce_tool_execution(
+                agent_id=rt_agent,
+                session_id=rt_session,
+                tool_name=name,
+                args=arguments if isinstance(arguments, dict) else {},
+            )
+            if not gate.get("allowed"):
+                return -32003, {"message": gate.get("reason", f"Tool '{name}' durch ToolRuntime blockiert."), "gate": gate}
+        except Exception as exc:
+            logger.debug("ToolRuntime-Pruefung im MCPGateway uebersprungen: %s", exc)
+            rt_session = None
 
-        from scripts.archon_mcp_server import ArchonMcpServer
-        res = ArchonMcpServer().execute_tool(name, arguments)
+        if name == "archon__list_specialists":
+            res = self._tool_list_specialists(arguments)
+        elif name == "archon__ask_specialist":
+            res = self._tool_ask_specialist(arguments)
+        elif name == "archon__search_vault":
+            res = self._tool_search_vault(arguments)
+        elif name == "archon__compress_agent_context":
+            res = self._tool_compress_agent_context(arguments)
+        else:
+            from scripts.archon_mcp_server import ArchonMcpServer
+            res = ArchonMcpServer().execute_tool(name, arguments)
+
+        if rt_session:
+            record_tool_read_side_effect(rt_session, name)
         return 0, res
 
     # ------------------------------------------------------------------

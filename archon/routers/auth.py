@@ -254,6 +254,10 @@ def api_auth_login(request: Request, payload: dict = Body(...)):
 @router.post("/api/auth/logout")
 def api_auth_logout(request: Request):
     token = request.cookies.get("archon_session") or request.headers.get("x-archon-session", "")
+    if not token:
+        auth_hdr = request.headers.get("authorization", "")
+        if auth_hdr.lower().startswith("bearer "):
+            token = auth_hdr[7:].strip()
     if token:
         auth_service.logout(token)
     res = JSONResponse(content={"status": "success", "message": "Erfolgreich abgemeldet."})
@@ -353,6 +357,8 @@ def api_auth_delete_user(user_id: str, request: Request):
 
 def _resolve_target_passkey_user(request: Request, explicit_user_id: Optional[str] = None) -> tuple[str, str]:
     curr = get_current_user_from_request(request)
+    if auth_service.is_auth_enabled() and curr.get("role") == "anonymous":
+        raise HTTPException(status_code=401, detail="Authentifizierung für Passkey-Verwaltung erforderlich.")
     curr_id = str(curr.get("id") or curr.get("username") or "admin")
     curr_name = str(curr.get("username") or curr_id)
     target_id = str(explicit_user_id or curr_id).strip() or curr_id
@@ -362,9 +368,15 @@ def _resolve_target_passkey_user(request: Request, explicit_user_id: Optional[st
 
 
 def _request_rp_id_and_origin(request: Request) -> tuple[str, Optional[str]]:
-    host_hdr = (request.headers.get("host") or "localhost").split(":")[0].strip() or "localhost"
-    origin = request.headers.get("origin")
-    return host_hdr, origin
+    raw_host = (request.headers.get("host") or "localhost").strip() or "localhost"
+    rp_id = raw_host.split(":")[0].strip() or "localhost"
+    scheme = request.url.scheme or "http"
+    server_origin = f"{scheme}://{raw_host}"
+    hdr_origin = request.headers.get("origin")
+    if hdr_origin and hdr_origin != server_origin:
+        # Nur explizit vertrauenswuerdige Origin oder Server-Origin akzeptieren
+        return rp_id, server_origin
+    return rp_id, (hdr_origin or server_origin)
 
 
 @router.get("/api/auth/passkey/config")
@@ -376,8 +388,12 @@ def api_get_passkey_config(request: Request, user_id: Optional[str] = None):
 
 @router.post("/api/auth/passkey/config")
 def api_update_passkey_config(request: Request, payload: dict = Body(...)):
-    from backend.passkey_hitl import update_user_passkey_config
+    from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required, update_user_passkey_config
     target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
+    if payload.get("enabled") is False and is_passkey_required(target_id, "system"):
+        proof = str(payload.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
+        if not proof or not consume_hitl_proof_token(proof, target_id, "system"):
+            raise HTTPException(status_code=403, detail="Passkey-Verifizierung erforderlich, um Passkey-HITL zu deaktivieren.")
     cfg = update_user_passkey_config(
         target_id,
         enabled=payload.get("enabled"),
@@ -419,8 +435,12 @@ def api_passkey_register_verify(request: Request, payload: dict = Body(...)):
 
 @router.delete("/api/auth/passkey/credentials/{cred_id}")
 def api_passkey_delete_credential(cred_id: str, request: Request, user_id: Optional[str] = None):
-    from backend.passkey_hitl import delete_user_credential
+    from backend.passkey_hitl import consume_hitl_proof_token, delete_user_credential, is_passkey_required
     target_id, _ = _resolve_target_passkey_user(request, user_id)
+    if is_passkey_required(target_id, "system"):
+        proof = str(request.headers.get("x-passkey-proof") or request.query_params.get("passkey_proof_token") or "").strip()
+        if not proof or not consume_hitl_proof_token(proof, target_id, "system"):
+            raise HTTPException(status_code=403, detail="Passkey-Verifizierung erforderlich, um Passkey-Zugangsdaten zu loeschen.")
     cfg = delete_user_credential(target_id, cred_id)
     return {"status": "success", **cfg}
 

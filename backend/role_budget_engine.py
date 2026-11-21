@@ -1,0 +1,1010 @@
+# -*- coding: utf-8 -*-
+"""
+backend/role_budget_engine.py
+=============================
+Paperclip-inspired Hard Token & Euro Budget Governance + Complexity-Weighted
+Subagent Budget Allocation + Autonomous CEO Hiring for Archon OS.
+
+Capabilities:
+1. Per-Role Daily & Monthly Token / EUR Budgets:
+   - Enforces hard daily token and Euro limits per agent role in `core_dispatcher`.
+   - Tracks daily consumption in SQLite WAL (`agentic_memory.db` -> `role_daily_budget_ledger`).
+   - Auto-pauses roles (`status = 'paused_budget'`) when their daily hard cap is reached.
+2. Complexity-Weighted Task Budget Splitting:
+   - Splits a task's `token_budget` and `cost_limit_eur` (or `cost_limit_usd`) across
+     subagents proportional to each subtask's complexity weight, reserving an
+     orchestrator/synthesis buffer (15%).
+3. Autonomous CEO Hiring (`allow_autonomous_hiring`):
+   - Allows the CEO (`executive_decision_architect`) or Orchestrator to dynamically
+     spawn and register temporary project specialists with dedicated token/EUR budgets
+     and matching skills from `.agents/skills/`.
+"""
+
+from __future__ import annotations
+
+import datetime
+import hashlib
+import json
+import logging
+import os
+import re
+import sqlite3
+import threading
+import uuid
+from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger("archon.role_budget_engine")
+
+WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
+USD_TO_EUR_RATE = 0.92
+
+try:
+    from backend.db_paths import resolve_db
+    BUDGET_DB_PATH = resolve_db("agentic_memory.db")
+except Exception:
+    BUDGET_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+
+_BUDGET_LOCK = threading.RLock()
+
+EXECUTIVE_ROLE_IDS = {
+    "default",
+    "executive_decision_architect",
+    "robert",
+    "founder",
+    "micha",
+    "system_architect_orchestrator",
+    "aggregation_lisa",
+    "labor_law_hr_governance",
+}
+
+LEAD_ROLE_IDS = {
+    "gtm_launch_strategist",
+    "commercial_jurist_contracts",
+    "construction_project_manager",
+    "logistics_supply_chain_manager",
+    "clinical_medical_advisor",
+    "finance_lead",
+    "agile_scrum_master",
+    "crisis_escalation_lead",
+}
+
+COMPLEXITY_KEYWORDS_HIGH = (
+    "architektur", "architecture", "security", "audit", "refactor", "steuer", "tax",
+    "vertrag", "contract", "legal", "haftung", "dcf", "valuation", "finanzmodell",
+    "migration", "compliance", "dsgvo", "gdpr", "ai-act", "code", "fullstack",
+    "datenbank", "database", "penetration", "red-team", "baugb", "medtech", "fda",
+)
+
+COMPLEXITY_KEYWORDS_MEDIUM = (
+    "analyse", "analysis", "recherche", "research", "strategie", "strategy",
+    "konzept", "concept", "wettbewerb", "competitor", "seo", "kampagne", "campaign",
+    "outreach", "funnel", "copywriting", "linkedin", "carousel", "skript", "script",
+)
+
+
+def _today_str() -> str:
+    return datetime.datetime.now().strftime("%Y-%m-%d")
+
+
+def _month_str() -> str:
+    return datetime.datetime.now().strftime("%Y-%m")
+
+
+def _get_conn(db_path: Optional[str] = None) -> sqlite3.Connection:
+    target = db_path or BUDGET_DB_PATH
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    conn = sqlite3.connect(target, timeout=15.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    return conn
+
+
+def init_budget_tables(db_path: Optional[str] = None) -> None:
+    with _BUDGET_LOCK:
+        with _get_conn(db_path) as conn:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS role_daily_budget_ledger (
+                    agent_id TEXT NOT NULL,
+                    usage_date TEXT NOT NULL,
+                    tokens_used INTEGER NOT NULL DEFAULT 0,
+                    cost_eur REAL NOT NULL DEFAULT 0.0,
+                    cost_usd REAL NOT NULL DEFAULT 0.0,
+                    dispatch_count INTEGER NOT NULL DEFAULT 0,
+                    paused_at TEXT DEFAULT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (agent_id, usage_date)
+                );
+
+                CREATE TABLE IF NOT EXISTS role_budget_policies (
+                    agent_id TEXT PRIMARY KEY,
+                    daily_token_budget INTEGER NOT NULL DEFAULT 150000,
+                    daily_cost_limit_eur REAL NOT NULL DEFAULT 1.50,
+                    monthly_cost_limit_eur REAL NOT NULL DEFAULT 30.00,
+                    hard_cap_enabled INTEGER NOT NULL DEFAULT 1,
+                    auto_pause_on_exceed INTEGER NOT NULL DEFAULT 1,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS task_budget_allocations (
+                    task_id TEXT PRIMARY KEY,
+                    parent_task_id TEXT DEFAULT NULL,
+                    agent_id TEXT NOT NULL,
+                    token_budget INTEGER NOT NULL DEFAULT 0,
+                    tokens_used INTEGER NOT NULL DEFAULT 0,
+                    cost_limit_eur REAL NOT NULL DEFAULT 0.0,
+                    cost_used_eur REAL NOT NULL DEFAULT 0.0,
+                    complexity_weight REAL NOT NULL DEFAULT 1.0,
+                    budget_share_pct REAL NOT NULL DEFAULT 100.0,
+                    allow_autonomous_hiring INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS autonomous_hired_agents (
+                    agent_id TEXT PRIMARY KEY,
+                    parent_task_id TEXT NOT NULL,
+                    subtask_id TEXT DEFAULT '',
+                    person_name TEXT NOT NULL,
+                    role_title TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    skills_json TEXT NOT NULL DEFAULT '[]',
+                    token_budget INTEGER NOT NULL DEFAULT 50000,
+                    cost_limit_eur REAL NOT NULL DEFAULT 0.50,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    hired_by TEXT NOT NULL DEFAULT 'executive_decision_architect',
+                    created_at TEXT NOT NULL,
+                    dissolved_at TEXT DEFAULT NULL
+                );
+                """
+            )
+            conn.commit()
+
+
+def get_default_role_budget(agent_id: str) -> Dict[str, Any]:
+    aid = (agent_id or "default").strip().lower()
+    if aid in EXECUTIVE_ROLE_IDS:
+        return {
+            "tier": "executive",
+            "daily_token_budget": 500_000,
+            "daily_cost_limit_eur": 5.00,
+            "monthly_cost_limit_eur": 100.00,
+            "hard_cap_enabled": True,
+            "auto_pause_on_exceed": True,
+        }
+    if aid in LEAD_ROLE_IDS:
+        return {
+            "tier": "lead",
+            "daily_token_budget": 250_000,
+            "daily_cost_limit_eur": 2.50,
+            "monthly_cost_limit_eur": 50.00,
+            "hard_cap_enabled": True,
+            "auto_pause_on_exceed": True,
+        }
+    return {
+        "tier": "specialist",
+        "daily_token_budget": 150_000,
+        "daily_cost_limit_eur": 1.50,
+        "monthly_cost_limit_eur": 30.00,
+        "hard_cap_enabled": True,
+        "auto_pause_on_exceed": True,
+    }
+
+
+def get_role_budget_policy(agent_id: str, db_path: Optional[str] = None) -> Dict[str, Any]:
+    init_budget_tables(db_path)
+    aid = (agent_id or "default").strip()
+    defaults = get_default_role_budget(aid)
+
+    # 1. Check explicit DB policy override
+    with _get_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM role_budget_policies WHERE agent_id = ?",
+            (aid,),
+        ).fetchone()
+        if row:
+            return {
+                "agent_id": aid,
+                "tier": defaults["tier"],
+                "daily_token_budget": int(row["daily_token_budget"]),
+                "daily_cost_limit_eur": float(row["daily_cost_limit_eur"]),
+                "monthly_cost_limit_eur": float(row["monthly_cost_limit_eur"]),
+                "hard_cap_enabled": bool(row["hard_cap_enabled"]),
+                "auto_pause_on_exceed": bool(row["auto_pause_on_exceed"]),
+            }
+
+    # 2. Check agent_profiles.json fields if present
+    if os.path.exists(PROFILES_FILE):
+        try:
+            with open(PROFILES_FILE, "r", encoding="utf-8") as f:
+                profiles = json.load(f)
+            prof = next((p for p in profiles if p.get("id") == aid), None)
+            if prof:
+                return {
+                    "agent_id": aid,
+                    "tier": defaults["tier"],
+                    "daily_token_budget": int(prof.get("daily_token_budget") or defaults["daily_token_budget"]),
+                    "daily_cost_limit_eur": float(
+                        prof.get("daily_cost_limit_eur")
+                        if prof.get("daily_cost_limit_eur") is not None
+                        else defaults["daily_cost_limit_eur"]
+                    ),
+                    "monthly_cost_limit_eur": float(
+                        prof.get("monthly_cost_limit_eur")
+                        if prof.get("monthly_cost_limit_eur") is not None
+                        else defaults["monthly_cost_limit_eur"]
+                    ),
+                    "hard_cap_enabled": bool(prof.get("hard_cap_enabled", True)),
+                    "auto_pause_on_exceed": bool(prof.get("auto_pause_on_exceed", True)),
+                }
+        except Exception as exc:
+            logger.debug(f"[RoleBudget] Konnte agent_profiles.json nicht lesen: {exc}")
+
+    return {"agent_id": aid, **defaults}
+
+
+def set_role_budget_policy(
+    agent_id: str,
+    daily_token_budget: Optional[int] = None,
+    daily_cost_limit_eur: Optional[float] = None,
+    monthly_cost_limit_eur: Optional[float] = None,
+    hard_cap_enabled: Optional[bool] = None,
+    auto_pause_on_exceed: Optional[bool] = None,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    init_budget_tables(db_path)
+    aid = (agent_id or "").strip()
+    if not aid:
+        raise ValueError("agent_id_required")
+
+    current = get_role_budget_policy(aid, db_path=db_path)
+    new_tok = max(1000, int(daily_token_budget)) if daily_token_budget is not None else current["daily_token_budget"]
+    new_eur = max(0.01, float(daily_cost_limit_eur)) if daily_cost_limit_eur is not None else current["daily_cost_limit_eur"]
+    new_month = max(0.10, float(monthly_cost_limit_eur)) if monthly_cost_limit_eur is not None else current["monthly_cost_limit_eur"]
+    new_hard = bool(hard_cap_enabled) if hard_cap_enabled is not None else current["hard_cap_enabled"]
+    new_pause = bool(auto_pause_on_exceed) if auto_pause_on_exceed is not None else current["auto_pause_on_exceed"]
+    now_iso = datetime.datetime.now().isoformat()
+
+    with _BUDGET_LOCK:
+        with _get_conn(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO role_budget_policies (
+                    agent_id, daily_token_budget, daily_cost_limit_eur,
+                    monthly_cost_limit_eur, hard_cap_enabled, auto_pause_on_exceed, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(agent_id) DO UPDATE SET
+                    daily_token_budget = excluded.daily_token_budget,
+                    daily_cost_limit_eur = excluded.daily_cost_limit_eur,
+                    monthly_cost_limit_eur = excluded.monthly_cost_limit_eur,
+                    hard_cap_enabled = excluded.hard_cap_enabled,
+                    auto_pause_on_exceed = excluded.auto_pause_on_exceed,
+                    updated_at = excluded.updated_at
+                """,
+                (aid, new_tok, new_eur, new_month, int(new_hard), int(new_pause), now_iso),
+            )
+            # Clear paused_at for today if budget was raised
+            today = _today_str()
+            conn.execute(
+                """
+                UPDATE role_daily_budget_ledger
+                SET paused_at = NULL, updated_at = ?
+                WHERE agent_id = ? AND usage_date = ? AND tokens_used < ? AND cost_eur < ?
+                """,
+                (now_iso, aid, today, new_tok, new_eur),
+            )
+            conn.commit()
+
+    return get_role_budget_policy(aid, db_path=db_path)
+
+
+def get_role_usage_today(agent_id: str, db_path: Optional[str] = None) -> Dict[str, Any]:
+    init_budget_tables(db_path)
+    aid = (agent_id or "default").strip()
+    today = _today_str()
+    month_prefix = _month_str()
+
+    with _get_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM role_daily_budget_ledger WHERE agent_id = ? AND usage_date = ?",
+            (aid, today),
+        ).fetchone()
+        month_row = conn.execute(
+            "SELECT COALESCE(SUM(tokens_used), 0) AS m_tok, COALESCE(SUM(cost_eur), 0.0) AS m_eur "
+            "FROM role_daily_budget_ledger WHERE agent_id = ? AND usage_date LIKE ?",
+            (aid, f"{month_prefix}%"),
+        ).fetchone()
+
+    tokens_today = int(row["tokens_used"]) if row else 0
+    cost_eur_today = round(float(row["cost_eur"]), 4) if row else 0.0
+    dispatches_today = int(row["dispatch_count"]) if row else 0
+    paused_at = row["paused_at"] if row else None
+
+    policy = get_role_budget_policy(aid, db_path=db_path)
+    tok_limit = max(1, policy["daily_token_budget"])
+    eur_limit = max(0.0001, policy["daily_cost_limit_eur"])
+
+    tok_pct = round(min(100.0, (tokens_today / tok_limit) * 100.0), 1)
+    eur_pct = round(min(100.0, (cost_eur_today / eur_limit) * 100.0), 1)
+    exceeded = (tokens_today >= tok_limit) or (cost_eur_today >= eur_limit)
+
+    return {
+        "agent_id": aid,
+        "date": today,
+        "tier": policy["tier"],
+        "tokens_used_today": tokens_today,
+        "daily_token_budget": policy["daily_token_budget"],
+        "token_utilization_pct": tok_pct,
+        "cost_eur_today": cost_eur_today,
+        "daily_cost_limit_eur": policy["daily_cost_limit_eur"],
+        "cost_utilization_pct": eur_pct,
+        "tokens_used_month": int(month_row["m_tok"]) if month_row else tokens_today,
+        "cost_eur_month": round(float(month_row["m_eur"]), 4) if month_row else cost_eur_today,
+        "monthly_cost_limit_eur": policy["monthly_cost_limit_eur"],
+        "dispatches_today": dispatches_today,
+        "hard_cap_enabled": policy["hard_cap_enabled"],
+        "is_exceeded": exceeded,
+        "paused_at": paused_at,
+        "budget_status": "paused_budget" if (exceeded and policy["hard_cap_enabled"]) else (
+            "warning" if max(tok_pct, eur_pct) >= 80.0 else "ok"
+        ),
+    }
+
+
+def check_budget_gate(
+    agent_id: str,
+    task_id: Optional[str] = None,
+    estimated_tokens: int = 500,
+    estimated_cost_eur: float = 0.001,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Pre-Flight Gate for `core_dispatcher`:
+    Checks both the role's daily hard token/EUR budget AND any task-level budget allocation.
+    """
+    init_budget_tables(db_path)
+    aid = (agent_id or "default").strip()
+    usage = get_role_usage_today(aid, db_path=db_path)
+
+    if usage["hard_cap_enabled"]:
+        if usage["tokens_used_today"] >= usage["daily_token_budget"]:
+            return {
+                "allowed": False,
+                "error_code": "ROLE_TOKEN_BUDGET_EXCEEDED",
+                "agent_id": aid,
+                "reason": (
+                    f"Tages-Tokenbudget für Rolle '{aid}' erschöpft "
+                    f"({usage['tokens_used_today']:,} / {usage['daily_token_budget']:,} Tokens). "
+                    f"Agent wurde zum Schutz vor Kostenüberschreitung pausiert."
+                ),
+                "usage": usage,
+            }
+        if usage["cost_eur_today"] >= usage["daily_cost_limit_eur"]:
+            return {
+                "allowed": False,
+                "error_code": "ROLE_EUR_BUDGET_EXCEEDED",
+                "agent_id": aid,
+                "reason": (
+                    f"Tages-Kostenbudget für Rolle '{aid}' erschöpft "
+                    f"({usage['cost_eur_today']:.2f} € / {usage['daily_cost_limit_eur']:.2f} €). "
+                    f"Agent wurde zum Schutz vor Kostenüberschreitung pausiert."
+                ),
+                "usage": usage,
+            }
+
+    # Check task-level budget allocation if task_id is provided
+    if task_id:
+        with _get_conn(db_path) as conn:
+            t_row = conn.execute(
+                "SELECT * FROM task_budget_allocations WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+        if t_row:
+            t_tok_budget = int(t_row["token_budget"] or 0)
+            t_tok_used = int(t_row["tokens_used"] or 0)
+            t_eur_limit = float(t_row["cost_limit_eur"] or 0.0)
+            t_eur_used = float(t_row["cost_used_eur"] or 0.0)
+            if t_tok_budget > 0 and t_tok_used >= t_tok_budget:
+                return {
+                    "allowed": False,
+                    "error_code": "TASK_TOKEN_BUDGET_EXCEEDED",
+                    "agent_id": aid,
+                    "task_id": task_id,
+                    "reason": (
+                        f"Aufgaben-Tokenlimit für Task '{task_id}' erreicht "
+                        f"({t_tok_used:,} / {t_tok_budget:,} Tokens)."
+                    ),
+                    "usage": usage,
+                }
+            if t_eur_limit > 0.0 and t_eur_used >= t_eur_limit:
+                return {
+                    "allowed": False,
+                    "error_code": "TASK_EUR_BUDGET_EXCEEDED",
+                    "agent_id": aid,
+                    "task_id": task_id,
+                    "reason": (
+                        f"Aufgaben-Kostenlimit für Task '{task_id}' erreicht "
+                        f"({t_eur_used:.2f} € / {t_eur_limit:.2f} €)."
+                    ),
+                    "usage": usage,
+                }
+
+    return {"allowed": True, "agent_id": aid, "task_id": task_id, "usage": usage}
+
+
+def record_budget_usage(
+    agent_id: str,
+    tokens_used: int,
+    cost_usd: float = 0.0,
+    cost_eur: Optional[float] = None,
+    task_id: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Records actual tokens and EUR/USD spent by an agent role and optional task."""
+    init_budget_tables(db_path)
+    aid = (agent_id or "default").strip()
+    tok = max(0, int(tokens_used or 0))
+    usd = max(0.0, float(cost_usd or 0.0))
+    eur = max(0.0, float(cost_eur)) if cost_eur is not None else round(usd * USD_TO_EUR_RATE, 6)
+    today = _today_str()
+    now_iso = datetime.datetime.now().isoformat()
+
+    policy = get_role_budget_policy(aid, db_path=db_path)
+
+    with _BUDGET_LOCK:
+        with _get_conn(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO role_daily_budget_ledger (
+                    agent_id, usage_date, tokens_used, cost_eur, cost_usd, dispatch_count, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, 1, ?)
+                ON CONFLICT(agent_id, usage_date) DO UPDATE SET
+                    tokens_used = role_daily_budget_ledger.tokens_used + excluded.tokens_used,
+                    cost_eur = role_daily_budget_ledger.cost_eur + excluded.cost_eur,
+                    cost_usd = role_daily_budget_ledger.cost_usd + excluded.cost_usd,
+                    dispatch_count = role_daily_budget_ledger.dispatch_count + 1,
+                    updated_at = excluded.updated_at
+                """,
+                (aid, today, tok, eur, usd, now_iso),
+            )
+
+            # Check if role just crossed the hard threshold -> auto-pause
+            row = conn.execute(
+                "SELECT tokens_used, cost_eur, paused_at FROM role_daily_budget_ledger WHERE agent_id = ? AND usage_date = ?",
+                (aid, today),
+            ).fetchone()
+            if row and policy["hard_cap_enabled"] and policy["auto_pause_on_exceed"]:
+                if (int(row["tokens_used"]) >= policy["daily_token_budget"] or float(row["cost_eur"]) >= policy["daily_cost_limit_eur"]) and not row["paused_at"]:
+                    conn.execute(
+                        "UPDATE role_daily_budget_ledger SET paused_at = ? WHERE agent_id = ? AND usage_date = ?",
+                        (now_iso, aid, today),
+                    )
+
+            if task_id:
+                conn.execute(
+                    """
+                    UPDATE task_budget_allocations
+                    SET tokens_used = tokens_used + ?,
+                        cost_used_eur = cost_used_eur + ?,
+                        updated_at = ?
+                    WHERE task_id = ?
+                    """,
+                    (tok, eur, now_iso, task_id),
+                )
+            conn.commit()
+
+    return get_role_usage_today(aid, db_path=db_path)
+
+
+# =========================================================================
+# 2. COMPLEXITY-WEIGHTED SUBTASK BUDGET SPLITTING
+# =========================================================================
+
+def score_subtask_complexity(
+    role_or_agent_id: str,
+    mandate_text: str,
+    explicit_complexity: Optional[str] = None,
+) -> float:
+    """
+    Calculates a complexity weight (0.7 .. 2.0) for a subtask based on explicit
+    complexity labels, specialist domain, and mandate keywords.
+    """
+    if explicit_complexity:
+        low_c = str(explicit_complexity).strip().lower()
+        if low_c in ("critical", "very_high", "sehr_hoch"):
+            return 1.8
+        if low_c in ("high", "hoch", "complex"):
+            return 1.45
+        if low_c in ("low", "niedrig", "simple"):
+            return 0.8
+        if low_c in ("medium", "mittel", "normal"):
+            return 1.0
+
+    combined = f"{role_or_agent_id} {mandate_text}".lower()
+    high_hits = sum(1 for kw in COMPLEXITY_KEYWORDS_HIGH if kw in combined)
+    med_hits = sum(1 for kw in COMPLEXITY_KEYWORDS_MEDIUM if kw in combined)
+
+    weight = 1.0 + min(0.75, high_hits * 0.18) + min(0.25, med_hits * 0.08)
+    if len(mandate_text or "") > 400:
+        weight += 0.15
+    elif len(mandate_text or "") < 80:
+        weight -= 0.10
+
+    return round(max(0.7, min(2.0, weight)), 2)
+
+
+def allocate_task_budget_to_subagents(
+    parent_task_id: str,
+    total_token_budget: int,
+    subtasks: List[Dict[str, Any]],
+    total_cost_limit_eur: Optional[float] = None,
+    orchestrator_reserve_pct: float = 0.15,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Splits a parent task's token & EUR budget across its subagents weighted by
+    task complexity. Reserves `orchestrator_reserve_pct` (default 15%) for the
+    Orchestrator triage & Lisa synthesis loop.
+    """
+    init_budget_tables(db_path)
+    tot_tokens = max(0, int(total_token_budget or 0))
+    if tot_tokens <= 0:
+        # Default fallback: 60k tokens per subtask + 20k orchestrator buffer
+        tot_tokens = max(60_000, len(subtasks) * 45_000 + 15_000)
+
+    if total_cost_limit_eur is None or total_cost_limit_eur <= 0:
+        # Approximate EUR from token budget (~1.25 EUR per 100k tokens blended)
+        tot_eur = round((tot_tokens / 100_000.0) * 1.25, 2)
+    else:
+        tot_eur = round(float(total_cost_limit_eur), 2)
+
+    if not subtasks:
+        now_iso = datetime.datetime.now().isoformat()
+        with _BUDGET_LOCK:
+            with _get_conn(db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO task_budget_allocations (
+                        task_id, parent_task_id, agent_id, token_budget, cost_limit_eur,
+                        complexity_weight, budget_share_pct, status, created_at, updated_at
+                    )
+                    VALUES (?, NULL, ?, ?, ?, 1.0, 100.0, 'active', ?, ?)
+                    ON CONFLICT(task_id) DO UPDATE SET
+                        token_budget = excluded.token_budget,
+                        cost_limit_eur = excluded.cost_limit_eur,
+                        updated_at = excluded.updated_at
+                    """,
+                    (parent_task_id, "default", tot_tokens, tot_eur, now_iso, now_iso),
+                )
+                conn.commit()
+        return {
+            "parent_task_id": parent_task_id,
+            "total_token_budget": tot_tokens,
+            "total_cost_limit_eur": tot_eur,
+            "orchestrator_reserve_tokens": tot_tokens,
+            "orchestrator_reserve_eur": tot_eur,
+            "allocations": [
+                {
+                    "task_id": parent_task_id,
+                    "agent_id": "default",
+                    "token_budget": tot_tokens,
+                    "cost_limit_eur": tot_eur,
+                    "budget_share_pct": 100.0,
+                }
+            ],
+        }
+
+    reserve_pct = max(0.0, min(0.40, float(orchestrator_reserve_pct)))
+    orch_tokens = int(round(tot_tokens * reserve_pct))
+    orch_eur = round(tot_eur * reserve_pct, 4)
+
+    pool_tokens = max(1000, tot_tokens - orch_tokens)
+    pool_eur = max(0.01, tot_eur - orch_eur)
+
+    weights: List[float] = []
+    for sub in subtasks:
+        w = sub.get("complexity_weight")
+        if isinstance(w, (int, float)) and w > 0:
+            weights.append(float(w))
+        else:
+            weights.append(
+                score_subtask_complexity(
+                    role_or_agent_id=str(sub.get("agent_id") or sub.get("role") or ""),
+                    mandate_text=str(sub.get("mandate") or sub.get("body") or sub.get("title") or ""),
+                    explicit_complexity=sub.get("complexity"),
+                )
+            )
+
+    weight_sum = sum(weights) or 1.0
+    now_iso = datetime.datetime.now().isoformat()
+    allocations: List[Dict[str, Any]] = []
+
+    with _BUDGET_LOCK:
+        with _get_conn(db_path) as conn:
+            # Record parent task allocation
+            conn.execute(
+                """
+                INSERT INTO task_budget_allocations (
+                    task_id, parent_task_id, agent_id, token_budget, cost_limit_eur,
+                    complexity_weight, budget_share_pct, status, created_at, updated_at
+                )
+                VALUES (?, NULL, 'orchestrator', ?, ?, 1.0, ?, 'active', ?, ?)
+                ON CONFLICT(task_id) DO UPDATE SET
+                    token_budget = excluded.token_budget,
+                    cost_limit_eur = excluded.cost_limit_eur,
+                    updated_at = excluded.updated_at
+                """,
+                (parent_task_id, tot_tokens, tot_eur, round(reserve_pct * 100.0, 1), now_iso, now_iso),
+            )
+
+            for idx, (sub, w) in enumerate(zip(subtasks, weights)):
+                share = w / weight_sum
+                sub_tok = max(2000, int(round(pool_tokens * share)))
+                sub_eur = max(0.01, round(pool_eur * share, 4))
+                share_pct = round(share * (1.0 - reserve_pct) * 100.0, 1)
+                sub_id = str(sub.get("id") or sub.get("task_id") or f"{parent_task_id}-sub{idx+1}")
+                sub_agent = str(sub.get("agent_id") or sub.get("assignee") or "default")
+
+                sub["token_budget"] = sub_tok
+                sub["estimated_tokens"] = sub_tok
+                sub["cost_limit_eur"] = round(sub_eur, 2)
+                sub["estimated_cost_eur"] = round(sub_eur, 2)
+                sub["cost_limit_usd"] = round(sub_eur / USD_TO_EUR_RATE, 2)
+                sub["complexity_weight"] = w
+                sub["budget_share_pct"] = share_pct
+
+                conn.execute(
+                    """
+                    INSERT INTO task_budget_allocations (
+                        task_id, parent_task_id, agent_id, token_budget, cost_limit_eur,
+                        complexity_weight, budget_share_pct, status, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+                    ON CONFLICT(task_id) DO UPDATE SET
+                        parent_task_id = excluded.parent_task_id,
+                        agent_id = excluded.agent_id,
+                        token_budget = excluded.token_budget,
+                        cost_limit_eur = excluded.cost_limit_eur,
+                        complexity_weight = excluded.complexity_weight,
+                        budget_share_pct = excluded.budget_share_pct,
+                        updated_at = excluded.updated_at
+                    """,
+                    (sub_id, parent_task_id, sub_agent, sub_tok, sub_eur, w, share_pct, now_iso, now_iso),
+                )
+
+                allocations.append({
+                    "subtask_id": sub_id,
+                    "agent_id": sub_agent,
+                    "role": sub.get("role") or sub_agent,
+                    "complexity_weight": w,
+                    "budget_share_pct": share_pct,
+                    "token_budget": sub_tok,
+                    "cost_limit_eur": round(sub_eur, 2),
+                })
+            conn.commit()
+
+    return {
+        "parent_task_id": parent_task_id,
+        "total_token_budget": tot_tokens,
+        "total_cost_limit_eur": tot_eur,
+        "orchestrator_reserve_tokens": orch_tokens,
+        "orchestrator_reserve_eur": round(orch_eur, 2),
+        "allocations": allocations,
+    }
+
+
+# =========================================================================
+# 3. AUTONOMOUS CEO HIRING (DYNAMIC SPECIALIST RECRUITMENT FOR TASKS)
+# =========================================================================
+
+def _discover_matching_skills(text: str, max_skills: int = 8) -> List[str]:
+    """Matches installed skills in `.agents/skills/` to a task description."""
+    skills_dir = os.path.join(WORKSPACE_DIR, ".agents", "skills")
+    low = (text or "").lower()
+    matched: List[str] = []
+
+    keyword_skill_map = [
+        (("linkedin", "social", "hook", "post", "feed", "ghostwrit"), ["li-post", "li-human", "li-carousel", "li-comment", "li-plan", "anti-ai-slop"]),
+        (("outreach", "dm", "akquise", "lead", "inbox"), ["li-dm", "li-inbox", "li-profile", "li-reply"]),
+        (("seo", "geo", "keyword", "ranking", "schema"), ["seo", "seo-audit", "seo-geo", "seo-schema", "seo-content"]),
+        (("video", "short", "tiktok", "youtube", "reel", "clip"), ["kinocut", "kinocut-repurpose", "li-repurpose"]),
+        (("n8n", "webhook", "workflow", "automat"), ["n8n-automation-mesh", "agent-skills-hub"]),
+        (("patent", "ip", "prior art", "marke"), ["patsnap-search"]),
+        (("steuer", "ust", "mwst", "buchhaltung", "finanz"), ["auto-calculate-vat-split"]),
+        (("browser", "scrape", "web", "formular"), ["agent-browser-navigator", "frontend-reverse-engineer"]),
+        (("code", "python", "refactor", "test", "review"), ["simplify-code", "sdlc-review", "claude-code"]),
+    ]
+
+    for kws, skill_ids in keyword_skill_map:
+        if any(k in low for k in kws):
+            for sid in skill_ids:
+                if sid not in matched:
+                    matched.append(sid)
+
+    if os.path.isdir(skills_dir):
+        try:
+            for entry in os.listdir(skills_dir):
+                if len(matched) >= max_skills:
+                    break
+                if entry in matched:
+                    continue
+                tokens = [t for t in re.split(r"[-_]+", entry.lower()) if len(t) >= 4]
+                if any(t in low for t in tokens):
+                    matched.append(entry)
+        except Exception as _exc:
+            logger.debug("[role_budget_engine] Ignorierte Ausnahme (Z.713): %s", _exc)
+
+    if "anti-ai-slop" not in matched:
+        matched.append("anti-ai-slop")
+    return matched[:max_skills]
+
+
+def ceo_autonomous_hire_specialist(
+    parent_task_id: str,
+    role_title: str,
+    mandate: str,
+    person_name: Optional[str] = None,
+    category: str = "1. Strategy, Leadership & Life Architecture",
+    token_budget: int = 45_000,
+    cost_limit_eur: float = 0.55,
+    subtask_id: str = "",
+    model: str = "deepseek/deepseek-chat",
+    register_in_profiles_json: bool = False,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Spawns a temporary specialist agent hired by the CEO (`executive_decision_architect`)
+    for a specific task, complete with tailored skills, system prompt, and hard token/EUR budget.
+    """
+    init_budget_tables(db_path)
+    clean_role = (role_title or "Project Task-Force Specialist").strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", clean_role.lower()).strip("_")[:24] or "specialist"
+    short_hash = hashlib.sha256(f"{parent_task_id}:{clean_role}:{uuid.uuid4().hex[:6]}".encode()).hexdigest()[:6]
+    agent_id = f"hired_{slug}_{short_hash}"
+
+    first_names = ["Dr. Lukas", "Maya", "Jonas", "Elena", "Rafael", "Nora", "Leonard", "Viktor"]
+    last_names = ["Vance", "Berg", "Keller", "Lindqvist", "Sterling", "Moreau", "Falk", "Novak"]
+    h_idx = int(short_hash, 16)
+    p_name = (person_name or f"{first_names[h_idx % len(first_names)]} {last_names[(h_idx // 8) % len(last_names)]}").strip()
+
+    skills = _discover_matching_skills(f"{clean_role} {mandate}")
+    now_iso = datetime.datetime.now().isoformat()
+
+    sys_prompt = (
+        f"# {p_name} — {clean_role} (`@{agent_id}`)\n"
+        f"**Rekrutiert durch:** Robert (CEO — Autonomous Hiring) | **Projekt-Task:** `{parent_task_id}`\n"
+        f"**Token-Budget:** {token_budget:,} Tokens | **Kosten-Limit:** {cost_limit_eur:.2f} €\n\n"
+        f"Du wurdest als spezialisierter Ad-hoc-Experte für folgendes Mandat eingestellt:\n"
+        f"{mandate}\n\n"
+        f"Arbeite präzise, faktenbasiert, ohne KI-Floskeln und liefere ein direkt verwertbares Ergebnis."
+    )
+
+    with _BUDGET_LOCK:
+        with _get_conn(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO autonomous_hired_agents (
+                    agent_id, parent_task_id, subtask_id, person_name, role_title,
+                    category, skills_json, token_budget, cost_limit_eur, status,
+                    hired_by, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'executive_decision_architect', ?)
+                """,
+                (
+                    agent_id,
+                    parent_task_id,
+                    subtask_id,
+                    p_name,
+                    clean_role,
+                    category,
+                    json.dumps(skills, ensure_ascii=False),
+                    int(token_budget),
+                    float(cost_limit_eur),
+                    now_iso,
+                ),
+            )
+            conn.commit()
+
+        set_role_budget_policy(
+            agent_id=agent_id,
+            daily_token_budget=int(token_budget),
+            daily_cost_limit_eur=float(cost_limit_eur),
+            monthly_cost_limit_eur=float(cost_limit_eur) * 5.0,
+            hard_cap_enabled=True,
+            auto_pause_on_exceed=True,
+            db_path=db_path,
+        )
+
+    return {
+        "agent_id": agent_id,
+        "person_name": p_name,
+        "name": clean_role,
+        "role": clean_role,
+        "category": category,
+        "skills": skills,
+        "model": model,
+        "system_prompt": sys_prompt,
+        "token_budget": int(token_budget),
+        "cost_limit_eur": round(float(cost_limit_eur), 2),
+        "parent_task_id": parent_task_id,
+        "subtask_id": subtask_id,
+        "hired_by": "executive_decision_architect",
+        "ephemeral": True,
+        "status": "active",
+        "created_at": now_iso,
+    }
+
+
+def plan_and_decompose_task_with_budgets(
+    parent_task_id: str,
+    title: str,
+    body: str,
+    total_token_budget: Optional[int] = None,
+    total_cost_limit_eur: Optional[float] = None,
+    allow_autonomous_hiring: bool = False,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Analyzes a task, selects the optimal 2-3 existing roster specialists,
+    optionally hires an ad-hoc specialist via CEO Autonomous Hiring if
+    `allow_autonomous_hiring` is enabled, and splits the task's token/EUR
+    budget across all subtasks by complexity.
+    """
+    init_budget_tables(db_path)
+    text_low = f"{title} {body}".lower()
+
+    nominated: List[Dict[str, Any]] = []
+
+    # Domain routing rules to select best roster agents
+    routing_rules = [
+        (("linkedin", "social media", "hook", "carousel", "post", "thought leadership"), "linkedin_social_media_specialist", "LinkedIn & Social Media Growth Specialist", "Erstelle den LinkedIn-/Social-Media-Content nach voice.md mit Hook-Varianten und Human-Score-Prüfung."),
+        (("ghostwrit", "story", "essay", "newsletter"), "storyteller_ghostwriter", "Executive Ghostwriter", "Verfasse den redaktionellen Haupttext mit starker Story-Struktur und Zahlenbelegen."),
+        (("repurpos", "short", "tiktok", "youtube", "multi-channel"), "content_repurposing_specialist", "Multi-Channel Repurposing Strategist", "Adaptiere den Kerninhalt für Kurzvideo-, Thread- und Multi-Channel-Formate."),
+        (("seo", "keyword", "geo", "ranking", "suchmaschine"), "seo_geo_specialist", "Technical SEO & GEO Lead", "Optimiere Struktur, Entitäten, Schema.org und Suchintention."),
+        (("wettbewerb", "competitor", "markt", "radar", "recherche", "studie"), "research_scout", "Primary Market & Intelligence Scout", "Führe eine belastbare Quellen-, Markt- und Wettbewerbsanalyse mit Primärzitaten durch."),
+        (("code", "python", "api", "frontend", "backend", "bug", "feature", "ui"), "senior_fullstack_engineer", "Staff Fullstack Software Engineer", "Implementiere und verifiziere die technische Lösung sauber im Code."),
+        (("architektur", "system", "docker", "n8n", "orchestr"), "system_architect_orchestrator", "Chief Distributed Systems Architect", "Entwirf die System- und Schnittstellenarchitektur sowie die Governance-Grenzen."),
+        (("vertrag", "recht", "agb", "haftung", "jurist"), "commercial_jurist_contracts", "Commercial Contracts Counsel", "Prüfe die vertraglichen und haftungsrechtlichen Rahmenbedingungen."),
+        (("steuer", "holding", "ust", "finanz", "budget", "dcf", "kalkulation"), "finance_lead", "VP of Finance & Treasury", "Erstelle die kaufmännische Kalkulation, Budget- und Wirtschaftlichkeitsprüfung."),
+        (("immobilie", "bau", "baugb", "kfw", "objekt"), "construction_project_manager", "Senior Construction & Delivery Director", "Bewerte Bau-, Genehmigungs- und Projektentwicklungsaspekte."),
+    ]
+
+    for kws, aid, role_label, default_mandate in routing_rules:
+        if any(k in text_low for k in kws) and len(nominated) < 3:
+            nominated.append({
+                "agent_id": aid,
+                "role": role_label,
+                "mandate": f"{default_mandate}\n\nKontext: {title}\n{body}".strip(),
+            })
+
+    if not nominated:
+        nominated.append({
+            "agent_id": "research_scout",
+            "role": "Primary Market & Intelligence Scout",
+            "mandate": f"Recherchiere Fakten, Grundlagen und Lösungsoptionen für: {title}\n{body}".strip(),
+        })
+        nominated.append({
+            "agent_id": "executive_decision_architect",
+            "role": "CEO — Chief Executive Officer",
+            "mandate": f"Erstelle die strategische Entscheidungsvorlage und Maßnahmenmatrix für: {title}".strip(),
+        })
+
+    hired_specialist: Optional[Dict[str, Any]] = None
+    if allow_autonomous_hiring:
+        # CEO hires a dedicated project specialist tailored specifically to this task's niche
+        custom_role_title = f"Ad-hoc Task-Force Specialist: {title[:42]}"
+        custom_mandate = (
+            f"Spezialmandat (CEO Autonomous Hiring) für Aufgabe '{title}':\n"
+            f"Bearbeite die spezifischen Fach- und Qualitätsanforderungen von '{body or title}' "
+            f"und liefere ein direkt umsetzbares Spezial-Artefakt für die Endsynthese."
+        )
+        # Preliminary budget estimate for hired agent (will be refined by allocate_task_budget_to_subagents)
+        hired_specialist = ceo_autonomous_hire_specialist(
+            parent_task_id=parent_task_id,
+            role_title=custom_role_title,
+            mandate=custom_mandate,
+            db_path=db_path,
+        )
+        nominated.append({
+            "agent_id": hired_specialist["agent_id"],
+            "person_name": hired_specialist["person_name"],
+            "role": hired_specialist["role"],
+            "mandate": custom_mandate,
+            "complexity": "high",
+            "is_autonomously_hired": True,
+        })
+
+    eff_tokens = int(total_token_budget) if (total_token_budget and total_token_budget > 0) else (len(nominated) * 45_000 + 15_000)
+    budget_plan = allocate_task_budget_to_subagents(
+        parent_task_id=parent_task_id,
+        total_token_budget=eff_tokens,
+        subtasks=nominated,
+        total_cost_limit_eur=total_cost_limit_eur,
+        db_path=db_path,
+    )
+
+    # Update hired specialist's budget policy to match its exact complexity-weighted share
+    if hired_specialist:
+        alloc = next((a for a in budget_plan["allocations"] if a["agent_id"] == hired_specialist["agent_id"]), None)
+        if alloc:
+            set_role_budget_policy(
+                agent_id=hired_specialist["agent_id"],
+                daily_token_budget=alloc["token_budget"],
+                daily_cost_limit_eur=alloc["cost_limit_eur"],
+                db_path=db_path,
+            )
+            hired_specialist["token_budget"] = alloc["token_budget"]
+            hired_specialist["cost_limit_eur"] = alloc["cost_limit_eur"]
+
+    return {
+        "parent_task_id": parent_task_id,
+        "allow_autonomous_hiring": allow_autonomous_hiring,
+        "hired_specialist": hired_specialist,
+        "subtasks": nominated,
+        "budget_plan": budget_plan,
+    }
+
+
+def list_all_role_budgets(
+    profiles: Optional[List[Dict[str, Any]]] = None,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Returns budget policies and today's live token/EUR consumption across all roles."""
+    init_budget_tables(db_path)
+    if profiles is None:
+        if os.path.exists(PROFILES_FILE):
+            try:
+                with open(PROFILES_FILE, "r", encoding="utf-8") as f:
+                    profiles = json.load(f)
+            except Exception:
+                profiles = []
+        else:
+            profiles = []
+
+    items: List[Dict[str, Any]] = []
+    seen_ids = set()
+    for p in profiles:
+        aid = p.get("id")
+        if not aid:
+            continue
+        seen_ids.add(aid)
+        u = get_role_usage_today(aid, db_path=db_path)
+        u["person_name"] = p.get("person_name") or p.get("name") or aid
+        u["role_name"] = p.get("name") or aid
+        u["category"] = p.get("category") or "Spezialist"
+        items.append(u)
+
+    # Include any active autonomously hired agents
+    with _get_conn(db_path) as conn:
+        hired_rows = conn.execute(
+            "SELECT * FROM autonomous_hired_agents WHERE status = 'active' ORDER BY created_at DESC"
+        ).fetchall()
+    for hr in hired_rows:
+        aid = hr["agent_id"]
+        if aid in seen_ids:
+            continue
+        u = get_role_usage_today(aid, db_path=db_path)
+        u["person_name"] = hr["person_name"]
+        u["role_name"] = hr["role_title"]
+        u["category"] = hr["category"]
+        u["ephemeral"] = True
+        u["parent_task_id"] = hr["parent_task_id"]
+        items.append(u)
+
+    total_tokens_today = sum(i["tokens_used_today"] for i in items)
+    total_eur_today = round(sum(i["cost_eur_today"] for i in items), 4)
+    paused_count = sum(1 for i in items if i["budget_status"] == "paused_budget")
+
+    return {
+        "date": _today_str(),
+        "total_roles": len(items),
+        "total_tokens_today": total_tokens_today,
+        "total_cost_eur_today": total_eur_today,
+        "paused_roles_count": paused_count,
+        "roles": items,
+    }

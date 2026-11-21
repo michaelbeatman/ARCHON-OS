@@ -238,8 +238,8 @@ class ChainedAuditLog:
         company_id_val = str(safe_payload.get("company_id") or "").strip()
         if not company_id_val:
             try:
-                from backend.tenant_context import get_active_tenant_id
-                company_id_val = get_active_tenant_id() or "default"
+                from backend.tenant_context import tenant_context
+                company_id_val = tenant_context.get_active_tenant_id() or "default"
             except Exception:
                 company_id_val = "default"
         else:
@@ -487,7 +487,7 @@ class ChainedAuditLog:
                     cid = sanitize_tenant_id(str(company_id).strip())
                 except Exception:
                     cid = str(company_id).strip()
-                query += " AND (company_id = ? OR company_id IS NULL OR company_id = '')"
+                query += " AND company_id = ?"
                 params.append(cid)
 
             if category and category.lower() not in ("all", "alle"):

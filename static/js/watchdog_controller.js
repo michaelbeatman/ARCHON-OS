@@ -171,7 +171,7 @@
         <div class="flex items-center gap-2 min-w-0 flex-1">
           <button 
             type="button" 
-            onclick="toggleWatchdogTarget('${t.id}')"
+            onclick="toggleWatchdogTarget('${escapeHtml(String(t.id || ''))}')"
             class="w-4 h-4 rounded flex items-center justify-center border transition shrink-0 cursor-pointer ${t.active ? 'bg-zinc-900 border-zinc-900 text-white dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900' : 'border-[var(--border)] hover:border-[var(--foreground)]'}"
             title="${t.active ? wdT('ui.watchdog_controller.toggle_deactivate', 'Deaktivieren') : wdT('ui.watchdog_controller.toggle_activate', 'Aktivieren')}"
           >
@@ -190,7 +190,7 @@
         <div class="flex items-center gap-1 shrink-0">
           <button 
             type="button" 
-            onclick="deleteWatchdogTarget('${t.id}')" 
+            onclick="deleteWatchdogTarget('${escapeHtml(String(t.id || ''))}')" 
             class="w-5 h-5 rounded hover:bg-rose-500/15 text-[var(--muted-foreground)] hover:text-rose-500 flex items-center justify-center transition cursor-pointer text-xs"
             title="${wdT('ui.watchdog_controller.remove_source', 'Quelle entfernen')}"
           >
@@ -238,7 +238,7 @@
 
       return `
         <div 
-          onclick="selectWatchdogFinding('${f.id}')"
+          onclick="selectWatchdogFinding('${escapeHtml(String(f.id || ''))}')"
           class="p-3 rounded-xl border transition cursor-pointer flex flex-col gap-1.5 ${
             isPrio 
               ? 'border-rose-500/40 bg-rose-500/5' 
@@ -267,7 +267,7 @@
             <!-- Schnell-Korb Toggle Checkbox -->
             <button 
               type="button" 
-              onclick="event.stopPropagation(); toggleFindingInBasket('${f.id}')"
+              onclick="event.stopPropagation(); toggleFindingInBasket('${escapeHtml(String(f.id || ''))}')"
               class="px-2 py-0.5 rounded font-mono text-[10px] flex items-center gap-1 transition cursor-pointer ${
                 inBasket 
                   ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40 font-bold' 

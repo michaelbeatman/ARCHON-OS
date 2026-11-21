@@ -668,10 +668,11 @@ def _create_hitl_decision(
 def dispatch_workflow_event(
     source: str,
     event_type: str,
-    title: str,
+    title: str = "",
     summary: str = "",
     payload: Optional[Dict[str, Any]] = None,
     correlation_id: Optional[str] = None,
+    bypass_hitl: bool = False,
 ) -> Dict[str, Any]:
     """Zentraler Event-Bus für Watchdog, Posteingang, Research Lab und AI Boardroom."""
     init_schedules_db()
@@ -721,7 +722,8 @@ def dispatch_workflow_event(
         ).fetchone()[0]
         pol_rows = conn.execute("SELECT * FROM event_bus_policies WHERE source = ?", (src,)).fetchall()
         pol_map = {r["target"]: dict(r) for r in pol_rows}
-        max_pm = min([int(r["max_per_min"] or 20) for r in pol_rows] or [20])
+        all_rule = pol_map.get("all")
+        max_pm = int(all_rule["max_per_min"] or 20) if all_rule else max([int(r["max_per_min"] or 20) for r in pol_rows] or [20])
         if recent_cnt >= max_pm:
             conn.execute(
                 """
@@ -755,7 +757,7 @@ def dispatch_workflow_event(
             if rule["policy"] == "deny":
                 blocked_by_policy = True
                 continue
-            if rule["policy"] == "require_hitl":
+            if not bypass_hitl and rule["policy"] == "require_hitl":
                 # HITL-Policy: Event laeuft NICHT ungebremselt in Runs —
                 # stattdessen wird es als 'awaiting_hitl' protokolliert und
                 # pragmatisch eine Freigabe-Decision angelegt.
@@ -804,6 +806,18 @@ def dispatch_workflow_event(
             ),
         )
         conn.commit()
+        try:
+            from archon.core.runtime import broadcast_event
+            broadcast_event("event_bus", {
+                "event_id": event_id,
+                "source": src,
+                "event_type": str(event_type or "event"),
+                "title": str(title or "")[:200],
+                "status": status,
+                "triggered": [r.get("run_id") for r in triggered_runs if r.get("run_id")],
+            })
+        except Exception:
+            pass
         return {"event_id": event_id, "status": status, "triggered": triggered_runs}
     finally:
         conn.close()
@@ -924,7 +938,7 @@ def upsert_event_policy(source: str, target: str, policy: str, max_per_min: int 
         conn.close()
 
 
-def replay_workflow_event(event_id: str) -> Dict[str, Any]:
+def replay_workflow_event(event_id: str, bypass_hitl: bool = False) -> Dict[str, Any]:
     init_schedules_db()
     conn = _get_conn()
     try:
@@ -932,6 +946,9 @@ def replay_workflow_event(event_id: str) -> Dict[str, Any]:
         if not row:
             raise KeyError("event_not_found")
         payload = json.loads(row["payload_json"] or "{}")
+        if bypass_hitl and row["status"] == "awaiting_hitl":
+            conn.execute("UPDATE workflow_events SET status = 'hitl_approved' WHERE id = ?", (event_id,))
+            conn.commit()
     finally:
         conn.close()
     return dispatch_workflow_event(
@@ -941,7 +958,13 @@ def replay_workflow_event(event_id: str) -> Dict[str, Any]:
         summary=row["summary"],
         payload=payload,
         correlation_id=None,
+        bypass_hitl=bypass_hitl,
     )
+
+
+def approve_and_replay_hitl_event(event_id: str) -> Dict[str, Any]:
+    """Gibt ein per require_hitl pausiertes Event frei und startet die passenden Workflows."""
+    return replay_workflow_event(event_id, bypass_hitl=True)
 
 
 async def workflow_scheduler_background_loop() -> None:

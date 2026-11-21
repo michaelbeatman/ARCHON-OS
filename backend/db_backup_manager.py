@@ -31,17 +31,22 @@ def _resolve_target(filename: str, legacy_subpath: str) -> str:
         return ws_path if os.path.exists(ws_path) else os.path.expanduser(legacy_subpath)
 
 
-DB_TARGETS = [
-    _resolve_target("ops.db", "~/.hermes/ops.db"),
-    _resolve_target("business.db", "~/.hermes/business.db"),
-    _resolve_target("memory.db", "~/.hermes/memory.db"),
-    _resolve_target("agentic_memory.db", "~/.hermes/agentic_memory.db"),
-    _resolve_target("kanban.db", "~/.hermes/kanban.db"),
-    _resolve_target("state.db", "~/.hermes/state.db"),
-    _resolve_target("contracts.db", "~/.hermes/contracts.db"),
-    _resolve_target("deals.db", "~/.hermes/deals.db"),
-    _resolve_target("corporate.db", "~/.hermes/corporate.db"),
-]
+def _collect_db_targets() -> List[str]:
+    return [
+        _resolve_target("ops.db", "~/.hermes/ops.db"),
+        _resolve_target("business.db", "~/.hermes/business.db"),
+        _resolve_target("memory.db", "~/.hermes/memory.db"),
+        _resolve_target("agentic_memory.db", "~/.hermes/agentic_memory.db"),
+        _resolve_target("kanban.db", "~/.hermes/kanban.db"),
+        _resolve_target("state.db", "~/.hermes/state.db"),
+        _resolve_target("contracts.db", "~/.hermes/contracts.db"),
+        _resolve_target("deals.db", "~/.hermes/deals.db"),
+        _resolve_target("corporate.db", "~/.hermes/corporate.db"),
+    ]
+
+
+_INITIAL_DB_TARGETS = _collect_db_targets()
+DB_TARGETS = list(_INITIAL_DB_TARGETS)
 
 class DBBackupManager:
     def __init__(self, backup_dir: str = BACKUP_DIR):
@@ -62,11 +67,12 @@ class DBBackupManager:
         now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         backed_up = []
 
-        # Statische Kern-DBs + alle dynamischen Mandanten-DBs (ERP, Kanban, Contracts, Deals, CRM)
+        # Statische Kern-DBs (respektiert Test-Monkeypatches auf DB_TARGETS) + dynamische Mandanten-DBs
+        base_targets = list(DB_TARGETS) if DB_TARGETS != _INITIAL_DB_TARGETS else _collect_db_targets()
         tenant_dbs = sorted(glob.glob(os.path.join(WORKSPACE_DIR, "data", "tenants", "*", "*.db")))
         seen_paths = set()
         all_targets = []
-        for candidate in list(DB_TARGETS) + tenant_dbs:
+        for candidate in base_targets + tenant_dbs:
             norm = os.path.abspath(candidate)
             if norm not in seen_paths and os.path.exists(norm):
                 seen_paths.add(norm)

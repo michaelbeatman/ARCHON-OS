@@ -24,9 +24,10 @@ import uuid
 from typing import Dict, Any, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_DEFAULT_CRM_SQLITE_PATH = os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data", "data.db")
+_DEFAULT_CRM_SQLITE_PATH = os.path.join(WORKSPACE_DIR, "data", "business.db")
 CRM_SQLITE_PATH = _DEFAULT_CRM_SQLITE_PATH
 _CRM_MSG_LOCK = threading.Lock()
+_CRM_SCHEMA_READY: set[str] = set()
 
 
 def _resolve_active_crm_db_path(company_id: Optional[str] = None) -> str:
@@ -41,9 +42,16 @@ def _resolve_active_crm_db_path(company_id: Optional[str] = None) -> str:
 
 def _get_sqlite_conn(company_id: Optional[str] = None) -> sqlite3.Connection:
     target_db = _resolve_active_crm_db_path(company_id)
-    if not os.path.exists(target_db):
-        raise FileNotFoundError(f"SQLite CRM database not found at {target_db}")
-    conn = sqlite3.connect(target_db, timeout=5.0)
+    os.makedirs(os.path.dirname(target_db) or ".", exist_ok=True)
+    if target_db not in _CRM_SCHEMA_READY:
+        try:
+            from backend.tenant_context import init_tenant_db_schema
+            init_tenant_db_schema("crm.db", target_db)
+        except Exception:
+            pass
+        _CRM_SCHEMA_READY.add(target_db)
+    conn = sqlite3.connect(target_db, timeout=10.0)
+    conn.execute("PRAGMA busy_timeout=5000;")
     conn.row_factory = sqlite3.Row
     return conn
 

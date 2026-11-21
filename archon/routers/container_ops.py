@@ -101,8 +101,10 @@ def send_prompt_to_agent(
 
     from backend.llm_egress_guard import (
         ZeroEgressBlockedError,
+        enforce_egress_firewall_for_url,
         evaluate_and_gate_llm_dispatch,
         log_completed_llm_dispatch,
+        sanitize_outbound_llm_payload,
     )
 
     try:
@@ -118,15 +120,10 @@ def send_prompt_to_agent(
 
     target_model = str(gate.get("model") or model_name)
     headers = {"Content-Type": "application/json", "Authorization": "Bearer omniroute-local-key"}
-    payload = {
-        "model": target_model,
-        "messages": messages,
-        "stream": False,
-    }
 
     if gate.get("routed_to_local"):
-        local_base = str(gate.get("local_url") or "http://localhost:11434/v1").rstrip("/")
-        urls = [f"{local_base}/chat/completions"]
+        raw_target = str(gate.get("target_url") or gate.get("local_url") or "http://localhost:11434/v1/chat/completions").rstrip("/")
+        urls = [raw_target if raw_target.endswith("/chat/completions") else f"{raw_target}/chat/completions"]
     else:
         urls = [
             "http://omniroute:20128/v1/chat/completions",
@@ -140,8 +137,24 @@ def send_prompt_to_agent(
     used_url = ""
     for url in urls:
         try:
+            enforce_egress_firewall_for_url(url, data_category=gate.get("data_category", "general"))
+            clean_msgs, _ = sanitize_outbound_llm_payload(messages, target_url=url, session_id=f"container_{agent_name}")
+            payload = {
+                "model": target_model,
+                "messages": clean_msgs,
+                "stream": False,
+            }
             with httpx.Client(timeout=40.0) as client:
                 res = client.post(url, json=payload, headers=headers)
+                log_completed_llm_dispatch(
+                    agent_id=agent_name,
+                    provider=str(gate.get("provider") or "omniroute"),
+                    model=target_model,
+                    target_endpoint=url,
+                    http_status=res.status_code,
+                    data_category=gate.get("data_category", "general"),
+                    zero_egress_active=bool(gate.get("zero_egress_active")),
+                )
                 if res.status_code == 200:
                     used_url = url
                     try:

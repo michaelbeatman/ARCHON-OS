@@ -64,52 +64,53 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Dict = Body
     fn_load_gates = getattr(app_main, "_load_permission_gates", _load_permission_gates)
     fn_save_gates = getattr(app_main, "_save_permission_gates", _save_permission_gates)
 
-    gates = fn_load_gates()
-    gate = next((g for g in gates.get("gates", []) if g.get("id") == gate_id), None)
-    if not gate:
-        raise HTTPException(status_code=404, detail={"code": "decisions_gate_not_found", "params": {"gate_id": gate_id}})
-    if gate.get("status") != "pending":
-        return {"status": "already_decided", "decision": gate.get("status"), "gate_id": gate_id}
+    with _DECIDE_RACE_LOCK:
+        gates = fn_load_gates()
+        gate = next((g for g in gates.get("gates", []) if g.get("id") == gate_id), None)
+        if not gate:
+            raise HTTPException(status_code=404, detail={"code": "decisions_gate_not_found", "params": {"gate_id": gate_id}})
+        if gate.get("status") != "pending":
+            return {"status": "already_decided", "decision": gate.get("status"), "gate_id": gate_id}
 
-    ergebnis = ""
-    ausgefuehrt = False
-    ausfuehrungsfehler = None
+        ergebnis = ""
+        ausgefuehrt = False
+        ausfuehrungsfehler = None
 
-    if decision == "approve":
-        payload = dict(gate.get("payload") or {})
-        try:
-            fn_save_profile = getattr(app_main, "save_profile", None)
-            if not fn_save_profile:
-                from archon.services.profiles_service import save_profile as fn_save_profile
-            fn_delete_profile = getattr(app_main, "delete_profile", None)
-            if not fn_delete_profile:
-                from archon.services.profiles_service import delete_profile as fn_delete_profile
+        if decision == "approve":
+            payload = dict(gate.get("payload") or {})
+            try:
+                fn_save_profile = getattr(app_main, "save_profile", None)
+                if not fn_save_profile:
+                    from archon.services.profiles_service import save_profile as fn_save_profile
+                fn_delete_profile = getattr(app_main, "delete_profile", None)
+                if not fn_delete_profile:
+                    from archon.services.profiles_service import delete_profile as fn_delete_profile
 
-            if gate.get("kind") == "tools_erweiterung":
-                payload["_approved_gate_id"] = gate_id
-                res = fn_save_profile(payload)
-                ergebnis = f"Tools gespeichert fuer '{payload.get('id')}': " + str(res)
-                ausgefuehrt = True
-            elif gate.get("kind") == "profil_loeschen":
-                res = fn_delete_profile(payload.get("profile_id", ""), approved_gate_id=gate_id)
-                ergebnis = f"Profil '{payload.get('profile_id')}' archiviert/geloescht: " + str(res)[:120]
-                ausgefuehrt = True
-            else:
-                ergebnis = "Unbekanntes Gate-Kind - nichts ausgefuehrt"
-        except Exception as dec_err:
-            logger.error(f"[Gate] Ausfuehrung nach Freigabe fehlgeschlagen: {dec_err}")
-            ergebnis = f"FEHLER bei der Ausfuehrung: {dec_err}"
-            ausfuehrungsfehler = str(dec_err)
+                if gate.get("kind") == "tools_erweiterung":
+                    payload["_approved_gate_id"] = gate_id
+                    res = fn_save_profile(payload)
+                    ergebnis = f"Tools gespeichert fuer '{payload.get('id')}': " + str(res)
+                    ausgefuehrt = True
+                elif gate.get("kind") == "profil_loeschen":
+                    res = fn_delete_profile(payload.get("profile_id", ""), approved_gate_id=gate_id)
+                    ergebnis = f"Profil '{payload.get('profile_id')}' archiviert/geloescht: " + str(res)[:120]
+                    ausgefuehrt = True
+                else:
+                    ergebnis = "Unbekanntes Gate-Kind - nichts ausgefuehrt"
+            except Exception as dec_err:
+                logger.error(f"[Gate] Ausfuehrung nach Freigabe fehlgeschlagen: {dec_err}")
+                ergebnis = f"FEHLER bei der Ausfuehrung: {dec_err}"
+                ausfuehrungsfehler = str(dec_err)
 
-        if ausgefuehrt:
-            gate["status"] = "approved"
+            if ausgefuehrt:
+                gate["status"] = "approved"
+                gate["decided_at"] = datetime.datetime.now().isoformat()
+                fn_save_gates(gates)
+        else:
+            gate["status"] = "rejected"
             gate["decided_at"] = datetime.datetime.now().isoformat()
             fn_save_gates(gates)
-    else:
-        gate["status"] = "rejected"
-        gate["decided_at"] = datetime.datetime.now().isoformat()
-        fn_save_gates(gates)
-        ergebnis = "Abgelehnt - NICHTS wurde geaendert."
+            ergebnis = "Abgelehnt - NICHTS wurde geaendert."
 
     try:
         from telegram_notify import send_telegram_message as _stg
@@ -477,6 +478,14 @@ async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
         fn_fs = getattr(app_main, "_followup_synthesis", _followup_synthesis)
         return await fn_fs(ref or "projekt", dossier, dec)
     if typ == "mission_freigabe":
+        if str(ref).startswith("evt-"):
+            try:
+                from backend.workflow_scheduler import approve_and_replay_hitl_event
+                res = await asyncio.to_thread(approve_and_replay_hitl_event, ref)
+                trig = len(res.get("triggered") or [])
+                return f"{_FOLGE_OK}: Event-Bus HITL-Event {ref} freigegeben ({res.get('status')}, {trig} Workflow-Runs gestartet)."
+            except Exception as exc:
+                return _folge_nicht(f"Event-Bus HITL-Freigabe {ref}", str(exc))
         fn_fm = getattr(app_main, "_followup_mission_start", _followup_mission_start)
         return await fn_fm(ref)
     if typ == "permission_gate":
@@ -519,12 +528,15 @@ async def api_decide_decision(body: Dict = Body(...)):
                 )
             except Exception as e:
                 logger.warning(f"[Decision] CAS-Marker ('in_bearbeitung') konnte nicht gesetzt werden: {e}")
+                return {"_error": "cas_write_failed", "detail": str(e)}
             return {"_ok": True, "dec": dec_local}
 
     try:
         claim = await asyncio.to_thread(_cas_claim)
     except Exception as e:
         raise HTTPException(status_code=502, detail={"code": "decisions_sidecar_unreadable", "params": {"error": str(e)}})
+    if claim.get("_error") == "cas_write_failed":
+        raise HTTPException(status_code=502, detail={"code": "decisions_cas_write_failed", "params": {"error": claim.get("detail", "")}})
     if claim.get("_error") == "no_decision":
         raise HTTPException(status_code=404, detail={"code": "decisions_no_decision_block", "params": {"task_id": task_id}})
     if claim.get("_error") == "already_decided":

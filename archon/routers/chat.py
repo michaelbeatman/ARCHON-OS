@@ -797,12 +797,10 @@ async def api_chat_stream(req: ChatStreamRequest):
                     for m in matches[:5]:
                         raw_path = m.group(1).strip()
                         f_path = None
-                        for root in allowed_attach_roots:
-                            try:
-                                f_path = safe_path_within(raw_path, root, must_exist=True)
-                                break
-                            except PathJailError:
-                                continue
+                        try:
+                            f_path = safe_path_within(raw_path, allowed_attach_roots, must_exist=True, allow_dirs=False)
+                        except PathJailError:
+                            f_path = None
                         if f_path and os.path.isfile(f_path):
                             lower_p = f_path.lower()
                             if lower_p.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
@@ -1044,8 +1042,10 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
     if provider == "openrouter":
         from backend.llm_egress_guard import (
             ZeroEgressBlockedError,
+            enforce_egress_firewall_for_url,
             evaluate_and_gate_llm_dispatch,
             log_completed_llm_dispatch,
+            sanitize_outbound_llm_payload,
         )
         target_img_ep = "https://openrouter.ai/api/v1/chat/completions"
         try:
@@ -1056,6 +1056,13 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
                 messages=[{"role": "user", "content": prompt}],
                 intended_url=target_img_ep,
             )
+            eff_url = str(gate.get("target_url") or target_img_ep)
+            enforce_egress_firewall_for_url(eff_url, data_category=gate.get("data_category", "general"))
+            clean_messages, _scrub_meta = sanitize_outbound_llm_payload(
+                [{"role": "user", "content": prompt}],
+                target_url=eff_url,
+                session_id="image_generate",
+            )
         except ZeroEgressBlockedError as ze_err:
             raise HTTPException(
                 status_code=403,
@@ -1063,27 +1070,28 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
             )
 
         or_key = all_keys.get("OPENROUTER_API_KEY")
-        if not or_key:
+        if not gate.get("routed_to_local") and not or_key:
             raise HTTPException(status_code=400, detail={"code": "chat_openrouter_key_missing", "params": {}})
         headers = {
-            "Authorization": f"Bearer {or_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "http://localhost:8501",
-            "X-Title": "Archon OS"
+            "X-Title": "Archon OS",
         }
+        if not gate.get("routed_to_local") and or_key:
+            headers["Authorization"] = f"Bearer {or_key}"
         payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False
+            "model": str(gate.get("model") or model),
+            "messages": clean_messages,
+            "stream": False,
         }
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(target_img_ep, headers=headers, json=payload)
+                resp = await client.post(eff_url, headers=headers, json=payload)
                 log_completed_llm_dispatch(
                     agent_id="image_generate",
-                    provider=provider,
-                    model=model,
-                    target_endpoint=target_img_ep,
+                    provider=str(gate.get("provider") or provider),
+                    model=str(gate.get("model") or model),
+                    target_endpoint=eff_url,
                     http_status=resp.status_code,
                     data_category=gate["data_category"],
                     zero_egress_active=gate["zero_egress_active"],

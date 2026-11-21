@@ -323,9 +323,10 @@ async def api_v2_treasury_accounts_save(request: Request, payload: Dict[str, Any
     from backend.treasury_engine import upsert_account
 
     uid = _treasury_actor(request)
-    if payload.get("id") and is_passkey_required(uid, category="payments"):
+    if is_passkey_required(uid, category="payments"):
+        proof = payload.get("passkey_proof_token") or request.headers.get("x-passkey-proof")
         if not await asyncio.to_thread(
-            consume_hitl_proof_token, payload.get("passkey_proof_token"), uid, category="payments"
+            consume_hitl_proof_token, proof, uid, category="payments"
         ):
             raise HTTPException(status_code=403, detail="passkey_verification_required")
     try:
@@ -338,7 +339,14 @@ async def api_v2_treasury_accounts_save(request: Request, payload: Dict[str, Any
 @router.delete("/api/v2/treasury/accounts/{acc_id}")
 async def api_v2_treasury_accounts_delete(request: Request, acc_id: str):
     require_admin_or_503(request)
+    from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required
     from backend.treasury_engine import delete_account
+
+    uid = _treasury_actor(request)
+    if is_passkey_required(uid, category="payments"):
+        proof = request.headers.get("x-passkey-proof") or request.query_params.get("passkey_proof_token")
+        if not await asyncio.to_thread(consume_hitl_proof_token, proof, uid, category="payments"):
+            raise HTTPException(status_code=403, detail="passkey_verification_required")
     if not await asyncio.to_thread(delete_account, acc_id):
         raise HTTPException(status_code=404, detail="Account not found")
     return {"status": "ok", "deleted": acc_id}

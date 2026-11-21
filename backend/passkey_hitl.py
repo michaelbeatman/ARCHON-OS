@@ -358,7 +358,7 @@ def verify_hitl_assertion(
         else:
             raise ValueError("Nicht unterstuetzter Public-Key-Typ.")
 
-        if sign_count > 0 and cred.get("sign_count", 0) > 0 and sign_count <= cred["sign_count"]:
+        if cred.get("sign_count", 0) > 0 and sign_count <= cred["sign_count"]:
             raise ValueError("Moeglicher Replay/Klon-Angriff (signCount).")
         cred["sign_count"] = max(sign_count, cred.get("sign_count", 0))
         cred["last_used_at"] = datetime.datetime.now().isoformat()

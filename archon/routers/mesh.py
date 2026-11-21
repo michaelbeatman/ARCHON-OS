@@ -115,7 +115,8 @@ def api_list_event_history(limit: int = 50):
 
 
 @router.post("/api/events/scan-directory")
-def api_scan_inbox_directory(payload: Dict = Body(default={})):
+def api_scan_inbox_directory(request: Request, payload: Dict = Body(default={})):
+    _require_admin(request)
     from backend.event_mesh import event_mesh
 
     return event_mesh.scan_inbox_directory(inbox_dir=payload.get("inbox_dir"))

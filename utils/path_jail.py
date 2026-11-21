@@ -88,10 +88,15 @@ def allowed_roots(extra: Optional[Iterable[str]] = None) -> list[str]:
     return seen
 
 
+def _norm_cmp(p: str) -> str:
+    return os.path.normcase(os.path.realpath(os.path.abspath(os.path.expanduser(str(p)))))
+
+
 def is_allowed(candidate: str, extra_roots: Optional[Iterable[str]] = None) -> bool:
-    real = os.path.realpath(os.path.abspath(os.path.expanduser(candidate)))
+    real = _norm_cmp(candidate)
     for root in allowed_roots(extra_roots):
-        if real == root or real.startswith(root + os.sep):
+        root_cmp = _norm_cmp(root)
+        if real == root_cmp or real.startswith(root_cmp + os.sep):
             return True
     return False
 
@@ -103,10 +108,12 @@ def is_within(candidate: str, roots: Iterable[str]) -> bool:
     nicht. Endpunkte, deren Reichweite ein einziges Verzeichnis ist, brauchen
     deshalb diese Variante (sonst bleibt z. B. ``/opt/data/.env`` erreichbar).
     """
-    real = os.path.realpath(os.path.abspath(os.path.expanduser(str(candidate))))
+    if isinstance(roots, (str, bytes, os.PathLike)):
+        raise TypeError("roots muss ein Iterable von Pfaden sein, kein einzelner String/Pfad.")
+    real = _norm_cmp(candidate)
     for root in roots:
         try:
-            root_real = os.path.realpath(os.path.abspath(os.path.expanduser(str(root))))
+            root_real = _norm_cmp(str(root))
         except Exception:
             continue
         if root_real and (real == root_real or real.startswith(root_real + os.sep)):
@@ -144,6 +151,8 @@ def safe_path_within(
     """
     if not candidate or not str(candidate).strip():
         raise PathJailError("Leerer Pfad.")
+    if isinstance(roots, (str, bytes, os.PathLike)):
+        raise TypeError("roots muss ein Iterable von Pfaden sein, kein einzelner String/Pfad.")
 
     root_list = [r for r in (roots or []) if str(r).strip()]
     if not root_list:

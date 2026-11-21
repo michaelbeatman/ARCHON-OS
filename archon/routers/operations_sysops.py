@@ -185,12 +185,26 @@ def api_call_mcp_tool(request: Request, req: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from scripts.archon_mcp_server import ArchonMcpServer
+        from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
         tool_name = req.get("name")
         arguments = req.get("arguments", {})
         if not tool_name:
             raise HTTPException(status_code=400, detail={"code": "sysops_name_required", "params": {}})
+        session_id = str(req.get("session_id") or "sysops_mcp").strip()
+        agent_id = str(req.get("agent_id") or "").strip()
+        gate = enforce_tool_execution(
+            agent_id=agent_id,
+            session_id=session_id,
+            tool_name=tool_name,
+            args=arguments if isinstance(arguments, dict) else {},
+            approval_id=req.get("approval_id"),
+            warrant=req.get("warrant"),
+        )
+        if not gate.get("allowed"):
+            raise HTTPException(status_code=403, detail=gate)
         server = ArchonMcpServer()
         result = server.execute_tool(tool_name, arguments)
+        record_tool_read_side_effect(session_id, tool_name)
         return {"status": "success", "result": result}
     except HTTPException:
         raise

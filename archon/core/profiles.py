@@ -265,7 +265,7 @@ def get_hermes_profiles_base_dirs() -> List[str]:
     candidates = [
         HERMES_PROFILES_BASE,
         os.path.expanduser("~/.hermes/profiles"),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "profiles")
+        os.path.join(APP_ROOT, "data", "profiles")
     ]
     valid_dirs = []
     for c in candidates:

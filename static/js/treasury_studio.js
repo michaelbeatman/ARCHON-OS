@@ -315,7 +315,8 @@
     const openSet = mount.querySelector("#tr-open-passkey-settings");
     if (openSet) {
       openSet.onclick = () => {
-        if (typeof window.openSettingsModal === "function") window.openSettingsModal("users");
+        if (typeof window.openSystemSettingsModal === "function") window.openSystemSettingsModal("users");
+        else if (typeof window.openSettingsModal === "function") window.openSettingsModal("users");
       };
     }
 

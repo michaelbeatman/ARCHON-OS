@@ -252,6 +252,7 @@ async def _execute_mission_control_task(
                 nominated = parsed_dispatch.get("nominated_agents", [])
                 if isinstance(nominated, list) and len(nominated) > 0:
                     proj_title = parsed_dispatch.get("project_title", task_title)
+                    batch_subtasks = []
                     for idx, nom in enumerate(nominated):
                         sub_agent_id = nom.get("agent_id", "").strip()
                         sub_role = nom.get("role", "Spezialist")
@@ -269,6 +270,8 @@ async def _execute_mission_control_task(
                             "id": sub_task_id,
                             "title": sub_task_title,
                             "capture_input": f"MANDAT VON STAFFING-DIRECTORIN ({agent_name}):\n\n{sub_mandate}\n\nProjekt-Kontext: {proj_title}",
+                            "mandate": sub_mandate,
+                            "role": sub_role,
                             "plan": [
                                 f"Empfangen von Mandat durch {agent_name}",
                                 f"Fachliche Ausarbeitung durch {sub_name} ({sub_agent_id})",
@@ -289,6 +292,26 @@ async def _execute_mission_control_task(
                             "target_action": task.get("target_action", "none"),
                             "phase": "execution"
                         }
+                        batch_subtasks.append(sub_task)
+
+                    # Komplexitätsgewichteter Budget-Split (Paperclip Governance)
+                    try:
+                        from backend.role_budget_engine import allocate_task_budget_to_subagents
+                        parent_tok_budget = int(task.get("token_budget") or task.get("estimated_tokens") or (len(batch_subtasks) * 60000))
+                        parent_eur_budget = float(task.get("cost_limit_eur") or task.get("estimated_cost_eur") or (len(batch_subtasks) * 0.08))
+                        allocate_task_budget_to_subagents(
+                            parent_task_id=task_id,
+                            total_token_budget=parent_tok_budget,
+                            subtasks=batch_subtasks,
+                            total_cost_limit_eur=parent_eur_budget,
+                        )
+                    except Exception as _bg_err:
+                        logger.debug(f"[Auto-Staffing] Budget-Split Fallback: {_bg_err}")
+
+                    for sub_task in batch_subtasks:
+                        sub_task_id = sub_task["id"]
+                        sub_agent_id = sub_task["agent_id"]
+                        sub_name = sub_task["agent_name"]
                         data.setdefault("tasks", []).insert(0, sub_task)
                         task.setdefault("subtask_ids", []).append(sub_task_id)
                         task["phase"] = "staffing"
@@ -395,6 +418,25 @@ def _set_agent_profile_status(
             rolling_backup(ssot, max_backups=3)
             with open(ssot, "w", encoding="utf-8") as f:
                 json.dump(all_profiles, f, indent=2, ensure_ascii=False)
+            # SSOT-Sync: auch profile.yaml im Hermes-Profilordner aktualisieren (falls vorhanden)
+            try:
+                import yaml
+                from archon.core.profiles import get_hermes_profiles_base_dirs
+                for bdir in get_hermes_profiles_base_dirs():
+                    ypath = os.path.join(bdir, profile_id, "profile.yaml")
+                    if os.path.isfile(ypath):
+                        with open(ypath, "r", encoding="utf-8") as yf:
+                            ydata = yaml.safe_load(yf) or {}
+                        if isinstance(ydata, dict):
+                            ydata["status"] = status
+                            if task_id:
+                                ydata["current_task_id"] = task_id
+                            elif "current_task_id" in ydata and status == "standby":
+                                del ydata["current_task_id"]
+                            with open(ypath, "w", encoding="utf-8") as yf:
+                                yaml.safe_dump(ydata, yf, allow_unicode=True, sort_keys=False)
+            except Exception as yaml_exc:
+                logger.debug(f"[ProfileStatus] profile.yaml Sync uebersprungen: {yaml_exc}")
             invalidate_profiles()
             logger.info(f"[ProfileStatus] '{profile_id}' → status='{status}'" + (f", task={task_id}" if task_id else ""))
             return True
@@ -587,6 +629,20 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                         paperclip_hire(sub_agent_id, profiles, current_task_id=sub_task_id)
                     except Exception as hire_err:
                         logger.warning(f"[AutoHire] Hire fehlgeschlagen für '{sub_agent_id}': {hire_err}")
+
+        if created_subtasks:
+            try:
+                from backend.role_budget_engine import allocate_task_budget_to_subagents
+                p_tok = int(parent_task.get("token_budget") or parent_task.get("estimated_tokens") or (len(created_subtasks) * 60000))
+                p_eur = float(parent_task.get("cost_limit_eur") or parent_task.get("estimated_cost_eur") or (len(created_subtasks) * 0.08))
+                allocate_task_budget_to_subagents(
+                    parent_task_id=parent_id,
+                    total_token_budget=p_tok,
+                    subtasks=created_subtasks,
+                    total_cost_limit_eur=p_eur,
+                )
+            except Exception as _bg_exc:
+                logger.debug(f"[Sandy-Staffing] Budget-Split Fallback: {_bg_exc}")
 
         # Parent-Task im lokalen Snapshot updaten (subtask_ids, phase)
         local_parent = next((t for t in data.get("tasks", []) if t.get("id") == parent_id), None)

@@ -47,18 +47,25 @@ async def transcribe_audio_file(file_path: str, language: str = "de") -> str:
 
 async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", language: str = "de") -> str:
     """
-    Transkribiert rohe Audio-Bytes.
+    Transkribiert rohe Audio-Bytes (Zero-Egress-geschuetzt).
     """
+    from backend.llm_egress_guard import ZeroEgressBlockedError, enforce_egress_firewall_for_url, is_zero_egress_active
+
+    if is_zero_egress_active():
+        logger.warning("[Voice] Zero-Egress aktiv — Cloud-Transkription (Groq/OpenAI/Gemini) blockiert.")
+        return "[Zero-Egress aktiv: Cloud-Audio-Transkription blockiert]"
+
     # 1. Groq Whisper (extrem schnell & präzise)
     if GROQ_API_KEY:
         try:
             import httpx
+            groq_url = "https://api.groq.com/openai/v1/audio/transcriptions"
+            enforce_egress_firewall_for_url(groq_url, data_category="voice")
             headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
             files = {"file": (filename, data, "audio/ogg")}
             data_fields = {"model": "whisper-large-v3", "language": language}
             async with httpx.AsyncClient(timeout=20.0) as client:
-                resp = await client.post("https://api.groq.com/openai/v1/audio/transcriptions",
-                                         headers=headers, files=files, data=data_fields)
+                resp = await client.post(groq_url, headers=headers, files=files, data=data_fields)
                 if resp.status_code == 200:
                     result = resp.json()
                     txt = result.get("text", "").strip()

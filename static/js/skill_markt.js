@@ -2132,18 +2132,23 @@
         card.className = "p-3.5 bg-[var(--card)] hover:bg-[var(--secondary)]/60 border border-[var(--border)] rounded-xl transition cursor-pointer shadow-xs group";
         card.onclick = () => openBoardroomDetailModal(h.id);
 
-        const taskText = h.task || smT("ui.skill_markt.default_debate_task", 'Strategische Debatte');
-        const synthSnippet = h.synthesis ? (h.synthesis.length > 220 ? h.synthesis.substring(0, 220) + '...' : h.synthesis) : smT("ui.skill_markt.no_synthesis", 'Keine Synthese dokumentiert.');
-        const scopeText = `${h.rounds || 2} Runden · ${(h.slots_count || 3) + 1} Experten`;
+        const _escHtml = (s) => String(s == null ? "" : s)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        const taskText = _escHtml(h.task || smT("ui.skill_markt.default_debate_task", 'Strategische Debatte'));
+        const synthSnippet = _escHtml(h.synthesis ? (h.synthesis.length > 220 ? h.synthesis.substring(0, 220) + '...' : h.synthesis) : smT("ui.skill_markt.no_synthesis", 'Keine Synthese dokumentiert.'));
+        const scopeText = _escHtml(`${h.rounds || 2} Runden · ${(h.slots_count || 3) + 1} Experten`);
+        const safeDate = _escHtml(h.date_display || 'Heute');
+        const safeFw = _escHtml(h.framework || 'Steffi Kieffer Boardroom');
 
         card.innerHTML = `
           <div class="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-2 mb-2">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-[10px] font-mono text-[var(--muted-foreground)] font-bold flex items-center gap-1">
-                <i data-lucide="calendar" class="w-3 h-3 text-indigo-500"></i> ${h.date_display || 'Heute'}
+                <i data-lucide="calendar" class="w-3 h-3 text-indigo-500"></i> ${safeDate}
               </span>
               <span class="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
-                ${h.framework || 'Steffi Kieffer Boardroom'}
+                ${safeFw}
               </span>
               <span class="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                 ${scopeText}

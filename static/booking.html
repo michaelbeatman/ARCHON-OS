@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Booking — Archon OS</title>
+  <link rel="stylesheet" href="/static/css/tailwind.generated.css" />
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 font-sans">
+  <main class="w-full max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl overflow-hidden">
+    <header id="bk-header" class="px-6 py-5 border-b border-slate-800 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div id="bk-brand" class="text-xs font-mono uppercase tracking-wider text-indigo-400">Archon OS Booking</div>
+          <h1 id="bk-title" class="text-xl font-bold mt-0.5">Termin vereinbaren</h1>
+          <p id="bk-welcome" class="text-xs text-slate-400 mt-1"></p>
+          <div id="bk-meta" class="text-[11px] font-mono text-slate-400 mt-1"></div>
+        </div>
+        <select id="bk-lang" class="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-950 text-xs font-mono">
+          <option value="de">DE</option><option value="en">EN</option><option value="fr">FR</option>
+          <option value="es">ES</option><option value="pt">PT</option><option value="ru">RU</option>
+          <option value="ja">JA</option><option value="ko">KO</option><option value="zh">ZH</option>
+        </select>
+      </div>
+      <div id="bk-types-bar" class="flex flex-wrap gap-1.5"></div>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+      <section class="space-y-3">
+        <h2 id="bk-lbl-slots" class="text-xs font-mono uppercase tracking-wider text-slate-400">Freie Zeitfenster</h2>
+        <div id="bk-slots" class="space-y-1.5 max-h-80 overflow-y-auto pr-1 text-xs"></div>
+      </section>
+
+      <form id="bk-form" class="space-y-3">
+        <h2 id="bk-lbl-details" class="text-xs font-mono uppercase tracking-wider text-slate-400">Deine Angaben</h2>
+        <div id="bk-selected-box" class="p-2.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-xs text-indigo-200"></div>
+        <input id="bk-name" required class="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-950 text-sm" />
+        <input id="bk-email" type="email" required class="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-950 text-sm" />
+        <div id="bk-questions" class="space-y-2"></div>
+        <div id="bk-payment-box" class="hidden p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 space-y-2 text-xs">
+          <div id="bk-pay-title" class="font-bold text-amber-200"></div>
+          <input id="bk-pay-ref" placeholder="Stripe / Zahlungs-Referenz oder 'PAID'" class="w-full px-2.5 py-1.5 rounded border border-slate-700 bg-slate-950 font-mono text-xs" />
+        </div>
+        <textarea id="bk-notes" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-950 text-sm"></textarea>
+        <button type="submit" id="bk-submit" disabled class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-bold transition"></button>
+        <div id="bk-status" class="text-xs"></div>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      const I18N = {
+        de: { slots: "Freie Zeitfenster", details: "Deine Angaben", pick: "Bitte links einen Zeitslot auswaehlen.", name: "Dein Name", email: "deine@email.de", notes: "Thema / Agenda (optional)", submit: "Termin verbindlich buchen", loading: "Lade freie Termine...", none: "Aktuell keine freien Slots gefunden.", choose: "Waehlen", selected: "Ausgewaehlt", booking: "Buche Termin...", confirmed: "Termin bestaetigt", buffer: "Puffer", limit: "Max/Tag" },
+        en: { slots: "Available Time Slots", details: "Your Details", pick: "Please select a time slot on the left.", name: "Your Name", email: "you@example.com", notes: "Topic / Agenda (optional)", submit: "Confirm Booking", loading: "Loading available slots...", none: "No available slots found.", choose: "Select", selected: "Selected", booking: "Booking slot...", confirmed: "Booking confirmed", buffer: "Buffer", limit: "Max/day" },
+        fr: { slots: "Creneaux disponibles", details: "Vos coordonnees", pick: "Veuillez choisir un creneau a gauche.", name: "Votre nom", email: "vous@exemple.fr", notes: "Sujet / Ordre du jour", submit: "Confirmer le rendez-vous", loading: "Chargement...", none: "Aucun creneau disponible.", choose: "Choisir", selected: "Selectionne", booking: "Reservation...", confirmed: "Rendez-vous confirme", buffer: "Marge", limit: "Max/jour" },
+        es: { slots: "Horarios disponibles", details: "Tus datos", pick: "Selecciona un horario a la izquierda.", name: "Tu nombre", email: "tu@correo.com", notes: "Tema / Agenda", submit: "Confirmar reserva", loading: "Cargando...", none: "No hay horarios disponibles.", choose: "Elegir", selected: "Seleccionado", booking: "Reservando...", confirmed: "Reserva confirmada", buffer: "Margen", limit: "Max/dia" },
+        pt: { slots: "Horarios disponiveis", details: "Seus dados", pick: "Selecione um horario a esquerda.", name: "Seu nome", email: "voce@exemplo.com", notes: "Assunto / Pauta", submit: "Confirmar agendamento", loading: "Carregando...", none: "Nenhum horario disponivel.", choose: "Escolher", selected: "Selecionado", booking: "Agendando...", confirmed: "Agendamento confirmado", buffer: "Intervalo", limit: "Max/dia" },
+        ru: { slots: "Свободные слоты", details: "Ваши данные", pick: "Выберите время слева.", name: "Ваше имя", email: "you@example.com", notes: "Тема встречи", submit: "Подтвердить запись", loading: "Загрузка...", none: "Нет свободных слотов.", choose: "Выбрать", selected: "Выбрано", booking: "Бронирование...", confirmed: "Встреча подтверждена", buffer: "Буфер", limit: "Лимит/день" },
+        ja: { slots: "空き時間枠", details: "予約情報", pick: "左側から時間枠を選択してください。", name: "お名前", email: "you@example.com", notes: "議題・メモ", submit: "予約を確定する", loading: "読み込み中...", none: "空き枠がありません。", choose: "選択", selected: "選択中", booking: "予約中...", confirmed: "予約が完了しました", buffer: "バッファ", limit: "1日上限" },
+        ko: { slots: "예약 가능 시간", details: "예약자 정보", pick: "왼쪽에서 시간을 선택하세요.", name: "이름", email: "you@example.com", notes: "안건 / 메모", submit: "예약 확정", loading: "불러오는 중...", none: "가능한 시간이 없습니다.", choose: "선택", selected: "선택됨", booking: "예약 중...", confirmed: "예약 완료", buffer: "버퍼", limit: "일일 한도" },
+        zh: { slots: "可用时间段", details: "您的信息", pick: "请在左侧选择时间段。", name: "您的姓名", email: "you@example.com", notes: "会议主题（可选）", submit: "确认预约", loading: "加载中...", none: "暂无可用时间段。", choose: "选择", selected: "已选择", booking: "正在预约...", confirmed: "预约成功", buffer: "缓冲", limit: "每日上限" },
+      };
+      const params = new URLSearchParams(window.location.search);
+      let slug = params.get("slug") || "mein-termin";
+      let lang = (params.get("lang") || localStorage.getItem("archon_locale") || navigator.language || "de").slice(0, 2).toLowerCase();
+      if (!I18N[lang]) lang = "de";
+
+      const langSel = document.getElementById("bk-lang");
+      langSel.value = lang;
+      const t = (k) => (I18N[lang] && I18N[lang][k]) || I18N.de[k] || k;
+      const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      const safeColor = (c, fallback) => /^#[0-9a-f]{3,8}$/i.test(String(c || "").trim()) ? String(c).trim() : fallback;
+
+      function applyTexts() {
+        document.getElementById("bk-lbl-slots").textContent = t("slots");
+        document.getElementById("bk-lbl-details").textContent = t("details");
+        document.getElementById("bk-name").placeholder = t("name");
+        document.getElementById("bk-email").placeholder = t("email");
+        document.getElementById("bk-notes").placeholder = t("notes");
+        document.getElementById("bk-submit").textContent = t("submit");
+        if (!chosen) document.getElementById("bk-selected-box").textContent = t("pick");
+      }
+
+      const slotsEl = document.getElementById("bk-slots");
+      const selBox = document.getElementById("bk-selected-box");
+      const submitBtn = document.getElementById("bk-submit");
+      const statusEl = document.getElementById("bk-status");
+      const typesBar = document.getElementById("bk-types-bar");
+      let chosen = null;
+
+      async function loadSlots() {
+        slotsEl.innerHTML = `<div class="text-slate-400">${t("loading")}</div>`;
+        try {
+          const res = await fetch(`/api/v1/calendar/booking/${encodeURIComponent(slug)}`);
+          const data = await res.json();
+          const bt = data.event_type || {};
+          const brandColor = bt.brand_color || "#6366f1";
+          document.getElementById("bk-brand").textContent = bt.brand_name || "Archon OS Booking";
+          document.getElementById("bk-brand").style.color = brandColor;
+          document.getElementById("bk-title").textContent = bt.title || slug;
+          document.getElementById("bk-welcome").textContent = bt.welcome_text || "";
+          const price = Number(bt.price_eur || 0);
+          document.getElementById("bk-meta").textContent = `${bt.duration_min || 30} Min · ${t("buffer")}: ${bt.buffer_before_min || 0}/${bt.buffer_after_min || 0} Min · ${t("limit")}: ${bt.max_per_day || 4}${price > 0 ? ` · ${price.toFixed(2)} EUR` : ""}`;
+          submitBtn.style.background = brandColor;
+
+          const qBox = document.getElementById("bk-questions");
+          const qs = Array.isArray(bt.questions) ? bt.questions : [];
+          qBox.innerHTML = qs
+            .map((q, idx) => `<input data-bk-q="${esc(q)}" id="bk-q-${idx}" placeholder="${esc(q)}" class="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-950 text-sm" />`)
+            .join("");
+
+          const payBox = document.getElementById("bk-payment-box");
+          if (price > 0) {
+            document.getElementById("bk-pay-title").textContent = `Kostenpflichtiger Termin: ${price.toFixed(2)} EUR (Stripe / Payment-Gate)`;
+            payBox.classList.remove("hidden");
+          } else {
+            payBox.classList.add("hidden");
+          }
+
+          const allTypes = data.all_types || [];
+          typesBar.innerHTML = allTypes
+            .map((item) => `<button type="button" data-type-slug="${esc(item.slug)}" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${item.slug === slug ? "text-white border-transparent" : "border-slate-700 text-slate-300 hover:bg-slate-800"}" style="${item.slug === slug ? `background:${safeColor(item.brand_color, safeColor(brandColor, "#6366f1"))};` : ""}">${esc(item.title)}</button>`)
+            .join("");
+          typesBar.querySelectorAll("[data-type-slug]").forEach((b) => {
+            b.onclick = () => {
+              slug = b.getAttribute("data-type-slug");
+              chosen = null;
+              submitBtn.disabled = true;
+              applyTexts();
+              loadSlots();
+            };
+          });
+
+          const slots = data.slots || [];
+          if (!slots.length) {
+            slotsEl.innerHTML = `<div class="text-slate-400">${t("none")}</div>`;
+            return;
+          }
+          slotsEl.innerHTML = slots
+            .map((s, idx) => `
+              <button type="button" data-idx="${idx}" class="w-full text-left px-3 py-2 rounded-lg border border-slate-800 hover:border-indigo-500/60 bg-slate-950/60 flex items-center justify-between transition">
+                <span class="font-mono font-semibold">${esc(s.date)} · ${esc(String(s.start || "").slice(11, 16))} – ${esc(String(s.end || "").slice(11, 16))}</span>
+                <span class="text-[11px]" style="color:${safeColor(brandColor, "#6366f1")}">${t("choose")}</span>
+              </button>`)
+            .join("");
+          slotsEl.querySelectorAll("[data-idx]").forEach((btn) => {
+            btn.onclick = () => {
+              chosen = slots[Number(btn.getAttribute("data-idx"))];
+              selBox.innerHTML = `${t("selected")}: <strong>${esc(chosen.date)}</strong> (${esc(String(chosen.start || "").slice(11, 16))} – ${esc(String(chosen.end || "").slice(11, 16))})`;
+              submitBtn.disabled = false;
+              slotsEl.querySelectorAll("[data-idx]").forEach((b) => b.classList.remove("border-indigo-500", "bg-indigo-500/15"));
+              btn.classList.add("border-indigo-500", "bg-indigo-500/15");
+            };
+          });
+        } catch (_) {
+          slotsEl.innerHTML = `<div class="text-rose-400">Error</div>`;
+        }
+      }
+
+      langSel.onchange = () => {
+        lang = langSel.value;
+        applyTexts();
+        loadSlots();
+      };
+
+      document.getElementById("bk-form").onsubmit = async (e) => {
+        e.preventDefault();
+        if (!chosen) return;
+        submitBtn.disabled = true;
+        statusEl.textContent = t("booking");
+        try {
+          const answers = {};
+          document.querySelectorAll("[data-bk-q]").forEach((inp) => {
+            answers[inp.getAttribute("data-bk-q")] = inp.value.trim();
+          });
+          const res = await fetch(`/api/v1/calendar/booking/${encodeURIComponent(slug)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: document.getElementById("bk-name").value.trim(),
+              email: document.getElementById("bk-email").value.trim(),
+              start: chosen.start,
+              end: chosen.end,
+              notes: document.getElementById("bk-notes").value.trim(),
+              payment_reference: document.getElementById("bk-pay-ref").value.trim(),
+              answers,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Booking failed");
+          statusEl.innerHTML = `<span class="text-emerald-400 font-semibold">${t("confirmed")}: ${esc(chosen.date)} ${esc(String(chosen.start || "").slice(11, 16))}</span>`;
+          chosen = null;
+          loadSlots();
+        } catch (err) {
+          statusEl.innerHTML = `<span class="text-rose-400">${esc(err && err.message ? err.message : "Error")}</span>`;
+          submitBtn.disabled = false;
+        }
+      };
+
+      applyTexts();
+      loadSlots();
+    })();
+  </script>
+</body>
+</html>

@@ -100,21 +100,39 @@ class EventMesh:
             except Exception as exc:
                 print(f"[EventMesh] Kanban-Task fuer Event konnte nicht synchronisiert werden: {exc}", file=sys.stderr)
 
+        bus_result = None
+        if safe_payload.get("_security_status") != "blocked":
+            try:
+                from backend.workflow_scheduler import dispatch_workflow_event
+                bus_result = dispatch_workflow_event(
+                    source=channel,
+                    event_type=event_type,
+                    title=str(safe_payload.get("title") or f"Mesh-Event: {channel}/{event_type}"),
+                    summary=str(safe_payload.get("summary") or safe_payload.get("message") or safe_payload.get("text") or "")[:800],
+                    payload=safe_payload,
+                    correlation_id=str(safe_payload.get("correlation_id") or "") or None,
+                )
+            except Exception as exc:
+                print(f"[EventMesh] Event-Bus Weiterleitung fehlgeschlagen: {exc}", file=sys.stderr)
+
         return {
             "status": "success",
             "event_id": evt_id,
             "channel": channel,
             "event_type": event_type,
             "kanban_task_id": task_id,
+            "event_bus": bus_result,
             "message": f"Ereignis aus Kanal '{channel}' erfolgreich im Event-Mesh verarbeitet."
         }
 
     def emit_outbound_event(self, webhook_url: str, event_type: str, payload: Dict[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
-        """Sendet einen Outbound-Event-Webhook an ein externes Ziel (z. B. n8n)."""
+        """Sendet einen Outbound-Event-Webhook SSRF-geschuetzt an ein externes Ziel (z. B. n8n)."""
+        from utils.egress_guard import check_target_url
+        safe_url = check_target_url(webhook_url)
         payload_str = json.dumps(payload, ensure_ascii=False)
         req_data = payload_str.encode("utf-8")
         req = urllib.request.Request(
-            webhook_url,
+            safe_url,
             data=req_data,
             headers={"Content-Type": "application/json"}
         )
@@ -148,8 +166,13 @@ class EventMesh:
         }
 
     def scan_inbox_directory(self, inbox_dir: Optional[str] = None) -> Dict[str, Any]:
-        """Prüft das Posteingangs-Verzeichnis auf neue Dokumente und erzeugt Event-Mesh-Einträge."""
-        target_dir = inbox_dir or os.path.join(WORKSPACE_DIR, "data", "inbox")
+        """Prüft das Posteingangs-Verzeichnis (Path-Jailed) auf neue Dokumente und erzeugt Event-Mesh-Einträge."""
+        from utils.path_jail import safe_path_within
+        default_inbox = os.path.join(WORKSPACE_DIR, "data", "inbox")
+        allowed_roots = [default_inbox, os.path.join(WORKSPACE_DIR, "agent_workspace", "inbox")]
+        if os.path.isdir("/opt/data/inbox"):
+            allowed_roots.append("/opt/data/inbox")
+        target_dir = safe_path_within(inbox_dir, allowed_roots) if inbox_dir else default_inbox
         if not os.path.exists(target_dir):
             return {"status": "ok", "scanned_files": 0, "events_created": 0}
 

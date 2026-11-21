@@ -107,7 +107,9 @@
       if (typeof window.setTab === 'function') {
         window.setTab('ai-mastermind');
       }
-      if (typeof window.switchMastermindSubTab === 'function') {
+      if (typeof window.setBoardroomTab === 'function') {
+        window.setBoardroomTab('debate');
+      } else if (typeof window.switchMastermindSubTab === 'function') {
         window.switchMastermindSubTab('debatte');
       }
       

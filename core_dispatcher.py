@@ -97,8 +97,14 @@ async def trigger_n8n_execution(
             "message": f"n8n unreachable - stored locally: {str(e)}"
         }
 
-def _clean_dispatch_output(text: Any) -> str:
+def _clean_dispatch_output(text: Any, session_id: Optional[str] = None, is_local: bool = False) -> str:
     s = str(text or "")
+    if session_id and not is_local:
+        try:
+            from backend.pii_scrubber import pii_scrubber
+            s = pii_scrubber.rehydrate_text(s, str(session_id))
+        except Exception as exc:
+            logger.debug(f"[Dispatcher] PII-Rehydrierung fehlgeschlagen: {exc}")
     try:
         from backend.secret_masker import mask_sensitive_text
         s, _ = mask_sensitive_text(s)
@@ -366,6 +372,7 @@ def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, 
             
             cur = conn.cursor()
             cur.execute("SELECT id FROM sessions WHERE id = ?", (s_id,))
+            inserted_session = False
             if not cur.fetchone():
                 unique_title = f"Task {eff_task[:25]} [{time.time_ns() % 1000000000}]"
                 try:
@@ -375,6 +382,7 @@ def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, 
                             input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd
                         ) VALUES (?, 'agent_task', ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
                     """, (s_id, unique_title, unique_title, model, agent_id, now, in_tok, out_tok, cost_usd, cost_usd))
+                    inserted_session = cur.rowcount > 0
                 except sqlite3.Error as db_exc:
                     logger.debug(f"[Dispatcher] Session-Insert fuer Usage-Logging uebersprungen: {db_exc}")
             
@@ -392,12 +400,13 @@ def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, 
                     last_seen = excluded.last_seen
             """, (s_id, model, t_key, in_tok, out_tok, cost_usd, cost_usd, now, now))
             
-            conn.execute("""
-                UPDATE sessions 
-                SET input_tokens = input_tokens + ?, output_tokens = output_tokens + ?,
-                    estimated_cost_usd = estimated_cost_usd + ?
-                WHERE id = ?
-            """, (in_tok, out_tok, cost_usd, s_id))
+            if not inserted_session:
+                conn.execute("""
+                    UPDATE sessions 
+                    SET input_tokens = input_tokens + ?, output_tokens = output_tokens + ?,
+                        estimated_cost_usd = estimated_cost_usd + ?
+                    WHERE id = ?
+                """, (in_tok, out_tok, cost_usd, s_id))
             
         if "main" in sys.modules:
             m = sys.modules["main"]
@@ -472,6 +481,25 @@ async def dispatch_to_omniroute_or_container(
 
     try:
         async with _get_task_semaphore():
+            # Pre-Flight Hard Role & Task Budget Gate (Paperclip FinOps Governance)
+            try:
+                from backend.role_budget_engine import check_budget_gate
+                est_in_tokens = max(100, len(str(prompt or "")) // 4)
+                bg_chk = check_budget_gate(
+                    agent_id=agent_id,
+                    task_id=task_id or None,
+                    estimated_tokens=est_in_tokens,
+                )
+                if not bg_chk.get("allowed", True):
+                    return {
+                        "status": "blocked",
+                        "error": bg_chk.get("error_code", "ROLE_BUDGET_EXCEEDED"),
+                        "error_code": bg_chk.get("error_code", "ROLE_BUDGET_EXCEEDED"),
+                        "content": f"🛑 [BUDGET-CAP BLOCK]: {bg_chk.get('reason')}",
+                    }
+            except Exception as bg_exc:
+                logger.debug(f"[Dispatcher] Pre-Flight Budget-Check uebersprungen: {bg_exc}")
+
             tr_id = None
             try:
                 from backend.otel_tracer import tracer
@@ -488,6 +516,18 @@ async def dispatch_to_omniroute_or_container(
             est_cost = float(res["cost_usd"]) if res.get("cost_usd") is not None else round((in_tok * 0.00000015) + (out_tok * 0.00000030), 6)
             used_model = res.get("model") or model
             is_ok = res.get("status") == "success"
+
+            if is_ok and (in_tok + out_tok) > 0:
+                try:
+                    from backend.role_budget_engine import record_budget_usage
+                    record_budget_usage(
+                        agent_id=agent_id,
+                        tokens_used=in_tok + out_tok,
+                        cost_usd=est_cost,
+                        task_id=task_id or None,
+                    )
+                except Exception as rec_exc:
+                    logger.debug(f"[Dispatcher] Budget-Consumption Recording uebersprungen: {rec_exc}")
 
             if tr_id:
                 try:

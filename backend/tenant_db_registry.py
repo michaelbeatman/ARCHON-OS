@@ -65,7 +65,24 @@ def gdpr_erase_subject_data(
     deleted_summary: Dict[str, int] = {}
     like_val = f"%{needle}%"
 
-    for db_name in REGISTERED_V2_DBS:
+    # Sowohl v2-DBs als auch Kern-/konsolidierte Domänen-DBs nach DSGVO Art. 17 bereinigen
+    scan_dbs = list(
+        dict.fromkeys(
+            list(REGISTERED_V2_DBS)
+            + [
+                "business.db",
+                "ops.db",
+                "memory.db",
+                "crm.db",
+                "erp.db",
+                "contracts.db",
+                "deals.db",
+                "agentic_memory.db",
+            ]
+        )
+    )
+
+    for db_name in scan_dbs:
         db_path = resolve_tenant_db_path(db_name, tenant_id=tenant_id, base_dir=base_dir)
         if not os.path.exists(db_path):
             continue
@@ -77,11 +94,13 @@ def gdpr_erase_subject_data(
             ]
             total_del = 0
             for tbl in tables:
-                cols = [r[1] for r in conn.execute(f"PRAGMA table_info({tbl})").fetchall() if str(r[2]).upper().startswith("TEXT") or r[2] == ""]
+                safe_tbl = str(tbl).replace('"', '""')
+                cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{safe_tbl}")').fetchall() if str(r[2]).upper().startswith("TEXT") or r[2] == ""]
                 if not cols:
                     continue
-                where_clause = " OR ".join(f"{c} LIKE ?" for c in cols)
-                cur = conn.execute(f"DELETE FROM {tbl} WHERE {where_clause}", [like_val] * len(cols))
+                quoted_cols = [f'"{str(c).replace(chr(34), chr(34)*2)}" LIKE ?' for c in cols]
+                where_clause = " OR ".join(quoted_cols)
+                cur = conn.execute(f'DELETE FROM "{safe_tbl}" WHERE {where_clause}', [like_val] * len(cols))
                 total_del += cur.rowcount
             conn.commit()
             if total_del > 0:

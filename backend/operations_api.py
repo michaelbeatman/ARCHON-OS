@@ -472,12 +472,14 @@ class TaskCreateRequest(BaseModel):
     model_override: Optional[str] = None
     provider_override: Optional[str] = None
     decompose: Optional[bool] = False
+    allow_autonomous_hiring: Optional[bool] = False
     team_id: Optional[str] = None
     reasoning_effort: Optional[str] = None
     soul_mode: Optional[str] = None
     tool_preset: Optional[str] = None
     token_budget: Optional[int] = None
     cost_limit_usd: Optional[float] = None
+    cost_limit_eur: Optional[float] = None
     require_hitl: Optional[bool] = False
     due_date: Optional[str] = None
     cron_schedule: Optional[str] = None
@@ -648,11 +650,15 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
         conn.commit()
         _sync_to_memory_bridge(task_id, req.title, target_assignee, target_status)
 
-        # Sidecar-Metadaten (SOUL, Reasoning, Tool-Preset, Budget, HITL, Due, Cron, Dependency)
+        # Sidecar-Metadaten (SOUL, Reasoning, Tool-Preset, Budget, HITL, Due, Cron, Dependency, CEO-Hiring)
+        eff_cost_eur = req.cost_limit_eur if req.cost_limit_eur is not None else (
+            round(float(req.cost_limit_usd) * 0.92, 2) if req.cost_limit_usd is not None else None
+        )
         if any([
             req.soul_mode, req.reasoning_effort, req.tool_preset,
-            req.token_budget, req.cost_limit_usd, req.require_hitl,
-            req.due_date, req.cron_schedule, req.depends_on, req.trusted_input
+            req.token_budget, req.cost_limit_usd, eff_cost_eur, req.require_hitl,
+            req.due_date, req.cron_schedule, req.depends_on, req.trusted_input,
+            req.allow_autonomous_hiring
         ]):
             try:
                 from backend.kanban_sidecar import update_kanban_meta
@@ -663,25 +669,95 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
                     if req.tool_preset: tmeta["tool_preset"] = req.tool_preset
                     if req.token_budget: tmeta["token_budget"] = int(req.token_budget)
                     if req.cost_limit_usd is not None: tmeta["cost_limit_usd"] = float(req.cost_limit_usd)
+                    if eff_cost_eur is not None: tmeta["cost_limit_eur"] = float(eff_cost_eur)
                     if req.require_hitl: tmeta["require_hitl"] = True
                     if req.due_date: tmeta["due"] = str(req.due_date)[:10]
                     if req.cron_schedule: tmeta["cron_schedule"] = str(req.cron_schedule).strip()
                     if req.depends_on: tmeta["depends_on"] = str(req.depends_on).strip()
                     if req.trusted_input: tmeta["trusted_input"] = True
+                    if req.allow_autonomous_hiring: tmeta["allow_autonomous_hiring"] = True
                 update_kanban_meta(_save_create_meta)
             except Exception as meta_err:
                 print(f"[OperationsAPI] Meta save warning: {meta_err}", file=sys.stderr)
-        
-        # Falls Decompose angefordert wurde und Hermes Container läuft:
-        if req.decompose:
+
+        decomposition_plan = None
+        created_subtask_ids: List[str] = []
+        if req.decompose or req.allow_autonomous_hiring:
             try:
-                from utils.docker_client import docker_cli_host_args
-                # -H <Socket>: `docker exec` ist Klasse C und bleibt am Socket; ohne die
-                # Bindung folgt die CLI dem globalen DOCKER_HOST (siehe docker_cli_host_args).
-                subprocess.Popen(["docker", *docker_cli_host_args(),
-                                  "exec", "hermes", "hermes", "kanban", "decompose", task_id])
-            except Exception as e:
-                print(f"[OperationsAPI] Decompose trigger error: {e}", file=sys.stderr)
+                from backend.role_budget_engine import plan_and_decompose_task_with_budgets
+                decomposition_plan = plan_and_decompose_task_with_budgets(
+                    parent_task_id=task_id,
+                    title=req.title,
+                    body=task_body,
+                    total_token_budget=req.token_budget,
+                    total_cost_limit_eur=eff_cost_eur,
+                    allow_autonomous_hiring=bool(req.allow_autonomous_hiring),
+                )
+                for idx, sub in enumerate(decomposition_plan.get("subtasks", [])):
+                    sub_id = f"{task_id}-sub{idx + 1}"
+                    sub_title = f"[AP{idx + 1}: {sub.get('role', 'Spezialist')}] {req.title[:70]}"
+                    sub_body = (
+                        f"{sub.get('mandate', '')}\n\n"
+                        f"---\n"
+                        f"🪙 **Zugeteiltes Teil-Budget (Orchestrator-Split):** "
+                        f"`{sub.get('token_budget', 0):,} Tokens` / `{sub.get('cost_limit_eur', 0.0):.2f} €` "
+                        f"(Komplexitätsgewicht: `{sub.get('complexity_weight', 1.0)}x`, Anteil: `{sub.get('budget_share_pct', 0)}%`)"
+                    )
+                    sub_assignee = sub.get("agent_id") or target_assignee or "default"
+                    cursor.execute(
+                        """
+                        INSERT OR IGNORE INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, model_override, provider_override, block_kind)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            sub_id,
+                            sub_title,
+                            sub_body,
+                            sub_assignee,
+                            target_status,
+                            req.priority or 0,
+                            "CEO-Orchestrator",
+                            now_iso,
+                            req.model_override,
+                            req.provider_override,
+                            "hitl_gate" if req.require_hitl else None,
+                        ),
+                    )
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO task_links (parent_id, child_id, kind, created_at) VALUES (?, ?, 'subtask', ?)",
+                        (task_id, sub_id, now_iso),
+                    )
+                    created_subtask_ids.append(sub_id)
+                conn.commit()
+                if created_subtask_ids:
+                    from backend.kanban_sidecar import update_kanban_meta
+                    def _save_sub_budgets(meta):
+                        for idx, sub in enumerate(decomposition_plan.get("subtasks", [])):
+                            sid = f"{task_id}-sub{idx + 1}"
+                            smeta = meta.setdefault("tasks", {}).setdefault(sid, {})
+                            smeta["token_budget"] = int(sub.get("token_budget") or 0)
+                            smeta["cost_limit_eur"] = float(sub.get("cost_limit_eur") or 0.0)
+                            smeta["cost_limit_usd"] = float(sub.get("cost_limit_usd") or 0.0)
+                            smeta["complexity_weight"] = float(sub.get("complexity_weight") or 1.0)
+                            smeta["budget_share_pct"] = float(sub.get("budget_share_pct") or 0.0)
+                            if sub.get("is_autonomously_hired"):
+                                smeta["autonomously_hired"] = True
+                    update_kanban_meta(_save_sub_budgets)
+            except Exception as dec_err:
+                print(f"[OperationsAPI] Native Budget-Decompose / CEO-Hiring warning: {dec_err}", file=sys.stderr)
+        elif req.token_budget or eff_cost_eur:
+            try:
+                from backend.role_budget_engine import allocate_task_budget_to_subagents
+                allocate_task_budget_to_subagents(
+                    parent_task_id=task_id,
+                    total_token_budget=int(req.token_budget or 60000),
+                    subtasks=[],
+                    total_cost_limit_eur=eff_cost_eur,
+                    orchestrator_reserve_pct=1.0,
+                )
+            except Exception as alloc_err:
+                print(f"[OperationsAPI] Single-Task Budget-Registration warning: {alloc_err}", file=sys.stderr)
+
         try:
             import main
             if hasattr(main, "broadcast_event"):
@@ -689,7 +765,18 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
         except Exception as exc:
             print(f"[OperationsAPI] WARNUNG (MEDIUM) create_kanban_task: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
-        return {"status": "success", "task_id": task_id, "title": req.title, "assigned_to": target_assignee, "team": req.team_id}
+        resp_out = {
+            "status": "success",
+            "task_id": task_id,
+            "title": req.title,
+            "assigned_to": target_assignee,
+            "team": req.team_id,
+            "subtask_ids": created_subtask_ids,
+        }
+        if decomposition_plan:
+            resp_out["budget_plan"] = decomposition_plan.get("budget_plan")
+            resp_out["hired_specialist"] = decomposition_plan.get("hired_specialist")
+        return resp_out
     finally:
         conn.close()
 
@@ -826,6 +913,8 @@ async def _execute_kanban_task_async(task_id: str):
     assignee = resolve_agent_id(raw_assignee)
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
+    profiles = _load_profiles_map()
+    prof = profiles.get(assignee, {})
     model = (t_dict.get("model_override") or "").strip()
     provider_override = (t_dict.get("provider_override") or "").strip()
     if not model:
@@ -840,10 +929,8 @@ async def _execute_kanban_task_async(task_id: str):
                     print(f"[ModelRouting] Task {task_id}: '{_task_type}' -> {model} ({provider_override})")
         except Exception as _mr_err:
             print(f"[ModelRouting] Fallback auf Profilmodell: {_mr_err}")
-    model = model or "deepseek/deepseek-chat"
+    model = model or prof.get("model") or "deepseek/deepseek-chat"
 
-    profiles = _load_profiles_map()
-    prof = profiles.get(assignee, {})
     agent_name = prof.get("name") or assignee
     role = prof.get("category") or prof.get("role") or "Fach-Spezialist"
     system_prompt = prof.get("prompt") or prof.get("system_prompt") or f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
@@ -962,6 +1049,15 @@ async def _execute_kanban_task_async(task_id: str):
                 c.execute(
                     "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'blocked', ?, ?)",
                     (task_id, json.dumps({"reason": verdict["block_kind"]}), now_iso),
+                )
+            elif target_status == "failed":
+                c.execute(
+                    "UPDATE tasks SET status = 'failed', result = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?",
+                    (reply, task_id),
+                )
+                c.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'failed', ?, ?)",
+                    (task_id, json.dumps({"status": "failed", "summary": reply[:200], "verified": False}), now_iso),
                 )
             else:
                 c.execute(
@@ -1222,6 +1318,11 @@ def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
         # 2. Aktion anwenden
         if action == "move":
             target_status = (req.payload.get("status") or "todo").lower()
+            if target_status not in VALID_KANBAN_STATUSES:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Ungültiger Status '{target_status}'. Erlaubt sind: {', '.join(sorted(VALID_KANBAN_STATUSES))}"
+                )
             # Fix-Sprint Paket A (Punkt 5): Cycle-Time/Zombie-Erkennung korrekt
             # — beim Zurückbewegen Timestamps explizit NULL setzen statt COALESCE.
             if target_status in ("backlog", "todo"):
@@ -1236,7 +1337,7 @@ def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
                 cursor.execute(f"""
                     UPDATE tasks
                     SET status = ?,
-                        started_at = COALESCE(?, started_at),
+                        started_at = COALESCE(started_at, ?),
                         completed_at = NULL
                     WHERE id IN ({placeholders})
                 """, [target_status, now_iso] + task_ids)
@@ -1476,12 +1577,13 @@ async def approve_kanban_task(request: Request, task_id: str):
 
 
 @router.post("/kanban/tasks/{task_id}/quality-review")
-async def trigger_quality_review(task_id: str, req: QualityReviewRequest = Body(default=QualityReviewRequest())):
+async def trigger_quality_review(task_id: str, request: Request, req: QualityReviewRequest = Body(default=QualityReviewRequest())):
     """
     Führt ein 4-Augen-Qualitätsreview für einen Kanban-Task durch.
     Ein unabhängiger Reviewer-Agent (Standard: Katharina Völk bzw. Robert bei Eigenarbeiten)
     prüft das Arbeitsergebnis objektiv gegen den ursprünglichen Auftrag.
     """
+    require_admin_or_503(request)
     def _fetch_task_sync() -> dict:
         conn = _get_kanban_connection(maintenance=True)
         try:
@@ -2354,7 +2456,8 @@ def get_project_meta(project_id: str):
 
 
 @router.put("/projects/{project_id}/meta")
-def put_project_meta(project_id: str, upd: ProjectMetaUpdate):
+def put_project_meta(project_id: str, upd: ProjectMetaUpdate, request: Request):
+    require_admin_or_503(request)
     patch = {k: v for k, v in upd.model_dump().items() if v is not None and k in _PROJECTS_META_ALLOWED}
     if "status" in patch and patch["status"] not in ("in_progress", "completed", "planned"):
         raise HTTPException(status_code=422, detail="status muss in_progress|completed|planned sein.")
@@ -2373,9 +2476,10 @@ def get_project_folder_files(project_id: str):
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
     vault = _P(get_vault_dir()).resolve()
-    proj = (vault / "01_PROJEKTE" / project_id).resolve()
+    proj_root = (vault / "01_PROJEKTE").resolve()
+    proj = (proj_root / project_id).resolve()
     # Traversal-Schutz: muss innerhalb von 01_PROJEKTE liegen
-    if not str(proj).startswith(str((vault / "01_PROJEKTE").resolve())):
+    if not proj.is_relative_to(proj_root):
         raise HTTPException(status_code=400, detail="Ungueltiger Projekt-Pfad.")
     if not proj.is_dir():
         return {"status": "success", "project_id": project_id, "folder": f"01_PROJEKTE/{project_id}", "files": []}
@@ -2384,8 +2488,8 @@ def get_project_folder_files(project_id: str):
         if f.is_file() and not f.name.startswith("."):
             files.append({
                 "name": f.name,
-                "path": str(f.relative_to(vault)).replace("\\\\", "/"),
-                "dir": str(f.parent.relative_to(proj)).replace("\\\\", "/") or "Root",
+                "path": str(f.relative_to(vault)).replace("\\", "/"),
+                "dir": str(f.parent.relative_to(proj)).replace("\\", "/") or "Root",
                 "size": f.stat().st_size
             })
     return {"status": "success", "project_id": project_id, "folder": f"01_PROJEKTE/{project_id}", "files": files}
@@ -2402,7 +2506,7 @@ def get_kanban_project_files(task_id: str):
         raise HTTPException(status_code=404, detail="Kein Obsidian-Projekt verknuepft.")
     vault = _P(get_vault_dir()).resolve()
     proj = (vault / rel).resolve()
-    if not str(proj).startswith(str(vault)) or not proj.is_dir():
+    if not proj.is_relative_to(vault) or not proj.is_dir():
         raise HTTPException(status_code=404, detail=f"Projektordner fehlt: {rel}")
     files = []
     for p in sorted(proj.rglob("*")):

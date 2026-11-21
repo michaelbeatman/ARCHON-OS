@@ -268,6 +268,23 @@ def _auth_unavailable_response() -> JSONResponse:
 
 
 @app.middleware("http")
+async def tenant_context_middleware(request: Request, call_next):
+    """Bindet optionalen Mandanten-Header (X-Tenant-Id / X-Company-Id) request-lokal via ContextVar."""
+    hdr_tid = (request.headers.get("X-Tenant-Id") or request.headers.get("X-Company-Id") or "").strip()
+    if not hdr_tid:
+        return await call_next(request)
+    try:
+        from backend.tenant_context import set_request_tenant, reset_request_tenant
+        tok = set_request_tenant(hdr_tid)
+        try:
+            return await call_next(request)
+        finally:
+            reset_request_tenant(tok)
+    except Exception:
+        return await call_next(request)
+
+
+@app.middleware("http")
 async def auth_gate(request: Request, call_next):
     """Blockt API-Aufrufe ohne gültige Session, sobald Multi-User aktiv ist.
 

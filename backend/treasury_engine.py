@@ -24,11 +24,21 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TREASURY_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "treasury.db")
 
 
+def _resolve_treasury_db() -> str:
+    try:
+        from backend.db_paths import resolve_db
+        return resolve_db("treasury.db")
+    except Exception:
+        return TREASURY_DB_PATH
+
+
 def _get_conn() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(TREASURY_DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(TREASURY_DB_PATH, timeout=15)
+    db_path = _resolve_treasury_db()
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -370,16 +380,24 @@ def approve_payment(tx_id: str, approver_id: str = "admin", passkey_verified: bo
     now_iso = datetime.now(timezone.utc).isoformat()
     conn = _get_conn()
     try:
+        conn.execute("BEGIN IMMEDIATE")
         tx_row = conn.execute("SELECT * FROM treasury_transactions WHERE id = ?", (tx_id,)).fetchone()
         if not tx_row:
+            conn.rollback()
             raise KeyError("transaction_not_found")
         tx = _row_to_tx(tx_row)
         if tx["status"] != "pending_approval":
+            conn.rollback()
             return tx
 
         acc_row = conn.execute("SELECT * FROM treasury_accounts WHERE id = ?", (tx["account_id"],)).fetchone()
         if not acc_row:
+            conn.rollback()
             raise KeyError("account_not_found")
+
+        if tx["direction"] == "out" and float(acc_row["balance"]) < float(tx["amount"]):
+            conn.rollback()
+            raise ValueError("insufficient_balance")
 
         if tx["direction"] == "out":
             conn.execute(
@@ -392,11 +410,11 @@ def approve_payment(tx_id: str, approver_id: str = "admin", passkey_verified: bo
                 (tx["amount"], now_iso, tx["account_id"]),
             )
 
-        conn.execute(
+        cur = conn.execute(
             """
             UPDATE treasury_transactions
             SET status = 'executed', approved_by = ?, passkey_verified = ?, executed_at = ?, policy_note = ?
-            WHERE id = ?
+            WHERE id = ? AND status = 'pending_approval'
             """,
             (
                 approver_id,
@@ -406,10 +424,24 @@ def approve_payment(tx_id: str, approver_id: str = "admin", passkey_verified: bo
                 tx_id,
             ),
         )
+        if cur.rowcount == 0:
+            conn.rollback()
+            return _row_to_tx(conn.execute("SELECT * FROM treasury_transactions WHERE id = ?", (tx_id,)).fetchone())
         conn.commit()
         updated = _row_to_tx(conn.execute("SELECT * FROM treasury_transactions WHERE id = ?", (tx_id,)).fetchone())
     finally:
         conn.close()
+
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="treasury",
+            action="payment_approved",
+            agent_id=approver_id,
+            payload={"tx_id": tx_id, "amount": updated["amount"], "currency": updated["currency"], "passkey_verified": passkey_verified},
+        )
+    except Exception as _exc:
+        _archon_exc_logger.debug("[treasury_engine] Audit-Log fuer payment_approved fehlgeschlagen: %s", _exc)
 
     try:
         from backend.workflow_scheduler import dispatch_workflow_event
@@ -430,11 +462,16 @@ def reject_payment(tx_id: str, rejected_by: str = "admin", reason: str = "") -> 
     init_treasury_db()
     conn = _get_conn()
     try:
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute("SELECT * FROM treasury_transactions WHERE id = ?", (tx_id,)).fetchone()
         if not row:
+            conn.rollback()
             raise KeyError("transaction_not_found")
+        if str(row["status"]) != "pending_approval":
+            conn.rollback()
+            raise ValueError(f"Zahlung '{tx_id}' ist bereits '{row['status']}' und kann nicht abgelehnt werden.")
         conn.execute(
-            "UPDATE treasury_transactions SET status = 'rejected', approved_by = ?, policy_note = ? WHERE id = ?",
+            "UPDATE treasury_transactions SET status = 'rejected', approved_by = ?, policy_note = ? WHERE id = ? AND status = 'pending_approval'",
             (rejected_by, reason or "Abgelehnt durch Benutzer", tx_id),
         )
         conn.commit()

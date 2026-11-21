@@ -15,6 +15,7 @@ Stellt pro Mandant bereit:
 
 from __future__ import annotations
 
+import contextvars
 import datetime
 import json
 import logging
@@ -27,6 +28,21 @@ from typing import Any, Dict, List, Optional
 from archon.core.runtime import WORKSPACE_DIR
 
 logger = logging.getLogger("archon.tenant_context")
+
+_REQUEST_TENANT_VAR: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "archon_request_tenant", default=None
+)
+
+
+def set_request_tenant(company_id: Optional[str]) -> contextvars.Token:
+    """Bindet eine Request-spezifische Mandanten-ID an den aktuellen Async/Thread-Kontext."""
+    val = sanitize_tenant_id(company_id) if company_id else None
+    return _REQUEST_TENANT_VAR.set(val)
+
+
+def reset_request_tenant(token: contextvars.Token) -> None:
+    """Setzt den Request-Mandantenkontext nach Abschluss des Requests zurueck."""
+    _REQUEST_TENANT_VAR.reset(token)
 
 ISOLATED_TENANT_DBS = ("erp.db", "kanban.db", "crm.db", "contracts.db", "deals.db")
 CONSOLIDATED_TENANT_DBS = ("ops.db", "business.db", "memory.db")
@@ -330,6 +346,9 @@ class TenantContextManager:
         return comp
 
     def get_active_tenant_id(self) -> str:
+        ctx_tid = _REQUEST_TENANT_VAR.get()
+        if ctx_tid:
+            return sanitize_tenant_id(ctx_tid)
         comp = self.get_active_company()
         return sanitize_tenant_id(comp.get("id"))
 
@@ -391,9 +410,13 @@ class TenantContextManager:
                 return os.path.join(self.workspace_dir, "data", fname) if (tid in PRIMARY_TENANT_IDS) else isolated_path
 
             if is_primary_prod and fname == "crm.db":
-                pb_db = os.path.join(self.workspace_dir, "pocketbase", "pb_data", "data.db")
-                if os.path.isfile(pb_db):
-                    return pb_db
+                # Archon OS CRM nutzt die interne business.db (saubere Trennung von externem PocketBase-LinkedIn-CRM)
+                biz_db = os.path.join(self.workspace_dir, "data", "business.db")
+                cache_key = ("crm.db", biz_db)
+                if cache_key not in self._initialized_schemas or not os.path.isfile(biz_db):
+                    init_tenant_db_schema("crm.db", biz_db)
+                    self._initialized_schemas.add(cache_key)
+                return biz_db
 
             if is_primary_prod and fname == "kanban.db":
                 for cand in (

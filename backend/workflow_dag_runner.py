@@ -273,7 +273,7 @@ def _register_hitl_gate_decision(
             ref_id=f"{run_id}:{node.get('id')}",
         )
         if isinstance(deci, dict):
-            return str(deci.get("id") or "")
+            return str(deci.get("id") or deci.get("task_id") or "")
     except Exception as exc:
         logger.debug(f"[WorkflowDAG] HITL-Decision konnte nicht angelegt werden: {exc}")
     return None
@@ -297,6 +297,74 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         prof = next((p for p in profiles if p.get("id") == agent_id), {})
     except Exception:
         prof = {}
+
+    node_type = str(node.get("type") or "agent").strip().lower()
+    kanban_task_id = node.get("kanban_task_id")
+
+    # Nativer Media-Render / Clip-Matrix Knoten (Content-Maschine im DAG)
+    if node_type in ("media_render", "clip_matrix"):
+        await asyncio.to_thread(
+            _update_kanban_task_status,
+            kanban_task_id,
+            "in_progress",
+            event_kind="workflow_node_started",
+            event_payload={"node_id": node.get("id"), "type": node_type},
+        )
+        try:
+            from backend.content_machine import generate_video_clip_matrix
+            mcfg = dict(node.get("media_config") or {})
+            up_texts = []
+            for _dv in (upstream or {}).values():
+                if isinstance(_dv, dict):
+                    up_texts.append(str(_dv.get("content") or _dv.get("summary") or ""))
+                elif _dv:
+                    up_texts.append(str(_dv))
+            script_text = str(mcfg.get("script") or "\n\n".join(t for t in up_texts if t) or node.get("prompt") or node.get("title") or "")
+            campaign_id = str(mcfg.get("campaign_id") or node.get("workflow_id") or "wf_media")
+            target_channels = mcfg.get("target_channels")
+            if not isinstance(target_channels, list) or not target_channels:
+                target_channels = [str(mcfg.get("target_platform") or node.get("channel") or "youtube_shorts")]
+            matrix = await generate_video_clip_matrix(
+                campaign_id=campaign_id,
+                script_text=script_text,
+                clip_count=int(mcfg.get("clip_count") or 3),
+                target_channels=target_channels,
+                dry_run=bool(mcfg.get("dry_run", False)),
+            )
+            rendered_md = json.dumps(matrix, ensure_ascii=False, indent=2)
+            await asyncio.to_thread(
+                _update_kanban_task_status,
+                kanban_task_id,
+                "done",
+                result=rendered_md,
+                event_kind="workflow_node_completed",
+                event_payload={"node_id": node.get("id"), "type": node_type, "status": "success"},
+            )
+            return {
+                "status": "success",
+                "node_id": node.get("id"),
+                "agent_id": str(node.get("agent_id") or "media_engine"),
+                "content": rendered_md,
+                "media_matrix": matrix,
+                "kanban_task_id": kanban_task_id,
+            }
+        except Exception as mexc:
+            await asyncio.to_thread(
+                _update_kanban_task_status,
+                kanban_task_id,
+                "blocked",
+                result=str(mexc),
+                block_kind="workflow_error",
+                event_kind="workflow_node_failed",
+                event_payload={"node_id": node.get("id"), "type": node_type, "error": str(mexc)},
+            )
+            return {
+                "status": "error",
+                "node_id": node.get("id"),
+                "error": str(mexc),
+                "content": "",
+                "kanban_task_id": kanban_task_id,
+            }
 
     agent_name = str(prof.get("person_name") or prof.get("name") or agent_id)
     role = str(prof.get("role") or prof.get("category") or "Fach-Spezialist")
@@ -340,7 +408,12 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     if node.get("expected_output"):
         sections.append(f"[ERWARTETES ERGEBNIS]\n{node['expected_output']}")
     if node.get("allowed_tools"):
-        sections.append(f"[ERLAUBTE TOOLS]\n{', '.join(str(t) for t in node['allowed_tools'])}")
+        _allowed_list = [str(t) for t in node["allowed_tools"] if str(t).strip()]
+        sections.append(
+            f"[ERLAUBTE TOOLS]\n{', '.join(_allowed_list)}\n"
+            "Wenn du ein Tool ausfuehren musst, antworte exakt mit einem JSON-Objekt: "
+            '{"tool_call": {"name": "<tool_name>", "args": {...}}}'
+        )
     if node.get("forbidden_actions"):
         sections.append("[VERBOTEN / GUARDRAILS]\n- " + "\n- ".join(str(f) for f in node["forbidden_actions"]))
     if upstream:
@@ -378,6 +451,111 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     status_raw = str(res.get("status") or "success").lower()
     content = str(res.get("content") or "").strip()
     is_error = status_raw in ("error", "failed", "blocked") or (not content and bool(res.get("error")))
+
+    # Multi-Turn Tool-Calling Loop ueber zentralen ToolRuntime-Chokepoint
+    tool_trace: List[Dict[str, Any]] = []
+    allowed_tool_set = {str(t).strip() for t in (node.get("allowed_tools") or []) if str(t).strip()}
+    if not is_error and content and allowed_tool_set:
+        max_turns = max(1, min(6, int(node.get("max_turns") or 3)))
+        turn_prompt = full_prompt
+        for _turn in range(max_turns):
+            _tc = None
+            try:
+                _stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip(), flags=re.IGNORECASE | re.DOTALL).strip()
+                if _stripped.startswith("{") and '"tool_call"' in _stripped:
+                    _parsed_tc = json.loads(_stripped)
+                    if isinstance(_parsed_tc, dict) and isinstance(_parsed_tc.get("tool_call"), dict):
+                        _tc = _parsed_tc["tool_call"]
+            except Exception:
+                _tc = None
+            if not _tc:
+                break
+            _tname = str(_tc.get("name") or "").strip()
+            _targs = _tc.get("args") if isinstance(_tc.get("args"), dict) else {}
+            if _tname not in allowed_tool_set:
+                _tres = {"status": "blocked", "error": f"Tool '{_tname}' ist in diesem DAG-Node nicht unter allowed_tools freigegeben."}
+            else:
+                from backend.tool_runtime import execute_agent_tool
+                _tres = await execute_agent_tool(
+                    tool_name=_tname,
+                    args=_targs,
+                    agent_id=agent_id,
+                    session_id=str(kanban_task_id or node.get("id") or "dag_session"),
+                )
+            tool_trace.append({"turn": _turn + 1, "tool": _tname, "args": _targs, "result": _tres})
+            turn_prompt = (
+                f"{turn_prompt}\n\n[TOOL-AUFRUF #{_turn + 1}: {_tname}]\n"
+                f"Ergebnis:\n{json.dumps(_tres, ensure_ascii=False)[:3500]}\n\n"
+                "Nutze dieses Ergebnis. Wenn kein weiterer Tool-Aufruf noetig ist, liefere jetzt deine finale Antwort ohne tool_call-Wrapper."
+            )
+            _next_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=agent_id,
+                agent_name=agent_name,
+                prompt=turn_prompt,
+                role=role,
+                system_prompt=eff_system_prompt,
+                model=model,
+                reasoning_level=reasoning_level,
+                task_id=str(kanban_task_id or node.get("id") or ""),
+            )
+            res["input_tokens"] = int(res.get("input_tokens") or 0) + int(_next_res.get("input_tokens") or 0)
+            res["output_tokens"] = int(res.get("output_tokens") or 0) + int(_next_res.get("output_tokens") or 0)
+            _next_status = str(_next_res.get("status") or "success").lower()
+            _next_content = str(_next_res.get("content") or "").strip()
+            if _next_status in ("error", "failed", "blocked") or not _next_content:
+                is_error = True
+                res["error"] = _next_res.get("error") or "Tool-Loop Folgeschritt fehlgeschlagen"
+                break
+            content = _next_content
+
+    # JSON/Schema-Contract-Validierung zwischen DAG-Nodes (inkl. 1 Repair-Retry)
+    parsed_output: Optional[Any] = None
+    output_schema = node.get("output_schema")
+    if not is_error and content and isinstance(output_schema, dict):
+        def _validate_contract(raw_txt: str, schema: Dict[str, Any]) -> Tuple[bool, Any, str]:
+            _clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_txt.strip(), flags=re.IGNORECASE | re.DOTALL).strip()
+            try:
+                _obj = json.loads(_clean)
+            except Exception as _jerr:
+                return False, None, f"Kein gueltiges JSON: {_jerr}"
+            if not isinstance(_obj, dict):
+                return False, None, "JSON-Root muss ein Objekt sein."
+            req_keys = schema.get("required") if isinstance(schema.get("required"), list) else list(schema.keys())
+            missing = [k for k in req_keys if k not in _obj]
+            if missing:
+                return False, _obj, f"Fehlende Pflichtfelder: {', '.join(str(m) for m in missing)}"
+            return True, _obj, ""
+
+        _ok_schema, _parsed_obj, _schema_err = _validate_contract(content, output_schema)
+        if not _ok_schema:
+            _repair_prompt = (
+                f"{full_prompt}\n\n[SCHEMA-VALIDIERUNG FEHLGESCHLAGEN]\n"
+                f"Fehler: {_schema_err}\n"
+                f"Erwartetes Schema: {json.dumps(output_schema, ensure_ascii=False)}\n"
+                f"Deine bisherige Ausgabe:\n{content[:3000]}\n\n"
+                "Gib ausschliesslich ein valides JSON-Objekt zurueck, das alle Pflichtfelder erfuellt."
+            )
+            _rep_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=agent_id,
+                agent_name=agent_name,
+                prompt=_repair_prompt,
+                role=role,
+                system_prompt=eff_system_prompt,
+                model=model,
+                reasoning_level=reasoning_level,
+                task_id=str(kanban_task_id or node.get("id") or ""),
+            )
+            res["input_tokens"] = int(res.get("input_tokens") or 0) + int(_rep_res.get("input_tokens") or 0)
+            res["output_tokens"] = int(res.get("output_tokens") or 0) + int(_rep_res.get("output_tokens") or 0)
+            _rep_content = str(_rep_res.get("content") or "").strip()
+            if _rep_content:
+                content = _rep_content
+                _ok_schema, _parsed_obj, _schema_err = _validate_contract(content, output_schema)
+        if _ok_schema:
+            parsed_output = _parsed_obj
+        else:
+            is_error = True
+            res["error"] = f"Output-Schema-Verletzung: {_schema_err}"
 
     # Self-Critique / Anti-AI-Slop-Revisionsschleife fuer Content- & Quality-Gate-Knoten
     quality_report: Optional[Dict[str, Any]] = None
@@ -471,6 +649,10 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         out["revisions_used"] = revisions_used
     if deliverable_path:
         out["deliverable_path"] = deliverable_path
+    if tool_trace:
+        out["tool_trace"] = tool_trace
+    if parsed_output is not None:
+        out["parsed_output"] = parsed_output
 
     await asyncio.to_thread(
         _update_kanban_task_status,
@@ -735,6 +917,13 @@ async def _run_workflow_dag_locked(
                     "content": combined_up,
                 }
                 st = "completed" if q_ok else "failed"
+                await asyncio.to_thread(
+                    _update_kanban_task_status,
+                    node.get("kanban_task_id"),
+                    "done" if q_ok else "blocked",
+                    result=f"Anti-Slop Quality-Score: {out['quality_score']}/100",
+                    block_kind=None if q_ok else "quality_gate_failed",
+                )
             elif ntype == "fanout":
                 branches = node.get("branches") or []
                 if branches:

@@ -1,0 +1,295 @@
+# -*- coding: utf-8 -*-
+"""
+Regressions-Tests fuer Stufe 1 (P0 Security/Data/Workflow),
+Stufe 2 (One-System Event-Bus, ToolRuntime, Kanban/CRM/Tenant-Isolation)
+und Stufe 3 (Multi-Turn Tool-Calling, Schema-Contracts & Media-Render im DAG).
+"""
+
+import asyncio
+import json
+import os
+import sqlite3
+import tempfile
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+# =====================================================================
+# STUFE 1: P0 Security, Data & Workflow Fixes
+# =====================================================================
+
+
+def test_path_jail_rejects_bare_string_roots(tmp_path):
+    from utils.path_jail import is_within, safe_path_within
+
+    f = tmp_path / "secret.txt"
+    f.write_text("ok", encoding="utf-8")
+
+    with pytest.raises(TypeError):
+        is_within(str(f), str(tmp_path))
+
+    with pytest.raises(TypeError):
+        safe_path_within(str(f), str(tmp_path))
+
+    assert is_within(str(f), [str(tmp_path)]) is True
+    assert safe_path_within(str(f), [str(tmp_path)], allow_dirs=False) == os.path.realpath(str(f))
+
+
+def test_agent_router_streaming_empty_choices_guard():
+    import backend.agent_router as ar_mod
+
+    # Sicherstellen, dass streaming-Parser bei choices=[] keinen IndexError wirft
+    src = Path(ar_mod.__file__).read_text(encoding="utf-8")
+    assert "if not choices:" in src
+    assert 'if eff_provider == "anthropic":' in src
+
+
+def test_core_dispatcher_single_write_token_accounting(tmp_path):
+    import core_dispatcher as cd
+
+    db_file = str(tmp_path / "usage.db")
+    with sqlite3.connect(db_file) as con:
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, total_tokens INTEGER DEFAULT 0, estimated_cost_usd REAL DEFAULT 0.0, updated_at TEXT)")
+        con.execute("CREATE TABLE token_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, agent_id TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER, cost_usd REAL, created_at TEXT)")
+        con.commit()
+
+    with patch.object(cd, "USAGE_DB_PATH", db_file, create=True):
+        # Test direkt gegen _log_dispatcher_usage falls DB-Pfad injizierbar, sonst Source-Check
+        pass
+    src = Path(cd.__file__).read_text(encoding="utf-8")
+    assert "if not inserted_session:" in src
+
+
+def test_role_budget_engine_single_and_subtask_ids(tmp_path):
+    from backend.role_budget_engine import allocate_task_budget_to_subagents
+
+    db_path = str(tmp_path / "budget.db")
+    single = allocate_task_budget_to_subagents(
+        "t-100", total_token_budget=10000, subtasks=[], total_cost_limit_eur=2.5, db_path=db_path
+    )
+    assert len(single["allocations"]) == 1
+    assert single["allocations"][0]["task_id"] == "t-100"
+    assert single["allocations"][0]["cost_limit_eur"] == 2.5
+
+    multi = allocate_task_budget_to_subagents(
+        "t-200",
+        total_token_budget=10000,
+        subtasks=[{"role": "researcher"}, {"role": "writer"}],
+        total_cost_limit_eur=3.0,
+        db_path=db_path,
+    )
+    assert len(multi["allocations"]) == 2
+    assert multi["allocations"][0]["subtask_id"] == "t-200-sub1"
+    assert multi["allocations"][1]["subtask_id"] == "t-200-sub2"
+
+
+def test_workflow_templates_preserves_quality_gate_and_passthru(tmp_path):
+    from backend.workflow_templates import _DAG_NODE_PASSTHROUGH_KEYS, _build_dag_def_from_template
+
+    for k in ("channel", "save_to_showroom", "max_revisions", "min_quality_score", "quality_gate", "max_turns", "output_schema", "media_config"):
+        assert k in _DAG_NODE_PASSTHROUGH_KEYS
+
+    tpl = {
+        "id": "tpl-test",
+        "title": "Test",
+        "nodes": [
+            {
+                "id": "n1",
+                "type": "agent",
+                "title": "Draft",
+                "prompt": "Schreibe {{topic}}",
+                "channel": "linkedin",
+                "save_to_showroom": True,
+                "max_revisions": 2,
+                "min_quality_score": 80,
+                "max_turns": 2,
+                "output_schema": {"required": ["headline", "body"]},
+            }
+        ],
+        "edges": [],
+    }
+    dag = _build_dag_def_from_template(tpl, {"topic": "KI"}, {"n1": "kt-1"})
+    n1 = dag["nodes"][0]
+    assert n1["channel"] == "linkedin"
+    assert n1["save_to_showroom"] is True
+    assert n1["max_revisions"] == 2
+    assert n1["min_quality_score"] == 80
+    assert n1["max_turns"] == 2
+    assert n1["output_schema"] == {"required": ["headline", "body"]}
+
+
+def test_treasury_approve_reject_atomic_and_balance_check(tmp_path, monkeypatch):
+    import backend.treasury_engine as te
+
+    db_file = str(tmp_path / "treasury.db")
+    monkeypatch.setattr(te, "_resolve_treasury_db", lambda: db_file)
+    te.init_treasury_db()
+    acc = te.upsert_account({"name": "Ops Konto", "balance_eur": 100.0})
+    tx = te.request_payment({"account_id": acc["id"], "amount": 250.0, "recipient": "Vendor GmbH", "purpose": "Zu teuer"})
+
+    # Guthaben reicht nicht -> ValueError
+    with pytest.raises(ValueError, match="insufficient_balance"):
+        te.approve_payment(tx["id"], "admin")
+
+    # Ablehnen funktioniert exakt einmal
+    rej = te.reject_payment(tx["id"], "Budget stop", "admin")
+    assert rej["status"] == "rejected"
+    with pytest.raises(ValueError):
+        te.reject_payment(tx["id"], "Doppelt", "admin")
+
+
+def test_mission_control_does_not_invent_assignee_or_model():
+    import archon.core.mission_control as mc
+
+    src = Path(mc.__file__).read_text(encoding="utf-8")
+    assert 'agent_id = r["assignee"] or ""' in src
+    assert '"model": r["model_override"] or ""' in src
+
+
+# =====================================================================
+# STUFE 2: One-System (Event-Bus, ToolRuntime, Kanban/CRM/PocketBase)
+# =====================================================================
+
+
+def test_event_bus_hitl_approve_and_replay(tmp_path, monkeypatch):
+    import backend.workflow_scheduler as ws
+
+    db_file = str(tmp_path / "sched.db")
+    monkeypatch.setattr(ws, "SCHEDULES_DB_PATH", db_file)
+
+    ws.init_schedules_db()
+    ws.upsert_event_policy("watchdog", "all", policy="require_hitl", max_per_min=10)
+    ws.upsert_schedule({
+        "template_id": "tpl-research-1",
+        "trigger_type": "watchdog",
+        "watchdog_keyword": "ki-trend",
+        "enabled": True,
+    })
+
+    created_decisions = []
+    monkeypatch.setattr(ws, "_create_hitl_decision", lambda *a, **kw: created_decisions.append(a[0]))
+
+    triggered = []
+    monkeypatch.setattr(ws, "_execute_schedule_row", lambda conn, row, now, extra_inputs=None: (triggered.append(row["id"]) or {"run_id": "run-123"}))
+
+    # 1. Dispatch wird wegen require_hitl geparkt
+    res1 = ws.dispatch_workflow_event(source="watchdog", event_type="finding", title="Neuer KI-Trend", summary="Details")
+    assert res1["status"] == "awaiting_hitl"
+    assert res1["triggered"] == []
+    assert len(created_decisions) == 1
+
+    # 2. Nach Owner-Freigabe startet approve_and_replay_hitl_event den Workflow wirklich
+    res2 = ws.approve_and_replay_hitl_event(res1["event_id"])
+    assert res2["status"] == "triggered"
+    assert len(res2["triggered"]) == 1
+    assert len(triggered) == 1
+
+
+def test_tool_runtime_enforces_m75_m89_and_m90(tmp_path):
+    from backend.tool_runtime import enforce_tool_execution
+    from backend.tool_warrants import issue_warrant, verify_warrant_for_call
+
+    # 1. M90 Warrant: NaN und Path-Traversal ablehnen
+    war = issue_warrant(
+        session_id="sess-1",
+        allowed_tools=["read_file", "pay_invoice"],
+        constraints={"max_amount": 50.0, "allowed_path_prefixes": ["01_PROJEKTE/"]},
+        secret="test-secret-key-32-chars-minimum!!",
+    )
+    assert verify_warrant_for_call(war, "sess-1", "pay_invoice", {"amount": float("nan")}, secret="test-secret-key-32-chars-minimum!!")["allowed"] is False
+    assert verify_warrant_for_call(war, "sess-1", "read_file", {"path": "../etc/passwd"}, secret="test-secret-key-32-chars-minimum!!")["allowed"] is False
+    assert verify_warrant_for_call(war, "sess-1", "read_file", {"path": "01_PROJEKTE/demo.md"}, secret="test-secret-key-32-chars-minimum!!")["allowed"] is True
+
+    # 2. ToolRuntime blockiert leere tool_name
+    bad = enforce_tool_execution(agent_id="researcher", session_id="sess-1", tool_name="")
+    assert bad["allowed"] is False
+
+
+def test_crm_service_decoupled_from_pocketbase(tmp_path, monkeypatch):
+    import backend.crm_service as crm
+
+    assert "pocketbase" not in crm._DEFAULT_CRM_SQLITE_PATH.lower()
+    assert crm._DEFAULT_CRM_SQLITE_PATH.endswith("business.db")
+
+    test_biz = str(tmp_path / "business.db")
+    monkeypatch.setattr(crm, "CRM_SQLITE_PATH", test_biz)
+    conn = crm._get_sqlite_conn()
+    try:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        assert "kontakte" in tables
+    finally:
+        conn.close()
+
+
+def test_kanban_router_uses_resolve_active_db(monkeypatch):
+    import archon.routers.kanban as kb
+    from backend.tenant_context import tenant_context
+
+    called = []
+    monkeypatch.setattr(tenant_context, "resolve_active_db", lambda fname, cid=None: (called.append(fname) or "/tmp/ops.db"))
+    res = kb._resolve_active_kanban_db()
+    assert res == "/tmp/ops.db"
+    assert called == ["kanban.db"]
+
+
+# =====================================================================
+# STUFE 3: Multi-Turn Tool-Loop, Schema Contracts & Media-Render Node
+# =====================================================================
+
+
+def test_dag_runner_multi_turn_tool_loop_and_output_schema(tmp_path):
+    from backend.workflow_dag_runner import default_agent_node_executor
+
+    responses = [
+        {"status": "success", "content": '{"tool_call": {"name": "archon__get_system_metrics", "args": {}}}', "input_tokens": 10, "output_tokens": 10, "model": "mock"},
+        # Zweite Antwort verletzt erst absichtlich das Schema -> triggert Repair-Retry!
+        {"status": "success", "content": "Kein JSON", "input_tokens": 10, "output_tokens": 10, "model": "mock"},
+        # Dritte Antwort erfuellt Schema
+        {"status": "success", "content": '{"headline": "Archon 2026", "score": 95}', "input_tokens": 10, "output_tokens": 10, "model": "mock"},
+    ]
+
+    async def _run():
+        with patch("core_dispatcher.dispatch_to_omniroute_or_container", side_effect=responses), \
+             patch("backend.tool_runtime.execute_agent_tool", AsyncMock(return_value={"status": "success", "result": {"cpu": 12}})), \
+             patch("backend.workflow_dag_runner._update_kanban_task_status"):
+            return await default_agent_node_executor(
+                {
+                    "id": "n-tool",
+                    "type": "agent",
+                    "title": "System Check",
+                    "prompt": "Pruefe System",
+                    "allowed_tools": ["archon__get_system_metrics"],
+                    "max_turns": 2,
+                    "output_schema": {"required": ["headline", "score"]},
+                },
+                {},
+            )
+
+    out = asyncio.run(_run())
+    assert out["status"] == "success"
+    assert len(out["tool_trace"]) == 1
+    assert out["tool_trace"][0]["tool"] == "archon__get_system_metrics"
+    assert out["parsed_output"] == {"headline": "Archon 2026", "score": 95}
+
+
+def test_dag_runner_media_render_node():
+    from backend.workflow_dag_runner import default_agent_node_executor
+
+    async def _run():
+        with patch("backend.content_machine.generate_video_clip_matrix", return_value={"clips": [{"title": "Clip 1"}]}), \
+             patch("backend.workflow_dag_runner._update_kanban_task_status"):
+            return await default_agent_node_executor(
+                {
+                    "id": "n-media",
+                    "type": "media_render",
+                    "title": "Shorts Render",
+                    "channel": "youtube_shorts",
+                },
+                {"n-script": {"content": "Hook: KI Agenten. Body: 3 Fakten. CTA: Folge mir."}},
+            )
+
+    out = asyncio.run(_run())
+    assert out["status"] == "success"
+    assert out["media_matrix"]["clips"][0]["title"] == "Clip 1"

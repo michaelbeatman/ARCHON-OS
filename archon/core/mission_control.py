@@ -78,18 +78,20 @@ def _is_file_override() -> bool:
 
 
 def _resolve_kanban_db_path() -> str:
-    """Ermittelt den autoritativen Pfad zu kanban.db."""
+    """Ermittelt den autoritativen Pfad zu kanban.db (über zentrales db_paths-Gateway)."""
     if KANBAN_DB_PATH:
         return KANBAN_DB_PATH
     env_override = os.environ.get("ARCHON_MC_KANBAN_DB", "").strip()
     if env_override:
         return env_override
     try:
-        import backend.operations_api as ops_api
-
-        ops_path = getattr(ops_api, "KANBAN_DB_PATH", None)
-        if ops_path and os.path.exists(ops_path):
-            return ops_path
+        from backend.tenant_context import tenant_context
+        return tenant_context.resolve_active_db("kanban.db")
+    except Exception:
+        pass
+    try:
+        from backend.db_paths import resolve_db
+        return resolve_db("kanban.db")
     except Exception as exc:
         logger.debug(f"[MissionControl] Fallback bei Kanban-Pfadermittlung: {exc}")
     for candidate in (
@@ -504,8 +506,8 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
                 logger.warning(f"[MissionControl] Beschaedigtes meta_json uebersprungen: {exc}")
 
         mc_status = _db_status_to_mc(r["status"], meta.get("mc_status"))
-        agent_id = r["assignee"] or "system"
-        agent_name = meta.get("agent_name") or agent_id or "System Agent"
+        agent_id = r["assignee"] or ""
+        agent_name = meta.get("agent_name") or agent_id or "Auto-Orchestrator"
         parent_pid = r["project_id"] or meta.get("parent_project_id") or meta.get("parent_task_id") or parent_map.get(tid)
         if parent_pid == tid:
             parent_pid = None
@@ -522,7 +524,7 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
             "plan": meta.get("plan") if isinstance(meta.get("plan"), list) else ["Autonomer Task aus kanban.db"],
             "agent_id": agent_id,
             "agent_name": agent_name,
-            "model": r["model_override"] or "omniroute/best-free",
+            "model": r["model_override"] or "",
             "estimated_tokens": meta.get("estimated_tokens", 15000),
             "estimated_cost_eur": meta.get("estimated_cost_eur", 0.0),
             "subagents_count": meta.get("subagents_count", max(1, len(sub_ids))),

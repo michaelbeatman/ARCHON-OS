@@ -3010,6 +3010,8 @@ class ERPManager:
                 coll = cfg["collection_name"]
                 url = f"{pb_url}/api/collections/{coll}/records?perPage=500"
                 try:
+                    from backend.egress_guard import check_target_url
+                    check_target_url(url)
                     req = urllib.request.Request(url, headers={"Accept": "application/json"})
                     with urllib.request.urlopen(req, timeout=4.0) as resp:
                         if resp.status == 200:

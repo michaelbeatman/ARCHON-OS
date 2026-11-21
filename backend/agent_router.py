@@ -257,12 +257,15 @@ class AgentRouter:
             "content": compact_text
         }
 
-        # Erste Nutzernachricht unverändert voranstellen (Aufgabenanker)
+        # Erste Nutzernachricht unverändert voranstellen (Aufgabenanker), ohne aufeinanderfolgende user-Nachrichten zu erzeugen
         anchor = None
         for m in older_msgs:
             if m.get("role") == "user":
                 anchor = {"role": "user", "content": str(m.get("content", ""))[:1500]}
                 break
+        if anchor and recent_msgs and recent_msgs[0].get("role") == "user":
+            compact_msg["content"] = f"{compact_text}\n\n### [URSPRÜNGLICHER AUFGABENANKER]:\n{anchor['content']}"
+            anchor = None
         compressed = ([sys_msg, compact_msg] + ([anchor] if anchor else []) + recent_msgs)
         total_len = sum(len(str(m.get("content", ""))) for m in compressed)
         if total_len > max_ctx_chars:
@@ -764,7 +767,7 @@ class AgentRouter:
                         continue
                     resp.raise_for_status()
                     data = resp.json()
-                    if prov_low == "anthropic":
+                    if eff_provider == "anthropic":
                         blocks = data.get("content") or []
                         raw_text = "".join(
                             b.get("text", "")
@@ -924,14 +927,17 @@ class AgentRouter:
                                     try:
                                         chunk = json.loads(data_str)
                                         piece = ""
-                                        if prov_low == "anthropic":
+                                        if eff_provider == "anthropic":
                                             if chunk.get("type") == "content_block_delta":
                                                 delta = chunk.get("delta", {})
                                                 if delta.get("type") == "text_delta":
                                                     piece = delta.get("text", "")
                                         else:
-                                            choice = chunk.get("choices", [{}])[0]
-                                            delta = choice.get("delta", {})
+                                            choices = chunk.get("choices") or []
+                                            if not choices:
+                                                continue
+                                            choice = choices[0] or {}
+                                            delta = choice.get("delta") or {}
                                             piece = delta.get("content", "")
                                         if piece:
                                             stream_buf += piece

@@ -14,7 +14,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import os
+import posixpath
 import secrets
 import time
 from typing import Any, Dict, List, Optional
@@ -95,13 +97,23 @@ def verify_warrant_for_call(
     constraints = payload.get("constraints") or {}
     call_args = args or {}
     if "max_amount" in constraints and "amount" in call_args:
-        if float(call_args["amount"]) > float(constraints["max_amount"]):
-            return {"allowed": False, "reason": f"Betrag {call_args['amount']} ueberschreitet Warrant-Limit {constraints['max_amount']}."}
+        try:
+            amt = float(call_args["amount"])
+            max_amt = float(constraints["max_amount"])
+        except (TypeError, ValueError):
+            return {"allowed": False, "reason": "Ungueltiger Betrag im Tool-Aufruf."}
+        if not math.isfinite(amt) or not math.isfinite(max_amt) or amt < 0:
+            return {"allowed": False, "reason": "Nicht-finiter oder negativer Betrag im Warrant-Aufruf abgelehnt."}
+        if amt > max_amt:
+            return {"allowed": False, "reason": f"Betrag {amt} ueberschreitet Warrant-Limit {max_amt}."}
 
     if "allowed_path_prefixes" in constraints and "path" in call_args:
-        norm_p = str(call_args["path"]).replace("\\", "/").lstrip("./")
-        prefs = [str(p).replace("\\", "/") for p in constraints["allowed_path_prefixes"]]
-        if not any(norm_p.startswith(pr) for pr in prefs):
+        raw_p = str(call_args["path"]).replace("\\", "/").strip()
+        norm_p = posixpath.normpath(raw_p).lstrip("./")
+        if norm_p == ".." or norm_p.startswith("../") or "/../" in f"/{norm_p}/":
+            return {"allowed": False, "reason": f"Pfad-Traversal '{raw_p}' im Warrant abgelehnt."}
+        prefs = [posixpath.normpath(str(p).replace("\\", "/")).lstrip("./") for p in constraints["allowed_path_prefixes"]]
+        if not any(norm_p == pr or norm_p.startswith(pr.rstrip("/") + "/") or norm_p.startswith(pr) for pr in prefs if pr):
             return {"allowed": False, "reason": f"Pfad '{norm_p}' ausserhalb der Warrant-Prefixes."}
 
     return {"allowed": True, "warrant_id": payload.get("warrant_id"), "tool": tool_name}

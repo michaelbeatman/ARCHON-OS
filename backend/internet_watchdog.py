@@ -42,6 +42,7 @@ DEFAULT_WATCHDOG_CONFIG: Dict[str, Any] = {
     "enabled": True,
     "interval_minutes": 30,
     "auto_kanban_sync": False,
+    "auto_ideas_sync": True,
     "basket_threshold": 3,
     "priority_keywords": [
         "KfW",
@@ -50,12 +51,15 @@ DEFAULT_WATCHDOG_CONFIG: Dict[str, Any] = {
         "GEG",
         "Groq",
         "Claude 3.7",
-        "Llama 4"
+        "Llama 4",
+        "AI Agent",
+        "n8n"
     ],
     "basket": [],
     "channels": {
         "telegram": False,
-        "kanban": False
+        "kanban": False,
+        "content_ideas": True
     },
     "targets": [
         {
@@ -84,6 +88,16 @@ DEFAULT_WATCHDOG_CONFIG: Dict[str, Any] = {
             "category": "Web-Diff",
             "type": "rss",
             "query_or_url": "https://news.ycombinator.com/rss",
+            "active": True,
+            "last_check": None,
+            "last_status": "bereit"
+        },
+        {
+            "id": "target-competitor",
+            "name": "Wettbewerber & Multi-Agenten-Trends",
+            "category": "Wettbewerb & Content-Ideen",
+            "type": "search_feed",
+            "query_or_url": "Multi-Agent Orchestration OR n8n AI Agent OR Claude Code Skills",
             "active": True,
             "last_check": None,
             "last_status": "bereit"
@@ -154,8 +168,10 @@ def save_watchdog_config(new_cfg: Dict[str, Any]) -> bool:
 
 
 def _fetch_rss_items(url: str, max_items: int = 10) -> List[Dict[str, str]]:
+    from utils.egress_guard import check_public_url
+    safe_url = check_public_url(url)
     req = urllib.request.Request(
-        url,
+        safe_url,
         headers={"User-Agent": "Mozilla/5.0 (compatible; ArchonWatchdog/2.0; +https://archon-os.local)"}
     )
     with urllib.request.urlopen(req, timeout=8.0) as resp:
@@ -439,6 +455,7 @@ def run_watchdog_scan(force: bool = False) -> Dict[str, Any]:
     save_watchdog_config(cfg)
 
     triggered_workflows = []
+    created_ideas = []
     if new_findings:
         try:
             from backend.workflow_scheduler import dispatch_watchdog_triggers
@@ -446,10 +463,24 @@ def run_watchdog_scan(force: bool = False) -> Dict[str, Any]:
         except Exception as wf_err:
             print(f"[Watchdog] Workflow-Trigger Fehler: {wf_err}", file=sys.stderr)
 
+        if cfg.get("auto_ideas_sync", True) and cfg.get("channels", {}).get("content_ideas", True):
+            try:
+                from backend.competitor_idea_bridge import ingest_watchdog_competitor_findings_to_ideas
+                idea_res = ingest_watchdog_competitor_findings_to_ideas(
+                    new_findings,
+                    priority_keywords=cfg.get("priority_keywords"),
+                    sync_to_kanban=bool(auto_kanban),
+                )
+                created_ideas = idea_res.get("ideas", [])
+            except Exception as idea_err:
+                print(f"[Watchdog] Competitor-Ideas-Sync Fehler: {idea_err}", file=sys.stderr)
+
     return {
         "status": "success",
         "new_findings_count": len(new_findings),
         "findings": new_findings,
+        "created_ideas_count": len(created_ideas),
+        "created_ideas": created_ideas,
         "triggered_workflows": triggered_workflows,
         "config": cfg
     }
@@ -461,9 +492,9 @@ async def internet_watchdog_background_loop():
     await asyncio.sleep(15)
     while True:
         try:
-            cfg = get_watchdog_config()
+            cfg = await asyncio.to_thread(get_watchdog_config)
             if cfg.get("enabled", True):
-                run_watchdog_scan(force=False)
+                await asyncio.to_thread(run_watchdog_scan, False)
             interval_mins = max(5, int(cfg.get("interval_minutes", 30)))
             await asyncio.sleep(interval_mins * 60)
         except asyncio.CancelledError:

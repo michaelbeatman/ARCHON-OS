@@ -809,7 +809,7 @@ def save_workflow_template(payload: Dict[str, Any]) -> Dict[str, Any]:
             continue
         nid = str(raw.get("id") or f"step_{idx}").strip()
         ntype = str(raw.get("type") or "agent").strip().lower()
-        if ntype not in {"agent", "fanout", "gate", "boardroom", "research"}:
+        if ntype not in {"agent", "fanout", "gate", "quality_gate", "boardroom", "research"}:
             ntype = "agent"
         deps = raw.get("depends_on") or []
         if isinstance(deps, str):
@@ -831,6 +831,21 @@ def save_workflow_template(payload: Dict[str, Any]) -> Dict[str, Any]:
             "max_retries": int(raw.get("max_retries") or 1),
             "timeout_sec": int(raw.get("timeout_sec") or 300),
         }
+        for opt_str in ("channel", "model"):
+            if raw.get(opt_str):
+                node_obj[opt_str] = str(raw[opt_str]).strip()
+        if raw.get("save_to_showroom") is not None:
+            node_obj["save_to_showroom"] = bool(raw["save_to_showroom"])
+        if raw.get("quality_gate") is not None:
+            node_obj["quality_gate"] = bool(raw["quality_gate"])
+        if raw.get("max_revisions") is not None and raw.get("max_revisions") != "":
+            node_obj["max_revisions"] = int(raw["max_revisions"])
+        if raw.get("min_quality_score") is not None and raw.get("min_quality_score") != "":
+            node_obj["min_quality_score"] = int(raw["min_quality_score"])
+        if raw.get("branches"):
+            node_obj["branches"] = list(raw["branches"])
+        if raw.get("quorum_min") is not None and raw.get("quorum_min") != "":
+            node_obj["quorum_min"] = int(raw["quorum_min"])
         if raw.get("token_budget"):
             node_obj["token_budget"] = int(raw["token_budget"])
         if raw.get("cost_limit_usd") is not None and raw.get("cost_limit_usd") != "":
@@ -1104,7 +1119,9 @@ _DAG_NODE_PASSTHROUGH_KEYS = (
     "agent_id", "depends_on", "allowed_tools", "forbidden_actions",
     "expected_output", "require_hitl", "token_budget", "cost_limit_usd",
     "max_retries", "timeout_sec", "soul_mode", "reasoning_effort",
-    "tool_preset", "model",
+    "tool_preset", "model", "channel", "save_to_showroom",
+    "max_revisions", "min_quality_score", "quality_gate",
+    "max_turns", "output_schema", "media_config",
 )
 
 

@@ -558,7 +558,7 @@ async function initMasterChat() {
           <div class="flex items-center justify-between gap-1.5">
             <span class="text-xs truncate ${isSelected ? 'text-[var(--foreground)] font-bold' : 'text-[var(--foreground)] font-medium'}" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
             <div class="flex items-center gap-1 shrink-0">
-              <button type="button" onclick="event.stopPropagation(); promptRenameSession('${sess.id}', '${escapeHtml(title).replace(/'/g, "\\'")}')" class="opacity-0 group-hover:opacity-100 hover:text-[var(--foreground)] text-[var(--muted-foreground)] p-0.5 rounded cursor-pointer transition" title="${chatT('ui.chat_engine.rename_session', 'Session umbenennen')}">
+              <button type="button" onclick="event.stopPropagation(); promptRenameSession('${escapeHtml(String(sess.id || ''))}', '${escapeHtml(title).replace(/'/g, "\\'")}')" class="opacity-0 group-hover:opacity-100 hover:text-[var(--foreground)] text-[var(--muted-foreground)] p-0.5 rounded cursor-pointer transition" title="${chatT('ui.chat_engine.rename_session', 'Session umbenennen')}">
                 <i data-lucide="pencil" class="w-3 h-3"></i>
               </button>
               ${badgeTypeHtml}

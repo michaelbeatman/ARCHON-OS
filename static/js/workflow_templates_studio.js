@@ -882,7 +882,6 @@
                 : "border-[var(--border)] hover:bg-[var(--secondary)]"
             }">Verknüpfen</button>
             <button type="button" id="wf-auto-layout" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-xs">Auto-Layout</button>
-            <button type="button" id="wf-import-n8n-btn" title="n8n Workflow JSON importieren" class="px-2.5 py-1 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 text-xs font-semibold">n8n Import</button>
             ${connectHint}
           </div>
           <div class="flex flex-wrap items-center gap-1.5">
@@ -1448,13 +1447,32 @@
     modal.className = "fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4";
     let previewId = (_activeTpl && _activeTpl.id) || (_templates[0] && _templates[0].id) || "";
     let search = "";
+    let catFilter = "all";
+    const FOLDER_KEY = "archon_wf_browser_folders";
+    let collapsedFolders = {};
+    try {
+      const savedState = JSON.parse(localStorage.getItem(FOLDER_KEY) || "{}");
+      if (savedState && typeof savedState === "object") collapsedFolders = savedState;
+    } catch (_) {}
+
+    const saveFolderState = () => {
+      try {
+        localStorage.setItem(FOLDER_KEY, JSON.stringify(collapsedFolders));
+      } catch (_) {}
+    };
 
     const renderModal = () => {
       const q = search.trim().toLowerCase();
-      const filtered = _templates.filter((t) => !q || `${t.title} ${t.category} ${t.description}`.toLowerCase().includes(q));
+      const allCats = Array.from(new Set(_templates.map((t) => (t.category || "Allgemein").trim()))).sort();
+      const filtered = _templates.filter((t) => {
+        const c = (t.category || "Allgemein").trim();
+        if (catFilter !== "all" && c !== catFilter) return false;
+        if (!q) return true;
+        return `${t.title} ${c} ${t.description}`.toLowerCase().includes(q);
+      });
       const groups = {};
       filtered.forEach((t) => {
-        const folder = `${t.builtin ? "Starter-Katalog" : "Eigene Workflows"} / ${t.category || "Allgemein"}`;
+        const folder = (t.category || "Allgemein").trim();
         if (!groups[folder]) groups[folder] = [];
         groups[folder].push(t);
       });
@@ -1463,21 +1481,28 @@
 
       const treeHtml = Object.keys(groups)
         .sort()
-        .map(
-          (folder) => `<div class="space-y-1">
-            <div class="text-[10px] font-mono uppercase tracking-wider text-indigo-300 px-2 pt-1.5">📁 ${esc(folder)}</div>
-            ${groups[folder]
-              .map(
-                (t) => `<button type="button" data-ni-tpl="${esc(t.id)}" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition flex items-center justify-between gap-2 ${
-                  sel && sel.id === t.id ? "bg-indigo-600 text-white font-semibold" : "hover:bg-[var(--secondary)] text-[var(--foreground)]"
-                }">
-                  <span class="truncate">${esc(t.title)}</span>
-                  <span class="text-[10px] font-mono opacity-75 shrink-0">${(t.nodes || []).length}</span>
-                </button>`
-              )
-              .join("")}
-          </div>`
-        )
+        .map((folder) => {
+          const isCollapsed = !!collapsedFolders[folder] && !q;
+          const itemsHtml = isCollapsed
+            ? ""
+            : groups[folder]
+                .map(
+                  (t) => `<button type="button" data-ni-tpl="${esc(t.id)}" class="w-full text-left pl-6 pr-2.5 py-1.5 rounded-lg text-xs transition flex items-center gap-2 ${
+                    sel && sel.id === t.id ? "bg-indigo-600 text-white font-semibold" : "hover:bg-[var(--secondary)] text-[var(--foreground)]"
+                  }">
+                    <span class="truncate">${esc(t.title)}</span>
+                  </button>`
+                )
+                .join("");
+          return `<div class="space-y-0.5">
+            <button type="button" data-ni-folder="${esc(folder)}" class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-[var(--secondary)]/60 text-left text-[11px] font-mono font-semibold text-indigo-300 transition">
+              <span class="text-[10px] w-3 text-center">${isCollapsed ? "▸" : "▾"}</span>
+              <span>${isCollapsed ? "📁" : "📂"}</span>
+              <span class="truncate">${esc(folder)}</span>
+            </button>
+            ${itemsHtml}
+          </div>`;
+        })
         .join("") || `<div class="p-4 text-xs text-[var(--muted-foreground)]">Keine Vorlagen gefunden.</div>`;
 
       const rightHtml = sel
@@ -1489,11 +1514,11 @@
                     <span class="text-[11px] font-mono uppercase tracking-wider text-indigo-300">${esc(sel.category || "Workflow")}</span>
                   </div>`
             }
-            <div class="flex-1 overflow-y-auto p-5 space-y-3">
+            <div style="flex:1 1 auto;min-height:0;overflow-y:auto;" class="p-5 space-y-3">
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <h3 class="text-lg font-bold text-[var(--foreground)]">${esc(sel.title)}</h3>
-                  <div class="text-[11px] font-mono text-[var(--muted-foreground)]">${sel.builtin ? "Starter-Katalog" : "Eigener Workflow"} · ${(sel.nodes || []).length} Stationen</div>
+                  <div class="text-[11px] font-mono text-[var(--muted-foreground)]">${esc(sel.category || "Allgemein")} · ${(sel.nodes || []).length} Stationen</div>
                 </div>
               </div>
               <p class="text-xs text-[var(--foreground)]/90 leading-relaxed whitespace-pre-wrap">${esc(sel.description || "Keine Beschreibung hinterlegt.")}</p>
@@ -1513,16 +1538,23 @@
 
       modal.innerHTML = `
         <div style="width:min(920px,94vw);height:76vh;display:flex;flex-direction:column;overflow:hidden;" class="rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl">
-          <div style="flex-shrink:0;" class="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+          <div style="flex-shrink:0;" class="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between gap-2">
             <div class="font-bold text-sm">📂 Workflow öffnen — Preset-Browser</div>
-            <button type="button" id="ni-close-btn" class="px-2 py-1 rounded hover:bg-[var(--secondary)] text-xs">✕</button>
+            <div class="flex items-center gap-2">
+              <button type="button" id="ni-import-n8n-btn" title="n8n Workflow JSON (z. B. Export von n8n.io/workflows) importieren" class="px-2.5 py-1 rounded-lg border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 text-xs font-semibold">n8n Import</button>
+              <button type="button" id="ni-close-btn" class="px-2 py-1 rounded hover:bg-[var(--secondary)] text-xs">✕</button>
+            </div>
           </div>
           <div style="flex:1 1 auto;min-height:0;display:flex;overflow:hidden;">
             <div style="width:280px;flex-shrink:0;display:flex;flex-direction:column;min-height:0;" class="border-r border-[var(--border)] bg-[var(--page-bg)]/50">
-              <div style="flex-shrink:0;" class="p-2 border-b border-[var(--border)]">
+              <div style="flex-shrink:0;" class="p-2 border-b border-[var(--border)] space-y-1.5">
                 <input id="ni-search" value="${esc(search)}" placeholder="Preset suchen..." class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] text-xs" />
+                <select id="ni-cat-filter" class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] text-xs">
+                  <option value="all" ${catFilter === "all" ? "selected" : ""}>Alle Kategorien (${_templates.length})</option>
+                  ${allCats.map((c) => `<option value="${esc(c)}" ${catFilter === c ? "selected" : ""}>${esc(c)}</option>`).join("")}
+                </select>
               </div>
-              <div style="flex:1 1 auto;min-height:0;overflow-y:auto;" class="p-2 space-y-2">${treeHtml}</div>
+              <div style="flex:1 1 auto;min-height:0;overflow-y:auto;" class="p-2 space-y-1">${treeHtml}</div>
             </div>
             ${rightHtml}
           </div>
@@ -1537,6 +1569,42 @@
         const ref = modal.querySelector("#ni-search");
         if (ref) { ref.focus(); ref.setSelectionRange(ref.value.length, ref.value.length); }
       };
+      const catEl = modal.querySelector("#ni-cat-filter");
+      if (catEl) {
+        catEl.onchange = () => {
+          catFilter = catEl.value || "all";
+          renderModal();
+        };
+      }
+      const impBtn = modal.querySelector("#ni-import-n8n-btn");
+      if (impBtn) {
+        impBtn.onclick = async () => {
+          const raw = prompt("n8n Workflow-JSON hier einfügen (z. B. Export von n8n.io/workflows):");
+          if (!raw || !raw.trim()) return;
+          try {
+            const parsed = JSON.parse(raw);
+            const res = await apiJson("/api/v2/workflows/templates/import-n8n", {
+              method: "POST",
+              body: JSON.stringify({ workflow: parsed }),
+            });
+            catFilter = "all";
+            search = "";
+            await loadTemplates(res.template.id);
+            previewId = res.template.id;
+            renderModal();
+          } catch (err) {
+            alert(`n8n Import fehlgeschlagen: ${err.message}`);
+          }
+        };
+      }
+      modal.querySelectorAll("[data-ni-folder]").forEach((fb) => {
+        fb.onclick = () => {
+          const f = fb.getAttribute("data-ni-folder");
+          collapsedFolders[f] = !collapsedFolders[f];
+          saveFolderState();
+          renderModal();
+        };
+      });
       modal.querySelectorAll("[data-ni-tpl]").forEach((b) => {
         b.onclick = () => { previewId = b.getAttribute("data-ni-tpl"); renderModal(); };
         b.ondblclick = () => {

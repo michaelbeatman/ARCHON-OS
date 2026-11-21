@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import sqlite3
+import tempfile
 import threading
 import urllib.request
 import uuid
@@ -23,6 +25,14 @@ from typing import Any, Dict, List, Optional
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CUSTOM_TEMPLATES_PATH = os.path.join(WORKSPACE_DIR, "config", "workflow_templates.json")
 _FILE_LOCK = threading.Lock()
+logger = logging.getLogger(__name__)
+
+# Paket C / Datenverlust-Schutz: Wenn beim Laden der Custom-Templates ein
+# Lese-/Parse-Fehler auftritt (korrupte JSON-Datei), wird dieses Flag gesetzt.
+# save_workflow_template / delete_workflow_template verweigern dann den Schreib-
+# zugriff (RuntimeError), damit sie die eventuell nur als leer gelesenen
+# vorhandenen Daten nicht still mit einer leeren Liste ueberschreiben.
+_CUSTOM_TEMPLATES_CORRUPT = False
 
 
 def _builtin_templates() -> List[Dict[str, Any]]:
@@ -647,7 +657,9 @@ def import_n8n_workflow_json(n8n_data: Dict[str, Any], title_override: Optional[
                     if tgt_id and tgt_id != src_id and tgt_id in nodes_by_id:
                         if src_id not in nodes_by_id[tgt_id]["depends_on"]:
                             nodes_by_id[tgt_id]["depends_on"].append(src_id)
-                        edges.append({"from": src_id, "to": tgt_id, "condition": "on_success", "data_mode": "full_output", "label": ""})
+                        # Paket C: 'full_output' wird zu 'full' normalisiert —
+                        # der DAG-Runner kennt nur full|summary|artifact_only|none.
+                        edges.append({"from": src_id, "to": tgt_id, "condition": "on_success", "data_mode": "full", "label": ""})
 
     title = str(title_override or n8n_data.get("name") or "Importierter n8n-Workflow").strip()
     return save_workflow_template({
@@ -660,24 +672,75 @@ def import_n8n_workflow_json(n8n_data: Dict[str, Any], title_override: Optional[
 
 
 def _load_custom_templates() -> List[Dict[str, Any]]:
+    global _CUSTOM_TEMPLATES_CORRUPT
     with _FILE_LOCK:
         if not os.path.exists(CUSTOM_TEMPLATES_PATH):
             return []
         try:
             with open(CUSTOM_TEMPLATES_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            parsed: Optional[List[Dict[str, Any]]] = None
             if isinstance(data, list):
-                return [{**item, "builtin": False} for item in data if isinstance(item, dict) and item.get("id")]
-        except Exception:
+                parsed = [{**item, "builtin": False} for item in data if isinstance(item, dict) and item.get("id")]
+        except Exception as exc:
+            # Paket C: Datei existiert, ist aber unlesbar/korrupt -> NICHT still
+            # [] zurueckgeben und den Store damit implizit loeschen. Stattdessen:
+            # Kontext loggen, korrupte Datei einmalig sichern und Store als
+            # korrupt markieren (save/delete blocken dann).
+            _CUSTOM_TEMPLATES_CORRUPT = True
+            logger.error(
+                "Custom-Template-Store (%s) ist korrupt/unlesbar (%s: %s) — "
+                "Template-Liste wird leer geliefert, aber Save/Delete sind blockiert, "
+                "bis die Datei repariert ist.",
+                CUSTOM_TEMPLATES_PATH,
+                type(exc).__name__,
+                exc,
+            )
+            corrupt_backup = CUSTOM_TEMPLATES_PATH + ".corrupt"
+            if not os.path.exists(corrupt_backup):
+                try:
+                    with open(CUSTOM_TEMPLATES_PATH, "rb") as src, open(corrupt_backup, "wb") as dst:
+                        dst.write(src.read())
+                    logger.error("Korrupte Datei gesichert nach %s", corrupt_backup)
+                except OSError as bk_exc:
+                    logger.error(
+                        "Backup der korrupten Datei nach %s fehlgeschlagen: %s",
+                        corrupt_backup,
+                        bk_exc,
+                    )
+            else:
+                logger.error(
+                    "Backup %s existiert bereits — bestehendes Backup nicht ueberschrieben.",
+                    corrupt_backup,
+                )
             return []
-        return []
+        # Datei lesbar -> korrupt-Marker zuruecksetzen (nach manueller Reparatur).
+        _CUSTOM_TEMPLATES_CORRUPT = False
+        return parsed or []
 
 
 def _save_custom_templates(items: List[Dict[str, Any]]) -> None:
+    # Paket C: Atomarer Schreibvorgang — Tempfile im selben Verzeichnis
+    # (gleiches Filesystem) + os.replace, damit nie eine halbgeschriebene
+    # Datei ohne Fallback zurueckbleibt.
     os.makedirs(os.path.dirname(CUSTOM_TEMPLATES_PATH), exist_ok=True)
+    dirname = os.path.dirname(CUSTOM_TEMPLATES_PATH)
     with _FILE_LOCK:
-        with open(CUSTOM_TEMPLATES_PATH, "w", encoding="utf-8") as f:
-            json.dump(items, f, ensure_ascii=False, indent=2)
+        tmp_path: Optional[str] = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", delete=False, dir=dirname, suffix=".tmp"
+            ) as tmp:
+                json.dump(items, tmp, ensure_ascii=False, indent=2)
+                tmp_path = tmp.name
+            os.replace(tmp_path, CUSTOM_TEMPLATES_PATH)
+            tmp_path = None
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    logger.error("Temp-Datei %s konnte nicht entfernt werden.", tmp_path)
 
 
 def list_workflow_templates() -> List[Dict[str, Any]]:
@@ -704,6 +767,11 @@ def _slugify(text: str) -> str:
 
 
 def save_workflow_template(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if _CUSTOM_TEMPLATES_CORRUPT:
+        raise RuntimeError(
+            "Custom-Template-Store korrupt — erst reparieren "
+            f"(siehe {CUSTOM_TEMPLATES_PATH} + .corrupt-Backup); Speichern blockiert."
+        )
     title = str(payload.get("title") or "").strip()
     if not title:
         raise ValueError("title_required")
@@ -757,11 +825,16 @@ def save_workflow_template(payload: Dict[str, Any]) -> Dict[str, Any]:
         eto = str(raw_e.get("to") or "").strip()
         if not efrom or not eto:
             continue
+        # Paket C: Legacy 'full_output' -> 'full' normalisieren (Runner kennt
+        # nur full|summary|artifact_only|none); Default ist 'full'.
+        raw_mode = str(raw_e.get("data_mode") or "full").strip()
+        if raw_mode == "full_output":
+            raw_mode = "full"
         normalized_edges.append({
             "from": efrom,
             "to": eto,
             "condition": str(raw_e.get("condition") or "on_success").strip(),
-            "data_mode": str(raw_e.get("data_mode") or "full_output").strip(),
+            "data_mode": raw_mode,
             "label": str(raw_e.get("label") or "").strip(),
         })
 
@@ -784,6 +857,11 @@ def save_workflow_template(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def delete_workflow_template(tpl_id: str) -> bool:
+    if _CUSTOM_TEMPLATES_CORRUPT:
+        raise RuntimeError(
+            "Custom-Template-Store korrupt — erst reparieren "
+            f"(siehe {CUSTOM_TEMPLATES_PATH} + .corrupt-Backup); Loeschen blockiert."
+        )
     customs = _load_custom_templates()
     filtered = [c for c in customs if c.get("id") != tpl_id]
     if len(filtered) == len(customs):
@@ -799,13 +877,40 @@ def _render_vars(text: str, inputs: Dict[str, Any]) -> str:
     return out
 
 
+class _RejectAllRedirectsHandler(urllib.request.HTTPRedirectHandler):
+    """Paket C / SSRF: lehnt HTTP-Redirects komplett ab.
+
+    urllib wuerde 3xx-Redirects still folgen — dabei koennte der Ziel-Server
+    einen internen Host (z.B. 169.254.169.254) zurueckgeben, den der initiale
+    Egress-Check nie gesehen hat. Redirect-Requests werden deshalb abgebrochen
+    (redirect_request -> None -> HTTPError fuer die Redirect-Antwort).
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
+        logger.error(
+            "n8n-Webhook: Redirect abgelehnt (HTTP %s -> %s) — Egress-Guard prueft keine Redirect-Ziele.",
+            code,
+            newurl,
+        )
+        return None
+
+
 def _trigger_n8n_webhook(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         return {"triggered": False, "reason": "no_valid_url"}
+    # Paket C: ImportError (Modul fehlt) wird NICHT mehr still als
+    # 'egress_blocked' frisst — explizit unterscheiden.
     try:
-        from utils.egress_guard import check_target_url
+        from utils.egress_guard import check_target_url, EgressBlocked
+    except ImportError as exc:
+        logger.error(
+            "egress_guard nicht importierbar — n8n-Webhook bewusst NICHT gesendet: %s",
+            exc,
+        )
+        return {"triggered": False, "reason": "egress_guard_unavailable", "error": str(exc)}
+    try:
         check_target_url(url)
-    except Exception as exc:
+    except EgressBlocked as exc:
         return {"triggered": False, "reason": "egress_blocked", "error": str(exc)}
     try:
         req = urllib.request.Request(
@@ -814,7 +919,8 @@ def _trigger_n8n_webhook(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        opener = urllib.request.build_opener(_RejectAllRedirectsHandler())
+        with opener.open(req, timeout=5) as resp:
             return {"triggered": True, "status_code": resp.status}
     except Exception as exc:
         return {"triggered": False, "error": str(exc)}

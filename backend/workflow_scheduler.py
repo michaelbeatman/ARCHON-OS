@@ -11,7 +11,6 @@ import json
 import logging
 import os
 import sqlite3
-import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
@@ -27,6 +26,7 @@ def _get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(SCHEDULES_DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -162,7 +162,23 @@ def parse_cron_next(cron_expr: str, after_dt: Optional[datetime] = None) -> Opti
             continue
         # Python weekday: Mon=0..Sun=6 -> Cron: Sun=0..Sat=6
         cron_dow = (cur.weekday() + 1) % 7
-        if cur.day not in doms or cron_dow not in dows:
+        # Vixie-Cron-Standard fuer dom/dow: wenn BEIDE Felder beschraenkt sind
+        # (keines ist '*'), wird ODER-verknuepft; wenn eines '*' ist, zaehlt
+        # nur das andere Feld.
+        #   '0 8 1 * 1'  -> 1. des Monats ODER jeder Montag um 08:00
+        #   '0 8 * * 1'  -> nur jeder Montag um 08:00
+        #   '0 8 1 * *'  -> nur am 1. des Monats um 08:00
+        dom_is_star = len(doms) == 31
+        dow_is_star = len(dows) == 7
+        if dom_is_star and dow_is_star:
+            day_match = True
+        elif dom_is_star:
+            day_match = cron_dow in dows
+        elif dow_is_star:
+            day_match = cur.day in doms
+        else:
+            day_match = (cur.day in doms) or (cron_dow in dows)
+        if not day_match:
             cur = (cur + timedelta(days=1)).replace(hour=0, minute=0)
             continue
         if cur.hour not in hours:
@@ -520,6 +536,53 @@ def _execute_schedule_row(conn: sqlite3.Connection, row: sqlite3.Row, now: datet
         return None
 
 
+_RETENTION_LAST_TS: Optional[datetime] = None
+_RETENTION_INTERVAL_MIN = 30
+_RETENTION_DAYS = 14
+_RETENTION_MAX_ROWS = 5000
+
+
+def _run_workflow_events_retention(conn: sqlite3.Connection, now: datetime) -> None:
+    """Gedrosselt (alle 30 Min): alte Events loeschen + hartes Zeilenlimit."""
+    global _RETENTION_LAST_TS
+    if _RETENTION_LAST_TS is not None and (now - _RETENTION_LAST_TS) < timedelta(minutes=_RETENTION_INTERVAL_MIN):
+        return
+    _RETENTION_LAST_TS = now
+    try:
+        cutoff = (now - timedelta(days=_RETENTION_DAYS)).isoformat()
+        deleted_old = conn.execute(
+            "DELETE FROM workflow_events WHERE created_at < ?", (cutoff,)
+        ).rowcount
+        cnt = conn.execute("SELECT COUNT(*) FROM workflow_events").fetchone()[0]
+        deleted_overflow = 0
+        if cnt > _RETENTION_MAX_ROWS:
+            deleted_overflow = conn.execute(
+                "DELETE FROM workflow_events WHERE id NOT IN "
+                "(SELECT id FROM workflow_events ORDER BY created_at DESC LIMIT ?)",
+                (_RETENTION_MAX_ROWS,),
+            ).rowcount
+        conn.commit()
+        if deleted_old or deleted_overflow:
+            logger.info(f"[WorkflowScheduler] Retention: {deleted_old} alte + {deleted_overflow} ueberzaehlige Events geloescht")
+    except Exception as exc:
+        logger.warning(f"[WorkflowScheduler] Retention-Cleanup fehlgeschlagen (ignoriert): {exc}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+def _calendar_event_already_handled(conn: sqlite3.Connection, corr_id: str, today_start_iso: str) -> bool:
+    """True, wenn fuer (source='calendar', correlation_id) HEUTE bereits ein
+    Event existiert (jeder Status zaehlt als 'schon behandelt', auch
+    skipped_loop/rate_limited). Dann GAR NICHTS mehr in die DB schreiben."""
+    row = conn.execute(
+        "SELECT 1 FROM workflow_events WHERE source = 'calendar' AND correlation_id = ? AND created_at >= ? LIMIT 1",
+        (corr_id, today_start_iso),
+    ).fetchone()
+    return bool(row)
+
+
 def evaluate_due_schedules(now: Optional[datetime] = None) -> List[Dict[str, Any]]:
     init_schedules_db()
     cur_now = now or datetime.now(timezone.utc)
@@ -547,12 +610,16 @@ def evaluate_due_schedules(now: Optional[datetime] = None) -> List[Dict[str, Any
         ).fetchone()
         if cal_subs and cal_subs[0] > 0:
             try:
+                _run_workflow_events_retention(conn, cur_now)
                 from backend.operations_calendar import operations_calendar
 
                 today_str = cur_now.date().isoformat()
+                today_start_iso = datetime(cur_now.year, cur_now.month, cur_now.day, tzinfo=timezone.utc).isoformat()
                 cal_events = operations_calendar.list_events(start_date=today_str, end_date=today_str)
                 for cev in cal_events:
                     cid = f"cal-{cev.get('id', '')}-{today_str}"
+                    if _calendar_event_already_handled(conn, cid, today_start_iso):
+                        continue  # Heute schon behandelt -> kein weiteres DB-Write (auch kein skipped_loop-Event)
                     ev_res = dispatch_workflow_event(
                         source="calendar",
                         event_type="due",
@@ -567,6 +634,35 @@ def evaluate_due_schedules(now: Optional[datetime] = None) -> List[Dict[str, Any
         return triggered
     finally:
         conn.close()
+
+
+def _create_hitl_decision(
+    event_id: str,
+    src: str,
+    event_type: str,
+    title: str,
+    summary: str,
+    corr: str,
+    target_dom: str,
+) -> None:
+    """Pragmatisch: legt fuer ein require_hitl-Event eine Freigabe-Decision an.
+    Misslingt das, bleibt es trotzdem beim Status 'awaiting_hitl' protokolliert."""
+    try:
+        from archon.routers.decisions import create_decision
+
+        res = create_decision(
+            typ="mission_freigabe",
+            titel=f"HITL-Freigabe: {title or event_type}"[:180],
+            kurzfassung=(summary or f"Event-Bus require_hitl: {src}/{event_type} (Ziel-Domain: {target_dom})")[:600],
+            ref_id=event_id,
+            extra={"event_bus": {"event_id": event_id, "source": src, "event_type": event_type, "correlation_id": corr, "target_domain": target_dom}},
+        )
+        if res:
+            logger.info(f"[WorkflowScheduler] HITL-Decision angelegt fuer Event {event_id} ({src}/{event_type})")
+        else:
+            logger.warning(f"[WorkflowScheduler] HITL-Decision fuer Event {event_id} lieferte kein Ergebnis (Status bleibt 'awaiting_hitl')")
+    except Exception as exc:
+        logger.warning(f"[WorkflowScheduler] HITL-Decision fuer Event {event_id} fehlgeschlagen: {exc}")
 
 
 def dispatch_workflow_event(
@@ -614,9 +710,13 @@ def dispatch_workflow_event(
                 return {"event_id": event_id, "status": "skipped_loop", "triggered": []}
 
         # Rate-Limit / Circuit-Breaker pro Quelle
+        # Skipping-Status-Namen die hier geschrieben werden (grep: 'skipped_loop',
+        # 'rate_limited'; 'deduped' wird extern verwendet). Diese zaehlen NICHT
+        # als Traffic, sonst loest der Circuit-Breaker sich selbst aus.
         one_min_ago = (now - timedelta(minutes=1)).isoformat()
         recent_cnt = conn.execute(
-            "SELECT COUNT(*) FROM workflow_events WHERE source = ? AND created_at >= ?",
+            "SELECT COUNT(*) FROM workflow_events WHERE source = ? AND created_at >= ? "
+            "AND status NOT IN ('skipped_loop', 'rate_limited', 'deduped')",
             (src, one_min_ago),
         ).fetchone()[0]
         pol_rows = conn.execute("SELECT * FROM event_bus_policies WHERE source = ?", (src,)).fetchall()
@@ -643,6 +743,7 @@ def dispatch_workflow_event(
         matched_ids: List[str] = []
         triggered_runs: List[Dict[str, Any]] = []
         blocked_by_policy = False
+        awaiting_hitl = False
 
         for row in rows:
             kw_raw = (row["watchdog_keyword"] or "").strip()
@@ -653,6 +754,13 @@ def dispatch_workflow_event(
             rule = pol_map.get(target_dom) or pol_map.get("all") or _default_policy_for(src, target_dom)
             if rule["policy"] == "deny":
                 blocked_by_policy = True
+                continue
+            if rule["policy"] == "require_hitl":
+                # HITL-Policy: Event laeuft NICHT ungebremselt in Runs —
+                # stattdessen wird es als 'awaiting_hitl' protokolliert und
+                # pragmatisch eine Freigabe-Decision angelegt.
+                awaiting_hitl = True
+                _create_hitl_decision(event_id, src, event_type, title, summary, corr, target_dom)
                 continue
             matched_ids.append(row["id"])
             extra = {
@@ -669,7 +777,11 @@ def dispatch_workflow_event(
             if res:
                 triggered_runs.append(res)
 
-        status = "triggered" if triggered_runs else ("blocked_policy" if blocked_by_policy else ("matched_skipped" if matched_ids else "no_match"))
+        status = "triggered" if triggered_runs else (
+            "blocked_policy" if blocked_by_policy
+            else ("awaiting_hitl" if awaiting_hitl
+                  else ("matched_skipped" if matched_ids else "no_match"))
+        )
         conn.execute(
             """
             INSERT INTO workflow_events (
@@ -836,8 +948,11 @@ async def workflow_scheduler_background_loop() -> None:
     await asyncio.sleep(8)
     while True:
         try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, evaluate_due_schedules)
+            loop = asyncio.new_event_loop()
+            try:
+                await loop.run_in_executor(None, evaluate_due_schedules)
+            finally:
+                loop.close()
         except Exception as exc:
-            print(f"[WorkflowScheduler] Loop-Fehler: {exc}", file=sys.stderr)
+            logger.error(f"[WorkflowScheduler] Loop-Fehler: {exc}")
         await asyncio.sleep(30)

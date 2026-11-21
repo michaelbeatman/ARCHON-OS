@@ -25,6 +25,7 @@ import logging
 import os
 import secrets
 import sqlite3
+import threading
 import time
 from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional
 
@@ -38,6 +39,20 @@ ExecutorFn = Callable[[Dict[str, Any], Dict[str, Any]], Awaitable[Dict[str, Any]
 TERMINAL_NODE_STATES = {"completed", "skipped_cached", "skipped_condition", "failed", "rejected"}
 SUCCESS_NODE_STATES = {"completed", "skipped_cached"}
 FAILURE_NODE_STATES = {"failed", "rejected"}
+
+# Per-run_id-Locks: verhindert doppelte/parallele Ausfuehrung desselben Runs.
+# Erzeugung neuer Locks geschuetzt ueber threading.Lock (Sync-Kontext, async-sicher).
+_RUN_LOCKS: Dict[str, asyncio.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def _get_run_lock(run_id: str) -> asyncio.Lock:
+    with _locks_guard:
+        lock = _RUN_LOCKS.get(run_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _RUN_LOCKS[run_id] = lock
+        return lock
 
 
 @contextmanager
@@ -129,8 +144,9 @@ def _edge_condition_matches(condition: str, parent_status: str) -> bool:
         return parent_status in FAILURE_NODE_STATES
     if cond in ("on_success", "success"):
         return parent_status in SUCCESS_NODE_STATES
-    # Default "always": laeuft weiter, solange Parent erfolgreich war (nicht bei hartem Abbruch/Gate)
-    return parent_status in SUCCESS_NODE_STATES
+    # Default "always": bereit sobald der Upstream IRGENDEINEN Terminal-Status
+    # erreicht hat (completed, skipped_cached, failed, rejected, skipped_condition)
+    return parent_status in TERMINAL_NODE_STATES
 
 
 def _shape_upstream_output(raw_out: Any, data_mode: str) -> Any:
@@ -222,7 +238,29 @@ def _update_kanban_task_status(
         logger.debug(f"[WorkflowDAG] broadcast_event fuer {task_id} fehlgeschlagen (Fallback): {exc}")
 
 
-def _register_hitl_gate_decision(run_id: str, wf_id: str, node: Dict[str, Any], upstream: Dict[str, Any]) -> Optional[str]:
+def _register_hitl_gate_decision(
+    run_id: str,
+    wf_id: str,
+    node: Dict[str, Any],
+    upstream: Dict[str, Any],
+    db_path: Optional[str] = None,
+) -> Optional[str]:
+    node_id = str(node.get("id") or "")
+    # Doppelte HITL-Decisions verhindern: falls fuer (run_id, node_id) bereits
+    # eine Decision existiert, diese wiederverwenden statt neu anzulegen.
+    try:
+        with _connect(db_path) as conn:
+            row = conn.execute(
+                "SELECT output_json FROM workflow_node_states WHERE run_id = ? AND node_id = ?",
+                (run_id, node_id),
+            ).fetchone()
+        if row:
+            prev_out = json.loads(row["output_json"] or "{}")
+            prev_id = prev_out.get("decision_id")
+            if prev_id:
+                return str(prev_id)
+    except Exception as exc:
+        logger.debug(f"[WorkflowDAG] HITL-Decision-Dedupe-Check fehlgeschlagen: {exc}")
     try:
         from archon.routers.decisions import create_decision
         title = f"Workflow-Freigabe: {node.get('title') or node.get('id')} ({run_id})"
@@ -254,7 +292,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     prof: Dict[str, Any] = {}
     try:
         from archon.core.profiles import api_get_hermes_profiles
-        profiles = api_get_hermes_profiles() or []
+        profiles = await asyncio.to_thread(api_get_hermes_profiles) or []
         prof = next((p for p in profiles if p.get("id") == agent_id), {})
     except Exception:
         prof = {}
@@ -374,21 +412,73 @@ async def run_workflow_dag(
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Fuehrt einen Workflow-DAG aus.
+    Fuehrt einen Workflow-DAG aus (mit Per-run_id-Lock gegen Doppel-Ausfuehrung).
     `dag_def`: {
         "id": "...",
         "nodes": [{"id": "...", "type": "agent|fanout|gate", "depends_on": [...], ...}],
         "edges": [{"from": "...", "to": "...", "condition": "always|on_success|on_failure", "data_mode": "full|summary|artifact_only|none"}]
     }
     """
+    rid = run_id or f"wfrun-{secrets.token_hex(5)}"
+    # Per-run_id-Lock: nur EINE Ausfuehrung pro Run. Falls belegt, laufende
+    # Ausfuehrung nicht stoeren, sondern sofort melden.
+    run_lock = _get_run_lock(rid)
+    if run_lock.locked():
+        logger.warning(f"[WorkflowDAG] Run '{rid}' laeuft bereits — keine zweite Ausfuehrung gestartet.")
+        return {
+            "status": "already_running",
+            "run_id": rid,
+            "workflow_id": str(dag_def.get("id") or "workflow"),
+            "node_statuses": {},
+            "outputs": {},
+        }
+    await run_lock.acquire()
+    try:
+        return await _run_workflow_dag_locked(dag_def, executor_fn, rid, gate_approvals, db_path)
+    finally:
+        run_lock.release()
+
+
+async def _run_workflow_dag_locked(
+    dag_def: Dict[str, Any],
+    executor_fn: Optional[ExecutorFn],
+    rid: str,
+    gate_approvals: Optional[Dict[str, bool]],
+    db_path: Optional[str],
+) -> Dict[str, Any]:
+    """Eigentliche DAG-Ausfuehrung; Per-run_id-Lock wird von run_workflow_dag gehalten."""
     eff_executor = executor_fn or default_agent_node_executor
     wf_id = str(dag_def.get("id") or "workflow")
-    rid = run_id or f"wfrun-{secrets.token_hex(5)}"
     nodes = dag_def.get("nodes") or []
     node_map: Dict[str, Dict[str, Any]] = {str(n["id"]): n for n in nodes if isinstance(n, dict) and n.get("id")}
     edge_map = _extract_edge_map(dag_def)
     approvals = gate_approvals or {}
     now = time.time()
+
+    # Unbekannte depends_on-IDs / Kanten-Quellen: sofort failed mit klarer Diagnose
+    for _nid, _node in node_map.items():
+        for _dep in _all_dependencies_for_node(_node, edge_map.get(_nid, [])):
+            if _dep not in node_map:
+                _err_msg = f"Unknown dependency: {_dep}"
+                logger.error(f"[WorkflowDAG] Run '{rid}': {_err_msg}")
+                with _connect(db_path) as conn:
+                    conn.execute(
+                        """
+                        INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at)
+                        VALUES (?, ?, 'failed', '{}', ?, ?)
+                        ON CONFLICT(run_id) DO UPDATE SET status = 'failed', updated_at = excluded.updated_at
+                        """,
+                        (rid, wf_id, now, now),
+                    )
+                    conn.commit()
+                return {
+                    "run_id": rid,
+                    "workflow_id": wf_id,
+                    "status": "failed",
+                    "node_statuses": {},
+                    "outputs": {},
+                    "error": _err_msg,
+                }
 
     with _connect(db_path) as conn:
         conn.execute(
@@ -492,7 +582,7 @@ async def run_workflow_dag(
                     st = "rejected"
                     await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Gate abgelehnt.", block_kind="hitl_rejected")
                 else:
-                    deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream)
+                    deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream, db_path)
                     out = {"awaiting_gate": True, "decision_id": deci_id}
                     st = "awaiting_gate"
                     await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe.", block_kind="hitl_gate")
@@ -502,24 +592,29 @@ async def run_workflow_dag(
                     st = "rejected"
                     await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Freigabe abgelehnt.", block_kind="hitl_rejected")
                 else:
-                    deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream)
+                    deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream, db_path)
                     out = {"awaiting_gate": True, "decision_id": deci_id}
                     st = "awaiting_gate"
                     await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe vor Ausfuehrung.", block_kind="hitl_gate")
             elif ntype == "fanout":
                 branches = node.get("branches") or []
-                quorum = int(node.get("quorum_min") or max(1, len(branches)))
-                results = await asyncio.gather(
-                    *(_exec_with_retry_and_timeout(eff_executor, {**node, "branch": b}, upstream) for b in branches),
-                    return_exceptions=True,
-                )
-                ok_results = [r for r in results if isinstance(r, dict) and r.get("status", "success") != "error"]
-                if len(ok_results) >= quorum:
-                    out = {"status": "success", "quorum_met": True, "ok_count": len(ok_results), "results": ok_results}
-                    st = "completed"
+                if branches:
+                    quorum = int(node.get("quorum_min") or max(1, len(branches)))
+                    results = await asyncio.gather(
+                        *(_exec_with_retry_and_timeout(eff_executor, {**node, "branch": b}, upstream) for b in branches),
+                        return_exceptions=True,
+                    )
+                    ok_results = [r for r in results if isinstance(r, dict) and r.get("status", "success") != "error"]
+                    if len(ok_results) >= quorum:
+                        out = {"status": "success", "quorum_met": True, "ok_count": len(ok_results), "results": ok_results}
+                        st = "completed"
+                    else:
+                        out = {"status": "error", "quorum_met": False, "ok_count": len(ok_results), "required": quorum}
+                        st = "failed"
                 else:
-                    out = {"status": "error", "quorum_met": False, "ok_count": len(ok_results), "required": quorum}
-                    st = "failed"
+                    # Fanout ohne (nicht-leere) branches: als regulären Einzel-Task-Knoten ausführen
+                    out = await _exec_with_retry_and_timeout(eff_executor, node, upstream)
+                    st = "failed" if out.get("status") == "error" else "completed"
             else:
                 out = await _exec_with_retry_and_timeout(eff_executor, node, upstream)
                 st = "failed" if out.get("status") == "error" else "completed"
@@ -543,10 +638,17 @@ async def run_workflow_dag(
         for nid in ready:
             pending.remove(nid)
 
+    has_awaiting_gate = any(s == "awaiting_gate" for s in statuses.values())
+    cycle_error: Optional[str] = None
     if any(s in ("failed", "rejected") for s in statuses.values()):
         final_status = "failed"
-    elif any(s == "awaiting_gate" for s in statuses.values()) or pending:
+    elif has_awaiting_gate:
         final_status = "paused"
+    elif pending:
+        # Kein Fortschritt moeglich und kein wartendes Gate: Zyklus / unresolvable dependency
+        final_status = "failed"
+        cycle_error = "Cycle or unresolvable dependency detected"
+        logger.error(f"[WorkflowDAG] Run '{rid}': {cycle_error}")
     else:
         final_status = "completed"
 
@@ -557,13 +659,16 @@ async def run_workflow_dag(
         )
         conn.commit()
 
-    return {
+    result: Dict[str, Any] = {
         "run_id": rid,
         "workflow_id": wf_id,
         "status": final_status,
         "node_statuses": statuses,
         "outputs": outputs,
     }
+    if cycle_error:
+        result["error"] = cycle_error
+    return result
 
 
 def get_workflow_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -633,3 +738,49 @@ async def resume_workflow_run(
         gate_approvals=gate_approvals or {},
         db_path=db_path,
     )
+
+
+def schedule_workflow_resume(
+    run_id: str,
+    gate_approvals: Optional[Dict[str, bool]] = None,
+    executor_fn: Optional[ExecutorFn] = None,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Feuert einen Fire-and-Forget-Resume-Task ab (fire-and-sauber-vergessen).
+
+    Eine Exception im Hintergrund-Task wird NICHT still geschluckt: der
+    Done-Callback loggt sie mit traceback und setzt den Run in workflow_runs
+    auf 'failed' (statt fuer immer 'running'/'paused' zu bleiben).
+    Wird von decisions.py / v2_capabilities.py benutzt.
+    """
+    async def _resume_runner() -> Dict[str, Any]:
+        return await resume_workflow_run(
+            run_id=run_id,
+            gate_approvals=gate_approvals,
+            executor_fn=executor_fn,
+            db_path=db_path,
+        )
+
+    def _on_resume_done(task: "asyncio.Task[Dict[str, Any]]") -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            logger.debug(f"[WorkflowDAG] Resume-Task fuer Run '{run_id}' wurde abgebrochen.")
+        except Exception as exc:
+            logger.error(f"[WorkflowDAG] Resume-Task fuer Run '{run_id}' fehlgeschlagen: {exc}", exc_info=exc)
+            try:
+                with _connect(db_path) as conn:
+                    conn.execute(
+                        "UPDATE workflow_runs SET status = 'failed', updated_at = ? WHERE run_id = ?",
+                        (time.time(), run_id),
+                    )
+                    conn.commit()
+            except Exception as persist_exc:
+                logger.error(
+                    f"[WorkflowDAG] Failed-Status fuer Run '{run_id}' konnte nicht persistiert werden: {persist_exc}",
+                    exc_info=persist_exc,
+                )
+
+    task = asyncio.create_task(_resume_runner())
+    task.add_done_callback(_on_resume_done)
+    return {"status": "scheduled", "run_id": run_id, "scheduled": True}

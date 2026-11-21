@@ -47,7 +47,43 @@ def _resolve_kanban_db_path() -> str:
 
 
 _DEFAULT_KANBAN_DB_PATH = _resolve_kanban_db_path()
+# 21.11.2026 (Fix-Sprint Paket A): dynamische Umleitung via Tenant-Context ist
+# der einzige Pfad — der alte, tote Branch "KANBAN_DB_PATH != default" ist entfernt.
 KANBAN_DB_PATH = _DEFAULT_KANBAN_DB_PATH
+
+# 21.11.2026 (Fix-Sprint Paket A): gueltige Kanban-Statuswerte fuer die
+# Status-Validierung an update_task_status (422 bei ungültigem Wert).
+VALID_KANBAN_STATUSES = {"backlog", "todo", "in_progress", "review", "done", "blocked", "archived", "failed"}
+
+# Zombie-Reset-Gedrossel: nur einmal pro 60 Sekunden (Paket A, Punkt 8)
+_ZOMBIE_RESET_LAST_RUN = {"ts": 0.0}
+_ZOMBIE_RESET_INTERVAL_S = 60.0
+
+
+def _maybe_auto_reset_zombie_tasks(conn: sqlite3.Connection) -> int:
+    """Auto-Crash-Recovery (Pillar 2): Tasks, die > 6 h in 'in_progress' hängen,
+    auf 'todo' zurücksetzen. Nur in Schreib-/Maintenance-Pfaden aufgerufen und
+    durch ein Modul-Global auf max. 1 Ausführung pro 60 s gedrosselt."""
+    now = time.time()
+    if now - _ZOMBIE_RESET_LAST_RUN["ts"] < _ZOMBIE_RESET_INTERVAL_S:
+        return 0
+    _ZOMBIE_RESET_LAST_RUN["ts"] = now
+    cutoff_ts = now - 21600
+    cutoff_iso = datetime.datetime.fromtimestamp(cutoff_ts).isoformat()
+    cur = conn.execute("""
+        UPDATE tasks
+        SET status = 'todo', started_at = NULL
+        WHERE status = 'in_progress'
+          AND (
+            (CAST(started_at AS REAL) >= 1000000000 AND CAST(started_at AS REAL) < ?)
+            OR (started_at IS NOT NULL AND started_at LIKE '____-__-__%' AND started_at < ?)
+            OR (started_at IS NULL AND created_at IS NOT NULL AND created_at < ?)
+          )
+    """, (cutoff_ts, cutoff_iso, cutoff_iso))
+    if cur.rowcount:
+        print(f"[OperationsAPI] Auto-Zombie-Reset: {cur.rowcount} Tasks zurueckgesetzt (Maintenance-Pfad).", file=sys.stderr)
+    conn.commit()
+    return cur.rowcount
 
 
 _KANBAN_JOURNAL_INIT = False
@@ -55,8 +91,6 @@ _KANBAN_JOURNAL_INIT_DBS: set = set()
 
 
 def _get_active_kanban_db_path(company_id: Optional[str] = None) -> str:
-    if KANBAN_DB_PATH != _DEFAULT_KANBAN_DB_PATH:
-        return KANBAN_DB_PATH
     try:
         from backend.tenant_context import tenant_context
         resolved = tenant_context.resolve_active_db("kanban.db", company_id)
@@ -67,7 +101,7 @@ def _get_active_kanban_db_path(company_id: Optional[str] = None) -> str:
     return KANBAN_DB_PATH
 
 
-def _get_kanban_connection(company_id: Optional[str] = None):
+def _get_kanban_connection(company_id: Optional[str] = None, maintenance: bool = False):
     global _KANBAN_JOURNAL_INIT
     target_db = _get_active_kanban_db_path(company_id)
     if not os.path.exists(target_db):
@@ -79,21 +113,10 @@ def _get_kanban_connection(company_id: Optional[str] = None):
             if os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes"):
                 conn.execute("PRAGMA journal_mode=WAL;")
                 conn.execute("PRAGMA synchronous=NORMAL;")
-            # Auto-Crash-Recovery (Pillar 2): Tasks die länger als 6 Stunden (21600s) in 'in_progress' hängen, auf 'todo' zurücksetzen
-            import time as _time
-            cutoff_ts = _time.time() - 21600
-            cutoff_iso = datetime.datetime.fromtimestamp(cutoff_ts).isoformat()
-            conn.execute("""
-                UPDATE tasks
-                SET status = 'todo', started_at = NULL
-                WHERE status = 'in_progress'
-                  AND (
-                    (CAST(started_at AS REAL) >= 1000000000 AND CAST(started_at AS REAL) < ?)
-                    OR (started_at IS NOT NULL AND started_at LIKE '____-__-__%' AND started_at < ?)
-                    OR (started_at IS NULL AND created_at IS NOT NULL AND created_at < ?)
-                  )
-            """, (cutoff_ts, cutoff_iso, cutoff_iso))
-            conn.commit()
+            # 21.11.2026 (Fix-Sprint Paket A): Zombie-Reset läuft NICHT mehr bei
+            # jedem Connect (auch reinen Lese-Connects) — er ist in die
+            # _maybe_auto_reset_zombie_tasks() ausgelagert und wird nur von
+            # Schreib-/Maintenance-Pfaden mit maintenance=True angestoßen.
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS task_comments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,6 +152,13 @@ def _get_kanban_connection(company_id: Optional[str] = None):
             print(f"[OperationsAPI] WARNUNG (MEDIUM) _get_kanban_connection: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
         _KANBAN_JOURNAL_INIT = True
         _KANBAN_JOURNAL_INIT_DBS.add(target_db)
+    # 21.11.2026 (Fix-Sprint Paket A): gedrosselter Zombie-Reset nur auf
+    # Schreib-/Maintenance-Connects (Punkt 8) — reine Lese-Connects bleiben unberuehrt.
+    if maintenance:
+        try:
+            _maybe_auto_reset_zombie_tasks(conn)
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) _get_kanban_connection: Zombie-Reset fehlgeschlagen: {exc}", file=sys.stderr)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -216,6 +246,28 @@ def _get_fallback_avatar(aid: str) -> str:
 # UNSICHTBAR und gehen bei Container-Recreate verloren. Deshalb: config/!
 # 12.10.2026: Besitzer der Sidecar-Datei ist backend/kanban_sidecar.py
 # (Lock + atomares Schreiben) — hier NIE direkt auf die Datei zugreifen.
+
+
+def _fuzzy_project_exact_match(needle: str, folder_names: list) -> Optional[str]:
+    """Fix-Sprint Paket A (Punkt 9): exakter Match zuerst; Substring-Match nur
+    bei Mindestlaenge >= 4 UND eindeutigem Treffer (genau 1), sonst kein Match
+    plus sichtbarer Log-Hinweis."""
+    n = str(needle or "").strip()
+    if not n:
+        return None
+    for name in folder_names:
+        if name == n:
+            return name
+    if len(n) < 4:
+        if n:
+            print(f"[OperationsAPI] Hinweis: Fuzzy-Projekt-Match für '{n}' abgelehnt (Mindestlänge 4 unterschritten).", file=sys.stderr)
+        return None
+    subs = [name for name in folder_names if n in name]
+    if len(subs) == 1:
+        return subs[0]
+    if len(subs) > 1:
+        print(f"[OperationsAPI] Hinweis: Fuzzy-Projekt-Match für '{n}' mehrdeutig ({len(subs)} Treffer) — kein Match.", file=sys.stderr)
+    return None
 
 
 def _load_kanban_meta() -> Dict:
@@ -327,15 +379,27 @@ def _build_kanban_obsidian_map(conn: sqlite3.Connection, rows: list, meta: Dict)
         rd = row_by_id.get(tid) or {}
         proj_id = rd.get("project_id")
         if proj_id:
-            for rel_p, dname, _ in proj_slug_parts:
-                if proj_id in dname:
-                    result[tid] = rel_p
-                    return rel_p
+            # Punkt 9: exakter Match zuerst, Substring nur >= 4 Zeichen & eindeutig
+            _pl = str(proj_id).strip()
+            exact = next((sp for sp in proj_slug_parts if sp[1] == _pl), None)
+            if exact:
+                result[tid] = exact[0]
+                return exact[0]
+            if len(_pl) >= 4:
+                subs = [sp for sp in proj_slug_parts if _pl in sp[1]]
+                if len(subs) == 1:
+                    result[tid] = subs[0][0]
+                    return subs[0][0]
+                if len(subs) > 1:
+                    print(f"[OperationsAPI] Hinweis: Fuzzy-Projekt-Match für '{_pl}' mehrdeutig ({len(subs)} Treffer) — kein Match.", file=sys.stderr)
 
-        for rel_p, dname, _ in proj_slug_parts:
-            if tid in dname:
-                result[tid] = rel_p
-                return rel_p
+        # Task-ID-Substring nur bei eindeutigem Treffer (Punkt 9)
+        _tid_hits = [sp for sp in proj_slug_parts if len(tid) >= 4 and tid in sp[1]]
+        if len(_tid_hits) == 1:
+            result[tid] = _tid_hits[0][0]
+            return _tid_hits[0][0]
+        if len(_tid_hits) > 1:
+            print(f"[OperationsAPI] Hinweis: Fuzzy-Projekt-Match für Task-ID '{tid}' mehrdeutig ({len(_tid_hits)} Treffer) — kein Match.", file=sys.stderr)
 
         for fname, rel_p in file_hits.items():
             if tid in fname:
@@ -511,9 +575,10 @@ def get_kanban_tasks(archived: bool = Query(False)):
 
 
 @router.post("/kanban/tasks")
-def create_kanban_task(req: TaskCreateRequest):
+def create_kanban_task(request: Request, req: TaskCreateRequest):
     """Erstellt eine neue Aufgabe im Hermes Kanban über CLI-Execution oder direkten Insert."""
-    conn = _get_kanban_connection()
+    require_admin_or_503(request)
+    conn = _get_kanban_connection(maintenance=True)
     try:
         now_iso = datetime.datetime.now().isoformat()
         cursor = conn.cursor()
@@ -629,11 +694,30 @@ def create_kanban_task(req: TaskCreateRequest):
         conn.close()
 
 
+_CONSECUTIVE_FAILURES_MIGRATED_DBS: set = set()
+
+
+def _ensure_consecutive_failures_column(conn: sqlite3.Connection) -> None:
+    """Fix-Sprint Paket A (Punkt 10): Retry-Zaehler-Spalte nachziehen, falls das
+    Schema aelter ist. Wird einmal pro DB-Pfad ausgefuehrt."""
+    target_db = _get_active_kanban_db_path()
+    if target_db in _CONSECUTIVE_FAILURES_MIGRATED_DBS:
+        return
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+    if "consecutive_failures" not in cols:
+        conn.execute("ALTER TABLE tasks ADD COLUMN consecutive_failures INTEGER DEFAULT 0")
+        conn.commit()
+        print(f"[OperationsAPI] Schema-Migration: tasks.consecutive_failures hinzugefuegt ({target_db}).", file=sys.stderr)
+    _CONSECUTIVE_FAILURES_MIGRATED_DBS.add(target_db)
+
+
 async def _execute_kanban_task_async(task_id: str):
     """Führt eine Kanban-Aufgabe autonom über core_dispatcher aus (alter dag_scheduler entfernt)."""
     import core_dispatcher
-    conn = _get_kanban_connection()
+    conn = _get_kanban_connection(maintenance=True)
     try:
+        # Fix-Sprint Paket A (Punkt 10): Spalte consecutive_failures sicherstellen
+        _ensure_consecutive_failures_column(conn)
         cur = conn.cursor()
         cur.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
         row = cur.fetchone()
@@ -674,7 +758,7 @@ async def _execute_kanban_task_async(task_id: str):
         _autonomy = "approval"
 
     if _autonomy != "autonomous":
-        _gate = _get_kanban_connection()
+        _gate = _get_kanban_connection(maintenance=True)
         try:
             _now = datetime.datetime.now().isoformat()
             _row = _gate.execute("SELECT block_kind FROM tasks WHERE id = ?", (task_id,)).fetchone()
@@ -712,7 +796,7 @@ async def _execute_kanban_task_async(task_id: str):
     # Fall 2: Einzelaufgabe
     # Sofort als 'in_progress' markieren, damit im Kanban und UI der aktive Lauf sichtbar ist
     try:
-        c_start = _get_kanban_connection()
+        c_start = _get_kanban_connection(maintenance=True)
         now_start_iso = datetime.datetime.now().isoformat()
         c_start.execute("UPDATE tasks SET status = 'in_progress', started_at = ? WHERE id = ?", (now_start_iso, task_id))
         c_start.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'started', ?, ?)", 
@@ -728,7 +812,7 @@ async def _execute_kanban_task_async(task_id: str):
         # Kein Profil manuell zugewiesen -> automatisch an den Root-Orchestrator ('default') uebergeben
         raw_assignee = "default"
         try:
-            c_asgn = _get_kanban_connection()
+            c_asgn = _get_kanban_connection(maintenance=True)
             now_asgn_iso = datetime.datetime.now().isoformat()
             c_asgn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", (raw_assignee, task_id))
             c_asgn.execute(
@@ -819,7 +903,7 @@ async def _execute_kanban_task_async(task_id: str):
             _sidecar_tmeta = {}
         _token_budget = int(t_dict.get("token_budget") or _sidecar_tmeta.get("token_budget") or 0)
         _proof_cmd = str(t_dict.get("proof_command") or _sidecar_tmeta.get("proof_command") or "").strip()
-        _retry_cnt = int(t_dict.get("retry_count") or 0)
+        _retry_cnt = int(t_dict.get("consecutive_failures") or t_dict.get("retry_count") or 0)
 
         from backend.kanban_verifier import verify_card_completion
         verdict = verify_card_completion(
@@ -864,11 +948,11 @@ async def _execute_kanban_task_async(task_id: str):
             reply = f"{reply}\n\n[VERIFIER / HITL]: {verdict['reason']}"
         now_iso = datetime.datetime.now().isoformat()
         
-        c = _get_kanban_connection()
+        c = _get_kanban_connection(maintenance=True)
         try:
             if target_status == "blocked" and verdict.get("block_kind"):
                 c.execute(
-                    "UPDATE tasks SET status = 'blocked', block_kind = ?, result = ? WHERE id = ?",
+                    "UPDATE tasks SET status = 'blocked', block_kind = ?, result = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?",
                     (verdict["block_kind"], reply, task_id),
                 )
                 c.execute(
@@ -880,7 +964,10 @@ async def _execute_kanban_task_async(task_id: str):
                     (task_id, json.dumps({"reason": verdict["block_kind"]}), now_iso),
                 )
             else:
-                c.execute("UPDATE tasks SET status = ?, completed_at = ?, result = ? WHERE id = ?", (target_status, now_iso, reply, task_id))
+                c.execute(
+                    "UPDATE tasks SET status = ?, completed_at = ?, result = ?, consecutive_failures = 0 WHERE id = ?",
+                    (target_status, now_iso, reply, task_id),
+                )
                 c.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)", 
                           (task_id, json.dumps({"status": target_status, "summary": reply[:200], "verified": is_success}), now_iso))
             c.commit()
@@ -922,9 +1009,9 @@ async def _execute_kanban_task_async(task_id: str):
     except Exception as ex:
         print(f"[OperationsAPI] Execution failed for {task_id}: {ex}", file=sys.stderr)
         now_iso = datetime.datetime.now().isoformat()
-        c = _get_kanban_connection()
+        c = _get_kanban_connection(maintenance=True)
         try:
-            c.execute("UPDATE tasks SET status = 'blocked', result = ? WHERE id = ?", (f"Fehler bei Ausführung: {ex}", task_id))
+            c.execute("UPDATE tasks SET status = 'blocked', result = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?", (f"Fehler bei Ausführung: {ex}", task_id))
             c.commit()
             _sync_to_memory_bridge(task_id, title, assignee, "blocked", f"Fehler: {ex}")
         finally:
@@ -943,10 +1030,10 @@ async def _execute_kanban_task_async(task_id: str):
             print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
 
-@router.patch("/kanban/tasks/{task_id}/status")
-async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
-    """Verschiebt eine Aufgabe in eine neue Spalte / Status und startet ggf. Ausführung."""
-    conn = _get_kanban_connection()
+def _update_task_status_db(task_id: str, new_status: str, result: Optional[str], force: bool) -> Dict[str, Any]:
+    """Fix-Sprint Paket A (Punkt 2): der komplette synchrone SQLite-/Datei-Block
+    von update_task_status — wird via asyncio.to_thread ausgefuehrt."""
+    conn = _get_kanban_connection(maintenance=True)
     try:
         now_iso = datetime.datetime.now().isoformat()
         cursor = conn.cursor()
@@ -957,11 +1044,10 @@ async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
             raise HTTPException(status_code=404, detail="Task nicht gefunden.")
 
         old_status = existing["status"]
-        new_status = req.status.lower()
 
         # 4-Augen Qualitäts-Gate Prüfung: Wenn Task auf 'done' verschoben werden soll,
         # prüfen ob ein Review mit 'changes_requested' vorliegt (es sei denn, force=True)
-        if new_status == "done" and not req.force:
+        if new_status == "done" and not force:
             meta = _load_kanban_meta()
             t_meta = (meta.get("tasks") or {}).get(task_id, {})
             q_rev = t_meta.get("quality_review")
@@ -986,7 +1072,7 @@ async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
                 END,
                 result = COALESCE(?, result)
             WHERE id = ?
-        """, (new_status, new_status, new_status, now_iso, new_status, now_iso, req.result, task_id))
+        """, (new_status, new_status, new_status, now_iso, new_status, now_iso, result, task_id))
 
         cursor.execute("""
             INSERT INTO task_events (task_id, kind, payload, created_at)
@@ -994,45 +1080,92 @@ async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
         """, (task_id, "status_changed", json.dumps({"from": old_status, "to": new_status}), now_iso))
 
         conn.commit()
-        _sync_to_memory_bridge(task_id, existing["title"], existing["assignee"], new_status, req.result)
-
-        # Autonome LLM-Ausführung starten, wenn Task auf 'in_progress' oder von 'review'/'failed'/'blocked' auf 'todo' gesetzt wurde
-        if new_status == "in_progress" and old_status != "in_progress":
-            asyncio.create_task(_execute_kanban_task_async(task_id))
-        elif new_status == "todo" and old_status in ("review", "failed", "blocked", "done"):
-            asyncio.create_task(_execute_kanban_task_async(task_id))
-
-        # 12.10.2026 (Decision-Service, Richtung Kanban -> Telegram): Wird ein
-        # Entscheidungs-Task (Sidecar-Block 'decision') ueber die Oberflaeche
-        # verschoben, informiert der Owner-Kanal. NICHT beim Aufruf durch den
-        # Decision-Service (source == 'decision') - der bestaetigt selbst.
-        if old_status == "review" and new_status != "review" and (req.source or "") != "decision":
-            try:
-                _dm = _load_kanban_meta().get("tasks", {}).get(task_id, {}).get("decision")
-                if _dm:
-                    from telegram_notify import send_telegram_message
-                    _verb = ("\u2705 freigegeben" if new_status in ("todo", "in_progress", "done")
-                             else "\u26d4 abgelehnt/verworfen")
-                    send_telegram_message(
-                        f"{_verb} \u2014 {_dm.get('titel') or task_id}\n"
-                        f"(im Kanban verschoben: review \u2192 {new_status})")
-            except Exception as _tg_err:
-                print(f"[OperationsAPI] Telegram-Benachrichtigung fehlgeschlagen: {_tg_err}", file=sys.stderr)
-
-        try:
-            import main
-            if hasattr(main, "broadcast_event"):
-                main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": old_status, "to": new_status})
-        except Exception as exc:
-            print(f"[OperationsAPI] WARNUNG (MEDIUM) update_task_status: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-
-        return {"status": "success", "task_id": task_id, "old_status": old_status, "new_status": new_status}
+        return {
+            "old_status": old_status,
+            "title": existing["title"],
+            "assignee": existing["assignee"],
+            "now_iso": now_iso,
+        }
     finally:
         conn.close()
 
 
+@router.patch("/kanban/tasks/{task_id}/status")
+async def update_task_status(request: Request, task_id: str, req: TaskStatusUpdateRequest):
+    """Verschiebt eine Aufgabe in eine neue Spalte / Status und startet ggf. Ausführung."""
+    require_admin_or_503(request)
+    new_status = (req.status or "").lower()
+    # Punkt 3 (Fix-Sprint Paket A): Status-Validierung
+    if new_status not in VALID_KANBAN_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Ungültiger Status '{req.status}'. Erlaubt sind: {', '.join(sorted(VALID_KANBAN_STATUSES))}"
+        )
+
+    # Fix-Sprint Paket A (Punkt 2): SQLite-/Datei-IO blockiert den Event-Loop nicht mehr
+    info = await asyncio.to_thread(
+        _update_task_status_db, task_id, new_status, req.result, bool(req.force)
+    )
+    old_status = info["old_status"]
+
+    try:
+        await asyncio.to_thread(
+            _sync_to_memory_bridge, task_id, info["title"], info["assignee"], new_status, req.result
+        )
+    except Exception as exc:
+        print(f"[OperationsAPI] WARNUNG (MEDIUM) update_task_status: Memory-Bridge fehlgeschlagen: {exc}", file=sys.stderr)
+
+    # Autonome LLM-Ausführung starten, wenn Task auf 'in_progress' oder von 'review'/'failed'/'blocked' auf 'todo' gesetzt wurde
+    # (Fix-Sprint Paket A, Punkt 1: create_task läuft hier garantiert im aktiven Event-Loop)
+    if new_status == "in_progress" and old_status != "in_progress":
+        asyncio.create_task(_execute_kanban_task_async(task_id))
+    elif new_status == "todo" and old_status in ("review", "failed", "blocked", "done"):
+        asyncio.create_task(_execute_kanban_task_async(task_id))
+
+    # 12.10.2026 (Decision-Service, Richtung Kanban -> Telegram): Wird ein
+    # Entscheidungs-Task (Sidecar-Block 'decision') ueber die Oberflaeche
+    # verschoben, informiert der Owner-Kanal. NICHT beim Aufruf durch den
+    # Decision-Service (source == 'decision') - der bestaetigt selbst.
+    if old_status == "review" and new_status != "review" and (req.source or "") != "decision":
+        try:
+            _dm = (await asyncio.to_thread(_load_kanban_meta)).get("tasks", {}).get(task_id, {}).get("decision")
+            if _dm:
+                from telegram_notify import send_telegram_message
+                _verb = ("✅ freigegeben" if new_status in ("todo", "in_progress", "done")
+                         else "⛔ abgelehnt/verworfen")
+                await asyncio.to_thread(
+                    send_telegram_message,
+                    f"{_verb} — {_dm.get('titel') or task_id}\n"
+                    f"(im Kanban verschoben: review → {new_status})")
+        except Exception as _tg_err:
+            print(f"[OperationsAPI] Telegram-Benachrichtigung fehlgeschlagen: {_tg_err}", file=sys.stderr)
+
+    try:
+        import main
+        if hasattr(main, "broadcast_event"):
+            main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": old_status, "to": new_status})
+    except Exception as exc:
+        print(f"[OperationsAPI] WARNUNG (MEDIUM) update_task_status: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
+
+    return {"status": "success", "task_id": task_id, "old_status": old_status, "new_status": new_status}
+
+
 # In-Memory Store für 10-Minuten Undo-Transaktionen (t-c2b384)
 _KANBAN_UNDO_STORE: Dict[str, Dict[str, Any]] = {}
+_KANBAN_UNDO_STORE_MAX_SIZE = 100
+
+
+def _prune_undo_store() -> None:
+    """Fix-Sprint Paket A (Punkt 7): raeumt den Undo-Store bei jedem Zugriff auf —
+    TTL-Abfluss + Hartes Maximum von 100 Eintraegen (aelteste werden verworfen)."""
+    now_ts = time.time()
+    for tok in list(_KANBAN_UNDO_STORE.keys()):
+        entry = _KANBAN_UNDO_STORE.get(tok)
+        if not entry or float(entry.get("expires_at") or 0) < now_ts:
+            _KANBAN_UNDO_STORE.pop(tok, None)
+    while len(_KANBAN_UNDO_STORE) > _KANBAN_UNDO_STORE_MAX_SIZE:
+        oldest_tok = min(_KANBAN_UNDO_STORE, key=lambda t: float(_KANBAN_UNDO_STORE[t].get("created_at") or 0.0))
+        _KANBAN_UNDO_STORE.pop(oldest_tok, None)
 
 class KanbanBulkActionRequest(BaseModel):
     task_ids: List[str]
@@ -1055,7 +1188,8 @@ def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
     if action not in ("move", "assign", "tag", "delete"):
         raise HTTPException(status_code=400, detail=f"Unbekannte Aktion: {action}")
 
-    conn = _get_kanban_connection()
+    _prune_undo_store()
+    conn = _get_kanban_connection(maintenance=True)
     now_iso = datetime.datetime.now().isoformat()
     now_ts = time.time()
     undo_token = f"undo_{secrets.token_hex(8)}"
@@ -1064,7 +1198,7 @@ def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
         cursor = conn.cursor()
         # 1. Schnappschuss der betroffenen Tasks sichern
         placeholders = ",".join("?" for _ in task_ids)
-        cursor.execute(f"SELECT id, title, assignee, status FROM tasks WHERE id IN ({placeholders})", task_ids)
+        cursor.execute(f"SELECT id, title, assignee, status, block_kind, result FROM tasks WHERE id IN ({placeholders})", task_ids)
         rows = cursor.fetchall()
         if not rows:
             raise HTTPException(status_code=404, detail="Keine passenden Aufgaben gefunden.")
@@ -1079,21 +1213,49 @@ def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
                 "title": r["title"],
                 "status": r["status"],
                 "assignee": r["assignee"],
-                "tags": t_tags
+                "tags": t_tags,
+                # Fix-Sprint Paket A (Punkt 6): block_kind & result mitichern
+                "block_kind": r["block_kind"] if "block_kind" in r.keys() else None,
+                "result": r["result"] if "result" in r.keys() else None,
             })
 
         # 2. Aktion anwenden
         if action == "move":
             target_status = (req.payload.get("status") or "todo").lower()
-            completed_at = now_iso if target_status == "done" else None
-            started_at = now_iso if target_status == "in_progress" else None
-            cursor.execute(f"""
-                UPDATE tasks
-                SET status = ?,
-                    started_at = COALESCE(?, started_at),
-                    completed_at = COALESCE(?, completed_at)
-                WHERE id IN ({placeholders})
-            """, [target_status, started_at, completed_at] + task_ids)
+            # Fix-Sprint Paket A (Punkt 5): Cycle-Time/Zombie-Erkennung korrekt
+            # — beim Zurückbewegen Timestamps explizit NULL setzen statt COALESCE.
+            if target_status in ("backlog", "todo"):
+                cursor.execute(f"""
+                    UPDATE tasks
+                    SET status = ?,
+                        started_at = NULL,
+                        completed_at = NULL
+                    WHERE id IN ({placeholders})
+                """, [target_status] + task_ids)
+            elif target_status == "in_progress":
+                cursor.execute(f"""
+                    UPDATE tasks
+                    SET status = ?,
+                        started_at = COALESCE(?, started_at),
+                        completed_at = NULL
+                    WHERE id IN ({placeholders})
+                """, [target_status, now_iso] + task_ids)
+            elif target_status == "done":
+                cursor.execute(f"""
+                    UPDATE tasks
+                    SET status = ?,
+                        completed_at = ?
+                    WHERE id IN ({placeholders})
+                """, [target_status, now_iso] + task_ids)
+            else:
+                # review/blocked/failed/archived etc.: altes Verhalten (kein Touch der Timestamps)
+                cursor.execute(f"""
+                    UPDATE tasks
+                    SET status = ?,
+                        started_at = COALESCE(NULL, started_at),
+                        completed_at = COALESCE(NULL, completed_at)
+                    WHERE id IN ({placeholders})
+                """, [target_status] + task_ids)
 
             for s in snapshot:
                 cursor.execute("""
@@ -1172,10 +1334,8 @@ def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
             "expires_at": now_ts + 600.0  # 10 Minuten
         }
 
-        # Abgelaufene Einträge bereinigen
-        for tok in list(_KANBAN_UNDO_STORE.keys()):
-            if _KANBAN_UNDO_STORE[tok]["expires_at"] < now_ts:
-                _KANBAN_UNDO_STORE.pop(tok, None)
+        # Abgelaufene Einträge bereinigen + Max-Size durchsetzen (Punkt 7)
+        _prune_undo_store()
 
         # Broadcast WebSocket Event
         try:
@@ -1204,6 +1364,7 @@ def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
 def api_kanban_bulk_undo(request: Request, req: KanbanBulkUndoRequest):
     """Macht eine Mehrfachaktion innerhalb des 10-Minuten-Zeitfensters rückgängig (t-c2b384)."""
     require_admin_or_503(request)
+    _prune_undo_store()
     token = req.undo_token.strip()
     entry = _KANBAN_UNDO_STORE.get(token)
     if not entry:
@@ -1215,7 +1376,7 @@ def api_kanban_bulk_undo(request: Request, req: KanbanBulkUndoRequest):
         raise HTTPException(status_code=400, detail="Das 10-Minuten-Zeitfenster für diese Aktion ist abgelaufen.")
 
     snapshot = entry.get("snapshot") or []
-    conn = _get_kanban_connection()
+    conn = _get_kanban_connection(maintenance=True)
     now_iso = datetime.datetime.now().isoformat()
     try:
         cursor = conn.cursor()
@@ -1223,9 +1384,10 @@ def api_kanban_bulk_undo(request: Request, req: KanbanBulkUndoRequest):
             tid = item["id"]
             cursor.execute("""
                 UPDATE tasks
-                SET status = ?, assignee = ?
+                SET status = ?, assignee = ?,
+                    block_kind = ?, result = ?
                 WHERE id = ?
-            """, (item["status"], item["assignee"], tid))
+            """, (item["status"], item["assignee"], item.get("block_kind"), item.get("result"), tid))
             cursor.execute("""
                 INSERT INTO task_events (task_id, kind, payload, created_at)
                 VALUES (?, ?, ?, ?)
@@ -1277,10 +1439,10 @@ def api_kanban_bulk_undo(request: Request, req: KanbanBulkUndoRequest):
         conn.close()
 
 
-@router.post("/kanban/tasks/{task_id}/approve")
-def approve_kanban_task(task_id: str):
-    """Erteilt die Autonomie-Freigabe (approval) und startet die Aufgabe."""
-    conn = _get_kanban_connection()
+def _approve_kanban_task_db(task_id: str) -> dict:
+    """Fix-Sprint Paket A (Punkt 1): der komplette synchrone SQLite-Block der
+    Freigabe — inklusive Approved-/Unblocked-Events. Läuft via asyncio.to_thread."""
+    conn = _get_kanban_connection(maintenance=True)
     try:
         row = conn.execute("SELECT id, status, block_kind FROM tasks WHERE id = ?", (task_id,)).fetchone()
         if not row:
@@ -1297,8 +1459,18 @@ def approve_kanban_task(task_id: str):
             (task_id, json.dumps({"by": "owner", "reason": "approval_granted"}), now_iso),
         )
         conn.commit()
+        return {"previous_status": row["status"] if hasattr(row, "keys") else row[1]}
     finally:
         conn.close()
+
+
+@router.post("/kanban/tasks/{task_id}/approve")
+async def approve_kanban_task(request: Request, task_id: str):
+    """Erteilt die Autonomie-Freigabe (approval) und startet die Aufgabe."""
+    require_admin_or_503(request)
+    await asyncio.to_thread(_approve_kanban_task_db, task_id)
+    # Fix-Sprint Paket A (Punkt 1): to_thread gibt im aktiven Event-Loop zurück —
+    # create_task hängt damit garantiert am laufenden Loop.
     asyncio.create_task(_execute_kanban_task_async(task_id))
     return {"status": "success", "task_id": task_id, "message": "Freigegeben und gestartet."}
 
@@ -1310,17 +1482,19 @@ async def trigger_quality_review(task_id: str, req: QualityReviewRequest = Body(
     Ein unabhängiger Reviewer-Agent (Standard: Katharina Völk bzw. Robert bei Eigenarbeiten)
     prüft das Arbeitsergebnis objektiv gegen den ursprünglichen Auftrag.
     """
-    conn = _get_kanban_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT id, title, body, assignee, status, result FROM tasks WHERE id = ?", (task_id,))
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Task nicht gefunden.")
-        t_dict = dict(row)
-    finally:
-        conn.close()
+    def _fetch_task_sync() -> dict:
+        conn = _get_kanban_connection(maintenance=True)
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT id, title, body, assignee, status, result FROM tasks WHERE id = ?", (task_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Task nicht gefunden.")
+            return dict(row)
+        finally:
+            conn.close()
 
+    t_dict = await asyncio.to_thread(_fetch_task_sync)
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
     from backend.agent_aliases import resolve_agent_id
@@ -1328,18 +1502,24 @@ async def trigger_quality_review(task_id: str, req: QualityReviewRequest = Body(
     if not raw_assignee:
         # Kein Profil manuell zugewiesen -> automatisch an den Root-Orchestrator ('default') uebergeben
         raw_assignee = "default"
-        try:
-            c_asgn = _get_kanban_connection()
-            now_asgn_iso = datetime.datetime.now().isoformat()
-            c_asgn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", (raw_assignee, task_id))
-            c_asgn.execute(
-                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'auto_assigned_orchestrator', ?, ?)",
-                (task_id, json.dumps({"assignee": raw_assignee, "reason": "Kein Profil gesetzt — automatische Zuweisung an Orchestrator"}), now_asgn_iso),
-            )
-            c_asgn.commit()
-            c_asgn.close()
-        except Exception as exc:
-            print(f"[OperationsAPI] WARNUNG (MEDIUM) trigger_quality_review: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
+
+        def _auto_assign_sync() -> None:
+            try:
+                c_asgn = _get_kanban_connection(maintenance=True)
+                try:
+                    now_asgn_iso = datetime.datetime.now().isoformat()
+                    c_asgn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", (raw_assignee, task_id))
+                    c_asgn.execute(
+                        "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'auto_assigned_orchestrator', ?, ?)",
+                        (task_id, json.dumps({"assignee": raw_assignee, "reason": "Kein Profil gesetzt — automatische Zuweisung an Orchestrator"}), now_asgn_iso),
+                    )
+                    c_asgn.commit()
+                finally:
+                    c_asgn.close()
+            except Exception as exc:
+                print(f"[OperationsAPI] WARNUNG (MEDIUM) trigger_quality_review: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
+
+        await asyncio.to_thread(_auto_assign_sync)
     assignee = resolve_agent_id(raw_assignee)
     result = t_dict.get("result") or ""
     now_iso = datetime.datetime.now().isoformat()
@@ -1364,7 +1544,7 @@ async def trigger_quality_review(task_id: str, req: QualityReviewRequest = Body(
         }
     else:
         # 2. Autonomer Reviewer-Agent (Katharina Völk für QM/Compliance oder Robert für CEO/Strategie)
-        profiles = _load_profiles_map()
+        profiles = await asyncio.to_thread(_load_profiles_map)
         reviewer_id = req.reviewer_id
         if not reviewer_id:
             if assignee in ("katharina", "katharina-voelk", "katharina_voelk"):
@@ -1461,22 +1641,24 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
         meta["tasks"].setdefault(task_id, {})
         meta["tasks"][task_id]["quality_review"] = review_data
         return meta
-    update_kanban_meta(_apply_meta)
+    await asyncio.to_thread(update_kanban_meta, _apply_meta)
 
     # In task_events und DB vermerken
-    c = _get_kanban_connection()
-    try:
-        c.execute(
-            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
-            (task_id, f"quality_review_{verdict}", json.dumps(review_data), now_iso)
-        )
-        if verdict == "approved" and t_dict.get("status") == "review":
-            c.execute("UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?", (now_iso, task_id))
-        elif verdict == "changes_requested":
-            c.execute("UPDATE tasks SET status = 'review' WHERE id = ?", (task_id,))
-        c.commit()
-    finally:
-        c.close()
+    def _record_review_sync() -> None:
+        c = _get_kanban_connection(maintenance=True)
+        try:
+            c.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
+                (task_id, f"quality_review_{verdict}", json.dumps(review_data), now_iso)
+            )
+            if verdict == "approved" and t_dict.get("status") == "review":
+                c.execute("UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?", (now_iso, task_id))
+            elif verdict == "changes_requested":
+                c.execute("UPDATE tasks SET status = 'review' WHERE id = ?", (task_id,))
+            c.commit()
+        finally:
+            c.close()
+    await asyncio.to_thread(_record_review_sync)
 
     try:
         import main
@@ -1505,7 +1687,7 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
 def reset_zombie_kanban_tasks(request: Request, payload: dict = Body(default={})):
     """Setzt hängengebliebene 'in_progress' Tasks (optional gefiltert nach assignee oder Alter) auf 'todo' zurück."""
     require_admin_or_503(request)
-    conn = _get_kanban_connection()
+    conn = _get_kanban_connection(maintenance=True)
     try:
         assignee = (payload.get("assignee") or "").strip()
         task_id = (payload.get("task_id") or "").strip()
@@ -1925,8 +2107,24 @@ def get_projects_overview():
                         primary_doc = f"01_PROJEKTE/{folder_name}/03_Endprodukte/{f.name}"
 
             subtasks = []
+            _all_folder_names = [d2 for d2 in tasks_by_project.keys()]
             for pid, t_list in tasks_by_project.items():
-                if pid.lower() in folder_name.lower() or any(part in pid.lower() for part in folder_name.lower().split("-") if len(part) >= 4 and part not in ("projekt", "2026")):
+                # Punkt 9 (Fix-Sprint Paket A): exakter Match zuerst; Substring nur
+                # bei Mindestlaenge >= 4 UND eindeutigem Treffer, sonst kein Match.
+                if pid and pid.lower() == folder_name.lower():
+                    matched = True
+                else:
+                    matched = _fuzzy_project_exact_match(pid, [folder_name]) is not None
+                if not matched:
+                    # Ordner-Slug-Parts nur uebernehmen, wenn sie den Projektordner
+                    # eindeutig identifizieren (nur 1 Ordner enthaelt den Part).
+                    for part in folder_name.lower().split("-"):
+                        if len(part) >= 4 and part not in ("projekt", "2026"):
+                            _containing = [d2 for d2 in _all_folder_names if part in d2.lower()]
+                            if len(_containing) == 1 and pid and part in str(pid).lower():
+                                matched = True
+                                break
+                if matched:
                     subtasks.extend(t_list)
                     seen_ids.add(pid)
                     for st in t_list:
@@ -2258,9 +2456,11 @@ def get_raw_original(request: Request, path: str):
 
 
 @router.get("/vault/file")
-def get_vault_file(path: str):
+def get_vault_file(request: Request, path: str):
     """SYSTEMWEITER Datei-Reader: liefert EINE Vault-Datei (01_PROJEKTE/...) als Text.
-    Traversal-Schutz: safe_path_within(Vault) + Suffix-Whitelist."""
+    Traversal-Schutz: safe_path_within(Vault) + Suffix-Whitelist.
+    Fix-Sprint Paket A (Punkt 10): liefert sensible Vault-Inhalte -> Admin-Gate."""
+    require_admin_or_503(request)
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
     from utils.path_jail import safe_path_within, PathJailError
@@ -2281,8 +2481,10 @@ def get_vault_file(path: str):
 
 
 @router.get("/vault/find")
-def find_vault_file(q: str, limit: int = 8):
-    """Findet Vault-Dateien per Name/Teilstring (fuer nackte .md-Namen aus Chat-Texten)."""
+def find_vault_file(request: Request, q: str, limit: int = 8):
+    """Findet Vault-Dateien per Name/Teilstring (fuer nackte .md-Namen aus Chat-Texten).
+    Fix-Sprint Paket A (Punkt 10): exposes Vault-Struktur -> Admin-Gate."""
+    require_admin_or_503(request)
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
     q = (q or "").strip().lower()
@@ -2312,8 +2514,10 @@ def find_vault_file(q: str, limit: int = 8):
 
 
 @router.get("/kanban/projects/{task_id}/file")
-def get_kanban_project_file(task_id: str, path: str):
-    """Liefert EINE Projektdatei als Text - nur innerhalb des Projektordners (Traversal-Schutz)."""
+def get_kanban_project_file(request: Request, task_id: str, path: str):
+    """Liefert EINE Projektdatei als Text - nur innerhalb des Projektordners (Traversal-Schutz).
+    Fix-Sprint Paket A (Punkt 10): liefert sensible Vault-Inhalte -> Admin-Gate."""
+    require_admin_or_503(request)
     from pathlib import Path as _P
     from backend.post_task_pipeline import get_vault_dir
     from utils.path_jail import safe_path_within, PathJailError
@@ -2357,8 +2561,9 @@ def get_kanban_palette():
     return {"status": "ok", "custom": False, "columns": KANBAN_PALETTE_DEFAULTS}
 
 @router.post("/kanban/palette")
-def save_kanban_palette(req: KanbanPaletteUpdate):
+def save_kanban_palette(request: Request, req: KanbanPaletteUpdate):
     """Speichert die Kanban-Farbpalette (oder setzt mit reset=true auf Standard zurück)."""
+    require_admin_or_503(request)
     if req.reset:
         if os.path.exists(_KANBAN_PALETTE_FILE):
             try:
@@ -2393,8 +2598,9 @@ def get_kanban_meta():
 
 
 @router.post("/kanban/meta")
-def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
+def save_kanban_meta(request: Request, payload: Dict[str, Any] = Body(...)):
     """Due/Tags (kind=task) oder WIP-Limits (kind=wip) speichern. Engine-DB bleibt unberuehrt."""
+    require_admin_or_503(request)
     # 12.10.2026 (Fix Punkt 1, Datenrisiko): die GESAMTE Load-Aendern-Speichern-
     # Sequenz laeuft unter EINER Sperre (backend.kanban_sidecar.update_kanban_meta),
     # sonst verliert paralleler Fan-in Entscheidungs-Metadaten. Validierung VORHER
@@ -2605,9 +2811,10 @@ def get_task_details(task_id: str):
 
 
 @router.post("/kanban/tasks/{task_id}/comments")
-def add_task_comment(task_id: str, author: str = Body(..., embed=True), body: str = Body(..., embed=True)):
+def add_task_comment(request: Request, task_id: str, author: str = Body(..., embed=True), body: str = Body(..., embed=True)):
     """Fügt einem Task einen Kommentar hinzu (Timestamp als integer Unix-Epoch für Hermes-Kompatibilität)."""
-    conn = _get_kanban_connection()
+    require_admin_or_503(request)
+    conn = _get_kanban_connection(maintenance=True)
     try:
         now_ts = int(time.time())
         cursor = conn.cursor()
@@ -2779,8 +2986,17 @@ def api_esign_webhook(request: Request, payload: Dict[str, Any] = Body(...)):
         if not header_secret or not secrets.compare_digest(str(header_secret), str(webhook_secret)):
             raise HTTPException(status_code=403, detail="Ungueltiges Webhook-Secret.")
     else:
-        # Fallback auf Admin-Rollenzaun, falls kein Secret konfiguriert ist
-        require_admin_or_503(request)
+        # Fix-Sprint Paket A (Punkt 10): ohne konfiguriertes DOCUSEAL_WEBHOOK_SECRET
+        # gibt es KEINEN stillen Admin-Fallback mehr — der Endpoint fail-closed mit 503,
+        # damit Dritte nicht an die Webhook-Verarbeitung kommen koennen.
+        print(
+            "[OperationsAPI] WARNUNG (HIGH_SECURITY) api_esign_webhook: DOCUSEAL_WEBHOOK_SECRET ist nicht konfiguriert — Webhook-Annahme abgelehnt (503).",
+            file=sys.stderr,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="DocuSeal-Webhook ist nicht konfiguriert: DOCUSEAL_WEBHOOK_SECRET fehlt. Endpoint ist abgeschaltet."
+        )
 
     try:
         from backend.docuseal_client import docuseal_client

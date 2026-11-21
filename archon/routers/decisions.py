@@ -8,6 +8,7 @@ import datetime
 import json
 import logging
 import os
+import threading
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
@@ -24,6 +25,11 @@ logger = logging.getLogger("archon.routers.decisions")
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["decisions"])
 
 _FOLGE_OK = "Folgeaktion ausgeführt"
+
+# Vorgabe 4: prozessweiter Lock gegen das Decide-Race (zwei parallele Decides auf denselben Task).
+# WICHTIG: Der Lock wird NUR innerhalb eines einzigen sync-to_thread-Blocks gehalten — niemals
+# ueber await-Hinweg, sonst wuerde er die Event-Loop blockieren.
+_DECIDE_RACE_LOCK = threading.RLock()
 
 
 def _require_admin(request: Request):
@@ -150,7 +156,7 @@ def _decision_self_api(method: str, path: str, payload: dict = None, timeout: fl
 
     import urllib.request
 
-    url = f"http://127.0.0.1:8501{path}"
+    url = f"{os.environ.get('ARCHON_INTERNAL_API_URL', 'http://127.0.0.1:8501')}{path}"
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     headers = {"Content-Type": "application/json"}
     try:
@@ -493,15 +499,36 @@ async def api_decide_decision(body: Dict = Body(...)):
         raise HTTPException(status_code=400, detail="task_id fehlt")
 
     fn_self_api = getattr(app_main, "_decision_self_api", _decision_self_api)
+
+    # Vorgabe 4: Compare-And-Set atomar in EINEM to_thread-Block unter prozessweitem Lock:
+    # Sidecar-Status-Read -> already_decided-Check -> 'in_bearbeitung'-Marker vor dem Followup.
+    # Wer 'offen' nicht mehr antrifft, bekommt already_decided (kein doppeltes Followup).
+    def _cas_claim() -> dict:
+        with _DECIDE_RACE_LOCK:
+            meta = fn_self_api("GET", "/api/operations/kanban/meta")
+            dec_local = (meta.get("tasks", {}).get(task_id, {}) or {}).get("decision")
+            if not dec_local:
+                return {"_error": "no_decision"}
+            if (dec_local.get("status") or "offen") != "offen":
+                return {"_error": "already_decided", "dec": dec_local}
+            try:
+                fn_self_api(
+                    "POST",
+                    "/api/operations/kanban/meta",
+                    {"kind": "task", "task_id": task_id, "decision": {"status": "in_bearbeitung"}},
+                )
+            except Exception as e:
+                logger.warning(f"[Decision] CAS-Marker ('in_bearbeitung') konnte nicht gesetzt werden: {e}")
+            return {"_ok": True, "dec": dec_local}
+
     try:
-        meta = await asyncio.to_thread(fn_self_api, "GET", "/api/operations/kanban/meta")
-        dec = (meta.get("tasks", {}).get(task_id, {}) or {}).get("decision")
+        claim = await asyncio.to_thread(_cas_claim)
     except Exception as e:
         raise HTTPException(status_code=502, detail={"code": "decisions_sidecar_unreadable", "params": {"error": str(e)}})
-    if not dec:
+    if claim.get("_error") == "no_decision":
         raise HTTPException(status_code=404, detail={"code": "decisions_no_decision_block", "params": {"task_id": task_id}})
-
-    if (dec.get("status") or "offen") != "offen":
+    if claim.get("_error") == "already_decided":
+        dec = claim.get("dec") or {}
         return {
             "status": "already_decided",
             "task_id": task_id,
@@ -509,6 +536,7 @@ async def api_decide_decision(body: Dict = Body(...)):
             "kanban_status": dec.get("status"),
             "ergebnis": "Bereits entschieden — nicht erneut ausgeführt.",
         }
+    dec = claim["dec"]
 
     fn_stat = getattr(app_main, "_decision_kanban_status", _decision_kanban_status)
     typ = dec.get("typ")
@@ -537,13 +565,30 @@ async def api_decide_decision(body: Dict = Body(...)):
         run_id, _, node_id = ref.partition(":")
         if run_id and node_id:
             try:
-                from backend.workflow_dag_runner import resume_workflow_run
-                asyncio.create_task(resume_workflow_run(
+                # DEFERRED-Import: Helper wird parallel in Paket B (backend/workflow_dag_runner.py) gebaut.
+                # schedule_workflow_resume ist ein sync-Caller (legt nur den Hintergrund-Task an) — direkt rufen.
+                from backend.workflow_dag_runner import schedule_workflow_resume
+
+                schedule_workflow_resume(
                     run_id=run_id,
                     gate_approvals={node_id: decision == "approve"},
-                ))
+                )
                 ergebnis += f" | Workflow-Run `{run_id}` wird am Knoten `{node_id}` fortgesetzt."
+            except ImportError:
+                # FALLBACK (Helper noch nicht gemerged): direkter Hintergrund-Task — markiert als Uebergang.
+                try:
+                    from backend.workflow_dag_runner import resume_workflow_run
+
+                    asyncio.create_task(resume_workflow_run(
+                        run_id=run_id,
+                        gate_approvals={node_id: decision == "approve"},
+                    ))
+                    ergebnis += f" | Workflow-Run `{run_id}` wird am Knoten `{node_id}` fortgesetzt (Fallback-Pfad)."
+                except Exception as e:
+                    logger.error(f"[Decision] Workflow-Resume-Fallback fehlgeschlagen: {e}")
+                    ergebnis += f" | Workflow-Resume nicht gestartet: {e}"
             except Exception as e:
+                logger.error(f"[Decision] Workflow-Resume-Scheduling fehlgeschlagen: {e}")
                 ergebnis += f" | Workflow-Resume nicht gestartet: {e}"
         else:
             ergebnis += " | Workflow-Resume übersprungen: ref_id enthält keine run_id:node_id-Kombination."

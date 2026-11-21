@@ -9,13 +9,17 @@ sauber ueber /api/v2/* mit RBAC (forbid_viewer_writes + require_admin_or_503) be
 
 from __future__ import annotations
 
+import asyncio
 import datetime
+import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends as _ArchonDepends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
+
+logger = logging.getLogger("archon.routers.v2_capabilities")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["archon_v2"])
 
@@ -96,14 +100,19 @@ async def api_v2_workflow_dag_run(request: Request, payload: Dict[str, Any] = Bo
         run_id=payload.get("run_id"),
         gate_approvals=payload.get("gate_approvals"),
     )
-    return {"status": "success", **res}
+    # Vorgabe 1: ehrlicher Status — kein pauschales "success" mehr.
+    # Top-Level "status" entspricht dem Run-Status ("completed"/"paused"/"failed"/"already_running");
+    # "dag_status" spiegelt ihn fuer Konsumenten, die das alte Feld-Framework erwarten.
+    dag_status = str(res.get("status") or "failed")
+    rest = {k: v for k, v in res.items() if k != "status"}
+    return {"status": dag_status, "dag_status": dag_status, **rest}
 
 
 @router.get("/api/v2/workflows/dag/runs/{run_id}")
 async def api_v2_workflow_dag_run_status(request: Request, run_id: str):
     require_admin_or_503(request)
     from backend.workflow_dag_runner import get_workflow_run
-    run = get_workflow_run(run_id)
+    run = await asyncio.to_thread(get_workflow_run, run_id)
     if not run:
         raise HTTPException(status_code=404, detail=f"Workflow run '{run_id}' not found")
     return {"status": "ok", "run": run}
@@ -113,26 +122,33 @@ async def api_v2_workflow_dag_run_status(request: Request, run_id: str):
 async def api_v2_workflow_dag_runs_list(request: Request, limit: int = 50):
     require_admin_or_503(request)
     from backend.workflow_dag_runner import list_workflow_runs
-    return {"status": "ok", "runs": list_workflow_runs(limit=limit)}
+    return {"status": "ok", "runs": await asyncio.to_thread(list_workflow_runs, limit=limit)}
 
 
 @router.post("/api/v2/workflows/dag/runs/{run_id}/resume")
 async def api_v2_workflow_dag_resume(request: Request, run_id: str, payload: Dict[str, Any] = Body(default={})):
     require_admin_or_503(request)
-    import asyncio as _asyncio
-    from backend.workflow_dag_runner import get_workflow_run, resume_workflow_run
-    existing = get_workflow_run(run_id)
+    from backend.workflow_dag_runner import get_workflow_run
+    existing = await asyncio.to_thread(get_workflow_run, run_id)
     if not existing:
         raise HTTPException(status_code=404, detail=f"Workflow run '{run_id}' not found")
     if existing.get("status") not in ("paused", "running"):
         return {"status": "already_terminal", "run": existing}
     # Resume laeuft als Hintergrund-Task: Agenten-Knoten brauchen Minuten, die Route blockiert nicht.
-    _asyncio.create_task(
-        resume_workflow_run(
-            run_id=run_id,
-            gate_approvals=payload.get("gate_approvals") or {},
-        )
-    )
+    # Vorgabe 3: schedule_workflow_resume (sync, legt nur einen Task an — nicht blockierend).
+    try:
+        # DEFERRED-Import: Helper wird parallel in Paket B (backend/workflow_dag_runner.py) gebaut.
+        from backend.workflow_dag_runner import schedule_workflow_resume
+        schedule_workflow_resume(run_id=run_id, gate_approvals=payload.get("gate_approvals") or {})
+    except ImportError:
+        # FALLBACK (Helper noch nicht gemerged): direkter Hintergrund-Task via resume_workflow_run.
+        try:
+            from backend.workflow_dag_runner import resume_workflow_run
+            import asyncio as _asyncio
+            _asyncio.create_task(resume_workflow_run(run_id=run_id, gate_approvals=payload.get("gate_approvals") or {}))
+        except Exception as e:
+            logger.error(f"[v2 dag resume] Fallback-Resume fuer {run_id} fehlgeschlagen: {e}")
+            raise HTTPException(status_code=500, detail=f"resume scheduling failed: {e}")
     return {"status": "resume_scheduled", "run_id": run_id, "prior_status": existing.get("status")}
 
 
@@ -140,7 +156,7 @@ async def api_v2_workflow_dag_resume(request: Request, run_id: str, payload: Dic
 async def api_v2_workflow_templates_list(request: Request):
     require_admin_or_503(request)
     from backend.workflow_templates import list_workflow_templates
-    return {"status": "ok", "templates": list_workflow_templates()}
+    return {"status": "ok", "templates": await asyncio.to_thread(list_workflow_templates)}
 
 
 @router.post("/api/v2/workflows/templates")
@@ -148,7 +164,7 @@ async def api_v2_workflow_templates_save(request: Request, payload: Dict[str, An
     require_admin_or_503(request)
     from backend.workflow_templates import save_workflow_template
     try:
-        tpl = save_workflow_template(payload)
+        tpl = await asyncio.to_thread(save_workflow_template, payload)
         return {"status": "ok", "template": tpl}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -160,7 +176,7 @@ async def api_v2_workflow_templates_import_n8n(request: Request, payload: Dict[s
     from backend.workflow_templates import import_n8n_workflow_json
     try:
         n8n_json = payload.get("workflow") if isinstance(payload.get("workflow"), dict) else payload
-        tpl = import_n8n_workflow_json(n8n_json, title_override=payload.get("title"))
+        tpl = await asyncio.to_thread(import_n8n_workflow_json, n8n_json, title_override=payload.get("title"))
         return {"status": "ok", "template": tpl}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -170,7 +186,7 @@ async def api_v2_workflow_templates_import_n8n(request: Request, payload: Dict[s
 async def api_v2_workflow_templates_delete(request: Request, tpl_id: str):
     require_admin_or_503(request)
     from backend.workflow_templates import delete_workflow_template
-    deleted = delete_workflow_template(tpl_id)
+    deleted = await asyncio.to_thread(delete_workflow_template, tpl_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Custom template not found or built-in")
     return {"status": "ok", "deleted": tpl_id}
@@ -181,7 +197,8 @@ async def api_v2_workflow_templates_run(request: Request, tpl_id: str, payload: 
     require_admin_or_503(request)
     from backend.workflow_templates import launch_workflow_run
     try:
-        res = launch_workflow_run(
+        res = await asyncio.to_thread(
+            launch_workflow_run,
             tpl_id=tpl_id,
             inputs=payload.get("inputs") or {},
             cron_schedule=payload.get("cron_schedule"),
@@ -197,7 +214,7 @@ async def api_v2_workflow_templates_run(request: Request, tpl_id: str, payload: 
 async def api_v2_workflow_schedules_list(request: Request, template_id: Optional[str] = None):
     require_admin_or_503(request)
     from backend.workflow_scheduler import list_schedules
-    return {"status": "ok", "schedules": list_schedules(template_id=template_id)}
+    return {"status": "ok", "schedules": await asyncio.to_thread(list_schedules, template_id=template_id)}
 
 
 @router.post("/api/v2/workflows/schedules")
@@ -205,7 +222,7 @@ async def api_v2_workflow_schedules_save(request: Request, payload: Dict[str, An
     require_admin_or_503(request)
     from backend.workflow_scheduler import upsert_schedule
     try:
-        sched = upsert_schedule(payload)
+        sched = await asyncio.to_thread(upsert_schedule, payload)
         return {"status": "ok", "schedule": sched}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -215,7 +232,7 @@ async def api_v2_workflow_schedules_save(request: Request, payload: Dict[str, An
 async def api_v2_workflow_schedules_delete(request: Request, schedule_id: str):
     require_admin_or_503(request)
     from backend.workflow_scheduler import delete_schedule
-    if not delete_schedule(schedule_id):
+    if not await asyncio.to_thread(delete_schedule, schedule_id):
         raise HTTPException(status_code=404, detail="Schedule not found")
     return {"status": "ok", "deleted": schedule_id}
 
@@ -224,14 +241,15 @@ async def api_v2_workflow_schedules_delete(request: Request, schedule_id: str):
 async def api_v2_workflow_events_list(request: Request, limit: int = 100, source: Optional[str] = None):
     require_admin_or_503(request)
     from backend.workflow_scheduler import list_workflow_events
-    return {"status": "ok", "events": list_workflow_events(limit=limit, source=source)}
+    return {"status": "ok", "events": await asyncio.to_thread(list_workflow_events, limit=limit, source=source)}
 
 
 @router.post("/api/v2/workflows/events/emit")
 async def api_v2_workflow_events_emit(request: Request, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)
     from backend.workflow_scheduler import dispatch_workflow_event
-    res = dispatch_workflow_event(
+    res = await asyncio.to_thread(
+        dispatch_workflow_event,
         source=str(payload.get("source") or "manual"),
         event_type=str(payload.get("event_type") or "manual_trigger"),
         title=str(payload.get("title") or "Manuelles Event"),
@@ -250,7 +268,7 @@ async def api_v2_workflow_event_policies_list(request: Request):
         "status": "ok",
         "sources": EVENT_BUS_SOURCES,
         "targets": EVENT_BUS_TARGETS,
-        "policies": list_event_policies(),
+        "policies": await asyncio.to_thread(list_event_policies),
     }
 
 
@@ -258,7 +276,8 @@ async def api_v2_workflow_event_policies_list(request: Request):
 async def api_v2_workflow_event_policies_save(request: Request, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)
     from backend.workflow_scheduler import upsert_event_policy
-    rule = upsert_event_policy(
+    rule = await asyncio.to_thread(
+        upsert_event_policy,
         source=str(payload.get("source") or ""),
         target=str(payload.get("target") or ""),
         policy=str(payload.get("policy") or "allow"),
@@ -273,7 +292,7 @@ async def api_v2_workflow_event_replay(request: Request, event_id: str):
     require_admin_or_503(request)
     from backend.workflow_scheduler import replay_workflow_event
     try:
-        res = replay_workflow_event(event_id)
+        res = await asyncio.to_thread(replay_workflow_event, event_id)
         return {"status": "ok", **res}
     except KeyError:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -284,15 +303,17 @@ def _treasury_actor(request: Request) -> str:
         from archon.routers.auth import _resolve_target_passkey_user
         uid, _ = _resolve_target_passkey_user(request)
         return uid
-    except Exception:
-        return "admin"
+    except Exception as exc:
+        # Vorgabe 5: niemals heimlich auf 'admin' fallen — Aufruf ohne identifizierbaren Actor ist 'anonymous'.
+        logger.warning(f"[v2 treasury] Actor nicht aufloesbar -> 'anonymous': {exc}")
+        return "anonymous"
 
 
 @router.get("/api/v2/treasury/overview")
 async def api_v2_treasury_overview(request: Request):
     require_admin_or_503(request)
     from backend.treasury_engine import get_treasury_overview
-    return {"status": "ok", **get_treasury_overview(user_id=_treasury_actor(request))}
+    return {"status": "ok", **(await asyncio.to_thread(get_treasury_overview, user_id=_treasury_actor(request)))}
 
 
 @router.post("/api/v2/treasury/accounts")
@@ -303,10 +324,12 @@ async def api_v2_treasury_accounts_save(request: Request, payload: Dict[str, Any
 
     uid = _treasury_actor(request)
     if payload.get("id") and is_passkey_required(uid, category="payments"):
-        if not consume_hitl_proof_token(payload.get("passkey_proof_token"), uid, category="payments"):
+        if not await asyncio.to_thread(
+            consume_hitl_proof_token, payload.get("passkey_proof_token"), uid, category="payments"
+        ):
             raise HTTPException(status_code=403, detail="passkey_verification_required")
     try:
-        acc = upsert_account(payload)
+        acc = await asyncio.to_thread(upsert_account, payload)
         return {"status": "ok", "account": acc}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -316,7 +339,7 @@ async def api_v2_treasury_accounts_save(request: Request, payload: Dict[str, Any
 async def api_v2_treasury_accounts_delete(request: Request, acc_id: str):
     require_admin_or_503(request)
     from backend.treasury_engine import delete_account
-    if not delete_account(acc_id):
+    if not await asyncio.to_thread(delete_account, acc_id):
         raise HTTPException(status_code=404, detail="Account not found")
     return {"status": "ok", "deleted": acc_id}
 
@@ -326,7 +349,7 @@ async def api_v2_treasury_payment_request(request: Request, payload: Dict[str, A
     require_admin_or_503(request)
     from backend.treasury_engine import request_payment
     try:
-        tx = request_payment(payload, actor_id=_treasury_actor(request))
+        tx = await asyncio.to_thread(request_payment, payload, actor_id=_treasury_actor(request))
         return {"status": "ok", "transaction": tx}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -342,9 +365,11 @@ async def api_v2_treasury_payment_approve(request: Request, tx_id: str, payload:
 
     uid = _treasury_actor(request)
     # Niemals dem Client-Boolean `passkey_verified` vertrauen; nur serverseitig ausgestelltes Einmal-Token akzeptieren.
-    server_verified = consume_hitl_proof_token(payload.get("passkey_proof_token"), uid, category="payments")
+    server_verified = await asyncio.to_thread(
+        consume_hitl_proof_token, payload.get("passkey_proof_token"), uid, category="payments"
+    )
     try:
-        tx = approve_payment(tx_id, approver_id=uid, passkey_verified=server_verified)
+        tx = await asyncio.to_thread(approve_payment, tx_id, approver_id=uid, passkey_verified=server_verified)
         return {"status": "ok", "transaction": tx}
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
@@ -357,7 +382,9 @@ async def api_v2_treasury_payment_reject(request: Request, tx_id: str, payload: 
     require_admin_or_503(request)
     from backend.treasury_engine import reject_payment
     try:
-        tx = reject_payment(tx_id, rejected_by=_treasury_actor(request), reason=str(payload.get("reason") or ""))
+        tx = await asyncio.to_thread(
+            reject_payment, tx_id, rejected_by=_treasury_actor(request), reason=str(payload.get("reason") or "")
+        )
         return {"status": "ok", "transaction": tx}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

@@ -802,16 +802,18 @@
     { type: "research", label: "Research Lab", icon: "🧪", desc: "Tiefenrecherche mit Quellenbeleg" },
   ];
 
-  function renderLeftPaletteHtml() {
+  function renderBottomPaletteHtml() {
     const tabsHtml = PALETTE_CATEGORIES.map((c) => {
       const active = _paletteTab === c.id;
-      return `<button type="button" data-palette-tab="${c.id}" class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium text-left transition ${
-        active
-          ? "bg-indigo-600/25 border border-indigo-500/50 text-indigo-100 font-semibold"
-          : "border border-transparent text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]"
-      }">
-        <span class="shrink-0">${c.icon}</span>
-        <span class="truncate">${esc(c.label)}</span>
+      return `<button type="button" data-palette-tab="${c.id}"
+        style="${active ? "border-bottom:2px solid #6366f1;margin-bottom:-1px;" : ""}"
+        class="px-3 py-1.5 rounded-t-lg text-[11px] font-medium whitespace-nowrap flex items-center gap-1.5 transition border border-b-0 ${
+          active
+            ? "bg-[var(--page-bg)] border-[var(--border)] text-[var(--foreground)] font-semibold"
+            : "bg-transparent border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)]/50"
+        }">
+        <span>${c.icon}</span>
+        <span>${esc(c.label)}</span>
       </button>`;
     }).join("");
 
@@ -835,6 +837,7 @@
           .map(
             (it) => `<div draggable="true" data-palette-type="${esc(it.type)}" data-add-station="${esc(it.type)}"
               title="Auf Matrix ziehen oder klicken"
+              style="min-width:190px;max-width:225px;flex:0 0 auto;"
               class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:border-indigo-500/60 hover:bg-indigo-500/10 cursor-grab active:cursor-grabbing transition select-none space-y-0.5">
               <div class="flex items-center justify-between gap-1">
                 <span class="text-xs font-semibold text-[var(--foreground)] truncate">${esc(it.icon)} ${esc(it.label)}</span>
@@ -844,20 +847,19 @@
             </div>`
           )
           .join("")
-      : `<div class="p-3 rounded-lg border border-dashed border-[var(--border)] text-center space-y-2">
-          <div class="text-[11px] text-[var(--muted-foreground)]">Noch keine Bausteine in dieser Kategorie installiert.</div>
-          <button type="button" id="wf-palette-open-mkt" class="px-2.5 py-1 rounded bg-indigo-600/25 hover:bg-indigo-600/40 border border-indigo-500/40 text-[11px] text-indigo-200 font-semibold">Im Marktplatz installieren →</button>
+      : `<div class="w-full py-2 px-3 rounded-lg border border-dashed border-[var(--border)] flex items-center justify-between gap-3">
+          <span class="text-[11px] text-[var(--muted-foreground)]">Noch keine Bausteine in dieser Kategorie installiert.</span>
+          <button type="button" id="wf-palette-open-mkt" class="px-2.5 py-1 rounded bg-indigo-600/25 hover:bg-indigo-600/40 border border-indigo-500/40 text-[11px] text-indigo-200 font-semibold shrink-0">Im Marktplatz installieren →</button>
         </div>`;
 
     return `
-      <aside style="width:268px;flex-shrink:0;" class="border-r border-[var(--border)] bg-[var(--card)]/40 flex flex-col min-h-0 overflow-hidden">
-        <div class="px-2.5 py-2 border-b border-[var(--border)] flex items-center justify-between">
-          <span class="text-[10px] font-mono uppercase tracking-wider text-[var(--muted-foreground)]">Baustein-Palette</span>
-          <span class="text-[9px] font-mono text-[var(--muted-foreground)]">Ziehen / Klick</span>
+      <section style="flex-shrink:0;" class="border-t border-[var(--border)] bg-[var(--card)]/70 flex flex-col">
+        <div class="px-3 pt-1.5 border-b border-[var(--border)] flex items-center justify-between gap-2 overflow-x-auto">
+          <div class="flex items-end gap-1">${tabsHtml}</div>
+          <span class="text-[9px] font-mono text-[var(--muted-foreground)] whitespace-nowrap pb-1 hidden lg:inline">Baustein auf Matrix ziehen oder klicken</span>
         </div>
-        <div class="p-2 border-b border-[var(--border)] space-y-0.5 shrink-0">${tabsHtml}</div>
-        <div class="flex-1 overflow-y-auto p-2 space-y-1.5">${itemsHtml}</div>
-      </aside>`;
+        <div style="overflow-x:auto;" class="p-2.5 bg-[var(--page-bg)] flex items-stretch gap-2">${itemsHtml}</div>
+      </section>`;
   }
 
   function renderAll() {
@@ -891,9 +893,9 @@
           </div>
         </div>
         <div style="display:flex;flex-direction:row;flex:1;min-height:0;overflow:hidden;">
-          ${renderLeftPaletteHtml()}
           <div style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;">
             ${renderCanvasHtml()}
+            ${renderBottomPaletteHtml()}
           </div>
           ${renderInspectorHtml()}
         </div>
@@ -1510,17 +1512,17 @@
         : `<div class="flex-1 flex items-center justify-center text-xs text-[var(--muted-foreground)]">Bitte links ein Preset auswählen.</div>`;
 
       modal.innerHTML = `
-        <div class="w-full max-w-4xl h-[76vh] rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl flex flex-col overflow-hidden">
-          <div class="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+        <div style="width:min(920px,94vw);height:76vh;display:flex;flex-direction:column;overflow:hidden;" class="rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl">
+          <div style="flex-shrink:0;" class="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
             <div class="font-bold text-sm">📂 Workflow öffnen — Preset-Browser</div>
             <button type="button" id="ni-close-btn" class="px-2 py-1 rounded hover:bg-[var(--secondary)] text-xs">✕</button>
           </div>
-          <div class="flex-1 flex min-h-0 overflow-hidden">
-            <div class="w-72 border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--page-bg)]/50">
-              <div class="p-2 border-b border-[var(--border)]">
+          <div style="flex:1 1 auto;min-height:0;display:flex;overflow:hidden;">
+            <div style="width:280px;flex-shrink:0;display:flex;flex-direction:column;min-height:0;" class="border-r border-[var(--border)] bg-[var(--page-bg)]/50">
+              <div style="flex-shrink:0;" class="p-2 border-b border-[var(--border)]">
                 <input id="ni-search" value="${esc(search)}" placeholder="Preset suchen..." class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] text-xs" />
               </div>
-              <div class="flex-1 overflow-y-auto p-2 space-y-2">${treeHtml}</div>
+              <div style="flex:1 1 auto;min-height:0;overflow-y:auto;" class="p-2 space-y-2">${treeHtml}</div>
             </div>
             ${rightHtml}
           </div>
@@ -1707,15 +1709,15 @@
       const catLabel = (cid) => (PALETTE_CATEGORIES.find((c) => c.id === cid)?.label || cid);
 
       modal.innerHTML = `
-        <div class="w-full max-w-5xl h-[82vh] rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl flex flex-col overflow-hidden">
-          <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between gap-3">
+        <div style="width:min(1040px,94vw);height:82vh;display:flex;flex-direction:column;overflow:hidden;" class="rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl">
+          <div style="flex-shrink:0;" class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between gap-3">
             <div>
               <div class="font-bold text-sm">🧩 Baustein-Marktplatz — 3rd-Party & Media Plugins</div>
               <div class="text-[11px] text-[var(--muted-foreground)]">Installiere externe Audio-, Video-, Bild-, Dokument-, Scraping- & Publishing-Module direkt in deine Workflow-Palette.</div>
             </div>
             <button type="button" id="mkt-close" class="px-2.5 py-1 rounded hover:bg-[var(--secondary)] text-xs">✕</button>
           </div>
-          <div class="px-5 py-2.5 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2 bg-[var(--page-bg)]/40">
+          <div style="flex-shrink:0;" class="px-5 py-2.5 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2 bg-[var(--page-bg)]/40">
             <div class="flex flex-wrap gap-1">
               <button type="button" data-mkt-cat="all" class="px-2.5 py-1 rounded-lg text-xs font-semibold ${activeCat === "all" ? "bg-indigo-600 text-white" : "border border-[var(--border)] hover:bg-[var(--secondary)]"}">Alle (${_marketplaceItems.length})</button>
               ${PALETTE_CATEGORIES.filter((c) => c.id !== "standard")
@@ -1728,7 +1730,7 @@
             </div>
             <input id="mkt-search" value="${esc(search)}" placeholder="Plugin oder Anbieter suchen..." class="w-60 px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] text-xs" />
           </div>
-          <div class="flex-1 overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
+          <div style="flex:1 1 auto;min-height:0;overflow-y:auto;" class="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
             ${filtered
               .map(
                 (it) => `<div class="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--page-bg)]/60 flex flex-col justify-between gap-3">

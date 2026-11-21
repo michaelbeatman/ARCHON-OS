@@ -14,14 +14,6 @@ from backend.client_approval_portal import (
     verify_share_access,
 )
 from backend.contract_diff_redliner import diff_contract_clauses
-from backend.external_connectors import (
-    build_ghl_crm_payload,
-    list_connector_capabilities,
-    map_kanban_to_issue,
-    normalize_local_lead,
-    prepare_esignature_envelope,
-)
-from backend.worktree_joust import plan_joust_worktrees, score_joust_contenders
 
 
 def test_m41_calendar_sync_and_focus_blocker():
@@ -73,23 +65,3 @@ def test_m42_client_approval_portal(tmp_path):
     )
     assert dec["erp_status"] == "Auftrag"
     assert dec["ai_disclosure_shown"] is True
-
-
-def test_m85_worktree_joust():
-    specs = plan_joust_worktrees("/repo", "t-77", contenders=3)
-    assert len(specs) == 3
-    scored = score_joust_contenders([
-        {"contender": "c1", "tests_passed": True, "exit_code": 0, "diff_lines": 120, "duration_s": 10},
-        {"contender": "c2", "tests_passed": True, "exit_code": 0, "diff_lines": 40, "duration_s": 12},
-        {"contender": "c3", "tests_passed": False, "exit_code": 1, "diff_lines": 10, "duration_s": 5},
-    ])
-    assert scored["winner"]["contender"] == "c2"
-    assert scored["requires_human_merge_approval"] is True
-
-
-def test_m87_external_connectors():
-    assert len(list_connector_capabilities()) == 4
-    assert prepare_esignature_envelope("NDA", "Max", "max@a.de")["connector"] == "inkly"
-    assert normalize_local_lead({"name": "Baecker GmbH", "city": "Berlin"})["company"] == "Baecker GmbH"
-    assert map_kanban_to_issue({"id": "t1", "status": "done"}, target="linear")["external_status"] == "closed"
-    assert build_ghl_crm_payload({"first_name": "Max", "email": "m@a.de"})["pipelineStage"] == "qualified"

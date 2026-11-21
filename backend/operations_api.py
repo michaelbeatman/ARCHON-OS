@@ -62,8 +62,8 @@ def _get_active_kanban_db_path(company_id: Optional[str] = None) -> str:
         resolved = tenant_context.resolve_active_db("kanban.db", company_id)
         if resolved:
             return resolved
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] WARNUNG (MEDIUM) _get_active_kanban_db_path: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     return KANBAN_DB_PATH
 
 
@@ -76,9 +76,7 @@ def _get_kanban_connection(company_id: Optional[str] = None):
     conn.execute("PRAGMA busy_timeout=5000;")
     if (not _KANBAN_JOURNAL_INIT) or (target_db not in _KANBAN_JOURNAL_INIT_DBS):
         try:
-            if str(target_db).replace("\\", "/").startswith("/opt/data"):
-                conn.execute("PRAGMA journal_mode=DELETE;")
-            else:
+            if os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes"):
                 conn.execute("PRAGMA journal_mode=WAL;")
                 conn.execute("PRAGMA synchronous=NORMAL;")
             # Auto-Crash-Recovery (Pillar 2): Tasks die länger als 6 Stunden (21600s) in 'in_progress' hängen, auf 'todo' zurücksetzen
@@ -107,6 +105,8 @@ def _get_kanban_connection(company_id: Optional[str] = None):
                 CREATE TABLE IF NOT EXISTS task_links (
                     parent_id TEXT NOT NULL,
                     child_id TEXT NOT NULL,
+                    kind TEXT DEFAULT 'subtask',
+                    created_at TEXT,
                     PRIMARY KEY (parent_id, child_id)
                 );
                 CREATE TABLE IF NOT EXISTS task_events (
@@ -118,8 +118,15 @@ def _get_kanban_connection(company_id: Optional[str] = None):
                     created_at INTEGER NOT NULL
                 );
             """)
-        except Exception:
-            pass
+            # Schema-Migration fuer aeltere kanban.db-Instanzen ohne kind/created_at auf task_links
+            tl_cols = {r[1] for r in conn.execute("PRAGMA table_info(task_links)").fetchall()}
+            if "kind" not in tl_cols:
+                conn.execute("ALTER TABLE task_links ADD COLUMN kind TEXT DEFAULT 'subtask'")
+            if "created_at" not in tl_cols:
+                conn.execute("ALTER TABLE task_links ADD COLUMN created_at TEXT")
+            conn.commit()
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) _get_kanban_connection: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
         _KANBAN_JOURNAL_INIT = True
         _KANBAN_JOURNAL_INIT_DBS.add(target_db)
     conn.row_factory = sqlite3.Row
@@ -141,8 +148,8 @@ def _parse_kanban_ts(value) -> Optional[float]:
     s = str(value).strip()
     try:
         return float(s)
-    except (TypeError, ValueError):
-        pass
+    except (TypeError, ValueError) as exc:
+        print(f"[OperationsAPI] Fallback _parse_kanban_ts: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     try:
         if s.endswith("Z"):
             s = s[:-1] + "+00:00"
@@ -154,14 +161,14 @@ def _parse_kanban_ts(value) -> Optional[float]:
 def _sync_to_memory_bridge(task_id: str, title: Optional[str], assignee: Optional[str], status: str, result: Optional[str] = None):
     """Synchronisiert Kanban-Aufgaben mit der zentralen agentic_memory.db (tasks-Tabelle)."""
     try:
-        from local_memory_bridge import LocalMemoryBridge
+        from local_memory_bridge import memory_bridge
         obsidian_rel = None
         try:
             meta = _load_kanban_meta()
             obsidian_rel = ((meta.get("tasks") or {}).get(task_id) or {}).get("obsidian")
-        except Exception:
-            pass
-        LocalMemoryBridge().sync_task(
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) _sync_to_memory_bridge: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
+        memory_bridge.sync_task(
             task_id=task_id,
             title=title or task_id,
             role=assignee or "unassigned",
@@ -255,8 +262,8 @@ def _build_kanban_obsidian_map(conn: sqlite3.Connection, rows: list, meta: Dict)
         for child_id, parent_id in conn.execute("SELECT child_id, parent_id FROM task_links").fetchall():
             if child_id and parent_id and child_id != parent_id and child_id not in parent_by_child:
                 parent_by_child[child_id] = parent_id
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] WARNUNG (MEDIUM) _build_kanban_obsidian_map: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     # Einmalig Endprodukte/Zwischenberichte nach Task-IDs durchsuchen, falls noetig
     file_hits: Dict[str, str] = {}
@@ -269,8 +276,8 @@ def _build_kanban_obsidian_map(conn: sqlite3.Connection, rows: list, meta: Dict)
                     for f in s_dir.iterdir():
                         fname = f.name
                         file_hits[fname] = rel_p
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[OperationsAPI] Fallback _build_kanban_obsidian_map: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     proj_slug_parts = []
     for p_dir in proj_dirs:
@@ -556,8 +563,8 @@ def create_kanban_task(req: TaskCreateRequest):
                     "INSERT OR IGNORE INTO task_links (parent_id, child_id, kind, created_at) VALUES (?, ?, 'blocks', ?)",
                     (dep_id, task_id, now_iso)
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[OperationsAPI] WARNUNG (MEDIUM) create_kanban_task: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
         
         # Log event
         cursor.execute("""
@@ -614,8 +621,8 @@ def create_kanban_task(req: TaskCreateRequest):
             import main
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {"action": "created", "task_id": task_id, "status": target_status})
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) create_kanban_task: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         return {"status": "success", "task_id": task_id, "title": req.title, "assigned_to": target_assignee, "team": req.team_id}
     finally:
@@ -647,8 +654,8 @@ async def _execute_kanban_task_async(task_id: str):
             current_step=0,
             state_payload={"task_id": task_id, "status": t_dict.get("status")}
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     # Fall 1: Ist es ein DAG Epic?
     if t_dict["id"].startswith("dag-") and not any(t_dict["id"].endswith(f"-{s}") for s in ["1", "2", "3", "4", "syn"]):
@@ -712,8 +719,8 @@ async def _execute_kanban_task_async(task_id: str):
                         (task_id, json.dumps({"status": "in_progress", "agent": t_dict.get("assignee")}), now_start_iso))
         c_start.commit()
         c_start.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     from backend.agent_aliases import resolve_agent_id
     raw_assignee = (t_dict.get("assignee") or "").strip()
@@ -730,8 +737,8 @@ async def _execute_kanban_task_async(task_id: str):
             )
             c_asgn.commit()
             c_asgn.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     assignee = resolve_agent_id(raw_assignee)
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
@@ -772,8 +779,8 @@ async def _execute_kanban_task_async(task_id: str):
                     files = [f.name for f in end_dir.iterdir() if f.is_file() and not f.name.startswith(".")]
                     if files:
                         proj_context += "Bereits vorhandene Projektergebnisse in 03_Endprodukte:\n" + "\n".join(f"- {fn}" for fn in files[:12]) + "\n"
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         # M91: Praezedenzfall-Gedaechtnis (strikt pro Mandant/Projekt isoliert)
         precedent_block = ""
@@ -783,8 +790,8 @@ async def _execute_kanban_task_async(task_id: str):
             _project_id = str(t_dict.get("project_id") or "")
             _matched_precs = find_matching_precedents(_tenant_id, _project_id, f"{title} {body}")
             precedent_block = format_precedents_for_prompt(_matched_precs)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         task_prompt = f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: {title}\nAUFTRAG / DETAILS:\n{body}{proj_context}{precedent_block}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte."
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
@@ -799,9 +806,19 @@ async def _execute_kanban_task_async(task_id: str):
         )
         # M76: Verifizierte Kanban-Cards mit Token-Budget & Proof-Gate
         raw_reply = (res.get("content") or "").strip()
-        _token_used = int(res.get("total_tokens") or res.get("tokens_used") or 0)
-        _token_budget = int(t_dict.get("token_budget") or 0)
-        _proof_cmd = str(t_dict.get("proof_command") or "").strip()
+        _token_used = int(
+            res.get("total_tokens")
+            or res.get("tokens_used")
+            or ((res.get("input_tokens") or 0) + (res.get("output_tokens") or 0))
+            or 0
+        )
+        _sidecar_tmeta = {}
+        try:
+            _sidecar_tmeta = ((_load_kanban_meta().get("tasks") or {}).get(task_id) or {})
+        except Exception:
+            _sidecar_tmeta = {}
+        _token_budget = int(t_dict.get("token_budget") or _sidecar_tmeta.get("token_budget") or 0)
+        _proof_cmd = str(t_dict.get("proof_command") or _sidecar_tmeta.get("proof_command") or "").strip()
         _retry_cnt = int(t_dict.get("retry_count") or 0)
 
         from backend.kanban_verifier import verify_card_completion
@@ -825,7 +842,12 @@ async def _execute_kanban_task_async(task_id: str):
                 task_id=task_id,
             )
             raw_reply = (res.get("content") or "").strip()
-            _token_used += int(res.get("total_tokens") or res.get("tokens_used") or 0)
+            _token_used += int(
+                res.get("total_tokens")
+                or res.get("tokens_used")
+                or ((res.get("input_tokens") or 0) + (res.get("output_tokens") or 0))
+                or 0
+            )
             verdict = verify_card_completion(
                 task_id=task_id,
                 result_text=raw_reply,
@@ -894,8 +916,8 @@ async def _execute_kanban_task_async(task_id: str):
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": "in_progress", "to": target_status})
                 main.broadcast_event("ticker_update", {"agent": agent_name, "message": f"Aufgabe '{title[:30]}...' ({target_status}).", "time": datetime.datetime.now().strftime("%H:%M:%S")})
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
             
     except Exception as ex:
         print(f"[OperationsAPI] Execution failed for {task_id}: {ex}", file=sys.stderr)
@@ -911,14 +933,14 @@ async def _execute_kanban_task_async(task_id: str):
             import main
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": "in_progress", "to": "blocked"})
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     finally:
         try:
             from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
             graceful_shutdown_coordinator.unregister_task(task_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
 
 @router.patch("/kanban/tasks/{task_id}/status")
@@ -1001,8 +1023,8 @@ async def update_task_status(task_id: str, req: TaskStatusUpdateRequest):
             import main
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": old_status, "to": new_status})
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) update_task_status: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         return {"status": "success", "task_id": task_id, "old_status": old_status, "new_status": new_status}
     finally:
@@ -1022,8 +1044,9 @@ class KanbanBulkUndoRequest(BaseModel):
     undo_token: str
 
 @router.post("/kanban/bulk")
-def api_kanban_bulk_action(req: KanbanBulkActionRequest):
+def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
     """Führt eine Mehrfachaktion auf ausgewählten Kanban-Tasks aus mit 10-Minuten-Undo-Puffer (t-c2b384)."""
+    require_admin_or_503(request)
     task_ids = [tid.strip() for tid in req.task_ids if tid and tid.strip()]
     if not task_ids:
         raise HTTPException(status_code=400, detail="Keine Aufgaben übergeben.")
@@ -1138,8 +1161,8 @@ def api_kanban_bulk_action(req: KanbanBulkActionRequest):
                 agent_id="operator",
                 payload={"task_ids": task_ids, "action": action, "payload": req.payload, "affected_count": len(task_ids)}
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback api_kanban_bulk_action: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         # 3. Snapshot im Undo-Puffer speichern (10 Minuten TTL)
         _KANBAN_UNDO_STORE[undo_token] = {
@@ -1163,8 +1186,8 @@ def api_kanban_bulk_action(req: KanbanBulkActionRequest):
                     "count": len(task_ids),
                     "task_ids": task_ids
                 })
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback api_kanban_bulk_action: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         return {
             "status": "success",
@@ -1178,8 +1201,9 @@ def api_kanban_bulk_action(req: KanbanBulkActionRequest):
 
 
 @router.post("/kanban/bulk/undo")
-def api_kanban_bulk_undo(req: KanbanBulkUndoRequest):
+def api_kanban_bulk_undo(request: Request, req: KanbanBulkUndoRequest):
     """Macht eine Mehrfachaktion innerhalb des 10-Minuten-Zeitfensters rückgängig (t-c2b384)."""
+    require_admin_or_503(request)
     token = req.undo_token.strip()
     entry = _KANBAN_UNDO_STORE.get(token)
     if not entry:
@@ -1230,8 +1254,8 @@ def api_kanban_bulk_undo(req: KanbanBulkUndoRequest):
                 agent_id="operator",
                 payload={"undo_token": token, "restored_count": len(snapshot)}
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] FEHLER (HIGH_SECURITY) api_kanban_bulk_undo: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         # Broadcast
         try:
@@ -1241,8 +1265,8 @@ def api_kanban_bulk_undo(req: KanbanBulkUndoRequest):
                     "action": "bulk_undone",
                     "count": len(snapshot)
                 })
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback api_kanban_bulk_undo: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         return {
             "status": "success",
@@ -1314,8 +1338,8 @@ async def trigger_quality_review(task_id: str, req: QualityReviewRequest = Body(
             )
             c_asgn.commit()
             c_asgn.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) trigger_quality_review: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     assignee = resolve_agent_id(raw_assignee)
     result = t_dict.get("result") or ""
     now_iso = datetime.datetime.now().isoformat()
@@ -1467,8 +1491,8 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
                 "message": f"4-Augen-Review ({verdict.upper()}): {review_data.get('summary', '')[:40]}",
                 "time": datetime.datetime.now().strftime("%H:%M:%S")
             })
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] Fallback trigger_quality_review: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     return {
         "status": "success",
@@ -1478,8 +1502,9 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
 
 
 @router.post("/kanban/reset-zombies")
-def reset_zombie_kanban_tasks(payload: dict = Body(default={})):
+def reset_zombie_kanban_tasks(request: Request, payload: dict = Body(default={})):
     """Setzt hängengebliebene 'in_progress' Tasks (optional gefiltert nach assignee oder Alter) auf 'todo' zurück."""
+    require_admin_or_503(request)
     conn = _get_kanban_connection()
     try:
         assignee = (payload.get("assignee") or "").strip()
@@ -1514,8 +1539,8 @@ def reset_zombie_kanban_tasks(payload: dict = Body(default={})):
             import main
             if hasattr(main, "broadcast_event") and reset_ids:
                 main.broadcast_event("kanban_updated", {"action": "zombie_reset", "task_ids": reset_ids, "to": target_status})
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) reset_zombie_kanban_tasks: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         return {"status": "ok", "reset_count": len(reset_ids), "task_ids": reset_ids, "target_status": target_status}
     finally:
@@ -1563,8 +1588,8 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_h
             cand = (vault / "01_PROJEKTE" / sub).resolve()
             if str(cand).startswith(str(vault)) and cand.is_dir():
                 rel = f"01_PROJEKTE/{sub}"
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _resolve_task_obsidian_rel: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     # Fallback 1b: Falls Subtask, erbe Projekt vom Parent aus task_links
     if not rel:
@@ -1579,8 +1604,8 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_h
                 parent_rel = _resolve_task_obsidian_rel(parent_id, meta)
                 if parent_rel:
                     return parent_rel
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _resolve_task_obsidian_rel: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     # Fallback 2: Pruefe kanban.db nach project_id
     if not rel:
@@ -1596,8 +1621,8 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_h
                     if d.is_dir() and pid in d.name:
                         rel = f"01_PROJEKTE/{d.name}"
                         break
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _resolve_task_obsidian_rel: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     # Fallback 3: Pruefe ob Ordner mit task_id in 01_PROJEKTE existiert
     if not rel and (vault / "01_PROJEKTE").is_dir():
@@ -1606,8 +1631,8 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_h
                 if d.is_dir() and task_id in d.name:
                     rel = f"01_PROJEKTE/{d.name}"
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _resolve_task_obsidian_rel: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     # Fallback 4: Durchsuche 01_PROJEKTE nach Dateien mit task_id (in 03_Endprodukte oder 01_Zwischenberichte)
     if not rel and (vault / "01_PROJEKTE").is_dir():
@@ -1626,8 +1651,8 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_h
                         break
                 if rel:
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _resolve_task_obsidian_rel: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     # Fallback 5: Titel/Body Keyword-Match gegen Ordnernamen in 01_PROJEKTE
     if not rel and (vault / "01_PROJEKTE").is_dir():
@@ -1650,15 +1675,15 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_h
                         break
                 if rel:
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _resolve_task_obsidian_rel: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     # In-Memory Cache im uebergebenen meta-Dict aktualisieren (vermeidet N-fache Lookups)
     if rel and meta is not None:
         try:
             meta.setdefault("tasks", {}).setdefault(task_id, {})["obsidian"] = rel
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _resolve_task_obsidian_rel: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     # P-03: Nur bei explizitem auto_heal=True (z.B. Task-Mutation) Sidecar-fsync ausfuehren
     if rel and auto_heal:
@@ -1667,8 +1692,8 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_h
             def _heal(m):
                 m.setdefault("tasks", {}).setdefault(task_id, {})["obsidian"] = rel
             update_kanban_meta(_heal)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] WARNUNG (MEDIUM) _resolve_task_obsidian_rel: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
     return rel
 
@@ -1701,8 +1726,8 @@ def _get_agent_cadre_map():
                     "model": "",
                     "provider": "",
                 }
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _get_agent_cadre_map: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     try:
         from archon.core.profiles import api_get_hermes_profiles
         for p in api_get_hermes_profiles() or []:
@@ -1729,8 +1754,8 @@ def _get_agent_cadre_map():
                 entry["model"] = p["model"]
             if p.get("provider"):
                 entry["provider"] = p["provider"]
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] Fallback _get_agent_cadre_map: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     return mapping
 
 
@@ -1774,8 +1799,8 @@ def _get_session_usage_map():
                 }
         finally:
             conn.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] Fallback _get_session_usage_map: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     return usage
 
 
@@ -1811,8 +1836,8 @@ def get_projects_overview():
                     parsed_sk = json.loads(skills_raw)
                     if isinstance(parsed_sk, list):
                         tools_used = [str(x) for x in parsed_sk if x]
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[OperationsAPI] Fallback get_projects_overview: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
             tasks_by_project.setdefault(pid, []).append({
                 "id": tid,
                 "title": title,
@@ -1847,8 +1872,8 @@ def get_projects_overview():
                 try:
                     dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
                     ts = dt.timestamp()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[OperationsAPI] Fallback get_projects_overview: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
         if ts is None:
             ts = fallback_ts
         dt_obj = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
@@ -1886,8 +1911,8 @@ def get_projects_overview():
                                 status = "completed"
                             elif "plan" in st_val:
                                 status = "planned"
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[OperationsAPI] Fallback get_projects_overview: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
             end_dir = p_dir / "03_Endprodukte"
             if end_dir.is_dir():
@@ -2454,8 +2479,8 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
             if tb is not None and str(tb).strip() != "":
                 try:
                     tmeta["token_budget"] = int(tb)
-                except (TypeError, ValueError):
-                    pass
+                except (TypeError, ValueError) as exc:
+                    print(f"[OperationsAPI] FEHLER (HIGH_SECURITY) save_kanban_meta: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
             else:
                 tmeta.pop("token_budget", None)
         if "cost_limit_usd" in payload:
@@ -2463,8 +2488,8 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
             if cl is not None and str(cl).strip() != "":
                 try:
                     tmeta["cost_limit_usd"] = float(cl)
-                except (TypeError, ValueError):
-                    pass
+                except (TypeError, ValueError) as exc:
+                    print(f"[OperationsAPI] Fallback save_kanban_meta: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
             else:
                 tmeta.pop("cost_limit_usd", None)
         if "require_hitl" in payload:
@@ -2481,8 +2506,8 @@ def save_kanban_meta(payload: Dict[str, Any] = Body(...)):
         import main
         if hasattr(main, "broadcast_event"):
             main.broadcast_event("kanban_updated", {"action": "meta_update", "task_id": task_id})
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] WARNUNG (MEDIUM) save_kanban_meta: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     return {"status": "ok", "task": saved}
 
 
@@ -2704,8 +2729,9 @@ router.include_router(_sysops_router)
 
 
 @router.post("/esign/submissions")
-def api_esign_create_submission(req: Dict[str, Any] = Body(...)):
+def api_esign_create_submission(request: Request, req: Dict[str, Any] = Body(...)):
     """Erstellt eine neue digitale Signaturanfrage via DocuSeal."""
+    require_admin_or_503(request)
     title = req.get("title", "").strip()
     signer_email = req.get("signer_email", "").strip()
     signer_name = req.get("signer_name", "").strip()

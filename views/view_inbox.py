@@ -35,6 +35,7 @@ views/view_inbox.py - Operatives Modul "Eingang (Triage & Streams)" für Archon 
 
 import html
 import os
+import sys
 import json
 import datetime
 from pathlib import Path
@@ -148,8 +149,8 @@ def load_internal_events() -> List[Dict[str, Any]]:
                             events.append(parsed)
                         except Exception:
                             continue
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[Inbox] Interne Events-Datei nicht lesbar, übersprungen: {exc}", file=sys.stderr)
 
     # 2. Watchdog Alarme einbinden
     alarm_files = [
@@ -177,8 +178,8 @@ def load_internal_events() -> List[Dict[str, Any]]:
                             "source": "internal",
                             "path": "watchdog://alarm"
                         })
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[Inbox] Watchdog-Alarme-Datei nicht lesbar: {exc}", file=sys.stderr)
 
     # 3. Reale SQLite Approvals & Tasks einbinden
     db_candidates = [
@@ -235,8 +236,8 @@ def load_internal_events() -> List[Dict[str, Any]]:
                         "path": f"paperclip://task/{t_id}"
                     })
                 break
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[Inbox] Paperclip-Tasks-Abfrage fehlgeschlagen: {exc}", file=sys.stderr)
 
     if not events:
         events = [
@@ -314,8 +315,8 @@ def load_email_messages() -> List[Dict[str, Any]]:
                     scan_res = scan_prompt_injection(body, subject=subject, sender=sender)
                     sec_status = scan_res.get("verdict", "safe")
                     sec_flags = scan_res.get("pattern_matches", [])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[Inbox] Security-Scan (E-Mail) fehlgeschlagen, Fallback 'safe': {exc}", file=sys.stderr)
 
                 mtime_val = float(data.get("mtime") or mtime)
                 html_val = data.get("html") or ""
@@ -377,8 +378,8 @@ def load_email_messages() -> List[Dict[str, Any]]:
                     scan_res = scan_prompt_injection(body, subject=subject, sender=sender)
                     sec_status = scan_res.get("verdict", "safe")
                     sec_flags = scan_res.get("pattern_matches", [])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[Inbox] Security-Scan (E-Mail) fehlgeschlagen, Fallback 'safe': {exc}", file=sys.stderr)
 
                 emails.append({
                     "id": f"mail_{file_path.name}",
@@ -497,8 +498,8 @@ def load_telegram_messages() -> List[Dict[str, Any]]:
                         scan_res = scan_prompt_injection(content_str, subject="Telegram", sender=sender)
                         sec_status = scan_res.get("verdict", "safe")
                         sec_flags = scan_res.get("pattern_matches", [])
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        print(f"[Inbox] Security-Scan (Telegram/DB) fehlgeschlagen, Fallback 'safe': {exc}", file=sys.stderr)
 
                     messages.append({
                         "id": f"tg_db_{r['id']}",
@@ -520,7 +521,7 @@ def load_telegram_messages() -> List[Dict[str, Any]]:
                 conn.close()
                 break
             except Exception as e:
-                pass
+                print(f"[Inbox] Telegram-DB-Abfrage fehlgeschlagen, übersprungen: {e}", file=sys.stderr)
 
     # 2. Ergänzend physische Dateien aus get_telegram_inbox_dir() einlesen
     tg_dir = get_telegram_inbox_dir()
@@ -574,8 +575,8 @@ def load_telegram_messages() -> List[Dict[str, Any]]:
                         scan_res = scan_prompt_injection(text, subject="Telegram", sender=sender)
                         sec_status = scan_res.get("verdict", "safe")
                         sec_flags = scan_res.get("pattern_matches", [])
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        print(f"[Inbox] Security-Scan (Telegram/Datei) fehlgeschlagen, Fallback 'safe': {exc}", file=sys.stderr)
 
                     mtime_val = float(data.get("mtime") or mtime)
 
@@ -635,8 +636,8 @@ def load_telegram_messages() -> List[Dict[str, Any]]:
                         scan_res = scan_prompt_injection(text, subject="Telegram", sender=sender)
                         sec_status = scan_res.get("verdict", "safe")
                         sec_flags = scan_res.get("pattern_matches", [])
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        print(f"[Inbox] Security-Scan (Telegram/Datei) fehlgeschlagen, Fallback 'safe': {exc}", file=sys.stderr)
 
                     messages.append({
                         "id": f"tg_{file_path.name}",

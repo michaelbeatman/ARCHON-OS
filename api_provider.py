@@ -216,8 +216,8 @@ def _list_provider_models_uncached(norm_pid: str) -> List[str]:
                             auto_routers = [m for m in clean_models if m.startswith("auto/") or m.startswith("omniroute/")]
                             other_models = [m for m in clean_models if not (m.startswith("auto/") or m.startswith("omniroute/"))]
                             return auto_routers + sorted(other_models)
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[APIProvider] Modell-Listen-Provider nicht erreichbar, nutze Fallback-Liste: {exc}", file=sys.stderr)
         return [
             "auto/best-coding", "auto/best-reasoning", "auto/best-vision", "auto/best-fast", "auto/best-chat",
             "deepseek-ai/DeepSeek-V4-Pro", "qwen/Qwen3.6-27B", "google/gemma-4-31B-it",
@@ -333,8 +333,8 @@ def read_active_config() -> Dict[str, Any]:
                     info[topkey] = parsed.get(topkey)
             if info.get("model"):
                 return info
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[APIProvider] Konfig-Parse fehlgeschlagen, nutze Regex-Fallback: {exc}", file=sys.stderr)
 
     # 2. Indent-sicherer Regex-Fallback (stoppt beim nächsten Top-Level-Key ohne Einrückung)
     m = re.search(r"^model:\s*$", content, re.MULTILINE)
@@ -623,8 +623,8 @@ def dedupe_env_file(path: str) -> int:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(out) + ("\n" if out else ""))
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[APIProvider] Konnte bereinigte Env-Datei nicht schreiben ({path}): {exc}", file=sys.stderr)
     return removed
 
 
@@ -643,8 +643,8 @@ def _read_flat_env(path: str) -> Dict[str, str]:
                 k = k.strip()
                 if k and k not in d:
                     d[k] = v.strip().strip('"').strip("'")
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[APIProvider] Flat-Env konnte nicht gelesen werden ({path}): {exc}", file=sys.stderr)
     return d
 
 
@@ -802,8 +802,8 @@ def list_real_hermes_profiles(profiles_dir: Optional[str] = None) -> List[Dict[s
                             k, v = m.group(1), m.group(2).strip().strip('"').strip("'")
                             if k in meta and v:
                                 meta[k] = v
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[APIProvider] profile.yaml konnte nicht gelesen werden ({py}): {exc}", file=sys.stderr)
         # Skills (echte Ordner, ohne "."-Dateien)
         sk = []
         skills_dir = os.path.join(dpath, "skills")
@@ -823,8 +823,8 @@ def list_real_hermes_profiles(profiles_dir: Optional[str] = None) -> List[Dict[s
                         _m = re.match(r'^description_long\s*:\s*(.*)$', _l.strip())
                         if _m:
                             _dl = _m.group(1).strip().strip('"').strip("'")
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[APIProvider] description_long konnte nicht gelesen werden ({_ppy}): {exc}", file=sys.stderr)
         pid = entry  # Ordnername ist der echte Profil-Ident (role_id kann kollidieren)
         out.append({
             "id": pid,

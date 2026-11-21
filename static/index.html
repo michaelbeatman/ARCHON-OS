@@ -1184,6 +1184,9 @@
           <!-- SUB-VIEW: WORKFLOWS (VISUELLER DAG-EDITOR) -->
           <div id="ops-view-workflows" class="hidden relative flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs"></div>
 
+          <!-- SUB-VIEW: KALENDER (FULLCALENDAR EINGEBETTET) -->
+          <div id="ops-view-calendar" class="hidden relative flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs"></div>
+
           <!-- SUB-VIEW 5: N8N WORKFLOW ENGINE (AUTOMATION) -->
           <div id="ops-view-automation" class="hidden relative flex-1 flex flex-col min-h-0 w-full h-full overflow-hidden rounded-2xl border-0 bg-[var(--card)] shadow-xs">
             <div id="n8n-loading-overlay" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--card)]/95 text-[var(--foreground)] p-6">
@@ -2139,19 +2142,19 @@ print('Ausführung erfolgreich!')</textarea>
   </script>
   <script src="/static/js/mission_control_cockpit.js?v=2026111113"></script>
   <script src="/static/js/research_lab.js?v=2026111113"></script>
-  <script src="/static/js/operations_kanban.js?v=2026112040"></script>
+  <script src="/static/js/operations_kanban.js?v=2026112101"></script>
   <script src="/static/js/kanban_gantt_graph.js?v=2026112032"></script>
   <script src="/static/js/passkey_hitl.js?v=2026112035"></script>
   <script src="/static/js/sidebar_v2.js?v=2026111901"></script>
   <script src="/static/js/enterprise_calendar_ui.js?v=2026111901"></script>
-  <script src="/static/js/v2_capabilities_panel.js?v=2026111901"></script>
+  <script src="/static/js/v2_capabilities_panel.js?v=2026112110"></script>
   <script src="/static/js/global_header_sync.js?v=2026112019"></script>
   <script src="/static/js/operations_projects.js?v=2026112012"></script>
   <script src="/static/js/appshell_architect.js?v=2026111113"></script>
   <script src="/static/js/css_live_studio.js?v=2026112016"></script>
   <script src="/static/js/guardian.js?v=2026111113"></script>
   <script src="/static/js/finance_controller.js?v=2026112047"></script>
-  <script src="/static/js/treasury_studio.js?v=2026112047" defer></script>
+  <script src="/static/js/treasury_studio.js?v=2026112050" defer></script>
   <script src="/static/js/approval_policies_controller.js?v=2026112010"></script>
   <script src="/static/js/prompt_studio.js?v=2026111113"></script>
   <script src="/static/js/wissensbibliothek.js?v=2026111113"></script>
@@ -2721,7 +2724,7 @@ print('Ausführung erfolgreich!')</textarea>
         ['library', '/static/views/library_view.html?v=2026111113', 'view-library-mount', null],
         ['inbox', '/static/views/inbox_view.html?v=2026112019', 'view-inbox-mount', null],
         ['showroom', '/static/views/view_showroom.html?v=2026112019', 'view-showroom-mount', null],
-        ['log-stream', '/static/views/log_stream_view.html?v=2026112043', 'view-log-stream-mount', null],
+        ['log-stream', '/static/views/log_stream_view.html?v=2026112110', 'view-log-stream-mount', null],
         ['guardian', '/static/views/view_guardian.html?v=2026111113', 'view-guardian-mount', null],
         ['plugins', '/static/views/view_plugins.html?v=2026112010', 'view-plugins-mount', () => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (typeof loadPluginSettingsRegistry === 'function') loadPluginSettingsRegistry(); if (typeof loadSystemSettings === 'function') loadSystemSettings(); }],
         ['research', '/static/views/view_research.html?v=2026111113', 'view-research-mount', null],
@@ -2872,7 +2875,7 @@ print('Ausführung erfolgreich!')</textarea>
     const CACHE_TTL_MS = 30000; // 30 Sek
     function shouldFetchTab(tId) { const now = Date.now(); if (!_tabCacheTimestamps[tId] || (now - _tabCacheTimestamps[tId] > CACHE_TTL_MS)) { _tabCacheTimestamps[tId] = now; return true; } return false; }
     // Operations-Subnavigation fallback (nur wenn operations_kanban.js nicht geladen wurde)
-    const OPS_TABS = ["projects", "chat", "kanban", "org", "workflows", "automation", "comm"];
+    const OPS_TABS = ["projects", "chat", "kanban", "org", "workflows", "automation", "calendar", "comm"];
     if (typeof window.setOperationsTab !== "function") {
       window.setOperationsTab = function setOperationsTabFallback(tab) {
         if (typeof window._opsKanbanSetTab === "function") {
@@ -13704,8 +13707,8 @@ ${logExcerpt}
   <script src="/static/js/onboarding_wizard.js?v=2026111903" defer></script>
   <script src="/static/js/tenant_switcher.js?v=20261116b" defer></script>
   <script src="/static/js/playbooks_studio.js?v=2026112036" defer></script>
-  <script src="/static/js/workflow_templates_studio.js?v=2026112046" defer></script>
-  <script src="/static/js/operations_calendar.js?v=2026112045" defer></script>
+  <script src="/static/js/workflow_templates_studio.js?v=2026112110" defer></script>
+  <script src="/static/js/operations_calendar.js?v=2026112109" defer></script>
   <script src="/static/js/eu_ai_act_studio.js" defer></script>
   <script src="/static/js/archon_version_badge.js?v=20261117" defer></script>
   <!-- MODAL: MIXTURE OF AGENTS (MoA) KONFIGURATION -->

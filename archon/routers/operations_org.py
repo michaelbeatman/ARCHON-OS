@@ -181,8 +181,8 @@ def get_org_chart():
             if row["assignee"]:
                 task_counts[row["assignee"]] = row["cnt"]
         conn.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] Task-Counts konnten nicht geladen werden (Kanban-DB): {exc}", file=sys.stderr)
 
     def _enrich(agent_id: str, is_lead: bool = False):
         p = profiles.get(agent_id, {})
@@ -299,8 +299,8 @@ def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] =
         payload_data = {}
         try:
             payload_data = json.loads(row["payload"])
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Ungueltiges Event-Payload uebersprungen: {exc}", file=sys.stderr)
 
         kind = row.get("kind") or "comment"
         author_id = payload_data.get("author") or payload_data.get("agent") or "system"
@@ -421,8 +421,8 @@ def _poll_comm_feed_sync(
             payload_data = {}
             try:
                 payload_data = json.loads(row["payload"])
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[OperationsAPI] Ungueltiges Event-Payload uebersprungen: {exc}", file=sys.stderr)
             kind = row.get("kind") or "event"
             author_id = payload_data.get("author") or "commander"
             prof = profiles.get(author_id, {})
@@ -477,8 +477,8 @@ async def stream_comm_feed(request: Request):
                     if idle_ticks >= 10:
                         idle_ticks = 0
                         yield ": keepalive\n\n"
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[OperationsAPI] SSE-Poll-Fehler im Event-Stream: {exc}", file=sys.stderr)
 
             await asyncio.sleep(1.5)
 
@@ -517,8 +517,8 @@ def _generate_default_hierarchy():
             if row["assignee"]:
                 task_counts[row["assignee"]] = row["cnt"]
         conn.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[OperationsAPI] Task-Counts konnten nicht geladen werden (Kanban-DB): {exc}", file=sys.stderr)
 
     def _make_node(agent_id: str, x: int, y: int, tier: int = 3, team_id: str = "team_strategy"):
         p = profiles.get(agent_id, {})
@@ -679,8 +679,8 @@ def reset_org_hierarchy(request: Request):
     if os.path.exists(org_file):
         try:
             os.remove(org_file)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[OperationsAPI] Hierarchie-Datei konnte nicht entfernt werden: {exc}", file=sys.stderr)
     return {"status": "success", "message": "Auf Standard-Teams zurückgesetzt.", "data": _generate_default_hierarchy()}
 
 

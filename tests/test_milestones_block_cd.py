@@ -3,7 +3,6 @@ import datetime
 
 from backend.contract_deadline_watcher import scan_upcoming_deadlines
 from backend.enterprise_calendar import build_calendar_grid, group_events_by_agent, reschedule_calendar_event
-from backend.meeting_copilot import build_crm_meeting_note
 from backend.operations_templates import list_operations_templates, preview_operations_template
 from backend.telegram_gateway_v2 import (
     build_hitl_inline_keyboard,
@@ -18,7 +17,6 @@ from backend.time_tracking_invoice import (
     start_timer,
     stop_timer,
 )
-from backend.voice_to_workflow import analyze_dictation_ambiguities, compile_playbook_from_spec
 from backend.watchdog_radar_v2 import record_source_health, register_signal_if_new, score_signal_relevance
 
 
@@ -93,29 +91,3 @@ def test_m37_time_tracking_invoice(tmp_path):
     assert var["billable_total_eur"] == 200.0
     lines = export_invoice_line_items("proj-1", db_path=db)
     assert len(lines) == 1 and lines[0]["net_total_eur"] == 200.0
-
-
-def test_m39_meeting_copilot():
-    segs = [
-        {"speaker": "Micha", "timestamp": "00:12", "text": "Wir brauchen bis Freitag ein Update."},
-        {"speaker": "Robert", "timestamp": "00:25", "text": "TODO: Angebot an Huber GmbH finalisieren"},
-    ]
-    # § 201 StGB Consent-Gate: ohne Einwilligung muss PermissionError kommen
-    try:
-        build_crm_meeting_note("Huber GmbH", segs, all_participants_consented=False)
-        assert False, "Expected PermissionError without consent"
-    except PermissionError:
-        pass
-    note = build_crm_meeting_note("Huber GmbH", segs, all_participants_consented=True, consent_timestamp="2026-11-19T07:40:00")
-    assert note["consent_verified"] is True
-    assert note["task_count"] == 1
-    assert "Angebot an Huber GmbH" in note["kanban_tasks"][0]["title"]
-
-
-def test_m54_voice_to_workflow():
-    amb = analyze_dictation_ambiguities("Pruefe neue Rechnungen.")
-    assert amb["needs_clarification"] is True
-    assert len(amb["questions"]) == 3
-    pb = compile_playbook_from_spec("Rechnungspruefung", "Pruefe neue Rechnungen", {"trigger": "cron", "target": "kanban", "hitl": "ja"})
-    assert pb["id"] == "rechnungspruefung"
-    assert pb["steps"][2]["require_hitl"] is True

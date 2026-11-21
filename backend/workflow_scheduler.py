@@ -78,6 +78,27 @@ def init_schedules_db() -> None:
         conn.close()
 
 
+def _init_policies_table() -> None:
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_bus_policies (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                target TEXT NOT NULL,
+                policy TEXT NOT NULL DEFAULT 'allow',
+                max_per_min INTEGER NOT NULL DEFAULT 20,
+                note TEXT DEFAULT '',
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _expand_cron_field(expr: str, min_v: int, max_v: int) -> Set[int]:
     out: Set[int] = set()
     for part in str(expr or "*").split(","):
@@ -419,9 +440,9 @@ def _execute_schedule_row(conn: sqlite3.Connection, row: sqlite3.Row, now: datet
 
     merged_inputs = {**(sched.get("inputs") or {}), **(extra_inputs or {})}
     try:
-        from backend.workflow_templates import materialize_workflow_to_kanban
+        from backend.workflow_templates import launch_workflow_run
 
-        res = materialize_workflow_to_kanban(
+        res = launch_workflow_run(
             tpl_id=tpl_id,
             inputs=merged_inputs,
             cron_schedule=sched.get("cron_expr") or None,
@@ -555,6 +576,7 @@ def dispatch_workflow_event(
 ) -> Dict[str, Any]:
     """Zentraler Event-Bus für Watchdog, Posteingang, Research Lab und AI Boardroom."""
     init_schedules_db()
+    _init_policies_table()
     now = datetime.now(timezone.utc)
     event_id = f"evt-{uuid.uuid4().hex[:10]}"
     src = str(source or "manual").strip().lower()
@@ -588,6 +610,26 @@ def dispatch_workflow_event(
                 conn.commit()
                 return {"event_id": event_id, "status": "skipped_loop", "triggered": []}
 
+        # Rate-Limit / Circuit-Breaker pro Quelle
+        one_min_ago = (now - timedelta(minutes=1)).isoformat()
+        recent_cnt = conn.execute(
+            "SELECT COUNT(*) FROM workflow_events WHERE source = ? AND created_at >= ?",
+            (src, one_min_ago),
+        ).fetchone()[0]
+        pol_rows = conn.execute("SELECT * FROM event_bus_policies WHERE source = ?", (src,)).fetchall()
+        pol_map = {r["target"]: dict(r) for r in pol_rows}
+        max_pm = min([int(r["max_per_min"] or 20) for r in pol_rows] or [20])
+        if recent_cnt >= max_pm:
+            conn.execute(
+                """
+                INSERT INTO workflow_events (id, source, event_type, title, summary, payload_json, correlation_id, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'rate_limited', ?)
+                """,
+                (event_id, src, event_type, title, summary, json.dumps(payload_dict, ensure_ascii=False), corr, now.isoformat()),
+            )
+            conn.commit()
+            return {"event_id": event_id, "status": "rate_limited", "triggered": []}
+
         placeholders = ",".join("?" for _ in source_triggers)
         rows = conn.execute(
             f"SELECT * FROM workflow_schedules WHERE enabled = 1 AND trigger_type IN ({placeholders})",
@@ -597,11 +639,17 @@ def dispatch_workflow_event(
         haystack = f"{title} {summary} {json.dumps(payload_dict, ensure_ascii=False)}".lower()
         matched_ids: List[str] = []
         triggered_runs: List[Dict[str, Any]] = []
+        blocked_by_policy = False
 
         for row in rows:
             kw_raw = (row["watchdog_keyword"] or "").strip()
             keywords = [k.strip().lower() for k in kw_raw.split(",") if k.strip()]
             if keywords and not any(k in haystack for k in keywords):
+                continue
+            target_dom = _infer_target_domain(row["template_id"])
+            rule = pol_map.get(target_dom) or pol_map.get("all") or _default_policy_for(src, target_dom)
+            if rule["policy"] == "deny":
+                blocked_by_policy = True
                 continue
             matched_ids.append(row["id"])
             extra = {
@@ -609,6 +657,7 @@ def dispatch_workflow_event(
                 "event_source": src,
                 "event_type": event_type,
                 "event_summary": str(summary or "")[:800],
+                "policy_mode": rule["policy"],
             }
             for k, v in payload_dict.items():
                 if isinstance(v, (str, int, float)):
@@ -617,7 +666,7 @@ def dispatch_workflow_event(
             if res:
                 triggered_runs.append(res)
 
-        status = "triggered" if triggered_runs else ("matched_skipped" if matched_ids else "no_match")
+        status = "triggered" if triggered_runs else ("blocked_policy" if blocked_by_policy else ("matched_skipped" if matched_ids else "no_match"))
         conn.execute(
             """
             INSERT INTO workflow_events (
@@ -688,6 +737,96 @@ def dispatch_watchdog_triggers(findings: List[Dict[str, Any]]) -> List[Dict[str,
         )
         triggered.extend(ev_res.get("triggered") or [])
     return triggered
+
+
+EVENT_BUS_SOURCES = ["watchdog", "inbox", "calendar", "research", "boardroom", "approval", "manual"]
+EVENT_BUS_TARGETS = ["workflow", "treasury", "comms", "system"]
+
+
+def _infer_target_domain(template_id: str) -> str:
+    low = (template_id or "").lower()
+    if any(k in low for k in ("invoice", "cost", "dunning", "pay", "dropshipping_order", "tax", "treasury")):
+        return "treasury"
+    if any(k in low for k in ("email", "outreach", "newsletter", "social", "influencer", "followup")):
+        return "comms"
+    if any(k in low for k in ("code_review", "compliance", "release", "security")):
+        return "system"
+    return "workflow"
+
+
+def _default_policy_for(source: str, target: str) -> Dict[str, Any]:
+    if source == "watchdog" and target in ("treasury", "system"):
+        return {"source": source, "target": target, "policy": "deny", "max_per_min": 20, "note": "Standard-Schutz: Watchdog darf keine Finanzen/Systeme triggern"}
+    if source in ("inbox", "calendar") and target == "treasury":
+        return {"source": source, "target": target, "policy": "require_hitl", "max_per_min": 20, "note": "Standard-Schutz: Zahlungen erfordern HITL-Freigabe"}
+    return {"source": source, "target": target, "policy": "allow", "max_per_min": 20, "note": ""}
+
+
+def list_event_policies() -> List[Dict[str, Any]]:
+    init_schedules_db()
+    _init_policies_table()
+    conn = _get_conn()
+    try:
+        rows = conn.execute("SELECT * FROM event_bus_policies").fetchall()
+        saved = {(r["source"], r["target"]): dict(r) for r in rows}
+        out: List[Dict[str, Any]] = []
+        for src in EVENT_BUS_SOURCES:
+            for tgt in EVENT_BUS_TARGETS:
+                out.append(saved.get((src, tgt)) or _default_policy_for(src, tgt))
+        return out
+    finally:
+        conn.close()
+
+
+def upsert_event_policy(source: str, target: str, policy: str, max_per_min: int = 20, note: str = "") -> Dict[str, Any]:
+    init_schedules_db()
+    _init_policies_table()
+    src = str(source or "").strip().lower()
+    tgt = str(target or "").strip().lower()
+    pol = str(policy or "allow").strip().lower()
+    if pol not in {"allow", "require_hitl", "deny"}:
+        pol = "allow"
+    pid = f"{src}__{tgt}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO event_bus_policies (id, source, target, policy, max_per_min, note, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                policy=excluded.policy,
+                max_per_min=excluded.max_per_min,
+                note=excluded.note,
+                updated_at=excluded.updated_at
+            """,
+            (pid, src, tgt, pol, max(1, int(max_per_min or 20)), str(note or "").strip(), now_iso),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM event_bus_policies WHERE id = ?", (pid,)).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+def replay_workflow_event(event_id: str) -> Dict[str, Any]:
+    init_schedules_db()
+    conn = _get_conn()
+    try:
+        row = conn.execute("SELECT * FROM workflow_events WHERE id = ?", (event_id,)).fetchone()
+        if not row:
+            raise KeyError("event_not_found")
+        payload = json.loads(row["payload_json"] or "{}")
+    finally:
+        conn.close()
+    return dispatch_workflow_event(
+        source=row["source"],
+        event_type=f"{row['event_type']}_replay",
+        title=row["title"],
+        summary=row["summary"],
+        payload=payload,
+        correlation_id=None,
+    )
 
 
 async def workflow_scheduler_background_loop() -> None:

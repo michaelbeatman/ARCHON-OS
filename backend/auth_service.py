@@ -53,8 +53,8 @@ def _get_db() -> sqlite3.Connection:
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA busy_timeout=10000;")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"SQLite-PRAGMA-Init fehlgeschlagen, Standard-Verhalten bleibt aktiv: {exc}")
     return conn
 
 
@@ -169,8 +169,8 @@ class AuthService:
             """)
             try:
                 conn.execute("ALTER TABLE user_sessions ADD COLUMN last_seen_at TEXT DEFAULT ''")
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as exc:
+                logger.warning(f"Migration last_seen_at uebersprungen (vermutlich bereits vorhanden): {exc}")
             conn.commit()
 
     def _seed_default_admin(self):
@@ -343,14 +343,14 @@ class AuthService:
                         cur.execute("DELETE FROM user_sessions WHERE token = ?", (row["stored_token"],))
                         conn.commit()
                         return None
-                except ValueError:
-                    pass
+                except ValueError as exc:
+                    logger.error(f"verify_session: ungueltiges last_seen_at-Format, Session bleibt aktiv: {exc}")
 
             try:
                 cur.execute("UPDATE user_sessions SET last_seen_at = ? WHERE token = ?", (now, row["stored_token"]))
                 conn.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.error(f"verify_session: last_seen_at-Update fehlgeschlagen (Session-Verlauf wird nicht verlaengert): {exc}")
 
             return {
                 "id": row["id"],

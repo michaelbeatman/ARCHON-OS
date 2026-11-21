@@ -80,8 +80,8 @@ class AgentScorecardEngine:
                     diff_m = (t_comp - t_start).total_seconds() / 60.0
                     if 0 < diff_m < 10080:  # Plausibel: bis zu 7 Tage
                         durations.append(diff_m)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[ScorecardEngine] Task-Zeitraum nicht parsebar: {exc}")
 
         avg_duration_minutes = round(sum(durations) / len(durations), 1) if durations else 0.0
 
@@ -137,8 +137,8 @@ class AgentScorecardEngine:
                 feedback_total = len(fb_rows)
                 if feedback_total > 0:
                     feedback_positive = sum(1 for r in fb_rows if r["score"] > 0)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[ScorecardEngine] Feedback-Statistiken nicht ladbar: {exc}")
 
         feedback_rate = round((feedback_positive / feedback_total) * 100.0, 1) if feedback_total > 0 else 98.5
 
@@ -157,8 +157,8 @@ class AgentScorecardEngine:
                     SELECT count(*) FROM learnings WHERE agent_id = ? OR category LIKE ? OR summary LIKE ?
                 """, (agent_id, f"%{agent_id}%", f"%{agent_id}%")).fetchone()
                 learnings_count = l_row[0] if l_row else 0
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[ScorecardEngine] Learnings-Count nicht ladbar: {exc}")
 
         # 6. Operator Notizen abrufen
         operator_notes = self.get_operator_notes(agent_id)
@@ -202,8 +202,8 @@ class AgentScorecardEngine:
                 row = conn.execute("SELECT value FROM kv_store WHERE key = ?", (f"operator_notes_{agent_id}",)).fetchone()
                 if row and row["value"]:
                     return row["value"]
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[ScorecardEngine] Operator-Notes nicht aus kv_store ladbar: {exc}")
 
         # Fallback: Aus Obsidian-Datei parsen
         for vdir in OBSIDIAN_VAULT_DIRS:
@@ -215,8 +215,8 @@ class AgentScorecardEngine:
                         if "## Operator-Beurteilung" in text:
                             parts = text.split("## Operator-Beurteilung")[1].split("##")[0]
                             return parts.strip().lstrip("& Arbeitsanweisungen").strip()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[ScorecardEngine] Obsidian-Fallback '{file_path}' nicht lesbar: {exc}")
 
         return ""
 

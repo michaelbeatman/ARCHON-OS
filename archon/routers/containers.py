@@ -90,8 +90,8 @@ def get_container_settings(container_name: str):
                         if isinstance(configs, list):
                             configs = {item.get("id"): item for item in configs if isinstance(item, dict)}
                         break
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"[Containers] Kupplungs-Config nicht lesbar ({cpath}): {exc}")
     if not isinstance(configs, dict):
         configs = {}
     cfg = configs.get(container_name, {})
@@ -191,8 +191,8 @@ def get_all_container_logs_api(tail: int = 40):
                 for line in parsed.splitlines():
                     if line.strip() and not any(p in line for p in ignore_patterns):
                         out.append(f"[{container_name}] {line}")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[Containers] Log-Abruf fuer '{container_name}' fehlgeschlagen: {exc}")
         return out
 
     combined_logs: List[str] = []
@@ -221,8 +221,8 @@ def get_hermes_profile_logs_api(request: Request, profile_id: str, tail: int = 1
                 try:
                     for l in _read_file_tail(lp, max_lines=tail):
                         lines.append(f"[{log_file}] {l}")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"[Containers] Profil-Log '{log_file}' nicht lesbar: {exc}")
 
     # 2. Check main logs matching profile ID (zeilenweises Streaming mit begrenztem Puffer)
     for log_name in ["agent.log", "errors.log", "gateway.log", "hermes-update.log"]:
@@ -235,8 +235,8 @@ def get_hermes_profile_logs_api(request: Request, profile_id: str, tail: int = 1
                         if profile_id in l:
                             matched.append(f"[{log_name}] {l.strip()}")
                 lines.extend(matched)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"[Containers] Haupt-Log '{log_name}' nicht lesbar: {exc}")
 
     # 3. Fallback: query hermes container logs for mention of profile
     if not lines:
@@ -250,8 +250,8 @@ def get_hermes_profile_logs_api(request: Request, profile_id: str, tail: int = 1
                             lines.append(f"[{c_name}] {l}")
                     if lines:
                         break
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"[Containers] Container-Log-Fallback '{c_name}' fehlgeschlagen: {exc}")
 
     if not lines:
         lines = [f"[System] Profil '{profile_id}' ist aktiv und bereit. Noch keine isolierten Hintergrund-Logs oder Fehler protokolliert."]

@@ -54,8 +54,8 @@ def get_email_storage_dirs() -> List[Path]:
         try:
             d.mkdir(parents=True, exist_ok=True)
             dirs.append(d)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Inbox-Verzeichnis {d} nicht erstellbar, übersprungen: {exc}")
     return dirs if dirs else [Path("./data/inbox/emails")]
 
 
@@ -140,8 +140,8 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                     if parsed_dt:
                         parsed_ts = parsed_dt.timestamp()
                         formatted_date = parsed_dt.strftime("%Y-%m-%d %H:%M")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"IMAP-Date-Parsing fehlgeschlagen, Rohwert übernommen: {exc}")
 
                 # Body extrahieren (Text & HTML)
                 body_plain = ""
@@ -163,8 +163,8 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                                 body_plain = text
                             elif ctype == "text/html" and not body_html:
                                 body_html = text
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug(f"Mail-Body-Part nicht dekodierbar, übersprungen: {exc}")
                 else:
                     try:
                         payload_bytes = msg.get_payload(decode=True)
@@ -188,8 +188,8 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                     scan_res = scan_prompt_injection(final_text, subject=subject, sender=sender)
                     sec_verdict = scan_res.get("verdict", "safe")
                     sec_flags = list(scan_res.get("pattern_matches", []))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"Security-Scan (IMAP-Mail) fehlgeschlagen, Fallback 'safe': {exc}")
                 try:
                     from backend.dual_llm_sanitizer import sanitize_external_input
                     dl_res = sanitize_external_input(final_text, source_id=sender, source_type="email")
@@ -200,8 +200,8 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                             sec_verdict = "suspicious"
                         sec_flags = sorted(set(sec_flags + list(dl_res.get("detected_patterns", []))))
                         sanitized_text = dl_res.get("clean_summary") or "[INHALT WEGEN SICHERHEITSRISIKEN GEFILTERT]"
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"Dual-LLM-Sanitizer fehlgeschlagen, Originaltext übernommen: {exc}")
 
                 doc = {
                     "id": f"mail_imap_{msg_id_str}",
@@ -248,12 +248,12 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
         if mail:
             try:
                 mail.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"IMAP close fehlgeschlagen: {exc}")
             try:
                 mail.logout()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"IMAP logout fehlgeschlagen: {exc}")
 
 
 def send_email(
@@ -312,8 +312,8 @@ def send_email(
                 try:
                     server.starttls()
                     server.ehlo()
-                except smtplib.SMTPException:
-                    pass
+                except smtplib.SMTPException as exc:
+                    logger.debug(f"STARTTLS nicht verfügbar, Login ohne TLS fortgesetzt: {exc}")
                 server.login(user, pwd)
                 server.send_message(msg)
         return {"status": "sent", "recipient": recipient, "host": smtp_host}

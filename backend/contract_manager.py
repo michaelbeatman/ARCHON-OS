@@ -188,8 +188,8 @@ class ContractParser:
             if mo:
                 try:
                     return datetime.date(y, mo, d).strftime("%Y-%m-%d")
-                except ValueError:
-                    pass
+                except ValueError as exc:
+                    print(f"[ContractManager] Ungültiges Datum y={y} mo={mo} d={d}: {exc}", file=sys.stderr)
 
         return None
 
@@ -343,8 +343,8 @@ class ContractParser:
                 cleaned_val = val_str.replace(".", "").replace(",", ".") if "," in val_str else val_str
                 try:
                     data["cost_amount"] = float(cleaned_val)
-                except ValueError:
-                    pass
+                except ValueError as exc:
+                    print(f"[ContractManager] Kostenbetrag nicht als Zahl erkannt: '{cleaned_val}': {exc}", file=sys.stderr)
                 if curr_str:
                     curr_upper = curr_str.upper()
                     if "$" in curr_upper or "USD" in curr_upper:
@@ -383,8 +383,8 @@ class ContractParser:
             try:
                 sy, sm, sd = map(int, data["start_date"].split("-"))
                 data["end_date"] = f"{sy + 1}-{sm:02d}-{sd:02d}"
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[ContractManager] Enddatum-Schätzung fehlgeschlagen für Start '{data.get('start_date')}': {exc}", file=sys.stderr)
 
         # 8. Kategorie
         if any(w in text_lower for w in ["hosting", "server", "domain", "cloud", "aws", "hetzner"]):
@@ -619,8 +619,8 @@ class ContractManager:
             try:
                 deadline_dt = datetime.datetime.strptime(deadline_str, "%Y-%m-%d").date()
                 days_left = (deadline_dt - today).days
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[ContractManager] Deadline '{deadline_str}' nicht als Datum parsebar: {exc}", file=sys.stderr)
 
         c["days_left"] = days_left
         if days_left is not None:
@@ -702,8 +702,8 @@ class ContractManager:
             try:
                 if c.get("alert_thresholds_json"):
                     thresholds = json.loads(c["alert_thresholds_json"])
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[ContractManager] alert_thresholds_json ungültig: {exc}", file=sys.stderr)
 
             # Prüfe ob days_left genau einem Schwellenwert entspricht oder kritisch ist
             should_alert = False
@@ -772,8 +772,8 @@ class ContractManager:
             from scripts.patches.hermes_telegram_adapter import send_admin_notification
             send_admin_notification(message)
             return
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[ContractManager] Telegram-Adapter-Import/Dispatch fehlgeschlagen, nutze Fallback: {exc}", file=sys.stderr)
 
         # Fallback: Direkt über requests / urllib falls Bot-Token vorhanden
         try:

@@ -137,6 +137,7 @@ def _decision_kanban_status(typ: str, decision: str) -> str:
         "synthesis_freigabe": "done" if approve else "archived",
         "mission_freigabe": "in_progress" if approve else "archived",
         "permission_gate": "done" if approve else "archived",
+        "workflow_hitl_gate": "done" if approve else "blocked",
     }.get(typ, "todo" if approve else "archived")
 
 
@@ -528,6 +529,23 @@ async def api_decide_decision(body: Dict = Body(...)):
     except Exception as e:
         logger.error(f"[Decision] Folgeaktion fehlgeschlagen: {e}")
         ergebnis = f"FEHLER bei der Folgeaktion: {e}"
+
+    # Workflow-HITL-Gate: Freigabe UND Ablehnung resume den Run (False = downstream wird skipped).
+    if typ == "workflow_hitl_gate":
+        ref = str(dec.get("ref_id") or "")
+        run_id, _, node_id = ref.partition(":")
+        if run_id and node_id:
+            try:
+                from backend.workflow_dag_runner import resume_workflow_run
+                asyncio.create_task(resume_workflow_run(
+                    run_id=run_id,
+                    gate_approvals={node_id: decision == "approve"},
+                ))
+                ergebnis += f" | Workflow-Run `{run_id}` wird am Knoten `{node_id}` fortgesetzt."
+            except Exception as e:
+                ergebnis += f" | Workflow-Resume nicht gestartet: {e}"
+        else:
+            ergebnis += " | Workflow-Resume übersprungen: ref_id enthält keine run_id:node_id-Kombination."
 
     try:
         await asyncio.to_thread(

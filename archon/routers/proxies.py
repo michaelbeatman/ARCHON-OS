@@ -139,8 +139,8 @@ async def _ensure_n8n_running() -> bool:
                     resp = await client.get(f"{base_url}/", timeout=2.0)
                     if resp.status_code == 200:
                         return True
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"[Proxy] Readiness-Probe fuer {base_url} noch nicht bereit: {exc}")
             await asyncio.sleep(0.5)
         return False
 
@@ -182,8 +182,8 @@ async def n8n_assets_proxy(request: Request, path: str = ""):
                 )
                 if target and os.path.isfile(target):
                     return FileResponse(target)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[Proxy] Statische Datei-Auslieferung uebersprungen: {exc}")
     import main as app_main
 
     ref = request.headers.get("referer", "")
@@ -284,9 +284,9 @@ async def _ws_forward_n8n_push(websocket: WebSocket) -> None:
                 elif msg.get("bytes") is not None:
                     await upstream_ws.send(msg["bytes"])
         except WebSocketDisconnect:
-            pass
-        except Exception:
-            pass
+            logger.debug("[Proxy] _c2u: WebSocket-Disconnect vom Client erwartet, Beende Uebertragung")
+        except Exception as exc:
+            logger.debug(f"[Proxy] _c2u: Uebertragung zum Upstream fehlgeschlagen: {exc}")
 
     async def _u2c():
         try:
@@ -295,8 +295,8 @@ async def _ws_forward_n8n_push(websocket: WebSocket) -> None:
                     await websocket.send_bytes(msg)
                 else:
                     await websocket.send_text(msg)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[Proxy] _u2c: Weiterleitung vom Upstream zum Client fehlgeschlagen: {exc}")
 
     try:
         t1 = asyncio.create_task(_c2u())
@@ -307,12 +307,12 @@ async def _ws_forward_n8n_push(websocket: WebSocket) -> None:
     finally:
         try:
             await upstream_ws.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[Proxy] Close des Upstream-WebSockets fehlgeschlagen: {exc}")
         try:
             await websocket.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[Proxy] Close des Client-WebSockets fehlgeschlagen: {exc}")
 
 
 @router.websocket("/n8n-proxy/rest/push")

@@ -104,13 +104,13 @@ def _put_sse_nowait_safe(q: asyncio.Queue, payload: str) -> None:
     try:
         q.put_nowait(payload)
     except asyncio.QueueFull:
-        pass
+        logger.debug("[Runtime] SSE-Queue voll, Event verworfen")
     except Exception:
         with _SSE_SUB_LOCK:
             try:
                 _SSE_SUBSCRIBERS.remove(q)
-            except ValueError:
-                pass
+            except ValueError as exc:
+                logger.debug(f"[Runtime] SSE-Abonnent bereits entfernt: {exc}")
 
 
 def broadcast_event(event_type: str, data: Optional[Dict[str, Any]] = None) -> None:
@@ -148,8 +148,8 @@ def broadcast_event(event_type: str, data: Optional[Dict[str, Any]] = None) -> N
             for dq in dead:
                 try:
                     _SSE_SUBSCRIBERS.remove(dq)
-                except ValueError:
-                    pass
+                except ValueError as exc:
+                    logger.debug(f"[Runtime] Toter SSE-Abonnent bereits entfernt: {exc}")
 
 
 def add_ticker(agent_name: str, message: str) -> None:
@@ -200,8 +200,8 @@ def atomic_write_json(filepath: str, data: Any, indent: int = 2) -> None:
     except BaseException:
         try:
             os.unlink(tmp)
-        except OSError:
-            pass
+        except OSError as exc:
+            logger.debug(f"[Runtime] Temp-Datei {tmp} konnte nicht aufgeraeumt werden: {exc}")
         raise
 
 

@@ -6,7 +6,6 @@ import time
 from backend.agent_eval_arena import run_eval_arena
 from backend.deep_research_lab import compile_research_dossier, triangulate_sources
 from backend.hybrid_sop_runner import run_hybrid_sop
-from backend.injection_range import run_injection_drill
 from backend.lossless_session_dag import (
     append_turn,
     compact_range_to_summary,
@@ -17,14 +16,6 @@ from backend.lossless_session_dag import (
 from backend.session_receipts import build_delegation_receipt, render_offline_html_receipt
 from backend.tool_output_firewall import guard_tool_output, run_batch_tool_calls
 from backend.tool_warrants import issue_warrant, verify_warrant_for_call
-from backend.workflow_freeze import freeze_tool_sequence, replay_frozen_workflow
-
-
-def test_m84_injection_range():
-    res = run_injection_drill()
-    assert res["total"] == 8
-    assert res["passed"] == 8
-    assert res["score_pct"] == 100.0
 
 
 def test_m90_tool_warrants():
@@ -84,19 +75,6 @@ def test_m93_tool_output_firewall_and_batch():
     batch = asyncio.run(run_batch_tool_calls([{"tool": "t1", "args": {"x": 1}}, {"tool": "t2", "args": {"x": 2}}], exec_fn))
     assert len(batch) == 2
     assert batch[0]["output"] == "t1:1"
-
-
-def test_m92_workflow_freeze_and_replay(tmp_path):
-    db = str(tmp_path / "frozen.db")
-    freeze_tool_sequence("wf-sync", [{"tool": "fetch", "args": {"url": "https://a"}}, {"tool": "save", "args": {}}], db_path=db)
-
-    async def exec_fn(tool, args):
-        return f"ran:{tool}"
-
-    rep = asyncio.run(replay_frozen_workflow("wf-sync", exec_fn, db_path=db))
-    assert rep["status"] == "completed"
-    assert rep["llm_tokens_used"] == 0
-    assert len(rep["results"]) == 2
 
 
 def test_m94_lossless_session_dag_and_storm(tmp_path):

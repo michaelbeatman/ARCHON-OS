@@ -9,6 +9,7 @@ Verbindet vordefinierte und benutzerdefinierte Multi-Agent-DAG-Vorlagen
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -802,6 +803,11 @@ def _trigger_n8n_webhook(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         return {"triggered": False, "reason": "no_valid_url"}
     try:
+        from utils.egress_guard import check_target_url
+        check_target_url(url)
+    except Exception as exc:
+        return {"triggered": False, "reason": "egress_blocked", "error": str(exc)}
+    try:
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -835,10 +841,11 @@ def materialize_workflow_to_kanban(
     run_id = f"wf-{tpl_id[:12]}-{uuid.uuid4().hex[:6]}"
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    from backend.operations_api import _get_active_kanban_db_path, init_kanban_db
+    from backend.operations_api import _get_active_kanban_db_path, _get_kanban_connection
     from backend.kanban_sidecar import update_kanban_meta
 
-    init_kanban_db()
+    # _get_kanban_connection erzwingt Schema-Init + task_links-Migration (kind/created_at)
+    _get_kanban_connection().close()
     db_path = _get_active_kanban_db_path()
 
     node_to_task_id: Dict[str, str] = {}
@@ -936,7 +943,7 @@ def materialize_workflow_to_kanban(
                 tmeta["cron_schedule"] = str(cron_schedule).strip()
             dep_tids = [node_to_task_id[d] for d in (node.get("depends_on") or []) if d in node_to_task_id]
             if dep_tids:
-                tmeta["depends_on"] = dep_tids[0]
+                tmeta["depends_on"] = dep_tids
 
     update_kanban_meta(_apply_wf_meta)
 
@@ -955,7 +962,112 @@ def materialize_workflow_to_kanban(
         "run_id": run_id,
         "template_id": tpl_id,
         "template_title": tpl["title"],
+        "resolved_inputs": resolved_inputs,
         "created_tasks": created_tasks,
         "created_links": created_links,
         "n8n_result": n8n_result,
     }
+
+
+# --- Echte Ausfuehrung: Materialisierung -> DAG-Runner (BRUCH-2-Fix) ---
+
+_DAG_NODE_PASSTHROUGH_KEYS = (
+    "agent_id", "depends_on", "allowed_tools", "forbidden_actions",
+    "expected_output", "require_hitl", "token_budget", "cost_limit_usd",
+    "max_retries", "timeout_sec", "soul_mode", "reasoning_effort",
+    "tool_preset", "model",
+)
+
+
+def _build_dag_def_from_template(
+    tpl: Dict[str, Any],
+    resolved_inputs: Dict[str, Any],
+    task_by_node: Dict[str, str],
+) -> Dict[str, Any]:
+    """Baut aus einem Workflow-Template ein run_workflow_dag-kompatibles DAG-JSON.
+    Task-IDs der Kanban-Spiegelung werden als kanban_task_id injiziert, damit der
+    Runner den Task-Status live mitzieht."""
+    dag_nodes: List[Dict[str, Any]] = []
+    for node in tpl.get("nodes") or []:
+        if not isinstance(node, dict) or not node.get("id"):
+            continue
+        d: Dict[str, Any] = {
+            "id": str(node["id"]),
+            "type": str(node.get("type") or "agent").lower(),
+            "title": _render_vars(node.get("title") or node["id"], resolved_inputs),
+            "prompt": _render_vars(node.get("prompt") or "", resolved_inputs),
+            "kanban_task_id": task_by_node.get(str(node["id"])),
+        }
+        for key in _DAG_NODE_PASSTHROUGH_KEYS:
+            if node.get(key) is not None:
+                d[key] = node[key]
+        if d["type"] == "fanout":
+            if node.get("branches"):
+                d["branches"] = node["branches"]
+            if node.get("quorum_min") is not None:
+                d["quorum_min"] = node["quorum_min"]
+        dag_nodes.append(d)
+    return {
+        "id": str(tpl.get("id") or "workflow"),
+        "title": tpl.get("title") or "",
+        "nodes": dag_nodes,
+        "edges": [e for e in (tpl.get("edges") or []) if isinstance(e, dict)],
+    }
+
+
+def _run_dag_in_background_thread(dag_def: Dict[str, Any], run_id: str) -> None:
+    from backend.workflow_dag_runner import run_workflow_dag
+    asyncio.run(run_workflow_dag(dag_def=dag_def, run_id=run_id))
+
+
+def _schedule_dag_execution(dag_def: Dict[str, Any], run_id: str) -> Dict[str, Any]:
+    """Startet den DAG-Runner aus beliebigem Kontext: im laufenden Event-Loop
+    als Task, sonst als eigener Daemon-Thread mit eigenem Loop."""
+    from backend.workflow_dag_runner import run_workflow_dag
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None:
+        loop.create_task(run_workflow_dag(dag_def=dag_def, run_id=run_id))
+        return {"execution": "async_task"}
+    threading.Thread(
+        target=_run_dag_in_background_thread,
+        args=(dag_def, run_id),
+        name=f"wf-dag-{run_id}",
+        daemon=True,
+    ).start()
+    return {"execution": "thread"}
+
+
+def launch_workflow_run(
+    tpl_id: str,
+    inputs: Optional[Dict[str, Any]] = None,
+    cron_schedule: Optional[str] = None,
+    n8n_webhook_url: Optional[str] = None,
+    execute: bool = True,
+) -> Dict[str, Any]:
+    """Materialisiert ein Template nach Kanban UND startet die echte DAG-Ausfuehrung.
+    Rueckgabewert: Resultat der Materialisierung + Ausfuehrungs-Status."""
+    res = materialize_workflow_to_kanban(
+        tpl_id=tpl_id,
+        inputs=inputs,
+        cron_schedule=cron_schedule,
+        n8n_webhook_url=n8n_webhook_url,
+    )
+    tpl = get_workflow_template(tpl_id)
+    task_by_node = {
+        str(t.get("node_id")): str(t.get("task_id") or "")
+        for t in (res.get("created_tasks") or [])
+        if t.get("node_id")
+    }
+    dag_def = _build_dag_def_from_template(
+        tpl or {},
+        dict(res.get("resolved_inputs") or {}),
+        task_by_node,
+    )
+    run_id = str(res.get("run_id") or "")
+    exec_info: Dict[str, Any] = {"execution": "skipped"}
+    if execute and dag_def.get("nodes"):
+        exec_info = _schedule_dag_execution(dag_def, run_id)
+    return {**res, **exec_info, "dag_nodes": len(dag_def.get("nodes") or [])}

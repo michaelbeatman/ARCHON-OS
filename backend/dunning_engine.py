@@ -54,8 +54,8 @@ def _get_bgb_base_rate(day: datetime.date) -> float:
     if env_override:
         try:
             return float(env_override)
-        except ValueError:
-            pass
+        except ValueError as exc:
+            print(f"[DunningEngine] ARCHON_BGB_BASE_RATE '{env_override}' ist kein float, nutze Tabelle: {exc}", file=sys.stderr)
     rate = _BGB_BASE_RATE_PERIODS[0][1]
     for start_dt, period_rate in _BGB_BASE_RATE_PERIODS:
         if day >= start_dt:
@@ -137,8 +137,8 @@ class DunningEngine:
                     ):
                         try:
                             conn.execute(col_ddl)
-                        except sqlite3.OperationalError:
-                            pass
+                        except sqlite3.OperationalError as exc:
+                            print(f"[DunningEngine] Spalten-Migration übersprungen ('{col_ddl}'): {exc}", file=sys.stderr)
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS dunning_history (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,8 +158,8 @@ class DunningEngine:
                     """)
                     try:
                         conn.execute("ALTER TABLE dunning_history ADD COLUMN company_id TEXT DEFAULT 'default'")
-                    except sqlite3.OperationalError:
-                        pass
+                    except sqlite3.OperationalError as exc:
+                        print(f"[DunningEngine] dunning_history.company_id Migration übersprungen: {exc}", file=sys.stderr)
                     conn.commit()
             except Exception as e:
                 print(f"[DunningEngine] Init Warning: {e}", file=sys.stderr)
@@ -558,8 +558,8 @@ class DunningEngine:
                         email_draft_engine.approve_and_send(email_draft_id, approver_id="dunning_engine")
                 except Exception as smtp_exc:
                     smtp_result = {"status": "error", "message": str(smtp_exc)}
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[DunningEngine] Email-Versand-Block fehlgeschlagen: {exc}", file=sys.stderr)
 
         # 4. ERP-Synchronisierung (Beleg-Mahnstatus im aktiven Mandanten nachführen, falls vorhanden)
         try:
@@ -574,8 +574,8 @@ class DunningEngine:
                 e_conn.commit()
             finally:
                 e_conn.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[DunningEngine] ERP-Mahnstatus-Sync fehlgeschlagen: {exc}", file=sys.stderr)
 
         # 5. NotificationHub alarmieren
         try:
@@ -586,8 +586,8 @@ class DunningEngine:
                 severity="WARNING" if lvl >= 2 else "INFO",
                 category="finance_dunning"
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[DunningEngine] NotificationHub-Alarm fehlgeschlagen: {exc}", file=sys.stderr)
 
         return {
             "status": "success",

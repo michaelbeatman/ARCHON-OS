@@ -20,14 +20,6 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["archon_v2"])
 
 
-# --- M84: Prompt-Injection-Feueruebung ---
-@router.post("/api/v2/security/injection-drill")
-def api_v2_injection_drill(request: Request):
-    require_admin_or_503(request)
-    from backend.injection_range import run_injection_drill
-    return {"status": "success", **run_injection_drill()}
-
-
 # --- M90: Signierte Tool-Warrants ---
 @router.post("/api/v2/security/warrants/issue")
 def api_v2_issue_warrant(request: Request, payload: Dict[str, Any] = Body(...)):
@@ -97,13 +89,51 @@ async def api_v2_workflow_dag_run(request: Request, payload: Dict[str, Any] = Bo
     async def _noop_exec(node: Dict[str, Any], upstream: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": "success", "node": node.get("id"), "upstream_keys": sorted(upstream.keys())}
 
+    # Standard: ECHTER Agenten-Executor. `"noop": true` behält den Trockenlauf für Tests.
     res = await run_workflow_dag(
         dag_def=payload.get("dag") or {},
-        executor_fn=_noop_exec,
+        executor_fn=_noop_exec if payload.get("noop") else None,
         run_id=payload.get("run_id"),
         gate_approvals=payload.get("gate_approvals"),
     )
     return {"status": "success", **res}
+
+
+@router.get("/api/v2/workflows/dag/runs/{run_id}")
+async def api_v2_workflow_dag_run_status(request: Request, run_id: str):
+    require_admin_or_503(request)
+    from backend.workflow_dag_runner import get_workflow_run
+    run = get_workflow_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail=f"Workflow run '{run_id}' not found")
+    return {"status": "ok", "run": run}
+
+
+@router.get("/api/v2/workflows/dag/runs")
+async def api_v2_workflow_dag_runs_list(request: Request, limit: int = 50):
+    require_admin_or_503(request)
+    from backend.workflow_dag_runner import list_workflow_runs
+    return {"status": "ok", "runs": list_workflow_runs(limit=limit)}
+
+
+@router.post("/api/v2/workflows/dag/runs/{run_id}/resume")
+async def api_v2_workflow_dag_resume(request: Request, run_id: str, payload: Dict[str, Any] = Body(default={})):
+    require_admin_or_503(request)
+    import asyncio as _asyncio
+    from backend.workflow_dag_runner import get_workflow_run, resume_workflow_run
+    existing = get_workflow_run(run_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Workflow run '{run_id}' not found")
+    if existing.get("status") not in ("paused", "running"):
+        return {"status": "already_terminal", "run": existing}
+    # Resume laeuft als Hintergrund-Task: Agenten-Knoten brauchen Minuten, die Route blockiert nicht.
+    _asyncio.create_task(
+        resume_workflow_run(
+            run_id=run_id,
+            gate_approvals=payload.get("gate_approvals") or {},
+        )
+    )
+    return {"status": "resume_scheduled", "run_id": run_id, "prior_status": existing.get("status")}
 
 
 @router.get("/api/v2/workflows/templates")
@@ -149,13 +179,14 @@ async def api_v2_workflow_templates_delete(request: Request, tpl_id: str):
 @router.post("/api/v2/workflows/templates/{tpl_id}/run")
 async def api_v2_workflow_templates_run(request: Request, tpl_id: str, payload: Dict[str, Any] = Body(default={})):
     require_admin_or_503(request)
-    from backend.workflow_templates import materialize_workflow_to_kanban
+    from backend.workflow_templates import launch_workflow_run
     try:
-        res = materialize_workflow_to_kanban(
+        res = launch_workflow_run(
             tpl_id=tpl_id,
             inputs=payload.get("inputs") or {},
             cron_schedule=payload.get("cron_schedule"),
             n8n_webhook_url=payload.get("n8n_webhook_url"),
+            execute=bool(payload.get("execute", True)),
         )
         return {"status": "success", **res}
     except KeyError as exc:
@@ -211,6 +242,43 @@ async def api_v2_workflow_events_emit(request: Request, payload: Dict[str, Any] 
     return {"status": "ok", **res}
 
 
+@router.get("/api/v2/workflows/event-policies")
+async def api_v2_workflow_event_policies_list(request: Request):
+    require_admin_or_503(request)
+    from backend.workflow_scheduler import EVENT_BUS_SOURCES, EVENT_BUS_TARGETS, list_event_policies
+    return {
+        "status": "ok",
+        "sources": EVENT_BUS_SOURCES,
+        "targets": EVENT_BUS_TARGETS,
+        "policies": list_event_policies(),
+    }
+
+
+@router.post("/api/v2/workflows/event-policies")
+async def api_v2_workflow_event_policies_save(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.workflow_scheduler import upsert_event_policy
+    rule = upsert_event_policy(
+        source=str(payload.get("source") or ""),
+        target=str(payload.get("target") or ""),
+        policy=str(payload.get("policy") or "allow"),
+        max_per_min=int(payload.get("max_per_min") or 20),
+        note=str(payload.get("note") or ""),
+    )
+    return {"status": "ok", "rule": rule}
+
+
+@router.post("/api/v2/workflows/events/{event_id}/replay")
+async def api_v2_workflow_event_replay(request: Request, event_id: str):
+    require_admin_or_503(request)
+    from backend.workflow_scheduler import replay_workflow_event
+    try:
+        res = replay_workflow_event(event_id)
+        return {"status": "ok", **res}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+
 def _treasury_actor(request: Request) -> str:
     try:
         from archon.routers.auth import _resolve_target_passkey_user
@@ -230,12 +298,13 @@ async def api_v2_treasury_overview(request: Request):
 @router.post("/api/v2/treasury/accounts")
 async def api_v2_treasury_accounts_save(request: Request, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)
-    from backend.passkey_hitl import is_passkey_required
+    from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required
     from backend.treasury_engine import upsert_account
 
     uid = _treasury_actor(request)
-    if payload.get("id") and is_passkey_required(uid, category="payments") and not payload.get("passkey_verified"):
-        raise HTTPException(status_code=403, detail="passkey_verification_required")
+    if payload.get("id") and is_passkey_required(uid, category="payments"):
+        if not consume_hitl_proof_token(payload.get("passkey_proof_token"), uid, category="payments"):
+            raise HTTPException(status_code=403, detail="passkey_verification_required")
     try:
         acc = upsert_account(payload)
         return {"status": "ok", "account": acc}
@@ -268,10 +337,14 @@ async def api_v2_treasury_payment_request(request: Request, payload: Dict[str, A
 @router.post("/api/v2/treasury/payments/{tx_id}/approve")
 async def api_v2_treasury_payment_approve(request: Request, tx_id: str, payload: Dict[str, Any] = Body(default={})):
     require_admin_or_503(request)
+    from backend.passkey_hitl import consume_hitl_proof_token
     from backend.treasury_engine import approve_payment
+
     uid = _treasury_actor(request)
+    # Niemals dem Client-Boolean `passkey_verified` vertrauen; nur serverseitig ausgestelltes Einmal-Token akzeptieren.
+    server_verified = consume_hitl_proof_token(payload.get("passkey_proof_token"), uid, category="payments")
     try:
-        tx = approve_payment(tx_id, approver_id=uid, passkey_verified=bool(payload.get("passkey_verified")))
+        tx = approve_payment(tx_id, approver_id=uid, passkey_verified=server_verified)
         return {"status": "ok", "transaction": tx}
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
@@ -305,17 +378,6 @@ async def api_v2_hybrid_sop_run(request: Request, payload: Dict[str, Any] = Body
         initial_context=payload.get("context"),
     )
     return {"status": "success", **res}
-
-
-@router.post("/api/v2/workflows/freeze")
-def api_v2_workflow_freeze(request: Request, payload: Dict[str, Any] = Body(...)):
-    require_admin_or_503(request)
-    from backend.workflow_freeze import freeze_tool_sequence
-    return freeze_tool_sequence(
-        workflow_id=str(payload.get("workflow_id") or "wf_default"),
-        recorded_calls=list(payload.get("calls") or []),
-        description=str(payload.get("description") or ""),
-    )
 
 
 @router.post("/api/v2/tools/firewall/guard")
@@ -447,21 +509,6 @@ def api_v2_watchdog_score(payload: Dict[str, Any] = Body(...)):
     )
 
 
-@router.post("/api/v2/meetings/note")
-def api_v2_meeting_note(request: Request, payload: Dict[str, Any] = Body(...)):
-    require_admin_or_503(request)
-    from backend.meeting_copilot import build_crm_meeting_note
-    try:
-        return build_crm_meeting_note(
-            str(payload.get("customer") or ""),
-            list(payload.get("segments") or []),
-            all_participants_consented=bool(payload.get("all_participants_consented", False)),
-            consent_timestamp=str(payload.get("consent_timestamp") or ""),
-        )
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
-
-
 @router.post("/api/v2/gdpr/erase")
 def api_v2_gdpr_erase(request: Request, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)
@@ -478,33 +525,11 @@ def api_v2_gdpr_erase(request: Request, payload: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post("/api/v2/voice/workflow/analyze")
-def api_v2_voice_workflow_analyze(payload: Dict[str, Any] = Body(...)):
-    from backend.voice_to_workflow import analyze_dictation_ambiguities
-    return analyze_dictation_ambiguities(str(payload.get("text") or ""))
-
-
 @router.post("/api/v2/telegram/route")
 def api_v2_telegram_route(payload: Dict[str, Any] = Body(...)):
     from backend.telegram_gateway_v2 import parse_telegram_agent_route
     agent, rest = parse_telegram_agent_route(str(payload.get("text") or ""))
     return {"agent_id": agent, "prompt": rest}
-
-
-@router.post("/api/v2/joust/score")
-def api_v2_joust_score(request: Request, payload: Dict[str, Any] = Body(...)):
-    require_admin_or_503(request)
-    from backend.worktree_joust import score_joust_contenders
-    return score_joust_contenders(list(payload.get("results") or []))
-
-
-@router.get("/api/v2/connectors")
-def api_v2_connectors():
-    from backend.external_connectors import list_connector_capabilities
-    return {"status": "success", "connectors": list_connector_capabilities()}
-
-
-@router.post("/api/v2/extensions/manners")
-def api_v2_manners(payload: Dict[str, Any] = Body(...)):
-    from backend.special_extensions import analyze_manners_metrics
-    return analyze_manners_metrics(list(payload.get("messages") or []))
+# (M84 injection-drill, M87 connectors, M88 manners, M92 freeze, M39 meetings,
+#  M54 voice-analyze und M85 joust sind im Triage-Lauf 21.11.2026 entfernt:
+#  Theater-Code laut Deepdive — Module liegen unter archive/20261121_triage_c_modules/)

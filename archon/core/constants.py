@@ -47,7 +47,7 @@ _AUTH_PROTECTED_PREFIXES = (
 
 # Erlaubte Entscheidungs-Typen fuer den Kanban-Entscheidungspfad.
 _DECISION_TYPEN = ("delegation_review", "synthesis_freigabe",
-                   "mission_freigabe", "permission_gate")
+                   "mission_freigabe", "permission_gate", "workflow_hitl_gate")
 
 # Delegations-Protokoll, das jedem Agenten-Prompt vorangestellt wird.
 DELEGATION_PROTOCOL_PROMPT = """

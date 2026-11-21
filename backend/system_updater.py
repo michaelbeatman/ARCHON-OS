@@ -93,8 +93,8 @@ def _run_git(args: List[str], timeout: int = 60) -> Dict[str, Any]:
                             if line.startswith("GITHUB_TOKEN=") or line.startswith("GH_TOKEN="):
                                 gh_token = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
                                 break
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.error(f"[SystemUpdater] .env-Token-Lesefehler in _run_git — Git-Auth ggf. nicht nutzbar: {exc}")
 
         if gh_token:
             import base64
@@ -117,8 +117,8 @@ def _run_git(args: List[str], timeout: int = 60) -> Dict[str, Any]:
             if is_posix:
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                except ProcessLookupError as exc:
+                    logger.debug(f"[SystemUpdater] killpg: Prozessgruppe bereits beendet: {exc}")
             else:
                 proc.kill()
             proc.communicate()
@@ -237,8 +237,8 @@ def get_system_version_info() -> Dict[str, Any]:
         try:
             with open(vpath, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[SystemUpdater] Versionsdatei nicht lesbar, Fallback 'unbekannt': {exc}")
     return {"version": "unbekannt", "codename": ""}
 
 
@@ -255,8 +255,8 @@ def get_github_auth_info() -> Dict[str, Any]:
                         if line.startswith("GITHUB_TOKEN=") or line.startswith("GH_TOKEN="):
                             gh_token = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
                             break
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.error(f"[SystemUpdater] .env-Token-Lesefehler — GitHub-Auth ggf. nicht nutzbar: {exc}")
 
     settings_path = os.path.join(WORKSPACE_DIR, "settings.json")
     is_master = False
@@ -270,8 +270,8 @@ def get_github_auth_info() -> Dict[str, Any]:
                 is_master = gh_conf.get("is_master", False)
                 allow_push = gh_conf.get("allow_push", True)
                 owner = gh_conf.get("owner", "michaelbeatman")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[SystemUpdater] settings.json (github_sync) nicht lesbar, Defaults übernommen: {exc}")
 
     has_token = bool(gh_token and len(gh_token) > 8)
     can_push = bool(has_token and is_master and allow_push)
@@ -346,8 +346,8 @@ def set_custom_version(target_version: Optional[str] = None, step: str = "custom
         try:
             with open(vpath, "r", encoding="utf-8") as f:
                 vdata = json.load(f)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[SystemUpdater] Versionsdatei nicht lesbar, Bestandswerte übernommen: {exc}")
 
     cur_version = vdata.get("version", "v0.3.8")
 
@@ -439,8 +439,8 @@ def _read_remote_version_from_origin(branch: str = "main") -> Optional[str]:
             rver = str(rdata.get("version") or "").strip()
             if rver:
                 return rver
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[SystemUpdater] Remote-Version nicht lesbar (origin): {exc}")
     return None
 
 
@@ -724,8 +724,8 @@ def schedule_delayed_reload(delay: float = 2.0):
     main_file = os.path.join(WORKSPACE_DIR, "main.py")
     try:
         os.utime(main_file, None)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[SystemUpdater] main.py-Touch (Reload-Signal) fehlgeschlagen: {exc}")
 
 
 def push_changes(commit_message: Optional[str] = None, custom_version: Optional[str] = None, version_step: str = "custom") -> Dict[str, Any]:

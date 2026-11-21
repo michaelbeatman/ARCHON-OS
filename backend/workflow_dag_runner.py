@@ -2,31 +2,42 @@
 """
 backend/workflow_dag_runner.py
 ==============================
-Meilenstein 77: Agenten-Workflow-DAGs mit Fan-Out/Quorum & Resume
-(hermes-workflows-Pattern).
+Meilenstein 77: Agenten-Workflow-DAGs mit Fan-Out/Quorum, Edge-Bedingungen,
+Datenfluss-Modi, HITL-Gates, Kanban-Synchronisation & Resume.
 
 Unterstuetzt:
-- JSON-DAGs mit `agent`, `fanout` (mit Quorum) und `gate` (Human/Machine-Gate)
-- Parallele Ausfuehrung bereiter Knoten
-- Fingerprint-basiertes Replay-Skip-Resume ueber SQLite WAL (data/workflow_dags.db)
+- JSON-DAGs mit `agent`, `fanout` (mit Quorum), `gate` (HITL-Gate) und `require_hitl`
+- Kanten-Bedingungen (`always`, `on_success`, `on_failure`) & Datenfluss-Modi
+  (`full`, `summary`, `artifact_only`, `none`)
+- Parallele Ausfuehrung bereiter Knoten mit Retry- und Timeout-Limits
+- Live-Kanban-Status-Synchronisation fuer materialisierte Workflow-Tasks
+- Persistentes Fingerprint-basiertes Replay-Skip-Resume ueber SQLite WAL (data/workflow_dags.db)
 """
 
 from __future__ import annotations
 
 import asyncio
 from contextlib import contextmanager
+import datetime
 import hashlib
 import json
+import logging
 import os
 import secrets
 import sqlite3
 import time
 from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional
 
+logger = logging.getLogger("archon.workflow_dag")
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "workflow_dags.db")
 
 ExecutorFn = Callable[[Dict[str, Any], Dict[str, Any]], Awaitable[Dict[str, Any]]]
+
+TERMINAL_NODE_STATES = {"completed", "skipped_cached", "skipped_condition", "failed", "rejected"}
+SUCCESS_NODE_STATES = {"completed", "skipped_cached"}
+FAILURE_NODE_STATES = {"failed", "rejected"}
 
 
 @contextmanager
@@ -37,11 +48,13 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
     try:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=5000;")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS workflow_runs (
                 run_id TEXT PRIMARY KEY,
                 workflow_id TEXT NOT NULL,
                 status TEXT NOT NULL,
+                dag_json TEXT DEFAULT '{}',
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
@@ -57,6 +70,10 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
                 PRIMARY KEY (run_id, node_id)
             )
         """)
+        # Sichere Migration fuer bestehende workflow_dags.db ohne dag_json
+        run_cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_runs)").fetchall()}
+        if "dag_json" not in run_cols:
+            conn.execute("ALTER TABLE workflow_runs ADD COLUMN dag_json TEXT DEFAULT '{}'")
         conn.commit()
         yield conn
     finally:
@@ -64,36 +81,315 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
 
 
 def compute_node_fingerprint(node: Dict[str, Any], upstream_outputs: Dict[str, Any]) -> str:
-    payload = json.dumps({"node": node, "upstream": upstream_outputs}, sort_keys=True, ensure_ascii=False)
+    # Transiente Laufzeit-Metadaten fuer stabilen Cache-Fingerprint ignorieren
+    stable_node = {
+        k: v for k, v in (node or {}).items()
+        if k not in ("kanban_task_id", "_edge_inputs")
+    }
+    payload = json.dumps({"node": stable_node, "upstream": upstream_outputs}, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _extract_edge_map(dag_def: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """Ordnet jedem Ziel-Knoten seine eingehenden Kanten zu."""
+    incoming: Dict[str, List[Dict[str, Any]]] = {}
+    for edge in (dag_def.get("edges") or []):
+        if not isinstance(edge, dict):
+            continue
+        src = str(edge.get("from") or edge.get("source") or "").strip()
+        dst = str(edge.get("to") or edge.get("target") or "").strip()
+        if not src or not dst:
+            continue
+        incoming.setdefault(dst, []).append({
+            "from": src,
+            "to": dst,
+            "condition": str(edge.get("condition") or "always").strip().lower(),
+            "data_mode": str(edge.get("data_mode") or "full").strip().lower(),
+            "label": str(edge.get("label") or "").strip(),
+        })
+    return incoming
+
+
+def _all_dependencies_for_node(node: Dict[str, Any], incoming_edges: List[Dict[str, Any]]) -> List[str]:
+    deps: List[str] = []
+    for d in (node.get("depends_on") or []):
+        ds = str(d).strip()
+        if ds and ds not in deps:
+            deps.append(ds)
+    for e in incoming_edges:
+        src = e["from"]
+        if src and src not in deps:
+            deps.append(src)
+    return deps
+
+
+def _edge_condition_matches(condition: str, parent_status: str) -> bool:
+    cond = (condition or "always").strip().lower()
+    if cond in ("on_failure", "failed", "error"):
+        return parent_status in FAILURE_NODE_STATES
+    if cond in ("on_success", "success"):
+        return parent_status in SUCCESS_NODE_STATES
+    # Default "always": laeuft weiter, solange Parent erfolgreich war (nicht bei hartem Abbruch/Gate)
+    return parent_status in SUCCESS_NODE_STATES
+
+
+def _shape_upstream_output(raw_out: Any, data_mode: str) -> Any:
+    mode = (data_mode or "full").strip().lower()
+    if mode == "none":
+        if isinstance(raw_out, dict):
+            return {"status": raw_out.get("status", "success")}
+        return {"status": "success"}
+    if mode == "artifact_only":
+        if isinstance(raw_out, dict):
+            return {
+                "status": raw_out.get("status", "success"),
+                "artifacts": raw_out.get("artifacts") or raw_out.get("files") or [],
+                "obsidian_path": raw_out.get("obsidian_path") or "",
+            }
+        return {"artifacts": []}
+    if mode == "summary":
+        if isinstance(raw_out, dict):
+            txt = str(raw_out.get("content") or raw_out.get("result") or json.dumps(raw_out, ensure_ascii=False))
+            return {
+                "status": raw_out.get("status", "success"),
+                "summary": txt[:1200],
+            }
+        return {"summary": str(raw_out or "")[:1200]}
+    return raw_out
+
+
+def _update_kanban_task_status(
+    task_id: Optional[str],
+    status: str,
+    *,
+    result: Optional[str] = None,
+    block_kind: Optional[str] = None,
+    event_kind: Optional[str] = None,
+    event_payload: Optional[Dict[str, Any]] = None,
+) -> None:
+    if not task_id:
+        return
+    try:
+        from backend.operations_api import _get_kanban_connection
+
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        conn = _get_kanban_connection()
+        try:
+            if status == "in_progress":
+                conn.execute(
+                    "UPDATE tasks SET status = 'in_progress', started_at = COALESCE(started_at, ?) WHERE id = ?",
+                    (now_iso, task_id),
+                )
+            elif status == "done":
+                conn.execute(
+                    "UPDATE tasks SET status = 'done', completed_at = ?, result = ?, block_kind = NULL WHERE id = ?",
+                    (now_iso, (result or "")[:12000], task_id),
+                )
+            elif status in ("blocked", "failed", "review"):
+                conn.execute(
+                    "UPDATE tasks SET status = ?, result = COALESCE(?, result), block_kind = COALESCE(?, block_kind) WHERE id = ?",
+                    (status, (result or "")[:12000] if result is not None else None, block_kind, task_id),
+                )
+            else:
+                conn.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, task_id))
+
+            if event_kind:
+                conn.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
+                    (task_id, event_kind, json.dumps(event_payload or {}, ensure_ascii=False), now_iso),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.debug(f"[WorkflowDAG] Kanban-Sync fuer {task_id} uebersprungen: {exc}")
+
+    try:
+        from archon.core.runtime import broadcast_event
+        broadcast_event("kanban_updated", {"action": "workflow_node", "task_id": task_id, "status": status})
+    except Exception:
+        pass
+
+
+def _register_hitl_gate_decision(run_id: str, wf_id: str, node: Dict[str, Any], upstream: Dict[str, Any]) -> Optional[str]:
+    try:
+        from archon.routers.decisions import create_decision
+        title = f"Workflow-Freigabe: {node.get('title') or node.get('id')} ({run_id})"
+        upstream_preview = json.dumps(upstream, ensure_ascii=False)[:1500]
+        deci = create_decision(
+            "workflow_hitl_gate",
+            title,
+            f"Workflow '{wf_id}' (Run `{run_id}`) wartet am Knoten `{node.get('id')}` auf Freigabe.\n\nVorlauf-Ergebnisse:\n{upstream_preview}",
+            ref_id=f"{run_id}:{node.get('id')}",
+        )
+        if isinstance(deci, dict):
+            return str(deci.get("id") or "")
+    except Exception as exc:
+        logger.debug(f"[WorkflowDAG] HITL-Decision konnte nicht angelegt werden: {exc}")
+    return None
+
+
+async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, Any]) -> Dict[str, Any]:
+    """Echter Standard-Executor fuer DAG-Knoten: loest Agenten-Profil auf, reicht
+    Upstream-Outputs weiter, ruft core_dispatcher auf und synchronisiert Kanban."""
+    import core_dispatcher
+    from backend.agent_aliases import resolve_agent_id
+
+    raw_agent = str(node.get("agent_id") or node.get("branch") or "default").strip()
+    agent_id = resolve_agent_id(raw_agent)
+    kanban_task_id = node.get("kanban_task_id")
+
+    # Agenten-Profil laden
+    prof: Dict[str, Any] = {}
+    try:
+        from archon.core.profiles import api_get_hermes_profiles
+        profiles = api_get_hermes_profiles() or []
+        prof = next((p for p in profiles if p.get("id") == agent_id), {})
+    except Exception:
+        prof = {}
+
+    agent_name = str(prof.get("person_name") or prof.get("name") or agent_id)
+    role = str(prof.get("role") or prof.get("category") or "Fach-Spezialist")
+    system_prompt = str(
+        prof.get("system_prompt")
+        or prof.get("prompt")
+        or f"Du bist {agent_name} in Archon OS. Bearbeite deinen Workflow-Schritt praezise und strukturiert."
+    )
+    model = str(node.get("model") or prof.get("model") or "deepseek/deepseek-chat").strip()
+    reasoning_level = str(node.get("reasoning_effort") or "medium").strip()
+
+    # Prompt inkl. Upstream-Kontext & Guardrails aufbauen
+    sections: List[str] = []
+    node_title = str(node.get("title") or node.get("id") or "Workflow-Schritt")
+    sections.append(f"WORKFLOW-SCHRITT: {node_title}")
+    if node.get("prompt"):
+        sections.append(str(node["prompt"]))
+    if node.get("expected_output"):
+        sections.append(f"[ERWARTETES ERGEBNIS]\n{node['expected_output']}")
+    if node.get("allowed_tools"):
+        sections.append(f"[ERLAUBTE TOOLS]\n{', '.join(str(t) for t in node['allowed_tools'])}")
+    if node.get("forbidden_actions"):
+        sections.append("[VERBOTEN / GUARDRAILS]\n- " + "\n- ".join(str(f) for f in node["forbidden_actions"]))
+    if upstream:
+        up_blocks = []
+        for dep_id, dep_val in upstream.items():
+            if isinstance(dep_val, dict):
+                txt = dep_val.get("content") or dep_val.get("summary") or dep_val.get("result") or json.dumps(dep_val, ensure_ascii=False)
+            else:
+                txt = str(dep_val)
+            up_blocks.append(f"### Vorlauf-Schritt `{dep_id}`:\n{str(txt)[:4000]}")
+        sections.append("[UPSTREAM-ERGEBNISSE AUS VORHERIGEN SCHRITTEN]\n" + "\n\n".join(up_blocks))
+
+    full_prompt = "\n\n".join(sections)
+
+    await asyncio.to_thread(
+        _update_kanban_task_status,
+        kanban_task_id,
+        "in_progress",
+        event_kind="workflow_node_started",
+        event_payload={"node_id": node.get("id"), "agent_id": agent_id, "model": model},
+    )
+
+    res = await core_dispatcher.dispatch_to_omniroute_or_container(
+        agent_id=agent_id,
+        agent_name=agent_name,
+        prompt=full_prompt,
+        role=role,
+        system_prompt=system_prompt,
+        model=model,
+        reasoning_level=reasoning_level,
+        task_id=str(kanban_task_id or node.get("id") or ""),
+    )
+
+    status_raw = str(res.get("status") or "success").lower()
+    content = str(res.get("content") or "").strip()
+    is_error = status_raw in ("error", "failed", "blocked") or (not content and bool(res.get("error")))
+
+    out = {
+        "status": "error" if is_error else "success",
+        "node_id": node.get("id"),
+        "agent_id": agent_id,
+        "model": res.get("model") or model,
+        "content": content,
+        "error": res.get("error") or "",
+        "input_tokens": int(res.get("input_tokens") or 0),
+        "output_tokens": int(res.get("output_tokens") or 0),
+        "kanban_task_id": kanban_task_id,
+    }
+
+    await asyncio.to_thread(
+        _update_kanban_task_status,
+        kanban_task_id,
+        "blocked" if is_error else "done",
+        result=content or out["error"],
+        block_kind="workflow_error" if is_error else None,
+        event_kind="workflow_node_failed" if is_error else "workflow_node_completed",
+        event_payload={"node_id": node.get("id"), "agent_id": agent_id, "status": out["status"]},
+    )
+    return out
+
+
+async def _exec_with_retry_and_timeout(
+    executor_fn: ExecutorFn,
+    node: Dict[str, Any],
+    upstream: Dict[str, Any],
+) -> Dict[str, Any]:
+    max_retries = max(0, min(5, int(node.get("max_retries") or 0)))
+    timeout_sec = max(5.0, min(900.0, float(node.get("timeout_sec") or 180.0)))
+    last_err = ""
+    for attempt in range(max_retries + 1):
+        try:
+            res = await asyncio.wait_for(executor_fn(node, upstream), timeout=timeout_sec)
+            out = res if isinstance(res, dict) else {"status": "success", "result": res}
+            if out.get("status") != "error":
+                return out
+            last_err = str(out.get("error") or "node_returned_error")
+            if attempt == max_retries:
+                return out
+        except asyncio.TimeoutError:
+            last_err = f"Timeout nach {timeout_sec}s (Versuch {attempt + 1}/{max_retries + 1})"
+        except Exception as exc:
+            last_err = str(exc)
+        if attempt < max_retries:
+            await asyncio.sleep(min(2.0 * (attempt + 1), 6.0))
+    return {"status": "error", "error": last_err, "node_id": node.get("id")}
 
 
 async def run_workflow_dag(
     dag_def: Dict[str, Any],
-    executor_fn: ExecutorFn,
+    executor_fn: Optional[ExecutorFn] = None,
     run_id: Optional[str] = None,
     gate_approvals: Optional[Dict[str, bool]] = None,
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Fuehrt einen Workflow-DAG aus.
-    `dag_def`: {"id": "...", "nodes": [{"id": "...", "type": "agent|fanout|gate", "depends_on": [...], ...}]}
+    `dag_def`: {
+        "id": "...",
+        "nodes": [{"id": "...", "type": "agent|fanout|gate", "depends_on": [...], ...}],
+        "edges": [{"from": "...", "to": "...", "condition": "always|on_success|on_failure", "data_mode": "full|summary|artifact_only|none"}]
+    }
     """
+    eff_executor = executor_fn or default_agent_node_executor
     wf_id = str(dag_def.get("id") or "workflow")
     rid = run_id or f"wfrun-{secrets.token_hex(5)}"
     nodes = dag_def.get("nodes") or []
-    node_map: Dict[str, Dict[str, Any]] = {str(n["id"]): n for n in nodes if n.get("id")}
+    node_map: Dict[str, Dict[str, Any]] = {str(n["id"]): n for n in nodes if isinstance(n, dict) and n.get("id")}
+    edge_map = _extract_edge_map(dag_def)
     approvals = gate_approvals or {}
     now = time.time()
 
     with _connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO workflow_runs (run_id, workflow_id, status, created_at, updated_at)
-            VALUES (?, ?, 'running', ?, ?)
-            ON CONFLICT(run_id) DO UPDATE SET status='running', updated_at=excluded.updated_at
+            INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at)
+            VALUES (?, ?, 'running', ?, ?, ?)
+            ON CONFLICT(run_id) DO UPDATE SET
+                status='running',
+                dag_json=CASE WHEN excluded.dag_json != '{}' THEN excluded.dag_json ELSE workflow_runs.dag_json END,
+                updated_at=excluded.updated_at
             """,
-            (rid, wf_id, now, now),
+            (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), now, now),
         )
         conn.commit()
         cached_rows = conn.execute(
@@ -107,18 +403,63 @@ async def run_workflow_dag(
 
     pending = set(node_map.keys())
     while pending:
-        ready = [
-            nid for nid in sorted(pending)
-            if all(statuses.get(dep) in ("completed", "skipped_cached") for dep in (node_map[nid].get("depends_on") or []))
-        ]
+        ready: List[str] = []
+        skippable: List[str] = []
+
+        for nid in sorted(pending):
+            node = node_map[nid]
+            inc_edges = edge_map.get(nid, [])
+            deps = _all_dependencies_for_node(node, inc_edges)
+            if not deps:
+                ready.append(nid)
+                continue
+            # Warten bis alle Vorlaeufer abgeschlossen sind
+            if not all(statuses.get(d) in TERMINAL_NODE_STATES for d in deps):
+                continue
+
+            # Kanten-Bedingungen pruefen (falls Kanten definiert sind; sonst muessen alle deps erfolgreich sein)
+            edge_by_src = {e["from"]: e for e in inc_edges}
+            all_conditions_met = True
+            for d in deps:
+                e = edge_by_src.get(d)
+                cond = e["condition"] if e else "on_success"
+                if not _edge_condition_matches(cond, statuses.get(d, "")):
+                    all_conditions_met = False
+                    break
+            if all_conditions_met:
+                ready.append(nid)
+            else:
+                skippable.append(nid)
+
+        for nid in skippable:
+            outputs[nid] = {"status": "skipped", "reason": "upstream_condition_not_met"}
+            statuses[nid] = "skipped_condition"
+            pending.remove(nid)
+            with _connect(db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(run_id, node_id) DO UPDATE SET
+                        status=excluded.status, output_json=excluded.output_json, updated_at=excluded.updated_at
+                    """,
+                    (rid, nid, "skipped", "skipped_condition", json.dumps(outputs[nid], ensure_ascii=False), time.time()),
+                )
+                conn.commit()
+
         if not ready:
             # Entweder durch Gate/Fehler blockiert oder Zyklus
             break
 
         async def _run_one(nid: str) -> None:
             node = node_map[nid]
-            deps = node.get("depends_on") or []
-            upstream = {d: outputs.get(d) for d in deps}
+            inc_edges = edge_map.get(nid, [])
+            edge_by_src = {e["from"]: e for e in inc_edges}
+            deps = _all_dependencies_for_node(node, inc_edges)
+            upstream = {
+                d: _shape_upstream_output(outputs.get(d), (edge_by_src.get(d) or {}).get("data_mode", "full"))
+                for d in deps
+            }
             fp = compute_node_fingerprint(node, upstream)
 
             prev = cached.get(nid)
@@ -128,33 +469,48 @@ async def run_workflow_dag(
                 return
 
             ntype = str(node.get("type") or "agent").lower()
+            requires_gate = ntype == "gate" or bool(node.get("require_hitl"))
+
             if ntype == "gate":
                 if approvals.get(nid) is True:
-                    out = {"approved": True}
+                    out = {"approved": True, "status": "success"}
                     st = "completed"
+                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "done", result="HITL-Gate freigegeben.")
                 elif approvals.get(nid) is False:
-                    out = {"approved": False}
+                    out = {"approved": False, "status": "rejected"}
                     st = "rejected"
+                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Gate abgelehnt.", block_kind="hitl_rejected")
                 else:
-                    out = {"awaiting_gate": True}
+                    deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream)
+                    out = {"awaiting_gate": True, "decision_id": deci_id}
                     st = "awaiting_gate"
+                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe.", block_kind="hitl_gate")
+            elif requires_gate and approvals.get(nid) is not True:
+                if approvals.get(nid) is False:
+                    out = {"approved": False, "status": "rejected"}
+                    st = "rejected"
+                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Freigabe abgelehnt.", block_kind="hitl_rejected")
+                else:
+                    deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream)
+                    out = {"awaiting_gate": True, "decision_id": deci_id}
+                    st = "awaiting_gate"
+                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe vor Ausfuehrung.", block_kind="hitl_gate")
             elif ntype == "fanout":
                 branches = node.get("branches") or []
                 quorum = int(node.get("quorum_min") or max(1, len(branches)))
                 results = await asyncio.gather(
-                    *(executor_fn({**node, "branch": b}, upstream) for b in branches),
+                    *(_exec_with_retry_and_timeout(eff_executor, {**node, "branch": b}, upstream) for b in branches),
                     return_exceptions=True,
                 )
                 ok_results = [r for r in results if isinstance(r, dict) and r.get("status", "success") != "error"]
                 if len(ok_results) >= quorum:
-                    out = {"quorum_met": True, "ok_count": len(ok_results), "results": ok_results}
+                    out = {"status": "success", "quorum_met": True, "ok_count": len(ok_results), "results": ok_results}
                     st = "completed"
                 else:
-                    out = {"quorum_met": False, "ok_count": len(ok_results), "required": quorum}
+                    out = {"status": "error", "quorum_met": False, "ok_count": len(ok_results), "required": quorum}
                     st = "failed"
             else:
-                res = await executor_fn(node, upstream)
-                out = res if isinstance(res, dict) else {"result": res}
+                out = await _exec_with_retry_and_timeout(eff_executor, node, upstream)
                 st = "failed" if out.get("status") == "error" else "completed"
 
             outputs[nid] = out
@@ -176,7 +532,7 @@ async def run_workflow_dag(
         for nid in ready:
             pending.remove(nid)
 
-    if any(s == "failed" or s == "rejected" for s in statuses.values()):
+    if any(s in ("failed", "rejected") for s in statuses.values()):
         final_status = "failed"
     elif any(s == "awaiting_gate" for s in statuses.values()) or pending:
         final_status = "paused"
@@ -197,3 +553,72 @@ async def run_workflow_dag(
         "node_statuses": statuses,
         "outputs": outputs,
     }
+
+
+def get_workflow_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    with _connect(db_path) as conn:
+        run_row = conn.execute(
+            "SELECT run_id, workflow_id, status, dag_json, created_at, updated_at FROM workflow_runs WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if not run_row:
+            return None
+        node_rows = conn.execute(
+            "SELECT node_id, fingerprint, status, output_json, updated_at FROM workflow_node_states WHERE run_id = ? ORDER BY updated_at ASC",
+            (run_id,),
+        ).fetchall()
+    nodes = {}
+    for nr in node_rows:
+        try:
+            out_parsed = json.loads(nr["output_json"] or "{}")
+        except Exception:
+            out_parsed = {}
+        nodes[nr["node_id"]] = {
+            "status": nr["status"],
+            "fingerprint": nr["fingerprint"],
+            "output": out_parsed,
+            "updated_at": nr["updated_at"],
+        }
+    try:
+        dag_parsed = json.loads(run_row["dag_json"] or "{}")
+    except Exception:
+        dag_parsed = {}
+    return {
+        "run_id": run_row["run_id"],
+        "workflow_id": run_row["workflow_id"],
+        "status": run_row["status"],
+        "dag": dag_parsed,
+        "nodes": nodes,
+        "created_at": run_row["created_at"],
+        "updated_at": run_row["updated_at"],
+    }
+
+
+def list_workflow_runs(limit: int = 50, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT run_id, workflow_id, status, created_at, updated_at FROM workflow_runs ORDER BY updated_at DESC LIMIT ?",
+            (max(1, min(200, int(limit))),),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+async def resume_workflow_run(
+    run_id: str,
+    gate_approvals: Optional[Dict[str, bool]] = None,
+    executor_fn: Optional[ExecutorFn] = None,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    existing = get_workflow_run(run_id, db_path=db_path)
+    if not existing:
+        raise KeyError(f"Workflow run '{run_id}' not found")
+    dag_def = existing.get("dag") or {}
+    if not dag_def.get("nodes"):
+        raise ValueError(f"Workflow run '{run_id}' besitzt keine gespeicherte DAG-Definition fuer Resume.")
+    return await run_workflow_dag(
+        dag_def=dag_def,
+        executor_fn=executor_fn,
+        run_id=run_id,
+        gate_approvals=gate_approvals or {},
+        db_path=db_path,
+    )

@@ -388,8 +388,8 @@ def _parse_delegation_blocks(text: str):
                 if h not in seen_hashes:
                     valid.append(payload)
                     seen_hashes.add(h)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[Delegation] Ungueltiger Delegations-JSON-Block uebersprungen: {exc}")
             
     return valid, invalid
 
@@ -594,8 +594,8 @@ async def _watch_delegated_task(
                         result = parsed_ev.get("summary") or parsed_ev.get("reason") or ""
                     except Exception:
                         result = ev[0][:500]
-            except Exception:
-                pass
+            except Exception as ev_exc:
+                logger.debug(f"[Delegation] Fallback-Event-Lesen fuer {task_id} fehlgeschlagen: {ev_exc}")
         attach_note = ""
         try:
             attach_dir = os.path.join(OPT_DATA_DIR, "kanban", "attachments", clean_tid)
@@ -603,8 +603,8 @@ async def _watch_delegated_task(
                 files = [safe_filename(f) for f in os.listdir(attach_dir) if os.path.isfile(os.path.join(attach_dir, f))]
                 if files:
                     attach_note = "\n\n**Angehängte Artefakte:**\n" + "\n".join(f"- {f}" for f in files)
-        except Exception:
-            pass
+        except OSError as att_exc:
+            logger.debug(f"[Delegation] Anhangsverzeichnis fuer {task_id} nicht lesbar: {att_exc}")
         obsidian_rel = None
         try:
             title = (final_title or "Delegation")[:80]
@@ -624,8 +624,8 @@ async def _watch_delegated_task(
                     fan_parent, fan_parent_title = await asyncio.to_thread(
                         mc_get_parent_context_sqlite, task_id
                     )
-                except Exception:
-                    pass
+                except Exception as fp_exc:
+                    logger.debug(f"[Delegation] Parent-Kontext fuer {task_id} nicht ladbar: {fp_exc}")
                 try:
                     from backend.post_task_pipeline import project_folder_name
                     proj_name = project_folder_name({
@@ -651,8 +651,8 @@ async def _watch_delegated_task(
                                 sf_name = safe_filename(f)
                                 dst_f = safe_path_within(os.path.join(medien_dir, sf_name), [medien_dir], allow_write=True, allow_dirs=False)
                                 shutil.copy2(src_f, dst_f)
-                except Exception:
-                    pass
+                except Exception as cp_exc:
+                    logger.warning(f"[Delegation] Medien-Kopie fuer {task_id} fehlgeschlagen: {cp_exc}")
                 result_fn = safe_filename(f"{clean_tid}-{slug}.md")
                 result_path = safe_path_within(os.path.join(dest_dir, result_fn), [dest_dir], allow_write=True, allow_dirs=False)
                 with open(result_path, "w", encoding="utf-8") as f:
@@ -681,7 +681,7 @@ async def _watch_delegated_task(
                                 + ("+ Lisa-Synthese + finale Beschlussvorlage" if fan_parent else "")
                                 + "\n\n---\n[[00_VAULT_KNOWLEDGE]] | [[Archiv-Hubs]]\n")
                 except FileExistsError:
-                    pass
+                    logger.debug(f"[Delegation] PROJEKT.md existiert bereits in {proj_folder}")
                 obsidian_rel = os.path.basename(proj_folder)
         except Exception as oe:
             logger.warning(f"[Delegation] Obsidian-Export fehlgeschlagen: {oe}")

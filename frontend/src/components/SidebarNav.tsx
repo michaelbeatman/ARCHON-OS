@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { 
   Bot, 
   MessageSquare, 
@@ -13,7 +14,9 @@ import {
   Compass,
   Clapperboard,
   Settings2,
-  Radar
+  Radar,
+  Workflow,
+  Sparkles
 } from "lucide-react";
 import { GatewayManagerModal } from "./GatewayManagerModal";
 import { WatchdogModal } from "./WatchdogModal";
@@ -33,10 +36,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const [watchdogModalOpen, setWatchdogModalOpen] = useState(false);
   const [runningGatewayCount, setRunningGatewayCount] = useState<number | null>(null);
 
-  // Fetch running gateway count on mount (non-blocking, best-effort)
+  // Fetch running gateway count on mount (non-blocking, best-effort via Archon FastAPI proxy)
   React.useEffect(() => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8501";
-    fetch(`${apiBase}/api/v1/gateway/list`)
+    fetch(`/api/archon/api/v1/gateway/list`)
       .then((r) => r.json())
       .then((d) => {
         const count = (d.profiles || []).filter((p: any) => p.status === "running").length;
@@ -142,6 +144,24 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               <Clapperboard className="w-4 h-4 text-slate-400" />
               <span>Content Studio</span>
             </button>
+
+            <Link
+              href="/content-studio"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition text-fuchsia-300 hover:text-fuchsia-200 hover:bg-fuchsia-500/10 border border-fuchsia-500/20"
+            >
+              <Sparkles className="w-4 h-4 text-fuchsia-400" />
+              <span>Content-Maschine v1</span>
+              <span className="ml-auto text-[9px] bg-fuchsia-500/20 text-fuchsia-300 px-1.5 py-0.5 rounded font-mono">API</span>
+            </Link>
+
+            <Link
+              href="/workflows"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/10 border border-emerald-500/20"
+            >
+              <Workflow className="w-4 h-4 text-emerald-400" />
+              <span>Workflows &amp; DAGs</span>
+              <span className="ml-auto text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono">DAG</span>
+            </Link>
           </div>
         </div>
 

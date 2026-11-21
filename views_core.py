@@ -18,11 +18,14 @@ import glob
 import threading
 import time
 import json
+import logging
 import datetime
 import asyncio
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Query, Request
+
+logger = logging.getLogger("archon.views_core")
 
 from archon.routers._rbac import require_admin_or_503
 from pydantic import BaseModel
@@ -220,8 +223,8 @@ def _write_cache_atomic(path: str, payload: Dict[str, Any]) -> None:
         if os.path.exists(tmp_path):
             try:
                 os.unlink(tmp_path)
-            except OSError:
-                pass
+            except OSError as rm_exc:
+                logger.debug(f"[ViewsCore] Temp-Datei {tmp_path} nicht entfernt: {rm_exc}")
 
 def _build_vault_tree_fast(current_dir, rel_path="", depth=0, max_depth=4):
     if depth > max_depth:
@@ -328,8 +331,8 @@ async def get_vault_tree(force_refresh: bool = False):
                 "cached": True,
                 "source": "disk"
             }
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            logger.debug(f"[ViewsCore] Disk-Cache nicht lesbar: {exc}")
 
     # 3. Wenn kein Cache existiert: erstellen & cachen.
     # P-01: Der Vault-Walk dauert gemessen ~10 s. Inline im ``async def``
@@ -431,8 +434,8 @@ async def get_showroom_tree():
                         if line.startswith("# "):
                             proj_info["title"] = line.replace("# ", "").replace("📂 Projekt:", "").strip()
                             break
-                except Exception:
-                    pass
+                except OSError as exc:
+                    logger.debug(f"[ViewsCore] PROJEKT.md Titel nicht lesbar: {exc}")
             if _date_part and not proj_info["title"].startswith(_date_part):
                 proj_info["title"] = f"{_date_part} · {proj_info['title']}"
 
@@ -1089,8 +1092,8 @@ async def get_theme_live_overrides():
         try:
             with open(THEME_OVERRIDES_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            logger.warning(f"[ViewsCore] Theme-Overrides nicht lesbar ({THEME_OVERRIDES_FILE}): {exc}")
     return {"rules": {}, "textOverrides": {}}
 
 @router.post("/theme/live-overrides")
@@ -1126,8 +1129,8 @@ async def delete_theme_live_overrides(request: Request):
             try:
                 with open(target_css, "w", encoding="utf-8") as f:
                     f.write("/* Custom Studio CSS Reset */\n")
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.warning(f"[ViewsCore] Custom-Studio-CSS Reset fehlgeschlagen ({target_css}): {exc}")
         return {"status": "success", "message": "Theme Overrides erfolgreich zurückgesetzt."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Zurücksetzen: {str(e)}")

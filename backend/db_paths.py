@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+from typing import Optional
 
 logger = logging.getLogger("archon.db_paths")
 
@@ -28,12 +29,19 @@ APP_DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
 # Hermes-Heimat (Agenten-State, Sessions, Kanban) — bleibt getrennt vom App-Data-Ordner.
 HERMES_DATA_DIR = "/opt/data" if os.path.isdir("/opt/data") else os.path.expanduser("~/.hermes")
 
+# Die 3 konsolidierten Ziel-Datenbanken (Phase 2.1)
+CONSOLIDATED_DB_FILENAMES = ("ops.db", "business.db", "memory.db")
+
 # Verbindliche Zuordnung: Datei -> Heimatverzeichnis.
 DB_HOME = {
+    "ops.db": APP_DATA_DIR,
+    "business.db": APP_DATA_DIR,
+    "memory.db": APP_DATA_DIR,
     "agentic_memory.db": APP_DATA_DIR,
     "contracts.db": APP_DATA_DIR,
     "deals.db": APP_DATA_DIR,
     "corporate.db": APP_DATA_DIR,
+    "content_machine.db": APP_DATA_DIR,
     "kanban.db": HERMES_DATA_DIR,
     "state.db": HERMES_DATA_DIR,
     "shared-state.db": HERMES_DATA_DIR,
@@ -88,7 +96,23 @@ _DB_PRAGMA_INITIALIZED: set[str] = set()
 
 
 def resolve_db(filename: str) -> str:
-    """Liefert den Pfad zur richtigen DB-Datei. Erzeugt keine Datei."""
+    """Liefert den Pfad zur richtigen DB-Datei. Erzeugt keine Datei.
+
+    Ist die Phase-2-Konsolidierung (`ARCHON_DB_CONSOLIDATED=1` oder Manifest)
+    aktiviert, werden Legacy-Dateinamen transparent auf `ops.db`, `business.db`
+    oder `memory.db` umgeleitet, sobald die konsolidierte Zieldatei existiert.
+    """
+    base = os.path.basename(str(filename or "").strip())
+    try:
+        from backend.db_consolidation import is_consolidation_active, resolve_consolidated_domain
+        if base not in CONSOLIDATED_DB_FILENAMES and is_consolidation_active(APP_DATA_DIR):
+            domain_db = resolve_consolidated_domain(base)
+            consolidated_path = os.path.abspath(os.path.join(APP_DATA_DIR, domain_db))
+            if _has_tables(consolidated_path):
+                return consolidated_path
+    except Exception as exc:
+        logger.debug(f"[db_paths] Konsolidierungs-Check fuer {base} uebersprungen: {exc}")
+
     cached = _RESOLVED_DB_CACHE.get(filename)
     if cached and os.path.isfile(cached):
         return cached
@@ -151,6 +175,6 @@ def get_db_connection(db_name_or_path: str, timeout: float = 15.0) -> sqlite3.Co
                 conn.execute("PRAGMA journal_mode = WAL;")
                 conn.execute("PRAGMA synchronous = NORMAL;")
             _DB_PRAGMA_INITIALIZED.add(db_path)
-        except Exception:
-            pass
+        except sqlite3.Error as exc:
+            logger.warning(f"[db_paths] WAL-PRAGMA fuer {db_path} fehlgeschlagen: {exc}")
     return conn

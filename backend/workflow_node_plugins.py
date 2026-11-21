@@ -1022,3 +1022,55 @@ def uninstall_marketplace_plugin(plugin_id: str) -> Dict[str, Any]:
         os.remove(target)
         return {"status": "uninstalled", "plugin_id": pid}
     return {"status": "not_installed", "plugin_id": pid}
+
+
+def register_custom_marketplace_plugin(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Registriert und installiert ein benutzerdefiniertes 3rd-Party- / GitHub-Plugin."""
+    source_url = str(payload.get("source_url") or payload.get("github_url") or "").strip()
+    label = str(payload.get("label") or "").strip()
+    if not label and source_url:
+        label = source_url.rstrip("/").split("/")[-1].replace(".git", "")
+    if not label:
+        raise ValueError("label_or_source_required")
+
+    raw_cat = str(payload.get("category") or "business").strip().lower()
+    valid_cats = {"audio", "video", "design", "docs", "research", "business"}
+    cat = raw_cat if raw_cat in valid_cats else "business"
+
+    pid = re.sub(r"[^a-z0-9_-]+", "_", label.lower()).strip("_")[:48] or f"custom_{int(time.time())}"
+    if pid in CORE_NODE_PLUGINS:
+        pid = f"custom_{pid}"
+
+    desc = str(payload.get("description") or "").strip() or (
+        f"Benutzerdefiniertes Modul aus {source_url}" if source_url else "Benutzerdefiniertes Workflow-Plugin"
+    )
+    adapter = str(payload.get("adapter") or "http").strip().lower()
+    if adapter not in ("http", "mcp", "local"):
+        adapter = "http"
+
+    spec: Dict[str, Any] = {
+        "plugin_id": pid,
+        "label": label,
+        "category": cat,
+        "icon": str(payload.get("icon") or "🔌").strip() or "🔌",
+        "adapter": adapter,
+        "source_name": source_url.split("/")[2] if source_url.startswith("http") and len(source_url.split("/")) > 2 else "Custom / GitHub",
+        "source_url": source_url,
+        "description": desc,
+        "http_endpoint": str(payload.get("http_endpoint") or "").strip(),
+        "mcp_tool": str(payload.get("mcp_tool") or "").strip(),
+        "outputs_schema": ["content", "output_path"],
+        "params_schema": [
+            {"key": "input", "label": "Eingabe / Prompt ({{upstream.step_1.content}})", "type": "textarea", "default": ""},
+            {"key": "source_ref", "label": "Quelle / Repo / Endpoint", "type": "text", "default": source_url},
+            {"key": "extra_args", "label": "Zusatz-Parameter (JSON / Flags)", "type": "text", "default": ""},
+        ],
+        "custom": True,
+    }
+    os.makedirs(PLUGINS_NODES_DIR, exist_ok=True)
+    target = os.path.join(PLUGINS_NODES_DIR, f"{pid}.json")
+    tmp = f"{target}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(spec, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, target)
+    return {"status": "installed", "plugin": {**spec, "installed": True, "third_party": True}}

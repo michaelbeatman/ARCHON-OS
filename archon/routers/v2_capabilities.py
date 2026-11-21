@@ -197,6 +197,16 @@ async def api_v2_workflow_node_plugin_uninstall(request: Request, plugin_id: str
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/api/v2/workflows/node-plugins/marketplace/custom")
+async def api_v2_workflow_node_plugin_register_custom(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.workflow_node_plugins import register_custom_marketplace_plugin
+    try:
+        return await asyncio.to_thread(register_custom_marketplace_plugin, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/api/v2/workflows/templates")
 async def api_v2_workflow_templates_save(request: Request, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)

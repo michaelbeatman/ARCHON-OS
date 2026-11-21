@@ -685,14 +685,13 @@
         <div class="space-y-1.5 pb-2.5 border-b border-[var(--border)]">
           <div class="flex items-center justify-between">
             <span class="text-[10px] font-mono uppercase tracking-wider text-[var(--muted-foreground)]">Ablaufplan</span>
-            ${_dirty ? '<span class="text-[10px] font-mono text-amber-400">Ungespeichert</span>' : ""}
+            <div class="flex items-center gap-2">
+              ${_dirty ? '<span class="text-[10px] font-mono text-amber-400">Ungespeichert</span>' : ""}
+              ${!_activeTpl.builtin ? `<button type="button" id="wf-del-tpl-btn" class="text-[10px] text-rose-400 hover:underline">Löschen</button>` : ""}
+            </div>
           </div>
           <input id="wf-meta-title" value="${esc(_activeTpl.title)}" class="w-full px-2.5 py-1.5 rounded border border-[var(--border)] bg-[var(--page-bg)] text-xs font-semibold" placeholder="Workflow-Name" />
           <input id="wf-meta-desc" value="${esc(_activeTpl.description || "")}" class="w-full px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] text-[11px]" placeholder="Kurzbeschreibung" />
-          <div class="flex flex-wrap gap-1.5 pt-1">
-            <button type="button" id="wf-save-btn" class="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold">Als Vorlage speichern</button>
-            ${!_activeTpl.builtin ? `<button type="button" id="wf-del-tpl-btn" class="px-2.5 py-1.5 rounded-lg border border-rose-500/40 text-rose-400 text-[11px] hover:bg-rose-500/10">Löschen</button>` : ""}
-          </div>
         </div>
 
         ${
@@ -775,10 +774,6 @@
                 </div>`
               : ""
           }
-          <button type="button" id="wf-run-btn" class="w-full px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">
-            Workflow in Kanban starten (DAG)
-          </button>
-          <div id="wf-run-status" class="text-[11px] font-mono text-[var(--muted-foreground)]"></div>
           <button type="button" id="wf-goto-kanban" class="hidden w-full px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs hover:bg-[var(--secondary)]">Im Kanban / Graph ansehen</button>
         </div>
       </aside>`;
@@ -856,10 +851,16 @@
       <section style="flex-shrink:0;" class="border-t border-[var(--border)] bg-[var(--card)]/70 flex flex-col">
         <div class="px-3 pt-1.5 border-b border-[var(--border)] flex items-center justify-between gap-2 overflow-x-auto">
           <div class="flex items-end gap-1">${tabsHtml}</div>
-          <span class="text-[9px] font-mono text-[var(--muted-foreground)] whitespace-nowrap pb-1 hidden lg:inline">Baustein auf Matrix ziehen oder klicken</span>
+          <button type="button" id="wf-marketplace-btn" class="mb-1 px-2.5 py-1 rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-200 text-xs font-semibold whitespace-nowrap shrink-0">🧩 Marktplatz</button>
         </div>
         <div style="overflow-x:auto;" class="p-2.5 bg-[var(--page-bg)] flex items-stretch gap-2">${itemsHtml}</div>
       </section>`;
+  }
+
+  function rememberActiveTemplateId(id) {
+    try {
+      if (id) localStorage.setItem("archon_wf_last_active_id", String(id));
+    } catch (_) {}
   }
 
   function renderAll() {
@@ -867,28 +868,45 @@
     if (!mount) return;
 
     const connectHint = _connectFromId
-      ? `<span class="text-[11px] font-mono text-emerald-300 bg-emerald-500/15 border border-emerald-500/40 px-2 py-1 rounded-lg">Verknüpfung ab <b>${esc(_connectFromId)}</b> → Ziel-Station anklicken (Esc = Abbruch)</span>`
+      ? `<span class="text-[11px] font-mono text-emerald-300 bg-emerald-500/15 border border-emerald-500/40 px-2 py-0.5 rounded">Verknüpfung ab <b>${esc(_connectFromId)}</b> → Ziel-Station anklicken (Esc = Abbruch)</span>`
       : _connectMode
-      ? `<span class="text-[11px] font-mono text-indigo-300 bg-indigo-500/15 border border-indigo-500/40 px-2 py-1 rounded-lg">Quell-Station anklicken…</span>`
-      : `<span class="text-[10px] font-mono text-[var(--muted-foreground)] hidden xl:inline">${_activeTpl ? `Aktiver Plan: ${esc(_activeTpl.title)}${_dirty ? " *" : ""}` : "Baustein auf Matrix ziehen"}</span>`;
+      ? `<span class="text-[11px] font-mono text-indigo-300 bg-indigo-500/15 border border-indigo-500/40 px-2 py-0.5 rounded">Quell-Station anklicken…</span>`
+      : `<span id="wf-run-status" class="text-[11px] font-mono text-[var(--muted-foreground)] truncate">Baustein auf Matrix ziehen · → Port verknüpft</span>`;
+
+    const wfTitle = _activeTpl ? `${_activeTpl.title}${_dirty ? " *" : ""}` : "Kein Workflow geladen";
+    const wfDesc = _activeTpl
+      ? (_activeTpl.description || "Keine Beschreibung hinterlegt.")
+      : "Über '📂 Öffnen' eine Vorlage laden oder mit '+ Neu' starten.";
 
     mount.innerHTML = `
       <div style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
-        <div class="px-3 py-2 border-b border-[var(--border)] bg-[var(--card)] flex flex-wrap items-center justify-between gap-2 shrink-0">
-          <div class="flex flex-wrap items-center gap-1.5">
-            <button type="button" id="wf-connect-toggle" class="px-2.5 py-1 rounded-lg border text-xs font-semibold ${
-              _connectMode || _connectFromId
-                ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
-                : "border-[var(--border)] hover:bg-[var(--secondary)]"
-            }">Verknüpfen</button>
-            <button type="button" id="wf-auto-layout" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-xs">Auto-Layout</button>
-            ${connectHint}
+        <div class="px-3 py-2 border-b border-[var(--border)] bg-[var(--card)] flex items-stretch justify-between gap-4 shrink-0">
+          <div class="flex flex-col justify-between gap-1.5 min-w-0">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button type="button" id="wf-connect-toggle" class="px-2.5 py-1 rounded-lg border text-xs font-semibold ${
+                _connectMode || _connectFromId
+                  ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
+                  : "border-[var(--border)] hover:bg-[var(--secondary)]"
+              }">Verknüpfen</button>
+              <button type="button" id="wf-auto-layout" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-xs">Auto-Layout</button>
+              <span class="mx-1 h-4 w-px bg-[var(--border)]"></span>
+              <button type="button" id="wf-blank-btn" class="px-2.5 py-1 rounded-lg border border-indigo-500/40 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 text-xs font-semibold">+ Neu</button>
+              <button type="button" id="wf-open-browser-btn" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-xs font-semibold">📂 Öffnen</button>
+              <button type="button" id="wf-save-dialog-btn" ${_activeTpl ? "" : "disabled"} class="px-2.5 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 disabled:opacity-40 text-emerald-200 text-xs font-semibold">💾 Speichern</button>
+            </div>
+            <div class="min-w-0 flex items-center">${connectHint}</div>
           </div>
-          <div class="flex flex-wrap items-center gap-1.5">
-            <button type="button" id="wf-blank-btn" class="px-2.5 py-1 rounded-lg border border-indigo-500/40 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 text-xs font-semibold">+ Neu</button>
-            <button type="button" id="wf-open-browser-btn" class="px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] text-xs font-semibold">📂 Öffnen</button>
-            <button type="button" id="wf-save-dialog-btn" class="px-2.5 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 text-xs font-semibold">💾 Speichern</button>
-            <button type="button" id="wf-marketplace-btn" class="px-2.5 py-1 rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-200 text-xs font-semibold">🧩 Marktplatz</button>
+
+          <div class="flex items-stretch gap-3 min-w-0 ml-auto">
+            <div class="flex flex-col justify-center text-right min-w-0 max-w-md">
+              <div class="text-sm font-bold text-[var(--foreground)] truncate leading-tight">${esc(wfTitle)}</div>
+              <div class="text-[11px] text-[var(--muted-foreground)] truncate leading-snug mt-0.5">${esc(wfDesc)}</div>
+            </div>
+            <button type="button" id="wf-header-start-btn" ${_activeTpl ? "" : "disabled"} title="Workflow starten"
+              style="min-width:48px;"
+              class="px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-35 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-sm transition cursor-pointer shrink-0">
+              <svg viewBox="0 0 24 24" class="w-6 h-6 fill-current"><path d="M8 5v14l11-7z"/></svg>
+            </button>
           </div>
         </div>
         <div style="display:flex;flex-direction:row;flex:1;min-height:0;overflow:hidden;">
@@ -1368,13 +1386,13 @@
       };
     });
 
-    const runBtn = mount.querySelector("#wf-run-btn");
+    const runBtn = mount.querySelector("#wf-header-start-btn");
     if (runBtn && _activeTpl) {
       runBtn.onclick = async () => {
         const statusEl = mount.querySelector("#wf-run-status");
         const gotoBtn = mount.querySelector("#wf-goto-kanban");
         runBtn.disabled = true;
-        if (statusEl) statusEl.textContent = "Erzeuge Multi-Agent-DAG in Kanban...";
+        if (statusEl) statusEl.textContent = "Starte Workflow in Operations...";
         try {
           let tplId = _activeTpl.id;
           if (_dirty || !tplId) {
@@ -1385,12 +1403,14 @@
                 title: _activeTpl.title || "Eigener Ablaufplan",
                 category: _activeTpl.builtin ? "Eigene Workflows" : _activeTpl.category || "Eigene Workflows",
                 description: _activeTpl.description || "",
+                header_image: _activeTpl.header_image || "",
                 inputs: _activeTpl.inputs || [{ key: "topic", label: "Thema / Ziel", default: "" }],
                 nodes: _activeTpl.nodes,
                 edges: _activeTpl.edges || [],
               }),
             });
             tplId = saved.template.id;
+            rememberActiveTemplateId(tplId);
             _dirty = false;
           }
           const inputs = {};
@@ -1615,6 +1635,7 @@
           _selectedNodeId = _activeTpl.nodes[0]?.id || null;
           _selectedEdge = null;
           _dirty = false;
+          rememberActiveTemplateId(_activeTpl.id);
           modal.remove();
           renderAll();
         };
@@ -1627,6 +1648,7 @@
           _selectedNodeId = _activeTpl.nodes[0]?.id || null;
           _selectedEdge = null;
           _dirty = false;
+          rememberActiveTemplateId(_activeTpl.id);
           modal.remove();
           renderAll();
         };
@@ -1957,11 +1979,21 @@
     try {
       const [data] = await Promise.all([apiJson("/api/v2/workflows/templates"), loadSchedules()]);
       _templates = data.templates || [];
-      const target = (selectId && _templates.find((t) => t.id === selectId)) || _templates[0] || null;
+      let rememberedId = "";
+      try {
+        rememberedId = localStorage.getItem("archon_wf_last_active_id") || "";
+      } catch (_) {}
+      const lookupId = selectId || rememberedId;
+      const target = lookupId ? _templates.find((t) => t.id === lookupId) || null : null;
       if (target) {
         _activeTpl = cloneTpl(target);
         ensurePositions(_activeTpl);
         _selectedNodeId = _activeTpl.nodes[0]?.id || null;
+        _selectedEdge = null;
+        rememberActiveTemplateId(target.id);
+      } else {
+        _activeTpl = null;
+        _selectedNodeId = null;
         _selectedEdge = null;
       }
       renderAll();

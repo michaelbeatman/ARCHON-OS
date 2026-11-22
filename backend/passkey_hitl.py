@@ -28,13 +28,14 @@ _CHALLENGES: Dict[str, Dict[str, Any]] = {}
 _CHALLENGE_TTL_SECONDS = 300
 _PROOF_TOKENS: Dict[str, Dict[str, Any]] = {}
 _PROOF_TTL_SECONDS = 120
-_HIGH_RISK_CATEGORIES = {"payments", "destructive_actions"}
+_HIGH_RISK_CATEGORIES = {"payments", "destructive_actions", "system"}
 
 DEFAULT_CATEGORIES = {
     "payments": True,
     "project_start": True,
     "budget_overrun": True,
     "destructive_actions": True,
+    "system": True,
 }
 
 
@@ -168,6 +169,8 @@ def consume_hitl_proof_token(token: Optional[str], user_id: str, category: str =
     token_cat = str(entry.get("category") or "all")
     if category != "all" and token_cat not in ("all", category):
         return False
+    if category in _HIGH_RISK_CATEGORIES and not entry.get("uv_verified"):
+        return False
     return True
 
 
@@ -218,6 +221,7 @@ def verify_and_store_registration(
     alg: int = -7,
     label: str = "Passkey",
     expected_origin: Optional[str] = None,
+    authenticator_data_b64: Optional[str] = None,
 ) -> Dict[str, Any]:
     uid = str(user_id or "admin").strip() or "admin"
     client_raw = _b64u_decode(client_data_b64)
@@ -233,6 +237,17 @@ def verify_and_store_registration(
         raise ValueError("Registrierungs-Challenge abgelaufen oder ungueltig.")
     if expected_origin and client_data.get("origin") != expected_origin:
         raise ValueError("Origin stimmt nicht ueberein.")
+
+    if authenticator_data_b64:
+        auth_data = _b64u_decode(authenticator_data_b64)
+        if len(auth_data) < 37:
+            raise ValueError("Ungueltige authenticatorData bei Registrierung.")
+        rp_id_hash = auth_data[:32]
+        expected_rp_hash = hashlib.sha256(ch["rp_id"].encode("utf-8")).digest()
+        if rp_id_hash != expected_rp_hash:
+            raise ValueError("rpIdHash stimmt bei Registrierung nicht ueberein.")
+        if not (auth_data[32] & 0x01):
+            raise ValueError("User-Presence-Flag fehlt bei Registrierung.")
 
     spki_bytes = _b64u_decode(public_key_spki_b64)
     # Validieren, dass es ein gueltiger oeffentlicher Schluessel ist
@@ -293,7 +308,7 @@ def create_hitl_assertion_options(
         "challenge": challenge_b64,
         "rpId": rp_id,
         "timeout": 60000,
-        "userVerification": "required" if category in _HIGH_RISK_CATEGORIES else "preferred",
+        "userVerification": "required" if (category in _HIGH_RISK_CATEGORIES or category == "all") else "preferred",
         "allowCredentials": allow,
     }
 
@@ -334,7 +349,7 @@ def verify_hitl_assertion(
     if not (flags & 0x01):  # User Present (UP)
         raise ValueError("User-Presence-Flag fehlt.")
     cat = ch.get("category") or "all"
-    must_uv = (cat in _HIGH_RISK_CATEGORIES) if require_uv is None else bool(require_uv)
+    must_uv = (cat in _HIGH_RISK_CATEGORIES or cat == "all") if require_uv is None else bool(require_uv)
     uv_ok = bool(flags & 0x04)  # User Verified (UV: Biometrie/PIN)
     if must_uv and not uv_ok:
         raise ValueError("User-Verification-Flag (Biometrie/PIN) fuer diese Risikokategorie erforderlich.")

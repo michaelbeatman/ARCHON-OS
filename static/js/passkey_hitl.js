@@ -127,6 +127,12 @@
     const label = prompt('Bezeichnung für diesen Passkey (z. B. Google Passkey / Windows Hello):', 'Mein Passkey');
     if (!label) return;
     try {
+      let proofToken = '';
+      const hasExisting = document.querySelectorAll('#passkey-credentials-list button').length > 0;
+      if (hasExisting) {
+        const hitl = await requirePasskeyForHitl('system', 'Weiteren Passkey registrieren');
+        if (hitl && hitl.proof_token) proofToken = hitl.proof_token;
+      }
       const optRes = await fetch('/api/auth/passkey/register/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -146,9 +152,10 @@
       }
       const spki = cred.response.getPublicKey();
       const alg = typeof cred.response.getPublicKeyAlgorithm === 'function' ? cred.response.getPublicKeyAlgorithm() : -7;
+      const authDataBuf = typeof cred.response.getAuthenticatorData === 'function' ? cred.response.getAuthenticatorData() : null;
       const verRes = await fetch('/api/auth/passkey/register/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(proofToken ? { 'x-passkey-proof': proofToken } : {}) },
         body: JSON.stringify({
           user_id: uid,
           id: cred.id,
@@ -156,6 +163,8 @@
           alg,
           clientDataJSON: bufToB64u(cred.response.clientDataJSON),
           publicKeySpki: bufToB64u(spki),
+          authenticatorData: authDataBuf ? bufToB64u(authDataBuf) : '',
+          ...(proofToken ? { passkey_proof_token: proofToken } : {}),
         }),
       });
       const verData = await verRes.json();
@@ -171,10 +180,20 @@
 
   async function deleteUserPasskey(credId) {
     const uid = document.getElementById('passkey-user-select')?.value || 'admin';
-    const res = await fetch(`/api/auth/passkey/credentials/${encodeURIComponent(credId)}?user_id=${encodeURIComponent(uid)}`, { method: 'DELETE' });
-    if (res.ok) {
-      const data = await res.json();
-      renderPasskeyCredentials(data.credentials || []);
+    try {
+      const hitl = await requirePasskeyForHitl('system', 'Passkey entfernen');
+      const headers = hitl && hitl.proof_token ? { 'x-passkey-proof': hitl.proof_token } : {};
+      const res = await fetch(`/api/auth/passkey/credentials/${encodeURIComponent(credId)}?user_id=${encodeURIComponent(uid)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        renderPasskeyCredentials(data.credentials || []);
+      }
+    } catch (err) {
+      if (typeof showNotification === 'function') showNotification('Passkey-Fehler', err.message, 'error');
+      else alert(err.message);
     }
   }
   window.deleteUserPasskey = deleteUserPasskey;

@@ -415,8 +415,21 @@ def api_passkey_register_options(request: Request, payload: dict = Body(default=
 
 @router.post("/api/auth/passkey/register/verify")
 def api_passkey_register_verify(request: Request, payload: dict = Body(...)):
-    from backend.passkey_hitl import verify_and_store_registration
+    from backend.passkey_hitl import (
+        consume_hitl_proof_token,
+        get_user_passkey_config,
+        is_passkey_required,
+        verify_and_store_registration,
+    )
     target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
+    existing_cfg = get_user_passkey_config(target_id)
+    if (existing_cfg.get("credentials") or []) and is_passkey_required(target_id, "system"):
+        proof = str(payload.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
+        if not proof or not consume_hitl_proof_token(proof, target_id, "system"):
+            raise HTTPException(
+                status_code=403,
+                detail="Passkey-Verifizierung erforderlich, um einen weiteren Passkey zu registrieren.",
+            )
     _, origin = _request_rp_id_and_origin(request)
     try:
         cfg = verify_and_store_registration(
@@ -427,6 +440,7 @@ def api_passkey_register_verify(request: Request, payload: dict = Body(...)):
             alg=int(payload.get("alg", -7)),
             label=str(payload.get("label") or "Passkey"),
             expected_origin=origin,
+            authenticator_data_b64=str(payload.get("authenticatorData") or "") or None,
         )
         return {"status": "success", **cfg}
     except Exception as exc:

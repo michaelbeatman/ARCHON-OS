@@ -137,9 +137,10 @@ class ApprovalPolicyEngine:
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     """, (domain, key, val, label, desc, now, user))
 
-                    # Chained audit log
+                    # Chained audit log (HMAC-SHA256 wenn ARCHON_AUDIT_HMAC_KEY gesetzt, sonst SHA-256)
+                    from backend.audit_log import _chain_hash
                     payload = f"{prev_h}|{now}|{user}|INIT|{domain}|{key}|{val}"
-                    curr_h = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                    curr_h = _chain_hash(payload)
                     cur.execute("""
                         INSERT INTO approval_policy_audit_chain 
                         (prev_hash, current_hash, timestamp, user_id, action, domain, policy_key, old_value, new_value)
@@ -158,9 +159,8 @@ class ApprovalPolicyEngine:
     # --------------------------------------------------------------------------
     # Audit Chain Helper
     # --------------------------------------------------------------------------
-    def _log_audit_change(self, user_id: str, action: str, domain: str, key: str, old_val: str, new_val: str, conn: Optional[sqlite3.Connection] = None):
-        should_close = False
-    def _log_audit_change(self, user_id: str, action: str, domain: str, key: str, old_val: str, new_val: str, conn: sqlite3.Connection = None) -> str:
+    def _log_audit_change(self, user_id: str, action: str, domain: str, key: str, old_val: str, new_val: str, conn: Optional[sqlite3.Connection] = None) -> str:
+        from backend.audit_log import _chain_hash
         with self._chain_lock:
             should_close = False
             if conn is None:
@@ -174,7 +174,7 @@ class ApprovalPolicyEngine:
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
             payload = f"{prev_h}|{now}|{user_id}|{action}|{domain}|{key}|{old_val}->{new_val}"
-            curr_h = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            curr_h = _chain_hash(payload)
 
             cur.execute("""
                 INSERT INTO approval_policy_audit_chain 
@@ -185,6 +185,7 @@ class ApprovalPolicyEngine:
 
             if should_close:
                 conn.close()
+            return curr_h
 
             return curr_h
 
@@ -210,6 +211,34 @@ class ApprovalPolicyEngine:
             old_val = row["policy_value"]
             domain = row["domain"]
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+            # P1: Vorher konnte ein Admin finance_auto_approval_max auf 1_000_000
+            # setzen und damit alle Finanzanfragen ohne Vier-Augen-Prinzip
+            # automatisch freigeben. Typ, Bereich und die Invariante werden
+            # jetzt zentral (fuer ALLE Aufrufer) geprueft.
+            if policy_key in ("finance_auto_approval_max", "finance_four_eyes_min"):
+                try:
+                    numeric = float(str(new_value).strip())
+                except (TypeError, ValueError):
+                    raise ValueError(f"Policy '{policy_key}' muss ein numerischer Betrag sein.")
+                if not (0.0 <= numeric <= 1_000_000.0):
+                    raise ValueError(
+                        f"Policy '{policy_key}' liegt ausserhalb der erlaubten Spanne (0..1_000_000)."
+                    )
+                if policy_key == "finance_auto_approval_max":
+                    four_eyes = cur.execute(
+                        "SELECT policy_value FROM approval_policies WHERE policy_key = 'finance_four_eyes_min'"
+                    ).fetchone()
+                    if four_eyes:
+                        try:
+                            minimum = float(str(four_eyes["policy_value"]).strip())
+                        except (TypeError, ValueError):
+                            minimum = 500.0
+                        if numeric >= minimum:
+                            raise ValueError(
+                                "Invariante verletzt: finance_auto_approval_max muss "
+                                "kleiner als finance_four_eyes_min sein."
+                            )
 
             cur.execute("""
                 UPDATE approval_policies
@@ -493,15 +522,17 @@ class ApprovalPolicyEngine:
             return [dict(r) for r in rows]
 
     def verify_audit_integrity(self) -> Dict[str, Any]:
-        """Validates all SHA-256 hashes in sequence from genesis."""
+        """Validates all SHA-256 / HMAC-SHA256 hashes in sequence from genesis."""
+        from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
         with self._get_conn() as conn:
             cur = conn.cursor()
             rows = cur.execute("SELECT * FROM approval_policy_audit_chain ORDER BY id ASC").fetchall()
             
             if not rows:
-                return {"valid": True, "count": 0, "message": "Audit-Kette ist leer."}
+                return {"valid": True, "count": 0, "hmac_active": bool(_hmac_epochs()), "hmac_blocks": 0, "message": "Audit-Kette ist leer."}
 
             prev_hash = GENESIS_HASH
+            hmac_blocks = 0
             for r in rows:
                 if r["prev_hash"] != prev_hash:
                     return {
@@ -509,13 +540,14 @@ class ApprovalPolicyEngine:
                         "broken_at_id": r["id"],
                         "message": f"Kettenbruch bei Eintrag ID {r['id']}: prev_hash stimmt nicht überein."
                     }
+                if str(r["current_hash"] or "").startswith(HMAC_PREFIX):
+                    hmac_blocks += 1
                 # R-30: Validiere auch den berechneten Hash ueber dem tatsaechlichen Inhalt der Zeile
                 if r["action"] == "INIT":
                     payload = f"{r['prev_hash']}|{r['timestamp']}|{r['user_id']}|INIT|{r['domain']}|{r['policy_key']}|{r['new_value']}"
                 else:
                     payload = f"{r['prev_hash']}|{r['timestamp']}|{r['user_id']}|{r['action']}|{r['domain']}|{r['policy_key']}|{r['old_value']}->{r['new_value']}"
-                expected_curr_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-                if r["current_hash"] != expected_curr_hash:
+                if not _verify_hash(payload, str(r["current_hash"] or "")):
                     return {
                         "valid": False,
                         "broken_at_id": r["id"],
@@ -523,9 +555,21 @@ class ApprovalPolicyEngine:
                     }
                 prev_hash = r["current_hash"]
 
+            key_active = bool(_hmac_epochs())
+            if hmac_blocks and not key_active:
+                return {
+                    "valid": False,
+                    "count": len(rows),
+                    "hmac_active": False,
+                    "hmac_blocks": hmac_blocks,
+                    "message": "HMAC-Signaturpruefung fehlgeschlagen: ARCHON_AUDIT_HMAC_KEY fehlt."
+                }
+
             return {
                 "valid": True,
                 "count": len(rows),
+                "hmac_active": key_active,
+                "hmac_blocks": hmac_blocks,
                 "latest_hash": prev_hash,
                 "message": f"Kryptografische Integrität bestätigt ({len(rows)} Einträge manipulationssicher verkettet)."
             }

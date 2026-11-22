@@ -340,3 +340,92 @@ def test_agent_aliases_map_workflow_roles_to_real_profiles():
     for short_role in ("research", "writer", "qa", "engineer", "analyst", "security", "seo", "video", "repurposing"):
         mapped = resolve_agent_id(short_role)
         assert mapped in real_ids, f"Alias {short_role!r} -> {mapped!r} existiert nicht in agent_profiles.json"
+
+
+def test_passkey_hardening_system_category_uv_and_authdata(tmp_path, monkeypatch):
+    import base64
+    import hashlib
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    import backend.passkey_hitl as pk
+
+    monkeypatch.setattr(pk, "PASSKEY_FILE", str(tmp_path / "passkey.json"))
+    assert pk.DEFAULT_CATEGORIES.get("system") is True
+
+    priv = ec.generate_private_key(ec.SECP256R1())
+    spki_b64 = base64.urlsafe_b64encode(
+        priv.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+    ).decode().rstrip("=")
+
+    reg_opts = pk.create_registration_options("u_hard", "hard", "localhost")
+    cd_b64 = base64.urlsafe_b64encode(
+        json.dumps({"type": "webauthn.create", "challenge": reg_opts["challenge"], "origin": "http://localhost:8501"}).encode()
+    ).decode().rstrip("=")
+
+    # Falsches rpIdHash in authenticatorData muss abgelehnt werden
+    bad_auth = hashlib.sha256(b"evil.example.com").digest() + bytes([0x01]) + (0).to_bytes(4, "big")
+    bad_auth_b64 = base64.urlsafe_b64encode(bad_auth).decode().rstrip("=")
+    with pytest.raises(ValueError):
+        pk.verify_and_store_registration(
+            user_id="u_hard",
+            credential_id="cred_1",
+            client_data_b64=cd_b64,
+            public_key_spki_b64=spki_b64,
+            authenticator_data_b64=bad_auth_b64,
+        )
+
+    # Korrektes rpIdHash + UP wird akzeptiert
+    reg_opts2 = pk.create_registration_options("u_hard", "hard", "localhost")
+    cd_b64_2 = base64.urlsafe_b64encode(
+        json.dumps({"type": "webauthn.create", "challenge": reg_opts2["challenge"], "origin": "http://localhost:8501"}).encode()
+    ).decode().rstrip("=")
+    good_auth = hashlib.sha256(b"localhost").digest() + bytes([0x01]) + (0).to_bytes(4, "big")
+    good_auth_b64 = base64.urlsafe_b64encode(good_auth).decode().rstrip("=")
+    cfg = pk.verify_and_store_registration(
+        user_id="u_hard",
+        credential_id="cred_1",
+        client_data_b64=cd_b64_2,
+        public_key_spki_b64=spki_b64,
+        authenticator_data_b64=good_auth_b64,
+    )
+    assert len(cfg["credentials"]) == 1
+
+    # UV-Downgrade-Schutz: Token ohne uv_verified darf nicht fuer payments/system eingelöst werden
+    pk._PROOF_TOKENS["tok_no_uv"] = {
+        "user_id": "u_hard",
+        "credential_id": "cred_1",
+        "category": "all",
+        "uv_verified": False,
+        "created_ts": 9999999999.0,
+    }
+    assert pk.consume_hitl_proof_token("tok_no_uv", "u_hard", category="payments") is False
+
+
+def test_approval_policy_hmac_mixed_chain_and_fail_closed(tmp_path, monkeypatch):
+    import backend.approval_policy_engine as ape
+    import backend.audit_log as al
+
+    db_file = str(tmp_path / "approval.db")
+    monkeypatch.delenv("ARCHON_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.delenv("ARCHON_AUDIT_HMAC_PREVIOUS_KEYS", raising=False)
+
+    eng = ape.ApprovalPolicyEngine(db_path=db_file)
+    v1 = eng.verify_audit_integrity()
+    assert v1["valid"] is True
+    assert v1["hmac_blocks"] == 0
+
+    # Jetzt HMAC-Key setzen und neuen Eintrag schreiben -> gemischte Kette bleibt gueltig
+    monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "0123456789abcdef0123456789abcdef")
+    al._hmac_epochs()  # env check
+    h_hmac = eng._log_audit_change("admin", "UPDATE", "finances", "max_auto", "100", "250")
+    assert h_hmac.startswith(al.HMAC_PREFIX)
+
+    v2 = eng.verify_audit_integrity()
+    assert v2["valid"] is True
+    assert v2["hmac_active"] is True
+    assert v2["hmac_blocks"] == 1
+
+    # Fehlt der HMAC-Key spaeter, schlaegt verify_audit_integrity() fail-closed fehl
+    monkeypatch.delenv("ARCHON_AUDIT_HMAC_KEY", raising=False)
+    v3 = eng.verify_audit_integrity()
+    assert v3["valid"] is False

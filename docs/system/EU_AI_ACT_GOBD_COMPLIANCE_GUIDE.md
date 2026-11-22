@@ -16,7 +16,7 @@ Der zentrale `TenantContextManager` (`backend/tenant_context.py`) isoliert für 
 |---|---|---|
 | `erp.db` | `backend/erp_manager.py` | Eigene Debitoren/Kreditoren, Artikel, Angebote, Aufträge, Rechnungen & Gutschriften je Mandant |
 | `kanban.db` | `backend/operations_api.py`, `archon/routers/kanban.py` | Eigenes Aufgaben-Board je Sekundärmandant; Primärmandant bleibt verlustfrei an die aktive Hermes-Engine angebunden |
-| `crm.db` | `backend/crm_service.py` | Eigene Kontakte, Debitoren-/Steuerfelder & Termine je Sekundärmandant; Primärmandant nutzt live `pocketbase/pb_data/data.db` |
+| `crm.db` | `backend/crm_service.py` | Eigene Kontakte, Debitoren-/Steuerfelder & Termine je Sekundärmandant; Primärmandant nutzt die konsolidierte `business.db` (PocketBase ist standardmäßig deaktiviert: `POCKETBASE_ENABLED=false`) |
 | `contracts.db` | `backend/contract_manager.py` | Eigene Verträge, Laufzeiten & Kündigungsfristen-Alarme je Mandant (inkl. automatischer Erst-Migration) |
 | `deals.db` | `backend/deal_pipeline.py` | Eigene Vertriebspipeline & gewichteter Umsatz-Forecast je Mandant (inkl. automatischer Erst-Migration) |
 

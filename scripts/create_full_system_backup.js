@@ -220,7 +220,7 @@ START NACH WIEDERHERSTELLUNG:
 -----------------------------
 1. Docker Desktop starten.
 2. In 'agenticos_codebase' Konsole öffnen:
-   docker compose -f docker-compose.archon.yml up -d
+   docker compose -f docker-compose.yml up -d
 ===================================================================
 `;
 fs.writeFileSync(path.join(tempBackupRoot, 'README_RESTORE.txt'), readmeContent, 'utf8');

@@ -75,14 +75,15 @@ Tests, die die Allowlist festschreiben (nicht den Proxy): `tests/test_docker_cli
 `tests/test_critical_hardening.py:94-99`. Sie bleiben unverändert gültig, weil die
 Allowlist nicht angefasst wurde.
 
-**Wichtig für die Risikobewertung:** Der laufende `ARCHON-OS` hat **kein**
-`DOCKER_HOST` gesetzt (`docker inspect … | grep DOCKER_HOST` → leer) und mountet
-`/var/run/docker.sock` direkt. Der gesamte `main.py`-Pfad spricht also **am Proxy
-vorbei** mit dem Daemon. Über den Proxy gehen heute nur:
-`backend/post_task_pipeline.py:522,526` (httpx, paperclip-exec) und die
-Health-Probe. Die Compose-Dateien (`docker-compose.yml:29,153`,
-`docker-compose.archon.yml:55`) setzen `DOCKER_HOST=tcp://docker-socket-proxy:2375`
-— dort wäre der Proxy im Pfad.
+**Wichtig für die Risikobewertung (Stand v0.5.7):** Der laufende `ARCHON-OS`
+spricht **ausschließlich über den Proxy** mit dem Daemon: `docker-compose.yml`
+setzt `DOCKER_HOST=tcp://docker-socket-proxy:2375`, und der rohe
+`/var/run/docker.sock` wird nicht in den Anwendungs-Container gemountet.
+Die gehärtete ACL wird dabei über den `command:`-Override
+`["haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]` tatsächlich geladen
+(ohne diesen Override würde der Entrypoint sein eigenes Template starten).
+Zusätzlich nutzt `backend/post_task_pipeline.py:522,526` den Proxy für
+paperclip-exec.
 
 ## 4. Negativtest (auszuführen **nach** der Anwendung)
 

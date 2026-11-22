@@ -15,7 +15,7 @@
 
 [🇬🇧 English](README.md) · **🇩🇪 Deutsch** · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md) · [🇮🇹 Italiano](docs/readme/README.it.md) · [🇳🇱 Nederlands](docs/readme/README.nl.md)
 
-[🤖 Agenten-Installationsprotokoll](INSTALL_AGENT.md) | [⚡ Zero-Key Live-Demo](#weg-c-sofortige-read-only-live-demo-archon_demo_modetrue) | [📘 Handbücher & PDFs](#dokumentation--handbücher-pdf) | [🗺️ Roadmap (M0–M108)](docs/system/ROADMAP_2026.md)
+[🤖 Agenten-Installationsprotokoll](INSTALL_AGENT.md) | [⚡ Zero-Key Live-Demo](#weg-c-sofortige-read-only-live-demo-archon_demo_modetrue) | [📘 Handbücher & PDFs](#dokumentation--handbücher-pdf) | [🗺️ Roadmap (M0–M113)](docs/system/ROADMAP_2026.md)
 
 </div>
 
@@ -27,14 +27,15 @@ Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehos
 
 ---
 
-### Aktueller Release-Stand (`v0.5.7`, 21.11.2026)
+### Aktueller Release-Stand (`v0.5.7`, 22.11.2026)
 
-Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen seit `v0.5.5.3`:
+Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen seit `v0.5.6.0`:
 
-- **SQLite-Konsolidierung (M106):** 28 verstreute Datenbanken wurden auf 3 domänengetrennte WAL-DBs reduziert — `data/ops.db` (Kanban, Workflows, Audit, Sicherheit), `data/business.db` (ERP, CRM, Verträge, Treasury, Content-Maschine), `data/memory.db` (Gedächtnis, Learnings, Checkpoints) — inklusive transparenter Kompatibilitäts-Pfadauflösung.
-- **Content-Maschine v2 (M107):** Multi-Channel-Kampagnen-Pipeline (LinkedIn, YouTube Longform/Shorts, TikTok, X/Threads) mit Repurposing-DAG, Anti-AI-Slop-Qualitätsgate, SSRF-gesicherter Quellenaufnahme, 9:16-Clip-Matrix und HITL-Redaktionsfreigabe.
-- **Next.js-16-Cockpit (M108):** `frontend/` spricht direkt mit dem FastAPI-Backend (`127.0.0.1:8420`) ohne PocketBase; neue Arbeitsplätze `/content-studio`, `/workflows` und `/cockpit`.
-- **Audit-v3-Härtung (Wellen 1–6):** RBAC-/Tenant-IDOR-Fixes, XSS-Beseitigung, Zero-Egress-Fail-Closed, Treasury-/GoBD-Korrekturen sowie Fan-in-/Profil-SSOT-Fixes.
+- **M110 Execution Hardening:** Effect-Ledger mit `UNKNOWN` und verpflichtender Reconciliation, Worker-Leases/Heartbeats mit Liveness-Check, Pre-Execution-Validator für DAGs und ein `replan_count`-Deckel.
+- **Governance:** eine zentrale PolicyEngine und eine atomare BudgetBank (`reserve → settle/release`); signierte Warrants sind jetzt für privilegierte Tools wie `pay` / `mcp__*` zwingend.
+- **Zuverlässigkeit:** Idempotency-Keys und eine Outbox mit Retry/DLQ für Events, Webhooks und Scheduler; das Audit-Log nutzt jetzt HMAC mit Env-Key und einen blockierungsfreien Hintergrund-Anker.
+- **Observability & Tooling:** OTel-Traces in LLM-Kernel und DAG, Trace-to-Eval-Replay-Fixtures, Python 3.13, getrennte Test-Requirements.
+- **Workspace:** 5-Stufen-Onboarding-Wizard v2, Operations-Kalender und 11 LinkedIn-Skills.
 
 > **Konfigurationshinweis:** Die Codepfade für Authentifizierung und Egress-Kontrolle sind vorhanden, die mitgelieferte lokale `settings.json` hat aber weiterhin `auth.enabled = false`, `privacy.zero_egress = false` und `zero_egress_strict = false` (nur `hard_block_on_local_offline = true`). Vor einer LAN-Freigabe unbedingt Auth aktivieren. `config/version.json` ist jetzt auf `v0.5.7` angeglichen (Single Source of Truth); der CHANGELOG dokumentiert die Details.
 
@@ -48,7 +49,7 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen sei
 | **Vollständige Featureliste (`v0.5.2.1`)** | [**ARCHON_OS_FEATURELISTE_2026.pdf**](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | [ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | Kompletter System- & Modul-Katalog, Zweisprachige Global Edition, Live-Demo-Modus, Setup-Wizard & FinOps |
 | **AI-Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | Alle 55 strukturierten Decision-Engine-Methodiken (DE & EN) & Index |
 
-*Weitere Technik- & Sicherheitsdokumente:* [Systemarchitektur & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M108)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD-PDF & Multi-Mandanten-Handbuch (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise-Features & Playbooks-Handbuch](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP-Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live-Demo-Modus (`ARCHON_DEMO_MODE`)](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup-Wizard](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ökosystem & Migration](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+*Weitere Technik- & Sicherheitsdokumente:* [Systemarchitektur & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M113)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD-PDF & Multi-Mandanten-Handbuch (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise-Features & Playbooks-Handbuch](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP-Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live-Demo-Modus (`ARCHON_DEMO_MODE`)](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup-Wizard](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ökosystem & Migration](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -199,7 +200,7 @@ flowchart LR
 - **Benutzer- & Firmenhandbuch (DE, PDF):** [docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)
 - **Vollständige Featureliste & System-Katalog (v0.5.2.1, DE, PDF):** [docs/system/ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf)
 - **Decision Engine & 55 Boardroom-Frameworks (DE, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
-- **Entwicklungs-Roadmap (M0–M108):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
+- **Entwicklungs-Roadmap (M0–M113):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
 - **Live-Demo-Modus (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](docs/system/LIVE_DEMO_MODE_GUIDE.md)
 - **First-Run Setup-Wizard:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)
 - **Ökosystem & Migrations-Guide:** [docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md)

@@ -11,11 +11,15 @@ All notable changes to **Archon OS** are documented in this file.
 - **PolicyEngine + BudgetBank**: zentrale Tool-Entscheidung, harter Warrant-Zwang für `pay`/`mcp__*` u. a., atomare Budget-Reservierung (`BEGIN IMMEDIATE`) statt Check-then-Use.
 - **Audit-HMAC** mit Env-Key (`ARCHON_AUDIT_HMAC_KEY`) und blockierungsfreiem Hintergrund-Anker (`ARCHON_AUDIT_ANCHOR_PATH`).
 - **OTel-Verdrahtung** in `llm_kernel.py` und `workflow_dag_runner.py` (Trace pro Run/Call, Span pro Node).
+- **Trace-to-Eval (M112):** `build_fixture_from_trace()` und `replay_and_evaluate()` in `backend/eval_gates.py` – PII-redaktierte Replay-Fixtures aus OTel-Traces, Bewertung über die bestehenden Eval-Gates.
+- **Workspace:** 5-Stufen-Onboarding-Wizard v2 mit SSRF-sicheren Integrations-Probes, Operations-Kalender-Engine inkl. Service Worker, 11 LinkedIn-Skills (post, profile, human, …) mit Hooks/Rubrics, `competitor_idea_bridge.py` und `execution_routing_guard.py`.
 
 ### Changed
 - Python 3.13 in Runtime-Images und CI; Test-Abhängigkeiten in `requirements-test.txt` ausgelagert.
 - Tenant-Header nur noch für Admins/Service-Tokens; `executescript`-Transaktionsbruch im Mission-Control-Store behoben.
 - Versions-/Pfad-/Config-SSOT: `config/version.json` = v0.5.7, einheitliche Vault-Pfad-Auflösung über `archon.core.runtime`, `clear_rules.json` repariert.
+- **Compose-Bereinigung:** veraltete Varianten `docker-compose.archon.yml`, `docker-compose.cro.yml` und `docker-compose.vpn.yml` entfernt (Produktiv/Dev/Demo/Hermes bleiben).
+- Dokumentation auf v0.5.7 aktualisiert: Security-Versionsmatrix, Roadmap M110 → abgeschlossen, Proxy-README, EU-AI-Act-Guide, 5 statt 4 Wizard-Schritte, JSON-LD-Version.
 
 ## [0.5.6.0] - 2026-11-21 (Phase 1–3 Hardening, SQLite 28→3 Consolidation, Content-Maschine v2, Workflow-DAG E2E & Next.js 16 Cockpits)
 

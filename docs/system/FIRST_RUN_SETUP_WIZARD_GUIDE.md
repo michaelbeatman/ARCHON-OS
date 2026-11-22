@@ -91,7 +91,7 @@ All endpoints are mounted via `archon/routers/onboarding.py` with router-level `
 |---|---|---|---|
 | `GET` | `/api/onboarding/status` | Authenticated / Single-User | Returns `auto_open`, `language`, `zero_egress`, boolean-only `detected_providers` (**never** raw secret values), sanitized `channels`, and the 8 specialist domains summary. |
 | `POST` | `/api/onboarding/test-provider` | Admin required (403 for `viewer` / non-admin) | Runs SSRF-validated 5s models/tags probe (`{provider, api_key, base_url}`) → returns `{ok, provider, latency_ms, models_detected, detail}`. |
-| `POST` | `/api/onboarding/complete` | Admin required (403 for `viewer` / non-admin) | Validates all 4 steps up-front, atomically writes tenant profile, `.env` (`0600`), and both `settings.json` files, marks `onboarding.completed = True`. |
+| `POST` | `/api/onboarding/complete` | Admin required (403 for `viewer` / non-admin) | Validates all 5 steps up-front, atomically writes tenant profile, `.env` (`0600`), both `settings.json` files and the n8n/webhook settings, marks `onboarding.completed = True`. |
 | `POST` | `/api/onboarding/skip` | Admin required (403 for `viewer` / non-admin) | Sets `onboarding.dismissed = True` so power users are not prompted again on reload. |
 
 #### Re-Opening the Wizard Anytime
@@ -143,7 +143,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -NonInteractive
 
 ---
 
-### 3. Die 4 Schritte des Web-Einrichtungsassistenten
+### 3. Die 5 Schritte des Web-Einrichtungsassistenten
 
 1. **Unternehmen & Mandantenprofil:**
    - Erfasst `company_name` (Pflichtfeld), `legal_form`, `address`, `tax_id`, `vat_id`, `iban`, `bic`, `currency` (`EUR`, `USD`, `GBP`, `CHF`) sowie die Systemsprache (`de` | `en`).
@@ -155,7 +155,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -NonInteractive
    - **Zero-Egress (`privacy.zero_egress`):** Erzwingt lokale Verarbeitung vertraulicher Finanz-, Vertrags-, HR- und CRM-Daten.
 3. **Kanäle & Obsidian-Vault:**
    - Konfiguriert den Pfad zum Obsidian-Vault (`./obsidian_vault`), IMAP/SMTP-Zugangsdaten (Passwort ausschließlich in `.env` mit `0600`) sowie Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` inkl. optionalem `getMe`-Test).
-4. **Spezialisten-Domänen (8 Domänen / 70 Spezialisten):**
+4. **n8n & externe Zugänge:**
+   - Hinterlegt die n8n-Basis-URL (Loopback bzw. `host.docker.internal`) und den Webhook-Secret (nur in `.env`, `0600`). Der Verbindungstest ist SSRF-geschützt und erlaubt für HTTP ausschließlich lokale Hosts.
+   - Aktiviert optionale externe Kanäle (z. B. GitHub-Webhooks) und prüft deren Erreichbarkeit mit 5-s-Timeout.
+5. **Spezialisten-Domänen (8 Domänen / 70 Spezialisten):**
    - Aktiviert alle oder ausgewählte Fachbereiche und synchronisiert fehlertolerant die kompakten Direktiven über `sync_soul_modes.apply_soul_mode(mode="compact", lang=language)`.
 
 ---
@@ -164,6 +167,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -NonInteractive
 
 - `GET /api/onboarding/status`: Liefert Einrichtungsstatus, Sprache, Domänenübersicht und boolesche Provider-Erkennung (`detected_providers` enthält **niemals** Klartext-Secrets).
 - `POST /api/onboarding/test-provider`: Führt den Live-Verbindungstest durch (erfordert Admin-Rolle im Multi-User-Modus; Rolle `viewer` erhält `403 Forbidden`).
-- `POST /api/onboarding/complete`: Speichert alle 4 Schritte nach vollständiger Vorab-Validierung atomar und setzt `onboarding.completed = True`.
+- `POST /api/onboarding/complete`: Speichert alle 5 Schritte nach vollständiger Vorab-Validierung atomar und setzt `onboarding.completed = True`.
 - `POST /api/onboarding/skip`: Setzt `onboarding.dismissed = True`, sodass der Assistent beim Neuladen nicht erneut automatisch eingeblendet wird.
 - **Erneutes Öffnen jederzeit:** `window.openArchonSetupWizard()` in der Oberfläche oder Browser-Konsole aufrufen.

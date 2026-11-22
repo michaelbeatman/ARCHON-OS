@@ -99,7 +99,7 @@ Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite
 
 ---
 
-## 6. Abschlussstatus aller Architekturschritte (v0.5.0.1)
+## 6. Abschlussstatus aller Architekturschritte (v0.5.7)
 
 Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sind vollständig umgesetzt:
 

@@ -97,7 +97,7 @@
 | **107** | **Multi-Channel Content-Maschine v1 & v2 (LinkedIn, YouTube, TikTok, X)** | Sehr hoch | Abgeschlossen | Repurposing-DAG, Anti-AI-Slop-Quality-Gate, Quellen-Ingestion (URL/Obsidian/Transkript), 9:16-Clip-Matrix & Publishing-Bridge (`backend/content_machine.py`) |
 | **108** | **Next.js 16 UI-Konsolidierung auf Archon FastAPI** | Hoch | Abgeschlossen | Direkter FastAPI-Proxy (`/api/archon/[...path]`) ohne PocketBase-Zwang für `/content-studio`, `/workflows` und `/cockpit` (`frontend/`) |
 | **109** | **Code Mode (M109a Deferred Discovery → M109b Isolierte Sandbox)** | Hoch | Geplant | Token-Reduktion für ~200+ Endpunkte: erst Deferred Catalog (`search`/`describe`/`call` über `tool_runtime.py`), danach optional isolierte Sandbox mit Capability-Broker |
-| **110** | **Execution Hardening: Idempotency, Effect-Ledger, Leases & Plan-Validator** | Sehr hoch | Geplant | Stabile Harness-Idempotency-Keys, `PENDING→COMMITTED/FAILED/UNKNOWN` Effect-Ledger, DAG-Leases/Heartbeats, Pre-Run-Validator & `replan_count`-Deckel |
+| **110** | **Execution Hardening: Idempotency, Effect-Ledger, Leases & Plan-Validator** | Sehr hoch | Abgeschlossen (v0.5.7) | Umgesetzt in `event_mesh.py` (Effect-Ledger + Outbox), `deadlock_supervisor.py` (Leases/Heartbeats) und `workflow_dag_runner.py` (Plan-Validator, `replan_count`=2) |
 | **111** | **Isolation & Resilience: Bulkheads, Tool-Output-Caps, Circuit-Breaker & Queues** | Hoch | Geplant | Getrennte Scheduling-Klassen (Chat vs. Background vs. DAG), Tool-Output-Größenlimits vor Kontext-Injektion, Provider-Circuit-Breaker & Backpressure |
 | **112** | **OTel GenAI Tracing & Trace-to-Eval-Pipeline** | Hoch | Geplant | Durchgängige `trace_id` (Gateway → `LLMKernel` → Tools → DAG) mit PII-Redaktion, Kosten/Latenz und 1-Klick-Export in `backend/eval_gates.py` |
 | **113** | **Content-Maschine Safety & Lifecycle: Brand-Safety-Pass, Kill-Switch & Asset-Retirement** | Sehr hoch | Geplant | Dedizierter Legal/Brand-Safety-Second-Pass vor Publish, zentraler Kill-Switch + Plattform-Caps, Asset-Rückzug/Update, 30-Tage-Derivate & Crop-vs-Gen |
@@ -696,12 +696,13 @@
   - **M109a (Deferred Tool/Endpoint Discovery):** 3 schlanke Meta-Tools (`search_capabilities`, `describe_capability`, `call_capability`) über `backend/tool_runtime.py` (~800–1.000 Token Footprint) unter Beibehaltung von JSON-Schema-Typing, M75/M89/M90 und RBAC.
   - **M109b (Isolierte Code-Sandbox + Capability-Broker):** Erst nach vollständiger Härtung von M75/M89/M90 und ausschließlich in echter Prozess-/Wasm-Isolation (kein FS/Env, `network_mode: none`), gekoppelt an einen Capability-Broker (Method+Path-Allowlist, Secret-Masking auf Write-Payloads, Code-Review-Pflicht via `PreDecision` für `write`/`destructive`).
 
-### Meilenstein 110: Execution Hardening — Idempotency, Effect-Ledger, Leases & Plan-Validator (Geplant)
+### Meilenstein 110: Execution Hardening — Idempotency, Effect-Ledger, Leases & Plan-Validator (Abgeschlossen in v0.5.7)
 - **Ziel:** Verhindern von Doppel-Effekten (z. B. doppelte E-Mails, Posts, Zahlungen) bei Timeouts/Restarts sowie deterministische DAG-Prüfung vor dem Start.
 - **Kernbausteine:**
   - Harness-generierte Idempotency-Keys (`task_id:step_id:tool`) stabil über Retries (nie vom LLM erzeugt).
   - Effect-Ledger mit `PENDING → COMMITTED / FAILED / UNKNOWN` inkl. verpflichtender Reconciliation vor Retry nach `UNKNOWN`.
   - Pre-Execution Plan Validator (Zyklen, Schema, Input-Mapping, Budget, Deadline, RBAC, HITL-Pflicht) + harter `replan_count`-Deckel + Worker-Leases/Heartbeats.
+- **Umsetzung (v0.5.7):** `backend/event_mesh.py` (`EffectLedger`, Outbox mit Idempotency-Key, Reconciliation aus `UNKNOWN`, DLQ), `backend/deadlock_supervisor.py` (atomare Leases, `os.kill(pid, 0)`-Liveness, CAS-Reset, 120-s-Schwelle), `backend/workflow_dag_runner.py` (`validate_dag_def()` mit Kahn-Toposort, `request_dag_replan()` mit Cap 2). Idempotency-Keys sind derzeit event-/asset-basiert; das kanonische Format `task_id:step_id:tool` ist noch offen.
 
 ### Meilenstein 111: Isolation & Resilience — Bulkheads, Tool-Output-Caps & Circuit-Breaker (Geplant)
 - **Ziel:** Schutz von Kontextfenstern, Event-Loop und Provider-Quotas unter Last oder bei Drittanbieter-Ausfällen.

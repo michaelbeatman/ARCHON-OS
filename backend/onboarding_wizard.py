@@ -1,7 +1,7 @@
 """
 Milestone 30: Interactive First-Run Web Setup Wizard & Onboarding Backend.
 
-Manages 4-step first-run onboarding state, SSRF-safe AI provider connectivity
+Manages 5-step first-run onboarding state, SSRF-safe AI provider connectivity
 probes, hardened .env secret persistence (0600), channel configuration
 (IMAP/SMTP, Telegram, Obsidian Vault), and 8-domain / 70-specialist activation.
 """

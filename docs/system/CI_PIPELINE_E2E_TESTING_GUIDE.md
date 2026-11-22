@@ -83,6 +83,6 @@ python scripts/run_ci_suite.py --fail-fast
 ## 4. GitHub Actions CI Workflow
 
 In `.github/workflows/ci.yml` ist der automatisierte Ablauf für Pull Requests und Pushes auf `main` / `master` konfiguriert:
-- Matrix-Build auf Python 3.11
+- Matrix-Build auf Python 3.13
 - Ausführung aller Teststufen in getrennten Jobs mit klaren Statusmeldungen
 - Blockiert Merges bei Sicherheitsfunden, Regressionsbrüchen oder fehlerhafter Docker-Konfiguration

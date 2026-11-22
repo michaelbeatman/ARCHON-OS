@@ -3,7 +3,7 @@
  * Milestone 30: Interactive First-Run Web Setup Wizard & Onboarding Assistant
  *
  * Self-contained, theme-aware (var(--card), var(--foreground), var(--border))
- * 4-step modal wizard in pure vanilla JS with built-in EN / DE i18n dictionary,
+ * 5-step modal wizard in pure vanilla JS with built-in EN / DE i18n dictionary,
  * live SSRF-safe AI provider connectivity probes + latency badges, Zero-Egress
  * privacy toggle, channel configuration, and 8-domain / 70-specialist activation.
  *
@@ -19,7 +19,7 @@
     en: {
       badge: 'First-Run Setup',
       title: 'Welcome to Archon Agentic OS',
-      subtitle: 'Configure your tenant, AI engines, communication channels, and specialist cadre in 4 quick steps.',
+      subtitle: 'Configure your tenant, AI engines, communication channels, and specialist cadre in 5 quick steps.',
       steps: [
         '1. Company & Tenant',
         '2. AI Providers & Zero-Egress',
@@ -128,7 +128,7 @@
     de: {
       badge: 'Ersteinrichtung',
       title: 'Willkommen bei Archon Agentic OS',
-      subtitle: 'Richten Sie Mandantenprofil, KI-Provider, Kommunikationskanäle und Spezialisten-Domänen in 4 kurzen Schritten ein.',
+      subtitle: 'Richten Sie Mandantenprofil, KI-Provider, Kommunikationskanäle und Spezialisten-Domänen in 5 kurzen Schritten ein.',
       steps: [
         '1. Unternehmen & Mandant',
         '2. KI-Provider & Zero-Egress',

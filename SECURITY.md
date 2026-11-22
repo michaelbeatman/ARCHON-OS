@@ -17,8 +17,8 @@ Archon OS is built for **sovereign, self-hosted operation**:
 
 | Version | Supported |
 |---|---|
-| `v0.5.2.x` | Yes |
-| `< v0.5.2` | No |
+| `v0.5.7.x` | Yes |
+| `< v0.5.7` | No |
 
 ## Reporting a Vulnerability
 

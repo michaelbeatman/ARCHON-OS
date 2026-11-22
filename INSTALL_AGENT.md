@@ -52,7 +52,7 @@ Summarize Phase 1 in 3–4 short lines, then ask these **6 mandatory questions**
 1. **`Standard` (~4 GB RAM, Recommended Default):** `archon-os` + `hermes` (Hermes Agent) + `anything-llm` + `chroma` (Vector RAG) + `docker-socket-proxy`
 2. **`Full Automation` (~7 GB RAM):** `Standard` + `n8n` Automation + `ollama-embed`
 3. **`Minimal Core` (Low-RAM ~2 GB):** `archon-os` + `hermes` + `docker-socket-proxy` *(without AnythingLLM RAG)*
-4. **`Bare-Metal Dev`:** `.venv` Python 3.11+ alongside containerized `hermes` + `anything-llm` + `chroma`
+4. **`Bare-Metal Dev`:** `.venv` Python 3.13+ alongside containerized `hermes` + `anything-llm` + `chroma`
 
 ### Question 4 — Cloud LLM Keys & Local AI Integration (*API-Keys & Lokale KI*)
 - Ask for provider keys (`OPENROUTER_API_KEY` recommended — shared by Archon **and** Hermes Agent — or `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or configure later in Web UI).

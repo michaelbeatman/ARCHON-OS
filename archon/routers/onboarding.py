@@ -4,7 +4,7 @@ FastAPI Router for Milestone 30: Interactive First-Run Web Setup Wizard & Onboar
 Endpoints:
   - GET  /api/onboarding/status        : Sanitized onboarding status, provider flags & 8 domains
   - POST /api/onboarding/test-provider : SSRF-safe live connectivity & latency probe
-  - POST /api/onboarding/complete      : Atomic 4-step configuration persistence
+  - POST /api/onboarding/complete      : Atomic 5-step configuration persistence
   - POST /api/onboarding/skip          : Dismiss auto-open prompt for power users
 """
 

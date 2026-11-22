@@ -71,7 +71,7 @@
     const verEl = document.getElementById("sidebar-archon-version-text");
     if (!dotEl) return;
 
-    const curVer = data.version || "v0.5.2.1";
+    const curVer = data.version || "v0.5.7";
     if (verEl) verEl.textContent = curVer;
 
     if (isLocalOnly) {

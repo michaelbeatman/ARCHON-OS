@@ -15,7 +15,7 @@
 
 **🇬🇧 English** · [🇩🇪 Deutsch](README.de.md) · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md) · [🇮🇹 Italiano](docs/readme/README.it.md) · [🇳🇱 Nederlands](docs/readme/README.nl.md)
 
-[🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [⚡ Zero-Key Live Demo](#option-c-instant-zero-key-read-only-demo-archon_demo_modetrue) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap (M0–M108)](docs/system/ROADMAP_2026.md)
+[🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [⚡ Zero-Key Live Demo](#option-c-instant-zero-key-read-only-demo-archon_demo_modetrue) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap (M0–M113)](docs/system/ROADMAP_2026.md)
 
 </div>
 
@@ -44,14 +44,15 @@ What that means in practice:
 
 **Pre-1.0, and we say that up front:** interfaces and config keys change between releases, the ERP/CRM module is alpha, and multi-user role enforcement is still being hardened. If that works for you, issues and PRs are welcome.
 
-### Current Release State (`v0.5.7`, 2026-11-21)
+### Current Release State (`v0.5.7`, 2026-11-22)
 
-The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions since `v0.5.5.3`:
+The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions since `v0.5.6.0`:
 
-- **SQLite consolidation (M106):** 28 scattered databases consolidated into 3 domain WAL databases — `data/ops.db` (kanban, workflows, audit, security), `data/business.db` (ERP, CRM, contracts, treasury, content machine), `data/memory.db` (memory, learnings, checkpoints) — with transparent legacy path resolution.
-- **Content Machine v2 (M107):** multi-channel campaign pipeline (LinkedIn, YouTube Longform/Shorts, TikTok, X/Threads) with repurposing DAG, anti-AI-slop quality gate, SSRF-guarded source ingestion, 9:16 clip matrix and HITL editorial gate.
-- **Next.js 16 cockpit (M108):** `frontend/` talks directly to the FastAPI backend (`127.0.0.1:8420`) without PocketBase; new `/content-studio`, `/workflows` and `/cockpit` workspaces.
-- **Audit v3 hardening (waves 1–6):** RBAC/tenant-IDOR fixes, XSS remediation, zero-egress fail-closed, treasury/GoBD corrections and fan-in / profile-SSOT fixes.
+- **M110 Execution Hardening:** effect ledger with `UNKNOWN` + mandatory reconciliation, worker leases/heartbeats with a liveness check, pre-execution DAG validator and a `replan_count` cap.
+- **Governance:** one central PolicyEngine and an atomic BudgetBank (`reserve → settle/release`); signed warrants are now mandatory for privileged tools such as `pay` / `mcp__*`.
+- **Reliability:** idempotency keys and an outbox with retry/DLQ for events, webhooks and the scheduler; the audit log now uses HMAC with an env key and a non-blocking background anchor.
+- **Observability & tooling:** OTel traces in the LLM kernel and DAG, trace-to-eval replay fixtures, Python 3.13, split test requirements.
+- **Workspace:** 5-step onboarding wizard v2, operations calendar and 11 LinkedIn skills.
 
 > **Configuration note:** the code paths for authentication and egress control exist, but the shipped local `settings.json` still has `auth.enabled = false`, `privacy.zero_egress = false` and `zero_egress_strict = false` (only `hard_block_on_local_offline = true`). Enable auth before exposing the UI on a LAN. `config/version.json` is now aligned to `v0.5.7` (single source of truth); the CHANGELOG documents the details.
 
@@ -77,7 +78,7 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 | **Complete Feature List (`v0.5.2.1`)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | Full module catalog, Bilingual Global Edition, Live Demo Mode, First-Run Wizard, FinOps & Security |
 | **AI Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 55 structured Decision Engine methodologies (EN & DE) & index |
 
-*More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M108)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF & Multi-Tenant Guide (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise Features & Playbooks Guide](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live Demo Mode Guide](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup Wizard Guide](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosystem & Migration Guide](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+*More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M113)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF & Multi-Tenant Guide (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise Features & Playbooks Guide](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live Demo Mode Guide](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup Wizard Guide](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosystem & Migration Guide](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -232,7 +233,7 @@ ARCHON-OS/
 ├── scripts/                 # Bilingual SOUL & profile.yaml sync (sync_soul_modes.py), backups
 ├── plugins/                 # cost_guard, security_audit_hook, system_metrics, workflow_nodes
 ├── deploy/ecosystem/        # Self-hosting manifests & ecosystem integration guides
-├── docs/system/             # System Architecture, Roadmap (M0–M108) & PDFs
+├── docs/system/             # System Architecture, Roadmap (M0–M113) & PDFs
 ├── INSTALL_AGENT.md         # Structured onboarding guide for AI Coding Agents
 ├── setup.bat / setup.ps1    # Interactive 1-Click Installer for Windows
 ├── install.sh               # Interactive Multi-Arch Installer for Linux & macOS
@@ -246,7 +247,7 @@ ARCHON-OS/
 - **User & Company Manual (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(German: [DE PDF](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
 - **Complete Feature List & System Catalog (v0.5.2.1, EN, PDF):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
 - **Decision Engine & 55 Boardroom Frameworks (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
-- **Detailed Roadmap (M0–M108):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
+- **Detailed Roadmap (M0–M113):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
 - **Live Demo Mode Guide (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](docs/system/LIVE_DEMO_MODE_GUIDE.md)
 - **First-Run Setup Wizard Guide:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)
 - **Ecosystem & Migration Guide:** [docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md)

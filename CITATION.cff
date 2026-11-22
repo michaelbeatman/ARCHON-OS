@@ -4,7 +4,7 @@ message: "If you use Archon OS in your research or software systems, please cite
 type: software
 authors:
   - given-names: Michael
-    family-names: Beatman
+    family-names: Keller
     alias: michaelbeatman
 repository-code: "https://github.com/michaelbeatman/ARCHON-OS"
 url: "https://michaelbeatman.github.io/ARCHON-OS/"

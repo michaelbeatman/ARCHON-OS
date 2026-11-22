@@ -377,10 +377,9 @@ def test_run_showroom_code_sandbox_and_path_jail(tmp_path, monkeypatch):
         ))
     assert ei.value.status_code == 403
 
-    # Ohne Docker ist die Sandbox korrekt fail-closed (S6-Hardening): es
-    # wird KEIN Code auf dem Host ausgefuehrt. Der Test prune, dass die
-    # Antwort weder Code noch Secret durchscheuern laesst.
-    from fastapi import HTTPException
+    # Mit Docker-Sandbox wird isoliert ausgefuehrt (status == "success",
+    # stdout == "CLEAN"); ohne Docker ist die Sandbox fail-closed (HTTP 501).
+    # In keinem Fall darf das Host-Secret durchsickern.
     try:
         res = asyncio.run(views_core.run_showroom_code(
             None,
@@ -392,7 +391,9 @@ def test_run_showroom_code_sandbox_and_path_jail(tmp_path, monkeypatch):
     except HTTPException as exc:
         assert exc.status_code == 501
         return
-    assert res["status"] in ("error", "timeout")
+    assert res["status"] in ("success", "error", "timeout")
+    if res["status"] == "success":
+        assert res["stdout"].strip() == "CLEAN"
     assert "TOP_SECRET_VALUE_999" not in res.get("stdout", "")
 
 

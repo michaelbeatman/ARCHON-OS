@@ -351,9 +351,10 @@ class CoreMemoryManager:
                 FROM core_memory_blocks
                 WHERE pinned = 1
                   AND COALESCE(tenant_id, 'default') = ?
+                  AND (COALESCE(agent_id, 'global') = ? OR COALESCE(agent_id, 'global') = 'global')
                 ORDER BY block_key
                 """,
-                (tenant_id,),
+                (tenant_id, agent_id),
             ).fetchall()
         visible = [
             r for r in rows

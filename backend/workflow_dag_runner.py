@@ -1175,7 +1175,9 @@ async def run_workflow_dag(
         }
     await run_lock.acquire()
     try:
-        return await _run_workflow_dag_locked(dag_def, executor_fn, rid, gate_approvals, db_path)
+        return await _run_workflow_dag_locked(
+            dag_def, executor_fn, rid, gate_approvals, db_path, cancel_token=cancel_token
+        )
     finally:
         run_lock.release()
 
@@ -1186,6 +1188,7 @@ async def _run_workflow_dag_locked(
     rid: str,
     gate_approvals: Optional[Dict[str, bool]],
     db_path: Optional[str],
+    cancel_token: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Eigentliche DAG-Ausfuehrung; Per-run_id-Lock wird von run_workflow_dag gehalten."""
     eff_executor = executor_fn or default_agent_node_executor

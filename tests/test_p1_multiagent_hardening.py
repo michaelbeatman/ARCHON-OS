@@ -38,9 +38,11 @@ def test_p1_unknown_agent_is_not_silently_redirected():
 
 
 def test_p1_boardroom_consensus_check_excludes_negation():
-    src = (REPO_ROOT / "core_dispatcher.py").read_text(encoding="utf-8")
-    assert '"KEIN KONSENS"' in src
-    assert 'consensus_reached and not negative' in src
+    disp_src = (REPO_ROOT / "core_dispatcher.py").read_text(encoding="utf-8")
+    gate_src = (REPO_ROOT / "backend/consensus_gate.py").read_text(encoding="utf-8")
+    assert "resolve_debate_consensus" in disp_src
+    assert '"KEIN KONSENS"' in gate_src
+    assert "_NEGATIVE_DEBATE_MARKERS" in gate_src
 
 
 def test_p1_delegation_result_uses_agent_role_and_handoff():

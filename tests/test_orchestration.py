@@ -1069,10 +1069,9 @@ class TestRunSynthesisCascade:
             "metrics": {}, "audit_logs": []
         }
         mock_folder_namer.return_value = "project-folder"
-        # 3 Calls: Lisa, Reviewer, Robert
+        # M114: Schritt 1 ist deterministische Fan-In-Synthese (kein LLM-Call fuer Lisa),
+        # danach 2 LLM-Calls: Reviewer + Robert
         mock_dispatcher.dispatch_to_omniroute_or_container.side_effect = [
-            # Lisa call
-            {"content": "Synthesis result\nSYNTHESE-BEREIT"},
             # Reviewer call
             {"content": "OK"},
             # Robert call
@@ -1128,10 +1127,9 @@ class TestRunSynthesisCascade:
             "metrics": {}, "audit_logs": []
         }
         mock_folder_namer.return_value = ""
-        # 4 Calls: Lisa (1), Lisa repair (2), Reviewer (3), Robert (4)
+        # M114: Deterministische Fan-In-Synthese kommt ohne Lisa-LLM-Retry aus;
+        # danach 2 Calls: Reviewer (1), Robert (2)
         mock_dispatcher.dispatch_to_omniroute_or_container.side_effect = [
-            {"content": "Synthesis without marker"},
-            {"content": "Still no marker"},
             {"content": "OK"},  # Reviewer
             {"content": "FREIGABE\nOK"},  # Robert
         ]
@@ -1161,7 +1159,6 @@ class TestRunSynthesisCascade:
             update_mc=make_update_mc(mock_load_mc, mock_update_mc),
         )
 
-        assert any("Synthese ohne SYNTHESE-BEREIT-Marker" in r.message for r in caplog.records)
         mock_finalize_approval.assert_called_once()
 
     @pytest.mark.asyncio
@@ -1181,9 +1178,8 @@ class TestRunSynthesisCascade:
             "metrics": {}, "audit_logs": []
         }
         mock_folder_namer.return_value = ""
-        # 3 Calls: Lisa, Reviewer, Robert
+        # 2 Calls: Reviewer, Robert
         mock_dispatcher.dispatch_to_omniroute_or_container.side_effect = [
-            {"content": "Synthesis\nSYNTHESE-BEREIT"},
             {"content": "OK"},  # Reviewer
             {"content": "Maybe, let me think..."},  # Robert unklar
         ]

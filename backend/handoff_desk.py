@@ -93,7 +93,12 @@ class HandoffDesk:
                     payload_hash TEXT NOT NULL,
                     status TEXT DEFAULT 'pending_acceptance',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    accepted_at TIMESTAMP
+                    accepted_at TIMESTAMP,
+                    message_id TEXT DEFAULT '',
+                    reply_to TEXT DEFAULT '',
+                    correlation_id TEXT DEFAULT '',
+                    confidence REAL DEFAULT 1.0,
+                    attachments_json TEXT DEFAULT '[]'
                 )
             """)
             # Batch D/1: additive Migration — keine Zerstoerung bestehender Zeilen.

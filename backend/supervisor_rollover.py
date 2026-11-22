@@ -93,8 +93,6 @@ def escalation_chain(agent_id: str) -> List[str]:
         if not parent or parent in chain or parent == cur:
             break
         chain.append(parent)
-        if parent in APEX_IDS:
-            break
         cur = parent
     if not chain or chain[-1] not in APEX_IDS:
         chain.append(DEFAULT_APEX)

@@ -552,6 +552,20 @@ _RETENTION_LAST_TS: Optional[datetime] = None
 _RETENTION_INTERVAL_MIN = 30
 _RETENTION_DAYS = 14
 _RETENTION_MAX_ROWS = 5000
+_CONTENT_FEEDBACK_LAST_TS: Optional[datetime] = None
+
+
+def _run_content_feedback_sweep(now: datetime) -> None:
+    """Alle 6h: 48h/7d-Performance-Rueckfluss der Content-Maschine in FTS5-Memory einspeisen."""
+    global _CONTENT_FEEDBACK_LAST_TS
+    if _CONTENT_FEEDBACK_LAST_TS is not None and (now - _CONTENT_FEEDBACK_LAST_TS) < timedelta(hours=6):
+        return
+    _CONTENT_FEEDBACK_LAST_TS = now
+    try:
+        from backend.content_machine import sweep_content_performance_feedback
+        sweep_content_performance_feedback(hours_min=48)
+    except Exception as exc:
+        logger.debug(f"[WorkflowScheduler] Content-Feedback-Sweep uebersprungen: {exc}")
 
 
 def _run_workflow_events_retention(conn: sqlite3.Connection, now: datetime) -> None:
@@ -598,6 +612,7 @@ def _calendar_event_already_handled(conn: sqlite3.Connection, corr_id: str, toda
 def evaluate_due_schedules(now: Optional[datetime] = None) -> List[Dict[str, Any]]:
     init_schedules_db()
     cur_now = now or datetime.now(timezone.utc)
+    _run_content_feedback_sweep(cur_now)
     triggered: List[Dict[str, Any]] = []
     conn = _get_conn()
     try:

@@ -27,6 +27,7 @@ router = APIRouter(
 
 ws_router = APIRouter(tags=["Operations Calendar WS"])
 _ws_clients: Set[WebSocket] = set()
+_ws_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
 def broadcast_calendar_update(action: str, detail: Optional[Dict[str, Any]] = None) -> None:
@@ -45,22 +46,28 @@ def broadcast_calendar_update(action: str, detail: Optional[Dict[str, Any]] = No
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_send_all())
-    except RuntimeError as _exc:
-        _archon_exc_logger.debug("[operations_calendar] Ignorierte Ausnahme (Z.45): %s", _exc)
+    except RuntimeError:
+        if _ws_loop and _ws_loop.is_running():
+            asyncio.run_coroutine_threadsafe(_send_all(), _ws_loop)
 
 
 @ws_router.websocket("/api/v1/calendar/ws")
 async def calendar_ws_endpoint(websocket: WebSocket):
+    global _ws_loop
+    try:
+        _ws_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        pass
     # Auth-Gate: Bei aktivem Multi-User-Auth muessen gueltige Session/Bearer-Token vorliegen
     try:
-        from backend.auth_service import is_auth_enabled, get_session_user
-        if is_auth_enabled():
+        from backend.auth_service import auth_service
+        if auth_service.is_auth_enabled():
             tok = websocket.cookies.get("archon_session") or ""
             if not tok:
                 auth_hdr = websocket.headers.get("authorization") or ""
                 if auth_hdr.lower().startswith("bearer "):
                     tok = auth_hdr[7:].strip()
-            user = get_session_user(tok) if tok else None
+            user = auth_service.verify_session(tok) if tok else None
             if not user or user.get("role") == "anonymous":
                 await websocket.close(code=1008)
                 return

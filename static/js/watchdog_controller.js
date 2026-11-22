@@ -476,6 +476,15 @@
         <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
           <button 
             type="button" 
+            onclick="window.startWorkflowDagFromSignal && window.startWorkflowDagFromSignal('${escapeHtml(f.title || '')}', '${escapeHtml((f.snippet || '').slice(0, 220))}', '${escapeHtml(f.link || '')}')" 
+            class="px-2.5 py-1.5 rounded-lg border border-indigo-500/30 hover:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-xs font-bold transition cursor-pointer flex items-center gap-1"
+            title="Als Workflow-DAG starten"
+          >
+            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+            <span>DAG starten</span>
+          </button>
+          <button 
+            type="button" 
             onclick="toggleFindingInBasket('${f.id}'); renderWatchdogBasketFull();" 
             class="px-2.5 py-1.5 rounded-lg border border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-mono text-xs font-bold transition cursor-pointer flex items-center gap-1"
             title="${wdT('ui.watchdog_controller.basket_remove', 'Aus Sammelkorb entfernen')}"

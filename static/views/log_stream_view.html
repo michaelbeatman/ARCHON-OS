@@ -1,4 +1,4 @@
-<div id="view-log-stream" class="hidden w-full max-w-full h-screen max-h-screen overflow-hidden flex flex-col select-none shadcn-view bg-[var(--background)] text-[var(--foreground)]" style="height: 100vh !important; max-height: 100vh !important;">
+<div id="view-log-stream" class="hidden w-full max-w-full min-h-screen flex flex-col select-none shadcn-view bg-[var(--background)] text-[var(--foreground)]" style="min-height: 100dvh !important; max-height: none !important;">
 
   <!-- ========================================================================= -->
   <!-- 2-ELEMENT ARCHITEKTUR: CONTINUOUS 80px HEADER FÜR TELEMETRIE & LOGS        -->
@@ -7,7 +7,7 @@
     <!-- Links: Titel & Subtitel & Badges -->
     <div class="flex items-center gap-3 min-w-0 flex-1">
       <div class="hidden" aria-hidden="true">
-        <img id="logstream-main-header-img" src="/static/img/cadre_icons/telemetry_containers.png" alt="Telemetrie" class="hidden">
+        <img id="logstream-main-header-img" src="/static/img/cadre_icons/telemetry_containers.png?v=2026112110" alt="Telemetrie" class="hidden">
       </div>
       <div class="min-w-0">
         <div class="flex items-center gap-2">
@@ -42,7 +42,7 @@
         title="Docker Container Logs" data-i18n-title="view.log_stream.title_tab_containers"
       >
         <div class="tile-icon-wrap active-tile w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-          <img src="/static/img/cadre_icons/telemetry_containers.png" alt="Container" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+          <img src="/static/img/cadre_icons/telemetry_containers.png?v=2026112110" alt="Container" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
         </div>
         <span class="logstream-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-red-600 font-bold leading-none" data-i18n="view.log_stream.tab_containers">Container</span>
       </button>
@@ -56,7 +56,7 @@
         title="Hermes Agenten Logs" data-i18n-title="view.log_stream.title_tab_agents"
       >
         <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-          <img src="/static/img/cadre_icons/telemetry_agents.png" alt="Agenten" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+          <img src="/static/img/cadre_icons/telemetry_agents.png?v=2026112110" alt="Agenten" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
         </div>
         <span class="logstream-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="view.log_stream.tab_agents">Agenten</span>
       </button>
@@ -70,7 +70,7 @@
         title="Kryptografisches Audit-Log (Pillar 6)" data-i18n-title="view.log_stream.title_tab_audit"
       >
         <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-          <img src="/static/img/cadre_icons/telemetry_audit.png" alt="Audit" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+          <img src="/static/img/cadre_icons/telemetry_audit.png?v=2026112110" alt="Audit" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
         </div>
         <span class="logstream-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="view.log_stream.tab_audit">Audit</span>
       </button>
@@ -85,7 +85,7 @@
         title="Agenten-Kommunikation &amp; Funkverkehr" data-i18n-title="view.log_stream.title_tab_comm"
       >
         <div class="tile-icon-wrap w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center mb-0.5 relative">
-          <img src="/static/img/cadre_icons/contact_nachrichten.png" alt="Kommunikation" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
+          <img src="/static/img/cadre_icons/telemetry_comm.png?v=2026112110" alt="Kommunikation" class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-xs pointer-events-none">
         </div>
         <span class="logstream-tab-label text-[10px] font-mono tracking-tight text-center whitespace-nowrap text-[var(--muted-foreground)] font-medium leading-none" data-i18n="view.log_stream.tab_comm">Kommunikation</span>
       </button>

@@ -70,7 +70,9 @@
   let _connectMode = false;
   let _dirty = false;
   let _runParamsOpen = false;
-  let _liveNodeStates = {}; // { [nodeId]: { status, quality_score, deliverable_path } }
+  let _activeRunId = "";
+  let _activeRunCostUsd = 0;
+  let _liveNodeStates = {}; // { [nodeId]: { status, quality_score, deliverable_path, cost_usd, output_preview, error } }
 
   // Live-SSE-Listener: Knoten leuchten waehrend der Ausfuehrung in Echtzeit
   window.addEventListener("archon:sse", (ev) => {
@@ -78,10 +80,14 @@
     if (!msg || msg.type !== "workflow_node_state" || !msg.payload) return;
     const p = msg.payload;
     if (!p.node_id) return;
+    if (p.run_id) _activeRunId = p.run_id;
     _liveNodeStates[p.node_id] = {
       status: p.status || "running",
       quality_score: p.quality_score,
       deliverable_path: p.deliverable_path,
+      cost_usd: p.cost_usd,
+      output_preview: p.output_preview || "",
+      error: p.error || "",
     };
     const card = document.querySelector(`[data-wf-card="${CSS.escape(p.node_id)}"]`);
     if (card) {
@@ -382,19 +388,37 @@
       .map((n) => {
         const isSel = _selectedNodeId === n.id;
         const isSrc = _connectFromId === n.id;
+        const plMeta = _nodePlugins.find((x) => x.plugin_id === n.type);
         const badgeCls =
           n.type === "gate"
             ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
             : n.type === "quality_gate"
             ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-            : n.type === "fanout"
+            : n.type === "fanout" || n.type === "map" || n.type === "dynamic_fanout"
             ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
             : n.type === "boardroom"
             ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
             : n.type === "research"
             ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+            : plMeta
+            ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
             : "bg-indigo-500/20 text-indigo-300 border-indigo-500/40";
-        const typeLabel = n.type === "gate" ? "HITL-Gate" : n.type === "quality_gate" ? "Anti-Slop QA" : n.type === "fanout" ? "Parallel" : n.type === "boardroom" ? "Boardroom" : n.type === "research" ? "Research Lab" : "Agent";
+        const typeLabel =
+          n.type === "gate"
+            ? "HITL-Gate"
+            : n.type === "quality_gate"
+            ? "Anti-Slop QA"
+            : n.type === "fanout"
+            ? "Parallel"
+            : n.type === "map" || n.type === "dynamic_fanout"
+            ? "Map-Fanout"
+            : n.type === "boardroom"
+            ? "Boardroom"
+            : n.type === "research"
+            ? "Research Lab"
+            : plMeta
+            ? `${plMeta.icon || "🔌"} ${plMeta.label}`
+            : "Agent";
         const liveState = _liveNodeStates[n.id];
         const livePillHtml = liveState
           ? `<span data-wf-live-pill="1" class="absolute -top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold shadow-xs pointer-events-none ${
@@ -661,12 +685,42 @@
         </div>`;
     }
 
+    const live = _liveNodeStates[node.id];
+    const liveCockpitHtml = live
+      ? `<div class="p-2 rounded-lg border border-sky-500/30 bg-sky-500/5 space-y-1.5 text-[11px]">
+          <div class="flex items-center justify-between gap-1">
+            <span class="font-mono font-bold text-sky-300">Live: ${esc(live.status)}${live.quality_score != null ? ` · Q${live.quality_score}` : ""}</span>
+            <div class="flex items-center gap-1.5">
+              ${live.cost_usd != null ? `<span class="font-mono text-[10px] text-emerald-300">$${Number(live.cost_usd).toFixed(4)}</span>` : ""}
+              ${_activeRunId ? `<button type="button" data-wf-refresh-run="1" class="px-1.5 py-0.5 rounded border border-[var(--border)] hover:bg-[var(--secondary)] text-[9px] font-mono">Sync</button>` : ""}
+            </div>
+          </div>
+          ${live.deliverable_path ? `<div class="text-[10px] font-mono text-emerald-300 truncate" title="${esc(live.deliverable_path)}">Datei: ${esc(live.deliverable_path)}</div>` : ""}
+          ${live.error ? `<div class="text-[10px] font-mono text-rose-400 break-words">${esc(live.error)}</div>` : ""}
+          ${live.output_preview ? `<pre class="max-h-28 overflow-y-auto p-1.5 rounded bg-[var(--page-bg)] border border-[var(--border)] text-[10px] font-mono whitespace-pre-wrap break-words">${esc(live.output_preview)}</pre>` : ""}
+          ${
+            live.status === "awaiting_gate" && _activeRunId
+              ? `<div class="flex items-center gap-1.5 pt-1">
+                  <button type="button" data-wf-gate-approve="${esc(node.id)}" class="flex-1 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] font-bold">Freigeben</button>
+                  <button type="button" data-wf-gate-reject="${esc(node.id)}" class="flex-1 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-mono text-[10px] font-bold">Ablehnen</button>
+                </div>`
+              : ""
+          }
+        </div>`
+      : _activeRunId
+      ? `<div class="flex items-center justify-between px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] text-[10px] font-mono text-[var(--muted-foreground)]">
+          <span>Run: ${esc(_activeRunId)} (${_activeRunCostUsd ? `$${Number(_activeRunCostUsd).toFixed(4)}` : "aktiv"})</span>
+          <button type="button" data-wf-refresh-run="1" class="text-sky-400 hover:underline">Status laden</button>
+        </div>`
+      : "";
+
     return `
       <div class="space-y-2.5">
         <div class="flex items-center justify-between">
           <span class="text-[10px] font-mono uppercase tracking-wider text-indigo-300">Station: ${esc(node.id)}</span>
           <button type="button" id="wf-del-node" class="text-[11px] text-rose-400 hover:underline">Entfernen</button>
         </div>
+        ${liveCockpitHtml}
         <div class="flex gap-1 p-1 rounded-lg bg-[var(--page-bg)] border border-[var(--border)]">
           ${tabBtn("prompt", "Prompt")}
           ${tabBtn("tools", "Tools")}
@@ -1410,61 +1464,163 @@
       };
     });
 
+    async function syncActiveRunDetails() {
+      if (!_activeRunId) return;
+      try {
+        const detail = await apiJson(`/api/v2/workflows/runs/${encodeURIComponent(_activeRunId)}`);
+        const runObj = detail && (detail.run || detail);
+        if (!runObj || !runObj.nodes) return;
+        _activeRunCostUsd = Number(runObj.total_cost_usd || 0);
+        Object.entries(runObj.nodes).forEach(([nid, nst]) => {
+          const out = nst.output || {};
+          _liveNodeStates[nid] = {
+            status: nst.status || "pending",
+            quality_score: out.quality_score ?? null,
+            deliverable_path: out.deliverable_path || "",
+            cost_usd: out.cost_usd ?? null,
+            output_preview: String(out.content || out.summary || out.result || "").slice(0, 1200),
+            error: out.error || "",
+          };
+        });
+        renderAll();
+      } catch (_) {}
+    }
+
+    mount.querySelectorAll("[data-wf-refresh-run]").forEach((btn) => {
+      btn.onclick = () => syncActiveRunDetails();
+    });
+
+    mount.querySelectorAll("[data-wf-gate-approve],[data-wf-gate-reject]").forEach((btn) => {
+      btn.onclick = async () => {
+        if (!_activeRunId) return;
+        const isApprove = btn.hasAttribute("data-wf-gate-approve");
+        const nid = btn.getAttribute(isApprove ? "data-wf-gate-approve" : "data-wf-gate-reject");
+        btn.disabled = true;
+        try {
+          await apiJson(`/api/v2/workflows/runs/${encodeURIComponent(_activeRunId)}/resume`, {
+            method: "POST",
+            body: JSON.stringify({ gate_approvals: { [nid]: isApprove } }),
+          });
+          await syncActiveRunDetails();
+        } catch (err) {
+          alert(`Gate-Aktion fehlgeschlagen: ${err.message}`);
+          btn.disabled = false;
+        }
+      };
+    });
+
+    async function executeWorkflowRun(inputsObj) {
+      const statusEl = mount.querySelector("#wf-run-status");
+      const gotoBtn = mount.querySelector("#wf-goto-kanban");
+      if (runBtn) runBtn.disabled = true;
+      if (statusEl) statusEl.textContent = "Starte Workflow in Operations...";
+      try {
+        let tplId = _activeTpl.id;
+        if (_dirty || !tplId) {
+          const saved = await apiJson("/api/v2/workflows/templates", {
+            method: "POST",
+            body: JSON.stringify({
+              id: _activeTpl.builtin ? `${_activeTpl.id}_custom` : _activeTpl.id || undefined,
+              title: _activeTpl.title || "Eigener Ablaufplan",
+              category: _activeTpl.builtin ? "Eigene Workflows" : _activeTpl.category || "Eigene Workflows",
+              description: _activeTpl.description || "",
+              header_image: _activeTpl.header_image || "",
+              inputs: _activeTpl.inputs || [{ key: "topic", label: "Thema / Ziel", default: "" }],
+              nodes: _activeTpl.nodes,
+              edges: _activeTpl.edges || [],
+            }),
+          });
+          tplId = saved.template.id;
+          rememberActiveTemplateId(tplId);
+          _dirty = false;
+        }
+        const res = await apiJson(`/api/v2/workflows/templates/${encodeURIComponent(tplId)}/run`, {
+          method: "POST",
+          body: JSON.stringify({
+            inputs: inputsObj || {},
+            cron_schedule: mount.querySelector("#wf-run-cron")?.value || _activeTpl.schedule_hint || "",
+            n8n_webhook_url: mount.querySelector("#wf-run-n8n")?.value || _activeTpl.n8n_webhook_hint || "",
+          }),
+        });
+        _activeRunId = res.run_id || "";
+        _activeRunCostUsd = 0;
+        _liveNodeStates = {};
+        if (statusEl) {
+          statusEl.textContent = `Gestartet (${res.run_id}): ${(res.created_tasks || []).length} Stationen & ${(res.created_links || []).length} Verknüpfungen angelegt.`;
+        }
+        if (gotoBtn) {
+          gotoBtn.classList.remove("hidden");
+          gotoBtn.onclick = () => {
+            if (typeof window.setOperationsTab === "function") window.setOperationsTab("kanban");
+            if (typeof window.loadOperationsData === "function") window.loadOperationsData();
+          };
+        }
+        if (typeof window.loadOperationsData === "function") window.loadOperationsData();
+        renderAll();
+      } catch (err) {
+        if (statusEl) statusEl.textContent = `Fehler: ${err.message}`;
+      } finally {
+        if (runBtn) runBtn.disabled = false;
+      }
+    }
+
+    function openRunDialogModal() {
+      closeModalById("wf-run-dialog-modal");
+      const tplInputs = Array.isArray(_activeTpl.inputs) ? _activeTpl.inputs : [];
+      const modal = document.createElement("div");
+      modal.id = "wf-run-dialog-modal";
+      modal.className = "fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4";
+      modal.innerHTML = `
+        <div class="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between border-b border-[var(--border)] pb-2">
+            <h3 class="text-sm font-bold text-[var(--foreground)]">Workflow starten: ${esc(_activeTpl.title || "Ablaufplan")}</h3>
+            <button type="button" id="wf-run-dlg-close" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">✕</button>
+          </div>
+          <div class="space-y-2.5 text-xs">
+            ${tplInputs
+              .map((inp) => {
+                const curEl = mount.querySelector(`[data-wf-input="${CSS.escape(inp.key)}"]`);
+                const val = curEl ? curEl.value : inp.default || "";
+                return `<label class="block space-y-1">
+                  <span class="text-[11px] font-mono text-[var(--muted-foreground)]">${esc(inp.label || inp.key)}</span>
+                  <input type="text" data-dlg-input="${esc(inp.key)}" value="${esc(val)}" placeholder="${esc(inp.placeholder || "")}" class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)]" />
+                </label>`;
+              })
+              .join("")}
+          </div>
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+            <button type="button" id="wf-run-dlg-cancel" class="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs hover:bg-[var(--secondary)]">Abbrechen</button>
+            <button type="button" id="wf-run-dlg-go" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">Jetzt starten</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.querySelector("#wf-run-dlg-close").onclick = () => closeModalById("wf-run-dialog-modal");
+      modal.querySelector("#wf-run-dlg-cancel").onclick = () => closeModalById("wf-run-dialog-modal");
+      modal.querySelector("#wf-run-dlg-go").onclick = async () => {
+        const inputsObj = {};
+        modal.querySelectorAll("[data-dlg-input]").forEach((el) => {
+          const k = el.getAttribute("data-dlg-input");
+          inputsObj[k] = el.value;
+          const mirror = mount.querySelector(`[data-wf-input="${CSS.escape(k)}"]`);
+          if (mirror) mirror.value = el.value;
+        });
+        closeModalById("wf-run-dialog-modal");
+        await executeWorkflowRun(inputsObj);
+      };
+    }
+
     const runBtn = mount.querySelector("#wf-header-start-btn");
     if (runBtn && _activeTpl) {
       runBtn.onclick = async () => {
-        const statusEl = mount.querySelector("#wf-run-status");
-        const gotoBtn = mount.querySelector("#wf-goto-kanban");
-        runBtn.disabled = true;
-        if (statusEl) statusEl.textContent = "Starte Workflow in Operations...";
-        try {
-          let tplId = _activeTpl.id;
-          if (_dirty || !tplId) {
-            const saved = await apiJson("/api/v2/workflows/templates", {
-              method: "POST",
-              body: JSON.stringify({
-                id: _activeTpl.builtin ? `${_activeTpl.id}_custom` : _activeTpl.id || undefined,
-                title: _activeTpl.title || "Eigener Ablaufplan",
-                category: _activeTpl.builtin ? "Eigene Workflows" : _activeTpl.category || "Eigene Workflows",
-                description: _activeTpl.description || "",
-                header_image: _activeTpl.header_image || "",
-                inputs: _activeTpl.inputs || [{ key: "topic", label: "Thema / Ziel", default: "" }],
-                nodes: _activeTpl.nodes,
-                edges: _activeTpl.edges || [],
-              }),
-            });
-            tplId = saved.template.id;
-            rememberActiveTemplateId(tplId);
-            _dirty = false;
-          }
-          const inputs = {};
-          mount.querySelectorAll("[data-wf-input]").forEach((inp) => {
-            inputs[inp.getAttribute("data-wf-input")] = inp.value;
-          });
-          const res = await apiJson(`/api/v2/workflows/templates/${encodeURIComponent(tplId)}/run`, {
-            method: "POST",
-            body: JSON.stringify({
-              inputs,
-              cron_schedule: mount.querySelector("#wf-run-cron")?.value || _activeTpl.schedule_hint || "",
-              n8n_webhook_url: mount.querySelector("#wf-run-n8n")?.value || _activeTpl.n8n_webhook_hint || "",
-            }),
-          });
-          if (statusEl) {
-            statusEl.textContent = `Gestartet (${res.run_id}): ${(res.created_tasks || []).length} Stationen & ${(res.created_links || []).length} Verknüpfungen angelegt.`;
-          }
-          if (gotoBtn) {
-            gotoBtn.classList.remove("hidden");
-            gotoBtn.onclick = () => {
-              if (typeof window.setOperationsTab === "function") window.setOperationsTab("kanban");
-              if (typeof window.loadOperationsData === "function") window.loadOperationsData();
-            };
-          }
-          if (typeof window.loadOperationsData === "function") window.loadOperationsData();
-        } catch (err) {
-          if (statusEl) statusEl.textContent = `Fehler: ${err.message}`;
-        } finally {
-          runBtn.disabled = false;
+        if (Array.isArray(_activeTpl.inputs) && _activeTpl.inputs.length > 0) {
+          openRunDialogModal();
+          return;
         }
+        const inputs = {};
+        mount.querySelectorAll("[data-wf-input]").forEach((inp) => {
+          inputs[inp.getAttribute("data-wf-input")] = inp.value;
+        });
+        await executeWorkflowRun(inputs);
       };
     }
   }
@@ -2366,6 +2522,36 @@
   window.openWorkflowTemplatesStudio = function () {
     injectStudioShell();
     if (typeof window.setOperationsTab === "function") window.setOperationsTab("workflows");
+  };
+
+  window.startWorkflowDagFromSignal = async function (title, summary, sourceUrl) {
+    const topic = [title, summary, sourceUrl].filter(Boolean).join(" — ").slice(0, 500);
+    if (!topic) return;
+    try {
+      const listRes = await apiJson("/api/v2/workflows/templates");
+      const tpls = Array.isArray(listRes.templates) ? listRes.templates : [];
+      const preferred =
+        tpls.find((t) => /content|research|news|media/i.test(String(t.id || t.category || ""))) || tpls[0];
+      if (!preferred) {
+        alert("Keine Workflow-Vorlage gefunden.");
+        return;
+      }
+      const res = await apiJson(`/api/v2/workflows/templates/${encodeURIComponent(preferred.id)}/run`, {
+        method: "POST",
+        body: JSON.stringify({ inputs: { topic } }),
+      });
+      _activeRunId = res.run_id || "";
+      _activeRunCostUsd = 0;
+      _liveNodeStates = {};
+      if (typeof window.showToast === "function") {
+        window.showToast(`Workflow-DAG gestartet (${res.run_id}): ${preferred.title}`, "success");
+      } else {
+        alert(`Workflow-DAG gestartet (${res.run_id}): ${preferred.title}`);
+      }
+      if (typeof window.loadOperationsData === "function") window.loadOperationsData();
+    } catch (err) {
+      alert(`Workflow-Start fehlgeschlagen: ${err.message}`);
+    }
   };
 
   if (document.readyState === "loading") {

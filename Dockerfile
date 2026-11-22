@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Base CLI tools + Multi-Arch static Docker CLI (amd64 & arm64 / Apple Silicon)
 # Debian 13 (trixie) ships no docker CLI binary in docker.io, so fetch static CLI for isolated sandboxes.
-RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates && \
+RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates ffmpeg && \
     case "${TARGETARCH:-amd64}" in \
       arm64|aarch64) DOCKER_ARCH="aarch64" ;; \
       *) DOCKER_ARCH="x86_64" ;; \

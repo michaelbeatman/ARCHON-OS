@@ -1176,3 +1176,67 @@ def publish_scheduled_due_assets(
         except Exception as exc:
             errors.append({"asset_id": a["id"], "error": str(exc)})
     return {"status": "ok", "due_count": len(due_assets), "published": published, "errors": errors}
+
+
+def sweep_content_performance_feedback(
+    *,
+    hours_min: int = 48,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """48h/7d-Performance-Rueckfluss: speist erfolgreiche Hooks gewichtet ins FTS5-Memory & Voice-Vorschlaege."""
+    init_content_machine_db(db_path)
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(1, int(hours_min)))).isoformat()
+    recorded = 0
+    suggestions: List[str] = []
+
+    with _conn(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT m.id AS metric_id, m.asset_id, m.channel, m.views, m.likes, m.comments, m.shares, m.saves,
+                   m.ctr_pct, m.recorded_at, a.title, a.hook, a.agent_id
+            FROM content_metrics m
+            JOIN content_assets a ON a.id = m.asset_id
+            WHERE m.recorded_at <= ?
+            ORDER BY m.views DESC, m.likes DESC
+            LIMIT 25
+            """,
+            (cutoff,),
+        ).fetchall()
+
+    for r in rows:
+        views = int(r["views"] or 0)
+        likes = int(r["likes"] or 0)
+        comments = int(r["comments"] or 0)
+        shares = int(r["shares"] or 0)
+        saves = int(r["saves"] or 0)
+        eng_rate = round(((likes + comments * 2 + shares * 3 + saves * 2) / views) * 100.0, 2) if views > 0 else 0.0
+        if eng_rate < 5.0 and views < 1000:
+            continue
+        summary = (
+            f"[48h+ Winner | {r['channel']}] '{r['title']}' — {views} Views, {eng_rate}% Engagement, "
+            f"CTR {float(r['ctr_pct'] or 0):.1f}%. Hook: {str(r['hook'] or '')[:160]}"
+        )
+        try:
+            from local_memory_bridge import memory_bridge
+            memory_bridge.record_learning(
+                agent_id=str(r["agent_id"] or "content_repurposing_specialist"),
+                category=f"content_{r['channel']}",
+                summary=summary,
+                memory_tier="procedural",
+            )
+            recorded += 1
+            suggestions.append(f"- ({r['channel']}, {eng_rate}% Eng.) {str(r['hook'] or '')[:140]}")
+        except Exception as exc:
+            logger.debug(f"[ContentMachine] 48h-Feedback-Sync uebersprungen: {exc}")
+
+    if suggestions:
+        try:
+            voice_sugg_path = os.path.join(WORKSPACE_DIR, "config", "voice_winner_hooks.md")
+            os.makedirs(os.path.dirname(voice_sugg_path), exist_ok=True)
+            with open(voice_sugg_path, "w", encoding="utf-8") as vf:
+                vf.write("# Automatische Brand-Voice Hook-Vorschlaege (48h+ Performance-Rueckfluss)\n\n")
+                vf.write("\n".join(suggestions[:15]) + "\n")
+        except Exception as exc:
+            logger.debug(f"[ContentMachine] voice_winner_hooks.md Schreibfehler: {exc}")
+
+    return {"status": "ok", "recorded_learnings": recorded, "suggestions_count": len(suggestions)}

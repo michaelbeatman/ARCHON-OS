@@ -569,11 +569,16 @@
               </div>
               <p class="text-[11px] text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">${escapeHtml(s.description || '')}</p>
             </div>
-            <div class="pt-2 border-t border-[var(--border)]/60 flex items-center justify-between text-[10px] font-mono">
-              <span class="text-[var(--muted-foreground)]">${escapeHtml(typeLabel)} · ${escapeHtml(s.domain)}</span>
-              <a href="${/^https?:\/\//i.test(String(s.homepage || '')) ? escapeHtml(s.homepage) : '#'}" target="_blank" rel="noopener" class="text-sky-500 hover:underline flex items-center gap-0.5">
-                ${resT('ui.research_lab.website', 'Webseite')} <i data-lucide="external-link" class="w-2.5 h-2.5"></i>
-              </a>
+            <div class="pt-2 border-t border-[var(--border)]/60 flex items-center justify-between text-[10px] font-mono gap-2">
+              <span class="text-[var(--muted-foreground)] truncate">${escapeHtml(typeLabel)} · ${escapeHtml(s.domain)}</span>
+              <div class="flex items-center gap-2 shrink-0">
+                <button type="button" onclick="window.startWorkflowDagFromSignal && window.startWorkflowDagFromSignal('${escapeHtml(s.name)}', '${escapeHtml((s.description || '').slice(0, 180))}', '${/^https?:\/\//i.test(String(s.homepage || '')) ? escapeHtml(s.homepage) : ''}')" class="px-1.5 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 border border-indigo-500/30 cursor-pointer" title="Als Workflow-DAG starten">
+                  ▶ DAG
+                </button>
+                <a href="${/^https?:\/\//i.test(String(s.homepage || '')) ? escapeHtml(s.homepage) : '#'}" target="_blank" rel="noopener" class="text-sky-500 hover:underline flex items-center gap-0.5">
+                  ${resT('ui.research_lab.website', 'Webseite')} <i data-lucide="external-link" class="w-2.5 h-2.5"></i>
+                </a>
+              </div>
             </div>
           </div>
         `;

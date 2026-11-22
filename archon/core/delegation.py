@@ -883,7 +883,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             kconn.execute(
                 "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, started_at, model_override, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (task_id, auftrag[:80] + ("..." if len(auftrag) > 80 else ""),
-                 f"Delegation von @{delegator_id} an @{ziel}:\n{auftrag}", ziel, "in_progress", prio_num, delegator_id, now_iso, now_iso, t_model, parent_pid)
+                 # Audit v3 2.1.3: isolation_header (M75 Tools/Skills) in tasks.body persistieren —
+                 # er ging vorher nur in state.db.messages verloren und fehlte bei der Ausfuehrung.
+                 f"Delegation von @{delegator_id} an @{ziel}:\n{isolation_header}\n{auftrag}", ziel, "in_progress", prio_num, delegator_id, now_iso, now_iso, t_model, parent_pid)
             )
             kconn.execute(
                 "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",

@@ -691,6 +691,69 @@ class AgentProfileValidationSchema(BaseModel):
         return val
 
 
+
+def _sync_hermes_profile_files(profiles_list: List[Dict[str, Any]]) -> None:
+    """SSOT-Rueckweg (Audit v3 2.1.4): schreibt profile.yaml und SOUL.md je Profil zurueck.
+
+    Ohne diesen Rueckweg wird der Prompt/Metadaten im UI gespeichert, der naechste Reload
+    aus profile.yaml/SOUL.md ueberschreibt die Aenderung aber wieder (Einbahn-SSOT).
+    Weiches Verhalten: Fehler pro Profil werden geloggt, werfen den Save nicht.
+    """
+    import yaml as _yaml
+    base = get_primary_hermes_profiles_dir()
+    yaml_fields = ("name", "person_name", "category", "model", "tools", "skills", "status")
+    for prof in profiles_list or []:
+        pid = str((prof or {}).get("id") or "").strip()
+        if not pid or "/" in pid or "\\" in pid or pid in (".", ".."):
+            continue
+        try:
+            prof_dir = os.path.join(base, pid)
+            os.makedirs(prof_dir, exist_ok=True)
+
+            # 1) profile.yaml: Metadaten zurueckschreiben (unbekannte Keys erhalten)
+            yaml_path = os.path.join(prof_dir, "profile.yaml")
+            existing: Dict[str, Any] = {}
+            if os.path.exists(yaml_path):
+                try:
+                    with open(yaml_path, "r", encoding="utf-8") as f:
+                        existing = _yaml.safe_load(f) or {}
+                except Exception as exc:
+                    logger.warning(f"[Profiles-SSOT] profile.yaml {pid} nicht lesbar: {exc}")
+            changed = False
+            for key in yaml_fields:
+                if key in prof and prof.get(key) is not None:
+                    new_val = prof.get(key)
+                    if existing.get(key) != new_val:
+                        existing[key] = new_val
+                        changed = True
+            if changed or not os.path.exists(yaml_path):
+                create_rolling_backup(yaml_path, max_backups=3)
+                tmp_p = yaml_path + ".tmp"
+                with open(tmp_p, "w", encoding="utf-8") as f:
+                    _yaml.safe_dump(existing, f, allow_unicode=True, sort_keys=False)
+                os.replace(tmp_p, yaml_path)
+
+            # 2) SOUL.md: Prompt zurueckschreiben (nur bei nicht-leerem Prompt)
+            prompt = str(prof.get("prompt") or "").strip()
+            if prompt:
+                soul_path = os.path.join(prof_dir, "SOUL.md")
+                cur_soul = ""
+                if os.path.exists(soul_path):
+                    try:
+                        with open(soul_path, "r", encoding="utf-8", errors="ignore") as f:
+                            cur_soul = f.read().strip()
+                    except OSError:
+                        cur_soul = ""
+                if cur_soul != prompt:
+                    create_rolling_backup(soul_path, max_backups=3)
+                    tmp_s = soul_path + ".tmp"
+                    with open(tmp_s, "w", encoding="utf-8") as f:
+                        f.write(prompt)
+                    os.replace(tmp_s, soul_path)
+        except Exception as exc:
+            logger.warning(f"[Profiles-SSOT] Rueckschreiben fuer '{pid}' fehlgeschlagen: {exc}")
+
+
 def save_all_agent_profiles(profiles_list: List[Dict[str, Any]]):
     import tempfile
     invalidate_hermes_profiles_cache()
@@ -738,6 +801,12 @@ def save_all_agent_profiles(profiles_list: List[Dict[str, Any]]):
                 _atomic_write_json(cand)
         except OSError as exc:
             logger.warning(f"[Profiles] Konnte Profil-Spiegel {cand} nicht aktualisieren: {exc}")
+
+    # Audit v3 2.1.4: Rueckschreiben in profile.yaml / SOUL.md (echte SSOT)
+    try:
+        _sync_hermes_profile_files(profiles_list)
+    except Exception as exc:
+        logger.error(f"[Profiles] profile.yaml/SOUL.md-Rueckschreiben fehlgeschlagen: {exc}")
 
 
 __all__ = [

@@ -228,6 +228,41 @@ def _load_profiles_map() -> Dict[str, Dict]:
             return profiles
         except Exception as e:
             print(f"[OperationsAPI] Error loading profiles: {e}", file=sys.stderr)
+    # Audit v3 2.1.4: profile.yaml/SOUL.md des Profilordners als Ergänzung einlesen,
+    # damit Profile die NUR dort existieren nicht unsichtbar bleiben.
+    try:
+        from archon.core.profiles import get_primary_hermes_profiles_dir
+        import yaml as _yaml
+        base = get_primary_hermes_profiles_dir()
+        if os.path.isdir(base):
+            _map = _PROFILES_MAP_CACHE["data"]
+            for pid in os.listdir(base):
+                pdir = os.path.join(base, pid)
+                if not os.path.isdir(pdir) or pid.startswith("."):
+                    continue
+                entry = dict(_map.get(pid) or {})
+                ypath = os.path.join(pdir, "profile.yaml")
+                if os.path.exists(ypath):
+                    try:
+                        with open(ypath, "r", encoding="utf-8") as f:
+                            ydata = _yaml.safe_load(f) or {}
+                        for k in ("name", "person_name", "category", "model", "tools", "skills", "status"):
+                            v = ydata.get(k)
+                            if v is not None and k not in entry:
+                                entry[k] = v
+                    except Exception as exc:
+                        print(f"[OperationsAPI] profile.yaml {pid} unlesbar: {exc}", file=sys.stderr)
+                spath = os.path.join(pdir, "SOUL.md")
+                if os.path.exists(spath) and not entry.get("prompt"):
+                    try:
+                        with open(spath, "r", encoding="utf-8", errors="ignore") as f:
+                            entry["prompt"] = f.read().strip()
+                    except OSError:
+                        pass
+                if entry:
+                    _map.setdefault(pid, entry)
+    except Exception as exc:
+        print(f"[OperationsAPI] profile.yaml-Ergänzung fehlgeschlagen: {exc}", file=sys.stderr)
     return _PROFILES_MAP_CACHE["data"]
 
 

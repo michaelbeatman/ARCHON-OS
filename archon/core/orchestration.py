@@ -219,6 +219,8 @@ async def _execute_mission_control_task(
             role=prof.get("name", "Spezialist") if prof else "Spezialist",
             system_prompt=system_prompt,
             model=model,
+            # Audit v3 2.1.3: task_id mitgeben — sonst wird das Task-Budget nie abgebucht
+            task_id=str(task_id or ""),
         )
 
         reply = res.get("content", "").strip()
@@ -332,16 +334,20 @@ async def _execute_mission_control_task(
 
         # Cascade-Loop Schritt B: Ist ein Sub-Task fertig und alle Geschwister-Tasks abgeschlossen? -> Synthese starten
         parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
-        if parent_pid and parent_pid != task_id:
-            asyncio.create_task(fan_in(parent_pid))
+        parent_ok = bool(parent_pid and parent_pid != task_id)
 
     except Exception as ex:
         logger.error(f"[Execution Error] _execute_mission_control_task {task_id}: {ex}")
+        parent_ok = False
         task["status"] = "failed"
         task["result_summary"] = f"Fehler bei Aufgabenausführung: {ex}"
         ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {ex}")
     finally:
         _commit()
+        # Audit v3 2.1.3: fan_in erst NACH dem Commit starten — sonst liest die Synthese
+        # den alten Geschwister-Status aus der letzten Persistierung.
+        if parent_ok:
+            asyncio.create_task(fan_in(parent_pid))
 
 
 def _paperclip_hire_profile_by_id(

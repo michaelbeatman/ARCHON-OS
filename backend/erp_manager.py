@@ -2418,7 +2418,9 @@ class ERPManager:
             clauses = ["d.doc_type IN ('invoice', 'credit_note')"]
             params: List[Any] = []
             if not include_drafts:
-                clauses.append("(d.status IN ('booked', 'paid') OR (d.status = 'cancelled' AND d.booked_at IS NOT NULL))")
+                # Audit v3 1.3.9: 'sent' (versandte, unverbuchte Rechnungen) gehoert in den
+                # Buchungsstapel — sonst fielen sie zwischen Versand und Verbuchung unter den Tisch.
+                clauses.append("(d.status IN ('booked', 'paid', 'sent') OR (d.status = 'cancelled' AND d.booked_at IS NOT NULL))")
             else:
                 clauses.append("d.status != 'cancelled'")
             if date_from:
@@ -2676,7 +2678,18 @@ class ERPManager:
                     yymmdd, cd, _, amt_str = m.groups()
                     bdate = f"20{yymmdd[:2]}-{yymmdd[2:4]}-{yymmdd[4:6]}"
                     val = cls._parse_de_amount(amt_str)
-                    signed = -abs(val) if "D" in cd else abs(val)
+                    cd_clean = str(cd).strip().upper()
+                    # Audit v3 1.3.9: MT940-Storno-Codes R^D/R^C haben GEGENLAEUFIGE Vorzeichen:
+                    # RD (Retour Habung eines Belastungssaldos) = Geld zurueck -> positiv,
+                    # RC (Storno einer Gutschrift) = Belastung -> negativ.
+                    if cd_clean == "D":
+                        signed = -abs(val)
+                    elif cd_clean == "RD":
+                        signed = abs(val)
+                    elif cd_clean == "RC":
+                        signed = -abs(val)
+                    else:
+                        signed = abs(val)
                     current = {
                         "booking_date": bdate,
                         "value_date": bdate,
@@ -2928,14 +2941,15 @@ class ERPManager:
         if not doc:
             raise ValueError(f"Beleg {doc_id} nicht gefunden.")
         cid = _sanitize_company_id(company_id)
-        # Erst Rechnung als bezahlt verbuchen (damit Bank-TX nie inkonsistent vorauseilt)
-        if mark_paid and doc.get("status") != "paid":
-            self.save_document({"id": doc_id, "status": "paid"}, company_id=cid)
         conn, cid = self._get_conn(cid)
         try:
+            # Audit v3 1.3.9: ZUERST pruefen, dass die Banktransaktion existiert, DANN die
+            # Rechnung irreversibel auf 'paid' setzen (sonst buchte ein Fake-tx_id 'paid').
             row = conn.execute("SELECT * FROM erp_bank_transactions WHERE id = ?", (tx_id,)).fetchone()
             if not row:
                 raise ValueError(f"Banktransaktion {tx_id} nicht gefunden.")
+            if mark_paid and doc.get("status") != "paid":
+                self.save_document({"id": doc_id, "status": "paid"}, company_id=cid)
             new_m_status = "paid_applied" if mark_paid else "matched"
             with conn:
                 conn.execute(
@@ -3010,7 +3024,7 @@ class ERPManager:
                 coll = cfg["collection_name"]
                 url = f"{pb_url}/api/collections/{coll}/records?perPage=500"
                 try:
-                    from backend.egress_guard import check_target_url
+                    from utils.egress_guard import check_target_url
                     check_target_url(url)
                     req = urllib.request.Request(url, headers={"Accept": "application/json"})
                     with urllib.request.urlopen(req, timeout=4.0) as resp:

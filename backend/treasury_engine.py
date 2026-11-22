@@ -13,6 +13,7 @@ import logging
 _archon_exc_logger = logging.getLogger("treasury_engine")
 
 import hashlib
+import math
 import json
 import os
 import sqlite3
@@ -89,6 +90,12 @@ def init_treasury_db() -> None:
             )
             """
         )
+        # M43-Mandantentrennung (Audit v3 1.3.7): company_id nachtraeglich auf beide Tabellen
+        for _tbl in ("treasury_accounts", "treasury_transactions"):
+            try:
+                conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN company_id TEXT NOT NULL DEFAULT 'default'")
+            except sqlite3.OperationalError:
+                pass  # Spalte existiert bereits
         conn.commit()
     finally:
         conn.close()
@@ -104,7 +111,9 @@ def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
             "amount": row_dict.get("amount"),
             "currency": row_dict.get("currency"),
             "recipient": row_dict.get("recipient"),
-            "status": row_dict.get("status"),
+            # 'status' bewusst AUSGENOMMEN: approve/reject aendert den Status per UPDATE und
+            # wuerde sonst jeden Hash brechen (Audit v3 1.3.7). Status-Verlauf bleibt in den
+            # Tabellen selbst und im Audit-Log erhalten.
             "created_at": row_dict.get("created_at"),
         },
         sort_keys=True,
@@ -229,7 +238,7 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
         raise ValueError("account_id_required")
 
     amount = float(payload.get("amount") or 0.0)
-    if amount <= 0:
+    if not math.isfinite(amount) or amount <= 0:
         raise ValueError("amount_must_be_positive")
 
     direction = "in" if str(payload.get("direction") or "out").lower() == "in" else "out"
@@ -245,6 +254,7 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
 
     conn = _get_conn()
     try:
+        conn.execute("BEGIN IMMEDIATE")  # Audit v3 1.3.7: serialisiert gleichzeitige Buchungen (Double-Spend-Schutz)
         existing_idem = conn.execute(
             "SELECT * FROM treasury_transactions WHERE idempotency_key = ?",
             (idem_key,),
@@ -255,6 +265,10 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
         acc_row = conn.execute("SELECT * FROM treasury_accounts WHERE id = ?", (account_id,)).fetchone()
         if not acc_row:
             raise KeyError("account_not_found")
+        acc_company = str(acc_row["company_id"]) if "company_id" in acc_row.keys() else "default"
+        if acc_company not in ("", "default") and active_company not in ("", "default") and acc_company != active_company:
+            conn.close()
+            raise KeyError("account_not_in_active_company")
         acc = _row_to_account(acc_row)
 
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -309,6 +323,12 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
                 )
 
         prev_h = _last_hash(conn)
+        active_company = ""
+        try:
+            from backend.tenant_context import tenant_context as _tc
+            active_company = str(_tc.get_active_company() or _tc.get_active_tenant_id() or "default")
+        except Exception:
+            active_company = "default"
         tx_obj = {
             "id": tx_id,
             "account_id": account_id,
@@ -330,6 +350,7 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
             "created_at": now_iso,
             "executed_at": executed_at,
         }
+        tx_obj["company_id"] = active_company
         tx_obj["entry_hash"] = _compute_entry_hash(prev_h, tx_obj)
 
         conn.execute(
@@ -337,8 +358,8 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
             INSERT INTO treasury_transactions (
                 id, account_id, direction, amount, currency, category, recipient, purpose,
                 workflow_run_id, receipt_id, idempotency_key, status, requested_by, approved_by,
-                passkey_verified, policy_note, prev_hash, entry_hash, created_at, executed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                passkey_verified, policy_note, prev_hash, entry_hash, created_at, executed_at, company_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 tx_obj["id"], tx_obj["account_id"], tx_obj["direction"], tx_obj["amount"],
@@ -347,6 +368,7 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
                 tx_obj["status"], tx_obj["requested_by"], tx_obj["approved_by"],
                 tx_obj["passkey_verified"], tx_obj["policy_note"], tx_obj["prev_hash"],
                 tx_obj["entry_hash"], tx_obj["created_at"], tx_obj["executed_at"],
+                tx_obj.get("company_id", "default"),
             ),
         )
         conn.commit()

@@ -63,7 +63,18 @@ def gdpr_erase_subject_data(
         raise ValueError("subject_identifier muss mindestens 3 Zeichen enthalten.")
 
     deleted_summary: Dict[str, int] = {}
-    like_val = f"%{needle}%"
+    # Audit v3 1.3.6: LIKE-Wildcards im Suchbegriff escapen — '%___%' darf nicht zum
+    # Tabellenvolltreffer werden. ESCAPE-Konvention: Backslash.
+    escaped_needle = (
+        (subject_identifier or "").strip()
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+    like_val = f"%{escaped_needle}%"
+    # GoBD/Compliance-Ausschluss (Audit v3 1.3.6): Diese Tabellen werden NIE per
+    # Art.-17-Skript geloescht (Hashketten-/Belegpersistenz).
+    protected_tables = {"audit_log", "erp_documents"}
 
     # Sowohl v2-DBs als auch Kern-/konsolidierte Domänen-DBs nach DSGVO Art. 17 bereinigen
     scan_dbs = list(
@@ -95,10 +106,12 @@ def gdpr_erase_subject_data(
             total_del = 0
             for tbl in tables:
                 safe_tbl = str(tbl).replace('"', '""')
+                if str(tbl).lower() in protected_tables:
+                    continue  # audit_log / erp_documents: GoBD-schutzwuerdig
                 cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{safe_tbl}")').fetchall() if str(r[2]).upper().startswith("TEXT") or r[2] == ""]
                 if not cols:
                     continue
-                quoted_cols = [f'"{str(c).replace(chr(34), chr(34)*2)}" LIKE ?' for c in cols]
+                quoted_cols = [f'"{str(c).replace(chr(34), chr(34)*2)}" LIKE ? ESCAPE \'\'' for c in cols]
                 where_clause = " OR ".join(quoted_cols)
                 cur = conn.execute(f'DELETE FROM "{safe_tbl}" WHERE {where_clause}', [like_val] * len(cols))
                 total_del += cur.rowcount

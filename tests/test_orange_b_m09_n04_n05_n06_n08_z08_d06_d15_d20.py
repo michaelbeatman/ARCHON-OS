@@ -351,10 +351,11 @@ def test_erp_print_escapes_doc_id(tmp_path):
     from archon.routers.erp import api_erp_document_print
 
     with mock.patch("backend.erp_manager.erp_manager.get_document", return_value=None), \
-         mock.patch("backend.corporate_manager.corporate_manager.render_template", return_value={"html": "<div>FRAGEBOGEN</div>"}):
+         mock.patch("backend.corporate_manager.corporate_manager.render_template", return_value={"html": "<div>FRAGEBOGEN</div>"}), \
+         mock.patch("archon.routers.erp.require_admin_or_503"):
         import html as _html
         evil = '<img src=x onerror=alert(1)>'
-        resp = api_erp_document_print(doc_id=evil, company_id=None)
+        resp = api_erp_document_print(request=None, doc_id=evil, company_id=None)
     body = resp.body.decode()
 
     assert "<img" not in body, "roher img-Tag darf nicht im Dokument stehen"

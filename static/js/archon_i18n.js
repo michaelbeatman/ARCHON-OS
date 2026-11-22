@@ -253,15 +253,27 @@ class ArchonI18n {
   startObserver() {
     if (this.observer || typeof MutationObserver === 'undefined') return;
     this.observer = new MutationObserver(mutations => {
+      // Audit v3 2.3: Mutation-Batches sammeln und per rAF gebuendelt uebersetzen
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (node.nodeType !== 1) continue;
+          this._i18nPending.add(node);
+        }
+      }
+      if (this._i18nRaf) return;
+      this._i18nRaf = requestAnimationFrame(() => {
+        this._i18nRaf = 0;
+        const pending = Array.from(this._i18nPending);
+        this._i18nPending.clear();
+        for (const node of pending) {
           if (node.matches(I18N_SELECTOR) || node.querySelector(I18N_SELECTOR)) {
             this.translateDOM(node);
           }
         }
-      }
+      });
     });
+    this._i18nRaf = 0;
+    this._i18nPending = new Set();
     this.observer.observe(document.body, { childList: true, subtree: true });
   }
 

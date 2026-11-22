@@ -441,10 +441,16 @@
     }
   };
 
+  let _finRaf = 0;
   const _finObs = new MutationObserver(() => {
-    if (document.getElementById("finance-subtab-btn-dunning") && !document.getElementById("finance-subtab-btn-treasury")) {
-      ensureTreasuryTabButton();
-    }
+    // Audit v3 2.3: rAF-Gedrosselt statt pro Mutation
+    if (_finRaf) return;
+    _finRaf = requestAnimationFrame(() => {
+      _finRaf = 0;
+      if (document.getElementById("finance-subtab-btn-dunning") && !document.getElementById("finance-subtab-btn-treasury")) {
+        ensureTreasuryTabButton();
+      }
+    });
   });
   if (document.body) _finObs.observe(document.body, { childList: true, subtree: true });
 

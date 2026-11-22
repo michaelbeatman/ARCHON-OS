@@ -4100,6 +4100,11 @@
         </div>
       `;
       messagesContainer.appendChild(card);
+      // Audit v3 2.3: SSE-Feed kumuliert sonst unbegrenzt im DOM
+      const MAX_COMM_CARDS = 200;
+      while (messagesContainer.children.length > MAX_COMM_CARDS) {
+        messagesContainer.removeChild(messagesContainer.firstElementChild);
+      }
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 

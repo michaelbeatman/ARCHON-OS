@@ -1166,6 +1166,14 @@
         origY = node.y || 40;
         moved = false;
 
+        let _edgesRaf = 0;
+        const _scheduleEdges = () => {
+          if (_edgesRaf) return;
+          _edgesRaf = requestAnimationFrame(() => {
+            _edgesRaf = 0;
+            updateCanvasEdgesDom();
+          });
+        };
         const onMove = (mv) => {
           const dx = mv.clientX - startX;
           const dy = mv.clientY - startY;
@@ -1175,12 +1183,13 @@
           node.y = Math.max(20, origY + dy);
           card.style.left = node.x + "px";
           card.style.top = node.y + "px";
-          updateCanvasEdgesDom();
+          _scheduleEdges();
         };
 
         const onUp = () => {
           window.removeEventListener("mousemove", onMove);
           window.removeEventListener("mouseup", onUp);
+          if (_edgesRaf) { cancelAnimationFrame(_edgesRaf); _edgesRaf = 0; }
           if (moved) {
             node.x = snap(node.x);
             node.y = snap(node.y);
@@ -2341,10 +2350,16 @@
     }
   };
 
+  let _logRaf = 0;
   const _logObserver = new MutationObserver(() => {
-    if (document.getElementById("log-subtab-btn-comm") && !document.getElementById("log-subtab-btn-events")) {
-      ensureEventBusLogTabButton();
-    }
+    // Audit v3 2.3: rAF-Gedrosselt statt pro Mutation
+    if (_logRaf) return;
+    _logRaf = requestAnimationFrame(() => {
+      _logRaf = 0;
+      if (document.getElementById("log-subtab-btn-comm") && !document.getElementById("log-subtab-btn-events")) {
+        ensureEventBusLogTabButton();
+      }
+    });
   });
   if (document.body) _logObserver.observe(document.body, { childList: true, subtree: true });
 

@@ -1,0 +1,35 @@
+{
+  "plugin_id": "n8n_webhook",
+  "label": "n8n Automation Webhook",
+  "category": "business",
+  "icon": "⚡",
+  "adapter": "http",
+  "source_name": "n8n",
+  "source_url": "https://n8n.io",
+  "description": "Uebergibt freigegebene Workflow-Ergebnisse an beliebige n8n-Automationen.",
+  "http_endpoint": "http://127.0.0.1:5678/webhook/archon-execution",
+  "outputs_schema": [
+    "webhook_response",
+    "content"
+  ],
+  "params_schema": [
+    {
+      "key": "webhook_url",
+      "label": "n8n Webhook-URL",
+      "type": "text",
+      "default": "http://127.0.0.1:5678/webhook/archon-execution"
+    },
+    {
+      "key": "action",
+      "label": "Action-Name",
+      "type": "text",
+      "default": "publish_content"
+    },
+    {
+      "key": "payload_text",
+      "label": "Nutzdaten ({{upstream.step_1.content}})",
+      "type": "textarea",
+      "default": ""
+    }
+  ]
+}

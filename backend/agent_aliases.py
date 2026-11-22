@@ -30,6 +30,8 @@ ALIASES = {
     "seo": "seo_geo_specialist",
     "video": "video_script_architect",
     "repurposing": "content_repurposing_specialist",
+    "linkedin": "linkedin_social_media_specialist",
+    "social_media": "linkedin_social_media_specialist",
 }
 
 

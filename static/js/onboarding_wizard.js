@@ -24,7 +24,8 @@
         '1. Company & Tenant',
         '2. AI Providers & Zero-Egress',
         '3. Channels & Vault',
-        '4. Specialist Domains'
+        '4. n8n & External Access',
+        '5. Specialist Domains'
       ],
       step1Title: 'Company & Primary Tenant Profile',
       step1Desc: 'Used for corporate letterheads, invoices, contracts, and executive syntheses. Stored locally on your instance.',
@@ -93,6 +94,20 @@
       tgChatId: 'Authorized Chat ID',
       tgVerify: 'Verify Telegram Bot via getMe upon completion',
 
+      stepIntTitle: 'n8n Automation Harness & External Credentials Vault',
+      stepIntDesc: 'Connect your deterministic n8n workflow engine, ARCHON CRM PocketBase bridge, and external API credentials (stored encrypted/0600 in .env).',
+      n8nSection: 'n8n Workflow Engine & Agent Harness',
+      n8nUrl: 'n8n Instance URL',
+      n8nWebhookPath: 'Execution Webhook Path',
+      n8nApiKey: 'n8n REST API Key (X-N8N-API-KEY)',
+      n8nWebhookSecret: 'n8n Webhook Secret Token',
+      extVaultSection: 'External Services & Social/Scraper Credentials',
+      pbUrl: 'ARCHON CRM / PocketBase URL',
+      firecrawlKey: 'Firecrawl API Key (Web Scraper & Competitor Radar)',
+      linkedinToken: 'LinkedIn Access Token (Social Publishing)',
+      githubToken: 'GitHub Personal Access Token (Code & PRs)',
+      braveKey: 'Brave Search API Key (Research Scout)',
+
       step4Title: 'Activate Specialist Domains (70 Specialists)',
       step4Desc: 'Select which specialist departments should be active in Mission Control and the AI Boardroom. Compact SOUL directives will be synchronized automatically.',
       selectAll: 'Select All (8)',
@@ -118,7 +133,8 @@
         '1. Unternehmen & Mandant',
         '2. KI-Provider & Zero-Egress',
         '3. Kanäle & Vault',
-        '4. Spezialisten-Domänen'
+        '4. n8n & Externe Zugänge',
+        '5. Spezialisten-Domänen'
       ],
       step1Title: 'Unternehmens- & Mandanten-Stammdaten',
       step1Desc: 'Basis für Briefbögen, Angebote, Rechnungen, Verträge und Boardroom-Dossiers. Wird ausschließlich lokal gespeichert.',
@@ -186,6 +202,20 @@
       tgToken: 'Telegram Bot-Token (@BotFather)',
       tgChatId: 'Autorisierte Chat-ID',
       tgVerify: 'Telegram-Bot beim Abschließen live via getMe prüfen',
+
+      stepIntTitle: 'n8n Agent Harness & Externe Zugangsdaten (Credential Vault)',
+      stepIntDesc: 'Verbinden Sie Ihre deterministische n8n-Workflow-Engine, das ARCHON CRM (PocketBase) sowie externe API-Schlüssel (gehärtet mit chmod 0600 in .env gespeichert).',
+      n8nSection: 'n8n Workflow-Engine & Deterministischer Agent Harness',
+      n8nUrl: 'n8n Instanz-URL',
+      n8nWebhookPath: 'Ausführungs-Webhook-Pfad',
+      n8nApiKey: 'n8n REST API-Key (X-N8N-API-KEY)',
+      n8nWebhookSecret: 'n8n Webhook Secret-Token',
+      extVaultSection: 'Externe Zugangsdaten (CRM, LinkedIn, Scraper & GitHub)',
+      pbUrl: 'ARCHON CRM / PocketBase URL',
+      firecrawlKey: 'Firecrawl API-Key (Web-Scraper & Competitor-Radar)',
+      linkedinToken: 'LinkedIn Access-Token (Social-Media-Publishing)',
+      githubToken: 'GitHub Personal Access Token (Repos & PR-Automation)',
+      braveKey: 'Brave Search API-Key (Research Scout)',
 
       step4Title: 'Spezialisten-Domänen aktivieren (70 Spezialisten)',
       step4Desc: 'Wählen Sie die aktiven Fachbereiche für Mission Control und den AI Boardroom. Die kompakten SOUL-Direktiven werden automatisch synchronisiert.',
@@ -268,6 +298,15 @@
       bot_token: '',
       chat_id: '',
       verify_telegram: false,
+      n8n_url: 'http://localhost:5678',
+      n8n_webhook_path: '/webhook/archon-execution',
+      n8n_api_key: '',
+      n8n_webhook_secret: '',
+      pocketbase_url: 'http://127.0.0.1:8090',
+      firecrawl_api_key: '',
+      linkedin_access_token: '',
+      github_token: '',
+      brave_api_key: '',
       active_domains: []
     }
   };
@@ -452,8 +491,8 @@
       }
       .aow-stepper {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 6px;
         padding: 12px 24px;
         background: var(--muted, rgba(148, 163, 184, 0.08));
         border-bottom: 1px solid var(--border, #e2e8f0);
@@ -737,6 +776,11 @@
     state.form.email_user = ch.email_user || '';
     state.form.chat_id = ch.telegram_chat_id || '';
 
+    const intg = (data && data.integrations) || {};
+    state.form.n8n_url = intg.n8n_url || 'http://localhost:5678';
+    state.form.n8n_webhook_path = intg.n8n_webhook_path || '/webhook/archon-execution';
+    state.form.pocketbase_url = intg.pocketbase_url || 'http://127.0.0.1:8090';
+
     const doms = (data && data.specialist_domains) || [];
     const activeIds = (data && data.active_domains && data.active_domains.length)
       ? data.active_domains.slice()
@@ -1008,6 +1052,90 @@
     `;
   }
 
+  function renderStepIntegrations() {
+    const f = state.form;
+    const intg = (state.statusData && state.statusData.integrations) || {};
+    const n8nKeyPh = intg.n8n_api_key_configured ? t('apiKeyKeepPlaceholder') : 'n8n_api_...';
+    const n8nSecPh = intg.n8n_webhook_secret_configured ? t('apiKeyKeepPlaceholder') : 'whsec_...';
+    const fcPh = intg.firecrawl_configured ? t('apiKeyKeepPlaceholder') : 'fc-...';
+    const liPh = intg.linkedin_configured ? t('apiKeyKeepPlaceholder') : 'AQV...';
+    const ghPh = intg.github_configured ? t('apiKeyKeepPlaceholder') : 'ghp_...';
+    const brPh = intg.brave_configured ? t('apiKeyKeepPlaceholder') : 'BSA...';
+    const n8nProbe = state.probeResults['int_n8n'];
+    const pbProbe = state.probeResults['int_pocketbase'];
+    const isProbingN8n = Boolean(state.probingMap['int_n8n']);
+    const isProbingPb = Boolean(state.probingMap['int_pocketbase']);
+
+    return `
+      <h3 class="aow-section-title">${esc(t('stepIntTitle'))}</h3>
+      <p class="aow-section-desc">${esc(t('stepIntDesc'))}</p>
+
+      <div class="aow-subbox">
+        <div class="aow-provider-top" style="margin-bottom:8px">
+          <div class="aow-subbox-title" style="margin:0">${esc(t('n8nSection'))}</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            ${n8nProbe ? `<span class="aow-pill ${n8nProbe.ok ? 'ok' : 'err'}">${esc(n8nProbe.detail || '')}</span>` : ''}
+            <button type="button" class="aow-btn" data-test-integration="n8n" ${isProbingN8n ? 'disabled' : ''}>
+              ${esc(isProbingN8n ? t('testingBtn') : t('testBtn'))}
+            </button>
+          </div>
+        </div>
+        <div class="aow-grid-2">
+          <div class="aow-field">
+            <label class="aow-label" for="aow-n8n-url">${esc(t('n8nUrl'))}</label>
+            <input id="aow-n8n-url" class="aow-input aow-mono" type="text" value="${esc(f.n8n_url)}" placeholder="http://localhost:5678" />
+          </div>
+          <div class="aow-field">
+            <label class="aow-label" for="aow-n8n-webhook">${esc(t('n8nWebhookPath'))}</label>
+            <input id="aow-n8n-webhook" class="aow-input aow-mono" type="text" value="${esc(f.n8n_webhook_path)}" placeholder="/webhook/archon-execution" />
+          </div>
+          <div class="aow-field">
+            <label class="aow-label" for="aow-n8n-key">${esc(t('n8nApiKey'))}</label>
+            <input id="aow-n8n-key" class="aow-input aow-mono" type="password" autocomplete="off" value="${esc(f.n8n_api_key)}" placeholder="${esc(n8nKeyPh)}" />
+          </div>
+          <div class="aow-field">
+            <label class="aow-label" for="aow-n8n-secret">${esc(t('n8nWebhookSecret'))}</label>
+            <input id="aow-n8n-secret" class="aow-input aow-mono" type="password" autocomplete="off" value="${esc(f.n8n_webhook_secret)}" placeholder="${esc(n8nSecPh)}" />
+          </div>
+        </div>
+      </div>
+
+      <div class="aow-subbox" style="margin-bottom:0">
+        <div class="aow-provider-top" style="margin-bottom:8px">
+          <div class="aow-subbox-title" style="margin:0">${esc(t('extVaultSection'))}</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            ${pbProbe ? `<span class="aow-pill ${pbProbe.ok ? 'ok' : 'err'}">${esc(pbProbe.detail || '')}</span>` : ''}
+            <button type="button" class="aow-btn" data-test-integration="pocketbase" ${isProbingPb ? 'disabled' : ''}>
+              ${esc(isProbingPb ? t('testingBtn') : 'CRM Test')}
+            </button>
+          </div>
+        </div>
+        <div class="aow-grid-2">
+          <div class="aow-field">
+            <label class="aow-label" for="aow-pb-url">${esc(t('pbUrl'))}</label>
+            <input id="aow-pb-url" class="aow-input aow-mono" type="text" value="${esc(f.pocketbase_url)}" placeholder="http://127.0.0.1:8090" />
+          </div>
+          <div class="aow-field">
+            <label class="aow-label" for="aow-firecrawl-key">${esc(t('firecrawlKey'))}</label>
+            <input id="aow-firecrawl-key" class="aow-input aow-mono" type="password" autocomplete="off" value="${esc(f.firecrawl_api_key)}" placeholder="${esc(fcPh)}" />
+          </div>
+          <div class="aow-field">
+            <label class="aow-label" for="aow-linkedin-token">${esc(t('linkedinToken'))}</label>
+            <input id="aow-linkedin-token" class="aow-input aow-mono" type="password" autocomplete="off" value="${esc(f.linkedin_access_token)}" placeholder="${esc(liPh)}" />
+          </div>
+          <div class="aow-field">
+            <label class="aow-label" for="aow-github-token">${esc(t('githubToken'))}</label>
+            <input id="aow-github-token" class="aow-input aow-mono" type="password" autocomplete="off" value="${esc(f.github_token)}" placeholder="${esc(ghPh)}" />
+          </div>
+          <div class="aow-field span-2">
+            <label class="aow-label" for="aow-brave-key">${esc(t('braveKey'))}</label>
+            <input id="aow-brave-key" class="aow-input aow-mono" type="password" autocomplete="off" value="${esc(f.brave_api_key)}" placeholder="${esc(brPh)}" />
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderStep4() {
     const domains = (state.statusData && state.statusData.specialist_domains) || [];
     const activeSet = new Set(state.form.active_domains);
@@ -1114,6 +1242,25 @@
       const tv = root.querySelector('#aow-tg-verify');
       if (tv) f.verify_telegram = tv.checked;
     } else if (state.step === 3) {
+      const nu = root.querySelector('#aow-n8n-url');
+      if (nu) f.n8n_url = nu.value.trim();
+      const nw = root.querySelector('#aow-n8n-webhook');
+      if (nw) f.n8n_webhook_path = nw.value.trim();
+      const nk = root.querySelector('#aow-n8n-key');
+      if (nk) f.n8n_api_key = nk.value;
+      const ns = root.querySelector('#aow-n8n-secret');
+      if (ns) f.n8n_webhook_secret = ns.value;
+      const pu = root.querySelector('#aow-pb-url');
+      if (pu) f.pocketbase_url = pu.value.trim();
+      const fk = root.querySelector('#aow-firecrawl-key');
+      if (fk) f.firecrawl_api_key = fk.value;
+      const lt = root.querySelector('#aow-linkedin-token');
+      if (lt) f.linkedin_access_token = lt.value;
+      const gt = root.querySelector('#aow-github-token');
+      if (gt) f.github_token = gt.value;
+      const bk = root.querySelector('#aow-brave-key');
+      if (bk) f.brave_api_key = bk.value;
+    } else if (state.step === 4) {
       const selected = [];
       root.querySelectorAll('[data-domain-id]').forEach(function (cb) {
         if (cb.checked) selected.push(cb.getAttribute('data-domain-id'));
@@ -1127,7 +1274,7 @@
       state.errorMsg = t('errCompanyRequired');
       return false;
     }
-    if (stepIndex === 3 && state.form.active_domains.length === 0) {
+    if (stepIndex === 4 && state.form.active_domains.length === 0) {
       state.errorMsg = t('errDomainRequired');
       return false;
     }
@@ -1190,6 +1337,43 @@
     }
   }
 
+  async function handleTestIntegration(serviceId) {
+    const overlay = document.getElementById(MODAL_ID);
+    captureCurrentStepInputs(overlay);
+    const mapKey = 'int_' + serviceId;
+    state.probingMap[mapKey] = true;
+    state.errorMsg = '';
+    renderModal();
+
+    const baseUrl = serviceId === 'n8n' ? state.form.n8n_url : state.form.pocketbase_url;
+    const apiKey = serviceId === 'n8n' ? state.form.n8n_api_key : '';
+
+    try {
+      const res = await fetch('/api/onboarding/test-integration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service: serviceId,
+          base_url: baseUrl || null,
+          api_key: apiKey || ''
+        })
+      });
+      const data = await res.json().catch(function () { return {}; });
+      state.probeResults[mapKey] = res.ok
+        ? data
+        : { ok: false, latency_ms: 0, detail: data.detail || ('HTTP ' + res.status) };
+    } catch (err) {
+      state.probeResults[mapKey] = {
+        ok: false,
+        latency_ms: 0,
+        detail: err && err.message ? err.message : 'Network error'
+      };
+    } finally {
+      state.probingMap[mapKey] = false;
+      renderModal();
+    }
+  }
+
   async function handleSkip() {
     if (state.busy) return;
     state.busy = true;
@@ -1225,7 +1409,7 @@
       renderModal();
       return;
     }
-    if (!validateStep(3)) {
+    if (!validateStep(4)) {
       renderModal();
       return;
     }
@@ -1265,6 +1449,17 @@
         bot_token: f.bot_token || null,
         chat_id: f.chat_id,
         verify_telegram: Boolean(f.verify_telegram)
+      },
+      integrations: {
+        n8n_url: f.n8n_url || 'http://localhost:5678',
+        n8n_webhook_path: f.n8n_webhook_path || '/webhook/archon-execution',
+        n8n_api_key: f.n8n_api_key || null,
+        n8n_webhook_secret: f.n8n_webhook_secret || null,
+        pocketbase_url: f.pocketbase_url || 'http://127.0.0.1:8090',
+        firecrawl_api_key: f.firecrawl_api_key || null,
+        linkedin_access_token: f.linkedin_access_token || null,
+        github_token: f.github_token || null,
+        brave_api_key: f.brave_api_key || null
       },
       active_domains: f.active_domains.slice(),
       sync_souls: true
@@ -1325,9 +1520,10 @@
     if (state.step === 0) bodyContent = renderStep1();
     else if (state.step === 1) bodyContent = renderStep2();
     else if (state.step === 2) bodyContent = renderStep3();
+    else if (state.step === 3) bodyContent = renderStepIntegrations();
     else bodyContent = renderStep4();
 
-    const isLast = state.step === 3;
+    const isLast = state.step === 4;
 
     const existingDetected = Boolean(state.statusData && state.statusData.existing_data_detected);
 
@@ -1484,6 +1680,12 @@
       });
     });
 
+    overlay.querySelectorAll('[data-test-integration]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        handleTestIntegration(btn.getAttribute('data-test-integration'));
+      });
+    });
+
     overlay.querySelectorAll('[data-domain-id]').forEach(function (cb) {
       cb.addEventListener('change', function () {
         captureCurrentStepInputs(overlay);
@@ -1537,7 +1739,7 @@
           renderModal();
           return;
         }
-        state.step = Math.min(3, state.step + 1);
+        state.step = Math.min(4, state.step + 1);
         renderModal();
       });
     }
@@ -1564,7 +1766,7 @@
       }
     } catch (_) { /* render with local defaults if offline */ }
 
-    state.step = typeof opts.step === 'number' ? Math.max(0, Math.min(3, opts.step)) : 0;
+    state.step = typeof opts.step === 'number' ? Math.max(0, Math.min(4, opts.step)) : 0;
     state.errorMsg = '';
     renderModal();
     const overlay = ensureOverlay();

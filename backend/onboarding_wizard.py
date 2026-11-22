@@ -577,11 +577,13 @@ def validate_provider_url(provider: str, base_url: Optional[str] = None) -> str:
         raise ValueError(f"Port {port} is blocked by security policy.")
 
     # Evaluate IP literals explicitly before hostname allowlist checks
-    literal_ip: Optional[ipaddress._BaseAddress] = None
+    # Keine private ipaddress-API (_BaseAddress) in der Annotation — die
+    # öffentliche ip_address() reicht und ist versionsstabil (auch Py 3.13).
+    literal_ip = None
     try:
         literal_ip = ipaddress.ip_address(host)
     except ValueError:
-        literal_ip = None
+        pass
 
     if spec["is_local"]:
         if parsed.scheme not in ("http", "https"):
@@ -987,6 +989,210 @@ def save_channels_config(channels_cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Step 3b / Step 4: n8n Automation Harness & External Credentials Vault
+# ---------------------------------------------------------------------------
+SUPPORTED_INTEGRATIONS: Dict[str, Dict[str, Any]] = {
+    "n8n": {
+        "id": "n8n",
+        "name": "n8n Workflow & Agent Harness",
+        "url_env_key": "N8N_URL",
+        "key_env_key": "N8N_API_KEY",
+        "secret_env_key": "N8N_WEBHOOK_SECRET",
+        "default_base_url": "http://localhost:5678",
+        "allowed_local_hosts": {"localhost", "127.0.0.1", "::1", "host.docker.internal", "n8n", "archon-n8n"},
+    },
+    "pocketbase": {
+        "id": "pocketbase",
+        "name": "ARCHON CRM / PocketBase Bridge",
+        "url_env_key": "POCKETBASE_URL",
+        "key_env_key": "POCKETBASE_ADMIN_TOKEN",
+        "default_base_url": "http://127.0.0.1:8090",
+        "allowed_local_hosts": {"localhost", "127.0.0.1", "::1", "host.docker.internal", "pocketbase", "pocketbase-media"},
+    },
+}
+
+
+def validate_integration_url(service: str, base_url: Optional[str] = None) -> str:
+    """SSRF-safe validation for n8n or PocketBase endpoint URLs."""
+    svc = (service or "").strip().lower()
+    spec = SUPPORTED_INTEGRATIONS.get(svc)
+    if not spec:
+        raise ValueError(f"Unsupported integration service '{service}'.")
+
+    candidate = (base_url or "").strip() or spec["default_base_url"]
+    parsed = urlparse(candidate)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("Integration URL must use http or https scheme.")
+    if parsed.username or parsed.password:
+        raise ValueError("Credentials in integration URL are forbidden.")
+
+    host = (parsed.hostname or "").strip().lower().rstrip(".")
+    if not host:
+        raise ValueError("Integration URL is missing a valid hostname.")
+
+    port = parsed.port
+    if port is not None and port in _BLOCKED_PORTS:
+        raise ValueError(f"Port {port} is blocked by security policy.")
+
+    # Keine private ipaddress-API (_BaseAddress) in der Annotation — die
+    # öffentliche ip_address() reicht und ist versionsstabil (auch Py 3.13).
+    literal_ip = None
+    try:
+        literal_ip = ipaddress.ip_address(host)
+    except ValueError:
+        pass
+
+    if literal_ip is not None:
+        if not literal_ip.is_loopback or any(literal_ip in net for net in _NEVER_ALLOWED_NETWORKS):
+            raise ValueError(f"IP literal '{literal_ip}' is not allowed; only loopback (127.0.0.1 / ::1) is permitted.")
+    elif parsed.scheme == "http" and host not in spec["allowed_local_hosts"]:
+        raise ValueError(
+            f"Unencrypted HTTP is only allowed for local/Docker hosts ({', '.join(sorted(spec['allowed_local_hosts']))}). Use HTTPS for remote instances."
+        )
+
+    return candidate.rstrip("/")
+
+
+def test_external_integration(
+    service: str,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Performs an SSRF-safe connectivity probe against n8n (/healthz or /api/v1/workflows) or PocketBase (/api/health)."""
+    svc = (service or "").strip().lower()
+    if svc not in SUPPORTED_INTEGRATIONS:
+        return {"ok": False, "service": svc, "latency_ms": 0, "detail": f"Unsupported integration '{service}'."}
+
+    spec = SUPPORTED_INTEGRATIONS[svc]
+    try:
+        validated_base = validate_integration_url(svc, base_url)
+    except ValueError as exc:
+        return {"ok": False, "service": svc, "latency_ms": 0, "detail": f"URL rejected by SSRF guard: {exc}"}
+
+    supplied_key = (api_key or "").strip()
+    if not supplied_key or is_masked_secret(supplied_key):
+        effective_key = _lookup_existing_secret(spec.get("key_env_key"))
+    else:
+        effective_key = supplied_key
+
+    headers: Dict[str, str] = {"Accept": "application/json"}
+    if svc == "n8n":
+        if effective_key:
+            headers["X-N8N-API-KEY"] = effective_key
+            probe_url = f"{validated_base}/api/v1/workflows?limit=1"
+        else:
+            probe_url = f"{validated_base}/healthz"
+    else:
+        probe_url = f"{validated_base}/api/health"
+        if effective_key:
+            headers["Authorization"] = effective_key
+
+    t0 = time.perf_counter()
+    try:
+        with httpx.Client(timeout=5.0, follow_redirects=False) as client:
+            resp = client.get(probe_url, headers=headers)
+        latency_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+    except httpx.TimeoutException:
+        latency_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+        return {"ok": False, "service": svc, "latency_ms": latency_ms, "detail": "Connection timed out after 5s."}
+    except httpx.RequestError as exc:
+        latency_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+        return {"ok": False, "service": svc, "latency_ms": latency_ms, "detail": f"Connection error ({type(exc).__name__}): endpoint unreachable."}
+
+    if 200 <= resp.status_code < 300:
+        return {
+            "ok": True,
+            "service": svc,
+            "latency_ms": latency_ms,
+            "detail": f"{spec['name']} reachable ({latency_ms} ms).",
+        }
+    if resp.status_code in (401, 403):
+        return {
+            "ok": False,
+            "service": svc,
+            "latency_ms": latency_ms,
+            "detail": f"Endpoint reachable, but authentication failed (HTTP {resp.status_code}). Check API key.",
+        }
+    return {
+        "ok": False,
+        "service": svc,
+        "latency_ms": latency_ms,
+        "detail": f"Endpoint returned HTTP {resp.status_code}.",
+    }
+
+
+def save_external_integrations(integrations_cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Validates and saves n8n & external credential vault settings to .env (0600) and settings.json."""
+    if not isinstance(integrations_cfg, dict):
+        integrations_cfg = {}
+
+    n8n_url_raw = str(integrations_cfg.get("n8n_url") or "").strip()
+    n8n_url = validate_integration_url("n8n", n8n_url_raw) if n8n_url_raw else ""
+    n8n_webhook_path = str(integrations_cfg.get("n8n_webhook_path") or "/webhook/archon-execution").strip()[:200]
+    pb_url_raw = str(integrations_cfg.get("pocketbase_url") or "").strip()
+    pb_url = validate_integration_url("pocketbase", pb_url_raw) if pb_url_raw else ""
+
+    n8n_api_key = integrations_cfg.get("n8n_api_key")
+    n8n_webhook_secret = integrations_cfg.get("n8n_webhook_secret")
+    firecrawl_api_key = integrations_cfg.get("firecrawl_api_key")
+    linkedin_access_token = integrations_cfg.get("linkedin_access_token")
+    github_token = integrations_cfg.get("github_token")
+    brave_api_key = integrations_cfg.get("brave_api_key")
+
+    env_updates: Dict[str, Optional[str]] = {}
+    if n8n_url:
+        env_updates["N8N_URL"] = n8n_url
+    if pb_url:
+        env_updates["POCKETBASE_URL"] = pb_url
+    if n8n_api_key is not None:
+        env_updates["N8N_API_KEY"] = str(n8n_api_key)
+    if n8n_webhook_secret is not None:
+        env_updates["N8N_WEBHOOK_SECRET"] = str(n8n_webhook_secret)
+    if firecrawl_api_key is not None:
+        env_updates["FIRECRAWL_API_KEY"] = str(firecrawl_api_key)
+    if linkedin_access_token is not None:
+        env_updates["LINKEDIN_ACCESS_TOKEN"] = str(linkedin_access_token)
+    if github_token is not None:
+        env_updates["GITHUB_TOKEN"] = str(github_token)
+    if brave_api_key is not None:
+        env_updates["BRAVE_API_KEY"] = str(brave_api_key)
+
+    secret_keys = (
+        "N8N_API_KEY",
+        "N8N_WEBHOOK_SECRET",
+        "FIRECRAWL_API_KEY",
+        "LINKEDIN_ACCESS_TOKEN",
+        "GITHUB_TOKEN",
+        "BRAVE_API_KEY",
+    )
+    upsert_env_secrets(env_updates, secret_keys=secret_keys)
+
+    current_env = parse_env_file()
+
+    def _has_sec(k: str) -> bool:
+        return bool(current_env.get(k) or os.environ.get(k))
+
+    sanitized_integrations = {
+        "n8n_url": n8n_url or current_env.get("N8N_URL") or os.environ.get("N8N_URL") or "http://localhost:5678",
+        "n8n_webhook_path": n8n_webhook_path,
+        "n8n_api_key_configured": _has_sec("N8N_API_KEY"),
+        "n8n_webhook_secret_configured": _has_sec("N8N_WEBHOOK_SECRET"),
+        "pocketbase_url": pb_url or current_env.get("POCKETBASE_URL") or os.environ.get("POCKETBASE_URL") or "http://127.0.0.1:8090",
+        "firecrawl_configured": _has_sec("FIRECRAWL_API_KEY"),
+        "linkedin_configured": _has_sec("LINKEDIN_ACCESS_TOKEN"),
+        "github_configured": _has_sec("GITHUB_TOKEN"),
+        "brave_configured": _has_sec("BRAVE_API_KEY"),
+    }
+
+    def _mutate(s: Dict[str, Any]) -> None:
+        s["integrations"] = sanitized_integrations
+
+    _update_both_settings(_mutate)
+    return {"integrations": sanitized_integrations}
+
+
+
+# ---------------------------------------------------------------------------
 # Step 4: Specialist Domain Activation (8 Domains / 70 Specialists)
 # ---------------------------------------------------------------------------
 def _load_category_counts() -> Dict[str, int]:
@@ -1257,6 +1463,19 @@ def get_onboarding_status() -> Dict[str, Any]:
         ),
     }
 
+    saved_int = settings.get("integrations") if isinstance(settings.get("integrations"), dict) else {}
+    sanitized_integrations = {
+        "n8n_url": str(saved_int.get("n8n_url") or file_env.get("N8N_URL") or os.environ.get("N8N_URL") or "http://localhost:5678"),
+        "n8n_webhook_path": str(saved_int.get("n8n_webhook_path") or "/webhook/archon-execution"),
+        "n8n_api_key_configured": bool(saved_int.get("n8n_api_key_configured") or file_env.get("N8N_API_KEY") or os.environ.get("N8N_API_KEY")),
+        "n8n_webhook_secret_configured": bool(saved_int.get("n8n_webhook_secret_configured") or file_env.get("N8N_WEBHOOK_SECRET") or os.environ.get("N8N_WEBHOOK_SECRET")),
+        "pocketbase_url": str(saved_int.get("pocketbase_url") or file_env.get("POCKETBASE_URL") or os.environ.get("POCKETBASE_URL") or "http://127.0.0.1:8090"),
+        "firecrawl_configured": bool(saved_int.get("firecrawl_configured") or file_env.get("FIRECRAWL_API_KEY") or os.environ.get("FIRECRAWL_API_KEY")),
+        "linkedin_configured": bool(saved_int.get("linkedin_configured") or file_env.get("LINKEDIN_ACCESS_TOKEN") or os.environ.get("LINKEDIN_ACCESS_TOKEN")),
+        "github_configured": bool(saved_int.get("github_configured") or file_env.get("GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")),
+        "brave_configured": bool(saved_int.get("brave_configured") or file_env.get("BRAVE_API_KEY") or os.environ.get("BRAVE_API_KEY")),
+    }
+
     return {
         "status": "ok",
         "auto_open": auto_open,
@@ -1274,6 +1493,7 @@ def get_onboarding_status() -> Dict[str, Any]:
         "detected_providers": detected_providers,
         "providers_catalog": providers_catalog,
         "channels": sanitized_channels,
+        "integrations": sanitized_integrations,
         "active_domains": [d["id"] for d in domains_summary if d["enabled"]],
         "specialist_domains": domains_summary,
         "total_domains": len(domains_summary),
@@ -1282,7 +1502,7 @@ def get_onboarding_status() -> Dict[str, Any]:
 
 
 def complete_onboarding(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Validates all 4 onboarding steps up-front, then persists atomically and marks completed."""
+    """Validates all onboarding steps up-front, then persists atomically and marks completed."""
     if not isinstance(payload, dict):
         raise ValueError("Invalid onboarding payload.")
 
@@ -1292,6 +1512,8 @@ def complete_onboarding(payload: Dict[str, Any]) -> Dict[str, Any]:
     raw_providers: Dict[str, Any] = maybe_providers if isinstance(maybe_providers, dict) else {}
     maybe_channels = payload.get("channels")
     raw_channels: Dict[str, Any] = maybe_channels if isinstance(maybe_channels, dict) else {}
+    maybe_integrations = payload.get("integrations")
+    raw_integrations: Dict[str, Any] = maybe_integrations if isinstance(maybe_integrations, dict) else {}
     selected_domains = payload.get("active_domains")
     sync_souls = bool(payload.get("sync_souls", True))
     zero_egress = bool(
@@ -1300,7 +1522,7 @@ def complete_onboarding(payload: Dict[str, Any]) -> Dict[str, Any]:
         else raw_providers.get("zero_egress", False)
     )
 
-    # Phase 1: Up-front validation across all 4 steps before mutating disk state
+    # Phase 1: Up-front validation across all steps before mutating disk state
     validated_company = validate_company_profile(raw_company)
     maybe_urls = raw_providers.get("base_urls")
     raw_urls: Dict[str, Any] = maybe_urls if isinstance(maybe_urls, dict) else {}
@@ -1309,6 +1531,11 @@ def complete_onboarding(payload: Dict[str, Any]) -> Dict[str, Any]:
         candidate_url = entry.get("base_url") if isinstance(entry, dict) else raw_urls.get(prov_id)
         if spec["url_env_key"] and candidate_url:
             validate_provider_url(prov_id, str(candidate_url))
+
+    if raw_integrations.get("n8n_url"):
+        validate_integration_url("n8n", str(raw_integrations["n8n_url"]))
+    if raw_integrations.get("pocketbase_url"):
+        validate_integration_url("pocketbase", str(raw_integrations["pocketbase_url"]))
 
     try:
         imap_p = int(raw_channels.get("imap_port") or 993)
@@ -1328,6 +1555,7 @@ def complete_onboarding(payload: Dict[str, Any]) -> Dict[str, Any]:
         language = saved_tenant["language"]
         providers_summary = save_providers_and_privacy(raw_providers, zero_egress=zero_egress)
         channels_summary = save_channels_config(raw_channels)
+        integrations_summary = save_external_integrations(raw_integrations)
         domains_result = activate_specialist_domains(
             selected_domains,
             language=language,
@@ -1359,6 +1587,7 @@ def complete_onboarding(payload: Dict[str, Any]) -> Dict[str, Any]:
             "detected_providers": get_detected_providers_booleans(),
         },
         "channels": channels_summary["channels"],
+        "integrations": integrations_summary["integrations"],
         "telegram_verification": channels_summary.get("telegram_verification"),
         "domains": domains_result,
     }

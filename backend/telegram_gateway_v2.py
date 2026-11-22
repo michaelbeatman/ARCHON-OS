@@ -26,6 +26,8 @@ AGENT_COMMAND_ALIASES: Dict[str, str] = {
     "dev": "senior_fullstack_engineer",
     "scrum": "agile_scrum_master",
     "qa": "qa_test_engineer",
+    "linkedin": "linkedin_social_media_specialist",
+    "social": "linkedin_social_media_specialist",
     "default": "default",
 }
 

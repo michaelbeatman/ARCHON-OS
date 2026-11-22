@@ -1,0 +1,46 @@
+[
+  {
+    "id": "neuer_prozessablauf",
+    "title": "Neuer Prozessablauf",
+    "category": "Eigene Workflows",
+    "description": "",
+    "header_image": "",
+    "schedule_hint": "",
+    "n8n_webhook_hint": "",
+    "inputs": [
+      {
+        "key": "topic",
+        "label": "Thema / Ziel",
+        "default": ""
+      }
+    ],
+    "builtin": false,
+    "nodes": [
+      {
+        "id": "step_1",
+        "title": "Start-Recherche: {{topic}}",
+        "type": "agent",
+        "agent_id": "research",
+        "tool_preset": "research",
+        "allowed_tools": [
+          "web_search",
+          "file_read",
+          "browser",
+          "crm_read"
+        ],
+        "forbidden_actions": [],
+        "soul_mode": "analytical",
+        "reasoning_effort": "medium",
+        "prompt": "Starte Analyse zu {{topic}}.",
+        "expected_output": "",
+        "depends_on": [],
+        "require_hitl": false,
+        "max_retries": 1,
+        "timeout_sec": 300,
+        "x": 60,
+        "y": 120
+      }
+    ],
+    "edges": []
+  }
+]

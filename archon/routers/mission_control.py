@@ -68,6 +68,9 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 class NewTaskCaptureRequest(BaseModel):
     title: str
+    token_budget: Optional[int] = None
+    cost_limit_eur: Optional[float] = None
+    allow_autonomous_hiring: Optional[bool] = False
 
 
 class TaskMoveRequest(BaseModel):
@@ -203,9 +206,9 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
     title = req.title.strip()
     is_large = any(k in title.lower() for k in ["audit", "refactor", "vollständig", "sicherheit", "pipeline", "db", "analyse"])
 
-    est_tokens = 120000 if is_large else 35000
-    est_cost = 0.22 if is_large else 0.04
-    subagents = 3 if is_large else 1
+    est_tokens = int(req.token_budget) if (req.token_budget and req.token_budget > 0) else (120000 if is_large else 35000)
+    est_cost = float(req.cost_limit_eur) if (req.cost_limit_eur and req.cost_limit_eur > 0) else (0.22 if is_large else 0.04)
+    subagents = 3 if (is_large or req.allow_autonomous_hiring) else 1
     agent_id = "sandy" if "audit" in title.lower() or "hr" in title.lower() else "micha"
     agent_name = "Sandy Hooks" if agent_id == "sandy" else "Michael Keller"
     model = "anthropic/claude-3.7-sonnet" if is_large else "deepseek/deepseek-v4-flash-0731"
@@ -223,7 +226,10 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
         "agent_name": agent_name,
         "model": model,
         "estimated_tokens": est_tokens,
+        "token_budget": est_tokens,
         "estimated_cost_eur": est_cost,
+        "cost_limit_eur": est_cost,
+        "allow_autonomous_hiring": bool(req.allow_autonomous_hiring),
         "subagents_count": subagents,
         "status": "backlog",
         "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),

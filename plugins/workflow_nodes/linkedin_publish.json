@@ -1,0 +1,39 @@
+{
+  "plugin_id": "linkedin_publish",
+  "label": "LinkedIn Post & Carousel",
+  "category": "business",
+  "icon": "💼",
+  "adapter": "http",
+  "source_name": "LinkedIn / Typefully / n8n",
+  "source_url": "https://developer.linkedin.com",
+  "description": "Veroeffentlicht Text-Posts, Dokument-Karussells (PDF) oder Videos nach HITL-Freigabe.",
+  "http_endpoint": "http://127.0.0.1:5678/webhook/archon-execution",
+  "outputs_schema": [
+    "post_url",
+    "content"
+  ],
+  "params_schema": [
+    {
+      "key": "post_text",
+      "label": "Post-Text",
+      "type": "textarea",
+      "default": "{{upstream.step_1.content}}"
+    },
+    {
+      "key": "attachment_path",
+      "label": "PDF/Bild/Video (optional)",
+      "type": "text",
+      "default": ""
+    },
+    {
+      "key": "visibility",
+      "label": "Sichtbarkeit",
+      "type": "select",
+      "default": "PUBLIC",
+      "options": [
+        "PUBLIC",
+        "CONNECTIONS"
+      ]
+    }
+  ]
+}

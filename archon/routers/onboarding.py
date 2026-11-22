@@ -82,6 +82,24 @@ class ChannelsInput(BaseModel):
     obsidian_vault_path: Optional[str] = "./obsidian_vault"
 
 
+class IntegrationTestRequest(BaseModel):
+    service: str = Field(..., description="Integration service identifier (n8n, pocketbase)")
+    base_url: Optional[str] = Field(default=None, description="Endpoint URL to test")
+    api_key: Optional[str] = Field(default="", description="Optional API key to test")
+
+
+class IntegrationsInput(BaseModel):
+    n8n_url: Optional[str] = "http://localhost:5678"
+    n8n_webhook_path: Optional[str] = "/webhook/archon-execution"
+    n8n_api_key: Optional[str] = None
+    n8n_webhook_secret: Optional[str] = None
+    pocketbase_url: Optional[str] = "http://127.0.0.1:8090"
+    firecrawl_api_key: Optional[str] = None
+    linkedin_access_token: Optional[str] = None
+    github_token: Optional[str] = None
+    brave_api_key: Optional[str] = None
+
+
 class OnboardingCompleteRequest(BaseModel):
     company_profile: Optional[CompanyProfileInput] = None
     company_name: Optional[str] = None
@@ -97,6 +115,7 @@ class OnboardingCompleteRequest(BaseModel):
     providers: Optional[Dict[str, Any]] = None
     zero_egress: Optional[bool] = False
     channels: Optional[ChannelsInput] = None
+    integrations: Optional[Union[IntegrationsInput, Dict[str, Any]]] = None
     active_domains: Optional[List[Union[str, int]]] = None
     sync_souls: Optional[bool] = True
 
@@ -124,6 +143,26 @@ def api_onboarding_test_provider(request: Request, payload: ProviderTestRequest)
         provider=prov,
         api_key=payload.api_key,
         base_url=payload.base_url,
+    )
+
+
+@router.post("/api/onboarding/test-integration")
+def api_onboarding_test_integration(request: Request, payload: IntegrationTestRequest) -> Dict[str, Any]:
+    """Tests n8n or PocketBase connectivity with SSRF protection and 5s timeout."""
+    _require_admin(request)
+    _forbid_demo_writes()
+
+    svc = (payload.service or "").strip().lower()
+    if svc not in onboarding_wizard.SUPPORTED_INTEGRATIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported integration '{payload.service}'. Supported: {', '.join(onboarding_wizard.SUPPORTED_INTEGRATIONS.keys())}",
+        )
+
+    return onboarding_wizard.test_external_integration(
+        service=svc,
+        base_url=payload.base_url,
+        api_key=payload.api_key,
     )
 
 

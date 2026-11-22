@@ -472,7 +472,7 @@ def _maybe_auto_migrate() -> None:
 def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
     _ensure_mc_tables(conn)
 
-    link_rows = conn.execute("SELECT parent_id, child_id FROM task_links").fetchall()
+    link_rows = conn.execute("SELECT parent_id, child_id FROM task_links WHERE COALESCE(kind, 'subtask') = 'subtask'").fetchall()
     children_map: Dict[str, List[str]] = {}
     parent_map: Dict[str, str] = {}
     for lr in link_rows:
@@ -679,7 +679,7 @@ def _load_single_task_from_conn(conn: sqlite3.Connection, task_id: str) -> Optio
     parent_id: Optional[str] = None
     children: List[str] = []
     for lr in conn.execute(
-        "SELECT parent_id, child_id FROM task_links WHERE parent_id = ? OR child_id = ?",
+        "SELECT parent_id, child_id FROM task_links WHERE (parent_id = ? OR child_id = ?) AND COALESCE(kind, 'subtask') = 'subtask'",
         (tid_str, tid_str),
     ).fetchall():
         p, c = lr["parent_id"], lr["child_id"]
@@ -979,7 +979,7 @@ def mc_get_parent_context_sqlite(task_id: str) -> tuple[Optional[str], Optional[
             """
             SELECT t.project_id, l.parent_id, m.meta_json
             FROM tasks t
-            LEFT JOIN task_links l ON l.child_id = t.id
+            LEFT JOIN task_links l ON l.child_id = t.id AND COALESCE(l.kind, 'subtask') = 'subtask'
             LEFT JOIN mc_task_meta m ON m.task_id = t.id
             WHERE t.id = ?
             LIMIT 1

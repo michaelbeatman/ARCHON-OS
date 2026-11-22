@@ -311,7 +311,7 @@ def _build_kanban_obsidian_map(conn: sqlite3.Connection, rows: list, meta: Dict)
     # Einmalig Parent-Child-Verknuepfungen laden
     parent_by_child: Dict[str, str] = {}
     try:
-        for child_id, parent_id in conn.execute("SELECT child_id, parent_id FROM task_links").fetchall():
+        for child_id, parent_id in conn.execute("SELECT child_id, parent_id FROM task_links WHERE COALESCE(kind, 'subtask') = 'subtask'").fetchall():
             if child_id and parent_id and child_id != parent_id and child_id not in parent_by_child:
                 parent_by_child[child_id] = parent_id
     except Exception as exc:
@@ -517,8 +517,8 @@ def get_kanban_tasks(archived: bool = Query(False)):
             SELECT rowid AS task_num, id, title, body, assignee, status, priority, created_by,
                    created_at, started_at, completed_at, result, model_override, provider_override, block_kind,
                    (SELECT count(*) FROM task_comments c WHERE c.task_id = tasks.id) AS comment_count,
-                   (SELECT count(*) FROM task_links l WHERE l.parent_id = tasks.id) AS subtask_count,
-                   (SELECT count(*) FROM task_links l WHERE l.child_id = tasks.id) AS parent_count
+                   (SELECT count(*) FROM task_links l WHERE l.parent_id = tasks.id AND COALESCE(l.kind, 'subtask') = 'subtask') AS subtask_count,
+                   (SELECT count(*) FROM task_links l WHERE l.child_id = tasks.id AND COALESCE(l.kind, 'subtask') = 'subtask') AS parent_count
             FROM tasks
     """
     try:
@@ -1880,7 +1880,7 @@ def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_h
         try:
             conn = _get_kanban_connection()
             try:
-                r_parent = conn.execute("SELECT parent_id FROM task_links WHERE child_id = ?", (task_id,)).fetchone()
+                r_parent = conn.execute("SELECT parent_id FROM task_links WHERE child_id = ? AND COALESCE(kind, 'subtask') = 'subtask'", (task_id,)).fetchone()
                 parent_id = r_parent[0] if r_parent else None
             finally:
                 conn.close()

@@ -91,12 +91,25 @@ def _month_str() -> str:
     return datetime.datetime.now().strftime("%Y-%m")
 
 
+class _ClosingBudgetConn(sqlite3.Connection):
+    def __enter__(self):
+        super().__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
+
+
 def _get_conn(db_path: Optional[str] = None) -> sqlite3.Connection:
     target = db_path or BUDGET_DB_PATH
     os.makedirs(os.path.dirname(target), exist_ok=True)
-    conn = sqlite3.connect(target, timeout=15.0)
+    conn = sqlite3.connect(target, timeout=15.0, factory=_ClosingBudgetConn)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=5000;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     return conn
 

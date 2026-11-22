@@ -35,11 +35,11 @@ def _emit_tool_event(kind: str, payload: Dict[str, Any]) -> None:
     if kind == "tool.blocked":
         try:
             from backend.audit_log import chained_audit_log
-            chained_audit_log.append(
-                actor=str(payload.get("agent_id") or "system"),
+            chained_audit_log.record_event(
+                category="tool_runtime",
                 action="tool_blocked",
-                target=str(payload.get("tool_name") or ""),
-                details=payload,
+                agent_id=str(payload.get("agent_id") or "system"),
+                payload=payload,
             )
         except Exception:
             pass
@@ -152,6 +152,13 @@ async def execute_agent_tool(
     try:
         from scripts.archon_mcp_server import ArchonMcpServer
         res = ArchonMcpServer().execute_tool(tool_name, call_args)
+        if isinstance(res, dict) and str(res.get("status") or "").lower() in ("error", "failed", "blocked"):
+            return {
+                "status": "error",
+                "source": "mcp",
+                "error": str(res.get("message") or res.get("error") or "MCP-Tool-Fehler"),
+                "result": res,
+            }
         record_tool_read_side_effect(session_id, tool_name)
         return {"status": "success", "source": "mcp", "result": res}
     except Exception as exc:

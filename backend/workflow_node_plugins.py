@@ -26,7 +26,9 @@ import re
 import shutil
 import subprocess
 import time
+import urllib.parse
 import urllib.request
+import uuid
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 logger = logging.getLogger("archon.workflow_node_plugins")
@@ -287,10 +289,12 @@ def is_workflow_node_plugin(node_type: str) -> bool:
 
 async def _run_ffmpeg_plugin(params: Dict[str, Any], node: Dict[str, Any], upstream: Dict[str, Any]) -> Dict[str, Any]:
     mode = str(params.get("mode") or "clip_cut")
-    out_fmt = str(params.get("output_format") or ("mp3" if mode == "extract_audio" else ("jpg" if mode == "thumbnail_frame" else "mp4"))).strip(".")
+    default_ext = "mp3" if mode == "extract_audio" else ("jpg" if mode == "thumbnail_frame" else "mp4")
+    out_fmt = re.sub(r"[^a-z0-9]+", "", str(params.get("output_format") or default_ext).strip(".").lower()) or default_ext
     media_dir = _showroom_media_dir(node, "02_Medien")
     ts = time.strftime("%Y%m%d_%H%M%S")
-    out_file = os.path.join(media_dir, f"ffmpeg_{mode}_{ts}.{out_fmt}")
+    nonce = uuid.uuid4().hex[:6]
+    out_file = os.path.join(media_dir, f"ffmpeg_{mode}_{ts}_{nonce}.{out_fmt}")
 
     raw_in = str(params.get("input_path") or "").strip()
     if not raw_in:
@@ -309,7 +313,17 @@ async def _run_ffmpeg_plugin(params: Dict[str, Any], node: Dict[str, Any], upstr
             cmd += ["-t", str(float(params["duration_sec"]))]
 
     if mode == "extract_audio":
-        cmd += ["-vn", "-acodec", str(params.get("audio_codec") or "libmp3lame"), "-b:a", str(params.get("audio_bitrate") or "192k"), out_file]
+        req_acodec = str(params.get("audio_codec") or "").strip().lower()
+        if out_fmt == "mp3" and req_acodec in ("", "aac"):
+            acodec_extract = "libmp3lame"
+        elif out_fmt == "wav" and not req_acodec:
+            acodec_extract = "pcm_s16le"
+        else:
+            acodec_extract = req_acodec or "libmp3lame"
+        cmd += ["-vn", "-acodec", acodec_extract]
+        if acodec_extract != "pcm_s16le":
+            cmd += ["-b:a", str(params.get("audio_bitrate") or "192k")]
+        cmd.append(out_file)
     elif mode == "thumbnail_frame":
         cmd += ["-vframes", "1", "-q:v", "2", out_file]
     else:
@@ -323,7 +337,7 @@ async def _run_ffmpeg_plugin(params: Dict[str, Any], node: Dict[str, Any], upstr
             vf_filters.append(f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2")
         sub_path = str(params.get("subtitle_path") or "").strip()
         if sub_path:
-            safe_sub = _safe_media_input_path(sub_path).replace("\\", "/").replace(":", "\\:")
+            safe_sub = _safe_media_input_path(sub_path).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
             vf_filters.append(f"subtitles='{safe_sub}'")
         if vf_filters:
             cmd += ["-vf", ",".join(vf_filters)]
@@ -348,12 +362,20 @@ async def _run_ffmpeg_plugin(params: Dict[str, Any], node: Dict[str, Any], upstr
             "planned_only": True,
             "reason": reason,
             "command": cmd_str,
-            "video_path": out_file if out_fmt != "mp3" else "",
-            "audio_path": out_file if out_fmt == "mp3" else "",
+            "video_path": out_file if out_fmt not in ("mp3", "wav", "m4a", "aac", "jpg", "png") else "",
+            "audio_path": out_file if out_fmt in ("mp3", "wav", "m4a", "aac") else "",
             "content": f"[FFmpeg ({reason})] Geplanter Befehl:\n`{cmd_str}`\nZiel: `{out_file}`",
         }
 
-    proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=300)
+    try:
+        proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=300)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return {
+            "status": "error",
+            "error": f"FFmpeg-Ausfuehrungsfehler: {exc}",
+            "command": cmd_str,
+            "content": "",
+        }
     if proc.returncode != 0:
         return {
             "status": "error",
@@ -364,9 +386,9 @@ async def _run_ffmpeg_plugin(params: Dict[str, Any], node: Dict[str, Any], upstr
     return {
         "status": "success",
         "command": cmd_str,
-        "video_path": out_file if out_fmt not in ("mp3", "jpg") else "",
-        "audio_path": out_file if out_fmt == "mp3" else "",
-        "thumbnail_path": out_file if out_fmt == "jpg" else "",
+        "video_path": out_file if out_fmt not in ("mp3", "wav", "m4a", "aac", "jpg", "png") else "",
+        "audio_path": out_file if out_fmt in ("mp3", "wav", "m4a", "aac") else "",
+        "thumbnail_path": out_file if out_fmt in ("jpg", "png") else "",
         "content": f"FFmpeg Render erfolgreich: `{out_file}`",
     }
 
@@ -387,10 +409,11 @@ async def _run_kinocut_plugin(params: Dict[str, Any], node: Dict[str, Any], upst
         dry_run=bool(params.get("dry_run", False)),
     )
     rendered = json.dumps(matrix, ensure_ascii=False, indent=2)
+    clips_list = matrix.get("clips") or matrix.get("clips_created") or []
     return {
         "status": "success",
-        "clips": matrix.get("clips") or [],
-        "clip_count": len(matrix.get("clips") or []),
+        "clips": clips_list,
+        "clip_count": len(clips_list),
         "media_matrix": matrix,
         "content": rendered,
     }
@@ -460,32 +483,28 @@ async def _run_suno_plugin(params: Dict[str, Any], node: Dict[str, Any], upstrea
             ),
         }
 
-    from utils.egress_guard import check_target_url
-    safe_url = check_target_url(endpoint)
-    payload = json.dumps({
+    from utils.safe_http import safe_http_json
+    payload_obj = {
         "title": params.get("title"),
         "prompt": params.get("prompt"),
         "tags": params.get("style_tags"),
         "make_instrumental": bool(params.get("instrumental", True)),
         "model": params.get("model_version", "v4"),
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        safe_url,
-        data=payload,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+    }
+    data = await asyncio.to_thread(
+        safe_http_json,
+        endpoint,
         method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+        json_body=payload_obj,
+        timeout=30.0,
     )
-
-    def _call() -> Dict[str, Any]:
-        with urllib.request.urlopen(req, timeout=30.0) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-
-    data = await asyncio.to_thread(_call)
+    data_dict = data if isinstance(data, dict) else {"raw": data}
     return {
         "status": "success",
-        "track_url": data.get("audio_url") or data.get("url") or "",
+        "track_url": data_dict.get("audio_url") or data_dict.get("url") or "",
         "title": str(params.get("title") or ""),
-        "content": json.dumps(data, ensure_ascii=False),
+        "content": json.dumps(data_dict, ensure_ascii=False),
     }
 
 
@@ -500,20 +519,18 @@ async def _run_calendar_publish_plugin(params: Dict[str, Any], node: Dict[str, A
     notes = str(params.get("notes") or "").strip()
     if asset_path:
         notes = f"{notes}\nAsset: {asset_path}".strip()
+    wf_ref = str(node.get("workflow_id") or "").strip()
+    n8n_act = str(params.get("n8n_webhook_action") or "").strip()
+    if wf_ref or n8n_act:
+        notes = f"{notes}\n[Workflow: {wf_ref}, Channel: {channel}, Action: {n8n_act}]".strip()
     ev = await asyncio.to_thread(
         operations_calendar.create_event,
         {
             "title": f"[{channel.upper()}] {title}",
-            "start_at": start_dt.isoformat(),
-            "end_at": end_dt.isoformat(),
+            "start": start_dt.isoformat(timespec="minutes"),
+            "end": end_dt.isoformat(timespec="minutes"),
             "category": "publishing",
-            "description": notes,
-            "metadata": {
-                "channel": channel,
-                "asset_path": asset_path,
-                "n8n_webhook_action": params.get("n8n_webhook_action", ""),
-                "workflow_id": node.get("workflow_id", ""),
-            },
+            "notes": notes,
         },
     )
     ev_id = ev.get("id") if isinstance(ev, dict) else ""
@@ -535,17 +552,31 @@ async def _run_image_gen_plugin(params: Dict[str, Any], node: Dict[str, Any], up
                 break
     if not prompt:
         prompt = str(node.get("title") or "Editorial cover graphic")
-    from archon.routers.chat import image_generate
-    res = await image_generate({
-        "prompt": f"{prompt} ({params.get('style_preset', 'editorial_clean')}, aspect {params.get('aspect_ratio', '16:9')})",
-        "model": str(params.get("model") or ""),
-    })
+    from fastapi import HTTPException
+    from archon.routers.chat import api_tool_image_generate, ImageGenerateToolRequest
+    try:
+        req_obj = ImageGenerateToolRequest(
+            prompt=f"{prompt} ({params.get('style_preset', 'editorial_clean')}, aspect {params.get('aspect_ratio', '16:9')})",
+            model=str(params.get("model") or "google/gemini-2.5-flash-image"),
+            provider=str(params.get("provider") or "openrouter"),
+            session_id=str(node.get("kanban_task_id") or node.get("id") or "dag_image_gen"),
+        )
+        res = await api_tool_image_generate(req_obj)
+    except HTTPException as hex_err:
+        return {
+            "status": "error",
+            "image_path": "",
+            "prompt": prompt,
+            "content": "",
+            "error": str(hex_err.detail),
+        }
+    res_dict = res if isinstance(res, dict) else {"raw": res}
     return {
-        "status": "success" if res.get("status") != "error" else "error",
-        "image_path": res.get("path") or res.get("url") or "",
+        "status": "success" if res_dict.get("status") != "error" else "error",
+        "image_path": res_dict.get("path") or res_dict.get("url") or res_dict.get("image_url") or "",
         "prompt": prompt,
-        "content": json.dumps(res, ensure_ascii=False),
-        "error": res.get("error") or "",
+        "content": json.dumps(res_dict, ensure_ascii=False),
+        "error": str(res_dict.get("error") or ""),
     }
 
 
@@ -603,16 +634,129 @@ async def execute_workflow_node_plugin(
             session_id=str(node.get("kanban_task_id") or node.get("id") or "dag_plugin"),
         )
     if adapter == "http" and spec.get("http_endpoint"):
-        from utils.egress_guard import check_target_url
-        safe_url = check_target_url(str(spec["http_endpoint"]))
-        req = urllib.request.Request(
-            safe_url,
-            data=json.dumps({"params": resolved_params, "node_id": node.get("id")}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
+        from utils.safe_http import safe_http_request
+
+        endpoint_url = str(spec["http_endpoint"]).strip()
+        method = str(spec.get("http_method") or "POST").strip().upper()
+        headers: Dict[str, str] = {"Content-Type": "application/json"}
+        if isinstance(spec.get("headers"), dict):
+            headers.update({str(k): str(v) for k, v in spec["headers"].items()})
+
+        auth_cfg = spec.get("auth") if isinstance(spec.get("auth"), dict) else {}
+        env_var = str(auth_cfg.get("env_var") or spec.get("auth_env_var") or "").strip()
+        if env_var:
+            secret_val = str(os.environ.get(env_var) or "").strip()
+            if not secret_val:
+                return {
+                    "status": "success",
+                    "planned_only": True,
+                    "reason": "api_key_missing",
+                    "missing_env": env_var,
+                    "content": (
+                        f"[{spec.get('label') or spec['plugin_id']} VST-Adapter] "
+                        f"API-Key `{env_var}` fehlt fuer Live-Ausfuehrung."
+                    ),
+                }
+            auth_type = str(auth_cfg.get("type") or "bearer").strip().lower()
+            if auth_type == "bearer":
+                prefix = str(auth_cfg.get("prefix") if auth_cfg.get("prefix") is not None else "Bearer ")
+                headers[str(auth_cfg.get("header_name") or "Authorization")] = f"{prefix}{secret_val}"
+            elif auth_type == "header":
+                headers[str(auth_cfg.get("header_name") or "X-API-Key")] = secret_val
+            elif auth_type == "query":
+                sep = "&" if "?" in endpoint_url else "?"
+                q_param = str(auth_cfg.get("query_param") or "api_key")
+                endpoint_url = f"{endpoint_url}{sep}{urllib.parse.quote(q_param)}={urllib.parse.quote(secret_val)}"
+
+        # Optionales Request-Mapping fuer 3rd-Party-APIs
+        req_mapping = spec.get("request_mapping") if isinstance(spec.get("request_mapping"), dict) else None
+        if req_mapping:
+            body_obj = {
+                str(out_k): resolved_params.get(str(in_k), resolved_params.get(str(out_k)))
+                for out_k, in_k in req_mapping.items()
+            }
+        else:
+            body_obj = {"params": resolved_params, "node_id": node.get("id")}
+
+        resp = await asyncio.to_thread(
+            safe_http_request,
+            endpoint_url,
+            method=method,
+            headers=headers,
+            json_body=body_obj if method != "GET" else None,
+            timeout=float(spec.get("timeout_sec") or 30.0),
         )
-        data = await asyncio.to_thread(lambda: json.loads(urllib.request.urlopen(req, timeout=30.0).read().decode("utf-8")))
-        return {"status": "success", "content": json.dumps(data, ensure_ascii=False), **({k: v for k, v in data.items() if isinstance(data, dict)})}
+        ctype = str((resp.get("headers") or {}).get("content-type") or "").lower()
+        raw_bytes: bytes = resp.get("body") or b""
+
+        # Binaer-Download direkt in Showroom-Medienverzeichnis speichern
+        is_binary = (
+            str(spec.get("response_type") or "").lower() == "binary"
+            or any(ctype.startswith(p) for p in ("audio/", "video/", "image/", "application/octet-stream"))
+        )
+        if is_binary:
+            ext = "bin"
+            if "mpeg" in ctype or "mp3" in ctype:
+                ext = "mp3"
+            elif "wav" in ctype:
+                ext = "wav"
+            elif "mp4" in ctype:
+                ext = "mp4"
+            elif "png" in ctype:
+                ext = "png"
+            elif "jpeg" in ctype or "jpg" in ctype:
+                ext = "jpg"
+            media_dir = _showroom_media_dir(node, "02_Medien")
+            out_file = os.path.join(media_dir, f"{spec['plugin_id']}_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.{ext}")
+            with open(out_file, "wb") as bf:
+                bf.write(raw_bytes)
+            out_payload: Dict[str, Any] = {
+                "status": "success",
+                "media_path": out_file,
+                "content_type": ctype,
+                "content": f"[{spec.get('label') or spec['plugin_id']}] Media-Datei gespeichert: `{out_file}`",
+            }
+            if ext in ("mp3", "wav"):
+                out_payload["audio_path"] = out_file
+            elif ext == "mp4":
+                out_payload["video_path"] = out_file
+            elif ext in ("png", "jpg"):
+                out_payload["image_path"] = out_file
+            return out_payload
+
+        data = json.loads(raw_bytes.decode("utf-8", errors="replace")) if raw_bytes else {}
+        data_dict = data if isinstance(data, dict) else {"raw": data}
+
+        # Asynchrones Job-Polling falls poll_endpoint konfiguriert ist
+        poll_tpl = str(spec.get("poll_endpoint") or "").strip()
+        job_id = str(data_dict.get("job_id") or data_dict.get("task_id") or data_dict.get("id") or "").strip()
+        if poll_tpl and job_id and str(data_dict.get("status") or "").lower() in ("queued", "pending", "processing", "running", ""):
+            poll_url = poll_tpl.replace("{job_id}", urllib.parse.quote(job_id)).replace("{id}", urllib.parse.quote(job_id))
+            max_polls = max(1, min(15, int(spec.get("max_polls") or 6)))
+            poll_interval = max(0.2, min(10.0, float(spec.get("poll_interval_sec") or 2.0)))
+            for _ in range(max_polls):
+                await asyncio.sleep(poll_interval)
+                p_resp = await asyncio.to_thread(
+                    safe_http_request,
+                    poll_url,
+                    method="GET",
+                    headers=headers,
+                    timeout=20.0,
+                )
+                p_data = json.loads((p_resp.get("body") or b"{}").decode("utf-8", errors="replace"))
+                if isinstance(p_data, dict):
+                    data_dict = p_data
+                    p_st = str(p_data.get("status") or "").lower()
+                    if p_st in ("completed", "succeeded", "done", "ready", "success"):
+                        break
+                    if p_st in ("failed", "error", "cancelled"):
+                        return {
+                            "status": "error",
+                            "error": str(p_data.get("error") or f"Async-Job {job_id} fehlgeschlagen"),
+                            "content": json.dumps(data_dict, ensure_ascii=False),
+                        }
+
+        return {"status": "success", "content": json.dumps(data_dict, ensure_ascii=False), **data_dict}
 
     return {"status": "error", "error": f"Kein Ausfuehrungs-Adapter fuer Plugin '{spec['plugin_id']}' konfiguriert.", "content": ""}
 
@@ -983,13 +1127,24 @@ def list_marketplace_plugins() -> List[Dict[str, Any]]:
             "core": True,
         })
     # 3rd-Party-Katalog
+    catalog_ids = set()
     for spec in WORKFLOW_NODE_MARKETPLACE_CATALOG:
         pid = spec["plugin_id"]
+        catalog_ids.add(pid)
         items.append({
             **spec,
             "installed": pid in installed_map,
             "core": False,
         })
+    # Benutzerdefinierte Custom-Plugins aus plugins/workflow_nodes/
+    for pid, spec in installed_map.items():
+        if pid not in CORE_NODE_PLUGINS and pid not in catalog_ids:
+            items.append({
+                **spec,
+                "installed": True,
+                "core": False,
+                "custom": True,
+            })
     return items
 
 

@@ -28,7 +28,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional
+from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger("archon.workflow_dag")
 
@@ -91,11 +91,21 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
                 workflow_id TEXT NOT NULL,
                 status TEXT NOT NULL,
                 dag_json TEXT DEFAULT '{}',
+                gate_approvals_json TEXT DEFAULT '{}',
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS workflow_node_states (
+                run_id TEXT PRIMARY KEY,
+                node_id TEXT NOT NULL,
+                fingerprint TEXT NOT NULL,
+                status TEXT NOT NULL,
+                output_json TEXT DEFAULT '{}',
+                updated_at REAL NOT NULL
+            )
+        """) if False else conn.execute("""
             CREATE TABLE IF NOT EXISTS workflow_node_states (
                 run_id TEXT NOT NULL,
                 node_id TEXT NOT NULL,
@@ -106,10 +116,12 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
                 PRIMARY KEY (run_id, node_id)
             )
         """)
-        # Sichere Migration fuer bestehende workflow_dags.db ohne dag_json
+        # Sichere Migration fuer bestehende workflow_dags.db ohne dag_json / gate_approvals_json
         run_cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_runs)").fetchall()}
         if "dag_json" not in run_cols:
             conn.execute("ALTER TABLE workflow_runs ADD COLUMN dag_json TEXT DEFAULT '{}'")
+        if "gate_approvals_json" not in run_cols:
+            conn.execute("ALTER TABLE workflow_runs ADD COLUMN gate_approvals_json TEXT DEFAULT '{}'")
         conn.commit()
         yield conn
     finally:
@@ -331,7 +343,11 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
             event_kind="workflow_node_started",
             event_payload={"node_id": node.get("id"), "type": node_type},
         )
-        pres = await execute_workflow_node_plugin(node_type, node, upstream)
+        try:
+            pres = await execute_workflow_node_plugin(node_type, node, upstream)
+        except Exception as pexc:
+            logger.error("[WorkflowDAG] Node-Plugin '%s' abgestuerzt: %s", node_type, pexc, exc_info=pexc)
+            pres = {"status": "error", "error": f"Plugin-Ausfuehrungsfehler: {pexc}", "content": ""}
         p_err = str(pres.get("status") or "success").lower() in ("error", "failed", "blocked")
         await asyncio.to_thread(
             _update_kanban_task_status,
@@ -531,6 +547,29 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                     session_id=str(kanban_task_id or node.get("id") or "dag_session"),
                 )
             tool_trace.append({"turn": _turn + 1, "tool": _tname, "args": _targs, "result": _tres})
+            _ckpt_rid = str(node.get("_dag_run_id") or "")
+            _ckpt_db = node.get("_dag_db_path")
+            if _ckpt_rid and node.get("id"):
+                try:
+                    with _connect(_ckpt_db) as conn:
+                        conn.execute(
+                            """
+                            INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
+                            VALUES (?, ?, ?, 'running', ?, ?)
+                            ON CONFLICT(run_id, node_id) DO UPDATE SET
+                                status='running', output_json=excluded.output_json, updated_at=excluded.updated_at
+                            """,
+                            (
+                                _ckpt_rid,
+                                str(node["id"]),
+                                "running_checkpoint",
+                                json.dumps({"partial_tool_trace": tool_trace, "turn": _turn + 1}, ensure_ascii=False),
+                                time.time(),
+                            ),
+                        )
+                        conn.commit()
+                except Exception as _cexc:
+                    logger.debug("[WorkflowDAG] Tool-Checkpoint fehlgeschlagen: %s", _cexc)
             turn_prompt = (
                 f"{turn_prompt}\n\n[TOOL-AUFRUF #{_turn + 1}: {_tname}]\n"
                 f"Ergebnis:\n{json.dumps(_tres, ensure_ascii=False)[:3500]}\n\n"
@@ -606,57 +645,69 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
             res["error"] = f"Output-Schema-Verletzung: {_schema_err}"
 
     # Self-Critique / Anti-AI-Slop-Revisionsschleife fuer Content- & Quality-Gate-Knoten
+    # Wichtig: Bei aktivem output_schema niemals validiertes JSON durch Prosa-Revision ueberschreiben.
     quality_report: Optional[Dict[str, Any]] = None
     revisions_used = 0
     if not is_error and content and _is_content_node:
         try:
             from backend.content_machine import evaluate_asset_quality
-            max_rev = max(0, min(2, int(node.get("max_revisions") if node.get("max_revisions") is not None else 1)))
-            min_q = int(node.get("min_quality_score") or 75)
-            lines_c = [ln.strip() for ln in content.splitlines() if ln.strip()]
-            quality_report = evaluate_asset_quality({
-                "channel": _channel_hint or "linkedin",
-                "hook": lines_c[0] if lines_c else "",
-                "body": content,
-                "cta": lines_c[-1] if len(lines_c) > 1 else "",
-            })
-            while revisions_used < max_rev and (not quality_report.get("passed") or int(quality_report.get("score", 0)) < min_q):
-                revisions_used += 1
-                rev_issues = "; ".join(quality_report.get("issues") or [])
-                rev_sugg = "; ".join(quality_report.get("suggestions") or [])
-                rev_prompt = (
-                    f"{full_prompt}\n\n"
-                    f"[SELBST-KRITIK / ANTI-AI-SLOP-PRUEFUNG (Revision {revisions_used}/{max_rev})]\n"
-                    f"Dein bisheriger Entwurf erreichte nur Quality-Score {quality_report.get('score')}/100.\n"
-                    f"Befunde: {rev_issues}\n"
-                    f"Konkrete Korrektur-Aufgaben: {rev_sugg}\n\n"
-                    f"BISHERIGER ENTWURF:\n{content[:4500]}\n\n"
-                    "Ueberarbeite den Text direkt, konkret, faktenbasiert (mit Zahlen-Anker & klarem CTA) und komplett ohne KI-Floskeln."
-                )
-                rev_res = await core_dispatcher.dispatch_to_omniroute_or_container(
-                    agent_id=agent_id,
-                    agent_name=agent_name,
-                    prompt=rev_prompt,
-                    role=role,
-                    system_prompt=eff_system_prompt,
-                    model=model,
-                    reasoning_level=reasoning_level,
-                    task_id=str(kanban_task_id or node.get("id") or ""),
-                )
-                rev_content = str(rev_res.get("content") or "").strip()
-                if rev_content and str(rev_res.get("status") or "success").lower() not in ("error", "failed", "blocked"):
-                    content = rev_content
-                    res["input_tokens"] = int(res.get("input_tokens") or 0) + int(rev_res.get("input_tokens") or 0)
-                    res["output_tokens"] = int(res.get("output_tokens") or 0) + int(rev_res.get("output_tokens") or 0)
-                    lines_c = [ln.strip() for ln in content.splitlines() if ln.strip()]
-                    quality_report = evaluate_asset_quality({
-                        "channel": _channel_hint or "linkedin",
-                        "hook": lines_c[0] if lines_c else "",
-                        "body": content,
-                        "cta": lines_c[-1] if len(lines_c) > 1 else "",
-                    })
-                else:
-                    break
+            if isinstance(output_schema, dict) and isinstance(parsed_output, dict):
+                _q_hook = str(parsed_output.get("hook") or parsed_output.get("title") or "")
+                _q_body = str(parsed_output.get("body") or parsed_output.get("content") or parsed_output.get("summary") or content)
+                _q_cta = str(parsed_output.get("cta") or "")
+                quality_report = evaluate_asset_quality({
+                    "channel": _channel_hint or "linkedin",
+                    "hook": _q_hook,
+                    "body": _q_body,
+                    "cta": _q_cta,
+                })
+            else:
+                max_rev = max(0, min(2, int(node.get("max_revisions") if node.get("max_revisions") is not None else 1)))
+                min_q = int(node.get("min_quality_score") or 75)
+                lines_c = [ln.strip() for ln in content.splitlines() if ln.strip()]
+                quality_report = evaluate_asset_quality({
+                    "channel": _channel_hint or "linkedin",
+                    "hook": lines_c[0] if lines_c else "",
+                    "body": content,
+                    "cta": lines_c[-1] if len(lines_c) > 1 else "",
+                })
+                while revisions_used < max_rev and (not quality_report.get("passed") or int(quality_report.get("score", 0)) < min_q):
+                    revisions_used += 1
+                    rev_issues = "; ".join(quality_report.get("issues") or [])
+                    rev_sugg = "; ".join(quality_report.get("suggestions") or [])
+                    rev_prompt = (
+                        f"{full_prompt}\n\n"
+                        f"[SELBST-KRITIK / ANTI-AI-SLOP-PRUEFUNG (Revision {revisions_used}/{max_rev})]\n"
+                        f"Dein bisheriger Entwurf erreichte nur Quality-Score {quality_report.get('score')}/100.\n"
+                        f"Befunde: {rev_issues}\n"
+                        f"Konkrete Korrektur-Aufgaben: {rev_sugg}\n\n"
+                        f"BISHERIGER ENTWURF:\n{content[:4500]}\n\n"
+                        "Ueberarbeite den Text direkt, konkret, faktenbasiert (mit Zahlen-Anker & klarem CTA) und komplett ohne KI-Floskeln."
+                    )
+                    rev_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        prompt=rev_prompt,
+                        role=role,
+                        system_prompt=eff_system_prompt,
+                        model=model,
+                        reasoning_level=reasoning_level,
+                        task_id=str(kanban_task_id or node.get("id") or ""),
+                    )
+                    rev_content = str(rev_res.get("content") or "").strip()
+                    if rev_content and str(rev_res.get("status") or "success").lower() not in ("error", "failed", "blocked"):
+                        content = rev_content
+                        res["input_tokens"] = int(res.get("input_tokens") or 0) + int(rev_res.get("input_tokens") or 0)
+                        res["output_tokens"] = int(res.get("output_tokens") or 0) + int(rev_res.get("output_tokens") or 0)
+                        lines_c = [ln.strip() for ln in content.splitlines() if ln.strip()]
+                        quality_report = evaluate_asset_quality({
+                            "channel": _channel_hint or "linkedin",
+                            "hook": lines_c[0] if lines_c else "",
+                            "body": content,
+                            "cta": lines_c[-1] if len(lines_c) > 1 else "",
+                        })
+                    else:
+                        break
         except Exception as _qexc:
             logger.debug("[WorkflowDAG] Anti-Slop-Quality-Check uebersprungen: %s", _qexc)
 
@@ -788,7 +839,6 @@ async def _run_workflow_dag_locked(
     nodes = dag_def.get("nodes") or []
     node_map: Dict[str, Dict[str, Any]] = {str(n["id"]): n for n in nodes if isinstance(n, dict) and n.get("id")}
     edge_map = _extract_edge_map(dag_def)
-    approvals = gate_approvals or {}
     now = time.time()
 
     # Unbekannte depends_on-IDs / Kanten-Quellen: sofort failed mit klarer Diagnose
@@ -816,17 +866,32 @@ async def _run_workflow_dag_locked(
                     "error": _err_msg,
                 }
 
+    approvals: Dict[str, bool] = {}
     with _connect(db_path) as conn:
+        prev_run = conn.execute(
+            "SELECT gate_approvals_json FROM workflow_runs WHERE run_id = ?",
+            (rid,),
+        ).fetchone()
+        if prev_run and prev_run["gate_approvals_json"]:
+            try:
+                stored_app = json.loads(prev_run["gate_approvals_json"])
+                if isinstance(stored_app, dict):
+                    approvals.update({str(k): bool(v) for k, v in stored_app.items()})
+            except Exception:
+                pass
+        if gate_approvals:
+            approvals.update({str(k): bool(v) for k, v in gate_approvals.items()})
         conn.execute(
             """
-            INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at)
-            VALUES (?, ?, 'running', ?, ?, ?)
+            INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, gate_approvals_json, created_at, updated_at)
+            VALUES (?, ?, 'running', ?, ?, ?, ?)
             ON CONFLICT(run_id) DO UPDATE SET
                 status='running',
                 dag_json=CASE WHEN excluded.dag_json != '{}' THEN excluded.dag_json ELSE workflow_runs.dag_json END,
+                gate_approvals_json=excluded.gate_approvals_json,
                 updated_at=excluded.updated_at
             """,
-            (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), now, now),
+            (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), json.dumps(approvals, ensure_ascii=False), now, now),
         )
         conn.commit()
         cached_rows = conn.execute(
@@ -838,23 +903,174 @@ async def _run_workflow_dag_locked(
     outputs: Dict[str, Any] = {}
     statuses: Dict[str, str] = {}
 
+    max_conc = max(1, min(16, int(dag_def.get("max_concurrent_tasks") or 4)))
+    sem = asyncio.Semaphore(max_conc)
     pending = set(node_map.keys())
-    while pending:
+    running_tasks: Dict[str, "asyncio.Task[None]"] = {}
+
+    async def _run_one(nid: str) -> None:
+        node = node_map[nid]
+        inc_edges = edge_map.get(nid, [])
+        edge_by_src = {e["from"]: e for e in inc_edges}
+        deps = _all_dependencies_for_node(node, inc_edges)
+        upstream = {
+            d: _shape_upstream_output(outputs.get(d), (edge_by_src.get(d) or {}).get("data_mode", "full"))
+            for d in deps
+        }
+        fp = compute_node_fingerprint(node, upstream)
+
+        prev = cached.get(nid)
+        if prev and prev["fingerprint"] == fp and prev["status"] in ("completed", "skipped_cached"):
+            outputs[nid] = json.loads(prev["output_json"] or "{}")
+            statuses[nid] = "skipped_cached"
+            return
+
+        # Persistenter Running-Status + Live-SSE-Broadcast
+        with _connect(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
+                VALUES (?, ?, ?, 'running', '{}', ?)
+                ON CONFLICT(run_id, node_id) DO UPDATE SET
+                    fingerprint=excluded.fingerprint, status='running', updated_at=excluded.updated_at
+                """,
+                (rid, nid, fp, time.time()),
+            )
+            conn.commit()
+
+        try:
+            from archon.core.runtime import broadcast_event
+            broadcast_event("workflow_node_state", {
+                "run_id": rid, "workflow_id": wf_id, "node_id": nid, "status": "running"
+            })
+        except Exception as _bexc:
+            logger.debug("[WorkflowDAG] SSE running-Event uebersprungen: %s", _bexc)
+
+        ntype = str(node.get("type") or "agent").lower()
+        requires_gate = ntype == "gate" or bool(node.get("require_hitl"))
+        node_ctx = {**node, "workflow_id": wf_id, "_dag_run_id": rid, "_dag_db_path": db_path}
+
+        if ntype == "gate":
+            if approvals.get(nid) is True:
+                out = {"approved": True, "status": "success"}
+                st = "completed"
+                await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "done", result="HITL-Gate freigegeben.")
+            elif approvals.get(nid) is False:
+                out = {"approved": False, "status": "rejected"}
+                st = "rejected"
+                await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Gate abgelehnt.", block_kind="hitl_rejected")
+            else:
+                deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream, db_path)
+                out = {"awaiting_gate": True, "decision_id": deci_id}
+                st = "awaiting_gate"
+                await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe.", block_kind="hitl_gate")
+        elif requires_gate and approvals.get(nid) is not True:
+            if approvals.get(nid) is False:
+                out = {"approved": False, "status": "rejected"}
+                st = "rejected"
+                await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Freigabe abgelehnt.", block_kind="hitl_rejected")
+            else:
+                deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream, db_path)
+                out = {"awaiting_gate": True, "decision_id": deci_id}
+                st = "awaiting_gate"
+                await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe vor Ausfuehrung.", block_kind="hitl_gate")
+        elif ntype == "quality_gate":
+            from backend.content_machine import evaluate_asset_quality
+            combined_up = "\n\n".join(
+                str(v.get("content") or v.get("result") or "") if isinstance(v, dict) else str(v)
+                for v in upstream.values()
+            ).strip()
+            lines_u = [ln.strip() for ln in combined_up.splitlines() if ln.strip()]
+            q_rep = evaluate_asset_quality({
+                "channel": str(node.get("channel") or "linkedin"),
+                "hook": lines_u[0] if lines_u else "",
+                "body": combined_up,
+                "cta": lines_u[-1] if len(lines_u) > 1 else "",
+            })
+            min_q = int(node.get("min_quality_score") or 70)
+            q_ok = bool(q_rep.get("passed")) and int(q_rep.get("score", 0)) >= min_q
+            out = {
+                "status": "success" if q_ok else "error",
+                "quality_score": int(q_rep.get("score", 0)),
+                "quality_report": q_rep,
+                "content": combined_up,
+            }
+            st = "completed" if q_ok else "failed"
+            await asyncio.to_thread(
+                _update_kanban_task_status,
+                node.get("kanban_task_id"),
+                "done" if q_ok else "blocked",
+                result=f"Anti-Slop Quality-Score: {out['quality_score']}/100",
+                block_kind=None if q_ok else "quality_gate_failed",
+            )
+        elif ntype == "fanout":
+            branches = node.get("branches") or []
+            if branches:
+                quorum = int(node.get("quorum_min") or max(1, len(branches)))
+                results = await asyncio.gather(
+                    *(_exec_with_retry_and_timeout(eff_executor, {**node_ctx, "branch": b}, upstream) for b in branches),
+                    return_exceptions=True,
+                )
+                ok_results = [r for r in results if isinstance(r, dict) and r.get("status", "success") != "error"]
+                if len(ok_results) >= quorum:
+                    out = {"status": "success", "quorum_met": True, "ok_count": len(ok_results), "results": ok_results}
+                    st = "completed"
+                else:
+                    out = {"status": "error", "quorum_met": False, "ok_count": len(ok_results), "required": quorum}
+                    st = "failed"
+            else:
+                out = await _exec_with_retry_and_timeout(eff_executor, node_ctx, upstream)
+                st = "failed" if out.get("status") == "error" else "completed"
+        else:
+            out = await _exec_with_retry_and_timeout(eff_executor, node_ctx, upstream)
+            st = "failed" if out.get("status") == "error" else "completed"
+
+        outputs[nid] = out
+        statuses[nid] = st
+        with _connect(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id, node_id) DO UPDATE SET
+                    fingerprint=excluded.fingerprint, status=excluded.status,
+                    output_json=excluded.output_json, updated_at=excluded.updated_at
+                """,
+                (rid, nid, fp, st, json.dumps(out, ensure_ascii=False), time.time()),
+            )
+            conn.commit()
+        try:
+            from archon.core.runtime import broadcast_event
+            broadcast_event("workflow_node_state", {
+                "run_id": rid,
+                "workflow_id": wf_id,
+                "node_id": nid,
+                "status": st,
+                "quality_score": out.get("quality_score") if isinstance(out, dict) else None,
+                "deliverable_path": out.get("deliverable_path") if isinstance(out, dict) else None,
+            })
+        except Exception as _bexc:
+            logger.debug("[WorkflowDAG] SSE terminal-Event uebersprungen: %s", _bexc)
+
+    async def _run_guarded(nid: str) -> None:
+        async with sem:
+            await _run_one(nid)
+
+    # Event-gesteuerte Topologische Ready-Queue (kein globales Wave-Barrier-Warten)
+    while pending or running_tasks:
         ready: List[str] = []
         skippable: List[str] = []
 
-        for nid in sorted(pending):
+        for nid in sorted(pending - set(running_tasks.keys())):
             node = node_map[nid]
             inc_edges = edge_map.get(nid, [])
             deps = _all_dependencies_for_node(node, inc_edges)
             if not deps:
                 ready.append(nid)
                 continue
-            # Warten bis alle Vorlaeufer abgeschlossen sind
             if not all(statuses.get(d) in TERMINAL_NODE_STATES for d in deps):
                 continue
 
-            # Kanten-Bedingungen pruefen (falls Kanten definiert sind; sonst muessen alle deps erfolgreich sein)
             edge_by_src = {e["from"]: e for e in inc_edges}
             all_conditions_met = True
             for d in deps:
@@ -871,7 +1087,7 @@ async def _run_workflow_dag_locked(
         for nid in skippable:
             outputs[nid] = {"status": "skipped", "reason": "upstream_condition_not_met"}
             statuses[nid] = "skipped_condition"
-            pending.remove(nid)
+            pending.discard(nid)
             with _connect(db_path) as conn:
                 conn.execute(
                     """
@@ -884,151 +1100,42 @@ async def _run_workflow_dag_locked(
                 )
                 conn.commit()
 
-        if not ready:
+        for nid in ready:
+            running_tasks[nid] = asyncio.create_task(_run_guarded(nid))
+
+        if not running_tasks:
             # Entweder durch Gate/Fehler blockiert oder Zyklus
             break
 
-        async def _run_one(nid: str) -> None:
-            node = node_map[nid]
-            inc_edges = edge_map.get(nid, [])
-            edge_by_src = {e["from"]: e for e in inc_edges}
-            deps = _all_dependencies_for_node(node, inc_edges)
-            upstream = {
-                d: _shape_upstream_output(outputs.get(d), (edge_by_src.get(d) or {}).get("data_mode", "full"))
-                for d in deps
-            }
-            fp = compute_node_fingerprint(node, upstream)
+        done_set, _ = await asyncio.wait(list(running_tasks.values()), return_when=asyncio.FIRST_COMPLETED)
+        for fin_nid, fin_task in list(running_tasks.items()):
+            if fin_task in done_set:
+                running_tasks.pop(fin_nid, None)
+                pending.discard(fin_nid)
+                # Exceptions im Task abfangen, damit Scheduler nicht abbricht
+                try:
+                    fin_task.result()
+                except Exception as _texc:
+                    logger.error("[WorkflowDAG] Unbehandelter Task-Fehler in Node '%s': %s", fin_nid, _texc, exc_info=_texc)
+                    statuses[fin_nid] = "failed"
+                    outputs[fin_nid] = {"status": "error", "error": str(_texc)}
 
-            prev = cached.get(nid)
-            if prev and prev["fingerprint"] == fp and prev["status"] in ("completed", "skipped_cached"):
-                outputs[nid] = json.loads(prev["output_json"] or "{}")
-                statuses[nid] = "skipped_cached"
-                return
+    # on_failure-Recovery pruefen: ein fehlgeschlagener Node gilt als aufgefangen,
+    # wenn ein nachgelagerter on_failure-Knoten erfolgreich abgeschlossen wurde.
+    recovered_failures = set()
+    for target_nid, inc_edges in edge_map.items():
+        if statuses.get(target_nid) in ("completed", "skipped_cached"):
+            for e in inc_edges:
+                if e.get("condition") == "on_failure" and statuses.get(e.get("from")) == "failed":
+                    recovered_failures.add(e["from"])
 
-            # Live-SSE-Broadcast fuer den Workflow-Editor (Node startet)
-            try:
-                from archon.core.runtime import broadcast_event
-                broadcast_event("workflow_node_state", {
-                    "run_id": rid, "workflow_id": wf_id, "node_id": nid, "status": "running"
-                })
-            except Exception as _bexc:
-                logger.debug("[WorkflowDAG] SSE running-Event uebersprungen: %s", _bexc)
-
-            ntype = str(node.get("type") or "agent").lower()
-            requires_gate = ntype == "gate" or bool(node.get("require_hitl"))
-            node_ctx = {**node, "workflow_id": wf_id}
-
-            if ntype == "gate":
-                if approvals.get(nid) is True:
-                    out = {"approved": True, "status": "success"}
-                    st = "completed"
-                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "done", result="HITL-Gate freigegeben.")
-                elif approvals.get(nid) is False:
-                    out = {"approved": False, "status": "rejected"}
-                    st = "rejected"
-                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Gate abgelehnt.", block_kind="hitl_rejected")
-                else:
-                    deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream, db_path)
-                    out = {"awaiting_gate": True, "decision_id": deci_id}
-                    st = "awaiting_gate"
-                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe.", block_kind="hitl_gate")
-            elif requires_gate and approvals.get(nid) is not True:
-                if approvals.get(nid) is False:
-                    out = {"approved": False, "status": "rejected"}
-                    st = "rejected"
-                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Freigabe abgelehnt.", block_kind="hitl_rejected")
-                else:
-                    deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream, db_path)
-                    out = {"awaiting_gate": True, "decision_id": deci_id}
-                    st = "awaiting_gate"
-                    await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe vor Ausfuehrung.", block_kind="hitl_gate")
-            elif ntype == "quality_gate":
-                # Deterministisches Anti-AI-Slop & Qualitaets-Gate direkt als Workflow-Baustein
-                from backend.content_machine import evaluate_asset_quality
-                combined_up = "\n\n".join(
-                    str(v.get("content") or v.get("result") or "") if isinstance(v, dict) else str(v)
-                    for v in upstream.values()
-                ).strip()
-                lines_u = [ln.strip() for ln in combined_up.splitlines() if ln.strip()]
-                q_rep = evaluate_asset_quality({
-                    "channel": str(node.get("channel") or "linkedin"),
-                    "hook": lines_u[0] if lines_u else "",
-                    "body": combined_up,
-                    "cta": lines_u[-1] if len(lines_u) > 1 else "",
-                })
-                min_q = int(node.get("min_quality_score") or 70)
-                q_ok = bool(q_rep.get("passed")) and int(q_rep.get("score", 0)) >= min_q
-                out = {
-                    "status": "success" if q_ok else "error",
-                    "quality_score": int(q_rep.get("score", 0)),
-                    "quality_report": q_rep,
-                    "content": combined_up,
-                }
-                st = "completed" if q_ok else "failed"
-                await asyncio.to_thread(
-                    _update_kanban_task_status,
-                    node.get("kanban_task_id"),
-                    "done" if q_ok else "blocked",
-                    result=f"Anti-Slop Quality-Score: {out['quality_score']}/100",
-                    block_kind=None if q_ok else "quality_gate_failed",
-                )
-            elif ntype == "fanout":
-                branches = node.get("branches") or []
-                if branches:
-                    quorum = int(node.get("quorum_min") or max(1, len(branches)))
-                    results = await asyncio.gather(
-                        *(_exec_with_retry_and_timeout(eff_executor, {**node_ctx, "branch": b}, upstream) for b in branches),
-                        return_exceptions=True,
-                    )
-                    ok_results = [r for r in results if isinstance(r, dict) and r.get("status", "success") != "error"]
-                    if len(ok_results) >= quorum:
-                        out = {"status": "success", "quorum_met": True, "ok_count": len(ok_results), "results": ok_results}
-                        st = "completed"
-                    else:
-                        out = {"status": "error", "quorum_met": False, "ok_count": len(ok_results), "required": quorum}
-                        st = "failed"
-                else:
-                    # Fanout ohne (nicht-leere) branches: als regulären Einzel-Task-Knoten ausführen
-                    out = await _exec_with_retry_and_timeout(eff_executor, node_ctx, upstream)
-                    st = "failed" if out.get("status") == "error" else "completed"
-            else:
-                out = await _exec_with_retry_and_timeout(eff_executor, node_ctx, upstream)
-                st = "failed" if out.get("status") == "error" else "completed"
-
-            outputs[nid] = out
-            statuses[nid] = st
-            with _connect(db_path) as conn:
-                conn.execute(
-                    """
-                    INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(run_id, node_id) DO UPDATE SET
-                        fingerprint=excluded.fingerprint, status=excluded.status,
-                        output_json=excluded.output_json, updated_at=excluded.updated_at
-                    """,
-                    (rid, nid, fp, st, json.dumps(out, ensure_ascii=False), time.time()),
-                )
-                conn.commit()
-            try:
-                from archon.core.runtime import broadcast_event
-                broadcast_event("workflow_node_state", {
-                    "run_id": rid,
-                    "workflow_id": wf_id,
-                    "node_id": nid,
-                    "status": st,
-                    "quality_score": out.get("quality_score") if isinstance(out, dict) else None,
-                    "deliverable_path": out.get("deliverable_path") if isinstance(out, dict) else None,
-                })
-            except Exception as _bexc:
-                logger.debug("[WorkflowDAG] SSE terminal-Event uebersprungen: %s", _bexc)
-
-        await asyncio.gather(*(_run_one(nid) for nid in ready))
-        for nid in ready:
-            pending.remove(nid)
-
+    unrecovered_fail = any(
+        (st == "rejected") or (st == "failed" and nid not in recovered_failures)
+        for nid, st in statuses.items()
+    )
     has_awaiting_gate = any(s == "awaiting_gate" for s in statuses.values())
     cycle_error: Optional[str] = None
-    if any(s in ("failed", "rejected") for s in statuses.values()):
+    if unrecovered_fail:
         final_status = "failed"
     elif has_awaiting_gate:
         final_status = "paused"

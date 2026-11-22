@@ -592,7 +592,7 @@ def record_asset_metrics(
                 f"Content-Winner ({asset['channel']}): '{asset['title']}' erzielte {views} Views "
                 f"({eng_rate}% Engagement, CTR {ctr}%). Erfolgreiche Hook: {asset['hook'][:160]}"
             )
-            memory_bridge.add_learning(
+            memory_bridge.record_learning(
                 agent_id=asset.get("agent_id") or "content_repurposing_specialist",
                 category=f"content_{asset['channel']}",
                 summary=summary,
@@ -981,8 +981,15 @@ async def generate_video_clip_matrix(
     """Zerlegt ein Longform-Skript in eigenstaendige 9:16-Clip-Pakete (Shorts & TikTok)."""
     init_content_machine_db(db_path)
     camp = get_campaign(campaign_id, db_path=db_path)
-    if not camp:
+    if not camp and not (script_text or "").strip():
         raise KeyError(f"Content-Kampagne '{campaign_id}' nicht gefunden.")
+    if not camp:
+        camp = {
+            "id": campaign_id,
+            "title": "Standalone Clip Matrix",
+            "topic": (script_text or "").strip()[:80] or "Clip Matrix",
+            "source_notes": (script_text or "").strip(),
+        }
 
     base_text = (script_text or "").strip()
     if source_asset_id and not base_text:
@@ -990,12 +997,13 @@ async def generate_video_clip_matrix(
             arow = conn.execute("SELECT * FROM content_assets WHERE id = ?", (source_asset_id,)).fetchone()
         if not arow:
             raise KeyError(f"Quell-Asset '{source_asset_id}' nicht gefunden.")
-        base_text = str(arow["body"] or arow["hook"] or camp["source_notes"] or camp["topic"])
+        base_text = str(arow["body"] or arow["hook"] or camp.get("source_notes") or camp.get("topic") or "")
     if not base_text:
         base_text = str(camp.get("source_notes") or camp.get("topic") or camp["title"])
 
     count = max(1, min(6, int(clip_count)))
-    channels = [c for c in (target_channels or ["youtube_shorts", "tiktok"]) if c in ("youtube_shorts", "tiktok")]
+    allowed_video_channels = ("youtube_shorts", "tiktok", "instagram_reels", "linkedin")
+    channels = [c for c in (target_channels or ["youtube_shorts", "tiktok"]) if c in allowed_video_channels]
     if not channels:
         channels = ["youtube_shorts", "tiktok"]
 
@@ -1007,15 +1015,17 @@ async def generate_video_clip_matrix(
         for idx in range(count):
             seg = segments[idx % len(segments)]
             ch = channels[idx % len(channels)]
+            ch_label = (CHANNEL_SPECS.get(ch) or {}).get("label") or ch
             start_s = idx * 45
+            mid_s = start_s + 2
             end_s = start_s + 38
             clips_spec.append({
                 "channel": ch,
-                "title": f"Clip #{idx + 1} ({CHANNEL_SPECS[ch]['label']}): {camp['title'][:70]}",
+                "title": f"Clip #{idx + 1} ({ch_label}): {camp['title'][:70]}",
                 "hook": f"Stopp — dieser 1 Fehler bei '{camp['topic'][:60]}' kostet 40% Performance ({idx + 1}/{count}).",
                 "body": (
-                    f"[00:{start_s % 60:02d}–00:{(start_s + 2) % 60:02d}] VISUAL HOOK: Grossaufnahme + Einblendung\n"
-                    f"[00:{(start_s + 2) % 60:02d}–00:{end_s % 60:02d}] KERN-AUSSAGE: {seg[:260]}\n"
+                    f"[{start_s // 60:02d}:{start_s % 60:02d}–{mid_s // 60:02d}:{mid_s % 60:02d}] VISUAL HOOK: Grossaufnahme + Einblendung\n"
+                    f"[{mid_s // 60:02d}:{mid_s % 60:02d}–{end_s // 60:02d}:{end_s % 60:02d}] KERN-AUSSAGE: {seg[:260]}\n"
                     f"[LOOP-ENDE] Uebergang zur naechsten Frage."
                 ),
                 "visual_brief": "9:16 Split-Screen, fette Captions (2-3 Woerter/Beat), B-Roll-Wechsel alle 2,5s",

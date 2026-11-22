@@ -98,26 +98,8 @@ async def trigger_n8n_execution(
         }
 
 def _clean_dispatch_output(text: Any, session_id: Optional[str] = None, is_local: bool = False) -> str:
-    s = str(text or "")
-    if session_id and not is_local:
-        try:
-            from backend.pii_scrubber import pii_scrubber
-            s = pii_scrubber.rehydrate_text(s, str(session_id))
-        except Exception as exc:
-            logger.debug(f"[Dispatcher] PII-Rehydrierung fehlgeschlagen: {exc}")
-    try:
-        from backend.secret_masker import mask_sensitive_text
-        s, _ = mask_sensitive_text(s)
-    except Exception as exc:
-        logger.warning(f"[Dispatcher] Secret-Masking fehlgeschlagen: {exc}")
-    try:
-        from backend.output_policy_linter import output_policy_linter
-        linted = output_policy_linter.lint_and_clean(s)
-        if isinstance(linted, dict) and linted.get("cleaned_text") is not None:
-            s = linted["cleaned_text"]
-    except Exception as exc:
-        logger.warning(f"[Dispatcher] Output-Policy-Linter fehlgeschlagen: {exc}")
-    return s
+    from backend.llm_kernel import finalize_llm_output
+    return finalize_llm_output(text, session_id=session_id, is_local=is_local)
 
 
 def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt: str, url: str) -> dict:
@@ -561,6 +543,13 @@ async def dispatch_to_omniroute_or_container(
                 except Exception as bn_exc:
                     logger.debug(f"[Dispatcher] Bandit-Feedback fehlgeschlagen: {bn_exc}")
 
+            if isinstance(res, dict) and res.get("status") == "success" and res.get("content"):
+                res["content"] = _clean_dispatch_output(
+                    res["content"],
+                    session_id=task_id or agent_id,
+                    is_local=(str(res.get("provider") or "").lower() == "local"),
+                )
+
             return res
     finally:
         if has_throttle_slot:
@@ -570,14 +559,7 @@ async def dispatch_to_omniroute_or_container(
             except Exception as th_exc:
                 logger.warning(f"[Dispatcher] Throttle-Slot {slot_id} konnte nicht freigegeben werden: {th_exc}")
 
-AUTO_MODEL_MAP = {
-    "auto/best-reasoning": "deepseek/deepseek-r1",
-    "auto/best-coding": "deepseek/deepseek-chat",
-    "auto/best-vision": "google/gemini-2.5-flash",
-    "auto/best-fast": "openai/gpt-4o-mini",
-    "auto/best-free": "google/gemini-2.5-flash",
-    "auto/best-creative": "anthropic/claude-3.5-sonnet",
-}
+from backend.llm_kernel import AUTO_MODEL_MAP, estimate_model_cost_usd
 
 _OMNIROUTE_OPENROUTER_FALLBACK_MAP = {
     **AUTO_MODEL_MAP,
@@ -753,7 +735,7 @@ async def _dispatch_to_omniroute_or_container_exec(
         from backend.execution_routing_guard import classify_execution_layer
         _erg = classify_execution_layer((prompt or "")[:160], prompt or "")
         if _erg.get("layer") in ("deterministic_n8n", "deterministic_script"):
-            logger.info(f"[ExecutionRoutingGuard] Hinweis fuer '{agent_id}': deterministische Route empfohlen ({_erg.get('target_engine')})")
+            logger.info(f"[ExecutionRoutingGuard] Hinweis fuer '{agent_id}': deterministische Route empfohlen ({_erg.get('recommended_engine')})")
     except Exception:
         pass
 
@@ -1205,14 +1187,35 @@ async def dispatch_to_external_agent(
     if agent_id == "hermes":
         res = await dispatch_to_hermes(agent_name, prompt, timeout)
         if res.get("status") in ("success", "blocked"):
+            if isinstance(res, dict) and res.get("status") == "success" and res.get("content"):
+                res["content"] = _clean_dispatch_output(
+                    res["content"],
+                    session_id=task_id or agent_id,
+                    is_local=(str(res.get("provider") or "").lower() == "local"),
+                )
+
             return res
     elif agent_id == "odysseus":
         res = await dispatch_to_odysseus(agent_name, prompt, timeout)
         if res.get("status") in ("success", "blocked"):
+            if isinstance(res, dict) and res.get("status") == "success" and res.get("content"):
+                res["content"] = _clean_dispatch_output(
+                    res["content"],
+                    session_id=task_id or agent_id,
+                    is_local=(str(res.get("provider") or "").lower() == "local"),
+                )
+
             return res
     elif agent_id == "openclaw" or agent_id == "openclaw-docker":
         res = await dispatch_to_openclaw(agent_name, prompt, timeout)
         if res.get("status") in ("success", "blocked"):
+            if isinstance(res, dict) and res.get("status") == "success" and res.get("content"):
+                res["content"] = _clean_dispatch_output(
+                    res["content"],
+                    session_id=task_id or agent_id,
+                    is_local=(str(res.get("provider") or "").lower() == "local"),
+                )
+
             return res
             
     # Falls der spezifische Container-Endpoint fehlschlägt oder ein anderer Agent gewählt wurde, OmniRoute Gateway nutzen!

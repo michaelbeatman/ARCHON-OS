@@ -1011,6 +1011,30 @@ def materialize_workflow_to_kanban(
     conn = sqlite3.connect(db_path, timeout=15)
     try:
         cur = conn.cursor()
+        # Uebergeordnete Workflow-Run-Aufgabe (Project/Parent-Task im Kanban)
+        wf_parent_title = f"[Workflow] {tpl['title']}"
+        wf_parent_body = (
+            f"Workflow-Run `{run_id}` (Template: `{tpl_id}`)\n\n"
+            f"{tpl.get('description') or ''}\n\n"
+            f"Stationen: {len(tpl.get('nodes') or [])}"
+        ).strip()
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, project_id)
+            VALUES (?, ?, ?, ?, 'in_progress', ?, 'Workflow-Studio', ?, ?)
+            """,
+            (run_id, wf_parent_title, wf_parent_body, "default", 15, now_iso, run_id),
+        )
+        cur.execute(
+            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
+            (
+                run_id,
+                "created",
+                json.dumps({"workflow_tpl": tpl_id, "workflow_run_id": run_id, "kind": "workflow_run"}),
+                now_iso,
+            ),
+        )
+
         for idx, node in enumerate(tpl.get("nodes") or [], start=1):
             tid = node_to_task_id[node["id"]]
             title = _render_vars(node.get("title") or node["id"], resolved_inputs)
@@ -1030,10 +1054,14 @@ def materialize_workflow_to_kanban(
 
             cur.execute(
                 """
-                INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, block_kind)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, project_id, block_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (tid, title, body, assignee, status, max(0, 10 - idx), "Workflow-Studio", now_iso, "hitl_gate" if require_hitl else None),
+                (tid, title, body, assignee, status, max(0, 10 - idx), "Workflow-Studio", now_iso, run_id, "hitl_gate" if require_hitl else None),
+            )
+            cur.execute(
+                "INSERT OR IGNORE INTO task_links (parent_id, child_id, kind, created_at) VALUES (?, ?, 'subtask', ?)",
+                (run_id, tid, now_iso),
             )
             cur.execute(
                 "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
@@ -1155,7 +1183,15 @@ def _build_dag_def_from_template(
         }
         for key in _DAG_NODE_PASSTHROUGH_KEYS:
             if node.get(key) is not None:
-                d[key] = node[key]
+                val = node[key]
+                if key == "expected_output" and isinstance(val, str):
+                    val = _render_vars(val, resolved_inputs)
+                elif key in ("plugin_params", "media_config") and isinstance(val, dict):
+                    val = {
+                        pk: (_render_vars(pv, resolved_inputs) if isinstance(pv, str) else pv)
+                        for pk, pv in val.items()
+                    }
+                d[key] = val
         if d["type"] == "fanout":
             if node.get("branches"):
                 d["branches"] = node["branches"]

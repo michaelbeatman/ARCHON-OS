@@ -407,3 +407,290 @@ def test_mcp_orchestrator_workflow_builder_tools(tmp_path, monkeypatch):
     )
     assert created["status"] == "success"
     assert created["template"]["nodes"][1]["type"] == "tts"
+
+
+def test_llm_kernel_unification_and_role_budget_conn_close(tmp_path):
+    from backend.llm_kernel import AUTO_MODEL_MAP, estimate_model_cost_usd, finalize_llm_output, resolve_auto_model
+    import backend.role_budget_engine as rbe
+
+    assert resolve_auto_model("auto/best-coding") == AUTO_MODEL_MAP["auto/best-coding"]
+    assert estimate_model_cost_usd("deepseek/deepseek-chat", 1000, 1000) > 0.0
+
+    # finalize_llm_output darf bei rehydrate_text-Dict nicht crashen und maskiert Secrets
+    dummy_key = "sk-" + ("1234567890abcdef" * 2)
+    out = finalize_llm_output(
+        f"Hallo Welt {dummy_key}",
+        session_id="sess_test_kernel",
+    )
+    assert "sk-123456" not in out
+
+    # role_budget_engine._get_conn() schliesst echte sqlite3.Connection beim Verlassen
+    db_file = str(tmp_path / "budget.db")
+    with rbe._get_conn(db_file) as conn:
+        conn.execute("SELECT 1").fetchone()
+    with pytest.raises(sqlite3.ProgrammingError):
+        conn.execute("SELECT 1")
+
+
+def test_safe_http_blocks_redirects():
+    from utils.safe_http import _RejectAllRedirectsHandler
+    import urllib.error
+
+    handler = _RejectAllRedirectsHandler()
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        handler.redirect_request(None, None, 302, "Found", {}, "https://evil.example.com")
+    assert exc_info.value.code == 302
+
+
+def test_unified_kanban_workflow_materialization(tmp_path, monkeypatch):
+    import sqlite3
+    import backend.workflow_templates as wt
+    import backend.operations_api as ops
+
+    ops_db = str(tmp_path / "ops.db")
+    with sqlite3.connect(ops_db) as _c:
+        _c.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                body TEXT,
+                assignee TEXT,
+                status TEXT,
+                priority INTEGER,
+                created_by TEXT,
+                created_at TEXT,
+                project_id TEXT,
+                block_kind TEXT
+            )
+        """)
+        _c.execute("""
+            CREATE TABLE IF NOT EXISTS task_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT,
+                kind TEXT,
+                actor TEXT,
+                payload TEXT,
+                created_at TEXT
+            )
+        """)
+        _c.commit()
+    monkeypatch.setattr(ops, "_resolve_kanban_db_path", lambda: ops_db)
+    monkeypatch.setattr(ops, "_get_active_kanban_db_path", lambda _cid=None: ops_db)
+    monkeypatch.setattr(ops, "_KANBAN_JOURNAL_INIT", set())
+
+    tpl = {
+        "id": "tpl_unit",
+        "title": "Content {{topic}}",
+        "category": "Content & Marketing",
+        "nodes": [
+            {
+                "id": "n1",
+                "type": "agent",
+                "title": "Draft {{topic}}",
+                "prompt": "Schreibe ueber {{topic}}",
+                "expected_output": "Summary zu {{topic}}",
+                "plugin_params": {"text": "Intro {{topic}}"},
+            },
+            {
+                "id": "n2",
+                "type": "tts",
+                "title": "Audio {{topic}}",
+                "depends_on": ["n1"],
+                "plugin_params": {"text": "{{upstream.n1.content}} fuer {{topic}}"},
+            },
+        ],
+        "edges": [{"from": "n1", "to": "n2", "condition": "on_success"}],
+    }
+    monkeypatch.setattr(wt, "get_workflow_template", lambda _tid: tpl)
+
+    mat = wt.materialize_workflow_to_kanban("tpl_unit", inputs={"topic": "AI Agents"})
+    run_id = mat["run_id"]
+    dag = mat.get("dag") or wt._build_dag_def_from_template(tpl, {"topic": "AI Agents"}, {"n1": "t1", "n2": "t2"})
+    assert dag["nodes"][0]["plugin_params"]["text"] == "Intro AI Agents"
+    assert dag["nodes"][0]["expected_output"] == "Summary zu AI Agents"
+    assert dag["nodes"][1]["plugin_params"]["text"] == "{{upstream.n1.content}} fuer AI Agents"
+
+    with sqlite3.connect(ops_db) as conn:
+        conn.row_factory = sqlite3.Row
+        parent = conn.execute("SELECT * FROM tasks WHERE id = ?", (run_id,)).fetchone()
+        assert parent is not None
+        assert "[Workflow]" in parent["title"]
+        links_sub = conn.execute(
+            "SELECT * FROM task_links WHERE parent_id = ? AND kind = 'subtask'",
+            (run_id,),
+        ).fetchall()
+        assert len(links_sub) == 2
+        links_blk = conn.execute("SELECT * FROM task_links WHERE kind = 'blocks'").fetchall()
+        assert len(links_blk) == 1
+
+
+def test_tool_runtime_mcp_error_and_audit_record(monkeypatch):
+    import backend.tool_runtime as tr
+
+    called = {}
+    monkeypatch.setattr(
+        "backend.audit_log.chained_audit_log.record_event",
+        lambda **kw: called.update(kw) or {"status": "ok"},
+    )
+    tr._emit_tool_event("tool.blocked", {"agent_id": "a1", "tool_name": "t1"})
+    assert called.get("category") == "tool_runtime"
+    assert called.get("action") == "tool_blocked"
+
+    class _FakeMcp:
+        def execute_tool(self, _name, _args):
+            return {"status": "error", "message": "Kaputt"}
+
+    monkeypatch.setattr("backend.tool_runtime.enforce_tool_execution", lambda **_kw: {"allowed": True})
+    monkeypatch.setattr(
+        "backend.plugin_manager.get_plugin_manager",
+        lambda: type("PM", (), {"get_all_exported_tools": lambda self: []})(),
+    )
+    monkeypatch.setattr("scripts.archon_mcp_server.ArchonMcpServer", _FakeMcp)
+    res = asyncio.run(tr.execute_agent_tool(tool_name="archon__broken", args={}))
+    assert res["status"] == "error"
+    assert "Kaputt" in res["error"]
+
+
+def test_workflow_plugins_fixes_and_vst2_http(tmp_path, monkeypatch):
+    import backend.workflow_node_plugins as wnp
+
+    # 1. FFmpeg extract_audio -> libmp3lame bei default audio_codec="aac" & output_format="mp3"
+    ff_res = asyncio.run(
+        wnp._run_ffmpeg_plugin(
+            {"mode": "extract_audio", "output_format": "mp3", "audio_codec": "aac", "input_path": str(tmp_path / "in.mp4"), "dry_run": True},
+            {"id": "n-ff", "workflow_id": "wf_test"},
+            {},
+        )
+    )
+    assert ff_res["status"] == "success"
+    assert "libmp3lame" in ff_res["command"]
+
+    # 2. KinoCut standalone (ohne vorherigen Content-Campaign-Eintrag)
+    kc_res = asyncio.run(
+        wnp._run_kinocut_plugin(
+            {"clip_count": 2, "target_platform": "youtube_shorts", "dry_run": True},
+            {"id": "n-kc", "workflow_id": "wf_standalone_test", "prompt": "Test Video Skript fuer zwei Clips."},
+            {},
+        )
+    )
+    assert kc_res["status"] == "success"
+    assert kc_res["clip_count"] == 2
+
+    # 3. CalendarPublish nutzt start/end/notes
+    captured_ev = {}
+    monkeypatch.setattr(
+        "backend.operations_calendar.operations_calendar.create_event",
+        lambda payload: captured_ev.update(payload) or {"id": "cal_unit_1"},
+    )
+    cal_res = asyncio.run(
+        wnp._run_calendar_publish_plugin(
+            {"title": "Launch Post", "channel": "linkedin", "notes": "Check CTA"},
+            {"id": "n-cal", "workflow_id": "wf_cal"},
+            {},
+        )
+    )
+    assert cal_res["calendar_event_id"] == "cal_unit_1"
+    assert "start" in captured_ev and "end" in captured_ev and "notes" in captured_ev
+
+    # 4. VST 2.0 HTTP Adapter: fehlender Env-Key -> planned_only; gesetzter Env-Key -> Binary-Download
+    pdir = tmp_path / "workflow_nodes"
+    pdir.mkdir(parents=True, exist_ok=True)
+    (pdir / "custom_audio_vst.json").write_text(
+        json.dumps({
+            "plugin_id": "custom_audio_vst",
+            "label": "Custom Audio VST",
+            "category": "audio",
+            "adapter": "http",
+            "http_endpoint": "https://api.example.com/render",
+            "auth": {"type": "bearer", "env_var": "UNIT_VST_KEY"},
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(wnp, "PLUGINS_NODES_DIR", str(pdir))
+    monkeypatch.delenv("UNIT_VST_KEY", raising=False)
+    monkeypatch.setattr("backend.tool_runtime.enforce_tool_execution", lambda **_kw: {"allowed": True})
+
+    # Custom Plugin erscheint in Marketplace-Liste
+    mkt = wnp.list_marketplace_plugins()
+    assert any(p["plugin_id"] == "custom_audio_vst" and p.get("custom") is True for p in mkt)
+
+    dry = asyncio.run(wnp.execute_workflow_node_plugin("custom_audio_vst", {"id": "n1", "workflow_id": "wf_vst"}, {}))
+    assert dry["planned_only"] is True
+    assert dry["missing_env"] == "UNIT_VST_KEY"
+
+    monkeypatch.setenv("UNIT_VST_KEY", "secret-token-123")
+    monkeypatch.setattr(
+        "utils.safe_http.safe_http_request",
+        lambda *_a, **_kw: {"status": 200, "headers": {"content-type": "audio/mpeg"}, "body": b"ID3MOCKAUDIO"},
+    )
+    live = asyncio.run(wnp.execute_workflow_node_plugin("custom_audio_vst", {"id": "n1", "workflow_id": "wf_vst"}, {}))
+    assert live["status"] == "success"
+    assert live["audio_path"].endswith(".mp3")
+    assert os.path.isfile(live["audio_path"])
+
+
+def test_dag_runner_schema_preserved_and_event_driven_recovery(tmp_path):
+    from backend.workflow_dag_runner import default_agent_node_executor, run_workflow_dag
+
+    # 1. output_schema JSON darf durch Anti-Slop nicht zu Prosa ueberschrieben werden
+    async def _run_schema():
+        with patch(
+            "core_dispatcher.dispatch_to_omniroute_or_container",
+            AsyncMock(return_value={
+                "status": "success",
+                "content": '{"hook": "Stopp — 3 Fehler", "body": "Konkreter Text.", "cta": "Folge mir."}',
+                "input_tokens": 5,
+                "output_tokens": 5,
+            }),
+        ), patch("backend.workflow_dag_runner._update_kanban_task_status"):
+            return await default_agent_node_executor(
+                {
+                    "id": "n-schema",
+                    "type": "agent",
+                    "title": "LinkedIn Post",
+                    "channel": "linkedin",
+                    "quality_gate": True,
+                    "output_schema": {"required": ["hook", "body", "cta"]},
+                },
+                {},
+            )
+
+    s_out = asyncio.run(_run_schema())
+    assert s_out["status"] == "success"
+    assert isinstance(s_out["parsed_output"], dict)
+    assert s_out["parsed_output"]["hook"] == "Stopp — 3 Fehler"
+
+    # 2. Event-Driven Ready-Queue + on_failure Recovery
+    db_file = str(tmp_path / "dag_event.db")
+    order = []
+
+    async def _exec(node, _up):
+        nid = node["id"]
+        if nid == "slow":
+            await asyncio.sleep(0.15)
+            order.append("slow")
+            return {"status": "success", "content": "slow done"}
+        if nid == "fast":
+            await asyncio.sleep(0.01)
+            order.append("fast")
+            return {"status": "error", "error": "boom"}
+        if nid == "fast_recover":
+            order.append("fast_recover")
+            return {"status": "success", "content": "recovered"}
+        return {"status": "success", "content": "ok"}
+
+    dag = {
+        "id": "wf_event_test",
+        "nodes": [
+            {"id": "slow", "type": "agent"},
+            {"id": "fast", "type": "agent"},
+            {"id": "fast_recover", "type": "agent", "depends_on": ["fast"]},
+        ],
+        "edges": [
+            {"from": "fast", "to": "fast_recover", "condition": "on_failure"},
+        ],
+    }
+    res = asyncio.run(run_workflow_dag(dag, executor_fn=_exec, db_path=db_file))
+    assert res["status"] == "completed"
+    # fast_recover muss VOR slow laufen (event-driven, kein Wave-Barrier)
+    assert order.index("fast_recover") < order.index("slow")

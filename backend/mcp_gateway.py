@@ -41,7 +41,7 @@ TOOL_SECURITY_POLICY: Dict[str, Dict[str, Any]] = {
     "archon__list_workflow_node_plugins": {"scope": "read_only", "hitl": False},
     "archon__create_task": {"scope": "kanban_rw", "hitl": False},
     "archon__update_task_status": {"scope": "kanban_rw", "hitl": False},
-    "archon__create_workflow_template": {"scope": "kanban_rw", "hitl": False},
+    "archon__create_workflow_template": {"scope": "agent_execute", "hitl": True, "domain": "workflow_authoring"},
     "archon__run_workflow_template": {"scope": "agent_execute", "hitl": False},
     "archon__trigger_boardroom_debate": {"scope": "agent_execute", "hitl": True, "domain": "boardroom"},
     "archon__ask_specialist": {"scope": "agent_execute", "hitl": True, "domain": "agent_dispatch"},

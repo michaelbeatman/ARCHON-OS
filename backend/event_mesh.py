@@ -127,21 +127,21 @@ class EventMesh:
 
     def emit_outbound_event(self, webhook_url: str, event_type: str, payload: Dict[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
         """Sendet einen Outbound-Event-Webhook SSRF-geschuetzt an ein externes Ziel (z. B. n8n)."""
-        from utils.egress_guard import check_target_url
-        safe_url = check_target_url(webhook_url)
+        from utils.safe_http import safe_http_request
         payload_str = json.dumps(payload, ensure_ascii=False)
-        req_data = payload_str.encode("utf-8")
-        req = urllib.request.Request(
-            safe_url,
-            data=req_data,
-            headers={"Content-Type": "application/json"}
-        )
 
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                status_code = resp.status
-                res_body = resp.read().decode("utf-8", errors="ignore")[:300]
-                status_str = "delivered"
+            _st, _hd, raw_body = safe_http_request(
+                webhook_url,
+                method="POST",
+                headers={"Content-Type": "application/json"},
+                data=payload_str.encode("utf-8"),
+                timeout=float(timeout),
+                max_bytes=1024 * 1024,
+            )
+            status_code = _st
+            res_body = raw_body.decode("utf-8", errors="ignore")[:300]
+            status_str = "delivered"
         except Exception as e:
             status_code = 500
             res_body = str(e)

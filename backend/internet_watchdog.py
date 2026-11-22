@@ -168,14 +168,14 @@ def save_watchdog_config(new_cfg: Dict[str, Any]) -> bool:
 
 
 def _fetch_rss_items(url: str, max_items: int = 10) -> List[Dict[str, str]]:
-    from utils.egress_guard import check_public_url
-    safe_url = check_public_url(url)
-    req = urllib.request.Request(
-        safe_url,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; ArchonWatchdog/2.0; +https://archon-os.local)"}
+    from utils.safe_http import safe_http_request
+    _st, _hd, content = safe_http_request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; ArchonWatchdog/2.0; +https://archon-os.local)"},
+        timeout=8.0,
+        max_bytes=8 * 1024 * 1024,
+        public_only=True,
     )
-    with urllib.request.urlopen(req, timeout=8.0) as resp:
-        content = resp.read()
 
     root = ET.fromstring(content)
     items = []

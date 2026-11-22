@@ -122,15 +122,15 @@ def sanitize_llm_endpoint(endpoint: str) -> Tuple[str, str, str]:
             if not ip_obj.is_link_local and (ip_obj.is_loopback or ip_obj.is_private):
                 zone = "LOCAL_ON_PREM"
         except ValueError:
-            # Nur explizit erlaubte interne Suffixe (.internal) und localhost.localdomain als LOCAL_ON_PREM;
-            # beliebige .local/.lan Hosts müssen explizit per Allowlist freigegeben werden.
-            allowed_local_suffixes = (".internal",)
+            # Nur explizit erlaubte interne Hosts und localhost.localdomain als LOCAL_ON_PREM;
+            # beliebige .local/.lan Hosts muessen explizit per Allowlist freigegeben werden.
+            # '.internal' ist bewusst KEIN lokales Suffix mehr (metadata.google.internal!)
             extra_local = {
                 h.strip().lower()
                 for h in (os.environ.get("ARCHON_LOCAL_LLM_HOSTS", "")).split(",")
                 if h.strip()
             }
-            if hostname in extra_local or hostname == "localhost.localdomain" or hostname.endswith(allowed_local_suffixes):
+            if hostname in extra_local or hostname == "localhost.localdomain":
                 zone = "LOCAL_ON_PREM"
 
     return clean_endpoint, target_host, zone

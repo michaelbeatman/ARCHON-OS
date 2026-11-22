@@ -920,10 +920,16 @@ def ingest_source_to_campaign(payload: Dict[str, Any], db_path: Optional[str] = 
 
     if source_type == "url":
         from utils.egress_guard import check_public_url
+        from utils.safe_http import safe_http_request
         safe_url = check_public_url(source_url)
-        req = urllib.request.Request(safe_url, headers={"User-Agent": "ArchonOS-ContentIngest/2.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            raw = resp.read(512 * 1024).decode("utf-8", errors="ignore")
+        _st, _hd, raw_bytes = safe_http_request(
+            source_url,
+            headers={"User-Agent": "ArchonOS-ContentIngest/2.0"},
+            timeout=10.0,
+            max_bytes=512 * 1024,
+            public_only=True,
+        )
+        raw = raw_bytes.decode("utf-8", errors="ignore")
         page_title, extracted_text = _strip_html_to_text(raw)
         if not extracted_title:
             extracted_title = page_title or safe_url

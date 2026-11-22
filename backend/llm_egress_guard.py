@@ -192,28 +192,48 @@ def evaluate_and_gate_llm_dispatch(
             "zero_egress_active": True,
         }
 
-    # Sicherheitsnetz: Falls intended_url explizit übergeben wurde und Zero-Egress aktiv ist,
-    # darf niemals ein EXTERNAL_CLOUD-Endpunkt oder Cloud-Provider passieren.
-    if zero_active and intended_url:
-        clean_ep, _, zone = sanitize_llm_endpoint(intended_url)
+    # Sicherheitsnetz: Falls Zero-Egress aktiv ist, darf niemals ein EXTERNAL_CLOUD-Endpunkt
+    # oder Cloud-Provider passieren — auch nicht bei LEEREM intended_url (Fail-Closed).
+    if zero_active:
         prov_low = (provider or "").strip().lower()
-        if zone == "EXTERNAL_CLOUD" or prov_low in _CLOUD_PROVIDERS or (zone == "INTERNAL_GATEWAY" and not _is_local_model_name(model)):
-            ev = alog.record_llm_dispatch(
-                agent_id=agent_id or "system",
-                provider=provider or "unknown",
-                model=model or "unknown",
-                target_endpoint=clean_ep,
-                action="llm_dispatch_blocked_egress_policy",
-                data_category=category,
-                http_status=0,
-                zero_egress_active=True,
-                extra={"reason": "Direkter Cloud-Aufruf durch Zero-Egress-Policy unterbunden."},
-            )
-            raise ZeroEgressBlockedError(
-                f"Zero-Egress Policy blockiert externen Aufruf an '{clean_ep}' (Provider: {provider}, Modell: {model}).",
-                audit_event=ev,
-                error_code="ZERO_EGRESS_CLOUD_ENDPOINT_BLOCKED",
-            )
+        if not intended_url:
+            if prov_low in _CLOUD_PROVIDERS:
+                alog = audit_logger or chained_audit_log
+                ev = alog.record_llm_dispatch(
+                    agent_id=agent_id or "system",
+                    provider=provider or "unknown",
+                    model=model or "unknown",
+                    target_endpoint="(keine Ziel-URL)",
+                    action="llm_dispatch_blocked_egress_policy",
+                    data_category=category,
+                    http_status=0,
+                    zero_egress_active=True,
+                    extra={"reason": "Cloud-Provider ohne Ziel-URL durch Zero-Egress-Policy unterbunden (Fail-Closed)."},
+                )
+                raise ZeroEgressBlockedError(
+                    f"Zero-Egress Policy blockiert Cloud-Provider '{provider}' ohne Ziel-URL (Modell: {model}).",
+                    audit_event=ev,
+                    error_code="ZERO_EGRESS_CLOUD_ENDPOINT_BLOCKED",
+                )
+        else:
+            clean_ep, _, zone = sanitize_llm_endpoint(intended_url)
+            if zone == "EXTERNAL_CLOUD" or prov_low in _CLOUD_PROVIDERS or (zone == "INTERNAL_GATEWAY" and not _is_local_model_name(model)):
+                ev = alog.record_llm_dispatch(
+                    agent_id=agent_id or "system",
+                    provider=provider or "unknown",
+                    model=model or "unknown",
+                    target_endpoint=clean_ep,
+                    action="llm_dispatch_blocked_egress_policy",
+                    data_category=category,
+                    http_status=0,
+                    zero_egress_active=True,
+                    extra={"reason": "Direkter Cloud-Aufruf durch Zero-Egress-Policy unterbunden."},
+                )
+                raise ZeroEgressBlockedError(
+                    f"Zero-Egress Policy blockiert externen Aufruf an '{clean_ep}' (Provider: {provider}, Modell: {model}).",
+                    audit_event=ev,
+                    error_code="ZERO_EGRESS_CLOUD_ENDPOINT_BLOCKED",
+                )
 
     return {
         "allowed": True,
@@ -411,11 +431,13 @@ def enforce_egress_firewall_for_url(
 
     clean_ep, host, zone = sanitize_llm_endpoint(url)
     host_low = (host or "").strip().lower()
-    # Cloud-Metadata / Link-Local (169.254.0.0/16, fe80::/10, AWS/Azure/GCP IMDS) und obfuskierte IP-Literale prüfen
-    host_ip_raw = host_low.split(":")[0].strip("[]")
-    if ":" in host_low and not host_low.startswith("["):
-        # IPv6 mit Port [fe80::1]:8080 vs reines [fe80::1] / fe80::1
-        pass
+    # IPv6-sicher extrahieren: [fe80::254]:8080, bare fe80::254 und IPv4:port
+    if host_low.startswith("["):
+        host_ip_raw = host_low[1:].split("]")[0]
+    elif host_low.count(":") >= 2:
+        host_ip_raw = host_low
+    else:
+        host_ip_raw = host_low.split(":")[0]
     import ipaddress as _ipaddr
     import socket as _socket
     _ip_obj = None
@@ -429,7 +451,15 @@ def enforce_egress_firewall_for_url(
         except OSError:
             _ip_obj = None
     if _ip_obj is not None:
-        if _ip_obj.is_link_local or _ip_obj.is_multicast or _ip_obj.is_unspecified or str(_ip_obj) == "fd00:ec2::254":
+        # IPv4-mapped IPv6 (::ffff:169.254.169.254) auf die gemappte IPv4 pruefen
+        _check_obj = _ip_obj
+        try:
+            _mapped = getattr(_ip_obj, "ipv4_mapped", None)
+            if _mapped is not None:
+                _check_obj = _mapped
+        except Exception:
+            _check_obj = _ip_obj
+        if _check_obj.is_link_local or _check_obj.is_multicast or _check_obj.is_unspecified or str(_check_obj) == "169.254.169.254" or str(_ip_obj) == "fd00:ec2::254":
             alog = audit_logger or chained_audit_log
             ev = alog.record_llm_dispatch(
                 agent_id=agent_id or "system",

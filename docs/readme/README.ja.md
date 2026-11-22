@@ -83,7 +83,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 - **安全なネットワーク既定値:** 初期設定は `127.0.0.1:8501` に限定。LAN公開（`ARCHON_BIND_IP=0.0.0.0`）を行う前にマルチユーザー認証（`auth.enabled = true`）を有効化してください。
 - **専門資格助言の非代替:** 法務・税務・金融・医療・建築に関する出力は内部判断支援用であり、有資格専門家による助言を代替しません（[LICENSE](../../LICENSE)）。
-- **合成アバター:** `static/avatars/` 内の301点の人物画像はAI生成（Gemini Nano Banana 2）による架空ポートレートです（[THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)）。
+- **合成アバター:** `static/avatars/` 内の312点の人物画像はAI生成（Gemini Nano Banana 2）による架空ポートレートです（[THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)）。
 ---
 
 ### Manuals & Documentation (PDF)

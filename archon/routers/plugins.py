@@ -15,7 +15,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 
-from archon.routers._rbac import require_admin_or_503
+from archon.routers._rbac import require_admin_or_503, get_session_actor
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -113,12 +113,15 @@ async def api_execute_plugin_tool(request: Request, payload: dict = Body(...)):
     from backend.plugin_manager import get_plugin_manager
     from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
     pm = get_plugin_manager()
-    tool_name = payload.get("tool_name", "")
+    tool_name = str(payload.get("tool_name") or "").strip()
     args = payload.get("args", {})
+    # Actor/Session aus der authentifizierten Identität — nicht aus dem Body.
+    session_id = f"user:{get_session_actor(request)}"
     agent_id = str(payload.get("agent_id") or "").strip()
-    session_id = str(payload.get("session_id") or "default_session").strip()
     approval_id = payload.get("approval_id")
-    warrant = payload.get("warrant")
+    # Warrant ausschließlich aus dem serverseitigen Registry, nie aus dem Body.
+    from backend.tool_warrants import get_warrant_for_session
+    warrant = get_warrant_for_session(session_id, tool_name)
     if not tool_name:
         raise HTTPException(status_code=400, detail={"code": "plugins_tool_name_required", "params": {}})
     gate = enforce_tool_execution(

@@ -170,6 +170,11 @@ async def _execute_mission_control_task(
     # R-18: Schnappschuss der Task-IDs VOR dem LLM-await — nur waerend des Laufs
     # neu erzeugte Tasks duerfen im Merge wieder eingefuegt werden.
     orig_task_ids = {t.get("id") for t in tasks}
+    # Das finally greift auf parent_ok/parent_pid zu — auch dann, wenn der
+    # Dispatch bei Fehler/blocked/leerer Antwort vor der Zuweisung zurueckkehrt.
+    # Ohne Defaults: UnboundLocalError statt der eigentlichen Fehlerbehandlung.
+    parent_ok = False
+    parent_pid = None
     task = next((t for t in tasks if t.get("id") == task_id), None)
     if not task:
         return
@@ -838,10 +843,13 @@ async def _fan_in_maybe_start_synthesis(
                 return
             if parent.get("synthesis_started"):
                 return
-            terminal_states = {"completed", "failed", "blocked", "error"}
+            # 'review' ist laut Delegationsprotokoll (constants.py) ein
+            # terminaler Zustand ("Ergebnis liegt vor"). Vorher startete die
+            # Synthese nie, obwohl alle Ergebnisse da waren.
+            terminal_states = {"completed", "done", "review", "failed", "blocked", "error"}
             if not all(s.get("status") in terminal_states for s in siblings):
                 return
-            failed_siblings = [s for s in siblings if s.get("status") != "completed"]
+            failed_siblings = [s for s in siblings if s.get("status") not in ("completed", "done", "review")]
             if failed_siblings:
                 failed_ids = ", ".join(str(s.get("id") or "?") for s in failed_siblings)
                 parent["status"] = "blocked"

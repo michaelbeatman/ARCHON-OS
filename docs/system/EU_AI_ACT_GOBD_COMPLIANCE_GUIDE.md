@@ -63,7 +63,7 @@ Unter `data/ai_act_literacy_register.json` verwaltet die `ComplianceEngine` alle
 ### 3.1 Aufbau des generierten DIN-A4-Prüfer-PDFs (`backend/compliance_pdf.py`)
 Der abhängigkeitsfreie Pure-Python-PDF-1.4-Generator (`WinAnsiEncoding` / volle deutsche Sonderzeichenunterstützung) erzeugt zur Laufzeit ein mehrseitiges, seitennummeriertes Prüfdokument aus dem **echten Live-Zustand** des gewählten Mandanten:
 
-1. **Deckblock & Mandanten-Identität:** Unternehmensstamm, Rechtsform, Gesellschaftstyp, Dokument-ID (`VD-...`), Systemversion (`v0.5.2.1`) und Snapshot-SHA-256.
+1. **Deckblock & Mandanten-Identität:** Unternehmensstamm, Rechtsform, Gesellschaftstyp, Dokument-ID (`VD-...`), Systemversion (`v0.5.7`) und Snapshot-SHA-256.
 2. **Kapitel 1 — Allgemeine Beschreibung & Unternehmensstamm (GoBD Rz. 151–153):** Anschrift, Handelsregister, Geschäftsführung, Steuernummer/USt-IdNr. und Bankverbindung.
 3. **Kapitel 2 — Technische Systemdokumentation & Mandantentrennung (M43):** Live-Tabelle aller 5 Mandanten-SQLite-Datenbanken (Modus, Status, Dateigröße, Pfad) sowie die aktiven Beleg-Nummernkreise.
 4. **Kapitel 3 — Internes Kontrollsystem (IKS), Zero-Egress & GoBD-Hashkette (M21/M22/M23):** Live-Prüfergebnis der kryptografischen SHA-256-Merkle-Kette (Gesamtanzahl verifizierter Blöcke, Anzahl signierter `llm_dispatch`-Nachweise mit Provider/Modell/Ziel-Host/Endpunkt, aktueller Head-Hash), aktiver Privacy-Router **Fail-Closed Hard-Block** bei Offline-Lokalmodell für Finanzen/Verträge/CRM, **Docker-Worker-Netzwerk-Isolation** (`archon-worker-zero-egress_net`, `Internal=true` ohne Internet-Route) und Prompt-Injection-Schutz.

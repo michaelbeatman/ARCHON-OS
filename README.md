@@ -7,7 +7,7 @@
 **Self-Hosted Multi-Agent Operating System for Founders, Teams & Domain Specialists**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release: v0.5.4.2](https://img.shields.io/badge/Release-v0.5.4.2-6366f1.svg)](CHANGELOG.md)
+[![Release: v0.5.7](https://img.shields.io/badge/Release-v0.5.7-6366f1.svg)](CHANGELOG.md)
 [![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
@@ -15,7 +15,7 @@
 
 **🇬🇧 English** · [🇩🇪 Deutsch](README.de.md) · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md) · [🇮🇹 Italiano](docs/readme/README.it.md) · [🇳🇱 Nederlands](docs/readme/README.nl.md)
 
-[🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [⚡ Zero-Key Live Demo](#option-c-instant-zero-key-read-only-demo-archon_demo_modetrue) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap (M0–M74)](docs/system/ROADMAP_2026.md)
+[🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [⚡ Zero-Key Live Demo](#option-c-instant-zero-key-read-only-demo-archon_demo_modetrue) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap (M0–M108)](docs/system/ROADMAP_2026.md)
 
 </div>
 
@@ -25,13 +25,13 @@
 
 Archon OS replaces isolated single-prompt chatbots with a persistent, self-hosted **Agentic Operating System**. It orchestrates **70 domain specialists across 8 specialized domains**, runs structured **55-framework AI Boardroom debates**, pairs **Zero-Egress local AI routing** with a tamper-evident **GoBD/ISO-27001 SHA-256 audit log**, and connects directly to your **Obsidian Second Brain**, **n8n automations**, **Telegram**, and an integrated **CRM & ERP suite *(Alpha)***.
 
-> **Localization & Global Edition (`v0.5.2.1`):** Full bilingual (`en` & `de`) parity across all **70 specialist `SOUL.md` profiles**, **832 parametric Prompt Studio templates**, **55 AI Boardroom frameworks**, and the **First-Run Web Setup Wizard**; core UI localized in 9 languages (`en`, `de`, `es`, `fr`, `pt`, `ru`, `ja`, `ko`, `zh`). The **User Manual**, **Complete Feature List (`v0.5.2.1`)**, and **55 Boardroom Frameworks Reference** are available immediately below as indexed **English & German PDFs**.
+> **Localization & Global Edition (`v0.5.2.1`):** Full bilingual (`en` & `de`) parity across all **70 specialist `SOUL.md` profiles**, **832 parametric Prompt Studio templates**, **55 AI Boardroom frameworks**, and the **First-Run Web Setup Wizard**; core UI localized in 11 languages (`en`, `de`, `es`, `fr`, `it`, `ja`, `ko`, `nl`, `pt`, `ru`, `zh`). The **User Manual**, **Complete Feature List (`v0.5.2.1`)**, and **55 Boardroom Frameworks Reference** are available immediately below as indexed **English & German PDFs**.
 
 ---
 
 ## What is Archon OS?
 
-Archon OS is a self-hosted multi-agent workspace built on [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research). It runs on your own server and orchestrates **70 specialist agent profiles** (`agent_profiles.json`) across 8 domains — tax, law, procurement, sales, software, real estate, medicine, strategy. Each profile has a 3-tier `SOUL.md` prompt (Compact / Pro / Full), so agents only spend tokens when their domain is actually needed.
+Archon OS is a self-hosted multi-agent workspace built on [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research). It runs on your own server and orchestrates **70 specialist agent profiles** plus 3 system/meta profiles (73 entries in `agent_profiles.json`) across 8 domains — tax, law, procurement, sales, software, real estate, medicine, strategy. Each profile has a 3-tier `SOUL.md` prompt (Compact / Pro / Full), so agents only spend tokens when their domain is actually needed.
 
 What that means in practice:
 
@@ -43,6 +43,19 @@ What that means in practice:
 - **Business operations.** Kanban with four-eyes approval gates, email triage, CRM, and an ERP suite (offers, contracts, invoices, receivables) — **alpha**.
 
 **Pre-1.0, and we say that up front:** interfaces and config keys change between releases, the ERP/CRM module is alpha, and multi-user role enforcement is still being hardened. If that works for you, issues and PRs are welcome.
+
+### Current Release State (`v0.5.7`, 2026-11-21)
+
+The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions since `v0.5.5.3`:
+
+- **SQLite consolidation (M106):** 28 scattered databases consolidated into 3 domain WAL databases — `data/ops.db` (kanban, workflows, audit, security), `data/business.db` (ERP, CRM, contracts, treasury, content machine), `data/memory.db` (memory, learnings, checkpoints) — with transparent legacy path resolution.
+- **Content Machine v2 (M107):** multi-channel campaign pipeline (LinkedIn, YouTube Longform/Shorts, TikTok, X/Threads) with repurposing DAG, anti-AI-slop quality gate, SSRF-guarded source ingestion, 9:16 clip matrix and HITL editorial gate.
+- **Next.js 16 cockpit (M108):** `frontend/` talks directly to the FastAPI backend (`127.0.0.1:8420`) without PocketBase; new `/content-studio`, `/workflows` and `/cockpit` workspaces.
+- **Audit v3 hardening (waves 1–6):** RBAC/tenant-IDOR fixes, XSS remediation, zero-egress fail-closed, treasury/GoBD corrections and fan-in / profile-SSOT fixes.
+
+> **Configuration note:** the code paths for authentication and egress control exist, but the shipped local `settings.json` still has `auth.enabled = false`, `privacy.zero_egress = false` and `zero_egress_strict = false` (only `hard_block_on_local_offline = true`). Enable auth before exposing the UI on a LAN. `config/version.json` is now aligned to `v0.5.7` (single source of truth); the CHANGELOG documents the details.
+
+> **Counts measured in this checkout:** 73 entries in `agent_profiles.json` (70 specialists + 3 system/meta profiles), 59 roles in `roles.json`, 72 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7`.
 
 ### Product Tour
 
@@ -64,7 +77,7 @@ What that means in practice:
 | **Complete Feature List (`v0.5.2.1`)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | Full module catalog, Bilingual Global Edition, Live Demo Mode, First-Run Wizard, FinOps & Security |
 | **AI Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 55 structured Decision Engine methodologies (EN & DE) & index |
 
-*More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M56)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF & Multi-Tenant Guide (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise Features & Playbooks Guide](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live Demo Mode Guide](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup Wizard Guide](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosystem & Migration Guide](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+*More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M108)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF & Multi-Tenant Guide (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise Features & Playbooks Guide](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live Demo Mode Guide](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup Wizard Guide](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosystem & Migration Guide](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -200,7 +213,7 @@ flowchart LR
 - **Zero-Trust Socket Proxy:** Container management routes through `docker-socket-proxy` on an isolated internal network (`archon-admin_net`).
 - **Prompt Injection Defense:** Dual-LLM quarantine sanitization (`backend/dual_llm_sanitizer.py`) isolates untrusted external emails/web content before tool execution.
 - **No Professional Advice:** Output from legal, tax, financial, construction, or medical/chemical specialist profiles is **for internal decision support only** and does not constitute licensed legal, tax, investment, engineering, or medical advice ([DISCLAIMER.md](DISCLAIMER.md), [LICENSE](LICENSE) & [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)).
-- **Synthetic Avatars:** All 301 local portrait assets in `static/avatars/` are synthetic AI-generated portraits (Gemini Nano Banana 2) representing fictional personas; see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+- **Synthetic Avatars:** All 312 local portrait assets in `static/avatars/` are synthetic AI-generated portraits (Gemini Nano Banana 2) representing fictional personas; see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ---
 
@@ -208,12 +221,18 @@ flowchart LR
 
 ```text
 ARCHON-OS/
-├── archon/                  # Modular FastAPI routers & core runtime (70 profiles, onboarding, demo)
-├── backend/                 # Auth gate, audit log, privacy router, onboarding wizard, demo guard
-├── static/                  # Border-first SPA UI, 9 locales & interactive liability modals
+├── archon/                  # Modular FastAPI routers & core runtime (routers/, core/, services/)
+├── backend/                 # Auth/RBAC, audit log, privacy router, CRM/ERP, workflow DAG, ~160 modules
+├── static/                  # Border-first SPA UI, 11 locales & interactive liability modals
+├── frontend/                # Next.js 16 / React 19 cockpit (/content-studio, /workflows, /cockpit)
+├── .hermes/profiles/        # 70 synced specialist SOUL.md profiles (Hermes runtime)
+├── .agents/skills/          # Agent skills (LinkedIn suite, SEO, security, MCP bridges, ...)
+├── data/                    # Runtime state: ops.db / business.db / memory.db, tenants, secrets, backups
+├── obsidian_vault/          # Markdown Second Brain (HR, projects, radar, content)
 ├── scripts/                 # Bilingual SOUL & profile.yaml sync (sync_soul_modes.py), backups
+├── plugins/                 # cost_guard, security_audit_hook, system_metrics, workflow_nodes
 ├── deploy/ecosystem/        # Self-hosting manifests & ecosystem integration guides
-├── docs/system/             # System Architecture, 54-Milestone Roadmap (M0–M53) & PDFs
+├── docs/system/             # System Architecture, Roadmap (M0–M108) & PDFs
 ├── INSTALL_AGENT.md         # Structured onboarding guide for AI Coding Agents
 ├── setup.bat / setup.ps1    # Interactive 1-Click Installer for Windows
 ├── install.sh               # Interactive Multi-Arch Installer for Linux & macOS
@@ -227,7 +246,7 @@ ARCHON-OS/
 - **User & Company Manual (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(German: [DE PDF](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
 - **Complete Feature List & System Catalog (v0.5.2.1, EN, PDF):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
 - **Decision Engine & 55 Boardroom Frameworks (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
-- **Detailed Roadmap (54 Milestones, M0–M53):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
+- **Detailed Roadmap (M0–M108):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
 - **Live Demo Mode Guide (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](docs/system/LIVE_DEMO_MODE_GUIDE.md)
 - **First-Run Setup Wizard Guide:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)
 - **Ecosystem & Migration Guide:** [docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md)

@@ -83,7 +83,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 - **Réseau sécurisé par défaut :** Écoute uniquement sur `127.0.0.1:8501`. Activez l'authentification multi-utilisateurs (`auth.enabled = true`) avant d'exposer `ARCHON_BIND_IP=0.0.0.0` sur le réseau local.
 - **Aucun conseil professionnel réglementé :** Les productions juridiques, fiscales, financières, médicales ou techniques ne remplacent pas un professionnel agréé ([LICENSE](../../LICENSE)).
-- **Avatars synthétiques :** Les 301 portraits dans `static/avatars/` sont générés par IA (Gemini Nano Banana 2) et ne représentent aucune personne réelle ([THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)).
+- **Avatars synthétiques :** Les 312 portraits dans `static/avatars/` sont générés par IA (Gemini Nano Banana 2) et ne représentent aucune personne réelle ([THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)).
 ---
 
 ### Manuals & Documentation (PDF)

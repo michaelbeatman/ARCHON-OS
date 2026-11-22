@@ -310,7 +310,7 @@ def build_verfahrensdokumentation_pdf(snapshot: Dict[str, Any]) -> Tuple[bytes, 
     legal_form = str(comp.get("legal_form") or "")
     entity_type = str(comp.get("entity_type") or "operative_gmbh")
     doc_id = str(snapshot.get("document_id") or "VD-ARCHON")
-    version = str(snapshot.get("system_version") or "v0.5.2.1")
+    version = str(snapshot.get("system_version") or "v0.5.7")
     gen_at = str(snapshot.get("generated_at") or "")
     tid = str(snapshot.get("tenant_id") or "default")
 

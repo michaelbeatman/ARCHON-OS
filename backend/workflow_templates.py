@@ -945,32 +945,28 @@ class _RejectAllRedirectsHandler(urllib.request.HTTPRedirectHandler):
 def _trigger_n8n_webhook(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         return {"triggered": False, "reason": "no_valid_url"}
-    # Paket C: ImportError (Modul fehlt) wird NICHT mehr still als
-    # 'egress_blocked' frisst — explizit unterscheiden.
+    # Outbox + Idempotenz: ein Retry/Restart darf 'workflow_started' nicht
+    # zweimal an n8n senden. SSRF/Redirect-Schutz steckt in safe_http_request.
     try:
-        from utils.egress_guard import check_target_url, EgressBlocked
-    except ImportError as exc:
-        logger.error(
-            "egress_guard nicht importierbar — n8n-Webhook bewusst NICHT gesendet: %s",
-            exc,
-        )
-        return {"triggered": False, "reason": "egress_guard_unavailable", "error": str(exc)}
-    try:
-        check_target_url(url)
-    except EgressBlocked as exc:
-        return {"triggered": False, "reason": "egress_blocked", "error": str(exc)}
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        opener = urllib.request.build_opener(_RejectAllRedirectsHandler())
-        with opener.open(req, timeout=5) as resp:
-            return {"triggered": True, "status_code": resp.status}
+        from backend.event_mesh import event_mesh
+
+        safe_payload = dict(payload or {})
+        safe_payload["idempotency_key"] = f"workflow-started:{safe_payload.get('run_id') or ''}"
+        result = event_mesh.emit_outbound_event(url, "workflow_started", safe_payload, timeout=5.0)
     except Exception as exc:
+        logger.error("n8n-Webhook ueber Outbox fehlgeschlagen: %s", exc)
         return {"triggered": False, "error": str(exc)}
+    if result.get("status") == "duplicate":
+        return {
+            "triggered": False, "duplicate": True,
+            "idempotency_key": result.get("idempotency_key"),
+            "reason": "already_dispatched",
+        }
+    return {
+        "triggered": result.get("status") == "delivered",
+        "status_code": result.get("http_status"),
+        "idempotency_key": result.get("idempotency_key"),
+    }
 
 
 def materialize_workflow_to_kanban(

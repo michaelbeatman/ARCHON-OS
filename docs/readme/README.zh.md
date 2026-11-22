@@ -83,7 +83,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 - **安全默认网络：** 默认仅绑定 `127.0.0.1:8501`。在开启局域网访问（`ARCHON_BIND_IP=0.0.0.0`）前，请务必先启用多用户登录验证（`auth.enabled = true`）。
 - **不构成执业专业意见：** 法律、财税、金融、医疗与工程领域的输出仅供内部决策参考，不能替代持证专业人士意见（[LICENSE](../../LICENSE)）。
-- **合成头像声明：** `static/avatars/` 中的 301 张人物头像均由 AI（Gemini Nano Banana 2）合成，不对应任何真实自然人（[THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)）。
+- **合成头像声明：** `static/avatars/` 中的 312 张人物头像均由 AI（Gemini Nano Banana 2）合成，不对应任何真实自然人（[THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)）。
 ---
 
 ### Manuals & Documentation (PDF)

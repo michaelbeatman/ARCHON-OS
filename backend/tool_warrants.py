@@ -47,6 +47,47 @@ def _sign_payload(payload: Dict[str, Any], secret: str) -> str:
     return hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
 
 
+# Serverseitiges Warrant-Registry: der Client soll sein Warrant NICHT self-
+# an den Tool-Endpunkt liefern können. Ausgestellte Warrants werden hier
+# vorgehalten und vom Chokepoint gegen die Session aufgelöst.
+_WARRANT_REGISTRY: Dict[str, list] = {}
+_REGISTRY_LOCK = __import__("threading").RLock()
+
+
+def register_warrant(warrant: Dict[str, Any]) -> None:
+    payload = warrant.get("payload") if isinstance(warrant, dict) else None
+    if not isinstance(payload, dict):
+        return
+    sid = str(payload.get("session_id") or "").strip()
+    if not sid:
+        return
+    with _REGISTRY_LOCK:
+        _WARRANT_REGISTRY.setdefault(sid, []).append(warrant)
+        # Alte/abgelaufene Einträge begrenzen (Memory-Hygiene)
+        _WARRANT_REGISTRY[sid] = _WARRANT_REGISTRY[sid][-25:]
+
+
+def get_warrant_for_session(session_id: str, tool_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Liefert das neueste gültige Warrant für die Session (serverseitig)."""
+    sid = str(session_id or "").strip()
+    if not sid:
+        return None
+    with _REGISTRY_LOCK:
+        entries = list(reversed(_WARRANT_REGISTRY.get(sid, [])))
+    for w in entries:
+        payload = w.get("payload") if isinstance(w, dict) else None
+        if not isinstance(payload, dict):
+            continue
+        if float(payload.get("expires_at") or 0) <= time.time():
+            continue
+        if tool_name:
+            allowed = set(payload.get("allowed_tools") or [])
+            if "*" not in allowed and str(tool_name) not in allowed:
+                continue
+        return w
+    return None
+
+
 def issue_warrant(
     session_id: str,
     allowed_tools: List[str],

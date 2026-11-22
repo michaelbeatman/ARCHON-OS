@@ -605,6 +605,19 @@ async def api_decide_decision(body: Dict = Body(...)):
         else:
             ergebnis += " | Workflow-Resume übersprungen: ref_id enthält keine run_id:node_id-Kombination."
 
+    # HITL-Sackgasse schliessen: der DAG-Resume allein setzt die Content-Assets
+    # nicht auf approved/scheduled. Sie blieben auf 'review' und wurden nie
+    # publiziert. Idempotent: nur review/draft werden umgesetzt.
+    if typ == "workflow_hitl_gate" and run_id:
+        try:
+            from backend.content_machine import finalize_assets_for_workflow_run
+
+            fin = finalize_assets_for_workflow_run(run_id, approved=(decision == "approve"))
+            if fin.get("status") == "ok" and fin.get("updated"):
+                ergebnis += f" | {fin['updated']} Content-Assets → {fin['target_status']}."
+        except Exception as fin_exc:
+            logger.error(f"[Decision] Content-Asset-Abschluss fehlgeschlagen: {fin_exc}")
+
     try:
         await asyncio.to_thread(
             fn_self_api,

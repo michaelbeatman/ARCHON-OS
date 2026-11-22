@@ -1,13 +1,16 @@
 {
-  "version": "v0.5.5.3",
-  "codename": "Archon Orchestration & Governance v2",
-  "released_at": "2026-11-19 23:46",
-  "previous_version": "v0.5.5.2",
-  "commit": "v0.5.5",
+  "version": "v0.5.7",
+  "codename": "Execution Hardening & Agentic Reliability",
+  "released_at": "2026-11-22 03:30",
+  "previous_version": "v0.5.6.0",
+  "commit": "v0.5.7",
   "features": [
     "Hermes Marketplace Integration: 18 Skills (.agents/skills/) & 6 MCP Servers (.mcp.json) assigned to specialist profiles",
     "Orchestration & Security v2 (M75-M94): Delegation Isolation, Session Taint Guard (HITL), Verifier & Proof Gate, Tenant-Isolated Precedent Log, Workflow DAGs, Offline AEAD Vault, Tool Warrants & Flightlog",
     "Business Operations & UI v2 (M6, M25/M55, M32-M65): Design System v2, Settings Ergonomics, Kanban Start/Quick-Assign/Gantt/Graph, Enterprise Calendar, Time-to-Invoice & Client Approval Portal",
-    "Compliance & Hardening: Art. 17 DSGVO Erasure, § 201 StGB Consent Gate, EU AI Act Art. 50/Annex III Guards, Legacy RCE/CORS Removal & 31 /api/v2/* Routes"
+    "Compliance & Hardening: Art. 17 DSGVO Erasure, § 201 StGB Consent Gate, EU AI Act Art. 50/Annex III Guards, Legacy RCE/CORS Removal & 31 /api/v2/* Routes",
+    "M110 Execution Hardening: Effect-Ledger (PENDING/COMMITTED/FAILED/UNKNOWN + Reconciliation), Worker-Leases/Heartbeats, Pre-Execution Plan Validator & replan_count-Deckel",
+    "Governance-Zentrierung: PolicyEngine + atomare BudgetBank (Reserve/Settle/Release), hartes Warrant-Gate für privilegierte Tools",
+    "Idempotenz & Outbox: stabile Keys für Events/Webhooks/Scheduler, Retry mit Backoff & DLQ; Audit-HMAC + Hintergrund-Anker; OTel in LLMKernel & DAG"
   ]
 }

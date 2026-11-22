@@ -17,7 +17,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from archon.routers._rbac import require_admin_or_503
+from archon.routers._rbac import require_admin_or_503, get_session_actor
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -190,15 +190,18 @@ def api_call_mcp_tool(request: Request, req: Dict[str, Any] = Body(...)):
         arguments = req.get("arguments", {})
         if not tool_name:
             raise HTTPException(status_code=400, detail={"code": "sysops_name_required", "params": {}})
-        session_id = str(req.get("session_id") or "sysops_mcp").strip()
+        # Actor/Session und Warrant serverseitig — nie aus dem Request-Body.
+        session_id = f"user:{get_session_actor(request)}"
         agent_id = str(req.get("agent_id") or "").strip()
+        from backend.tool_warrants import get_warrant_for_session
+        warrant = get_warrant_for_session(session_id, str(tool_name))
         gate = enforce_tool_execution(
             agent_id=agent_id,
             session_id=session_id,
             tool_name=tool_name,
             args=arguments if isinstance(arguments, dict) else {},
             approval_id=req.get("approval_id"),
-            warrant=req.get("warrant"),
+            warrant=warrant,
         )
         if not gate.get("allowed"):
             raise HTTPException(status_code=403, detail=gate)

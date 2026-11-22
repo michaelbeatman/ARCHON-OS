@@ -7,7 +7,7 @@
 **Autonomes, lokal betreibbares Multi-Agenten-Betriebssystem für Gründer, Teams & Fachdomänen**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release: v0.5.4.2](https://img.shields.io/badge/Release-v0.5.4.2-6366f1.svg)](CHANGELOG.md)
+[![Release: v0.5.7](https://img.shields.io/badge/Release-v0.5.7-6366f1.svg)](CHANGELOG.md)
 [![Agenten: 70 Spezialisten](https://img.shields.io/badge/Spezialisten-70%20in%208%20Dom%C3%A4nen%20(DE%2FEN)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
@@ -15,7 +15,7 @@
 
 [🇬🇧 English](README.md) · **🇩🇪 Deutsch** · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md) · [🇮🇹 Italiano](docs/readme/README.it.md) · [🇳🇱 Nederlands](docs/readme/README.nl.md)
 
-[🤖 Agenten-Installationsprotokoll](INSTALL_AGENT.md) | [⚡ Zero-Key Live-Demo](#weg-c-sofortige-read-only-live-demo-archon_demo_modetrue) | [📘 Handbücher & PDFs](#dokumentation--handbücher-pdf) | [🗺️ Roadmap (M0–M74)](docs/system/ROADMAP_2026.md)
+[🤖 Agenten-Installationsprotokoll](INSTALL_AGENT.md) | [⚡ Zero-Key Live-Demo](#weg-c-sofortige-read-only-live-demo-archon_demo_modetrue) | [📘 Handbücher & PDFs](#dokumentation--handbücher-pdf) | [🗺️ Roadmap (M0–M108)](docs/system/ROADMAP_2026.md)
 
 </div>
 
@@ -27,6 +27,19 @@ Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehos
 
 ---
 
+### Aktueller Release-Stand (`v0.5.7`, 21.11.2026)
+
+Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen seit `v0.5.5.3`:
+
+- **SQLite-Konsolidierung (M106):** 28 verstreute Datenbanken wurden auf 3 domänengetrennte WAL-DBs reduziert — `data/ops.db` (Kanban, Workflows, Audit, Sicherheit), `data/business.db` (ERP, CRM, Verträge, Treasury, Content-Maschine), `data/memory.db` (Gedächtnis, Learnings, Checkpoints) — inklusive transparenter Kompatibilitäts-Pfadauflösung.
+- **Content-Maschine v2 (M107):** Multi-Channel-Kampagnen-Pipeline (LinkedIn, YouTube Longform/Shorts, TikTok, X/Threads) mit Repurposing-DAG, Anti-AI-Slop-Qualitätsgate, SSRF-gesicherter Quellenaufnahme, 9:16-Clip-Matrix und HITL-Redaktionsfreigabe.
+- **Next.js-16-Cockpit (M108):** `frontend/` spricht direkt mit dem FastAPI-Backend (`127.0.0.1:8420`) ohne PocketBase; neue Arbeitsplätze `/content-studio`, `/workflows` und `/cockpit`.
+- **Audit-v3-Härtung (Wellen 1–6):** RBAC-/Tenant-IDOR-Fixes, XSS-Beseitigung, Zero-Egress-Fail-Closed, Treasury-/GoBD-Korrekturen sowie Fan-in-/Profil-SSOT-Fixes.
+
+> **Konfigurationshinweis:** Die Codepfade für Authentifizierung und Egress-Kontrolle sind vorhanden, die mitgelieferte lokale `settings.json` hat aber weiterhin `auth.enabled = false`, `privacy.zero_egress = false` und `zero_egress_strict = false` (nur `hard_block_on_local_offline = true`). Vor einer LAN-Freigabe unbedingt Auth aktivieren. `config/version.json` ist jetzt auf `v0.5.7` angeglichen (Single Source of Truth); der CHANGELOG dokumentiert die Details.
+
+> **In diesem Checkout gemessene Zahlen:** 73 Einträge in `agent_profiles.json` (70 Spezialisten + 3 System-/Meta-Profile), 59 Rollen in `roles.json`, 72 synchronisierte Profile in `.hermes/profiles/`, 312 Portrait-Assets in `static/avatars/`, 832 Prompt-Templates und 11 UI-Sprachen. Die PDF-Handbücher wurden für `v0.5.2.1` erzeugt und noch nicht für `v0.5.7` aktualisiert.
+
 ## Dokumentation & Handbücher (PDF)
 
 | Dokument | Deutsch (DE) | Englisch (EN) | Inhalt & Umfang |
@@ -35,7 +48,7 @@ Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehos
 | **Vollständige Featureliste (`v0.5.2.1`)** | [**ARCHON_OS_FEATURELISTE_2026.pdf**](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | [ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | Kompletter System- & Modul-Katalog, Zweisprachige Global Edition, Live-Demo-Modus, Setup-Wizard & FinOps |
 | **AI-Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | Alle 55 strukturierten Decision-Engine-Methodiken (DE & EN) & Index |
 
-*Weitere Technik- & Sicherheitsdokumente:* [Systemarchitektur & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M56)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD-PDF & Multi-Mandanten-Handbuch (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise-Features & Playbooks-Handbuch](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP-Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live-Demo-Modus (`ARCHON_DEMO_MODE`)](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup-Wizard](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ökosystem & Migration](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+*Weitere Technik- & Sicherheitsdokumente:* [Systemarchitektur & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M108)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD-PDF & Multi-Mandanten-Handbuch (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise-Features & Playbooks-Handbuch](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP-Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live-Demo-Modus (`ARCHON_DEMO_MODE`)](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup-Wizard](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ökosystem & Migration](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -180,13 +193,13 @@ flowchart LR
 
 - **Sichere Netzwerk-Vorgabe:** Standardmäßig bindet Archon OS nur auf `127.0.0.1:8501`. Für LAN-Zugriff (`ARCHON_BIND_IP=0.0.0.0`) zuerst Multi-User-Auth in den Einstellungen aktivieren.
 - **Keine Rechts-, Steuer- oder Medizinberatung:** Ausgaben aus den Domänen 3, 4 und 8 lösen beim Profilaufruf automatisch ein Warn-Modal aus und ersetzen keinen zugelassenen Fachberater ([LICENSE](LICENSE)).
-- **Synthetische Avatare:** Alle 301 Porträts in `static/avatars/` sind künstlich mit Gemini (*Nano Banana 2*) generiert und zeigen keine realen Personen ([THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)).
+- **Synthetische Avatare:** Alle 312 Porträts in `static/avatars/` sind künstlich mit Gemini (*Nano Banana 2*) generiert und zeigen keine realen Personen ([THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)).
 
 ### Weiterführende Dokumente & Handbücher (PDF)
 - **Benutzer- & Firmenhandbuch (DE, PDF):** [docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)
 - **Vollständige Featureliste & System-Katalog (v0.5.2.1, DE, PDF):** [docs/system/ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf)
 - **Decision Engine & 55 Boardroom-Frameworks (DE, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
-- **Entwicklungs-Roadmap (54 Meilensteine, M0–M53):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
+- **Entwicklungs-Roadmap (M0–M108):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
 - **Live-Demo-Modus (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](docs/system/LIVE_DEMO_MODE_GUIDE.md)
 - **First-Run Setup-Wizard:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)
 - **Ökosystem & Migrations-Guide:** [docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md)

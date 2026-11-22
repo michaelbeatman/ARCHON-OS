@@ -560,7 +560,11 @@ class GDPRComplianceEngine:
         }
 
         def _redact_ci(val: Optional[str]) -> str:
-            return term_pat.sub(replacement, val or "")
+            # Art. 17: das GANZE Feld anonymisieren, nicht nur das gematchte
+            # Token. Vorher wurde aus "Michael Keller" "[ANONYMISIERT] Keller"
+            # — der Nachname blieb personenbezogen.
+            text = str(val or "")
+            return replacement if _matches_subject(text, term_pat) else text
 
         # 1. Kanban Tasks
         if os.path.exists(self.kanban_db):

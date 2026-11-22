@@ -83,7 +83,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 - **안전한 네트워크 기본값:** 기본 바인딩은 `127.0.0.1:8501`입니다. LAN 공개(`ARCHON_BIND_IP=0.0.0.0`) 전 멀티유저 인증(`auth.enabled = true`)을 먼저 활성화하세요.
 - **전문 자문 대체 불가:** 법률, 세무, 금융, 의료, 건축 도메인 출력은 내부 의사결정 보조용이며 공인 전문가 자문을 대체하지 않습니다([LICENSE](../../LICENSE)).
-- **합성 아바타:** `static/avatars/`의 301개 인물 초상은 AI(Gemini Nano Banana 2)로 생성된 가상 이미지입니다([THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)).
+- **합성 아바타:** `static/avatars/`의 312개 인물 초상은 AI(Gemini Nano Banana 2)로 생성된 가상 이미지입니다([THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)).
 ---
 
 ### Manuals & Documentation (PDF)

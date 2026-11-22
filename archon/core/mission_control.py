@@ -150,9 +150,15 @@ def _ensure_mc_tables(conn: sqlite3.Connection) -> None:
         db_file = ""
     if db_file and db_file in _MC_TABLES_INITIALIZED:
         return
-    conn.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS tasks (
+    # WICHTIG: keinesfalls executescript() verwenden — das fuehrt vor der
+    # Ausfuehrung ein implizites COMMIT der laufenden Transaktion durch
+    # (sqlite3-Dokumentation). Da diese Funktion aus _load_sqlite_state_from_conn
+    # innerhalb von BEGIN IMMEDIATE gerufen wird, war damit die gesamte
+    # Read-Modify-Write-Atomaritaet aller MC-Mutationen gebrochen.
+    # Einzelne execute()-DDL-Statements sind innerhalb der Transaktion
+    # transaktional und duerfen hier sicher verwendet werden.
+    _DDL = (
+        """CREATE TABLE IF NOT EXISTS tasks (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             body TEXT,
@@ -166,35 +172,36 @@ def _ensure_mc_tables(conn: sqlite3.Connection) -> None:
             project_id TEXT,
             result TEXT,
             model_override TEXT
-        );
-        CREATE TABLE IF NOT EXISTS task_links (
+        )""",
+        """CREATE TABLE IF NOT EXISTS task_links (
             parent_id TEXT NOT NULL,
             child_id TEXT NOT NULL,
             kind TEXT DEFAULT 'subtask',
             created_at TEXT,
             PRIMARY KEY (parent_id, child_id)
-        );
-        CREATE TABLE IF NOT EXISTS task_events (
+        )""",
+        """CREATE TABLE IF NOT EXISTS task_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task_id TEXT NOT NULL,
             run_id INTEGER,
             kind TEXT NOT NULL,
             payload TEXT,
             created_at INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS mc_task_meta (
+        )""",
+        """CREATE TABLE IF NOT EXISTS mc_task_meta (
             task_id TEXT PRIMARY KEY,
             meta_json TEXT NOT NULL,
             updated_at REAL NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS mc_kv (
+        )""",
+        """CREATE TABLE IF NOT EXISTS mc_kv (
             key TEXT PRIMARY KEY,
             value_json TEXT NOT NULL,
             updated_at REAL NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_mc_events_kind ON task_events(kind, id);
-        """
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_mc_events_kind ON task_events(kind, id)",
     )
+    for _ddl in _DDL:
+        conn.execute(_ddl)
     try:
         tl_cols = {r[1] for r in conn.execute("PRAGMA table_info(task_links)").fetchall()}
         if "kind" not in tl_cols:
@@ -234,7 +241,9 @@ def _db_status_to_mc(db_status: Optional[str], meta_mc_status: Optional[str] = N
     if s in ("review", "waiting_approval", "approval", "gate"):
         return "approval"
     if s in ("blocked", "failed"):
-        return "failed"
+        # Vorher wurde 'blocked' beim Reload immer zu 'failed' — die Eskalation
+        # in orchestration.py war damit dauerhaft verloren.
+        return m if m in ("blocked", "failed") else "failed"
     return "backlog"
 
 

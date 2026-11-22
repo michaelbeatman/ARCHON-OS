@@ -145,6 +145,10 @@ def api_cm_asset_create(request: Request, payload: Dict[str, Any] = Body(...)):
 def api_cm_asset_update(request: Request, asset_id: str, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)
     from backend.content_machine import update_asset
+    if "status" in payload:
+        # Sonst könnte die HITL-State-Machine über den generischen Patch
+        # umgangen werden (draft → published ohne Freigabe).
+        raise HTTPException(status_code=409, detail="Status nur über /approve oder /publish ändern.")
     try:
         return {"status": "ok", "asset": update_asset(asset_id, payload)}
     except KeyError as exc:
@@ -162,6 +166,8 @@ def api_cm_asset_approve(request: Request, asset_id: str, payload: Dict[str, Any
         return {"status": "ok", "asset": asset}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.post("/api/v2/content-machine/assets/{asset_id}/publish")
@@ -173,6 +179,8 @@ def api_cm_asset_publish(request: Request, asset_id: str, payload: Dict[str, Any
         return {"status": "ok", "asset": asset}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.post("/api/v2/content-machine/assets/{asset_id}/metrics")

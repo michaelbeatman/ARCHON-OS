@@ -74,7 +74,10 @@ def gdpr_erase_subject_data(
     like_val = f"%{escaped_needle}%"
     # GoBD/Compliance-Ausschluss (Audit v3 1.3.6): Diese Tabellen werden NIE per
     # Art.-17-Skript geloescht (Hashketten-/Belegpersistenz).
-    protected_tables = {"audit_log", "erp_documents"}
+    protected_tables = {
+        "audit_log", "erp_documents", "erp_document_lines",
+        "treasury_transactions", "gdpr_audit_log", "receipts", "invoices", "learnings",
+    }
 
     # Sowohl v2-DBs als auch Kern-/konsolidierte Domänen-DBs nach DSGVO Art. 17 bereinigen
     scan_dbs = list(
@@ -111,9 +114,26 @@ def gdpr_erase_subject_data(
                 cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{safe_tbl}")').fetchall() if str(r[2]).upper().startswith("TEXT") or r[2] == ""]
                 if not cols:
                     continue
-                quoted_cols = [f'"{str(c).replace(chr(34), chr(34)*2)}" LIKE ? ESCAPE \'\'' for c in cols]
-                where_clause = " OR ".join(quoted_cols)
-                cur = conn.execute(f'DELETE FROM "{safe_tbl}" WHERE {where_clause}', [like_val] * len(cols))
+                # Art. 17: NUR die tatsächlich betroffenen TEXT-Spalten
+                # anonymisieren. Ein DELETE ganzer Zeilen würde z. B.
+                # erp_document_lines löschen, während erp_documents die
+                # Beträge behält — GoBD-Bruch und Buchhaltungskorruptur.
+                safe_cols = [str(c).replace('"', '""') for c in cols]
+                esc = " ESCAPE '\\'"
+                set_clause = ", ".join(
+                    f'"{c}" = CASE WHEN "{c}" LIKE ?{esc} THEN ? ELSE "{c}" END'
+                    for c in safe_cols
+                )
+                where_clause = " OR ".join(f'"{c}" LIKE ?{esc}' for c in safe_cols)
+                anonymized = "[ANONYMISIERT_DSGVO_ART17]"
+                params: list = []
+                for _c in safe_cols:
+                    params.extend([like_val, anonymized])
+                params.extend([like_val] * len(safe_cols))
+                cur = conn.execute(
+                    f'UPDATE "{safe_tbl}" SET {set_clause} WHERE {where_clause}',
+                    params,
+                )
                 total_del += cur.rowcount
             conn.commit()
             if total_del > 0:

@@ -17,7 +17,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Body, Depends as _ArchonDepends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
+from archon.routers._rbac import (
+    forbid_viewer_writes as _forbid_viewer_writes,
+    require_admin_or_503,
+    get_session_actor,
+)
 
 logger = logging.getLogger("archon.routers.v2_capabilities")
 
@@ -28,16 +32,18 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["
 @router.post("/api/v2/security/warrants/issue")
 def api_v2_issue_warrant(request: Request, payload: Dict[str, Any] = Body(...)):
     require_admin_or_503(request)
-    from backend.tool_warrants import issue_warrant
-    return {
-        "status": "success",
-        "warrant": issue_warrant(
-            session_id=str(payload.get("session_id") or "default"),
-            allowed_tools=list(payload.get("allowed_tools") or []),
-            constraints=payload.get("constraints"),
-            ttl_seconds=int(payload.get("ttl_seconds") or 900),
-        ),
-    }
+    from backend.tool_warrants import issue_warrant, register_warrant
+    # Session aus der authentifizierten Identität, nicht aus dem Body —
+    # sonst könnte ein Aufrufer ein Warrant für eine fremde Session binden.
+    session_id = f"user:{get_session_actor(request)}"
+    warrant = issue_warrant(
+        session_id=session_id,
+        allowed_tools=list(payload.get("allowed_tools") or []),
+        constraints=payload.get("constraints"),
+        ttl_seconds=int(payload.get("ttl_seconds") or 900),
+    )
+    register_warrant(warrant)
+    return {"status": "success", "warrant": warrant, "session_id": session_id}
 
 
 @router.post("/api/v2/security/warrants/verify")

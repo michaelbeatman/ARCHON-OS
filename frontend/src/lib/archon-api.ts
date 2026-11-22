@@ -278,7 +278,8 @@ export const archonApi = {
   decideHitl: (decisionId: string, decision: 'approve' | 'reject', note = '') =>
     archonFetch<Record<string, unknown>>('api/decisions/decide', {
       method: 'POST',
-      body: JSON.stringify({ decision_id: decisionId, decision, note }),
+      // Der Endpoint erwartet task_id (nicht decision_id) — sonst 400.
+      body: JSON.stringify({ task_id: decisionId, decision, note }),
     }),
   listCrmContacts: (limit = 25) =>
     archonFetch<{ contacts?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> }>(

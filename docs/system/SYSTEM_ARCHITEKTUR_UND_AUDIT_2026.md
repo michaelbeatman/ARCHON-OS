@@ -1,6 +1,6 @@
-# AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.6.0)
+# AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.7)
 
-*Stand: 21. November 2026 | Release: v0.5.6.0 (Phase 1–3 Hardening, 28→3 SQLite Consolidation & Content-Maschine v2)*  
+*Stand: 22. November 2026 | Release: v0.5.7 (Execution Hardening, PolicyEngine/BudgetBank, Idempotenz & OTel)*  
 *Maschinenlesbares Gegenstück:* [`docs/system/system_architecture_spec.json`](system_architecture_spec.json)  
 *Endbenutzer-Handbuch (PDF):* [`docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf`](ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)  
 *Vollständige Featureliste (PDF):* [`docs/system/ARCHON_OS_FEATURELISTE_2026.pdf`](ARCHON_OS_FEATURELISTE_2026.pdf) | *55 Boardroom-Frameworks:* [`docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf`](ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)

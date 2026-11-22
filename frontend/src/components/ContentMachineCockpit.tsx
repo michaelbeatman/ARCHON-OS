@@ -618,7 +618,7 @@ export function ContentMachineCockpit() {
                     >
                       Bearbeiten
                     </button>
-                    {asset.status !== 'approved' && asset.status !== 'published' && (
+                    {(asset.status === 'review' || asset.status === 'draft') && (
                       <button
                         onClick={() => handleApprove(asset.id)}
                         disabled={busyId === asset.id}
@@ -628,7 +628,7 @@ export function ContentMachineCockpit() {
                         Freigeben
                       </button>
                     )}
-                    {asset.status !== 'published' && (
+                    {(asset.status === 'approved' || asset.status === 'scheduled') && (
                       <button
                         onClick={() => handlePublish(asset.id)}
                         disabled={busyId === asset.id}

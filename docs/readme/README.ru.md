@@ -83,7 +83,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 - **Безопасная сеть по умолчанию:** Привязка только к `127.0.0.1:8501`. Перед открытием доступа в локальной сети (`ARCHON_BIND_IP=0.0.0.0`) включите многопользовательскую авторизацию (`auth.enabled = true`).
 - **Не является профессиональной консультацией:** Ответы юридических, финансовых, медицинских и инженерных профилей не заменяют сертифицированных специалистов ([LICENSE](../../LICENSE)).
-- **Синтетические аватары:** Все 301 портрет в `static/avatars/` сгенерированы ИИ (Gemini Nano Banana 2) и не изображают реальных людей ([THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)).
+- **Синтетические аватары:** Все 312 портрет в `static/avatars/` сгенерированы ИИ (Gemini Nano Banana 2) и не изображают реальных людей ([THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)).
 ---
 
 ### Manuals & Documentation (PDF)

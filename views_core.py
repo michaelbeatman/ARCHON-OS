@@ -38,9 +38,11 @@ except ImportError:  # pragma: no cover - direkter Aufruf ausserhalb des Repo-Ro
 
 router = APIRouter(prefix="/api/views", tags=["views_core"])
 
-# Basispfade auflösen (Host vs. Docker)
-WORKSPACE_DIR = "/app/agent_workspace" if os.path.exists("/app/agent_workspace") or os.path.exists("/.dockerenv") else "./agent_workspace"
-MEMORY_DIR = "/app/data" if os.path.exists("/app/data") else "./data"
+# Pfad-SSOT: archon.core.runtime ist die einzige Wahrheit für Host/Docker-Pfade.
+from archon.core import runtime as _runtime
+
+WORKSPACE_DIR = _runtime.WORKSPACE_DIR
+MEMORY_DIR = _runtime.MEMORY_DIR
 
 def get_inbox_email_dir() -> str:
     candidates = ["/opt/data/inbox/emails", os.path.join(MEMORY_DIR, "inbox", "emails"), "data/inbox/emails"]
@@ -88,23 +90,10 @@ def get_apps_dir() -> str:
     return path
 
 def resolve_obsidian_vault_dir() -> str:
-    env_path = os.environ.get("OBSIDIAN_VAULT_PATH")
-    if env_path and os.path.exists(env_path):
-        return env_path
-    import sys
-    if sys.platform != "win32":
-        candidates = ["/opt/data/obsidian", "/app/data/obsidian"]
-    else:
-        candidates = [OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT]
-    candidates += [
-        "/opt/data/obsidian",
-        OBSIDIAN_VAULT,
-        os.path.join(WORKSPACE_DIR, "obsidian_vault"),
-        "agent_workspace/obsidian_vault"
-    ]
-    for c in candidates:
-        if c and os.path.exists(c):
-            return c
+    # Einziger Resolver: archon.core.runtime.resolve_obsidian_vault_path.
+    resolved = _runtime.resolve_obsidian_vault_path()
+    if resolved and os.path.exists(resolved):
+        return resolved
     default_path = os.path.join(WORKSPACE_DIR, "obsidian_vault")
     os.makedirs(default_path, exist_ok=True)
     return default_path

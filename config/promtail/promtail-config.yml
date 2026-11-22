@@ -26,7 +26,9 @@ scrape_configs:
 
   - job_name: docker-containers
     docker_sd_configs:
-      - host: unix:///var/run/docker.sock
+      # Kein roher Docker-Socket mehr (Zero-Trust): Discovery läuft über den
+      # gehärteten Proxy. Die ACL erlaubt GET /containers/json (CONTAINERS=1).
+      - host: tcp://docker-socket-proxy:2375
         refresh_interval: 10s
     relabel_configs:
       - source_labels: ['__meta_docker_container_name']

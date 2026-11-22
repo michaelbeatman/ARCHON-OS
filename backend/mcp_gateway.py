@@ -598,22 +598,26 @@ class ArchonMcpGateway:
         if not allowed and pending is not None:
             return 0, pending
 
-        # Zentraler ToolRuntime-Chokepoint (M75 Isolation + M89 Taint + Event-Bus)
+        # Zentraler ToolRuntime-Chokepoint (M75 + M89 + M90 + PolicyEngine).
+        # Fail-closed: wenn die Prüfung selbst scheitert, wird NICHT ausgeführt.
+        from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
+        rt_session = str(key_info.get("session_id") or key_info.get("name") or "mcp_gateway")
+        rt_agent = str(key_info.get("agent_id") or "")
         try:
-            from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
-            rt_session = str(key_info.get("session_id") or key_info.get("name") or "mcp_gateway")
-            rt_agent = str(key_info.get("agent_id") or "")
+            from backend.tool_warrants import get_warrant_for_session
+            rt_warrant = get_warrant_for_session(rt_session, name)
             gate = enforce_tool_execution(
                 agent_id=rt_agent,
                 session_id=rt_session,
                 tool_name=name,
                 args=arguments if isinstance(arguments, dict) else {},
+                warrant=rt_warrant,
             )
-            if not gate.get("allowed"):
-                return -32003, {"message": gate.get("reason", f"Tool '{name}' durch ToolRuntime blockiert."), "gate": gate}
         except Exception as exc:
-            logger.debug("ToolRuntime-Pruefung im MCPGateway uebersprungen: %s", exc)
-            rt_session = None
+            logger.error("MCPGateway: ToolRuntime-Prüfung fehlgeschlagen — Zugriff verweigert: %s", exc)
+            return -32003, {"message": "ToolRuntime-Prüfung fehlgeschlagen — Zugriff verweigert (fail-closed)."}
+        if not gate.get("allowed"):
+            return -32003, {"message": gate.get("reason", f"Tool '{name}' durch ToolRuntime blockiert."), "gate": gate}
 
         if name == "archon__list_specialists":
             res = self._tool_list_specialists(arguments)

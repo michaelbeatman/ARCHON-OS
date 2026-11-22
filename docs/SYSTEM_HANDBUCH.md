@@ -1,7 +1,7 @@
 # ARCHON AGENTIC OS 2026
 ## Offizielles System-Handbuch, Modul-Referenz & Praxisführer
 
-> **System-Version:** v0.5.6.0 (Sentinel / Global Release & Content-Maschine Edition)  
+> **System-Version:** v0.5.7 (Execution Hardening & Agentic Reliability)  
 > **Klassifizierung:** Intern / Streng Vertraulich (GoBD, EU AI Act & ISO 27001 konform)  
 > **Stand:** 21. November 2026  
 > **Geltungsbereich:** Gesamtes Archon OS Ökosystem (70 Fachagenten, 3 konsolidierte Domänen-Datenbanken `ops.db`/`business.db`/`memory.db`, Multi-Channel Content-Maschine v2, Workflow-DAG-Engine, Next.js 16 Cockpits, Daemon-Kernel, Governance & Spezialleitfäden)

@@ -496,7 +496,7 @@ async def _run_suno_plugin(params: Dict[str, Any], node: Dict[str, Any], upstrea
         endpoint,
         method="POST",
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
-        json_body=payload_obj,
+        payload=payload_obj,
         timeout=30.0,
     )
     data_dict = data if isinstance(data, dict) else {"raw": data}
@@ -679,16 +679,18 @@ async def execute_workflow_node_plugin(
         else:
             body_obj = {"params": resolved_params, "node_id": node.get("id")}
 
-        resp = await asyncio.to_thread(
+        # safe_http_request liefert (status, headers, bytes) — kein Dict und
+        # kein json_body-Argument. Der alte Aufruf warf TypeError/AttributeError,
+        # wodurch alle installierten JSON-Plugins nicht ausführbar waren.
+        _status_code, resp_headers, raw_bytes = await asyncio.to_thread(
             safe_http_request,
             endpoint_url,
             method=method,
             headers=headers,
-            json_body=body_obj if method != "GET" else None,
+            data=json.dumps(body_obj).encode("utf-8") if method != "GET" and body_obj is not None else None,
             timeout=float(spec.get("timeout_sec") or 30.0),
         )
-        ctype = str((resp.get("headers") or {}).get("content-type") or "").lower()
-        raw_bytes: bytes = resp.get("body") or b""
+        ctype = str(resp_headers.get("content-type") or "").lower()
 
         # Binaer-Download direkt in Showroom-Medienverzeichnis speichern
         is_binary = (
@@ -737,14 +739,14 @@ async def execute_workflow_node_plugin(
             poll_interval = max(0.2, min(10.0, float(spec.get("poll_interval_sec") or 2.0)))
             for _ in range(max_polls):
                 await asyncio.sleep(poll_interval)
-                p_resp = await asyncio.to_thread(
+                _p_status, _p_headers, p_body = await asyncio.to_thread(
                     safe_http_request,
                     poll_url,
                     method="GET",
                     headers=headers,
                     timeout=20.0,
                 )
-                p_data = json.loads((p_resp.get("body") or b"{}").decode("utf-8", errors="replace"))
+                p_data = json.loads((p_body or b"{}").decode("utf-8", errors="replace"))
                 if isinstance(p_data, dict):
                     data_dict = p_data
                     p_st = str(p_data.get("status") or "").lower()

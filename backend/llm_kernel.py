@@ -12,7 +12,9 @@ Vereinheitlichter LLM-Kernel fuer Archon OS (Punkt 3.1.1):
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("archon.llm_kernel")
@@ -119,6 +121,31 @@ def finalize_llm_output(
     return s
 
 
+async def _otel_start(name: str, task_id: Optional[str], agent_id: str) -> Optional[str]:
+    try:
+        from backend.otel_tracer import tracer
+        return await asyncio.to_thread(tracer.start_trace, name, task_id, agent_id)
+    except Exception as exc:
+        logger.debug("[LLMKernel] OTel-Trace-Start fehlgeschlagen: %s", exc)
+        return None
+
+
+async def _otel_span(trace_id: str, **kwargs: Any) -> None:
+    try:
+        from backend.otel_tracer import tracer
+        await asyncio.to_thread(tracer.record_span, trace_id, **kwargs)
+    except Exception as exc:
+        logger.debug("[LLMKernel] OTel-Span fehlgeschlagen: %s", exc)
+
+
+async def _otel_end(trace_id: str, status: str) -> None:
+    try:
+        from backend.otel_tracer import tracer
+        await asyncio.to_thread(tracer.end_trace, trace_id, status)
+    except Exception as exc:
+        logger.debug("[LLMKernel] OTel-Trace-Ende fehlgeschlagen: %s", exc)
+
+
 async def dispatch_llm(
     *,
     agent_id: str = "default",
@@ -136,31 +163,99 @@ async def dispatch_llm(
 ) -> Any:
     """Einheitlicher LLM-Einstiegspunkt fuer Agenten- & Chat-Calls."""
     if stream:
+        # Der Router erwartet provider UND api_keys als Pflichtargumente und
+        # kennt kein session_id. Der alte Aufruf erzeugte guarantee einen
+        # TypeError — der gesamte Streaming-Pfad des Kernels war damit tot.
         from backend.agent_router import router_instance
+        import api_provider
         msgs = list(messages or [])
         if not msgs and prompt:
             if system_prompt:
                 msgs.append({"role": "system", "content": system_prompt})
             msgs.append({"role": "user", "content": prompt})
-        return router_instance.stream_chat_completion(
-            messages=msgs,
-            model=resolve_auto_model(model),
-            session_id=session_id or task_id or agent_id,
-            agent_id=agent_id,
+        all_keys = api_provider.collect_keys() or {}
+        eff_provider = (provider or "").strip().lower() or (
+            "openrouter" if all_keys.get("OPENROUTER_API_KEY") else "omniroute"
         )
+        eff_model = resolve_auto_model(model)
+        gen = router_instance.stream_chat_completion(
+            messages=msgs,
+            provider=eff_provider,
+            model=eff_model,
+            api_keys=all_keys,
+            reasoning_level=reasoning_level,
+            agent_id=agent_id,
+            role=role,
+        )
+        trace_id = await _otel_start("llm.stream", task_id or session_id, agent_id)
+
+        async def _traced_stream():
+            started = time.perf_counter()
+            chunks: List[str] = []
+            status = "OK"
+            try:
+                async for chunk in gen:
+                    chunks.append(str(chunk))
+                    yield chunk
+            except Exception:
+                status = "ERROR"
+                raise
+            finally:
+                if trace_id:
+                    await _otel_span(
+                        trace_id,
+                        name=f"llm.stream.{agent_id}",
+                        span_type="llm",
+                        agent_id=agent_id,
+                        model=eff_model,
+                        output_data="".join(chunks)[-2000:],
+                        status=status,
+                        duration_ms=round((time.perf_counter() - started) * 1000.0, 2),
+                        attributes={"provider": eff_provider, "stream": True},
+                    )
+                    await _otel_end(trace_id, status)
+
+        return _traced_stream()
 
     import core_dispatcher
     eff_prompt = prompt
     if not eff_prompt and messages:
         eff_prompt = "\n".join(str(m.get("content") or "") for m in messages if m.get("role") == "user")
-    return await core_dispatcher.dispatch_to_omniroute_or_container(
-        agent_id=agent_id,
-        agent_name=agent_name,
-        prompt=eff_prompt,
-        role=role,
-        system_prompt=system_prompt,
-        model=model,
-        provider=provider,
-        reasoning_level=reasoning_level,
-        task_id=task_id,
-    )
+    started = time.perf_counter()
+    trace_id = await _otel_start("llm.dispatch", task_id or session_id, agent_id)
+    res: Any = None
+    try:
+        res = await core_dispatcher.dispatch_to_omniroute_or_container(
+            agent_id=agent_id,
+            agent_name=agent_name,
+            prompt=eff_prompt,
+            role=role,
+            system_prompt=system_prompt,
+            model=model,
+            provider=provider,
+            reasoning_level=reasoning_level,
+            task_id=task_id,
+        )
+        return res
+    finally:
+        if trace_id:
+            status = "OK"
+            if isinstance(res, dict) and res.get("status") in ("error", "blocked"):
+                status = "ERROR"
+            in_tok = int(res.get("input_tokens", 0) or 0) if isinstance(res, dict) else 0
+            out_tok = int(res.get("output_tokens", 0) or 0) if isinstance(res, dict) else 0
+            cost = float(res.get("cost_usd", 0.0) or 0.0) if isinstance(res, dict) else 0.0
+            await _otel_span(
+                trace_id,
+                name=f"llm.{agent_id}",
+                span_type="llm",
+                agent_id=agent_id,
+                model=str(res.get("model") or model) if isinstance(res, dict) else model,
+                input_tokens=in_tok,
+                output_tokens=out_tok,
+                cost_usd=cost,
+                duration_ms=round((time.perf_counter() - started) * 1000.0, 2),
+                status=status,
+                attributes={"provider": str(res.get("provider") or provider) if isinstance(res, dict) else provider},
+            )
+            await _otel_end(trace_id, status)

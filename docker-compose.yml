@@ -58,6 +58,10 @@ services:
       - PRIVACY_ZERO_EGRESS=${PRIVACY_ZERO_EGRESS:-false}
       # Zero-Trust Docker access strictly via allowlisted socket proxy (no raw docker.sock mount)
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      # Audit-HMAC: Key NUR aus .env, nicht in DB/Image. Der Anker läuft im
+      # Hintergrund-Thread in das gemountete ./data-Verzeichnis.
+      - ARCHON_AUDIT_HMAC_KEY=${ARCHON_AUDIT_HMAC_KEY:-}
+      - ARCHON_AUDIT_ANCHOR_PATH=${ARCHON_AUDIT_ANCHOR_PATH:-}
     volumes:
       - ./:/app
       - ./data/inbox:/opt/data/inbox
@@ -208,6 +212,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./deploy/docker-socket-proxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    # F20: Die geprüfte ACL wird nur wirksam, wenn der Entrypoint nicht sein
+    # eigenes /tmp/haproxy.cfg-Template startet (siehe docker-compose.dev.yml).
+    # Ohne diesen Override greifen POST=1/EXEC=0/DELETE=0 nicht.
+    command: ["haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:2375/version >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -585,9 +593,12 @@ services:
     profiles: ["logging", "observability", "all"]
     networks:
       - agentic_mesh
+      # Nur über den gehärteten Proxy an die Docker-API, nie mit dem rohen Socket.
+      - archon-admin_net
     volumes:
       - ./config/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Kein /var/run/docker.sock mehr: der Socket erlaubt Exec/Start/Stop und
+      # umgeht damit die ACL des docker-socket-proxy vollständig.
       - ${DATA_DIR:-./data}/logs:/opt/data/logs:ro
     command: -config.file=/etc/promtail/config.yml
     deploy:

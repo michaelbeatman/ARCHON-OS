@@ -117,6 +117,15 @@ def init_eval_db(db_path: Optional[str] = None) -> None:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_eval_target ON eval_runs(target_type, target_id, created_at DESC)")
+        # M112: aus OTel-Traces abgeleitete, PII-redaktierte Replay-Fixtures.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS replay_fixtures (
+                fixture_id TEXT PRIMARY KEY,
+                trace_id TEXT NOT NULL UNIQUE,
+                fixture_json TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+        """)
         conn.commit()
 
 
@@ -419,3 +428,144 @@ def get_eval_run(eval_id: str, db_path: Optional[str] = None) -> Optional[Dict[s
         d["results"] = []
     d["passed"] = bool(d.get("passed"))
     return d
+
+
+# =========================================================================
+# M112 — Trace-to-Replay / Replay-to-Eval
+# =========================================================================
+
+def _redact_for_fixture(text: Any, trace_id: str) -> str:
+    """PII-Redaktion vor dem Persistieren eines Replay-Fixtures."""
+    raw = str(text or "")
+    if not raw:
+        return ""
+    try:
+        from backend.pii_scrubber import pii_scrubber
+        res = pii_scrubber.scrub_text(raw, session_id=f"replay-{trace_id}")
+        return str(res.get("scrubbed_text") or "")
+    except Exception:
+        # Fail-closed: ohne Redaktion kein Fixture anlegen.
+        return "[REDACTED_UNAVAILABLE]"
+
+
+def build_fixture_from_trace(trace_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Macht aus einem OTel-Trace ein deterministisches, PII-redaktiertes Gold-Fixture."""
+    init_eval_db(db_path)
+    from backend.otel_tracer import tracer
+
+    tree = tracer.get_trace_tree(trace_id)
+    if not tree:
+        return None
+    steps: List[Dict[str, Any]] = []
+    for span in sorted(tree.get("spans") or [], key=lambda s: str(s.get("start_time") or "")):
+        if str(span.get("span_type") or "") not in ("llm", "agent", "tool"):
+            continue
+        steps.append({
+            "name": str(span.get("name") or "step"),
+            "type": str(span.get("span_type") or "agent"),
+            "input": _redact_for_fixture(span.get("input_data"), trace_id),
+            "expected_output": _redact_for_fixture(span.get("output_data"), trace_id),
+            "model": str(span.get("model") or ""),
+            "cost_usd": float(span.get("cost_usd") or 0.0),
+            "duration_ms": float(span.get("duration_ms") or 0.0),
+            "status": str(span.get("status") or "OK"),
+        })
+    fixture = {
+        "trace_id": trace_id,
+        "task_id": tree.get("task_id"),
+        "name": tree.get("name"),
+        "expected_status": tree.get("status"),
+        "total_cost_usd": float(tree.get("total_cost_usd") or 0.0),
+        "duration_ms": float(tree.get("duration_ms") or 0.0),
+        "steps": steps,
+        "created_at": time.time(),
+    }
+    p = _resolve_eval_db(db_path)
+    with sqlite3.connect(p, timeout=10.0) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO replay_fixtures (fixture_id, trace_id, fixture_json, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (f"fx-{uuid.uuid4().hex[:12]}", trace_id,
+             json.dumps(fixture, ensure_ascii=False), fixture["created_at"]),
+        )
+        conn.commit()
+    return fixture
+
+
+def get_replay_fixture(trace_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    init_eval_db(db_path)
+    p = _resolve_eval_db(db_path)
+    with sqlite3.connect(p, timeout=10.0) as conn:
+        row = conn.execute(
+            "SELECT fixture_json FROM replay_fixtures WHERE trace_id = ?", (trace_id,)
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        return json.loads(row[0])
+    except Exception:
+        return None
+
+
+def replay_and_evaluate(
+    trace_id: str,
+    executor_fn,
+    *,
+    db_path: Optional[str] = None,
+    min_score: float = 65.0,
+) -> Dict[str, Any]:
+    """Führt ein Fixture gegen die aktuelle Prompt-/Modellversion erneut aus
+    und bewertet die Abweichung mit den bestehenden Eval-Gates."""
+    init_eval_db(db_path)
+    fixture = get_replay_fixture(trace_id, db_path=db_path) or build_fixture_from_trace(trace_id, db_path=db_path)
+    if not fixture or not fixture.get("steps"):
+        return {"status": "error", "error": "Kein Replay-Fixture verfügbar (Trace leer oder unbekannt)."}
+
+    results: List[Dict[str, Any]] = []
+    for step in fixture["steps"]:
+        item = {
+            "id": step.get("name"),
+            "prompt": step.get("input") or "",
+            "min_length": 0,
+            "max_length": 20000,
+            # Keywords aus der erwarteten Antwort (deterministisch, kein LLM nötig)
+            "expected_keywords": list({
+                w.lower() for w in re.findall(r"\b[\wÄÖÜäöüß-]{4,}\b", str(step.get("expected_output") or ""))
+            })[:8],
+            "min_score": min_score,
+        }
+        started = time.perf_counter()
+        try:
+            out = executor_fn(step)
+            text = str(out.get("output") or out.get("content") or "") if isinstance(out, dict) else str(out or "")
+        except Exception as exc:
+            text = f"REPLAY_ERROR: {exc}"
+        latency = (time.perf_counter() - started) * 1000.0
+        results.append(_evaluate_text_item(item, text, latency, float(step.get("cost_usd") or 0.0)))
+
+    score = round(sum(r["score"] for r in results) / max(1, len(results)), 1)
+    passed_items = sum(1 for r in results if r["passed"])
+    passed = passed_items == len(results)
+    eval_id = f"replay-{uuid.uuid4().hex[:12]}"
+    p = _resolve_eval_db(db_path)
+    with sqlite3.connect(p, timeout=10.0) as conn:
+        conn.execute(
+            "INSERT INTO eval_runs (id, target_type, target_id, overall_score, passed, anti_slop_score, "
+            "schema_fidelity, total_cost_usd, avg_latency_ms, items_count, passed_items, results_json, created_at) "
+            "VALUES (?, 'replay', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                eval_id, trace_id, score, 1 if passed else 0, score,
+                round(sum(1 for r in results if r.get("schema_ok")) / max(1, len(results)) * 100.0, 1),
+                round(sum(float(r.get("cost_usd") or 0.0) for r in results), 6),
+                round(sum(float(r.get("latency_ms") or 0.0) for r in results) / max(1, len(results)), 1),
+                len(results), passed_items,
+                json.dumps(results, ensure_ascii=False), time.time(),
+            ),
+        )
+        conn.commit()
+    return {
+        "status": "ok", "eval_id": eval_id, "trace_id": trace_id,
+        "overall_score": score, "passed": passed,
+        "items_count": len(results), "passed_items": passed_items,
+        "results": results,
+    }

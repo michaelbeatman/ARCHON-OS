@@ -29,11 +29,16 @@ import os
 import re
 import secrets
 import urllib.request
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from backend.db_paths import get_db_connection
 
 logger = logging.getLogger("archon.content_machine")
+
+# Für den Feedback-Loop (voice_winner_hooks.md). Vorher undefiniert → NameError
+# beim ersten Sweep, der nur als logger.debug verschluckt wurde.
+WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 CHANNEL_SPECS: Dict[str, Dict[str, Any]] = {
     "linkedin": {
@@ -524,24 +529,49 @@ def update_asset(asset_id: str, patch: Dict[str, Any], db_path: Optional[str] = 
 
 
 def approve_asset(asset_id: str, scheduled_at: str = "", db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Nur review/draft → approved/scheduled. Direktes draft→published ist
+    damit nicht mehr möglich (HITL-Gate-Umgehung)."""
     new_status = "scheduled" if scheduled_at else "approved"
-    return update_asset(
-        asset_id,
-        {"status": new_status, "scheduled_at": scheduled_at},
-        db_path=db_path,
-    )
+    now = _utc_now_iso()
+    with _conn(db_path) as conn:
+        row = conn.execute("SELECT status FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
+        if not row:
+            raise KeyError(f"Content-Asset '{asset_id}' nicht gefunden.")
+        cur = str(row["status"] or "")
+        if cur not in ("review", "draft"):
+            raise ValueError(f"Unzulässiger Statusübergang: {cur} → {new_status}")
+        cur_update = conn.execute(
+            "UPDATE content_assets SET status = ?, scheduled_at = ?, updated_at = ? "
+            "WHERE id = ? AND status IN ('review', 'draft')",
+            (new_status, str(scheduled_at or ""), now, asset_id),
+        )
+        if int(cur_update.rowcount or 0) != 1:
+            raise ValueError("Statusübergang wurde concurrently geändert — bitte erneut prüfen.")
+        conn.commit()
+        row = conn.execute("SELECT * FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
+    return _row_to_asset(row)
 
 
 def mark_asset_published(asset_id: str, external_url: str = "", db_path: Optional[str] = None) -> Dict[str, Any]:
-    return update_asset(
-        asset_id,
-        {
-            "status": "published",
-            "published_at": _utc_now_iso(),
-            "external_url": str(external_url or "").strip(),
-        },
-        db_path=db_path,
-    )
+    """Publish nur aus approved/scheduled — niemals direkt aus draft/review."""
+    now = _utc_now_iso()
+    with _conn(db_path) as conn:
+        row = conn.execute("SELECT status FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
+        if not row:
+            raise KeyError(f"Content-Asset '{asset_id}' nicht gefunden.")
+        cur = str(row["status"] or "")
+        if cur not in ("approved", "scheduled"):
+            raise ValueError(f"Unzulässiger Statusübergang: {cur} → published")
+        cur_update = conn.execute(
+            "UPDATE content_assets SET status = 'published', published_at = ?, external_url = ?, updated_at = ? "
+            "WHERE id = ? AND status IN ('approved', 'scheduled')",
+            (now, str(external_url or "").strip(), now, asset_id),
+        )
+        if int(cur_update.rowcount or 0) != 1:
+            raise ValueError("Statusübergang wurde concurrently geändert — bitte erneut prüfen.")
+        conn.commit()
+        row = conn.execute("SELECT * FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
+    return _row_to_asset(row)
 
 
 def record_asset_metrics(
@@ -1134,16 +1164,31 @@ def dispatch_asset_to_webhook(
     if dry_run:
         return {"status": "dry_run", "target_url": safe_url, "payload": payload}
 
-    req = urllib.request.Request(
-        safe_url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+    # Outbox + Idempotenz: ein zweiter Sweep/Retry darf denselben Asset nicht
+    # erneut publizieren. safe_http_request blockt zusätzlich Redirect-SSRF
+    # (urlopen folgte früher 3xx und löste DNS erneut auf).
+    from backend.event_mesh import event_mesh
+
+    idem = f"content-publish:{asset_id}"
+    payload["idempotency_key"] = idem
+    delivery = event_mesh.emit_outbound_event(
+        safe_url, "content_asset_publish", payload, timeout=8.0
     )
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        code = int(resp.status)
+    if delivery.get("status") == "duplicate":
+        return {
+            "status": "already_dispatched",
+            "idempotency_key": idem,
+            "outbox_status": delivery.get("outbox_status"),
+        }
+    if delivery.get("status") != "delivered":
+        raise RuntimeError(f"Publish-Webhook fehlgeschlagen: {delivery.get('response')}")
     updated = mark_asset_published(asset_id, db_path=db_path)
-    return {"status": "published", "http_status": code, "asset": updated}
+    return {
+        "status": "published",
+        "http_status": delivery.get("http_status"),
+        "asset": updated,
+        "idempotency_key": idem,
+    }
 
 
 def publish_scheduled_due_assets(
@@ -1240,3 +1285,42 @@ def sweep_content_performance_feedback(
             logger.debug(f"[ContentMachine] voice_winner_hooks.md Schreibfehler: {exc}")
 
     return {"status": "ok", "recorded_learnings": recorded, "suggestions_count": len(suggestions)}
+
+
+def finalize_assets_for_workflow_run(
+    workflow_run_id: str,
+    *,
+    approved: bool,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """HITL-Abschluss fuer Repurposing-Campaigns.
+
+    Die Kanal-Assets werden vor dem Gate mit status='review' angelegt. Die
+    Freigabe resume nur den DAG — die Asset-Persistenz lief aber bereits
+    zurueck. Ohne diesen Schritt bleiben die Assets dauerhaft auf 'review'
+    und publish_scheduled_due_assets() findet sie nie (Sackgasse).
+    """
+    now = _utc_now_iso()
+    target = "scheduled" if approved else "rejected"
+    with _conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT campaign_id FROM content_repurpose_runs "
+            "WHERE workflow_run_id = ? ORDER BY created_at DESC LIMIT 1",
+            (workflow_run_id,),
+        ).fetchone()
+        if not row:
+            return {"status": "no_run", "updated": 0, "workflow_run_id": workflow_run_id}
+        campaign_id = str(row["campaign_id"] or "")
+        cur = conn.execute(
+            "UPDATE content_assets SET status = ?, updated_at = ? "
+            "WHERE campaign_id = ? AND status IN ('review', 'draft')",
+            (target, now, campaign_id),
+        )
+        updated = int(cur.rowcount or 0)
+        conn.commit()
+    return {
+        "status": "ok",
+        "updated": updated,
+        "campaign_id": campaign_id,
+        "target_status": target,
+    }

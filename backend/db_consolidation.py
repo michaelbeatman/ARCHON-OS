@@ -431,10 +431,21 @@ def run_consolidation(
                             if common_cols:
                                 cols_quoted = ", ".join(f'"{c}"' for c in common_cols)
                                 try:
-                                    conn.execute(
+                                    cur = conn.execute(
                                         f'INSERT OR IGNORE INTO main."{dst_tbl}" ({cols_quoted}) '
                                         f'SELECT {cols_quoted} FROM legacy_src."{src_tbl}"'
                                     )
+                                    # INSERT OR IGNORE verwirft Zeilen still bei PK/UNIQUE/
+                                    # NOT NULL-Konflikten. Gegen die QUELLZEILEN dieser
+                                    # Tabelle prüfen, nicht gegen den kumulativen Zielstand.
+                                    inserted = int(cur.rowcount or 0)
+                                    src_count = int(m["row_count"])
+                                    if inserted < src_count:
+                                        warnings.append(
+                                            f"DATENVERLUST {src_tbl}->{dst_tbl}: "
+                                            f"{inserted}/{src_count} Zeilen übernommen "
+                                            "(PK/UNIQUE/NOT NULL-Konflikt)"
+                                        )
                                 except sqlite3.Error as ins_err:
                                     warnings.append(f"Datenkopie {src_tbl}->{dst_tbl} uebersprungen: {ins_err}")
 
@@ -468,10 +479,11 @@ def run_consolidation(
                                 """,
                                 (m["source_file"], src_tbl, dst_tbl, int(m["row_count"]), datetime.datetime.now(datetime.timezone.utc).isoformat()),
                             )
-                            if int(cnt_after) < int(m["row_count"]):
-                                warnings.append(
-                                    f"Zeilenzahl-Hinweis {dst_tbl}: target={cnt_after} < source={m['row_count']}"
-                                )
+                            # cnt_after ist der kumulative Zielstand mehrerer Quellen —
+                            # ein Vergleich mit m['row_count'] war irreführend und hat
+                            # verworfene Zeilen verdeckt. Die belastbare Prüfung steht
+                            # direkt am INSERT (rowcount gegen Quellzeilen).
+                            _ = cnt_after
                 finally:
                     conn.execute("DETACH DATABASE legacy_src")
 

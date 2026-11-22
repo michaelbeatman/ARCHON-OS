@@ -21,6 +21,105 @@ import pytest
 # =====================================================================
 
 
+# =====================================================================
+# M110 / PHASE 3: Effect-Ledger, atomare Reservierung, Leases,
+# Plan-Validator, Warrant-Gate
+# =====================================================================
+
+
+def test_effect_ledger_unknown_requires_reconciliation(tmp_path):
+    from backend.event_mesh import EffectLedger
+
+    ledger = EffectLedger(str(tmp_path / "effects.db"))
+    ledger.reserve("key-1", tool="http_post", target="http://example.invalid", payload_hash="h")
+    ledger.mark_unknown("key-1", {"error": "timeout"})
+
+    assert ledger.can_retry("key-1") is False
+    # Reconciliation ohne Beweis ist nicht erlaubt.
+    assert ledger.reconcile("key-1", "COMMITTED", {}) is False
+    assert ledger.reconcile("key-1", "COMMITTED", {"http_status": 200}) is True
+    assert ledger.can_retry("key-1") is False
+
+
+def test_budget_reservation_is_atomic(tmp_path):
+    from backend.role_budget_engine import BudgetBank, set_role_budget_policy
+
+    db = str(tmp_path / "budget.db")
+    set_role_budget_policy(
+        "test_agent", daily_token_budget=1000, daily_cost_limit_eur=1.0,
+        hard_cap_enabled=True, auto_pause_on_exceed=False, db_path=db,
+    )
+    bank = BudgetBank(db)
+    first = bank.reserve("test_agent", estimated_tokens=800, estimated_cost_eur=0.1)
+    second = bank.reserve("test_agent", estimated_tokens=800, estimated_cost_eur=0.1)
+
+    assert first["allowed"] is True
+    assert second["allowed"] is False
+    assert second["error_code"] == "ROLE_TOKEN_BUDGET_EXCEEDED"
+    bank.release(first["reservation_id"])
+    assert bank.reserve("test_agent", estimated_tokens=800, estimated_cost_eur=0.1)["allowed"] is True
+
+
+def test_lease_exclusivity_and_liveness(tmp_path):
+    from backend.deadlock_supervisor import DeadlockSupervisor
+
+    db = str(tmp_path / "kanban.db")
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT, body TEXT, assignee TEXT, status TEXT, "
+        "created_at REAL, claim_lock TEXT, claim_expires REAL, worker_pid INTEGER, "
+        "last_heartbeat_at REAL, worker_started_at REAL, tenant TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO tasks (id, title, status, created_at) VALUES ('t1', 'Lease', 'in_progress', 1)"
+    )
+    conn.commit()
+    conn.close()
+
+    supervisor = DeadlockSupervisor(db)
+    first = supervisor.acquire_lease("t1", 999999)
+    second = supervisor.acquire_lease("t1", 999998)
+
+    assert first["acquired"] is True
+    assert second["acquired"] is False
+    assert supervisor.heartbeat("t1", first["lease_token"]) is True
+    assert supervisor._pid_alive(999999) is False
+    assert supervisor.release_lease("t1", first["lease_token"]) is True
+
+
+def test_plan_validator_detects_cycle_before_execution():
+    from backend.workflow_dag_runner import validate_dag_def
+
+    good = {
+        "id": "good",
+        "nodes": [{"id": "a", "type": "agent"}, {"id": "b", "type": "agent", "depends_on": ["a"]}],
+        "edges": [{"from": "a", "to": "b", "condition": "on_success"}],
+    }
+    cyclic = {
+        "id": "bad",
+        "nodes": [{"id": "a", "depends_on": ["b"]}, {"id": "b", "depends_on": ["a"]}],
+        "edges": [],
+    }
+    assert validate_dag_def(good)["valid"] is True
+    result = validate_dag_def(cyclic)
+    assert result["valid"] is False
+    assert any("Zyklus" in e for e in result["errors"])
+
+
+def test_privileged_tool_requires_warrant(monkeypatch):
+    monkeypatch.setenv("ARCHON_WARRANT_SECRET", "test-warrant-secret")
+    from backend.delegation_isolation import PolicyEngine
+
+    monkeypatch.setattr(PolicyEngine, "_emit", staticmethod(lambda *args, **kwargs: None))
+    engine = PolicyEngine()
+    decision = engine.decide(
+        agent_id="default", session_id="user:tester", tool_name="pay",
+        args={"amount": 10},
+    )
+    assert decision["allowed"] is False
+    assert decision["gate"] == "privileged_tool_requires_warrant"
+
+
 def test_path_jail_rejects_bare_string_roots(tmp_path):
     from utils.path_jail import is_within, safe_path_within
 
@@ -621,7 +720,7 @@ def test_workflow_plugins_fixes_and_vst2_http(tmp_path, monkeypatch):
     monkeypatch.setenv("UNIT_VST_KEY", "secret-token-123")
     monkeypatch.setattr(
         "utils.safe_http.safe_http_request",
-        lambda *_a, **_kw: {"status": 200, "headers": {"content-type": "audio/mpeg"}, "body": b"ID3MOCKAUDIO"},
+        lambda *_a, **_kw: (200, {"content-type": "audio/mpeg"}, b"ID3MOCKAUDIO"),
     )
     live = asyncio.run(wnp.execute_workflow_node_plugin("custom_audio_vst", {"id": "n1", "workflow_id": "wf_vst"}, {}))
     assert live["status"] == "success"

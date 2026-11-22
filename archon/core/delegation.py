@@ -44,10 +44,9 @@ def configure(**deps: Any) -> None:
 
 
 def _get_obsidian_vault_dir() -> str:
-    main_mod = sys.modules.get("main")
-    if main_mod and hasattr(main_mod, "OBSIDIAN_VAULT_DIR"):
-        return getattr(main_mod, "OBSIDIAN_VAULT_DIR")
-    return OBSIDIAN_VAULT
+    # Pfad-SSOT: kein main.py-Fallback mehr, sondern der gemeinsame Resolver.
+    from archon.core.runtime import resolve_obsidian_vault_path
+    return resolve_obsidian_vault_path()
 
 
 def _spawn_background(coro, name: str = ""):
@@ -755,10 +754,10 @@ async def _watch_delegated_task(
         except Exception as tg_err:
             logger.warning(f"[Telegram] Delegations-Ping für Task {task_id} fehlgeschlagen: {tg_err}")
 
-        if status in ("done", "blocked", "failed"):
+        if status in ("done", "review", "blocked", "failed"):
             try:
                 fan_parent, _ = await asyncio.to_thread(mc_get_parent_context_sqlite, task_id)
-                mc_status = "completed" if status == "done" else ("blocked" if status == "blocked" else "failed")
+                mc_status = "completed" if status in ("done", "review") else ("blocked" if status == "blocked" else "failed")
                 await asyncio.to_thread(
                     mc_update_task_sqlite,
                     task_id,

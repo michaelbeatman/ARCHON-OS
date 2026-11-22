@@ -250,6 +250,19 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
 
     from backend.passkey_hitl import is_passkey_required
 
+    # Mandantenkontext VOR der Pruefung auflösen (vorher: NameError in Z.269)
+    # und niemals ein Dict stringifizieren (vorher: company_id="{"id": ...}").
+    try:
+        from backend.tenant_context import tenant_context as _tc
+        from backend.tenant_context import sanitize_tenant_id as _sanitize
+
+        _company = getattr(_tc, "get_active_company", lambda: None)()
+        if isinstance(_company, dict):
+            _company = _company.get("id") or _company.get("tenant_id") or ""
+        active_company = _sanitize(str(_company or getattr(_tc, "get_active_tenant_id", lambda: "default")() or "default"))
+    except Exception:
+        active_company = "default"
+
     passkey_enforced = is_passkey_required(actor_id, category="payments")
 
     conn = _get_conn()
@@ -323,12 +336,6 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
                 )
 
         prev_h = _last_hash(conn)
-        active_company = ""
-        try:
-            from backend.tenant_context import tenant_context as _tc
-            active_company = str(_tc.get_active_company() or _tc.get_active_tenant_id() or "default")
-        except Exception:
-            active_company = "default"
         tx_obj = {
             "id": tx_id,
             "account_id": account_id,
@@ -422,6 +429,23 @@ def approve_payment(tx_id: str, approver_id: str = "admin", passkey_verified: bo
             raise ValueError("insufficient_balance")
 
         if tx["direction"] == "out":
+            # Allowlist/Caps koennen sich seit dem Request geändert haben oder
+            # durch andere Freigaben überschritten worden sein. Erneut prüfen,
+            # sonst wird eine zwischenzeitlich über Limit liegende Zahlung
+            # trotzdem ausgeführt.
+            acc = _row_to_account(acc_row)
+            if acc.get("custody_mode") == "allowance_capped":
+                allowlist = [str(x).lower() for x in (acc.get("allowlist") or [])]
+                amount = float(tx["amount"])
+                recipient_lc = str(tx.get("recipient") or "").lower()
+                spent_today = _today_spent(conn, tx["account_id"])
+                if (
+                    (allowlist and recipient_lc not in allowlist)
+                    or (float(acc.get("per_tx_limit") or 0) > 0 and amount > float(acc["per_tx_limit"]))
+                    or (float(acc.get("daily_limit") or 0) > 0 and spent_today + amount > float(acc["daily_limit"]))
+                ):
+                    conn.rollback()
+                    raise ValueError("policy_limit_exceeded_at_approval")
             conn.execute(
                 "UPDATE treasury_accounts SET balance = balance - ?, updated_at = ? WHERE id = ?",
                 (tx["amount"], now_iso, tx["account_id"]),

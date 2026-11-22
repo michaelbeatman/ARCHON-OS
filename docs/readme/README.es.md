@@ -83,7 +83,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 - **Red segura por defecto:** Enlazado a `127.0.0.1:8501`. Activa la autenticación multiusuario (`auth.enabled = true`) antes de habilitar `ARCHON_BIND_IP=0.0.0.0` en LAN.
 - **Sin asesoramiento profesional regulado:** Los resultados de las áreas legales, fiscales, médicas, químicas o de construcción son solo apoyo interno y no sustituyen a profesionales colegiados ([LICENSE](../../LICENSE)).
-- **Avatares sintéticos:** Todos los 301 retratos en `static/avatars/` fueron generados artificialmente (Gemini Nano Banana 2) y no representan personas reales ([THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)).
+- **Avatares sintéticos:** Todos los 312 retratos en `static/avatars/` fueron generados artificialmente (Gemini Nano Banana 2) y no representan personas reales ([THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md)).
 ---
 
 ### Manuals & Documentation (PDF)

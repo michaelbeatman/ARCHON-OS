@@ -96,7 +96,7 @@
 
 - name: Launch Docker Compose stack
   command:
-    cmd: "docker compose -f {{ archon_compose_file }} up -d"
+    cmd: "docker compose -f {{ archon_compose_file }} up -d --build"
     chdir: "{{ archon_install_root }}"
   become_user: "{{ archon_user_name }}"
   register: docker_compose_output
@@ -111,7 +111,8 @@
   until: health_result.status == 200
   retries: 12
   delay: 5
-  ignore_errors: yes
+  # Kein ignore_errors: ein nicht erreichbarer Health-Endpoint muss das
+  # Deployment scheitern lassen, statt "complete" zu melden.
 
 - name: Display deployment completion status
   debug:

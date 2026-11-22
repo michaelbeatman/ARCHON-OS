@@ -17,7 +17,8 @@
 
     # Sicherheits-Header (Zero Trust)
     header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # HSTS nur mit echter TLS-Terminierung setzen: auto_https ist off und
+        # es gibt keinen TLS-Listener. Ein HSTS-Header ohne HTTPS ist irreführend.
         X-Content-Type-Options "nosniff"
         X-Frame-Options "SAMEORIGIN"
         Referrer-Policy "strict-origin-when-cross-origin"
@@ -37,39 +38,69 @@
         reverse_proxy authelia:9091
     }
 
-    # Geschützte Sub-Dienste (mit Forward-Auth Hook bei Bedarf)
+    # Geschützte Sub-Dienste: forward_auth ist VERBINDLICH. Ohne den Hook
+    # sind Hermes/n8n/PocketBase/OmniRoute/Grafana/Prometheus/Uptime Kuma
+    # anonym erreichbar, obwohl Authelia deployt ist.
     # 1. Hermes Agenten-Gateway (Container-Port 8642, Host-Mapping ist 8644)
     handle_path /hermes* {
+        forward_auth authelia:9091 {
+            uri /api/authz/forward-auth
+            copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+        }
         reverse_proxy hermes:8642
     }
 
     # 2. n8n Workflow-Mesh
     handle_path /n8n* {
+        forward_auth authelia:9091 {
+            uri /api/authz/forward-auth
+            copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+        }
         reverse_proxy n8n:5678
     }
 
     # 3. PocketBase CRM & Collections
     handle_path /pb* {
+        forward_auth authelia:9091 {
+            uri /api/authz/forward-auth
+            copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+        }
         reverse_proxy pocketbase:8090
     }
 
     # 4. OmniRoute Multi-Provider LLM Gateway
     handle_path /omniroute* {
+        forward_auth authelia:9091 {
+            uri /api/authz/forward-auth
+            copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+        }
         reverse_proxy omniroute:20128
     }
 
     # 5. Monitoring: Grafana
     handle_path /grafana* {
+        forward_auth authelia:9091 {
+            uri /api/authz/forward-auth
+            copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+        }
         reverse_proxy grafana:3000
     }
 
     # 6. Monitoring: Prometheus
     handle_path /prometheus* {
+        forward_auth authelia:9091 {
+            uri /api/authz/forward-auth
+            copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+        }
         reverse_proxy prometheus:9090
     }
 
     # 7. Monitoring: Uptime Kuma
     handle_path /uptime* {
+        forward_auth authelia:9091 {
+            uri /api/authz/forward-auth
+            copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+        }
         reverse_proxy uptime-kuma:3001
     }
 

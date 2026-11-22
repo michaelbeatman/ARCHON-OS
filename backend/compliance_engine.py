@@ -368,10 +368,10 @@ class ComplianceEngine:
         if os.path.isfile(vfile):
             try:
                 with open(vfile, "r", encoding="utf-8") as fh:
-                    return fh.read().strip() or "v0.5.2.1"
+                    return fh.read().strip() or "v0.5.7"
             except Exception as exc:
-                print(f"[Compliance] VERSION-Datei nicht lesbar, Fallback-Version v0.5.2.1: {exc}", file=sys.stderr)
-        return "v0.5.2.1"
+                print(f"[Compliance] VERSION-Datei nicht lesbar, Fallback-Version v0.5.7: {exc}", file=sys.stderr)
+        return "v0.5.7"
 
     def collect_verfahrensdokumentation_snapshot(self, company_id: Optional[str] = None) -> Dict[str, Any]:
         tenant_mgr = self._get_tenant_mgr()

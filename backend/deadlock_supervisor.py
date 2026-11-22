@@ -11,6 +11,8 @@ import os
 import sys
 import sqlite3
 import datetime
+import time
+import uuid
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -46,6 +48,12 @@ def _to_dt(value) -> Optional[datetime.datetime]:
         return None
 
 
+# Ein laufender LLM-Call darf 90 s dauern (agent_router timeout). Der alte
+# 45-s-Stagnations-Reset hat solche Tasks als "deadlock" markiert und parallel
+# erneut gestartet → doppelte E-Mails/Zahlungen. Lease TTL liegt daher darüber.
+MIN_LEASE_TTL_SECONDS = 120
+
+
 class DeadlockSupervisor:
     def __init__(self, db_path: str = KANBAN_DB):
         self.db_path = db_path
@@ -54,6 +62,81 @@ class DeadlockSupervisor:
         conn = sqlite3.connect(self.db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
         return conn
+
+    @staticmethod
+    def _pid_alive(pid: Any) -> bool:
+        """Signalfreie Liveness-Prüfung (signal 0 = nur Existenz-Check)."""
+        try:
+            value = int(pid)
+        except (TypeError, ValueError):
+            return False
+        if value <= 0:
+            return False
+        try:
+            os.kill(value, 0)
+            return True
+        except (OSError, ValueError):
+            return False
+
+    def acquire_lease(
+        self,
+        task_id: str,
+        worker_pid: Optional[int] = None,
+        ttl_seconds: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Atomare Lease: nur wer den Claim hält, darf den Task ausführen."""
+        now = time.time()
+        ttl = max(MIN_LEASE_TTL_SECONDS, int(ttl_seconds or MIN_LEASE_TTL_SECONDS))
+        expires = now + ttl
+        token = f"{worker_pid or os.getpid()}:{uuid.uuid4().hex[:8]}"
+        conn = self._get_conn()
+        try:
+            with conn:
+                cur = conn.execute(
+                    "UPDATE tasks SET claim_lock = ?, claim_expires = ?, worker_pid = ?, "
+                    "last_heartbeat_at = ?, "
+                    "worker_started_at = CASE WHEN worker_started_at IS NULL THEN ? ELSE worker_started_at END "
+                    "WHERE id = ? AND status IN ('todo', 'in_progress') "
+                    "AND (claim_lock IS NULL OR claim_expires IS NULL OR claim_expires <= ?)",
+                    (token, expires, worker_pid or os.getpid(), now, now, task_id, now),
+                )
+                acquired = int(cur.rowcount or 0) == 1
+                conn.commit()
+            return {"acquired": acquired, "lease_token": token, "expires_at": expires}
+        finally:
+            conn.close()
+
+    def heartbeat(self, task_id: str, lease_token: str, ttl_seconds: Optional[int] = None) -> bool:
+        now = time.time()
+        ttl = max(MIN_LEASE_TTL_SECONDS, int(ttl_seconds or MIN_LEASE_TTL_SECONDS))
+        conn = self._get_conn()
+        try:
+            with conn:
+                cur = conn.execute(
+                    "UPDATE tasks SET last_heartbeat_at = ?, claim_expires = ? "
+                    "WHERE id = ? AND claim_lock = ?",
+                    (now, now + ttl, task_id, lease_token),
+                )
+                ok = int(cur.rowcount or 0) == 1
+                conn.commit()
+            return ok
+        finally:
+            conn.close()
+
+    def release_lease(self, task_id: str, lease_token: str) -> bool:
+        conn = self._get_conn()
+        try:
+            with conn:
+                cur = conn.execute(
+                    "UPDATE tasks SET claim_lock = NULL, claim_expires = NULL, worker_pid = NULL "
+                    "WHERE id = ? AND claim_lock = ?",
+                    (task_id, lease_token),
+                )
+                ok = int(cur.rowcount or 0) == 1
+                conn.commit()
+            return ok
+        finally:
+            conn.close()
 
     def detect_and_resolve_deadlocks(self, stagnation_threshold_seconds: Optional[int] = None) -> Dict[str, Any]:
         """
@@ -70,6 +153,8 @@ class DeadlockSupervisor:
         except Exception:
             if stagnation_threshold_seconds is None:
                 stagnation_threshold_seconds = 45
+        # Nie unter die maximale LLM-Call-Dauer + Puffer (siehe MIN_LEASE_TTL).
+        stagnation_threshold_seconds = max(int(stagnation_threshold_seconds), MIN_LEASE_TTL_SECONDS)
 
         if not os.path.exists(self.db_path):
             return {"status": "no_db", "resolved_count": 0, "stagnant_tasks": []}
@@ -87,7 +172,14 @@ class DeadlockSupervisor:
                 has_heartbeat = "last_heartbeat_at" in cols
                 has_claim_lock = "claim_lock" in cols
                 has_worker_pid = "worker_pid" in cols
-                sel = "id, title, assignee, status, created_at, body" + (", last_heartbeat_at" if has_heartbeat else "")
+                has_claim_expires = "claim_expires" in cols
+                sel = "id, title, assignee, status, created_at, body"
+                if has_heartbeat:
+                    sel += ", last_heartbeat_at"
+                if has_claim_expires:
+                    sel += ", claim_expires"
+                if has_worker_pid:
+                    sel += ", worker_pid"
                 cur.execute(
                     f"SELECT {sel} FROM tasks WHERE status IN ('in_progress', 'blocked')"
                 )
@@ -111,6 +203,21 @@ class DeadlockSupervisor:
                         if last_beacon is not None:
                             c_at = max(c_at, last_beacon)
 
+                    # M110 Lease/Liveness: ein noch lebender Worker wird NIE
+                    # zurückgesetzt — sonst läuft ein 90-s-LLM-Call doppelt.
+                    pid = t["worker_pid"] if has_worker_pid else None
+                    if self._pid_alive(pid):
+                        if has_claim_expires:
+                            conn.execute(
+                                "UPDATE tasks SET claim_expires = ? WHERE id = ?",
+                                (time.time() + MIN_LEASE_TTL_SECONDS, t_id),
+                            )
+                        continue
+                    expires = float(t["claim_expires"] or 0) if has_claim_expires else 0.0
+                    if expires > time.time():
+                        # Lease von einem anderen Prozess gehalten.
+                        continue
+
                     age_sec = (now - c_at).total_seconds()
                     if age_sec > stagnation_threshold_seconds:
                         body_txt = t["body"] or ""
@@ -128,10 +235,17 @@ class DeadlockSupervisor:
                         if has_worker_pid:
                             set_parts.append("worker_pid = NULL")
                         params.append(t_id)
-                        conn.execute(
-                            f"UPDATE tasks SET {', '.join(set_parts)} WHERE id = ?",
-                            params,
-                        )
+                        # CAS: nur zurücksetzen, wenn die Lease immer noch
+                        # abgelaufen ist — ein paralleler Worker darf nicht
+                        # überschrieben werden.
+                        if has_claim_expires:
+                            set_clause = f"UPDATE tasks SET {', '.join(set_parts)} WHERE id = ? AND status IN ('in_progress','blocked') AND (claim_expires IS NULL OR claim_expires <= ?)"
+                            params.append(time.time())
+                        else:
+                            set_clause = f"UPDATE tasks SET {', '.join(set_parts)} WHERE id = ? AND status IN ('in_progress','blocked')"
+                        cur_reset = conn.execute(set_clause, params)
+                        if int(cur_reset.rowcount or 0) != 1:
+                            continue
                         resolved.append({
                             "task_id": t_id,
                             "title": t["title"],

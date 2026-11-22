@@ -2,7 +2,22 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
-## [0.5.6.0] — 2026-11-21 (Phase 1–3 Hardening, SQLite 28→3 Consolidation, Content-Maschine v2, Workflow-DAG E2E & Next.js 16 Cockpits)
+## [v0.5.7] — 2026-11-22 (Execution Hardening, Governance-Zentrierung & Idempotenz)
+
+### Added
+- **M110 Effect-Ledger** (`backend/event_mesh.py`): `PENDING → COMMITTED / FAILED / UNKNOWN`, verpflichtende Reconciliation vor Retry nach `UNKNOWN` (mit Evidence), Outbox mit `X-Idempotency-Key` und DLQ nach 5 Versuchen.
+- **Worker-Leases/Heartbeats** (`backend/deadlock_supervisor.py`): atomare Leases, Liveness-Check via `os.kill(pid, 0)`, CAS-Reset, Mindestschwelle 120 s (über dem 90-s-LLM-Timeout).
+- **Pre-Execution Plan Validator** (`backend/workflow_dag_runner.py`): Zyklus-Erkennung via Kahn vor dem Start, Schema/Mapping/Budget/Deadline/RBAC-HITL-Prüfung, `replan_count`-Deckel (= 2).
+- **PolicyEngine + BudgetBank**: zentrale Tool-Entscheidung, harter Warrant-Zwang für `pay`/`mcp__*` u. a., atomare Budget-Reservierung (`BEGIN IMMEDIATE`) statt Check-then-Use.
+- **Audit-HMAC** mit Env-Key (`ARCHON_AUDIT_HMAC_KEY`) und blockierungsfreiem Hintergrund-Anker (`ARCHON_AUDIT_ANCHOR_PATH`).
+- **OTel-Verdrahtung** in `llm_kernel.py` und `workflow_dag_runner.py` (Trace pro Run/Call, Span pro Node).
+
+### Changed
+- Python 3.13 in Runtime-Images und CI; Test-Abhängigkeiten in `requirements-test.txt` ausgelagert.
+- Tenant-Header nur noch für Admins/Service-Tokens; `executescript`-Transaktionsbruch im Mission-Control-Store behoben.
+- Versions-/Pfad-/Config-SSOT: `config/version.json` = v0.5.7, einheitliche Vault-Pfad-Auflösung über `archon.core.runtime`, `clear_rules.json` repariert.
+
+## [0.5.6.0] - 2026-11-21 (Phase 1–3 Hardening, SQLite 28→3 Consolidation, Content-Maschine v2, Workflow-DAG E2E & Next.js 16 Cockpits)
 
 ### Added
 - **M106 SQLite Database Consolidation (`28 → 3` Domain DBs: `backend/db_consolidation.py`, `backend/db_paths.py`, `backend/tenant_context.py`, `backend/db_backup_manager.py`):**

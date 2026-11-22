@@ -2,7 +2,7 @@
   "name": "Archon OS",
   "slug": "archon-os",
   "tagline": "Self-Hosted Agentic Operating System with 70 Domain Specialists, AI Boardroom & Obsidian Second Brain",
-  "version": "0.5.2.1",
+  "version": "0.5.7",
   "license": "MIT",
   "repository": "https://github.com/michaelbeatman/ARCHON-OS",
   "foundation": "https://github.com/NousResearch/hermes-agent",

@@ -628,6 +628,23 @@ def evaluate_due_schedules(now: Optional[datetime] = None) -> List[Dict[str, Any
                     conn.commit()
                     next_dt = _parse_iso(computed)
             if next_dt and cur_now >= next_dt:
+                # Atomarer Claim (CAS): nur der Tick/Prozess, der next_run_at
+                # genau vom gelesenen Wert fortschreibt, führt den Schedule aus.
+                # Ohne CAS triggern zwei Ticks oder ein Manual-Endpoint denselben
+                # Schedule mehrfach (doppelte Webhooks/LLM-Kosten).
+                old_next = str(row["next_run_at"] or "")
+                new_next = parse_cron_next(row["cron_expr"] or "", cur_now) or (
+                    cur_now + timedelta(days=365)
+                ).isoformat()
+                claim = conn.execute(
+                    "UPDATE workflow_schedules SET next_run_at = ?, last_status = 'claiming' "
+                    "WHERE id = ? AND next_run_at = ?",
+                    (new_next, row["id"], old_next),
+                )
+                conn.commit()
+                if int(claim.rowcount or 0) != 1:
+                    logger.debug(f"[WorkflowScheduler] Schedule '{row['id']}' wurde bereits von einem anderen Tick geclaimt.")
+                    continue
                 res = _execute_schedule_row(conn, row, cur_now)
                 if res:
                     triggered.append(res)
@@ -1001,4 +1018,13 @@ async def workflow_scheduler_background_loop() -> None:
             await asyncio.to_thread(evaluate_due_schedules)
         except Exception as exc:
             logger.error(f"[WorkflowScheduler] Loop-Fehler: {exc}")
+        # Outbox-Retry: fehlgeschlagene Webhooks werden im Hintergrund
+        # erneut zugestellt (mit Idempotency-Key, nach 5 Versuchen → DLQ).
+        try:
+            from backend.event_mesh import event_mesh
+            outbox = await asyncio.to_thread(event_mesh.process_outbox)
+            if outbox.get("processed") or outbox.get("dead"):
+                logger.info(f"[WorkflowScheduler] Outbox: {outbox}")
+        except Exception as exc:
+            logger.warning(f"[WorkflowScheduler] Outbox-Retry fehlgeschlagen: {exc}")
         await asyncio.sleep(30)

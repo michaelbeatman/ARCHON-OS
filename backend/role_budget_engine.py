@@ -157,6 +157,24 @@ def init_budget_tables(db_path: Optional[str] = None) -> None:
                     updated_at TEXT NOT NULL
                 );
 
+                -- Atomare Reservierungen für parallele DAG-Nodes: Reserve → Settle/Release.
+                -- Ohne Reservierung passieren N Dispatches das Gate und buchen
+                -- danach → hartes Cap wird überschritten.
+                CREATE TABLE IF NOT EXISTS budget_reservations (
+                    reservation_id TEXT PRIMARY KEY,
+                    agent_id TEXT NOT NULL,
+                    task_id TEXT,
+                    node_id TEXT,
+                    tokens_reserved INTEGER NOT NULL DEFAULT 0,
+                    cost_eur_reserved REAL NOT NULL DEFAULT 0.0,
+                    status TEXT NOT NULL DEFAULT 'reserved',
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    settled_at TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_budget_res_agent ON budget_reservations(agent_id, status);
+                CREATE INDEX IF NOT EXISTS idx_budget_res_expiry ON budget_reservations(expires_at);
+
                 CREATE TABLE IF NOT EXISTS autonomous_hired_agents (
                     agent_id TEXT PRIMARY KEY,
                     parent_task_id TEXT NOT NULL,
@@ -379,74 +397,15 @@ def check_budget_gate(
     Pre-Flight Gate for `core_dispatcher`:
     Checks both the role's daily hard token/EUR budget AND any task-level budget allocation.
     """
-    init_budget_tables(db_path)
-    aid = (agent_id or "default").strip()
-    usage = get_role_usage_today(aid, db_path=db_path)
-
-    if usage["hard_cap_enabled"]:
-        if usage["tokens_used_today"] >= usage["daily_token_budget"]:
-            return {
-                "allowed": False,
-                "error_code": "ROLE_TOKEN_BUDGET_EXCEEDED",
-                "agent_id": aid,
-                "reason": (
-                    f"Tages-Tokenbudget für Rolle '{aid}' erschöpft "
-                    f"({usage['tokens_used_today']:,} / {usage['daily_token_budget']:,} Tokens). "
-                    f"Agent wurde zum Schutz vor Kostenüberschreitung pausiert."
-                ),
-                "usage": usage,
-            }
-        if usage["cost_eur_today"] >= usage["daily_cost_limit_eur"]:
-            return {
-                "allowed": False,
-                "error_code": "ROLE_EUR_BUDGET_EXCEEDED",
-                "agent_id": aid,
-                "reason": (
-                    f"Tages-Kostenbudget für Rolle '{aid}' erschöpft "
-                    f"({usage['cost_eur_today']:.2f} € / {usage['daily_cost_limit_eur']:.2f} €). "
-                    f"Agent wurde zum Schutz vor Kostenüberschreitung pausiert."
-                ),
-                "usage": usage,
-            }
-
-    # Check task-level budget allocation if task_id is provided
-    if task_id:
-        with _get_conn(db_path) as conn:
-            t_row = conn.execute(
-                "SELECT * FROM task_budget_allocations WHERE task_id = ?",
-                (task_id,),
-            ).fetchone()
-        if t_row:
-            t_tok_budget = int(t_row["token_budget"] or 0)
-            t_tok_used = int(t_row["tokens_used"] or 0)
-            t_eur_limit = float(t_row["cost_limit_eur"] or 0.0)
-            t_eur_used = float(t_row["cost_used_eur"] or 0.0)
-            if t_tok_budget > 0 and t_tok_used >= t_tok_budget:
-                return {
-                    "allowed": False,
-                    "error_code": "TASK_TOKEN_BUDGET_EXCEEDED",
-                    "agent_id": aid,
-                    "task_id": task_id,
-                    "reason": (
-                        f"Aufgaben-Tokenlimit für Task '{task_id}' erreicht "
-                        f"({t_tok_used:,} / {t_tok_budget:,} Tokens)."
-                    ),
-                    "usage": usage,
-                }
-            if t_eur_limit > 0.0 and t_eur_used >= t_eur_limit:
-                return {
-                    "allowed": False,
-                    "error_code": "TASK_EUR_BUDGET_EXCEEDED",
-                    "agent_id": aid,
-                    "task_id": task_id,
-                    "reason": (
-                        f"Aufgaben-Kostenlimit für Task '{task_id}' erreicht "
-                        f"({t_eur_used:.2f} € / {t_eur_limit:.2f} €)."
-                    ),
-                    "usage": usage,
-                }
-
-    return {"allowed": True, "agent_id": aid, "task_id": task_id, "usage": usage}
+    # Zentrale BudgetBank: eine einzige Entscheidungsstelle, die auch aktive
+    # Reservierungen paralleler DAG-Nodes berücksichtigt (kein TOCTOU mehr).
+    bank = BudgetBank(db_path=db_path) if db_path else budget_bank
+    return bank.check(
+        agent_id=agent_id,
+        task_id=task_id,
+        estimated_tokens=estimated_tokens,
+        estimated_cost_eur=estimated_cost_eur,
+    )
 
 
 def record_budget_usage(
@@ -1021,3 +980,281 @@ def list_all_role_budgets(
         "paused_roles_count": paused_count,
         "roles": items,
     }
+
+
+# =========================================================================
+# ZENTRALE BUDGET-BANK — Reserve → Settle/Release (atomar)
+# =========================================================================
+
+class BudgetBank:
+    """Einzige Instanz, die Budget-Entscheidungen trifft.
+
+    statt "check then use" (TOCTOU): jede side-effektive Ausführung reserviert
+    ihr Budget unter BEGIN IMMEDIATE und settet/release danach. Parallele
+    DAG-Nodes können damit das harte Cap nicht überschreiten.
+    """
+
+    RESERVATION_TTL_SECONDS = 1800
+
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or BUDGET_DB_PATH
+
+    def _policy(self, conn: sqlite3.Connection, aid: str) -> Dict[str, Any]:
+        row = conn.execute(
+            "SELECT * FROM role_budget_policies WHERE agent_id = ?", (aid,)
+        ).fetchone()
+        defaults = get_default_role_budget(aid)
+        if not row:
+            return defaults
+        return {
+            **defaults,
+            "daily_token_budget": int(row["daily_token_budget"]),
+            "daily_cost_limit_eur": float(row["daily_cost_limit_eur"]),
+            "hard_cap_enabled": bool(row["hard_cap_enabled"]),
+            "auto_pause_on_exceed": bool(row["auto_pause_on_exceed"]),
+        }
+
+    @staticmethod
+    def _usage(conn: sqlite3.Connection, aid: str) -> Tuple[int, float]:
+        row = conn.execute(
+            "SELECT tokens_used, cost_eur FROM role_daily_budget_ledger "
+            "WHERE agent_id = ? AND usage_date = ?",
+            (aid, _today_str()),
+        ).fetchone()
+        return (
+            int(row["tokens_used"] or 0) if row else 0,
+            float(row["cost_eur"] or 0.0) if row else 0.0,
+        )
+
+    @staticmethod
+    def _reserved(conn: sqlite3.Connection, aid: str, task_id: Optional[str], now: str) -> Tuple[int, float]:
+        sql = (
+            "SELECT COALESCE(SUM(tokens_reserved), 0), COALESCE(SUM(cost_eur_reserved), 0.0) "
+            "FROM budget_reservations "
+            "WHERE agent_id = ? AND status = 'reserved' AND expires_at > ?"
+        )
+        params: List[Any] = [aid, now]
+        if task_id:
+            sql += " AND task_id = ?"
+            params.append(task_id)
+        row = conn.execute(sql, tuple(params)).fetchone()
+        return int(row[0] or 0), float(row[1] or 0.0)
+
+    def check(
+        self,
+        agent_id: str,
+        task_id: Optional[str] = None,
+        estimated_tokens: int = 0,
+        estimated_cost_eur: float = 0.0,
+    ) -> Dict[str, Any]:
+        """Pre-Flight-Prüfung inklusive aktiver Reservierungen (read-only)."""
+        init_budget_tables(self.db_path)
+        aid = (agent_id or "default").strip()
+        now = datetime.datetime.now().isoformat()
+        est_tok = max(0, int(estimated_tokens or 0))
+        est_eur = max(0.0, float(estimated_cost_eur or 0.0))
+        with _BUDGET_LOCK:
+            with _get_conn(self.db_path) as conn:
+                policy = self._policy(conn, aid)
+                used_tok, used_eur = self._usage(conn, aid)
+                res_tok, res_eur = self._reserved(conn, aid, task_id, now)
+                usage = get_role_usage_today(aid, db_path=self.db_path)
+
+                if policy["hard_cap_enabled"]:
+                    if used_tok + res_tok + est_tok > policy["daily_token_budget"]:
+                        return {
+                            "allowed": False, "agent_id": aid, "task_id": task_id,
+                            "error_code": "ROLE_TOKEN_BUDGET_EXCEEDED", "usage": usage,
+                            "reason": f"Tages-Tokenbudget für Rolle '{aid}' einschließlich Reservierungen überschritten.",
+                        }
+                    if used_eur + res_eur + est_eur > policy["daily_cost_limit_eur"]:
+                        return {
+                            "allowed": False, "agent_id": aid, "task_id": task_id,
+                            "error_code": "ROLE_EUR_BUDGET_EXCEEDED", "usage": usage,
+                            "reason": f"Tages-Kostenbudget für Rolle '{aid}' einschließlich Reservierungen überschritten.",
+                        }
+
+                if task_id:
+                    t = conn.execute(
+                        "SELECT token_budget, cost_limit_eur, tokens_used, cost_used_eur "
+                        "FROM task_budget_allocations WHERE task_id = ?",
+                        (task_id,),
+                    ).fetchone()
+                    if t:
+                        if int(t["token_budget"] or 0) > 0 and int(t["tokens_used"] or 0) + res_tok + est_tok > int(t["token_budget"]):
+                            return {
+                                "allowed": False, "agent_id": aid, "task_id": task_id,
+                                "error_code": "TASK_TOKEN_BUDGET_EXCEEDED", "usage": usage,
+                                "reason": f"Aufgaben-Tokenlimit für Task '{task_id}' überschritten.",
+                            }
+                        if float(t["cost_limit_eur"] or 0) > 0.0 and float(t["cost_used_eur"] or 0.0) + res_eur + est_eur > float(t["cost_limit_eur"]):
+                            return {
+                                "allowed": False, "agent_id": aid, "task_id": task_id,
+                                "error_code": "TASK_EUR_BUDGET_EXCEEDED", "usage": usage,
+                                "reason": f"Aufgaben-Kostenlimit für Task '{task_id}' überschritten.",
+                            }
+        return {"allowed": True, "agent_id": aid, "task_id": task_id, "usage": usage}
+
+    def reserve(
+        self,
+        agent_id: str,
+        task_id: Optional[str] = None,
+        estimated_tokens: int = 0,
+        estimated_cost_eur: float = 0.0,
+        node_id: Optional[str] = None,
+        ttl_seconds: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Atomare Reservierung: prüft und bucht in EINER BEGIN-IMMEDIATE-Transaktion."""
+        init_budget_tables(self.db_path)
+        aid = (agent_id or "default").strip()
+        est_tok = max(0, int(estimated_tokens or 0))
+        est_eur = max(0.0, float(estimated_cost_eur or 0.0))
+        now_dt = datetime.datetime.now()
+        now = now_dt.isoformat()
+        expires = (
+            now_dt + datetime.timedelta(seconds=int(ttl_seconds or self.RESERVATION_TTL_SECONDS))
+        ).isoformat()
+
+        with _BUDGET_LOCK:
+            conn = _get_conn(self.db_path)
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute(
+                    "UPDATE budget_reservations SET status = 'expired', settled_at = ? "
+                    "WHERE status = 'reserved' AND expires_at <= ?",
+                    (now, now),
+                )
+                policy = self._policy(conn, aid)
+                used_tok, used_eur = self._usage(conn, aid)
+                res_tok, res_eur = self._reserved(conn, aid, task_id, now)
+                if policy["hard_cap_enabled"]:
+                    if used_tok + res_tok + est_tok > policy["daily_token_budget"]:
+                        conn.rollback()
+                        return {"allowed": False, "agent_id": aid, "task_id": task_id,
+                                "error_code": "ROLE_TOKEN_BUDGET_EXCEEDED",
+                                "reason": "Budget inklusive aktiver Reservierungen überschritten."}
+                    if used_eur + res_eur + est_eur > policy["daily_cost_limit_eur"]:
+                        conn.rollback()
+                        return {"allowed": False, "agent_id": aid, "task_id": task_id,
+                                "error_code": "ROLE_EUR_BUDGET_EXCEEDED",
+                                "reason": "Budget inklusive aktiver Reservierungen überschritten."}
+                reservation_id = f"res-{uuid.uuid4().hex[:12]}"
+                conn.execute(
+                    "INSERT INTO budget_reservations "
+                    "(reservation_id, agent_id, task_id, node_id, tokens_reserved, cost_eur_reserved, status, created_at, expires_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 'reserved', ?, ?)",
+                    (reservation_id, aid, task_id or None, node_id or None, est_tok, est_eur, now, expires),
+                )
+                conn.commit()
+                return {
+                    "allowed": True, "reservation_id": reservation_id,
+                    "agent_id": aid, "task_id": task_id,
+                    "tokens_reserved": est_tok, "cost_eur_reserved": est_eur,
+                }
+            except Exception as exc:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                return {"allowed": False, "agent_id": aid, "task_id": task_id,
+                        "error_code": "BUDGET_RESERVATION_ERROR", "reason": str(exc)}
+            finally:
+                conn.close()
+
+    def settle(
+        self,
+        reservation_id: str,
+        actual_tokens: int = 0,
+        actual_cost_usd: float = 0.0,
+        cost_eur: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Bucht die Reservierung als echten Verbrauch — alles in EINER Transaktion."""
+        init_budget_tables(self.db_path)
+        tok = max(0, int(actual_tokens or 0))
+        usd = max(0.0, float(actual_cost_usd or 0.0))
+        eur = max(0.0, float(cost_eur)) if cost_eur is not None else round(usd * USD_TO_EUR_RATE, 6)
+        now = datetime.datetime.now().isoformat()
+        with _BUDGET_LOCK:
+            conn = _get_conn(self.db_path)
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT * FROM budget_reservations WHERE reservation_id = ? AND status = 'reserved'",
+                    (reservation_id,),
+                ).fetchone()
+                if not row:
+                    conn.rollback()
+                    return {"status": "not_found", "reservation_id": reservation_id}
+                aid = str(row["agent_id"] or "default")
+                tid = row["task_id"] or None
+                conn.execute(
+                    "INSERT INTO role_daily_budget_ledger "
+                    "(agent_id, usage_date, tokens_used, cost_eur, cost_usd, dispatch_count, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, 1, ?) "
+                    "ON CONFLICT(agent_id, usage_date) DO UPDATE SET "
+                    "tokens_used = role_daily_budget_ledger.tokens_used + excluded.tokens_used, "
+                    "cost_eur = role_daily_budget_ledger.cost_eur + excluded.cost_eur, "
+                    "cost_usd = role_daily_budget_ledger.cost_usd + excluded.cost_usd, "
+                    "dispatch_count = role_daily_budget_ledger.dispatch_count + 1, "
+                    "updated_at = excluded.updated_at",
+                    (aid, _today_str(), tok, eur, usd, now),
+                )
+                policy = self._policy(conn, aid)
+                if policy["hard_cap_enabled"] and policy["auto_pause_on_exceed"]:
+                    led = conn.execute(
+                        "SELECT tokens_used, cost_eur, paused_at FROM role_daily_budget_ledger "
+                        "WHERE agent_id = ? AND usage_date = ?",
+                        (aid, _today_str()),
+                    ).fetchone()
+                    if led and not led["paused_at"] and (
+                        int(led["tokens_used"] or 0) >= policy["daily_token_budget"]
+                        or float(led["cost_eur"] or 0.0) >= policy["daily_cost_limit_eur"]
+                    ):
+                        conn.execute(
+                            "UPDATE role_daily_budget_ledger SET paused_at = ? "
+                            "WHERE agent_id = ? AND usage_date = ?",
+                            (now, aid, _today_str()),
+                        )
+                if tid:
+                    conn.execute(
+                        "UPDATE task_budget_allocations "
+                        "SET tokens_used = tokens_used + ?, cost_used_eur = cost_used_eur + ?, updated_at = ? "
+                        "WHERE task_id = ?",
+                        (tok, eur, now, tid),
+                    )
+                conn.execute(
+                    "UPDATE budget_reservations SET status = 'settled', settled_at = ? WHERE reservation_id = ?",
+                    (now, reservation_id),
+                )
+                conn.commit()
+                return {"status": "settled", "reservation_id": reservation_id,
+                        "agent_id": aid, "task_id": tid, "tokens_used": tok, "cost_eur": eur}
+            except Exception as exc:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                return {"status": "error", "reservation_id": reservation_id, "reason": str(exc)}
+            finally:
+                conn.close()
+
+    def release(self, reservation_id: str, reason: str = "") -> Dict[str, Any]:
+        """Gibt eine nicht ausgeführte Reservierung frei (z. B. bei Dispatch-Fehler)."""
+        init_budget_tables(self.db_path)
+        with _BUDGET_LOCK:
+            conn = _get_conn(self.db_path)
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                cur = conn.execute(
+                    "UPDATE budget_reservations SET status = 'released', settled_at = ? "
+                    "WHERE reservation_id = ? AND status = 'reserved'",
+                    (datetime.datetime.now().isoformat(), reservation_id),
+                )
+                conn.commit()
+                return {"status": "released" if cur.rowcount else "not_found",
+                        "reservation_id": reservation_id, "reason": reason}
+            finally:
+                conn.close()
+
+
+budget_bank = BudgetBank()

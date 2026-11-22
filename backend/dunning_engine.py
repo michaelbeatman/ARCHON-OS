@@ -103,7 +103,13 @@ class DunningEngine:
             return (company_id or "default").strip() or "default"
 
     def _init_tables(self):
-        """Erstellt die Tabellen für Rechnungen und Mahnhistorie."""
+        """Erstellt die Tabellen für Rechnungen und Mahnhistorie — auch wenn die DB noch nicht existiert."""
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(self.memory_db)), exist_ok=True)
+            if not os.path.exists(self.memory_db):
+                sqlite3.connect(self.memory_db).close()
+        except Exception as e:
+            print(f"[DunningEngine] DB-Anlage fehlgeschlagen: {e}", file=sys.stderr)
         if os.path.exists(self.memory_db):
             try:
                 with sqlite3.connect(self.memory_db, timeout=5.0, factory=_ArchonClosingConn) as conn:
@@ -419,13 +425,17 @@ class DunningEngine:
         # Speichere Entwurf in DB
         with sqlite3.connect(self.memory_db, timeout=5.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""
-                INSERT OR REPLACE INTO dunning_history (
+                -- INSERT OR IGNORE statt OR REPLACE: ein bereits versandter
+                -- Entwurf darf durch erneute Generierung nicht auf 'draft'
+                -- zurückgesetzt und damit ein zweites Mal versendet werden.
+                INSERT OR IGNORE INTO dunning_history (
                     dunning_id, invoice_id, level, issued_date, deadline_date,
-                    fee, interest, total_claim, status, draft_text
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)
+                    fee, interest, total_claim, status, draft_text, company_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
             """, (
                 dunning_id, invoice_id, level, today.isoformat(), deadline,
-                fee, interest, total_claim, body_text
+                fee, interest, total_claim, body_text,
+                self._resolve_cid(inv.get("company_id")),
             ))
             conn.commit()
 
@@ -563,8 +573,15 @@ class DunningEngine:
 
         # 4. ERP-Synchronisierung (Beleg-Mahnstatus im aktiven Mandanten nachführen, falls vorhanden)
         try:
-            from backend.erp_manager import get_erp_manager
-            erp_mgr = get_erp_manager()
+            import backend.erp_manager as _erp_mod
+            # Es gibt keine Funktion get_erp_manager() — der Import war toter
+            # Code und wurde verschluckt. Stattdessen das Modul-Singleton.
+            erp_mgr = getattr(_erp_mod, "erp_manager", None)
+            if erp_mgr is None:
+                _factory = getattr(_erp_mod, "get_erp_manager", None)
+                erp_mgr = _factory() if callable(_factory) else None
+            if erp_mgr is None:
+                raise RuntimeError("erp_manager-Singleton nicht verfügbar")
             e_conn, _ = erp_mgr._get_conn()
             try:
                 e_conn.execute(

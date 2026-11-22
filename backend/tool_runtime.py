@@ -17,11 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from backend.delegation_isolation import (
-    enforce_runtime_tool_gate,
-    mark_session_tainted_on_tool_read,
-)
-from backend.tool_warrants import verify_warrant_for_call
+from backend.delegation_isolation import mark_session_tainted_on_tool_read
 
 logger = logging.getLogger("archon.tool_runtime")
 
@@ -58,19 +54,18 @@ def enforce_tool_execution(
     clean_tool = str(tool_name or "").strip()
     clean_agent = str(agent_id or "").strip()
     clean_session = str(session_id or "default_session").strip()
-    call_args = args if isinstance(args, dict) else {}
 
-    if not clean_tool:
-        res = {"allowed": False, "reason": "tool_name darf nicht leer sein.", "gate": "validation"}
-        _emit_tool_event("tool.blocked", {"agent_id": clean_agent, "session_id": clean_session, "tool_name": clean_tool, "reason": res["reason"]})
-        return res
+    # Zentrale PolicyEngine: M75 + M89 + M90 + RBAC an EINER Stelle.
+    # Dieser Chokepoint enthält keine eigene Policy-Logik mehr.
+    from backend.delegation_isolation import policy_engine
 
-    gate = enforce_runtime_tool_gate(
+    gate = policy_engine.decide(
         agent_id=clean_agent,
         session_id=clean_session,
         tool_name=clean_tool,
-        args=call_args,
+        args=args,
         approval_id=approval_id,
+        warrant=warrant,
     )
     if not gate.get("allowed"):
         _emit_tool_event("tool.blocked", {
@@ -78,31 +73,23 @@ def enforce_tool_execution(
             "session_id": clean_session,
             "tool_name": clean_tool,
             "reason": gate.get("reason", "gate_denied"),
+            "gate": gate.get("gate"),
         })
         return gate
-
-    if warrant is not None:
-        w_res = verify_warrant_for_call(
-            warrant=warrant,
-            session_id=clean_session,
-            tool_name=clean_tool,
-            args=call_args,
-        )
-        if not w_res.get("allowed"):
-            _emit_tool_event("tool.blocked", {
-                "agent_id": clean_agent,
-                "session_id": clean_session,
-                "tool_name": clean_tool,
-                "reason": w_res.get("reason", "warrant_denied"),
-            })
-            return {"allowed": False, "gate": "warrant", **w_res}
 
     _emit_tool_event("tool.allowed", {
         "agent_id": clean_agent,
         "session_id": clean_session,
         "tool_name": clean_tool,
     })
-    return {"allowed": True, "tool": clean_tool, "agent_id": clean_agent, "session_id": clean_session}
+    return {
+        "allowed": True,
+        "tool": clean_tool,
+        "agent_id": clean_agent,
+        "session_id": clean_session,
+        "privileged": bool(gate.get("privileged")),
+        "obligations": gate.get("obligations") or [],
+    }
 
 
 def record_tool_read_side_effect(session_id: str, tool_name: str) -> None:

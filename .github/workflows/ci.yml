@@ -15,10 +15,10 @@ jobs:
       - name: Quellcode auschecken
         uses: actions/checkout@v4
 
-      - name: Python 3.11 einrichten
+      - name: Python 3.13 einrichten
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
           cache: "pip"
 
       - name: Basis-Abhängigkeiten installieren
@@ -46,16 +46,17 @@ jobs:
       - name: Quellcode auschecken
         uses: actions/checkout@v4
 
-      - name: Python 3.11 einrichten
+      - name: Python 3.13 einrichten
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Abhängigkeiten installieren
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install pyyaml requests psutil pytest
+          if [ -f requirements-test.txt ]; then pip install -r requirements-test.txt; fi
+          pip install pyyaml requests psutil
           mkdir -p data inbox
 
       - name: Gesamte Pytest-Suite ausführen
@@ -75,10 +76,10 @@ jobs:
       - name: Quellcode auschecken
         uses: actions/checkout@v4
 
-      - name: Python 3.11 einrichten
+      - name: Python 3.13 einrichten
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Abhängigkeiten installieren
         run: |
@@ -97,5 +98,13 @@ jobs:
       - name: Quellcode auschecken
         uses: actions/checkout@v4
 
-      - name: Docker Compose Syntaxprüfung
-        run: docker compose config --quiet
+      - name: Docker Compose Syntaxprüfung (alle Varianten)
+        run: |
+          set -e
+          # Vorher wurde nur docker-compose.yml geprüft — gerade die
+          # problematischen Varianten (.vpn, .archon, .cro) blieben ungeprüft.
+          for f in docker-compose*.yml CRM/docker-compose.yml pocketbase/docker-compose.yml; do
+            [ -f "$f" ] || continue
+            echo "Prüfe $f"
+            docker compose -f "$f" config --quiet
+          done

@@ -448,6 +448,7 @@ async def dispatch_to_omniroute_or_container(
     t_start = time.time()
     slot_id = task_id or f"{agent_id}-{t_start}"
     has_throttle_slot = False
+    budget_reservation_id: str | None = None
     try:
         from backend.concurrency_throttle import concurrency_throttle
         acquired = await concurrency_throttle.acquire_slot(agent_id, slot_id, priority=2)
@@ -463,24 +464,36 @@ async def dispatch_to_omniroute_or_container(
 
     try:
         async with _get_task_semaphore():
-            # Pre-Flight Hard Role & Task Budget Gate (Paperclip FinOps Governance)
+            # Atomare Budget-Reservierung statt Check-then-Use: parallele
+            # DAG-Nodes können das harte Cap nicht mehr überschreiten.
             try:
-                from backend.role_budget_engine import check_budget_gate
+                from backend.role_budget_engine import budget_bank
                 est_in_tokens = max(100, len(str(prompt or "")) // 4)
-                bg_chk = check_budget_gate(
+                bg_chk = budget_bank.reserve(
                     agent_id=agent_id,
                     task_id=task_id or None,
                     estimated_tokens=est_in_tokens,
+                    estimated_cost_eur=0.0,
+                    node_id=slot_id,
                 )
-                if not bg_chk.get("allowed", True):
+                if not bg_chk.get("allowed", False):
                     return {
                         "status": "blocked",
                         "error": bg_chk.get("error_code", "ROLE_BUDGET_EXCEEDED"),
                         "error_code": bg_chk.get("error_code", "ROLE_BUDGET_EXCEEDED"),
                         "content": f"🛑 [BUDGET-CAP BLOCK]: {bg_chk.get('reason')}",
                     }
+                budget_reservation_id = bg_chk.get("reservation_id")
             except Exception as bg_exc:
-                logger.debug(f"[Dispatcher] Pre-Flight Budget-Check uebersprungen: {bg_exc}")
+                # Fail-closed: ein nicht auswertbares Budget-Gate darf niemals
+                # einen unbegrenzten Dispatch freigeben (Audit v3 Welle 6).
+                logger.error(f"[Dispatcher] Pre-Flight Budget-Check fehlgeschlagen - Dispatch blockiert: {bg_exc}")
+                return {
+                    "status": "blocked",
+                    "error": "budget_gate_unavailable",
+                    "error_code": "BUDGET_GATE_UNAVAILABLE",
+                    "content": "🛑 [BUDGET-GATE]: Budget-Prüfung nicht verfügbar — Dispatch blockiert (fail-closed).",
+                }
 
             tr_id = None
             try:
@@ -499,17 +512,25 @@ async def dispatch_to_omniroute_or_container(
             used_model = res.get("model") or model
             is_ok = res.get("status") == "success"
 
-            if is_ok and (in_tok + out_tok) > 0:
+            if budget_reservation_id:
                 try:
-                    from backend.role_budget_engine import record_budget_usage
-                    record_budget_usage(
-                        agent_id=agent_id,
-                        tokens_used=in_tok + out_tok,
-                        cost_usd=est_cost,
-                        task_id=task_id or None,
-                    )
+                    from backend.role_budget_engine import budget_bank
+                    if is_ok:
+                        budget_bank.settle(
+                            budget_reservation_id,
+                            actual_tokens=in_tok + out_tok,
+                            actual_cost_usd=est_cost,
+                        )
+                    else:
+                        budget_bank.release(
+                            budget_reservation_id,
+                            reason=f"dispatch status={res.get('status')}",
+                        )
+                    budget_reservation_id = None
                 except Exception as rec_exc:
-                    logger.debug(f"[Dispatcher] Budget-Consumption Recording uebersprungen: {rec_exc}")
+                    # Kein stilles Verlieren von Verbrauch: sonst faellt sich das
+                    # Budget nie und harte Caps wirken nur bis zum ersten DB-Fehler.
+                    logger.error(f"[Dispatcher] Budget-Settlement fehlgeschlagen: {rec_exc}")
 
             if tr_id:
                 try:
@@ -552,6 +573,14 @@ async def dispatch_to_omniroute_or_container(
 
             return res
     finally:
+        if budget_reservation_id:
+            # Reservierung darf nie hängen bleiben (früher Return, Exception,
+            # Zero-Egress-Block) — sonst wird Budget dauerhaft blockiert.
+            try:
+                from backend.role_budget_engine import budget_bank
+                budget_bank.release(budget_reservation_id, reason="dispatch_finished_without_settle")
+            except Exception as rel_exc:
+                logger.warning(f"[Dispatcher] Budget-Release im finally fehlgeschlagen: {rel_exc}")
         if has_throttle_slot:
             try:
                 from backend.concurrency_throttle import concurrency_throttle
@@ -771,18 +800,26 @@ async def _dispatch_to_omniroute_or_container_exec(
             "audit_event": ze_err.audit_event,
         }
 
-    # Schutz gegen Datenleck: Spekulativ vorgeladene CRM-/ERP-Daten dürfen niemals an externe Cloud-Modelle gehen,
-    # wenn sensibles lokales Routing aktiv ist und dieser Call NICHT lokal geroutet wird.
-    if prefetch_addon and not preflight_gate.get("routed_to_local"):
+    # Schutz gegen Datenleck: ALLE Kontext-Injektionen (spekulatives CRM/ERP,
+    # Langzeitgedaechtnis, Core-Memory) duerfen nicht an externe Cloud-Modelle,
+    # sobald sensibles lokales Routing aktiv ist. Vorher wurde nur prefetch_addon
+    # entfernt — core_mem_addon und memory_context_addon blieben im Prompt.
+    if (prefetch_addon or core_mem_addon or memory_context_addon) and not preflight_gate.get("routed_to_local"):
         try:
             p_cfg_chk = get_privacy_config()
             if bool(p_cfg_chk.get("block_crm_erp_prefetch_on_cloud", True)) and bool(p_cfg_chk.get("sensitive_local_routing", True)):
-                full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{core_mem_addon}{memory_context_addon}".strip()
+                full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip()
                 messages = [{"role": "system", "content": full_system_prompt}] + chat_history_turns + [
                     {"role": "user", "content": prompt},
                 ]
         except Exception as priv_err:
-            logger.warning(f"[Dispatcher] Privacy-Config Pruefung fuer Prefetch-Stripping fehlgeschlagen: {priv_err}")
+            logger.error(f"[Dispatcher] Privacy-Config Pruefung fuer Kontext-Stripping fehlgeschlagen: {priv_err}")
+            return {
+                "status": "blocked",
+                "error": "context_strip_unavailable",
+                "error_code": "PRIVACY_CONTEXT_STRIP_FAILED",
+                "content": "🛑 [PRIVACY]: Kontext konnte nicht vor Cloud-Hop bereinigt werden — Dispatch blockiert.",
+            }
 
     async def _audited_post(http_client: httpx.AsyncClient, url: str, *, provider_id: str, model_id: str, headers: dict | None = None, json_body: dict | None = None, timeout: float | None = None):
         from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
@@ -825,7 +862,8 @@ async def _dispatch_to_omniroute_or_container_exec(
         return r
 
     # 0. On-Premise Lokales LLM (erzwungen durch Privacy-Router / Zero-Egress oder explizit prov_lower == 'local')
-    if preflight_gate.get("routed_to_local") or prov_lower in ("local", "ollama", "lmstudio", "vllm"):
+    _local_requested = bool(preflight_gate.get("routed_to_local")) or prov_lower in ("local", "ollama", "lmstudio", "vllm")
+    if _local_requested:
         p_cfg = get_privacy_config()
         base_local = str(preflight_gate.get("target_url") or p_cfg.get("local_llm_url", "http://127.0.0.1:11434/v1")).rstrip("/")
         local_ep = base_local if base_local.endswith("/chat/completions") else f"{base_local}/chat/completions"
@@ -846,7 +884,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                     i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
                     _log_dispatcher_usage(agent_id, local_model, i_tok, o_tok, task_id)
                     return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": local_model, "provider": "local"}
-            if preflight_gate.get("zero_egress_active"):
+            if preflight_gate.get("zero_egress_active") or _local_requested:
                 return {
                     "status": "blocked",
                     "error_code": "LOCAL_LLM_HTTP_ERROR_HARD_BLOCK",
@@ -862,7 +900,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                 "audit_event": ze_err.audit_event,
             }
         except Exception as loc_err:
-            if preflight_gate.get("zero_egress_active"):
+            if preflight_gate.get("zero_egress_active") or _local_requested:
                 ev = log_completed_llm_dispatch(
                     agent_id=agent_id,
                     provider="local",
@@ -880,6 +918,28 @@ async def _dispatch_to_omniroute_or_container_exec(
                     "content": f"🛑 [PRIVACY-ROUTER HARD-BLOCK]: Lokales On-Premise-Modell ({local_ep}) ist nicht erreichbar ({loc_err}) — keine Daten verlassen das Haus.",
                     "audit_event": ev,
                 }
+
+    # Ein explizit lokales Routing darf NIEMALS still in die Cloud-Kette fallen
+    # (Groq/OpenRouter/OmniRoute). Vorher war der Fallback nur bei
+    # zero_egress_active gesperrt — bei reinem Privacy-Routing ging das durch.
+    if _local_requested:
+        ev = log_completed_llm_dispatch(
+            agent_id=agent_id,
+            provider="local",
+            model=local_model if _local_requested else (model or ""),
+            target_endpoint=local_ep if _local_requested else "",
+            http_status=0,
+            data_category=preflight_gate.get("data_category", classified_cat),
+            zero_egress_active=True,
+            task_id=task_id,
+        )
+        return {
+            "status": "blocked",
+            "error": "local_route_cloud_fallback_denied",
+            "error_code": "LOCAL_ROUTE_CLOUD_FALLBACK_BLOCKED",
+            "content": "🛑 [PRIVACY-ROUTER]: Lokal gerouteter Task darf nicht in die Cloud-Fallback-Kette fallen (fail-closed).",
+            "audit_event": ev,
+        }
 
     # 1. Spezifischer Provider: GROQ
     if prov_lower == "groq" and groq_api_key:

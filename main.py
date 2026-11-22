@@ -271,9 +271,13 @@ def _auth_unavailable_response() -> JSONResponse:
 async def tenant_context_middleware(request: Request, call_next):
     """Bindet optionalen Mandanten-Header (X-Tenant-Id / X-Company-Id) request-lokal via ContextVar.
 
-    Autorisierung (Audit v3 Befund 2.2): Nur formatgueltige UND bekannte Mandanten werden
-    akzeptiert — beliebige Header-Werte erzeugen keinen Tenant-Kontext (IDOR-Schutz).
+    Autorisierung (Audit v3 Welle 4): Nur formatgueltige, bekannte Mandanten
+    UND nur verifizierte Admins bzw. Service-Tokens duerfen den Mandanten per
+    Header wechseln. Die Rolle aus request.state stammt aus dem auth_gate
+    (der vor dieser Middleware laeuft). Ein Viewer konnte sonst per Header fremde
+    Mandanten-DBs lesen (IDOR).
     """
+    response = None
     hdr_tid = (request.headers.get("X-Tenant-Id") or request.headers.get("X-Company-Id") or "").strip()
     if not hdr_tid:
         response = await call_next(request)
@@ -283,6 +287,17 @@ async def tenant_context_middleware(request: Request, call_next):
             return JSONResponse(
                 status_code=400,
                 content={"error": "invalid_tenant_id", "detail": "X-Tenant-Id ist ungueltig."},
+            )
+        _user = getattr(request.state, "user", None) or {}
+        _role = str(_user.get("role", "")).strip().lower()
+        _is_service = bool(request.headers.get("X-Archon-Service-Token"))
+        if not _is_service and _role != "admin":
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "tenant_forbidden",
+                    "detail": "Mandantenwechsel per Header ist nur Admins und Service-Tokens erlaubt.",
+                },
             )
         try:
             from backend.tenant_context import tenant_context, set_request_tenant, reset_request_tenant
@@ -303,8 +318,12 @@ async def tenant_context_middleware(request: Request, call_next):
                 response = await call_next(request)
             finally:
                 reset_request_tenant(tok)
-        except Exception:
-            response = await call_next(request)
+        except Exception as err:
+            # Fail-closed: kein Tenant-Kontext darf ohne gueltige Setzung durchgereicht werden.
+            logger.error(f"[Tenant] Kontext konnte nicht gesetzt werden: {err}")
+            return _auth_unavailable_response()
+    if response is None:
+        response = await call_next(request)
     if request.url.path == "/static/sw_calendar.js":
         response.headers["Service-Worker-Allowed"] = "/"
     return response

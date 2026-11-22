@@ -32,6 +32,177 @@ from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional, Tup
 
 logger = logging.getLogger("archon.workflow_dag")
 
+
+async def _otel_start(name: str, run_id: str) -> Optional[str]:
+    try:
+        from backend.otel_tracer import tracer
+        return await asyncio.to_thread(tracer.start_trace, name, run_id, "workflow_engine")
+    except Exception as exc:
+        logger.debug("[WorkflowDAG] OTel-Trace-Start fehlgeschlagen: %s", exc)
+        return None
+
+
+async def _otel_span(trace_id: str, **kwargs: Any) -> None:
+    try:
+        from backend.otel_tracer import tracer
+        await asyncio.to_thread(tracer.record_span, trace_id, **kwargs)
+    except Exception as exc:
+        logger.debug("[WorkflowDAG] OTel-Span fehlgeschlagen: %s", exc)
+
+
+async def _otel_end(trace_id: str, status: str) -> None:
+    try:
+        from backend.otel_tracer import tracer
+        await asyncio.to_thread(tracer.end_trace, trace_id, status)
+    except Exception as exc:
+        logger.debug("[WorkflowDAG] OTel-Trace-Ende fehlgeschlagen: %s", exc)
+
+
+# M110: harter Deckel für Replans — ein Agent darf nicht unbegrenzt neu
+# planen und damit Budget/Deadline endlos umgehen.
+MAX_REPLAN_COUNT = 2
+
+_PRIVILEGED_NODE_TOOLS = frozenset({
+    "pay", "terminal", "execute_code", "filesystem", "computer_use", "mcp", "pay-cli",
+})
+
+
+def validate_dag_def(
+    dag_def: Dict[str, Any],
+    *,
+    now: Optional[float] = None,
+    max_nodes: int = 100,
+) -> Dict[str, Any]:
+    """M110 Pre-Execution Plan Validator.
+
+    Prüft Schema, Zyklen, Input-Mapping, Budget, Deadline, RBAC/HITL und
+    Replan-Count, BEVOR irgendein Node ausgeführt wird. Fehler sind immer
+    `valid=False` mit klarer Diagnose (nie stilles Weiterlaufen).
+    """
+    errors: List[str] = []
+    nodes = dag_def.get("nodes") or []
+    if not isinstance(nodes, list) or not nodes:
+        return {"valid": False, "errors": ["DAG enthält keine Nodes."]}
+    if len(nodes) > max_nodes:
+        errors.append(f"Zu viele Nodes: {len(nodes)} > {max_nodes}")
+
+    node_map: Dict[str, Dict[str, Any]] = {}
+    for n in nodes:
+        if not isinstance(n, dict) or not n.get("id"):
+            errors.append("Node ohne id oder falscher Typ.")
+            continue
+        nid = str(n["id"])
+        if nid in node_map:
+            errors.append(f"Doppelte Node-ID: {nid}")
+        node_map[nid] = n
+
+    edge_map = _extract_edge_map(dag_def)
+    for src, targets in edge_map.items():
+        if src not in node_map:
+            errors.append(f"Kante von unbekannter Quelle: {src}")
+        for e in targets or []:
+            dst = str(e.get("to") or "")
+            if dst and dst not in node_map:
+                errors.append(f"Kante zu unbekanntem Ziel: {dst}")
+
+    # Zyklus-Erkennung via Kahn — vor dem Start, nicht als Restgröße.
+    deps: Dict[str, set] = {}
+    for nid, node in node_map.items():
+        deps[nid] = {
+            str(d) for d in _all_dependencies_for_node(node, edge_map.get(nid, []))
+        }
+        for d in deps[nid]:
+            if d not in node_map:
+                errors.append(f"Unbekannte Abhängigkeit '{d}' bei Node '{nid}'")
+    remaining = set(node_map)
+    progress = True
+    while remaining and progress:
+        progress = False
+        for nid in sorted(remaining):
+            if not (deps.get(nid, set()) & remaining):
+                remaining.discard(nid)
+                progress = True
+    if remaining:
+        errors.append(f"Zyklus in DAG erkannt: {', '.join(sorted(remaining))}")
+
+    # Input-Mapping: {{upstream.<node>.<field>}} nur aus deklarierten Deps.
+    ref_re = re.compile(r"\{\{\s*upstream\.([A-Za-z0-9_-]+)\.")
+    for nid, node in node_map.items():
+        blob = json.dumps(node, ensure_ascii=False)
+        for ref in set(ref_re.findall(blob)):
+            if ref not in deps.get(nid, set()):
+                errors.append(f"Node '{nid}' referenziert '{ref}', das keine deklarierte Abhängigkeit ist.")
+
+    # Budget: Summe der Node-Caps gegen den Run-Cap.
+    cap = dag_def.get("max_budget_eur")
+    if cap is not None:
+        try:
+            total = sum(
+                float(n.get("max_budget_eur") or 0.0)
+                for n in node_map.values()
+            )
+            if total > float(cap) * 1.15:
+                errors.append(f"Node-Budgets ({total:.2f} EUR) überschreiten Run-Cap ({float(cap):.2f} EUR).")
+        except (TypeError, ValueError):
+            errors.append("Ungültiger max_budget_eur-Wert.")
+
+    # Deadline
+    deadline = dag_def.get("deadline")
+    if deadline:
+        try:
+            dl = datetime.datetime.fromisoformat(str(deadline).replace("Z", "+00:00"))
+            if dl.timestamp() <= (now if now is not None else time.time()):
+                errors.append("Deadline liegt in der Vergangenheit.")
+        except (TypeError, ValueError):
+            errors.append("Ungültige Deadline.")
+
+    # RBAC/HITL: privilegierte Tools brauchen ein Gate.
+    has_gate = any(
+        str(n.get("type") or "").lower() in ("gate", "require_hitl") or n.get("require_hitl")
+        for n in node_map.values()
+    )
+    for nid, node in node_map.items():
+        tool = str(node.get("tool") or node.get("plugin_id") or "")
+        if any(tool.lower().startswith(p) for p in _PRIVILEGED_NODE_TOOLS):
+            if not has_gate and not node.get("require_hitl"):
+                errors.append(f"Node '{nid}' nutzt privilegiertes Tool '{tool}' ohne HITL-Gate.")
+
+    # Replan-Cap
+    replan_count = int(dag_def.get("_replan_count") or 0)
+    if replan_count > MAX_REPLAN_COUNT:
+        errors.append(f"replan_count {replan_count} überschreitet den Deckel ({MAX_REPLAN_COUNT}).")
+
+    return {"valid": not errors, "errors": errors, "node_count": len(node_map)}
+
+
+def request_dag_replan(
+    run_id: str,
+    new_dag_def: Dict[str, Any],
+    reason: str,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Kontrollierter Replan-Pfad — nur bis MAX_REPLAN_COUNT."""
+    existing = get_workflow_run(run_id, db_path=db_path)
+    if not existing:
+        return {"allowed": False, "reason": "run_not_found"}
+    count = int((existing.get("dag") or {}).get("_replan_count") or 0)
+    if count >= MAX_REPLAN_COUNT:
+        return {"allowed": False, "reason": "replan_cap_reached", "replan_count": count}
+    candidate = dict(new_dag_def or {})
+    candidate["_replan_count"] = count + 1
+    candidate["_replan_reason"] = str(reason or "")[:500]
+    validation = validate_dag_def(candidate)
+    if not validation["valid"]:
+        return {"allowed": False, "reason": "invalid_plan", "errors": validation["errors"]}
+    with _connect(db_path) as conn:
+        conn.execute(
+            "UPDATE workflow_runs SET dag_json = ?, updated_at = ? WHERE run_id = ?",
+            (json.dumps(candidate, ensure_ascii=False), time.time(), run_id),
+        )
+        conn.commit()
+    return {"allowed": True, "replan_count": count + 1, "dag_def": candidate}
+
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "workflow_dags.db")
 _INITIAL_DEFAULT_DB_PATH = DEFAULT_DB_PATH
@@ -906,6 +1077,30 @@ async def _run_workflow_dag_locked(
     edge_map = _extract_edge_map(dag_def)
     now = time.time()
 
+    # M110 Pre-Execution Validator: Zyklen/Schema/Mapping/Budget/Deadline/
+    # RBAC/HITL/Replan-Count werden VOR jedem Node geprüft (kein halber Start).
+    validation = validate_dag_def(dag_def, now=now)
+    if not validation["valid"]:
+        err_msg = "Plan-Validator: " + "; ".join(validation["errors"][:8])
+        logger.error(f"[WorkflowDAG] Run '{rid}' von Plan-Validator abgelehnt: {err_msg}")
+        with _connect(db_path) as conn:
+            conn.execute(
+                "INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at) "
+                "VALUES (?, ?, 'failed', ?, ?, ?) "
+                "ON CONFLICT(run_id) DO UPDATE SET status = 'failed', updated_at = excluded.updated_at",
+                (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), now, now),
+            )
+            conn.commit()
+        return {
+            "run_id": rid,
+            "workflow_id": wf_id,
+            "status": "failed",
+            "node_statuses": {},
+            "outputs": {},
+            "error": err_msg,
+            "validation_errors": validation["errors"],
+        }
+
     # Unbekannte depends_on-IDs / Kanten-Quellen: sofort failed mit klarer Diagnose
     for _nid, _node in node_map.items():
         for _dep in _all_dependencies_for_node(_node, edge_map.get(_nid, [])):
@@ -930,6 +1125,10 @@ async def _run_workflow_dag_locked(
                     "outputs": {},
                     "error": _err_msg,
                 }
+
+    # OTel: ein Trace pro Run, ein Span pro Node. Alle Tracer-Writes laufen
+    # im Threadpool, damit der Event-Loop nicht blockiert.
+    trace_id = await _otel_start(f"workflow.{wf_id}", rid)
 
     approvals: Dict[str, bool] = {}
     with _connect(db_path) as conn:
@@ -974,6 +1173,7 @@ async def _run_workflow_dag_locked(
     running_tasks: Dict[str, "asyncio.Task[None]"] = {}
 
     async def _run_one(nid: str) -> None:
+        node_started = time.perf_counter()
         node = node_map[nid]
         inc_edges = edge_map.get(nid, [])
         edge_by_src = {e["from"]: e for e in inc_edges}
@@ -1176,6 +1376,19 @@ async def _run_workflow_dag_locked(
 
         outputs[nid] = out
         statuses[nid] = st
+        if trace_id:
+            await _otel_span(
+                trace_id,
+                name=f"dag.node.{nid}",
+                span_type="agent",
+                agent_id=str(node.get("agent_id") or "workflow_engine"),
+                model=str(node.get("model") or ""),
+                output_data=out if isinstance(out, dict) else {"result": out},
+                status="OK" if st in SUCCESS_NODE_STATES else "ERROR",
+                cost_usd=float(out.get("cost_usd") or 0.0) if isinstance(out, dict) else 0.0,
+                duration_ms=round((time.perf_counter() - node_started) * 1000.0, 2),
+                attributes={"run_id": rid, "node_id": nid, "node_type": ntype, "status": st},
+            )
         with _connect(db_path) as conn:
             conn.execute(
                 """
@@ -1323,6 +1536,8 @@ async def _run_workflow_dag_locked(
     }
     if cycle_error:
         result["error"] = cycle_error
+    if trace_id:
+        await _otel_end(trace_id, "ERROR" if final_status in FAILURE_NODE_STATES or cycle_error else "OK")
     return result
 
 

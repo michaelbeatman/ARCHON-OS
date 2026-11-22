@@ -1,5 +1,8 @@
 services:
   archon:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: archon-os-dev:latest
     container_name: ARCHON-OS-dev
     init: true
@@ -8,8 +11,9 @@ services:
       - "973"
     working_dir: /app
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8501", "--reload"]
+    # Ansible legt .env aus .env.example an; .env.archon existiert nicht im Repo.
     env_file:
-      - .env.archon
+      - .env
     environment:
       HOME: /tmp
       ENVIRONMENT: development
@@ -31,6 +35,8 @@ services:
       # utils.docker_client.docker_cli_host_args() — die CLI wuerde DOCKER_HOST sonst
       # global folgen und still degradieren.
       DOCKER_HOST: "tcp://docker-socket-proxy:2375"
+      ARCHON_AUDIT_HMAC_KEY: "${ARCHON_AUDIT_HMAC_KEY:-}"
+      ARCHON_AUDIT_ANCHOR_PATH: "${ARCHON_AUDIT_ANCHOR_PATH:-}"
     ports:
       # Standard bleibt 127.0.0.1 (localhost-only); fuer LAN-Zugriff auf dem Homeserver
       # in .env.archon z. B. ARCHON_BIND_IP=0.0.0.0 oder 192.168.1.100 setzen.

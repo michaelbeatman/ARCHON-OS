@@ -22,12 +22,23 @@ import argparse
 HOME = os.path.expanduser("~")
 PROJECT = r"."
 
-# (Anzeigename, vollständiger Pfad)
+# (Anzeigename, vollständiger Pfad, Pflicht?)
+# Pfade decken sich mit config/litestream.yml (Hermes-Home, Konsolidierungs-DBs)
+# und den lokalen Root-DBs. "optional" = konsolidierte DB, die erst nach
+# Aktivierung der 28→3-Migration existiert; fehlt sie, wird das explizit
+# gemeldet statt still als Erfolg gezählt.
 DATABASES = [
-    ("state.db", os.path.join(HOME, ".hermes", "state.db")),
-    ("kanban.db", os.path.join(HOME, ".hermes", "kanban.db")),
-    ("agent_os.db", os.path.join(PROJECT, "agent_os.db")),
-    ("agentic_memory.db", os.path.join(PROJECT, "agentic_memory.db")),
+    ("hermes_state.db", os.path.join(HOME, ".hermes", "state.db"), True),
+    ("hermes_kanban.db", os.path.join(HOME, ".hermes", "kanban.db"), True),
+    ("agent_os.db", os.path.join(PROJECT, "agent_os.db"), True),
+    ("agentic_memory.db", os.path.join(PROJECT, "agentic_memory.db"), True),
+    ("ops.db", os.path.join(PROJECT, "data", "ops.db"), False),
+    ("business.db", os.path.join(PROJECT, "data", "business.db"), True),
+    ("memory.db", os.path.join(PROJECT, "data", "memory.db"), False),
+    ("kanban.db", os.path.join(PROJECT, "data", "kanban.db"), True),
+    ("contracts.db", os.path.join(PROJECT, "data", "contracts.db"), True),
+    ("deals.db", os.path.join(PROJECT, "data", "deals.db"), True),
+    ("workflow_schedules.db", os.path.join(PROJECT, "data", "workflow_schedules.db"), True),
 ]
 
 LOCAL_BACKUP_DIR = os.path.join(PROJECT, "data", "backups")
@@ -106,21 +117,37 @@ def main():
     os.makedirs(run_dir_local, exist_ok=True)
 
     print(f"[{datetime.datetime.now().isoformat(timespec='seconds')}] Backup-Lauf archon_{stamp}")
-    ok, fail = 0, 0
-    for name, path in DATABASES:
+    ok, fail, nas_fail = 0, 0, 0
+    for name, path, required in DATABASES:
         if not os.path.exists(path):
-            print(f"  - {name}: übersprungen (nicht gefunden: {path})")
+            if required:
+                print(f"  ! {name}: FEHLT (Pflicht-DB nicht gefunden: {path})")
+                fail += 1
+            else:
+                print(f"  - {name}: nicht vorhanden (Konsolidierung inaktiv: {path})")
             continue
         dst_local = os.path.join(run_dir_local, name)
-        if backup_sqlite_safe(path, dst_local):
-            size_mb = os.path.getsize(dst_local) / (1024 * 1024)
-            print(f"  + {name}: lokal gesichert ({size_mb:.1f} MB)")
-            ok += 1
-        else:
+        if not backup_sqlite_safe(path, dst_local):
             print(f"  ! {name}: FEHLGESCHLAGEN")
             fail += 1
             continue
-        # NAS-Kopie
+        # Integritätsprüfung der gesicherten Kopie (sonst ist "OK" wertlos)
+        try:
+            check = sqlite3.connect(f"file:{dst_local}?mode=ro", uri=True)
+            integrity = check.execute("PRAGMA integrity_check").fetchone()[0]
+            check.close()
+            if integrity != "ok":
+                print(f"  ! {name}: Integritätsprüfung fehlgeschlagen ({integrity})")
+                fail += 1
+                continue
+        except Exception as e:
+            print(f"  ! {name}: Integritätsprüfung nicht möglich ({e})")
+            fail += 1
+            continue
+        size_mb = os.path.getsize(dst_local) / (1024 * 1024)
+        print(f"  + {name}: lokal gesichert ({size_mb:.1f} MB, integrity ok)")
+        ok += 1
+        # NAS-Kopie: Fehler zählen jetzt zum Exit-Code, statt nur gedruckt zu werden
         if not args.no_nas:
             try:
                 run_dir_nas = os.path.join(NAS_BACKUP_DIR, f"archon_{stamp}")
@@ -129,6 +156,7 @@ def main():
                 print(f"  + {name}: NAS-Kopie OK")
             except Exception as e:
                 print(f"  ! {name}: NAS-Kopie fehlgeschlagen ({e})")
+                nas_fail += 1
 
     # 2. Config-Dateien & Profile sichern (Pillar 4 / SSOT)
     config_items = [
@@ -177,10 +205,10 @@ def main():
     else:
         print(f"Aufgeräumt: lokal {removed_local} (>{args.local_days} Tage)")
 
-    if fail:
-        print(f"ERGEBNIS: {ok} OK, {fail} FEHLGESCHLAGEN")
+    if fail or nas_fail:
+        print(f"ERGEBNIS: {ok} OK, {fail} FEHLGESCHLAGEN, {nas_fail} NAS-Fehler")
         sys.exit(1)
-    print(f"ERGEBNIS: {ok} Datenbanken gesichert.")
+    print(f"ERGEBNIS: {ok} Datenbanken gesichert (lokal + NAS).")
 
 
 if __name__ == "__main__":

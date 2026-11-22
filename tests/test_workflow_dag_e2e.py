@@ -178,7 +178,10 @@ def test_unknown_dependency_and_cycle_fail_with_diagnosis(tmp_path):
 
     r = _run(_flow_unknown())
     assert r["status"] == "failed"
-    assert "Unknown dependency" in str(r.get("error") or r.get("outputs", {}).get("a", {}).get("error") or ""), r
+    _msg = str(r.get("error") or r.get("outputs", {}).get("a", {}).get("error") or "")
+    # Der Pre-Execution Plan Validator (M110) liefert die Meldung auf Deutsch;
+    # ältere Pfade lieferten "Unknown dependency". Beide sind gültig.
+    assert ("Unknown dependency" in _msg or "Unbekannte Abhängigkeit" in _msg or "Plan-Validator" in _msg), r
 
     async def _flow_cycle():
         return await run_workflow_dag(
@@ -191,7 +194,8 @@ def test_unknown_dependency_and_cycle_fail_with_diagnosis(tmp_path):
 
     r2 = _run(_flow_cycle())
     assert r2["status"] == "failed"
-    assert "Cycle" in str(r2.get("error") or ""), r2
+    _msg2 = str(r2.get("error") or "")
+    assert ("Cycle" in _msg2 or "Zyklus" in _msg2 or "Plan-Validator" in _msg2), r2
 
 
 def test_corrupt_custom_templates_block_save_and_backup(tmp_path, monkeypatch):

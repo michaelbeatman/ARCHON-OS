@@ -12,10 +12,12 @@ import csv
 import io
 import json
 import hashlib
+import hmac
 import sqlite3
 import datetime
 import ipaddress
 import threading
+import time
 from typing import Dict, Any, List, Optional, Tuple
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 import logging
@@ -29,6 +31,37 @@ try:
 except Exception:
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 GENESIS_HASH = "0" * 64
+
+# HMAC statt nacktem SHA-256: ohne Separat-Secret kann jemand mit DB-Schreibzugriff
+# die Kette ab Block 1 neu signieren. Der Key kommt ausschließlich aus der ENV
+# (nicht aus einer Datei neben der DB), damit Backup/Image ihn nicht enthalten.
+HMAC_PREFIX = "hmac-sha256:"
+ANCHOR_INTERVAL_SEC = 300
+
+
+def _hmac_key() -> bytes:
+    return os.environ.get("ARCHON_AUDIT_HMAC_KEY", "").strip().encode("utf-8")
+
+
+def _chain_hash(raw_str: str) -> str:
+    key = _hmac_key()
+    if key:
+        digest = hmac.new(key, raw_str.encode("utf-8"), hashlib.sha256).hexdigest()
+        return f"{HMAC_PREFIX}{digest}"
+    # Rückwärtskompatibel: bestehende SHA-256-Ketten bleiben verifizierbar,
+    # solange kein Key gesetzt ist.
+    return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
+
+
+def _verify_hash(raw_str: str, stored: str) -> bool:
+    stored = str(stored or "")
+    if stored.startswith(HMAC_PREFIX):
+        key = _hmac_key()
+        if not key:
+            return False  # fail-closed: HMAC-Blöcke ohne Key nicht verifizierbar
+        expected = HMAC_PREFIX + hmac.new(key, raw_str.encode("utf-8"), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, stored)
+    return hmac.compare_digest(hashlib.sha256(raw_str.encode("utf-8")).hexdigest(), stored)
 
 _SENSITIVE_QUERY_KEYS = frozenset({
     "key", "api_key", "apikey", "token", "access_token", "secret", "password", "auth"
@@ -142,6 +175,47 @@ class ChainedAuditLog:
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._lock = threading.Lock()
         self._init_db()
+        self._start_anchor_worker()
+
+    def _start_anchor_worker(self) -> None:
+        """Optionaler externer Anker. Läuft als Daemon-Thread und schreibt
+        ausschließlich im Hintergrund — niemals im Request-Pfad und ohne
+        Netzwerkzugriff (funktioniert offline und im Container)."""
+        path = os.environ.get("ARCHON_AUDIT_ANCHOR_PATH", "").strip()
+        if not path:
+            return
+        worker = threading.Thread(
+            target=self._anchor_loop,
+            args=(path,),
+            name="archon-audit-anchor",
+            daemon=True,
+        )
+        worker.start()
+
+    def _anchor_loop(self, path: str) -> None:
+        while True:
+            try:
+                self._write_anchor(path)
+            except Exception as exc:
+                logger.warning("Audit-Log: Anker-Schreibfehler: %s", exc)
+            time.sleep(ANCHOR_INTERVAL_SEC)
+
+    def _write_anchor(self, path: Optional[str] = None) -> Optional[str]:
+        anchor = (path or os.environ.get("ARCHON_AUDIT_ANCHOR_PATH", "")).strip()
+        if not anchor:
+            return None
+        conn = self._get_conn()
+        try:
+            row = conn.execute("SELECT current_hash FROM audit_log ORDER BY id DESC LIMIT 1").fetchone()
+        finally:
+            conn.close()
+        if not row:
+            return None
+        latest = str(row["current_hash"] or "")
+        os.makedirs(os.path.dirname(os.path.abspath(anchor)), exist_ok=True)
+        with open(anchor, "a", encoding="utf-8") as fh:
+            fh.write(f"{datetime.datetime.now(datetime.timezone.utc).isoformat()}\t{latest}\n")
+        return latest
 
     def _get_conn(self):
         conn = sqlite3.connect(self.db_path, timeout=30.0)
@@ -258,8 +332,11 @@ class ChainedAuditLog:
                 last_row = cur.fetchone()
                 prev_hash = last_row["current_hash"] if last_row and last_row["current_hash"] else GENESIS_HASH
 
-                raw_str = f"{prev_hash}|{now_iso}|{category}|{action}|{agent_id}|{payload_str}"
-                current_hash = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
+                # company_id in den signierten String aufnehmen: sonst kann die
+                # Mandantenzuordnung nachträglich geändert werden, ohne dass
+                # verify_integrity() alarmiert.
+                raw_str = f"{prev_hash}|{now_iso}|{category}|{action}|{agent_id}|{company_id_val}|{payload_str}"
+                current_hash = _chain_hash(raw_str)
 
                 col_map = {
                     "timestamp": now_iso,
@@ -373,8 +450,10 @@ class ChainedAuditLog:
                 cur = conn.cursor()
                 select_cols = [
                     "id", "timestamp", "category", "action", "agent_id",
-                    "payload_json", "prev_hash", "current_hash",
+                    "company_id", "payload_json", "prev_hash", "current_hash",
                 ]
+                if "company_id" not in getattr(self, "cols", set()):
+                    select_cols.remove("company_id")
                 has_dispatch_cols = all(
                     c in getattr(self, "cols", set())
                     for c in ("provider", "model", "target_host", "target_endpoint", "egress_zone")
@@ -409,17 +488,28 @@ class ChainedAuditLog:
                             "actual_prev": r["prev_hash"],
                         }
 
-                    # 2. Inhalts-Signatur Prüfung (SHA-256)
-                    raw_str = f"{r['prev_hash']}|{r['timestamp']}|{r['category']}|{r['action']}|{r['agent_id']}|{r['payload_json']}"
-                    recomputed = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
+                    # 2. Inhalts-Signatur Prüfung (HMAC-SHA256 bzw. Legacy-SHA256)
+                    raw_new = (
+                        f"{r['prev_hash']}|{r['timestamp']}|{r['category']}|{r['action']}|"
+                        f"{r['agent_id']}|{r['company_id'] if 'company_id' in r.keys() else ''}|{r['payload_json']}"
+                    )
+                    raw_legacy = (
+                        f"{r['prev_hash']}|{r['timestamp']}|{r['category']}|{r['action']}|"
+                        f"{r['agent_id']}|{r['payload_json']}"
+                    )
+                    stored_hash = str(r["current_hash"] or "")
+                    ok = _verify_hash(raw_new, stored_hash)
+                    if not ok and not stored_hash.startswith(HMAC_PREFIX):
+                        # Alte Blöcke ohne company_id im signierten String akzeptieren.
+                        ok = _verify_hash(raw_legacy, stored_hash)
 
-                    if recomputed != r["current_hash"]:
+                    if not ok:
                         return {
                             "valid": False,
                             "corrupted_id": r["id"],
                             "reason": f"Manipulationsalarm bei Block #{r['id']}: Inhalt oder Zeitstempel weicht vom signierten Hash ab.",
-                            "expected_hash": recomputed,
-                            "actual_hash": r["current_hash"],
+                            "expected_hash": _chain_hash(raw_new),
+                            "actual_hash": stored_hash,
                         }
 
                     # 3. LLM-Dispatch Nachweis- & Spaltenkonsistenz-Prüfung

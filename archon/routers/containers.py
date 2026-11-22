@@ -7,6 +7,7 @@ Extrahiert aus main.py zur Modularisierung.
 """
 
 import os
+import re
 import sys
 import json
 import time
@@ -113,7 +114,10 @@ def save_container_settings(request: Request, container_name: str, config: Dict 
 
 
 @router.get("/api/v1/container/logs")
-def get_container_logs_api(container_name: str, tail: int = 150):
+def get_container_logs_api(request: Request, container_name: str, tail: int = 150):
+    require_admin_or_503(request)  # RBAC: Logs koennen Env-Secrets enthalten
+    if not re.fullmatch(r"[a-zA-Z0-9_.-]+", container_name):
+        raise HTTPException(status_code=400, detail="Ungueltiger container_name (erlaubt: a-zA-Z0-9_.-)")
     logs_raw = _dsr("GET", f"/containers/{container_name}/logs?tail={tail}&stdout=true&stderr=true")
     if not logs_raw:
         return {"logs": ""}

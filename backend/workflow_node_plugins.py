@@ -602,7 +602,8 @@ async def execute_workflow_node_plugin(
 
     from backend.tool_runtime import enforce_tool_execution
     gate = enforce_tool_execution(
-        agent_id="",
+        # M75: rechenschaftsfähiger Engine-Akteur statt leerer agent_id (Fail-closed)
+        agent_id="workflow_engine",
         session_id=str(node.get("kanban_task_id") or node.get("id") or "dag_plugin"),
         tool_name=f"node_plugin:{spec['plugin_id']}",
         args=dict(node.get("plugin_params") or {}),

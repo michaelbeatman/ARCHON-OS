@@ -113,7 +113,18 @@ def verify_warrant_for_call(
         if norm_p == ".." or norm_p.startswith("../") or "/../" in f"/{norm_p}/":
             return {"allowed": False, "reason": f"Pfad-Traversal '{raw_p}' im Warrant abgelehnt."}
         prefs = [posixpath.normpath(str(p).replace("\\", "/")).lstrip("./") for p in constraints["allowed_path_prefixes"]]
-        if not any(norm_p == pr or norm_p.startswith(pr.rstrip("/") + "/") or norm_p.startswith(pr) for pr in prefs if pr):
+
+        def _path_in_prefix(p: str, pref: str) -> bool:
+            # M90: commonpath statt startswith — 'data/safe_secrets' matcht nicht 'data/safe'
+            pref = pref.rstrip("/")
+            if not pref:
+                return False
+            try:
+                return posixpath.commonpath([p, pref]) == pref
+            except ValueError:
+                return False
+
+        if not any(_path_in_prefix(norm_p, pr) for pr in prefs if pr):
             return {"allowed": False, "reason": f"Pfad '{norm_p}' ausserhalb der Warrant-Prefixes."}
 
     return {"allowed": True, "warrant_id": payload.get("warrant_id"), "tool": tool_name}

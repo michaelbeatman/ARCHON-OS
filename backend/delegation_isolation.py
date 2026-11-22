@@ -50,6 +50,19 @@ def resolve_isolated_execution_scope(
     prof_list = profiles if profiles is not None else _load_profiles(profiles_path)
     prof = next((p for p in prof_list if p.get("id") == target_agent_id), None)
 
+    if target_agent_id == "workflow_engine":
+        # Benannter Akteur der DAG-/Plugin-Engine: M75 attribuiert Plugin-Laeufe
+        # rechenschaftsfähig, statt sie mit leerer agent_id still zu bypassen.
+        return {
+            "agent_id": target_agent_id,
+            "found": True,
+            "allowed_tools": ["node_plugin:*"],
+            "allowed_skills": [],
+            "model": requested_model or "auto/best-coding",
+            "provider": "",
+            "isolated": True,
+        }
+
     if not prof:
         return {
             "agent_id": target_agent_id,
@@ -103,6 +116,8 @@ def is_tool_allowed_for_agent(
     norm_tool = (tool_name or "").strip()
     if not norm_tool:
         return False
+    if "node_plugin:*" in allowed and norm_tool.startswith("node_plugin:"):
+        return True
     if norm_tool in allowed:
         return True
     if "mcp" in allowed and (norm_tool.startswith("mcp__") or norm_tool.startswith("mcp_")):
@@ -139,7 +154,15 @@ def enforce_runtime_tool_gate(
     1. M75: Prueft, ob `tool_name` im isolierten Profil-Toolset von `agent_id` liegt.
     2. M89: Prueft, ob `session_id` versiegelt (tainted) ist und HITL-Freigabe braucht.
     """
-    if agent_id and not is_tool_allowed_for_agent(agent_id, tool_name, profiles=profiles):
+    if not agent_id:
+        # M75 fail-closed: Ohne Agenten-Kontext ist keine Profil-Freigabe pruefbar.
+        return {
+            "allowed": False,
+            "blocked": True,
+            "gate": "m75_delegation_isolation",
+            "reason": "Leere agent_id — M75 fail-closed: Aufrufe brauchen einen Agenten mit Profil-Freigabe.",
+        }
+    if not is_tool_allowed_for_agent(agent_id, tool_name, profiles=profiles):
         return {
             "allowed": False,
             "blocked": True,

@@ -23,8 +23,8 @@ try:
     KANBAN_DB = _resolve_db("kanban.db")
     STATE_DB = _resolve_db("state.db")
 except Exception:
-    KANBAN_DB = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
-    STATE_DB = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.expanduser("~/.hermes/state.db")
+    KANBAN_DB = os.path.join(WORKSPACE_DIR, "data", "kanban.db")
+    STATE_DB = os.path.join(WORKSPACE_DIR, "data", "state.db")
 
 async def generate_morning_standup(force: bool = True) -> dict:
     standup_time = "08:00"

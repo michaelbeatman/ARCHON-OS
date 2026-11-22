@@ -102,6 +102,32 @@ def resolve_consolidated_domain(legacy_filename: str) -> str:
     return "ops.db"
 
 
+def get_schema_versions(target_dir: Optional[str] = None) -> Dict[str, int]:
+    """P2: user_version aller (auch nicht konsolidierten) DBs auslesen.
+
+    Damit ist die Schema-Version zentral inspizierbar, statt dass ~155
+    ad-hoc CREATE/ALTER-Statements ohne Versionsmarke nebeneinander stehen.
+    """
+    base = os.path.abspath(target_dir or DEFAULT_DATA_DIR)
+    versions: Dict[str, int] = {}
+    names = list(CONSOLIDATION_DOMAIN_MAP.keys()) + list(CONSOLIDATED_DOMAINS)
+    seen = set()
+    for name in names:
+        path = os.path.join(base, name)
+        if path in seen or not os.path.isfile(path) or os.path.getsize(path) == 0:
+            continue
+        seen.add(path)
+        try:
+            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2.0)
+            try:
+                versions[name] = int(conn.execute("PRAGMA user_version").fetchone()[0])
+            finally:
+                conn.close()
+        except Exception:
+            continue
+    return versions
+
+
 def get_manifest_path(target_dir: Optional[str] = None) -> str:
     base = os.path.abspath(target_dir or DEFAULT_DATA_DIR)
     return os.path.join(base, MANIFEST_FILENAME)
@@ -128,6 +154,22 @@ def is_consolidation_active(target_dir: Optional[str] = None) -> bool:
 
 def _sanitize_ident(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]", "_", str(name or "").strip()) or "tbl"
+
+
+def _full_schema_signature(tinfo: Dict[str, Any]) -> Tuple:
+    """P2: vollstaendige Signatur statt nur Spaltennamen.
+
+    Vorher verglich plan_consolidation nur `tinfo["columns"]` (eine Liste
+    von Namen). Zwei Tabellen mit gleichen Namen, aber unterschiedlichen
+    Typen/PK/NOT NULL wurden zusammengefuehrt; CREATE TABLE IF NOT EXISTS
+    liess die erste gewinnen und INSERT OR IGNORE verwarf Zeilen still.
+    Die CREATE-SQL enthaelt Typen, PK, Constraints und Defaultwerte.
+    """
+    sql = str(tinfo.get("create_sql") or "")
+    # Nur Whitespaces/Case normalisieren — semantisch relevante Unterschiede
+    # (Typen, NOT NULL, PK) bleiben erhalten.
+    normalized = re.sub(r"\s+", " ", sql).strip().lower().rstrip(";")
+    return (tuple(tinfo.get("columns") or []), normalized)
 
 
 def _inspect_sqlite_file(db_path: str, *, fast_count: bool = False) -> Dict[str, Any]:
@@ -192,6 +234,16 @@ def discover_legacy_databases(
     seen: set[str] = set()
     skip_names = {"cert9.db", "key4.db"}
 
+    # Die echte Hermes-Kanban-DB liegt in ~/.hermes, NICHT in data/. Ohne
+    # diese explizite Quelle wurde die 41-Spalten-Tasks-Tabelle nie nach
+    # ops.db migriert (statt dessen landete die 8-Spalten-Agent-Tabelle aus
+    # agentic_memory.db dort) —的经典 Split-Brain.
+    if source_dirs is None:
+        hermes_kanban = os.path.expanduser("~/.hermes/kanban.db")
+        if os.path.isfile(hermes_kanban) and os.path.getsize(hermes_kanban) > 0:
+            found.append(os.path.abspath(hermes_kanban))
+            seen.add(os.path.abspath(hermes_kanban))
+
     for sdir in dirs:
         if not sdir or not os.path.isdir(sdir):
             continue
@@ -235,7 +287,7 @@ def plan_consolidation(
     }
 
     # Pro Zieldomaene pruefen, ob zwei Quell-DBs denselben Tabellennamen mit abweichenden Spalten liefern
-    seen_tables_per_domain: Dict[str, Dict[str, Tuple[str, List[str]]]] = {d: {} for d in CONSOLIDATED_DOMAINS}
+    seen_tables_per_domain: Dict[str, Dict[str, Tuple[str, Tuple]]] = {d: {} for d in CONSOLIDATED_DOMAINS}
 
     for src in sources:
         if not src["valid_sqlite"] or not src["tables"]:
@@ -248,10 +300,11 @@ def plan_consolidation(
 
         for tbl_name, tinfo in src["tables"].items():
             prev = seen_tables_per_domain[dom].get(tbl_name)
+            signature = _full_schema_signature(tinfo)
             if prev is None:
                 target_table = tbl_name
-                seen_tables_per_domain[dom][tbl_name] = (src["filename"], tinfo["columns"])
-            elif prev[1] == tinfo["columns"]:
+                seen_tables_per_domain[dom][tbl_name] = (src["filename"], signature)
+            elif prev[1] == signature:
                 # Identisches Schema (z. B. duplizierte Tabelle in memory/ und data/): sauber mergen
                 target_table = tbl_name
             else:
@@ -488,6 +541,10 @@ def run_consolidation(
                     conn.execute("DETACH DATABASE legacy_src")
 
             integrity = conn.execute("PRAGMA integrity_check;").fetchone()[0]
+            # P2: Schema-Versionierung. Ohne user_version gibt es keine
+            # moeglichkeit, spaetere Migrationen versionsgesteuert anzuwenden.
+            if integrity == "ok":
+                conn.execute("PRAGMA user_version = 1;")
         finally:
             conn.close()
 

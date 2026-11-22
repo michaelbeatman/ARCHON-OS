@@ -367,7 +367,7 @@ def run_watchdog_scan(force: bool = False) -> Dict[str, Any]:
                 )
 
                 # Zusätzlich in Hermes kanban.db eintragen falls vorhanden
-                for kanban_db in [os.path.expanduser("~/.hermes/kanban.db"), "/opt/data/kanban.db"]:
+                for kanban_db in [__import__("backend.db_paths", fromlist=["resolve_db"]).resolve_db("kanban.db")]:
                     if os.path.exists(kanban_db):
                         try:
                             import sqlite3

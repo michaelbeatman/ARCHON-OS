@@ -106,7 +106,27 @@ class ConfigValidator:
             tid = t.get("id")
             lead = t.get("lead_id")
             if lead and known_agent_ids and lead not in known_agent_ids:
-                warnings.append(f"Team '{tid}': Lead-ID '{lead}' ist nicht in agent_profiles.json registriert.")
+                errors.append(f"Team '{tid}': Lead-ID '{lead}' ist nicht in agent_profiles.json registriert.")
+            if not lead:
+                warnings.append(f"Team '{tid}': kein lead_id definiert.")
+            members = t.get("member_agent_ids") or []
+            if known_agent_ids:
+                orphan_members = [m for m in members if m not in known_agent_ids]
+                if orphan_members:
+                    errors.append(
+                        f"Team '{tid}': unbekannte Member-IDs: {', '.join(orphan_members[:8])}"
+                    )
+        # H-2: Org-Chart muss Report-Linien (links) besitzen, sonst sind
+        # Teams/Supervisor nur Dekoration.
+        org_path = os.path.join(self.workspace_dir, "config", "org_hierarchy.json")
+        if os.path.exists(org_path):
+            try:
+                with open(org_path, "r", encoding="utf-8") as fh:
+                    org = json.load(fh)
+                if not org.get("links"):
+                    warnings.append("org_hierarchy.json: keine 'links' — Berichtslinien fehlen.")
+            except Exception as exc:
+                warnings.append(f"org_hierarchy.json nicht lesbar: {exc}")
 
         return errors, warnings, {"total_teams": len(teams_list)}
 

@@ -736,6 +736,25 @@ def load_persona_sources(lang: str = "de") -> Dict[str, Dict[str, Any]]:
     return result
 
 
+def _supervisor_from_org_chart(agent_id: str) -> str:
+    """H-4: Supervisor-ID aus config/org_hierarchy.json (links: from -> to)."""
+    fallback = "executive_decision_architect"
+    try:
+        path = os.path.join(APP_ROOT, "config", "org_hierarchy.json")
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        for link in data.get("links", []):
+            if str(link.get("to")) == agent_id:
+                return str(link.get("from") or fallback)
+        # Kein Link: Team-Lead aus der eigenen Node, wenn vorhanden.
+        for node in data.get("nodes", []):
+            if str(node.get("id")) == agent_id and node.get("supervisor_id"):
+                return str(node["supervisor_id"])
+    except Exception:
+        pass
+    return fallback
+
+
 def parse_personalakte_sections(agent_id: str, lang: str = "de") -> Dict[str, str]:
     candidates = [
         os.path.join(os.environ.get("ARCHON_OBSIDIAN_DIR", os.path.join(APP_ROOT, "obsidian_vault")), "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
@@ -749,11 +768,16 @@ def parse_personalakte_sections(agent_id: str, lang: str = "de") -> Dict[str, st
             with open(c, "r", encoding="utf-8", errors="ignore") as f:
                 raw = f.read()
             break
+    # H-4: Supervisor aus dem Org-Chart ableiten (source of truth), NICHT aus
+    # der Personalakte — dort stand nur ein Wikilink-Anzeigename ("@CEO Robert")
+    # oder gar nichts, woraufhin ALLE Agenten denselben Supervisor bekamen.
+    supervisor = _supervisor_from_org_chart(agent_id)
+    collaborators_default = f"`@default`, `@{supervisor}`"
     if not raw:
         return {
             "lessons": "",
-            "supervisor": "executive_decision_architect",
-            "collaborators": "`@default`, `@executive_decision_architect`",
+            "supervisor": supervisor,
+            "collaborators": collaborators_default,
         }
 
     raw = raw.split("<!-- SOUL_MD_EMBED_START -->")[0].strip()
@@ -768,10 +792,8 @@ def parse_personalakte_sections(agent_id: str, lang: str = "de") -> Dict[str, st
                     lessons.append(line_s.replace("Michael Keller", "Alex Rivera"))
 
     collabs = []
-    supervisor = "executive_decision_architect"
-    sup_m = re.search(r"supervisor:\s*\"?\[\[([^\]]+)\]\]\"?", raw)
-    if sup_m:
-        supervisor = sup_m.group(1).strip()
+    # Supervisor kommt aus dem Org-Chart, nicht aus dem Anzeigenamen im
+    # Wikilink. Die Personalakte liefert nur zusaetzliche Collaborators.
     for cm in re.findall(r"-\s*\"?\[\[([^\]]+)\]\]\"?", raw.split("## 6.")[-1] if "## 6." in raw else ""):
         if cm != supervisor and cm not in collabs:
             collabs.append(cm)
@@ -779,7 +801,7 @@ def parse_personalakte_sections(agent_id: str, lang: str = "de") -> Dict[str, st
     return {
         "lessons": "\n".join(lessons),
         "supervisor": supervisor,
-        "collaborators": ", ".join(f"`@{c}`" for c in collabs) if collabs else "`@default`, `@executive_decision_architect`",
+        "collaborators": ", ".join(f"`@{c}`" for c in collabs) if collabs else collaborators_default,
     }
 
 
@@ -1632,6 +1654,17 @@ def apply_soul_mode(mode: str = "compact", target_agent_id: str | None = None, l
                 except Exception:
                     pass
 
+    # H-3: Zentrale Cache-Invalidierung. Vorher musste jeder Aufrufer
+    # (Onboarding, HR-Router, CLI) selbst invalidieren — das Onboarding tat
+    # es nicht, sodass bis zu 300 s lang der alte SOUL-Prompt weiter lief.
+    try:
+        from archon.core.profiles import invalidate_hermes_profiles_cache
+        invalidate_hermes_profiles_cache()
+    except Exception as exc:
+        logger_debug = globals().get("logger")
+        if logger_debug:
+            logger_debug.debug("[sync_soul_modes] Profil-Cache-Invalidierung übersprungen: %s", exc)
+
     return {
         "status": "success",
         "mode": mode,
@@ -1646,7 +1679,12 @@ def apply_soul_mode(mode: str = "compact", target_agent_id: str | None = None, l
     }
 
 
-def get_current_soul_mode_status() -> Dict[str, Any]:
+def get_current_soul_mode_status(agent_id: str = "") -> Dict[str, Any]:
+    """H-3: Mit `agent_id` den pro-Agenten-Modus liefern, sonst den globalen.
+
+    `apply_soul_mode(target_agent_id=...)` setzt `prof["soul_mode"]` — der
+    alte Status-Endpoint ignorierte das und zeigte immer den globalen Modus.
+    """
     mode = "compact"
     for sp in SETTINGS_PATHS:
         if os.path.exists(sp):
@@ -1659,6 +1697,7 @@ def get_current_soul_mode_status() -> Dict[str, Any]:
             except Exception:
                 pass
 
+    profiles: list = []
     try:
         with open(PROFILES_JSON_PATH, "r", encoding="utf-8") as f:
             profiles = json.load(f)
@@ -1667,9 +1706,19 @@ def get_current_soul_mode_status() -> Dict[str, Any]:
     except Exception:
         avg_len = 0
 
+    if agent_id:
+        per_agent = next(
+            (str(p.get("soul_mode")) for p in profiles
+             if isinstance(p, dict) and p.get("id") == agent_id and p.get("soul_mode")),
+            "",
+        )
+        if per_agent in ("full", "pro", "compact"):
+            mode = per_agent
+
     return {
         "status": "success",
         "mode": mode,
+        "agent_id": agent_id or None,
         "avg_chars": avg_len,
     }
 

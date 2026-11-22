@@ -16,22 +16,38 @@
   ],
   "agents": [
     {
-      "id": "hermes-lead",
-      "name": "Hermes System Architect",
-      "system_prompt": "Du bist der leitende Architekt.",
+      "id": "system_architect_orchestrator",
+      "name": "Chief Distributed Systems & Cloud Infrastructure Architect",
+      "system_prompt": "Du bist der leitende Architekt und koordinierst das Tech-Team.",
       "model_id": "omniroute-free",
-      "tool_ids": [
-        "file-search"
-      ]
+      "tool_ids": ["file-search"]
+    },
+    {
+      "id": "executive_decision_architect",
+      "name": "CEO — Chief Executive Officer",
+      "system_prompt": "Du bist der strategische Leiter und triffst finale Entscheidungen.",
+      "model_id": "omniroute-free",
+      "tool_ids": []
     }
   ],
   "teams": [
     {
-      "id": "dev-team-alpha",
-      "name": "Dev Team Alpha",
+      "id": "team_strategy",
+      "name": "Strategy & Leadership",
       "mode": "Round-Robin",
+      "lead_id": "executive_decision_architect",
+      "member_agent_ids": ["executive_decision_architect"]
+    },
+    {
+      "id": "team_tech",
+      "name": "Tech, Software & Data",
+      "mode": "Round-Robin",
+      "lead_id": "system_architect_orchestrator",
       "member_agent_ids": [
-        "hermes-lead"
+        "system_architect_orchestrator",
+        "senior_fullstack_engineer",
+        "devops_cloud_sec_specialist",
+        "qa_test_engineer"
       ]
     }
   ]

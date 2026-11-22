@@ -420,13 +420,11 @@ class TenantContextManager:
                 return biz_db
 
             if is_primary_prod and fname == "kanban.db":
-                for cand in (
-                    "/opt/data/kanban.db",
-                    os.path.join(self.workspace_dir, "data", "kanban.db"),
-                    os.path.expanduser("~/.hermes/kanban.db"),
-                ):
-                    if os.path.isfile(cand):
-                        return cand
+                try:
+                    from backend.db_paths import resolve_db as _resolve_db
+                    return _resolve_db("kanban.db")
+                except Exception:
+                    return os.path.join(self.workspace_dir, "data", "kanban.db")
 
             if is_primary_prod and fname in ("deals.db", "contracts.db") and not _db_has_tables(isolated_path):
                 legacy_path = os.path.join(self.workspace_dir, "data", fname)

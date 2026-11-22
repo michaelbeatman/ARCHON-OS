@@ -16,7 +16,11 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger("archon.sla_contract_enforcer")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    DB_PATH = _resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 def _init_contracts_db():
     conn = sqlite3.connect(DB_PATH, timeout=10.0)

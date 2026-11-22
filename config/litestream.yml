@@ -1,33 +1,12 @@
 # Litestream Continuous SQLite Replication Configuration for Archon OS
 # Docs: https://litestream.io/reference/config/
-
-# Global replication settings
+#
+# Die 28->3-Konsolidierung ist AKTIV (data/.db_consolidated.json). Die drei
+# konsolidierten DBs sind die primären Replikationsziele. Die Hermes-Runtime
+# (/opt/data = ./.hermes) schreibt weiterhin kanban.db / state.db — diese
+# bleiben zusaetzlich gesichert.
 dbs:
-  # 1. Hermes Kanban Database (Single Source of Truth fuer Tasks & Status)
-  - path: /opt/data/kanban.db
-    replicas:
-      - type: file
-        path: /opt/litestream_replicas/kanban.db
-        sync-interval: 5s
-        retention: 72h
-
-  # 2. Hermes State & Session History
-  - path: /opt/data/state.db
-    replicas:
-      - type: file
-        path: /opt/litestream_replicas/state.db
-        sync-interval: 10s
-        retention: 72h
-
-  # 3. Archon Agentic Memory (Standard-Tabellen: user_profile, learnings, kv_store, tasks)
-  - path: /app/data/agentic_memory.db
-    replicas:
-      - type: file
-        path: /opt/litestream_replicas/agentic_memory.db
-        sync-interval: 10s
-        retention: 72h
-
-  # 4. Konsolidierte Domaenen-DBs (Phase 2)
+  # --- Konsolidierte Archon-Domaenen (Phase 2.1, aktiv) ---
   - path: /app/data/ops.db
     replicas:
       - type: file
@@ -46,5 +25,20 @@ dbs:
     replicas:
       - type: file
         path: /opt/litestream_replicas/memory.db
+        sync-interval: 10s
+        retention: 72h
+
+  # --- Hermes-Runtime (/opt/data = ./.hermes Mount) ---
+  - path: /opt/data/kanban.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/kanban.db
+        sync-interval: 5s
+        retention: 72h
+
+  - path: /opt/data/state.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/state.db
         sync-interval: 10s
         retention: 72h

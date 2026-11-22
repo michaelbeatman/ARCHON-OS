@@ -218,10 +218,14 @@ class OperationsCalendarManager:
             return True
 
     def _collect_kanban_deadlines(self) -> List[Dict[str, Any]]:
+        try:
+            from backend.db_paths import resolve_db as _resolve_db
+            resolved_kanban = _resolve_db("kanban.db")
+        except Exception:
+            resolved_kanban = os.path.join(self.data_dir, "kanban.db")
         candidates = [
             self.kanban_db_path,
-            "/opt/data/kanban.db",
-            os.path.join(self.data_dir, "kanban.db"),
+            resolved_kanban,
         ]
         db_path = next((p for p in candidates if p and os.path.isfile(p)), None)
         if not db_path:

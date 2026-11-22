@@ -383,7 +383,13 @@ def api_get_hermes_profiles(lang: Optional[str] = None):
         and (now - _HERMES_PROFILES_CACHE_TIME) < _HERMES_PROFILES_CACHE_TTL
         and (_HERMES_PROFILES_CACHE_MTIME == 0.0 or cur_mtime <= _HERMES_PROFILES_CACHE_MTIME)
     ):
-        return _project_profiles_for_lang(_HERMES_PROFILES_CACHE, resolved_lang)
+        cached = _HERMES_PROFILES_CACHE
+        try:
+            from backend.domain_activation import filter_active_profiles
+            cached = filter_active_profiles(cached)
+        except Exception as _dom_exc:
+            logger.debug("[Profiles] Domain-Filter (Cache) uebersprungen: %s", _dom_exc)
+        return _project_profiles_for_lang(cached, resolved_lang)
 
     HERMES_PROFILES_DIR = get_primary_hermes_profiles_dir()
     os.makedirs(HERMES_PROFILES_DIR, exist_ok=True)
@@ -631,7 +637,16 @@ def api_get_hermes_profiles(lang: Optional[str] = None):
     except Exception as e:
         logger.warning(f"[Profiles] Error initializing agent_profiles.json: {e}")
 
+    # H-2: Domain-Aktivierung als Laufzeit-Consumer. Fail-open, wenn keine
+    # active_domains gesetzt sind (Default = alle Profile sichtbar).
+    try:
+        from backend.domain_activation import filter_active_profiles
+        enriched_profiles = filter_active_profiles(enriched_profiles)
+    except Exception as _dom_exc:
+        logger.debug("[Profiles] Domain-Filter uebersprungen: %s", _dom_exc)
+
     return _project_profiles_for_lang(enriched_profiles, resolved_lang)
+
 
 def create_rolling_backup(filepath: str, max_backups: int = 3):
     """

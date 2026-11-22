@@ -18,8 +18,8 @@ try:
     KANBAN_DB_PATH = _resolve_db("kanban.db")
     MEMORY_DB_PATH = _resolve_db("agentic_memory.db")
 except Exception:
-    KANBAN_DB_PATH = "/opt/data/kanban.db" if os.path.exists("/opt/data/kanban.db") else os.path.expanduser("~/.hermes/kanban.db")
-    MEMORY_DB_PATH = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
+    KANBAN_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "kanban.db")
+    MEMORY_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 OBSIDIAN_VAULT_DIRS = [
     "/opt/data/obsidian/00_HR_Agenten/Personalakten",
     os.path.expanduser("~/obsidian/00_HR_Agenten/Personalakten"),
@@ -118,13 +118,15 @@ class AgentScorecardEngine:
         avg_tokens = round(total_tokens / total_tasks) if total_tasks > 0 else 0
         avg_cost = round(total_cost / total_tasks, 3) if total_tasks > 0 else 0.0
 
-        # Erfolgsquote (4-Augen Gate und Abschluss)
+        # M-3: erfundene 98 % fuer Agenten ohne Daten entfernt. Eine Scorecard
+        # ohne Belege darf keine Erfolgsquote behaupten — Consumer muessen
+        # `None` als "unzureichende Daten" behandeln.
         if review_scores:
             success_rate = round(sum(review_scores) / len(review_scores), 1)
         elif total_tasks > 0:
             success_rate = round((completed_count / total_tasks) * 100.0, 1)
         else:
-            success_rate = 98.0  # Basiswert für neue Agenten
+            success_rate = None
 
         # 3. Human Feedback Daten aus agentic_memory.db abfragen
         feedback_positive = 0
@@ -140,14 +142,14 @@ class AgentScorecardEngine:
         except Exception as exc:
             print(f"[ScorecardEngine] Feedback-Statistiken nicht ladbar: {exc}")
 
-        feedback_rate = round((feedback_positive / feedback_total) * 100.0, 1) if feedback_total > 0 else 98.5
+        feedback_rate = round((feedback_positive / feedback_total) * 100.0, 1) if feedback_total > 0 else None
 
         # 4. Autonomie-Index (First-Pass Rate ohne Korrekturschleifen)
         rework_count = review_count + sum(1 for t in tasks if t["status"] == "blocked")
         if total_tasks > 0:
             autonomy_rate = round(max(0.0, ((total_tasks - rework_count) / total_tasks) * 100.0), 1)
         else:
-            autonomy_rate = 95.0
+            autonomy_rate = None
 
         # 5. Learnings & Heuristiken aus agentic_memory.db
         learnings_count = 0
@@ -173,8 +175,12 @@ class AgentScorecardEngine:
                 "completed_at": t.get("completed_at") or t.get("created_at")
             })
 
+        # Consumer koennen an `data_sufficient` erkennen, ob die KPI-Werte
+        # auf echten Daten beruhen oder None (= "noch keine Daten") sind.
+        data_sufficient = total_tasks > 0 or feedback_total > 0
         return {
             "agent_id": agent_id,
+            "data_sufficient": data_sufficient,
             "total_tasks": total_tasks,
             "completed_tasks": completed_count,
             "in_progress_tasks": in_progress_count,

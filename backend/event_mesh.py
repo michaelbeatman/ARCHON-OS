@@ -17,7 +17,11 @@ import urllib.request
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+try:
+    from backend.db_paths import resolve_db as _resolve_db
+    DB_PATH = _resolve_db("agentic_memory.db")
+except Exception:
+    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 class EffectLedger:
     """M110: Zustandsbuch für externe Seiteneffekte.
@@ -227,6 +231,12 @@ class EventMesh:
                         delivered_at TEXT
                     )
                 """)
+                # P2: CAS-Claim gegen parallele Worker. Ohne Claim lesen zwei
+                # Prozesse dieselbe Zeile und posten denselben Webhook doppelt.
+                cols = {r[1] for r in conn.execute("PRAGMA table_info(event_mesh_outbox)").fetchall()}
+                for col, decl in (("claimed_by", "TEXT"), ("claim_expires", "REAL")):
+                    if cols and col not in cols:
+                        conn.execute(f"ALTER TABLE event_mesh_outbox ADD COLUMN {col} {decl}")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_event_mesh_outbox_pending ON event_mesh_outbox(status, next_try_at)")
                 conn.commit()
         finally:
@@ -504,17 +514,44 @@ class EventMesh:
             ).fetchall()
         finally:
             conn.close()
-        delivered = failed = dead = 0
+        delivered = failed = dead = claimed_skipped = 0
+        worker_id = f"{os.getpid()}:{uuid.uuid4().hex[:8]}"
+        claim_ttl = 120.0
         for r in rows:
+            # P2: atomarer CAS-Claim — genau ein Worker darf diese Zeile
+            # zustellen. Ein abgelaufener Claim (abgestuerzter Worker) darf
+            # uebernommen werden.
+            c = self._get_conn()
+            try:
+                c.execute("BEGIN IMMEDIATE")
+                cur = c.execute(
+                    "UPDATE event_mesh_outbox SET claimed_by = ?, claim_expires = ? "
+                    "WHERE id = ? AND status IN ('pending', 'delivery_failed') "
+                    "AND next_try_at <= ? "
+                    "AND (claimed_by IS NULL OR claim_expires IS NULL OR claim_expires <= ?)",
+                    (worker_id, time.time() + claim_ttl, r["id"], time.time(), time.time()),
+                )
+                got_claim = int(cur.rowcount or 0) == 1
+                c.commit()
+            finally:
+                c.close()
+            if not got_claim:
+                claimed_skipped += 1
+                continue
+
             if not self.effect_ledger.can_retry(str(r["idempotency_key"])):
-                # UNKNOWN/COMMITTED → hier bewusst kein Retry.
+                # UNKNOWN/COMMITTED → hier bewusst kein Retry. Claim freigeben.
+                self._release_outbox_claim(r["id"], worker_id)
                 continue
             attempts = int(r["attempts"] or 0)
             if attempts >= max_attempts:
                 c = self._get_conn()
                 try:
                     with c:
-                        c.execute("UPDATE event_mesh_outbox SET status = 'dead' WHERE id = ?", (r["id"],))
+                        c.execute(
+                            "UPDATE event_mesh_outbox SET status = 'dead', claimed_by = NULL, claim_expires = NULL WHERE id = ?",
+                            (r["id"],),
+                        )
                         c.commit()
                 finally:
                     c.close()
@@ -524,6 +561,9 @@ class EventMesh:
                 str(r["idempotency_key"]), str(r["target_url"]), str(r["event_type"]),
                 str(r["payload_json"]), 5.0, attempts,
             )
+            # Claim nach Zustellung freigeben (Erfolg wie Fehler — der Status
+            # in _deliver_outbox entscheidet ueber Retry).
+            self._release_outbox_claim(r["id"], worker_id)
             if res.get("status") == "delivered":
                 delivered += 1
             else:
@@ -532,7 +572,25 @@ class EventMesh:
             "status": "ok", "processed": len(rows),
             "delivered": delivered, "failed": failed, "dead": dead,
             "reconciled_unknown": reconciled,
+            "claimed_skipped": claimed_skipped,
         }
+
+    def _release_outbox_claim(self, row_id: int, worker_id: str) -> None:
+        """Gibt einen Claim nur fuer den eigenen Worker frei."""
+        try:
+            c = self._get_conn()
+            try:
+                with c:
+                    c.execute(
+                        "UPDATE event_mesh_outbox SET claimed_by = NULL, claim_expires = NULL "
+                        "WHERE id = ? AND claimed_by = ?",
+                        (row_id, worker_id),
+                    )
+                    c.commit()
+            finally:
+                c.close()
+        except Exception as exc:
+            logger.warning("[EventMesh] Claim-Release fehlgeschlagen: %s", exc)
 
     def scan_inbox_directory(self, inbox_dir: Optional[str] = None) -> Dict[str, Any]:
         """Prüft das Posteingangs-Verzeichnis (Path-Jailed) auf neue Dokumente und erzeugt Event-Mesh-Einträge."""

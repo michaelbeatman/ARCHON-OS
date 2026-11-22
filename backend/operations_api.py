@@ -46,7 +46,7 @@ def _resolve_kanban_db_path() -> str:
     return "/opt/data/kanban.db"
 
 
-_DEFAULT_KANBAN_DB_PATH = _resolve_kanban_db_path()
+_DEFAULT_KANBAN_DB_PATH = _resolve_kanban_db_path()  # resolve_db-basiert, siehe Funktion
 # 21.11.2026 (Fix-Sprint Paket A): dynamische Umleitung via Tenant-Context ist
 # der einzige Pfad — der alte, tote Branch "KANBAN_DB_PATH != default" ist entfernt.
 KANBAN_DB_PATH = _DEFAULT_KANBAN_DB_PATH

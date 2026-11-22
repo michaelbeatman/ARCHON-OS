@@ -21,7 +21,7 @@ try:
     from backend.db_paths import resolve_db
     DB_FILE = resolve_db("agentic_memory.db")
 except Exception:
-    DB_FILE = "/opt/data/agentic_memory.db" if os.path.exists("/opt/data/agentic_memory.db") else os.path.expanduser("~/.hermes/agentic_memory.db")
+    DB_FILE = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
 
 class ApprovalPolicyEngine:

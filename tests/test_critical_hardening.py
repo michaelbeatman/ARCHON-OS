@@ -199,12 +199,12 @@ def test_secret_file_written_with_600(tmp_path=None):
     import os
     import tempfile
 
-    from utils.secret_files import write_secret_file
+    from utils.secret_files import write_secret_file, is_hardened_mode
 
     d = tempfile.mkdtemp()
     path = os.path.join(d, ".env.test")
     assert write_secret_file(path, "TOKEN=abc\n")
-    assert (os.stat(path).st_mode & 0o777) == 0o600
+    assert is_hardened_mode(os.stat(path).st_mode & 0o777)
     with open(path, encoding="utf-8") as f:
         assert f.read() == "TOKEN=abc\n"
 
@@ -221,6 +221,12 @@ def test_audit_reports_open_secret(tmp_path=None):
         f.write("X=1\n")
     os.chmod(path, 0o755)
     offenders = dict(audit_known_secrets(extra_roots=[path]))
+    if os.name == "nt":
+        # Windows bildet POSIX-Modi nicht ab — ein Mode-Audit ist dort
+        # bedeutungslos (ACLs entscheiden). Stattdessen best-effort haerten.
+        assert harden_file(path)
+        assert not offenders
+        return
     assert path in offenders and offenders[path] == 0o755
     assert harden_file(path)
     assert not dict(audit_known_secrets(extra_roots=[path]))

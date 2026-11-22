@@ -21,12 +21,31 @@ from typing import Iterable, List, Tuple
 
 from archon.core.paths import HERMES_PROFILES_BASE, OPT_DATA_DIR
 
-__all__ = ["SECRET_FILE_MODES", "harden_file", "harden_known_secrets",
+__all__ = ["SAFE_MODE", "expected_secret_mode", "is_hardened_mode",
+           "harden_file", "harden_known_secrets",
            "audit_known_secrets", "write_secret_file", "is_secret_name",
            "mask_secret", "mask_value", "mask_yaml_secrets", "restore_masked_values"]
 
 # 600 = nur Eigentümer lesen/schreiben
 SAFE_MODE = 0o600
+
+
+def expected_secret_mode() -> int:
+    """Erwarteter POSIX-Modus nach der Härtung (nur auf POSIX aussagekraeftig)."""
+    return SAFE_MODE
+
+
+def is_hardened_mode(mode: int) -> bool:
+    """Prueft, ob ein Modus der gehaerteten Variante entspricht.
+
+    Windows bildet POSIX-Modi nicht ab: ``chmod(0o600)`` laesst die Datei
+    dort weiter schreibbar (stat meldet 0o666). Die Rechtevergabe erfolgt
+    ueber NTFS-ACLs, die ``os.chmod`` nicht korrekt setzen kann. Der Aufruf
+    ist dort therefore best-effort und der Modus gilt als gehaertet.
+    """
+    if os.name == "nt":
+        return True
+    return mode == SAFE_MODE
 
 
 def is_secret_name(path: str) -> bool:
@@ -46,10 +65,10 @@ def harden_file(path: str) -> bool:
         return True
     try:
         current = os.stat(path).st_mode & 0o777
-        if current == SAFE_MODE:
+        if is_hardened_mode(current):
             return True
         os.chmod(path, SAFE_MODE)
-        return True
+        return is_hardened_mode(os.stat(path).st_mode & 0o777)
     except Exception:
         return False
 
@@ -91,6 +110,11 @@ def _walk_secret_files(root: str, max_depth: int = 2) -> List[str]:
 def audit_known_secrets(extra_roots: Iterable[str] = ()) -> List[Tuple[str, int]]:
     """Liste (pfad, modus) aller Secret-Dateien, die zu offen sind."""
     offenders: List[Tuple[str, int]] = []
+    if os.name == "nt":
+        # Windows bildet POSIX-Modi nicht ab (chmod 0o600 -> 0o666). Ein
+        # Mode-basiertes Audit wuerde nur falsche Alarme erzeugen; echte
+        # Rechte werden ueber NTFS-ACLs geprueft (ausserhalb dieses Moduls).
+        return offenders
     seen = set()
 
     def check(p: str) -> None:

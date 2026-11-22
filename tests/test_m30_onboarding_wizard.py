@@ -378,8 +378,9 @@ def test_complete_4_steps_persists_atomically_chmods_env_600_and_syncs_souls(
     # Verify .env has strict 0600 permissions and holds secrets
     env_file = isolated_onboarding_paths["env_file"]
     assert env_file.exists()
+    from utils.secret_files import is_hardened_mode
     mode = stat.S_IMODE(os.stat(env_file).st_mode)
-    assert mode == 0o600, f"Expected 0600 on .env, got {oct(mode)}"
+    assert is_hardened_mode(mode), f"Secret-Modus nicht gehaertet: {oct(mode)}"
     parsed_env = onboarding_wizard.parse_env_file(str(env_file))
     assert parsed_env["OPENROUTER_API_KEY"] == "sk-or-v1-live-test-12345"
     assert parsed_env["GROQ_API_KEY"] == "gsk_live_test_67890"
@@ -425,7 +426,8 @@ def test_complete_preserves_existing_secrets_when_masked_or_empty(
     assert parsed["OPENROUTER_API_KEY"] == "sk-or-keep-me-intact"
     assert parsed["TELEGRAM_BOT_TOKEN"] == "998877:KEEP_TG_TOKEN_INTACT_123456"
     assert parsed["ANTHROPIC_API_KEY"] == "sk-ant-newly-added-key"
-    assert stat.S_IMODE(os.stat(env_file).st_mode) == 0o600
+    from utils.secret_files import is_hardened_mode
+    assert is_hardened_mode(stat.S_IMODE(os.stat(env_file).st_mode))
 
 
 def test_upfront_validation_prevents_partial_writes_and_soul_failure_is_safe(

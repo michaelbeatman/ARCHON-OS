@@ -32,10 +32,14 @@ logger = logging.getLogger("archon_os")
 # frueher verwendete os.path.dirname(__file__) aus main.py.
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
-WORKSPACE_DIR = "/app/agent_workspace" if (
+# Container-Erkennung: Windows bildet '/app/...' auf 'C:\app\...' ab — dort
+# darf NICHT der Linux-Container-Pfad gewaehlt werden (die Pfad-Baselines
+# sind POSIX). /.dockerenv ist das zuverlaessige Signal im Docker-Container.
+_IN_CONTAINER = os.name != "nt" and (
     os.path.exists("/app/agent_workspace") or os.path.exists("/.dockerenv")
-) else "./agent_workspace"
-MEMORY_DIR = "/app/data" if os.path.exists("/app/data") else "."
+)
+WORKSPACE_DIR = "/app/agent_workspace" if _IN_CONTAINER else "./agent_workspace"
+MEMORY_DIR = "/app/data" if (_IN_CONTAINER and os.path.exists("/app/data")) else "."
 DATA_DIR = MEMORY_DIR
 SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
 

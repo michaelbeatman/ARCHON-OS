@@ -117,10 +117,14 @@ def _resolve_host_path(container_path: str) -> Optional[str]:
     Returns:
         Host-Pfad als String, oder None wenn nicht auflösbar.
     """
+    # Docker-Mount-Pfade sind IMMER POSIX — auch wenn der Host Windows ist.
+    # os.path.* wuerde '/custom/path' auf Windows zu 'C:\\custom\\path' machen.
+    import posixpath
+
     # 1. Override per Environment Variable
     override = os.environ.get("ARCHON_SANDBOX_HOST_DIR")
     if override:
-        return os.path.abspath(override)
+        return posixpath.normpath(override) if override.startswith("/") else os.path.abspath(override)
 
     # 1b. Expliziter Bare-Metal/CI-Modus: der Pfad IST bereits ein Host-Pfad.
     # Nur per Env-Flag aktivieren — die Resolve-Tests simulieren bewusst einen
@@ -137,15 +141,17 @@ def _resolve_host_path(container_path: str) -> Optional[str]:
     try:
         raw = docker_client.request("GET", f"/containers/{container_id}/json", timeout=5.0)
         info = json.loads(raw.decode("utf-8"))
-    except (DockerError, json.JSONDecodeError, UnicodeDecodeError, OSError):
+    except (DockerError, json.JSONDecodeError, UnicodeDecodeError, OSError, AttributeError):
+        # AttributeError: socket.AF_UNIX existiert auf Windows nicht — Docker
+        # ist dort nicht ueber den Unix-Socket erreichbar.
         return None
 
     mounts = info.get("Mounts", [])
     if not mounts:
         return None
 
-    # Pfad normalisieren
-    container_path = os.path.abspath(container_path)
+    # Pfad normalisieren (POSIX — Container-Pfade sind unabhaengig vom Host-OS)
+    container_path = posixpath.normpath(container_path)
 
     # Mount mit längstem Destination-Präfix finden, der container_path abdeckt
     best_match = None
@@ -156,12 +162,12 @@ def _resolve_host_path(container_path: str) -> Optional[str]:
         src = mount.get("Source", "")
         if not dest or not src:
             continue
-        dest = os.path.abspath(dest)
-        src = os.path.abspath(src)
+        dest = posixpath.normpath(dest)
+        src = posixpath.normpath(src)
 
         # Prüfen ob container_path unter dest liegt (oder genau dest ist)
         try:
-            rel = os.path.relpath(container_path, dest)
+            rel = posixpath.relpath(container_path, dest)
             if not rel.startswith(".."):
                 # container_path ist unter dest
                 if len(dest) > best_len:
@@ -177,7 +183,7 @@ def _resolve_host_path(container_path: str) -> Optional[str]:
     src, dest, rel = best_match
     if rel == ".":
         return src
-    return os.path.join(src, rel)
+    return posixpath.join(src, rel)
 
 
 def _terminate_container(name: str) -> bool:

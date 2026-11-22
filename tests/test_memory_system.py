@@ -117,31 +117,16 @@ class TestEveyLearnerIntegration(unittest.TestCase):
         shutil.rmtree(getattr(self, "_tmpdir", ""), ignore_errors=True)
 
     def test_learner_handlers(self):
-        # 1. Learn from interaction
-        learn_args = {
-            "task": "Automatisierter Systemtest für Evey Learner",
-            "model_or_tool": "test_model_v1",
-            "quality_score": 9,
-            "what_worked": "JSONL-Persistenz",
-            "what_failed": "Keine Fehler aufgetreten",
-            "do_differently": "Immer append-only schreiben",
-            "tags": ["testing", "jsonl"]
-        }
-        res = json.loads(self.learner.learn_handler(learn_args))
-        self.assertEqual(res.get("status"), "learned", res)
-        self.assertEqual(res.get("quality_score"), 9)
-        self.assertGreaterEqual(res.get("total_learnings", 0), 1)
-
-        # 2. Apply learnings
-        apply_args = {
-            "task_description": "Führe einen Systemtest mit JSONL durch",
-            "max_results": 3
-        }
-        apply_res = json.loads(self.learner.apply_handler(apply_args))
-        self.assertIn(apply_res.get("status"), ["found", "no_learnings", "no_matches"], apply_res)
-        self.assertIsInstance(apply_res.get("applicable_lessons"), list)
-        if apply_res.get("status") == "found":
-            self.assertGreater(apply_res.get("matches", 0), 0)
+        """Das Plugin ist jetzt eine Archon-Bridge mit register(ctx) statt
+        direkter learn_handler/apply_handler-Funktionen. Die Bridge-Schnittstelle
+        wird geprueft; die eigentliche Learning-Logik liegt in Archon OS.
+        """
+        self.assertTrue(callable(self.learner.register))
+        res = self.learner.register({})
+        self.assertIsInstance(res, dict)
+        self.assertEqual(res.get("plugin_id"), "evey-learner")
+        self.assertEqual(res.get("status"), "bridged_to_archon_os")
+        self.assertIn("learn_from_interaction", res.get("tools", []))
 
 
 @unittest.skipUnless(
@@ -170,19 +155,21 @@ class TestEveyMemoryConsolidate(unittest.TestCase):
 
     def test_module_surface(self):
         consolidate = self._load()
-        self.assertTrue(callable(consolidate.handler))
-        self.assertTrue(callable(consolidate._langfuse_query))
-        # Die alte SQLite-Kopplung ist bewusst entfernt — Regression-Guard.
+        self.assertTrue(callable(consolidate.register))
+        res = consolidate.register({})
+        self.assertIsInstance(res, dict)
+        self.assertEqual(res.get("plugin_id"), "evey-memory-consolidate")
+        self.assertEqual(res.get("status"), "bridged_to_archon_os")
+        # Die alte SQLite-/Langfuse-Kopplung ist bewusst entfernt.
         self.assertFalse(hasattr(consolidate, "_sqlite_conversations_query"))
+        self.assertFalse(hasattr(consolidate, "_langfuse_query"))
 
     def test_langfuse_query_fails_open(self):
         consolidate = self._load()
-        # Unerreichbarer Host: der Query muss weich zurückfallen, nie crashen.
-        consolidate.LANGFUSE_HOST = "http://127.0.0.1:59999"
-        traces = consolidate._langfuse_query(hours_back=1)
-        self.assertIsInstance(traces, list)
-        self.assertGreaterEqual(len(traces), 1)
-        self.assertIsInstance(traces[0], str)
+        # Die Bridge darf auch mit leerer/externer Umgebung nie crashen.
+        res = consolidate.register({})
+        self.assertEqual(res.get("status"), "bridged_to_archon_os")
+        self.assertIsInstance(res.get("tools", []), list)
 
 
 if __name__ == "__main__":

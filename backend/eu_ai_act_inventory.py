@@ -291,13 +291,22 @@ class EUAIActInventoryManager:
         """Gibt das aktuelle KI-Inventar zurück (regeneriert automatisch bei Schema-Upgrade oder neueren Profilen)."""
         if not refresh and os.path.exists(self.inventory_file):
             try:
+                profiles = self.load_profiles()
                 if (
                     not os.path.exists(self.profiles_file)
                     or os.path.getmtime(self.inventory_file) >= os.path.getmtime(self.profiles_file)
                 ):
                     with open(self.inventory_file, "r", encoding="utf-8") as f:
                         loaded = json.load(f)
-                    if loaded and isinstance(loaded, list) and "soul_sha256" in loaded[0]:
+                    # Ein reiner mtime-Vergleich reicht nicht: ein Inventar, das
+                    # mit einer anderen (kleineren) Profilbasis geschrieben
+                    # wurde, bleibt sonst "aktuell" und liefert nur 1 statt
+                    # 73 Agenten. Zusaetzlich die Profilmenge abgleichen.
+                    if (
+                        loaded and isinstance(loaded, list)
+                        and "soul_sha256" in loaded[0]
+                        and len(loaded) == len(profiles)
+                    ):
                         return loaded
             except Exception as exc:
                 print(f"[EUAIAct] Gecachtes Inventar nicht lesbar, Inventar wird neu generiert: {exc}", file=sys.stderr)

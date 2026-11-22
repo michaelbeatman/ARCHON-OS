@@ -62,7 +62,15 @@ def test_public_repo_hygiene_and_70_specialists_ssot():
     assert not (REPO_ROOT / "docs" / "BETRIEB_HANDBUCH_INTERN.md").exists()
     assert not (REPO_ROOT / "docs" / "LAUNCH_PLAN_1000_STARS.md").exists()
     assert not (REPO_ROOT / "archon" / "core" / "agent_profiles.json").exists()
-    assert not (REPO_ROOT / "static" / "hermes-webui" / "static").exists()
+    # Hygiene-Regel: kein doppelter WebUI-Static-Baum im VERSIONIERTEN Repo.
+    # Untracked/generierte Dateien (z. B. lokale WebUI-Synchronisation) sind
+    # zulaessig — entscheidend ist, dass sie nicht committet werden.
+    import subprocess
+    tracked = subprocess.run(
+        ["git", "ls-files", "static/hermes-webui/static"],
+        cwd=str(REPO_ROOT), capture_output=True, text=True,
+    )
+    assert not tracked.stdout.strip(), "static/hermes-webui/static ist versioniert"
 
     profiles = json.loads((REPO_ROOT / "agent_profiles.json").read_text(encoding="utf-8"))
     assert len(profiles) >= 70

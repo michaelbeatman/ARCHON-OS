@@ -36,6 +36,8 @@ _TTF_CANDIDATES: Dict[str, Tuple[str, List[str]]] = {
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
             "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            # Windows: PDF/A-3b braucht eingebettete Fonts auch auf dem Host.
+            os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf"),
         ],
     ),
     "F2": (
@@ -44,6 +46,7 @@ _TTF_CANDIDATES: Dict[str, Tuple[str, List[str]]] = {
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
             "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arialbd.ttf"),
         ],
     ),
     "F3": (
@@ -52,6 +55,7 @@ _TTF_CANDIDATES: Dict[str, Tuple[str, List[str]]] = {
             "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
             "/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+            os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "consola.ttf"),
         ],
     ),
 }

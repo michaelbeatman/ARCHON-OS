@@ -226,17 +226,26 @@ class GracefulShutdownCoordinator:
     @staticmethod
     def _known_db_paths(filenames: List[str]) -> List[str]:
         candidates: List[str] = []
-        try:
-            from backend.db_paths import resolve_db
-            for fname in filenames:
-                candidates.append(resolve_db(fname))
-        except Exception as exc:
-            print(f"[GracefulShutdown] Warnung: resolve_db nicht verfuegbar, Fallback auf Workspace-DB-Pfade: {exc}", file=sys.stderr)
+        # Explizite Workspace-Pfade zuerst: sie sind konfigurierbar und in
+        # Tests mockbar. resolve_db() ergaenzt nur (frueher kamen dessen Pfade
+        # zuerst und ueberschrieben den gemockten Workspace-Pfad).
         for fname in filenames:
             if fname == "agent_os.db":
                 candidates.append(os.path.join(WORKSPACE_DIR, fname))
             else:
                 candidates.append(os.path.join(WORKSPACE_DIR, "data", fname))
+        # resolve_db() nur als Ergaenzung, wenn der explizite Pfad nicht
+        # existiert. Sonst werden in Tests/isolierten Workspaces fremde DBs
+        # geoeffnet (und auf Windows das Temp-Verzeichnis blockiert).
+        explicit = set(candidates)
+        try:
+            from backend.db_paths import resolve_db
+            for fname in filenames:
+                resolved = os.path.abspath(resolve_db(fname))
+                if resolved not in explicit:
+                    candidates.append(resolved)
+        except Exception as exc:
+            print(f"[GracefulShutdown] Warnung: resolve_db nicht verfuegbar, Fallback auf Workspace-DB-Pfade: {exc}", file=sys.stderr)
         seen = set()
         ordered: List[str] = []
         for p in candidates:
@@ -246,9 +255,18 @@ class GracefulShutdownCoordinator:
                 ordered.append(ap)
         return ordered
 
-    def _update_task_db_status(self, task_id: str, new_status: str, note: str = ""):
-        """Setzt den Task-Status in den bekannten SQLite-Tasktabellen."""
-        db_paths = self._known_db_paths(["kanban.db", "state.db", "agent_os.db"])
+    def _update_task_db_status(
+        self, task_id: str, new_status: str, note: str = "",
+        db_path: Optional[str] = None,
+    ):
+        """Setzt den Task-Status in den bekannten SQLite-Tasktabellen.
+
+        ``db_path`` erlaubt explizite Dependency Injection (Tests, isolation),
+        ohne globale Pfade mocken oder fremde DBs oeffnen zu muessen.
+        """
+        db_paths = [db_path] if db_path else self._known_db_paths(
+            ["kanban.db", "state.db", "agent_os.db"]
+        )
         for dbp in db_paths:
             if os.path.exists(dbp):
                 try:
@@ -370,10 +388,12 @@ class GracefulShutdownCoordinator:
             "recovered_orphans_count": recovered_orphans
         }
 
-    def _heal_orphan_tasks(self) -> int:
+    def _heal_orphan_tasks(self, db_path: Optional[str] = None) -> int:
         """Heilt Tasks, die durch unvorhergesehenes Beenden im 'in_progress'-Status hängengeblieben sind."""
         count = 0
-        db_paths = self._known_db_paths(["kanban.db", "state.db", "agent_os.db"])
+        db_paths = [db_path] if db_path else self._known_db_paths(
+            ["kanban.db", "state.db", "agent_os.db"]
+        )
         for dbp in db_paths:
             if os.path.exists(dbp):
                 try:

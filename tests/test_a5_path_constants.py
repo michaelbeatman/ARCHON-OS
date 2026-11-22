@@ -39,7 +39,12 @@ def test_path_constants_match_environment_baseline():
     mismatches = {}
     for name, want in expected.items():
         got = str(getattr(main, name))
-        if got != want:
+        # Die Baselines wurden auf POSIX erzeugt. Windows liefert fuer
+        # os.path.join('..', 'x') '..\\x' statt '../x' — nur die
+        # Pfad-Trennzeichen normalisieren, nicht die Werte selbst.
+        want_norm = str(want).replace("\\", "/")
+        got_norm = got.replace("\\", "/")
+        if got_norm != want_norm:
             mismatches[name] = {"baseline": want, "jetzt": got}
 
     assert not mismatches, (

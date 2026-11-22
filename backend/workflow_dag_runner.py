@@ -1074,15 +1074,41 @@ async def _exec_with_retry_and_timeout(
     executor_fn: ExecutorFn,
     node: Dict[str, Any],
     upstream: Dict[str, Any],
+    idempotency_key: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Fuehrt einen Node aus. ``idempotency_key`` (run_id + node_id +
+    fingerprint) verhindert doppelte Seiteneffekte bei Replay/Resume — der
+    leichte Ersatz fuer Coroutinen-Replay: bereits verbuchte Effekte werden
+    aus dem Ledger zurueckgegeben statt erneut auszufuehren.
+    """
     max_retries = max(0, min(5, int(node.get("max_retries") or 0)))
     timeout_sec = max(5.0, min(900.0, float(node.get("timeout_sec") or 180.0)))
     last_err = ""
     for attempt in range(max_retries + 1):
         try:
+            if idempotency_key:
+                try:
+                    from backend.idempotency_guard import idempotency_guard
+                    idem = idempotency_guard.check_or_register(
+                        "dag_node",
+                        {"key": idempotency_key, "attempt": attempt},
+                        explicit_key=idempotency_key,
+                    )
+                    if idem.get("blocked") and idem.get("cached_result"):
+                        cached = idem["cached_result"]
+                        if isinstance(cached, dict) and cached.get("status") != "error":
+                            return cached
+                except Exception as _idem_exc:
+                    logger.debug("[WorkflowDAG] Idempotency-Check uebersprungen: %s", _idem_exc)
             res = await asyncio.wait_for(executor_fn(node, upstream), timeout=timeout_sec)
             out = res if isinstance(res, dict) else {"status": "success", "result": res}
             if out.get("status") != "error":
+                if idempotency_key:
+                    try:
+                        from backend.idempotency_guard import idempotency_guard
+                        idempotency_guard.record_execution_result(idempotency_key, out)
+                    except Exception as _idem_exc:
+                        logger.debug("[WorkflowDAG] Idempotency-Record fehlgeschlagen: %s", _idem_exc)
                 return out
             last_err = str(out.get("error") or "node_returned_error")
             if attempt == max_retries:
@@ -1395,7 +1421,11 @@ async def _run_workflow_dag_locked(
                         },
                     }
                     sub_up = {**upstream, "_item": itm}
-                    sub_tasks.append(_exec_with_retry_and_timeout(eff_executor, sub_ctx, sub_up))
+                    _db_scope = hashlib.sha256(os.path.abspath(db_path).encode("utf-8")).hexdigest()[:10] if db_path else "default"
+                    sub_tasks.append(_exec_with_retry_and_timeout(
+                        eff_executor, sub_ctx, sub_up,
+                        idempotency_key=f"dag-{_db_scope}-{rid}-{nid}-item-{idx}",
+                    ))
 
                 sub_results = await asyncio.gather(*sub_tasks, return_exceptions=True)
                 ok_results = []
@@ -1440,7 +1470,15 @@ async def _run_workflow_dag_locked(
                 out = await _exec_with_retry_and_timeout(eff_executor, node_ctx, upstream)
                 st = "failed" if out.get("status") == "error" else "completed"
         else:
-            out = await _exec_with_retry_and_timeout(eff_executor, node_ctx, upstream)
+            # Stabiler Idempotency-Key: db_scope + run + node + fingerprint.
+            # db_scope verhindert Ledger-Kollisionen zwischen isolierten
+            # Test-/Mandanten-DBs bei gleichem run_id; innerhalb derselben DB
+            # bleibt der Key bei Resume/Replay stabil.
+            _db_scope = hashlib.sha256(os.path.abspath(db_path).encode("utf-8")).hexdigest()[:10] if db_path else "default"
+            node_idem_key = f"dag-{_db_scope}-{rid}-{nid}-{fp}"
+            out = await _exec_with_retry_and_timeout(
+                eff_executor, node_ctx, upstream, idempotency_key=node_idem_key
+            )
             st = "failed" if out.get("status") == "error" else "completed"
 
         outputs[nid] = out

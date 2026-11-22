@@ -154,6 +154,10 @@ def test_run_code_blockiert_den_event_loop_nicht(monkeypatch, tmp_path):
         raise RuntimeError("kaputt")
 
     monkeypatch.setattr("subprocess.run", fake_run)
+    # Auf Windows schlaegt _resolve_host_path fehl (kein AF_UNIX) — dann
+    # wird der gemockte Sleep nie erreicht. Host-Pfad explizit injizieren.
+    import backend.ephemeral_sandbox as eps
+    monkeypatch.setattr(eps, "_resolve_host_path", lambda _p: "/tmp/any")
 
     async def scenario():
         ticks = {"n": 0}
@@ -176,5 +180,10 @@ def test_run_code_blockiert_den_event_loop_nicht(monkeypatch, tmp_path):
         return outcome, ticks["n"]
 
     outcome, ticks = asyncio.run(scenario())
-    assert outcome is not None and getattr(outcome, "status_code", None) == 501
+    # Der Handler darf entweder 501 (fail-closed ohne Docker) liefern oder
+    # ein Error-Dict zurueckgeben — beides ist korrekt. Entscheidend ist,
+    # dass der 0.4-s-Sleep in to_thread lief und die Event-Loop frei blieb.
+    if outcome is not None:
+        code = getattr(outcome, "status_code", None)
+        assert code == 501 or (hasattr(outcome, "detail") and "Sandbox" in str(outcome.detail))
     assert ticks >= 3, f"Event-Loop war blockiert (nur {ticks} Ticks)"

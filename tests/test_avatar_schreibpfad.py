@@ -58,7 +58,8 @@ def test_ohne_env_ohne_opt_data_nimmt_home_pendant(monkeypatch):
 
     erwartet = os.path.expanduser("~/.hermes/webui/static_avatars")
     assert profiles_mod.avatars_dir() == erwartet
-    assert erwartet.endswith(os.path.join(".hermes", "webui", "static_avatars"))
+    # expanduser liefert auf Windows gemischte Separatoren (C:\Users/x/...).
+    assert erwartet.replace("\\", "/").endswith(".hermes/webui/static_avatars")
 
 
 @pytest.mark.parametrize("fall", ["env", "container", "host"])

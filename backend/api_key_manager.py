@@ -59,7 +59,22 @@ class ApiKeyManager:
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=15.0)
+        # ClosingConnection: `with conn` schliesst die Verbindung
+        # deterministisch. Ohne das bleiben bei jedem Aufruf offene
+        # Dateideskriptoren zurueck (unter Windows blockiert das den
+        # Temp-Verzeichnis-Teardown).
+        class _ClosingConn(sqlite3.Connection):
+            def __enter__(self):
+                super().__enter__()
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                try:
+                    super().__exit__(exc_type, exc_val, exc_tb)
+                finally:
+                    self.close()
+
+        conn = sqlite3.connect(self.db_path, timeout=15.0, factory=_ClosingConn)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")

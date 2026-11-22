@@ -80,10 +80,10 @@ def test_update_task_db_status_works_without_updated_at_column():
         conn.close()
 
         coord = gsync.GracefulShutdownCoordinator()
-        with mock.patch.object(gsync, "WORKSPACE_DIR", tmpdir):
-            coord._update_task_db_status("t-1", "checkpointed")
+        coord._update_task_db_status("t-1", "checkpointed", db_path=dbp)
 
-        with sqlite3.connect(dbp) as check:
+        from contextlib import closing
+        with closing(sqlite3.connect(dbp)) as check:
             status = check.execute("SELECT status FROM tasks WHERE id = 't-1'").fetchone()[0]
         assert status == "checkpointed"
 
@@ -98,10 +98,10 @@ def test_heal_orphan_tasks_works_without_updated_at_column():
         conn.close()
 
         coord = gsync.GracefulShutdownCoordinator()
-        with mock.patch.object(gsync, "WORKSPACE_DIR", tmpdir):
-            count = coord._heal_orphan_tasks()
+        count = coord._heal_orphan_tasks(db_path=dbp)
 
         assert count == 1  # nur der in_progress-Task
-        with sqlite3.connect(dbp) as check:
+        from contextlib import closing
+        with closing(sqlite3.connect(dbp)) as check:
             status = check.execute("SELECT status FROM tasks WHERE id = 't-1'").fetchone()[0]
         assert status == "todo"

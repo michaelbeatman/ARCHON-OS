@@ -377,16 +377,23 @@ def test_run_showroom_code_sandbox_and_path_jail(tmp_path, monkeypatch):
         ))
     assert ei.value.status_code == 403
 
-    res = asyncio.run(views_core.run_showroom_code(
-        None,
-        views_core.CodeRunPayload(
-            code="import os\nprint(os.environ.get('ARCHON_TEST_SECRET_TOKEN', 'CLEAN'))",
-            language="python",
-        ),
-    ))
-    assert res["status"] == "success"
-    assert res["stdout"].strip() == "CLEAN"
-    assert "TOP_SECRET_VALUE_999" not in res["stdout"]
+    # Ohne Docker ist die Sandbox korrekt fail-closed (S6-Hardening): es
+    # wird KEIN Code auf dem Host ausgefuehrt. Der Test prune, dass die
+    # Antwort weder Code noch Secret durchscheuern laesst.
+    from fastapi import HTTPException
+    try:
+        res = asyncio.run(views_core.run_showroom_code(
+            None,
+            views_core.CodeRunPayload(
+                code="import os\nprint(os.environ.get('ARCHON_TEST_SECRET_TOKEN', 'CLEAN'))",
+                language="python",
+            ),
+        ))
+    except HTTPException as exc:
+        assert exc.status_code == 501
+        return
+    assert res["status"] in ("error", "timeout")
+    assert "TOP_SECRET_VALUE_999" not in res.get("stdout", "")
 
 
 def test_gdpr_paginated_export_and_case_insensitive_erase(tmp_path):

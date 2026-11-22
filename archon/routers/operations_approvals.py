@@ -10,7 +10,7 @@ logger = logging.getLogger("archon.routers.operations_approvals")
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, HTTPException, Request
 
-from archon.routers._rbac import require_admin_or_503, get_session_actor
+from archon.routers._rbac import require_admin_or_503, require_session_actor
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -32,7 +32,7 @@ def api_update_approval_policy(request: Request, req: Dict[str, Any] = Body(...)
     require_admin_or_503(request)  # RBAC: Admin-Sache
     policy_key = req.get("policy_key", "").strip()
     new_value = str(req.get("new_value", "")).strip()
-    user_id = get_session_actor(request, fallback=req.get("user_id", "admin").strip() or "admin")
+    user_id = require_session_actor(request)
 
     if not policy_key or new_value == "":
         raise HTTPException(status_code=400, detail={"code": "approvals_policy_key_value_required", "params": {}})
@@ -41,6 +41,8 @@ def api_update_approval_policy(request: Request, req: Dict[str, Any] = Body(...)
         from backend.approval_policy_engine import approval_engine
         res = approval_engine.update_policy(policy_key, new_value, user_id=user_id)
         return {"status": "success", "result": res}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -82,21 +84,11 @@ def api_create_approval_request(req: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _resolve_actor(request: Request, fallback: str) -> str:
-    auth_user = getattr(request.state, "user", None)
-    if isinstance(auth_user, dict):
-        for key in ("username", "sub", "user_id", "email"):
-            val = auth_user.get(key)
-            if isinstance(val, str) and val.strip():
-                return val.strip()
-    return (fallback or "admin").strip()
-
-
 @router.post("/approvals/requests/{request_id}/approve")
 def api_approve_request(request: Request, request_id: str, req: Dict[str, Any] = Body(default={})):
     """Gibt eine anhängige Anfrage frei (unterstützt 1. und 2. Prüfer)."""
     require_admin_or_503(request)
-    approver_id = _resolve_actor(request, req.get("approver_id", "admin"))
+    approver_id = require_session_actor(request)
     try:
         from backend.approval_policy_engine import approval_engine
         res = approval_engine.approve_request(request_id, approver_id=approver_id)
@@ -121,7 +113,7 @@ def api_approve_request(request: Request, request_id: str, req: Dict[str, Any] =
 def api_reject_request(request: Request, request_id: str, req: Dict[str, Any] = Body(...)):
     """Lehnt eine anhängige Freigabeanfrage mit Begründung ab."""
     require_admin_or_503(request)
-    rejected_by = _resolve_actor(request, req.get("rejected_by", "admin"))
+    rejected_by = require_session_actor(request)
     reason = req.get("reason", "").strip()
     if not reason:
         raise HTTPException(status_code=400, detail={"code": "approvals_reason_required", "params": {}})
@@ -161,7 +153,7 @@ def api_get_delegation(user_id: str = "admin"):
 def api_set_delegation(request: Request, req: Dict[str, Any] = Body(...)):
     """Aktiviert oder deaktiviert den Urlaubsmodus mit Stellvertretung."""
     require_admin_or_503(request)
-    user_id = _resolve_actor(request, req.get("user_id", "admin"))
+    user_id = require_session_actor(request)
     is_active = bool(req.get("is_active", False))
     substitute_id = req.get("substitute_id", "katharina").strip()
     substitute_name = req.get("substitute_name", "Katharina Völk (QM)").strip()

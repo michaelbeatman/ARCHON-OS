@@ -71,7 +71,9 @@ def estimate_model_cost_usd(
 
     in_per_1m, out_per_1m = 0.30, 1.20
     try:
-        from backend.llm_prices import get_llm_prices
+        # P0-8: backend.llm_prices existiert nicht — der ImportError wurde
+        # verschluckt, weshalb immer die statische 8-Modell-Tabelle galt.
+        from archon.routers.llm_providers import get_llm_prices
         prices = get_llm_prices()
         if isinstance(prices, dict) and model in prices:
             entry = prices[model]

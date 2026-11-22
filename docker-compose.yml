@@ -63,7 +63,17 @@ services:
       - ARCHON_AUDIT_HMAC_KEY=${ARCHON_AUDIT_HMAC_KEY:-}
       - ARCHON_AUDIT_ANCHOR_PATH=${ARCHON_AUDIT_ANCHOR_PATH:-}
     volumes:
-      - ./:/app
+      # P0-11: KEIN `./:/app` mehr. Der alte Bind-Mount legte die .env mit dem
+      # Audit-HMAC-Key als /app/.env lesbar in den Container. Der Anwendungscode
+      # kommt jetzt ausschliesslich aus dem gebauten Image; nur echte
+      # Laufzeitdaten werden eingehängt. Der HMAC-Key geht weiterhin NUR über
+      # `environment:` (ARCHON_AUDIT_HMAC_KEY) in den Prozess, nie als Datei.
+      - ./data:/app/data
+      - ./agent_workspace:/app/agent_workspace
+      - ./obsidian_vault:/app/obsidian_vault
+      - ./plugins:/app/plugins
+      - ./config:/app/config
+      - ${ARCHON_HERMES_DIR:-./.hermes}:/app/.hermes
       - ./data/inbox:/opt/data/inbox
       - ./agent_workspace/builds:/projects/builds
       - ${ARCHON_HERMES_DIR:-./.hermes}:/opt/data
@@ -434,7 +444,8 @@ services:
     volumes:
       - ./config/litestream.yml:/etc/litestream.yml:ro
       - ${ARCHON_HERMES_DIR:-./.hermes}:/opt/data
-      - ./:/app
+      # P0-11: nur der Datenordner statt ./:/app (keine .env im Container).
+      - ./data:/app/data
       - ./data/litestream_replicas:/opt/litestream_replicas
     command: ["replicate", "--config", "/etc/litestream.yml"]
     deploy:

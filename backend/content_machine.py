@@ -528,18 +528,51 @@ def update_asset(asset_id: str, patch: Dict[str, Any], db_path: Optional[str] = 
     return _row_to_asset(row)
 
 
+def _enforce_asset_quality(conn, row) -> Dict[str, Any]:
+    """P1: Quality-Gate als echte Freigabebedingung (nicht nur Anzeige).
+
+    Nutzt den gespeicherten Report, falls vorhanden; andernfalls wird er aus
+    dem Asset neu berechnet. Ohne bestandenen Gate darf kein Asset in
+    'approved'/'scheduled'/'published' uebergehen.
+    """
+    raw = None
+    try:
+        if "quality_report" in row.keys():
+            raw = row["quality_report"]
+    except Exception:
+        raw = None
+    report: Optional[Dict[str, Any]] = None
+    if raw:
+        try:
+            report = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        except Exception:
+            report = None
+    if not isinstance(report, dict):
+        report = evaluate_asset_quality(_row_to_asset(row))
+    if not report.get("passed", False):
+        issues = "; ".join(str(i) for i in (report.get("issues") or [])[:3]) or "keine Details"
+        raise ValueError(
+            f"Quality-Gate blockiert Freigabe (Score {report.get('score', 0)}/100): {issues}"
+        )
+    return report
+
+
 def approve_asset(asset_id: str, scheduled_at: str = "", db_path: Optional[str] = None) -> Dict[str, Any]:
     """Nur review/draft → approved/scheduled. Direktes draft→published ist
     damit nicht mehr möglich (HITL-Gate-Umgehung)."""
     new_status = "scheduled" if scheduled_at else "approved"
     now = _utc_now_iso()
     with _conn(db_path) as conn:
-        row = conn.execute("SELECT status FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
+        row = conn.execute("SELECT * FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
         if not row:
             raise KeyError(f"Content-Asset '{asset_id}' nicht gefunden.")
         cur = str(row["status"] or "")
         if cur not in ("review", "draft"):
             raise ValueError(f"Unzulässiger Statusübergang: {cur} → {new_status}")
+        # P1: Der Quality-Score war bisher Dashboard-Kosmetik — approve_asset()
+        # pruefte nur den Status. Ein Score-0-Asset mit KI-Floskeln konnte
+        # freigegeben und publiziert werden.
+        _enforce_asset_quality(conn, row)
         cur_update = conn.execute(
             "UPDATE content_assets SET status = ?, scheduled_at = ?, updated_at = ? "
             "WHERE id = ? AND status IN ('review', 'draft')",
@@ -556,12 +589,13 @@ def mark_asset_published(asset_id: str, external_url: str = "", db_path: Optiona
     """Publish nur aus approved/scheduled — niemals direkt aus draft/review."""
     now = _utc_now_iso()
     with _conn(db_path) as conn:
-        row = conn.execute("SELECT status FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
+        row = conn.execute("SELECT * FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
         if not row:
             raise KeyError(f"Content-Asset '{asset_id}' nicht gefunden.")
         cur = str(row["status"] or "")
         if cur not in ("approved", "scheduled"):
             raise ValueError(f"Unzulässiger Statusübergang: {cur} → published")
+        _enforce_asset_quality(conn, row)
         cur_update = conn.execute(
             "UPDATE content_assets SET status = 'published', published_at = ?, external_url = ?, updated_at = ? "
             "WHERE id = ? AND status IN ('approved', 'scheduled')",
@@ -712,6 +746,36 @@ def build_content_repurposing_dag(campaign: Dict[str, Any], *, require_hitl_gate
     audience = campaign.get("target_audience") or "Entscheider & Gruender"
     voice = campaign.get("brand_voice") or "Direkt, faktenbasiert, praxisnah"
     notes = campaign.get("source_notes") or ""
+
+    # P1/Content B6: Feedback-Loop war Write-Only. voice_winner_hooks.md und
+    # config/voice.md wurden gespeichert, aber nie in Prompts geladen. Jetzt
+    # werden Top-Learnings + Voice-Dateien als aktiver Kontext injiziert.
+    feedback_lines: List[str] = []
+    try:
+        from local_memory_bridge import memory_bridge
+        learnings = memory_bridge.search_learnings(str(topic)[:100], limit=5, agent_id="content_machine")
+        for learning in learnings or []:
+            summary = str(learning.get("summary") or "").strip()
+            if summary:
+                feedback_lines.append(f"- [Learning] {summary[:220]}")
+    except Exception as exc:
+        logger.debug(f"[ContentMachine] Learning-Feedback nicht verfuegbar: {exc}")
+    for voice_file in ("config/voice.md", "config/voice_winner_hooks.md"):
+        try:
+            vpath = os.path.join(WORKSPACE_DIR, voice_file)
+            if os.path.isfile(vpath):
+                with open(vpath, "r", encoding="utf-8") as _vf:
+                    text = _vf.read().strip()
+                if text:
+                    lines = [ln.strip(" -#*") for ln in text.splitlines() if ln.strip()][:8]
+                    feedback_lines.append(f"- [{os.path.basename(vpath)}] " + " | ".join(lines))
+        except Exception as exc:
+            logger.debug(f"[ContentMachine] {voice_file} nicht lesbar: {exc}")
+    feedback_addon = (
+        "\n\n### ERFOLGREICHE MUSTER AUS VERGANGENEN CAMPAIGNS\n" + "\n".join(feedback_lines)
+        if feedback_lines else ""
+    )
+
     channels = [c for c in (campaign.get("channels") or DEFAULT_CHANNELS) if c in CHANNEL_SPECS]
     if not channels:
         channels = list(DEFAULT_CHANNELS)
@@ -720,16 +784,19 @@ def build_content_repurposing_dag(campaign: Dict[str, Any], *, require_hitl_gate
         {
             "id": "n_research",
             "title": f"Trend- & Fakten-Research: {campaign['title']}",
-            "type": "agent",
+            # P1/Content B1: echter Tool-Knoten (run_research_mission_v2) statt
+            # eines Prompt-Agenten. Ergebnis enthaelt `sources` + `verdict`.
+            "type": "research",
             "agent_id": "research_scout",
             "depends_on": [],
-            "prompt": (
-                f"Recherchiere das Thema '{topic}' fuer Zielgruppe '{audience}'.\n"
-                f"Quell-Notizen: {notes or 'keine'}\n"
-                "Liefere: (1) 3 starke, faktenbasierte Thesen, (2) haeufigste Irrtuemer/Pain-Points, "
-                "(3) konkrete Zahlen/Beispiele fuer hohe Glaubwuerdigkeit."
+            "query": (
+                f"{topic} — Zielgruppe: {audience}. "
+                f"Faktenbasierte Thesen, Pain-Points, konkrete Zahlen. "
+                f"Quell-Notizen: {notes or 'keine'}"
             ),
-            "expected_output": "Strukturierte Recherche-Notizen mit 3 Thesen und Fakten-Ankern.",
+            "max_rounds": 2,
+            "max_pages": 4,
+            "expected_output": "Quellenbasierte Synthese mit verifizierten Belegquellen.",
         },
         {
             "id": "n_master_brief",
@@ -740,6 +807,10 @@ def build_content_repurposing_dag(campaign: Dict[str, Any], *, require_hitl_gate
             "prompt": (
                 f"Erstelle auf Basis des Research die zentrale Storyline fuer '{topic}'.\n"
                 f"Tonalitaet: {voice}.\n"
+                "ZITATIONSPFLICHT: Jede konkrete Zahl oder Behauptung muss auf eine der "
+                "Belegquellen aus dem Research-Schritt zurueckzufuehren sein. Keine "
+                "Fakten aus dem Modellgedaechtnis erfinden.\n"
+                f"{feedback_addon}\n"
                 "Liefere: Kernbotschaft in 1 Satz, 5 starke Hooks, visuelle Leitidee und einen klaren CTA."
             ),
             "expected_output": "Master-Brief mit Kernbotschaft, 5 Hooks und Story-Bogen.",
@@ -768,6 +839,8 @@ def build_content_repurposing_dag(campaign: Dict[str, Any], *, require_hitl_gate
                 f"(Format: {spec['format']}, Seitenverhaeltnis: {spec['aspect_ratio']}).\n"
                 f"Tonalitaet: {voice}.\n"
                 f"Kanal-Regeln:\n- {rules}\n\n"
+                "ZITATIONSPFLICHT: Fakten und Zahlen nur aus den Belegquellen des "
+                "Research-Schritts. Unbelegte Behauptungen weglassen.\n\n"
                 "Antworte als JSON-Objekt mit den Schluesseln: "
                 "title, hook, body, visual_brief, hashtags (Liste), cta."
             ),
@@ -1202,7 +1275,10 @@ def publish_scheduled_due_assets(
     now_iso = _utc_now_iso()
     with _conn(db_path) as conn:
         rows = conn.execute(
-            "SELECT * FROM content_assets WHERE status = 'scheduled' AND scheduled_at != '' AND scheduled_at <= ? ORDER BY scheduled_at ASC",
+            # P1: 'approved' mit gesetztem scheduled_at wurde vom Sweep nie
+            # gefunden — Finalisierung und HITL-Gate setzten teils 'approved'.
+            "SELECT * FROM content_assets WHERE status IN ('scheduled', 'approved') "
+            "AND scheduled_at != '' AND scheduled_at <= ? ORDER BY scheduled_at ASC",
             (now_iso,),
         ).fetchall()
     due_assets = [_row_to_asset(r) for r in rows]

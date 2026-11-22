@@ -553,6 +553,30 @@ _RETENTION_INTERVAL_MIN = 30
 _RETENTION_DAYS = 14
 _RETENTION_MAX_ROWS = 5000
 _CONTENT_FEEDBACK_LAST_TS: Optional[datetime] = None
+_CONTENT_PUBLISH_LAST_TS: Optional[datetime] = None
+
+
+def _run_content_publish_sweep(now: datetime) -> None:
+    """P1: Alle 5 min faellige, HITL-freigegebene Assets automatisch publizieren.
+
+    Vorher existierte publish_scheduled_due_assets() nur als manueller Endpoint —
+    ein 'scheduled'-Asset blieb dauerhaft liegen, solange niemand den Button
+    geklickt hat (harte Sackgasse der Content-Pipeline).
+    """
+    global _CONTENT_PUBLISH_LAST_TS
+    if _CONTENT_PUBLISH_LAST_TS is not None and (now - _CONTENT_PUBLISH_LAST_TS) < timedelta(minutes=5):
+        return
+    _CONTENT_PUBLISH_LAST_TS = now
+    try:
+        from backend.content_machine import publish_scheduled_due_assets
+        res = publish_scheduled_due_assets()
+        if res.get("errors"):
+            logger.warning(
+                "[WorkflowScheduler] Content-Publish-Sweep mit Fehlern: %s",
+                res["errors"][:3],
+            )
+    except Exception as exc:
+        logger.warning(f"[WorkflowScheduler] Content-Publish-Sweep fehlgeschlagen: {exc}")
 
 
 def _run_content_feedback_sweep(now: datetime) -> None:
@@ -612,6 +636,7 @@ def _calendar_event_already_handled(conn: sqlite3.Connection, corr_id: str, toda
 def evaluate_due_schedules(now: Optional[datetime] = None) -> List[Dict[str, Any]]:
     init_schedules_db()
     cur_now = now or datetime.now(timezone.utc)
+    _run_content_publish_sweep(cur_now)
     _run_content_feedback_sweep(cur_now)
     triggered: List[Dict[str, Any]] = []
     conn = _get_conn()

@@ -16,10 +16,10 @@ if BASE_DIR not in sys.path:
 import backend.auth_service as auth_service
 from backend.auth_service import AuthService
 
-# Passwort des von _seed_default_admin() angelegten Admin-Kontos in einer
-# FRISCHEN Datenbank. Kein Umgebungsgeheimnis nötig — die Tests laufen gegen
-# eine temporäre DB, die sie selbst erzeugen und danach löschen.
-TEST_ADMIN_PW = "archon2026"
+# P0-2: kein hartcodiertes Default-Passwort mehr. _seed_default_admin()
+# generiert ein Zufallspasswort und schreibt es einmalig neben die (hier
+# temporäre) DB. setUpClass liest es von dort.
+TEST_ADMIN_PW = ""
 
 
 class TestAuthRBAC(unittest.TestCase):
@@ -30,6 +30,13 @@ class TestAuthRBAC(unittest.TestCase):
         cls._tmpdir = tempfile.mkdtemp(prefix="archon_auth_test_")
         cls._orig_db_path = auth_service.DB_PATH
         auth_service.DB_PATH = os.path.join(cls._tmpdir, "test_agentic_memory.db")
+
+        # Seed ausführen und generiertes Passwort aus der Datei neben der DB lesen.
+        AuthService()
+        global TEST_ADMIN_PW
+        pw_file = os.path.join(cls._tmpdir, ".archon_initial_admin_password")
+        with open(pw_file, "r", encoding="utf-8") as fh:
+            TEST_ADMIN_PW = fh.read().strip()
 
     @classmethod
     def tearDownClass(cls):

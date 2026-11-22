@@ -78,7 +78,7 @@ class EphemeralTeamSpawner:
     def __init__(self):
         _init_db()
 
-    def spawn_task_force(
+    async def spawn_task_force(
         self,
         mission_title: str,
         mission_brief: str,
@@ -109,8 +109,9 @@ class EphemeralTeamSpawner:
 
         team_id = f"squad-{uuid.uuid4().hex[:10]}"
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        final_status = "completed_and_dissolved" if auto_dissolve else "active"
-        dissolved_at = now_iso if auto_dissolve else None
+        # P0-10: Abschlussstatus frueher VOR dem DAG gesetzt — ein fehlgeschlagener
+        # Run wurde trotzdem als "completed_and_dissolved" gespeichert.
+        dag_succeeded = True
 
         # Optionale Ausfuehrung ueber die zentrale Workflow-DAG-Engine (Fan-Out + Synthese)
         dag_run: Optional[Dict[str, Any]] = None
@@ -143,9 +144,21 @@ class EphemeralTeamSpawner:
                     if dry_run
                     else None
                 )
-                dag_run = asyncio.run(run_workflow_dag(dag_def=dag_def, executor_fn=eff_exec))
+                # P0-10: asyncio.run() erzeugte eine NEUE Event-Loop pro Call —
+                # Dispatcher-Semaphoren/HTTP-Pools sind loop-keyed und wurden
+                # damit umgangen. Aus async-Kontext haette es hart gecrasht.
+                dag_run = await run_workflow_dag(dag_def=dag_def, executor_fn=eff_exec)
+                dag_succeeded = str(dag_run.get("status", "")).lower() in ("success", "completed", "ok")
             except Exception as dag_exc:
-                logger.warning(f"[EphemeralTeamSpawner] DAG-Dispatch fuer {team_id} uebersprungen: {dag_exc}")
+                dag_succeeded = False
+                logger.warning(f"[EphemeralTeamSpawner] DAG-Dispatch fuer {team_id} fehlgeschlagen: {dag_exc}")
+
+        final_status = (
+            "completed_and_dissolved" if (auto_dissolve and dag_succeeded)
+            else "failed" if not dag_succeeded
+            else "active"
+        )
+        dissolved_at = now_iso if (auto_dissolve and dag_succeeded) else None
 
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""

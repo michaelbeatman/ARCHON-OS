@@ -26,7 +26,7 @@ FRAMEWORK_DEFAULTS = {
         {"role_name": "Refinable Delivery (Tech)", "profile_id": "senior_fullstack_engineer"}
     ],
     "Six Thinking Hats": [
-        {"role_name": "Weißer Hut (Fakten & Daten)", "profile_id": "market_research_analyst"},
+        {"role_name": "Weißer Hut (Fakten & Daten)", "profile_id": "research_scout"},
         {"role_name": "Roter Hut (Emotion & Intuition)", "profile_id": "personal_life_strategist"},
         {"role_name": "Schwarzer Hut (Kritik & Risiko)", "profile_id": "liability_risk_analyst"},
         {"role_name": "Gelber Hut (Optimismus & Chancen)", "profile_id": "executive_decision_architect"},
@@ -77,7 +77,7 @@ def auto_detect_framework(task_text: str) -> str:
         return "CLEAR-Model"
     return "Steffi Kieffer Boardroom"
 
-def run_debate(task: str, framework: str = None, budget: str = "balanced", rounds: int = 2, chairman_id: str = "orchestrator", host: str = "http://127.0.0.1:8501"):
+def run_debate(task: str, framework: str = None, budget: str = "balanced", rounds: int = 2, chairman_id: str = "default", host: str = "http://127.0.0.1:8501"):
     if not framework:
         framework = auto_detect_framework(task)
     
@@ -96,7 +96,7 @@ def run_debate(task: str, framework: str = None, budget: str = "balanced", round
     for s in chosen_slots_def:
         slots_payload.append({
             "role_name": s["role_name"],
-            "profile_id": s.get("profile_id") or s.get("default_profile") or "senior_coder",
+            "profile_id": s.get("profile_id") or s.get("default_profile") or "senior_fullstack_engineer",
             "provider": preset["provider"],
             "model_id": preset["model"]
         })
@@ -128,8 +128,10 @@ def run_debate(task: str, framework: str = None, budget: str = "balanced", round
         print(f"[Warning] HTTP call failed ({e}). Falling back to internal dispatcher...", file=sys.stderr)
         try:
             import asyncio
-            from core.agent_core import core_dispatcher
-            from main import _prepare_boardroom_agents, BoardroomRequest
+            # P1/K-3: `core.agent_core` existiert nicht, und BoardroomRequest
+            # liegt nicht in main.py — der Notfallpfad scheiterte immer.
+            import core_dispatcher
+            from archon.routers.boardroom import _prepare_boardroom_agents, BoardroomRequest
             breq = BoardroomRequest(**payload)
             chair, all_agents = _prepare_boardroom_agents(breq)
             res = asyncio.run(core_dispatcher.run_boardroom_debate(

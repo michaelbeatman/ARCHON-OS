@@ -811,6 +811,40 @@ def list_real_hermes_profiles(profiles_dir: Optional[str] = None) -> List[Dict[s
             for e in sorted(os.listdir(skills_dir)):
                 if not e.startswith(".") and os.path.isdir(os.path.join(skills_dir, e)):
                     sk.append(e)
+        # H-1: echte Tool-Freigaben aus profile.yaml statt 18 Tools fuer alle.
+        # Vorher bekam jedes Profil (auch legal_counsel) denselben Tool-Satz —
+        # der M75-Gate in delegation_isolation.py war damit wirkungslos.
+        prof_tools: List[str] = []
+        _tools_in = False
+        if os.path.exists(py):
+            try:
+                with open(py, "r", encoding="utf-8") as _tf:
+                    for _line in _tf:
+                        _s = _line.strip()
+                        if _s.startswith("tools:"):
+                            _tools_in = True
+                            _inline = _s.split(":", 1)[1].strip()
+                            if _inline and _inline.startswith("["):
+                                try:
+                                    prof_tools = [str(x).strip() for x in json.loads(_inline)]
+                                except Exception:
+                                    prof_tools = []
+                            continue
+                        if _tools_in:
+                            if _s.startswith("- "):
+                                prof_tools.append(_s[2:].strip().strip('"\''))
+                            elif _s and not _s.startswith("#"):
+                                _tools_in = False
+            except Exception as exc:
+                print(f"[APIProvider] tools konnten nicht gelesen werden ({py}): {exc}", file=sys.stderr)
+        _tool_aliases = {
+            "FileSystem_MCP": "filesystem", "Calculator": "execute_code",
+            "WebSearch": "web_search", "websearch": "web_search",
+        }
+        prof_tools = [_tool_aliases.get(t, t) for t in prof_tools if t]
+        if not prof_tools:
+            prof_tools = ["web_search"]  # fail-closed: kein Profil-Tool-Set
+
         # config.yaml -> Modell
         cfg = read_profile_config(entry, pd)
         # description_long aus profile.yaml lesen (falls vorhanden) -> wird 'prompt'
@@ -833,7 +867,7 @@ def list_real_hermes_profiles(profiles_dir: Optional[str] = None) -> List[Dict[s
             "category": meta.get("category", ""),
             "description": meta.get("description", ""),
             "skills": sk,
-            "tools": ['web_search', 'browser', 'terminal', 'filesystem', 'execute_code', 'vision_analyze', 'image_generate', 'bfl_flux3', 'text_to_speech', 'speech_to_text', 'skills', 'task_planning', 'memory', 'session_search', 'clarify', 'delegate_task', 'cronjob', 'computer_use'],
+            "tools": prof_tools,
             "prompt": _dl,
             "model": cfg.get("model"),
             "provider": cfg.get("provider"),

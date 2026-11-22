@@ -118,7 +118,8 @@ class TaskSelfHealer:
         affected_file: Optional[str] = None,
         attempt: int = 1,
         max_attempts: Optional[int] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        apply_patch: bool = False,
     ) -> Dict[str, Any]:
         """
         Führt einen geschlossenen Selbstheilungs-Durchlauf durch:
@@ -187,6 +188,39 @@ Antworte strukturiert mit der korrigierten Fassung."""
         except Exception as err:
             repaired_code = f"Reparatur-Versuch fehlgeschlagen: {err}"
 
+        # P0-5: Frueher wurde der "reparierte" Code nur geloggt und zurueckgegeben;
+        # `status="repaired"` war schon bei jeder nichtleeren LLM-Antwort gesetzt.
+        # Jetzt: echter Patch NUR bei explizitem Opt-in, mit Backup und nur aus
+        # einem Codeblock. Sonst ehrlicher Status 'proposed' (Human Review).
+        patch_applied = False
+        if repaired_ok and apply_patch and affected_file:
+            try:
+                import re as _re
+                _block = _re.search(
+                    r"```(?:python|py|js|jsx|ts|tsx)?\s*\n(.*?)```",
+                    repaired_code,
+                    _re.DOTALL,
+                )
+                candidate = _block.group(1).strip() if _block else ""
+                if not candidate:
+                    raise ValueError("Kein Codeblock in der LLM-Antwort — Patch nicht angewandt.")
+                rel_path = validate_affected_file(affected_file)
+                target = os.path.join(WORKSPACE_DIR, rel_path)
+                with open(target, "r", encoding="utf-8") as fh:
+                    original = fh.read()
+                with open(target + ".archon_heal_backup", "w", encoding="utf-8") as fh:
+                    fh.write(original)
+                with open(target, "w", encoding="utf-8") as fh:
+                    fh.write(candidate + "\n")
+                patch_applied = True
+                _archon_exc_logger.warning(
+                    "[task_self_healer] Patch nach %s geschrieben (Backup: %s.archon_heal_backup)",
+                    target, target,
+                )
+            except Exception as exc:
+                repaired_ok = False
+                repaired_code = f"Patch konnte nicht geschrieben werden: {exc}"
+
         # 3. Loggen
         action_desc = f"Rollback {affected_file}" if rollback_applied else ("Rollback übersprungen (keine Datei)" if not affected_file else f"Rollback {affected_file} ({rollback_res.get('status')})")
         conn = self._get_conn()
@@ -222,15 +256,21 @@ Antworte strukturiert mit der korrigierten Fassung."""
             except Exception as _exc:
                 _archon_exc_logger.debug("[task_self_healer] Ignorierte Ausnahme (Z.220): %s", _exc)
 
+        status = "repaired" if patch_applied else ("proposed" if repaired_ok else "failed")
         return {
-            "status": "repaired" if repaired_ok else "failed",
+            "status": status,
             "task_id": task_id,
             "attempt": attempt,
             "max_attempts": max_attempts,
             "rollback_applied": rollback_applied,
+            "patch_applied": patch_applied,
             "repaired_code_preview": repaired_code[:300] + ("..." if len(repaired_code) > 300 else ""),
             "repaired_code": repaired_code,
-            "next_action": "Task weiterführen" if repaired_ok else ("Wiederholen" if attempt < max_attempts else "Auf Blockiert gesetzt (HITL)")
+            "next_action": (
+                "Task weiterführen" if patch_applied
+                else "Human Review: Patchvorschlag pruefen und manuell anwenden" if repaired_ok
+                else ("Wiederholen" if attempt < max_attempts else "Auf Blockiert gesetzt (HITL)")
+            ),
         }
 
     def get_healing_logs(self, limit: int = 25) -> List[Dict[str, Any]]:

@@ -49,9 +49,12 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
     """
     Transkribiert rohe Audio-Bytes (Zero-Egress-geschuetzt).
     """
-    from backend.llm_egress_guard import ZeroEgressBlockedError, enforce_egress_firewall_for_url, is_zero_egress_active
+    # P0-4: is_zero_egress_active existiert nicht in llm_egress_guard →
+    # ImportError; der TypeError mit data_category= liess den Guard nie laufen.
+    from backend.llm_egress_guard import ZeroEgressBlockedError, enforce_egress_firewall_for_url
+    from backend.privacy_router import get_privacy_config
 
-    if is_zero_egress_active():
+    if bool(get_privacy_config().get("zero_egress_strict")):
         logger.warning("[Voice] Zero-Egress aktiv — Cloud-Transkription (Groq/OpenAI/Gemini) blockiert.")
         return "[Zero-Egress aktiv: Cloud-Audio-Transkription blockiert]"
 
@@ -60,7 +63,7 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
         try:
             import httpx
             groq_url = "https://api.groq.com/openai/v1/audio/transcriptions"
-            enforce_egress_firewall_for_url(groq_url, data_category="voice")
+            enforce_egress_firewall_for_url(groq_url, agent_id="voice_pipeline")
             headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
             files = {"file": (filename, data, "audio/ogg")}
             data_fields = {"model": "whisper-large-v3", "language": language}

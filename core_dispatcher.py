@@ -349,8 +349,14 @@ def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, 
             now = time.time()
             eff_task = task_id or f"agent_{agent_id}"
             s_id = f"task_{eff_task}" if not str(eff_task).startswith("task_") else str(eff_task)
-            t_key = f"{eff_task}_{int(now)}"
-            cost_usd = round((in_tok * 0.00000015) + (out_tok * 0.00000030), 6)
+            t_key = str(eff_task)
+            # P0-8: Ein Einheitstarif fuer alle Modelle war falsch (Claude-Opus
+            # wurde ~100x unterberechnet). Echte Preis-Tabelle mit Fallback.
+            try:
+                from backend.llm_kernel import estimate_model_cost_usd
+                cost_usd = estimate_model_cost_usd(model, in_tok, out_tok)
+            except Exception:
+                cost_usd = round((in_tok * 0.00000015) + (out_tok * 0.00000030), 6)
             
             cur = conn.cursor()
             cur.execute("SELECT id FROM sessions WHERE id = ?", (s_id,))
@@ -469,11 +475,24 @@ async def dispatch_to_omniroute_or_container(
             try:
                 from backend.role_budget_engine import budget_bank
                 est_in_tokens = max(100, len(str(prompt or "")) // 4)
+                # P0-8: Output-Tokens und EUR-Vorabschaetzung fehlten. Ohne
+                # est_eur greift der harte EUR-Cap erst NACH dem Geldausgeben.
+                est_out_tokens = max(256, est_in_tokens // 2)
+                try:
+                    from backend.role_budget_engine import USD_TO_EUR_RATE
+                    from backend.llm_kernel import estimate_model_cost_usd
+                    est_cost_eur = round(
+                        estimate_model_cost_usd(model, est_in_tokens, est_out_tokens, provider=provider)
+                        * USD_TO_EUR_RATE,
+                        6,
+                    )
+                except Exception:
+                    est_cost_eur = 0.0
                 bg_chk = budget_bank.reserve(
                     agent_id=agent_id,
                     task_id=task_id or None,
-                    estimated_tokens=est_in_tokens,
-                    estimated_cost_eur=0.0,
+                    estimated_tokens=est_in_tokens + est_out_tokens,
+                    estimated_cost_eur=est_cost_eur,
                     node_id=slot_id,
                 )
                 if not bg_chk.get("allowed", False):
@@ -1244,10 +1263,15 @@ async def dispatch_to_external_agent(
     model: str = "free-forever",
     timeout: int = 30,
     provider: str = "",
-    reasoning_level: str = "medium"
+    reasoning_level: str = "medium",
+    task_id: str = "",
 ) -> dict:
     """
     Haupt-Dispatcher: Routet Anfragen primär an den Container und fällt nahtlos auf OmniRoute (Port 20128) zurück.
+
+    P0-1: ``task_id`` war in den Zeilen 1258/1269/1280 referenziert, aber nicht
+    definiert — der Erfolgsfall der Container-Dispatches (hermes/odysseus/openclaw)
+    endete deshalb in einem NameError.
     """
     if agent_id == "hermes":
         res = await dispatch_to_hermes(agent_name, prompt, timeout)
@@ -1293,7 +1317,8 @@ async def dispatch_to_external_agent(
         model=model,
         provider=provider,
         timeout=timeout,
-        reasoning_level=reasoning_level
+        reasoning_level=reasoning_level,
+        task_id=task_id,
     )
 
 CATEGORIZED_FRAMEWORKS = {
@@ -1738,8 +1763,18 @@ async def stream_boardroom_debate(
                 timeout=15
             )
             
-            check_text = check_res.get("content", "").upper()
-            if "KONSENS_ERREICHT" in check_text or "CONSENSUS" in check_text:
+            check_text = str(check_res.get("content", "") or "").strip().upper()
+            # M-1: "CONSENSUS" traf auch auf "KEIN CONSENSUS ERREICHT" zu und
+            # beendete die Debatte vorzeitig. Explizite Negation schlaegt immer.
+            negative = any(
+                token in check_text
+                for token in ("KEIN KONSENS", "NICHT ERREICHT", "NO CONSENSUS",
+                              "DEBATTE_FORTSETZEN", "KEIN CONSENSUS")
+            )
+            consensus_reached = (
+                "KONSENS_ERREICHT" in check_text or "CONSENSUS_ERREICHT" in check_text
+            )
+            if consensus_reached and not negative:
                 yield {
                     "type": "consensus_reached",
                     "round": round_num,

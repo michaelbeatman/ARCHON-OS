@@ -136,6 +136,74 @@ class ConfigValidator:
 
         return errors, warnings, {"nodes_count": len(nodes), "links_count": len(links)}
 
+    def validate_profile_ssot(self, known_agent_ids: set) -> Tuple[List[str], List[str], Dict[str, Any]]:
+        """K-4: Drift zwischen der SSOT (agent_profiles.json) und den
+        abgeleiteten Artefakten (.hermes/profiles, roles.json) erkennen.
+
+        Nur echte Abweichungen sind Fehler; fehlt ein komplettes abgeleitetes
+        Verzeichnis (z. B. in isolierten Test-Workspaces), genuegt eine
+        Warnung, damit der Validator nicht grundlos alle Checks sperrt.
+        """
+        errors: List[str] = []
+        warnings: List[str] = []
+        ssot_ids = set(known_agent_ids)
+
+        # 1. Hermes-Profilordner
+        profiles_dir = os.path.join(self.workspace_dir, ".hermes", "profiles")
+        if not os.path.isdir(profiles_dir):
+            warnings.append(".hermes/profiles fehlt — abgeleitete Profile nicht pruefbar.")
+        else:
+            disk_ids = {
+                name for name in os.listdir(profiles_dir)
+                if os.path.isdir(os.path.join(profiles_dir, name)) and not name.startswith(".")
+            }
+            missing_dirs = sorted(ssot_ids - disk_ids)
+            orphan_dirs = sorted(disk_ids - ssot_ids)
+            if missing_dirs:
+                errors.append(
+                    f"Profil-SSOT: fehlende Hermes-Profile: {', '.join(missing_dirs[:8])}"
+                    + (" ..." if len(missing_dirs) > 8 else "")
+                    + " (python scripts/sync_profile_ssot.py)"
+                )
+            if orphan_dirs:
+                errors.append(
+                    f"Profil-SSOT: verwaiste Hermes-Profile: {', '.join(orphan_dirs[:8])}"
+                    + (" ..." if len(orphan_dirs) > 8 else "")
+                )
+
+        # 2. roles.json (abgeleitete Rollen-Projektion)
+        roles_path = os.path.join(self.workspace_dir, "roles.json")
+        if not os.path.exists(roles_path):
+            warnings.append("roles.json fehlt — Rollen-Projektion nicht pruefbar.")
+        else:
+            try:
+                with open(roles_path, "r", encoding="utf-8") as fh:
+                    roles = json.load(fh)
+                if isinstance(roles, dict):
+                    roles = roles.get("roles", [])
+                role_ids = {
+                    str(r.get("id")) for r in roles
+                    if isinstance(r, dict) and r.get("id")
+                }
+                missing_roles = sorted(ssot_ids - role_ids)
+                stale_roles = sorted(role_ids - ssot_ids)
+                if missing_roles:
+                    errors.append(
+                        f"Profil-SSOT: roles.json fehlen {len(missing_roles)} Rollen: "
+                        + ", ".join(missing_roles[:8]) + (" ..." if len(missing_roles) > 8 else "")
+                    )
+                if stale_roles:
+                    errors.append(
+                        f"Profil-SSOT: roles.json enthält veraltete Rollen: {', '.join(stale_roles[:8])}"
+                    )
+            except Exception as exc:
+                errors.append(f"Profil-SSOT: roles.json nicht lesbar: {exc}")
+
+        stats = {
+            "ssot_profiles": len(ssot_ids),
+        }
+        return errors, warnings, stats
+
     def validate_env_file(self) -> Tuple[List[str], List[str], Dict[str, Any]]:
         errors = []
         warnings = []
@@ -186,19 +254,25 @@ class ConfigValidator:
         all_warnings.extend(w)
         stats["profiles"] = s
 
-        # 3. config/teams.json
+        # 3. Profil-SSOT (K-4): agent_profiles.json vs. Hermes-Profile vs. roles.json
+        e, w, s = self.validate_profile_ssot(known_agents)
+        all_errors.extend(e)
+        all_warnings.extend(w)
+        stats["profile_ssot"] = s
+
+        # 4. config/teams.json
         e, w, s = self.validate_teams(known_agents)
         all_errors.extend(e)
         all_warnings.extend(w)
         stats["teams"] = s
 
-        # 4. config/org_hierarchy.json
+        # 5. config/org_hierarchy.json
         e, w, s = self.validate_org_hierarchy(known_agents)
         all_errors.extend(e)
         all_warnings.extend(w)
         stats["org_hierarchy"] = s
 
-        # 5. .env
+        # 6. .env
         e, w, s = self.validate_env_file()
         all_errors.extend(e)
         all_warnings.extend(w)

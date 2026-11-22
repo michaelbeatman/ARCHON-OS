@@ -39,12 +39,55 @@ HMAC_PREFIX = "hmac-sha256:"
 ANCHOR_INTERVAL_SEC = 300
 
 
+def _hmac_epochs() -> list:
+    """Sortierte (from_block, key)-Epochen aus der Umgebung.
+
+    P1: Ermoeglicht sichere Key-Rotation. Der aktuelle Key steht in
+    ``ARCHON_AUDIT_HMAC_KEY`` (optional mit ``ARCHON_AUDIT_HMAC_EPOCH_FROM``).
+    Fruehere Keys koennen als JSON-Liste in ``ARCHON_AUDIT_HMAC_EPOCHS``
+    stehen: ``[{"key": "...", "from_block": 1}, ...]``. Bloecke werden mit
+    genau dem Key verifiziert, der zum Zeitpunkt ihres Schreibens galt —
+    alte Bloecke bleiben nach einer Rotation verifizierbar.
+    """
+    epochs: list = []
+    raw = os.environ.get("ARCHON_AUDIT_HMAC_EPOCHS", "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+            if isinstance(data, list):
+                for item in data:
+                    key = str(item.get("key", "")).strip().encode("utf-8")
+                    if key:
+                        epochs.append((int(item.get("from_block", 0)), key))
+        except Exception as exc:
+            logger.error("[Audit] ARCHON_AUDIT_HMAC_EPOCHS ungueltig: %s", exc)
+    current = os.environ.get("ARCHON_AUDIT_HMAC_KEY", "").strip().encode("utf-8")
+    if current:
+        epochs.append((int(os.environ.get("ARCHON_AUDIT_HMAC_EPOCH_FROM", "0") or 0), current))
+    try:
+        return sorted(set(epochs))
+    except Exception:
+        return epochs
+
+
 def _hmac_key() -> bytes:
-    return os.environ.get("ARCHON_AUDIT_HMAC_KEY", "").strip().encode("utf-8")
+    """Aktueller (juengster) Key — rueckwaerts kompatibel mit alten Aufrufern."""
+    epochs = _hmac_epochs()
+    return epochs[-1][1] if epochs else b""
 
 
-def _chain_hash(raw_str: str) -> str:
-    key = _hmac_key()
+def _key_for_block(block_id) -> bytes:
+    epochs = _hmac_epochs()
+    if not epochs:
+        return b""
+    if block_id is None:
+        return epochs[-1][1]
+    usable = [key for start, key in epochs if start <= int(block_id)]
+    return usable[-1] if usable else b""
+
+
+def _chain_hash(raw_str: str, block_id=None) -> str:
+    key = _key_for_block(block_id)
     if key:
         digest = hmac.new(key, raw_str.encode("utf-8"), hashlib.sha256).hexdigest()
         return f"{HMAC_PREFIX}{digest}"
@@ -53,12 +96,12 @@ def _chain_hash(raw_str: str) -> str:
     return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
 
-def _verify_hash(raw_str: str, stored: str) -> bool:
+def _verify_hash(raw_str: str, stored: str, block_id=None) -> bool:
     stored = str(stored or "")
     if stored.startswith(HMAC_PREFIX):
-        key = _hmac_key()
+        key = _key_for_block(block_id)
         if not key:
-            return False  # fail-closed: HMAC-Blöcke ohne Key nicht verifizierbar
+            return False  # fail-closed: HMAC-Blöcke ohne passenden Key nicht verifizierbar
         expected = HMAC_PREFIX + hmac.new(key, raw_str.encode("utf-8"), hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, stored)
     return hmac.compare_digest(hashlib.sha256(raw_str.encode("utf-8")).hexdigest(), stored)
@@ -285,6 +328,24 @@ class ChainedAuditLog:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_target_host ON audit_log(target_host)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_company_id ON audit_log(company_id)")
 
+                # P1: Append-only. Ohne Trigger konnte jemand mit DB-Schreibzugriff
+                # die letzten N Bloecke loeschen — verify_integrity() prueft nur
+                # vorhandene Bloecke und meldete weiter "valid".
+                conn.execute("""
+                    CREATE TRIGGER IF NOT EXISTS audit_log_no_update
+                    BEFORE UPDATE ON audit_log
+                    BEGIN
+                        SELECT RAISE(ABORT, 'audit_log is append-only');
+                    END
+                """)
+                conn.execute("""
+                    CREATE TRIGGER IF NOT EXISTS audit_log_no_delete
+                    BEFORE DELETE ON audit_log
+                    BEGIN
+                        SELECT RAISE(ABORT, 'audit_log is append-only');
+                    END
+                """)
+
             conn.commit()
             cur = conn.cursor()
             cur.execute("PRAGMA table_info(audit_log)")
@@ -302,7 +363,8 @@ class ChainedAuditLog:
         """
         safe_payload = dict(payload or {})
         payload_str = json.dumps(safe_payload, sort_keys=True, ensure_ascii=False)
-        now_iso = datetime.datetime.now().isoformat()
+        # GoBD: eindeutige Zeitreferenz mit UTC-Offset (frueher naive Lokalzeit).
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
 
         provider_val = str(safe_payload.get("provider", "") or "") if category == "llm_dispatch" else str(safe_payload.get("provider", "") or "")
         model_val = str(safe_payload.get("model", "") or "") if category == "llm_dispatch" else str(safe_payload.get("model", "") or "")
@@ -464,9 +526,29 @@ class ChainedAuditLog:
                 cur.execute(f"SELECT {', '.join(select_cols)} FROM audit_log ORDER BY id ASC")
                 rows = cur.fetchall()
 
+                key_active = bool(_hmac_epochs())
+                hmac_blocks = sum(
+                    1 for r in rows if str(r["current_hash"] or "").startswith(HMAC_PREFIX)
+                )
+
+                # P1: Ein HMAC-Log ohne Key ist NICHT verifizierbar. Frueher
+                # fiel _chain_hash() still auf nacktes SHA-256 zurueck und
+                # verify_integrity() meldete trotzdem valid=True.
+                if hmac_blocks and not key_active:
+                    return {
+                        "valid": False,
+                        "hmac_active": False,
+                        "hmac_blocks": hmac_blocks,
+                        "reason": (
+                            "HMAC-signierte Audit-Bloecke vorhanden, aber ARCHON_AUDIT_HMAC_KEY "
+                            "fehlt — Kette nicht verifizierbar (fail-closed)."
+                        ),
+                    }
+
                 if not rows:
                     return {
                         "valid": True,
+                        "hmac_active": key_active,
                         "total_records": 0,
                         "llm_dispatch_records": 0,
                         "genesis_hash": GENESIS_HASH,
@@ -482,6 +564,8 @@ class ChainedAuditLog:
                     if r["prev_hash"] != expected_prev:
                         return {
                             "valid": False,
+                            "hmac_active": key_active,
+                            "hmac_blocks": hmac_blocks,
                             "corrupted_id": r["id"],
                             "reason": f"Kettenbruch bei Block #{r['id']}: Vorheriger Hash stimmt nicht mit vorherigem Block überein.",
                             "expected_prev": expected_prev,
@@ -498,17 +582,29 @@ class ChainedAuditLog:
                         f"{r['agent_id']}|{r['payload_json']}"
                     )
                     stored_hash = str(r["current_hash"] or "")
-                    ok = _verify_hash(raw_new, stored_hash)
+                    ok = _verify_hash(raw_new, stored_hash, r["id"])
                     if not ok and not stored_hash.startswith(HMAC_PREFIX):
-                        # Alte Blöcke ohne company_id im signierten String akzeptieren.
-                        ok = _verify_hash(raw_legacy, stored_hash)
+                        # P1: Der Legacy-Pfad (ohne company_id im signierten
+                        # String) erlaubte das Aendern der Mandantenzuordnung
+                        # ohne Alarm. Er ist jetzt auf explizit markierte
+                        # Alt-Bloecke begrenzt; Default 0 = nie.
+                        try:
+                            legacy_max = int(
+                                os.environ.get("ARCHON_AUDIT_LEGACY_MAX_BLOCK", "0") or 0
+                            )
+                        except ValueError:
+                            legacy_max = 0
+                        if int(r["id"]) <= legacy_max:
+                            ok = _verify_hash(raw_legacy, stored_hash, r["id"])
 
                     if not ok:
                         return {
                             "valid": False,
+                            "hmac_active": key_active,
+                            "hmac_blocks": hmac_blocks,
                             "corrupted_id": r["id"],
                             "reason": f"Manipulationsalarm bei Block #{r['id']}: Inhalt oder Zeitstempel weicht vom signierten Hash ab.",
-                            "expected_hash": _chain_hash(raw_new),
+                            "expected_hash": _chain_hash(raw_new, r["id"]),
                             "actual_hash": stored_hash,
                         }
 
@@ -545,6 +641,8 @@ class ChainedAuditLog:
 
                 return {
                     "valid": True,
+                    "hmac_active": key_active,
+                    "hmac_blocks": hmac_blocks,
                     "total_records": len(rows),
                     "llm_dispatch_records": llm_dispatch_count,
                     "genesis_hash": GENESIS_HASH,

@@ -112,8 +112,13 @@ def test_sha256_chain_detects_column_or_payload_tampering(tmp_path):
     )
     assert alog.verify_integrity()["valid"] is True
 
-    # Manipuliere nur die Indexspalte target_host (ohne payload_json anzufassen)
+    # P1: Append-only-Trigger muss direkte UPDATEs blockieren.
     conn = sqlite3.connect(db_file)
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("UPDATE audit_log SET target_host = 'evil.example.com' WHERE id = 1")
+    conn.rollback()
+    # Trigger temporaer entfernen, um die Detektionslogik weiter zu pruefen.
+    conn.execute("DROP TRIGGER IF EXISTS audit_log_no_update")
     conn.execute("UPDATE audit_log SET target_host = 'evil.example.com' WHERE id = 1")
     conn.commit()
     conn.close()

@@ -6,8 +6,10 @@ Ausgelagert aus backend/operations_api.py.
 """
 
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
+
+from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -86,6 +88,29 @@ def api_resume_workflow_checkpoint(checkpoint_id: str):
         status="resumed", pause_reason=None
     )
     return {"status": "success", "message": f"Workflow {cp['workflow_id']} ab Schritt {cp['current_step']} reaktiviert.", "checkpoint": cp}
+
+
+@router.post("/workflows/runs/{run_id}/resume-suspended")
+async def api_resume_suspended_workflow_run(run_id: str, request: Request):
+    """P2: SUSPENDED → RUNNING ueber persistierte Checkpoints + Node-States.
+
+    Der alte ``/checkpoints/{id}/resume`` setzte nur ein Flag — kein Consumer
+    fuehrte den Workflow fort. Dieser Endpoint startet den echten Executor;
+    bereits abgeschlossene Nodes werden ueber den Fingerprint-Cache
+    (``workflow_node_states``) uebernommen, nicht erneut ausgefuehrt.
+    """
+    require_admin_or_503(request)
+    from backend.workflow_dag_runner import resume_suspended_workflow_run
+    from backend.durable_execution_kernel import (
+        InvalidTransitionError, StaleFencingTokenError,
+    )
+
+    try:
+        return await resume_suspended_workflow_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except (InvalidTransitionError, StaleFencingTokenError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 # =========================================================================

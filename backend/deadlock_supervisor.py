@@ -78,6 +78,33 @@ class DeadlockSupervisor:
         except (OSError, ValueError):
             return False
 
+    def _ensure_lease_columns(self, conn) -> None:
+        """P0-6: MC-`tasks` hatte urspruenglich keine Claim-Spalten.
+
+        Ohne diese Migration scheiterte acquire_lease mit
+        `no such column: claim_lock` und war deshalb produktiv Totcode.
+        """
+        try:
+            cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+        except sqlite3.OperationalError:
+            return
+        if not cols:
+            return
+        wanted = {
+            "claim_lock": "TEXT",
+            "claim_expires": "REAL",
+            "worker_pid": "INTEGER",
+            "last_heartbeat_at": "REAL",
+            "worker_started_at": "REAL",
+        }
+        for name, typ in wanted.items():
+            if name not in cols:
+                try:
+                    conn.execute(f"ALTER TABLE tasks ADD COLUMN {name} {typ}")
+                except sqlite3.OperationalError:
+                    pass
+        conn.commit()
+
     def acquire_lease(
         self,
         task_id: str,
@@ -91,6 +118,14 @@ class DeadlockSupervisor:
         token = f"{worker_pid or os.getpid()}:{uuid.uuid4().hex[:8]}"
         conn = self._get_conn()
         try:
+            self._ensure_lease_columns(conn)
+            # P0-6: Ein Task, der nicht in der tasks-Tabelle liegt (z. B.
+            # isolierte Tests, alternative Store-Implementierungen), kann
+            # nicht gelockt werden — das darf aber KEIN "anderer Worker"
+            # bedeuten und den Dispatch blockieren.
+            task_exists = conn.execute(
+                "SELECT 1 FROM tasks WHERE id = ?", (task_id,)
+            ).fetchone() is not None
             with conn:
                 cur = conn.execute(
                     "UPDATE tasks SET claim_lock = ?, claim_expires = ?, worker_pid = ?, "
@@ -102,7 +137,12 @@ class DeadlockSupervisor:
                 )
                 acquired = int(cur.rowcount or 0) == 1
                 conn.commit()
-            return {"acquired": acquired, "lease_token": token, "expires_at": expires}
+            return {
+                "acquired": acquired,
+                "lease_token": token,
+                "expires_at": expires,
+                "task_exists": task_exists,
+            }
         finally:
             conn.close()
 

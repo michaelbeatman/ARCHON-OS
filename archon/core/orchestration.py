@@ -212,6 +212,66 @@ async def _execute_mission_control_task(
 
     ticker(agent_name, f"Startet Bearbeitung von Task #{task_id}: '{task_title[:35]}...'")
 
+    # P0-6: Lease + Idempotency waren implementiert, aber nie im Hot Path
+    # verdrahtet — parallele Worker konnten denselben Task doppelt ausfuehren.
+    lease_token = None
+    idem_key = None
+    heartbeat_task = None
+    deadlock_supervisor = None
+    try:
+        from backend.deadlock_supervisor import deadlock_supervisor as _supervisor
+        deadlock_supervisor = _supervisor
+        lease = _supervisor.acquire_lease(str(task_id), ttl_seconds=300)
+        if lease.get("acquired"):
+            lease_token = lease.get("lease_token")
+        elif lease.get("task_exists", True):
+            # Nur ein real existierender, bereits geclaimter Task ist ein
+            # Duplikat. Fehlt die Zeile (isolierter Store/Test), laufen wir
+            # ohne Lease weiter statt den Task faelschlich zu ueberspringen.
+            ticker(agent_name, f"Task #{task_id} laeuft bereits in einem anderen Worker — uebersprungen.")
+            return
+    except Exception as lease_exc:
+        # Kein stilles Durchlassen bei ausfallendem Claim ist hier vertretbar,
+        # wenn das Feature explizit deaktiviert ist; sonst warnen.
+        logger.warning(f"[MissionControl] Lease nicht verfuegbar ({lease_exc}) — Dispatch ohne Claim.")
+
+    # Der Guard schuetzt nur echte, per Lease geclaimte Tasks. Ohne Lease
+    # (isolierter Store / Tests) gibt es keinen verlaesslichen Lauf-Kontext —
+    # ein task_id-basierter Key wuerde dort wiederholte Laeufe faelschlich
+    # als Duplikat blockieren.
+    if lease_token:
+        try:
+            from backend.idempotency_guard import idempotency_guard
+            idem = idempotency_guard.check_or_register(
+                "mission_control_task",
+                {"task_id": str(task_id), "prompt": str(prompt_text)[:2000]},
+                explicit_key=f"mct-{task_id}",
+            )
+            if idem.get("blocked"):
+                cached = idem.get("cached_result") or {}
+                task["status"] = "completed"
+                task["result_summary"] = cached.get(
+                    "result_summary", "Bereits ausgefuehrt (Idempotency-Cache)."
+                )
+                ticker(agent_name, f"Task #{task_id} war bereits ausgefuehrt — Duplicate geblockt.")
+                _commit()
+                return
+            idem_key = idem.get("idempotency_key")
+        except Exception as idem_exc:
+            logger.warning(f"[MissionControl] Idempotency-Guard nicht verfuegbar ({idem_exc}).")
+
+    if lease_token:
+        async def _lease_heartbeat():
+            while True:
+                await asyncio.sleep(60.0)
+                try:
+                    if deadlock_supervisor is not None:
+                        deadlock_supervisor.heartbeat(str(task_id), lease_token, ttl_seconds=300)
+                except Exception:
+                    return
+
+        heartbeat_task = asyncio.create_task(_lease_heartbeat())
+
     try:
         task["active_tool"] = "Tool: web_search & archon_core"
         _commit()
@@ -348,6 +408,31 @@ async def _execute_mission_control_task(
         task["result_summary"] = f"Fehler bei Aufgabenausführung: {ex}"
         ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {ex}")
     finally:
+        # P0-6: Heartbeat stoppen, Lease freigeben, Idempotency-Key abschliessen.
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+        if lease_token and deadlock_supervisor is not None:
+            try:
+                deadlock_supervisor.release_lease(str(task_id), lease_token)
+            except Exception as rel_exc:
+                logger.warning(f"[MissionControl] Lease-Release fehlgeschlagen: {rel_exc}")
+        if idem_key:
+            try:
+                from backend.idempotency_guard import idempotency_guard
+                if task.get("status") == "completed":
+                    idempotency_guard.record_execution_result(
+                        idem_key,
+                        {
+                            "status": "completed",
+                            "result_summary": str(task.get("result_summary", ""))[:300],
+                        },
+                    )
+                else:
+                    # Fehlgeschlagener Lauf darf den Key nicht als "erledigt"
+                    # markerieren — sonst wird der naechste Retry geblockt.
+                    idempotency_guard.invalidate_key(idem_key)
+            except Exception as idem_fin_exc:
+                logger.warning(f"[MissionControl] Idempotency-Abschluss fehlgeschlagen: {idem_fin_exc}")
         _commit()
         # Audit v3 2.1.3: fan_in erst NACH dem Commit starten — sonst liest die Synthese
         # den alten Geschwister-Status aus der letzten Persistierung.

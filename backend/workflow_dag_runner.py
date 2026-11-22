@@ -484,6 +484,71 @@ def _register_hitl_gate_decision(
     return None
 
 
+async def _execute_research_dag_node(node: Dict[str, Any], upstream: Dict[str, Any]) -> Dict[str, Any]:
+    """Nativer Research-Knoten: ruft research_engine_v2 (echte Quellen) statt
+    eines Prompt-Agenten auf. P1/Content B1: vorher war 'Research' nur ein
+    LLM-Auftrag ohne Triangulation, Quellenbewertung oder Zitationen.
+
+    Laeuft in einem Thread, weil die Research-Engine synchron HTTP + LLM macht.
+    """
+    query = str(node.get("query") or node.get("prompt") or "").strip()
+    # Upstream-Kontext (z. B. Quell-Notizen der Campaign) anhaengen.
+    extra = []
+    for _nid, up in (upstream or {}).items():
+        if isinstance(up, dict):
+            txt = str(up.get("content") or up.get("synthesis") or "").strip()
+            if txt:
+                extra.append(txt[:2000])
+    if extra:
+        query = f"{query}\n\nZusaetzlicher Kontext:\n" + "\n---\n".join(extra[:4])
+
+    try:
+        import research_engine_v2
+        result = await asyncio.to_thread(
+            research_engine_v2.run_research_mission_v2,
+            query,
+            max_rounds=max(1, min(4, int(node.get("max_rounds", 2)))),
+            max_pages=max(1, min(10, int(node.get("max_pages", 4)))),
+            depth=max(1, min(5, int(node.get("depth", 3)))),
+        )
+    except Exception as exc:
+        logger.error("[WorkflowDAG] Research-Knoten fehlgeschlagen: %s", exc, exc_info=exc)
+        return {
+            "status": "error",
+            "content": f"Research fehlgeschlagen: {exc}",
+            "agent_id": "research_scout",
+            "node_id": node.get("id"),
+        }
+
+    synthesis = str(result.get("synthesis") or "")
+    sources = result.get("sources") or []
+    source_lines = []
+    for idx, src in enumerate(sources[:12], start=1):
+        if not isinstance(src, dict):
+            continue
+        title = str(src.get("title") or src.get("name") or "")[:120]
+        url = str(src.get("url") or src.get("link") or "")[:200]
+        domain = str(src.get("domain") or "")
+        source_lines.append(f"[{idx}] {title} — {domain} — {url}")
+    content = (
+        "### Research-Synthese (quellenbasiert)\n"
+        f"{synthesis or '(keine Synthese — Status: ' + str(result.get('status')) + ')'}\n\n"
+        f"### Verifikationsstatus\n{str(result.get('verdict', ''))}\n\n"
+        f"### Belegquellen ({len(sources)})\n" + "\n".join(source_lines)
+    )
+    ok = bool(synthesis) and result.get("status") != "no_evidence"
+    return {
+        "status": "success" if ok else "error",
+        "content": content,
+        "synthesis": synthesis,
+        "sources": sources,
+        "verdict": result.get("verdict", ""),
+        "total_sources": len(sources),
+        "agent_id": "research_scout",
+        "node_id": node.get("id"),
+    }
+
+
 async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, Any]) -> Dict[str, Any]:
     """Echter Standard-Executor fuer DAG-Knoten: loest Agenten-Profil auf, reicht
     Upstream-Outputs weiter, ruft core_dispatcher auf und synchronisiert Kanban."""
@@ -505,6 +570,10 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
 
     node_type = str(node.get("type") or "agent").strip().lower()
     kanban_task_id = node.get("kanban_task_id")
+
+    # P1/Content B1: nativer Research-Knoten mit echter Quellen-Triangulation.
+    if node_type == "research":
+        return await _execute_research_dag_node(node, upstream)
 
     # Standardisierte Node-Plugins ("VST-Schnittstelle": ffmpeg, kinocut, tts, suno, image_gen, calendar_publish, 3rd-Party)
     from backend.workflow_node_plugins import is_workflow_node_plugin, execute_workflow_node_plugin
@@ -1606,13 +1675,139 @@ async def resume_workflow_run(
     dag_def = existing.get("dag") or {}
     if not dag_def.get("nodes"):
         raise ValueError(f"Workflow run '{run_id}' besitzt keine gespeicherte DAG-Definition fuer Resume.")
-    return await run_workflow_dag(
-        dag_def=dag_def,
-        executor_fn=executor_fn,
-        run_id=run_id,
-        gate_approvals=gate_approvals or {},
-        db_path=db_path,
+    # P2/Durable Execution: CAS-Claim + Fencing-Token statt prozesslokaler
+    # Locks. Der Kernel ist fail-open gegenueber bereits abgeschlossenen
+    # Laeufen (Rueckwaerts-Kompatibilitaet), protokolliert aber jeden Lauf in
+    # Zustandsmaschine + Command-Log.
+    kernel = None
+    fencing_token = ""
+    try:
+        from backend.durable_execution_kernel import durable_kernel, FAILED as _FAILED, COMPLETED as _COMPLETED
+        kernel = durable_kernel
+        import json as _json
+        claim = kernel.claim(
+            run_id,
+            ttl_seconds=300,
+            dag_fingerprint=_json.dumps(dag_def, sort_keys=True, ensure_ascii=False)[:2000],
+        )
+        if claim.get("claimed"):
+            fencing_token = claim["fencing_token"]
+        else:
+            logger.info(
+                "[WorkflowDAG] Run '%s' bereits im Kernel erfasst (%s) — Resume läuft ohne neuen Claim.",
+                run_id, claim.get("state"),
+            )
+    except Exception as kc_exc:
+        logger.debug("[WorkflowDAG] Durable-Kernel Claim nicht verfuegbar: %s", kc_exc)
+
+    result = None
+    try:
+        result = await run_workflow_dag(
+            dag_def=dag_def,
+            executor_fn=executor_fn,
+            run_id=run_id,
+            gate_approvals=gate_approvals or {},
+            db_path=db_path,
+        )
+    except Exception as run_exc:
+        if kernel and fencing_token:
+            try:
+                kernel.transition(run_id, _FAILED, fencing_token, reason=str(run_exc)[:300])
+            except Exception:
+                pass
+        raise
+
+    if kernel and fencing_token:
+        try:
+            final_state = _COMPLETED if str(result.get("status", "")).lower() in ("success", "completed") else _FAILED
+            kernel.transition(run_id, final_state, fencing_token, reason=str(result.get("status", "")))
+        except Exception as tr_exc:
+            logger.debug("[WorkflowDAG] Durable-Kernel Transition fehlgeschlagen: %s", tr_exc)
+
+    # P1: Die Asset-Finalisierung hing bisher nur am decisions.py-Pfad. Wurde
+    # derselbe Run ueber den generischen Resume-Endpoint fortgesetzt, blieben
+    # die Assets dauerhaft auf 'review'. Jetzt zentral im Resume verankert
+    # (idempotent — ein zweiter Aufruf durch decisions.py trifft 0 Zeilen).
+    try:
+        from backend.content_machine import finalize_assets_for_workflow_run
+        approved = all(bool(v) for v in (gate_approvals or {}).values())
+        finalized = finalize_assets_for_workflow_run(run_id, approved=approved)
+        if finalized.get("updated"):
+            logger.info(
+                "[WorkflowDAG] Content-Assets fuer Run '%s' finalisiert: %s (%s)",
+                run_id, finalized["updated"], finalized.get("target_status"),
+            )
+    except Exception as exc:
+        # Keine Eskalation: die Finalisierung ist ein Folge-Schritt, der
+        # DAG-Run selbst ist bereits erfolgreich durchgelaufen.
+        logger.warning("[WorkflowDAG] Content-Finalisierung fuer '%s' fehlgeschlagen: %s", run_id, exc)
+    return result
+
+
+async def resume_suspended_workflow_run(
+    run_id: str,
+    *,
+    executor_fn: ExecutorFn = None,
+    db_path: Optional[str] = None,
+    max_missing_outputs: int = 0,
+) -> Dict[str, Any]:
+    """P2: SUSPENDED → RUNNING pragmatisch ueber Checkpoints + Node-States.
+
+    Kein schwergewichtiges Coroutinen-Replay: der DAG-Runner persistiert jeden
+    Node-Output in ``workflow_node_states``. Beim Resume laedt er den
+    Kernel-Checkpoint, verifiziert, dass alle als 'completed' markierten Nodes
+    auch einen Output haben, transitioniert SUSPENDED → RUNNING und startet
+    ``resume_workflow_run`` neu. Der bestehende Fingerprint-Cache ueberspringt
+    alle bereits abgeschlossenen Knoten (``skipped_cached``); nur die
+    unfertigen Nodes werden erneut ausgefuehrt.
+    """
+    from backend.durable_execution_kernel import durable_kernel, SUSPENDED
+
+    ctx = durable_kernel.resume_context(run_id)
+    if not ctx:
+        raise KeyError(f"Kein Durable-Checkpoint fuer Run '{run_id}' vorhanden.")
+    if ctx["state"] != SUSPENDED:
+        return {
+            "status": "not_suspended",
+            "run_id": run_id,
+            "state": ctx["state"],
+            "reason": "Nur SUSPENDED-Runs koennen ueber dieses Portal fortgesetzt werden.",
+        }
+
+    # Persistierte Node-States pruefen: jeder 'completed' muss einen Output haben.
+    with _connect(db_path) as conn:
+        node_rows = conn.execute(
+            "SELECT node_id, status, output_json FROM workflow_node_states WHERE run_id = ?",
+            (run_id,),
+        ).fetchall()
+    missing: List[str] = []
+    completed = 0
+    for row in node_rows:
+        if str(row["status"]) in ("completed", "skipped_cached"):
+            completed += 1
+            raw = str(row["output_json"] or "").strip()
+            if raw in ("", "{}", "null"):
+                missing.append(str(row["node_id"]))
+    if len(missing) > max_missing_outputs:
+        return {
+            "status": "resume_blocked",
+            "run_id": run_id,
+            "reason": f"{len(missing)} bereits abgeschlossene Nodes haben keinen persistierten Output.",
+            "missing_outputs": missing[:20],
+        }
+
+    resumed = durable_kernel.resume_suspended(run_id, ctx.get("fencing_token"))
+    logger.info(
+        "[WorkflowDAG] Run '%s' von Schritt %s fortgesetzt (%s Node-Outputs uebernommen).",
+        run_id, resumed["resume_from_step"], completed,
     )
+    result = await resume_workflow_run(
+        run_id=run_id, executor_fn=executor_fn, db_path=db_path
+    )
+    result["resume"] = resumed
+    result["resumed_from_step"] = resumed["resume_from_step"]
+    result["reused_node_outputs"] = completed
+    return result
 
 
 def schedule_workflow_resume(

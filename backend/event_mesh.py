@@ -394,7 +394,11 @@ class EventMesh:
         payload_str: str,
         timeout: float,
         attempts: int,
+        update_ledger: bool = True,
     ) -> Dict[str, Any]:
+        # P0-7b: Bei der UNKNOWN-Reconciliation darf _deliver_outbox den
+        # Ledger-Zustand NICHT selbst aendern — sonst trifft reconcile() mit
+        # WHERE state='UNKNOWN' auf 0 Zeilen und der Fall bleibt ungeklaert.
         from utils.safe_http import safe_http_request
         definitive_rejection = False
         try:
@@ -408,7 +412,7 @@ class EventMesh:
             )
             status_code = int(_st)
             res_body = raw_body.decode("utf-8", errors="ignore")[:300]
-            status_str = "delivered" if status_code < 400 else "delivery_failed"
+            status_str = "delivered" if status_code < 400 else ("dead" if 400 <= status_code < 500 else "delivery_failed")
             definitive_rejection = 400 <= status_code < 500
         except Exception as e:
             # Timeout/Netzwerkfehler: der Effekt KÖNNTE angekommen sein →
@@ -417,12 +421,13 @@ class EventMesh:
             res_body = str(e)
             status_str = "delivery_failed"
 
-        if status_str == "delivered":
-            self.effect_ledger.commit(idem, {"http_status": status_code})
-        elif definitive_rejection:
-            self.effect_ledger.fail(idem, {"http_status": status_code, "response": res_body[:300]})
-        else:
-            self.effect_ledger.mark_unknown(idem, {"http_status": status_code, "error": res_body[:300]})
+        if update_ledger:
+            if status_str == "delivered":
+                self.effect_ledger.commit(idem, {"http_status": status_code})
+            elif definitive_rejection:
+                self.effect_ledger.fail(idem, {"http_status": status_code, "response": res_body[:300]})
+            else:
+                self.effect_ledger.mark_unknown(idem, {"http_status": status_code, "error": res_body[:300]})
 
         next_attempt = int(attempts) + 1
         delivered_at = datetime.datetime.now().isoformat() if status_str == "delivered" else None
@@ -436,7 +441,7 @@ class EventMesh:
                     (
                         status_str,
                         next_attempt,
-                        time.time() + backoff if status_str != "delivered" else 0.0,
+                        time.time() + backoff if status_str == "delivery_failed" else 0.0,
                         None if status_str == "delivered" else res_body[:500],
                         delivered_at,
                         idem,
@@ -479,6 +484,7 @@ class EventMesh:
             res = self._deliver_outbox(
                 idem, str(out["target_url"]), str(out["event_type"]),
                 str(out["payload_json"]), 5.0, int(out["attempts"] or 0),
+                update_ledger=False,  # P0-7b: Ledger bleibt UNKNOWN bis reconcile()
             )
             final_state = "COMMITTED" if res.get("status") == "delivered" else "FAILED"
             if self.effect_ledger.reconcile(
@@ -490,8 +496,10 @@ class EventMesh:
         conn = self._get_conn()
         try:
             rows = conn.execute(
-                "SELECT * FROM event_mesh_outbox WHERE status = 'pending' AND next_try_at <= ? "
-                "ORDER BY id ASC LIMIT ?",
+                # P0-7a: 'delivery_failed' war Endstatus statt Retry-Zustand —
+                # der erste 5xx/Timeout wurde nie erneut zugestellt.
+                "SELECT * FROM event_mesh_outbox WHERE status IN ('pending', 'delivery_failed') "
+                "AND next_try_at <= ? ORDER BY id ASC LIMIT ?",
                 (time.time(), max(1, min(200, int(limit)))),
             ).fetchall()
         finally:

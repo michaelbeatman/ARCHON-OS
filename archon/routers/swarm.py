@@ -34,10 +34,10 @@ from archon.core.runtime import (  # noqa: F401
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 @router.post("/api/swarm/spawn-ephemeral-team")
-def api_spawn_ephemeral_team(request: Request, payload: Dict = Body(...)):
+async def api_spawn_ephemeral_team(request: Request, payload: Dict = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.ephemeral_team_spawner import ephemeral_team_spawner
-    return ephemeral_team_spawner.spawn_task_force(
+    return await ephemeral_team_spawner.spawn_task_force(
         mission_title=payload.get("mission_title", "Spezial-Auftrag"),
         mission_brief=payload.get("mission_brief", ""),
         execute_dag=bool(payload.get("execute_dag", False)),

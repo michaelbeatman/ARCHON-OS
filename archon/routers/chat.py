@@ -538,11 +538,13 @@ def _prepare_chat_stream_context(
     """Synchrone Profil-, Personalakten-, Key- und Routing-Auflösung für ``asyncio.to_thread``."""
     profiles = api_get_hermes_profiles()
     prof = next((p for p in profiles if p["id"] == agent_id), None)
-    if not prof and profiles:
-        prof = profiles[0]
+    if not prof:
+        # M-5: ein Tippfehler in agent_id liess bisher den ERSTEN Profilagenten
+        # antworten — still und schwer erkennbar. Now: harter Fehler.
+        raise ValueError(f"Unbekannte agent_id: {agent_id!r}")
 
-    agent_name = prof.get("person_name") or prof.get("name") or "Hermes Agent" if prof else "Hermes Agent"
-    system_prompt = (prof.get("prompt") if prof else None) or "You are Hermes Agent, an intelligent AI assistant created by Nous Research."
+    agent_name = prof.get("person_name") or prof.get("name") or "Hermes Agent"
+    system_prompt = prof.get("prompt") or prof.get("system_prompt") or "You are Hermes Agent, an intelligent AI assistant created by Nous Research."
     delegation_prompt_addon = _get_delegation_prompt_for(agent_id)
     if delegation_prompt_addon:
         system_prompt += delegation_prompt_addon
@@ -1069,11 +1071,18 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
                 intended_url=target_img_ep,
             )
             eff_url = str(gate.get("target_url") or target_img_ep)
-            enforce_egress_firewall_for_url(eff_url, data_category=gate.get("data_category", "general"))
-            clean_messages, _scrub_meta = sanitize_outbound_llm_payload(
-                [{"role": "user", "content": prompt}],
-                target_url=eff_url,
+            # P0-4/PII: enforce_... hat kein data_category; sanitize_... nimmt
+            # ein DICT mit 'messages'-Key — eine nackte Liste wurde unveraendert
+            # zurueckgegeben (PII-Scrubbing komplett umgangen).
+            enforce_egress_firewall_for_url(eff_url, agent_id="image_generate")
+            _scrubbed = sanitize_outbound_llm_payload(
+                {"messages": [{"role": "user", "content": prompt}]},
+                agent_id="image_generate",
                 session_id="image_generate",
+            )
+            clean_messages = (
+                _scrubbed["messages"] if isinstance(_scrubbed, dict) and "messages" in _scrubbed
+                else [{"role": "user", "content": prompt}]
             )
         except ZeroEgressBlockedError as ze_err:
             raise HTTPException(

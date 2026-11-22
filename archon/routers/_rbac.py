@@ -54,6 +54,40 @@ def get_session_actor(request: Optional[Request], fallback: str = "admin") -> st
     return fallback
 
 
+def require_session_actor(request: Request) -> str:
+    """P0-3: Strikt verifizierter Actor fuer Freigaben und Audit-Eintraege.
+
+    Kein Fallback auf ``request.state.user`` (beliebig setzbar), kein
+    Body-Wert, kein stilles ``"admin"``. Sonst koennen zwei Aufrufe mit
+    ``{"approver_id": "alice"}`` / ``{"approver_id": "bob"}`` ein
+    Vier-Augen-Prinzip simulieren, ohne dass diese Personen existieren.
+
+    Im lokalen Single-User-Modus (auth aus) bleibt der Fallback-Admin
+    zulaessig — aber weiterhin NUR aus der Session-Hilfe, nie aus dem Body.
+    """
+    from archon.routers.auth import get_current_user_from_request
+
+    try:
+        user = get_current_user_from_request(request)
+    except Exception as exc:
+        logger.error("[RBAC] Actor-Pruefung fehlgeschlagen (fail-closed): %s", exc)
+        raise HTTPException(status_code=503, detail="Actor-Pruefung nicht verfuegbar.")
+
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="Keine verifizierte Identitaet.")
+    if user.get("is_service"):
+        raise HTTPException(status_code=403, detail="Service-Token duerfen keine Freigaben erteilen.")
+    role = str(user.get("role") or "").strip().lower()
+    if bool(user.get("auth_enabled")) and role in ("anonymous", "", "viewer"):
+        raise HTTPException(status_code=401, detail="Freigaben erfordern eine verifizierte Session.")
+
+    for key in ("username", "user_id", "sub", "email"):
+        val = user.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    raise HTTPException(status_code=401, detail="Keine verifizierte Identitaet.")
+
+
 def require_admin_or_503(request: Request) -> None:
     """Rollenzaun; ohne Injektion bewusst laut sperren statt still durchlassen."""
     checker = _checker

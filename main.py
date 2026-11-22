@@ -1815,6 +1815,8 @@ async def api_attempt_task_healing(request: Request, payload: Dict = Body(...)):
         attempt=int(payload.get("attempt", 1)),
         max_attempts=int(payload["max_attempts"]) if "max_attempts" in payload else None,
         model=payload.get("model"),
+        # P0-5: Code-S rewrite nur bei explizitem Opt-in; sonst 'proposed'.
+        apply_patch=bool(payload.get("apply_patch", False)),
     )
 
 

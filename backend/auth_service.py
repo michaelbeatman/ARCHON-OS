@@ -17,6 +17,7 @@ import datetime
 import logging
 import re
 import html
+import secrets
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -102,6 +103,40 @@ class AuthService:
     def is_auth_enabled() -> bool:
         """True = Login-Pflicht aktiv.
 
+        P0-2b: Reine Localhost-Entwicklung (127.0.0.1, kein production)
+        bleibt bewusst offen, damit Dev-/UI-Tests nicht ausgesperrt werden.
+        Sobald der Server auf einer nicht-lokalen Adresse gebunden wird oder
+        ``ENVIRONMENT``/``ARCHON_ENV`` = production, wird Auth ERZWUNGEN —
+        ein Produktiv-Server steht niemals offen, auch wenn settings.json
+        ``auth.enabled=false`` sagt.
+        """
+        configured = AuthService._read_auth_enabled()
+        if not configured and AuthService._must_force_auth():
+            logger.warning(
+                "[Auth] Nicht-lokale Bindung oder ENVIRONMENT=production erkannt — "
+                "Auth wird ungeachtet settings.json erzwungen."
+            )
+            return True
+        return configured
+
+    @staticmethod
+    def _must_force_auth() -> bool:
+        env_name = str(
+            os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
+        ).strip().lower()
+        if env_name in ("production", "prod", "live"):
+            return True
+        bind = str(os.environ.get("ARCHON_BIND_IP") or "").strip()
+        local_binds = {"127.0.0.1", "localhost", "::1", "[::1]"}
+        # 0.0.0.0 und jede LAN-/oeffentliche IP sind kein Localhost.
+        if bind and bind not in local_binds:
+            return True
+        return False
+
+    @staticmethod
+    def _read_auth_enabled() -> bool:
+        """True = Login-Pflicht aktiv.
+
         Fail-closed (R-08): eine vorhandene, aber unlesbare oder strukturell
         defekte ``settings.json`` ist ein Fehlerfall und schaltet die
         Authentifizierung **nicht** ab — sonst genügt eine abgeschnittene Datei
@@ -180,13 +215,47 @@ class AuthService:
             cur.execute("SELECT count(*) as count FROM users WHERE role = 'admin'")
             row = cur.fetchone()
             if row and row["count"] == 0:
-                pwd_hash, salt = _hash_password(os.environ.get("ARCHON_INITIAL_ADMIN_PASSWORD", "archon2026"))
+                initial_pwd = (os.environ.get("ARCHON_INITIAL_ADMIN_PASSWORD") or "").strip()
+                generated = not initial_pwd
+                if generated:
+                    # P0-2: kein hartcodiertes Default-Passwort im Quellcode.
+                    initial_pwd = secrets.token_urlsafe(18)
+                pwd_hash, salt = _hash_password(initial_pwd)
                 admin_id = f"usr_{uuid.uuid4().hex[:12]}"
                 cur.execute("""
                     INSERT INTO users (id, username, display_name, email, password_hash, salt, role, is_active)
                     VALUES (?, ?, ?, ?, ?, ?, 'admin', 1)
                 """, (admin_id, "admin", "Archon Administrator", "admin@archon.local", pwd_hash, salt))
                 conn.commit()
+                if generated:
+                    # Einmalige Ausgabe an den Operator — danach nur noch Hash
+                    # in der DB. Datei liegt im Runtime-State (nicht im Repo).
+                    try:
+                        # Neben der DB: bei temporaeren Test-DBs landet das
+                        # Passwort ebenfalls im Testverzeichnis, nicht im
+                        # Produktions-/data-Ordner.
+                        pwd_file = os.path.join(
+                            os.path.dirname(DB_PATH) or WORKSPACE_DIR,
+                            ".archon_initial_admin_password",
+                        )
+                        os.makedirs(os.path.dirname(pwd_file), exist_ok=True)
+                        with open(pwd_file, "w", encoding="utf-8") as fh:
+                            fh.write(initial_pwd + "\n")
+                        try:
+                            os.chmod(pwd_file, 0o600)
+                        except OSError:
+                            pass
+                        logger.warning(
+                            "[Auth] Initiales Admin-Passwort generiert und einmalig nach %s geschrieben. "
+                            "Nach dem ersten Login aendern und die Datei loeschen.",
+                            pwd_file,
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "[Auth] Generiertes Admin-Passwort konnte nicht ausgegeben werden (%s). "
+                            "Setze ARCHON_INITIAL_ADMIN_PASSWORD und starte mit leerer users-Tabelle neu.",
+                            exc,
+                        )
 
     def create_user(
         self,

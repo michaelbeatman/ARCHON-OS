@@ -363,10 +363,12 @@ def audit_zero_egress_posture(audit_logger: Any = None) -> Dict[str, Any]:
         elif z in zone_counts:
             zone_counts[z] += 1
 
+    # P1: Eine "gueltige" Kette ohne HMAC-Key darf nicht als verifiziert gelten.
     no_cloud_leak_ready = (
         bool(cfg.get("hard_block_on_local_offline", True))
         and not bool(cfg.get("fallback_to_eu", False))
         and bool(chain.get("valid", False))
+        and bool(chain.get("hmac_active", False))
     )
     cfg_check = verify_zero_egress_config(cfg)
 
@@ -382,6 +384,8 @@ def audit_zero_egress_posture(audit_logger: Any = None) -> Dict[str, Any]:
         "docker_sandbox_network": sandbox_net,
         "audit_chain": {
             "valid": chain.get("valid", False),
+            "hmac_active": chain.get("hmac_active", False),
+            "hmac_blocks": chain.get("hmac_blocks", 0),
             "total_records": chain.get("total_records", 0),
             "llm_dispatch_records": chain.get("llm_dispatch_records", 0),
             "latest_hash": chain.get("latest_hash", ""),

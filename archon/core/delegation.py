@@ -181,6 +181,19 @@ def _check_delegation_permission(delegator_id: str, target_id: str):
     org = _load_org_hierarchy_map()
     d = org.get(delegator_id)
     t = org.get(target_id)
+
+    # K-1: Der Root-Orchestrator war im UI-Org-Chart als Tier 3 gefuehrt und
+    # durfte deshalb im Hauptpfad NICHT delegieren. Apex-Rechte gehoeren nicht
+    # in ein UI-Layout — eigene, explizite Liste (auditierbar, unabhaengig vom
+    # Chart). Tier-1-Knoten duerfen weiterhin delegieren.
+    apex_ids = frozenset({
+        "default", "executive_decision_architect", "system_architect_orchestrator",
+    })
+    if delegator_id in apex_ids:
+        if delegator_id == target_id:
+            return False, "Selbst-Delegation ist nicht erlaubt."
+        return True, "APEX"
+
     if d is None:
         return False, f"Delegator '{delegator_id}' ist in der Organisationsstruktur nicht registriert."
     if delegator_id == target_id:
@@ -703,13 +716,40 @@ async def _watch_delegated_task(
         if origin_sess_id and origin_sess_id != s_id:
             try:
                 status_badge = "✅ ERLEDIGT" if status in ("done", "review") else "⛔ BLOCKIERT"
+                # M-2/K-5: Formales A2A-Envelope statt "Message from 🤖" als
+                # Freitext. Der Handoff-Desk existierte, wurde aber von keinem
+                # Dispatcher-Pfad genutzt.
+                handoff_id = ""
+                try:
+                    from backend.handoff_desk import handoff_desk
+                    envelope = handoff_desk.create_handoff(
+                        task_id=str(task_id),
+                        from_agent=str(prof_id or "unknown"),
+                        to_agent=str(orig_delegator or "default"),
+                        deliverables={
+                            "result": str(result or "")[:4000],
+                            "status": str(status),
+                            "artifact_path": str(obsidian_rel or ""),
+                        },
+                        acceptance_criteria=(
+                            f"Ergebnis von @{prof_id} fuer Task {task_id} fachlich pruefen."
+                        ),
+                    )
+                    handoff_id = str(envelope.get("handoff_id") or "")
+                except Exception as he:
+                    logger.debug(f"[Delegation] Handoff-Envelope nicht angelegt: {he}")
+
                 delegator_feedback = (
                     f"{status_badge}: Der Sub-Agent `@{prof_id}` hat Task `{task_id}` ({final_title}) abgeschlossen.\n\n"
+                    f"**A2A-Handoff:** `{handoff_id or 'nicht protokolliert'}`\n"
                     f"**Ergebnis:**\n{result or '(Ergebnis liegt im Projektordner/Kanban)'}\n"
                     f"{attach_note}\n\n"
                     f"*(Status im Kanban: `{status}`)*"
                 )
-                _save_message_to_db(origin_sess_id, "user", delegator_feedback)
+                # K-5: Das Ergebnis eines Sub-Agenten ist KEINE User-Aussage.
+                # Vorher role='user' → Taint-/HITL-/Audit-Logik sah einen
+                # Nutzer, der nie etwas gesagt hat.
+                _save_message_to_db(origin_sess_id, "assistant", delegator_feedback)
                 broadcast_event("chat_message_received", {
                     "session_id": origin_sess_id,
                     "agent_id": orig_delegator,
@@ -879,12 +919,30 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         kconn = _get_kanban_connection()
         try:
             parent_pid = str(payload.get("parent_project_id") or "").strip()
+            # H-5: Systeminterne Delegations-Subtasks sind keine externen
+            # Seiteneffekte. Ohne Marker blockierte operations_api.py jeden
+            # Subtask mit `awaiting_approval`, der Watchdog meldete nach 20 min
+            # einen Timeout, obwohl nur eine Freigabe fehlte. Eigener,
+            # konfigurierbarer Scope `delegation` mit Audit-Event.
+            try:
+                from backend.autonomy_settings import get_module_config
+                _del_cfg = get_module_config("delegation") or {}
+                _del_autonomy = str(_del_cfg.get("autonomy", "autonomous")).lower()
+            except Exception:
+                _del_autonomy = "autonomous"
+            _block_kind = "approval_granted" if _del_autonomy == "autonomous" else None
+            try:
+                _task_cols = {r[1] for r in kconn.execute("PRAGMA table_info(tasks)").fetchall()}
+                if _task_cols and "block_kind" not in _task_cols:
+                    kconn.execute("ALTER TABLE tasks ADD COLUMN block_kind TEXT")
+            except Exception:
+                pass
             kconn.execute(
-                "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, started_at, model_override, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, started_at, model_override, project_id, block_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (task_id, auftrag[:80] + ("..." if len(auftrag) > 80 else ""),
                  # Audit v3 2.1.3: isolation_header (M75 Tools/Skills) in tasks.body persistieren —
                  # er ging vorher nur in state.db.messages verloren und fehlte bei der Ausfuehrung.
-                 f"Delegation von @{delegator_id} an @{ziel}:\n{isolation_header}\n{auftrag}", ziel, "in_progress", prio_num, delegator_id, now_iso, now_iso, t_model, parent_pid)
+                 f"Delegation von @{delegator_id} an @{ziel}:\n{isolation_header}\n{auftrag}", ziel, "in_progress", prio_num, delegator_id, now_iso, now_iso, t_model, parent_pid, _block_kind)
             )
             kconn.execute(
                 "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",

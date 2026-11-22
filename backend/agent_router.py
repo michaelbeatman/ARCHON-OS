@@ -92,8 +92,11 @@ class AgentRouter:
                 db_errors += 1
                 continue
 
-        if dbs and not ok and db_errors > 0 and not self._budget_override():
-            logger.error("[TokenGuard] Verbrauchsdatenbanken vorhanden, aber nicht lesbar (Fail-Closed).")
+        # P0-9: Frueher galt Fail-Closed nur, wenn DBs vorhanden, aber unlesbar
+        # waren. Ohnestate.db (frische Installation / falscher Pfad) blieb
+        # ``ok=False`` und der Budget-Check wurde komplett uebersprungen.
+        if not ok and not self._budget_override():
+            logger.error("[TokenGuard] Verbrauch nicht verifizierbar — Budget-Check fail-closed (Block).")
             total = float("inf")
             ok = True
 
@@ -366,7 +369,6 @@ class AgentRouter:
 
         daily_budget = float(policy.get("daily_budget", 2.0) or 0.0)
         current_spend = float(policy.get("current_spend", 0.0) or 0.0)
-        spend_ok = bool(policy.get("spend_ok", False))
         max_ctx_chars = max(8000, int(policy.get("max_context_tokens", 32000)) * 4)
 
         # 1. Context-Window Cap mit intelligenter Rolling Summarization (Sliding Window Memory Compression)
@@ -398,7 +400,10 @@ class AgentRouter:
                 logger.warning(f"[TokenClipper] nicht angewendet: {clip_err}")
 
         # 2. Budget-Stufenprüfung: 80% drosseln + warnen, 100% hart blockieren
-        if daily_budget > 0 and spend_ok:
+        # P0-9: frueher `and spend_ok` — damit wurde bei nicht verifizierbarem
+        # Verbrauch (keine state.db) der Budget-Check KOMPLETT uebersprungen.
+        # Jetzt gilt: nur der explizite Override darf den Check abschalten.
+        if daily_budget > 0 and not self._budget_override():
             ratio = current_spend / daily_budget
             if ratio >= 1.0:
                 if self._budget_override():

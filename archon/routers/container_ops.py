@@ -137,8 +137,18 @@ def send_prompt_to_agent(
     used_url = ""
     for url in urls:
         try:
-            enforce_egress_firewall_for_url(url, data_category=gate.get("data_category", "general"))
-            clean_msgs, _ = sanitize_outbound_llm_payload(messages, target_url=url, session_id=f"container_{agent_name}")
+            # P0-4/PII: falsche Keyword-Argumente fuehrten zu TypeError; die
+            # nackte Messages-Liste umging das PII-Scrubbing.
+            enforce_egress_firewall_for_url(url, agent_id=agent_name)
+            _scrubbed = sanitize_outbound_llm_payload(
+                {"messages": messages},
+                agent_id=agent_name,
+                session_id=f"container_{agent_name}",
+            )
+            clean_msgs = (
+                _scrubbed["messages"] if isinstance(_scrubbed, dict) and "messages" in _scrubbed
+                else messages
+            )
             payload = {
                 "model": target_model,
                 "messages": clean_msgs,

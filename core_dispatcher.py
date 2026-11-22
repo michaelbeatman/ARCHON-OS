@@ -609,8 +609,13 @@ async def _dispatch_to_omniroute_or_container_exec(
     try:
         from local_memory_bridge import memory_bridge as bridge
         # Hole die wichtigsten und relevantesten Erkenntnisse für diesen Agenten
-        query_hint = prompt[:100] if prompt else ""
-        learnings = bridge.search_learnings(query_hint, limit=4)
+        # Audit v3 2.1.5 / Punkt 3.2.5: STREKT nach agent_id isoliert — ohne Agenten-Kontext
+        # keine Memory-Injection (Cross-Agent-Leakage).
+        if agent_id:
+            query_hint = prompt[:100] if prompt else ""
+            learnings = bridge.search_learnings(query_hint, limit=4, agent_id=str(agent_id))
+        else:
+            learnings = []
         if learnings:
             lines = [f"- [{l.get('category', 'Allgemein')}] {l.get('summary')}" for l in learnings if l.get('summary')]
             if lines:

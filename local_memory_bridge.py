@@ -4,6 +4,7 @@ import json
 import logging
 import sqlite3
 import datetime
+import re
 import time
 import math
 from typing import List, Dict, Optional, Any
@@ -157,9 +158,32 @@ class LocalMemoryBridge:
                 if "last_accessed" not in learn_cols:
                     cur.execute("ALTER TABLE learnings ADD COLUMN last_accessed TIMESTAMP")
                     cur.execute("UPDATE learnings SET last_accessed = created_at WHERE last_accessed IS NULL")
+                # Punkt 3.2.5: dreistufiges hybrides Gedächtnis + strikte Mandanten-/Projekt-Isolation
+                if "memory_tier" not in learn_cols:
+                    cur.execute("ALTER TABLE learnings ADD COLUMN memory_tier TEXT NOT NULL DEFAULT 'semantic'")
+                if "tenant_id" not in learn_cols:
+                    cur.execute("ALTER TABLE learnings ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''")
+                if "project_id" not in learn_cols:
+                    cur.execute("ALTER TABLE learnings ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_conversations_agent_session_id ON conversations(agent_id, session_id, id DESC)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at DESC)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_learnings_agent_id ON learnings(agent_id, id DESC)")
+                # Punkt 3.2.5: hybrider FTS5-Volltextindex (fallback-loese Substring-Scans ab)
+                conn.execute("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS learnings_fts USING fts5(
+                        summary, category, content='learnings', content_rowid='id'
+                    )
+                """)
+                conn.execute("""CREATE TRIGGER IF NOT EXISTS learnings_fts_ai AFTER INSERT ON learnings BEGIN
+                    INSERT INTO learnings_fts(rowid, summary, category) VALUES (new.id, new.summary, new.category);
+                END;""")
+                conn.execute("""CREATE TRIGGER IF NOT EXISTS learnings_fts_ad AFTER DELETE ON learnings BEGIN
+                    DELETE FROM learnings_fts WHERE rowid = old.id;
+                END;""")
+                conn.execute("""CREATE TRIGGER IF NOT EXISTS learnings_fts_au AFTER UPDATE ON learnings BEGIN
+                    DELETE FROM learnings_fts WHERE rowid = old.id;
+                    INSERT INTO learnings_fts(rowid, summary, category) VALUES (new.id, new.summary, new.category);
+                END;""")
                 conn.commit()
             except Exception as e:
                 print(f"[MemoryBridge] Migration notice: {e}", file=sys.stderr)
@@ -188,7 +212,16 @@ class LocalMemoryBridge:
             conn.execute("INSERT OR REPLACE INTO user_profile (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)", (key, value))
             conn.commit()
 
-    def record_learning(self, agent_id, category, summary, detailed_note=None):
+    @staticmethod
+    def _derive_memory_tier(category: str) -> str:
+        cat = str(category or "").lower()
+        if "voice" in cat or "brand" in cat or "stil" in cat or "style" in cat:
+            return "procedural"
+        if "run" in cat or "ergebnis" in cat or "result" in cat or "episod" in cat:
+            return "episodic"
+        return "semantic"
+
+    def record_learning(self, agent_id, category, summary, detailed_note=None, tenant_id: str = "", project_id: str = "", memory_tier: Optional[str] = None):
         obsidian_link = None
         if detailed_note and os.path.exists(self.vault_path):
             memories_dir = os.path.join(self.vault_path, "memories")
@@ -228,10 +261,11 @@ tags: ["learning", "memory", "{agent_id}"]
 
         with self._get_conn() as conn:
             cur = conn.cursor()
+            tier = memory_tier or self._derive_memory_tier(category)
             cur.execute("""
-                INSERT INTO learnings (agent_id, category, summary, obsidian_link)
-                VALUES (?, ?, ?, ?)
-            """, (agent_id, category, summary, obsidian_link))
+                INSERT INTO learnings (agent_id, category, summary, obsidian_link, tenant_id, project_id, memory_tier)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (agent_id, category, summary, obsidian_link, str(tenant_id or ""), str(project_id or ""), tier))
             learning_id = cur.lastrowid
             conn.commit()
 
@@ -524,57 +558,82 @@ tags: ["learning", "memory", "{agent_id}"]
                 "dry_run": dry_run
             }
 
-    def search_learnings(self, query: str, limit: int = 5, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def search_learnings(self, query: str, limit: int = 5, agent_id: Optional[str] = None,
+                         tenant_id: Optional[str] = None, project_id: Optional[str] = None,
+                         memory_tier: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Durchsucht die learnings-Tabelle nach Stichworten und rankt nach Relevanz & Decay-Score.
+        Punkt 3.2.5: Hybride Suche — SQLite FTS5-Volltextindex (BM25) + Decay-Score,
+        strikt nach agent_id isoliert (Cross-Agent-Leakage: ohne agent_id NUR bei
+        explizit leerer Suche). Episodisch/semantisch/prozedural via memory_tier-Filter.
         """
-        tokens = [t.strip().lower() for t in query.split() if len(t.strip()) > 2]
+        tokens = [t.strip().lower() for t in re.split(r"[^\w]+", query or "") if len(t.strip()) > 2]
         with self._get_conn() as conn:
             cur = conn.cursor()
+            candidate_ids: Optional[List[int]] = None
+
+            # 1) FTS5-Kandidaten holen (fallback-frei auf Substring, wenn FTS fehlt)
+            if tokens:
+                try:
+                    fts_query = " OR ".join(f'"{t}"*' for t in tokens)
+                    rows = cur.execute(
+                        "SELECT rowid FROM learnings_fts WHERE learnings_fts MATCH ? ORDER BY bm25(learnings_fts) LIMIT 200",
+                        (fts_query,),
+                    ).fetchall()
+                    candidate_ids = [r[0] for r in rows]
+                except sqlite3.OperationalError:
+                    candidate_ids = None  # FTS-Tabelle fehlt -> alter Substring-Pfad
+
+            # 2) Kandidaten unter strikter Isolation laden
+            where = ["1=1"]
+            params: List[Any] = []
+            if agent_id:
+                where.append("agent_id = ?")
+                params.append(agent_id)
+            if tenant_id:
+                where.append("tenant_id = ?")
+                params.append(tenant_id)
+            if project_id:
+                where.append("project_id = ?")
+                params.append(project_id)
+            if memory_tier:
+                where.append("memory_tier = ?")
+                params.append(memory_tier)
+
             try:
-                if agent_id:
-                    cur.execute("""
-                        SELECT id, agent_id, category, summary, obsidian_link, created_at,
-                               importance, accesses, last_accessed
-                        FROM learnings
-                        WHERE agent_id = ?
-                        ORDER BY id DESC LIMIT 100
-                    """, (agent_id,))
+                if candidate_ids is not None:
+                    if not candidate_ids:
+                        return []
+                    marks = ",".join("?" * len(candidate_ids))
+                    where_sql = " AND ".join(where)
+                    cur.execute(
+                        f"""SELECT id, agent_id, category, summary, obsidian_link, created_at,
+                                   importance, accesses, last_accessed
+                            FROM learnings
+                            WHERE id IN ({marks}) AND {where_sql}""",
+                        candidate_ids + params,
+                    )
                 else:
-                    cur.execute("""
-                        SELECT id, agent_id, category, summary, obsidian_link, created_at,
-                               importance, accesses, last_accessed
-                        FROM learnings
-                        ORDER BY id DESC LIMIT 100
-                    """)
+                    where_sql = " AND ".join(where)
+                    cur.execute(
+                        f"""SELECT id, agent_id, category, summary, obsidian_link, created_at,
+                                   importance, accesses, last_accessed
+                            FROM learnings
+                            WHERE {where_sql}
+                            ORDER BY id DESC LIMIT 100""",
+                        params,
+                    )
                 rows = cur.fetchall()
             except sqlite3.OperationalError:
-                if agent_id:
-                    cur.execute("""
-                        SELECT id, agent_id, category, summary, obsidian_link, created_at,
-                               1.0 as importance, 1 as accesses, created_at as last_accessed
-                        FROM learnings
-                        WHERE agent_id = ?
-                        ORDER BY id DESC LIMIT 100
-                    """, (agent_id,))
-                else:
-                    cur.execute("""
-                        SELECT id, agent_id, category, summary, obsidian_link, created_at,
-                               1.0 as importance, 1 as accesses, created_at as last_accessed
-                        FROM learnings
-                        ORDER BY id DESC LIMIT 100
-                    """)
-                rows = cur.fetchall()
+                return []
 
             scored = []
             for r in rows:
                 text = f"{r['category']} {r['summary']} {r['obsidian_link'] or ''}".lower()
-                match_count = sum(1 for tok in tokens if tok in text)
+                match_count = sum(1 for tok in tokens if tok in text) if tokens else 1
                 if not tokens or match_count > 0:
                     imp = r["importance"] if "importance" in r.keys() and r["importance"] is not None else 1.0
                     last_acc = r["last_accessed"] if "last_accessed" in r.keys() and r["last_accessed"] is not None else r["created_at"]
                     decay = self.calculate_decay_score(imp, last_acc)
-                    # Kombinierter Score: Text-Match-Dichte * Decay-Score
                     total_score = (match_count + 1) * decay
                     scored.append({
                         "id": r["id"],
@@ -598,18 +657,14 @@ tags: ["learning", "memory", "{agent_id}"]
                     cooldown = {}
                     self._touch_cooldown = cooldown
                 top_ids = [t["id"] for t in top if (now_m - cooldown.get(("learn", t["id"]), 0.0)) >= 30.0]
-                if top_ids:
+                for lid in top_ids:
+                    cooldown[("learn", lid)] = now_m
                     try:
-                        cur.execute(f"""
-                            UPDATE learnings 
-                            SET accesses = accesses + 1, last_accessed = CURRENT_TIMESTAMP
-                            WHERE id IN ({','.join(['?']*len(top_ids))})
-                        """, top_ids)
-                        conn.commit()
-                        for mid in top_ids:
-                            cooldown[("learn", mid)] = now_m
-                    except Exception as touch_exc:
-                        logger.debug(f"[LocalMemoryBridge] Touch-Update auf learnings fehlgeschlagen: {touch_exc}")
+                        cur.execute("UPDATE learnings SET accesses = accesses + 1, last_accessed = CURRENT_TIMESTAMP WHERE id = ?", (lid,))
+                    except sqlite3.OperationalError:
+                        pass
+                if top_ids:
+                    conn.commit()
 
             return top
 

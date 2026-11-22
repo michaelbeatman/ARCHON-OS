@@ -122,6 +122,8 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
             conn.execute("ALTER TABLE workflow_runs ADD COLUMN dag_json TEXT DEFAULT '{}'")
         if "gate_approvals_json" not in run_cols:
             conn.execute("ALTER TABLE workflow_runs ADD COLUMN gate_approvals_json TEXT DEFAULT '{}'")
+        if "total_cost_usd" not in run_cols:
+            conn.execute("ALTER TABLE workflow_runs ADD COLUMN total_cost_usd REAL DEFAULT 0.0")
         conn.commit()
         yield conn
     finally:
@@ -438,6 +440,8 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         or f"Du bist {agent_name} in Archon OS. Bearbeite deinen Workflow-Schritt praezise und strukturiert."
     )
     model = str(node.get("model") or prof.get("model") or "deepseek/deepseek-chat").strip()
+    # Punkt 3.2.6: Cheap-First -> Frontier-Escalation pro Node
+    _esc_model = str(node.get("escalation_model") or "").strip()
     reasoning_level = str(node.get("reasoning_effort") or "medium").strip()
 
     # Optionale Markenstimme (config/voice.md) automatisch fuer Content-/Marketing-Schritte injizieren
@@ -622,21 +626,54 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                 f"Deine bisherige Ausgabe:\n{content[:3000]}\n\n"
                 "Gib ausschliesslich ein valides JSON-Objekt zurueck, das alle Pflichtfelder erfuellt."
             )
+            _repair_model_used = _esc_model or model
             _rep_res = await core_dispatcher.dispatch_to_omniroute_or_container(
                 agent_id=agent_id,
                 agent_name=agent_name,
                 prompt=_repair_prompt,
                 role=role,
                 system_prompt=eff_system_prompt,
-                model=model,
+                model=_repair_model_used,
                 reasoning_level=reasoning_level,
                 task_id=str(kanban_task_id or node.get("id") or ""),
             )
-            res["input_tokens"] = int(res.get("input_tokens") or 0) + int(_rep_res.get("input_tokens") or 0)
-            res["output_tokens"] = int(res.get("output_tokens") or 0) + int(_rep_res.get("output_tokens") or 0)
+            _repair_in = int(_rep_res.get("input_tokens") or 0)
+            _repair_out = int(_rep_res.get("output_tokens") or 0)
+            res["input_tokens"] = int(res.get("input_tokens") or 0) + _repair_in
+            res["output_tokens"] = int(res.get("output_tokens") or 0) + _repair_out
             _rep_content = str(_rep_res.get("content") or "").strip()
             if _rep_content:
                 content = _rep_content
+                _ok_schema, _parsed_obj, _schema_err = _validate_contract(content, output_schema)
+        # Punkt 3.2.6: Frontier-Eskalation, wenn der Repair-Retry am billigen Modell scheitert
+        _esc_in = 0
+        _esc_out = 0
+        if not _ok_schema and _esc_model and _esc_model != model:
+            _esc_prompt = (
+                f"{full_prompt}\n\n"
+                f"[SCHEMA-VALIDIERUNG FEHLGESCHLAGEN — FRONTIER-ESKALATION]\n"
+                f"Fehler: {_schema_err}\n"
+                f"Erwartetes Schema: {json.dumps(output_schema, ensure_ascii=False)}\n"
+                f"Vorheriger Versuch:\n{content[:3000]}\n\n"
+                "Liefere ausschliesslich das korrekte JSON-Objekt."
+            )
+            _esc_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=agent_id,
+                agent_name=agent_name,
+                prompt=_esc_prompt,
+                role=role,
+                system_prompt=eff_system_prompt,
+                model=_esc_model,
+                reasoning_level="high",
+                task_id=str(kanban_task_id or node.get("id") or ""),
+            )
+            _esc_in = int(_esc_res.get("input_tokens") or 0)
+            _esc_out = int(_esc_res.get("output_tokens") or 0)
+            res["input_tokens"] = int(res.get("input_tokens") or 0) + _esc_in
+            res["output_tokens"] = int(res.get("output_tokens") or 0) + _esc_out
+            _esc_content = str(_esc_res.get("content") or "").strip()
+            if _esc_content:
+                content = _esc_content
                 _ok_schema, _parsed_obj, _schema_err = _validate_contract(content, output_schema)
         if _ok_schema:
             parsed_output = _parsed_obj
@@ -731,6 +768,25 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         except OSError as _dexc:
             logger.debug("[WorkflowDAG] Showroom-Deliverable nicht geschrieben: %s", _dexc)
 
+    # Punkt 3.2.6: exakte Kosten pro Node (Basis-/Repair-/Eskalations-Modell getrennt)
+    _cost_usd = 0.0
+    try:
+        from backend.llm_kernel import estimate_model_cost_usd as _est_cost
+        _rep_in_tok = int(locals().get("_repair_in", 0) or 0)
+        _rep_out_tok = int(locals().get("_repair_out", 0) or 0)
+        _esc_in_tok = int(locals().get("_esc_in", 0) or 0)
+        _esc_out_tok = int(locals().get("_esc_out", 0) or 0)
+        _base_in = int(res.get("input_tokens") or 0) - _rep_in_tok - _esc_in_tok
+        _base_out = int(res.get("output_tokens") or 0) - _rep_out_tok - _esc_out_tok
+        if _base_in or _base_out:
+            _cost_usd += _est_cost(model, _base_in, _base_out)
+        if _rep_in_tok or _rep_out_tok:
+            _cost_usd += _est_cost(locals().get("_repair_model_used") or model, _rep_in_tok, _rep_out_tok)
+        if _esc_in_tok or _esc_out_tok:
+            _cost_usd += _est_cost(_esc_model or model, _esc_in_tok, _esc_out_tok)
+        _cost_usd = round(_cost_usd, 6)
+    except Exception as _cost_exc:
+        logger.debug("[WorkflowDAG] Kostenberechnung uebersprungen: %s", _cost_exc)
     out = {
         "status": "error" if is_error else "success",
         "node_id": node.get("id"),
@@ -741,6 +797,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         "input_tokens": int(res.get("input_tokens") or 0),
         "output_tokens": int(res.get("output_tokens") or 0),
         "kanban_task_id": kanban_task_id,
+        "cost_usd": _cost_usd,
     }
     if quality_report is not None:
         out["quality_score"] = int(quality_report.get("score", 0))
@@ -1148,9 +1205,20 @@ async def _run_workflow_dag_locked(
         final_status = "completed"
 
     with _connect(db_path) as conn:
+        # Punkt 3.2.6: Gesamtkosten pro Run/Deliverable ausmessen
+        _total_cost = 0.0
+        try:
+            for _r in conn.execute("SELECT output_json FROM workflow_node_states WHERE run_id = ?", (rid,)).fetchall():
+                try:
+                    _o = json.loads(_r[0] or "{}")
+                    _total_cost += float(_o.get("cost_usd") or 0.0)
+                except Exception:
+                    pass
+        except sqlite3.OperationalError:
+            pass
         conn.execute(
-            "UPDATE workflow_runs SET status = ?, updated_at = ? WHERE run_id = ?",
-            (final_status, time.time(), rid),
+            "UPDATE workflow_runs SET status = ?, updated_at = ?, total_cost_usd = ? WHERE run_id = ?",
+            (final_status, time.time(), round(_total_cost, 6), rid),
         )
         conn.commit()
 

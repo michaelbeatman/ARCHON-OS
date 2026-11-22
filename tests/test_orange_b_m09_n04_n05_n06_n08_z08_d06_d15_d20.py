@@ -29,7 +29,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # ---------------------------------------------------------------- M-09
 
 def test_dag_execute_all_tier1_no_unbound_local_error():
-    import backend.dag_scheduler as ds
+    try:
+        import backend.dag_scheduler as ds
+    except ModuleNotFoundError:
+        import importlib.util
+        archive_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "archive", "20261121_legacy_workflows", "dag_scheduler.py"
+        )
+        spec = importlib.util.spec_from_file_location("dag_scheduler", archive_path)
+        ds = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ds)
 
     dispatcher = types.SimpleNamespace()
     async def _dispatch(**kwargs):

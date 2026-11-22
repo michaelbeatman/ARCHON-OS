@@ -500,13 +500,13 @@
               const done = (typeof t.completed_at === 'number') ? new Date(t.completed_at * 1000)
                 : (t.completed_at ? new Date(String(t.completed_at).replace(' ', 'T')) : null);
               return `
-              <div onclick="openTaskDetailModal('${t.id}')" class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-indigo-400 hover:bg-[var(--secondary)]/40 transition cursor-pointer flex items-center justify-between gap-2 text-xs">
+              <div onclick="openTaskDetailModal('${String(t.id).replace(/[^a-zA-Z0-9_\-]/g, "")}')" class="p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:border-indigo-400 hover:bg-[var(--secondary)]/40 transition cursor-pointer flex items-center justify-between gap-2 text-xs">
                 <div class="min-w-0">
-                  <span class="font-mono font-bold text-muted-custom">${t.id}</span>
+                  <span class="font-mono font-bold text-muted-custom">${opsEscapeHtml(String(t.id))}</span>
                   <span class="font-semibold text-primary-custom ml-2">${opsEscapeHtml((t.title || '').slice(0, 90))}</span>
                 </div>
                 <div class="flex items-center gap-2.5 shrink-0 text-[10px] font-mono text-muted-custom">
-                  ${t.due_date ? `<span title="${kanT('ui.operations_kanban.due_label', 'Fällig')}">📅 ${t.due_date}</span>` : ''}
+                  ${t.due_date ? `<span title="${kanT('ui.operations_kanban.due_label', 'Fällig')}">📅 ${opsEscapeHtml(t.due_date)}</span>` : ''}
                   ${(t.tags || []).slice(0, 2).map(tg => `<span>#${opsEscapeHtml(tg)}</span>`).join('')}
                   <span>${done && !isNaN(done) ? done.toLocaleDateString(kanLocale()) : ''}</span>
                   <span title="${kanT('ui.operations_kanban.assigned_to', 'Zugewiesen an')}">👤 ${opsEscapeHtml(t.assignee_name || '-')}</span>
@@ -4156,8 +4156,8 @@
         items = items.filter(i => i.task_id && !i.task_id.includes("boardroom") && i.task_id !== "system_broadcast");
       }
 
-      if (currentCommFilterAgent) {
-        items = items.filter(i => i.author_id === currentCommFilterAgent || i.target_id === currentCommFilterAgent);
+      if (activeCommFilter) {
+        items = items.filter(i => i.author_id === activeCommFilter || i.target_id === activeCommFilter);
       }
 
       const messagesContainer = document.getElementById('ops-comm-messages');

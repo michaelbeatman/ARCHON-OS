@@ -1447,10 +1447,10 @@
             gotoBtn.classList.remove("hidden");
             gotoBtn.onclick = () => {
               if (typeof window.setOperationsTab === "function") window.setOperationsTab("kanban");
-              if (typeof window.loadKanbanTasks === "function") window.loadKanbanTasks();
+              if (typeof window.loadOperationsData === "function") window.loadOperationsData();
             };
           }
-          if (typeof window.loadKanbanTasks === "function") window.loadKanbanTasks();
+          if (typeof window.loadOperationsData === "function") window.loadOperationsData();
         } catch (err) {
           if (statusEl) statusEl.textContent = `Fehler: ${err.message}`;
         } finally {
@@ -2018,7 +2018,7 @@
             body: JSON.stringify({ inputs: { topic: topic.trim() } }),
           });
           if (typeof window.closeNewTaskModal === "function") window.closeNewTaskModal();
-          if (typeof window.loadKanbanTasks === "function") window.loadKanbanTasks();
+          if (typeof window.loadOperationsData === "function") window.loadOperationsData();
           alert(`Workflow-DAG gestartet (${res.run_id}): ${(res.created_tasks || []).length} verknuepfte Aufgaben angelegt.`);
         } catch (err) {
           alert(`Fehler: ${err.message}`);

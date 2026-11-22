@@ -3014,15 +3014,16 @@
         tr.className = "hover:bg-[var(--secondary)]/60 border-b border-[var(--border)] transition text-xs";
         const ctx = m.context_length ? (m.context_length >= 1000000 ? `${(m.context_length/1000000).toFixed(1)}M` : `${Math.round(m.context_length/1000)}k`) : '—';
         const isFree = (m.prompt_1m === 0 && m.completion_1m === 0);
-        
+        const safeModelId = String(m.id || "").replace(/[^a-zA-Z0-9_.\-\/:]/g, "");
+
         tr.innerHTML = `
           <td class="py-2.5 px-3 font-mono">
-            <div class="font-bold text-[var(--foreground)] truncate max-w-[280px]" title="${m.id}">${m.id}</div>
-            <div class="text-[10px] text-[var(--muted-foreground)] truncate max-w-[280px]">${m.name}</div>
+            <div class="font-bold text-[var(--foreground)] truncate max-w-[280px]" title="${escapeHtml(safeModelId)}">${escapeHtml(safeModelId)}</div>
+            <div class="text-[10px] text-[var(--muted-foreground)] truncate max-w-[280px]">${escapeHtml(m.name)}</div>
           </td>
           <td class="py-2.5 px-3 font-mono">
             <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)] truncate max-w-[110px] inline-block">
-              ${m.vendor}
+              ${escapeHtml(m.vendor)}
             </span>
           </td>
           <td class="py-2.5 px-3 font-mono text-[11px] text-[var(--muted-foreground)]">${ctx}</td>
@@ -3033,7 +3034,7 @@
             ${isFree ? smT("ui.skill_markt.price_free", "Kostenlos") : '$' + fmt(m.completion_1m)}
           </td>
           <td class="py-2.5 px-3 text-right">
-            <button type="button" onclick="selectModelFromPriceCatalog('${m.id}')" class="px-2.5 py-1 rounded-md bg-[var(--foreground)] text-[var(--background)] hover:opacity-90 transition font-mono text-[11px] font-bold cursor-pointer shadow-2xs">
+            <button type="button" onclick="selectModelFromPriceCatalog('${safeModelId}')" class="px-2.5 py-1 rounded-md bg-[var(--foreground)] text-[var(--background)] hover:opacity-90 transition font-mono text-[11px] font-bold cursor-pointer shadow-2xs">
               ${smT("ui.skill_markt.btn_select", "Wählen")}
             </button>
           </td>

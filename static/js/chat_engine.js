@@ -769,7 +769,7 @@ async function initMasterChat() {
       try { scheduleMasterChatContextMeter(); } catch (e) { /* Meter optional */ }
       const messagesContainer = document.getElementById("master-chat-messages");
       if (!messagesContainer) return null;
-      const safeContent = content == null ? "" : String(content);
+      let safeContent = content == null ? "" : String(content);
       const isUser = role === "user";
       // Formatiere Datum & Uhrzeit (z. B. 13.09.2026, 19:55)
       let dateFormatted = "";

@@ -562,16 +562,16 @@
           <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] flex flex-col justify-between gap-2 shadow-2xs hover:border-[var(--muted-foreground)] transition">
             <div class="space-y-1">
               <div class="flex items-center justify-between gap-1.5">
-                <span class="text-xs font-bold font-mono text-[var(--foreground)] truncate">${s.name}</span>
+                <span class="text-xs font-bold font-mono text-[var(--foreground)] truncate">${escapeHtml(s.name)}</span>
                 <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${badgeClass} shrink-0">
                   ${resT('ui.research_lab.level_badge', 'Lvl {level} · {tier}', { level: s.tier_level, tier: s.tier_name.split(' ')[0] })}
                 </span>
               </div>
-              <p class="text-[11px] text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">${s.description || ''}</p>
+              <p class="text-[11px] text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">${escapeHtml(s.description || '')}</p>
             </div>
             <div class="pt-2 border-t border-[var(--border)]/60 flex items-center justify-between text-[10px] font-mono">
-              <span class="text-[var(--muted-foreground)]">${typeLabel} · ${s.domain}</span>
-              <a href="${s.homepage || '#'}" target="_blank" rel="noopener" class="text-sky-500 hover:underline flex items-center gap-0.5">
+              <span class="text-[var(--muted-foreground)]">${escapeHtml(typeLabel)} · ${escapeHtml(s.domain)}</span>
+              <a href="${/^https?:\/\//i.test(String(s.homepage || '')) ? escapeHtml(s.homepage) : '#'}" target="_blank" rel="noopener" class="text-sky-500 hover:underline flex items-center gap-0.5">
                 ${resT('ui.research_lab.website', 'Webseite')} <i data-lucide="external-link" class="w-2.5 h-2.5"></i>
               </a>
             </div>

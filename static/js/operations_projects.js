@@ -313,7 +313,7 @@
     if (!txt) return "";
     if (window.marked && typeof window.marked.parse === "function") {
       try {
-        return `<div class="prose prose-xs dark:prose-invert max-w-none text-xs leading-relaxed">${window.marked.parse(txt)}</div>`;
+        return `<div class="prose prose-xs dark:prose-invert max-w-none text-xs leading-relaxed">${DOMPurify.sanitize(window.marked.parse(txt))}</div>`;
       } catch (e) { /* fallback */ }
     }
     return `<div class="text-xs text-[var(--foreground)] leading-relaxed whitespace-pre-wrap font-sans">${escapeHtml(txt)}</div>`;

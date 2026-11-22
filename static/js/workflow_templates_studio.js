@@ -744,8 +744,7 @@
               ${!_activeTpl.builtin ? `<button type="button" id="wf-del-tpl-btn" class="text-[10px] text-rose-400 hover:underline">Löschen</button>` : ""}
             </div>
           </div>
-          <input id="wf-meta-title" value="${esc(_activeTpl.title)}" class="w-full px-2.5 py-1.5 rounded border border-[var(--border)] bg-[var(--page-bg)] text-xs font-semibold" placeholder="Workflow-Name" />
-          <input id="wf-meta-desc" value="${esc(_activeTpl.description || "")}" class="w-full px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] text-[11px]" placeholder="Kurzbeschreibung" />
+          <div class="text-[10px] text-[var(--muted-foreground)]">Name &amp; Beschreibung in der Kopfzeile bearbeitbar.</div>
         </div>
 
         ${
@@ -945,11 +944,6 @@
       ? `<span class="text-[11px] font-mono text-indigo-300 bg-indigo-500/15 border border-indigo-500/40 px-2 py-0.5 rounded">Quell-Station anklicken…</span>`
       : `<span id="wf-run-status" class="text-[11px] font-mono text-[var(--muted-foreground)] truncate">Baustein auf Matrix ziehen · → Port verknüpft</span>`;
 
-    const wfTitle = _activeTpl ? `${_activeTpl.title}${_dirty ? " *" : ""}` : "Kein Workflow geladen";
-    const wfDesc = _activeTpl
-      ? (_activeTpl.description || "Keine Beschreibung hinterlegt.")
-      : "Über '📂 Öffnen' eine Vorlage laden oder mit '+ Neu' starten.";
-
     mount.innerHTML = `
       <div style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
         <div class="px-3 py-2 border-b border-[var(--border)] bg-[var(--card)] flex items-stretch justify-between gap-4 shrink-0">
@@ -970,9 +964,16 @@
           </div>
 
           <div class="flex items-stretch gap-3 min-w-0 ml-auto">
-            <div class="flex flex-col justify-center text-right min-w-0 max-w-md">
-              <div class="text-sm font-bold text-[var(--foreground)] truncate leading-tight">${esc(wfTitle)}</div>
-              <div class="text-[11px] text-[var(--muted-foreground)] truncate leading-snug mt-0.5">${esc(wfDesc)}</div>
+            <div class="flex flex-col justify-center gap-1 min-w-0" style="max-width:420px;">
+              <div class="flex items-center gap-1.5">
+                <input type="text" id="wf-meta-title" value="${_activeTpl ? esc(_activeTpl.title) : ""}" ${_activeTpl ? "" : "disabled"}
+                  placeholder="Workflow-Name"
+                  class="w-full min-w-0 px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] text-sm font-bold text-[var(--foreground)] focus:border-indigo-400 focus:outline-none disabled:opacity-50" />
+                ${_dirty ? '<span class="text-[10px] font-mono text-amber-400 shrink-0" title="Ungespeicherte Änderungen">*</span>' : ""}
+              </div>
+              <input type="text" id="wf-meta-desc" value="${_activeTpl ? esc(_activeTpl.description || "") : ""}" ${_activeTpl ? "" : "disabled"}
+                placeholder="Kurzbeschreibung"
+                class="w-full min-w-0 px-2 py-0.5 rounded border border-[var(--border)] bg-[var(--page-bg)] text-[11px] text-[var(--muted-foreground)] focus:border-indigo-400 focus:outline-none disabled:opacity-50" />
             </div>
             <button type="button" id="wf-header-start-btn" ${_activeTpl ? "" : "disabled"} title="Workflow starten"
               style="min-width:48px;"

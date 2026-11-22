@@ -32,6 +32,7 @@ from archon.core.runtime import (
     logger,
 )
 from archon.core.profiles import api_get_hermes_profiles
+from backend.cancellation import cancel_scope, get_child_token, get_token
 
 # Externe Dependencies (wie in main.py)
 import core_dispatcher
@@ -258,6 +259,9 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
 
     await asyncio.to_thread(update_mission_control_data, _mutate)
     _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
+    # Cancel-Kette: Root-Token pro Task, damit Boardroom/Dispatch/DAG später
+    # als Kinder daran hängen und zentral abgebrochen werden können.
+    get_token(f"task:{task_id}")
     broadcast_event("kanban_updated", {"action": "capture", "task_id": task_id, "status": "backlog"})
     return {"status": "ok", "task": new_task}
 
@@ -392,6 +396,8 @@ async def move_mission_control_task(req: TaskMoveRequest):
             await asyncio.to_thread(update_mission_control_data, _mark_fin)
 
     if plan.get("execute"):
+        get_child_token(f"task:{req.task_id}", f"dispatch:{req.task_id}")
+        get_child_token(f"task:{req.task_id}", f"run:{req.task_id}")
         asyncio.create_task(_DEPS["execute"](task["id"]))
     if plan.get("fan_in"):
         asyncio.create_task(_DEPS["fan_in"](plan["fan_in"]))
@@ -402,6 +408,20 @@ async def move_mission_control_task(req: TaskMoveRequest):
     if plan.get("dismissed"):
         return {"status": "ok", "message": "Task verworfen."}
     return {"status": "ok", "task": task}
+
+
+@router.post("/api/mission-control/tasks/{task_id}/cancel")
+async def cancel_mission_control_task(task_id: str, reason: str = ""):
+    """Zentraler Abbruch: Task-Root → Dispatch → DAG (und deren Kinder)."""
+    why = str(reason or "operator_cancel")
+    cancelled = []
+    if cancel_scope(f"task:{task_id}", why):
+        cancelled.append(f"task:{task_id}")
+    for scope in (f"dispatch:{task_id}", f"run:{task_id}", task_id):
+        if cancel_scope(scope, why):
+            cancelled.append(scope)
+    broadcast_event("task_cancelled", {"task_id": task_id, "reason": why, "scopes": cancelled})
+    return {"status": "ok", "task_id": task_id, "cancelled_scopes": cancelled}
 
 
 @router.get("/api/mission-control/task/{task_id}/artifact")

@@ -10,6 +10,8 @@ Kanonische Quelle (SSOT) ist ``agent_profiles.json``. Abgeleitete Artefakte:
 
 Usage:
     python scripts/sync_profile_ssot.py --check   # nur Drift melden (CI)
+    python scripts/sync_profile_ssot.py --check --allow-missing-hermes --json
+                                                 # CI: fehlendes .hermes/profiles tolerieren
     python scripts/sync_profile_ssot.py           # abgeleitete Dateien regenerieren
 """
 from __future__ import annotations
@@ -67,16 +69,25 @@ def _role_ids() -> List[str]:
     return [str(r.get("id") or "").strip() for r in data if isinstance(r, dict) and r.get("id")]
 
 
-def detect_drift() -> Dict[str, Any]:
-    """Liefert einen maschinenlesbaren Drift-Report (SSOT = agent_profiles.json)."""
+def detect_drift(allow_missing_hermes: bool = False) -> Dict[str, Any]:
+    """Liefert einen maschinenlesbaren Drift-Report (SSOT = agent_profiles.json).
+
+    ``allow_missing_hermes`` greift nur, wenn ``.hermes/profiles`` gar nicht
+    existiert (gitignored in einem sauberen CI-Checkout): fehlende Profilordner
+    zaehlen dann nicht als Drift. Rollen-Drift und verwaiste Ordner bleiben
+    weiterhin hart. Existiert das Verzeichnis, ist das Verhalten unveraendert.
+    """
     src = set(_profile_ids())
+    hermes_present = os.path.isdir(HERMES_PROFILES)
     disk = set(_disk_ids())
     roles = set(_role_ids())
     missing_dirs = sorted(src - disk)
     orphan_dirs = sorted(disk - src)
     missing_roles = sorted(src - roles)
     stale_roles = sorted(roles - src)
-    drift = bool(missing_dirs or orphan_dirs or missing_roles or stale_roles)
+    disk_skipped = (not hermes_present) and allow_missing_hermes
+    effective_missing_dirs: List[str] = [] if disk_skipped else missing_dirs
+    drift = bool(effective_missing_dirs or orphan_dirs or missing_roles or stale_roles)
     return {
         "ssot": "agent_profiles.json",
         "counts": {"ssot": len(src), "disk": len(disk), "roles": len(roles)},
@@ -84,6 +95,7 @@ def detect_drift() -> Dict[str, Any]:
         "orphan_dirs": orphan_dirs,
         "missing_roles": missing_roles,
         "stale_roles": stale_roles,
+        "disk_skipped": disk_skipped,
         "drift": drift,
     }
 
@@ -165,9 +177,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Archon OS Profile-SSOT Sync/Check")
     parser.add_argument("--check", action="store_true", help="Nur Drift melden, nichts schreiben")
     parser.add_argument("--json", action="store_true", help="Report als JSON ausgeben")
+    parser.add_argument(
+        "--allow-missing-hermes", action="store_true",
+        help="Fehlendes .hermes/profiles in der Drift-Entscheidung ignorieren (CI)",
+    )
     args = parser.parse_args()
 
-    report = detect_drift() if args.check else sync()
+    report = detect_drift(allow_missing_hermes=args.allow_missing_hermes) if args.check else sync()
     display = report if args.check else report.get("after", report)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))

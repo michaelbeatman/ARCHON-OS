@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 import core_dispatcher  # noqa: F401
+from backend.cancellation import clear_scope, get_child_token
 from archon.core.runtime import (  # noqa: F401
     WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, SETTINGS_FILE, OBSIDIAN_VAULT_DIR, APP_ROOT,
     add_ticker, broadcast_event, ticker_entries, _load_json, _save_json, atomic_write_json,
@@ -385,6 +386,11 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
     chairman_agent, all_debate_agents = _prepare_boardroom_agents(req)
     add_ticker("AI Boardroom", f"Live-Debatte gestartet: '{req.task[:40]}...' ({req.framework}) mit {len(all_debate_agents)} Teilnehmern")
 
+    # Cancel-Token: Kind von 'boardroom' (Global-Kill-Switch) und pro Debatte
+    # eindeutig. Ein Disconnect bricht die laufende Debatte im Dispatch ab,
+    # nicht nur den SSE-Consumer.
+    cancel_token = get_child_token("boardroom", f"boardroom:{uuid.uuid4().hex[:12]}")
+
     async def sse_generator():
         running_transcript = ""
         synthesis_text = ""
@@ -396,10 +402,13 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
             framework=req.framework,
             use_moa=req.use_moa,
             moa_reference_models=req.moa_reference_models,
-            moa_aggregator=req.moa_aggregator
+            moa_aggregator=req.moa_aggregator,
+            cancel_token=cancel_token,
         ):
+            cancel_token.check()
             if await request.is_disconnected():
                 print("[AI Boardroom] Client disconnected. Beende Debatten-Stream vorzeitig.")
+                cancel_token.cancel("client_disconnect")
                 break
             if ev.get("type") == "done":
                 running_transcript = ev.get("transcript", "")
@@ -457,6 +466,8 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
 
             payload = json.dumps(ev, ensure_ascii=False)
             yield f"data: {payload}\n\n"
+
+        clear_scope(cancel_token.scope)
 
     return StreamingResponse(
         sse_generator(),

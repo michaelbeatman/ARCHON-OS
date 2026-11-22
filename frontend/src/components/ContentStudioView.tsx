@@ -5,6 +5,7 @@ import {
   MediaItemRecord, VideoBatchRecord, LinkedinContentRecord,
   getMediaFileUrl
 } from '@/lib/pocketbaseMedia';
+import { buildMediaHandoffHref } from '@/lib/content-flow';
 import {
   Film, Video, Image as ImageIcon, Sparkles, Sliders, Settings,
   Play, RefreshCw, Search, Layers, FileText, ExternalLink,
@@ -734,6 +735,16 @@ export function ContentStudioView({ themeMode }: Props) {
                     ))}
                   </select>
                 </div>
+
+                {/* Batch-Handoff: ausgewaehlte Medien als Kampagnen-Quelle uebernehmen */}
+                <a
+                  href={buildMediaHandoffHref(Array.from(selectedIds))}
+                  className="px-3 py-1 rounded-lg border border-accent-soft bg-accent-soft/20 text-accent-main font-mono text-[11px] font-bold flex items-center gap-1.5 cursor-pointer hover:bg-accent-soft/40 transition"
+                  title="Ausgewaehlte Medien als Batch in die Content-Kampagne uebernehmen"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Zur Content-Kampagne ({selectedIds.size})
+                </a>
 
                 <button
                   onClick={() => setBulkDeleteConfirmOpen(true)}
@@ -1665,6 +1676,14 @@ export function ContentStudioView({ themeMode }: Props) {
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
+                <a
+                  href={buildMediaHandoffHref(previewItem.id)}
+                  className="px-2 py-1 rounded-lg border border-accent-soft bg-accent-soft/20 text-accent-main text-[11px] font-mono font-bold flex items-center gap-1 cursor-pointer hover:bg-accent-soft/40"
+                  title="Dieses Medium in die Content-Maschine uebernehmen"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Zur Content-Kampagne
+                </a>
                 <button
                   onClick={() => setPreviewItem(null)}
                   className={`p-1 rounded-lg cursor-pointer ${isLight ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-slate-100'}`}

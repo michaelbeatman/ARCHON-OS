@@ -10,6 +10,7 @@ _archon_exc_logger = logging.getLogger("consensus_gate")
 import os
 import sys
 import json
+import math
 import sqlite3
 import asyncio
 from typing import Dict, Any, List, Optional
@@ -43,6 +44,79 @@ def _init_consensus_db():
     conn.close()
 
 _init_consensus_db()
+
+
+# --- Deterministische, OFFLINE-Konsensauswertung fuer Boardroom-Debatten ---
+# M-1: Eine explizite Negation schlaegt immer einen positiven Marker.
+# "KEIN CONSENSUS ERREICHT" darf niemals als Zustimmung gewertet werden.
+_POSITIVE_DEBATE_MARKERS = (
+    "KONSENS_ERREICHT", "CONSENSUS_REACHED", "ZUSTIMME", "AGREE", "EINVERSTANDEN",
+)
+_NEGATIVE_DEBATE_MARKERS = (
+    "KEIN KONSENS", "KEIN CONSENSUS", "NICHT ERREICHT", "NO CONSENSUS",
+    "WIDERSPRUCH", "DISAGREE", "DEBATTE_FORTSETZEN",
+)
+
+
+def resolve_debate_consensus(
+    statements: List[Dict[str, Any]],
+    *,
+    majority_rule: str = "two_thirds",
+) -> Dict[str, Any]:
+    """
+    Wertet explizite Konsens-Marker einer Boardroom-Debatte deterministisch und
+    OFFLINE aus (kein LLM-Aufruf, keine externe Abhaengigkeit).
+
+    Jeder Statement-Dict muss ``agent_id`` und ``content`` enthalten. Marker
+    werden case-insensitive erkannt; eine explizite Negation gewinnt immer
+    (M-1-Fix). Statements ohne Marker zaehlen weder als Ja-Stimme noch in
+    ``total_votes``.
+
+    Fail-closed: Weniger als zwei explizite Statements oder keine Ja-Stimmen
+    bedeuten immer ``consensus_reached=False``.
+    """
+    yes_votes = 0
+    total_votes = 0
+    evidence: List[Any] = []
+
+    for statement in statements or []:
+        if not isinstance(statement, dict):
+            continue
+        text = str(statement.get("content", "") or "").upper()
+        agent_id = statement.get("agent_id", "")
+
+        neg = next((m for m in _NEGATIVE_DEBATE_MARKERS if m in text), None)
+        pos = next((m for m in _POSITIVE_DEBATE_MARKERS if m in text), None)
+
+        if neg is not None:
+            # Negation gewinnt, auch wenn zusaetzlich ein Ja-Marker steht.
+            total_votes += 1
+            evidence.append((agent_id, neg))
+        elif pos is not None:
+            total_votes += 1
+            yes_votes += 1
+            evidence.append((agent_id, pos))
+
+    if majority_rule == "unanimous":
+        required_votes = total_votes
+    else:
+        # ceil(2/3 * total), mindestens 2 (Fail-closed bei zu wenig Statements).
+        required_votes = max(2, math.ceil(2 * total_votes / 3))
+
+    consensus_reached = bool(
+        total_votes >= 2 and yes_votes > 0 and yes_votes >= required_votes
+    )
+    verdict = "CONSENSUS_REACHED" if consensus_reached else "NO_CONSENSUS"
+
+    return {
+        "consensus_reached": consensus_reached,
+        "yes_votes": yes_votes,
+        "total_votes": total_votes,
+        "required_votes": required_votes,
+        "verdict": verdict,
+        "evidence": evidence,
+    }
+
 
 async def review_task_output(
     task_id: str,

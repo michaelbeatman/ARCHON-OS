@@ -101,6 +101,7 @@
 | **111** | **Isolation & Resilience: Bulkheads, Tool-Output-Caps, Circuit-Breaker & Queues** | Hoch | Geplant | Getrennte Scheduling-Klassen (Chat vs. Background vs. DAG), Tool-Output-Größenlimits vor Kontext-Injektion, Provider-Circuit-Breaker & Backpressure |
 | **112** | **OTel GenAI Tracing & Trace-to-Eval-Pipeline** | Hoch | Geplant | Durchgängige `trace_id` (Gateway → `LLMKernel` → Tools → DAG) mit PII-Redaktion, Kosten/Latenz und 1-Klick-Export in `backend/eval_gates.py` |
 | **113** | **Content-Maschine Safety & Lifecycle: Brand-Safety-Pass, Kill-Switch & Asset-Retirement** | Sehr hoch | Geplant | Dedizierter Legal/Brand-Safety-Second-Pass vor Publish, zentraler Kill-Switch + Plattform-Caps, Asset-Rückzug/Update, 30-Tage-Derivate & Crop-vs-Gen |
+| **114** | **Multi-Agent-Orchestrierung & Content-Maschine: Roadmap-Abschluss (28 Punkte)** | Sehr hoch | Abgeschlossen | Durable Kernel, CAS-Leases, A2A-Envelope, Shared Queue, Supervisor-Rollover, Memory-Scope, Event-Push, Cancellation, Consensus, Eval-Gates, Handoff, CI-SSOT sowie Publish-Sweep, HITL, Research-Dossier, Quality-, Fact-Check-, Plagiat-/Rechte- und SEO-Gates, A/B, Kanalvalidierung, Editorial-Rollen, Skills-Injektion, GEO, Frontend-Flow und SSRF (`docs/system/MULTI_AGENT_CONTENT_ROADMAP_2026_GUIDE.md`) |
 
 ---
 
@@ -723,6 +724,16 @@
   - Dedizierter Moderation-/Brand-Safety-Second-Pass („Not this one“) vor Publish (Verleumdung, Markenrechte, unbelegte Claims).
   - Globaler Kill-Switch + tägliche Spend-/Publish-Caps pro Plattform und Modell.
   - Asset-Retirement & Update (Auffinden/Zurückziehen veralteter Assets), geplanter 30-Tage-Derivate-Schedule und Trennung zwischen Neugenerierung (volles Review) und reinem Crop.
+
+### Meilenstein 114: Multi-Agent- & Content-Machine-Roadmap — Abschluss aller 28 Punkte (Abgeschlossen)
+- **Ziel:** Die 2026er Audit-/Feature-Roadmaps (Abschnitt 6: Multi-Agenten-Orchestrierung, 12 Punkte; Abschnitt 7: Content-Machine, 16 Punkte) vollständig in den Produktionscode überführen — nicht nur Bausteine anlegen, sondern sie in Hot Paths verdrahten, härten und mit Regressionstests absichern.
+- **Umsetzung in vier Batches:**
+  - **A — Quick Wins:** CI `validate --strict` + SSOT-Drift-Check, Oracle-SSRF + dynamisches Datum, Research-Verdict-Key, decision_id bei manueller Freigabe, Kampagnen-Status `idea`, harte Kanal-/Fact-Check-Blocker, A/B-API, Feedback-Loop.
+  - **B — Orchestrierung:** Event-Push statt 10-s-Polling (`subscribe_events`/`unsubscribe_events`, konfigurierbare Deadlines), zentrale Cancel-Kette Mission Control → Dispatch → DAG → Boardroom, deterministischer Konsens (Boardroom + Fan-in statt `aggregation_lisa`).
+  - **C — Safety & Compliance:** Shared Task Queue mit Idempotenz/Priorität/CAS-Leases, Agent-Memory-Scope mit ACL/TTL inkl. Delegationsbindung, Plagiat-/Copyright-Gate, SEO-HITL statt Direkt-Publish.
+  - **D — Vollendung:** Typisierte A2A-Envelope, Acceptance Criteria + Handoff-Kompression, Eval-/Promotion-Gates, Supervisor-Rollover, Research-Dossier, Editorial-Rollen/Historie, Skill-Injektion (`li-human`), GEO-Citation-Check, `idea`-Badge und Media-Handoff im Frontend.
+- **Status:** 28/28 Punkte umgesetzt. Detailübersicht mit Datei- und Testreferenzen: `docs/system/MULTI_AGENT_CONTENT_ROADMAP_2026_GUIDE.md`.
+- **Hinweis:** Die Regressionstests sind geschrieben, aber in der Entwicklungssession nicht ausgeführt worden (kein Python-Interpreter im Shell-Pfad); CI muss sie beim nächsten Lauf verifizieren.
 
 ## Ideen-Pool (beobachten, nicht geplant)
 

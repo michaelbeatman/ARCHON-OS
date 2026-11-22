@@ -33,6 +33,21 @@ from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
+
+def _validate_scope(scope: Optional[str]) -> Optional[str]:
+    """Prueft einen optionalen Memory-Scope gegen die kanonische Menge (400 bei Fehler)."""
+    if scope is None or str(scope).strip() == "":
+        return None
+    from backend.core_memory_manager import VALID_MEMORY_SCOPES, normalize_scope
+    value = str(scope).strip().lower()
+    if value not in VALID_MEMORY_SCOPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ungueltiger Memory-Scope: {scope!r} (erlaubt: {', '.join(VALID_MEMORY_SCOPES)})",
+        )
+    return normalize_scope(value)
+
+
 @router.post("/api/memory/harvest")
 def api_harvest_memory(request: Request, payload: Dict = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
@@ -117,21 +132,74 @@ def api_crag_retrieve(request: Request, payload: Dict = Body(...)):
 
 
 @router.get("/api/memory/core-blocks")
-def api_get_core_memory_blocks():
+def api_get_core_memory_blocks(
+    scope: Optional[str] = Query(default=None),
+    agent_id: str = Query(default="global"),
+    tenant_id: str = Query(default="default"),
+    project_id: str = Query(default=""),
+):
+    scope = _validate_scope(scope)
     from backend.core_memory_manager import core_memory_manager
-    return core_memory_manager.list_blocks()
+    return core_memory_manager.list_blocks(
+        agent_id=agent_id, tenant_id=tenant_id, scope=scope, project_id=project_id
+    )
 
 
 @router.post("/api/memory/core-blocks")
 def api_upsert_core_memory_block(request: Request, payload: Dict = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    scope = _validate_scope(payload.get("scope"))
     from backend.core_memory_manager import core_memory_manager
     return core_memory_manager.upsert_block(
         block_key=payload.get("block_key", "custom_block"),
         content=payload.get("content", ""),
         block_title=payload.get("block_title", ""),
-        mode=payload.get("mode", "replace")
+        mode=payload.get("mode", "replace"),
+        scope=scope or "global",
+        acl=payload.get("acl"),
+        ttl_seconds=payload.get("ttl_seconds"),
+        project_id=str(payload.get("project_id") or ""),
     )
+
+
+@router.post("/api/memory/compartment/store")
+def api_compartment_store(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
+    scope = _validate_scope(payload.get("scope"))
+    from backend.offline_memory_vault import store_memory
+    eid = store_memory(
+        namespace=str(payload.get("namespace") or "default"),
+        content=str(payload.get("content") or ""),
+        tags=list(payload.get("tags") or []),
+        scope=scope or "global",
+        acl=payload.get("acl"),
+        ttl_seconds=payload.get("ttl_seconds"),
+        agent_id=str(payload.get("agent_id") or "global"),
+        project_id=str(payload.get("project_id") or ""),
+    )
+    return {"status": "success", "id": eid, "scope": scope or "global"}
+
+
+@router.get("/api/memory/compartment/recall")
+def api_compartment_recall(
+    request: Request,
+    namespace: str = Query(default="default"),
+    query: str = Query(default=""),
+    top_k: int = Query(default=5),
+    scope: Optional[str] = Query(default=None),
+    agent_id: str = Query(default="global"),
+    project_id: str = Query(default=""),
+):
+    require_admin_or_503(request)  # RBAC: Rollenzaun
+    scope = _validate_scope(scope)
+    from backend.offline_memory_vault import recall_memory
+    return {
+        "status": "success",
+        "results": recall_memory(
+            namespace, query, top_k=max(1, min(20, top_k)),
+            scope=scope, agent_id=agent_id, project_id=project_id,
+        ),
+    }
 
 
 @router.post("/api/memory/pin-citations")

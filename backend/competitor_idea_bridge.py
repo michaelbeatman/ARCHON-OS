@@ -25,12 +25,18 @@ import json
 import logging
 import os
 import sqlite3
+import sys
 import unicodedata
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("archon.competitor_idea_bridge")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if WORKSPACE_DIR not in sys.path:
+    sys.path.insert(0, WORKSPACE_DIR)
+
+# CM: kanonisches Kampagnen-Statusmodell statt lokaler String-Literale.
+from backend.content_machine import CAMPAIGN_STATUS_IDEA  # noqa: E402
 CRM_PB_DB = os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data", "data.db")
 MEDIA_PB_DB = os.path.join(WORKSPACE_DIR, "pocketbase-media", "pb_data", "data.db")
 
@@ -305,7 +311,7 @@ def import_crm_telegram_ideas_to_archon(
                     source_url, source_notes, channels_json, status, workflow_run_id,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'idea', '', ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
                 """,
                 (
                     cid,
@@ -317,6 +323,7 @@ def import_crm_telegram_ideas_to_archon(
                     cand["source_url"],
                     cand["source_notes"],
                     json.dumps(cand["channels"]),
+                    CAMPAIGN_STATUS_IDEA,
                     now_iso,
                     now_iso,
                 ),
@@ -350,7 +357,7 @@ def import_crm_telegram_ideas_to_archon(
                 "title": cand["title"],
                 "source_url": cand["source_url"],
                 "pillar": cand["pillar"],
-                "status": "idea",
+                "status": CAMPAIGN_STATUS_IDEA,
             })
 
             if sync_to_kanban:
@@ -440,7 +447,7 @@ def ingest_watchdog_competitor_findings_to_ideas(
                     source_url, source_notes, channels_json, status, workflow_run_id,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, 'Competitor & Trend Radar', ?, ?, '["linkedin","x_threads"]', 'idea', '', ?, ?)
+                VALUES (?, ?, ?, ?, ?, 'Competitor & Trend Radar', ?, ?, '["linkedin","x_threads"]', ?, '', ?, ?)
                 """,
                 (
                     camp_id,
@@ -450,6 +457,7 @@ def ingest_watchdog_competitor_findings_to_ideas(
                     "voice.md (Michael Keller)",
                     link,
                     notes,
+                    CAMPAIGN_STATUS_IDEA,
                     now_iso,
                     now_iso,
                 ),
@@ -459,7 +467,7 @@ def ingest_watchdog_competitor_findings_to_ideas(
                 "title": idea_title,
                 "source_url": link,
                 "relevance_score": rel["score"],
-                "status": "idea",
+                "status": CAMPAIGN_STATUS_IDEA,
             })
 
             if sync_to_kanban:

@@ -31,12 +31,32 @@ class SEOExecutionAgent:
         s = re.sub(r'[^a-z0-9\-]+', '-', s)
         return s.strip('-')[:50]
 
-    def plan_seo_blueprint(self, topic: str, keyword: str, audience: str = "B2B / Tech") -> Dict[str, Any]:
-        """Erstellt eine suchintentionierte Gliederung mit H2/H3-Struktur und Meta-Angaben."""
+    def plan_seo_blueprint(
+        self,
+        topic: str,
+        keyword: str,
+        audience: str = "B2B / Tech",
+        serp_analysis: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Erstellt eine suchintentionierte Gliederung mit H2/H3-Struktur und Meta-Angaben.
+
+        ``serp_analysis`` (optional) ist ein Dict mit einer oder mehreren dieser
+        Quellen:
+
+        * ``headings`` / ``h2``: H2-Eintraege (Strings oder Dicts mit ``title``
+          bzw. ``text``).
+        * ``people_also_ask`` / ``questions``: Fragen (Strings oder Dicts mit
+          ``question``, ``title`` bzw. ``text``), als H3 eingeordnet.
+
+        Ohne verwertbares ``serp_analysis`` bleibt die 5-H2-Standardvorlage als
+        Fallback erhalten. Die Herkunft wird ueber ``outline_source`` (``"serp"``
+        bzw. ``"template_fallback"``), ``serp_analyzed`` und ``serp_sources``
+        ausgewiesen — es wird nie SERP-Analyse behauptet, die nicht stattfand.
+        """
         slug = self._generate_slug(keyword or topic)
         meta_desc = f"Praxisleitfaden zu {topic}. Konkrete Architektur, Implementierungsschritte und Best Practices für {audience}."
 
-        outline = [
+        fallback_outline = [
             {"level": "h2", "title": f"1. Was ist {topic} und warum ist es relevant?"},
             {"level": "h2", "title": "2. Technische Kernarchitektur & Systemkomponenten"},
             {"level": "h2", "title": "3. Schritt-für-Schritt Implementierungs-Workflow"},
@@ -44,20 +64,73 @@ class SEOExecutionAgent:
             {"level": "h2", "title": "5. Fazit & Handlungsleitfaden für die Praxis"}
         ]
 
+        serp_sources: Dict[str, int] = {}
+        outline: List[Dict[str, str]] = []
+        if isinstance(serp_analysis, dict):
+            for key in ("headings", "h2"):
+                titles = self._serp_titles(serp_analysis.get(key))
+                if titles:
+                    serp_sources[key] = len(titles)
+                    outline.extend({"level": "h2", "title": t} for t in titles)
+            for key in ("people_also_ask", "questions"):
+                titles = self._serp_titles(serp_analysis.get(key))
+                if titles:
+                    serp_sources[key] = len(titles)
+                    outline.extend({"level": "h3", "title": t} for t in titles)
+
+        if outline:
+            outline_source = "serp"
+            serp_analyzed = True
+        else:
+            outline = fallback_outline
+            outline_source = "template_fallback"
+            serp_analyzed = False
+            serp_sources = {}
+
         return {
             "topic": topic,
             "target_keyword": keyword,
             "slug": slug,
             "meta_description": meta_desc[:160],
             "target_audience": audience,
-            "outline": outline
+            "outline": outline,
+            "outline_source": outline_source,
+            "serp_analyzed": serp_analyzed,
+            "serp_sources": serp_sources,
         }
+
+    @staticmethod
+    def _serp_titles(value: Any) -> List[str]:
+        """Normalisiert SERP-Rohdaten (String, Dict oder Liste) zu Titeln."""
+        if isinstance(value, str):
+            return [value.strip()] if value.strip() else []
+        if not isinstance(value, (list, tuple)):
+            return []
+        titles: List[str] = []
+        for entry in value:
+            if isinstance(entry, str):
+                title = entry.strip()
+            elif isinstance(entry, dict):
+                title = str(
+                    entry.get("title")
+                    or entry.get("text")
+                    or entry.get("question")
+                    or ""
+                ).strip()
+            else:
+                title = ""
+            if title:
+                titles.append(title)
+        return titles
 
     def generate_article_markdown(self, blueprint: Dict[str, Any], custom_body: Optional[str] = None) -> str:
         """Kompiliert das fertige Markdown unter strenger Anti-AI-Slop Disziplin."""
         topic = blueprint["topic"]
         kw = blueprint["target_keyword"]
         today_str = datetime.date.today().isoformat()
+
+        outline_source = str(blueprint.get("outline_source") or "template_fallback")
+        serp_analyzed = bool(blueprint.get("serp_analyzed", False))
 
         frontmatter = f"""---
 title: "{topic}: Vollständiger Architektur- & Praxisleitfaden"
@@ -66,7 +139,10 @@ date: {today_str}
 author: "Archon OS Content Engine"
 keywords: ["{kw}", "Archon OS", "Agentic Systems", "Automation"]
 meta_description: "{blueprint['meta_description']}"
-status: "published"
+status: "review"
+approval_required: true
+outline_source: "{outline_source}"
+serp_analyzed: {str(serp_analyzed).lower()}
 ---
 """
 
@@ -111,20 +187,29 @@ Erfolgreiche Systeme zeichnen sich durch strikte Modulgrenzen und messbare SLAs 
         topic: str,
         keyword: str,
         audience: str = "B2B / Tech",
-        trigger_n8n: bool = True
+        trigger_n8n: bool = False,
+        serp_analysis: Optional[Dict[str, Any]] = None,
+        approved: bool = False,
     ) -> Dict[str, Any]:
-        """Führt den kompletten Pipeline-Lauf aus: Blueprint -> Entwurf -> Vault -> n8n-Webhook."""
-        blueprint = self.plan_seo_blueprint(topic, keyword, audience)
+        """Fuehrt Blueprint -> Entwurf -> Vault -> optionalen n8n-Draft aus.
+
+        Es gibt bewusst keinen direkten Publish-Pfad: der n8n-Trigger erzeugt
+        ausschliesslich einen CMS-Entwurf (``draft_cms``), auch wenn
+        ``trigger_n8n`` gesetzt ist. ``approved`` dokumentiert lediglich die
+        Absicht des Aufrufers; veroeffentlicht wird erst nach HITL-Freigabe via
+        ``mark_asset_published``.
+        """
+        blueprint = self.plan_seo_blueprint(topic, keyword, audience, serp_analysis)
         content_md = self.generate_article_markdown(blueprint)
 
-        # In Obsidian speichern
+        # In Obsidian speichern (Entwurf, nicht veroeffentlicht)
         today_str = datetime.date.today().isoformat()
         filename = f"{today_str}_{blueprint['slug']}.md"
         file_path = CONTENT_DIR / filename
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content_md)
 
-        # n8n Outbound Trigger
+        # n8n Outbound Trigger: nur Entwurf, niemals Direkt-Publish
         n8n_result = {"status": "skipped"}
         if trigger_n8n:
             try:
@@ -134,19 +219,24 @@ Erfolgreiche Systeme zeichnen sich durch strikte Modulgrenzen und messbare SLAs 
                     title=f"SEO: {topic}",
                     final_report_path=str(file_path),
                     content=content_md[:1500],
-                    target_action="publish_cms"
+                    target_action="draft_cms"
                 )
             except Exception as e:
                 n8n_result = {"status": "error", "message": str(e)}
 
         return {
-            "status": "success",
+            "status": "review",
+            "approval_required": True,
+            "outline_source": blueprint["outline_source"],
+            "serp_analyzed": blueprint["serp_analyzed"],
             "topic": topic,
             "keyword": keyword,
             "slug": blueprint["slug"],
             "vault_path": str(file_path),
             "words_count": len(content_md.split()),
             "n8n_dispatch": n8n_result,
+            "approved": approved,
+            "publish_hint": "Publishing requires HITL mark_asset_published; no direct publish.",
             "created_at": datetime.datetime.now().isoformat()
         }
 

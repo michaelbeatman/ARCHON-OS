@@ -179,6 +179,12 @@ async def _execute_mission_control_task(
     if not task:
         return
 
+    # Zentrale Cancel-Propagation: Mission Control bricht 'dispatch:<task_id>'
+    # ab; der Check direkt vor dem LLM-Call verhindert[kostspielige] Folgecalls.
+    from backend.cancellation import get_token as _get_cancel_token
+    cancel_token = _get_cancel_token(f"dispatch:{task_id}")
+    cancel_token.check()
+
     def _commit() -> None:
         """Schreibt die Aenderungen dieses Tasks.
 
@@ -276,7 +282,8 @@ async def _execute_mission_control_task(
         task["active_tool"] = "Tool: web_search & archon_core"
         _commit()
 
-        # Echter LLM-Dispatch
+        # Echter LLM-Dispatch — vorher Cancel-Token pruefen.
+        cancel_token.check()
         res = await dispatcher.dispatch_to_omniroute_or_container(
             agent_id=prof.get("id", agent_id) if prof else agent_id,
             agent_name=agent_name,
@@ -1096,90 +1103,67 @@ async def _run_synthesis_cascade(
     combined_reports = f"\n---\n\n".join(reports)
     parent_title = parent_task.get("title", "Gesamtprojekt")
 
-    # --- SCHRITT 1: LISA fuegt zusammen ---
-    lisa_prompt = f"""Fuehre die vorliegenden Teilergebnisse der Fachagenten zu einem konsistenten
-Gesamtergebnis zusammen. Du bist Lisa, Ergebnis-Kuratorin.
-
-PROJEKT: {parent_title}
-URSPRUEBLICHE ANFORDERUNG:
-{parent_task.get('capture_input', parent_title)}
-
-VORLIEGENDE TEILERGEBNISSE ({len(reports)} Arbeitspakete):
-{combined_reports}
-
-VORGABEN:
-1. NUR integrieren, was vorliegt - keine neuen Fakten erfinden.
-2. Widersprueche und Luecken klar kennzeichnen, nicht glaetten.
-3. Struktur: Executive-Kurzfassung / Integriertes Ergebnis / Widersprueche & offene Punkte / Naechste Schritte.
-4. Keine Begruessungen, keine Floskeln. Deutsch, dicht, entscheidungsfaehig.
-5. Letzte Zeile exakt: SYNTHESE-BEREIT"""
+    # --- SCHRITT 1: DETERMINISTISCHE FAN-IN-SYNTHESE (kein LLM-Prompt) ---
+    # Die alte "aggregation_lisa" war ein LLM-Prompt inkl. Marker-Repair-Retry.
+    # Jetzt: votes-/evidence-basierte Auswertung + deterministische Struktur.
+    # Kein neues LLM, keine erfundenen Fakten, Widersprüche bleiben sichtbar.
+    from backend.consensus_gate import resolve_debate_consensus
 
     profiles = get_profiles() if get_profiles else []
-    lisa_prof = next((p for p in profiles if p.get("id") == "aggregation_lisa"), None)
-    lisa_system = ((lisa_prof or {}).get("system_prompt") or (lisa_prof or {}).get("prompt")
-                   or "Du bist Lisa, Ergebnis-Kuratorin von Archon OS. Du fügst Teilergebnisse zusammen, kennzeichnest Widersprüche und lieferst ein entscheidungsfähiges Gesamtergebnis auf Deutsch ohne Floskeln.")
-    lisa_model = (lisa_prof or {}).get("model") or "deepseek/deepseek-v4-flash-0731"
-    ticker("Lisa", f"Fuegt {len(reports)} Teilergebnisse zu '{parent_title[:30]}...' zusammen")
-    try:
-        res = await dispatcher.dispatch_to_omniroute_or_container(
-            agent_id="aggregation_lisa",
-            agent_name="Lisa (Ergebnis-Kuratorin)",
-            prompt=lisa_prompt,
-            role="Ergebnis-Kuratorin & Synthese",
-            system_prompt=lisa_system,
-            model=lisa_model,
-        )
-        synthesis_reply = res.get("content", "").strip()
-    except Exception as synth_err:
-        logger.warning(f"[Cascade-Loop] Dispatch an Lisa fehlgeschlagen: {synth_err}")
-        synthesis_reply = ""
-    if not synthesis_reply or "Fehler" in synthesis_reply[:25]:
-        synthesis_reply = (f"# Synthese: {parent_title}\n\n"
-                           "Die Synthese der Fachmodule wurde planmaessig abgeschlossen "
-                           "(Modell-Antwort leer - Teilergebnisse liegen in den Projektordnern).")
-        _lisa_leer = True
-    else:
-        _lisa_leer = False
-
-    # MARKER-KONTRAKT (Struktur-Thema 2, User-Entscheidung): Lisas Prompt verlangt
-    # als letzte Zeile exakt SYNTHESE-BEREIT. Fehlt der Marker bei echter Antwort:
-    # EIN Reparatur-Retry, danach Fallback MIT sichtbarer Warnung (nie still).
-    # Die Marker-Zeile ist Protokoll, kein Inhalt - sie wird vor Draft/Dossier/Robert entfernt.
     _MARKER = "SYNTHESE-BEREIT"
+    ticker(
+        "Fan-In",
+        f"Fuegt {len(reports)} Teilergebnisse deterministisch zu '{parent_title[:30]}...' zusammen",
+    )
 
-    def _lisa_marker_ok(txt):
-        _ls = [l.strip() for l in (txt or "").splitlines() if l.strip()]
-        return bool(_ls) and _ls[-1].upper() == _MARKER
+    fan_statements = [
+        {"agent_id": f"work_package_{idx + 1}", "content": str(rep or "")[:4000]}
+        for idx, rep in enumerate(reports)
+    ]
+    fan_consensus = resolve_debate_consensus(fan_statements)
+    _negative_markers = {
+        "KEIN KONSENS", "KEIN CONSENSUS", "NICHT ERREICHT", "NO CONSENSUS",
+        "WIDERSPRUCH", "DISAGREE", "DEBATTE_FORTSETZEN",
+    }
+    _negative_evidence = [
+        e for e in (fan_consensus.get("evidence") or [])
+        if isinstance(e, (list, tuple)) and len(e) >= 2
+        and str(e[1]).upper() in _negative_markers
+    ]
 
-    if _lisa_leer:
-        logger.warning(f"[Cascade-Loop] Lisa lieferte keine Synthese fuer {parent_project_id} (Fallback-Text).")
-        ticker("Lisa", f"Keine Modell-Antwort fuer '{parent_title[:30]}...' - Fallback-Text verwendet")
-    elif not _lisa_marker_ok(synthesis_reply):
-        _repaired = ""
-        try:
-            _rres2 = await dispatcher.dispatch_to_omniroute_or_container(
-                agent_id="aggregation_lisa",
-                agent_name="Lisa (Ergebnis-Kuratorin)",
-                prompt=("Gib die folgende Synthese UNVERAENDERT erneut aus und setze "
-                        "als LETZTE ZEILE exakt: SYNTHESE-BEREIT\n\n" + synthesis_reply),
-                role="Ergebnis-Kuratorin & Synthese",
-                system_prompt=lisa_system,
-                model=lisa_model,
-            )
-            _repaired = (_rres2.get("content", "") or "").strip()
-        except Exception as _rep_err:
-            logger.warning(f"[Cascade-Loop] Marker-Repair an Lisa fehlgeschlagen: {_rep_err}")
-        if _lisa_marker_ok(_repaired):
-            synthesis_reply = _repaired
-            logger.info(f"[Cascade-Loop] Marker-Repair erfolgreich ({parent_project_id})")
-        else:
-            logger.warning(f"[Cascade-Loop] Synthese ohne {_MARKER}-Marker ({parent_project_id}) - ungeprueft verwendet")
-            ticker("Lisa", f"Synthese ohne {_MARKER}-Marker - ungeprueft verwendet")
+    _parts = [
+        f"# Synthese: {parent_title}",
+        "## Executive-Kurzfassung",
+        f"{len(reports)} Arbeitspakete wurden deterministisch integriert; keine neuen Fakten "
+        f"erfunden. Konsensstatus: {fan_consensus.get('verdict')} "
+        f"({fan_consensus.get('yes_votes')}/{fan_consensus.get('total_votes')} explizite "
+        f"Zustimmungen, erforderlich: {fan_consensus.get('required_votes')}).",
+        "## Integriertes Ergebnis",
+        combined_reports or "(keine Teilergebnisse vorhanden)",
+        "## Widersprueche & offene Punkte",
+    ]
+    if _negative_evidence:
+        _parts.extend(f"- {e[0]}: {e[1]}" for e in _negative_evidence[:10])
+    else:
+        _parts.append(
+            "- Keine expliziten Widerspruchs-Marker in den Teilergebnissen; "
+            "implizite Luecken bleiben im Review zu pruefen."
+        )
+    _parts.extend([
+        "## Naechste Schritte",
+        "Freigabe durch ROBERT (executive_decision_architect) einholen; bei Ablehnung "
+        "Entwurf als Approval-Task im Board belassen.",
+        _MARKER,
+    ])
+    synthesis_reply = "\n\n".join(_parts)
+
+    # MARKER-KONTRAKT: letzte Zeile ist Protokoll, kein Inhalt — wird vor
+    # Draft/Dossier/Robert entfernt (wie zuvor).
     _syn_lines = synthesis_reply.splitlines()
     if _syn_lines and _syn_lines[-1].strip().upper() == _MARKER:
         synthesis_reply = "\n".join(_syn_lines[:-1]).strip()
 
-    # --- SCHRITT 1.5: KRITISCHER REVIEWER prüft Lisas Synthese vor Roberts Entscheidung ---
+    # --- SCHRITT 1.5: KRITISCHER REVIEWER prüft die Fan-in-Synthese vor Roberts Entscheidung ---
     reviewer_prof = next((p for p in profiles if p.get("id") == "gpts_critical_reviewer"), None)
     reviewer_critique = ""
     if reviewer_prof:
@@ -1187,7 +1171,7 @@ VORGABEN:
 PROJEKT: {parent_title}
 URSPRUENGLICHE ANFORDERUNG: {parent_task.get('capture_input', parent_title)}
 
-SYNTHESE-ENTWURF (von Lisa):
+SYNTHESE-ENTWURF (deterministische Fan-in-Synthese):
 {synthesis_reply}
 
 AUFGABE:
@@ -1211,7 +1195,7 @@ AUFGABE:
             logger.warning(f"[Cascade-Loop] Reviewer-Pruefung fehlgeschlagen: {rev_err}")
 
     # --- SCHRITT 2: ROBERT gibt frei ---
-    robert_prompt = f"""Lisa (aggregation_lisa) hat die Teilergebnisse folgenden Projekts zusammengefuegt:
+    robert_prompt = f"""Die deterministische Fan-in-Synthese hat die Teilergebnisse folgenden Projekts zusammengefuegt:
 
 PROJEKT: {parent_title}
 ANFORDERUNG: {parent_task.get('capture_input', parent_title)}

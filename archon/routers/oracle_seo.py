@@ -8,7 +8,8 @@ import logging
 import os
 from typing import Any, Dict
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Request
+from archon.routers._rbac import require_admin_or_503
 
 logger = logging.getLogger("archon.routers.oracle_seo")
 
@@ -64,18 +65,22 @@ def api_triage_oracle_signal(payload: Dict[str, Any] = Body(...)):
 
 
 @router.post("/api/seo/generate")
-async def api_seo_generate(payload: Dict[str, Any] = Body(...)):
+async def api_seo_generate(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)  # RBAC: Admin-Sache (HITL-Pfad)
     topic = payload.get("topic", "")
     keyword = payload.get("keyword", topic)
     audience = payload.get("audience", "B2B / Tech")
-    trigger_n8n = payload.get("trigger_n8n", True)
+    trigger_n8n = payload.get("trigger_n8n", False)
+    serp_analysis = payload.get("serp_analysis")
     if not topic:
         raise HTTPException(status_code=400, detail={"code": "oracle_topic_required", "params": {}})
     try:
         from seo_execution_agent import SEOExecutionAgent
 
         agent = SEOExecutionAgent()
-        return await agent.execute_content_pipeline(topic, keyword, audience, trigger_n8n)
+        return await agent.execute_content_pipeline(
+            topic, keyword, audience, trigger_n8n, serp_analysis=serp_analysis
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

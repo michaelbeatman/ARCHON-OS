@@ -162,7 +162,13 @@ def api_cm_asset_approve(request: Request, asset_id: str, payload: Dict[str, Any
     require_admin_or_503(request)
     from backend.content_machine import approve_asset
     try:
-        asset = approve_asset(asset_id, scheduled_at=str(payload.get("scheduled_at") or "").strip())
+        asset = approve_asset(
+            asset_id,
+            scheduled_at=str(payload.get("scheduled_at") or "").strip(),
+            decision_id=str(payload.get("decision_id") or "").strip(),
+            actor=str(payload.get("actor") or "").strip(),
+            role=str(payload.get("role") or "reviewer").strip(),
+        )
         return {"status": "ok", "asset": asset}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -175,12 +181,23 @@ def api_cm_asset_publish(request: Request, asset_id: str, payload: Dict[str, Any
     require_admin_or_503(request)
     from backend.content_machine import mark_asset_published
     try:
-        asset = mark_asset_published(asset_id, external_url=str(payload.get("external_url") or "").strip())
+        asset = mark_asset_published(
+            asset_id,
+            external_url=str(payload.get("external_url") or "").strip(),
+            actor=str(payload.get("actor") or "").strip(),
+        )
         return {"status": "ok", "asset": asset}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+
+
+@router.get("/api/v2/content-machine/assets/{asset_id}/approvals")
+def api_cm_asset_approvals(asset_id: str):
+    """Batch D: Freigabe-Historie (reviewer/publisher, decision_id, actor, role)."""
+    from backend.content_machine import approval_history
+    return {"status": "ok", "approvals": approval_history(asset_id)}
 
 
 @router.post("/api/v2/content-machine/assets/{asset_id}/metrics")
@@ -329,6 +346,70 @@ def api_cm_humanize_and_score(payload: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=400, detail="Text darf nicht leer sein.")
     report = evaluate_asset_quality({"channel": channel, "hook": hook, "body": text, "cta": cta})
     return {"status": "ok", **report}
+
+
+# ---------------------------------------------------------------------------
+# CONTENT-MACHINE 2.0: A/B-Varianten, Kanalvalidierung, Fact-Check, GEO
+# ---------------------------------------------------------------------------
+
+@router.post("/api/v2/content-machine/assets/{asset_id}/variants")
+def api_cm_create_variant(request: Request, asset_id: str, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.content_machine import create_variant
+    try:
+        res = create_variant(
+            asset_id,
+            str(payload.get("variant_label") or "B"),
+            str(payload.get("hook") or ""),
+            title=str(payload.get("title") or ""),
+            body=str(payload.get("body") or ""),
+        )
+        return {"status": "ok", **res}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/api/v2/content-machine/assets/{asset_id}/variants")
+def api_cm_list_variants(asset_id: str):
+    from backend.content_machine import list_variants
+    return {"status": "ok", "variants": list_variants(asset_id)}
+
+
+@router.post("/api/v2/content-machine/assets/{asset_id}/experiments/decide")
+def api_cm_decide_experiment(request: Request, asset_id: str, payload: Dict[str, Any] = Body(default={})):
+    require_admin_or_503(request)
+    from backend.content_machine import decide_experiment
+    return {"status": "ok", **decide_experiment(asset_id, metric=str(payload.get("metric") or "ctr_pct"))}
+
+
+@router.post("/api/v2/content-machine/validate-channel")
+def api_cm_validate_channel(payload: Dict[str, Any] = Body(...)):
+    from backend.content_machine import validate_channel_constraints, evaluate_fact_check, evaluate_asset_quality
+    asset = dict(payload)
+    return {
+        "status": "ok",
+        "channel_validation": validate_channel_constraints(asset),
+        "fact_check": evaluate_fact_check(asset),
+        "quality": evaluate_asset_quality(asset),
+    }
+
+
+@router.get("/api/v2/content-machine/assets/{asset_id}/geo-jsonld")
+def api_cm_geo_jsonld(asset_id: str):
+    from backend.content_machine import _conn, _row_to_asset, build_geo_jsonld
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Asset nicht gefunden")
+    asset = _row_to_asset(row)
+    return {"status": "ok", "jsonld": build_geo_jsonld(asset, external_url=str(asset.get("external_url") or ""))}
+
+
+@router.post("/api/v2/content-machine/geo/citation-check")
+def api_cm_geo_citation_check(payload: Dict[str, Any] = Body(default={})):
+    """Batch D: deterministische Offline-Zitatpruefung 48h nach Publish."""
+    from backend.content_machine import check_geo_citations
+    return {"status": "ok", **check_geo_citations(hours=int(payload.get("hours") or 48))}
 
 
 

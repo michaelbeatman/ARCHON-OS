@@ -64,6 +64,19 @@ GATE_KIND_DELETE = "profil_loeschen"
 PROTECTED_PROFILES = ("default", "hermes_default", "founder", "micha")
 
 
+def _delegation_eval_gate_required() -> bool:
+    """Batch D/3: globales Config-Flag ``delegation.require_eval_gate``.
+
+    Spiegelt dieselbe Regel wie im Delegations-Dispatcher: ein gesetztes Flag
+    macht das Eval-Gate verpflichtend, auch ohne Profil-Flag.
+    """
+    try:
+        from backend.autonomy_settings import get_module_config
+        return bool((get_module_config("delegation") or {}).get("require_eval_gate"))
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Domaenenfehler — der Router uebersetzt sie in HTTP-Antworten
 # ---------------------------------------------------------------------------
@@ -208,23 +221,31 @@ def save_profile(profile_data: Dict[str, Any], *,
         _verify_gate(_approved_gate_id, GATE_KIND_TOOLS, {"id": p_id})
 
     # Punkt 3.2.4: Automatisches Eval-Gate vor Aktivierung geänderter Prompts/Modelle
-    if profile_data.get("require_eval_gate"):
+    # Batch D/3: Profil-Flag ODER globales Config-Flag => strikt (fail-closed).
+    if profile_data.get("require_eval_gate") or _delegation_eval_gate_required():
         try:
             import asyncio
             from backend.eval_gates import run_evaluation
             eval_res = asyncio.run(run_evaluation("profile", p_id, min_pass_score=float(profile_data.get("min_eval_score") or 70.0)))
-            profile_data["last_eval_score"] = eval_res.get("overall_score")
-            profile_data["last_eval_passed"] = eval_res.get("passed")
-            if not eval_res.get("passed"):
-                return {
-                    "status": "eval_gate_failed",
-                    "eval_id": eval_res.get("eval_id"),
-                    "score": eval_res.get("overall_score"),
-                    "message": f"Eval-Gate nicht bestanden ({eval_res.get('overall_score')}/100 Punkten). Profil wurde nicht aktiviert.",
-                    "details": eval_res.get("results"),
-                }
         except Exception as eval_exc:
             logger.warning(f"[EvalGate] Vorab-Eval fehlgeschlagen: {eval_exc}")
+            # Frueher wurde hier nur gewarnt und das Profil trotzdem aktiviert.
+            # Ohne belegtes Eval-Ergebnis darf keine Aktivierung erfolgen.
+            return {
+                "status": "eval_gate_failed",
+                "message": f"Eval-Gate konnte nicht ausgefuehrt werden: {eval_exc}. Profil wurde nicht aktiviert.",
+            }
+        profile_data["last_eval_score"] = eval_res.get("overall_score")
+        profile_data["last_eval_passed"] = eval_res.get("passed")
+        score = eval_res.get("overall_score")
+        if eval_res.get("status") != "success" or score is None or not eval_res.get("passed"):
+            return {
+                "status": "eval_gate_failed",
+                "eval_id": eval_res.get("eval_id"),
+                "score": score,
+                "message": f"Eval-Gate nicht bestanden ({score}/100 Punkten). Profil wurde nicht aktiviert.",
+                "details": eval_res.get("results"),
+            }
 
     if isinstance(incoming_tools, list) and not _approved_gate_id:
         _alt_tools = []

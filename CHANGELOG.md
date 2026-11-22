@@ -2,6 +2,28 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [Unreleased] — 2026-11-22 (M114: Abschluss der Multi-Agent- & Content-Machine-Roadmap, 28/28)
+
+### Added
+- **M114 Multi-Agent-Orchestrierung (12/12):** Durable-Execution-Kernel mit Fencing-Token, CAS-Leases/Heartbeats, typisierte A2A-Envelope (`message_id`/`reply_to`/`correlation_id`/`confidence`/`attachments`) inkl. `role="assistant"`-Fix, Shared Task Queue mit Idempotenz/Priorität/Work-Stealing, Supervisor-Rollover (`backend/supervisor_rollover.py`), Memory-Scope mit ACL/TTL, Event-Push statt 10-s-Polling, zentrale Cancel-Kette (`backend/cancellation.py`), deterministischer Konsens und Eval-/Promotion-Gates inkl. strikter Profil-Aktivierung.
+- **M114 Content-Machine (16/16):** Publish-Sweep im 5-min-Scheduler, zentralisierte HITL-Finalisierung, Research-Tool-Knoten mit Dossier-Pfad, harte Quality-/Kanal-/Fact-Check-Gates, Plagiat-/Rechte-Check mit Quellenlizenzen, SEO-HITL statt Direkt-Publish, kanonischer `idea`-Status, Feedback-Loop, A/B-Experimente, Editorial-Rollen/Historie, verpflichtende `li-human`-Skill-Injektion, GEO-JSON-LD/`llms.txt` mit 48-h-Citation-Check, `idea`-Badge und Media-Handoff im Frontend.
+- **Dokumentation:** `docs/system/MULTI_AGENT_CONTENT_ROADMAP_2026_GUIDE.md` mit vollständiger 28-Punkt-Matrix, Dateireferenzen und Verifikationsschritten; Roadmap-Meilenstein M114 ergänzt.
+
+### Changed
+- Fan-in-Synthese nutzt `resolve_debate_consensus()` (Votes/Evidence) statt des `aggregation_lisa`-LLM-Prompts inkl. Marker-Repair-Retry; Boardroom-Konsens wird deterministisch und offline entschieden (M-1-Negationsschutz bleibt).
+- CI: `validate_config.py --strict` und Profil-SSOT-Drift-Check (`--allow-missing-hermes` für saubere Checkouts).
+- Oracle News Radar: zentraler SSRF-geschützter Client + dynamischer GitHub-Cutoff statt hart codiertem Datum.
+- `handoff_desk.accept_handoff()` validiert Ergebnis/Status/Akzeptanzkriterien statt bedingungsloser Quittierung.
+
+### Fixed
+- Research-Verdict war immer leer (`verdict` vs. `triangulation_verdict`).
+- Manuelle Freigaben schrieben keine `decision_id`.
+- `success_rate=98.0` für Agenten ohne Daten → `None`/`data_sufficient=false`.
+- `datetime`-Fehler im Content-Feedback-Sweep behoben.
+- Review-Knoten nutzte einen Skill-Namen als `agent_id` (nicht auflösbar) → echtes Profil.
+
+> **Verifikation:** Die neuen `tests/test_p2_*.py` sind geschrieben, konnten in der Entwicklungssession aber nicht ausgeführt werden (kein Python im PATH). CI muss sie beim nächsten Lauf prüfen.
+
 ## [v0.5.7] — 2026-11-22 (Execution Hardening, Governance-Zentrierung & Idempotenz)
 
 ### Added

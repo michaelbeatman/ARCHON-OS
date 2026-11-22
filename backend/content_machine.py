@@ -33,6 +33,14 @@ from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from backend.db_paths import get_db_connection
+# Batch C: geteilte, konservative Rechte-Helfer (keine erfundenen Lizenzen).
+from backend.research_sources import (
+    apply_rights_defaults,
+    classify_rights,
+    rights_from_html,
+    DEFAULT_LICENSE,
+    DEFAULT_RIGHTS,
+)
 
 logger = logging.getLogger("archon.content_machine")
 
@@ -118,6 +126,13 @@ CHANNEL_SPECS: Dict[str, Dict[str, Any]] = {
 
 DEFAULT_CHANNELS = ["linkedin", "youtube_longform", "youtube_shorts", "tiktok"]
 VALID_ASSET_STATUSES = ("draft", "review", "approved", "scheduled", "published", "rejected")
+# CM: kanonisches Kampagnen-Statusmodell. 'idea' ist die Vorstufe aus dem
+# competitor_idea_bridge / CRM-Intake und muss von der Content-Machine
+# genauso verstanden werden wie 'draft', 'in_review', 'completed' und 'failed'.
+CAMPAIGN_STATUS_IDEA = "idea"
+VALID_CAMPAIGN_STATUSES = (
+    CAMPAIGN_STATUS_IDEA, "draft", "in_review", "completed", "failed",
+)
 
 
 def _utc_now_iso() -> str:
@@ -172,6 +187,20 @@ def init_content_machine_db(db_path: Optional[str] = None) -> None:
                 agent_id TEXT DEFAULT '',
                 quality_score INTEGER DEFAULT 0,
                 quality_report_json TEXT DEFAULT '{}',
+                -- CM 2.0: Fact-Check/Plagiat-Gate + Kanalvalidierung
+                sources_json TEXT DEFAULT '[]',
+                fact_check_report_json TEXT DEFAULT '{}',
+                channel_validation_json TEXT DEFAULT '{}',
+                geo_jsonld_json TEXT DEFAULT '{}',
+                -- Batch C: Plagiats-/Rechte-Gate (Offline-Similarity + Rights)
+                plagiarism_report_json TEXT DEFAULT '{}',
+                -- Batch D: Dossier-Pfad aus dem Research-Knoten + Redaktionsrollen
+                dossier_path TEXT DEFAULT '',
+                author TEXT DEFAULT '',
+                reviewer TEXT DEFAULT '',
+                publisher TEXT DEFAULT '',
+                -- Batch D: offline GEO-Zitatpruefung (48h)
+                citation_check_json TEXT DEFAULT '{}',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (campaign_id) REFERENCES content_campaigns (id) ON DELETE CASCADE
@@ -189,6 +218,8 @@ def init_content_machine_db(db_path: Optional[str] = None) -> None:
                 watch_time_avg_sec REAL DEFAULT 0.0,
                 ctr_pct REAL DEFAULT 0.0,
                 conversions INTEGER DEFAULT 0,
+                -- CM 2.0: Variant-Zuordnung fuer A/B-Auswertung
+                variant_id TEXT DEFAULT '',
                 recorded_at TEXT NOT NULL,
                 FOREIGN KEY (asset_id) REFERENCES content_assets (id) ON DELETE CASCADE
             );
@@ -203,9 +234,49 @@ def init_content_machine_db(db_path: Optional[str] = None) -> None:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS content_asset_approvals (
+                id TEXT PRIMARY KEY,
+                asset_id TEXT NOT NULL,
+                decision_id TEXT DEFAULT '',
+                action TEXT NOT NULL,
+                actor TEXT DEFAULT '',
+                role TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (asset_id) REFERENCES content_assets (id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_cm_assets_campaign ON content_assets(campaign_id);
             CREATE INDEX IF NOT EXISTS idx_cm_assets_status ON content_assets(status, channel);
             CREATE INDEX IF NOT EXISTS idx_cm_metrics_asset ON content_metrics(asset_id);
+            CREATE INDEX IF NOT EXISTS idx_cm_approvals_asset ON content_asset_approvals(asset_id, created_at);
+
+            -- Content-Machine 2.0: A/B-Varianten, Fact-Check/Plagiat, GEO
+            CREATE TABLE IF NOT EXISTS content_variants (
+                id TEXT PRIMARY KEY,
+                asset_id TEXT NOT NULL,
+                variant_label TEXT NOT NULL,
+                title TEXT DEFAULT '',
+                hook TEXT DEFAULT '',
+                body TEXT DEFAULT '',
+                is_winner INTEGER DEFAULT 0,
+                selected_by TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (asset_id) REFERENCES content_assets (id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS content_experiments (
+                id TEXT PRIMARY KEY,
+                asset_id TEXT NOT NULL,
+                metric TEXT NOT NULL DEFAULT 'ctr_pct',
+                status TEXT NOT NULL DEFAULT 'running',
+                winner_variant_id TEXT DEFAULT '',
+                decided_at TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (asset_id) REFERENCES content_assets (id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_cm_variants_asset ON content_variants(asset_id);
+            CREATE INDEX IF NOT EXISTS idx_cm_experiments_asset ON content_experiments(asset_id);
             """
         )
         # Migration fuer bestehende content_assets ohne quality_score / quality_report_json
@@ -214,6 +285,45 @@ def init_content_machine_db(db_path: Optional[str] = None) -> None:
             conn.execute("ALTER TABLE content_assets ADD COLUMN quality_score INTEGER DEFAULT 0")
         if "quality_report_json" not in cols:
             conn.execute("ALTER TABLE content_assets ADD COLUMN quality_report_json TEXT DEFAULT '{}'")
+        # CM 2.0 Migration fuer bestehende Installationen (z. B. konsolidierte business.db)
+        for col, decl in (
+            ("sources_json", "TEXT DEFAULT '[]'"),
+            ("fact_check_report_json", "TEXT DEFAULT '{}'"),
+            ("channel_validation_json", "TEXT DEFAULT '{}'"),
+            ("geo_jsonld_json", "TEXT DEFAULT '{}'"),
+            ("plagiarism_report_json", "TEXT DEFAULT '{}'"),
+            # Batch D: neue Asset-Spalten (Dossier, Rollen, Zitatpruefung).
+            ("dossier_path", "TEXT DEFAULT ''"),
+            ("author", "TEXT DEFAULT ''"),
+            ("reviewer", "TEXT DEFAULT ''"),
+            ("publisher", "TEXT DEFAULT ''"),
+            ("citation_check_json", "TEXT DEFAULT '{}'"),
+        ):
+            if col not in cols:
+                conn.execute(f"ALTER TABLE content_assets ADD COLUMN {col} {decl}")
+        # Batch D: Tabelle fuer die Freigabe-Historie nachtraeglich anlegen, falls
+        # eine bestehende DB nur bis CM 2.0 initialisiert wurde.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS content_asset_approvals (
+                id TEXT PRIMARY KEY,
+                asset_id TEXT NOT NULL,
+                decision_id TEXT DEFAULT '',
+                action TEXT NOT NULL,
+                actor TEXT DEFAULT '',
+                role TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (asset_id) REFERENCES content_assets (id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cm_approvals_asset "
+            "ON content_asset_approvals(asset_id, created_at)"
+        )
+        metric_cols = {r[1] for r in conn.execute("PRAGMA table_info(content_metrics)").fetchall()}
+        if metric_cols and "variant_id" not in metric_cols:
+            conn.execute("ALTER TABLE content_metrics ADD COLUMN variant_id TEXT DEFAULT ''")
         conn.commit()
 
 
@@ -236,6 +346,28 @@ def _row_to_asset(row) -> Dict[str, Any]:
         d["quality_report"] = json.loads(d.pop("quality_report_json", "{}") or "{}")
     except (ValueError, TypeError):
         d["quality_report"] = {}
+    # CM 2.0: strukturierte Zusatzfelder
+    for json_field, out_field, default in (
+        ("sources_json", "sources", "[]"),
+        ("fact_check_report_json", "fact_check", "{}"),
+        ("channel_validation_json", "channel_validation", "{}"),
+        ("geo_jsonld_json", "geo_jsonld", "{}"),
+        ("plagiarism_report_json", "plagiarism_report", "{}"),
+    ):
+        try:
+            d[out_field] = json.loads(d.pop(json_field, default) or default)
+        except (ValueError, TypeError):
+            d[out_field] = default
+    # Batch D: neue TEXT-Spalten auch bei alten Zeilen/Rows explizit im Schema.
+    for text_field in ("dossier_path", "author", "reviewer", "publisher"):
+        d.setdefault(text_field, "")
+        d[text_field] = str(d.get(text_field) or "")
+    if "citation_check_json" in d:
+        try:
+            d["citation_check"] = json.loads(d.pop("citation_check_json") or "{}")
+        except (ValueError, TypeError):
+            d["citation_check"] = {}
+    d.setdefault("citation_check", {})
     return d
 
 
@@ -330,6 +462,10 @@ def create_campaign(payload: Dict[str, Any], db_path: Optional[str] = None) -> D
     if not channels:
         channels = list(DEFAULT_CHANNELS)
 
+    status = str(payload.get("status") or "draft").strip().lower()
+    if status not in VALID_CAMPAIGN_STATUSES:
+        raise ValueError(f"Ungueltiger Kampagnen-Status: {status!r}")
+
     cid = f"camp-{secrets.token_hex(4)}"
     now = _utc_now_iso()
     with _conn(db_path) as conn:
@@ -339,7 +475,7 @@ def create_campaign(payload: Dict[str, Any], db_path: Optional[str] = None) -> D
                 id, title, topic, target_audience, brand_voice, pillar,
                 source_url, source_notes, channels_json, status, workflow_run_id,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', '', ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
             """,
             (
                 cid,
@@ -351,6 +487,7 @@ def create_campaign(payload: Dict[str, Any], db_path: Optional[str] = None) -> D
                 str(payload.get("source_url") or "").strip(),
                 str(payload.get("source_notes") or "").strip(),
                 json.dumps(channels),
+                status,
                 now,
                 now,
             ),
@@ -413,14 +550,33 @@ def create_asset(payload: Dict[str, Any], db_path: Optional[str] = None) -> Dict
     aid = f"asset-{secrets.token_hex(4)}"
     now = _utc_now_iso()
     hashtags = payload.get("hashtags") if isinstance(payload.get("hashtags"), list) else []
-    q_report = evaluate_asset_quality(
-        {
-            "channel": channel,
-            "hook": payload.get("hook") or "",
-            "body": payload.get("body") or "",
-            "cta": payload.get("cta") or "",
-        }
-    )
+    asset_view = {
+        "channel": channel,
+        "hook": payload.get("hook") or "",
+        "body": payload.get("body") or "",
+        "cta": payload.get("cta") or "",
+        "sources": payload.get("sources") or [],
+        "parse_failed": bool(payload.get("parse_failed")),
+        "duration_sec": int(payload.get("duration_sec") or CHANNEL_SPECS[channel].get("target_duration_sec") or 0),
+    }
+    q_report = evaluate_asset_quality(asset_view)
+    # CM 2.0: harte Kanalvalidierung + Fact-Check gegen Belegquellen.
+    channel_validation = validate_channel_constraints(asset_view)
+    fact_check = evaluate_fact_check(asset_view)
+    # Batch C: Rechte- + Plagiatsreport (offline, deterministisch). Der Korpus
+    # kann ueber den Payload injiziert werden; ohne Korpus bleibt checked=False.
+    rights_report = evaluate_source_rights(asset_view["sources"])
+    corpus = payload.get("plagiarism_corpus")
+    if corpus is None:
+        corpus = payload.get("corpus")
+    sim_report = evaluate_plagiarism_risk(asset_view, corpus=corpus)
+    plagiarism_report = {
+        "rights": rights_report,
+        "plagiarism": sim_report,
+        "checked": bool(sim_report.get("checked")),
+        "passed": bool(rights_report.get("passed", True) and sim_report.get("passed", True)),
+        "created_at": now,
+    }
     with _conn(db_path) as conn:
         conn.execute(
             """
@@ -428,8 +584,10 @@ def create_asset(payload: Dict[str, Any], db_path: Optional[str] = None) -> Dict
                 id, campaign_id, channel, format_type, title, hook, body, visual_brief,
                 hashtags_json, cta, duration_sec, status, scheduled_at, published_at,
                 external_url, decision_id, agent_id, quality_score, quality_report_json,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?)
+                sources_json, fact_check_report_json, channel_validation_json,
+                plagiarism_report_json, dossier_path, author, reviewer, publisher,
+                citation_check_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 aid,
@@ -450,6 +608,15 @@ def create_asset(payload: Dict[str, Any], db_path: Optional[str] = None) -> Dict
                 str(payload.get("agent_id") or CHANNEL_SPECS[channel]["recommended_agent"]),
                 int(q_report["score"]),
                 json.dumps(q_report, ensure_ascii=False),
+                json.dumps(asset_view["sources"], ensure_ascii=False),
+                json.dumps(fact_check, ensure_ascii=False),
+                json.dumps(channel_validation, ensure_ascii=False),
+                json.dumps(plagiarism_report, ensure_ascii=False),
+                str(payload.get("dossier_path") or "").strip(),
+                str(payload.get("author") or "").strip(),
+                str(payload.get("reviewer") or "").strip(),
+                str(payload.get("publisher") or "").strip(),
+                json.dumps(payload.get("citation_check") or {}, ensure_ascii=False, default=str),
                 now,
                 now,
             ),
@@ -528,6 +695,308 @@ def update_asset(asset_id: str, patch: Dict[str, Any], db_path: Optional[str] = 
     return _row_to_asset(row)
 
 
+def validate_channel_constraints(asset: Dict[str, Any]) -> Dict[str, Any]:
+    """CM 2.0: Harte Kanalvalidierung gegen CHANNEL_SPECS.
+
+    Frueher wurde hook_max_chars (180) ignoriert und auf 400 gekuerzt; bei
+    JSON-Parse-Fehlern bekamen alle Kanaele denselben Body. Hier werden die
+    Grenzen verbindlich geprueft und Verletzungen als Blockiergrund geliefert.
+    """
+    channel = str(asset.get("channel") or "linkedin").lower()
+    spec = CHANNEL_SPECS.get(channel, CHANNEL_SPECS["linkedin"])
+    issues: List[str] = []
+    hook = str(asset.get("hook") or "")
+    body = str(asset.get("body") or "")
+    hook_limit = int(spec.get("hook_max_chars") or 0)
+    max_chars = int(spec.get("max_chars") or 0)
+    if hook_limit and len(hook) > hook_limit:
+        issues.append(f"Hook {len(hook)} > {hook_limit} Zeichen ({spec['label']}).")
+    if max_chars and len(body) > max_chars:
+        issues.append(f"Body {len(body)} > {max_chars} Zeichen ({spec['label']}).")
+    if asset.get("parse_failed"):
+        issues.append("Agent-Output war kein strukturiertes JSON — Kanal-Asset nicht verwertbar.")
+    if spec.get("target_duration_sec") and not int(asset.get("duration_sec") or 0):
+        issues.append(f"Dauer fehlt fuer {spec['label']} (Ziel {spec['target_duration_sec']}s).")
+    return {"passed": not issues, "issues": issues, "channel": channel,
+            "hook_limit": hook_limit, "max_chars": max_chars}
+
+
+def evaluate_fact_check(asset: Dict[str, Any]) -> Dict[str, Any]:
+    """CM 2.0: Fakten-Anker muessen in Belegquellen vorkommen.
+
+    Der alte Score akzeptierte jedes '\\d+' als Fakten-Anker. Hier wird
+    geprueft, ob Zahlen im Body auch in den Research-Quellen auftauchen.
+    """
+    body = str(asset.get("body") or "")
+    sources = asset.get("sources") or []
+    if isinstance(sources, str):
+        try:
+            sources = json.loads(sources)
+        except Exception:
+            sources = []
+    # Timestamps (00:02:38, 1:45) und Folgen-/Kapitelnummern sind
+    # Strukturangaben, keine Faktenbehauptungen.
+    body_for_facts = re.sub(r"\b\d{1,2}:\d{2}(?::\d{2})?\b", " ", body)
+    body_for_facts = re.sub(
+        r"\b(?:Folge|Episode|Teil|Kapitel|Chapter|Part)\s+\d+\b", " ",
+        body_for_facts, flags=re.IGNORECASE,
+    )
+    # Einstellige Zahlen ohne Einheit sind meist Artikel-/Folgennummern.
+    numbers = {
+        n for n in re.findall(r"\b\d+(?:[.,]\d+)?\s?%?", body_for_facts)
+        if len(n.strip("% ")) >= 2 or "%" in n
+    }
+    source_text = " ".join(
+        str(s.get("text") or s.get("summary") or s.get("title") or "")
+        for s in sources if isinstance(s, dict)
+    )
+    unbacked = sorted(n for n in numbers if n.strip("% ") not in source_text.replace(",", "."))
+    passed = bool(numbers) and not unbacked
+    issues = []
+    if not numbers:
+        issues.append("Keine konkreten Zahlen im Asset — kein Fakten-Anker.")
+    if unbacked:
+        issues.append(f"Zahlen ohne Beleg in Research-Quellen: {', '.join(unbacked[:6])}")
+    return {"passed": passed, "numbers_found": len(numbers),
+            "unbacked": unbacked[:10], "issues": issues,
+            "sources_checked": len(sources)}
+
+
+# =========================================================================
+# BATCH C: PLAGIATS-/COPYRIGHT-GATE (OFFLINE, DETERMINISTISCH)
+# =========================================================================
+
+_PLAGIARISM_SHINGLE_SIZE = 5
+_PLAGIARISM_WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß0-9]+")
+
+
+def _text_shingles(text: str, k: int = _PLAGIARISM_SHINGLE_SIZE) -> set:
+    """O(n)-Token-Shingles (keine Heavy-Deps, kein difflib-Quadratverhalten)."""
+    words = [w.lower() for w in _PLAGIARISM_WORD_RE.findall(str(text or ""))]
+    if not words:
+        return set()
+    if len(words) < k:
+        return {tuple(words)}
+    return {tuple(words[i:i + k]) for i in range(len(words) - k + 1)}
+
+
+def evaluate_source_rights(sources: Any) -> Dict[str, Any]:
+    """Batch C: konservative Rechte-Pruefung der Belegquellen.
+
+    Meldet Issues fuer fehlende oder einschraenkende Lizenz-/Rechte-Angaben.
+    'passed' ist NUR False bei explizit verweigerten Rechten — fehlende
+    Metadaten oder leere Quellen duerfen keine Freigabe blockieren. Es wird
+    niemals ein 'cleared'-Status behauptet.
+    """
+    if isinstance(sources, str):
+        try:
+            sources = json.loads(sources)
+        except (ValueError, TypeError):
+            sources = []
+    if not isinstance(sources, (list, tuple)):
+        sources = []
+
+    issues: List[str] = []
+    denied: List[str] = []
+    restricted: List[str] = []
+    unknown: List[str] = []
+    permissive_declared = 0
+
+    for idx, s in enumerate(sources):
+        if not isinstance(s, dict):
+            label = f"[{idx}]"
+            unknown.append(label)
+            issues.append(f"Quelle {label} hat kein Rechte-Metadaten-Format.")
+            continue
+        label = str(s.get("title") or s.get("url") or s.get("domain") or f"[{idx}]")[:120]
+        lic = str(s.get("license") or "").strip()
+        rgt = str(s.get("rights") or "").strip()
+        info = classify_rights(lic, rgt)
+        status = info["status"]
+        if status == "denied":
+            denied.append(label)
+            issues.append(f"Quelle '{label}': Rechte explizit verweigert ({lic or rgt}).")
+        elif status == "unknown":
+            unknown.append(label)
+            issues.append(f"Quelle '{label}': Lizenz/Rechte unbekannt — keine Freigabe behauptet.")
+        elif status == "restricted":
+            restricted.append(label)
+            issues.append(f"Quelle '{label}': Nutzung eingeschraenkt ({lic or rgt}).")
+        elif status == "permissive_declared":
+            permissive_declared += 1
+        else:
+            issues.append(f"Quelle '{label}': Lizenz deklariert, aber nicht geprueft ({lic}).")
+
+    if not sources:
+        issues.append("Keine Belegquellen vorhanden — keine Rechtepruefung moeglich.")
+
+    overall = "denied" if denied else (
+        "restricted" if restricted else (
+            "unknown" if unknown else (
+                "declared" if permissive_declared == len(sources) and sources else "unknown"
+            )
+        )
+    )
+    return {
+        "passed": not denied,
+        "status": overall,
+        "sources_checked": len(sources),
+        "issues": issues,
+        "denied": denied,
+        "restricted": restricted,
+        "unknown": unknown,
+        "permissive_declared": permissive_declared,
+        "note": "Konservative offline Rechtepruefung; 'declared' ist keine Freigabe.",
+    }
+
+
+def evaluate_plagiarism_risk(asset: Any, corpus: Any = None) -> Dict[str, Any]:
+    """Batch C: deterministischer Offline-Aehnlichkeitscheck (Token-Shingles).
+
+    `corpus` ist eine Liste von Strings oder Dicts (body/text/content/snippet).
+    Fehlt der Korpus, wird ausdruecklich KEIN Check behauptet (checked=False),
+    aber passes=True zurueckgegeben (Fail-Safe, keine blockierten Assets).
+    """
+    if isinstance(asset, dict):
+        body = str(asset.get("body") or "")
+        text = body or str(asset.get("title") or "")
+    else:
+        text = str(asset or "")
+
+    if corpus is None:
+        return {
+            "passed": True,
+            "checked": False,
+            "max_similarity": 0.0,
+            "issues": [],
+            "sources_checked": 0,
+            "note": "Kein Korpus bereitgestellt — kein Plagiatsvergleich durchgefuehrt (Fail-Safe).",
+        }
+
+    if isinstance(corpus, dict):
+        corpus = [corpus]
+    if not isinstance(corpus, (list, tuple)):
+        corpus = []
+
+    docs: List[tuple] = []
+    for item in corpus:
+        if isinstance(item, dict):
+            txt = (item.get("body") or item.get("text") or item.get("content")
+                   or item.get("snippet") or item.get("raw_text") or "")
+            label = str(item.get("title") or item.get("url") or item.get("id") or "")[:120]
+        else:
+            txt, label = item, ""
+        docs.append((label, str(txt or "")))
+
+    asset_shingles = _text_shingles(text)
+    base = {
+        "passed": True,
+        "checked": True,
+        "max_similarity": 0.0,
+        "issues": [],
+        "sources_checked": len(docs),
+        "matched_source": "",
+        "note": f"Offline-Token-Shingle-Vergleich (k={_PLAGIARISM_SHINGLE_SIZE}, Containment).",
+    }
+    if not asset_shingles:
+        base["issues"].append("Kein Text im Asset — kein Vergleich moeglich.")
+        return base
+
+    best = 0.0
+    best_label = ""
+    for label, doc in docs:
+        doc_shingles = _text_shingles(doc)
+        if not doc_shingles:
+            continue
+        # Containment: Anteil der Asset-Shingles, die im Dokument vorkommen.
+        sim = len(asset_shingles & doc_shingles) / len(asset_shingles)
+        if sim > best:
+            best, best_label = sim, label
+
+    best = round(min(1.0, max(0.0, best)), 4)
+    base["max_similarity"] = best
+    base["matched_source"] = best_label
+    if best > 0.8:
+        base["passed"] = False
+        base["issues"].append(
+            f"Hohe Textaehnlichkeit {best:.2f} (> 0.8) mit "
+            f"'{best_label or 'Korpusdokument'}' — Freigabe blockiert."
+        )
+    elif best > 0.5:
+        base["issues"].append(
+            f"Erhohte Textaehnlichkeit {best:.2f} mit '{best_label or 'Korpusdokument'}' — manuell pruefen."
+        )
+    return base
+
+
+def create_variant(asset_id: str, variant_label: str, hook: str,
+                   title: str = "", body: str = "", db_path=None) -> Dict[str, Any]:
+    """CM 2.0: A/B-Variante zu einem Asset anlegen."""
+    vid = f"var-{secrets.token_hex(6)}"
+    with _conn(db_path) as conn:
+        conn.execute(
+            "INSERT INTO content_variants (id, asset_id, variant_label, title, hook, body, created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (vid, asset_id, str(variant_label)[:40], str(title)[:160], str(hook), str(body), _utc_now_iso()),
+        )
+        conn.commit()
+    return {"id": vid, "asset_id": asset_id, "variant_label": variant_label, "hook": hook}
+
+
+def list_variants(asset_id: str, db_path=None) -> List[Dict[str, Any]]:
+    with _conn(db_path) as conn:
+        rows = conn.execute("SELECT * FROM content_variants WHERE asset_id = ? ORDER BY created_at", (asset_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def record_variant_metrics(asset_id: str, variant_id: str, metrics: Dict[str, Any], db_path=None) -> Dict[str, Any]:
+    """CM 2.0: Metriken einer Variante verknuepfen (variant_id in payload_json)."""
+    with _conn(db_path) as conn:
+        meta = dict(metrics or {})
+        mid = f"cm-{secrets.token_hex(6)}"
+        conn.execute(
+            "INSERT INTO content_metrics (id, asset_id, channel, views, likes, comments, shares, saves, ctr_pct, variant_id, recorded_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (mid, asset_id, str(meta.get("channel", "")), int(meta.get("views") or 0),
+             int(meta.get("likes") or 0), int(meta.get("comments") or 0),
+             int(meta.get("shares") or 0), int(meta.get("saves") or 0),
+             float(meta.get("ctr_pct") or 0.0), str(variant_id), _utc_now_iso()),
+        )
+        conn.commit()
+    return {"status": "ok", "metric_id": mid, "variant_id": variant_id}
+
+
+def decide_experiment(asset_id: str, metric: str = "ctr_pct", db_path=None) -> Dict[str, Any]:
+    """CM 2.0: A/B-Entscheidung auf Basis der Metriken (einfacher CTR-Vergleich)."""
+    variants = list_variants(asset_id, db_path=db_path)
+    if len(variants) < 2:
+        return {"status": "insufficient_variants", "winner_variant_id": ""}
+    with _conn(db_path) as conn:
+        rows = conn.execute(
+            "SELECT variant_id, ctr_pct FROM content_metrics WHERE asset_id = ?", (asset_id,)
+        ).fetchall()
+    scores: Dict[str, float] = {v["id"]: 0.0 for v in variants}
+    for r in rows:
+        vid = str(r["variant_id"] or "")
+        if vid in scores:
+            scores[vid] = max(scores[vid], float(r["ctr_pct"] or 0.0))
+    winner = max(scores, key=scores.get) if scores else ""
+    with _conn(db_path) as conn:
+        conn.execute(
+            "UPDATE content_variants SET is_winner = 0 WHERE asset_id = ?", (asset_id,)
+        )
+        if winner:
+            conn.execute("UPDATE content_variants SET is_winner = 1 WHERE id = ?", (winner,))
+        conn.execute(
+            "INSERT INTO content_experiments (id, asset_id, metric, status, winner_variant_id, decided_at, created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (f"exp-{secrets.token_hex(6)}", asset_id, metric, "decided", winner, _utc_now_iso(), _utc_now_iso()),
+        )
+        conn.commit()
+    return {"status": "decided", "winner_variant_id": winner,
+            "scores": scores, "metric": metric}
+
+
 def _enforce_asset_quality(conn, row) -> Dict[str, Any]:
     """P1: Quality-Gate als echte Freigabebedingung (nicht nur Anzeige).
 
@@ -554,14 +1023,98 @@ def _enforce_asset_quality(conn, row) -> Dict[str, Any]:
         raise ValueError(
             f"Quality-Gate blockiert Freigabe (Score {report.get('score', 0)}/100): {issues}"
         )
+
+    # CM 2.0: zusaetzliche harte Gates — Kanalgrenzen und Faktenbelege.
+    asset = _row_to_asset(row)
+    channel_check = validate_channel_constraints(asset)
+    if not channel_check.get("passed"):
+        raise ValueError(
+            "Kanalvalidierung blockiert Freigabe: " + "; ".join(channel_check["issues"][:3])
+        )
+    fact_check = asset.get("fact_check") or evaluate_fact_check(asset)
+    if fact_check.get("numbers_found") and not fact_check.get("passed"):
+        raise ValueError(
+            "Fact-Check blockiert Freigabe: " + "; ".join(fact_check["issues"][:3])
+        )
+
+    # Batch C: Plagiats-/Rechte-Gate. Bewusst ENG gefasst — blockiert nur bei
+    # Hoher Aehnlichkeit (>0.8) oder explizit verweigerten Rechten. Ein leerer
+    # Korpus oder leere Quellen duerfen die Freigabe NICHT verhindern.
+    p_report = asset.get("plagiarism_report") or {}
+    rights = p_report.get("rights") or {}
+    sim = p_report.get("plagiarism") or {}
+    if rights.get("denied"):
+        raise ValueError(
+            "Rechte-Gate blockiert Freigabe: " +
+            "; ".join(str(i) for i in (rights.get("issues") or [])[:3])
+        )
+    max_sim = 0.0
+    try:
+        max_sim = float(sim.get("max_similarity") or 0.0)
+    except (TypeError, ValueError):
+        max_sim = 0.0
+    if sim.get("checked") and max_sim > 0.8:
+        raise ValueError(
+            f"Plagiats-Gate blockiert Freigabe: Aehnlichkeit {max_sim:.2f} > 0.8 — "
+            + "; ".join(str(i) for i in (sim.get("issues") or [])[:2])
+        )
     return report
 
 
-def approve_asset(asset_id: str, scheduled_at: str = "", db_path: Optional[str] = None) -> Dict[str, Any]:
+def _record_approval(
+    conn,
+    asset_id: str,
+    action: str,
+    *,
+    decision_id: str = "",
+    actor: str = "",
+    role: str = "",
+    created_at: str = "",
+) -> str:
+    """Batch D: schreibt eine Zeile in die Freigabe-Historie (gleiche Connection)."""
+    aid = f"appr-{secrets.token_hex(6)}"
+    conn.execute(
+        "INSERT INTO content_asset_approvals "
+        "(id, asset_id, decision_id, action, actor, role, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            aid, asset_id, str(decision_id or "").strip(), str(action or "").strip(),
+            str(actor or "").strip(), str(role or "").strip(), created_at or _utc_now_iso(),
+        ),
+    )
+    return aid
+
+
+def approval_history(asset_id: str, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Batch D: liefert die Freigabe-Historie eines Assets (aelteste zuerst)."""
+    init_content_machine_db(db_path)
+    with _conn(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM content_asset_approvals WHERE asset_id = ? ORDER BY created_at ASC, id ASC",
+            (asset_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def approve_asset(
+    asset_id: str,
+    scheduled_at: str = "",
+    *,
+    decision_id: str = "",
+    actor: str = "",
+    role: str = "reviewer",
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
     """Nur review/draft → approved/scheduled. Direktes draft→published ist
-    damit nicht mehr möglich (HITL-Gate-Umgehung)."""
+    damit nicht mehr möglich (HITL-Gate-Umgehung).
+
+    Bei manueller Freigabe wird die decision_id mitgeschrieben — sonst ist
+    die Freigabe im Audit-Pfad nicht dem HITL-Entscheid zuordenbar.
+    Batch D: setzt `reviewer` und schreibt zusaetzlich eine Approval-History-Zeile.
+    """
     new_status = "scheduled" if scheduled_at else "approved"
     now = _utc_now_iso()
+    init_content_machine_db(db_path)  # Batch D: Approval-Tabelle + Migrationen sicherstellen
     with _conn(db_path) as conn:
         row = conn.execute("SELECT * FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
         if not row:
@@ -574,20 +1127,88 @@ def approve_asset(asset_id: str, scheduled_at: str = "", db_path: Optional[str] 
         # freigegeben und publiziert werden.
         _enforce_asset_quality(conn, row)
         cur_update = conn.execute(
-            "UPDATE content_assets SET status = ?, scheduled_at = ?, updated_at = ? "
+            "UPDATE content_assets SET status = ?, scheduled_at = ?, decision_id = ?, "
+            "reviewer = ?, updated_at = ? "
             "WHERE id = ? AND status IN ('review', 'draft')",
-            (new_status, str(scheduled_at or ""), now, asset_id),
+            (
+                new_status, str(scheduled_at or ""), str(decision_id or "").strip(),
+                str(actor or "").strip(), now, asset_id,
+            ),
         )
         if int(cur_update.rowcount or 0) != 1:
             raise ValueError("Statusübergang wurde concurrently geändert — bitte erneut prüfen.")
+        _record_approval(
+            conn, asset_id, new_status,
+            decision_id=decision_id, actor=actor, role=role, created_at=now,
+        )
         conn.commit()
         row = conn.execute("SELECT * FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
     return _row_to_asset(row)
 
 
-def mark_asset_published(asset_id: str, external_url: str = "", db_path: Optional[str] = None) -> Dict[str, Any]:
-    """Publish nur aus approved/scheduled — niemals direkt aus draft/review."""
+def build_geo_jsonld(asset: Dict[str, Any], external_url: str = "") -> Dict[str, Any]:
+    """CM 2.0/GEO: JSON-LD Article/FAQPage aus einem publizierten Asset.
+
+    Der seo_geo_specialist hatte bisher nur Prompt-Wissen; hier wird echte
+    maschinenlesbare Struktur erzeugt (Schema.org), die Such-/Antwortsysteme
+    zitieren koennen.
+    """
+    schema: Dict[str, Any] = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": str(asset.get("title") or "")[:160],
+        "description": str(asset.get("hook") or "")[:300],
+        "articleBody": str(asset.get("body") or "")[:20000],
+        "datePublished": _utc_now_iso(),
+        "author": {"@type": "Organization", "name": "Archon OS Content Machine"},
+    }
+    if external_url:
+        schema["url"] = external_url
+        schema["mainEntityOfPage"] = {"@type": "WebPage", "@id": external_url}
+    sources = asset.get("sources") or []
+    if sources:
+        schema["citation"] = [
+            str(s.get("url") or s.get("title") or "") for s in sources
+            if isinstance(s, dict) and (s.get("url") or s.get("title"))
+        ][:20]
+    return schema
+
+
+def append_llms_txt(asset: Dict[str, Any], external_url: str = "", db_path=None) -> str:
+    """CM 2.0/GEO: llms.txt-Eintrag pflegen (Citation-Readiness)."""
+    try:
+        from backend.platform_paths import OBSIDIAN_VAULT
+        base = OBSIDIAN_VAULT
+    except Exception:
+        base = os.path.join(WORKSPACE_DIR, "obsidian_vault") if "WORKSPACE_DIR" in globals() else "."
+    path = os.path.join(base, "llms.txt")
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    line = f"- [{asset.get('title', 'Asset')}]({external_url}): {asset.get('hook', '')[:200]}\n"
+    existing = ""
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                existing = fh.read()
+        except Exception:
+            existing = ""
+    if line.strip() not in existing:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(line)
+    return path
+
+
+def mark_asset_published(
+    asset_id: str,
+    external_url: str = "",
+    db_path: Optional[str] = None,
+    *,
+    actor: str = "",
+) -> Dict[str, Any]:
+    """Publish nur aus approved/scheduled — niemals direkt aus draft/review.
+    Batch D: setzt `publisher` und schreibt eine Approval-History-Zeile.
+    """
     now = _utc_now_iso()
+    init_content_machine_db(db_path)  # Batch D: Approval-Tabelle + Migrationen sicherstellen
     with _conn(db_path) as conn:
         row = conn.execute("SELECT * FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
         if not row:
@@ -597,15 +1218,36 @@ def mark_asset_published(asset_id: str, external_url: str = "", db_path: Optiona
             raise ValueError(f"Unzulässiger Statusübergang: {cur} → published")
         _enforce_asset_quality(conn, row)
         cur_update = conn.execute(
-            "UPDATE content_assets SET status = 'published', published_at = ?, external_url = ?, updated_at = ? "
+            "UPDATE content_assets SET status = 'published', published_at = ?, external_url = ?, "
+            "publisher = ?, updated_at = ? "
             "WHERE id = ? AND status IN ('approved', 'scheduled')",
-            (now, str(external_url or "").strip(), now, asset_id),
+            (now, str(external_url or "").strip(), str(actor or "").strip(), now, asset_id),
         )
         if int(cur_update.rowcount or 0) != 1:
             raise ValueError("Statusübergang wurde concurrently geändert — bitte erneut prüfen.")
+        _record_approval(
+            conn, asset_id, "published",
+            decision_id=str(row["decision_id"] or ""),
+            actor=actor, role="publisher", created_at=now,
+        )
         conn.commit()
         row = conn.execute("SELECT * FROM content_assets WHERE id = ?", (asset_id,)).fetchone()
-    return _row_to_asset(row)
+    published = _row_to_asset(row)
+    # CM 2.0/GEO: JSON-LD + llms.txt nach dem Publish. Fehler duerfen den
+    # bereits erfolgreichen Publish nicht rueckgaengig machen.
+    try:
+        geo = build_geo_jsonld(published, external_url=external_url)
+        with _conn(db_path) as conn:
+            conn.execute(
+                "UPDATE content_assets SET geo_jsonld_json = ? WHERE id = ?",
+                (json.dumps(geo, ensure_ascii=False), asset_id),
+            )
+            conn.commit()
+        published["geo_jsonld"] = geo
+        published["llms_txt_path"] = append_llms_txt(published, external_url=external_url)
+    except Exception as geo_exc:
+        logger.warning("[ContentMachine] GEO-Artefakte fehlgeschlagen: %s", geo_exc)
+    return published
 
 
 def record_asset_metrics(
@@ -740,12 +1382,101 @@ def get_content_overview(db_path: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
+# =========================================================================
+# BATCH D: SKILL-REGELN AUS .agents/skills IN DEN DAG INJIZIEREN
+# =========================================================================
+
+_CORE_REVIEW_SKILL = "li-human"
+_CHANNEL_SKILLS: Dict[str, tuple] = {
+    "linkedin": ("li-post", "li-carousel", "anti-ai-slop"),
+    "x_threads": ("li-post", "anti-ai-slop"),
+    "newsletter": ("anti-ai-slop",),
+}
+_SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+
+
+def _safe_skill_path(skill_name: str, workspace_dir: str = "") -> Optional[str]:
+    """Sicherer Pfad zu einer SKILL.md (Pfad-Jail). None bei fehlender/ungenueltiger Datei."""
+    name = str(skill_name or "").strip()
+    if not name or not _SKILL_NAME_RE.match(name):
+        return None
+    base = workspace_dir or WORKSPACE_DIR
+    try:
+        skills_root = os.path.realpath(os.path.join(base, ".agents", "skills"))
+        candidate = os.path.realpath(os.path.join(skills_root, name, "SKILL.md"))
+        if os.path.commonpath([skills_root, candidate]) != skills_root:
+            return None
+    except Exception:
+        return None
+    return candidate if os.path.isfile(candidate) else None
+
+
+def _extract_skill_rules(skill_name: str, max_rules: int = 8, workspace_dir: str = "") -> str:
+    """Extrahiert eine kompakte Regel-Block aus einer SKILL.md.
+
+    Fehlende/unklare Dateien liefern einen expliziten Hinweis statt zu crashen.
+    """
+    path = _safe_skill_path(skill_name, workspace_dir)
+    if not path:
+        return (
+            f"- [Hinweis] Skill '{skill_name}' nicht gefunden — "
+            "Regeln nicht injiziert (Graceful Degradation)."
+        )
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            text = fh.read(24000)
+    except Exception as exc:
+        return f"- [Hinweis] Skill '{skill_name}' nicht lesbar: {exc} (Graceful Degradation)."
+
+    if text.startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            text = parts[2]
+
+    rules: List[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        rule = ""
+        bold = re.match(r"^\*\*(.+?)\*\*", line)
+        if bold:
+            rule = bold.group(1)
+        elif line.startswith("- ") or re.match(r"^\d+\.\s", line):
+            rule = re.sub(r"^\d+\.\s*", "", line[2:] if line.startswith("- ") else line)
+        if not rule:
+            continue
+        rule = re.sub(r"^\d+[.)]\s*", "", rule).strip()
+        rule = rule.replace("**", "").replace("`", "").strip(" :;-")
+        rule = re.sub(r"\s+", " ", rule)
+        if len(rule) < 6 or len(rule) > 220:
+            continue
+        if rule.lower() in {r.lower() for r in rules}:
+            continue
+        rules.append(rule)
+        if len(rules) >= max_rules:
+            break
+    if not rules:
+        return (
+            f"- [Hinweis] Skill '{skill_name}' enthaelt keine extrahierbaren Regeln "
+            "(Graceful Degradation)."
+        )
+    return "\n".join(f"- [{skill_name}] {r}" for r in rules)
+
+
+def _skill_rules_for_channel(channel: str, max_rules: int = 6) -> str:
+    """Kern-Review-Skill (li-human) + kanalrelevante Skills, dedupliziert."""
+    names = [_CORE_REVIEW_SKILL] + list(_CHANNEL_SKILLS.get(str(channel).lower(), ()))
+    blocks = [_extract_skill_rules(n, max_rules=max_rules) for n in dict.fromkeys(names)]
+    return "\n".join(blocks)
+
+
 def build_content_repurposing_dag(campaign: Dict[str, Any], *, require_hitl_gate: bool = True) -> Dict[str, Any]:
     """Erzeugt einen ausfuehrbaren Multi-Agenten-DAG fuer `workflow_dag_runner.run_workflow_dag`."""
     topic = campaign.get("topic") or campaign.get("title") or ""
     audience = campaign.get("target_audience") or "Entscheider & Gruender"
     voice = campaign.get("brand_voice") or "Direkt, faktenbasiert, praxisnah"
-    notes = campaign.get("source_notes") or ""
+    notes = _source_notes_text(campaign.get("source_notes"))
 
     # P1/Content B6: Feedback-Loop war Write-Only. voice_winner_hooks.md und
     # config/voice.md wurden gespeichert, aber nie in Prompts geladen. Jetzt
@@ -827,6 +1558,9 @@ def build_content_repurposing_dag(campaign: Dict[str, Any], *, require_hitl_gate
         nid = f"n_ch_{ch}"
         channel_node_ids.append(nid)
         rules = "\n- ".join(spec.get("best_practices") or [])
+        # Batch D: Skill-Regeln (li-human + kanalrelevant) aus .agents/skills
+        # injizieren. CHANNEL_SPECS.best_practices bleiben erhalten.
+        skill_rules = _skill_rules_for_channel(ch)
         nodes.append({
             "id": nid,
             "title": f"Kanal-Asset ({spec['label']}): {campaign['title']}",
@@ -839,6 +1573,8 @@ def build_content_repurposing_dag(campaign: Dict[str, Any], *, require_hitl_gate
                 f"(Format: {spec['format']}, Seitenverhaeltnis: {spec['aspect_ratio']}).\n"
                 f"Tonalitaet: {voice}.\n"
                 f"Kanal-Regeln:\n- {rules}\n\n"
+                f"Skill-Regeln (li-human & kanalrelevant, aus .agents/skills — verpflichtend):\n"
+                f"{skill_rules}\n\n"
                 "ZITATIONSPFLICHT: Fakten und Zahlen nur aus den Belegquellen des "
                 "Research-Schritts. Unbelegte Behauptungen weglassen.\n\n"
                 "Antworte als JSON-Objekt mit den Schluesseln: "
@@ -849,14 +1585,44 @@ def build_content_repurposing_dag(campaign: Dict[str, Any], *, require_hitl_gate
         edges.append({"from": "n_master_brief", "to": nid, "condition": "on_success", "data_mode": "full"})
 
     if require_hitl_gate:
+        # Batch D: verpflichtender li-human-Review-Schritt zwischen Kanal-Fan-Out
+        # und HITL-Freigabe. Regelblock stammt aus .agents/skills/li-human/SKILL.md.
+        review_node_id = "n_li_human_review"
+        review_rules = _extract_skill_rules(_CORE_REVIEW_SKILL, max_rules=10)
+        nodes.append({
+            "id": review_node_id,
+            "title": f"li-human Sprach- & Stil-Review: {campaign['title']}",
+            "type": "agent",
+            "agent_id": "content_repurposing_specialist",
+            "skill": _CORE_REVIEW_SKILL,
+            "depends_on": channel_node_ids,
+            "prompt": (
+                "Pflicht-Review ALLER Kanal-Assets nach der li-human-Methode: entferne "
+                "unsichtbare Zeichen, Gedankenstriche/KI-Floskeln und strukturelle "
+                "Muster (Regel von drei, Reflex-Engagement-Bait, Hashtag-Waende). "
+                "Behalte Fakten, Zahlen und Zitationen unveraendert bei.\n"
+                f"li-human Regeln:\n{review_rules}\n\n"
+                "Liefere die bereinigten Kanal-Assets als JSON-Objekt (Kanal-ID -> "
+                "title, hook, body, visual_brief, hashtags, cta) und eine kurze Liste "
+                "der vorgenommenen Aenderungen."
+            ),
+            "expected_output": "Bereinigte Kanal-Assets plus Aenderungsprotokoll (li-human).",
+        })
+        for cnid in channel_node_ids:
+            edges.append({
+                "from": cnid, "to": review_node_id,
+                "condition": "on_success", "data_mode": "full",
+            })
         nodes.append({
             "id": "n_editorial_gate",
             "title": f"Redaktions-Freigabe (HITL): {campaign['title']}",
             "type": "gate",
-            "depends_on": channel_node_ids,
+            "depends_on": [review_node_id],
         })
-        for cnid in channel_node_ids:
-            edges.append({"from": cnid, "to": "n_editorial_gate", "condition": "on_success", "data_mode": "summary"})
+        edges.append({
+            "from": review_node_id, "to": "n_editorial_gate",
+            "condition": "on_success", "data_mode": "summary",
+        })
 
     return {
         "id": f"content-dag-{campaign['id']}",
@@ -889,18 +1655,32 @@ def _parse_asset_output(channel: str, campaign_title: str, raw_out: Dict[str, An
         except (ValueError, TypeError):
             parsed = {}
 
-    first_line = next((ln.strip() for ln in content.splitlines() if ln.strip()), "")[:180]
+    # CM 2.0: harte Kanalgrenzen aus CHANNEL_SPECS statt hartcodiertem 400.
+    hook_limit = int(spec.get("hook_max_chars") or 180)
+    max_chars = int(spec.get("max_chars") or 0)
+    first_line = next((ln.strip() for ln in content.splitlines() if ln.strip()), "")[:hook_limit]
+    body = str(parsed.get("body") or content or f"[Entwurf fuer {spec['label']} zu '{campaign_title}']")
+    if max_chars and len(body) > max_chars:
+        body = body[:max_chars].rstrip() + " …"
+    # Bei Parse-FehHER darf der rohe Prompt-Output NICHT als fertiges Asset
+    # uebernommen werden (frueher: identischer Body fuer alle Kanaele).
+    parse_failed = bool(content) and not parsed
+    if parse_failed:
+        body = f"[Strukturiertes Asset fehlt — Agent lieferte ungeparsten Output fuer {spec['label']}]\n{body}"[:max_chars or 3000]
+    sources = parsed.get("sources") if isinstance(parsed.get("sources"), list) else []
     return {
         "channel": channel,
         "format_type": spec["format"],
         "title": str(parsed.get("title") or f"{spec['label']}: {campaign_title}")[:160],
-        "hook": str(parsed.get("hook") or first_line)[:400],
-        "body": str(parsed.get("body") or content or f"[Entwurf fuer {spec['label']} zu '{campaign_title}']"),
+        "hook": str(parsed.get("hook") or first_line)[:hook_limit],
+        "body": body,
         "visual_brief": str(parsed.get("visual_brief") or f"Format {spec['aspect_ratio']}, klare Typografie, hohe Kontraste"),
         "hashtags": parsed.get("hashtags") if isinstance(parsed.get("hashtags"), list) else [f"#{channel}", "#ArchonOS"],
         "cta": str(parsed.get("cta") or "Kommentiere deine Erfahrung oder folge fuer Teil 2."),
         "duration_sec": int(parsed.get("duration_sec") or spec.get("target_duration_sec") or 0),
         "agent_id": str(raw_out.get("agent_id") or spec["recommended_agent"]),
+        "sources": sources,
+        "parse_failed": parse_failed,
     }
 
 
@@ -957,6 +1737,11 @@ async def run_content_campaign_pipeline(
     gate_out = outputs.get("n_editorial_gate") or {}
     decision_id = str(gate_out.get("decision_id") or "")
     gate_approved = run_res.get("node_statuses", {}).get("n_editorial_gate") == "completed"
+    # Batch D: Dossier-Pfad aus dem Research-Knoten auf alle Assets vererben.
+    research_out = outputs.get("n_research") or {}
+    dossier_path = str(
+        research_out.get("dossier_path") if isinstance(research_out, dict) else ""
+    ) or ""
 
     for node in dag_def["nodes"]:
         ch = node.get("channel")
@@ -969,6 +1754,7 @@ async def run_content_campaign_pipeline(
         asset_data["campaign_id"] = campaign_id
         asset_data["status"] = "approved" if gate_approved else ("review" if require_hitl_gate else "draft")
         asset_data["decision_id"] = decision_id
+        asset_data["dossier_path"] = dossier_path
         created_assets.append(create_asset(asset_data, db_path=db_path))
 
     now = _utc_now_iso()
@@ -997,6 +1783,7 @@ async def run_content_campaign_pipeline(
         "dag_status": run_res["status"],
         "node_statuses": run_res.get("node_statuses") or {},
         "decision_id": decision_id,
+        "dossier_path": dossier_path,
         "assets_created": created_assets,
     }
 
@@ -1014,12 +1801,37 @@ def _strip_html_to_text(raw_html: str) -> tuple[str, str]:
     return title, cleaned
 
 
+def _source_notes_text(value: Any) -> str:
+    """Liest den Klartext aus source_notes (neu: JSON-Objekt, alt: Plaintext)."""
+    if isinstance(value, str) and value.lstrip().startswith("{"):
+        try:
+            obj = json.loads(value)
+            if isinstance(obj, dict):
+                return str(obj.get("text") or "")
+        except (ValueError, TypeError):
+            return value
+    return str(value or "")
+
+
 def ingest_source_to_campaign(payload: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
-    """Erstellt eine Multi-Channel-Kampagne aus URL (SSRF-geschuetzt), Obsidian-Notiz oder Transkript."""
+    """Erstellt eine Multi-Channel-Kampagne aus URL (SSRF-geschuetzt), Obsidian-Notiz oder Transkript.
+
+    Batch C: Fremd-HTML wird nicht mehr stillschweigend als eigener Text
+    gespeichert. Stattdessen werden Rechte-Metadaten (license/rights) und ein
+    explizites rights_status flag im source_notes-JSON mitgefuehrt.
+    """
     source_type = str(payload.get("source_type") or "transcript").strip().lower()
     extracted_title = str(payload.get("title") or "").strip()
     source_url = str(payload.get("source_url") or "").strip()
     extracted_text = ""
+    rights_meta = {
+        "license": DEFAULT_LICENSE,
+        "rights": DEFAULT_RIGHTS,
+        "rights_status": "unknown",
+        "license_declared": False,
+        "denied": False,
+        "restricted": False,
+    }
 
     if source_type == "url":
         from utils.egress_guard import check_public_url
@@ -1034,6 +1846,8 @@ def ingest_source_to_campaign(payload: Dict[str, Any], db_path: Optional[str] = 
         )
         raw = raw_bytes.decode("utf-8", errors="ignore")
         page_title, extracted_text = _strip_html_to_text(raw)
+        # Batch C: Rechte aus den tatsaechlich geladenen HTML-Metadaten.
+        rights_meta = rights_from_html(raw)
         if not extracted_title:
             extracted_title = page_title or safe_url
     elif source_type == "obsidian":
@@ -1049,13 +1863,37 @@ def ingest_source_to_campaign(payload: Dict[str, Any], db_path: Optional[str] = 
             first_h1 = next((ln.lstrip("# ").strip() for ln in extracted_text.splitlines() if ln.strip().startswith("#")), "")
             extracted_title = first_h1 or os.path.splitext(os.path.basename(safe_file))[0]
     else:
-        extracted_text = str(payload.get("transcript") or payload.get("source_notes") or "").strip()
+        extracted_text = str(payload.get("transcript") or _source_notes_text(payload.get("source_notes")) or "").strip()
         if not extracted_title:
             first_line = next((ln.strip() for ln in extracted_text.splitlines() if ln.strip()), "")
             extracted_title = first_line[:90] or "Content-Kampagne aus Transkript"
 
     if not extracted_text:
         raise ValueError("Quell-Inhalt ist leer — keine Kampagne erstellt.")
+
+    # Batch C: explizite Angaben aus dem Payload haben Vorrang vor Metadaten;
+    # fehlende Angaben bleiben konservativ 'unknown'/'unbekannt'.
+    for key in ("license", "rights"):
+        override = str(payload.get(key) or "").strip()
+        if override:
+            rights_meta[key] = override
+    classify = classify_rights(rights_meta.get("license"), rights_meta.get("rights"))
+    rights_meta["rights_status"] = str(payload.get("rights_status") or classify["status"])
+    rights_meta["denied"] = bool(classify["denied"])
+    rights_meta["restricted"] = bool(classify["restricted"])
+
+    notes_obj = {
+        "text": extracted_text[:6000],
+        "source_url": source_url,
+        "source_type": source_type,
+        "license": rights_meta["license"],
+        "rights": rights_meta["rights"],
+        "rights_status": rights_meta["rights_status"],
+        "license_declared": bool(rights_meta.get("license_declared")),
+        "rights_denied": bool(rights_meta.get("denied")),
+        "rights_restricted": bool(rights_meta.get("restricted")),
+    }
+    notes_json = json.dumps(notes_obj, ensure_ascii=False)
 
     camp = create_campaign(
         {
@@ -1065,7 +1903,7 @@ def ingest_source_to_campaign(payload: Dict[str, Any], db_path: Optional[str] = 
             "brand_voice": payload.get("brand_voice") or "Direkt, faktenbasiert, praxisnah, ohne KI-Floskeln",
             "pillar": payload.get("pillar") or "Content Repurposing",
             "source_url": source_url,
-            "source_notes": extracted_text[:6000],
+            "source_notes": notes_json,
             "channels": payload.get("channels") or DEFAULT_CHANNELS,
         },
         db_path=db_path,
@@ -1074,6 +1912,9 @@ def ingest_source_to_campaign(payload: Dict[str, Any], db_path: Optional[str] = 
         "campaign": camp,
         "source_type": source_type,
         "ingested_chars": len(extracted_text),
+        "license": rights_meta["license"],
+        "rights": rights_meta["rights"],
+        "rights_status": rights_meta["rights_status"],
     }
 
 
@@ -1106,9 +1947,9 @@ async def generate_video_clip_matrix(
             arow = conn.execute("SELECT * FROM content_assets WHERE id = ?", (source_asset_id,)).fetchone()
         if not arow:
             raise KeyError(f"Quell-Asset '{source_asset_id}' nicht gefunden.")
-        base_text = str(arow["body"] or arow["hook"] or camp.get("source_notes") or camp.get("topic") or "")
+        base_text = str(arow["body"] or arow["hook"] or _source_notes_text(camp.get("source_notes")) or camp.get("topic") or "")
     if not base_text:
-        base_text = str(camp.get("source_notes") or camp.get("topic") or camp["title"])
+        base_text = str(_source_notes_text(camp.get("source_notes")) or camp.get("topic") or camp["title"])
 
     count = max(1, min(6, int(clip_count)))
     allowed_video_channels = ("youtube_shorts", "tiktok", "instagram_reels", "linkedin")
@@ -1195,6 +2036,13 @@ async def generate_video_clip_matrix(
                     "hashtags": spec.get("hashtags") if isinstance(spec.get("hashtags"), list) else [f"#{ch}"],
                     "status": "review",
                     "agent_id": "content_repurposing_specialist",
+                    # CM 2.0: Belegquellen erben — die Zahlen im Clip stammen
+                    # aus dem Transcription/Research der Campaign.
+                    "sources": [{
+                        "title": camp["title"],
+                        "text": str(_source_notes_text(camp.get("source_notes")) or camp.get("topic") or ""),
+                        "url": str(camp.get("source_url") or ""),
+                    }],
                 },
                 db_path=db_path,
             )
@@ -1299,6 +2147,100 @@ def publish_scheduled_due_assets(
     return {"status": "ok", "due_count": len(due_assets), "published": published, "errors": errors}
 
 
+def _norm_citation(value: Any) -> str:
+    """Deterministische Normalisierung fuer Zitat-URLs/Titel (offline)."""
+    return str(value or "").strip().rstrip("/").lower()
+
+
+def check_geo_citations(
+    hours: int = 48,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Batch D: GEO-Zitatpruefung 48h nach Publish (offline, deterministisch).
+
+    Fuer alle vor `hours` Stunden publizierten Assets mit JSON-LD wird geprueft,
+    ob jede `citation` (URL oder Titel) unter den Belegquellen (`sources`) des
+    Assets vorkommt. Das Ergebnis wird pro Asset in `citation_check_json`
+    persistiert. Es gibt KEINE Netzwerkaufrufe.
+    """
+    init_content_machine_db(db_path)
+    window = max(1, int(hours))
+    cutoff = (datetime.datetime.now(datetime.timezone.utc) - timedelta(hours=window)).isoformat()
+    reports: List[Dict[str, Any]] = []
+    assets_checked = 0
+    citations_checked = 0
+    citations_missing = 0
+    assets_with_missing = 0
+
+    with _conn(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM content_assets
+            WHERE status = 'published'
+              AND published_at != '' AND published_at <= ?
+              AND geo_jsonld_json NOT IN ('', '{}')
+            ORDER BY published_at ASC
+            """,
+            (cutoff,),
+        ).fetchall()
+        for row in rows:
+            asset = _row_to_asset(row)
+            geo = asset.get("geo_jsonld") or {}
+            citations = geo.get("citation") if isinstance(geo, dict) else None
+            if not isinstance(citations, (list, tuple)):
+                citations = []
+            sources = asset.get("sources") or []
+            if not isinstance(sources, (list, tuple)):
+                sources = []
+            valid = set()
+            for src in sources:
+                if isinstance(src, dict):
+                    for key in ("url", "title", "link"):
+                        if src.get(key):
+                            valid.add(_norm_citation(src.get(key)))
+                elif src:
+                    valid.add(_norm_citation(src))
+            missing = [
+                str(c) for c in citations
+                if c and _norm_citation(c) not in valid
+            ]
+            citations_checked += len(citations)
+            citations_missing += len(missing)
+            passed = not missing
+            if not passed:
+                assets_with_missing += 1
+            report = {
+                "asset_id": asset.get("id"),
+                "title": str(asset.get("title") or "")[:160],
+                "channel": str(asset.get("channel") or ""),
+                "published_at": str(asset.get("published_at") or ""),
+                "checked_at": _utc_now_iso(),
+                "hours": window,
+                "citations": [str(c) for c in citations],
+                "missing": missing,
+                "sources_count": len(sources),
+                "passed": passed,
+                "note": "Offline-Vergleich JSON-LD citation <-> sources; keine Netzwerkaufrufe.",
+            }
+            reports.append(report)
+            assets_checked += 1
+            conn.execute(
+                "UPDATE content_assets SET citation_check_json = ? WHERE id = ?",
+                (json.dumps(report, ensure_ascii=False), asset.get("id")),
+            )
+        conn.commit()
+
+    return {
+        "status": "ok",
+        "hours": window,
+        "assets_checked": assets_checked,
+        "citations_checked": citations_checked,
+        "citations_missing": citations_missing,
+        "assets_with_missing": assets_with_missing,
+        "reports": reports,
+    }
+
+
 def sweep_content_performance_feedback(
     *,
     hours_min: int = 48,
@@ -1306,7 +2248,9 @@ def sweep_content_performance_feedback(
 ) -> Dict[str, Any]:
     """48h/7d-Performance-Rueckfluss: speist erfolgreiche Hooks gewichtet ins FTS5-Memory & Voice-Vorschlaege."""
     init_content_machine_db(db_path)
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(1, int(hours_min)))).isoformat()
+    # Batch D: 'datetime' ist das Modul (import datetime) — frueher falsch als
+    # Klasse verwendet (AttributFehler/NameError), daher korrekt qualifizieren.
+    cutoff = (datetime.datetime.now(datetime.timezone.utc) - timedelta(hours=max(1, int(hours_min)))).isoformat()
     recorded = 0
     suggestions: List[str] = []
 
@@ -1360,7 +2304,20 @@ def sweep_content_performance_feedback(
         except Exception as exc:
             logger.debug(f"[ContentMachine] voice_winner_hooks.md Schreibfehler: {exc}")
 
-    return {"status": "ok", "recorded_learnings": recorded, "suggestions_count": len(suggestions)}
+    # Batch D: GEO-Zitatpruefung als Teil des 48h-Feedback-Sweeps. Fehler duerfen
+    # den eigentlichen Feedback-Loop nicht blockieren.
+    citation_report: Dict[str, Any] = {}
+    try:
+        citation_report = check_geo_citations(hours=hours_min, db_path=db_path)
+    except Exception as exc:
+        logger.debug("[ContentMachine] GEO-Zitatpruefung im Sweep uebersprungen: %s", exc)
+
+    return {
+        "status": "ok",
+        "recorded_learnings": recorded,
+        "suggestions_count": len(suggestions),
+        "geo_citation_check": citation_report,
+    }
 
 
 def finalize_assets_for_workflow_run(

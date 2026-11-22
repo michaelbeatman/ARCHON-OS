@@ -6,8 +6,9 @@ import json
 import logging
 import httpx
 import asyncio
+import functools
 import sqlite3
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 logger = logging.getLogger("archon.core_dispatcher")
 
@@ -1564,6 +1565,34 @@ def build_final_system_prompt(selected_framework_id: str, base_system_prompt: st
 
     return "\n\n".join(parts)
 
+
+def _boardroom_cancellation_guard(fn):
+    """
+    Wrappt den kompletten Debatten-Generator:
+    Eine asyncio.CancelledError (z. B. aus ``token.check()``) wird in EIN
+    finales ``cancelled``-Event uebersetzt und der Generator kehrt sauber
+    zurueck. Der Abbruch wird damit nicht still geschluckt, sondern dem
+    SSE-Consumer explizit gemeldet.
+    """
+    @functools.wraps(fn)
+    async def _wrapped(*args, **kwargs):
+        last_round = 0
+        try:
+            async for ev in fn(*args, **kwargs):
+                if isinstance(ev, dict) and isinstance(ev.get("round"), int):
+                    last_round = ev["round"]
+                yield ev
+        except asyncio.CancelledError:
+            yield {
+                "type": "cancelled",
+                "round": last_round,
+                "content": "Debatte abgebrochen",
+            }
+            return
+    return _wrapped
+
+
+@_boardroom_cancellation_guard
 async def stream_boardroom_debate(
     task: str,
     max_rounds: int,
@@ -1573,12 +1602,22 @@ async def stream_boardroom_debate(
     timeout: int = 30,
     use_moa: bool = False,
     moa_reference_models: list = None,
-    moa_aggregator: dict = None
+    moa_aggregator: dict = None,
+    cancel_token: Optional[Any] = None,
+    task_id: Optional[str] = None
 ):
     """
     Asynchroner Generator für Live-Streaming der 'AI Boardroom' Multi-Agenten Debatte:
-    Streamt Events schrittweise (start, chairman_init, round_start, agent_response, consensus_reached, final_synthesis, done).
+    Streamt Events schrittweise (start, chairman_init, round_start, agent_response,
+    consensus_reached, final_synthesis, done). Bei Abbruchueber das cancel_token
+    folgt ein abschliessendes 'cancelled'-Event (siehe _boardroom_cancellation_guard).
     """
+    if cancel_token is None:
+        # Import hier, um Import-Zyklen zwischen Dispatcher und Backend zu vermeiden.
+        from backend.cancellation import get_token
+        cancel_token = get_token(f"boardroom:{task_id or chairman_id}")
+    token = cancel_token
+
     if not active_agents:
         yield {"type": "error", "content": "Keine aktiven Agenten für den Boardroom vorhanden."}
         return
@@ -1611,6 +1650,7 @@ async def stream_boardroom_debate(
     
     chairman_sys_prompt = build_final_system_prompt(framework, chairman.get("prompt", ""))
 
+    token.check()  # Abbruch vor dem ersten Dispatch beachten
     res_init = await dispatch_to_external_agent(
         agent_id=chairman["id"],
         agent_name=chairman["name"],
@@ -1636,6 +1676,8 @@ async def stream_boardroom_debate(
 
     # 2. ROUND-BASED DEBATE
     running_transcript = f"--- MODERATOR INITIALISIERUNG ---\n{init_text}\n\n"
+    # Alle Agent-Aussagen dieser Debatte fuer die offline Konsensauswertung sammeln.
+    debate_statements: List[Any] = []
     
     for round_num in range(1, max_rounds + 1):
         yield {
@@ -1643,6 +1685,9 @@ async def stream_boardroom_debate(
             "round": round_num,
             "max_rounds": max_rounds
         }
+        # Abbruch zu Beginn jeder Runde pruefen (nach round_start, damit das
+        # cancelled-Event die korrekte Rundennummer trägt).
+        token.check()
         
         if round_num == 1 and len(expert_agents) > 1:
             async def _dispatch_agent(ag):
@@ -1657,6 +1702,7 @@ async def stream_boardroom_debate(
                     f"Formuliere deine klare Fachperspektive."
                 )
                 sys_prompt = build_final_system_prompt(framework, ag.get("prompt", ""))
+                token.check()  # Abbruch vor jedem Agent-Dispatch beachten
                 res = await dispatch_to_external_agent(
                     agent_id=ag["id"],
                     agent_name=ag["name"],
@@ -1681,6 +1727,7 @@ async def stream_boardroom_debate(
             tasks = [asyncio.create_task(_dispatch_agent(a)) for a in expert_agents]
             for coro in asyncio.as_completed(tasks):
                 res_event = await coro
+                debate_statements.append(res_event)
                 running_transcript += f"[{res_event['agent_name']} ({res_event['role']}) - Runde {round_num}]:\n{res_event['content']}\n\n"
                 # Replicate live into task_events for #boardroom and #all-stream in Operations
                 try:
@@ -1720,6 +1767,7 @@ async def stream_boardroom_debate(
                 
                 agent_sys_prompt = build_final_system_prompt(framework, agent.get("prompt", ""))
 
+                token.check()  # Abbruch vor jedem Agent-Dispatch beachten
                 res = await dispatch_to_external_agent(
                     agent_id=agent["id"],
                     agent_name=agent["name"],
@@ -1742,43 +1790,25 @@ async def stream_boardroom_debate(
                     "model": agent.get("model") or "deepseek/deepseek-chat",
                     "content": resp_content
                 }
+                debate_statements.append(ev_agent)
                 running_transcript += f"[{agent['name']} ({agent.get('role', 'Expert')}) - Runde {round_num}]:\n{resp_content}\n\n"
                 yield ev_agent
         
-        # 3. CONSENSUS CHECK & WATCHDOG
+        # 3. CONSENSUS CHECK & WATCHDOG (deterministisch, OFFLINE, kein LLM)
+        # M-1: Explizite Negation schlaegt positive Marker; unklar = kein Konsens.
         if round_num < max_rounds:
-            consensus_prompt = (
-                f"Du bist der Moderator ({chairman['name']}).\n"
-                f"Bisheriger Diskussionsverlauf nach Runde {round_num}:\n{running_transcript}\n\n"
-                f"Prüfe, ob bereits voller Konsens erzielt wurde. Antworte NUR mit 'KONSENS_ERREICHT' oder 'DEBATTE_FORTSETZEN'."
-            )
-            
-            check_res = await dispatch_to_external_agent(
-                agent_id=chairman["id"],
-                agent_name=chairman["name"],
-                prompt=consensus_prompt,
-                role=chairman.get("role", "Orchestrator"),
-                system_prompt="Prüfe strikt, ob Konsens erreicht wurde.",
-                model=chairman.get("model") or "deepseek/deepseek-chat",
-                timeout=15
-            )
-            
-            check_text = str(check_res.get("content", "") or "").strip().upper()
-            # M-1: "CONSENSUS" traf auch auf "KEIN CONSENSUS ERREICHT" zu und
-            # beendete die Debatte vorzeitig. Explizite Negation schlaegt immer.
-            negative = any(
-                token in check_text
-                for token in ("KEIN KONSENS", "NICHT ERREICHT", "NO CONSENSUS",
-                              "DEBATTE_FORTSETZEN", "KEIN CONSENSUS")
-            )
-            consensus_reached = (
-                "KONSENS_ERREICHT" in check_text or "CONSENSUS_ERREICHT" in check_text
-            )
-            if consensus_reached and not negative:
+            from backend.consensus_gate import resolve_debate_consensus
+            consensus = resolve_debate_consensus(debate_statements)
+            if consensus.get("consensus_reached"):
                 yield {
                     "type": "consensus_reached",
                     "round": round_num,
-                    "content": f"Konsens in Runde {round_num} vorzeitig erzielt!"
+                    "content": f"Konsens in Runde {round_num} vorzeitig erzielt!",
+                    "yes_votes": consensus["yes_votes"],
+                    "total_votes": consensus["total_votes"],
+                    "required_votes": consensus["required_votes"],
+                    "verdict": consensus["verdict"],
+                    "evidence": consensus["evidence"],
                 }
                 break
 
@@ -1816,6 +1846,7 @@ async def stream_boardroom_debate(
             m_id = m_item.get("model", "deepseek/deepseek-chat")
             m_prov = m_item.get("provider", "openrouter")
             m_name = m_item.get("name", m_id)
+            token.check()  # Abbruch vor jedem Agent-Dispatch beachten
             try:
                 res = await dispatch_to_external_agent(
                     agent_id=f"moa_ref_{m_name}",
@@ -1871,6 +1902,7 @@ async def stream_boardroom_debate(
             "message": f"Aggregator {agg_model.get('name', 'Chair')} synthetisiert alle Layer-1 Ergebnisse..."
         }
 
+        token.check()  # Abbruch vor dem Aggregator-Dispatch beachten
         res_agg = await dispatch_to_external_agent(
             agent_id=chairman["id"],
             agent_name=agg_model.get("name", chairman["name"]),
@@ -1894,6 +1926,7 @@ async def stream_boardroom_debate(
             f"### 3. Final Actionable Decision (Finale Entscheidung & konkreter Aktionsplan)"
         )
     
+        token.check()  # Abbruch vor dem Synthese-Dispatch beachten
         res_synth = await dispatch_to_external_agent(
             agent_id=chairman["id"],
             agent_name=chairman["name"],

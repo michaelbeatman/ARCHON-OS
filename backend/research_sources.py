@@ -12,6 +12,143 @@ from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse
 
 # ==============================================================================
+# BATCH C: RECHTE-/LIZENZ-METADATEN (KONSERVATIV)
+# ==============================================================================
+# Eine permissive Lizenz wird NIE erfunden. Nur explizit in Quell-Metadaten
+# gefundene Angaben werden uebernommen; alles andere bleibt 'unknown'.
+DEFAULT_LICENSE = "unknown"
+DEFAULT_RIGHTS = "unbekannt"
+
+# Tokens, die eine Nutzung erkennbar einschraenken oder untersagen.
+RESTRICTIVE_LICENSE_TOKENS = (
+    "all rights reserved",
+    "urheberrechtlich geschützt",
+    "urheberrechtlich geschuetzt",
+    "non-commercial",
+    "nicht-kommerziell",
+    "no-derivatives",
+    "keine bearbeitung",
+    "proprietary",
+    "by-nc",
+    "by-nd",
+    "copyright",
+)
+# Tokens, die eine ausdrueckliche Verweigerung bedeuten (Freigabe-Blocker).
+DENIED_RIGHTS_TOKENS = (
+    "denied",
+    "verweigert",
+    "verboten",
+    "not permitted",
+    "nicht erlaubt",
+    "keine verwendung",
+    "no use",
+    "all rights denied",
+)
+# Bekannte freizuegige Angaben — nur als "deklariert" fuehrbar, nie als Freigabe.
+PERMISSIVE_LICENSE_TOKENS = (
+    "cc0",
+    "public domain",
+    "gemeinfrei",
+    "cc by",
+    "cc-by",
+    "mit license",
+    "apache-2.0",
+    "bsd",
+)
+
+
+def classify_rights(license_val: Any, rights_val: Any) -> Dict[str, Any]:
+    """Klassifiziert Lizenz-/Rechte-Angaben konservativ (kein 'cleared'-Claim)."""
+    lic = str(license_val or "").strip()
+    rgt = str(rights_val or "").strip()
+    lic_l, rgt_l = lic.lower(), rgt.lower()
+    lic_missing = not lic_l or lic_l in ("unknown", "unbekannt")
+    rgt_missing = not rgt_l or rgt_l in ("unknown", "unbekannt")
+    combined = f"{lic_l} {rgt_l}"
+    denied = any(t in combined for t in DENIED_RIGHTS_TOKENS)
+    restricted = any(t in combined for t in RESTRICTIVE_LICENSE_TOKENS)
+    if denied:
+        status = "denied"
+    elif lic_missing and rgt_missing:
+        status = "unknown"
+    elif restricted:
+        status = "restricted"
+    elif any(t in lic_l for t in PERMISSIVE_LICENSE_TOKENS):
+        status = "permissive_declared"
+    else:
+        status = "declared"
+    return {"status": status, "denied": denied, "restricted": restricted,
+            "license": lic or DEFAULT_LICENSE, "rights": rgt or DEFAULT_RIGHTS}
+
+
+def apply_rights_defaults(source: Dict[str, Any]) -> Dict[str, Any]:
+    """Setzt explizite, konservative Rechte-Schluessel auf ein Quell-Dict."""
+    if not isinstance(source, dict):
+        return source
+    lic = source.get("license")
+    rgt = source.get("rights")
+    source["license"] = str(lic).strip() if lic is not None and str(lic).strip() else DEFAULT_LICENSE
+    source["rights"] = str(rgt).strip() if rgt is not None and str(rgt).strip() else DEFAULT_RIGHTS
+    status = classify_rights(source["license"], source["rights"])["status"]
+    source["rights_status"] = str(source.get("rights_status") or status)
+    return source
+
+
+def rights_from_html(raw_html: str) -> Dict[str, Any]:
+    """Batch C: liest Lizenz-/Rechte-Metadaten aus HTML (nur explizite Angaben).
+
+    Unterstuetzt <link rel="license" href="..."> sowie <meta name/property=
+    license|rights|copyright>. Unbekannte oder fehlende Angaben bleiben
+    'unknown'/'unbekannt'. Es wird nie eine Freigabe behauptet.
+    """
+    import re as _re
+    import html as _html
+
+    text = raw_html or ""
+
+    def _attr(tag: str, name: str) -> str:
+        m = _re.search(r"\b" + _re.escape(name) + r"\s*=\s*(['\"])(.*?)\1", tag, _re.I | _re.S)
+        return _html.unescape(m.group(2)).strip() if m else ""
+
+    license_val = ""
+    rights_val = ""
+    for tag in _re.findall(r"<link\b[^>]*>", text, flags=_re.I):
+        if _re.search(r"\blicense\b", _attr(tag, "rel"), _re.I):
+            license_val = _attr(tag, "href")
+            if license_val:
+                break
+    if not license_val:
+        for tag in _re.findall(r"<meta\b[^>]*>", text, flags=_re.I):
+            key = (_attr(tag, "name") or _attr(tag, "property")).lower()
+            val = _attr(tag, "content")
+            if not val or license_val:
+                continue
+            if key in ("license", "dcterms.license", "dc.license", "article:license"):
+                license_val = val
+            elif key in ("rights", "dc.rights", "dcterms.rights", "copyright") and not rights_val:
+                rights_val = val
+
+    # CC-URLs in kanonische Kurzformen uebersetzen (nur wenn explizit deklariert).
+    lic_l = license_val.lower()
+    if "creativecommons.org/publicdomain/zero" in lic_l or "cc0" in lic_l:
+        license_val = "CC0-1.0"
+    else:
+        cc = _re.search(r"creativecommons\.org/(?:licenses|publicdomain)/([a-z\-]+(?:/[0-9.]+)?)", lic_l)
+        if cc:
+            license_val = "CC " + cc.group(1).replace("/", " ").upper()
+
+    info = classify_rights(license_val, rights_val)
+    return {
+        "license": info["license"],
+        "rights": info["rights"],
+        "rights_status": info["status"],
+        "license_declared": bool(license_val),
+        "denied": bool(info["denied"]),
+        "restricted": bool(info["restricted"]),
+    }
+
+
+# ==============================================================================
 # TRUST TIERS (VERTRAUENSSTUFEN)
 # ==============================================================================
 TRUST_TIERS = {
@@ -284,6 +421,8 @@ def get_curated_sources_pool() -> List[Dict[str, Any]]:
     enriched = []
     for s in CURATED_SOURCES_POOL:
         item = dict(s)
+        # Batch C: Rechte-Metadaten explizit und konservativ mitgeben.
+        apply_rights_defaults(item)
         tier_info = TRUST_TIERS.get(s["trust_tier"], TRUST_TIERS["TIER_2_ESTABLISHED_MEDIA"])
         item["tier_level"] = tier_info["level"]
         item["tier_name"] = tier_info["name"]
@@ -318,7 +457,11 @@ def get_domain_reputation(domain_or_url: str) -> Dict[str, Any]:
         "weight": tier_info["weight"],
         "badge_color": tier_info["badge_color"],
         "is_primary": tier_info["level"] == 1,
-        "is_established": tier_info["level"] <= 2
+        "is_established": tier_info["level"] <= 2,
+        # Batch C: Reputation ist KEINE Lizenz — konservative Defaults.
+        "license": DEFAULT_LICENSE,
+        "rights": DEFAULT_RIGHTS,
+        "rights_status": "unknown",
     }
 
 def format_citation(name: str, url: str, date_str: Optional[str] = None) -> str:
@@ -379,3 +522,10 @@ def evaluate_triangulation_quality(sources: List[Dict[str, Any]]) -> Dict[str, A
         "has_tier_1_official": has_tier_1,
         "tier_2_count": tier_2_count
     }
+
+
+# Batch C: Jeder kuratierte Quell-Eintrag erhaelt explizite, konservative
+# Rechte-Schluessel. Vorhandene Angaben bleiben erhalten, es wird nichts
+# erfunden. (Am Modulende, damit alle Helper definiert sind.)
+for _curated_source in CURATED_SOURCES_POOL:
+    apply_rights_defaults(_curated_source)

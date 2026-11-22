@@ -14,6 +14,23 @@ export interface ChannelSpec {
   best_practices: string[];
 }
 
+/**
+ * Kanonische Content-Status inkl. `idea` (Vorstufe aus dem competitor_idea_bridge).
+ * Asset- und Kampagnen-Status teilen sich diesen Typ, damit 'idea' frontendseitig
+ * als erstklassiger Wert behandelt wird.
+ */
+export type ContentStatus =
+  | 'idea'
+  | 'draft'
+  | 'review'
+  | 'in_review'
+  | 'approved'
+  | 'scheduled'
+  | 'published'
+  | 'rejected'
+  | 'completed'
+  | 'failed';
+
 export interface ContentCampaign {
   id: string;
   title: string;
@@ -24,7 +41,7 @@ export interface ContentCampaign {
   source_url: string;
   source_notes: string;
   channels: string[];
-  status: string;
+  status: ContentStatus;
   workflow_run_id: string;
   created_at: string;
   updated_at: string;
@@ -50,7 +67,7 @@ export interface ContentAsset {
   hashtags: string[];
   cta: string;
   duration_sec: number;
-  status: 'draft' | 'review' | 'approved' | 'scheduled' | 'published' | 'rejected';
+  status: ContentStatus;
   scheduled_at: string;
   published_at: string;
   external_url: string;

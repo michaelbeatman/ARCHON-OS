@@ -9,10 +9,10 @@ import sys
 import json
 import time
 import datetime
-import urllib.request
-import urllib.error
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+
+from utils.safe_http import safe_http_json
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -67,16 +67,9 @@ class OracleNewsRadar:
             print(f"[ORACLE] Fehler beim Speichern von seen_ids: {e}", file=sys.stderr)
 
     def _fetch_url(self, url: str, timeout: int = 12) -> Optional[Any]:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Archon-OracleNewsRadar/1.0 (AgenticOS-2026; autonomous intelligence bot)"
-            }
-        )
+        """Holt JSON ueber den zentralen SSRF-geschuetzten Client (nur public URLs)."""
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                data = resp.read()
-                return json.loads(data.decode("utf-8"))
+            return safe_http_json(url, timeout=timeout, public_only=True)
         except Exception as e:
             print(f"[ORACLE] Fetch error for {url}: {e}", file=sys.stderr)
             return None
@@ -150,7 +143,8 @@ class OracleNewsRadar:
     def fetch_github_trending(self, limit: int = 8) -> List[Dict[str, Any]]:
         """Liest stark wachsende GitHub Repositories im Agentic- und LLM-Bereich."""
         items = []
-        url = "https://api.github.com/search/repositories?q=agentic+OR+llm+pushed:>2026-10-01&sort=stars&order=desc&per_page=12"
+        cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
+        url = f"https://api.github.com/search/repositories?q=agentic+OR+llm+pushed:>{cutoff}&sort=stars&order=desc&per_page=12"
         data = self._fetch_url(url)
         if not data or "items" not in data:
             return items

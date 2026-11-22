@@ -82,6 +82,9 @@ _SSE_SUBSCRIBERS: List[asyncio.Queue] = []
 # F-08: broadcast_event laeuft aus mehreren Threads (main.py-Hintergrund,
 # operations_api); Appends/Removes auf der Liste brauchen eine Sperre.
 _SSE_SUB_LOCK = threading.Lock()
+# Batch B/8: begrenzte Puffer fuer Event-Push-Abonnenten (z. B. Delegations-
+# Watcher). Verhindert unbegrenztes Wachstum, wenn ein Consumer nicht liest.
+_SSE_QUEUE_MAXSIZE = 256
 _IO_EXECUTOR = None
 _IO_EXECUTOR_LOCK = threading.Lock()
 
@@ -156,6 +159,28 @@ def broadcast_event(event_type: str, data: Optional[Dict[str, Any]] = None) -> N
                     logger.debug(f"[Runtime] Toter SSE-Abonnent bereits entfernt: {exc}")
 
 
+def subscribe_events() -> asyncio.Queue:
+    """Registriert eine neue, begrenzte Event-Queue am In-Process-Bus.
+
+    Gegenstueck zu ``broadcast_event``: alles, was ueber den Bus gesendet wird
+    (u. a. ``kanban_updated``), landet auch in dieser Queue. Der Aufrufer muss
+    ``unsubscribe_events`` in einem ``finally`` aufrufen.
+    """
+    q: asyncio.Queue = asyncio.Queue(maxsize=_SSE_QUEUE_MAXSIZE)
+    with _SSE_SUB_LOCK:
+        _SSE_SUBSCRIBERS.append(q)
+    return q
+
+
+def unsubscribe_events(q: asyncio.Queue) -> None:
+    """Entfernt eine zuvor registrierte Event-Queue sicher und idempotent."""
+    with _SSE_SUB_LOCK:
+        try:
+            _SSE_SUBSCRIBERS.remove(q)
+        except ValueError as exc:
+            logger.debug(f"[Runtime] Event-Abonnent bereits entfernt: {exc}")
+
+
 def add_ticker(agent_name: str, message: str) -> None:
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     with _TICKER_LOCK:
@@ -214,5 +239,6 @@ def atomic_write_json(filepath: str, data: Any, indent: int = 2) -> None:
 __all__ = [
     "APP_ROOT", "logger", "WORKSPACE_DIR", "MEMORY_DIR", "DATA_DIR", "SETTINGS_FILE", "OBSIDIAN_VAULT_DIR",
     "resolve_obsidian_vault_path", "ticker_entries", "add_ticker", "broadcast_event",
+    "subscribe_events", "unsubscribe_events",
     "_SSE_SUBSCRIBERS", "_SSE_SUB_LOCK", "_load_json", "_save_json", "atomic_write_json",
 ]

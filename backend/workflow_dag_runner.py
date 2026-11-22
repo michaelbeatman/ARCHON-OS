@@ -521,6 +521,9 @@ async def _execute_research_dag_node(node: Dict[str, Any], upstream: Dict[str, A
         }
 
     synthesis = str(result.get("synthesis") or "")
+    # research_engine_v2 liefert 'triangulation_verdict'; alte Mocks/Fixtures
+    # nutzen 'verdict'. Beide Keys werden unterstuetzt (P2-Verdict-Fix).
+    verdict = str(result.get("triangulation_verdict") or result.get("verdict") or "")
     sources = result.get("sources") or []
     source_lines = []
     for idx, src in enumerate(sources[:12], start=1):
@@ -530,20 +533,35 @@ async def _execute_research_dag_node(node: Dict[str, Any], upstream: Dict[str, A
         url = str(src.get("url") or src.get("link") or "")[:200]
         domain = str(src.get("domain") or "")
         source_lines.append(f"[{idx}] {title} — {domain} — {url}")
+    ok = bool(synthesis) and result.get("status") != "no_evidence"
+
+    # Batch D: Dossier aus dem strukturierten v2-Ergebnis schreiben (gleicher
+    # Pfad wie run_research_mission_reflect). Fehler duerfen den Research-Knoten
+    # nicht scheitern lassen.
+    dossier_path = ""
+    if ok and str(result.get("status")) == "success":
+        try:
+            dossier_path = str(
+                research_engine_v2.save_dossier_for_result(result, query) or ""
+            )
+        except Exception as exc:
+            logger.debug("[WorkflowDAG] Research-Dossier nicht gespeichert: %s", exc)
+
     content = (
         "### Research-Synthese (quellenbasiert)\n"
         f"{synthesis or '(keine Synthese — Status: ' + str(result.get('status')) + ')'}\n\n"
-        f"### Verifikationsstatus\n{str(result.get('verdict', ''))}\n\n"
+        f"### Verifikationsstatus\n{verdict}\n\n"
         f"### Belegquellen ({len(sources)})\n" + "\n".join(source_lines)
+        + (f"\n\n### Research-Dossier\n{dossier_path}" if dossier_path else "")
     )
-    ok = bool(synthesis) and result.get("status") != "no_evidence"
     return {
         "status": "success" if ok else "error",
         "content": content,
         "synthesis": synthesis,
         "sources": sources,
-        "verdict": result.get("verdict", ""),
+        "verdict": verdict,
         "total_sources": len(sources),
+        "dossier_path": dossier_path,
         "agent_id": "research_scout",
         "node_id": node.get("id"),
     }
@@ -1128,6 +1146,7 @@ async def run_workflow_dag(
     run_id: Optional[str] = None,
     gate_approvals: Optional[Dict[str, bool]] = None,
     db_path: Optional[str] = None,
+    cancel_token: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Fuehrt einen Workflow-DAG aus (mit Per-run_id-Lock gegen Doppel-Ausfuehrung).
@@ -1138,6 +1157,10 @@ async def run_workflow_dag(
     }
     """
     rid = run_id or f"wfrun-{secrets.token_hex(5)}"
+    # Zentrale Cancel-Propagation: Run-Token oder explizit übergebener Token
+    # (Mission Control → Dispatch → DAG). Ohne Token unveraendertes Verhalten.
+    from backend.cancellation import get_token as _get_cancel_token
+    cancel_token = cancel_token or _get_cancel_token(f"run:{rid}")
     # Per-run_id-Lock: nur EINE Ausfuehrung pro Run. Falls belegt, laufende
     # Ausfuehrung nicht stoeren, sondern sofort melden.
     run_lock = _get_run_lock(rid)
@@ -1270,6 +1293,8 @@ async def _run_workflow_dag_locked(
     async def _run_one(nid: str) -> None:
         node_started = time.perf_counter()
         node = node_map[nid]
+        if cancel_token is not None:
+            cancel_token.check()
         inc_edges = edge_map.get(nid, [])
         edge_by_src = {e["from"]: e for e in inc_edges}
         deps = _all_dependencies_for_node(node, inc_edges)
@@ -1527,6 +1552,10 @@ async def _run_workflow_dag_locked(
 
     # Event-gesteuerte Topologische Ready-Queue (kein globales Wave-Barrier-Warten)
     while pending or running_tasks:
+        if cancel_token is not None and cancel_token.cancelled:
+            for _t in running_tasks.values():
+                _t.cancel()
+            cancel_token.check()
         ready: List[str] = []
         skippable: List[str] = []
 

@@ -130,3 +130,49 @@ def api_dlq_replay(request: Request, payload: Dict = Body(...)):
 def api_dlq_list(status: Optional[str] = None):
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.list_dlq(status_filter=status)
+
+
+# ---------------------------------------------------------------------------
+# Shared Task Queue (attempt / idempotency_key / priority / CAS-Lease)
+# ---------------------------------------------------------------------------
+
+@router.post("/api/execution/queue/enqueue")
+def api_queue_enqueue(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)
+    from backend.dead_letter_queue import dead_letter_queue_manager
+    return dead_letter_queue_manager.enqueue_task(
+        job_type=payload.get("job_type", "generic"),
+        source_module=payload.get("source_module", "router"),
+        payload=payload.get("payload", {}),
+        priority=int(payload.get("priority", 0)),
+        idempotency_key=str(payload.get("idempotency_key", "") or ""),
+        max_retries=payload.get("max_retries"),
+    )
+
+
+@router.post("/api/execution/queue/claim")
+def api_queue_claim(request: Request, payload: Dict = Body(default={})):
+    require_admin_or_503(request)
+    from backend.dead_letter_queue import dead_letter_queue_manager
+    item = dead_letter_queue_manager.claim_next(
+        worker_id=str(payload.get("worker_id") or "api-worker"),
+        lease_seconds=int(payload.get("lease_seconds", 120)),
+        job_types=payload.get("job_types") or None,
+    )
+    return {"claimed": item is not None, "item": item}
+
+
+@router.post("/api/execution/queue/{dlq_id}/complete")
+def api_queue_complete(request: Request, dlq_id: str, payload: Dict = Body(default={})):
+    require_admin_or_503(request)
+    from backend.dead_letter_queue import dead_letter_queue_manager
+    return {"completed": dead_letter_queue_manager.complete(dlq_id, payload.get("result") or {})}
+
+
+@router.post("/api/execution/queue/{dlq_id}/fail")
+def api_queue_fail(request: Request, dlq_id: str, payload: Dict = Body(default={})):
+    require_admin_or_503(request)
+    from backend.dead_letter_queue import dead_letter_queue_manager
+    return dead_letter_queue_manager.fail(
+        dlq_id, str(payload.get("error_message") or "Worker-Fehler")
+    )

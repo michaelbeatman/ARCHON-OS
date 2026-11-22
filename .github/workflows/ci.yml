@@ -27,7 +27,10 @@ jobs:
           pip install pyyaml requests psutil
 
       - name: Pre-Flight Konfigurationsprüfung
-        run: python scripts/validate_config.py
+        run: python scripts/validate_config.py --strict
+
+      - name: Profil-SSOT Drift-Check
+        run: python scripts/sync_profile_ssot.py --check --allow-missing-hermes --json
 
       - name: Secrets- & Credential-Audit (Zero-Leak Gate)
         run: python scripts/audit_secrets.py --all

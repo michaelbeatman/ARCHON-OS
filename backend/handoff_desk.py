@@ -3,6 +3,11 @@ backend/handoff_desk.py
 Standardisierter Agent-to-Agent Handoff-Desk (Pillar 2).
 Erstellt bei Rollenübergaben (z. B. Researcher an Coder) ein formales Übergabe-Dokument
 mit Prüfsumme, Annahmen und Akzeptanzkriterien gegen Informationsverlust.
+
+Batch D/1+D/2: Vollständiges, typisiertes A2A-Envelope (message_id, reply_to,
+correlation_id, confidence, attachments) und validierte Annahme mit
+deterministischer Ergebnis-Kompression. Das *vollständige* Ergebnis bleibt
+immer in ``deliverables_json`` — die Kompression betrifft nur die Ansicht.
 """
 
 import os
@@ -11,6 +16,7 @@ import json
 import sqlite3
 import datetime
 import hashlib
+import secrets
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +25,49 @@ try:
     DB_PATH = _resolve_db("agentic_memory.db")
 except Exception:
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+
+# Rueckwaertskompatible Defaults fuer die A2A-Envelope-Spalten (Migration in
+# _init_db). Bestehende Zeilen behalten damit gueltige Werte.
+_A2A_COLUMNS = (
+    ("message_id", "TEXT DEFAULT ''"),
+    ("reply_to", "TEXT DEFAULT ''"),
+    ("correlation_id", "TEXT DEFAULT ''"),
+    ("confidence", "REAL DEFAULT 1.0"),
+    ("attachments_json", "TEXT DEFAULT '[]'"),
+)
+
+
+def _coerce_confidence(value: Any) -> float:
+    """Confidence ist immer eine Zahl in [0.0, 1.0]; Default 1.0."""
+    try:
+        conf = float(value)
+    except (TypeError, ValueError):
+        return 1.0
+    return max(0.0, min(1.0, conf))
+
+
+def summarize_for_handoff(text: Any, limit: int = 2000) -> str:
+    """Deterministische Kompression eines einzelnen Ergebnistextes.
+
+    ``backend/context_compactor.py`` verdichtet Konversationslisten
+    (``ContextCompactor.compact_messages``), bietet aber keinen Helfer für
+    einen einzelnen Ergebnistext. Diese Variante behält Kopf und Ende und
+    markiert die Auslassung explizit. Sie ist rein deterministisch, offline
+    und verliert nie die vollständige Fassung in der Datenbank: Aufrufer
+    speichern immer den ganzen Text in ``deliverables_json``.
+    """
+    raw = str(text or "")
+    if limit <= 0 or len(raw) <= limit:
+        return raw
+    marker = (
+        f"\n… [gekürzt: {len(raw) - limit} Zeichen; "
+        "vollständiges Ergebnis in deliverables_json] …\n"
+    )
+    budget = max(0, int(limit) - len(marker))
+    head = budget // 2
+    tail = budget - head
+    return raw[:head] + marker + (raw[-tail:] if tail else "")
+
 
 class HandoffDesk:
     def __init__(self, db_path: str = DB_PATH):
@@ -47,6 +96,11 @@ class HandoffDesk:
                     accepted_at TIMESTAMP
                 )
             """)
+            # Batch D/1: additive Migration — keine Zerstoerung bestehender Zeilen.
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(agent_handoffs)").fetchall()}
+            for col_name, col_decl in _A2A_COLUMNS:
+                if col_name not in cols:
+                    conn.execute(f"ALTER TABLE agent_handoffs ADD COLUMN {col_name} {col_decl}")
             conn.commit()
 
     def create_handoff(
@@ -55,18 +109,41 @@ class HandoffDesk:
         from_agent: str,
         to_agent: str,
         deliverables: Dict[str, Any],
-        acceptance_criteria: str
+        acceptance_criteria: str,
+        *,
+        message_id: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+        confidence: float = 1.0,
+        attachments: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Erzeugt ein manipulationssicheres Übergabe-Dokument."""
-        h_id = f"handoff-{datetime.datetime.now().strftime('%m%d%H%M%S')}"
-        deliv_str = json.dumps(deliverables, sort_keys=True, ensure_ascii=False)
+        """Erzeugt ein manipulationssicheres, typisiertes A2A-Übergabe-Dokument."""
+        # Sekunden-Stempel allein kollidiert bei mehreren Übergaben pro Sekunde.
+        h_id = f"handoff-{datetime.datetime.now().strftime('%m%d%H%M%S')}-{secrets.token_hex(3)}"
+        # Kopie statt Mutation des Aufrufers; altes Format hatte kein 'status'.
+        deliv = dict(deliverables or {})
+        deliv.setdefault("status", "unknown")
+        deliv["result"] = str(deliv.get("result") or "")
+        result_text = deliv["result"]
+        deliv_str = json.dumps(deliv, sort_keys=True, ensure_ascii=False)
         p_hash = hashlib.sha256(f"{task_id}:{from_agent}:{to_agent}:{deliv_str}".encode("utf-8")).hexdigest()
+
+        msg_id = str(message_id or f"msg-{secrets.token_hex(6)}")
+        corr_id = str(correlation_id or f"task:{task_id}")
+        reply = str(reply_to or "")
+        conf = _coerce_confidence(confidence)
+        att_json = json.dumps(list(attachments or []), sort_keys=True, ensure_ascii=False)
 
         with self._get_conn() as conn:
             conn.execute("""
-                INSERT INTO agent_handoffs (id, task_id, from_agent, to_agent, deliverables_json, acceptance_criteria, payload_hash, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_acceptance', CURRENT_TIMESTAMP)
-            """, (h_id, task_id, from_agent, to_agent, deliv_str, acceptance_criteria, p_hash))
+                INSERT INTO agent_handoffs (
+                    id, task_id, from_agent, to_agent, deliverables_json,
+                    acceptance_criteria, payload_hash, status, created_at,
+                    message_id, reply_to, correlation_id, confidence, attachments_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_acceptance', CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)
+            """, (h_id, task_id, from_agent, to_agent, deliv_str, acceptance_criteria,
+                  p_hash, msg_id, reply, corr_id, conf, att_json))
             conn.commit()
 
         return {
@@ -75,11 +152,18 @@ class HandoffDesk:
             "from_agent": from_agent,
             "to_agent": to_agent,
             "payload_hash": p_hash,
+            "message_id": msg_id,
+            "reply_to": reply,
+            "correlation_id": corr_id,
+            "confidence": conf,
+            "attachments": list(attachments or []),
+            # Batch D/2: kompakte Ansicht; das volle Ergebnis liegt in der DB.
+            "summary": summarize_for_handoff(result_text),
             "message": f"Übergabe von '{from_agent}' an '{to_agent}' protokolliert. Quittung ausstehend."
         }
 
     def accept_handoff(self, handoff_id: str, receiving_agent: str) -> Dict[str, Any]:
-        """Der Folge-Agent quittiert die fehlerfreie Übernahme."""
+        """Der Folge-Agent quittiert die fehlerfreie Übernahme (validiert)."""
         with self._get_conn() as conn:
             cur = conn.cursor()
             cur.execute("SELECT * FROM agent_handoffs WHERE id = ?", (handoff_id,))
@@ -90,6 +174,24 @@ class HandoffDesk:
             item = dict(row)
             if item["to_agent"] != receiving_agent and receiving_agent != "hermes-orchestrator":
                 return {"status": "error", "message": f"Agent {receiving_agent} ist nicht der autorisierte Empfänger."}
+
+            # Batch D/2: keine bedingungslose Annahme mehr. deliverables und
+            # Akzeptanzkriterien muessen vorhanden und nicht leer sein.
+            try:
+                deliverables = json.loads(item.get("deliverables_json") or "{}")
+            except (TypeError, ValueError):
+                deliverables = {}
+            if not isinstance(deliverables, dict):
+                deliverables = {}
+            result = str(deliverables.get("result") or "").strip()
+            status = str(deliverables.get("status") or "").strip()
+            if not result:
+                return {"status": "error", "message": f"Übergabe {handoff_id} enthält kein Ergebnis (deliverables.result leer)."}
+            if not status:
+                return {"status": "error", "message": f"Übergabe {handoff_id} enthält keinen Status (deliverables.status leer)."}
+            criteria = str(item.get("acceptance_criteria") or "").strip()
+            if not criteria:
+                return {"status": "error", "message": f"Übergabe {handoff_id} hat keine Akzeptanzkriterien."}
 
             conn.execute("""
                 UPDATE agent_handoffs
@@ -116,6 +218,21 @@ class HandoffDesk:
                 d["deliverables"] = json.loads(d["deliverables_json"])
             except Exception:
                 d["deliverables"] = {}
+            # Batch D/1: Anhaenge als Liste, nicht als rohen JSON-String.
+            try:
+                d["attachments"] = json.loads(d.get("attachments_json") or "[]")
+            except Exception:
+                d["attachments"] = []
+            if not isinstance(d["attachments"], list):
+                d["attachments"] = []
+            d["confidence"] = _coerce_confidence(d.get("confidence"))
+            d["message_id"] = str(d.get("message_id") or "")
+            d["reply_to"] = str(d.get("reply_to") or "")
+            d["correlation_id"] = str(d.get("correlation_id") or "")
+            # Batch D/2: kompakte Ansicht on demand, voller Text in deliverables.
+            d["summary"] = summarize_for_handoff(
+                (d.get("deliverables") or {}).get("result", "")
+            )
             return d
 
 handoff_desk = HandoffDesk()

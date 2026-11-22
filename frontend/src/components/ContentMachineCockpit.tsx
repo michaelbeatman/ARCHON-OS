@@ -9,6 +9,7 @@ import {
   ContentCampaign,
   ContentOverview,
 } from '@/lib/archon-api';
+import { buildMediaHandoffNote, readMediaHandoff } from '@/lib/content-flow';
 import {
   CheckCircle2,
   Clapperboard,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, string> = {
+  idea: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
   draft: 'bg-slate-800 text-slate-300 border-slate-700',
   review: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   approved: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
@@ -37,6 +39,7 @@ export function ContentMachineCockpit() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [mediaNotice, setMediaNotice] = useState<string | null>(null);
 
   // Campaign creation form
   const [title, setTitle] = useState('');
@@ -85,6 +88,19 @@ export function ContentMachineCockpit() {
   useEffect(() => {
     loadOverview();
   }, [loadOverview]);
+
+  // Media-Handoff aus dem Content Studio (/crm): `?media=<id[,id...]>` lesen
+  // und das Kampagnen-Formular vorausfuellen. Kein Next.js-Navigation-API noetig.
+  useEffect(() => {
+    const ids = readMediaHandoff(window.location.search);
+    if (ids.length === 0) return;
+    const note = buildMediaHandoffNote(ids);
+    setNotes((prev) =>
+      prev.includes(note) ? prev : prev.trim() ? `${prev.trim()}\n${note}` : note
+    );
+    setTopic((prev) => prev.trim() || `Media-Handoff: ${ids.join(', ')}`);
+    setMediaNotice(note);
+  }, []);
 
   const toggleChannel = (ch: string) => {
     setSelectedChannels((prev) =>
@@ -306,6 +322,22 @@ export function ContentMachineCockpit() {
         {error && (
           <div className="p-3 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-200 text-xs">
             {error}
+          </div>
+        )}
+
+        {mediaNotice && (
+          <div className="p-3 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-xs flex items-center justify-between gap-3">
+            <span>
+              {mediaNotice} — Quell-Notizen und Thema wurden vorausgefuellt.
+            </span>
+            <button
+              type="button"
+              onClick={() => setMediaNotice(null)}
+              className="px-2 py-0.5 rounded border border-violet-500/40 hover:bg-violet-500/20 shrink-0"
+              title="Hinweis schliessen"
+            >
+              ✕
+            </button>
           </div>
         )}
 
@@ -550,6 +582,7 @@ export function ContentMachineCockpit() {
                 className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800"
               >
                 <option value="all">Alle Status</option>
+                <option value="idea">Idee (CRM-Intake)</option>
                 <option value="draft">Entwurf</option>
                 <option value="review">In Review (HITL)</option>
                 <option value="approved">Freigegeben</option>

@@ -31,9 +31,17 @@ from archon.core.mission_control import (
 from archon.core.orchestration import _fan_in_maybe_start_synthesis, _run_synthesis_cascade
 from archon.core.profiles import api_get_hermes_profiles
 from archon.core.paths import OPT_DATA_DIR
-from archon.core.runtime import WORKSPACE_DIR, broadcast_event, logger
+from archon.core.runtime import (
+    WORKSPACE_DIR,
+    broadcast_event,
+    subscribe_events,
+    unsubscribe_events,
+    logger,
+)
 from archon.core.state_db import _get_state_db
 from backend.platform_paths import OBSIDIAN_VAULT, PROJEKTE_DIR
+# Batch D/4: Supervisor-Rollover aus der Org-Hierarchie (links bleiben SSOT).
+from backend.supervisor_rollover import resolve_supervisor, on_supervisor_failure
 
 _DEPS: Dict[str, Any] = {}
 
@@ -206,6 +214,87 @@ def _check_delegation_permission(delegator_id: str, target_id: str):
         return False, (f"LEAD '{delegator_id}' (Team {d.get('team_id')}) darf nur an das eigene Team delegieren — "
                        f"'{target_id}' gehört zu Team {(t or {}).get('team_id', 'unbekannt')}.")
     return False, f"Spezialist '{delegator_id}' (Tier 3) darf nicht delegieren. Bitte beim eigenen LEAD eskalieren."
+
+
+# Batch D/1: Task -> Handoff-ID, damit verkettete Delegationen reply_to setzen koennen.
+_HANDOFF_IDS_BY_TASK: Dict[str, str] = {}
+
+
+def _resolve_handoff_criteria(criteria: Optional[str], prof_id: str, task_id: str) -> str:
+    """Batch D/2: explizite Akzeptanzkriterien aus dem Delegations-Payload.
+
+    Fehlt ``payload.get("acceptance_criteria")``, bleibt der generische
+    Fallback erhalten — jetzt aber explizit benannt und niemals leer.
+    """
+    explicit = str(criteria or "").strip()
+    if explicit:
+        return explicit
+    return (
+        f"Ergebnis von @{prof_id} fuer Task {task_id} fachlich pruefen; "
+        "Status, Artefakte und Quittung im Kanban/Obsidian gegennehmen."
+    )
+
+
+def _delegation_eval_gate_config() -> Dict[str, Any]:
+    """Batch D/3: Konfigurationsblock ``delegation`` (require_eval_gate)."""
+    try:
+        from backend.autonomy_settings import get_module_config
+        return get_module_config("delegation") or {}
+    except Exception:
+        return {}
+
+
+def _check_delegation_eval_gate(ziel: str, t_prof: Optional[Dict[str, Any]]) -> Tuple[bool, str]:
+    """Batch D/3: Eval-/Promotion-Gate vor dem Dispatch.
+
+    Aktiv nur bei Profil-Flag ``require_eval_gate`` oder dem globalen
+    Config-Flag ``delegation.require_eval_gate``. Ohne Gate bleibt das
+    Verhalten unveraendert. Konsultiert werden ausschliesslich persistierte
+    Eval-Ergebnisse und die Scorecard — ein neuer LLM-Lauf gehoert nicht in
+    den Dispatch-Pfad. Unzureichende Daten fuehren fail-closed zur Ablehnung;
+    es wird nie eine Erfolgsquote erfunden.
+    """
+    cfg = _delegation_eval_gate_config()
+    if not (bool((t_prof or {}).get("require_eval_gate")) or bool(cfg.get("require_eval_gate"))):
+        return True, ""
+    try:
+        min_score = float(cfg.get("min_eval_score") or (t_prof or {}).get("min_eval_score") or 70.0)
+    except (TypeError, ValueError):
+        min_score = 70.0
+
+    try:
+        from backend.eval_gates import list_eval_runs
+        runs = list_eval_runs(target_id=ziel, limit=1) or []
+    except Exception as exc:
+        logger.warning(f"[Delegation] Eval-Gate nicht lesbar fuer {ziel}: {exc}")
+        return False, "Eval-Gate-Daten nicht verfuegbar (Ablehnung aus Sicherheitsgruenden)."
+    if runs:
+        latest = runs[0]
+        if bool(latest.get("passed")) and float(latest.get("overall_score") or 0.0) >= min_score:
+            return True, ""
+        return False, (
+            f"letzter Eval-Lauf {latest.get('eval_id', '?')} nicht bestanden "
+            f"({latest.get('overall_score')}/{min_score})."
+        )
+
+    try:
+        from backend.agent_scorecard_engine import agent_scorecard_engine
+        sc = agent_scorecard_engine.get_scorecard(ziel) or {}
+    except Exception as exc:
+        logger.warning(f"[Delegation] Scorecard nicht lesbar fuer {ziel}: {exc}")
+        return False, "Keine Eval-Daten und keine Scorecard verfuegbar."
+    if not sc.get("data_sufficient"):
+        return False, "Keine Eval-Daten und unzureichende Scorecard-Daten (data_sufficient=false)."
+    rate = sc.get("success_rate")
+    if rate is None:
+        return False, "Scorecard liefert keine belegte Erfolgsquote (success_rate=None)."
+    try:
+        rate_f = float(rate)
+    except (TypeError, ValueError):
+        return False, "Scorecard-Erfolgsquote nicht lesbar."
+    if rate_f < min_score:
+        return False, f"Scorecard-Erfolgsquote {rate_f}% unter Schwelle {min_score}%."
+    return True, ""
 
 
 DELEGATION_ALIAS_MAP = {
@@ -548,6 +637,49 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
 
 _ACTIVE_WATCHERS: set[str] = set()
 
+# Terminale Kanban-Status (auf die ein Delegations-Watcher wartet).
+_TERMINAL_TASK_STATUSES = ("done", "blocked", "review", "failed")
+
+
+def _poll_kanban_row(task_id: str):
+    """Einzelner Kanban-DB-Read fuer den Watcher.
+
+    Modul-Ebene statt Closure, damit der Safety-Poll in Tests ersetzt werden
+    kann und nicht auf echte DB/Netzwerk zugreifen muss.
+    """
+    from backend.operations_api import _get_kanban_connection as _kgc
+    kc = _kgc()
+    try:
+        return kc.execute("SELECT status, result, title FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    finally:
+        kc.close()
+
+
+def _enqueue_delegation_failure(task_id: str, prof_id: str, status: str, result: str) -> Dict[str, Any]:
+    """Fehlgeschlagene Delegation in die Shared Queue stellen (idempotent).
+
+    Die Queue übernimmt damit attempt/dead_letter/priority für Aufträge, die
+    bisher als Kanban-Ad-hoc-Eintrag endeten. Ein Fehler hier darf die
+    Statusmeldung an den Delegator nicht verhindern.
+    """
+    try:
+        from backend.dead_letter_queue import dead_letter_queue_manager
+        return dead_letter_queue_manager.enqueue_task(
+            job_type="delegation_result",
+            source_module="archon.core.delegation",
+            payload={
+                "task_id": str(task_id),
+                "agent_id": str(prof_id or ""),
+                "status": str(status),
+                "result": str(result or "")[:2000],
+            },
+            priority=2,
+            idempotency_key=f"delegation-result:{task_id}:{status}",
+        )
+    except Exception as exc:
+        logger.debug(f"[Delegation] Shared-Queue-Enqueue fehlgeschlagen: {exc}")
+        return {"queued": False, "error": str(exc)}
+
 
 async def _watch_delegated_task(
     task_id: str,
@@ -556,6 +688,8 @@ async def _watch_delegated_task(
     origin_sess_id: Optional[str] = None,
     orig_delegator: Optional[str] = None,
     parent_pid: Optional[str] = None,
+    acceptance_criteria: Optional[str] = None,
+    reply_to: Optional[str] = None,
 ) -> None:
     """Beobachtet den Kanban-Task, während der Hermes-Agent-Worker ihn abarbeitet,
     und spiegelt das Endergebnis in die Sub-Session (Rücklauf ohne Doppel-Ausführung)."""
@@ -566,32 +700,125 @@ async def _watch_delegated_task(
         from utils.path_jail import safe_filename, safe_identifier, safe_path_within
 
         clean_tid = safe_identifier(task_id, "task_id")
-        deadline = time.time() + 1200  # max 20 Minuten beobachten
-        final = None
-        def _poll_kanban_row():
-            from backend.operations_api import _get_kanban_connection as _kgc
-            kc = _kgc()
-            try:
-                return kc.execute("SELECT status, result, title FROM tasks WHERE id = ?", (task_id,)).fetchone()
-            finally:
-                kc.close()
 
-        while time.time() < deadline:
+        # Batch B/8: Event-Push statt Polling. Persistierte Konfiguration mit
+        # rueckwaertskompatiblen Defaults des alten Watchdogs.
+        try:
+            from backend.autonomy_settings import get_module_config
+            cfg = get_module_config("delegation") or {}
+        except Exception:
+            cfg = {}
+
+        def _cfg_number(key: str, default: float, cast) -> float:
             try:
-                row = await asyncio.to_thread(_poll_kanban_row)
-                if row and row[0] in ("done", "blocked", "review", "failed"):
-                    final = row
-                    break
+                value = cast(cfg.get(key, default))
+            except (TypeError, ValueError):
+                return default
+            return value if value > 0 else default
+
+        deadline_seconds = _cfg_number("watcher_deadline_seconds", 1200, float)
+        fallback_poll_seconds = _cfg_number("watcher_fallback_poll_seconds", 60, float)
+        retry_count = int(_cfg_number("watcher_retry_count", 3, float))
+
+        deadline = time.time() + deadline_seconds
+        final = None
+        poll_retries = 0
+
+        async def _safety_poll():
+            """Ein DB-Read als Fallback fuer verpasste Events; liefert Zeile oder None."""
+            try:
+                row = await asyncio.to_thread(_poll_kanban_row, task_id)
+                if row and row[0] in _TERMINAL_TASK_STATUSES:
+                    return row
             except Exception as poll_err:
                 logger.debug(f"[Delegation] Kanban-Poll fuer {task_id} fehlgeschlagen: {poll_err}")
-            await asyncio.sleep(10)
+            return None
+
+        # Einmal abonnieren, ueber die gesamte Laufzeit warten, immer abmelden.
+        events = subscribe_events()
+        try:
+            while time.time() < deadline:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                try:
+                    payload = await asyncio.wait_for(
+                        events.get(), timeout=min(fallback_poll_seconds, remaining)
+                    )
+                except asyncio.TimeoutError:
+                    # Safety-Poll: ein verpasstes Event darf den Watcher nicht
+                    # bis zum Deadline blockieren.
+                    row = await _safety_poll()
+                    if row is not None:
+                        final = row
+                        break
+                    poll_retries += 1
+                    if poll_retries > retry_count:
+                        logger.warning(
+                            f"[Delegation] Watcher {task_id}: {poll_retries} Safety-Polls "
+                            f"ohne Endstatus (Toleranz {retry_count}) — warte weiter bis zum Deadline."
+                        )
+                    continue
+
+                # Nur kanban_updated mit passender task_id und terminalem Status.
+                try:
+                    event = json.loads(payload) if isinstance(payload, str) else payload
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(event, dict) or event.get("type") != "kanban_updated":
+                    continue
+                data = event.get("data") or {}
+                if not isinstance(data, dict):
+                    continue
+                if str(data.get("task_id") or "") != str(task_id):
+                    continue
+                to_status = str(data.get("to") or data.get("status") or "").strip().lower()
+                if to_status not in _TERMINAL_TASK_STATUSES:
+                    continue
+
+                # Genau EIN DB-Read bei passendem Terminal-Event.
+                row = await _safety_poll()
+                if row is not None:
+                    final = row
+                    break
+                logger.debug(
+                    f"[Delegation] Terminal-Event fuer {task_id} ({to_status}), "
+                    "Kanban-Zeile noch nicht terminal — warte weiter."
+                )
+        finally:
+            unsubscribe_events(events)
+
         if final is None:
+            timeout_text = (
+                f"{deadline_seconds / 60:g} Minuten" if deadline_seconds >= 60
+                else f"{deadline_seconds:g} Sekunden"
+            )
             _save_message_to_db(s_id, "assistant",
-                "⏱️ DELEGATION-TIMEOUT — Der Task läuft länger als 20 Minuten ohne Endstatus. "
+                f"⏱️ DELEGATION-TIMEOUT — Der Task läuft länger als {timeout_text} ohne Endstatus. "
                 "Aktueller Stand bitte im Kanban prüfen (Task-ID siehe Delegations-Quittung).")
             return
         status, result = final[0], (final[1] or "").strip()
         final_title = (final[2] or "").strip()
+
+        # Batch D/4: Supervisor-Rollover bei blockierten/fehlgeschlagenen Tasks.
+        supervisor_hint = ""
+        if status in ("blocked", "failed"):
+            try:
+                _current_supervisor = resolve_supervisor(str(prof_id))
+                _rollover = on_supervisor_failure(
+                    str(prof_id), _current_supervisor, reason=str(status)
+                )
+                _new_supervisor = str(_rollover.get("new_supervisor") or _current_supervisor)
+                supervisor_hint = (
+                    f"\n\n**Supervisor-Rollover:** @{_new_supervisor} "
+                    f"(Kette: {', '.join(_rollover.get('chain') or []) or _new_supervisor})"
+                )
+                logger.info(
+                    f"[Delegation] Rollover fuer {prof_id}: {_current_supervisor} -> {_new_supervisor} ({status})"
+                )
+            except Exception as rollover_exc:
+                logger.debug(f"[Delegation] Supervisor-Rollover fehlgeschlagen: {rollover_exc}")
+
         if not result:
             try:
                 from backend.operations_api import _get_kanban_connection as _kgc2
@@ -618,6 +845,7 @@ async def _watch_delegated_task(
         except OSError as att_exc:
             logger.debug(f"[Delegation] Anhangsverzeichnis fuer {task_id} nicht lesbar: {att_exc}")
         obsidian_rel = None
+        proj_folder = None  # Batch D/1: Artefaktpfad fuer das A2A-Envelope.
         try:
             title = (final_title or "Delegation")[:80]
             slug = re.sub(r"[^a-zA-Z0-9]+", "-", title.lower()).strip("-")[:50] or "auftrag"
@@ -707,10 +935,15 @@ async def _watch_delegated_task(
             msg = ("🔍 DELEGATION IN REVIEW — Das Ergebnis liegt zur Prüfung bereit.\n\n"
                    f"**Ergebnis:**\n{result or '(siehe Kanban-Task)'}{attach_note}\n\nTask-ID: {task_id}")
         else:
+            # Shared Queue: blockierte/failed Delegations werden mit attempt,
+            # Idempotency-Key und Priorität weiterverarbeitet statt als
+            # Kanban-Ad-hoc-Eintrag zu enden.
+            _enqueue_delegation_failure(task_id, prof_id, status, result)
             msg = ("⛔ DELEGATION BLOCKIERT — Der Sub-Agent konnte die Aufgabe nicht abschließen.\n\n"
                    f"**Grund/Eskalation:**\n{result or 'Siehe Task-Events im Kanban (Kommentare des Agenten).'}{attach_note}\n\n"
                    f"Task-ID: {task_id} | Ggf. Kontextdaten nachliefern oder Aufgabe umformulieren."
                    + (f"\n📁 Dokumentation: `01_PROJEKTE/{obsidian_rel}`" if obsidian_rel else ""))
+        msg += supervisor_hint
         _save_message_to_db(s_id, "assistant", msg)
 
         if origin_sess_id and origin_sess_id != s_id:
@@ -722,6 +955,15 @@ async def _watch_delegated_task(
                 handoff_id = ""
                 try:
                     from backend.handoff_desk import handoff_desk
+                    # Batch D/1: vollständiges, typisiertes A2A-Envelope.
+                    _status_key = str(status).strip().lower()
+                    _confidence = 1.0 if _status_key == "done" else (0.6 if _status_key == "review" else 0.0)
+                    _attachments = [
+                        p for p in (
+                            str(obsidian_rel or ""),
+                            str(proj_folder or ""),
+                        ) if p
+                    ]
                     envelope = handoff_desk.create_handoff(
                         task_id=str(task_id),
                         from_agent=str(prof_id or "unknown"),
@@ -731,11 +973,17 @@ async def _watch_delegated_task(
                             "status": str(status),
                             "artifact_path": str(obsidian_rel or ""),
                         },
-                        acceptance_criteria=(
-                            f"Ergebnis von @{prof_id} fuer Task {task_id} fachlich pruefen."
+                        acceptance_criteria=_resolve_handoff_criteria(
+                            acceptance_criteria, prof_id, task_id
                         ),
+                        message_id=f"msg-{secrets.token_hex(6)}",
+                        correlation_id=f"task:{task_id}",
+                        reply_to=str(reply_to or _HANDOFF_IDS_BY_TASK.get(str(parent_pid or ""), "")),
+                        confidence=_confidence,
+                        attachments=_attachments,
                     )
                     handoff_id = str(envelope.get("handoff_id") or "")
+                    _HANDOFF_IDS_BY_TASK[str(task_id)] = handoff_id
                 except Exception as he:
                     logger.debug(f"[Delegation] Handoff-Envelope nicht angelegt: {he}")
 
@@ -745,6 +993,7 @@ async def _watch_delegated_task(
                     f"**Ergebnis:**\n{result or '(Ergebnis liegt im Projektordner/Kanban)'}\n"
                     f"{attach_note}\n\n"
                     f"*(Status im Kanban: `{status}`)*"
+                    f"{supervisor_hint}"
                 )
                 # K-5: Das Ergebnis eines Sub-Agenten ist KEINE User-Aussage.
                 # Vorher role='user' → Taint-/HITL-/Audit-Logik sah einen
@@ -843,7 +1092,11 @@ async def resume_pending_delegation_watchers() -> int:
             tgt_sess = meta.get("tgt_session_id") or f"sub_{delegator}_{assignee}_{tid}"
             origin_sess = meta.get("origin_session_id") or None
             _spawn_background(
-                _watch_delegated_task(tid, tgt_sess, assignee or "default", origin_sess, delegator, project_id or None),
+                _watch_delegated_task(
+                    tid, tgt_sess, assignee or "default", origin_sess, delegator, project_id or None,
+                    acceptance_criteria=meta.get("acceptance_criteria"),
+                    reply_to=meta.get("reply_to"),
+                ),
                 name=f"bg_watch_{tid}",
             )
             restarted += 1
@@ -863,6 +1116,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     modell = str(payload.get("modell") or payload.get("model") or "").strip()
     prioritaet = str(payload.get("prioritaet") or "normal").strip().lower()
     reasoning_lvl = str(payload.get("reasoning_level") or payload.get("reasoning") or "medium").strip().lower()
+    # Batch D/2: explizite Akzeptanzkriterien aus dem Delegations-Payload.
+    acceptance_criteria = str(payload.get("acceptance_criteria") or "").strip()
+    reply_to = str(payload.get("reply_to") or "").strip()
 
     profiles = api_get_hermes_profiles()
     ziel, resolve_note = _resolve_target_agent_id(ziel_raw, profiles)
@@ -871,7 +1127,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
 
     allowed, reason = _check_delegation_permission(delegator_id, ziel)
     if not allowed:
-        return f"❌ DELEGATION ABGELEHNT — Ziel: {ziel} ({ziel_raw}) | Grund: {reason}"
+        # Batch D/4: Eskalationshinweis aus der live aufgeloesten Hierarchie.
+        return (f"❌ DELEGATION ABGELEHNT — Ziel: {ziel} ({ziel_raw}) | Grund: {reason} | "
+                f"Eskalation an @{resolve_supervisor(ziel)}.")
 
     t_prof = next((p for p in profiles if p["id"] == ziel), None)
     if not t_prof:
@@ -879,6 +1137,13 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     d_prof = next((p for p in profiles if p["id"] == delegator_id), None)
     t_name = (t_prof.get("person_name") or t_prof.get("name") or ziel)
     d_name = (d_prof.get("person_name") or d_prof.get("name") or delegator_id) if d_prof else delegator_id
+
+    # Batch D/3: Eval-/Promotion-Gate vor dem Dispatch (nur wenn konfiguriert).
+    gate_ok, gate_reason = _check_delegation_eval_gate(ziel, t_prof)
+    if not gate_ok:
+        logger.warning(f"[Delegation] Eval-Gate blockiert Delegation an {ziel}: {gate_reason}")
+        return f"❌ DELEGATION ABGELEHNT — Eval-/Promotion-Gate für {ziel} nicht bestanden: {gate_reason}"
+
     # 3. Compute-optimierte Modell-Zuweisung für den Ziel-Agenten:
     # Verhindert, dass Subagenten unreflektiert teure Flaggschiff-Modelle (wie Opus) erben.
     if not modell:
@@ -903,6 +1168,21 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     )
     isolated_scope = resolve_isolated_execution_scope(ziel, requested_model=t_model, profiles=profiles)
     isolation_header = build_isolated_system_prompt_header(isolated_scope)
+
+    # Batch C: Memory-Scope-Bindung pro Delegation. Sub-Agents operieren
+    # standardmäßig im Projekt-Scope; der Delegator steht in der ACL und darf
+    # die Ergebnisse mitlesen. TTL verhindert unbeschränktes Wachstum.
+    try:
+        from backend.core_memory_manager import SCOPE_PROJECT, normalize_scope
+        memory_scope = normalize_scope(str(payload.get("memory_scope") or SCOPE_PROJECT))
+    except Exception:
+        memory_scope = "project"
+    memory_acl = [str(delegator_id)] if delegator_id else []
+    memory_ttl_seconds = 86400
+    isolation_header += (
+        f"\nMEMORY_SCOPE: {memory_scope} | ACL: {','.join(memory_acl) or '-'} "
+        f"| TTL_SECONDS: {memory_ttl_seconds}"
+    )
 
     tgt_sess = f"mc_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{ziel}_{secrets.token_hex(3)}"
     msg_text = f"{isolation_header}\nMessage from 🤖 {d_name} (@{delegator_id}): {auftrag}"
@@ -957,6 +1237,11 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     "isolated": True,
                     "allowed_tools": isolated_scope["allowed_tools"],
                     "allowed_skills": isolated_scope["allowed_skills"],
+                    "memory_scope": memory_scope,
+                    "memory_acl": memory_acl,
+                    "memory_ttl_seconds": memory_ttl_seconds,
+                    "acceptance_criteria": acceptance_criteria,
+                    "reply_to": reply_to,
                 }), now_iso)
             )
             kconn.commit()
@@ -1002,8 +1287,15 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             logger.warning(f"[Delegation] Fan-in-Anbindung fehlgeschlagen: {fan_err}")
 
     if task_id:
-        _spawn_background(_watch_delegated_task(task_id, tgt_sess, ziel, origin_session_id, delegator_id, parent_pid), name=f"bg_watch_{task_id}")
+        _spawn_background(
+            _watch_delegated_task(
+                task_id, tgt_sess, ziel, origin_session_id, delegator_id, parent_pid,
+                acceptance_criteria=acceptance_criteria, reply_to=reply_to,
+            ),
+            name=f"bg_watch_{task_id}",
+        )
     resolve_str = f" [aufgelöst von '{ziel_raw}']" if ziel_raw and ziel_raw != ziel else ""
     return (f"✅ DELEGATION QUITTUNG — Ziel: {ziel} ({t_name}{resolve_str}) | Kanban-Task: {task_id or 'n/a'} | "
             f"Sub-Session: {tgt_sess} | Modell (Empfehlung): {t_model} | "
-            f"Ausführung: Hermes-Agent-Worker | Ergebnis erscheint im Kanban und wird automatisch in die Sub-Session gespiegelt.")
+            f"Ausführung: Hermes-Agent-Worker | Ergebnis erscheint im Kanban und wird automatisch in die Sub-Session gespiegelt."
+            f" | Eskalation: @{resolve_supervisor(ziel)}")

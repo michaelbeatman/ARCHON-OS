@@ -34,6 +34,13 @@ from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional, Tuple
 
 import research_engine as base
+# Batch C: konservative Rechte-Metadaten fuer jede Research-Quelle.
+from backend.research_sources import (
+    apply_rights_defaults,
+    rights_from_html,
+    DEFAULT_LICENSE,
+    DEFAULT_RIGHTS,
+)
 
 OMNIROUTE_URL = os.environ.get("OMNIROUTE_URL", "http://omniroute:20128/v1")
 OMNIROUTE_KEY = os.environ.get("OMNIROUTE_API_KEY", "sk-archon")
@@ -41,6 +48,11 @@ OMNIROUTE_KEY = os.environ.get("OMNIROUTE_API_KEY", "sk-archon")
 USER_AGENT = "Mozilla/5.0 (ArchonOS ResearchEngine v2)"
 MAX_PAGE_BYTES = 1_500_000
 BLOCKED_HOSTS = ("localhost", "127.0.0.1", "0.0.0.0", "169.254.", "10.", "192.168.", "172.16.")
+
+# Batch C: gebundener Cache mit Rechte-Metadaten aus bereits geladenen Seiten.
+# Greift nur auf HTML zu, das der lokale Scraper ohnehin heruntergeladen hat.
+_RIGHTS_META_CACHE: Dict[str, Dict[str, Any]] = {}
+_RIGHTS_CACHE_MAX = 256
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +198,10 @@ def scrape_local(url: str, timeout: int = 15) -> str:
         except Exception:
             return ""
     html = raw.decode("utf-8", errors="ignore")
+    # Batch C: Rechte-Metadaten aus dem bereits geladenen HTML ziehen.
+    if len(_RIGHTS_META_CACHE) >= _RIGHTS_CACHE_MAX:
+        _RIGHTS_META_CACHE.clear()
+    _RIGHTS_META_CACHE[url] = rights_from_html(html)
     ex = _TextExtractor()
     ex.feed(html)
     text = "".join(ex.parts)
@@ -353,6 +369,8 @@ def _clean(raw: List[Dict[str, Any]], seen: set) -> Tuple[List[Dict[str, Any]], 
             blocked += 1
             continue
         s["is_safe"] = chk.get("is_safe", True)
+        # Batch C: jede Quelle bekommt explizite, konservative Rechte-Schluessel.
+        apply_rights_defaults(s)
         kept.append(s)
     return kept, blocked
 
@@ -375,6 +393,21 @@ def _enrich(sources: List[Dict[str, Any]], query: str, max_pages: int, providers
             continue
         s["snippet"] = excerpt
         s["scraped_with"] = prov
+        # Batch C: gefundene Metadaten auf die Quelle anwenden. Ohne explizite
+        # Angabe bleibt es bei den konservativen Defaults aus _clean().
+        rights_meta = _RIGHTS_META_CACHE.get(s["url"])
+        if rights_meta:
+            s["license"] = rights_meta.get("license", DEFAULT_LICENSE)
+            s["rights"] = rights_meta.get("rights", DEFAULT_RIGHTS)
+            s["rights_status"] = rights_meta.get("rights_status", "unknown")
+            s["license_declared"] = bool(rights_meta.get("license_declared"))
+        elif prov == "jina":
+            # Jina liefert Markdown; nur explizit beschriftete Zeilen uebernehmen.
+            m = re.search(r"(?im)^\s*(?:license|lizenz)\s*:\s*(.{2,120})$", text)
+            if m:
+                s["license"] = m.group(1).strip()
+                s["rights_status"] = "declared"
+                s["license_declared"] = True
         enriched += 1
     return enriched
 
@@ -468,6 +501,61 @@ def run_research_mission_v2(
         "synthesis": synth.get("synthesis", ""),
         "sources": ordered,
     }
+
+
+def save_dossier_for_result(
+    result: Dict[str, Any],
+    query: str,
+    *,
+    profile: str = "deep",
+    model: str = "omniroute/free-forever",
+    agent_role: str = "Lead Research Analyst",
+    engines: Optional[List[str]] = None,
+    vault_path: str = os.environ.get("ARCHON_OBSIDIAN_DIR", "./obsidian_vault"),
+    workspace_dir: str = "/app/agent_workspace",
+    export_obsidian: bool = False,
+) -> str:
+    """Batch D: schreibt zu einem run_research_mission_v2()-Ergebnis ein Dossier.
+
+    Nutzt exakt denselben Pfad wie run_research_mission_reflect(), naemlich
+    base.build_and_save_dossier(). Gibt den Dossier-Dateipfad zurueck oder ''
+    bei leerer Evidenz/Fehlern (Graceful Degradation, kein Netzwerk, kein Crash).
+    """
+    if not isinstance(result, dict) or result.get("status") == "no_evidence":
+        return ""
+    sources = result.get("sources") or []
+    if not sources:
+        return ""
+    try:
+        synthesis = str(result.get("synthesis") or "")
+        val_gate = base.validate_ai_output(f"Recherche: {query}", synthesis, min_score=6)
+        domains = set(
+            s.get("domain", "") for s in sources
+            if isinstance(s, dict) and s.get("domain") and not s.get("ai_generated")
+        )
+        out = base.build_and_save_dossier(
+            start_time=time.time(), query=query, profile=profile, model=model,
+            model_actual=str(result.get("model") or model), agent_actual=agent_role,
+            active_engines=engines or ["duckduckgo", "grokipedia", "wikipedia", "arxiv"],
+            cleaned_sources=sources, unique_domains=domains,
+            triangulation_verdict=str(
+                result.get("triangulation_verdict") or result.get("verdict") or ""
+            ),
+            triangulation_score=int(result.get("triangulation_score") or 0),
+            val_gate=val_gate, synthesis_markdown=synthesis,
+            blocked_snippets=int(result.get("blocked_snippets") or 0),
+            vault_path=vault_path, workspace_dir=workspace_dir,
+            export_obsidian=export_obsidian,
+            extra_meta="- **Modus:** Dossier aus dem DAG-Research-Knoten\n",
+        )
+        if not isinstance(out, dict):
+            return ""
+        return str(out.get("local_path") or out.get("obsidian_path") or "")
+    except Exception as exc:
+        _archon_exc_logger.debug(
+            "[research_engine_v2] Dossier konnte nicht gespeichert werden: %s", exc
+        )
+        return ""
 
 
 def run_research_mission_reflect(

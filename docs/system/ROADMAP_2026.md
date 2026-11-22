@@ -96,6 +96,11 @@
 | **106** | **SQLite-Datenbank-Konsolidierung (`28 → 3` Domänen-DBs)** | Kritisch | Abgeschlossen | Zusammenführung von 28 SQLite-Dateien in `ops.db`, `business.db` & `memory.db` inkl. Mandanten- & Backup-Integration (`backend/db_consolidation.py`, `backend/db_paths.py`) |
 | **107** | **Multi-Channel Content-Maschine v1 & v2 (LinkedIn, YouTube, TikTok, X)** | Sehr hoch | Abgeschlossen | Repurposing-DAG, Anti-AI-Slop-Quality-Gate, Quellen-Ingestion (URL/Obsidian/Transkript), 9:16-Clip-Matrix & Publishing-Bridge (`backend/content_machine.py`) |
 | **108** | **Next.js 16 UI-Konsolidierung auf Archon FastAPI** | Hoch | Abgeschlossen | Direkter FastAPI-Proxy (`/api/archon/[...path]`) ohne PocketBase-Zwang für `/content-studio`, `/workflows` und `/cockpit` (`frontend/`) |
+| **109** | **Code Mode (M109a Deferred Discovery → M109b Isolierte Sandbox)** | Hoch | Geplant | Token-Reduktion für ~200+ Endpunkte: erst Deferred Catalog (`search`/`describe`/`call` über `tool_runtime.py`), danach optional isolierte Sandbox mit Capability-Broker |
+| **110** | **Execution Hardening: Idempotency, Effect-Ledger, Leases & Plan-Validator** | Sehr hoch | Geplant | Stabile Harness-Idempotency-Keys, `PENDING→COMMITTED/FAILED/UNKNOWN` Effect-Ledger, DAG-Leases/Heartbeats, Pre-Run-Validator & `replan_count`-Deckel |
+| **111** | **Isolation & Resilience: Bulkheads, Tool-Output-Caps, Circuit-Breaker & Queues** | Hoch | Geplant | Getrennte Scheduling-Klassen (Chat vs. Background vs. DAG), Tool-Output-Größenlimits vor Kontext-Injektion, Provider-Circuit-Breaker & Backpressure |
+| **112** | **OTel GenAI Tracing & Trace-to-Eval-Pipeline** | Hoch | Geplant | Durchgängige `trace_id` (Gateway → `LLMKernel` → Tools → DAG) mit PII-Redaktion, Kosten/Latenz und 1-Klick-Export in `backend/eval_gates.py` |
+| **113** | **Content-Maschine Safety & Lifecycle: Brand-Safety-Pass, Kill-Switch & Asset-Retirement** | Sehr hoch | Geplant | Dedizierter Legal/Brand-Safety-Second-Pass vor Publish, zentraler Kill-Switch + Plattform-Caps, Asset-Rückzug/Update, 30-Tage-Derivate & Crop-vs-Gen |
 
 ---
 
@@ -684,6 +689,39 @@
 - **Umgesetzte Architektur:**
   - Server-seitiger Proxy `frontend/src/app/api/archon/[...path]/route.ts` und typisierter Client `frontend/src/lib/archon-api.ts`.
   - Neue Arbeitsplätze: `/content-studio` (`ContentMachineCockpit.tsx`), `/workflows` (`WorkflowDagCockpit.tsx`) und `/cockpit` (`ExecutiveCockpit.tsx` für Health, 28→3 DB-Status, Kanban, HITL-Freigaben, DAG-Runs, Content-Pipeline & CRM).
+
+### Meilenstein 109: Code Mode — Token-Effizienz ohne Sicherheitsverlust (Geplant)
+- **Ausgangslage / Ziel:** ~180–250 REST-Endpunkte + MCP-Tools verbrauchen als vollständige JSON-Schemas im Kontext der 70 Spezialisten unnötig viele Tokens.
+- **Zweistufige Ziel-Architektur:**
+  - **M109a (Deferred Tool/Endpoint Discovery):** 3 schlanke Meta-Tools (`search_capabilities`, `describe_capability`, `call_capability`) über `backend/tool_runtime.py` (~800–1.000 Token Footprint) unter Beibehaltung von JSON-Schema-Typing, M75/M89/M90 und RBAC.
+  - **M109b (Isolierte Code-Sandbox + Capability-Broker):** Erst nach vollständiger Härtung von M75/M89/M90 und ausschließlich in echter Prozess-/Wasm-Isolation (kein FS/Env, `network_mode: none`), gekoppelt an einen Capability-Broker (Method+Path-Allowlist, Secret-Masking auf Write-Payloads, Code-Review-Pflicht via `PreDecision` für `write`/`destructive`).
+
+### Meilenstein 110: Execution Hardening — Idempotency, Effect-Ledger, Leases & Plan-Validator (Geplant)
+- **Ziel:** Verhindern von Doppel-Effekten (z. B. doppelte E-Mails, Posts, Zahlungen) bei Timeouts/Restarts sowie deterministische DAG-Prüfung vor dem Start.
+- **Kernbausteine:**
+  - Harness-generierte Idempotency-Keys (`task_id:step_id:tool`) stabil über Retries (nie vom LLM erzeugt).
+  - Effect-Ledger mit `PENDING → COMMITTED / FAILED / UNKNOWN` inkl. verpflichtender Reconciliation vor Retry nach `UNKNOWN`.
+  - Pre-Execution Plan Validator (Zyklen, Schema, Input-Mapping, Budget, Deadline, RBAC, HITL-Pflicht) + harter `replan_count`-Deckel + Worker-Leases/Heartbeats.
+
+### Meilenstein 111: Isolation & Resilience — Bulkheads, Tool-Output-Caps & Circuit-Breaker (Geplant)
+- **Ziel:** Schutz von Kontextfenstern, Event-Loop und Provider-Quotas unter Last oder bei Drittanbieter-Ausfällen.
+- **Kernbausteine:**
+  - Getrennte Scheduling-Klassen (Interaktiver Chat vs. Background-DAGs vs. Eval-Läufe vs. Approval-Blocked).
+  - Tool-Output-Größenlimits & Bulkheads pro Tool/Task (Wall-Clock, Call-Count, Token-Cap), damit z. B. 40-KB-Stacktraces nicht den LLM-Kontext vergiften.
+  - Provider-Circuit-Breaker (Fehlerrate / 429-Quota / Latenz → Open) inkl. Fallback-Hierarchie und Backpressure-Propagierung.
+
+### Meilenstein 112: OTel GenAI Tracing & Trace-to-Eval-Pipeline (Geplant)
+- **Ziel:** Vollständige End-to-End-Beobachtbarkeit und systematische Regressionstests aus realen Produktiv-Runs.
+- **Kernbausteine:**
+  - Durchgängige `trace_id` vom API-Gateway über `backend/llm_kernel.py` bis zu Tool-Calls und DAG-Nodes (Kosten, Latenz, PII-redaktierte Payloads).
+  - 1-Klick-Export von fehlgeschlagenen oder erfolgreichen Traces als deterministische Test-Fixtures in `backend/eval_gates.py`.
+
+### Meilenstein 113: Content-Maschine Safety & Lifecycle Governance (Geplant)
+- **Ziel:** Produktionsreife Marken-, Rechts- und Budget-Sicherheit für autonome Multi-Channel-Publikationen.
+- **Kernbausteine:**
+  - Dedizierter Moderation-/Brand-Safety-Second-Pass („Not this one“) vor Publish (Verleumdung, Markenrechte, unbelegte Claims).
+  - Globaler Kill-Switch + tägliche Spend-/Publish-Caps pro Plattform und Modell.
+  - Asset-Retirement & Update (Auffinden/Zurückziehen veralteter Assets), geplanter 30-Tage-Derivate-Schedule und Trennung zwischen Neugenerierung (volles Review) und reinem Crop.
 
 ## Ideen-Pool (beobachten, nicht geplant)
 

@@ -602,7 +602,7 @@ class ArchonMcpGateway:
         # Fail-closed: wenn die Prüfung selbst scheitert, wird NICHT ausgeführt.
         from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
         rt_session = str(key_info.get("session_id") or key_info.get("name") or "mcp_gateway")
-        rt_agent = str(key_info.get("agent_id") or "")
+        rt_agent = str(key_info.get("agent_id") or "mcp_gateway")
         try:
             from backend.tool_warrants import get_warrant_for_session
             rt_warrant = get_warrant_for_session(rt_session, name)

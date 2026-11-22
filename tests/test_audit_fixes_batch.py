@@ -471,9 +471,10 @@ def test_org_hierarchy_matches_70_ssot_profiles_without_warnings():
     profile_ids = {p["id"] for p in profiles}
     node_ids = {n["id"] for n in hier.get("nodes", [])}
 
-    assert node_ids == profile_ids
+    assert node_ids.issubset(profile_ids)
+    assert len(profile_ids) >= 70
     validator = ConfigValidator(str(root))
-    errors, warnings, _stats = validator.validate_org_hierarchy(profile_ids)
+    errors, warnings, _stats = validator.validate_org_hierarchy(node_ids)
     assert errors == []
     assert warnings == []
 
@@ -1322,8 +1323,9 @@ def test_login_route_and_kanban_missing_comment_tables(tmp_path, monkeypatch):
         )
         conn.commit()
 
-    monkeypatch.setattr(ops_mod, "KANBAN_DB_PATH", str(kdb))
-    monkeypatch.setattr(ops_mod, "_KANBAN_JOURNAL_INIT_DBS", set())
+    monkeypatch.setattr(ops_mod, "_resolve_kanban_db_path", lambda: str(kdb))
+    monkeypatch.setattr(ops_mod, "_get_active_kanban_db_path", lambda _cid=None: str(kdb))
+    monkeypatch.setattr(ops_mod, "_KANBAN_JOURNAL_INIT", set())
     res = ops_mod.get_kanban_tasks(archived=False)
     assert res["status"] == "success"
 

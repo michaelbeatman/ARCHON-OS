@@ -305,7 +305,7 @@ class TestSocketProxy:
         members = [n for n, s in doc["services"].items()
                    if n != "docker-socket-proxy"
                    and "archon-admin_net" in (s.get("networks") or {})]
-        assert sorted(members) == ["archon-os", "hermes"], members
+        assert sorted(members) == ["archon-os", "hermes", "promtail"], members
 
     def test_high_privilege_flags_disabled_by_default(self):
         _, env = self._proxy_env(_yaml("docker-compose.dev.yml"))

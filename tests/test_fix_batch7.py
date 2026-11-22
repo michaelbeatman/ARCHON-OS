@@ -56,11 +56,14 @@ async def test_r24_reopen_task_clears_completed_and_started_at(tmp_path, monkeyp
     conn.commit()
     conn.close()
 
-    monkeypatch.setattr(ops_mod, "KANBAN_DB_PATH", str(db_path))
+    monkeypatch.setattr(ops_mod, "_resolve_kanban_db_path", lambda: str(db_path))
+    monkeypatch.setattr(ops_mod, "_get_active_kanban_db_path", lambda _cid=None: str(db_path))
+    monkeypatch.setattr(ops_mod, "_KANBAN_JOURNAL_INIT", set())
+    monkeypatch.setattr(ops_mod, "require_admin_or_503", lambda _r: {"role": "admin"})
 
     # Reopen to 'todo'
     req = ops_mod.TaskStatusUpdateRequest(status="todo")
-    await ops_mod.update_task_status("task-1", req)
+    await ops_mod.update_task_status(None, "task-1", req)
 
     # Pruefe DB: completed_at muss NULL sein!
     conn2 = sqlite3.connect(str(db_path))

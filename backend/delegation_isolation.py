@@ -50,13 +50,15 @@ def resolve_isolated_execution_scope(
     prof_list = profiles if profiles is not None else _load_profiles(profiles_path)
     prof = next((p for p in prof_list if p.get("id") == target_agent_id), None)
 
-    if target_agent_id == "workflow_engine":
-        # Benannter Akteur der DAG-/Plugin-Engine: M75 attribuiert Plugin-Laeufe
-        # rechenschaftsfähig, statt sie mit leerer agent_id still zu bypassen.
+    norm_target = str(target_agent_id or "").strip().lstrip("@")
+    if norm_target in ("workflow_engine", "mcp_gateway"):
+        # Benannte System-Akteure: M75 attribuiert Plugin-/MCP-Laeufe
+        # rechenschaftsfaehig, statt sie mit leerer agent_id still zu bypassen.
+        sys_tools = ["node_plugin:*"] if norm_target == "workflow_engine" else ["archon__*"]
         return {
             "agent_id": target_agent_id,
             "found": True,
-            "allowed_tools": ["node_plugin:*"],
+            "allowed_tools": sys_tools,
             "allowed_skills": [],
             "model": requested_model or "auto/best-coding",
             "provider": "",
@@ -117,6 +119,8 @@ def is_tool_allowed_for_agent(
     if not norm_tool:
         return False
     if "node_plugin:*" in allowed and norm_tool.startswith("node_plugin:"):
+        return True
+    if "archon__*" in allowed and norm_tool.startswith("archon__"):
         return True
     if norm_tool in allowed:
         return True

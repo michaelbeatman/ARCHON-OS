@@ -13,7 +13,8 @@ services:
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8501", "--reload"]
     # Ansible legt .env aus .env.example an; .env.archon existiert nicht im Repo.
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       HOME: /tmp
       ENVIRONMENT: development

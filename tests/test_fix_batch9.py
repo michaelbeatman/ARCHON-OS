@@ -67,7 +67,9 @@ async def test_m14_execute_kanban_task_registers_with_shutdown_coordinator(tmp_p
     conn.commit()
     conn.close()
 
-    monkeypatch.setattr(ops_mod, "KANBAN_DB_PATH", str(db_path))
+    monkeypatch.setattr(ops_mod, "_resolve_kanban_db_path", lambda: str(db_path))
+    monkeypatch.setattr(ops_mod, "_get_active_kanban_db_path", lambda _cid=None: str(db_path))
+    monkeypatch.setattr(ops_mod, "_KANBAN_JOURNAL_INIT", set())
 
     reg_mock = MagicMock()
     unreg_mock = MagicMock()

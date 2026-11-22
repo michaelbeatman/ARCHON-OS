@@ -137,11 +137,12 @@ def test_r02_crash_recovery_does_not_reset_recent_tasks(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
-    monkeypatch.setattr(ops_mod, "KANBAN_DB_PATH", str(db_path))
-    monkeypatch.setattr(ops_mod, "_KANBAN_JOURNAL_INIT", False)
+    monkeypatch.setattr(ops_mod, "_resolve_kanban_db_path", lambda: str(db_path))
+    monkeypatch.setattr(ops_mod, "_get_active_kanban_db_path", lambda _cid=None: str(db_path))
+    monkeypatch.setattr(ops_mod, "_KANBAN_JOURNAL_INIT", set())
 
-    # _get_kanban_connection triggert Crash-Recovery beim ersten Aufruf
-    test_conn = ops_mod._get_kanban_connection()
+    # _get_kanban_connection(maintenance=True) triggert Crash-Recovery
+    test_conn = ops_mod._get_kanban_connection(maintenance=True)
     cur = test_conn.cursor()
 
     cur.execute("SELECT status FROM tasks WHERE id = 't1'")

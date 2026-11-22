@@ -50,7 +50,7 @@ def _temp_kanban_db(task_status="review"):
     conn.commit()
     conn.close()
 
-    def _open():
+    def _open(*_a, **_kw):
         c = sqlite3.connect(db_path)
         c.row_factory = sqlite3.Row
         return c
@@ -70,10 +70,11 @@ async def test_reviewer_exception_verdict_changes_requested():
 
     with mock.patch.object(ops, "_get_kanban_connection", side_effect=open_db), \
          mock.patch.object(ops, "_load_profiles_map", return_value={}), \
+         mock.patch.object(ops, "require_admin_or_503", return_value={"role": "admin"}), \
          mock.patch.dict(sys.modules, {"core_dispatcher": dispatcher}), \
          mock.patch("backend.agent_aliases.resolve_agent_id", side_effect=lambda a: a), \
          mock.patch("backend.kanban_sidecar.update_kanban_meta", side_effect=lambda m: ({"tasks": {}}, None)):
-        res = await ops.trigger_quality_review("t-a", QualityReviewRequest())
+        res = await ops.trigger_quality_review("t-a", None, QualityReviewRequest())
 
     assert res["quality_review"]["status"] == "changes_requested"
     assert res["quality_review"]["score"] == 0
@@ -94,10 +95,11 @@ async def test_reviewer_prose_answer_no_json_fail_closed():
 
     with mock.patch.object(ops, "_get_kanban_connection", side_effect=open_db), \
          mock.patch.object(ops, "_load_profiles_map", return_value={}), \
+         mock.patch.object(ops, "require_admin_or_503", return_value={"role": "admin"}), \
          mock.patch.dict(sys.modules, {"core_dispatcher": dispatcher}), \
          mock.patch("backend.agent_aliases.resolve_agent_id", side_effect=lambda a: a), \
          mock.patch("backend.kanban_sidecar.update_kanban_meta", side_effect=lambda m: ({"tasks": {}}, None)):
-        res = await ops.trigger_quality_review("t-a", QualityReviewRequest())
+        res = await ops.trigger_quality_review("t-a", None, QualityReviewRequest())
 
     assert res["quality_review"]["status"] == "changes_requested"
     assert res["quality_review"]["score"] == 0
@@ -118,9 +120,10 @@ async def test_explicit_approval_still_works():
 
     req = QualityReviewRequest(force_verdict="approved", comment="Freigegeben")
     with mock.patch.object(ops, "_get_kanban_connection", side_effect=open_db), \
+         mock.patch.object(ops, "require_admin_or_503", return_value={"role": "admin"}), \
          mock.patch.dict(sys.modules, {"core_dispatcher": dispatcher}), \
          mock.patch("backend.kanban_sidecar.update_kanban_meta", side_effect=lambda m: ({"tasks": {}}, None)):
-        res = await ops.trigger_quality_review("t-a", req)
+        res = await ops.trigger_quality_review("t-a", None, req)
 
     assert res["quality_review"]["status"] == "approved"
     assert res["quality_review"]["score"] == 100

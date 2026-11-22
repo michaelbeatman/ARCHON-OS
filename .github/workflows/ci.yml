@@ -101,8 +101,7 @@ jobs:
       - name: Docker Compose Syntaxprüfung (alle Varianten)
         run: |
           set -e
-          # Vorher wurde nur docker-compose.yml geprüft — gerade die
-          # problematischen Varianten (.vpn, .archon, .cro) blieben ungeprüft.
+          [ -f .env ] || cp .env.example .env
           for f in docker-compose*.yml CRM/docker-compose.yml pocketbase/docker-compose.yml; do
             [ -f "$f" ] || continue
             echo "Prüfe $f"

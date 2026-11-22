@@ -40,7 +40,9 @@ def test_sync_soul_modes_defaults_to_en_and_writes_english_prompts(tmp_path, mon
     res = ssm.apply_soul_mode(mode="compact", lang="en")
     assert res["status"] == "success"
     assert res["lang"] == "en"
-    assert res["updated_profiles"] == 70
+    expected_count = len(json.loads((app_root / "agent_profiles.json").read_text(encoding="utf-8")))
+    assert expected_count >= 70
+    assert res["updated_profiles"] == expected_count
 
     updated = json.loads((app_root / "agent_profiles.json").read_text(encoding="utf-8"))
     for prof in updated:

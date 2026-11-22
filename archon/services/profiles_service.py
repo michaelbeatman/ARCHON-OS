@@ -206,6 +206,26 @@ def save_profile(profile_data: Dict[str, Any], *,
     _approved_gate_id = str(profile_data.get("_approved_gate_id") or "").strip()
     if _approved_gate_id:
         _verify_gate(_approved_gate_id, GATE_KIND_TOOLS, {"id": p_id})
+
+    # Punkt 3.2.4: Automatisches Eval-Gate vor Aktivierung geänderter Prompts/Modelle
+    if profile_data.get("require_eval_gate"):
+        try:
+            import asyncio
+            from backend.eval_gates import run_evaluation
+            eval_res = asyncio.run(run_evaluation("profile", p_id, min_pass_score=float(profile_data.get("min_eval_score") or 70.0)))
+            profile_data["last_eval_score"] = eval_res.get("overall_score")
+            profile_data["last_eval_passed"] = eval_res.get("passed")
+            if not eval_res.get("passed"):
+                return {
+                    "status": "eval_gate_failed",
+                    "eval_id": eval_res.get("eval_id"),
+                    "score": eval_res.get("overall_score"),
+                    "message": f"Eval-Gate nicht bestanden ({eval_res.get('overall_score')}/100 Punkten). Profil wurde nicht aktiviert.",
+                    "details": eval_res.get("results"),
+                }
+        except Exception as eval_exc:
+            logger.warning(f"[EvalGate] Vorab-Eval fehlgeschlagen: {eval_exc}")
+
     if isinstance(incoming_tools, list) and not _approved_gate_id:
         _alt_tools = []
         for p_base in get_hermes_profiles_base_dirs():

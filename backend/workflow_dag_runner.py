@@ -484,6 +484,14 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         )
     if node.get("forbidden_actions"):
         sections.append("[VERBOTEN / GUARDRAILS]\n- " + "\n- ".join(str(f) for f in node["forbidden_actions"]))
+    if node.get("map_item") is not None:
+        item_val = node["map_item"]
+        item_str = json.dumps(item_val, ensure_ascii=False) if isinstance(item_val, (dict, list)) else str(item_val)
+        sections.append(f"[AKTUELLER MAP-EINTRAG ({int(node.get('map_index', 0)) + 1}/{int(node.get('map_total', 1))})]\n{item_str}")
+        if node.get("prompt") and "{{item}}" in str(node.get("prompt")):
+            for p_idx, p_sec in enumerate(sections):
+                if "{{item}}" in p_sec:
+                    sections[p_idx] = p_sec.replace("{{item}}", item_str)
     if upstream:
         up_blocks = []
         for dep_id, dep_val in upstream.items():
@@ -1060,6 +1068,90 @@ async def _run_workflow_dag_locked(
                 result=f"Anti-Slop Quality-Score: {out['quality_score']}/100",
                 block_kind=None if q_ok else "quality_gate_failed",
             )
+        elif ntype in ("map", "dynamic_fanout"):
+            # Punkt 3.2.3: Dynamisches Sub-DAG-Spawning (Map-Over-Items)
+            items = []
+            items_key = str(node.get("items_key") or "items").strip()
+            if isinstance(node.get("items"), list):
+                items = list(node["items"])
+            else:
+                for up_k, up_val in upstream.items():
+                    if isinstance(up_val, dict):
+                        po = up_val.get("parsed_output")
+                        if isinstance(po, list):
+                            items = po
+                            break
+                        elif isinstance(po, dict) and isinstance(po.get(items_key), list):
+                            items = po[items_key]
+                            break
+                        if isinstance(up_val.get("items"), list):
+                            items = up_val["items"]
+                            break
+                        if isinstance(up_val.get("results"), list):
+                            items = up_val["results"]
+                            break
+                        raw_c = str(up_val.get("content") or up_val.get("result") or "").strip()
+                        if raw_c.startswith("[") and raw_c.endswith("]"):
+                            try:
+                                loaded = json.loads(raw_c)
+                                if isinstance(loaded, list):
+                                    items = loaded
+                                    break
+                            except Exception:
+                                pass
+                    elif isinstance(up_val, list):
+                        items = up_val
+                        break
+
+            max_items = max(1, min(50, int(node.get("max_items") or 10)))
+            max_budget_eur = float(node.get("max_budget_eur") or 1.0)
+            items_to_process = items[:max_items]
+
+            if not items_to_process:
+                out = await _exec_with_retry_and_timeout(eff_executor, node_ctx, upstream)
+                st = "failed" if out.get("status") == "error" else "completed"
+            else:
+                sub_tasks = []
+                for idx, itm in enumerate(items_to_process):
+                    sub_ctx = {
+                        **node_ctx,
+                        "id": f"{nid}_item_{idx}",
+                        "map_item": itm,
+                        "map_index": idx,
+                        "map_total": len(items_to_process),
+                        "plugin_params": {
+                            **dict(node.get("plugin_params") or {}),
+                            "item": itm,
+                            "index": idx,
+                        },
+                    }
+                    sub_up = {**upstream, "_item": itm}
+                    sub_tasks.append(_exec_with_retry_and_timeout(eff_executor, sub_ctx, sub_up))
+
+                sub_results = await asyncio.gather(*sub_tasks, return_exceptions=True)
+                ok_results = []
+                total_cost = 0.0
+                for r in sub_results:
+                    if isinstance(r, dict):
+                        total_cost += float(r.get("cost_usd") or 0.0)
+                        if r.get("status") != "error":
+                            ok_results.append(r)
+                    elif not isinstance(r, Exception):
+                        ok_results.append({"result": r, "status": "success"})
+
+                budget_exceeded = total_cost > (max_budget_eur * 1.15)
+                quorum = int(node.get("quorum_min") or max(1, len(items_to_process) // 2 or 1))
+                st = "completed" if (len(ok_results) >= quorum and not budget_exceeded) else "failed"
+                out = {
+                    "status": "success" if st == "completed" else "error",
+                    "map_results": ok_results,
+                    "items_count": len(items_to_process),
+                    "ok_count": len(ok_results),
+                    "cost_usd": round(total_cost, 6),
+                    "budget_exceeded": budget_exceeded,
+                    "max_budget_eur": max_budget_eur,
+                    "results": ok_results,
+                }
         elif ntype == "fanout":
             branches = node.get("branches") or []
             if branches:
@@ -1236,8 +1328,10 @@ async def _run_workflow_dag_locked(
 
 def get_workflow_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
     with _connect(db_path) as conn:
+        run_cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_runs)").fetchall()}
+        cost_col = ", total_cost_usd" if "total_cost_usd" in run_cols else ""
         run_row = conn.execute(
-            "SELECT run_id, workflow_id, status, dag_json, created_at, updated_at FROM workflow_runs WHERE run_id = ?",
+            f"SELECT run_id, workflow_id, status, dag_json, created_at, updated_at{cost_col} FROM workflow_runs WHERE run_id = ?",
             (run_id,),
         ).fetchone()
         if not run_row:
@@ -1268,6 +1362,7 @@ def get_workflow_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dic
         "status": run_row["status"],
         "dag": dag_parsed,
         "nodes": nodes,
+        "total_cost_usd": float(run_row["total_cost_usd"] or 0.0) if "total_cost_usd" in run_row.keys() else 0.0,
         "created_at": run_row["created_at"],
         "updated_at": run_row["updated_at"],
     }
@@ -1275,8 +1370,10 @@ def get_workflow_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dic
 
 def list_workflow_runs(limit: int = 50, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
     with _connect(db_path) as conn:
+        run_cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_runs)").fetchall()}
+        cost_col = ", total_cost_usd" if "total_cost_usd" in run_cols else ""
         rows = conn.execute(
-            "SELECT run_id, workflow_id, status, created_at, updated_at FROM workflow_runs ORDER BY updated_at DESC LIMIT ?",
+            f"SELECT run_id, workflow_id, status, created_at, updated_at{cost_col} FROM workflow_runs ORDER BY updated_at DESC LIMIT ?",
             (max(1, min(200, int(limit))),),
         ).fetchall()
     return [dict(r) for r in rows]

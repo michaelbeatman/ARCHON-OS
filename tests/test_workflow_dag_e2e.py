@@ -320,3 +320,79 @@ def test_omnichannel_content_workflow_quality_gate_and_template(tmp_path):
     assert res_slop["status"] == "failed"
     assert res_slop["node_statuses"]["qgate"] == "failed"
     assert len(res_slop["outputs"]["qgate"]["quality_report"]["slop_hits"]) >= 3
+
+
+def test_map_dynamic_fanout_node(tmp_path):
+    """Punkt 3.2.3: map-Node erzeugt dynamisch N parallele Sub-Nodes aus Upstream-Array."""
+    db = str(tmp_path / "wf_map.db")
+    dag_map = {
+        "id": "wf-map-test",
+        "nodes": [
+            {
+                "id": "news_fetch",
+                "type": "agent",
+                "depends_on": [],
+            },
+            {
+                "id": "news_map",
+                "type": "map",
+                "depends_on": ["news_fetch"],
+                "max_items": 3,
+                "max_budget_eur": 0.50,
+            },
+        ],
+        "edges": [{"from": "news_fetch", "to": "news_map", "condition": "on_success", "data_mode": "full"}],
+    }
+
+    async def mock_exec(node, upstream):
+        nid = node.get("id", "")
+        if nid == "news_fetch":
+            return {
+                "status": "success",
+                "parsed_output": [
+                    {"headline": "News A", "score": 90},
+                    {"headline": "News B", "score": 85},
+                    {"headline": "News C", "score": 80},
+                    {"headline": "News D (ignored by max_items)", "score": 70},
+                ],
+            }
+        # map sub-execution
+        item = node.get("map_item") or {}
+        return {
+            "status": "success",
+            "content": f"Analysiert: {item.get('headline')}",
+            "cost_usd": 0.002,
+        }
+
+    res = _run(run_workflow_dag(dag_def=dag_map, executor_fn=mock_exec, db_path=db))
+    assert res["status"] == "completed"
+    assert res["node_statuses"]["news_map"] == "completed"
+    map_out = res["outputs"]["news_map"]
+    assert map_out["items_count"] == 3
+    assert map_out["ok_count"] == 3
+    assert len(map_out["map_results"]) == 3
+    assert round(map_out["cost_usd"], 4) == 0.006
+
+
+def test_cheap_first_cost_telemetry_persisted(tmp_path):
+    """Punkt 3.2.6: total_cost_usd wird pro Run und Node persistiert."""
+    db = str(tmp_path / "wf_cost.db")
+    dag_cost = {
+        "id": "wf-cost-test",
+        "nodes": [
+            {"id": "node_a", "type": "agent", "depends_on": []},
+            {"id": "node_b", "type": "agent", "depends_on": ["node_a"]},
+        ],
+        "edges": [{"from": "node_a", "to": "node_b", "condition": "on_success", "data_mode": "full"}],
+    }
+
+    async def mock_exec(node, upstream):
+        nid = node.get("id")
+        cost = 0.0015 if nid == "node_a" else 0.0035
+        return {"status": "success", "content": f"done {nid}", "cost_usd": cost}
+
+    res = _run(run_workflow_dag(dag_def=dag_cost, executor_fn=mock_exec, db_path=db))
+    assert res["status"] == "completed"
+    r = get_workflow_run(res["run_id"], db_path=db)
+    assert r is not None
+    assert round(float(r.get("total_cost_usd") or 0.0), 4) == 0.0050

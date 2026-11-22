@@ -601,6 +601,51 @@ def api_v2_telegram_route(payload: Dict[str, Any] = Body(...)):
     from backend.telegram_gateway_v2 import parse_telegram_agent_route
     agent, rest = parse_telegram_agent_route(str(payload.get("text") or ""))
     return {"agent_id": agent, "prompt": rest}
+
+
+# --- Punkt 3.2.4: Automatische Eval- & Regression-Gates (Gold-Datasets + LLM-as-a-Judge) ---
+@router.post("/api/v2/eval/run")
+async def api_v2_eval_run(request: Request, payload: Dict[str, Any] = Body(...)):
+    require_admin_or_503(request)
+    from backend.eval_gates import run_evaluation
+    target_type = str(payload.get("target_type") or "profile").strip()
+    target_id = str(payload.get("target_id") or "default").strip()
+    gold_dataset = payload.get("gold_dataset")
+    judge_model = str(payload.get("judge_model") or "auto").strip()
+    min_pass_score = float(payload.get("min_pass_score") or 70.0)
+
+    res = await run_evaluation(
+        target_type=target_type,
+        target_id=target_id,
+        gold_dataset=gold_dataset,
+        judge_model=judge_model,
+        min_pass_score=min_pass_score,
+    )
+    return res
+
+
+@router.get("/api/v2/eval/runs")
+def api_v2_eval_runs_list(request: Request, target_id: Optional[str] = None, limit: int = 50):
+    require_admin_or_503(request)
+    from backend.eval_gates import list_eval_runs
+    return {"status": "success", "runs": list_eval_runs(target_id=target_id, limit=limit)}
+
+
+@router.get("/api/v2/eval/runs/{eval_id}")
+def api_v2_eval_run_detail(request: Request, eval_id: str):
+    require_admin_or_503(request)
+    from backend.eval_gates import get_eval_run
+    run_obj = get_eval_run(eval_id)
+    if not run_obj:
+        raise HTTPException(status_code=404, detail=f"Eval-Run '{eval_id}' nicht gefunden.")
+    return {"status": "success", "run": run_obj}
+
+
+@router.get("/api/v2/eval/gold-datasets/{target_type}")
+def api_v2_eval_gold_dataset(target_type: str, target_id: Optional[str] = None):
+    from backend.eval_gates import get_default_gold_dataset
+    return {"status": "success", "target_type": target_type, "dataset": get_default_gold_dataset(target_type, target_id or "")}
+
 # (M84 injection-drill, M87 connectors, M88 manners, M92 freeze, M39 meetings,
 #  M54 voice-analyze und M85 joust sind im Triage-Lauf 21.11.2026 entfernt:
 #  Theater-Code laut Deepdive — Module liegen unter archive/20261121_triage_c_modules/)

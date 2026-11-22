@@ -122,6 +122,12 @@ def _resolve_host_path(container_path: str) -> Optional[str]:
     if override:
         return os.path.abspath(override)
 
+    # 1b. Expliziter Bare-Metal/CI-Modus: der Pfad IST bereits ein Host-Pfad.
+    # Nur per Env-Flag aktivieren — die Resolve-Tests simulieren bewusst einen
+    # Container und dürfen hier nicht beeinflusst werden.
+    if os.environ.get("ARCHON_SANDBOX_BARE_METAL", "").strip().lower() in ("1", "true", "yes"):
+        return container_path if os.path.exists(container_path) else None
+
     # 2. Eigene Container-ID ermitteln
     container_id = os.environ.get("HOSTNAME") or socket.gethostname()
     if not container_id:

@@ -165,10 +165,16 @@ def test_run_code_blockiert_den_event_loop_nicht(monkeypatch, tmp_path):
 
         task = asyncio.create_task(ticker())
         payload = views_core.CodeRunPayload(code="print('x')", language="python")
-        result = await views_core.run_showroom_code(None, payload)
+        # S6-fail-closed: ohne Docker-Sandbox liefert der Handler 501.
+        # dieser Test prüft nur die Event-Loop-Freiheit, nicht die Antwortform.
+        outcome = None
+        try:
+            await views_core.run_showroom_code(None, payload)
+        except Exception as exc:
+            outcome = exc
         task.cancel()
-        return result, ticks["n"]
+        return outcome, ticks["n"]
 
-    result, ticks = asyncio.run(scenario())
-    assert result["status"] == "error"
+    outcome, ticks = asyncio.run(scenario())
+    assert outcome is not None and getattr(outcome, "status_code", None) == 501
     assert ticks >= 3, f"Event-Loop war blockiert (nur {ticks} Ticks)"

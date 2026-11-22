@@ -42,6 +42,10 @@ jobs:
     name: 2. Unit- & Security-Tests
     needs: validate-and-audit
     runs-on: ubuntu-latest
+    env:
+      # GitHub-Runner ist Bare-Metal (kein /.dockerenv): Sandbox-Run-Verzeichnis
+      # ist bereits ein Host-Pfad, DooD-Mount-Auflösung ist nicht nötig.
+      ARCHON_SANDBOX_BARE_METAL: "1"
     steps:
       - name: Quellcode auschecken
         uses: actions/checkout@v4

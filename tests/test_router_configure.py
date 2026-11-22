@@ -139,10 +139,10 @@ def test_hermes_profiles_status_endpoint_calls_save():
     mock_api_profiles = MagicMock(return_value=[
         {"id": "telegram_bot", "name": "Telegram Assistant", "status": "inactive"}
     ])
-    # Since api_get_hermes_profiles is imported from archon.core.profiles, we need to patch it
-    import archon.core.profiles as profiles_module
-    original = profiles_module.api_get_hermes_profiles
-    profiles_module.api_get_hermes_profiles = mock_api_profiles
+    # Der Router hält seine eigene Import-Binding — das muss gepatcht werden,
+    # nicht das Modul archon.core.profiles (dort wirkt der Patch nicht).
+    original = hermes_profiles.api_get_hermes_profiles
+    hermes_profiles.api_get_hermes_profiles = mock_api_profiles
     
     try:
         # Also need to mock add_ticker
@@ -170,7 +170,7 @@ def test_hermes_profiles_status_endpoint_calls_save():
         finally:
             runtime_module.add_ticker = original_ticker
     finally:
-        profiles_module.api_get_hermes_profiles = original
+        hermes_profiles.api_get_hermes_profiles = original
 
 
 if __name__ == "__main__":

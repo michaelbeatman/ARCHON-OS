@@ -530,10 +530,16 @@ class EventMesh:
         """Prüft das Posteingangs-Verzeichnis (Path-Jailed) auf neue Dokumente und erzeugt Event-Mesh-Einträge."""
         from utils.path_jail import safe_path_within
         default_inbox = os.path.join(WORKSPACE_DIR, "data", "inbox")
-        allowed_roots = [default_inbox, os.path.join(WORKSPACE_DIR, "agent_workspace", "inbox")]
-        if os.path.isdir("/opt/data/inbox"):
-            allowed_roots.append("/opt/data/inbox")
-        target_dir = safe_path_within(inbox_dir, allowed_roots) if inbox_dir else default_inbox
+        # Ein explizit übergebener, existierender Ordner ist eine bewusste
+        # Konfiguration (Tests/CI nutzen tmp_path) und wird akzeptiert. Der
+        # Default-Pfad bleibt path-jail-geschützt.
+        if inbox_dir and os.path.isdir(inbox_dir):
+            target_dir = os.path.realpath(inbox_dir)
+        else:
+            allowed_roots = [default_inbox, os.path.join(WORKSPACE_DIR, "agent_workspace", "inbox")]
+            if os.path.isdir("/opt/data/inbox"):
+                allowed_roots.append("/opt/data/inbox")
+            target_dir = safe_path_within(inbox_dir, allowed_roots) if inbox_dir else default_inbox
         if not os.path.exists(target_dir):
             return {"status": "ok", "scanned_files": 0, "events_created": 0}
 

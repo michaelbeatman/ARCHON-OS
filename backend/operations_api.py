@@ -91,6 +91,8 @@ _KANBAN_JOURNAL_INIT_DBS: set = set()
 
 
 def _get_active_kanban_db_path(company_id: Optional[str] = None) -> str:
+    if not company_id and KANBAN_DB_PATH != _DEFAULT_KANBAN_DB_PATH:
+        return KANBAN_DB_PATH
     try:
         from backend.tenant_context import tenant_context
         resolved = tenant_context.resolve_active_db("kanban.db", company_id)

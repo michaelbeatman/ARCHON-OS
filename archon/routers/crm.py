@@ -103,6 +103,7 @@ def api_crm_add_message(request: Request, contact_id: str, payload: Dict = Body(
 
 @router.get("/api/crm/messages")
 def api_crm_list_messages(
+    request: Request,
     search: str = "",
     channel: str = "all",
     direction: str = "all",
@@ -110,6 +111,7 @@ def api_crm_list_messages(
     page: int = 1,
     limit: int = 50
 ):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.crm_service import crm_service
     return crm_service.list_all_messages(
         search=search, channel=channel, direction=direction, sort=sort, page=page, limit=limit
@@ -117,13 +119,15 @@ def api_crm_list_messages(
 
 
 @router.get("/api/crm/calendar")
-def api_crm_get_calendar():
+def api_crm_get_calendar(request: Request):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.crm_service import crm_service
     return crm_service.get_calendar_events()
 
 
 @router.get("/api/crm/report")
-def api_crm_get_report():
+def api_crm_get_report(request: Request):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.crm_service import crm_service
     return crm_service.get_report_metrics()
 

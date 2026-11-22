@@ -14,8 +14,9 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 
 @router.get("/keys")
-def api_list_keys():
+def api_list_keys(request: Request):
     """Gibt alle registrierten API-Keys ohne Klardaten zurück."""
+    require_admin_or_503(request)  # RBAC: Key-Verzeichnis ist sensibel (Audit v3 Befund 2.2)
     try:
         from backend.api_key_manager import api_key_manager
         keys = api_key_manager.list_keys()

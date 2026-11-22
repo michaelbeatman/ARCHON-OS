@@ -352,21 +352,22 @@ class TenantContextManager:
         comp = self.get_active_company()
         return sanitize_tenant_id(comp.get("id"))
 
-    def get_tenant_dir(self, company_id: Optional[str] = None) -> str:
+    def get_tenant_dir(self, company_id: Optional[str] = None, create: bool = True) -> str:
         tid = sanitize_tenant_id(company_id) if company_id else self.get_active_tenant_id()
         target = os.path.realpath(os.path.join(self.tenants_base_dir, tid))
         base_real = os.path.realpath(self.tenants_base_dir)
         if not (target == base_real or target.startswith(base_real + os.sep)):
             raise ValueError(f"Ungültiger Mandantenpfad: {tid}")
-        os.makedirs(target, exist_ok=True)
+        if create:
+            os.makedirs(target, exist_ok=True)
         return target
 
-    def resolve_tenant_db(self, db_filename: str, company_id: Optional[str] = None) -> str:
+    def resolve_tenant_db(self, db_filename: str, company_id: Optional[str] = None, create_dirs: bool = True) -> str:
         """Liefert den physisch isolierten SQLite-Pfad unter `data/tenants/<id>/<db>`."""
         fname = os.path.basename(db_filename)
         if fname not in ISOLATED_TENANT_DBS and fname not in CONSOLIDATED_TENANT_DBS:
             raise ValueError(f"DB '{fname}' ist nicht für Mandanten-Isolation registriert.")
-        tdir = self.get_tenant_dir(company_id)
+        tdir = self.get_tenant_dir(company_id, create=create_dirs)
         return os.path.join(tdir, fname)
 
     def resolve_active_db(self, db_filename: str, company_id: Optional[str] = None) -> str:
@@ -439,12 +440,13 @@ class TenantContextManager:
 
             return isolated_path
 
-    def ensure_tenant_databases(self, company_id: Optional[str] = None, init_schemas: bool = False) -> Dict[str, str]:
-        """Stellt sicher, dass das Mandantenverzeichnis existiert und alle DB-Pfade auflösbar sind."""
+    def ensure_tenant_databases(self, company_id: Optional[str] = None, init_schemas: bool = False, create_dirs: bool = True) -> Dict[str, str]:
+        """Stellt sicher, dass das Mandantenverzeichnis existiert und alle DB-Pfade auflösbar sind.
+        create_dirs=False macht den Aufruf read-only (GET-Endpoints dürfen keine Ordner anlegen)."""
         tid = sanitize_tenant_id(company_id) if company_id else self.get_active_tenant_id()
         paths = {}
         for db_name in ISOLATED_TENANT_DBS:
-            p = self.resolve_tenant_db(db_name, tid)
+            p = self.resolve_tenant_db(db_name, tid, create_dirs=create_dirs)
             if init_schemas and not os.path.isfile(p):
                 init_tenant_db_schema(db_name, p)
             paths[db_name] = p
@@ -548,7 +550,7 @@ class TenantContextManager:
 
     def get_isolation_status(self, company_id: Optional[str] = None) -> Dict[str, Any]:
         tid = sanitize_tenant_id(company_id) if company_id else self.get_active_tenant_id()
-        paths = self.ensure_tenant_databases(tid)
+        paths = self.ensure_tenant_databases(tid, create_dirs=False)
         db_status = {}
         for name, isolated_p in paths.items():
             active_p = self.resolve_active_db(name, tid)

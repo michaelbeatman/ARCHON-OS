@@ -24,8 +24,9 @@ router = APIRouter(
 
 
 @router.get("/context")
-def get_tenant_context():
+def get_tenant_context(request: Request):
     """Liefert den aktiven Mandanten, alle Firmen und den physischen SQLite-Isolationsstatus."""
+    require_admin_or_503(request)  # RBAC: Mandanten-/Firmenstruktur + DB-Pfade sind sensibel
     mgr = tenant_context._get_corporate_manager()
     companies = mgr.list_companies()
     active = tenant_context.get_active_company()

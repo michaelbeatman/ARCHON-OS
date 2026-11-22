@@ -2,6 +2,7 @@
 from __future__ import annotations
 from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import require_admin_or_503
 
 import logging
 from typing import Dict
@@ -76,7 +77,8 @@ def api_heal_service(request: Request, service_name: str):
 
 
 @router.get("/api/fleet/health-check")
-def api_fleet_health_check():
+def api_fleet_health_check(request: Request):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.fleet_self_healing import check_fleet_and_heal
 
     return check_fleet_and_heal()

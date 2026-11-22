@@ -12,8 +12,9 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 
 @router.get("/dunning/invoices")
-def api_dunning_invoices():
+def api_dunning_invoices(request: Request):
     """Gibt alle Ausgangsrechnungen inklusive Fälligkeits- und Mahnstufenstatus zurück."""
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     try:
         from backend.dunning_engine import dunning_engine
         invoices = dunning_engine.check_overdue_invoices()

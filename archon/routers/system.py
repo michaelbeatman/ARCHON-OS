@@ -1,5 +1,6 @@
 from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import require_admin_or_503
 """/api/system/* — Health, Recovery, Drain, Backups, Diagnose."""
 
 import asyncio
@@ -428,8 +429,9 @@ def api_execute_shutdown(request: Request, payload: dict = Body(default={})):
 
 
 @router.post("/api/system/standup/run")
-async def api_run_morning_standup():
+async def api_run_morning_standup(request: Request):
     """Generiert ein proaktives Morgen-Briefing über Tasks, Flotte, Inbox und Token-Kosten."""
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.autonomous_standup import generate_morning_standup
     res = await generate_morning_standup()
     add_ticker("Morgen-Standup", f"Tages-Briefing für {res.get('date')} erstellt.")
@@ -497,7 +499,8 @@ def api_get_health_score():
 
 
 @router.post("/api/system/generate-dossier")
-def api_generate_dossier():
+def api_generate_dossier(request: Request):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.system_dossier_generator import generate_system_dossier
     return generate_system_dossier()
 
@@ -511,7 +514,8 @@ def api_trigger_memory_consolidation(request: Request, payload: Dict = Body(defa
 
 
 @router.post("/api/system/write-batcher/enqueue")
-def api_write_batcher_enqueue(payload: Dict = Body(...)):
+def api_write_batcher_enqueue(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.async_write_batcher import async_write_batcher
     return async_write_batcher.enqueue(
         event_type=payload.get("event_type", "telemetry"),

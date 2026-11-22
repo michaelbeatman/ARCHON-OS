@@ -458,7 +458,8 @@ async def api_library_upload(request: Request):
 
 
 @router.post("/api/v1/library/ingest")
-def api_library_ingest():
+def api_library_ingest(request: Request):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     try:
         from utils.batch_library_importer import run_batch_ingest
         summary = run_batch_ingest()

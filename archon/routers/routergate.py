@@ -1,5 +1,6 @@
 from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import require_admin_or_503
 """Router /api/routergate — ausgelagerte Routen.
 
 Automatisch aus main.py extrahiert (Critical-Hardening / Modularisierung).
@@ -43,7 +44,8 @@ async def api_run_model_benchmark(payload: Dict = Body(...)):
 
 
 @router.post("/api/router/estimate-cost")
-def api_estimate_cost(payload: Dict = Body(...)):
+def api_estimate_cost(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.cost_estimator import estimate_prompt_cost
     return estimate_prompt_cost(
         prompt=payload.get("prompt", ""),
@@ -73,7 +75,8 @@ async def api_hedged_completion(payload: Dict = Body(...)):
 
 
 @router.get("/api/router/hedged-stats")
-def api_hedged_stats():
+def api_hedged_stats(request: Request):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.speculative_hedger import speculative_hedger
     return speculative_hedger.get_stats()
 

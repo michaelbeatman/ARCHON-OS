@@ -269,13 +269,35 @@ def _auth_unavailable_response() -> JSONResponse:
 
 @app.middleware("http")
 async def tenant_context_middleware(request: Request, call_next):
-    """Bindet optionalen Mandanten-Header (X-Tenant-Id / X-Company-Id) request-lokal via ContextVar."""
+    """Bindet optionalen Mandanten-Header (X-Tenant-Id / X-Company-Id) request-lokal via ContextVar.
+
+    Autorisierung (Audit v3 Befund 2.2): Nur formatgueltige UND bekannte Mandanten werden
+    akzeptiert — beliebige Header-Werte erzeugen keinen Tenant-Kontext (IDOR-Schutz).
+    """
     hdr_tid = (request.headers.get("X-Tenant-Id") or request.headers.get("X-Company-Id") or "").strip()
     if not hdr_tid:
         response = await call_next(request)
     else:
+        import re as _re
+        if not _re.fullmatch(r"[A-Za-z0-9_-]{1,64}", hdr_tid):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "invalid_tenant_id", "detail": "X-Tenant-Id ist ungueltig."},
+            )
         try:
-            from backend.tenant_context import set_request_tenant, reset_request_tenant
+            from backend.tenant_context import tenant_context, set_request_tenant, reset_request_tenant
+            known = False
+            try:
+                mgr = tenant_context._get_corporate_manager()
+                companies = mgr.list_companies() or []
+                known = any(str(c.get("id") or "").strip().lower() == hdr_tid.lower() for c in companies if isinstance(c, dict))
+            except Exception:
+                known = False
+            if not known and hdr_tid.lower() != "default":
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "tenant_not_found", "detail": "X-Tenant-Id referenziert keinen bekannten Mandanten."},
+                )
             tok = set_request_tenant(hdr_tid)
             try:
                 response = await call_next(request)

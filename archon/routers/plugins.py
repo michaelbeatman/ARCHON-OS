@@ -64,7 +64,8 @@ def api_reload_plugin(request: Request, plugin_id: str):
 
 
 @router.get("/api/v1/plugins/{plugin_id}/config")
-def api_get_plugin_settings(plugin_id: str):
+def api_get_plugin_settings(request: Request, plugin_id: str):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     plugin = pm.plugins.get(plugin_id)

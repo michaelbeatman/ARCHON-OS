@@ -37,6 +37,7 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 @router.get("/api/erp/documents/{doc_id}/print", response_class=HTMLResponse)
 def api_erp_document_print(
+    request: Request,
     doc_id: str,
     company_id: Optional[str] = None,
     autoprint: bool = False,
@@ -44,6 +45,7 @@ def api_erp_document_print(
     entity_name: Optional[str] = None,
     amount_net: Optional[float] = None
 ):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.corporate_manager import corporate_manager
     from backend.erp_manager import erp_manager
     doc = erp_manager.get_document(doc_id, company_id=company_id)
@@ -139,11 +141,13 @@ def api_erp_overview(company_id: Optional[str] = None):
 
 @router.get("/api/erp/entities")
 def api_erp_list_entities(
+    request: Request,
     company_id: Optional[str] = None,
     role: str = "all",
     search: str = "",
     status: str = ""
 ):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.erp_manager import erp_manager
     return erp_manager.list_entities(company_id=company_id, role_filter=role, search=search, status=status)
 
@@ -205,11 +209,13 @@ def api_erp_save_item(request: Request, payload: Dict = Body(...)):
 
 @router.get("/api/erp/documents")
 def api_erp_list_documents(
+    request: Request,
     company_id: Optional[str] = None,
     doc_type: Optional[str] = None,
     status: Optional[str] = None,
     entity_id: Optional[str] = None
 ):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.erp_manager import erp_manager
     return erp_manager.list_documents(
         company_id=company_id, doc_type=doc_type, status=status, entity_id=entity_id
@@ -261,8 +267,9 @@ def api_erp_cancel_document(request: Request, doc_id: str, payload: Dict = Body(
 
 
 @router.get("/api/erp/documents/{doc_id}/xrechnung.xml")
-def api_erp_document_xrechnung_xml(doc_id: str, company_id: Optional[str] = None):
+def api_erp_document_xrechnung_xml(request: Request, doc_id: str, company_id: Optional[str] = None):
     """Exportiert einen ERP-Beleg als EN-16931 / XRechnung-3.0-konforme UBL-XML-Datei."""
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.erp_manager import erp_manager
     try:
         doc_num, xml_str = erp_manager.export_xrechnung_xml(doc_id=doc_id, company_id=company_id)
@@ -327,8 +334,9 @@ def api_erp_export_gobd_z3_zip(
 
 
 @router.get("/api/erp/documents/{doc_id}/zugferd.pdf")
-def api_erp_document_zugferd_pdf(doc_id: str, company_id: Optional[str] = None):
+def api_erp_document_zugferd_pdf(request: Request, doc_id: str, company_id: Optional[str] = None):
     """Exportiert eine Hybrid-E-Rechnung im ZUGFeRD-2.2-/Factur-X-Format (PDF + `factur-x.xml`)."""
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.erp_manager import erp_manager
     try:
         doc_num, pdf_bytes = erp_manager.export_zugferd_pdf(doc_id=doc_id, company_id=company_id)

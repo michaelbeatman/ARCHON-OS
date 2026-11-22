@@ -92,7 +92,8 @@ def api_lint_agent_output(payload: Dict = Body(...)):
 
 
 @router.post("/api/security/receipts/issue")
-def api_issue_execution_receipt(payload: Dict = Body(...)):
+def api_issue_execution_receipt(request: Request, payload: Dict = Body(...)):
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.execution_receipt_ledger import execution_receipt_ledger
     return execution_receipt_ledger.issue_receipt(
         task_id=payload.get("task_id", "task-01"),

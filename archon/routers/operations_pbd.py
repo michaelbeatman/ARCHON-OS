@@ -7,6 +7,8 @@ Ausgelagert aus backend/operations_api.py.
 
 from typing import Any, Dict, Optional
 from fastapi import APIRouter
+from fastapi import Request
+from archon.routers._rbac import require_admin_or_503
 from pydantic import BaseModel
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
@@ -83,8 +85,9 @@ def get_pbd_status():
 
 
 @router.post("/bot-screen/pbd/stop-and-synthesize")
-def stop_pbd_and_synthesize(req: PBDStopRequest):
+def stop_pbd_and_synthesize(req: PBDStopRequest, request: Request):
     """Beendet die Demonstration und synthetisiert einen Skill (SKILL.md + Python-Skript)."""
+    require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
     from backend.computer_use_pbd import get_pbd_recorder
     recorder = get_pbd_recorder()
     res = recorder.stop_and_synthesize_skill(skill_slug=req.skill_slug)

@@ -62,11 +62,15 @@ def test_p1_handoff_envelope_integrity(tmp_path):
 
 
 def test_p1_profile_tools_come_from_profile_yaml():
+    import pytest
     import api_provider
     from backend.delegation_isolation import is_tool_allowed_for_agent
 
+    profiles_dir = REPO_ROOT / ".hermes" / "profiles"
+    if not profiles_dir.is_dir():
+        pytest.skip(".hermes/profiles ist gitignored und im CI-Checkout nicht vorhanden")
     profiles = api_provider.list_real_hermes_profiles(
-        profiles_dir=str(REPO_ROOT / ".hermes" / "profiles")
+        profiles_dir=str(profiles_dir)
     )
     assert profiles
     legal = next((p for p in profiles if p["id"] == "legal_counsel"), None)

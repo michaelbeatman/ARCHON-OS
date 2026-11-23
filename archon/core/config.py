@@ -63,7 +63,7 @@ class ArchonConfig:
     @property
     def omniroute_api_key(self) -> str:
         """API-Key für Omniroute (Env: OMNIROUTE_API_KEY)."""
-        return os.getenv("OMNIROUTE_API_KEY", "sk-archon-local-dev").strip()
+        return os.getenv("OMNIROUTE_API_KEY", "").strip()
 
     @property
     def anythingllm_api_key(self) -> str:

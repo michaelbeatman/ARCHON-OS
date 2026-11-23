@@ -119,7 +119,10 @@ def send_prompt_to_agent(
         return f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}"
 
     target_model = str(gate.get("model") or model_name)
-    headers = {"Content-Type": "application/json", "Authorization": "Bearer omniroute-local-key"}
+    _omni_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()
+    headers = {"Content-Type": "application/json"}
+    if _omni_key:
+        headers["Authorization"] = f"Bearer {_omni_key}"
 
     if gate.get("routed_to_local"):
         raw_target = str(gate.get("target_url") or gate.get("local_url") or "http://localhost:11434/v1/chat/completions").rstrip("/")

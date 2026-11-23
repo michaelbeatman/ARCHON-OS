@@ -438,10 +438,14 @@ Handlungsempfehlung für Archon OS.
             "max_tokens": 1200
         }).encode("utf-8")
 
+        _omni_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()
+        _headers = {"Content-Type": "application/json"}
+        if _omni_key:
+            _headers["Authorization"] = f"Bearer {_omni_key}"
         req = urllib.request.Request(
             f"{omniroute_url.rstrip('/')}/chat/completions",
             data=payload,
-            headers={"Content-Type": "application/json", "Authorization": "Bearer sk-archon"}
+            headers=_headers,
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))

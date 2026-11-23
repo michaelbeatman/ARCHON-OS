@@ -20,6 +20,8 @@ HTTP-Fehlercodes heben. Inventur: `scripts`-interner Scan (2026-11-22).
 | 1 | `operations_keys`, `operations_approvals`, `operations_dunning`, `operations_receipts`, `llm_providers` | 23 | ✅ erledigt |
 | 2a | `auth` (10 Endpunkte: Toggle, Login, User-CRUD, Passwort, Passkey) | 10 | ✅ erledigt (23.11.2026) |
 | 2b | `system` (7), `plugins` (3): Update/Drain/Language, Plugin-Tools/-Config | 10 | ✅ erledigt (23.11.2026) |
+| 2c | `security` (7), `routergate` (4): Maskierung, PII, Egress, RBAC-Check, Kosten/Bandit | 11 | ✅ erledigt (23.11.2026) |
+| 2d | `erp` (10): Entitäten, Kontakte, Belege, Bankimport, PocketBase-Sync | 10 | ✅ erledigt (23.11.2026) |
 | 2 | `llm_providers` (Rest), `governance`, `guardian`, `docker_services`, `watchdog`, `hermes_profiles`, `email_settings`, `kanban`, `memory_ops`, `telegram` | ~19 | offen |
 | 3 | `v2_capabilities` (Teil 1) | ~20 | offen |
 | 4 | `v2_capabilities` (Teil 2) + `content_machine` (Teil 1) | ~20 | offen |
@@ -30,7 +32,11 @@ HTTP-Fehlercodes heben. Inventur: `scripts`-interner Scan (2026-11-22).
 
 **Rest nach Etappe 1:** 105 Body-Dicts + 18 HTTP-200-Fehler = 123.  
 **Nach Etappe 2a:** 95 Body-Dicts + 18 HTTP-200-Fehler = 113.  
-**Nach Etappe 2b:** 85 Body-Dicts + 18 HTTP-200-Fehler = 103.
+**Nach Etappe 2b:** 85 Body-Dicts + 18 HTTP-200-Fehler = 103.  
+**Nach Etappe 2d:** 44 Body-Dicts + 18 HTTP-200-Fehler = 62.  
+**Hinweis:** alle Testlaeufe seit dem 23.11.2026 nur noch mit
+`ARCHON_TEST_DB_ISOLATION=1`, damit die produktiven `data/*.db` nicht mehr
+durch Host/Container-WAL-Konflikte beschaedigt werden.
 
 ---
 

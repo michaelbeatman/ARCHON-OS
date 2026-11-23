@@ -22,7 +22,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -34,6 +34,46 @@ from archon.core.runtime import (  # noqa: F401
 from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+
+# P0 / API_VALIDATION_ROADMAP Etappe 2d.
+# erp_manager verarbeitet bei den save_*-Endpunkten den kompletten Payload
+# (beliebige Fachfelder) -> dort extra="allow", sonst extra="ignore".
+class ErpPayloadRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    company_id: Optional[str] = None
+
+
+class ErpConvertDocumentRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    target_doc_type: str = "invoice"
+    company_id: Optional[str] = None
+
+
+class ErpCancelDocumentRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    company_id: Optional[str] = None
+    reason: str = ""
+
+
+class ErpBankImportRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    content: str = ""
+    format: str = "auto"
+    auto_mark_paid: bool = False
+    company_id: Optional[str] = None
+
+
+class ErpMatchBankTransactionRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    doc_id: str = ""
+    mark_paid: bool = True
+    company_id: Optional[str] = None
+
+
+class ErpSyncPocketbaseRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    company_id: Optional[str] = None
 
 @router.get("/api/erp/documents/{doc_id}/print", response_class=HTMLResponse)
 def api_erp_document_print(
@@ -162,8 +202,9 @@ def api_erp_get_entity_detail(entity_id: str, company_id: Optional[str] = None):
 
 
 @router.post("/api/erp/entities")
-def api_erp_save_entity(request: Request, payload: Dict = Body(...)):
+def api_erp_save_entity(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.save_entity(payload=payload, company_id=company_id)
@@ -171,8 +212,9 @@ def api_erp_save_entity(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/erp/contacts")
-def api_erp_save_contact(request: Request, payload: Dict = Body(...)):
+def api_erp_save_contact(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.save_contact(payload=payload, company_id=company_id)
@@ -180,8 +222,9 @@ def api_erp_save_contact(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/erp/interactions")
-def api_erp_add_interaction(request: Request, payload: Dict = Body(...)):
+def api_erp_add_interaction(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.add_interaction(payload=payload, company_id=company_id)
@@ -199,8 +242,9 @@ def api_erp_list_items(
 
 
 @router.post("/api/erp/items")
-def api_erp_save_item(request: Request, payload: Dict = Body(...)):
+def api_erp_save_item(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.save_item(payload=payload, company_id=company_id)
@@ -232,8 +276,9 @@ def api_erp_get_document(doc_id: str, company_id: Optional[str] = None):
 
 
 @router.post("/api/erp/documents")
-def api_erp_save_document(request: Request, payload: Dict = Body(...)):
+def api_erp_save_document(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     saved = erp_manager.save_document(payload=payload, company_id=company_id)
@@ -241,8 +286,9 @@ def api_erp_save_document(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/erp/documents/{doc_id}/convert")
-def api_erp_convert_document(request: Request, doc_id: str, payload: Dict = Body(default={})):
+def api_erp_convert_document(request: Request, doc_id: str, payload: ErpConvertDocumentRequest = Body(default=ErpConvertDocumentRequest())):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     target_type = payload.get("target_doc_type", "invoice")
     company_id = payload.get("company_id")
@@ -253,9 +299,10 @@ def api_erp_convert_document(request: Request, doc_id: str, payload: Dict = Body
 
 
 @router.post("/api/erp/documents/{doc_id}/cancel")
-def api_erp_cancel_document(request: Request, doc_id: str, payload: Dict = Body(default={})):
+def api_erp_cancel_document(request: Request, doc_id: str, payload: ErpCancelDocumentRequest = Body(default=ErpCancelDocumentRequest())):
     """Storniert einen Beleg GoBD-konform über eine Storno-Gutschrift (Typ 381)."""
     require_admin_or_503(request)
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     reason = str(payload.get("reason") or "")
@@ -359,9 +406,10 @@ def api_erp_list_bank_transactions(request: Request, company_id: Optional[str] =
 
 
 @router.post("/api/erp/bank/import")
-def api_erp_import_bank_statement(request: Request, payload: Dict = Body(...)):
+def api_erp_import_bank_statement(request: Request, payload: ErpBankImportRequest = Body(...)):
     """Importiert Kontoauszüge (ISO 20022 CAMT.053 XML, MT940, Bank-CSV) und führt automatischen OPOS-Abgleich aus."""
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     raw_content = payload.get("content") or ""
     if not str(raw_content).strip():
@@ -380,9 +428,10 @@ def api_erp_import_bank_statement(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/erp/bank/transactions/{tx_id}/match")
-def api_erp_match_bank_transaction(request: Request, tx_id: str, payload: Dict = Body(...)):
+def api_erp_match_bank_transaction(request: Request, tx_id: str, payload: ErpMatchBankTransactionRequest = Body(...)):
     """Ordnet eine importierte Banktransaktion einer Rechnung zu und verbucht optional als bezahlt."""
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     doc_id = str(payload.get("doc_id") or "").strip()
     if not doc_id:
@@ -399,8 +448,9 @@ def api_erp_match_bank_transaction(request: Request, tx_id: str, payload: Dict =
 
 
 @router.post("/api/erp/sync/pocketbase")
-def api_erp_sync_pocketbase(request: Request, payload: Dict = Body(default={})):
+def api_erp_sync_pocketbase(request: Request, payload: ErpSyncPocketbaseRequest = Body(default=ErpSyncPocketbaseRequest())):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     company_id = payload.get("company_id")
     if "pocketbase_url" in payload or "collection_name" in payload:

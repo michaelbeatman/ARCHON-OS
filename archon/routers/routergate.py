@@ -21,7 +21,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -32,8 +32,43 @@ from archon.core.runtime import (  # noqa: F401
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
+
+class _RouterGateRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class ModelBenchmarkRequest(_RouterGateRequest):
+    prompt: str = "Erstelle eine strukturierte Zusammenfassung der DSGVO-Kernpflichten."
+    model_a: str = "deepseek/deepseek-chat"
+    model_b: str = "anthropic/claude-3-5-sonnet"
+    role: str = "Senior Analyst"
+
+
+class EstimateCostRequest(_RouterGateRequest):
+    prompt: str = ""
+    model: str = "deepseek/deepseek-chat"
+    expected_output_tokens: int = Field(default=1000, ge=0)
+    task_budget_usd: float = Field(default=0.25, ge=0)
+
+
+class HedgedCompletionRequest(_RouterGateRequest):
+    prompt: str = "Test-Anfrage"
+    primary_model: str = "openai/gpt-4o"
+    fallback_model: Optional[str] = None
+    hedge_delay_seconds: Optional[float] = None
+    simulate_primary_latency_sec: Optional[float] = None
+    simulate_fallback_latency_sec: float = 0.05
+
+
+class BanditOutcomeRequest(_RouterGateRequest):
+    model_id: str = "deepseek/deepseek-chat"
+    success: bool = True
+    latency_ms: float = Field(default=500.0, ge=0)
+
+
 @router.post("/api/router/benchmark")
-async def api_run_model_benchmark(payload: Dict = Body(...)):
+async def api_run_model_benchmark(payload: ModelBenchmarkRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.model_benchmarker import run_model_benchmark
     return await run_model_benchmark(
         prompt=payload.get("prompt", "Erstelle eine strukturierte Zusammenfassung der DSGVO-Kernpflichten."),
@@ -44,8 +79,9 @@ async def api_run_model_benchmark(payload: Dict = Body(...)):
 
 
 @router.post("/api/router/estimate-cost")
-def api_estimate_cost(request: Request, payload: Dict = Body(...)):
+def api_estimate_cost(request: Request, payload: EstimateCostRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
+    payload = payload.model_dump()
     from backend.cost_estimator import estimate_prompt_cost
     return estimate_prompt_cost(
         prompt=payload.get("prompt", ""),
@@ -62,7 +98,8 @@ def api_get_benchmark_history(limit: int = 25):
 
 
 @router.post("/api/router/hedged-completion")
-async def api_hedged_completion(payload: Dict = Body(...)):
+async def api_hedged_completion(payload: HedgedCompletionRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.speculative_hedger import speculative_hedger
     result = await speculative_hedger.execute_hedged_call(
         prompt=payload.get("prompt", "Test-Anfrage"),
@@ -87,7 +124,8 @@ def api_hedged_stats(request: Request):
 
 
 @router.post("/api/router/bandit-outcome")
-def api_bandit_record_outcome(payload: Dict = Body(...)):
+def api_bandit_record_outcome(payload: BanditOutcomeRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.bandit_model_router import bandit_model_router
     return bandit_model_router.record_outcome(
         model_id=payload.get("model_id", "deepseek/deepseek-chat"),

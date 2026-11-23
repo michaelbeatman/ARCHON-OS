@@ -20,7 +20,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -31,15 +31,63 @@ from archon.core.runtime import (  # noqa: F401
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
+
+# P0 / API_VALIDATION_ROADMAP Etappe 2c — extra="ignore" bewahrt Client-Kompatibilitaet.
+class _SecurityRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class MaskSecretsRequest(_SecurityRequest):
+    text: str = ""
+
+
+class PiiScrubRequest(_SecurityRequest):
+    text: str = ""
+    session_id: str = ""
+
+
+class PiiRehydrateRequest(_SecurityRequest):
+    response_text: str = ""
+    session_id: str = ""
+    vault_map: Optional[Dict[str, Any]] = None
+
+
+class EgressCheckRequest(_SecurityRequest):
+    url: str = ""
+    agent_id: str = "agent-worker"
+
+
+class RbacCheckRequest(_SecurityRequest):
+    role: str = "researcher"
+    tool_name: str = "read_file"
+    target_path: str = ""
+
+
+class LintOutputRequest(_SecurityRequest):
+    output_text: str = ""
+
+
+class ExecutionReceiptIssueRequest(_SecurityRequest):
+    task_id: str = "task-01"
+    agent_role: str = "backend_architect"
+    model_used: str = "deepseek/deepseek-chat"
+    prompt_tokens: int = Field(default=500, ge=0)
+    completion_tokens: int = Field(default=250, ge=0)
+    cost_usd: float = Field(default=0.0012, ge=0)
+    tools_invoked: List[str] = Field(default_factory=list)
+
+
 @router.post("/api/security/mask-secrets")
-def api_mask_secrets(payload: Dict = Body(...)):
+def api_mask_secrets(payload: MaskSecretsRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.secret_masker import mask_sensitive_text
     masked, count = mask_sensitive_text(payload.get("text", ""))
     return {"status": "success", "masked_text": masked, "redacted_count": count}
 
 
 @router.post("/api/security/pii-scrub")
-def api_pii_scrub(payload: Dict = Body(...)):
+def api_pii_scrub(payload: PiiScrubRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.pii_scrubber import pii_scrubber
     return pii_scrubber.scrub_text(
         text=payload.get("text", ""),
@@ -48,8 +96,9 @@ def api_pii_scrub(payload: Dict = Body(...)):
 
 
 @router.post("/api/security/pii-rehydrate")
-def api_pii_rehydrate(request: Request, payload: Dict = Body(...)):
+def api_pii_rehydrate(request: Request, payload: PiiRehydrateRequest = Body(...)):
     require_admin_or_503(request)
+    payload = payload.model_dump()
     from backend.pii_scrubber import pii_scrubber
     return pii_scrubber.rehydrate_text(
         response_text=payload.get("response_text", ""),
@@ -59,7 +108,8 @@ def api_pii_rehydrate(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/security/egress-check")
-def api_egress_firewall_check(payload: Dict = Body(...)):
+def api_egress_firewall_check(payload: EgressCheckRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.egress_firewall import egress_firewall
     return egress_firewall.check_url(
         target_url=payload.get("url", ""),
@@ -75,7 +125,8 @@ def api_egress_firewall_logs(request: Request, limit: int = 25):
 
 
 @router.post("/api/security/rbac-check")
-def api_rbac_jail_check(payload: Dict = Body(...)):
+def api_rbac_jail_check(payload: RbacCheckRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.agent_rbac_jail import agent_rbac_jail
     return agent_rbac_jail.check_access(
         role=payload.get("role", "researcher"),
@@ -85,7 +136,8 @@ def api_rbac_jail_check(payload: Dict = Body(...)):
 
 
 @router.post("/api/security/lint-output")
-def api_lint_agent_output(payload: Dict = Body(...)):
+def api_lint_agent_output(payload: LintOutputRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.output_policy_linter import output_policy_linter
     return output_policy_linter.lint_and_clean(
         output_text=payload.get("output_text", "")
@@ -93,8 +145,9 @@ def api_lint_agent_output(payload: Dict = Body(...)):
 
 
 @router.post("/api/security/receipts/issue")
-def api_issue_execution_receipt(request: Request, payload: Dict = Body(...)):
+def api_issue_execution_receipt(request: Request, payload: ExecutionReceiptIssueRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
+    payload = payload.model_dump()
     from backend.execution_receipt_ledger import execution_receipt_ledger
     return execution_receipt_ledger.issue_receipt(
         task_id=payload.get("task_id", "task-01"),

@@ -168,13 +168,21 @@ button.shadcn-btn-primary.mc-btn-start:hover,
 
 /* Review & QA Freigabe/Ablehnen-Buttons (weiss mit 2px gruenem/rotem Rand) */
 button.shadcn-btn-primary.mc-btn-approve {
+  --mc-approve-green: #159768;
   background-color: #ffffff !important;
-  border: 2px solid #159768 !important;
-  color: #159768 !important;
+  border: 2px solid var(--mc-approve-green) !important;
+  color: var(--mc-approve-green) !important;
 }
 
 button.shadcn-btn-primary.mc-btn-approve:hover {
   background-color: #ecfdf5 !important;
+}
+
+/* Lucide-Check-Icon im Freigaben-Button in der Farbe des gruenen Rahmens */
+button.shadcn-btn-primary.mc-btn-approve svg.mc-kanban-approve-icon {
+  width: 14px !important;
+  height: 14px !important;
+  stroke: var(--mc-approve-green) !important;
 }
 
 button.shadcn-btn-outline.mc-btn-reject {

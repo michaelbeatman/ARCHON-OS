@@ -390,7 +390,8 @@
         if (dec) {
           const approveLabel = escapeHtmlMC(mcT('ui.mission_control_cockpit.move_approve', 'Freigeben'));
           const rejectLabel = escapeHtmlMC(mcT('ui.mission_control_cockpit.move_reject', 'Ablehnen'));
-          buttons = `<button onclick="event.stopPropagation(); mcKanbanDecide('${t.id}', 'approve')" title="${approveLabel}" aria-label="${approveLabel}" class="shadcn-btn-primary mc-btn-approve flex-1 py-0.5 text-[11px] cursor-pointer flex items-center justify-center h-6">✅</button>`
+          const approveIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check preview-icon mc-kanban-approve-icon"><path d="M20 6 9 17l-5-5"/></svg>';
+          buttons = `<button onclick="event.stopPropagation(); mcKanbanDecide('${t.id}', 'approve')" title="${approveLabel}" aria-label="${approveLabel}" class="shadcn-btn-primary mc-btn-approve flex-1 py-0.5 text-[11px] cursor-pointer flex items-center justify-center h-6">${approveIcon}</button>`
             + `<button onclick="event.stopPropagation(); mcKanbanDecide('${t.id}', 'reject')" title="${rejectLabel}" aria-label="${rejectLabel}" class="shadcn-btn-outline mc-btn-reject flex-1 py-0.5 text-[11px] cursor-pointer flex items-center justify-center h-6">❌</button>`;
         } else {
           buttons = mcKanbanMoveBtn(t.id, 'done', mcT('ui.mission_control_cockpit.move_complete', 'Abschließen'), true) + mcKanbanMoveBtn(t.id, 'todo', mcT('ui.mission_control_cockpit.move_back', 'Zurück'), false);

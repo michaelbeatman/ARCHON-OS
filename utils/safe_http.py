@@ -10,10 +10,30 @@ Zentraler SSRF-geschuetzter HTTP-Client fuer Archon OS:
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import os
 import urllib.error
 import urllib.request
 from typing import Any, Dict, Optional, Tuple
+
+
+def webhook_signature_headers(body: bytes, secret_env: str = "ARCHON_WEBHOOK_HMAC_SECRET") -> Dict[str, str]:
+    """H5: HMAC-SHA256-Signatur fuer ausgehende Webhooks.
+
+    Der Secret kommt ausschliesslich aus der Umwelt (kein Default, kein Repo).
+    Ist keiner konfiguriert, wird nicht signiert — Empfaenger mit
+    Signaturpruefung lehnen den Request dann ab (fail-closed beim Empfaenger).
+    """
+    secret = (os.environ.get(secret_env) or "").strip()
+    if not secret or not body:
+        return {}
+    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return {
+        "X-Archon-Webhook-Signature": f"sha256={digest}",
+        "X-Archon-Webhook-Algorithm": "HMAC-SHA256",
+    }
 
 
 class _RejectAllRedirectsHandler(urllib.request.HTTPRedirectHandler):

@@ -518,11 +518,28 @@ def register_calendar_webhook_watch(request: Request, src_id: str, payload: Opti
 
 
 @router.api_route("/webhooks/push", methods=["GET", "POST"])
-def receive_calendar_push_webhook(request: Request, validationToken: Optional[str] = Query(None)):
+async def receive_calendar_push_webhook(request: Request, validationToken: Optional[str] = Query(None)):
     if validationToken:
         return PlainTextResponse(content=validationToken, status_code=200)
-    channel_id = request.headers.get("X-Goog-Channel-ID", "")
-    res = operations_calendar.handle_webhook_push(channel_id=channel_id)
+    # Google: watch_id in X-Goog-Channel-ID, clientState in X-Goog-Channel-Token.
+    channel_id = str(request.headers.get("X-Goog-Channel-ID") or "")
+    client_state = str(request.headers.get("X-Goog-Channel-Token") or "")
+    if not client_state:
+        # Microsoft Graph sendet den clientState im Body der Notification.
+        try:
+            raw = await request.body()
+            payload = json.loads(raw.decode("utf-8")) if raw else {}
+            if isinstance(payload, dict):
+                client_state = str(payload.get("clientState") or "")
+        except Exception:
+            client_state = ""
+    res = await asyncio.to_thread(
+        operations_calendar.handle_webhook_push,
+        channel_id=channel_id,
+        client_state=client_state,
+    )
+    if not res.get("matched"):
+        raise HTTPException(status_code=401, detail="Unbekannter Webhook-Kanal")
     broadcast_calendar_update("webhook_synced", res)
     return {"status": "success", **res}
 

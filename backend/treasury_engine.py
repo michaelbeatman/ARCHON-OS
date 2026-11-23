@@ -101,7 +101,8 @@ def init_treasury_db() -> None:
         conn.close()
 
 
-def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
+def _legacy_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
+    """Hash-Format bestehender Ketten (Lauf-5 K-01): nacktes SHA-256."""
     payload = json.dumps(
         {
             "prev": prev_hash,
@@ -111,9 +112,6 @@ def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
             "amount": row_dict.get("amount"),
             "currency": row_dict.get("currency"),
             "recipient": row_dict.get("recipient"),
-            # 'status' bewusst AUSGENOMMEN: approve/reject aendert den Status per UPDATE und
-            # wuerde sonst jeden Hash brechen (Audit v3 1.3.7). Status-Verlauf bleibt in den
-            # Tabellen selbst und im Audit-Log erhalten.
             "created_at": row_dict.get("created_at"),
         },
         sort_keys=True,
@@ -121,11 +119,105 @@ def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
+    """Lauf-5 K-01: HMAC-SHA256 + company_id im signierten Payload.
+
+    'status' bleibt bewusst ausgenommen: approve/reject aendert den Status per
+    UPDATE und wuerde sonst jeden Hash brechen. Der Statusverlauf liegt in der
+    Tabelle und im zentralen Audit-Log.
+    """
+    payload = json.dumps(
+        {
+            "prev": prev_hash,
+            "id": row_dict.get("id"),
+            "company_id": row_dict.get("company_id", "default"),
+            "account_id": row_dict.get("account_id"),
+            "direction": row_dict.get("direction"),
+            "amount": row_dict.get("amount"),
+            "currency": row_dict.get("currency"),
+            "recipient": row_dict.get("recipient"),
+            "idempotency_key": row_dict.get("idempotency_key", ""),
+            "created_at": row_dict.get("created_at"),
+        },
+        sort_keys=True,
+    )
+    from backend.audit_log import _chain_hash
+    return _chain_hash(payload)
+
+
 def _last_hash(conn: sqlite3.Connection) -> str:
+    # id statt created_at: manipulierte Zeitstempel duerfen nicht bestimmen,
+    # an welchem Block die Kette fortgesetzt wird (K-01).
     row = conn.execute(
-        "SELECT entry_hash FROM treasury_transactions ORDER BY created_at DESC, rowid DESC LIMIT 1"
+        "SELECT entry_hash FROM treasury_transactions ORDER BY id DESC LIMIT 1"
     ).fetchone()
     return str(row["entry_hash"]) if row and row["entry_hash"] else "GENESIS"
+
+
+def verify_treasury_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Lauf-5 K-01: Verifikation der Finanz-Hashkette (Legacy + HMAC-Bloecke)."""
+    from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
+    conn = sqlite3.connect(db_path, timeout=10.0) if db_path else _get_conn()
+    if db_path:
+        conn.row_factory = sqlite3.Row
+    try:
+        has_tbl = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='treasury_transactions'"
+        ).fetchone()
+        if not has_tbl:
+            return {"valid": True, "count": 0, "message": "Treasury-Kette ist leer."}
+        rows = conn.execute("SELECT * FROM treasury_transactions ORDER BY id ASC").fetchall()
+        if not rows:
+            return {"valid": True, "count": 0, "message": "Treasury-Kette ist leer."}
+        prev_hash = "GENESIS"
+        hmac_blocks = 0
+        for r in rows:
+            if str(r["prev_hash"]) != prev_hash:
+                return {
+                    "valid": False, "broken_at_id": r["id"],
+                    "message": f"Treasury-Kettenbruch bei ID {r['id']}.",
+                }
+            stored = str(r["entry_hash"] or "")
+            if stored.startswith(HMAC_PREFIX):
+                hmac_blocks += 1
+                payload = json.dumps(
+                    {
+                        "prev": r["prev_hash"],
+                        "id": r["id"],
+                        "company_id": r["company_id"],
+                        "account_id": r["account_id"],
+                        "direction": r["direction"],
+                        "amount": r["amount"],
+                        "currency": r["currency"],
+                        "recipient": r["recipient"],
+                        "idempotency_key": r["idempotency_key"],
+                        "created_at": r["created_at"],
+                    },
+                    sort_keys=True,
+                )
+                if not _verify_hash(payload, stored, r["id"]):
+                    return {
+                        "valid": False, "broken_at_id": r["id"],
+                        "message": f"Treasury-Payload-Manipulation bei ID {r['id']}.",
+                    }
+            elif _legacy_entry_hash(r["prev_hash"], dict(r)) != stored:
+                return {
+                    "valid": False, "broken_at_id": r["id"],
+                    "message": f"Treasury-Legacy-Hash ungueltig bei ID {r['id']}.",
+                }
+            prev_hash = stored
+        key_active = bool(_hmac_epochs())
+        if hmac_blocks and not key_active:
+            return {
+                "valid": False, "count": len(rows), "hmac_active": False,
+                "message": "HMAC-Bloecke ohne passenden ARCHON_AUDIT_HMAC_KEY.",
+            }
+        return {
+            "valid": True, "count": len(rows), "hmac_active": key_active,
+            "hmac_blocks": hmac_blocks, "latest_hash": prev_hash,
+        }
+    finally:
+        conn.close()
 
 
 def _row_to_account(row: sqlite3.Row) -> Dict[str, Any]:

@@ -121,6 +121,14 @@ class AuthService:
 
     @staticmethod
     def _must_force_auth() -> bool:
+        # K2/C01: expliziter Operator-Schalter fuer Mesh-/Prod-Deployments.
+        # Production wird unten bereits erzwungen; dieser Flag deckt den Fall
+        # ab, dass der Container zwar `ENVIRONMENT=development` hat, aber
+        # ueber `agentic_mesh`/`archon-admin_net` fuer andere Dienste
+        # erreichbar ist. Erst nach Provisionierung des Service-Tokens setzen.
+        forced = str(os.environ.get("ARCHON_REQUIRE_AUTH") or "").strip().lower()
+        if forced in ("1", "true", "yes", "on"):
+            return True
         env_name = str(
             os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
         ).strip().lower()

@@ -34,7 +34,11 @@ class ProviderCircuitBreaker:
             if open_until <= 0:
                 return True
             if time.time() >= open_until:
-                # Half-Open: genau ein Probe darf durch.
+                # M1 (Audit-Lauf 5): bisher wurde `probing` gesetzt, aber nie
+                # geprüft -> after cooldown dürfen ALLE wartenden Threads
+                # gleichzeitig durch (Thundering Herd). Genau ein Probe.
+                if st.get("probing"):
+                    return False
                 st["probing"] = True
                 return True
             return False

@@ -95,22 +95,9 @@ let AuthService = class AuthService {
             }
             const isPreviewMode = process.env.N8N_PREVIEW_MODE === 'true';
             const shouldSkipAuth = (allowSkipPreviewAuth && isPreviewMode) || allowUnauthenticated;
-            const autoOwnerEnabled = process.env.N8N_ARCHON_AUTO_OWNER === 'true';
-            if (autoOwnerEnabled && !req.user && !allowUnauthenticated) {
-                try {
-                    const users = await this.userRepository.find({ relations: ['role'] });
-                    const owner = (users && users.find(u => u.role?.slug === 'global:owner')) || (users && users[0]);
-                    if (owner && !owner.disabled) {
-                        req.user = owner;
-                        req.authInfo = { usedMfa: false };
-                        try {
-                            this.issueCookie(res, owner, false, undefined, false, { sameSite: 'lax', secure: false });
-                        } catch (_) {}
-                    }
-                } catch (e) {
-                    this.logger.warn('Auto-auth fallback: ' + (e?.message || e));
-                }
-            }
+            // K4: Der fruehere N8N_ARCHON_AUTO_OWNER-Fallback setzte ohne
+            // gueltige Session automatisch den Owner-User und stellte ein Cookie
+            // mit secure:false aus — eine latente Backdoor. Entfernt.
             if (Object.hasOwn(req, 'user') && req.user)
                 return next();
             else if (shouldSkipAuth)
@@ -222,8 +209,25 @@ let AuthService = class AuthService {
         return this.skipBrowserIdCheckEndpoints.some((entry) => typeof entry === 'string' ? entry === endpoint : entry.test(endpoint));
     }
     validateBrowserId(jwtPayload, browserId, endpoint, method) {
-        // Archon OS: Disabled strict browserId check to prevent session dropping across iframes, tabs, and reloads
-        return;
+        // K4: bindung der Session an den Browser wiederherstellen. Die
+        // Ausnahmeliste (Push, Binary-Data, OAuth-Callbacks, Typ-Endpunkte,
+        // MCP) deckt die legitimen Cross-Origin-/Embed-Faelle ab.
+        if (this.endpointSkipsBrowserIdCheck(endpoint)) {
+            return;
+        }
+        if (jwtPayload && jwtPayload.browserId) {
+            const current = typeof browserId === 'string' && browserId
+                ? this.hash(browserId)
+                : '';
+            if (current !== jwtPayload.browserId) {
+                this.logger.warn('Ungueltige Browser-ID im JWT', {
+                    endpoint,
+                    method,
+                    userId: jwtPayload.id,
+                });
+                throw new auth_error_1.AuthError('Unauthorized');
+            }
+        }
     }
     async validateToken(token) {
         const jwtPayload = this.jwtService.verify(token, {

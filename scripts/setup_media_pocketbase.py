@@ -27,7 +27,7 @@ def api_request(endpoint, data=None, method="GET", token=None):
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             content = resp.read().decode("utf-8")
             return json.loads(content) if content else {}
     except urllib.error.HTTPError as e:

@@ -141,7 +141,24 @@ class EmailDraftEngine:
                 local_conn.commit()
 
     def _seed_sample_drafts_if_empty(self):
-        """Erzeugt 2 realistische Muster-Entwuerfe, falls noch keine Daten vorliegen."""
+        """Erzeugt Muster-Entwuerfe NUR im expliziten Demo-Modus (C21).
+
+        Vorher wurden beim ersten Start immer zwei realistisch wirkende
+        Entwuerfe (inkl. `DRAFT_CREATED`-Audit-Events und erfundenen
+        `source_task_id`) angelegt. Sie erschienen in der Freigabe-Queue und
+        konnten tatsaechlich versendet werden. Im Normalbetrieb darf das
+        System keine E-Mails erfinden.
+        """
+        try:
+            from backend.demo_mode import is_demo_mode
+            demo = bool(is_demo_mode())
+        except Exception:
+            demo = False
+        if not demo:
+            _archon_exc_logger.info(
+                "[EmailDrafts] Keine Muster-Entwuerfe erzeugt (Demo-Modus inaktiv)."
+            )
+            return
         with self._get_conn() as conn:
             count = conn.execute("SELECT COUNT(*) as c FROM email_drafts").fetchone()["c"]
             if count > 0:
@@ -149,7 +166,7 @@ class EmailDraftEngine:
 
             now = datetime.datetime.now(datetime.timezone.utc)
             d1_id = f"draft_{secrets.token_hex(6)}"
-            d1_subject = "Projekt-Update: Status Meilenstein Q4 Infrastruktur"
+            d1_subject = "[DEMO] Projekt-Update: Status Meilenstein Q4 Infrastruktur"
             d1_rec = "keller.michael@archon-partner.de"
             d1_body = (
                 "Sehr geehrter Herr Keller,\n\n"
@@ -166,10 +183,10 @@ class EmailDraftEngine:
                     body_text, status, created_at, updated_at, source_task_id
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 't-6fad7a')
             """, (d1_id, d1_subject, d1_rec, "hermes@archon-os.internal", "default", "Hermes Orchestrator", d1_body, d1_created, d1_created))
-            self._log_audit(d1_id, "DRAFT_CREATED", {"subject": d1_subject, "recipient": d1_rec}, created_by="system", conn=conn)
+            self._log_audit(d1_id, "DEMO_DRAFT_CREATED", {"subject": d1_subject, "recipient": d1_rec, "demo": True}, created_by="system", conn=conn)
 
             d2_id = f"draft_{secrets.token_hex(6)}"
-            d2_subject = "Rückfrage zu Rechnung INV-2026-0881 (Zahlungseingang)"
+            d2_subject = "[DEMO] Rückfrage zu Rechnung INV-2026-0881 (Zahlungseingang)"
             d2_rec = "buchhaltung@cloud-scale.io"
             d2_body = (
                 "Hallo Team von CloudScale,\n\n"
@@ -186,7 +203,7 @@ class EmailDraftEngine:
                     body_text, status, created_at, updated_at, source_task_id
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 't-5596bd')
             """, (d2_id, d2_subject, d2_rec, "finanzen@archon-os.internal", "finanzen", "Finanz-Agent", d2_body, d2_created, d2_created))
-            self._log_audit(d2_id, "DRAFT_CREATED", {"subject": d2_subject, "recipient": d2_rec}, created_by="system", conn=conn)
+            self._log_audit(d2_id, "DEMO_DRAFT_CREATED", {"subject": d2_subject, "recipient": d2_rec, "demo": True}, created_by="system", conn=conn)
 
             conn.commit()
 

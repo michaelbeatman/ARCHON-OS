@@ -179,34 +179,42 @@ class GracefulShutdownCoordinator:
         if not self._active_tasks:
             return []
 
-        checkpoints = []
+        checkpoints: List[Dict[str, Any]] = []
+        failed: List[str] = []
         try:
             from backend.durable_checkpoint_manager import durable_checkpoint_manager
             has_mgr = True
-        except Exception:
+        except Exception as exc:
             has_mgr = False
+            print(f"[GracefulShutdown] Checkpoint-Manager nicht verfuegbar: {exc}", file=sys.stderr)
 
         now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         for tid, tinfo in list(self._active_tasks.items()):
+            if not has_mgr:
+                failed.append(tid)
+                continue
             title = tinfo.get("title", f"Task {tid}")
             cur_step = tinfo.get("current_step", 0)
             total_steps = tinfo.get("total_steps", 1)
             state = tinfo.get("state_payload", {})
 
-            # 1. In durable_checkpoint_manager eintragen
-            if has_mgr:
-                try:
-                    durable_checkpoint_manager.save_checkpoint(
-                        workflow_id=tid,
-                        task_title=title,
-                        current_step_index=cur_step,
-                        total_steps=total_steps,
-                        state_payload=state,
-                        status="checkpointed"
-                    )
-                except Exception as e:
-                    print(f"[GracefulShutdown] Fehler beim Checkpointing von {tid}: {e}", file=sys.stderr)
+            # 1. In durable_checkpoint_manager eintragen. Nur bei Erfolg darf
+            # der Task als 'checkpointed' gelten (Audit C12: vorher wurde ein
+            # Checkpoint-Fehler nur gedruckt und die Registry trotzdem geleert).
+            try:
+                durable_checkpoint_manager.save_checkpoint(
+                    workflow_id=tid,
+                    task_title=title,
+                    current_step_index=cur_step,
+                    total_steps=total_steps,
+                    state_payload=state,
+                    status="checkpointed"
+                )
+            except Exception as e:
+                print(f"[GracefulShutdown] Fehler beim Checkpointing von {tid}: {e}", file=sys.stderr)
+                failed.append(tid)
+                continue
 
             # 2. In kanban.db oder agent_os.db Status von 'in_progress' auf 'checkpointed' setzen
             self._update_task_db_status(tid, "checkpointed", f"Automatisch pausiert vor System-Shutdown ({now_iso})")
@@ -219,8 +227,16 @@ class GracefulShutdownCoordinator:
                 "status": "checkpointed"
             })
 
+        # Nur tatsaechlich gesicherte Tasks aus der Registry entfernen.
+        for cp in checkpoints:
+            self._active_tasks.pop(cp["task_id"], None)
+        if failed:
+            print(
+                f"[GracefulShutdown] {len(failed)} Aufgaben konnten NICHT gesichert werden "
+                f"und bleiben in der Registry: {failed}",
+                file=sys.stderr,
+            )
         print(f"[GracefulShutdown] {len(checkpoints)} verbleibende Aufgaben erfolgreich als Checkpoint gesichert.")
-        self._active_tasks.clear()
         return checkpoints
 
     @staticmethod

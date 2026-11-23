@@ -1,8 +1,53 @@
 import json
+import os
 import subprocess
+import sys
+import tempfile
 import urllib.request
 import urllib.error
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+TOKEN_FILE = ROOT / "data" / ".archon_service_token"
+ARCHON_HOST = "http://archon-os:8501"
+
+
+def _load_service_token() -> str:
+    """Service-Token aus ENV oder der lokalen Token-Datei (nie aus dem Repo)."""
+    tok = os.environ.get("ARCHON_SERVICE_TOKEN", "").strip()
+    if tok:
+        return tok
+    try:
+        return TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _prepare_workflows(token: str):
+    """Token in alle HTTP-Nodes injizieren und den Container-Host korrigieren.
+
+    C17: Dieses Skript hat frueher die tokenhaltige Vorlage
+    `n8n_routine_workflows.json` mit tokenlosen AKTIVEN Workflows ueberschrieben.
+    Ohne Token brechen wir ab, statt ein funktionsloses/wirkungsloses Deployment
+    zu erzeugen.
+    """
+    workflows = json.loads(json.dumps(ROUTINE_WORKFLOWS))
+    for wf in workflows:
+        for node in wf.get("nodes", []):
+            params = node.get("parameters", {})
+            url = params.get("url")
+            if isinstance(url, str):
+                params["url"] = url.replace("http://ARCHON-OS:8501", ARCHON_HOST)
+            if node.get("type") == "n8n-nodes-base.httpRequest":
+                params["sendHeaders"] = True
+                headers = params.setdefault("headerParameters", {}).setdefault("parameters", [])
+                if not any(
+                    str(h.get("name", "")).lower() == "x-archon-service-token"
+                    for h in headers
+                ):
+                    headers.append({"name": "X-Archon-Service-Token", "value": token})
+    return workflows
+
 
 ROUTINE_WORKFLOWS = [
     {
@@ -443,13 +488,33 @@ def run():
     print("DEPLOYMENT DER N8N ROUTINE-WORKFLOWS")
     print("=" * 60)
 
-    # 1. Speichere JSON lokal
-    json_path = Path("scripts/n8n_routine_workflows.json")
-    json_path.write_text(json.dumps(ROUTINE_WORKFLOWS, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"[OK] Routine-Workflows lokal gespeichert: {json_path}")
+    # 0. C17: ohne Service-Token keine aktiven, tokenlosen Workflows deployen.
+    token = _load_service_token()
+    if not token:
+        print(
+            "FEHLER: Kein ARCHON_SERVICE_TOKEN gefunden (ENV oder data/.archon_service_token). "
+            "Deployment abgebrochen — aktive Workflows ohne Token wuerden bei aktivierter "
+            "Auth mit 401 scheitern."
+        )
+        return 1
+    workflows = _prepare_workflows(token)
+    # Repo-getrackte Dateien enthalten NUR den Platzhalter — nie den echten
+    # Token. Das import_n8n_workflows.py ersetzt ihn bei Bedarf zur Laufzeit.
+    template = _prepare_workflows("__ARCHON_SERVICE_TOKEN__")
+
+    # 1. Speichere Template lokal (ohne Secret)
+    json_path = ROOT / "scripts" / "n8n_routine_workflows.json"
+    json_path.write_text(json.dumps(template, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"[OK] Routine-Workflow-Template lokal gespeichert: {json_path}")
+
+    # 1b. Laufzeit-Datei mit echtem Token ausserhalb des Repos
+    runtime_dir = Path(tempfile.mkdtemp(prefix="archon_n8n_deploy_"))
+    runtime_path = runtime_dir / "n8n_routine_workflows.json"
+    runtime_path.write_text(json.dumps(workflows, indent=2, ensure_ascii=False), encoding="utf-8")
+    os.chmod(runtime_path, 0o600)
 
     # 2. Kopiere in n8n-Container
-    copy_cmd = ["docker", "cp", str(json_path), "n8n:/home/node/n8n_routine_workflows.json"]
+    copy_cmd = ["docker", "cp", str(runtime_path), "n8n:/home/node/n8n_routine_workflows.json"]
     res = subprocess.run(copy_cmd, capture_output=True, text=True)
     if res.returncode == 0:
         print("[OK] Datei in Container n8n kopiert.")
@@ -493,7 +558,7 @@ def run():
     
     # Merge routines into bundle
     existing_ids = {w["id"] for w in current_bundle if "id" in w}
-    for rw in ROUTINE_WORKFLOWS:
+    for rw in template:
         if rw["id"] not in existing_ids:
             current_bundle.append(rw)
             existing_ids.add(rw["id"])
@@ -502,4 +567,4 @@ def run():
     print(f"[OK] n8n_workflows_bundle.json aktualisiert ({len(current_bundle)} Workflows).")
 
 if __name__ == "__main__":
-    run()
+    sys.exit(run() or 0)

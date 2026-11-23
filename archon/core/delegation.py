@@ -636,6 +636,9 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
 
 
 _ACTIVE_WATCHERS: set[str] = set()
+# C10: Referenz auf den gestarteten Worker-Task, damit der Watcher bei
+# Deadline-UEberschreitung wirklich abbrechen kann (vorher nur Textnachricht).
+_DELEGATED_WORKER_TASKS: dict[str, Any] = {}
 
 # Terminale Kanban-Status (auf die ein Delegations-Watcher wartet).
 _TERMINAL_TASK_STATUSES = ("done", "blocked", "review", "failed")
@@ -789,6 +792,12 @@ async def _watch_delegated_task(
             unsubscribe_events(events)
 
         if final is None:
+            # C10: der "Timeout" war vorher kosmetisch — der Sub-Agent lief
+            # ungebremst weiter und verbrauchte Budget. Jetzt Task abbrechen.
+            worker = _DELEGATED_WORKER_TASKS.pop(task_id, None)
+            if worker is not None and not worker.done():
+                worker.cancel()
+                logger.warning("[Delegation] Worker-Task %s nach Deadline abgebrochen", task_id)
             timeout_text = (
                 f"{deadline_seconds / 60:g} Minuten" if deadline_seconds >= 60
                 else f"{deadline_seconds:g} Sekunden"
@@ -797,6 +806,7 @@ async def _watch_delegated_task(
                 f"⏱️ DELEGATION-TIMEOUT — Der Task läuft länger als {timeout_text} ohne Endstatus. "
                 "Aktueller Stand bitte im Kanban prüfen (Task-ID siehe Delegations-Quittung).")
             return
+        _DELEGATED_WORKER_TASKS.pop(task_id, None)
         status, result = final[0], (final[1] or "").strip()
         final_title = (final[2] or "").strip()
 
@@ -1249,7 +1259,11 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             kconn.close()
         try:
             from backend.operations_api import _execute_kanban_task_async
-            _spawn_background(_execute_kanban_task_async(task_id), name=f"kanban_{task_id}")
+            worker_task = _spawn_background(
+                _execute_kanban_task_async(task_id), name=f"kanban_{task_id}"
+            )
+            if worker_task is not None and hasattr(worker_task, "cancel"):
+                _DELEGATED_WORKER_TASKS[task_id] = worker_task
         except Exception as exe_err:
             logger.warning(f"[Delegation] Sofortige Ausfuehrung fehlgeschlagen: {exe_err}")
     except Exception as e:

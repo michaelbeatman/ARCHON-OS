@@ -482,6 +482,28 @@ def infer_provider_from_model(model: str) -> Optional[str]:
     return None
 
 
+def _is_safe_yaml_value(value: Optional[str]) -> bool:
+    """H3: ein Config-Wert darf keine Zeilen-/Steuerzeichen enthalten."""
+    if value is None:
+        return True
+    return not any(c in str(value) for c in ("\n", "\r", "\x00", "\x1b"))
+
+
+def _validate_base_url(value: Optional[str]) -> bool:
+    """H3: nur absolute http(s)-URLs ohne eingebettete Credentials."""
+    if not value:
+        return True
+    url = str(value).strip()
+    if not _is_safe_yaml_value(url):
+        return False
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc) and "@" not in parsed.netloc
+
+
 def _set_model_block(model: str, provider: str, base_url: Optional[str] = None,
                      config_path: Optional[str] = None) -> bool:
     """
@@ -492,6 +514,10 @@ def _set_model_block(model: str, provider: str, base_url: Optional[str] = None,
         base_url: <base_url>
     Ersetzt einen evtl. vorhandenen model:-Block komplett.
     """
+    if not (_is_safe_yaml_value(model) and _is_safe_yaml_value(provider)
+            and _validate_base_url(base_url)):
+        print("Fehler beim Schreiben model-Block: ungueltige/unsichere Parameter", file=sys.stderr)
+        return False
     path = config_path or CONFIG_PATH
     if os.path.dirname(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)

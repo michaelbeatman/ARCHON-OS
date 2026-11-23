@@ -846,7 +846,16 @@ async def execute_workflow_node_plugin(
                             "content": json.dumps(data_dict, ensure_ascii=False),
                         }
 
-        return {"status": "success", "content": json.dumps(data_dict, ensure_ascii=False), **data_dict}
+        # H4: externe Antwort darf die Steuerungsfelder des Ergebnisses nicht
+        # ueberschreiben (status/content/error/media_path). Alle externen
+        # Daten stehen zusaetzlich unter `data` zur Verfuegung.
+        external = {
+            k: v for k, v in data_dict.items()
+            if k not in ("status", "content", "error", "media_path", "data")
+        }
+        result = {"status": "success", "content": json.dumps(data_dict, ensure_ascii=False), "data": external}
+        result.update(external)
+        return result
 
     return {"status": "error", "error": f"Kein Ausfuehrungs-Adapter fuer Plugin '{spec['plugin_id']}' konfiguriert.", "content": ""}
 

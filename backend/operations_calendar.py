@@ -7,6 +7,7 @@ M25 — Operativer Operations-Kalender (ERP, Kanban, n8n-Crons & Termine/Geburts
 from __future__ import annotations
 
 import datetime
+import hmac
 import json
 import os
 import sqlite3
@@ -1615,7 +1616,15 @@ class OperationsCalendarManager:
         watch_id = f"archon_{src_id}_{uuid.uuid4().hex[:8]}"
 
         if prov == "google_oauth":
-            body = json.dumps({"id": watch_id, "type": "web_hook", "address": webhook_url}).encode("utf-8")
+            # clientState ist der gemeinsame Geheimwert für eingehende Pushs.
+            # Ohne ihn kann der Webhook-Endpunkt keine legitimen von fremden
+            # Notifications unterscheiden (Audit-Lauf 5, K1).
+            body = json.dumps({
+                "id": watch_id,
+                "type": "web_hook",
+                "address": webhook_url,
+                "clientState": watch_id,
+            }).encode("utf-8")
             req = urllib.request.Request(
                 "https://www.googleapis.com/calendar/v3/calendars/primary/events/watch",
                 data=body,
@@ -1658,15 +1667,30 @@ class OperationsCalendarManager:
         return {"watch_id": watch_id, "expires_at": exp, "provider": prov}
 
     def handle_webhook_push(self, channel_id: str = "", client_state: str = "") -> Dict[str, Any]:
+        """Nur Pushs mit bekannter watch_id/clientState dürfen Syncs auslösen (K1).
+
+        Google liefert die watch_id in `X-Goog-Channel-ID` und den clientState in
+        `X-Goog-Channel-Token`; Microsoft Graph sendet den clientState im Body.
+        Ein Match allein auf den Provider würde jeden unauthentifizierten POST
+        auf den Webhook-Endpunkt zum Sync aller OAuth-Quellen machen.
+        """
         sources = self.list_sources()
+        known = [s for s in sources if s.get("enabled") and s.get("watch_id")]
+
+        def _matches(source: Dict[str, Any], candidate: str) -> bool:
+            if not candidate:
+                return False
+            expected = str(source.get("watch_id") or "")
+            return bool(expected) and hmac.compare_digest(expected, str(candidate))
+
         matched = [
-            s for s in sources
-            if s.get("enabled") and (
-                (channel_id and s.get("watch_id") == channel_id)
-                or (client_state and s.get("watch_id") == client_state)
-                or s.get("provider") in ("google_oauth", "outlook_oauth")
-            )
+            s for s in known
+            if _matches(s, channel_id) or _matches(s, client_state)
         ]
+        if not matched:
+            logger.info("[Calendar] Push-Webhook ohne gueltigen Kanal verworfen")
+            return {"synced": [], "matched": False}
+
         synced = []
         for s in matched:
             try:
@@ -1685,7 +1709,7 @@ class OperationsCalendarManager:
             )
         except Exception as exc:
             logger.debug(f"[Calendar] Push-Webhook Event-Dispatch uebersprungen: {exc}")
-        return {"synced": synced}
+        return {"synced": synced, "matched": True}
 
     # ── Eingehende .ics-RSVP-Antworten (METHOD:REPLY / IMAP) ────────────────
     def process_rsvp_ics_text(self, ics_text: str) -> List[Dict[str, Any]]:

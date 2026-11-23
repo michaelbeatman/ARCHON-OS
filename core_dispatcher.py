@@ -7,11 +7,30 @@ import logging
 import httpx
 import asyncio
 import functools
+import random
 import weakref
 import sqlite3
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("archon.core_dispatcher")
+
+
+async def _provider_backoff(response=None, *, provider: str = "") -> None:
+    """H1: jittered Backoff nach 429/5xx bzw. fehlgeschlagenem Provider-Hop.
+
+    Verhindert, dass die Fallback-Kette einen rate-limitierten Provider im
+    selben Millisekundenfenster erneut haemmert (Thundering Herd). `Retry-After`
+    wird respektiert, aber auf 3 s gedeckelt.
+    """
+    delay = 0.2
+    if response is not None:
+        try:
+            if getattr(response, "status_code", 0) == 429:
+                delay = max(delay, float(getattr(response, "headers", {}).get("Retry-After", "0")))
+        except (TypeError, ValueError):
+            pass
+    delay = min(3.0, delay)
+    await asyncio.sleep(delay * (0.75 + random.random() * 0.5))
 
 
 def _dispatch_cache_scope(agent_id: str = "") -> str:
@@ -101,8 +120,12 @@ async def trigger_n8n_execution(
         "executed_at": datetime.datetime.now().isoformat()
     }
     try:
+        from utils.safe_http import webhook_signature_headers
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        headers.update(webhook_signature_headers(body))
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(url, content=body, headers=headers)
             if resp.status_code == 200:
                 return {
                     "status": "success",
@@ -1079,9 +1102,11 @@ async def _dispatch_to_omniroute_or_container_impl(
             r = await http_client.post(url, **post_kwargs)
         except Exception:
             provider_breaker.record_failure(provider_id)
+            await _provider_backoff(provider=provider_id)
             raise
         if r.status_code >= 500 or r.status_code == 429:
             provider_breaker.record_failure(provider_id)
+            await _provider_backoff(r, provider=provider_id)
         else:
             provider_breaker.record_success(provider_id)
         log_completed_llm_dispatch(
@@ -1460,7 +1485,16 @@ async def _dispatch_to_omniroute_or_container_impl(
             )
             if resp.status_code == 200:
                 data = resp.json()
-                content = data.get("content") or data.get("output") or data.get("result") or str(data)
+                # H6: keine ungepruefte Container-Antwort als Agenten-Output
+                # uebernehmen. Nur bekannte Inhaltsfelder, bereinigt wie im
+                # anderen Container-Pfad (Z. 202).
+                if not isinstance(data, dict):
+                    data = {"content": data}
+                raw_content = data.get("content") or data.get("output") or data.get("result")
+                if not raw_content:
+                    logger.debug("[Dispatcher] Container-Antwort ohne Inhalt: %s", str(data)[:200])
+                    continue
+                content = _clean_dispatch_output(raw_content)
                 i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, str(content))
                 await _log_dispatcher_usage(agent_id, selected_model, i_tok, o_tok, task_id)
                 return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": selected_model}
@@ -1841,11 +1875,15 @@ async def stream_boardroom_debate(
     # H6 (Audit 23.11.2026): der Kill-Switch setzte nur ein Flag, aber der
     # laufende HTTP-LLM-Call blieb am Leben. Task registrieren wie in
     # archon/core/orchestration.py — cancel() bricht ihn jetzt aktiv ab.
+    # C10: frueher wurde ein Registrierungsfehler mit `pass` verschluckt und
+    # die Debatte lief ohne wirksamen Abbruch weiter (fail-open). Jetzt
+    # fail-closed — inkl. Scope-Cleanup im selben try/finally.
     try:
-        cancel_token.register_task(asyncio.current_task())
-    except Exception:
-        pass
-    try:
+        try:
+            cancel_token.register_task(asyncio.current_task())
+        except Exception as exc:
+            logger.error("[Boardroom] Kill-Switch-Registrierung fehlgeschlagen: %s", exc)
+            raise RuntimeError("Kill-Switch konnte nicht registriert werden") from exc
         async for ev in _stream_boardroom_debate_inner(
             task=task,
             max_rounds=max_rounds,

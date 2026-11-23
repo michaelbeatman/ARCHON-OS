@@ -12,7 +12,7 @@ import time
 import subprocess
 import datetime
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from archon.core.cache import ttl_cache  # noqa: E402
 from utils.docker_client import DockerError, docker_cli_host_args, validate_container_name
@@ -123,8 +123,15 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
         return {"status": "error", "service": service_name, "error": str(e)}
 
 @ttl_cache(seconds=30)
-def check_fleet_and_heal() -> Dict[str, Any]:
-    """Prüft den Zustand der Core-Dienste und heilt ausgefallene Dienste automatisch (sofern in settings.json aktiviert)."""
+def check_fleet_and_heal(services: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Prüft den Zustand der Core-Dienste und heilt ausgefallene Dienste automatisch.
+
+    C13: Es werden nur Container betrachtet, die überhaupt existieren. Ein
+    nicht deployter Dienst (z. B. CRM in einer Minimal-Installation) wird
+    übersprungen statt alle 2 Minuten einen erfolglosen Neustart zu versuchen.
+    Als ausgefallen gilt auch ein laufender Container mit `unhealthy`-Status —
+    `restart: unless-stopped` greift in diesem Fall nicht.
+    """
     auto_restart = True
     try:
         from backend.autonomy_settings import get_module_config
@@ -135,16 +142,31 @@ def check_fleet_and_heal() -> Dict[str, Any]:
 
     try:
         proc = subprocess.run(
-            ["docker", *docker_cli_host_args(), "ps", "--format", "{{.Names}}"],
+            ["docker", *docker_cli_host_args(), "ps", "-a", "--format", "{{.Names}}\t{{.Status}}"],
             capture_output=True, text=True, timeout=10,
         )
-        lines = proc.stdout.strip().splitlines()
-        running_names = [l.split("\t")[0].strip() for l in lines if l.strip()]
+        containers: Dict[str, str] = {}
+        for line in proc.stdout.strip().splitlines():
+            parts = line.split("\t", 1)
+            name = parts[0].strip()
+            if name:
+                containers[name] = parts[1].strip() if len(parts) > 1 else ""
 
+        aliases = [a for a in KNOWN_SERVICES if services is None or a in services]
         healed = []
         missing = []
-        for s_alias, c_name in KNOWN_SERVICES.items():
-            if not any(c_name in r for r in running_names):
+        skipped_not_deployed = []
+        for s_alias in aliases:
+            c_name = KNOWN_SERVICES[s_alias]
+            status = next(
+                (st for name, st in containers.items() if name == c_name or c_name in name),
+                None,
+            )
+            if status is None:
+                skipped_not_deployed.append(s_alias)
+                continue
+            is_healthy = status.startswith("Up") and "unhealthy" not in status.lower()
+            if not is_healthy:
                 missing.append(s_alias)
                 if auto_restart:
                     res = restart_service_container(s_alias)
@@ -153,7 +175,8 @@ def check_fleet_and_heal() -> Dict[str, Any]:
         return {
             "status": "ok",
             "auto_restart_enabled": auto_restart,
-            "checked_services_count": len(KNOWN_SERVICES),
+            "checked_services_count": len(aliases),
+            "skipped_not_deployed": skipped_not_deployed,
             "missing_services": missing,
             "healed_count": len(healed),
             "healed_services": healed

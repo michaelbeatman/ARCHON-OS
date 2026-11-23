@@ -10,7 +10,7 @@ def get_all_contacts():
     """Liest alle Kontakte aus PocketBase aus."""
     url = f"{POCKETBASE_URL}/api/collections/{COLLECTION_NAME}/records?perPage=500"
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json().get("items", [])
     except Exception as e:
@@ -21,7 +21,7 @@ def update_contact_email(contact_id, email_address):
     """Führt Auto-Enrichment aus (ergänzt fehlende E-Mail-Adresse)."""
     url = f"{POCKETBASE_URL}/api/collections/{COLLECTION_NAME}/records/{contact_id}"
     payload = {"email": email_address}
-    response = requests.patch(url, json=payload)
+    response = requests.patch(url, json=payload, timeout=10)
     return response.status_code == 200
 
 def append_email_to_history(contact_id, email_obj, max_retries=3):

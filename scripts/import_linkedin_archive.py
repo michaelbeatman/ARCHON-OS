@@ -124,7 +124,7 @@ def merge_and_import_connections(csv_path):
                     
                 if update_payload:
                     patch_url = f"{POCKETBASE_URL}/api/collections/{COLLECTION_NAME}/records/{contact['id']}"
-                    requests.patch(patch_url, json=update_payload)
+                    requests.patch(patch_url, json=update_payload, timeout=10)
                     print(f"[+] Anreicherung für {full_name}: {list(update_payload.keys())}")
             else:
                 # NEUER KONTAKT
@@ -140,7 +140,7 @@ def merge_and_import_connections(csv_path):
                     "nachrichtenverlauf": []
                 }
                 post_url = f"{POCKETBASE_URL}/api/collections/{COLLECTION_NAME}/records"
-                res = requests.post(post_url, json=new_contact)
+                res = requests.post(post_url, json=new_contact, timeout=10)
                 if res.status_code in [200, 201]:
                     created_data = res.json()
                     existing_by_name[name_key] = created_data

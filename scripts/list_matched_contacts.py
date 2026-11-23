@@ -6,7 +6,7 @@ COLLECTION_NAME = "kontakte"
 
 def list_matched():
     url = f"{POCKETBASE_URL}/api/collections/{COLLECTION_NAME}/records?perPage=500"
-    res = requests.get(url)
+    res = requests.get(url, timeout=10)
     if res.status_code != 200:
         print("Fehler beim Abruf:", res.status_code)
         return

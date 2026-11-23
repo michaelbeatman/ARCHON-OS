@@ -11,6 +11,7 @@ Connection für seine gesamte Laufzeit.
 """
 
 import functools
+import hashlib
 import os
 import sqlite3
 from typing import Optional
@@ -57,6 +58,24 @@ def try_acquire_loop_lock(name: str, timeout: float = 0.3) -> Optional[LoopLock]
         return None
     except Exception:
         return None
+
+
+def acquire_restore_lock(target_path: str, timeout: float = 0.3) -> LoopLock:
+    """Cross-Prozess-Gate für einen Restore auf einer bestimmten Zieldatenbank.
+
+    C07/Option B: der SQLite-EXCLUSIVE-Guard direkt auf der Ziel-DB kann unter
+    Windows nicht über `os.replace()` hinweg gehalten werden. Dieses Gate
+    liegt deshalb auf einer separaten Lock-DB (OS-verwaltet, keine stale
+    Files) und serialisiert Restores über Prozessgrenzen hinweg.
+    """
+    digest = hashlib.sha1(os.path.abspath(str(target_path)).encode("utf-8")).hexdigest()[:12]
+    lock = try_acquire_loop_lock(f"restore_{digest}", timeout=timeout)
+    if lock is None:
+        raise RuntimeError(
+            "Restore abgelehnt: fuer diese Datenbank laeuft bereits ein anderer "
+            "Restore-Prozess (Cross-Prozess-Lock)."
+        )
+    return lock
 
 
 def exclusive_loop(name: str):

@@ -72,6 +72,38 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Dict = Body
         if gate.get("status") != "pending":
             return {"status": "already_decided", "decision": gate.get("status"), "gate_id": gate_id}
 
+        # C04: HITL-Gate auch bei der Owner-Entscheidung selbst. Die Telegram-
+        # Freigabe bleibt bestehen; ist fuer die Kategorie ein Passkey
+        # konfiguriert, zusaetzlich einen gueltigen Proof verlangen. Ohne
+        # registrierte Credentials ist `is_passkey_required()` False (unveraendert).
+        if decision == "approve":
+            try:
+                from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required
+                _user = getattr(request.state, "user", None) or {}
+                uid = str(_user.get("id") or _user.get("username") or "owner")
+                category = (
+                    "destructive_actions" if gate.get("kind") == "profil_loeschen" else "system"
+                )
+                if is_passkey_required(uid, category):
+                    proof = str(
+                        body.get("passkey_proof_token")
+                        or request.headers.get("x-passkey-proof")
+                        or ""
+                    ).strip()
+                    if not proof or not consume_hitl_proof_token(
+                        proof, uid, category,
+                        action=f"Gate-Freigabe {gate_id}", resource=gate_id,
+                    ):
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Passkey-Verifizierung erforderlich, um dieses Gate freizugeben.",
+                        )
+            except HTTPException:
+                raise
+            except Exception as htl_err:
+                logger.error(f"[Gate] HITL-Pruefung fehlgeschlagen (fail-closed): {htl_err}")
+                raise HTTPException(status_code=503, detail="HITL-Pruefung nicht verfuegbar")
+
         ergebnis = ""
         ausgefuehrt = False
         ausfuehrungsfehler = None

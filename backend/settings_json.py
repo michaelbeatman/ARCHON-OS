@@ -12,6 +12,7 @@ Dieses Blatt-Modul importiert nichts aus backend (keine Import-Zyklen).
 import logging
 _archon_exc_logger = logging.getLogger("settings_json")
 
+import errno
 import json
 import os
 import tempfile
@@ -59,14 +60,25 @@ def _load_raw(path: str, *, strict: bool = False) -> Dict[str, Any]:
 
 
 def _write_atomic(path: str, data: Dict[str, Any]) -> None:
-    """Temp-Datei im SELBEN Verzeichnis + fsync + os.replace (kein Halbstand)."""
+    """Temp-Datei + fsync + os.replace (kein Halbstand).
+
+    C14: Im gehaerteten Container ist `/app` read-only und `settings.json` ein
+    Bind-Mount. Dort kann weder die Temp-Datei im Zielverzeichnis liegen noch
+    `os.replace()` den Mount-Point ersetzen (EBUSY). In diesem Fall wird die
+    Temp-Datei im beschreibbaren tmp-Raum erzeugt und der vorbereitete,
+    fsync-te Inhalt in-place in die gemountete Datei geschrieben. Der Lock
+    `_SETTINGS_LOCK` schuetzt diesen Pfad vor parallelen Schreibern.
+    """
     target = os.path.abspath(path)
     tdir = os.path.dirname(target) or "."
     os.makedirs(tdir, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=tdir, prefix=".settings_", suffix=".tmp")
+    dir_writable = os.access(tdir, os.W_OK)
+    temp_dir = tdir if dir_writable else tempfile.gettempdir()
+    fd, tmp = tempfile.mkstemp(dir=temp_dir, prefix=".settings_", suffix=".tmp")
     try:
         # Letzten gueltigen Stand als .bak sichern, bevor ersetzt wird.
-        if os.path.exists(target):
+        # Nur moeglich, wenn das Zielverzeichnis beschreibbar ist.
+        if dir_writable and os.path.exists(target):
             try:
                 import shutil
                 shutil.copy2(target, target + ".bak")
@@ -76,13 +88,34 @@ def _write_atomic(path: str, data: Dict[str, Any]) -> None:
             json.dump(data, f, indent=2, ensure_ascii=False)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, target)
+        try:
+            os.replace(tmp, target)
+        except OSError as exc:
+            if exc.errno not in (errno.EBUSY, errno.EROFS, errno.EXDEV):
+                raise
+            with open(tmp, "r", encoding="utf-8") as src:
+                content = src.read()
+            with open(target, "r+", encoding="utf-8") as dst:
+                dst.seek(0)
+                dst.write(content)
+                dst.truncate()
+                dst.flush()
+                os.fsync(dst.fileno())
+            _archon_exc_logger.warning(
+                "[settings_json] Ziel ist ein Bind-Mount (%s) - In-Place-Sync statt os.replace", target
+            )
     except BaseException:
         try:
             os.unlink(tmp)
         except OSError as _exc:
             _archon_exc_logger.debug("[settings_json] Ignorierte Ausnahme (Z.50): %s", _exc)
         raise
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def atomic_update_settings(

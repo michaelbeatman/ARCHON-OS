@@ -270,6 +270,13 @@ class PolicyEngine:
                 base,
             )
 
+        # C03: der dokumentierte Datei-Jail greift jetzt auch nach einem
+        # verifizierten Warrant — vorher konnten Agenten mit filesystem-Tool
+        # und Warrant beliebige Pfade (inkl. ../.env) lesen.
+        jail = self._enforce_file_jail(clean_tool, call_args)
+        if jail:
+            return self._deny(jail["gate"], jail["reason"], base)
+
         # M75 + M89 (einzige bestehende Implementierung, single source of truth).
         # Ein verifiziertes Warrant ersetzt NUR die Profilfreigabe (M75), niemals
         # den Session-Taint/HITL-Check (M89). Vorher wurde bei Warrant die ganze
@@ -329,6 +336,46 @@ class PolicyEngine:
                 normalized["amount"] = normalized[key]
                 break
         return normalized
+
+    _PATH_ARG_KEYS = (
+        "path", "file_path", "filepath", "file", "target_path", "filename",
+        "notebook_path", "source_path", "destination_path", "workspace",
+    )
+
+    @staticmethod
+    def _enforce_file_jail(tool: str, args: Dict[str, Any]) -> Optional[Dict[str, str]]:
+        """C03: Datei-Jail im echten Tool-Ausführungspfad durchsetzen.
+
+        `ROLE_POLICIES` kennt die realen Agentenprofile nicht — ein Aufruf mit
+        der echten Agent-ID würde alles blockieren. Deshalb wird hier nur die
+        pfadbezogene Prüfung mit `kernel_admin`-Scope genutzt: dessen Tool- und
+        Pfad-Freigaben sind `'*'`, wirksam bleiben die Sperren für `.env`/
+        SSH-Keys, Systempfade, `..`-Traversal und Symlink-Ausbrüche.
+        """
+        targets = [
+            str(args[key]).strip()
+            for key in PolicyEngine._PATH_ARG_KEYS
+            if isinstance(args.get(key), str) and str(args[key]).strip()
+        ]
+        if not targets:
+            return None
+        try:
+            from backend.agent_rbac_jail import agent_rbac_jail
+        except Exception as exc:
+            return {"gate": "rbac_jail_unavailable", "reason": f"RBAC-Jail nicht verfügbar: {exc}"}
+        for target in targets:
+            try:
+                check = agent_rbac_jail.check_access(
+                    role="kernel_admin", tool_name=tool, target_path=target
+                )
+            except Exception as exc:
+                return {"gate": "rbac_jail_error", "reason": f"RBAC-Prüfung fehlgeschlagen: {exc}"}
+            if not check.get("allowed"):
+                return {
+                    "gate": "rbac_jail",
+                    "reason": str(check.get("reason") or "path_denied"),
+                }
+        return None
 
     @staticmethod
     def is_privileged(tool_name: str) -> bool:

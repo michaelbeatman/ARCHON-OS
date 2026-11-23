@@ -198,9 +198,36 @@ def _resolve_host_path(container_path: str) -> Optional[str]:
     return posixpath.join(src, rel)
 
 
-def _terminate_container(name: str) -> bool:
-    """Killt einen Sandbox-Container hart und entfernt ihn (Best effort)."""
+def _container_present(name: str) -> Optional[bool]:
+    """True/False, falls Docker erreichbar ist, sonst None.
+
+    Ein fehlgeschlagener CLI-Aufruf darf nicht als „Container weg" interpretiert
+    werden — sonst würde ein Down-Docker-Daemon ein falsches `destroyed: True`
+    erzeugen (Audit C12).
+    """
+    try:
+        res = subprocess.run(
+            ["docker", *docker_cli_host_args(), "ps", "-a",
+             "--filter", f"name={name}", "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        return None
+    if res.returncode != 0:
+        return None
+    return name in [line.strip() for line in res.stdout.splitlines() if line.strip()]
+
+
+def _terminate_container(name: str) -> Dict[str, Any]:
+    """Killt und entfernt einen Sandbox-Container und verifiziert das Ergebnis.
+
+    `destroyed` wird nur gemeldet, wenn der Container nachweislich nicht mehr
+    existiert (oder `rm -f` erfolgreich war, falls Docker nicht mehr erreichbar
+    ist). Bisher wurde `destroyed: True` unbedingt zurückgegeben, auch wenn
+    kill und rm scheitern — der Container lief dann als Zombie weiter (C12).
+    """
     killed = False
+    removed = False
     for action in (["kill", name], ["rm", "-f", name]):
         try:
             res = subprocess.run(
@@ -209,9 +236,18 @@ def _terminate_container(name: str) -> bool:
             )
             if action[0] == "kill" and res.returncode == 0:
                 killed = True
+            elif action[0] == "rm" and res.returncode == 0:
+                removed = True
         except Exception:
             continue
-    return killed
+    present = _container_present(name)
+    destroyed = removed if present is None else not present
+    return {
+        "killed": killed,
+        "removed": removed,
+        "destroyed": destroyed,
+        "cleanup_verified": present is not None,
+    }
 
 
 class EphemeralSandbox:
@@ -381,21 +417,27 @@ class EphemeralSandbox:
             # `--rm` greift erst, wenn der Container endet. Der CLI-Timeout toetet
             # nur den Client — der Container lief weiter. Deshalb hier explizit
             # killen (und als Sicherheitsnetz entfernen).
-            terminated = _terminate_container(run_id)
+            cleanup = _terminate_container(run_id)
             return {
                 "status": "timeout",
                 "run_id": run_id,
                 "container": run_id,
                 "error": f"Ausführung überschritt das Timeout-Limit von {timeout_seconds}s.",
-                "killed": terminated,
-                "destroyed": True
+                "killed": cleanup["killed"],
+                "destroyed": cleanup["destroyed"],
+                "cleanup_verified": cleanup["cleanup_verified"],
             }
         except Exception as e:
+            # Auch im generischen Fehlerpfad muss aufgeräumt werden; bisher
+            # wurde hier ohne jeden Cleanup-Versuch `destroyed: True` gemeldet.
+            cleanup = _terminate_container(run_id)
             return {
                 "status": "error",
                 "run_id": run_id,
                 "error": str(e),
-                "destroyed": True
+                "killed": cleanup["killed"],
+                "destroyed": cleanup["destroyed"],
+                "cleanup_verified": cleanup["cleanup_verified"],
             }
         finally:
             if os.path.exists(run_dir):

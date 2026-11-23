@@ -12,7 +12,7 @@ def get_existing_filenames():
     try:
         url = f"{PB_URL}/api/collections/media_items/records?perPage=500"
         req = urllib.request.Request(url)
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             items = data.get('items', [])
             existing = set()
@@ -76,7 +76,7 @@ def upload_file(filepath):
     )
 
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             res_data = json.loads(resp.read().decode('utf-8'))
             print(f"[OK] Uploaded {filename} -> ID {res_data.get('id')}")
             return True

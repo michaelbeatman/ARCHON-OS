@@ -51,6 +51,11 @@ services:
       # sie laufe lokal und bleibt unauthentifiziert offen.
       - ARCHON_BIND_IP=${ARCHON_BIND_IP:-127.0.0.1}
       - ENVIRONMENT=${ENVIRONMENT:-development}
+      # K2/C01: auf `true` setzen, sobald ARCHON_SERVICE_TOKEN hinterlegt und
+      # die n8n-Workflows damit deployt sind. Production erzwingt Auth bereits
+      # ueber ENVIRONMENT; dieser Schalter deckt zusaetzlich Mesh-Deployments
+      # im Development-Modus ab. Default false = akzeptierter lokaler Dev-Fall.
+      - ARCHON_REQUIRE_AUTH=${ARCHON_REQUIRE_AUTH:-false}
       - ARCHON_CONTENT_PUBLISH_WEBHOOK=${ARCHON_CONTENT_PUBLISH_WEBHOOK:-}
       # Watchdog-Killswitch: im Container darf localhost NICHT auf den
       # Archon-Prozess selbst zeigen — echte Service-Namen verwenden.
@@ -94,6 +99,12 @@ services:
       - ./obsidian_vault:/app/obsidian_vault
       - ./plugins:/app/plugins
       - ./config:/app/config
+      # C14: Die von backend/* genutzte settings.json (/app/settings.json) lag
+      # bisher nur im Image und war wegen read_only:true nicht beschreibbar ->
+      # Feature-Flags, Schwellen und Auth-Konfiguration konnten zur Laufzeit
+      # nicht gespeichert werden. Bind-Mount macht sie persistent; der Schreiber
+      # in backend/settings_json.py behandelt den Mount-Point (EBUSY) korrekt.
+      - ./settings.json:/app/settings.json:rw
       - ${ARCHON_HERMES_DIR:-./.hermes}:/app/.hermes
       - ./data/inbox:/opt/data/inbox
       - ./agent_workspace/builds:/projects/builds

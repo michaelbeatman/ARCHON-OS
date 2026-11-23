@@ -8,6 +8,7 @@ die Datenbanken komprimiert im Ringpuffer (.hermes/backups/db/) mit konfigurierb
 import os
 import sys
 import re
+from contextlib import contextmanager
 import glob
 import gzip
 import logging
@@ -42,6 +43,23 @@ _SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+\.secret\.gz$")
 
 # K1 (Audit 23.11.2026): parallele Restores müssen serialisiert werden.
 _RESTORE_LOCK = threading.RLock()
+
+
+@contextmanager
+def _restore_gate(target: str):
+    """C07/Option B: Cross-Prozess-Gate über die gesamte Restore-Phase.
+
+    Der eigentliche SQLite-EXCLUSIVE-Guard darf unter Windows nicht über den
+    Dateiaustausch hinweg offen bleiben (Sharing-Violation). Das Gate auf einer
+    separaten Lock-DB verhindert zumindest parallele Restores über Prozess-
+    grenzen hinweg und wird vom OS bei Prozessende automatisch freigegeben.
+    """
+    from backend.process_lock import acquire_restore_lock
+    lock = acquire_restore_lock(target)
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 def _tenant_secret_files() -> Dict[str, str]:
@@ -336,7 +354,7 @@ class DBBackupManager:
             if dry_run:
                 return result
             os.makedirs(os.path.dirname(target), exist_ok=True)
-            with _RESTORE_LOCK:
+            with _RESTORE_LOCK, _restore_gate(target):
                 # K1: Fail-Closed statt Split-Brain. Ein EXCLUSIVE-Lock bricht
                 # ab, wenn gerade andere Schreiber auf der Zieldatenbank aktiv
                 # sind — dann wird der Restore abgelehnt (Stattdessen vorher
@@ -374,9 +392,12 @@ class DBBackupManager:
                             pass
                         guard.close()
 
-                # Erst nach Freigabe des Guards: alte WAL/SHM-Sidecars entfernen.
-                # Sonst wendet SQLite beim nächsten Öffnen das alte WAL auf die
-                # restaurierte Datei an (falsche Daten/Korruption).
+                # Der Guard wird hier freigegeben, weil Windows einen
+                # `os.replace()` auf eine noch offene Datei verweigert. Das
+                # Cross-Prozess-Gate (_restore_gate) bleibt bis zum Ende der
+                # Phase gehalten. Restrisiko: ein Writer, der genau in diesem
+                # winzigen Fenster die alte Inode öffnet, schreibt danach in
+                # die verworfene Datei. Deshalb im Anschluss verifizieren.
                 for suffix in ("-wal", "-shm", "-journal"):
                     sidecar = target + suffix
                     if os.path.exists(sidecar):
@@ -385,6 +406,21 @@ class DBBackupManager:
                         except OSError as exc:
                             logger.warning("[DBBackup] Sidecar %s nicht entfernbar: %s", sidecar, exc)
                 os.replace(tmp_path, target)
+
+                # Post-Condition: die restaurierte Datei muss lesbar und
+                # integr sein. Schlägt das fehl, wird der Restore als Fehler
+                # gemeldet statt still als Erfolg zurückgegeben.
+                try:
+                    verify = sqlite3.connect(f"file:{target}?mode=ro", uri=True, timeout=5.0)
+                    try:
+                        check = verify.execute("PRAGMA quick_check").fetchone()
+                    finally:
+                        verify.close()
+                    result["verified"] = bool(check and str(check[0]).lower() == "ok")
+                    if not result["verified"]:
+                        raise RuntimeError(f"Restore-Verifikation fehlgeschlagen: {check}")
+                except sqlite3.Error as exc:
+                    raise RuntimeError(f"Restore-Verifikation nicht möglich: {exc}") from exc
 
                 # Directory-fsync: ohne ihn kann der Rename nach Stromausfall
                 # im Dateisystem-Journal verloren gehen.

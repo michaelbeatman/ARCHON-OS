@@ -19,8 +19,13 @@ def fetch_all_contacts():
     contacts = []
     page = 1
     per_page = 500
-    while True:
-        resp = requests.get(f"{PB_URL}/api/collections/{COLLECTION}/records", params={"page": page, "perPage": per_page})
+    max_pages = 100  # M7/M9: Schutz vor Endlosschleifen bei fehlerhafter API
+    while page <= max_pages:
+        resp = requests.get(
+            f"{PB_URL}/api/collections/{COLLECTION}/records",
+            params={"page": page, "perPage": per_page},
+            timeout=10,
+        )
         resp.raise_for_status()
         data = resp.json()
         contacts.extend(data.get("items", []))

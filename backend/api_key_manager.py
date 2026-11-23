@@ -181,6 +181,53 @@ class ApiKeyManager:
             except Exception as exc:
                 logger.debug("API-Key-Manager: Audit-Log-Eintrag fehlgeschlagen: %s", exc)
 
+    def verify_integrity(self) -> Dict[str, Any]:
+        """Lauf-5 H-02: kryptografische Pruefung der API-Key-Audit-Kette.
+
+        Die Kette hatte Append-only-Trigger und HMAC-Signatur, aber keine
+        Verifikationsfunktion — Manipulationen waren nur bei manueller
+        Pruefung erkennbar.
+        """
+        from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM api_key_audit_log ORDER BY id ASC"
+            ).fetchall()
+            if not rows:
+                return {"valid": True, "count": 0, "message": "API-Key-Kette ist leer."}
+            prev_hash = GENESIS_HASH
+            hmac_blocks = 0
+            for r in rows:
+                if r["prev_hash"] != prev_hash:
+                    return {
+                        "valid": False,
+                        "broken_at_id": r["id"],
+                        "message": f"Kettenbruch bei API-Key-Audit ID {r['id']}.",
+                    }
+                if str(r["block_hash"] or "").startswith(HMAC_PREFIX):
+                    hmac_blocks += 1
+                payload = (
+                    f"{r['prev_hash']}|{r['key_id']}|{r['action']}|"
+                    f"{r['details']}|{r['created_by']}|{r['created_at']}"
+                )
+                if not _verify_hash(payload, str(r["block_hash"] or ""), r["id"]):
+                    return {
+                        "valid": False,
+                        "broken_at_id": r["id"],
+                        "message": f"Payload-Manipulation bei API-Key-Audit ID {r['id']}.",
+                    }
+                prev_hash = r["block_hash"]
+            key_active = bool(_hmac_epochs())
+            if hmac_blocks and not key_active:
+                return {
+                    "valid": False, "count": len(rows), "hmac_active": False,
+                    "message": "HMAC-Bloecke ohne passenden ARCHON_AUDIT_HMAC_KEY.",
+                }
+            return {
+                "valid": True, "count": len(rows), "hmac_active": key_active,
+                "hmac_blocks": hmac_blocks, "latest_hash": prev_hash,
+            }
+
     @staticmethod
     def _emit_global_audit(key_id: str, action: str, details: Dict[str, Any], created_by: str) -> None:
         try:

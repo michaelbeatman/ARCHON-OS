@@ -311,13 +311,17 @@ def select_llm_provider(request: Request, req: LLMProviderSelectRequest):
         
         if pid == "omniroute":
             base_url = req.base_url or "http://omniroute:20128/v1"
+            if not api_provider._validate_base_url(base_url):
+                raise ValueError("Ungueltige base_url: nur http(s)-URLs ohne Steuerzeichen/Credentials erlaubt.")
             chosen_model = model or "auto/best-coding"
             res = api_provider.set_provider_model(provider="omniroute", model=chosen_model)
-            api_provider._set_model_block(chosen_model, "omniroute", base_url)
+            if not api_provider._set_model_block(chosen_model, "omniroute", base_url):
+                raise RuntimeError("Hermes-Model-Block konnte nicht geschrieben werden.")
         else:
             res = api_provider.set_provider_model(provider=pid, model=model)
             # Remove base_url when switching away from omniroute
-            api_provider._set_model_block(res.get("model") or model or "", pid, None)
+            if not api_provider._set_model_block(res.get("model") or model or "", pid, None):
+                raise RuntimeError("Hermes-Model-Block konnte nicht geschrieben werden.")
             
         return {"status": "ok", "result": res, "active": api_provider.read_active_config()}
     except Exception as e:

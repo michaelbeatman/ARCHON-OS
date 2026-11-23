@@ -446,14 +446,17 @@ class EventMesh:
         # P0-7b: Bei der UNKNOWN-Reconciliation darf _deliver_outbox den
         # Ledger-Zustand NICHT selbst aendern — sonst trifft reconcile() mit
         # WHERE state='UNKNOWN' auf 0 Zeilen und der Fall bleibt ungeklaert.
-        from utils.safe_http import safe_http_request
+        from utils.safe_http import safe_http_request, webhook_signature_headers
         definitive_rejection = False
         try:
+            body_bytes = payload_str.encode("utf-8")
+            headers = {"Content-Type": "application/json", "X-Idempotency-Key": idem}
+            headers.update(webhook_signature_headers(body_bytes))
             _st, _hd, raw_body = safe_http_request(
                 target,
                 method="POST",
-                headers={"Content-Type": "application/json", "X-Idempotency-Key": idem},
-                data=payload_str.encode("utf-8"),
+                headers=headers,
+                data=body_bytes,
                 timeout=float(timeout),
                 max_bytes=1024 * 1024,
             )

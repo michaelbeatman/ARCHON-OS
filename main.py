@@ -1089,6 +1089,29 @@ async def _deadlock_supervisor_loop():
                 logger.error("[Integritaet] Quittungs-Hashkette INVALID: %s", chain)
         except Exception as e:
             logger.debug(f"[Integritaet] Loop-Hinweis: {e}")
+
+        # C08: zentrale Audit-Kette und Approval-Kette ebenfalls im 30-s-Loop.
+        # Vorher liefen diese Nur-On-Demand — Manipulationen blieben unbemerkt,
+        # solange kein Prüfer aktiv eine Route aufrief.
+        try:
+            from backend.audit_log import chained_audit_log as _audit_chain
+            from backend.approval_policy_engine import approval_engine as _approval_chain
+            from backend.api_key_manager import api_key_manager as _api_key_chain
+            from backend.treasury_engine import verify_treasury_chain
+            for label, verify_fn in (
+                ("Zentrale Audit-Kette", _audit_chain.verify_integrity),
+                ("Approval-Kette", _approval_chain.verify_audit_integrity),
+                ("API-Key-Kette", _api_key_chain.verify_integrity),
+                ("Treasury-Kette", verify_treasury_chain),
+            ):
+                try:
+                    res = await asyncio.to_thread(verify_fn)
+                    if isinstance(res, dict) and res.get("valid") is False:
+                        logger.error("[Integritaet] %s INVALID: %s", label, res)
+                except Exception as exc:
+                    logger.debug(f"[Integritaet] {label}: {exc}")
+        except Exception as e:
+            logger.debug(f"[Integritaet] Nebenketten-Import: {e}")
         await asyncio.sleep(30)
 
 
@@ -1105,6 +1128,33 @@ async def _db_maintenance_loop():
         except Exception as e:
             logger.debug(f"[DBMaintenance] Loop-Hinweis: {e}")
         await asyncio.sleep(21600)
+
+
+@_exclusive_loop("fleet_self_healing")
+async def _fleet_self_healing_loop():
+    """C13: Core-Dienste periodisch prüfen und ausgefallene Container neu starten.
+
+    Vorher war `check_fleet_and_heal()` nur über eine API-Route erreichbar;
+    `restart: unless-stopped` hilft nicht bei `running`-aber-unhealthy Containern.
+    Der Exclusive-Loop verhindert parallele Restarts bei mehreren Replicas.
+    """
+    await asyncio.sleep(45)
+    while True:
+        try:
+            from backend.fleet_self_healing import check_fleet_and_heal
+            res = await asyncio.to_thread(check_fleet_and_heal)
+            if isinstance(res, dict) and res.get("status") == "ok":
+                missing = res.get("missing_services") or []
+                if missing or res.get("healed_count", 0):
+                    logger.warning(
+                        "[FleetSelfHealing] vermisst/unhealthy=%s, geheilt=%s, übersprungen=%s",
+                        missing, res.get("healed_count", 0), res.get("skipped_not_deployed") or [],
+                    )
+            elif isinstance(res, dict):
+                logger.debug("[FleetSelfHealing] Loop-Hinweis: %s", res.get("error"))
+        except Exception as e:
+            logger.debug(f"[FleetSelfHealing] Loop-Hinweis: {e}")
+        await asyncio.sleep(120)
 
 
 _LOOPS_STARTED = False
@@ -1126,6 +1176,7 @@ async def _start_gateway_idle_loop():
     _spawn_background(_gateway_idle_stop_loop())
     _spawn_background(_email_imap_background_loop())
     _spawn_background(_deadlock_supervisor_loop(), name="deadlock_supervisor_30s")
+    _spawn_background(_fleet_self_healing_loop(), name="fleet_self_healing_120s")
     _spawn_background(_db_maintenance_loop(), name="db_maintenance_6h")
     try:
         from archon.core.delegation import resume_pending_delegation_watchers
@@ -1147,6 +1198,17 @@ async def _start_gateway_idle_loop():
         _spawn_background(workflow_scheduler_background_loop())
     except Exception as e:
         print(f"[Startup] Workflow Scheduler init notice: {e}")
+    # K2: Auth aktiv, aber kein Service-Token -> n8n/Telegram-Adapter erhalten
+    # 401. Laut warnen statt stillem Lockout der Automatisierungen.
+    try:
+        from backend.auth_service import auth_service as _auth_svc
+        if _auth_svc.is_auth_enabled() and not _get_service_token():
+            logger.critical(
+                "[Auth] Auth ist aktiv, aber kein ARCHON_SERVICE_TOKEN konfiguriert — "
+                "interne Automaten (n8n, Adapter) werden mit 401 abgewiesen."
+            )
+    except Exception as e:
+        logger.debug(f"[Startup] Auth-Token-Pruefung Hinweis: {e}")
 
 
 async def _cancel_background_tasks():

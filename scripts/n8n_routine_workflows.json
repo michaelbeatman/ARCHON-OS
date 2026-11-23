@@ -44,7 +44,7 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "http://ARCHON-OS:8501/api/system/standup/run",
+          "url": "http://archon-os:8501/api/system/standup/run",
           "sendBody": false,
           "options": {},
           "sendHeaders": true,
@@ -69,7 +69,7 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "http://ARCHON-OS:8501/api/telegram/send",
+          "url": "http://archon-os:8501/api/telegram/send",
           "sendBody": true,
           "specifyBody": "keypair",
           "bodyParameters": {
@@ -237,7 +237,7 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "http://ARCHON-OS:8501/api/system/backup-db",
+          "url": "http://archon-os:8501/api/system/backup-db",
           "sendBody": false,
           "options": {},
           "sendHeaders": true,
@@ -262,7 +262,7 @@
       {
         "parameters": {
           "method": "GET",
-          "url": "http://ARCHON-OS:8501/api/system/health",
+          "url": "http://archon-os:8501/api/system/health",
           "options": {},
           "sendHeaders": true,
           "headerParameters": {
@@ -420,7 +420,7 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "http://ARCHON-OS:8501/api/inbox-watcher/scan-now",
+          "url": "http://archon-os:8501/api/inbox-watcher/scan-now",
           "sendBody": false,
           "options": {},
           "sendHeaders": true,

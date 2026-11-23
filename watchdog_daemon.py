@@ -137,14 +137,18 @@ class WatchdogDaemon:
         
         logger.info(f"Sending alarm webhook to n8n ({webhook_url}) for agent '{profile_handle}'...")
         try:
+            from utils.safe_http import webhook_signature_headers
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            headers = {"Content-Type": "application/json"}
+            headers.update(webhook_signature_headers(body))
             if requests:
-                resp = requests.post(webhook_url, json=payload, timeout=4)
+                resp = requests.post(webhook_url, data=body, headers=headers, timeout=4)
                 logger.info(f"n8n webhook response: HTTP {resp.status_code}")
             else:
                 req = urllib.request.Request(
                     webhook_url,
-                    data=json.dumps(payload).encode("utf-8"),
-                    headers={"Content-Type": "application/json"}
+                    data=body,
+                    headers=headers
                 )
                 with urllib.request.urlopen(req, timeout=4) as resp:
                     logger.info(f"n8n webhook response: HTTP {resp.status}")
@@ -173,11 +177,15 @@ class WatchdogDaemon:
             "force": True
         }
         
+        from utils.safe_http import webhook_signature_headers
+        abort_body = json.dumps(abort_payload, ensure_ascii=False).encode("utf-8")
+        abort_headers = {"Content-Type": "application/json"}
+        abort_headers.update(webhook_signature_headers(abort_body))
         aborted_successfully = False
         for ep in abort_endpoints:
             try:
                 if requests:
-                    res = requests.post(ep, json=abort_payload, timeout=3)
+                    res = requests.post(ep, data=abort_body, headers=abort_headers, timeout=3)
                     if res.status_code in [200, 204]:
                         logger.info(f"Successfully aborted thread via {ep}")
                         aborted_successfully = True
@@ -185,8 +193,8 @@ class WatchdogDaemon:
                 else:
                     req = urllib.request.Request(
                         ep,
-                        data=json.dumps(abort_payload).encode("utf-8"),
-                        headers={"Content-Type": "application/json"}
+                        data=abort_body,
+                        headers=abort_headers
                     )
                     with urllib.request.urlopen(req, timeout=3) as res:
                         if res.status in [200, 204]:

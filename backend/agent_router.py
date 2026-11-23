@@ -4,6 +4,7 @@ import time
 import uuid
 import logging
 import asyncio
+import random
 import weakref
 import json
 import httpx
@@ -21,6 +22,17 @@ OPENROUTER_FALLBACK_CHAIN = [
 ]
 
 BUDGET_WARN_MARKER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", ".budget_warn.json")
+
+
+async def _router_provider_backoff(status_code: int = 0, headers: Optional[Dict[str, str]] = None) -> None:
+    """H1: Jitter-Backoff nach fehlgeschlagenem Provider-Hop im Agent-Router."""
+    delay = 0.2
+    if status_code == 429:
+        try:
+            delay = max(delay, float(dict(headers or {}).get("Retry-After", "0")))
+        except (TypeError, ValueError):
+            pass
+    await asyncio.sleep(min(3.0, delay) * (0.75 + random.random() * 0.5))
 
 
 class BudgetExceededError(RuntimeError):
@@ -754,7 +766,20 @@ class AgentRouter:
                         session_id=hop_sid,
                         is_local=is_local_hop,
                     )
-                    resp = await client.post(target_url, headers=request_headers, json=safe_payload)
+                    from backend.provider_circuit_breaker import provider_breaker
+                    if not provider_breaker.allow(provider):
+                        logger.warning(f"[AgentRouter] Provider '{provider}' circuit-open — Fallback")
+                        continue
+                    try:
+                        resp = await client.post(target_url, headers=request_headers, json=safe_payload)
+                    except Exception:
+                        provider_breaker.record_failure(provider)
+                        await _router_provider_backoff()
+                        raise
+                    if resp.status_code >= 500 or resp.status_code == 429:
+                        provider_breaker.record_failure(provider)
+                    else:
+                        provider_breaker.record_success(provider)
                     log_completed_llm_dispatch(
                         agent_id=agent_id,
                         provider=provider,
@@ -766,6 +791,7 @@ class AgentRouter:
                     )
                     if resp.status_code in (429, 500, 502, 503, 504, 404) and idx < len(candidate_models) - 1:
                         logger.warning(f"[AgentRouter] Model '{m_try}' returned {resp.status_code}, falling back to '{candidate_models[idx+1]}'...")
+                        await _router_provider_backoff(resp.status_code, dict(resp.headers))
                         continue
                     resp.raise_for_status()
                     data = resp.json()
@@ -899,6 +925,10 @@ class AgentRouter:
             try:
                 client = self._get_shared_client()
                 if True:
+                    from backend.provider_circuit_breaker import provider_breaker
+                    if not provider_breaker.allow(provider):
+                        logger.warning(f"[AgentRouter Stream] Provider '{provider}' circuit-open — Fallback")
+                        continue
                     async with client.stream("POST", target_url, headers=request_headers, json=safe_payload) as response:
                         log_completed_llm_dispatch(
                             agent_id=agent_id,
@@ -909,10 +939,15 @@ class AgentRouter:
                             data_category=hop_gate["data_category"],
                             zero_egress_active=hop_gate["zero_egress_active"],
                         )
+                        if response.status_code >= 500 or response.status_code == 429:
+                            provider_breaker.record_failure(provider)
+                        else:
+                            provider_breaker.record_success(provider)
                         if response.status_code != 200:
                             err_body = await response.aread()
                             if response.status_code in (429, 500, 502, 503, 504, 404) and idx < len(candidate_models) - 1:
                                 logger.warning(f"[AgentRouter Stream] Model '{m_try}' returned {response.status_code}, falling back to '{candidate_models[idx+1]}'...")
+                                await _router_provider_backoff(response.status_code, dict(response.headers))
                                 continue
                             yield f"ERROR: {provider.capitalize()} Fehler (Status {response.status_code}): {err_body.decode('utf-8', errors='ignore')[:300]}"
                             return

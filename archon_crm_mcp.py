@@ -8,7 +8,7 @@ COLLECTION_NAME = "kontakte"
 def get_all_contacts():
     """Liest alle Kontakte aus PocketBase aus."""
     url = f"{POCKETBASE_URL}/api/collections/{COLLECTION_NAME}/records?perPage=500"
-    response = requests.get(url)
+    response = requests.get(url, timeout=10)
     if response.status_code == 200:
         return response.json().get("items", [])
     print(f"Fehler beim Abrufen der Kontakte: {response.text}")
@@ -18,7 +18,7 @@ def update_contact_email(contact_id, email_address):
     """Führt das Auto-Enrichment durch, falls die E-Mail-Adresse fehlt."""
     url = f"{POCKETBASE_URL}/api/collections/{COLLECTION_NAME}/records/{contact_id}"
     payload = {"email": email_address}
-    response = requests.patch(url, json=payload)
+    response = requests.patch(url, json=payload, timeout=10)
     return response.status_code == 200
 
 def append_email_to_history(contact_id, email_obj):

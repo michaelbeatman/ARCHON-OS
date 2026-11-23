@@ -272,11 +272,36 @@ class EmailDraftEngine:
 
     # AKTION 1: Freigeben & Senden
     def approve_and_send(self, draft_id: str, approver_id: str = "admin") -> Dict[str, Any]:
+        """Gibt den Entwurf frei und versendet ihn TAETSCHLICH ueber SMTP.
+
+        Audit 23.11.2026: diese Methode setzte frueher status='approved' und
+        schrieb DRAFT_APPROVED_SENT, ohne jemals SMTP aufzurufen. Der Audit-
+        Eintrag und die UI-Meldung 'versendet' waren nachweislich falsch.
+        """
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         with self._get_conn() as conn:
             draft = conn.execute("SELECT * FROM email_drafts WHERE draft_id = ?", (draft_id,)).fetchone()
             if not draft:
                 raise ValueError("Entwurf nicht gefunden.")
+
+            # Echter Versand VOR Status-/Audit-Schreibvorgang.
+            try:
+                from backend.email_service import send_email
+                send_result = send_email(
+                    to_email=draft["recipient"],
+                    subject=draft["subject"],
+                    body_text=draft["body_text"],
+                ) or {}
+            except Exception as exc:
+                send_result = {"status": "error", "message": str(exc)}
+
+            delivery_status = str(send_result.get("status") or "error")
+            if delivery_status == "error":
+                # Kein Statuswechsel, kein 'SENT'-Audit: sonst wuerde die
+                # Freigabe einen nie erfolgten Versand bestaetigen.
+                raise RuntimeError(
+                    f"E-Mail-Versand fehlgeschlagen: {send_result.get('message') or 'unbekannt'}"
+                )
 
             body_hash = hashlib.sha256(draft["body_text"].encode("utf-8")).hexdigest()
             conn.execute("""
@@ -285,16 +310,22 @@ class EmailDraftEngine:
                 WHERE draft_id = ?
             """, (now_iso, approver_id, now_iso, body_hash, draft_id))
 
-            # Revisionssicheres Audit-Log
-            self._log_audit(draft_id, "DRAFT_APPROVED_SENT", {
+            # Nur bei tatsaechlichem Versand heisst der Audit-Eintrag '...SENT'.
+            audit_action = (
+                "DRAFT_APPROVED_SENT" if delivery_status == "sent"
+                else "DRAFT_APPROVED_NOT_SENT"
+            )
+            self._log_audit(draft_id, audit_action, {
                 "approver": approver_id,
                 "recipient": draft["recipient"],
                 "subject": draft["subject"],
-                "body_sha256": body_hash
+                "body_sha256": body_hash,
+                "delivery_status": delivery_status,
+                "smtp_reason": send_result.get("reason"),
             }, created_by=approver_id, conn=conn)
 
-            # Falls verknuepft mit Kanban-Task, Task auf done setzen
-            if draft["source_task_id"]:
+            # Kanban-Task erst abschliessen, wenn die Mail wirklich raus ist.
+            if delivery_status == "sent" and draft["source_task_id"]:
                 try:
                     try:
                         from backend.db_paths import resolve_db
@@ -310,7 +341,13 @@ class EmailDraftEngine:
 
             conn.commit()
 
-        return self.get_draft(draft_id)
+        result = self.get_draft(draft_id) or {}
+        result["delivery_status"] = delivery_status
+        result["message"] = (
+            "E-Mail freigegeben und versendet." if delivery_status == "sent"
+            else "E-Mail freigegeben, aber NICHT versendet (SMTP nicht konfiguriert)."
+        )
+        return result
 
     # AKTION 2: Im Editor bearbeiten
     def edit_draft(

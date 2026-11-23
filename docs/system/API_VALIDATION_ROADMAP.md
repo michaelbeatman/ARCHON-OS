@@ -18,6 +18,8 @@ HTTP-Fehlercodes heben. Inventur: `scripts`-interner Scan (2026-11-22).
 | Etappe | Scope | Funde | Status |
 |---|---|---:|---|
 | 1 | `operations_keys`, `operations_approvals`, `operations_dunning`, `operations_receipts`, `llm_providers` | 23 | ✅ erledigt |
+| 2a | `auth` (10 Endpunkte: Toggle, Login, User-CRUD, Passwort, Passkey) | 10 | ✅ erledigt (23.11.2026) |
+| 2b | `system` (7), `plugins` (3): Update/Drain/Language, Plugin-Tools/-Config | 10 | ✅ erledigt (23.11.2026) |
 | 2 | `llm_providers` (Rest), `governance`, `guardian`, `docker_services`, `watchdog`, `hermes_profiles`, `email_settings`, `kanban`, `memory_ops`, `telegram` | ~19 | offen |
 | 3 | `v2_capabilities` (Teil 1) | ~20 | offen |
 | 4 | `v2_capabilities` (Teil 2) + `content_machine` (Teil 1) | ~20 | offen |
@@ -26,7 +28,43 @@ HTTP-Fehlercodes heben. Inventur: `scripts`-interner Scan (2026-11-22).
 | 7 | `operations_emails`, `operations_prompts`, `playbooks`, `operations_security`, `preflight_shadow`, `tenants` | ~20 | offen |
 | 8 | `documents`, `oracle_seo`, `voice`, `system`, `squad_packs`, `operations_finetuning`, `backend/operations_api` | ~19 | offen |
 
-**Rest nach Etappe 1:** 105 Body-Dicts + 18 HTTP-200-Fehler = 123.
+**Rest nach Etappe 1:** 105 Body-Dicts + 18 HTTP-200-Fehler = 123.  
+**Nach Etappe 2a:** 95 Body-Dicts + 18 HTTP-200-Fehler = 113.  
+**Nach Etappe 2b:** 85 Body-Dicts + 18 HTTP-200-Fehler = 103.
+
+---
+
+## Etappe 2a – Auth (23.11.2026, P0-Sprint)
+
+Alle 10 `dict = Body(...)`-Endpunkte in `archon/routers/auth.py` nutzen jetzt
+Pydantic-v2-Modelle (`AuthToggleRequest`, `AuthLoginRequest`,
+`AuthCreateUserRequest`, `AuthUpdateUserRequest`, `AuthChangePasswordRequest`,
+`PasskeyConfigRequest`, `PasskeyRegisterOptionsRequest`,
+`PasskeyRegisterVerifyRequest`, `PasskeyHitlOptionsRequest`,
+`PasskeyHitlVerifyRequest`).
+
+- Kompatibilitaetsregel eingehalten: gemeinsame Basis mit
+  `ConfigDict(extra="ignore")`; Client-Zusatzfelder (`created_by`, `user_id`,
+  `rejected_by`, …) werden verworfen statt abgelehnt.
+- Migrationsmuster: Handler starten mit `payload = payload.model_dump()` — die
+  bestehende Dict-Zugriffslogik bleibt unverändert, Response-Shapes unverändert.
+- Konkreter Fix: `POST /api/auth/login` mit `username: 123` lieferte vorher
+  `AttributeError: 'int' object has no attribute 'strip'` (HTTP 500) → jetzt 422.
+- Verifikation: `tests/test_p0_api_validation.py` (4 neue Tests) + volle Suite
+  **1745 passed, 16 skipped**.
+
+### Etappe 2b – system.py / plugins.py (10 Endpunkte)
+
+- Wichtigste Erkenntnis: **Rollenzaun vor Payload-Parsing**. Die erste
+  Fassung hatte `payload.model_dump()` vor `_require_admin()` / 
+  `require_admin_or_503()` — direkte RBAC-Tests (die Handler mit `Body`-Stubs
+  aufrufen) brachen mit 31 Fehlern. Korrekte Reihenfolge: erst autorisieren,
+  dann parsen. Das ist auch fachlich fail-closed.
+- `PluginSettingsRequest` nutzt bewusst `extra="allow"` (beliebige
+  Plugin-Manifest-Settings muessen durchgereicht werden), alle anderen
+  `extra="ignore"`.
+- Verifikation: `tests/test_p0_api_validation_batch2.py` (4 neue Tests) +
+  volle Suite **1749 passed, 16 skipped**.
 
 ---
 

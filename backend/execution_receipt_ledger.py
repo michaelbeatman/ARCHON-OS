@@ -200,6 +200,12 @@ class ExecutionReceiptLedger:
             stored = str(r["receipt_hash"] or "")
             if stored.startswith(RECEIPT_HMAC_PREFIX):
                 recomputed = _receipt_digest(canonical_str)
+            elif _receipt_key():
+                # Audit 23.11.2026: bei aktivem eigenen HMAC-Key darf keine
+                # Quittung ohne HMAC-Praefix akzeptiert werden (Downgrade).
+                tampered_hashes.append(rid)
+                expected_prev = stored
+                continue
             else:
                 # Legacy-Quittungen (vor HMAC-Einfuehrung) weiterhin pruefbar
                 recomputed = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()

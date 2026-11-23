@@ -218,6 +218,26 @@ class ApiKeyManager:
                     }
                 prev_hash = r["block_hash"]
             key_active = bool(_hmac_epochs())
+            if key_active and hmac_blocks:
+                # Audit 23.11.2026: Plain-SHA nach dem ersten HMAC-Block ist ein
+                # Downgrade; ein Legacy-Praefix davor bleibt zulaessig.
+                first_hmac_id = min(
+                    int(r["id"]) for r in rows
+                    if str(r["block_hash"] or "").startswith(HMAC_PREFIX)
+                )
+                if any(
+                    int(r["id"]) > first_hmac_id
+                    for r in rows
+                    if not str(r["block_hash"] or "").startswith(HMAC_PREFIX)
+                ):
+                    return {
+                        "valid": False, "count": len(rows), "hmac_active": True,
+                        "hmac_blocks": hmac_blocks,
+                        "message": (
+                            "HMAC-Signatur auf nacktes SHA-256 zurueckgesetzt "
+                            "(Block nach erstem HMAC-Block)."
+                        ),
+                    }
             if hmac_blocks and not key_active:
                 return {
                     "valid": False, "count": len(rows), "hmac_active": False,

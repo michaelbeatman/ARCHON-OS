@@ -768,6 +768,7 @@ class OperationsCalendarManager:
             + "END:VEVENT\r\nEND:VCALENDAR\r\n"
         )
         draft_ids = []
+        draft_error = None
         try:
             from backend.email_draft_engine import email_draft_engine
             for a in attendees:
@@ -780,13 +781,23 @@ class OperationsCalendarManager:
                         f"Ort/Link: {ev.get('meeting_url') or ev.get('location') or '-'}\n\n"
                         f"--- .ics Kalendereinladung ---\n{ics_body}"
                     ),
-                    source="calendar_invite",
+                    source_task_id=event_id,
                 )
-                if isinstance(d, dict) and d.get("id"):
-                    draft_ids.append(d["id"])
+                # create_draft() liefert 'draft_id', nicht 'id' (Audit 23.11.2026).
+                draft_id = (d or {}).get("draft_id") if isinstance(d, dict) else None
+                if draft_id:
+                    draft_ids.append(draft_id)
         except Exception as exc:
+            draft_error = str(exc)
             logger.warning(f"[Calendar] Einladungs-E-Mail-Entwurf fehlgeschlagen ({event_id}): {exc}")
-        return {"event_id": event_id, "attendees": attendees, "rsvp_status": ev["rsvp_status"], "draft_ids": draft_ids, "ics": ics_body}
+        return {
+            "event_id": event_id,
+            "attendees": attendees,
+            "rsvp_status": ev["rsvp_status"],
+            "draft_ids": draft_ids,
+            "draft_error": draft_error,
+            "ics": ics_body,
+        }
 
     def update_rsvp(self, event_id: str, email: str, status: str) -> Dict[str, Any]:
         st = status if status in ("pending", "accepted", "declined", "tentative") else "pending"

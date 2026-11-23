@@ -42,7 +42,13 @@ ROLE_POLICIES: Dict[str, Dict[str, List[str]]] = {
 }
 
 FORBIDDEN_SYSTEM_PREFIXES = ("/etc/", "/root/", "/proc/", "/sys/", "c:/windows", "c:/system32")
-SENSITIVE_FILENAMES = (".env", "id_rsa", "id_ed25519", "shadow", "passwd", "credentials.json")
+# Audit 23.11.2026: der symmetrische Warrant-HMAC-Key liegt unter
+# data/warrant_hmac.key. Ein Agent mit Dateilese-Zugriff koennte sonst
+# beliebige Privileg-Warrants selbst signieren.
+SENSITIVE_FILENAMES = (
+    ".env", "id_rsa", "id_ed25519", "shadow", "passwd", "credentials.json",
+    "warrant_hmac.key",
+)
 
 
 class AgentRBACJail:

@@ -30,6 +30,7 @@ class ArchonChaosTester:
             "tests_run": 0,
             "tests_passed": 0,
             "tests_failed": 0,
+            "tests_skipped": 0,
             "details": {}
         }
 
@@ -175,10 +176,29 @@ class ArchonChaosTester:
         ]
         alarms_found = any(os.path.exists(a) for a in alarms_candidates)
 
+        # Audit 23.11.2026 (K-4): frueher wurde hier unbedingt "passed"
+        # zurueckgegeben, ohne dass der Watchdog je beruehrt wurde. Status jetzt
+        # aus echter Evidenz ableiten: keine Logdatei = nicht pruefbar,
+        # alte Logdatei = fehlgeschlagen.
+        log_age_sec = None
+        if found_log:
+            try:
+                log_age_sec = max(0.0, time.time() - os.path.getmtime(found_log))
+            except OSError:
+                log_age_sec = None
+        if found_log is None:
+            status, reason = "skipped", "no_watchdog_log_evidence"
+        elif log_age_sec is None or log_age_sec > 120:
+            status, reason = "failed", "watchdog_log_stale_or_unreadable"
+        else:
+            status, reason = "passed", None
+
         return {
-            "status": "passed",
+            "status": status,
+            "reason": reason,
             "log_file_present": found_log is not None,
             "log_path": found_log,
+            "log_age_sec": log_age_sec,
             "alarms_file_active": alarms_found,
             "supervisor_interval_sec": 30
         }
@@ -227,8 +247,11 @@ class ArchonChaosTester:
 
     def _record_result(self, status: str):
         self.results["tests_run"] += 1
-        if status in ("passed", "skipped"):
+        if status == "passed":
             self.results["tests_passed"] += 1
+        elif status == "skipped":
+            # Audit 23.11.2026: "nicht pruefbar" darf nicht als Erfolg zaehlen.
+            self.results["tests_skipped"] += 1
         else:
             self.results["tests_failed"] += 1
 

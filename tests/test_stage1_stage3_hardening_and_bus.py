@@ -228,9 +228,12 @@ def test_treasury_approve_reject_atomic_and_balance_check(tmp_path, monkeypatch)
     acc = te.upsert_account({"name": "Ops Konto", "balance_eur": 100.0})
     tx = te.request_payment({"account_id": acc["id"], "amount": 250.0, "recipient": "Vendor GmbH", "purpose": "Zu teuer"})
 
-    # Guthaben reicht nicht -> ValueError
+    # Guthaben reicht nicht -> ValueError.
+    # P0 (Audit 23.11.2026): Zahlungen sind ohne Passkey-Konfiguration jetzt
+    # fail-closed. Dieser Test prueft die Guthaben-Atomaritaet, nicht die
+    # Passkey-Pflicht — daher hier explizit als verifiziert uebergeben.
     with pytest.raises(ValueError, match="insufficient_balance"):
-        te.approve_payment(tx["id"], "admin")
+        te.approve_payment(tx["id"], "admin", passkey_verified=True)
 
     # Ablehnen funktioniert exakt einmal
     rej = te.reject_payment(tx["id"], "Budget stop", "admin")

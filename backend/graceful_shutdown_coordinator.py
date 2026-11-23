@@ -305,6 +305,7 @@ class GracefulShutdownCoordinator:
         auf allen relevanten SQLite-Datenbanken aus, um Datenverlust zu verhindern.
         """
         flushed_dbs = []
+        errors = []
 
         # 1. Async Write Batcher leeren
         # N-03: das Modul exportiert die Singleton-INSTANZ (async_write_batcher),
@@ -314,10 +315,14 @@ class GracefulShutdownCoordinator:
         try:
             from backend.async_write_batcher import async_write_batcher as write_batcher
             flush_info = write_batcher.flush()
-            flushed_dbs.append("async_write_batcher_ram_queue")
             if isinstance(flush_info, dict) and flush_info.get("status") == "error":
-                print(f"[GracefulShutdown] Batcher-Flush meldet Fehler: {flush_info}", file=sys.stderr)
+                msg = f"Batcher-Flush meldet Fehler: {flush_info}"
+                errors.append(msg)
+                print(f"[GracefulShutdown] {msg}", file=sys.stderr)
+            else:
+                flushed_dbs.append("async_write_batcher_ram_queue")
         except Exception as e:
+            errors.append(f"Batcher-Flush fehlgeschlagen: {e}")
             print(f"[GracefulShutdown] Batcher-Flush fehlgeschlagen: {e}", file=sys.stderr)
 
         # 2. Alle SQLite-Datenbanken über zentrale DB-SSOT einsammeln
@@ -339,10 +344,23 @@ class GracefulShutdownCoordinator:
                         cur.execute("PRAGMA wal_checkpoint(PASSIVE);")
                         flushed_dbs.append(os.path.basename(db_file))
                 except Exception as e:
+                    errors.append(f"WAL-Flush {db_file} fehlgeschlagen: {e}")
                     print(f"[GracefulShutdown] Fehler beim WAL-Flush für {db_file}: {e}", file=sys.stderr)
 
-        print(f"[GracefulShutdown] WAL-Flush abgeschlossen ({len(flushed_dbs)} Speicherpunkte konsolidiert).")
-        return {"status": "success", "flushed_databases": flushed_dbs}
+        # Audit 23.11.2026: frueher wurde unbedingt 'success' zurueckgegeben,
+        # auch wenn ALLE Flushes fehlgeschlagen sind (stiller Datenverlust +
+        # falsche Shutdown-Bestaetigung). Jetzt statusgenau melden.
+        if not errors:
+            status = "success"
+        elif flushed_dbs:
+            status = "partial"
+        else:
+            status = "error"
+        print(
+            f"[GracefulShutdown] WAL-Flush {status} "
+            f"({len(flushed_dbs)} Speicherpunkte konsolidiert, {len(errors)} Fehler)."
+        )
+        return {"status": status, "flushed_databases": flushed_dbs, "errors": errors}
 
     def execute_graceful_shutdown_sync(self, reason: str = "Server shutdown", grace_seconds: Optional[float] = None) -> Dict[str, Any]:
         """Synchrone Komplett-Orchestrierung für atexit / Signal Handler."""

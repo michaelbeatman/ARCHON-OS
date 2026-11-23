@@ -54,9 +54,9 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 - **Observability & tooling:** OTel traces in the LLM kernel and DAG, trace-to-eval replay fixtures, Python 3.13, split test requirements.
 - **Workspace:** 4-step onboarding wizard v2, operations calendar and 11 LinkedIn skills.
 
-> **Configuration note:** the code paths for authentication and egress control exist, but the shipped local `settings.json` still has `auth.enabled = false`, `privacy.zero_egress = false` and `zero_egress_strict = false` (only `hard_block_on_local_offline = true`). Enable auth before exposing the UI on a LAN. `config/version.json` is now aligned to `v0.5.7` (single source of truth); the CHANGELOG documents the details.
+> **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.3** while the badge/manual still say v0.5.7.
 
-> **Counts measured in this checkout:** 73 entries in `agent_profiles.json` (70 specialists + 3 system/meta profiles), 59 roles in `roles.json`, 72 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7`.
+> **Counts measured in this checkout:** 73 entries in `agent_profiles.json` (70 specialists + 3 system/meta profiles), 73 roles in `roles.json`, 73 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7`.
 
 ### Product Tour
 
@@ -210,7 +210,7 @@ flowchart LR
 
 ## Security, Privacy & Regulatory Notice
 
-- **Safe Network Default:** Binds to `127.0.0.1:8501` by default. Enable multi-user login (`auth.enabled = true`) before exposing `ARCHON_BIND_IP=0.0.0.0` on a LAN.
+- **Safe Network Default:** Binds to `127.0.0.1:8501` by default. Enable multi-user login (`auth.enabled = true`) before exposing `ARCHON_BIND_IP=0.0.0.0` on a LAN. The local single-user fallback (no `auth` block in `settings.json`) is **localhost-only by design** — never treat it as an access control for shared or production hosts.
 - **Zero-Trust Socket Proxy:** Container management routes through `docker-socket-proxy` on an isolated internal network (`archon-admin_net`).
 - **Prompt Injection Defense:** Dual-LLM quarantine sanitization (`backend/dual_llm_sanitizer.py`) isolates untrusted external emails/web content before tool execution.
 - **No Professional Advice:** Output from legal, tax, financial, construction, or medical/chemical specialist profiles is **for internal decision support only** and does not constitute licensed legal, tax, investment, engineering, or medical advice ([DISCLAIMER.md](DISCLAIMER.md), [LICENSE](LICENSE) & [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)).

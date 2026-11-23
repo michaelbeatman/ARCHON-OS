@@ -198,7 +198,9 @@ def api_v2_issue_warrant(request: Request, payload: WarrantIssueRequest):
 
 
 @router.post("/api/v2/security/warrants/verify")
-def api_v2_verify_warrant(payload: WarrantVerifyRequest):
+def api_v2_verify_warrant(request: Request, payload: WarrantVerifyRequest):
+    # Audit 23.11.2026: war ein oeffentliches Warrant-Orakel.
+    require_admin_or_503(request)
     from backend.tool_warrants import verify_warrant_for_call
     return verify_warrant_for_call(
         warrant=payload.warrant,

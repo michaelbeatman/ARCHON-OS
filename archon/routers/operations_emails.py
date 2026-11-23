@@ -153,7 +153,15 @@ def api_approve_email_draft(request: Request, draft_id: str, req: EmailDraftAppr
             )
         except Exception as _exc:
             _archon_exc_logger.debug("[operations_emails] Ignorierte Ausnahme (Z.92): %s", _exc)
-        return {"status": "success", "draft": draft, "message": "E-Mail freigegeben und versendet."}
+        # Audit 23.11.2026: die Nachricht darf nur bei echtem SMTP-Erfolg
+        # 'versendet' behaupten. Engine liefert delivery_status + ehrliche Message.
+        delivery_status = draft.get("delivery_status") or "unknown"
+        return {
+            "status": "success" if delivery_status == "sent" else "partial",
+            "draft": draft,
+            "delivery_status": delivery_status,
+            "message": draft.get("message") or "Freigabe ohne Versandbestätigung.",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

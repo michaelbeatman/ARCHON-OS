@@ -1,4 +1,4 @@
-"""Optionale Test-DB-Isolation (W6).
+r"""Optionale Test-DB-Isolation (W6).
 
 Problem: pytest (Windows-Host) und der laufende ARCHON-OS-Container (Linux)
 schreiben bei Bind-Mounts gleichzeitig WAL auf dieselben Dateien unter
@@ -22,6 +22,35 @@ import atexit
 import os
 import shutil
 import tempfile
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _reset_graceful_shutdown_gate():
+    """Test-Isolation fuer den zentralen Draining-Gate (P0, 23.11.2026).
+
+    Einige Tests fahren die App ueber den Lifespan-Shutdown herunter; dabei
+    ruft ``on_shutdown_graceful()`` den Singleton-Coordinator auf und laesst
+    ihn im Draining-Zustand. Seit ``main._spawn_background()`` das Gate
+    ``can_start_task()`` wirklich auswertet, wuerde dieser Zustand in den
+    naechsten Test hineinwirken und dort Background-Tasks blockieren.
+    """
+    try:
+        from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator as _coord
+
+        if _coord.is_draining:
+            _coord.cancel_draining()
+    except Exception:
+        pass
+    yield
+    try:
+        from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator as _coord
+
+        if _coord.is_draining:
+            _coord.cancel_draining()
+    except Exception:
+        pass
 
 _FLAG = os.getenv("ARCHON_TEST_DB_ISOLATION", "").strip().lower()
 if _FLAG in ("1", "true", "yes", "on"):

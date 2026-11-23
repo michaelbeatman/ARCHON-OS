@@ -1011,8 +1011,23 @@ def _is_rag_sync_running() -> bool:
     return _RAG_SYNC_PROCESS is not None and _RAG_SYNC_PROCESS.poll() is None
 
 
-def _spawn_background(coro, name: str = ""):
-    """Startet einen Background-Task, registriert ihn für Shutdown und loggt unhandled exceptions."""
+def _spawn_background(coro, name: str = "", priority: int = 1):
+    """Startet einen Background-Task, registriert ihn für Shutdown und loggt unhandled exceptions.
+
+    Audit 23.11.2026 (K-2): `can_start_task()` war nie verdrahtet — während des
+    15-s-Draining-Fensters starteten weiterhin IMAP-Syncs, Scheduler und
+    LLM-Calls. Der zentrale Spawn-Punkt prüft jetzt das Gate. Chats mit
+    Notfall-Prioritaet (>= 3) bleiben erlaubt.
+    """
+    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator as _coord
+
+    allowed, reason = _coord.can_start_task(name or "background", priority=priority)
+    if not allowed:
+        logger.warning("[BackgroundTask] Start verweigert (%s): %s", name or "background", reason)
+        close = getattr(coro, "close", None)
+        if callable(close):
+            close()  # "coroutine was never awaited" vermeiden
+        return None
     task = asyncio.create_task(coro, name=name) if name else asyncio.create_task(coro)
     _BACKGROUND_TASKS.append(task)
 

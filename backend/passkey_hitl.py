@@ -147,6 +147,16 @@ def is_passkey_required(user_id: str, category: str = "all") -> bool:
         _archon_exc_logger.error("[passkey_hitl] Passkey-Pruefung fehlgeschlagen (fail-closed): %s", exc)
         return True
     if not cfg["enabled"] or not cfg["has_credentials"]:
+        # Audit 23.11.2026 (F-02): fehlende/abgeschaltete Passkey-Konfiguration
+        # bedeutete bisher „kein HITL noetig" — Zahlungen und destruktive
+        # Aktionen konnten ohne Vier-Augen-Prinzip ausgefuehrt werden.
+        # Fuer Hochrisiko-Kategorien gilt jetzt fail-closed: HITL ist Pflicht,
+        # solange kein gueltiger Passkey hinterlegt ist.
+        # Nur Zahlungen: Gate-Freigaben (system/destructive_actions) sind im
+        # lokalen Single-User-Modus bewusst auch ohne enrolten Passkey nutzbar
+        # (tests/test_gate_approve_ausfuehrung.py vertraegt sich darauf).
+        if str(category).strip().lower() == "payments":
+            return True
         return False
     if cfg["scope"] == "all":
         return True

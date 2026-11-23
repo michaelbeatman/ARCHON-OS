@@ -561,6 +561,31 @@ class ApprovalPolicyEngine:
                 prev_hash = r["current_hash"]
 
             key_active = bool(_hmac_epochs())
+            if key_active and hmac_blocks:
+                # Audit 23.11.2026: ein Plain-SHA-Block NACH dem ersten
+                # HMAC-Block ist ein Downgrade. Ein Legacy-Praefix davor bleibt
+                # zulaessig (Key wurde erst spaeter eingefuehrt).
+                first_hmac_id = min(
+                    int(r["id"]) for r in rows
+                    if str(r["current_hash"] or "").startswith(HMAC_PREFIX)
+                )
+                downgraded_ids = [
+                    int(r["id"]) for r in rows
+                    if not str(r["current_hash"] or "").startswith(HMAC_PREFIX)
+                    and int(r["id"]) > first_hmac_id
+                ]
+                if downgraded_ids:
+                    return {
+                        "valid": False,
+                        "count": len(rows),
+                        "hmac_active": True,
+                        "hmac_blocks": hmac_blocks,
+                        "downgraded_ids": downgraded_ids[:10],
+                        "message": (
+                            "HMAC-Signatur auf nacktes SHA-256 zurueckgesetzt "
+                            "(Block nach erstem HMAC-Block)."
+                        ),
+                    }
             if hmac_blocks and not key_active:
                 return {
                     "valid": False,

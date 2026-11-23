@@ -37,9 +37,9 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen sei
 - **Observability & Tooling:** OTel-Traces in LLM-Kernel und DAG, Trace-to-Eval-Replay-Fixtures, Python 3.13, getrennte Test-Requirements.
 - **Workspace:** 5-Stufen-Onboarding-Wizard v2, Operations-Kalender und 11 LinkedIn-Skills.
 
-> **Konfigurationshinweis:** Die Codepfade für Authentifizierung und Egress-Kontrolle sind vorhanden, die mitgelieferte lokale `settings.json` hat aber weiterhin `auth.enabled = false`, `privacy.zero_egress = false` und `zero_egress_strict = false` (nur `hard_block_on_local_offline = true`). Vor einer LAN-Freigabe unbedingt Auth aktivieren. `config/version.json` ist jetzt auf `v0.5.7` angeglichen (Single Source of Truth); der CHANGELOG dokumentiert die Details.
+> **Konfigurations- & Sicherheitshinweis (Audit 23.11.2026):** Die mitgelieferte `settings.json` enthält **keinen `auth`-Block**. Das System läuft daher bei Bindung auf `127.0.0.1` bewusst im **lokalen Single-User-Modus** (Fallback-Admin, kein Login). **Dieser Modus ist ausschließlich für die lokale Desktop-Nutzung gedacht.** Nicht-Loopback-Binds erzwingen Auth bereits über `_must_force_auth()`; vor LAN- oder Produktionsbetrieb muss zusätzlich `"auth": {"enabled": true}` gesetzt werden. Auch die Egress-Flags sind standardmäßig aus (`privacy.zero_egress = false`, `zero_egress_strict = false`; nur `hard_block_on_local_offline = true`). `config/version.json` meldet **v0.5.7.3**, Badge und Handbuch sagen noch v0.5.7.
 
-> **In diesem Checkout gemessene Zahlen:** 73 Einträge in `agent_profiles.json` (70 Spezialisten + 3 System-/Meta-Profile), 59 Rollen in `roles.json`, 72 synchronisierte Profile in `.hermes/profiles/`, 312 Portrait-Assets in `static/avatars/`, 832 Prompt-Templates und 11 UI-Sprachen. Die PDF-Handbücher wurden für `v0.5.2.1` erzeugt und noch nicht für `v0.5.7` aktualisiert.
+> **In diesem Checkout gemessene Zahlen:** 73 Einträge in `agent_profiles.json` (70 Spezialisten + 3 System-/Meta-Profile), 73 Rollen in `roles.json`, 73 synchronisierte Profile in `.hermes/profiles/`, 312 Portrait-Assets in `static/avatars/`, 832 Prompt-Templates und 11 UI-Sprachen. Die PDF-Handbücher wurden für `v0.5.2.1` erzeugt und noch nicht für `v0.5.7` aktualisiert.
 
 ## Dokumentation & Handbücher (PDF)
 
@@ -192,7 +192,7 @@ flowchart LR
 
 ## Sicherheit, Recht & Weiterführende Dokumentation
 
-- **Sichere Netzwerk-Vorgabe:** Standardmäßig bindet Archon OS nur auf `127.0.0.1:8501`. Für LAN-Zugriff (`ARCHON_BIND_IP=0.0.0.0`) zuerst Multi-User-Auth in den Einstellungen aktivieren.
+- **Sichere Netzwerk-Vorgabe:** Standardmäßig bindet Archon OS nur auf `127.0.0.1:8501`. Für LAN-Zugriff (`ARCHON_BIND_IP=0.0.0.0`) zuerst Multi-User-Auth in den Einstellungen aktivieren. Der lokale Single-User-Fallback (fehlender `auth`-Block in `settings.json`) ist **per Design nur für localhost** — niemals als Zugriffsschutz auf geteilten oder Produktions-Hosts einsetzen.
 - **Keine Rechts-, Steuer- oder Medizinberatung:** Ausgaben aus den Domänen 3, 4 und 8 lösen beim Profilaufruf automatisch ein Warn-Modal aus und ersetzen keinen zugelassenen Fachberater ([LICENSE](LICENSE)).
 - **Synthetische Avatare:** Alle 312 Porträts in `static/avatars/` sind künstlich mit Gemini (*Nano Banana 2*) generiert und zeigen keine realen Personen ([THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)).
 

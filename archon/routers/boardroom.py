@@ -18,7 +18,7 @@ from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, 
 
 from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import core_dispatcher  # noqa: F401
 from backend.cancellation import clear_scope, get_child_token
@@ -61,7 +61,9 @@ class BoardroomSlotItem(BaseModel):
 
 class BoardroomRequest(BaseModel):
     task: str
-    rounds: int = 2
+    # Audit 23.11.2026: ohne Obergrenze waren unbegrenzt kostenpflichtige
+    # LLM-Runden moeglich (pro Runde N Agenten + optionales MoA).
+    rounds: int = Field(default=2, ge=1, le=6)
     chairman_id: Optional[str] = "orchestrator"
     chairman_provider: Optional[str] = "openrouter"
     chairman_model: Optional[str] = None

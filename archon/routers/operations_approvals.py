@@ -89,8 +89,10 @@ def api_get_approval_requests(request: Request, status: Optional[str] = None, do
 
 
 @router.post("/approvals/requests")
-def api_create_approval_request(req: ApprovalRequestCreate):
+def api_create_approval_request(request: Request, req: ApprovalRequestCreate):
     """Erstellt eine neue Freigabeanfrage und evaluiert Auto-Freigabe Schwellenwerte."""
+    # Audit 23.11.2026: Freigabeanfragen konnten ohne Rollenzaun angelegt werden.
+    require_admin_or_503(request)
     domain = req.domain.strip()
     title = req.title.strip()
     amount = req.amount

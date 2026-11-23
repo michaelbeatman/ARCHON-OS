@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict
 
 from backend.auth_service import auth_service
 from archon.core.config import config
@@ -22,6 +23,88 @@ from archon.core.paths import SETTINGS_FILE
 from archon.core.runtime import atomic_write_json, logger
 
 router = APIRouter(tags=["auth"])
+
+
+# ---------------------------------------------------------------------------
+# Pydantic-v2 Request-Modelle (API_VALIDATION_ROADMAP, Etappe 2a — Auth)
+# Kompatibilitaetsregel: extra="ignore" (Client-Zusatzfelder wie created_by
+# werden verworfen, nicht abgelehnt). Die Handler arbeiten weiter mit Dicts,
+# indem sie das Modell direkt zu Beginn in ein Dict ueberfuehren.
+# ---------------------------------------------------------------------------
+
+class _AuthRequestBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class AuthToggleRequest(_AuthRequestBase):
+    enabled: bool = False
+
+
+class AuthLoginRequest(_AuthRequestBase):
+    username: str = ""
+    password: str = ""
+
+
+class AuthCreateUserRequest(_AuthRequestBase):
+    username: str
+    password: str
+    role: str = "operator"
+    display_name: str = ""
+    email: str = ""
+
+
+class AuthUpdateUserRequest(_AuthRequestBase):
+    role: Optional[str] = None
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class AuthChangePasswordRequest(_AuthRequestBase):
+    user_id: Optional[str] = None
+    new_password: str = ""
+    current_password: str = ""
+
+
+class PasskeyConfigRequest(_AuthRequestBase):
+    user_id: Optional[str] = None
+    enabled: Optional[bool] = None
+    scope: Optional[str] = None
+    categories: Optional[Dict[str, bool]] = None
+    passkey_proof_token: Optional[str] = None
+
+
+class PasskeyRegisterOptionsRequest(_AuthRequestBase):
+    user_id: Optional[str] = None
+    username: Optional[str] = None
+
+
+class PasskeyRegisterVerifyRequest(_AuthRequestBase):
+    user_id: Optional[str] = None
+    id: str = ""
+    clientDataJSON: str = ""
+    publicKeySpki: str = ""
+    alg: int = -7
+    label: str = "Passkey"
+    authenticatorData: Optional[str] = None
+    passkey_proof_token: Optional[str] = None
+
+
+class PasskeyHitlOptionsRequest(_AuthRequestBase):
+    user_id: Optional[str] = None
+    category: str = "all"
+    force: bool = False
+    action_label: str = ""
+    resource: str = ""
+
+
+class PasskeyHitlVerifyRequest(_AuthRequestBase):
+    user_id: Optional[str] = None
+    id: str = ""
+    clientDataJSON: str = ""
+    authenticatorData: str = ""
+    signature: str = ""
+
 
 _DEPS: Dict[str, Any] = {}
 
@@ -175,7 +258,8 @@ def api_auth_status():
 
 
 @router.post("/api/auth/toggle")
-def api_auth_toggle(request: Request, payload: dict = Body(...)):
+def api_auth_toggle(request: Request, payload: AuthToggleRequest = Body(...)):
+    payload = payload.model_dump()
     curr = get_current_user_from_request(request)
     if curr.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Nur Administratoren dürfen den Authentifizierungsmodus ändern.")
@@ -224,7 +308,8 @@ def api_auth_me(request: Request):
 
 
 @router.post("/api/auth/login")
-def api_auth_login(request: Request, payload: dict = Body(...)):
+def api_auth_login(request: Request, payload: AuthLoginRequest = Body(...)):
+    payload = payload.model_dump()
     username = payload.get("username", "")
     password = payload.get("password", "")
     client_ip = request.client.host if request.client else ""
@@ -274,7 +359,8 @@ def api_auth_list_users(request: Request):
 
 
 @router.post("/api/auth/users")
-def api_auth_create_user(request: Request, payload: dict = Body(...)):
+def api_auth_create_user(request: Request, payload: AuthCreateUserRequest = Body(...)):
+    payload = payload.model_dump()
     curr = get_current_user_from_request(request)
     if curr.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Nur Administratoren dürfen neue Benutzer anlegen.")
@@ -292,7 +378,8 @@ def api_auth_create_user(request: Request, payload: dict = Body(...)):
 
 
 @router.patch("/api/auth/users/{user_id}")
-def api_auth_update_user(user_id: str, request: Request, payload: dict = Body(...)):
+def api_auth_update_user(user_id: str, request: Request, payload: AuthUpdateUserRequest = Body(...)):
+    payload = payload.model_dump()
     curr = get_current_user_from_request(request)
     if curr.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Benutzerrollen anpassen.")
@@ -310,8 +397,9 @@ def api_auth_update_user(user_id: str, request: Request, payload: dict = Body(..
 
 
 @router.post("/api/auth/change-password")
-def api_auth_change_password(request: Request, payload: dict = Body(...)):
+def api_auth_change_password(request: Request, payload: AuthChangePasswordRequest = Body(...)):
     """Passwort ändern: eigener Account (mit aktuellem Passwort) oder als Admin für andere."""
+    payload = payload.model_dump()
     curr = get_current_user_from_request(request)
     if not curr or curr.get("id") in (None, "", "usr_anonymous"):
         raise HTTPException(status_code=401, detail="Nicht angemeldet.")
@@ -387,7 +475,8 @@ def api_get_passkey_config(request: Request, user_id: Optional[str] = None):
 
 
 @router.post("/api/auth/passkey/config")
-def api_update_passkey_config(request: Request, payload: dict = Body(...)):
+def api_update_passkey_config(request: Request, payload: PasskeyConfigRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required, update_user_passkey_config
     target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
     if payload.get("enabled") is False and is_passkey_required(target_id, "system"):
@@ -407,7 +496,8 @@ def api_update_passkey_config(request: Request, payload: dict = Body(...)):
 
 
 @router.post("/api/auth/passkey/register/options")
-def api_passkey_register_options(request: Request, payload: dict = Body(default={})):
+def api_passkey_register_options(request: Request, payload: PasskeyRegisterOptionsRequest = Body(default=PasskeyRegisterOptionsRequest())):
+    payload = payload.model_dump()
     from backend.passkey_hitl import create_registration_options
     target_id, curr_name = _resolve_target_passkey_user(request, payload.get("user_id"))
     rp_id, _ = _request_rp_id_and_origin(request)
@@ -417,7 +507,8 @@ def api_passkey_register_options(request: Request, payload: dict = Body(default=
 
 
 @router.post("/api/auth/passkey/register/verify")
-def api_passkey_register_verify(request: Request, payload: dict = Body(...)):
+def api_passkey_register_verify(request: Request, payload: PasskeyRegisterVerifyRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.passkey_hitl import (
         consume_hitl_proof_token,
         get_user_passkey_config,
@@ -469,7 +560,8 @@ def api_passkey_delete_credential(cred_id: str, request: Request, user_id: Optio
 
 
 @router.post("/api/auth/passkey/hitl/options")
-def api_passkey_hitl_options(request: Request, payload: dict = Body(default={})):
+def api_passkey_hitl_options(request: Request, payload: PasskeyHitlOptionsRequest = Body(default=PasskeyHitlOptionsRequest())):
+    payload = payload.model_dump()
     from backend.passkey_hitl import create_hitl_assertion_options, is_passkey_required
     target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
     category = str(payload.get("category") or "all")
@@ -490,7 +582,8 @@ def api_passkey_hitl_options(request: Request, payload: dict = Body(default={}))
 
 
 @router.post("/api/auth/passkey/hitl/verify")
-def api_passkey_hitl_verify(request: Request, payload: dict = Body(...)):
+def api_passkey_hitl_verify(request: Request, payload: PasskeyHitlVerifyRequest = Body(...)):
+    payload = payload.model_dump()
     from backend.passkey_hitl import verify_hitl_assertion
     target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
     _, origin = _request_rp_id_and_origin(request)

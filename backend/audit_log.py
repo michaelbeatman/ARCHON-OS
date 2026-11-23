@@ -540,6 +540,37 @@ class ChainedAuditLog:
                 hmac_blocks = sum(
                     1 for r in rows if str(r["current_hash"] or "").startswith(HMAC_PREFIX)
                 )
+                try:
+                    legacy_max = int(
+                        os.environ.get("ARCHON_AUDIT_LEGACY_MAX_BLOCK", "0") or 0
+                    )
+                except ValueError:
+                    legacy_max = 0
+
+                # Audit 23.11.2026 (K-1): mit aktivem HMAC-Key duerfen keine
+                # ungesalzten SHA-256-Bloecke ausserhalb des explizit markierten
+                # Legacy-Bereichs liegen. Sonst kann ein Angreifer mit
+                # DB-Schreibzugriff die PRAEFIXE entfernen, die Kette mit nacktem
+                # SHA-256 neu signieren und erhaelt trotzdem valid=True — der
+                # HMAC-Schutz waere wirkungslos (Schein-Kryptografie).
+                if key_active:
+                    plain_ids = [
+                        int(r["id"]) for r in rows
+                        if not str(r["current_hash"] or "").startswith(HMAC_PREFIX)
+                        and int(r["id"]) > legacy_max
+                    ]
+                    if plain_ids:
+                        return {
+                            "valid": False,
+                            "hmac_active": True,
+                            "hmac_blocks": hmac_blocks,
+                            "plain_sha_blocks": len(rows) - hmac_blocks,
+                            "corrupted_id": plain_ids[0],
+                            "reason": (
+                                "HMAC-Key ist aktiv, aber Block(e) ohne HMAC-Signatur "
+                                "vorhanden — moeglicher Downgrade auf nacktes SHA-256."
+                            ),
+                        }
 
                 # P1: Ein HMAC-Log ohne Key ist NICHT verifizierbar. Frueher
                 # fiel _chain_hash() still auf nacktes SHA-256 zurueck und
@@ -597,13 +628,8 @@ class ChainedAuditLog:
                         # P1: Der Legacy-Pfad (ohne company_id im signierten
                         # String) erlaubte das Aendern der Mandantenzuordnung
                         # ohne Alarm. Er ist jetzt auf explizit markierte
-                        # Alt-Bloecke begrenzt; Default 0 = nie.
-                        try:
-                            legacy_max = int(
-                                os.environ.get("ARCHON_AUDIT_LEGACY_MAX_BLOCK", "0") or 0
-                            )
-                        except ValueError:
-                            legacy_max = 0
+                        # Alt-Bloecke begrenzt; Default 0 = nie. legacy_max
+                        # wird einmalig am Anfang dieser Pruefung bestimmt.
                         if int(r["id"]) <= legacy_max:
                             ok = _verify_hash(raw_legacy, stored_hash, r["id"])
 

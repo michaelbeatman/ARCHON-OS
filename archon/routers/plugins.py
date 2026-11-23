@@ -17,7 +17,7 @@ from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, 
 
 from archon.routers._rbac import require_admin_or_503, get_session_actor
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -27,6 +27,26 @@ from archon.core.runtime import (  # noqa: F401
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
+
+# P0 / API_VALIDATION_ROADMAP Etappe 2b. Plugin-Configs sind bewusst frei
+# (extra="allow"), damit beliebige Manifest-Settings unveraendert durchgereicht
+# werden. Alle anderen Modelle ignorieren Client-Zusatzfelder.
+class PluginToggleRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    enable: Optional[bool] = None
+
+
+class PluginSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class PluginToolExecuteRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    tool_name: str = ""
+    args: Dict[str, Any] = Field(default_factory=dict)
+    approval_id: Optional[str] = None
+
+
 @router.get("/api/v1/plugins")
 def api_list_plugins():
     from backend.plugin_manager import get_plugin_manager
@@ -35,8 +55,9 @@ def api_list_plugins():
 
 
 @router.post("/api/v1/plugins/{plugin_id}/toggle")
-def api_toggle_plugin(request: Request, plugin_id: str, payload: dict = Body(default={})):
-    require_admin_or_503(request)  # RBAC: Admin-Sache
+def api_toggle_plugin(request: Request, plugin_id: str, payload: PluginToggleRequest = Body(default=PluginToggleRequest())):
+    require_admin_or_503(request)
+    payload = payload.model_dump()  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     plugin = pm.plugins.get(plugin_id)
@@ -80,8 +101,9 @@ def api_get_plugin_settings(request: Request, plugin_id: str):
 
 
 @router.post("/api/v1/plugins/{plugin_id}/config")
-def api_save_plugin_settings(request: Request, plugin_id: str, payload: dict = Body(...)):
-    require_admin_or_503(request)  # RBAC: Admin-Sache
+def api_save_plugin_settings(request: Request, plugin_id: str, payload: PluginSettingsRequest = Body(...)):
+    require_admin_or_503(request)
+    payload = payload.model_dump()  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     plugin = pm.plugins.get(plugin_id)
@@ -108,8 +130,9 @@ def api_get_plugin_tools():
 
 
 @router.post("/api/v1/plugins/tools/execute")
-async def api_execute_plugin_tool(request: Request, payload: dict = Body(...)):
-    require_admin_or_503(request)  # RBAC: Admin-Sache
+async def api_execute_plugin_tool(request: Request, payload: PluginToolExecuteRequest = Body(...)):
+    require_admin_or_503(request)
+    payload = payload.model_dump()  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     from backend.tool_runtime import enforce_tool_execution, guard_result, record_tool_read_side_effect
     pm = get_plugin_manager()

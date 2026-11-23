@@ -47,6 +47,47 @@ class DbRestoreRequest(BaseModel):
     confirmed: bool = False
 
 
+# P0 / API_VALIDATION_ROADMAP Etappe 2b: Pydantic-Modelle fuer die
+# Body-Dict-Endpunkte. extra="ignore" bewahrt die Client-Kompatibilitaet.
+class SystemLanguageRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    language: str = "de"
+
+
+class SystemUpdatePushRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    message: Optional[str] = None
+    version: Optional[str] = None
+    step: str = "custom"
+
+
+class SystemUpdateApplyRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    backup: bool = True
+
+
+class SystemUpdateRollbackRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    snapshot_id: str = ""
+
+
+class SystemUpdateBackupRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    tag: str = "manual"
+
+
+class DrainStartRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    reason: str = "Manuell angefordertes Draining"
+    grace_seconds: float = 15.0
+
+
+class DrainShutdownRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    reason: str = "API-gesteuerter Shutdown"
+    grace_seconds: float = 5.0
+
+
 def _require_admin(request: Request) -> None:
     """Rollenzaun (RBAC-Pilot) — nutzt die aus main.py injizierte Pruefung.
 
@@ -320,8 +361,9 @@ def get_system_language():
 
 
 @router.post("/api/system/language")
-def set_system_language(request: Request, payload: dict = Body(...)):
-    _require_admin(request)  # RBAC: Admin-Sache
+def set_system_language(request: Request, payload: SystemLanguageRequest = Body(...)):
+    _require_admin(request)
+    payload = payload.model_dump()  # RBAC: Admin-Sache
     lang = (payload.get("language") or "de").strip().lower()
     supported = ["de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"]
     if lang not in supported:
@@ -354,8 +396,9 @@ def api_system_update_local_changes(force: bool = False):
 
 
 @router.post("/api/v1/system/update/push")
-def api_system_update_push(request: Request, payload: dict = Body(default={})):
-    _require_admin(request)  # RBAC: Admin-Sache
+def api_system_update_push(request: Request, payload: SystemUpdatePushRequest = Body(default=SystemUpdatePushRequest())):
+    _require_admin(request)
+    payload = payload.model_dump()  # RBAC: Admin-Sache
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     msg = payload.get("message")
     version = payload.get("version")
@@ -364,8 +407,9 @@ def api_system_update_push(request: Request, payload: dict = Body(default={})):
 
 
 @router.post("/api/v1/system/update/apply")
-def api_system_update_apply(request: Request, payload: dict = Body(default={}), background_tasks: BackgroundTasks = None):
-    _require_admin(request)  # RBAC-Pilot: Update des Systems ist Admin-Sache
+def api_system_update_apply(request: Request, payload: SystemUpdateApplyRequest = Body(default=SystemUpdateApplyRequest()), background_tasks: BackgroundTasks = None):
+    _require_admin(request)
+    payload = payload.model_dump()  # RBAC-Pilot: Update des Systems ist Admin-Sache
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     make_backup = payload.get("backup", True)
     res = system_updater.apply_update(make_backup=make_backup)
@@ -381,8 +425,9 @@ def api_system_update_snapshots():
 
 
 @router.post("/api/v1/system/update/rollback")
-def api_system_update_rollback(request: Request, payload: dict = Body(...)):
-    _require_admin(request)  # RBAC-Pilot: Rollback des Systems ist Admin-Sache
+def api_system_update_rollback(request: Request, payload: SystemUpdateRollbackRequest = Body(...)):
+    _require_admin(request)
+    payload = payload.model_dump()  # RBAC-Pilot: Rollback des Systems ist Admin-Sache
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     snapshot_id = payload.get("snapshot_id", "").strip()
     if not snapshot_id:
@@ -391,8 +436,9 @@ def api_system_update_rollback(request: Request, payload: dict = Body(...)):
 
 
 @router.post("/api/v1/system/update/backup")
-def api_system_update_backup(request: Request, payload: dict = Body(default={})):
-    _require_admin(request)  # RBAC: Admin-Sache
+def api_system_update_backup(request: Request, payload: SystemUpdateBackupRequest = Body(default=SystemUpdateBackupRequest())):
+    _require_admin(request)
+    payload = payload.model_dump()  # RBAC: Admin-Sache
     from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     tag = payload.get("tag", "manual").strip() or "manual"
     return system_updater.create_snapshot(tag=tag)
@@ -407,8 +453,9 @@ def api_drain_status():
 
 @router.post("/api/system/drain/start")
 @router.post("/api/v1/system/drain/start")
-def api_start_drain(request: Request, payload: dict = Body(default={})):
-    _require_admin(request)  # RBAC: Admin-Sache
+def api_start_drain(request: Request, payload: DrainStartRequest = Body(default=DrainStartRequest())):
+    _require_admin(request)
+    payload = payload.model_dump()  # RBAC: Admin-Sache
     from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
     reason = payload.get("reason", "Manuell angefordertes Draining")
     grace = payload.get("grace_seconds", 15.0)
@@ -427,8 +474,9 @@ def api_cancel_drain(request: Request):
 
 @router.post("/api/system/drain/execute-shutdown")
 @router.post("/api/v1/system/drain/execute-shutdown")
-def api_execute_shutdown(request: Request, payload: dict = Body(default={})):
-    _require_admin(request)  # RBAC: Admin-Sache
+def api_execute_shutdown(request: Request, payload: DrainShutdownRequest = Body(default=DrainShutdownRequest())):
+    _require_admin(request)
+    payload = payload.model_dump()  # RBAC: Admin-Sache
     from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
     reason = payload.get("reason", "API-gesteuerter Shutdown")
     grace = payload.get("grace_seconds", 5.0)

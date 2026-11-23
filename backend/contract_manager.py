@@ -767,15 +767,13 @@ class ContractManager:
 
     @classmethod
     def _dispatch_telegram(cls, message: str):
-        """Sendet Fristenwarnung an den Telegram-Adminchat."""
-        try:
-            from scripts.patches.hermes_telegram_adapter import send_admin_notification
-            send_admin_notification(message)
-            return
-        except Exception as exc:
-            print(f"[ContractManager] Telegram-Adapter-Import/Dispatch fehlgeschlagen, nutze Fallback: {exc}", file=sys.stderr)
+        """Sendet Fristenwarnung an den Telegram-Adminchat.
 
-        # Fallback: Direkt über requests / urllib falls Bot-Token vorhanden
+        W6: der frühere Import von `send_admin_notification` aus dem
+        Hermes-Patch-Adapter existiert dort nicht — jeder Aufruf scheiterte
+        und lieferte nur einen stderr-Import-Fehler. Der direkte API-Pfad
+        unten ist der einzige echte Versandweg.
+        """
         try:
             token = os.getenv("TELEGRAM_BOT_TOKEN")
             chat_id = os.getenv("TELEGRAM_ADMIN_CHAT_ID") or os.getenv("TELEGRAM_CHAT_ID")

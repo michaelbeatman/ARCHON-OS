@@ -1,9 +1,10 @@
 # Multi-Agent- & Content-Machine-Roadmap 2026 — Abschlussbericht
 
-**Status:** 28/28 Punkte umgesetzt (Meilenstein M114, v0.5.7-Nachfolge).
+**Status (korrigiert 23.11.2026):** 28/28 Punkte *implementiert*, aber zum Zeitpunkt des ursprünglichen Berichts **nicht verifiziert**. Ein nachfolgendes Voll-Audit fand erhebliche Verdrahtungsfehler (Gates ohne Wirkung, Publish ohne Versand, fehlende UI). Diese wurden in einer umfangreichen Sanierungswelle behoben — Details siehe [`SYSTEM_AUDIT_2026_KONSOLIDIERT.md`](SYSTEM_AUDIT_2026_KONSOLIDIERT.md) und [`AUDIT_2026_11_SANIERUNG.md`](AUDIT_2026_11_SANIERUNG.md).
+
 **Zweck:** Nachweis, welche Audit-/Feature-Forderungen aus den Roadmap-Abschnitten 6 (Multi-Agenten-Orchestrierung) und 7 (Content-Machine) im Code landed sind, inklusive Datei- und Testreferenzen.
 
-> **Hinweis zur Verifikation:** Die Regressionstests wurden geschrieben, aber in der Entwicklungssession nicht ausgeführt (der Shell-Pfad enthielt keinen echten Python-Interpreter). Vor dem Release gilt: `python -m pytest tests/test_p2_*.py -q` in CI/Docker laufen lassen.
+> **Verifikationsstatus:** Die Regressionstests wurden geschrieben, aber in der Entwicklungssession **nicht vollständig ausgeführt** (lokale venvs ohne pytest, kein `frontend/node_modules`). Die Infrastruktur-Batch-Suite meldet 40 bestandene Tests, der Gesamtlauf (`pytest tests/ -q`, `npm ci && npx tsc --noEmit && npm run build`) muss in CI/Docker erfolgen. Solange dieser nicht grün ist, ist „umgesetzt" nicht gleich „verifiziert".
 
 ---
 

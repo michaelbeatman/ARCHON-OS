@@ -967,7 +967,7 @@ export function CalendarView({ themeMode = 'light' }: CalendarViewProps) {
     } catch {}
 
     const icsUrl        = calSettings.outlookIcsUrl   || '';
-    const aggregatorUrl = (calSettings.aggregatorUrl  || 'http://localhost:8421').replace(/\/$/, '');
+    const aggregatorUrl = (calSettings.aggregatorUrl  || '/api/calendar').replace(/\/$/, '');
     const lookAhead     = calSettings.lookAheadDays   || '60';
     const lookBack      = calSettings.lookBackDays    || '14';
 

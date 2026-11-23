@@ -1,78 +1,57 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 
-const DATA_FILE = path.resolve(process.cwd(), '../data/crm_theme_live_overrides.json');
-const CSS_FILE = path.resolve(process.cwd(), 'src/app/custom_studio.css');
+/**
+ * Theme-Live-Overrides: dünner Proxy auf den FastAPI-Endpunkt.
+ * Leitet Auth-Header und Cookies weiter — der FastAPI-Endpunkt ist
+ * admin-geschützt; ohne Spiegelung bekamen POST/DELETE 401.
+ */
+const ARCHON_TARGETS = [
+  process.env.INTERNAL_ARCHON_URL,
+  process.env.NEXT_PUBLIC_ARCHON_API_URL,
+  'http://archon-os:8501',
+  'http://host.docker.internal:8501',
+  'http://127.0.0.1:8501',
+].filter((u): u is string => Boolean(u && u.trim()));
 
-export async function GET() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-      return NextResponse.json(JSON.parse(raw));
-    }
-    return NextResponse.json({ rules: {}, rawCss: '', textOverrides: {} });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
-  }
+const UPSTREAM = '/api/theme/live-overrides';
+
+function forwardHeaders(request: Request, withBody: boolean): HeadersInit {
+  const headers: Record<string, string> = {};
+  const auth = request.headers.get('authorization');
+  if (auth) headers['Authorization'] = auth;
+  const cookie = request.headers.get('cookie');
+  if (cookie) headers['Cookie'] = cookie;
+  if (withBody) headers['Content-Type'] = 'application/json';
+  return headers;
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { rules, rawCss, textOverrides } = body || {};
-
-    const payload = {
-      rules: rules || {},
-      textOverrides: textOverrides || {},
-      rawCss: rawCss || ''
-    };
-
-    const dataDir = path.dirname(DATA_FILE);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(payload, null, 2), 'utf-8');
-
-    let cssText = '/* Archon CRM CSS Live Studio */\n';
-    cssText += '#archon-css-studio, #archon-css-studio-minimized, #archon-css-highlighter { z-index: 99999999 !important; }\n\n';
-    if (rawCss && rawCss.trim()) {
-      cssText += rawCss + '\n';
-    }
-    if (rules && Object.keys(rules).length > 0) {
-      Object.entries(rules).forEach(([selector, decls]) => {
-        if (typeof decls === 'object' && decls !== null && Object.keys(decls).length > 0) {
-          cssText += `${selector} {\n`;
-          Object.entries(decls).forEach(([prop, val]) => {
-            cssText += `  ${prop}: ${val};\n`;
-          });
-          cssText += '}\n\n';
-        }
+async function forward(request: Request, method: 'GET' | 'POST' | 'DELETE') {
+  const body = method === 'POST' ? await request.text() : undefined;
+  const headers = forwardHeaders(request, method === 'POST');
+  let lastError = '';
+  for (let i = 0; i < ARCHON_TARGETS.length; i += 1) {
+    const base = ARCHON_TARGETS[i];
+    try {
+      const res = await fetch(`${base.replace(/\/+$/, '')}${UPSTREAM}`, {
+        method,
+        headers,
+        body,
+        cache: 'no-store',
       });
+      if (res.ok || i === ARCHON_TARGETS.length - 1) {
+        const text = await res.text();
+        return new NextResponse(text || null, {
+          status: res.status,
+          headers: { 'Content-Type': res.headers.get('content-type') || 'application/json' },
+        });
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
     }
-
-    const cssDir = path.dirname(CSS_FILE);
-    if (!fs.existsSync(cssDir)) {
-      fs.mkdirSync(cssDir, { recursive: true });
-    }
-    fs.writeFileSync(CSS_FILE, cssText, 'utf-8');
-
-    return NextResponse.json({ ok: true, payload });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
+  return NextResponse.json({ error: 'Archon-Theme-Endpoint nicht erreichbar', details: lastError }, { status: 502 });
 }
 
-export async function DELETE() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      fs.unlinkSync(DATA_FILE);
-    }
-    if (fs.existsSync(CSS_FILE)) {
-      fs.writeFileSync(CSS_FILE, '/* Archon CRM CSS Live Studio */\n', 'utf-8');
-    }
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
-  }
-}
+export async function GET(request: Request) { return forward(request, 'GET'); }
+export async function POST(request: Request) { return forward(request, 'POST'); }
+export async function DELETE(request: Request) { return forward(request, 'DELETE'); }

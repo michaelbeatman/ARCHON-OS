@@ -53,7 +53,15 @@ def save_inbox_config(new_cfg: Dict[str, Any]) -> bool:
         return False
 
 def _scan_and_process_inbox_sync() -> Dict[str, Any]:
-    """Synchrone Ausfuehrung fuer scan_and_process_inbox (laeuft ueber asyncio.to_thread)."""
+    """Synchrone Ausfuehrung fuer scan_and_process_inbox (laeuft ueber asyncio.to_thread).
+
+    KRITISCH (Wiring-Audit): es gab ZWEI Scanner — diesen hier und
+    ``event_mesh.scan_inbox_directory``. Beide erzeugten Kanban-Tasks und
+    Workflow-Events fuer dieselbe Datei. Jetzt gibt es nur noch EINEN Scanner
+    (Event-Mesh inkl. Cursor-Dedup `.event_mesh_processed.json`); dieser
+    Watcher ist nur noch ein konfigurierter Aufrufer davon und verschiebt
+    erfolgreich verarbeitete Dateien in den `processed`-Ordner.
+    """
     cfg = get_inbox_config()
     watch_dir = cfg.get("watch_folder", DEFAULT_WATCH_DIR)
     proc_dir = cfg.get("processed_folder") or os.path.join(watch_dir, "processed")
@@ -65,92 +73,40 @@ def _scan_and_process_inbox_sync() -> Dict[str, Any]:
         except Exception:
             return {"status": "error", "message": f"Ordner {watch_dir} konnte nicht erstellt werden."}
 
-    os.makedirs(proc_dir, exist_ok=True)
-
-    processed_files = []
-    now = time.time()
-
     try:
-        entries = os.listdir(watch_dir)
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+        from backend.event_mesh import event_mesh
+        scan = event_mesh.scan_inbox_directory(watch_dir, channel="inbox")
+    except Exception as exc:
+        return {"status": "error", "message": f"Event-Mesh-Scan fehlgeschlagen: {exc}"}
 
-    for fname in entries:
-        fpath = os.path.join(watch_dir, fname)
-        if not os.path.isfile(fpath):
+    os.makedirs(proc_dir, exist_ok=True)
+    processed_files = []
+    for evt in (scan.get("events") or []):
+        fname = str(evt.get("file_name") or "")
+        if not fname or evt.get("status") == "duplicate":
             continue
-        # Ignoriere versteckte Dateien oder bereits im Zielordner
-        if fname.startswith(".") or fname.startswith("~"):
+        src = os.path.join(watch_dir, fname)
+        if not os.path.isfile(src):
             continue
-
-        # Debouncing: Datei muss mindestens 2 Sekunden alt sein (Upload/Kopiervorgang beendet)
+        target = os.path.join(proc_dir, f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{fname}")
         try:
-            mtime = os.path.getmtime(fpath)
-            if now - mtime < 2.0:
-                continue
-            fsize = os.path.getsize(fpath)
-        except Exception:
-            continue
-
-        # Datei-Inhalt / Preview auslesen
-        ext = os.path.splitext(fname)[1].lower()
-        content_preview = ""
-        if ext in (".txt", ".md", ".json", ".csv", ".log", ".yaml", ".yml"):
-            try:
-                with open(fpath, "r", encoding="utf-8", errors="ignore") as tf:
-                    content_preview = tf.read(2000)
-            except Exception:
-                content_preview = f"[Textdatei {fname}, Groesse: {fsize} Bytes]"
-        else:
-            content_preview = f"[Binaerdatei {fname}, Typ: {ext}, Groesse: {fsize} Bytes]"
-
-        task_id = f"inbox-{datetime.datetime.now().strftime('%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
-        title = f"[INBOX-DROP] {fname}"
-        body = (
-            f"Automatisch ueber den Ingest-Watcher erfasst:\n"
-            f"- Datei: {fname}\n"
-            f"- Groesse: {fsize} Bytes\n"
-            f"- Erfassungszeit: {datetime.datetime.now().isoformat()}\n\n"
-            f"VORSCHAU / METADATEN:\n{content_preview}\n"
-        )
-
-        try:
-            from local_memory_bridge import LocalMemoryBridge
-            bridge = LocalMemoryBridge()
-            bridge.sync_task(
-                task_id=task_id,
-                title=title,
-                role=cfg.get("auto_assignee", "hermes-researcher"),
-                status="todo",
-            )
-        except Exception as e:
-            print(f"[InboxWatcher] Task sync notice: {e}", file=sys.stderr)
-
-        # Verschiebe Datei in processed Ordner
-        target_path = os.path.join(proc_dir, f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{fname}")
-        try:
-            shutil.move(fpath, target_path)
-            processed_files.append({"file": fname, "task_id": task_id, "size": fsize})
-            try:
-                from backend.workflow_scheduler import dispatch_workflow_event
-                dispatch_workflow_event(
-                    source="inbox",
-                    event_type="new_item",
-                    title=fname,
-                    summary=body[:600],
-                    payload={"file": fname, "ext": ext, "task_id": task_id, "size": fsize, "processed_path": target_path},
-                    correlation_id=task_id,
-                )
-            except Exception as wf_err:
-                print(f"[InboxWatcher] Workflow-Event notice: {wf_err}", file=sys.stderr)
-        except Exception as e:
-            print(f"[InboxWatcher] Move file error: {e}", file=sys.stderr)
+            shutil.move(src, target)
+            processed_files.append({
+                "file": fname,
+                "task_id": evt.get("kanban_task_id"),
+                "size": evt.get("file_size"),
+                "processed_path": target,
+            })
+        except Exception as exc:
+            print(f"[InboxWatcher] Move file error: {exc}", file=sys.stderr)
 
     return {
-        "status": "success",
+        "status": scan.get("status", "success"),
         "watch_folder": watch_dir,
+        "scanned_files": scan.get("scanned_files", 0),
         "processed_count": len(processed_files),
-        "processed_items": processed_files
+        "processed_items": processed_files,
+        "dedup_strategy": "event_mesh_cursor",
     }
 
 

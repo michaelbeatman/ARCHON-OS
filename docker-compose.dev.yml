@@ -111,7 +111,7 @@ services:
   # der Env-Generierung (Pfad-Praefix-Match, siehe deploy/docker-socket-proxy/
   # README.md), sondern aus der geprueften, read-only gemounteten Soll-Cfg.
   docker-socket-proxy:
-    image: tecnativa/docker-socket-proxy:latest
+    image: tecnativa/docker-socket-proxy:latest@sha256:be1ac64f33bd82043beb504822a17ba6b71668ea1ad7cf51a9a01d27bb7ab047
     container_name: docker-socket-proxy
     restart: unless-stopped
     # Entrypoint rendert weiterhin /tmp/haproxy.cfg aus dem Image-Template

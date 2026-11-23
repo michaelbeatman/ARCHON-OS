@@ -104,9 +104,18 @@
       categories[k] = !!document.getElementById(`passkey-cat-${k}`)?.checked;
     });
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      // Das Abschalten der Passkey-HITL ist selbst eine kritische Aktion und
+      // erfordert einen an_user_gebundenen Proof, sofern Credentials existieren.
+      if (!enabled && document.querySelectorAll('#passkey-credentials-list button').length > 0
+          && typeof window.requirePasskeyForHitl === 'function') {
+        const hitl = await window.requirePasskeyForHitl('system', 'Passkey-HITL deaktivieren', true, uid);
+        if (!hitl || !hitl.verified) return;
+        if (hitl.proof_token) headers['x-passkey-proof'] = hitl.proof_token;
+      }
       const res = await fetch('/api/auth/passkey/config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ user_id: uid, enabled, scope, categories }),
       });
       if (res.ok && typeof showNotification === 'function') {
@@ -130,7 +139,7 @@
       let proofToken = '';
       const hasExisting = document.querySelectorAll('#passkey-credentials-list button').length > 0;
       if (hasExisting) {
-        const hitl = await requirePasskeyForHitl('system', 'Weiteren Passkey registrieren');
+        const hitl = await requirePasskeyForHitl('system', 'Weiteren Passkey registrieren', false, uid);
         if (hitl && hitl.proof_token) proofToken = hitl.proof_token;
       }
       const optRes = await fetch('/api/auth/passkey/register/options', {
@@ -181,7 +190,7 @@
   async function deleteUserPasskey(credId) {
     const uid = document.getElementById('passkey-user-select')?.value || 'admin';
     try {
-      const hitl = await requirePasskeyForHitl('system', 'Passkey entfernen');
+      const hitl = await requirePasskeyForHitl('system', 'Passkey entfernen', false, `${uid}:${credId}`);
       const headers = hitl && hitl.proof_token ? { 'x-passkey-proof': hitl.proof_token } : {};
       const res = await fetch(`/api/auth/passkey/credentials/${encodeURIComponent(credId)}?user_id=${encodeURIComponent(uid)}`, {
         method: 'DELETE',
@@ -198,12 +207,14 @@
   }
   window.deleteUserPasskey = deleteUserPasskey;
 
-  async function requirePasskeyForHitl(category = 'all', actionLabel = 'HITL-Freigabe', force = false) {
+  async function requirePasskeyForHitl(category = 'all', actionLabel = 'HITL-Freigabe', force = false, resource = '') {
     const uid = document.getElementById('passkey-user-select')?.value || 'admin';
     const optRes = await fetch('/api/auth/passkey/hitl/options', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: uid, category, action_label: actionLabel, force }),
+      // Aktion UND Ressource müssen in der Challenge gebunden werden, sonst
+      // kann ein Proof für Ziel A später für Ziel B verwendet werden.
+      body: JSON.stringify({ user_id: uid, category, action_label: actionLabel, force, resource: resource || uid }),
     });
     const optData = await optRes.json();
     if (!optRes.ok) throw new Error(optData.detail || 'Passkey-Optionen fehlgeschlagen');
@@ -242,7 +253,7 @@
 
   async function testPasskeyHitlVerification() {
     try {
-      const res = await requirePasskeyForHitl('all', 'Test-Verifizierung', true);
+      const res = await requirePasskeyForHitl('all', 'Test-Verifizierung', true, uid);
       if (res.verified && typeof showNotification === 'function') {
         showNotification('Passkey verifiziert', 'Kryptographische Signatur erfolgreich geprüft.', 'success');
       }

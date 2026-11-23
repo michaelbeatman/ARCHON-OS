@@ -70,6 +70,8 @@ def _sync_task_to_obsidian(task: dict) -> str:
     # User-Vorgabe 09.10.2026: Datum (YYYYMMDD-) als Präfix statt "task-"
     _date_prefix = datetime.datetime.now().strftime("%Y%m%d")
     _tid_core = task_id.replace("task-", "")
+    # Dateiname jailen: task_id koennte Pfadzeichen/Traversal enthalten.
+    _tid_core = "".join(c for c in _tid_core if c.isalnum() or c in "-_")[:80] or "task"
     file_name = f"{_date_prefix}-{_tid_core}-{task_slug}.md"
 
     # Bevorzugt PROJEKTE_DIR, fallbacks auf OBSIDIAN_VAULT_DIR und inbox
@@ -81,13 +83,18 @@ def _sync_task_to_obsidian(task: dict) -> str:
     ]
 
     written_paths = []
+    # YAML-Frontmatter.values mit json.dumps quoten — ein Titel/Name mit
+    # Anfuehrungszeichen oder Newline zerstoerte sonst die Obsidian-Notiz.
+    import json as _json
+    def _y(v: Any) -> str:
+        return _json.dumps(str(v if v is not None else ""), ensure_ascii=False)
     content = f"""---
-project_id: {task_id}
-date: {datetime.date.today().isoformat()}
-agent: {task.get('agent_name', 'Hermes Agent')}
-model: {task.get('model', 'Universal')}
+project_id: {_y(task_id)}
+date: {_y(datetime.date.today().isoformat())}
+agent: {_y(task.get('agent_name', 'Hermes Agent'))}
+model: {_y(task.get('model', 'Universal'))}
 tokens_used: {task.get('estimated_tokens', 0)}
-cost_usd: ${task.get('estimated_cost_eur', 0.0):.2f}
+cost_eur: {float(task.get('estimated_cost_eur', 0.0) or 0.0):.2f}
 status: completed
 ---
 # {task.get('title', 'Ohne Titel')}
@@ -122,12 +129,21 @@ status: completed
     return final_path
 
 
-_LIVE_TELEMETRY_CACHE = {"ts": 0.0, "data": None}
+_LIVE_TELEMETRY_CACHE = {"ts": 0.0, "data": None, "tenant": ""}
 
 
 def _get_live_telemetry_metrics() -> Dict[str, Any]:
     now_ts = time.time()
-    if _LIVE_TELEMETRY_CACHE["data"] is not None and (now_ts - _LIVE_TELEMETRY_CACHE["ts"]) < 15.0:
+    try:
+        from backend.tenant_context import tenant_context
+        _tenant_id = tenant_context.get_active_tenant_id()
+    except Exception:
+        _tenant_id = "default"
+    if (
+        _LIVE_TELEMETRY_CACHE.get("tenant") == _tenant_id
+        and _LIVE_TELEMETRY_CACHE["data"] is not None
+        and (now_ts - _LIVE_TELEMETRY_CACHE["ts"]) < 15.0
+    ):
         return _LIVE_TELEMETRY_CACHE["data"]
     all_dbs = sorted(glob.glob(os.path.join(HERMES_PROFILES_BASE, "*", "state.db")) + [STATE_DB_PATH])
     if not all_dbs:
@@ -232,4 +248,5 @@ def _get_live_telemetry_metrics() -> Dict[str, Any]:
     }
     _LIVE_TELEMETRY_CACHE["ts"] = time.time()
     _LIVE_TELEMETRY_CACHE["data"] = res
+    _LIVE_TELEMETRY_CACHE["tenant"] = _tenant_id
     return res

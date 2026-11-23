@@ -281,7 +281,8 @@ def _serialize_pdf_objects(objects: List[bytes], info_obj_num: int, doc_id_seed:
     for off in offsets[1:]:
         buf.extend(f"{off:010d} 00000 n \n".encode("ascii"))
 
-    fid = hashlib.md5(doc_id_seed.encode("utf-8")).hexdigest()
+    # Kein kryptografischer Zweck (PDF-/ID-Stabilität) — explizit markieren.
+    fid = hashlib.md5(doc_id_seed.encode("utf-8"), usedforsecurity=False).hexdigest()
     buf.extend(
         f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R /Info {info_obj_num} 0 R /ID [<{fid}> <{fid}>] >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii")
     )

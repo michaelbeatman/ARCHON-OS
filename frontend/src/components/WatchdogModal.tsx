@@ -60,7 +60,8 @@ interface WatchdogModalProps {
   themeMode?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8501";
+// Browser darf niemals localhost treffen: immer über den Next.js-Proxy.
+const API_BASE = "/api/archon";
 
 export const WatchdogModal: React.FC<WatchdogModalProps> = ({
   isOpen,
@@ -89,9 +90,12 @@ export const WatchdogModal: React.FC<WatchdogModalProps> = ({
       if (res.ok) {
         const data = await res.json();
         setConfig(data);
+      } else {
+        setSaveStatus(`Fehler: HTTP ${res.status} (Konfiguration nicht geladen)`);
       }
     } catch (e) {
       console.error("Watchdog config fetch error:", e);
+      setSaveStatus("Fehler: Watchdog nicht erreichbar");
     } finally {
       setLoading(false);
     }
@@ -115,6 +119,8 @@ export const WatchdogModal: React.FC<WatchdogModalProps> = ({
       if (res.ok) {
         setSaveStatus("Gespeichert");
         setTimeout(() => setSaveStatus(null), 2000);
+      } else {
+        setSaveStatus(`Fehler: HTTP ${res.status}`);
       }
     } catch (e) {
       setSaveStatus("Fehler beim Speichern");
@@ -180,6 +186,8 @@ export const WatchdogModal: React.FC<WatchdogModalProps> = ({
         }
         setSaveStatus(`${data.new_findings_count || 0} neue Treffer erfasst`);
         setTimeout(() => setSaveStatus(null), 3000);
+      } else {
+        setSaveStatus(`Fehler: HTTP ${res.status}`);
       }
     } catch (e) {
       setSaveStatus("Fehler beim Suchlauf");

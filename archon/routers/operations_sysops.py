@@ -12,10 +12,10 @@ import json
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.routers._rbac import require_admin_or_503, get_session_actor
 
@@ -23,11 +23,79 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+# ---------------------------------------------------------------------------
+# Pydantic-v2 Request-Modelle (Etappe 6)
+# Frontend-Feldnamen bleiben unverändert; unbekannte Felder werden ignoriert.
+# ---------------------------------------------------------------------------
+
+class NotificationPolicyUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    enabled: Optional[bool] = None
+    quiet_hours_enabled: Optional[bool] = None
+    quiet_hours_start: Optional[str] = Field(None, pattern=r"^\d{1,2}:[0-5]\d$")
+    quiet_hours_end: Optional[str] = Field(None, pattern=r"^\d{1,2}:[0-5]\d$")
+    allow_critical_during_quiet_hours: Optional[bool] = None
+    telegram_enabled: Optional[bool] = None
+    telegram_min_severity: Optional[str] = Field(None, max_length=32)
+    timezone: Optional[str] = Field(None, max_length=64)
+    allow_emergency_during_quiet: Optional[bool] = None
+    digest_enabled: Optional[bool] = None
+    digest_delivery_time: Optional[str] = Field(None, pattern=r"^\d{1,2}:[0-5]\d$")
+    min_severity: Optional[str] = Field(None, max_length=32)
+
+
+class McpToolCallRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: Optional[str] = Field(None, max_length=200)
+    arguments: Union[Dict[str, Any], str] = Field(default_factory=dict)
+    agent_id: Optional[str] = Field(None, max_length=200)
+    approval_id: Optional[str] = Field(None, max_length=200)
+
+
+class TaskChunkBroadcastRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    chunk: str = Field("", max_length=100_000)
+    agent_id: Optional[str] = Field(None, max_length=200)
+    status: str = Field("in_progress", max_length=32)
+
+
+class GdprExportRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    identifier: str = Field("", max_length=500)
+
+
+class GdprEraseRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    identifier: str = Field("", max_length=500)
+    dry_run: bool = False
+    anonymize: bool = True
+
+
+class GdprVvtUpsertRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    activity_id: Optional[str] = Field(None, max_length=128)
+    name: str = Field("", max_length=300)
+    purpose: str = Field("", max_length=4000)
+    legal_basis: str = Field("", max_length=500)
+    data_categories: Optional[str] = Field(None, max_length=4000)
+    data_subjects: Optional[str] = Field(None, max_length=4000)
+    recipient_categories: Optional[str] = Field(None, max_length=4000)
+    third_country_transfers: Optional[str] = Field(None, max_length=4000)
+    retention_period: Optional[str] = Field(None, max_length=500)
+    technical_organizational_measures: Optional[str] = Field(None, max_length=8000)
+
+
+class ChaosRunRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    dry_run: bool = True
+
+
 # =========================================================================
 # HUMAN FEEDBACK ENGINE
 # =========================================================================
 
 class HumanFeedbackSubmitRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     agent_id: str
     score: int  # +1 (positiv / Daumen hoch) oder -1 (negativ / Daumen runter)
     task_id: Optional[str] = None
@@ -125,13 +193,13 @@ def api_get_notification_policy():
 
 
 @router.post("/notifications/policy")
-def api_update_notification_policy(request: Request, req: Dict[str, Any] = Body(...)):
+def api_update_notification_policy(request: Request, req: NotificationPolicyUpdateRequest):
     """Aktualisiert die Benachrichtigungs- und Ruhezeit-Regeln in settings.json."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from backend.notification_hub import get_notification_hub
         hub = get_notification_hub()
-        updated = hub.update_policy(req)
+        updated = hub.update_policy(req.model_dump(exclude_none=True))
         return {
             "status": "success",
             "policy": updated,
@@ -180,19 +248,19 @@ def api_get_mcp_tools():
 
 
 @router.post("/mcp/call")
-def api_call_mcp_tool(request: Request, req: Dict[str, Any] = Body(...)):
+def api_call_mcp_tool(request: Request, req: McpToolCallRequest):
     """Führt ein Archon MCP-Werkzeug über eine HTTP-REST-Schnittstelle aus."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from scripts.archon_mcp_server import ArchonMcpServer
         from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
-        tool_name = req.get("name")
-        arguments = req.get("arguments", {})
+        tool_name = req.name
+        arguments = req.arguments
         if not tool_name:
             raise HTTPException(status_code=400, detail={"code": "sysops_name_required", "params": {}})
         # Actor/Session und Warrant serverseitig — nie aus dem Request-Body.
         session_id = f"user:{get_session_actor(request)}"
-        agent_id = str(req.get("agent_id") or "").strip()
+        agent_id = str(req.agent_id or "").strip()
         from backend.tool_warrants import get_warrant_for_session
         warrant = get_warrant_for_session(session_id, str(tool_name))
         gate = enforce_tool_execution(
@@ -200,7 +268,7 @@ def api_call_mcp_tool(request: Request, req: Dict[str, Any] = Body(...)):
             session_id=session_id,
             tool_name=tool_name,
             args=arguments if isinstance(arguments, dict) else {},
-            approval_id=req.get("approval_id"),
+            approval_id=req.approval_id,
             warrant=warrant,
         )
         if not gate.get("allowed"):
@@ -284,11 +352,11 @@ async def api_stream_task_execution(task_id: str):
 
 
 @router.post("/tasks/{task_id}/chunk")
-def api_broadcast_task_chunk(task_id: str, req: Dict[str, Any] = Body(...)):
+def api_broadcast_task_chunk(task_id: str, req: TaskChunkBroadcastRequest):
     """Broadcastet ein Token oder Teilergebnis für einen laufenden Task."""
-    chunk = req.get("chunk", "")
-    agent_id = req.get("agent_id", "")
-    status = req.get("status", "in_progress")
+    chunk = req.chunk
+    agent_id = req.agent_id or ""
+    status = req.status
     try:
         import main
         if hasattr(main, "broadcast_event"):
@@ -335,10 +403,10 @@ def api_trigger_restore_test(request: Request, notify: bool = Query(default=True
 # =========================================================================
 
 @router.post("/gdpr/export")
-def api_gdpr_export(request: Request, req: Dict[str, Any] = Body(...)):
+def api_gdpr_export(request: Request, req: GdprExportRequest):
     """Art. 15 DSGVO: Erstellt einen vollständigen Datenauszug für eine Person über alle Speicherschichten."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    identifier = req.get("identifier", "").strip()
+    identifier = req.identifier.strip()
     if not identifier:
         raise HTTPException(status_code=400, detail={"code": "sysops_identifier_required", "params": {}})
     try:
@@ -352,12 +420,12 @@ def api_gdpr_export(request: Request, req: Dict[str, Any] = Body(...)):
 
 
 @router.post("/gdpr/erase")
-def api_gdpr_erase(request: Request, req: Dict[str, Any] = Body(...)):
+def api_gdpr_erase(request: Request, req: GdprEraseRequest):
     """Art. 17 DSGVO: Löscht/anonymisiert Daten zu einer Person und erzeugt eine kryptografische Quittung."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    identifier = req.get("identifier", "").strip()
-    dry_run = bool(req.get("dry_run", False))
-    anonymize = bool(req.get("anonymize", True))
+    identifier = req.identifier.strip()
+    dry_run = req.dry_run
+    anonymize = req.anonymize
     if not identifier:
         raise HTTPException(status_code=400, detail={"code": "sysops_identifier_required_2", "params": {}})
     try:
@@ -393,12 +461,12 @@ def api_gdpr_export_vvt(request: Request, fmt: str = Query(default="json")):
 
 
 @router.post("/gdpr/vvt")
-def api_gdpr_upsert_vvt(request: Request, req: Dict[str, Any] = Body(...)):
+def api_gdpr_upsert_vvt(request: Request, req: GdprVvtUpsertRequest):
     """Art. 30 DSGVO: Erstellt oder aktualisiert einen VVT-Eintrag."""
     require_admin_or_503(request)
     try:
         from backend.gdpr_compliance_engine import gdpr_engine
-        act = gdpr_engine.upsert_processing_activity(req)
+        act = gdpr_engine.upsert_processing_activity(req.model_dump(exclude_none=True))
         return {"status": "success", "activity": act}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -411,10 +479,10 @@ def api_gdpr_upsert_vvt(request: Request, req: Dict[str, Any] = Body(...)):
 # =========================================================================
 
 @router.post("/chaos/run")
-def api_chaos_run(request: Request, req: Dict[str, Any] = Body(default={})):
+def api_chaos_run(request: Request, req: ChaosRunRequest = Body(default=ChaosRunRequest())):
     """Führt automatisierte Chaos- und Resilienz-Tests gegen Container, DB und Watchdog aus."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    dry_run = bool(req.get("dry_run", True))
+    dry_run = req.dry_run
     try:
         sys.path.insert(0, os.path.join(WORKSPACE_DIR, "scripts"))
         from chaos_tester import ArchonChaosTester

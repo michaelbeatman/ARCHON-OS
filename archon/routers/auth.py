@@ -392,7 +392,10 @@ def api_update_passkey_config(request: Request, payload: dict = Body(...)):
     target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
     if payload.get("enabled") is False and is_passkey_required(target_id, "system"):
         proof = str(payload.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
-        if not proof or not consume_hitl_proof_token(proof, target_id, "system"):
+        if not proof or not consume_hitl_proof_token(
+            proof, target_id, "system",
+            action="Passkey-HITL deaktivieren", resource=target_id,
+        ):
             raise HTTPException(status_code=403, detail="Passkey-Verifizierung erforderlich, um Passkey-HITL zu deaktivieren.")
     cfg = update_user_passkey_config(
         target_id,
@@ -425,7 +428,10 @@ def api_passkey_register_verify(request: Request, payload: dict = Body(...)):
     existing_cfg = get_user_passkey_config(target_id)
     if (existing_cfg.get("credentials") or []) and is_passkey_required(target_id, "system"):
         proof = str(payload.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
-        if not proof or not consume_hitl_proof_token(proof, target_id, "system"):
+        if not proof or not consume_hitl_proof_token(
+            proof, target_id, "system",
+            action="Weiteren Passkey registrieren", resource=target_id,
+        ):
             raise HTTPException(
                 status_code=403,
                 detail="Passkey-Verifizierung erforderlich, um einen weiteren Passkey zu registrieren.",
@@ -453,7 +459,10 @@ def api_passkey_delete_credential(cred_id: str, request: Request, user_id: Optio
     target_id, _ = _resolve_target_passkey_user(request, user_id)
     if is_passkey_required(target_id, "system"):
         proof = str(request.headers.get("x-passkey-proof") or request.query_params.get("passkey_proof_token") or "").strip()
-        if not proof or not consume_hitl_proof_token(proof, target_id, "system"):
+        if not proof or not consume_hitl_proof_token(
+            proof, target_id, "system",
+            action="Passkey entfernen", resource=f"{target_id}:{cred_id}",
+        ):
             raise HTTPException(status_code=403, detail="Passkey-Verifizierung erforderlich, um Passkey-Zugangsdaten zu loeschen.")
     cfg = delete_user_credential(target_id, cred_id)
     return {"status": "success", **cfg}
@@ -473,6 +482,7 @@ def api_passkey_hitl_options(request: Request, payload: dict = Body(default={}))
             rp_id,
             category=category,
             action_label=str(payload.get("action_label") or ""),
+            resource=str(payload.get("resource") or ""),
         )
         return {"status": "success", "required": True, "options": opts}
     except ValueError as exc:

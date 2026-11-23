@@ -1739,6 +1739,7 @@
       "delete_title": "Artikel archiveren / verwijderen"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "Formulierlay-outeditor momenteel niet beschikbaar",
       "kontakte_crm_adressstamm": "Contacten — CRM adresbestand",
       "mandant_archon_systems": "Tenant: archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "Volledige contact- & CRM-tabel (High-Performance SQLite)",
@@ -3973,6 +3974,8 @@
       "quality_gate_hint": "Onafhankelijke peer-review voordat verplaatst wordt naar \"Done\"",
       "review_start": "Review starten",
       "human_approve": "Goedkeuren",
+      "human_reject": "Afwijzen",
+      "human_reject_title": "Handmatig afwijzen — wijzigingen aanvragen zonder AI-review",
       "critique_label": "Kritiekpunten / Aanpassingen:",
       "next_steps_label": "Volgende stappen:",
       "feedback_loop": "⭐ Human-feedback-lus",
@@ -4363,7 +4366,7 @@
       "label_saved": "Opgeslagen!",
       "log_connecting": "Verbinden met agentenlog...",
       "log_empty": "Geen recente achtergrondlogs voor deze agent.",
-      "log_fallback_ready": "Agent gereed in standbymodus.",
+      "log_fallback_ready": "Livefeed momenteel niet beschikbaar. Probeer het opnieuw.",
       "log_fallback_router": "Poort 20128 actief. Geen waarschuwingen.",
       "log_telemetry_header": "⚡ Systeem & daemon-telemetrie:",
       "log_turns_header": "💬 Laatste conversatierondes:",
@@ -5395,6 +5398,7 @@
       "move_complete": "Afronden",
       "move_failed": "Status {status}: taak kon niet worden bijgewerkt",
       "move_open_operations": "Openen in Operations",
+      "task_open_detail_hint": "Taakdetails openen",
       "move_reject": "❌ Afwijzen",
       "move_review": "Review",
       "move_start": "Starten",

@@ -1735,6 +1735,7 @@
       "delete_title": "Archive / delete item"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "Form layout editor currently unavailable",
       "kontakte_crm_adressstamm": "Contacts — CRM master data",
       "mandant_archon_systems": "Tenant: archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "Complete contact & CRM table (high-performance SQLite)",
@@ -3802,6 +3803,8 @@
       "quality_gate_hint": "Independent peer review before moving to “Done”",
       "review_start": "Start review",
       "human_approve": "Approve",
+      "human_reject": "Reject",
+      "human_reject_title": "Manually reject — request changes without AI review",
       "critique_label": "Critique points / rework:",
       "next_steps_label": "Next steps:",
       "feedback_loop": "⭐ Human feedback loop",
@@ -4359,7 +4362,7 @@
       "label_saved": "Saved!",
       "log_connecting": "Connecting to agent log...",
       "log_empty": "No recent background logs for this agent.",
-      "log_fallback_ready": "Agent ready in standby mode.",
+      "log_fallback_ready": "Live feed temporarily unavailable. Please try again.",
       "log_fallback_router": "Port 20128 active. No warnings.",
       "log_telemetry_header": "⚡ System & daemon telemetry:",
       "log_turns_header": "💬 Recent conversation turns:",
@@ -5391,6 +5394,7 @@
       "move_complete": "Complete",
       "move_failed": "Status {status}: task could not be updated",
       "move_open_operations": "Open in Operations",
+      "task_open_detail_hint": "Open task details",
       "move_reject": "❌ Reject",
       "move_review": "Review",
       "move_start": "Start",

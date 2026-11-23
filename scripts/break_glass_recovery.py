@@ -29,7 +29,14 @@ from typing import Dict, Any, Tuple, Optional
 
 BACKUP_DIR = os.path.join(WORKSPACE_DIR, "data", "backups")
 VAULT_FILE = os.path.join(BACKUP_DIR, "break_glass_vault.enc")
-KIT_DOC_FILE = os.path.join(BACKUP_DIR, "BREAK_GLASS_RECOVERY_KIT.md")
+# KRITISCH: der Klartext-Notfallkey darf NICHT im selben Verzeichnis liegen
+# wie der verschluesselte Vault (der .env mit ARCHON_AUDIT_HMAC_KEY enthaelt).
+# Wer data/backups/ lesen kann, konnte sonst Vault + Key + HMAC-Secret
+# kombinieren und die Audit-Kette ab Block 1 neu signieren.
+KIT_DOC_FILE = os.path.join(
+    os.environ.get("ARCHON_BREAK_GLASS_KIT_DIR", os.path.join(WORKSPACE_DIR, "data", "security")),
+    "BREAK_GLASS_RECOVERY_KIT.md",
+)
 METADATA_FILE = os.path.join(BACKUP_DIR, "break_glass_meta.json")
 
 # Kritisches Notfall-Inventar
@@ -182,8 +189,17 @@ Sollte die Web-Oberflaeche nicht erreichbar sein oder der Server neu aufgesetzt 
 ---
 *Revisionssicher protokolliert gemaess GoBD & ISO/IEC 27001 (Zero-Trust Ledger).*
 """
-    with open(KIT_DOC_FILE, "w", encoding="utf-8") as f:
-        f.write(kit_markdown)
+    os.makedirs(os.path.dirname(KIT_DOC_FILE), exist_ok=True)
+    fd = os.open(KIT_DOC_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(kit_markdown)
+    except Exception:
+        try:
+            os.close(fd)
+        except Exception:
+            pass
+        raise
 
     # 5. In GoBD Audit-Log protokollieren
     try:
@@ -225,10 +241,26 @@ def restore_break_glass_vault(recovery_key: str, operator: str = "emergency_oper
     # 2. Auspacken und Dateien überschreiben
     restored_files = []
     zip_buffer = io.BytesIO(decrypted_zip_bytes)
+    workspace_root = os.path.realpath(WORKSPACE_DIR)
     with zipfile.ZipFile(zip_buffer, "r") as zf:
         for member in zf.namelist():
-            target_path = os.path.join(WORKSPACE_DIR, member)
+            if member.endswith("/"):
+                continue
+            # KRITISCH (Audit 23.11.2026): Zip-Slip. Absolute Pfade, '..' und
+            # Symlink-Ausbrüche muessen hart abgelehnt werden — sonst kann der
+            # Vault beliebige Dateien im Workspace überschreiben (RCE).
+            normalized = member.replace("\\", "/")
+            if os.path.isabs(member) or ".." in normalized.split("/"):
+                raise ValueError(f"[BreakGlass] Unsafe vault member abgelehnt: {member}")
+            target_path = os.path.realpath(os.path.join(workspace_root, member))
+            if os.path.commonpath([workspace_root, target_path]) != workspace_root:
+                raise ValueError(f"[BreakGlass] Vault member ausserhalb Workspace: {member}")
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            # Veraltete WAL-Sidecars entfernen, sonst wendet SQLite beim
+            # naechsten Start das alte Journal auf die restore-Datei an.
+            for sidecar in (target_path + "-wal", target_path + "-shm"):
+                if os.path.exists(sidecar):
+                    os.remove(sidecar)
             with zf.open(member) as src, open(target_path, "wb") as dst:
                 shutil.copyfileobj(src, dst)
             restored_files.append(member)

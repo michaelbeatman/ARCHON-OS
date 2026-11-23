@@ -730,6 +730,359 @@
       </div>`;
   }
 
+  // ------------------------------------------------------------------
+  // VOLLBILD-DIALOG: Stations-Konfiguration (Drei-Spalten)
+  // ------------------------------------------------------------------
+
+  function renderPluginParamFieldsHtml(plugin, values) {
+    const schema = Array.isArray(plugin && plugin.params_schema) ? plugin.params_schema : [];
+    if (!schema.length) {
+      return '<div class="text-[11px] text-[var(--muted-foreground)] p-3 rounded-lg border border-[var(--border)] bg-[var(--page-bg)]">Dieser Baustein hat keine eigenen Parameter.</div>';
+    }
+    const groups = {};
+    schema.forEach((ps) => {
+      if (!ps || !ps.key) return;
+      const g = String(ps.group || "Allgemein");
+      (groups[g] = groups[g] || []).push(ps);
+    });
+    const fieldHtml = (ps) => {
+      const val = values && values[ps.key] !== undefined ? values[ps.key] : (ps.default !== undefined ? ps.default : "");
+      const common = `data-wfd-plugin-param="${esc(ps.key)}" data-wfd-type="${esc(ps.type || "text")}"`;
+      const label = `<span class="text-[10px] font-mono text-[var(--muted-foreground)]">${esc(ps.label)}${ps.context_ref ? ' · ctx_-Referenz erlaubt' : ''}</span>`;
+      const help = ps.help ? `<span class="text-[9px] text-[var(--muted-foreground)] block">${esc(ps.help)}</span>` : "";
+      if (ps.type === "checkbox") {
+        return `<label class="flex items-start gap-2 text-[11px] cursor-pointer" data-wfd-field="${esc(ps.key)}">${label}<input type="checkbox" ${common} ${val ? "checked" : ""} class="mt-0.5" /></label>`;
+      }
+      if (ps.type === "select") {
+        return `<label class="block space-y-0.5" data-wfd-field="${esc(ps.key)}">${label}
+          <select ${common} class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] font-mono text-[11px]">
+            ${(ps.options || []).map((o) => `<option value="${esc(o)}" ${String(val) === String(o) ? "selected" : ""}>${esc(o)}</option>`).join("")}
+          </select>${help}</label>`;
+      }
+      if (ps.type === "textarea") {
+        return `<label class="block space-y-0.5" data-wfd-field="${esc(ps.key)}">${label}
+          <textarea rows="2" ${common} placeholder="${esc(ps.placeholder || "")}" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] text-[11px]">${esc(val)}</textarea>${help}</label>`;
+      }
+      const itype = ps.type === "number" ? "number" : "text";
+      const limits = `${ps.min !== undefined ? `min="${esc(ps.min)}"` : ""} ${ps.max !== undefined ? `max="${esc(ps.max)}"` : ""} ${ps.step !== undefined ? `step="${esc(ps.step)}"` : ""}`;
+      return `<label class="block space-y-0.5" data-wfd-field="${esc(ps.key)}">${label}
+        <input type="${itype}" ${limits} ${common} value="${esc(val)}" placeholder="${esc(ps.placeholder || "")}" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] font-mono text-[11px]" />${help}</label>`;
+    };
+    const groupsHtml = Object.entries(groups).map(([g, fields]) => {
+      const primary = fields.filter((f) => !f.advanced);
+      const advanced = fields.filter((f) => f.advanced);
+      return `<section data-wfd-group="${esc(g)}" class="space-y-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+        <h4 class="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-500">${esc(g)}</h4>
+        ${primary.map(fieldHtml).join("")}
+        ${advanced.length ? `<details class="pt-1"><summary class="text-[10px] font-mono text-[var(--muted-foreground)] cursor-pointer">+ ${advanced.length} erweiterte Optionen</summary><div class="space-y-2 pt-2">${advanced.map(fieldHtml).join("")}</div></details>` : ""}
+      </section>`;
+    }).join("");
+    return `<div class="space-y-2.5">
+      <input type="search" data-wfd-param-search placeholder="Parameter suchen…" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] text-[11px]" />
+      ${groupsHtml}
+    </div>`;
+  }
+
+  async function openStationConfigDialog(nodeId) {
+    if (!_activeTpl) return;
+    const node = _activeTpl.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    const plugin = _nodePlugins.find((p) => p.plugin_id === node.type) || null;
+    let ctxPackages = [];
+    try { ctxPackages = (await apiJson("/api/context-packages")).packages || []; } catch (_) {}
+
+    const prev = document.getElementById("wf-station-dialog");
+    if (prev) prev.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "wf-station-dialog";
+    overlay.className = "fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4";
+    const agentOptions = (_profiles || []).map((p) => `<option value="${esc(p.id)}" ${node.agent_id === p.id ? "selected" : ""}>${esc(p.label)}</option>`).join("");
+    const ctxRows = ctxPackages.length
+      ? ctxPackages.map((c) => `<label class="flex items-center gap-2 text-[11px] py-1 border-b border-[var(--border)]">
+          <input type="checkbox" data-wfd-ctx="${esc(c.id)}" ${(node.context_refs || []).includes(c.id) ? "checked" : ""} />
+          <span class="truncate flex-1">${esc(c.original_name)}</span>
+          <span class="text-[9px] font-mono text-[var(--muted-foreground)]">${esc(c.tokens_est)} Tok · ${esc(c.scope)}</span>
+        </label>`).join("")
+      : '<div class="text-[10px] text-[var(--muted-foreground)] py-2">Noch keine Kontext-Pakete vorhanden.</div>';
+
+    overlay.innerHTML = `
+      <div style="width:100%;height:100%;max-width:1600px;" class="bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] shrink-0">
+          <div>
+            <div class="text-sm font-bold">⚙ Station vollständig konfigurieren</div>
+            <div class="text-[10px] font-mono text-[var(--muted-foreground)]">${esc(node.id)} · ${esc(plugin ? plugin.label : node.type)}</div>
+          </div>
+          <button type="button" data-wfd-close class="px-2 py-1 rounded-lg border border-[var(--border)] text-xs">✕ Schließen</button>
+        </div>
+        <div class="flex flex-1 min-h-0">
+          <!-- LINKS: Metadaten -->
+          <aside style="width:240px;min-width:220px;" class="border-r border-[var(--border)] p-3 space-y-3 overflow-y-auto text-xs">
+            <div class="text-[10px] font-mono uppercase tracking-wider text-[var(--muted-foreground)]">Station</div>
+            <label class="block space-y-0.5"><span class="text-[10px] font-mono">Titel</span><input id="wfd-title" value="${esc(node.title)}" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)]" /></label>
+            <label class="block space-y-0.5"><span class="text-[10px] font-mono">Typ</span><input value="${esc(plugin ? plugin.label : node.type)}" disabled class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--secondary)] opacity-70" /></label>
+            <label class="block space-y-0.5"><span class="text-[10px] font-mono">Preset-ID</span><input id="wfd-preset" value="${esc(node.preset_id || "")}" placeholder="z. B. video-short-9x16" class="w-full px-2 py-1 rounded border border-[var(--border)] bg-[var(--page-bg)] font-mono text-[11px]" /></label>
+            <div class="p-2 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] text-[10px] font-mono space-y-1">
+              <div>Plugin: ${esc(plugin ? plugin.adapter || "local" : "core")}</div>
+              <div>Parameter: ${esc(Object.keys(node.plugin_params || {}).length)}</div>
+              <div>Kontext: ${esc((node.context_refs || []).length)} Referenzen</div>
+            </div>
+            <div class="flex gap-2 pt-2">
+              <button type="button" data-wfd-apply class="flex-1 px-2 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">Übernehmen</button>
+              <button type="button" data-wfd-close class="px-2 py-2 rounded-lg border border-[var(--border)] text-xs">Abbrechen</button>
+            </div>
+          </aside>
+
+          <!-- MITTE: Aufgaben-Konfiguration -->
+          <section class="flex-1 min-w-0 flex flex-col">
+            <div class="flex gap-1 px-3 py-2 border-b border-[var(--border)] overflow-x-auto shrink-0 text-[11px] font-mono">
+              ${[["ziel","Ziel"],["identitaet","Identität"],["kontext","Kontext"],["werkzeuge","Werkzeuge"],["grenzen","Grenzen"],["zeitplan","Zeitplan"]]
+                .map(([k,l], i) => `<button type="button" data-wfd-tab="${k}" class="px-2.5 py-1 rounded-lg border ${i === 0 ? "border-indigo-500 bg-indigo-500/15 text-indigo-500" : "border-[var(--border)] text-[var(--muted-foreground)]"} whitespace-nowrap">${l}</button>`).join("")}
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-4 text-xs space-y-3">
+              <div data-wfd-panel="ziel" class="space-y-3">
+                <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Beschreibung / Prompt / Ziel</span>
+                  <div class="border border-[var(--border)] rounded-xl p-2 bg-[var(--card)]">
+                    <textarea id="wfd-prompt" rows="7" class="w-full px-2 py-1.5 text-xs bg-transparent text-[var(--foreground)] focus:outline-none font-sans leading-relaxed custom-scrollbar resize-y">${esc(node.prompt || "")}</textarea>
+                    <div class="mt-1.5 pt-1.5 border-t border-[var(--border)] flex items-center gap-1.5 flex-wrap">
+                      <input type="file" data-wfd-attach-file class="hidden" accept=".txt,.md,.pdf,.csv,.json,.png,.jpg,.jpeg,.py,.js,.html,.ts" />
+                      <button type="button" data-wfd-attach title="Datei anhängen (wird als Kontext-Paket referenziert)" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)]"><i data-lucide="paperclip" class="w-4 h-4"></i></button>
+                      <button type="button" data-wfd-mic title="Spracheingabe / Diktat" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)]"><i data-lucide="mic" class="w-4 h-4"></i></button>
+                      <button type="button" onclick="openSurePromptsModal('wfd-station')" title="Archon Prompt Studio" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-indigo-600 hover:text-white text-[var(--foreground)]"><i data-lucide="layers" class="w-4 h-4"></i></button>
+                      <button type="button" id="wfd-optimize-btn" onclick="optimizePromptWithAI('wfd-station')" title="KI Prompt-Optimierer (5-Felder SOP)" class="p-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-indigo-600 hover:text-white text-[var(--foreground)]"><i data-lucide="sparkles" class="w-4 h-4"></i></button>
+                      <span data-wfd-attach-status class="text-[10px] font-mono text-[var(--muted-foreground)]"></span>
+                    </div>
+                  </div>
+                </label>
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                  <span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">SOUL.md Experten-Tiefe</span>
+                  <input type="hidden" id="wfd-soul-mode" value="${["compact","pro","full"].includes(node.soul_mode) ? esc(node.soul_mode) : "compact"}" />
+                  <div class="flex items-center rounded-md border border-[var(--border)] bg-[var(--secondary)] p-0.5 text-[10px] font-mono gap-0.5">
+                    <button type="button" data-wfd-soul="compact" class="px-1.5 py-0.5 rounded font-bold flex items-center gap-1 whitespace-nowrap"><i data-lucide="zap" class="w-3 h-3"></i>Standard (~3k)</button>
+                    <button type="button" data-wfd-soul="pro" class="px-1.5 py-0.5 rounded flex items-center gap-1 whitespace-nowrap"><i data-lucide="target" class="w-3 h-3"></i>Pro (~6.8k)</button>
+                    <button type="button" data-wfd-soul="full" class="px-1.5 py-0.5 rounded flex items-center gap-1 whitespace-nowrap"><i data-lucide="flame" class="w-3 h-3"></i>Full-SOUL</button>
+                  </div>
+                </div>
+                <div class="px-1 flex items-center justify-between gap-2 flex-wrap text-[11px] font-mono">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-semibold uppercase text-[10.5px]">PROVIDER:</span>
+                    <select id="wfd-provider" class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2 py-1 text-[11px] font-mono">
+                      ${[["omniroute","OmniRoute"],["openrouter","OpenRouter"],["google","Google AI (Gemini)"],["groq","Groq"],["openai","OpenAI"],["nvidia","NVIDIA NIM"]].map(([v,l]) => `<option value="${v}" ${(node.provider || "omniroute") === v ? "selected" : ""}>${l}</option>`).join("")}
+                    </select>
+                    <span class="font-semibold uppercase text-[10.5px]">MODELL:</span>
+                    <select id="wfd-model" class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2 py-1 text-[11px] font-mono">
+                      <option value="">OmniRoute Default (Auto)</option>
+                      ${node.model ? `<option value="${esc(node.model)}" selected>${esc(node.model)}</option>` : ""}
+                    </select>
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <span class="font-semibold uppercase text-[10.5px]">REASONING:</span>
+                    <select id="wfd-reasoning" class="bg-[var(--card)] border border-[var(--border)] rounded-md px-2 py-1 text-[11px] font-mono">
+                      ${[ ["","Auto (Agenten-Standard)"],["off","Aus (0 Tok)"],["minimal","Minimal (~1k Tok)"],["low","Niedrig (~2k Tok)"],["medium","Mittel (~4k Tok)"],["high","Hoch (~8k Tok)"],["max","Maximal (~16k Tok)"] ].map(([v,l]) => `<option value="${v}" ${(node.reasoning_effort || "") === v ? "selected" : ""}>${l}</option>`).join("")}
+                    </select>
+                  </div>
+                </div>
+                <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Erwarteter Output / Abnahmekriterium</span><textarea id="wfd-expected" rows="3" class="w-full px-2 py-2 rounded-lg border border-[var(--border)] bg-[var(--page-bg)]">${esc(node.expected_output || "")}</textarea></label>
+              </div>
+              <div data-wfd-panel="identitaet" class="space-y-3 hidden">
+                <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Agent / Profil</span><select id="wfd-agent" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono"><option value="">(Auto)</option>${agentOptions}</select></label>
+                <div class="text-[10px] text-[var(--muted-foreground)] p-2 rounded-lg border border-[var(--border)] bg-[var(--page-bg)]">SOUL-Modus, Provider, Modell und Reasoning befinden sich im Reiter <b>Ziel</b> – direkt beim Prompt.</div>
+              </div>
+              <div data-wfd-panel="kontext" class="space-y-3 hidden">
+                <div class="p-2 rounded-lg border border-[var(--border)] bg-[var(--page-bg)]">
+                  <div class="text-[10px] font-mono font-bold uppercase mb-1">Kontext-Pakete (referenziert)</div>
+                  ${ctxRows}
+                  <div class="flex items-center gap-2 pt-2">
+                    <input type="file" data-wfd-ctx-file class="hidden" />
+                    <button type="button" data-wfd-ctx-upload class="px-2 py-1 rounded-lg border border-indigo-500/40 bg-indigo-500/10 text-indigo-500 text-[11px]">+ Datei hochladen</button>
+                    <span data-wfd-ctx-status class="text-[10px] font-mono text-[var(--muted-foreground)]"></span>
+                  </div>
+                </div>
+                <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Weitere Referenzen (eine pro Zeile, z. B. @upstream.n_research.synthesis oder ctx_…)</span><textarea id="wfd-ctx-extra" rows="4" class="w-full px-2 py-2 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono">${esc((node.context_refs || []).filter((r) => !String(r).startsWith("ctx_")).join("\n"))}</textarea></label>
+                <div class="text-[10px] font-mono text-[var(--muted-foreground)]">Token-Budget: <span id="wfd-token-meter">—</span></div>
+              </div>
+              <div data-wfd-panel="werkzeuge" class="space-y-3 hidden">
+                <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Tool-Profil</span><select id="wfd-tool-preset" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono">
+                  ${Object.keys(PRESET_TOOLS).map((p) => `<option value="${esc(p)}" ${(node.tool_preset || "standard") === p ? "selected" : ""}>${esc(p)}</option>`).join("")}
+                </select></label>
+                <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Verbote / Guardrails (eine pro Zeile)</span><textarea id="wfd-forbidden" rows="4" class="w-full px-2 py-2 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono">${esc((node.forbidden_actions || []).join("\n"))}</textarea></label>
+              </div>
+              <div data-wfd-panel="grenzen" class="space-y-3 hidden">
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Priorität</span><select id="wfd-priority" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono">
+                    ${[0,1,2,3].map((p) => `<option value="${p}" ${Number(node.priority || 0) === p ? "selected" : ""}>P${3 - p}</option>`).join("")}
+                  </select></label>
+                  <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Max. Tokens</span><input id="wfd-token-budget" type="number" min="0" step="1000" value="${esc(node.token_budget || "")}" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono" /></label>
+                  <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Kosten-Cap (USD)</span><input id="wfd-cost-limit" type="number" min="0" step="0.1" value="${esc(node.cost_limit_usd || "")}" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono" /></label>
+                  <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Retries</span><input id="wfd-retries" type="number" min="0" max="10" value="${esc(node.max_retries !== undefined ? node.max_retries : 1)}" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono" /></label>
+                  <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Timeout (s)</span><input id="wfd-timeout" type="number" min="30" step="30" value="${esc(node.timeout_sec || 300)}" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono" /></label>
+                </div>
+                <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" id="wfd-hitl" ${node.require_hitl ? "checked" : ""} /> HITL-Freigabe vor Ausführung erzwingen</label>
+              </div>
+              <div data-wfd-panel="zeitplan" class="space-y-3 hidden">
+                <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Cron / Schedule-Hinweis</span><input id="wfd-cron" value="${esc(node.schedule_hint || "")}" placeholder="0 9 * * 1 oder @daily" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono" /></label>
+                <label class="block space-y-0.5"><span class="text-[10px] font-mono uppercase text-[var(--muted-foreground)]">Fällig (Datum)</span><input id="wfd-due" type="date" value="${esc(node.due_date || "")}" class="w-full px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--page-bg)] font-mono" /></label>
+              </div>
+            </div>
+          </section>
+
+          <!-- RECHTS: baustein-spezifische Parameter -->
+          <aside style="width:400px;min-width:340px;" class="border-l border-[var(--border)] p-3 overflow-y-auto bg-[var(--page-bg)]">
+            <div class="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-500 mb-2">Baustein-Parameter ${plugin ? `· ${esc(plugin.label)}` : ""}</div>
+            ${renderPluginParamFieldsHtml(plugin, node.plugin_params || {})}
+          </aside>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const q = (sel) => overlay.querySelector(sel);
+    const qa = (sel) => Array.from(overlay.querySelectorAll(sel));
+    if (window.lucide && typeof lucide.createIcons === "function") lucide.createIcons();
+
+    // SOUL-Umschalter (Standard / Pro / Full-SOUL) – wie im Aufgaben-Dialog
+    const soulInput = q("#wfd-soul-mode");
+    const paintSoul = () => {
+      qa("[data-wfd-soul]").forEach((b) => {
+        const active = b.getAttribute("data-wfd-soul") === soulInput.value;
+        b.className = `px-1.5 py-0.5 rounded font-bold flex items-center gap-1 whitespace-nowrap ${active ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"}`;
+      });
+    };
+    qa("[data-wfd-soul]").forEach((b) => b.onclick = () => {
+      soulInput.value = b.getAttribute("data-wfd-soul");
+      paintSoul();
+    });
+    paintSoul();
+
+    // Anhang -> Kontext-Paket hochladen und als Referenz übernehmen
+    const attachFile = q("[data-wfd-attach-file]");
+    q("[data-wfd-attach]").onclick = () => attachFile.click();
+    attachFile.onchange = async () => {
+      const file = attachFile.files && attachFile.files[0];
+      if (!file) return;
+      const status = q("[data-wfd-attach-status]");
+      if (status) status.textContent = "lädt…";
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("scope", "project");
+        fd.append("acl_json", "[]");
+        const res = await fetch("/api/context-packages", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Upload fehlgeschlagen");
+        ctxPackages.push(data.package);
+        const extra = q("#wfd-ctx-extra");
+        if (extra) extra.value = [extra.value.trim(), data.package.id].filter(Boolean).join("\n");
+        if (status) status.textContent = `✓ ${data.package.original_name.slice(0, 24)}`;
+        updateMeter();
+      } catch (err) {
+        if (status) status.textContent = String(err.message || err).slice(0, 60);
+      }
+    };
+
+    // Diktat direkt in den Dialog-Prompt
+    let wfdRecognition = null;
+    q("[data-wfd-mic]").onclick = () => {
+      const SR = window.webkitSpeechRecognition || window.SpeechRecognition;
+      const promptEl = q("#wfd-prompt");
+      if (!SR) { alert("Spracherkennung wird in diesem Browser leider nicht unterstützt (Chrome/Edge nutzen)."); return; }
+      if (wfdRecognition) { wfdRecognition.stop(); wfdRecognition = null; return; }
+      wfdRecognition = new SR();
+      wfdRecognition.lang = "de-DE";
+      wfdRecognition.interimResults = false;
+      wfdRecognition.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        promptEl.value = (promptEl.value ? promptEl.value + " " : "") + text;
+      };
+      wfdRecognition.onend = () => { wfdRecognition = null; };
+      wfdRecognition.start();
+    };
+
+    qa("[data-wfd-close]").forEach((b) => b.onclick = () => overlay.remove());
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    qa("[data-wfd-tab]").forEach((btn) => btn.onclick = () => {
+      qa("[data-wfd-tab]").forEach((b) => b.className = "px-2.5 py-1 rounded-lg border border-[var(--border)] text-[var(--muted-foreground)] whitespace-nowrap");
+      btn.className = "px-2.5 py-1 rounded-lg border border-indigo-500 bg-indigo-500/15 text-indigo-500 whitespace-nowrap";
+      qa("[data-wfd-panel]").forEach((p) => p.classList.toggle("hidden", p.getAttribute("data-wfd-panel") !== btn.getAttribute("data-wfd-tab")));
+    });
+    const search = q("[data-wfd-param-search]");
+    if (search) search.oninput = () => {
+      const term = (search.value || "").toLowerCase().trim();
+      qa("[data-wfd-field]").forEach((el) => {
+        const hit = !term || String(el.getAttribute("data-wfd-field")).toLowerCase().includes(term) || (el.textContent || "").toLowerCase().includes(term);
+        el.style.display = hit ? "" : "none";
+      });
+    };
+
+    const meter = q("#wfd-token-meter");
+    const updateMeter = () => {
+      const est = ctxPackages.filter((c) => overlay.querySelector(`[data-wfd-ctx="${c.id}"]`)?.checked).reduce((a, c) => a + Number(c.tokens_est || 0), 0);
+      if (meter) meter.textContent = `${est.toLocaleString("de-DE")} Tokens (Schätzung)`;
+    };
+    qa("[data-wfd-ctx]").forEach((cb) => cb.onchange = updateMeter);
+    updateMeter();
+
+    const ctxFile = q("[data-wfd-ctx-file]");
+    q("[data-wfd-ctx-upload]").onclick = () => ctxFile.click();
+    ctxFile.onchange = async () => {
+      const file = ctxFile.files && ctxFile.files[0];
+      if (!file) return;
+      const status = q("[data-wfd-ctx-status]");
+      if (status) status.textContent = "lädt…";
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("scope", "project");
+        fd.append("acl_json", "[]");
+        const res = await fetch("/api/context-packages", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Upload fehlgeschlagen");
+        ctxPackages.push(data.package);
+        const list = q("[data-wfd-ctx]") ? q("[data-wfd-ctx]").parentElement : null;
+        const label = document.createElement("label");
+        label.className = "flex items-center gap-2 text-[11px] py-1 border-b border-[var(--border)]";
+        label.innerHTML = `<input type="checkbox" data-wfd-ctx="${esc(data.package.id)}" checked /><span class="truncate flex-1">${esc(data.package.original_name)}</span><span class="text-[9px] font-mono text-[var(--muted-foreground)]">${esc(data.package.tokens_est)} Tok</span>`;
+        if (list && list.parentElement) list.parentElement.insertBefore(label, list.parentElement.firstChild);
+        if (status) status.textContent = "hochgeladen";
+        updateMeter();
+      } catch (err) {
+        if (status) status.textContent = String(err.message || err).slice(0, 80);
+      }
+    };
+
+    q("[data-wfd-apply]").onclick = () => {
+      node.title = q("#wfd-title").value.trim() || node.title;
+      node.prompt = q("#wfd-prompt").value;
+      node.expected_output = q("#wfd-expected").value;
+      node.agent_id = q("#wfd-agent").value;
+      node.soul_mode = q("#wfd-soul-mode").value;
+      node.provider = q("#wfd-provider").value;
+      node.model = q("#wfd-model").value;
+      node.tool_preset = q("#wfd-tool-preset").value;
+      node.forbidden_actions = q("#wfd-forbidden").value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+      node.reasoning_effort = q("#wfd-reasoning").value;
+      node.priority = Number(q("#wfd-priority").value || 0);
+      node.token_budget = Number(q("#wfd-token-budget").value || 0) || undefined;
+      node.cost_limit_usd = Number(q("#wfd-cost-limit").value || 0) || undefined;
+      node.max_retries = Number(q("#wfd-retries").value || 0);
+      node.timeout_sec = Number(q("#wfd-timeout").value || 300);
+      node.require_hitl = q("#wfd-hitl").checked;
+      node.schedule_hint = q("#wfd-cron").value;
+      node.due_date = q("#wfd-due").value;
+      node.preset_id = q("#wfd-preset").value.trim() || undefined;
+      const extra = q("#wfd-ctx-extra").value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+      const checkedCtx = qa("[data-wfd-ctx]").filter((cb) => cb.checked).map((cb) => cb.getAttribute("data-wfd-ctx"));
+      node.context_refs = Array.from(new Set([...checkedCtx, ...extra]));
+      const params = {};
+      qa("[data-wfd-plugin-param]").forEach((el) => {
+        const key = el.getAttribute("data-wfd-plugin-param");
+        const type = el.getAttribute("data-wfd-type");
+        params[key] = type === "checkbox" ? el.checked : (type === "number" ? Number(el.value) : el.value);
+      });
+      if (Object.keys(params).length) node.plugin_params = params;
+      _dirty = true;
+      overlay.remove();
+      renderAll();
+    };
+  }
+
   function renderInspectorHtml() {
     if (!_activeTpl) return "";
     const node = _selectedNodeId ? _activeTpl.nodes.find((n) => n.id === _selectedNodeId) : null;
@@ -745,6 +1098,7 @@
             </div>
           </div>
           <div class="text-[10px] text-[var(--muted-foreground)]">Name &amp; Beschreibung in der Kopfzeile bearbeitbar.</div>
+          <button type="button" id="wf-station-full-btn" class="w-full px-2 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 text-[11px] font-bold">⚙ Vollständig konfigurieren</button>
         </div>
 
         ${
@@ -1268,6 +1622,8 @@
     if (metaTitle && _activeTpl) metaTitle.oninput = () => { _activeTpl.title = metaTitle.value; _dirty = true; };
     const metaDesc = mount.querySelector("#wf-meta-desc");
     if (metaDesc && _activeTpl) metaDesc.oninput = () => { _activeTpl.description = metaDesc.value; _dirty = true; };
+    const fullBtn = mount.querySelector("#wf-station-full-btn");
+    if (fullBtn && _selectedNodeId) fullBtn.onclick = () => openStationConfigDialog(_selectedNodeId);
 
     // Edge-Inspektor
     if (_selectedEdge) {
@@ -1468,7 +1824,9 @@
     async function syncActiveRunDetails() {
       if (!_activeRunId) return;
       try {
-        const detail = await apiJson(`/api/v2/workflows/runs/${encodeURIComponent(_activeRunId)}`);
+        // Registriert ist /api/v2/workflows/dag/runs/{id} — der alte Pfad
+        // lieferte 404, wodurch Live-Node-Status und HITL-Gates nie更新 wurden.
+        const detail = await apiJson(`/api/v2/workflows/dag/runs/${encodeURIComponent(_activeRunId)}`);
         const runObj = detail && (detail.run || detail);
         if (!runObj || !runObj.nodes) return;
         _activeRunCostUsd = Number(runObj.total_cost_usd || 0);
@@ -1484,7 +1842,14 @@
           };
         });
         renderAll();
-      } catch (_) {}
+      } catch (err) {
+        // Frueher still verschluckt: HITL-Gates schienen zu funktionieren,
+        // taten es aber nicht. Fehler jetzt sichtbar im Run-Status.
+        if (window.addTicker) {
+          window.addTicker('Workflow', `Run-Status nicht ladbar: ${err && err.message ? err.message : err}`);
+        }
+        console.warn('[WorkflowStudio] Run-Status fehlgeschlagen:', err);
+      }
     }
 
     mount.querySelectorAll("[data-wf-refresh-run]").forEach((btn) => {
@@ -1498,7 +1863,7 @@
         const nid = btn.getAttribute(isApprove ? "data-wf-gate-approve" : "data-wf-gate-reject");
         btn.disabled = true;
         try {
-          await apiJson(`/api/v2/workflows/runs/${encodeURIComponent(_activeRunId)}/resume`, {
+          await apiJson(`/api/v2/workflows/dag/runs/${encodeURIComponent(_activeRunId)}/resume`, {
             method: "POST",
             body: JSON.stringify({ gate_approvals: { [nid]: isApprove } }),
           });

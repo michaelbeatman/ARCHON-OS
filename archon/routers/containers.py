@@ -17,6 +17,7 @@ from typing import Dict, Any, List, Optional
 import httpx
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Query, Body, Request
+from fastapi.responses import Response as _HttpResponse
 from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import add_ticker, logger, WORKSPACE_DIR
 from archon.core.config import config
@@ -438,6 +439,9 @@ def run_container_action(request: Request, req: ContainerActionRequest):
     if not action_fn:
         raise HTTPException(status_code=500, detail={"code": "containers_action_unavailable", "params": {}})
     res = action_fn(req.container_name, req.action)
+    # Fehlerpfade liefern eine JSONResponse (kein Dict) — nicht als Dict lesen.
+    if isinstance(res, _HttpResponse) or not isinstance(res, dict):
+        return res
     if res.get("status") == "success":
         add_ticker("SYSTEM", f"Container {req.container_name} {req.action}ed via dashboard.")
     return res

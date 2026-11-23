@@ -25,6 +25,15 @@ if ROOT not in sys.path:
 
 from utils.docker_client import DockerError  # noqa: E402
 
+
+def _as_dict(res):
+    """Fehlerpfade liefern bewusst eine JSONResponse, Erfolg ein Dict."""
+    if hasattr(res, "body"):
+        import json as _json
+        return _json.loads(res.body)
+    return res
+
+
 CONTAINER = "wegwerf-test"
 
 
@@ -66,7 +75,7 @@ def test_restart_stop_failure_returns_error_and_skips_start():
     m = _app()
     calls, fake = _recorder(fail_on=("stop",))
     with patch.object(m.docker_client, "container_action", side_effect=fake):
-        res = m.post_docker_container_action(CONTAINER, "restart")
+        res = _as_dict(m.post_docker_container_action(CONTAINER, "restart"))
 
     assert res["status"] == "error", res
     assert "stop" in res["message"]
@@ -78,7 +87,7 @@ def test_restart_start_failure_returns_error():
     m = _app()
     calls, fake = _recorder(fail_on=("start",))
     with patch.object(m.docker_client, "container_action", side_effect=fake):
-        res = m.post_docker_container_action(CONTAINER, "restart")
+        res = _as_dict(m.post_docker_container_action(CONTAINER, "restart"))
 
     assert res["status"] == "error", res
     assert "start" in res["message"]
@@ -174,7 +183,9 @@ def test_container_action_route_reports_restart_truthfully(client):
         resp = client.post("/api/v1/container/action",
                            json={"container_name": CONTAINER, "action": "restart"})
 
-    assert resp.status_code == 200, resp.text
+    # Fehlerhafte Container-Aktionen liefern bewusst 502 (nicht mehr 200 mit
+    # 'error'-Body) — Monitoring darf einen Fehlschlag nicht als Erfolg zählen.
+    assert resp.status_code == 502, resp.text
     assert resp.json()["status"] == "error", resp.text
     assert calls == [(CONTAINER, "stop")]
 

@@ -13,6 +13,8 @@ from typing import Dict, Any, List, Optional
 
 from backend.platform_paths import PERSONALAKTEN_DIR
 
+WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 try:
     from backend.db_paths import resolve_db as _resolve_db
     KANBAN_DB_PATH = _resolve_db("kanban.db")

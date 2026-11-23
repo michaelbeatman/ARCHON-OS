@@ -37,8 +37,25 @@ def _get_warrant_secret(key_file: Optional[str] = None) -> str:
             if len(val) >= 32:
                 return val
     generated = secrets.token_hex(32)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(generated)
+    # Secret-Datei atomar und mit 600 anlegen (vorher open("w") -> default
+    # 644, lokaler Key-Diebstall ermoeglichte Warrant-Faelschung).
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(fd, generated.encode("utf-8"))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except FileExistsError:
+        with open(path, "r", encoding="utf-8") as f:
+            existing = f.read().strip()
+        if len(existing) >= 32:
+            return existing
+        raise RuntimeError(f"Warrant-Key ungueltig: {path}")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     return generated
 
 
@@ -84,6 +101,15 @@ def get_warrant_for_session(session_id: str, tool_name: Optional[str] = None) ->
             allowed = set(payload.get("allowed_tools") or [])
             if "*" not in allowed and str(tool_name) not in allowed:
                 continue
+        # Registry-Eintraege muessen zusaetzlich kryptografisch verifiziert
+        # werden. Vorher genuegten Ablauf + Tool-Name — manipulierte Registry
+        # oder gefaelschte Eintraege wurden bedingungslos vertraut.
+        try:
+            v = verify_warrant_for_call(w, sid, str(tool_name or "*"))
+            if not v.get("allowed"):
+                continue
+        except Exception:
+            continue
         return w
     return None
 
@@ -95,6 +121,9 @@ def issue_warrant(
     ttl_seconds: int = 900,
     secret: Optional[str] = None,
 ) -> Dict[str, Any]:
+    # Harte Obergrenze: ein Aufrufer konnte frueher beliebig lange
+    # Super-Warrants ausstellen (ttl_seconds ohne Limit).
+    ttl_seconds = max(1, min(int(ttl_seconds or 900), 900))
     now = time.time()
     payload = {
         "warrant_id": f"war-{secrets.token_hex(6)}",
@@ -148,15 +177,20 @@ def verify_warrant_for_call(
         if amt > max_amt:
             return {"allowed": False, "reason": f"Betrag {amt} ueberschreitet Warrant-Limit {max_amt}."}
 
-    if "allowed_path_prefixes" in constraints and "path" in call_args:
-        raw_p = str(call_args["path"]).replace("\\", "/").strip()
-        norm_p = posixpath.normpath(raw_p).lstrip("./")
-        if norm_p == ".." or norm_p.startswith("../") or "/../" in f"/{norm_p}/":
-            return {"allowed": False, "reason": f"Pfad-Traversal '{raw_p}' im Warrant abgelehnt."}
+    if "allowed_path_prefixes" in constraints:
+        # KRITISCH: vorher wurde nur der exakte Key "path" geprueft. Ein Call
+        # mit {"file_path": "../warrant_hmac.key"} umging das Constraint und
+        # konnte das Warrant-Secret lesen. Alle gaengigen Pfad-Aliase pruefen.
+        _PATH_KEYS = ("path", "file_path", "filename", "uri", "target", "src",
+                      "target_path", "source_path", "image_path", "file")
+        path_values = [str(call_args[k]) for k in _PATH_KEYS if k in call_args and call_args[k]]
+        if not path_values:
+            # Pfad-Constraint vorhanden, aber kein Pfad-Argument erkennbar:
+            # fail-closed statt still durchzulassen.
+            return {"allowed": False, "reason": "Warrant verlangt Pfad-Constraint, aber kein Pfad-Argument im Tool-Call."}
         prefs = [posixpath.normpath(str(p).replace("\\", "/")).lstrip("./") for p in constraints["allowed_path_prefixes"]]
 
         def _path_in_prefix(p: str, pref: str) -> bool:
-            # M90: commonpath statt startswith — 'data/safe_secrets' matcht nicht 'data/safe'
             pref = pref.rstrip("/")
             if not pref:
                 return False
@@ -165,7 +199,12 @@ def verify_warrant_for_call(
             except ValueError:
                 return False
 
-        if not any(_path_in_prefix(norm_p, pr) for pr in prefs if pr):
-            return {"allowed": False, "reason": f"Pfad '{norm_p}' ausserhalb der Warrant-Prefixes."}
+        for raw_p in path_values:
+            raw_p = raw_p.replace("\\", "/").strip()
+            norm_p = posixpath.normpath(raw_p).lstrip("./")
+            if norm_p == ".." or norm_p.startswith("../") or "/../" in f"/{norm_p}/" or raw_p.startswith("/"):
+                return {"allowed": False, "reason": f"Pfad-Traversal '{raw_p}' im Warrant abgelehnt."}
+            if not any(_path_in_prefix(norm_p, pr) for pr in prefs if pr):
+                return {"allowed": False, "reason": f"Pfad '{norm_p}' ausserhalb der Warrant-Prefixes."}
 
     return {"allowed": True, "warrant_id": payload.get("warrant_id"), "tool": tool_name}

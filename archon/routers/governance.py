@@ -9,7 +9,7 @@ import os
 import re
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import httpx
 import yaml
@@ -17,7 +17,7 @@ from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, 
 
 from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -55,6 +55,45 @@ def docker_socket_request(method: str, path: str, payload: dict = None, timeout:
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
+
+# --- Pydantic-v2 Payload-Modelle (extra="ignore" fuer Legacy-Felder) ---
+
+class AiActReclassifyRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    risk_tier: Optional[str] = None
+    legal_basis: Optional[str] = None
+    human_oversight_measure: Optional[str] = None
+    data_protection_measures: Optional[str] = None
+    compliance_status: Optional[str] = None
+    audit_interval_months: Optional[int] = Field(default=None, ge=0, le=1200)
+    override_reason: Optional[str] = None
+
+
+class LiteracyEntryCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    person_name: str = Field(min_length=1, max_length=200)
+    role: Optional[str] = Field(default=None, max_length=200)
+    training_module: Optional[str] = Field(default=None, max_length=500)
+    completed_at: Optional[str] = Field(default=None, max_length=40)
+    valid_until: Optional[str] = Field(default=None, max_length=40)
+    scope_tiers: Optional[Union[str, List[str]]] = None
+    id: Optional[str] = Field(default=None, max_length=100)
+
+
+class ClassifyContentRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    text: str = Field(default="", max_length=1_000_000)
+    filename: Optional[str] = Field(default=None, max_length=500)
+
+
+class TagClassificationRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    item_id: str = Field(min_length=1, max_length=200)
+    item_type: str = Field(default="task", min_length=1, max_length=60)
+    text: str = Field(default="", max_length=1_000_000)
+    filename: Optional[str] = Field(default=None, max_length=500)
+
+
 @router.get("/api/governance/ai-act/inventory")
 @router.get("/api/v1/governance/ai-act/inventory")
 def api_ai_act_inventory():
@@ -71,10 +110,10 @@ def api_ai_act_stats():
 
 @router.post("/api/governance/ai-act/reclassify/{agent_id}")
 @router.post("/api/v1/governance/ai-act/reclassify/{agent_id}")
-def api_ai_act_reclassify(request: Request, agent_id: str, payload: dict = Body(...)):
+def api_ai_act_reclassify(request: Request, agent_id: str, payload: AiActReclassifyRequest):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.eu_ai_act_inventory import eu_ai_act_inventory_manager
-    updated = eu_ai_act_inventory_manager.set_manual_override(agent_id, payload)
+    updated = eu_ai_act_inventory_manager.set_manual_override(agent_id, payload.model_dump(exclude_unset=True))
     if not updated:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' nicht gefunden.")
     return {"status": "success", "agent": updated}
@@ -97,11 +136,11 @@ def api_ai_act_literacy_list():
 
 @router.post("/api/governance/ai-act/literacy-register")
 @router.post("/api/v1/governance/ai-act/literacy-register")
-def api_ai_act_literacy_add(request: Request, payload: dict = Body(...)):
+def api_ai_act_literacy_add(request: Request, payload: LiteracyEntryCreate):
     require_admin_or_503(request)
     from backend.compliance_engine import compliance_engine
     try:
-        entry = compliance_engine.add_literacy_entry(payload)
+        entry = compliance_engine.add_literacy_entry(payload.model_dump(exclude_unset=True))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "success", "entry": entry}
@@ -129,20 +168,30 @@ def api_ai_act_guardrails_check(agent_id: Optional[str] = None):
 
 @router.get("/api/governance/compliance/snapshot")
 @router.get("/api/v1/governance/compliance/snapshot")
-def api_compliance_verfahrensdoku_snapshot(company_id: Optional[str] = None):
+def api_compliance_verfahrensdoku_snapshot(request: Request):
+    require_admin_or_503(request)
     from backend.compliance_engine import compliance_engine
-    snap = compliance_engine.collect_verfahrensdokumentation_snapshot(company_id=company_id)
+    from backend.tenant_context import tenant_context
+    # Kein client-gesteuertes company_id (IDOR): ausschliesslich der aktive
+    # Mandant aus dem verifizierten Kontext (Audit 23.11.2026).
+    snap = compliance_engine.collect_verfahrensdokumentation_snapshot(
+        company_id=tenant_context.get_active_tenant_id()
+    )
     return {"status": "success", "snapshot": snap}
 
 
 @router.get("/api/governance/ai-act/export/pdf")
 @router.get("/api/v1/governance/compliance/verfahrensdokumentation.pdf")
-def api_export_verfahrensdokumentation_pdf(company_id: Optional[str] = None):
+def api_export_verfahrensdokumentation_pdf(request: Request):
     """Erzeugt live das prüferfertige GoBD- & EU-AI-Act-Verfahrensdokumentations-PDF (M49)."""
+    require_admin_or_503(request)
     from backend.compliance_engine import compliance_engine
     from backend.compliance_pdf import build_verfahrensdokumentation_pdf
+    from backend.tenant_context import tenant_context
 
-    snap = compliance_engine.collect_verfahrensdokumentation_snapshot(company_id=company_id)
+    snap = compliance_engine.collect_verfahrensdokumentation_snapshot(
+        company_id=tenant_context.get_active_tenant_id()
+    )
     pdf_bytes, pdf_sha256 = build_verfahrensdokumentation_pdf(snap)
 
     try:
@@ -201,10 +250,10 @@ def api_export_gobd_z3_zip(
 
 @router.post("/api/governance/data-classification/classify")
 @router.post("/api/v1/governance/data-classification/classify")
-def api_classify_content(payload: dict = Body(...)):
+def api_classify_content(payload: ClassifyContentRequest):
     from backend.data_classifier import DataClassifier
-    text = payload.get("text", "")
-    filename = payload.get("filename")
+    text = payload.text
+    filename = payload.filename
     res = DataClassifier.classify(text, filename=filename)
     return {"status": "success", "classification": res}
 
@@ -219,12 +268,12 @@ def api_classification_taxonomy():
 
 @router.post("/api/governance/data-classification/tag")
 @router.post("/api/v1/governance/data-classification/tag")
-def api_tag_classification(payload: dict = Body(...)):
+def api_tag_classification(payload: TagClassificationRequest):
     from backend.data_classifier import DataClassifier
-    item_id = payload.get("item_id", "")
-    item_type = payload.get("item_type", "task")
-    text = payload.get("text", "")
-    filename = payload.get("filename")
+    item_id = payload.item_id
+    item_type = payload.item_type
+    text = payload.text
+    filename = payload.filename
     if not item_id:
         raise HTTPException(status_code=400, detail="item_id erforderlich.")
     res = DataClassifier.tag_item(item_id, item_type, text, filename=filename)
@@ -256,13 +305,13 @@ def api_run_promptfoo_eval(request: Request, config_path: str = "/app/tests/prom
     }
     create_raw = docker_socket_request("POST", "/containers/promptfoo/exec", exec_create_payload, timeout=5.0)
     if not create_raw:
-        return {"status": "error", "message": "Docker Proxy nicht erreichbar."}
+        return JSONResponse(status_code=502, content={"status": "error", "message": "Docker Proxy nicht erreichbar."})
     try:
         exec_id = json.loads(create_raw.decode('utf-8')).get("Id")
         if not exec_id:
-            return {"status": "error", "message": "Exec-Instanz konnte nicht erstellt werden."}
+            return JSONResponse(status_code=500, content={"status": "error", "message": "Exec-Instanz konnte nicht erstellt werden."})
     except Exception as e:
-        return {"status": "error", "message": f"Ungültige Exec-Antwort: {str(e)}"}
+        return JSONResponse(status_code=502, content={"status": "error", "message": f"Ungültige Exec-Antwort: {str(e)}"})
 
     start_payload = {"Detach": False, "Tty": False}
     start_raw = docker_socket_request("POST", f"/exec/{exec_id}/start", start_payload, timeout=120.0)

@@ -204,7 +204,8 @@ def test_secret_file_written_with_600(tmp_path=None):
     d = tempfile.mkdtemp()
     path = os.path.join(d, ".env.test")
     assert write_secret_file(path, "TOKEN=abc\n")
-    assert is_hardened_mode(os.stat(path).st_mode & 0o777)
+    # Auf Windows braucht die Pruefung den Pfad (NTFS-DACL statt POSIX-Mode).
+    assert is_hardened_mode(os.stat(path).st_mode & 0o777, path)
     with open(path, encoding="utf-8") as f:
         assert f.read() == "TOKEN=abc\n"
 
@@ -225,7 +226,8 @@ def test_audit_reports_open_secret(tmp_path=None):
         # Windows bildet POSIX-Modi nicht ab — ein Mode-Audit ist dort
         # bedeutungslos (ACLs entscheiden). Stattdessen best-effort haerten.
         assert harden_file(path)
-        assert not offenders
+        # Der Mode-Schnappschuss vor dem Haerten ist auf Windows bedeutungslos
+        # (chmod 0o755 -> stat 0o666); ACLs entscheiden, nicht der Mode.
         return
     assert path in offenders and offenders[path] == 0o755
     assert harden_file(path)

@@ -639,8 +639,42 @@ class ChainedAuditLog:
 
                     expected_prev = r["current_hash"]
 
+                # Externer Anker: der zuletzt geschriebene Head-Hash muss mit
+                # dem tatsaechlichen Head der Kette uebereinstimmen. Ohne
+                # diesen Abgleich ist der Anker ein reiner Schreibvorgang ohne
+                # Beweiswert (Tail-Loeschung bleibt unentdeckt).
+                anchor_path = os.environ.get("ARCHON_AUDIT_ANCHOR_PATH", "").strip()
+                anchor_ok: Optional[bool] = None
+                if anchor_path and os.path.isfile(anchor_path):
+                    try:
+                        with open(anchor_path, "r", encoding="utf-8") as fh:
+                            lines = [ln for ln in fh.read().splitlines() if ln.strip()]
+                        if lines:
+                            last_anchor = lines[-1].split("\t")[-1].strip()
+                            anchor_ok = last_anchor == str(expected_prev or "")
+                    except Exception as exc:
+                        logger.error("Audit-Log: Anker nicht lesbar: %s", exc)
+                        anchor_ok = False
+                if anchor_ok is False:
+                    return {
+                        "valid": False,
+                        "corrupted_id": "audit_anchor",
+                        "reason": "Externer Audit-Anker weicht vom Ketten-Head ab (Tail-Loeschung oder Manipulation).",
+                    }
+                # Audit 23.11.2026: in Produktion ist ein fehlender/nicht
+                # verifizierbarer Anker KEIN Erfolg (sonst bleibt Tail-
+                # Löschung unentdeckt). Development bleibt privilegiert.
+                prod_env = str(os.environ.get("ENVIRONMENT") or "").strip().lower()
+                if prod_env in ("production", "prod", "live") and anchor_ok is not True:
+                    return {
+                        "valid": False,
+                        "corrupted_id": "audit_anchor",
+                        "reason": "Kein verifizierbarer externer Audit-Anker in Produktion — Revisionssicherheit nicht nachweisbar.",
+                    }
+
                 return {
                     "valid": True,
+                    "anchor_verified": anchor_ok,
                     "hmac_active": key_active,
                     "hmac_blocks": hmac_blocks,
                     "total_records": len(rows),
@@ -735,6 +769,7 @@ class ChainedAuditLog:
         offset: int = 0,
         provider: Optional[str] = None,
         target_host: Optional[str] = None,
+        company_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Liefert die chronologisch neuesten kryptografisch verketteten LLM-Dispatch-Nachweise."""
         res = self.list_events(
@@ -743,6 +778,7 @@ class ChainedAuditLog:
             offset=offset,
             provider=provider,
             target_host=target_host,
+            company_id=company_id,
         )
         out: List[Dict[str, Any]] = []
         for entry in res.get("entries", []):
@@ -765,7 +801,9 @@ class ChainedAuditLog:
             })
         return out
 
-    def generate_compliance_export(self, format_type: str = "json") -> Dict[str, Any]:
+    def generate_compliance_export(
+        self, format_type: str = "json", company_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Generiert einen revisionssicheren Prüfbericht für GoBD / ISO 27001 Auditoren.
         Enthält alle Blöcke, die Merkle-/SHA-256-Prüfsumme, LLM-Dispatch-Nachweise und Validierungs-Signatur.
@@ -774,7 +812,17 @@ class ChainedAuditLog:
         conn = self._get_conn()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT * FROM audit_log ORDER BY id ASC")
+            # Mandantenfilter (IDOR-Schutz): ein Admin sieht nur die Blöcke
+            # seines aktiven Mandanten (Audit 23.11.2026).
+            if company_id and str(company_id).strip() and "company_id" in getattr(self, "cols", set()):
+                try:
+                    from backend.tenant_context import sanitize_tenant_id
+                    cid = sanitize_tenant_id(str(company_id).strip())
+                except Exception:
+                    cid = str(company_id).strip()
+                cur.execute("SELECT * FROM audit_log WHERE company_id = ? ORDER BY id ASC", (cid,))
+            else:
+                cur.execute("SELECT * FROM audit_log ORDER BY id ASC")
             rows = [dict(r) for r in cur.fetchall()]
         finally:
             conn.close()

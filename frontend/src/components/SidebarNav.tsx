@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { 
   Bot, 
   MessageSquare, 
@@ -12,29 +13,54 @@ import {
   Cpu, 
   Boxes,
   Compass,
-  Clapperboard,
   Settings2,
   Radar,
-  Workflow,
-  Sparkles
+  Workflow
 } from "lucide-react";
 import { GatewayManagerModal } from "./GatewayManagerModal";
 import { WatchdogModal } from "./WatchdogModal";
 
-interface SidebarNavProps {
-  currentView: string;
-  onSelectView: (view: string) => void;
-  agentsList: Array<{ id: string; name: string; role: string }>;
-}
+const VIEW_TITLES: Record<string, string> = {
+  "/": "Mission Control",
+  "/crm": "📇 PocketBase CRM",
+  "/cockpit": "Executive Cockpit",
+  "/workflows": "Workflows & DAGs",
+};
+const VIEW_PATHS: Record<string, string> = {
+  "Mission Control": "/",
+  "💬 Master Chat": "/",
+  "📇 PocketBase CRM": "/crm",
+  "Paperclip Orchestrator": "/workflows",
+};
 
-export const SidebarNav: React.FC<SidebarNavProps> = ({
-  currentView,
-  onSelectView,
-  agentsList
-}) => {
+/** Eigenständige, routenbasierte Navigation — wird ohne Props im Root-Layout gemountet. */
+export const SidebarNav: React.FC = () => {
+  const router = useRouter();
+  const pathname = usePathname();
+  const currentView = VIEW_TITLES[pathname || "/"] || "";
+  const selectView = (view: string) => {
+    const target = VIEW_PATHS[view] || "/";
+    router.push(target);
+  };
   const [gatewayManagerOpen, setGatewayManagerOpen] = useState(false);
   const [watchdogModalOpen, setWatchdogModalOpen] = useState(false);
   const [runningGatewayCount, setRunningGatewayCount] = useState<number | null>(null);
+  const [agentsList, setAgentsList] = useState<Array<{ id: string; name: string; role: string }>>([]);
+
+  React.useEffect(() => {
+    // Echte Agentenliste aus der Archon-API (statt leerer Pseudo-Anzeige)
+    fetch(`/api/archon/api/hermes/profiles`)
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ profiles: [] })))
+      .then((d) => {
+        const rows = Array.isArray(d) ? d : (d.profiles || d.agents || []);
+        setAgentsList(rows.slice(0, 6).map((p: any) => ({
+          id: p.id || p.agent_id || "",
+          name: p.name || p.display_name || p.id || "agent",
+          role: p.role || p.display_name || "",
+        })));
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch running gateway count on mount (non-blocking, best-effort via Archon FastAPI proxy)
   React.useEffect(() => {
@@ -78,7 +104,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             1. WORKSPACE
           </div>
           <button
-            onClick={() => onSelectView("Mission Control")}
+            onClick={() => selectView("Mission Control")}
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition ${
               currentView === "Mission Control"
                 ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
@@ -97,7 +123,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           </div>
           <div className="space-y-1">
             <button
-              onClick={() => onSelectView("💬 Master Chat")}
+              onClick={() => selectView("💬 Master Chat")}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition ${
                 currentView === "💬 Master Chat"
                   ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
@@ -109,7 +135,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             </button>
 
             <button
-              onClick={() => onSelectView("📇 PocketBase CRM")}
+              onClick={() => selectView("📇 PocketBase CRM")}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition ${
                 currentView === "📇 PocketBase CRM"
                   ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
@@ -122,7 +148,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             </button>
 
             <button
-              onClick={() => onSelectView("Paperclip Orchestrator")}
+              onClick={() => selectView("Paperclip Orchestrator")}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition ${
                 currentView === "Paperclip Orchestrator"
                   ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
@@ -133,18 +159,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               <span>Paperclip Orchestrator</span>
             </button>
 
-            <button
-              onClick={() => onSelectView("Content Studio")}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition ${
-                currentView === "Content Studio"
-                  ? "bg-slate-800 text-slate-100 border border-slate-700 font-bold"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-              }`}
-            >
-              <Clapperboard className="w-4 h-4 text-slate-400" />
-              <span>Content Studio</span>
-            </button>
-
             <Link
               href="/cockpit"
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition text-sky-300 hover:text-sky-200 hover:bg-sky-500/10 border border-sky-500/20"
@@ -152,15 +166,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               <Compass className="w-4 h-4 text-sky-400" />
               <span>Executive Cockpit</span>
               <span className="ml-auto text-[9px] bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded font-mono">v2</span>
-            </Link>
-
-            <Link
-              href="/content-studio"
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md font-medium transition text-fuchsia-300 hover:text-fuchsia-200 hover:bg-fuchsia-500/10 border border-fuchsia-500/20"
-            >
-              <Sparkles className="w-4 h-4 text-fuchsia-400" />
-              <span>Content-Maschine v1</span>
-              <span className="ml-auto text-[9px] bg-fuchsia-500/20 text-fuchsia-300 px-1.5 py-0.5 rounded font-mono">API</span>
             </Link>
 
             <Link

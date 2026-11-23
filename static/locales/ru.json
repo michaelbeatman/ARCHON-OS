@@ -1735,6 +1735,7 @@
       "delete_title": "Архивировать / удалить артикул"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "Редактор макетов форм временно недоступен",
       "kontakte_crm_adressstamm": "Контакты — Основные данные CRM",
       "mandant_archon_systems": "Мандант: archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "Полная таблица контактов и CRM (высокопроизводительный SQLite)",
@@ -3802,6 +3803,8 @@
       "quality_gate_hint": "Независимая экспертная проверка перед переводом в «Done»",
       "review_start": "Запустить проверку",
       "human_approve": "Согласовать",
+      "human_reject": "Отклонить",
+      "human_reject_title": "Отклонить вручную — запросить доработку без ИИ-проверки",
       "critique_label": "Замечания / доработка:",
       "next_steps_label": "Следующие шаги:",
       "feedback_loop": "⭐ Цикл обратной связи от человека",
@@ -4359,7 +4362,7 @@
       "label_saved": "Сохранено!",
       "log_connecting": "Подключение к журналу агента...",
       "log_empty": "Нет свежих фоновых журналов для этого агента.",
-      "log_fallback_ready": "Агент готов в режиме ожидания.",
+      "log_fallback_ready": "Поток в реальном времени временно недоступен. Повторите попытку.",
       "log_fallback_router": "Порт 20128 активен. Предупреждений нет.",
       "log_telemetry_header": "⚡ Телеметрия системы и демона:",
       "log_turns_header": "💬 Последние реплики диалога:",
@@ -5391,6 +5394,7 @@
       "move_complete": "Завершить",
       "move_failed": "Статус {status}: не удалось обновить задачу",
       "move_open_operations": "Открыть в Operations",
+      "task_open_detail_hint": "Открыть детали задачи",
       "move_reject": "❌ Отклонить",
       "move_review": "Проверка",
       "move_start": "Запустить",

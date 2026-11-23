@@ -99,9 +99,25 @@ class ComplianceEngine:
                         return data
                 except Exception as exc:
                     print(f"[Compliance] KI-Kompetenzregister konnte nicht geladen werden ({self.literacy_file}), Seed-Entries werden verwendet: {exc}", file=sys.stderr)
-            seeded = self._default_seed_entries()
-            self._save_literacy_entries(seeded)
-            return seeded
+            # KRITISCH: diese "Seed"-Eintraege fabrizieren einen
+            # KI-Kompetenznachweis (Art. 4 EU AI Act) inklusive selbst
+            # signiertem certificate_sha256. Das ist ein Schein-Nachweis.
+            # Nur im expliziten Demo-Modus erlaubt, sonst leere Liste.
+            try:
+                from backend.demo_mode import is_demo_mode
+                demo = bool(is_demo_mode())
+            except Exception:
+                demo = False
+            if demo:
+                seeded = self._default_seed_entries()
+                self._save_literacy_entries(seeded)
+                return seeded
+            print(
+                "[Compliance] Kein KI-Kompetenzregister vorhanden — "
+                "es werden KEINE Nachweise erfunden (Art. 4).",
+                file=sys.stderr,
+            )
+            return []
 
     def _save_literacy_entries(self, entries: List[Dict[str, Any]]) -> None:
         tmp = f"{self.literacy_file}.tmp.{os.getpid()}"
@@ -276,13 +292,25 @@ class ComplianceEngine:
     def check_activation_allowed(self, agent_id: str, system_prompt: str = "") -> Dict[str, Any]:
         """Prüft vor Aktivierung/Dispatch eines Spezialisten, ob alle EU-AI-Act-Pflicht-Guardrails erfüllt sind."""
         inv = self._get_inventory_mgr().get_inventory()
-        item = next((x for x in inv if x.get("agent_id") == agent_id), None)
+        # Historische Handles (z. B. 'hermes-orchestrator') auf echte
+        # Kader-IDs übersetzen — sonst würden legitime Spezialisten als
+        # "unbekannt" fail-closed blockiert (Audit 23.11.2026).
+        try:
+            from backend.agent_aliases import resolve_agent_id
+            lookup_id = resolve_agent_id(agent_id, {str(x.get("agent_id") or "") for x in inv})
+        except Exception:
+            lookup_id = agent_id
+        item = next((x for x in inv if x.get("agent_id") == lookup_id), None)
         if not item:
+            # KRITISCH (Audit 23.11.2026): neu gespawnte/ephemere Agenten
+            # duerfen nicht einfach alle EU-AI-Act-Guardrails umgehen.
+            # Default-Deny, bis der Agent inventarisiert und klassifiziert ist.
             return {
-                "allowed": True,
+                "allowed": False,
                 "agent_id": agent_id,
                 "risk_tier": "UNCLASSIFIED",
-                "disclosure_required": False,
+                "disclosure_required": True,
+                "reason": "agent_not_in_ai_act_inventory",
             }
 
         if item.get("risk_tier") == "PROHIBITED" or item.get("compliance_status") == "BLOCKED_PROHIBITED":

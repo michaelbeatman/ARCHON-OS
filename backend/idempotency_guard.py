@@ -66,7 +66,26 @@ def _init_db() -> None:
             conn.execute("ALTER TABLE idempotency_ledger ADD COLUMN status TEXT DEFAULT 'pending'")
         if cols and "executed_at" not in cols:
             conn.execute("ALTER TABLE idempotency_ledger ADD COLUMN executed_at TEXT")
+        # Tenant-/Lease-Scope: der alte Key enthielt weder Mandant noch
+        # Ausfuehrungs-ID -> Mandant B bekam das Ergebnis von A bzw. zwei
+        # Worker fuehrten denselben Seiteneffekt parallel aus.
+        if cols and "scope_key" not in cols:
+            conn.execute("ALTER TABLE idempotency_ledger ADD COLUMN scope_key TEXT DEFAULT ''")
+        if cols and "owner_id" not in cols:
+            conn.execute("ALTER TABLE idempotency_ledger ADD COLUMN owner_id TEXT DEFAULT ''")
+        if cols and "lease_expires" not in cols:
+            conn.execute("ALTER TABLE idempotency_ledger ADD COLUMN lease_expires TEXT DEFAULT ''")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_idem_expires ON idempotency_ledger(expires_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_idem_scope ON idempotency_ledger(scope_key)")
         conn.commit()
+
+
+def _current_scope() -> str:
+    try:
+        from backend import tenant_context as _tc
+        return str(_tc._REQUEST_TENANT_VAR.get() or "default")
+    except Exception:
+        return "default"
 
 
 class IdempotencyGuard:
@@ -78,16 +97,25 @@ class IdempotencyGuard:
         tool_name: str,
         params: Dict[str, Any],
         explicit_key: Optional[str] = None,
-        execution_result: Optional[Dict[str, Any]] = None
+        execution_result: Optional[Dict[str, Any]] = None,
+        scope_key: Optional[str] = None,
+        owner_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         cfg = _get_cfg()
         enabled = bool(cfg.get("enabled", True))
         block_dups = bool(cfg.get("block_duplicate_side_effects", True))
         ttl_hours = int(cfg.get("ttl_hours", 24))
 
+        scope = str(scope_key or _current_scope())
         canonical_params = json.dumps(params, sort_keys=True, ensure_ascii=False)
-        payload_hash = hashlib.sha256(f"{tool_name}::{canonical_params}".encode("utf-8")).hexdigest()
-        idem_key = explicit_key or f"idem-{payload_hash[:20]}"
+        payload_hash = hashlib.sha256(
+            f"{scope}::{tool_name}::{canonical_params}".encode("utf-8")
+        ).hexdigest()
+        # KRITISCH: explizite Keys (mct-{task_id}, workflow-{id}, ...) waren
+        # nicht tenant-gescoped — Mandant B bekam bei gleicher ID das
+        # gecachte Ergebnis von A oder wurde am eigenen Seiteneffekt gehindert.
+        idem_key = f"{scope}::{explicit_key}" if explicit_key else f"idem-{payload_hash[:20]}"
+        owner = str(owner_id or "")
 
         if not enabled:
             return {
@@ -100,6 +128,9 @@ class IdempotencyGuard:
         now = datetime.now()
         now_iso = now.strftime("%Y-%m-%d %H:%M:%S")
         exp_iso = (now + timedelta(hours=ttl_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        # Lease fuer laufende Ausfuehrungen: 10 min. Danach darf ein anderer
+        # Worker uebernehmen (z. B. nach Crash ohne invalidate_key).
+        lease_iso = (now + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
 
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
@@ -110,9 +141,9 @@ class IdempotencyGuard:
             # den zweiten INSERT -> IntegrityError -> 500 statt Duplikat-Block.
             cur = conn.execute("""
                 INSERT OR IGNORE INTO idempotency_ledger
-                (idempotency_key, tool_name, payload_hash, result_json, duplicate_blocks_count, created_at, expires_at, status)
-                VALUES (?, ?, ?, NULL, 0, ?, ?, 'pending')
-            """, (idem_key, tool_name, payload_hash, now_iso, exp_iso))
+                (idempotency_key, tool_name, payload_hash, result_json, duplicate_blocks_count, created_at, expires_at, status, scope_key, owner_id, lease_expires)
+                VALUES (?, ?, ?, NULL, 0, ?, ?, 'pending', ?, ?, ?)
+            """, (idem_key, tool_name, payload_hash, now_iso, exp_iso, scope, owner, lease_iso))
             if cur.rowcount > 0:
                 # Erster Anruf: mit echtem Resultat sofort als executed registrieren.
                 if execution_result:
@@ -154,16 +185,43 @@ class IdempotencyGuard:
                     "cached_result": json.loads(existing["result_json"] or "{}")
                 }
 
-            # N-04: Der erste Versuch ist noch PENDING (Ausfuehrung nicht
-            # abgeschlossen oder fehlgeschlagen). Ein Retry wird ZUGELASSEN,
-            # bekommt aber KEIN erfundenes Ergebnis (frueher: Platzhalter
-            # {"status": "executed_once"} fuer 24 h) und die Laufzeit wird
-            # erneuert. Erst ein reales Ergebnis (record_execution_result)
-            # macht den Key zum echten Duplikat-Filter.
-            conn.execute(
-                "UPDATE idempotency_ledger SET created_at = ?, expires_at = ? WHERE idempotency_key = ?",
-                (now_iso, exp_iso, idem_key)
+            # KRITISCH: PENDING durfte frueher immer ausgefuehrt werden. Damit
+            # fuehrten zwei Worker bei Lease-Ablauf denselben Seiteneffekt
+            # doppelt aus. Jetzt gilt: eine noch aktive Lease blockiert; erst
+            # nach Ablauf (Crash) oder nach invalidate_key darf uebernommen
+            # werden.
+            lease = str(existing["lease_expires"] or "")
+            if lease and lease > now_iso:
+                conn.commit()
+                return {
+                    "allowed": False,
+                    "blocked": True,
+                    "duplicate_detected": True,
+                    "previous_attempt_pending": True,
+                    "idempotency_key": idem_key,
+                    "tool_name": tool_name,
+                    "reason": "another_execution_in_progress",
+                    "lease_expires": lease,
+                }
+            # KRITISCH (Audit 23.11.2026): CAS gegen den gelesenen Lease-Wert.
+            # Sonst können zwei Worker nach Ablauf denselben Key gleichzeitig
+            # übernehmen und den Seiteneffekt doppelt ausführen.
+            cur = conn.execute(
+                "UPDATE idempotency_ledger SET created_at = ?, expires_at = ?, owner_id = ?, lease_expires = ? "
+                "WHERE idempotency_key = ? AND COALESCE(lease_expires, '') = ?",
+                (now_iso, exp_iso, owner, lease_iso, idem_key, lease)
             )
+            if int(cur.rowcount or 0) != 1:
+                conn.commit()
+                return {
+                    "allowed": False,
+                    "blocked": True,
+                    "duplicate_detected": True,
+                    "previous_attempt_pending": True,
+                    "idempotency_key": idem_key,
+                    "tool_name": tool_name,
+                    "reason": "concurrent_claim",
+                }
             if execution_result:
                 conn.execute("""
                     UPDATE idempotency_ledger

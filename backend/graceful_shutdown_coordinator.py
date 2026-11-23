@@ -368,11 +368,35 @@ class GracefulShutdownCoordinator:
             from backend.durable_checkpoint_manager import durable_checkpoint_manager
             cps = durable_checkpoint_manager.list_checkpoints(status_filter="checkpointed")
             for cp in cps:
+                workflow_id = str(cp.get("workflow_id") or "")
+                resume = durable_checkpoint_manager.resume_checkpoint(workflow_id) if workflow_id else {"found": False}
+                restart = {"queued": False, "reason": "checkpoint_not_found"}
+                if resume.get("found"):
+                    try:
+                        from backend.dead_letter_queue import dead_letter_queue_manager as _dlq
+                        # Der echte Restart laeuft im produktiven Scheduler-Loop
+                        # (Shared-Queue-Consumer) — kein asyncio.run() im
+                        # synchronen Startup-Hook, keine neue Event-Loop.
+                        restart = dict(_dlq.enqueue_task(
+                            job_type="workflow_resume",
+                            source_module="graceful_shutdown_coordinator",
+                            payload={
+                                "run_id": workflow_id,
+                                "resume_from_step": resume.get("resume_from_step"),
+                                "task_title": cp.get("task_title"),
+                            },
+                            priority=3,
+                            idempotency_key=f"workflow-resume:{workflow_id}",
+                        ))
+                    except Exception as enqueue_exc:
+                        restart = {"queued": False, "reason": f"enqueue_failed: {enqueue_exc}"}
                 recovered.append({
-                    "task_id": cp.get("workflow_id"),
+                    "task_id": workflow_id,
                     "title": cp.get("task_title"),
                     "step": cp.get("current_step_index"),
-                    "total": cp.get("total_steps")
+                    "total": cp.get("total_steps"),
+                    "resume_from_step": resume.get("resume_from_step") if resume.get("found") else None,
+                    "restart": restart,
                 })
         except Exception as exc:
             print(f"[GracefulShutdown] Keine unterbrochenen Checkpoints wiederhergestellt (durable_checkpoint_manager nicht erreichbar): {exc}", file=sys.stderr)

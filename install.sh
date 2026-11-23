@@ -230,6 +230,10 @@ upsert_env "PRIVACY_ZERO_EGRESS" "$ZERO_EGRESS"
 ensure_env_secret "HERMES_DASHBOARD_SESSION_TOKEN"
 ensure_env_secret "N8N_USER_MANAGEMENT_JWT_SECRET"
 ensure_env_secret "OMNIROUTE_INITIAL_PASSWORD"
+# KRITISCH (Audit 23.11.2026): ohne HMAC-Key ist die GoBD-Audit-Kette ab
+# Block 1 manipulierbar. Der Startup-Check bricht bei nicht-lokaler Bindung
+# oder Auth-Zwang ohne Key ab — der Installer muss ihn daher erzeugen.
+ensure_env_secret "ARCHON_AUDIT_HMAC_KEY"
 echo "[OK] Configuration & unique instance secrets saved to .env (mode 600)."
 echo ""
 

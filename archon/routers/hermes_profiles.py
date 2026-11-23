@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional
 
 import yaml
 from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile, Request
+from fastapi.responses import JSONResponse
 
 from archon.routers._rbac import require_admin_or_503
 from archon.services import profiles_service
@@ -32,7 +33,7 @@ from archon.services.profiles_service import (
     GateNotApproved, ProfileProtectedError, ProfileValidationError,
 )
 from utils.path_jail import safe_filename, PathJailError
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.paths import OPT_DATA_DIR
 from archon.core.runtime import add_ticker, logger
@@ -70,6 +71,17 @@ class ProfileStatusUpdate(BaseModel):
     status: Optional[str] = "active"
 
 
+class ProfileSaveRequest(BaseModel):
+    """Profil-Payload ist bewusst durchreichig (viele optionale Legacy-Felder)."""
+    model_config = ConfigDict(extra="allow")
+
+
+class AvatarUploadRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    image: Optional[str] = Field(default=None, max_length=20_000_000)
+    avatar: Optional[str] = Field(default=None, max_length=20_000_000)
+
+
 @router.get("/api/hermes/profiles")
 def api_get_hermes_profiles_route():
     """Duenne Huelle: Logik lebt in archon.core.profiles."""
@@ -93,7 +105,7 @@ def api_get_agents_profiles():
 
 
 @router.post("/api/hermes/profiles")
-def api_save_hermes_profile(request: Request, profile_data: Dict = Body(...)):
+def api_save_hermes_profile(request: Request, profile_data: ProfileSaveRequest):
     """Legt ein Profil an bzw. schreibt es fort.
 
     Duenne Fassade: der Rollenzaun steht hier, die Fachlogik liegt in
@@ -102,7 +114,7 @@ def api_save_hermes_profile(request: Request, profile_data: Dict = Body(...)):
     """
     require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
-        return profiles_service.save_profile(profile_data)
+        return profiles_service.save_profile(profile_data.model_dump())
     except ProfileValidationError as val_err:
         raise HTTPException(
             status_code=422,
@@ -113,8 +125,12 @@ def api_save_hermes_profile(request: Request, profile_data: Dict = Body(...)):
 
 
 @router.post("/api/hermes/profiles/{profile_id}/avatar")
-def api_upload_hermes_profile_avatar(request: Request, profile_id: str, data: Dict = Body(...)):
+def api_upload_hermes_profile_avatar(request: Request, profile_id: str, data: AvatarUploadRequest):
     require_admin_or_503(request)  # RBAC: Admin-Sache (fail-closed, vor jedem Schreibpfad)
+    # Direkte Python-Aufrufer (Tests, interne Automaten) uebergeben weiterhin
+    # ein Dict. Pydantic v2 validiert es hier nach — kein 500er mehr.
+    if isinstance(data, dict):
+        data = AvatarUploadRequest(**data)
     if ".." in profile_id or "/" in profile_id or "\\" in profile_id:
         raise HTTPException(status_code=400, detail="Ungueltige profile_id (Pfad-Traversal unzulaessig).")
     try:
@@ -123,7 +139,7 @@ def api_upload_hermes_profile_avatar(request: Request, profile_id: str, data: Di
         raise HTTPException(status_code=400, detail={"code": "profiles_invalid_profile_id", "params": {"error": str(e)}})
     try:
         import base64, hashlib, time
-        data_url = (data.get("image") or data.get("avatar") or "").strip()
+        data_url = (data.image or data.avatar or "").strip()
         if not data_url.startswith("data:image"):
             raise HTTPException(status_code=400, detail="Ungültiges Bilddaten-Format (muss data:image/... sein).")
 
@@ -191,7 +207,7 @@ def api_update_hermes_profile_status(request: Request, profile_id: str, body: Op
     roles_list = api_get_hermes_profiles()
     prof = next((r for r in roles_list if r["id"] == profile_id), None)
     if not prof:
-        return {"status": "error", "message": f"Profil '{profile_id}' nicht gefunden."}
+        return JSONResponse(status_code=404, content={"status": "error", "message": f"Profil '{profile_id}' nicht gefunden."})
     
     new_status = (body.status if body and body.status else "active").lower().strip()
     if new_status not in ("active", "inactive", "standby"):
@@ -287,7 +303,7 @@ def api_set_hermes_profile_model(request: Request, profile_id: str, req: SetProf
         return {"status": "ok", "provider": prov, "model": mod, "result": res}
     except Exception as e:
         logger.error(f"[set_profile_model] Error: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 @router.delete("/api/hermes/profiles/{profile_id}")

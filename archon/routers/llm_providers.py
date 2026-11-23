@@ -10,9 +10,10 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 
 from archon.routers._rbac import require_admin_or_503
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.runtime import logger  # noqa: F401
 
@@ -28,6 +29,24 @@ class LLMProviderSelectRequest(BaseModel):
     provider: str
     model: Optional[str] = None
     base_url: Optional[str] = None
+
+
+class PrivacyRoutingRequest(BaseModel):
+    """Typisierte Felder; weitere Legacy-Keys bleiben erlaubt (extra='allow')."""
+    model_config = ConfigDict(extra="allow")
+    zero_egress_strict: Optional[bool] = None
+    sensitive_local_routing: Optional[bool] = None
+    hard_block_on_local_offline: Optional[bool] = None
+    fallback_to_eu: Optional[bool] = None
+    local_llm_url: Optional[str] = None
+
+
+class ProviderConnectionTestRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    provider: str = Field(default="local", min_length=1, max_length=60)
+    url: str = Field(default="http://127.0.0.1:11434/v1", min_length=5, max_length=500)
+    api_key: Optional[str] = None
+    model: Optional[str] = None
 
 @router.get("/api/llm-providers/models")
 def api_get_llm_provider_models(provider: str = Query("openrouter")):
@@ -204,7 +223,8 @@ def get_llm_providers():
         }
     except Exception as e:
         logger.error(f"[llm-providers] get error: {e}", exc_info=True)
-        return {"status": "error", "message": str(e), "providers": []}
+        # Echter HTTP-Fehlerstatus, alter Body-Shape bleibt kompatibel.
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e), "providers": []})
 
 
 _openrouter_price_cache = None
@@ -213,8 +233,8 @@ _openrouter_price_cache = None
 _openrouter_price_timestamp = 0
 
 
-@router.get('/api/llm-providers/prices')
-def get_llm_prices(refresh: int = 0):
+def _get_llm_prices_impl(refresh: int = 0) -> Dict[str, Any]:
+    """Kernlogik der Preisabfrage; liefert immer ein Dict (alter Body-Shape)."""
     global _openrouter_price_cache, _openrouter_price_timestamp
     try:
         now = time.time()
@@ -244,7 +264,22 @@ def get_llm_prices(refresh: int = 0):
         return {"status": "error", "message": str(e), "prices": _openrouter_price_cache or {}}
 
 
-def get_llm_provider_models(provider: str = ""):
+def get_llm_prices(refresh: int = 0) -> Dict[str, Any]:
+    """Interner Helfer (chat.py, llm_kernel.py, main.py): immer ein Dict."""
+    return _get_llm_prices_impl(refresh=refresh)
+
+
+@router.get('/api/llm-providers/prices')
+def api_get_llm_prices_route(refresh: int = 0):
+    """HTTP-Fassade: Fehlerstatus wird zum echten HTTP-Fehler, Body bleibt gleich."""
+    result = _get_llm_prices_impl(refresh=refresh)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(status_code=502, content=result)
+    return result
+
+
+def _get_llm_provider_models_impl(provider: str = "") -> Dict[str, Any]:
+    """Kernlogik der Modelllisten-Abfrage; liefert immer ein Dict."""
     try:
         import api_provider
         pid = (provider or "").strip().lower()
@@ -257,6 +292,11 @@ def get_llm_provider_models(provider: str = ""):
         return {"status": "ok", "provider": pid, "models": models}
     except Exception as e:
         return {"status": "error", "provider": provider, "models": [], "message": str(e)}
+
+
+def get_llm_provider_models(provider: str = "") -> Dict[str, Any]:
+    """Interner Helfer: immer ein Dict (kein JSONResponse)."""
+    return _get_llm_provider_models_impl(provider=provider)
 
 
 @router.post("/api/llm-providers/select")
@@ -282,7 +322,7 @@ def select_llm_provider(request: Request, req: LLMProviderSelectRequest):
         return {"status": "ok", "result": res, "active": api_provider.read_active_config()}
     except Exception as e:
         logger.error(f"[llm-providers] select error: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 @router.post("/api/llm-providers/save-key")
@@ -313,11 +353,11 @@ def save_llm_provider_key(request: Request, req: LLMProviderSaveKeyRequest):
         # Erfolgsmeldung.
         if deploy_res.get("status") != "ok":
             logger.warning(f"[llm-providers] save-key: Verteilung meldet '{deploy_res.get('status')}'")
-            return {"status": "error", "message": f"{env_key} hinterlegt, aber Verteilung fehlgeschlagen ({deploy_res.get('status')}).", "deploy": deploy_res}
+            return JSONResponse(status_code=502, content={"status": "error", "message": f"{env_key} hinterlegt, aber Verteilung fehlgeschlagen ({deploy_res.get('status')}).", "deploy": deploy_res})
         return {"status": "ok", "message": f"{env_key} erfolgreich hinterlegt und verteilt", "deploy": deploy_res}
     except Exception as e:
         logger.error(f"[llm-providers] save-key error: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 @router.get("/api/llm-providers/privacy-status")
@@ -328,34 +368,37 @@ def api_get_privacy_status():
         return get_overall_privacy_status()
     except Exception as e:
         logger.error(f"[privacy-status] Error: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 @router.post("/api/llm-providers/privacy-routing")
-def api_save_privacy_routing(request: Request, payload: Dict[str, Any] = Body(...)):
+def api_save_privacy_routing(request: Request, payload: PrivacyRoutingRequest):
     """Aktualisiert die Richtlinien für sensibles On-Premise Routing und EU-Fallback (t-c4489c)."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from backend.privacy_router import save_privacy_config
-        saved = save_privacy_config(payload, operator="operator")
+        saved = save_privacy_config(payload.model_dump(exclude_none=True), operator="operator")
         return {"status": "ok", "config": saved}
     except Exception as e:
         logger.error(f"[privacy-routing] Error: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 @router.post("/api/llm-providers/test-connection")
-def api_test_provider_connection(request: Request, payload: Dict[str, Any] = Body(...)):
+def api_test_provider_connection(request: Request, payload: ProviderConnectionTestRequest):
     """Testet die Live-Verbindung zu einem lokalen LLM oder Mistral AI (t-c4489c)."""
     require_admin_or_503(request)  # D-14: Rollenzaun wie select/save-key/privacy-routing
+    if isinstance(payload, dict):
+        # Direkte Python-Aufrufer/interne Automaten senden ein Dict; Pydantic
+        # v2 validiert es hier nach (kein AttributeError/500 mehr).
+        payload = ProviderConnectionTestRequest(**payload)
     try:
         from backend.privacy_router import test_endpoint_sync
-        provider = payload.get("provider", "local")
-        url = payload.get("url", "http://127.0.0.1:11434/v1")
-        api_key = payload.get("api_key")
-        model = payload.get("model")
-        res = test_endpoint_sync(provider=provider, url=url, api_key=api_key, model=model)
+        res = test_endpoint_sync(
+            provider=payload.provider, url=payload.url,
+            api_key=payload.api_key, model=payload.model,
+        )
         return {"status": "ok", "result": res}
     except Exception as e:
         logger.error(f"[test-connection] Error: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})

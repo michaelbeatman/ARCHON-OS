@@ -38,6 +38,17 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       - ARCHON_LANGUAGE=${ARCHON_LANGUAGE:-en}
+      # KRITISCH: auth_service._must_force_auth() liest diese Variablen.
+      # Ohne Durchreichung glaubt die App im Container trotz 0.0.0.0-Bind
+      # sie laufe lokal und bleibt unauthentifiziert offen.
+      - ARCHON_BIND_IP=${ARCHON_BIND_IP:-127.0.0.1}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - ARCHON_CONTENT_PUBLISH_WEBHOOK=${ARCHON_CONTENT_PUBLISH_WEBHOOK:-}
+      # Watchdog-Killswitch: im Container darf localhost NICHT auf den
+      # Archon-Prozess selbst zeigen — echte Service-Namen verwenden.
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/archon-watchdog-abort}
+      - HERMES_API_BASE=${HERMES_API_BASE:-http://hermes:8642}
+      - HERMES_DASHBOARD_BASE=${HERMES_DASHBOARD_BASE:-http://hermes:9119}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
@@ -62,6 +73,8 @@ services:
       # Hintergrund-Thread in das gemountete ./data-Verzeichnis.
       - ARCHON_AUDIT_HMAC_KEY=${ARCHON_AUDIT_HMAC_KEY:-}
       - ARCHON_AUDIT_ANCHOR_PATH=${ARCHON_AUDIT_ANCHOR_PATH:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GH_TOKEN=${GH_TOKEN:-}
     volumes:
       # P0-11: KEIN `./:/app` mehr. Der alte Bind-Mount legte die .env mit dem
       # Audit-HMAC-Key als /app/.env lesbar in den Container. Der Anwendungscode
@@ -106,7 +119,7 @@ services:
   # OMNIROUTE MULTI-PROVIDER AI ROUTER (Port 20128)
   # -------------------------------------------------------------
   omniroute:
-    image: ${OMNIROUTE_IMAGE:-diegosouzapw/omniroute:3.8.50}
+    image: ${OMNIROUTE_IMAGE:-diegosouzapw/omniroute:3.8.50@sha256:085c57adf499a8aaa9f35ccde95c0df9c11bd9ecd18d6c9edbf3b68b8079ba9d}
     container_name: ${OMNIROUTE_CONTAINER_NAME:-omniroute}
     restart: unless-stopped
     networks:
@@ -144,7 +157,7 @@ services:
   # n8n WORKFLOW MESH (Optional Full Profile, Localhost-Bound)
   # -------------------------------------------------------------
   n8n:
-    image: ${N8N_IMAGE:-n8nio/n8n:2.36.8}
+    image: ${N8N_IMAGE:-n8nio/n8n:2.36.8@sha256:cfe2704ff858395503d42548206c2c99ea351a205e941063a9d9b77b0f404478}
     container_name: ${N8N_CONTAINER_NAME:-n8n}
     restart: unless-stopped
     profiles: ["automation", "full", "all"]
@@ -159,16 +172,22 @@ services:
       - N8N_EDITOR_BASE_URL=http://localhost:5678/
       - WEBHOOK_URL=http://localhost:5678/
       - N8N_PREVIEW_MODE=true
-      - N8N_XFRAME_BYPASS=true
-      - N8N_SECURE_COOKIE=false
+      # Supply-Chain/Session-Haertung: X-Frame-Bypass und unpruefbare
+      # Community-Pakete waren standardmaessig aktiv.
+      - N8N_XFRAME_BYPASS=false
+      # Secure-Cookie erfordert TLS (Reverse-Proxy). Für reines Localhost-
+      # Development kann in .env N8N_SECURE_COOKIE=false gesetzt werden.
+      - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-true}
       - N8N_SAMESITE_COOKIE=lax
+      # MUSS in .env auf einen langen Zufallswert gesetzt werden (CI nutzt
+      # das leere Template — dort darf der Start nicht abbrechen).
       - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET:-}
       - N8N_USER_MANAGEMENT_JWT_DURATION_HOURS=168
       - N8N_USER_MANAGEMENT_JWT_REFRESH_TIMEOUT_HOURS=144
-      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
       - N8N_DIAGNOSTICS_ENABLED=false
       - N8N_HIRING_BANNER_ENABLED=false
-      - N8N_UNVERIFIED_PACKAGES_ENABLED=true
+      - N8N_UNVERIFIED_PACKAGES_ENABLED=false
       - N8N_RUNNERS_TASK_TIMEOUT=300
       - GENERIC_TIMEZONE=${TZ:-UTC}
       - TZ=${TZ:-UTC}
@@ -191,7 +210,7 @@ services:
   # DOCKER SOCKET PROXY (Zero-Trust Read/Lifecycle ACL)
   # -------------------------------------------------------------
   docker-socket-proxy:
-    image: ${SOCKET_PROXY_IMAGE:-tecnativa/docker-socket-proxy:v0.5.0}
+    image: ${SOCKET_PROXY_IMAGE:-tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459}
     container_name: ${SOCKET_PROXY_CONTAINER_NAME:-docker-socket-proxy}
     restart: unless-stopped
     networks:
@@ -242,7 +261,7 @@ services:
   # HERMES AGENT ORCHESTRATOR (Pinned v0.23.1 Multi-Arch)
   # -------------------------------------------------------------
   hermes:
-    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:v0.23.1}
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:v0.23.1@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08}
     container_name: ${HERMES_CONTAINER_NAME:-hermes}
     restart: unless-stopped
     networks:
@@ -298,7 +317,7 @@ services:
   # HERMES DASHBOARD (Metrics & Trace on Port 9119)
   # -------------------------------------------------------------
   hermes-dashboard:
-    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:v0.23.1}
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:v0.23.1@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08}
     container_name: ${HERMES_DASHBOARD_CONTAINER_NAME:-hermes-dashboard}
     restart: unless-stopped
     profiles: ["dashboard", "observability", "all"]
@@ -329,7 +348,7 @@ services:
           cpus: "1.0"
 
   hermes-dashboard-proxy:
-    image: alpine/socat:1.8.0.1
+    image: alpine/socat:1.8.0.1@sha256:87d88ff79bf42ca723fb360e9585c40e2923a2f4df9b9d148b127568ef6b99e7
     container_name: ${HERMES_PROXY_CONTAINER_NAME:-hermes-dashboard-proxy}
     restart: unless-stopped
     profiles: ["dashboard", "observability", "all"]
@@ -345,7 +364,7 @@ services:
           cpus: "0.2"
 
   anything-llm:
-    image: mintplexlabs/anythingllm:1.7.4
+    image: mintplexlabs/anythingllm:1.7.4@sha256:db45b3f9242b87e650e46081b81fb9004b88971c2e53cc85047200df7e110ee8
     container_name: ${ANYTHINGLLM_CONTAINER_NAME:-anything-llm}
     restart: unless-stopped
     networks:
@@ -374,7 +393,7 @@ services:
           cpus: "2.0"
 
   ollama-embed:
-    image: ollama/ollama:0.5.7
+    image: ollama/ollama:0.5.7@sha256:7e672211886f8bd4448a98ed577e26c816b9e8b052112860564afaa2c105800e
     container_name: ${OLLAMA_EMBED_CONTAINER_NAME:-ollama-embed}
     restart: unless-stopped
     profiles: ["rag", "full", "all"]
@@ -393,7 +412,7 @@ services:
           cpus: "3.0"
 
   chroma:
-    image: chromadb/chroma:0.6.3
+    image: chromadb/chroma:0.6.3@sha256:e0e78dc7609a599b63c99753442c7d01b1d3d369ce0e3bf3e0540536fec4fa7a
     container_name: ${CHROMA_CONTAINER_NAME:-chroma}
     restart: unless-stopped
     networks:
@@ -435,7 +454,7 @@ services:
           pids: 50
 
   litestream:
-    image: litestream/litestream:0.3.13
+    image: litestream/litestream:0.3.13@sha256:027eda2a89a86015b9797d2129d4dd447e8953097b4190e1d5a30b73e76d8d58
     container_name: litestream
     restart: unless-stopped
     profiles: ["backup", "replication", "all"]
@@ -455,7 +474,7 @@ services:
           cpus: "0.5"
 
   langfuse:
-    image: langfuse/langfuse:2
+    image: langfuse/langfuse:2@sha256:85c278dcab96c15db94191a5c1664f85aba2d7fb6771a00e99681c902c4b7015
     container_name: langfuse
     restart: unless-stopped
     profiles: ["tracing", "observability", "all"]
@@ -476,7 +495,7 @@ services:
           cpus: "1.5"
 
   prometheus:
-    image: prom/prometheus:v2.54.1
+    image: prom/prometheus:v2.54.1@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
     container_name: prometheus
     restart: unless-stopped
     profiles: ["monitoring", "observability", "all"]
@@ -498,7 +517,7 @@ services:
           cpus: "0.5"
 
   grafana:
-    image: grafana/grafana:11.1.0
+    image: grafana/grafana:11.1.0@sha256:079600c9517b678c10cda6006b4487d3174512fd4c6cface37df7822756ed7a5
     container_name: grafana
     restart: unless-stopped
     profiles: ["monitoring", "observability", "all"]
@@ -521,7 +540,7 @@ services:
           cpus: "0.5"
 
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    image: louislam/uptime-kuma:1@sha256:70233f4acb5163fd2a59a49909cf01e44415cecff13dba69e3a86647a2919f83
     container_name: uptime-kuma
     restart: unless-stopped
     profiles: ["monitoring", "observability", "all"]
@@ -538,7 +557,7 @@ services:
           cpus: "0.5"
 
   caddy:
-    image: caddy:2.8.4-alpine
+    image: caddy:2.8.4-alpine@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17
     container_name: caddy-gateway
     restart: unless-stopped
     profiles: ["gateway", "proxy", "all"]
@@ -558,7 +577,7 @@ services:
           cpus: "0.5"
 
   authelia:
-    image: authelia/authelia:4.38
+    image: authelia/authelia:4.38@sha256:46021dc20efdcc5cdc38a29e3050b8835429a155ae6215388ed3b793a02eb0ab
     container_name: authelia-sso
     restart: unless-stopped
     profiles: ["gateway", "proxy", "all"]
@@ -579,7 +598,7 @@ services:
           cpus: "0.5"
 
   loki:
-    image: grafana/loki:3.1.0
+    image: grafana/loki:3.1.0@sha256:d947e68a84d9e44915dfa08c3bec27e2124efd5ba6c83443eb53578101ec69e3
     container_name: loki
     restart: unless-stopped
     profiles: ["logging", "observability", "all"]
@@ -598,7 +617,7 @@ services:
           cpus: "0.5"
 
   promtail:
-    image: grafana/promtail:3.1.0
+    image: grafana/promtail:3.1.0@sha256:b3db8e7b1cba0e8c45ce2ae72ebddfd88ebdcae86383f1680edf0074e9010ff6
     container_name: promtail
     restart: unless-stopped
     profiles: ["logging", "observability", "all"]
@@ -619,7 +638,7 @@ services:
           cpus: "0.3"
 
   metabase:
-    image: metabase/metabase:v0.50.23
+    image: metabase/metabase:v0.50.23@sha256:489b7f9c943fb7bf36c46acbad41fed895118952e78cf2495e6283dfe4cc40eb
     container_name: metabase-bi
     restart: unless-stopped
     profiles: ["bi", "analytics", "all"]
@@ -642,7 +661,7 @@ services:
           cpus: "1.0"
 
   docuseal:
-    image: docuseal/docuseal:1.8.4
+    image: docuseal/docuseal:1.8.4@sha256:664690ea8a1e50e83f1c6810db297633929e49de274539c71a3566c4b630fbb6
     container_name: docuseal-esign
     restart: unless-stopped
     profiles: ["esign", "legal", "all"]

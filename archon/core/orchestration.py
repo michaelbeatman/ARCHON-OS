@@ -20,10 +20,12 @@ from archon.core.mission_control import (
     _MC_ASYNC_LOCK,
     _load_mission_control_data as _default_load_mc,
     _save_mission_control_data as _default_save_mc,
+    update_mission_control_data as _default_update_mc,
     _write_mc_atomic,
 )
 from archon.core.paths import OBSIDIAN_VAULT, PROJEKTE_DIR
 from archon.core.runtime import APP_ROOT, logger
+from archon.core.task_registry import spawn as _spawn_tracked
 
 
 # Type aliases für DI
@@ -183,6 +185,11 @@ async def _execute_mission_control_task(
     # ab; der Check direkt vor dem LLM-Call verhindert[kostspielige] Folgecalls.
     from backend.cancellation import get_token as _get_cancel_token
     cancel_token = _get_cancel_token(f"dispatch:{task_id}")
+    # Damit cancel_scope() den laufenden LLM-Call wirklich abbricht (nicht nur
+    # ein Flag setzt), wird dieser Task an den Scope gebunden.
+    _current_task = asyncio.current_task()
+    if _current_task is not None:
+        cancel_token.register_task(_current_task)
     cancel_token.check()
 
     def _commit() -> None:
@@ -208,8 +215,12 @@ async def _execute_mission_control_task(
 
     profiles = get_profiles() if get_profiles else []
     prof = next((p for p in profiles if p.get("id") == agent_id or p.get("person_name") == agent_name), None)
-    if not prof and profiles:
-        prof = profiles[0]
+    if not prof:
+        # KRITISCH (Audit 23.11.2026): niemals unter der Identität eines
+        # beliebigen fremden Profils laufen (falscher Prompt, falsches Budget,
+        # falsche EU-AI-Act-Klasse). Nur der explizite Root-Orchestrator ist
+        # ein zulässiger Fallback.
+        prof = next((p for p in profiles if p.get("id") in ("default", "orchestrator")), None)
 
     system_prompt = (prof.get("system_prompt") if prof else None) or (prof.get("prompt") if prof else None) or (
         f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
@@ -237,9 +248,16 @@ async def _execute_mission_control_task(
             ticker(agent_name, f"Task #{task_id} laeuft bereits in einem anderen Worker — uebersprungen.")
             return
     except Exception as lease_exc:
-        # Kein stilles Durchlassen bei ausfallendem Claim ist hier vertretbar,
-        # wenn das Feature explizit deaktiviert ist; sonst warnen.
-        logger.warning(f"[MissionControl] Lease nicht verfuegbar ({lease_exc}) — Dispatch ohne Claim.")
+        # KRITISCH (Audit 23.11.2026): ein nicht auswertbarer Lease-Claim darf
+        # nicht bedeuten „kein anderer Worker" — sonst laufen Tasks doppelt.
+        # Expliziter Opt-out nur für isolierte Tests/Entwicklung.
+        if str(os.environ.get("ARCHON_LEASE_FAIL_OPEN", "")).strip().lower() not in ("1", "true", "yes"):
+            task["status"] = "blocked"
+            task["result_summary"] = f"Lease-Claim nicht verfügbar: {lease_exc}"
+            ticker(agent_name, f"Task #{task_id} blockiert — Lease-Claim nicht verfügbar.")
+            _commit()
+            return
+        logger.warning(f"[MissionControl] Lease nicht verfuegbar ({lease_exc}) — Dispatch ohne Claim (FAIL_OPEN aktiv).")
 
     # Der Guard schuetzt nur echte, per Lease geclaimte Tasks. Ohne Lease
     # (isolierter Store / Tests) gibt es keinen verlaesslichen Lauf-Kontext —
@@ -272,8 +290,15 @@ async def _execute_mission_control_task(
                 await asyncio.sleep(60.0)
                 try:
                     if deadlock_supervisor is not None:
-                        deadlock_supervisor.heartbeat(str(task_id), lease_token, ttl_seconds=300)
-                except Exception:
+                        ok = deadlock_supervisor.heartbeat(str(task_id), lease_token, ttl_seconds=300)
+                        if ok is False:
+                            cancel_token.cancel("lease_lost")
+                            return
+                except Exception as hb_exc:
+                    # Heartbeat-Verlust darf nicht unbemerkt zum Ablauf der
+                    # Lease führen, während der Task weiterläuft (Audit).
+                    logger.error("[MissionControl] Lease-Heartbeat %s fehlgeschlagen: %s", task_id, hb_exc)
+                    cancel_token.cancel("lease_heartbeat_failed")
                     return
 
         heartbeat_task = asyncio.create_task(_lease_heartbeat())
@@ -325,6 +350,21 @@ async def _execute_mission_control_task(
                     continue
                 nominated = parsed_dispatch.get("nominated_agents", [])
                 if isinstance(nominated, list) and len(nominated) > 0:
+                    # KRITISCH (Audit 23.11.2026): Delegations-Rekursion und
+                    # Fan-out hart begrenzen — sonst kann ein LLM, das sich
+                    # selbst nominiert, unbegrenzt kostenpflichtige Calls
+                    # auslösen.
+                    max_depth = 3
+                    max_fanout = 5
+                    depth = int(task.get("delegation_depth", 0) or 0) + 1
+                    if depth > max_depth:
+                        logger.warning(
+                            "[Delegation] Tiefe %s > %s bei Task %s — weitere Nominierung abgelehnt.",
+                            depth, max_depth, task_id,
+                        )
+                        ticker("Delegation", f"Task #{task_id}: maximale Delegationstiefe erreicht — keine weiteren Sub-Tasks.")
+                        continue
+                    nominated = nominated[:max_fanout]
                     proj_title = parsed_dispatch.get("project_title", task_title)
                     batch_subtasks = []
                     for idx, nom in enumerate(nominated):
@@ -342,6 +382,8 @@ async def _execute_mission_control_task(
 
                         sub_task = {
                             "id": sub_task_id,
+                            "delegation_depth": depth,
+                            "parent_task_id": task_id,
                             "title": sub_task_title,
                             "capture_input": f"MANDAT VON STAFFING-DIRECTORIN ({agent_name}):\n\n{sub_mandate}\n\nProjekt-Kontext: {proj_title}",
                             "mandate": sub_mandate,
@@ -402,12 +444,21 @@ async def _execute_mission_control_task(
         # Cascade-Loop Schritt A: Hat Robert strategisch vorgelegt ohne direkte Nominierung? -> Sandy beauftragen
         if agent_id in ("executive_decision_architect", "robert") and not task.get("parent_project_id"):
             if not task.get("subtask_ids"):
-                asyncio.create_task(trigger_sandy(task, profiles))
+                _spawn_tracked(trigger_sandy(task, profiles), name="sandy_staffing")
 
         # Cascade-Loop Schritt B: Ist ein Sub-Task fertig und alle Geschwister-Tasks abgeschlossen? -> Synthese starten
         parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
         parent_ok = bool(parent_pid and parent_pid != task_id)
 
+    except asyncio.CancelledError:
+        # CancelledError erbt BaseException — vorher blieb der Task in
+        # 'approval'/'in_progress' und wurde vom Deadlock-Supervisor reaktiviert.
+        logger.info("[MissionControl] Task %s durch Cancel abgebrochen.", task_id)
+        parent_ok = False
+        task["status"] = "cancelled"
+        task["result_summary"] = "Aufgabe durch Operator abgebrochen"
+        ticker("Mission Control", f"Task #{task_id} abgebrochen")
+        raise
     except Exception as ex:
         logger.error(f"[Execution Error] _execute_mission_control_task {task_id}: {ex}")
         parent_ok = False
@@ -444,7 +495,7 @@ async def _execute_mission_control_task(
         # Audit v3 2.1.3: fan_in erst NACH dem Commit starten — sonst liest die Synthese
         # den alten Geschwister-Status aus der letzten Persistierung.
         if parent_ok:
-            asyncio.create_task(fan_in(parent_pid))
+            _spawn_tracked(fan_in(parent_pid), name=f"fan_in:{parent_pid}")
 
 
 def _paperclip_hire_profile_by_id(
@@ -912,6 +963,7 @@ async def _fan_in_maybe_start_synthesis(
     *,
     load_mc: LoadMC = _default_load_mc,
     write_mc_atomic: Callable = _write_mc_atomic,
+    update_mc: Optional[Callable] = _default_update_mc,
     mc_async_lock: asyncio.Lock = _MC_ASYNC_LOCK,
     run_cascade: Callable = None,
 ) -> None:
@@ -921,25 +973,28 @@ async def _fan_in_maybe_start_synthesis(
     if run_cascade is None:
         run_cascade = _run_synthesis_cascade
     try:
-        # Struktur-Thema 3: die GANZE Pruef-Sequenz unter EINEM Lock (frisch
-        # laden, pruefen, Flag setzen, speichern). Sonst starten zwei zeitgleiche
-        # Fertigmeldungen die Synthese doppelt. _write_mc_atomic direkt: der Lock
-        # ist nicht reentrant, _save_mission_control_data wuerde verklemmen.
-        async with mc_async_lock:
-            data = await asyncio.to_thread(load_mc)
-            siblings = [t for t in data.get("tasks", [])
+        # KRITISCH: früher wurde ein Snapshot über das await gehalten und mit
+        # _write_mc_atomic(overwrite=True) zurückgeschrieben. Parallel fertig
+        # gewordene Geschwister wurden auf alte Stände zurückgesetzt und die
+        # 25 letzten Audit-Sigs erneut eingefügt. Jetzt läuft Prüfung + Flag
+        # in EINEM update_mc-Mutator (BEGIN IMMEDIATE, previous_ids, audit_sigs).
+        decision: Dict[str, Any] = {}
+
+        def _mutate(fresh: Dict[str, Any]) -> None:
+            tasks = fresh.get("tasks", []) or []
+            siblings = [t for t in tasks
                         if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)
                         and t.get("id") != parent_pid]
-            parent = next((t for t in data.get("tasks", []) if t.get("id") == parent_pid), None)
+            parent = next((t for t in tasks if t.get("id") == parent_pid), None)
             if not siblings or not parent:
+                decision["skip"] = True
                 return
             if parent.get("synthesis_started"):
+                decision["skip"] = True
                 return
-            # 'review' ist laut Delegationsprotokoll (constants.py) ein
-            # terminaler Zustand ("Ergebnis liegt vor"). Vorher startete die
-            # Synthese nie, obwohl alle Ergebnisse da waren.
             terminal_states = {"completed", "done", "review", "failed", "blocked", "error"}
             if not all(s.get("status") in terminal_states for s in siblings):
+                decision["skip"] = True
                 return
             failed_siblings = [s for s in siblings if s.get("status") not in ("completed", "done", "review")]
             if failed_siblings:
@@ -947,13 +1002,36 @@ async def _fan_in_maybe_start_synthesis(
                 parent["status"] = "blocked"
                 parent["phase"] = "blocked"
                 parent["failure_reason"] = f"Teilaufgaben fehlgeschlagen/blockiert: {failed_ids}"
-                await asyncio.to_thread(write_mc_atomic, data)
-                logger.warning(f"[Fan-in] Parent '{parent_pid}' eskaliert/blockiert wegen fehlgeschlagener Geschwister: {failed_ids}")
+                decision["blocked"] = failed_ids
                 return
             parent["synthesis_started"] = True
-            await asyncio.to_thread(write_mc_atomic, data)
-        logger.info(f"[Fan-in] Alle {len(siblings)} Geschwister von '{parent_pid}' fertig -> Synthese starten")
-        asyncio.create_task(run_cascade(parent_pid))
+            parent["synthesis_started_at"] = datetime.datetime.now().isoformat()
+            decision["start"] = len(siblings)
+
+        async with mc_async_lock:
+            if update_mc is not None:
+                await asyncio.to_thread(update_mc, _mutate)
+            else:  # Rückwärtskompatibilität für alte Aufrufer
+                data = await asyncio.to_thread(load_mc)
+                _mutate(data)
+                # Kein Schreiben, wenn die Prüfung übersprungen wurde (keine
+                # Geschwister, bereits gestartet, Parent fehlt) — sonst werden
+                # unnötig Snapshots/Audit-Sigs erzeugt.
+                if not decision.get("skip"):
+                    await asyncio.to_thread(write_mc_atomic, data)
+
+        if decision.get("blocked"):
+            logger.warning(
+                "[Fan-in] Parent '%s' eskaliert/blockiert wegen fehlgeschlagener Geschwister: %s",
+                parent_pid, decision["blocked"],
+            )
+            return
+        if decision.get("start"):
+            logger.info(
+                "[Fan-in] Alle %s Geschwister von '%s' fertig -> Synthese starten",
+                decision["start"], parent_pid,
+            )
+            _spawn_tracked(run_cascade(parent_pid), name=f"synthesis:{parent_pid}")
     except Exception as e:
         logger.warning(f"[Fan-in] Synthese-Check fehlgeschlagen: {e}")
 
@@ -1348,7 +1426,77 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
                        f"angelegt werden — Freigabe ist per Telegram/Kanban nicht möglich.")
 
 
+def recover_stale_synthesis(
+    load_mc: LoadMC,
+    update_mc: Callable[[Callable[[Dict[str, Any]], None]], None],
+    *,
+    ttl_seconds: int = 900,
+    restart: Optional[Callable[[str], Any]] = None,
+) -> List[str]:
+    """Setzt verwaiste ``synthesis_started``-Flags zurueck und startet neu.
+
+    ``synthesis_started`` wurde vor dem Start der Cascade persistiert. Wurde
+    der Task GC'd, das Modul neu geladen oder der Prozess beendet, blieb das
+    Flag dauerhaft true und der Fan-In kehrte immer wieder frueh zurueck —
+    das Projekt blieb stumm in "alle Ergebnisse da, keine Synthese".
+    """
+    data = load_mc() or {}
+    stale: List[str] = []
+    now = datetime.datetime.now()
+    for task in data.get("tasks", []) or []:
+        if not task.get("synthesis_started") or task.get("synthesis_finalized"):
+            continue
+        raw = task.get("synthesis_started_at") or task.get("updated_at") or ""
+        try:
+            started = datetime.datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            if started.tzinfo is not None:
+                started = started.replace(tzinfo=None)
+        except (TypeError, ValueError):
+            # Kein Zeitstempel (Legacy-Datensatz) -> als stale behandeln
+            stale.append(str(task.get("id") or task.get("project_id") or "?"))
+            continue
+        if (now - started).total_seconds() > ttl_seconds:
+            stale.append(str(task.get("id") or task.get("project_id") or "?"))
+
+    if not stale:
+        return []
+
+    max_retries = 3
+    restartable: List[str] = []
+
+    def _reset(fresh: Dict[str, Any]) -> None:
+        for t in fresh.get("tasks", []) or []:
+            key = str(t.get("id") or t.get("project_id") or "?")
+            if key in stale and t.get("synthesis_started") and not t.get("synthesis_finalized"):
+                retries = int(t.get("synthesis_retry_count") or 0) + 1
+                t["synthesis_retry_count"] = retries
+                t["synthesis_started"] = False
+                if retries >= max_retries:
+                    # Nach 3 Fehlversuchen nicht endlos neu starten (LLM-Kosten,
+                    # Audit-Spam) — eskalieren und HITL entscheiden lassen.
+                    t["status"] = "blocked"
+                    t["phase"] = "blocked"
+                    t["failure_reason"] = f"Synthese nach {retries} Versuchen fehlgeschlagen — manuelle Pruefung erforderlich."
+                    logger.error("[Fan-in] Synthese '%s' nach %s Versuchen blockiert.", key, retries)
+                else:
+                    restartable.append(key)
+
+    update_mc(_reset)
+    logger.warning("[Fan-in] %s verwaiste Synthese-Flag(s) zurueckgesetzt: %s", len(stale), stale)
+    # KRITISCH: frueher wurde nur das Flag geloescht, aber keine neue
+    # Synthese gestartet — das Projekt blieb genau im Zustand haengen, den
+    # die Recovery verhindern sollte. Fan-in nach dem Reset erneut triggern.
+    if restart is not None:
+        for pid in restartable:
+            try:
+                restart(pid)
+            except Exception as exc:
+                logger.warning("[Fan-in] Restart von '%s' fehlgeschlagen: %s", pid, exc)
+    return stale
+
+
 __all__ = [
+    "recover_stale_synthesis",
     "_execute_mission_control_task",
     "_paperclip_hire_profile_by_id",
     "_set_agent_profile_status",

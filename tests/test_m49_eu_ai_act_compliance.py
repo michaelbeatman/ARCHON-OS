@@ -53,6 +53,17 @@ class TestM49EUAIActCompliance(unittest.TestCase):
             tenant_mgr=cls.tenant_mgr,
             audit_logger=cls.audit_log,
         )
+        # Produktiv erfindet die Engine keine Kompetenznachweise (Art. 4).
+        # Der Test muss sein Register daher selbst anlegen — genau wie ein
+        # echter Compliance-Verantwortlicher es tun würde.
+        cls.engine.add_literacy_entry(
+            {
+                "person_name": "Michael Keller",
+                "role": "Geschäftsführer & System-Owner",
+                "training_module": "EU AI Act Art. 4 & GoBD-Verfahrenskontrolle",
+            },
+            actor="setup",
+        )
 
     @classmethod
     def tearDownClass(cls):

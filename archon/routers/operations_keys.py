@@ -5,10 +5,22 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 Ausgelagert aus backend/operations_api.py.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 from fastapi import APIRouter, Body, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 
-from archon.routers._rbac import require_admin_or_503, get_session_actor
+from archon.routers._rbac import require_admin_or_503, get_session_actor, require_session_actor
+
+
+class ApiKeyCreateRequest(BaseModel):
+    """Validierter Payload für die API-Key-Erzeugung (Etappe 1)."""
+    # extra="ignore" bewusst: bestehende Clients senden 'created_by', das
+    # serverseitig aus der Session kommt (kein Body-Vertrauensmoment).
+    model_config = ConfigDict(extra="ignore")
+    name: str = Field(min_length=1, max_length=120)
+    scopes: List[str] = Field(default_factory=lambda: ["read_only"])
+    rate_limit_rpm: int = Field(default=60, ge=0, le=100_000)
+    rate_limit_rpd: int = Field(default=5000, ge=0, le=10_000_000)
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -26,14 +38,14 @@ def api_list_keys(request: Request):
 
 
 @router.post("/keys")
-def api_create_key(request: Request, req: Dict[str, Any] = Body(...)):
+def api_create_key(request: Request, req: ApiKeyCreateRequest):
     """Erstellt einen neuen API-Key und gibt den Klartext-Token einmalig zurück."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    name = req.get("name", "").strip()
-    scopes = req.get("scopes", ["read_only"])
-    rate_limit_rpm = int(req.get("rate_limit_rpm", 60))
-    rate_limit_rpd = int(req.get("rate_limit_rpd", 5000))
-    created_by = get_session_actor(request, fallback=req.get("created_by", "admin").strip() or "admin")
+    name = req.name.strip()
+    scopes = req.scopes
+    rate_limit_rpm = req.rate_limit_rpm
+    rate_limit_rpd = req.rate_limit_rpd
+    created_by = require_session_actor(request)
 
     if not name:
         raise HTTPException(status_code=400, detail="Name/Zweck des API-Keys ist erforderlich.")
@@ -53,10 +65,10 @@ def api_create_key(request: Request, req: Dict[str, Any] = Body(...)):
 
 
 @router.post("/keys/{key_id}/revoke")
-def api_revoke_key(request: Request, key_id: str, req: Dict[str, Any] = Body(default={})):
+def api_revoke_key(request: Request, key_id: str):
     """Deaktiviert einen API-Key dauerhaft und revisionssicher."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    revoked_by = get_session_actor(request, fallback=req.get("revoked_by", "admin").strip() or "admin")
+    revoked_by = require_session_actor(request)
     try:
         from backend.api_key_manager import api_key_manager
         success = api_key_manager.revoke_key(key_id, revoked_by=revoked_by)
@@ -70,10 +82,10 @@ def api_revoke_key(request: Request, key_id: str, req: Dict[str, Any] = Body(def
 
 
 @router.delete("/keys/{key_id}")
-def api_delete_key(request: Request, key_id: str, req: Dict[str, Any] = Body(default={})):
+def api_delete_key(request: Request, key_id: str):
     """Löscht einen Key vollständig aus der aktiven Liste."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    deleted_by = get_session_actor(request, fallback=req.get("deleted_by", "admin").strip() or "admin")
+    deleted_by = require_session_actor(request)
     try:
         from backend.api_key_manager import api_key_manager
         success = api_key_manager.delete_key(key_id, deleted_by=deleted_by)
@@ -87,8 +99,9 @@ def api_delete_key(request: Request, key_id: str, req: Dict[str, Any] = Body(def
 
 
 @router.get("/keys/audit")
-def api_get_keys_audit(limit: int = 50):
+def api_get_keys_audit(request: Request, limit: int = 50):
     """Liefert das revisionssichere SHA-256 Audit-Log der Key-Verwaltung."""
+    require_admin_or_503(request)  # audit_trail enthaelt key_id/scopes/created_by — Admin only
     try:
         from backend.api_key_manager import api_key_manager
         trail = api_key_manager.get_audit_trail(limit=limit)

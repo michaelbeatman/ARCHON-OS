@@ -7,6 +7,7 @@ die Datenbanken komprimiert im Ringpuffer (.hermes/backups/db/) mit konfigurierb
 
 import os
 import sys
+import re
 import glob
 import gzip
 import logging
@@ -20,6 +21,60 @@ logger = logging.getLogger("archon.db_backup_manager")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKUP_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "backups", "db")
+TENANTS_DIR = os.path.join(WORKSPACE_DIR, "data", "tenants")
+
+# Sensible Konfigurationsdateien, die ohne DB-Backup nicht wiederhergestellt
+# werden koennten (Settings, HITL-Passkeys, HMAC-Keys, Service-Token).
+SECRET_FILES: Dict[str, str] = {
+    "settings": os.path.join(WORKSPACE_DIR, "settings.json"),
+    "compartment_key": os.path.join(WORKSPACE_DIR, "data", "compartment.key"),
+    "warrant_hmac_key": os.path.join(WORKSPACE_DIR, "data", "warrant_hmac.key"),
+    "passkey_hitl": os.path.join(WORKSPACE_DIR, "config", "passkey_hitl.json"),
+    "archon_service_token": os.path.join(WORKSPACE_DIR, "data", ".archon_service_token"),
+    "initial_admin_password": os.path.join(WORKSPACE_DIR, ".archon_initial_admin_password"),
+}
+_SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+\.secret\.gz$")
+
+
+def _tenant_secret_files() -> Dict[str, str]:
+    """Vault-Keys liegen pro Mandant unter data/tenants/<tid>/compartment.key.
+
+    Vorher wurde nur der globale Key gesichert — ein Restore der Tenant-Vault-
+    DB ohne ihren Key machte die AES-GCM-Daten dauerhaft unlesbar.
+    """
+    out: Dict[str, str] = {}
+    try:
+        import glob as _glob
+        for key_path in _glob.glob(os.path.join(TENANTS_DIR, "*", "compartment.key")):
+            tid = os.path.basename(os.path.dirname(key_path))
+            out[f"tenant_{tid}_compartment_key"] = key_path
+    except Exception:
+        pass
+    return out
+
+
+def _within(path: str, root: str) -> bool:
+    """Jail-Pruefung: path muss unter root liegen (symlink-aufgeloest)."""
+    try:
+        real_path = os.path.realpath(path)
+        real_root = os.path.realpath(root)
+        return os.path.commonpath([real_path, real_root]) == real_root
+    except (ValueError, OSError):
+        return False
+
+
+def _tenant_restore_target(db_name: str) -> Optional[str]:
+    """`tenant_<tid>__<db>` -> `data/tenants/<tid>/<db>` (mit Jail-Pruefung)."""
+    m = re.fullmatch(r"tenant_([A-Za-z0-9_.\-]+)__([A-Za-z0-9_.\-]+)", str(db_name or ""))
+    if not m:
+        return None
+    tid, db_file = m.group(1), m.group(2)
+    if tid in (".", "..") or db_file in (".", ".."):
+        return None
+    target = os.path.abspath(os.path.join(TENANTS_DIR, tid, db_file))
+    if not _within(target, TENANTS_DIR):
+        return None
+    return target
 
 
 def _resolve_target(filename: str, legacy_subpath: str) -> str:
@@ -126,6 +181,10 @@ class DBBackupManager:
                     except OSError as rm_exc:
                         logger.debug(f"[DBBackupManager] Temp-Snapshot {tmp_snapshot} nicht entfernt: {rm_exc}")
 
+        # Secret-Dateien gehoeren zum Wiederherstellungs-Umfang: ohne sie
+        # hilft das beste DB-Backup nichts (settings/HITL/Token weg).
+        backed_up.extend(self._backup_secret_files(now_str))
+
         self._rotate_backups(keep_days=keep_days)
 
         return {
@@ -136,6 +195,37 @@ class DBBackupManager:
             "backed_up_count": len(backed_up),
             "backups": backed_up
         }
+
+    def _backup_secret_files(self, now_str: str) -> List[Dict[str, Any]]:
+        """Sichert settings.json, compartment.key, warrant_hmac.key,
+        passkey_hitl.json und .archon_service_token komprimiert im Ringpuffer.
+        """
+        secured: List[Dict[str, Any]] = []
+        all_secrets = {**SECRET_FILES, **_tenant_secret_files()}
+        for logical_name, src_path in all_secrets.items():
+            if not os.path.isfile(src_path):
+                continue
+            backup_file = os.path.join(self.backup_dir, f"{logical_name}_{now_str}.secret.gz")
+            try:
+                with open(src_path, "rb") as f_in:
+                    with gzip.open(backup_file, "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                secured.append({
+                    "db_name": logical_name,
+                    "kind": "secret",
+                    "source_path": src_path,
+                    "backup_file": backup_file,
+                    "size_bytes": os.path.getsize(backup_file),
+                    "integrity": "ok",
+                })
+            except Exception as exc:
+                print(f"[DBBackupManager] Secret-Backup {logical_name} fehlgeschlagen: {exc}", file=sys.stderr)
+                try:
+                    if os.path.exists(backup_file):
+                        os.unlink(backup_file)
+                except OSError:
+                    pass
+        return secured
 
     def _rotate_backups(self, keep_days: int = 7):
         cutoff = datetime.datetime.now() - datetime.timedelta(days=keep_days)
@@ -163,5 +253,144 @@ class DBBackupManager:
         except OSError as exc:
             logger.warning(f"[DBBackupManager] Backup-Liste nicht lesbar: {exc}")
         return res
+
+    def restore_backup(
+        self,
+        file_name: str,
+        target_path: Optional[str] = None,
+        *,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Stellt ein komprimiertes Backup wieder her (openssl-artig sicher).
+
+        Vorher gab es nur Backups, aber KEINE Restore-Funktion — ein Backup
+        war damit ein Versprechen, keine Sicherheit. Ablauf:
+        Datei-Jail -> Dekompression -> PRAGMA integrity_check -> atomic replace.
+        """
+        name = os.path.basename(str(file_name or ""))
+        if not name.endswith(".db.gz") or not re.fullmatch(r"[A-Za-z0-9_.\-]+\.db\.gz", name):
+            raise ValueError("Ungueltiger Backup-Dateiname.")
+        src = os.path.join(self.backup_dir, name)
+        if not os.path.isfile(src):
+            raise FileNotFoundError(f"Backup '{name}' nicht gefunden.")
+
+        if target_path is None:
+            # Format: <db_name>_YYYYmmdd_HHMMSS.db.gz
+            stem = name[:-len(".db.gz")]
+            db_name = re.sub(r"_\d{8}_\d{6}$", "", stem)
+            # Tenant-Backups: tenant_<tid>__<db> -> data/tenants/<tid>/<db>.
+            # Vorher wurde daraus falsch data/tenant_<tid>__<db>.
+            tenant_target = _tenant_restore_target(db_name)
+            if tenant_target is not None:
+                target_path = tenant_target
+            else:
+                candidates = {os.path.abspath(p): p for p in DB_TARGETS}
+                target_path = next((p for candidate, p in candidates.items()
+                                    if os.path.basename(candidate) == db_name), None)
+                if target_path is None:
+                    target_path = os.path.join(WORKSPACE_DIR, "data", db_name)
+        target = os.path.abspath(target_path)
+        if not _within(target, WORKSPACE_DIR):
+            raise ValueError(f"Restore-Ziel ausserhalb des Workspace: {target}")
+
+        with tempfile.NamedTemporaryFile(dir=self.backup_dir, suffix=".restore.db", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            with gzip.open(src, "rb") as fin, open(tmp_path, "wb") as fout:
+                shutil.copyfileobj(fin, fout)
+            conn = sqlite3.connect(tmp_path)
+            try:
+                integrity = conn.execute("PRAGMA integrity_check").fetchone()
+            finally:
+                conn.close()
+            if not integrity or str(integrity[0]).lower() != "ok":
+                raise RuntimeError(f"Integritätsprüfung fehlgeschlagen: {integrity}")
+            result = {
+                "restored": not dry_run,
+                "backup": name,
+                "target": target,
+                "integrity": "ok",
+            }
+            if dry_run:
+                return result
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            if os.path.exists(target):
+                _stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                shutil.copy2(target, target + f".pre_restore.{_stamp}")
+            # KRITISCH: alte WAL/SHM-Sidecars muessen weg, bevor die neue DB
+            # eingesetzt wird — sonst wendet SQLite beim nächsten Öffnen das
+            # alte WAL auf die restaurierte Datei an (falsche Daten/Korruption).
+            for suffix in ("-wal", "-shm", "-journal"):
+                sidecar = target + suffix
+                if os.path.exists(sidecar):
+                    try:
+                        os.remove(sidecar)
+                    except OSError as exc:
+                        logger.warning("[DBBackup] Sidecar %s nicht entfernbar: %s", sidecar, exc)
+            os.replace(tmp_path, target)
+            return result
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+    def restore_secret_files(
+        self,
+        backup_file: str,
+        *,
+        dry_run: bool = False,
+        confirm: bool = False,
+    ) -> Dict[str, Any]:
+        """Stellt eine mit `_backup_secret_files()` gesicherte Datei wieder her.
+
+        Secrets sind explizit geschuetzt: ohne ``confirm=True`` passiert nichts
+        (separat bestaetigter Restore-Pfad). Ziel ist ausschliesslich der in
+        ``SECRET_FILES`` hinterlegte, workspace-jailed Pfad.
+        """
+        name = os.path.basename(str(backup_file or ""))
+        if not _SECRET_NAME_RE.fullmatch(name):
+            raise ValueError("Ungueltiger Secret-Backup-Dateiname.")
+        stem = name[:-len(".secret.gz")]
+        logical = re.sub(r"_\d{8}_\d{6}$", "", stem)
+        target_checked = {**SECRET_FILES, **_tenant_secret_files()}.get(logical)
+        if not target_checked:
+            raise ValueError(f"Unbekannte Secret-Datei: {logical}")
+        target = os.path.abspath(target_checked)
+        if not _within(target, WORKSPACE_DIR):
+            raise ValueError(f"Secret-Restore-Ziel ausserhalb des Workspace: {target}")
+
+        src = os.path.join(self.backup_dir, name)
+        if not os.path.isfile(src):
+            raise FileNotFoundError(f"Secret-Backup '{name}' nicht gefunden.")
+
+        with tempfile.NamedTemporaryFile(dir=self.backup_dir, suffix=".restore.secret", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            with gzip.open(src, "rb") as fin, open(tmp_path, "wb") as fout:
+                shutil.copyfileobj(fin, fout)
+            result = {
+                "restored": not dry_run and confirm,
+                "dry_run": bool(dry_run),
+                "confirmed": bool(confirm),
+                "backup": name,
+                "secret": logical,
+                "target": target,
+            }
+            if dry_run or not confirm:
+                return result
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            if os.path.exists(target):
+                shutil.copy2(target, target + ".pre_restore")
+            os.replace(tmp_path, target)
+            return result
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
 
 db_backup_manager = DBBackupManager()

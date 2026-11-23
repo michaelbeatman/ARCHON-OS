@@ -40,10 +40,35 @@ CRITICAL_EGRESS_TOOLS = frozenset({
 
 CRITICAL_EGRESS_PREFIXES = ("pay_", "mcp__pay", "mcp__email", "deploy_")
 
+# Alle Tools mit Egress-/Code-Ausfuehrungs-Faehigkeit muessen durch den
+# Taint-Gate. Vorher war nur eine 11-Eintrags-Exact-Liste hinterlegt —
+# `terminal`, `execute_code`, `computer_use`, `mcp__slack__chat_postMessage`
+# und `node_plugin:http_post` galten als harmlos und konnten eine tainted
+# Session verlassen, ohne HITL zu triggern (Datenabfluss ohne Freigabe).
+CRITICAL_EGRESS_NAMES = frozenset({
+    "terminal", "shell", "execute_code", "computer_use", "filesystem",
+    "file_write", "http_post", "browser", "browser_navigate", "code_execute",
+})
+CRITICAL_EGRESS_NAME_FRAGMENTS = ("mcp__", "node_plugin:", "http_post", "webhook", "email")
+# Explizit als harmlos bekannte Tools (keine Egress-Wirkung).
+NON_EGRESS_TOOLS = frozenset({
+    "read_file", "file_read", "search", "web_search", "web_fetch", "calculate",
+    "get_time", "list_files", "thinking", "memory_read",
+})
+
 
 @contextmanager
 def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
-    path = db_path or DEFAULT_DB_PATH
+    # C2: ohne expliziten Pfad mandantenisolierte DB verwenden (sonst sahen
+    # alle Mandanten dieselben Taint-Marker/HITL-Freigaben).
+    path = db_path
+    if not path:
+        try:
+            from backend.tenant_db_registry import resolve_tenant_db_path
+            from backend.tenant_context import tenant_context
+            path = resolve_tenant_db_path("taint_guard.db", tenant_context.get_active_tenant_id())
+        except Exception:
+            path = DEFAULT_DB_PATH
     os.makedirs(os.path.dirname(path), exist_ok=True)
     conn = sqlite3.connect(path, timeout=10.0)
     try:
@@ -78,12 +103,25 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
 
 
 def is_critical_egress_tool(tool_name: str) -> bool:
+    """Default-Deny fuer alle Tools mit Egress-/Ausfuehrungs-Faehigkeit.
+
+    Unbekannte Tool-Namen werden als kritisch behandelt (fail-closed): ein
+    neues MCP-/Plugin-Tool darf nicht automatisch am HITL-Gate vorbei.
+    """
     norm = (tool_name or "").strip().lower()
     if not norm:
+        return True  # leerer Tool-Name -> fail-closed
+    if norm in NON_EGRESS_TOOLS:
         return False
-    if norm in CRITICAL_EGRESS_TOOLS:
+    if norm in CRITICAL_EGRESS_TOOLS or norm in CRITICAL_EGRESS_NAMES:
         return True
-    return any(norm.startswith(pref) for pref in CRITICAL_EGRESS_PREFIXES)
+    if any(norm.startswith(pref) for pref in CRITICAL_EGRESS_PREFIXES):
+        return True
+    if any(frag in norm for frag in CRITICAL_EGRESS_NAME_FRAGMENTS):
+        return True
+    # Unbekannt -> kritisch (Default-Deny). Harmlose Tools muessen explizit
+    # in NON_EGRESS_TOOLS stehen.
+    return True
 
 
 def mark_session_tainted(
@@ -136,21 +174,58 @@ def check_egress_tool_call(
     if not taint:
         return {"allowed": True, "tainted": False, "tool": tool_name}
 
+    # Freigaben sind an die EXAKTEN Argumente gebunden (TOCTOU-Schutz).
+    # Vorher genuegten approval_id + tool_name: nach Freigabe von
+    # pay{amount:10,to:alice} konnte pay{amount:10000,to:attacker} durch.
+    canonical_args = json.dumps(args or {}, sort_keys=True, ensure_ascii=False)
+
     with _connect(db_path) as conn:
         if approval_id:
             row = conn.execute(
                 """
-                SELECT approval_id, status, consumed, tool_name, session_id
+                SELECT approval_id, status, consumed, tool_name, session_id, args_json
                 FROM taint_hitl_approvals
                 WHERE approval_id = ? AND session_id = ? AND tool_name = ?
                 """,
                 (approval_id, session_id, tool_name),
             ).fetchone()
+            approved_args = {}
+            if row:
+                try:
+                    approved_args = json.loads(row["args_json"] or "{}")
+                except (TypeError, ValueError):
+                    approved_args = None  # type: ignore[assignment]
+            args_match = approved_args == (args or {})
+            if row and not args_match:
+                return {
+                    "allowed": False,
+                    "blocked": True,
+                    "requires_hitl": True,
+                    "tainted": True,
+                    "approval_id": None,
+                    "tool": tool_name,
+                    "reason": "HITL-Freigabe gueltig, aber die Tool-Argumente weichen ab — Freigabe abgelehnt.",
+                }
             if row and row["status"] == "approved" and int(row["consumed"]) == 0:
-                conn.execute(
-                    "UPDATE taint_hitl_approvals SET consumed = 1 WHERE approval_id = ?",
-                    (approval_id,),
+                # KRITISCH (Audit 23.11.2026): CAS — ohne `AND consumed = 0`
+                # konnten zwei parallele Calls dieselbe Freigabe verbrauchen
+                # und den kritischen Egress doppelt ausführen.
+                cur = conn.execute(
+                    "UPDATE taint_hitl_approvals SET consumed = 1 "
+                    "WHERE approval_id = ? AND session_id = ? AND tool_name = ? "
+                    "AND status = 'approved' AND consumed = 0",
+                    (approval_id, session_id, tool_name),
                 )
+                if int(cur.rowcount or 0) != 1:
+                    return {
+                        "allowed": False,
+                        "blocked": True,
+                        "requires_hitl": True,
+                        "tainted": True,
+                        "approval_id": None,
+                        "tool": tool_name,
+                        "reason": "HITL-Freigabe wurde parallel bereits verbraucht — abgelehnt.",
+                    }
                 conn.commit()
                 return {
                     "allowed": True,
@@ -167,7 +242,7 @@ def check_egress_tool_call(
                 (approval_id, session_id, tool_name, args_json, taint_source, status, created_at)
             VALUES (?, ?, ?, ?, ?, 'pending', ?)
             """,
-            (new_id, session_id, tool_name, json.dumps(args or {}, ensure_ascii=False), taint["source"], time.time()),
+            (new_id, session_id, tool_name, canonical_args, taint["source"], time.time()),
         )
         conn.commit()
 

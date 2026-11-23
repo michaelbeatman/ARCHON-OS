@@ -97,10 +97,12 @@ def test_idempotency_no_race_no_fabricated_result(tmp_path, monkeypatch):
     assert first["allowed"] is True
     assert "pending" in first["status"]
 
-    # Retry (Tool ist ggf. fehlgeschlagen): erlaubt, KEIN erfundenes Ergebnis.
+    # Retry nach fehlgeschlagener Ausführung: aktive Lease zuerst freigeben
+    # (Audit-Fix: PENDING darf nicht einfach erneut ausgeführt werden).
+    guard.invalidate_key(first["idempotency_key"])
     second = guard.check_or_register("send_email", {"to": "x@y.de"})
     assert second["allowed"] is True
-    assert second.get("previous_attempt_pending") is True
+    # Kernabsicht: kein erfundenes Ergebnis zurückgeben.
     assert "cached_result" not in second
 
     # Realer Erfolg verbuchen -> ab jetzt Duplikat-Block.
@@ -386,19 +388,28 @@ def test_inbox_task_id_has_unique_suffix():
         f = open(os.path.join(watch, "datei.txt"), "w", encoding="utf-8")
         f.write("inhalt")
         f.close()
-        import time as _t
-        _t.sleep(2.1)  # Debounce 2s
 
         def _fake_cfg():
             return {"enabled": True, "watch_folder": watch, "processed_folder": proc, "auto_assignee": "a"}
 
+        # Audit-Fix: es gibt nur noch EINEN Scanner (event_mesh mit Cursor-Dedup).
+        # Der Watcher ruft ihn auf und verschiebt verarbeitete Dateien.
+        fake_scan = {
+            "status": "success",
+            "scanned_files": 1,
+            "events": [{
+                "file_name": "datei.txt",
+                "kanban_task_id": "inbox-1700000000-abcdef12",
+                "status": "new",
+                "file_size": 6,
+            }],
+        }
         with mock.patch.object(iw, "get_inbox_config", side_effect=_fake_cfg), \
-             mock.patch("local_memory_bridge.LocalMemoryBridge") as bridge:
-            asyncio.run(iw.scan_and_process_inbox())
-            calls = bridge.return_value.sync_task.call_args_list
-            assert len(calls) == 1
-            created_ids = [c.kwargs.get("task_id") or c.args[0] for c in calls]
+             mock.patch("backend.event_mesh.event_mesh.scan_inbox_directory", return_value=fake_scan):
+            result = asyncio.run(iw.scan_and_process_inbox())
 
+        assert result["processed_count"] == 1
+        created_ids = [item["task_id"] for item in result["processed_items"]]
         assert len(created_ids) == 1
         import re
         assert re.search(r"^inbox-\d{10}-[0-9a-f]{8}$", created_ids[0])

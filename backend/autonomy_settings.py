@@ -347,16 +347,23 @@ DEFAULT_AUTONOMY_SETTINGS: Dict[str, Dict[str, Any]] = {
 
 
 def load_all_settings() -> Dict[str, Any]:
-    """Lädt die gesamte settings.json und ergänzt fehlende Standardblöcke verlustfrei."""
+    """Lädt die gesamte settings.json und ergänzt fehlende Standardblöcke verlustfrei.
+
+    KRITISCH: frueher wurden Parse-Fehler hier verschluckt und Defaults
+    zurueckgegeben. atomic_update_settings schrieb diese Defaults dann ueber
+    die beschaedigte Datei — alle nicht-Default-Sektionen waren dauerhaft
+    weg. Jetzt: strikter Loader mit .bak-Recovery aus settings_json.
+    """
     data: Dict[str, Any] = {}
     if os.path.exists(SETTINGS_FILE):
         try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                if isinstance(loaded, dict):
-                    data = loaded
+            from backend.settings_json import _load_raw
+            data = _load_raw(SETTINGS_FILE, strict=True)
         except Exception as exc:
-            logger.debug("Konfigurations-Datei settings.json nicht lesbar, nutze Defaults: %s", exc)
+            # Fail-closed: kein stillen Default-Override einer beschaedigten Datei.
+            raise RuntimeError(
+                f"settings.json beschaeidigt und kein gueltiges Backup vorhanden: {exc}"
+            ) from exc
 
     for section, defaults in DEFAULT_AUTONOMY_SETTINGS.items():
         if section not in data or not isinstance(data.get(section), dict):

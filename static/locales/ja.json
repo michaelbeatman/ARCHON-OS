@@ -1735,6 +1735,7 @@
       "delete_title": "品目をアーカイブ / 削除"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "フォームレイアウトエディタは現在利用できません",
       "kontakte_crm_adressstamm": "連絡先 — CRM マスターデータ",
       "mandant_archon_systems": "テナント: archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "完全な連絡先・CRM テーブル（高性能 SQLite）",
@@ -3802,6 +3803,8 @@
       "quality_gate_hint": "「Done」へ移動する前の独立したピアレビュー",
       "review_start": "レビューを開始",
       "human_approve": "承認",
+      "human_reject": "却下",
+      "human_reject_title": "手動で却下 — AIレビューなしで修正を要求",
       "critique_label": "指摘事項 / 修正:",
       "next_steps_label": "次のステップ:",
       "feedback_loop": "⭐ 人によるフィードバックループ",
@@ -4359,7 +4362,7 @@
       "label_saved": "保存しました！",
       "log_connecting": "エージェントログに接続中...",
       "log_empty": "このエージェントの最近のバックグラウンドログはありません。",
-      "log_fallback_ready": "エージェントはスタンバイ状態です。",
+      "log_fallback_ready": "ライブフィードは一時的に利用できません。もう一度お試しください。",
       "log_fallback_router": "ポート 20128 稼働中。警告なし。",
       "log_telemetry_header": "⚡ システムとデーモンのテレメトリ:",
       "log_turns_header": "💬 最近の会話ターン:",
@@ -5391,6 +5394,7 @@
       "move_complete": "完了",
       "move_failed": "ステータス {status}: タスクを更新できませんでした",
       "move_open_operations": "Operations で開く",
+      "task_open_detail_hint": "タスクの詳細を開く",
       "move_reject": "❌ 却下",
       "move_review": "レビュー",
       "move_start": "開始",

@@ -262,34 +262,29 @@ class OracleNewsRadar:
         if not target:
             return {"status": "error", "message": f"Signal mit ID {signal_id} nicht gefunden"}
 
-        # Task in kanban_data.json einhängen
-        kanban_file = BASE_DIR / "agent_workspace" / "kanban_data.json"
-        if not kanban_file.exists():
-            kanban_file = BASE_DIR / "data" / "kanban_data.json"
-
-        task_entry = {
-            "id": f"task_oracle_{int(time.time())}",
-            "title": f"[ORACLE] {target['title'][:70]}",
-            "description": f"Quelle: {target['source']}\nURL: {target['url']}\n\n{target.get('summary', '')}\n\nZiel: Evaluieren und ggf. in Archon OS / Wissensbasis integrieren.",
-            "status": "todo",
-            "priority": "medium",
-            "category": "Research & Tech",
-            "created_at": datetime.datetime.now().isoformat()
-        }
-
-        tasks = []
-        if kanban_file.exists():
-            try:
-                with open(kanban_file, "r", encoding="utf-8") as f:
-                    tasks = json.load(f)
-            except Exception:
-                tasks = []
-
-        tasks.append(task_entry)
+        # KRITISCH: frueher wurde in verwaiste kanban_data.json-Dateien
+        # geschrieben. Board und Mission Control lesen aber aus kanban.db —
+        # die erzeugten Karten erschienen nie. Jetzt echte SQLite-DB.
+        task_id = f"task_oracle_{int(time.time())}"
+        title = f"[ORACLE] {target['title'][:70]}"
+        body = (
+            f"Quelle: {target['source']}\nURL: {target['url']}\n\n"
+            f"{target.get('summary', '')}\n\n"
+            "Ziel: Evaluieren und ggf. in Archon OS / Wissensbasis integrieren."
+        )
+        now_iso = datetime.datetime.now().isoformat()
         try:
-            with open(kanban_file, "w", encoding="utf-8") as f:
-                json.dump(tasks, f, indent=2, ensure_ascii=False)
-            return {"status": "success", "task_id": task_entry["id"], "task": task_entry}
+            from backend.db_paths import resolve_db as _resolve_db
+            import sqlite3
+            db_path = _resolve_db("kanban.db")
+            with sqlite3.connect(db_path, timeout=10.0) as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO tasks (id, title, body, assignee, status, priority, created_by, created_at) "
+                    "VALUES (?, ?, ?, '', 'todo', 1, 'oracle_radar', ?)",
+                    (task_id, title, body, now_iso),
+                )
+                conn.commit()
+            return {"status": "success", "task_id": task_id, "target": "kanban.db"}
         except Exception as e:
             return {"status": "error", "message": f"Fehler beim Erstellen des Tasks: {e}"}
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import threading
 from typing import Dict, List, Optional, Set
 
@@ -24,6 +25,11 @@ APEX_IDS = frozenset({"default", DEFAULT_APEX, "system_architect_orchestrator"})
 
 _lock = threading.RLock()
 _failed: Dict[str, str] = {}
+# TTL pro Ausfall: ein fachlicher Fehler eines Sub-Agenten markierte frueher
+# seinen Supervisor dauerhaft als ausgefallen (bis Neustart). Jetzt verfällt
+# die Markierung nach 5 Minuten automatisch.
+_FAILED_TTL_SECONDS = 300
+_failed_at: Dict[str, float] = {}
 _cache: Dict[str, object] = {"mtime": -1.0, "parents": {}, "nodes": {}}
 
 
@@ -65,11 +71,13 @@ def mark_agent_failed(agent_id: str, reason: str = "") -> None:
     """Markiert einen Agenten als ausgefallen (nur Laufzeit, keine Persistenz)."""
     with _lock:
         _failed[str(agent_id)] = str(reason or "unbekannt")
+        _failed_at[str(agent_id)] = time.time()
 
 
 def mark_agent_recovered(agent_id: str) -> None:
     with _lock:
         _failed.pop(str(agent_id), None)
+        _failed_at.pop(str(agent_id), None)
 
 
 def failed_agents() -> Dict[str, str]:
@@ -81,6 +89,7 @@ def clear_state() -> None:
     """Nur für Tests: Ausfall-Registry leeren."""
     with _lock:
         _failed.clear()
+        _failed_at.clear()
 
 
 def escalation_chain(agent_id: str) -> List[str]:
@@ -109,6 +118,11 @@ def resolve_supervisor(agent_id: str, *, exclude: Optional[Set[str]] = None) -> 
         candidates.append(direct)
     candidates.extend(c for c in escalation_chain(aid) if c not in candidates)
     with _lock:
+        now = time.time()
+        expired = [aid for aid, ts in _failed_at.items() if now - ts > _FAILED_TTL_SECONDS]
+        for aid in expired:
+            _failed.pop(aid, None)
+            _failed_at.pop(aid, None)
         down = set(_failed)
     skip = set(exclude or set()) | down
     for cand in candidates:

@@ -10,6 +10,7 @@ _archon_exc_logger = logging.getLogger("passkey_hitl")
 import base64
 import datetime
 import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -55,11 +56,15 @@ def _load_store() -> Dict[str, Any]:
     try:
         with open(PASSKEY_FILE, "r", encoding="utf-8") as fh:
             data = json.load(fh)
-        if isinstance(data, dict) and isinstance(data.get("users"), dict):
-            return data
-    except Exception as _exc:
-        _archon_exc_logger.debug("[passkey_hitl] Ignorierte Ausnahme (Z.57): %s", _exc)
-    return {"users": {}}
+    except Exception as exc:
+        # C9: Parser-/IO-Fehler duerfen niemals als "kein Passkey noetig"
+        # interpretiert werden (HITL-Bypass). Fail-closed.
+        _archon_exc_logger.error("[passkey_hitl] Konfiguration nicht lesbar (fail-closed): %s", exc)
+        raise RuntimeError("Passkey-HITL-Konfiguration unlesbar — HITL bleibt zwingend erforderlich.") from exc
+    if isinstance(data, dict) and isinstance(data.get("users"), dict):
+        return data
+    _archon_exc_logger.error("[passkey_hitl] Ungueltiges Konfigurationsformat (fail-closed).")
+    raise RuntimeError("Passkey-HITL-Konfiguration ungueltig — HITL bleibt zwingend erforderlich.")
 
 
 def _save_store(data: Dict[str, Any]) -> None:
@@ -135,7 +140,12 @@ def update_user_passkey_config(
 
 
 def is_passkey_required(user_id: str, category: str = "all") -> bool:
-    cfg = get_user_passkey_config(user_id)
+    try:
+        cfg = get_user_passkey_config(user_id)
+    except Exception as exc:
+        # C9: bei jeder Unklarheit (inkl. Parse-Fehler) HITL verlangen.
+        _archon_exc_logger.error("[passkey_hitl] Passkey-Pruefung fehlgeschlagen (fail-closed): %s", exc)
+        return True
     if not cfg["enabled"] or not cfg["has_credentials"]:
         return False
     if cfg["scope"] == "all":
@@ -153,8 +163,20 @@ def _cleanup_challenges() -> None:
         _PROOF_TOKENS.pop(k, None)
 
 
-def consume_hitl_proof_token(token: Optional[str], user_id: str, category: str = "all") -> bool:
-    """Prueft und verbraucht ein serverseitig ausgestelltes Einmal-Passkey-Proof-Token."""
+def consume_hitl_proof_token(
+    token: Optional[str],
+    user_id: str,
+    category: str = "all",
+    action: str = "",
+    resource: str = "",
+) -> bool:
+    """Prueft und verbraucht ein Einmal-Passkey-Proof-Token.
+
+    C8 (Audit 23.11.2026): Fuer hochriskante Kategorien (payments, system,
+    destructive_actions) ist die Bindung an ``action`` und ``resource``
+    ZWINGEND. Ein Proof ohne oder mit abweichender Zielangabe wird abgelehnt —
+    sonst konnte ein Proof fuer Zahlung A beliebige Zahlung B freigeben.
+    """
     raw = str(token or "").strip()
     if not raw:
         return False
@@ -171,6 +193,30 @@ def consume_hitl_proof_token(token: Optional[str], user_id: str, category: str =
         return False
     if category in _HIGH_RISK_CATEGORIES and not entry.get("uv_verified"):
         return False
+
+    bound_action = str(entry.get("action") or entry.get("action_label") or "")
+    bound_resource = str(entry.get("resource") or "")
+    want_action = str(action or "").strip()
+    want_resource = str(resource or "").strip()
+    if category in _HIGH_RISK_CATEGORIES:
+        # Fail-closed: bei kritischen Aktionen ist ein ungebundener Proof kein
+        # gueltiger Proof. Beide Seiten (Ausstellung und Verbrauch) muessen die
+        # exakt gleichen Werte liefern.
+        if not want_action or not bound_action or not hmac.compare_digest(want_action, bound_action):
+            _archon_exc_logger.warning("[passkey_hitl] Proof-Action fehlt oder stimmt nicht — abgelehnt.")
+            return False
+        if bound_resource and (
+            not want_resource or not hmac.compare_digest(want_resource, bound_resource)
+        ):
+            _archon_exc_logger.warning("[passkey_hitl] Proof-Resource fehlt oder stimmt nicht — abgelehnt.")
+            return False
+    else:
+        if want_action and (not bound_action or not hmac.compare_digest(want_action, bound_action)):
+            _archon_exc_logger.warning("[passkey_hitl] Proof-Action mismatch — abgelehnt.")
+            return False
+        if want_resource and (not bound_resource or not hmac.compare_digest(want_resource, bound_resource)):
+            _archon_exc_logger.warning("[passkey_hitl] Proof-Resource mismatch — abgelehnt.")
+            return False
     return True
 
 
@@ -287,6 +333,7 @@ def create_hitl_assertion_options(
     rp_id: str,
     category: str = "all",
     action_label: str = "",
+    resource: str = "",
 ) -> Dict[str, Any]:
     uid = str(user_id or "admin").strip() or "admin"
     cfg = get_user_passkey_config(uid)
@@ -301,7 +348,8 @@ def create_hitl_assertion_options(
             "user_id": uid,
             "rp_id": rp_id,
             "category": category,
-            "action_label": action_label,
+            "action_label": str(action_label or ""),
+            "resource": str(resource or ""),
             "created_ts": time.time(),
         }
     return {
@@ -322,6 +370,8 @@ def verify_hitl_assertion(
     signature_b64: str,
     expected_origin: Optional[str] = None,
     require_uv: Optional[bool] = None,
+    action: str = "",
+    resource: str = "",
 ) -> Dict[str, Any]:
     uid = str(user_id or "admin").strip() or "admin"
     client_raw = _b64u_decode(client_data_b64)
@@ -337,6 +387,17 @@ def verify_hitl_assertion(
         raise ValueError("Verifizierungs-Challenge abgelaufen oder ungueltig.")
     if expected_origin and client_data.get("origin") != expected_origin:
         raise ValueError("Origin stimmt nicht ueberein.")
+
+    # C8: der ausgestellte Proof darf nur fuer die freigegebene Aktion/Ressource
+    # verwendet werden. Wurde beim Verifizieren ein Ziel angegeben, muss es mit
+    # der Challenge uebereinstimmen.
+    bound_action = str(ch.get("action_label") or "")
+    bound_resource = str(ch.get("resource") or "")
+    want_action, want_resource = str(action or "").strip(), str(resource or "").strip()
+    if want_action and (not bound_action or not hmac.compare_digest(want_action, bound_action)):
+        raise ValueError("Passkey-Proof ist an eine andere Aktion gebunden.")
+    if want_resource and (not bound_resource or not hmac.compare_digest(want_resource, bound_resource)):
+        raise ValueError("Passkey-Proof ist an eine andere Ressource gebunden.")
 
     auth_data = _b64u_decode(authenticator_data_b64)
     if len(auth_data) < 37:
@@ -387,6 +448,9 @@ def verify_hitl_assertion(
             "category": cat,
             "uv_verified": uv_ok,
             "created_ts": time.time(),
+            # C8: Bindung an Aktion + Ressource aus der Challenge uebernehmen.
+            "action": bound_action,
+            "resource": bound_resource,
         }
 
     return {

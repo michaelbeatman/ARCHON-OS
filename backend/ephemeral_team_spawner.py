@@ -65,12 +65,18 @@ def _init_db() -> None:
         conn.commit()
 
 
+# `squad_commander` existiert nicht in agent_profiles.json -> echte Laeufe
+# scheiterten an einem unbekannten Agenten. SSOT ist der CEO-Agent.
+SQUAD_LEAD_ROLE_ID = "executive_decision_architect"
+
+# KRITISCH: diese role_ids existierten nicht in agent_profiles.json -> echte
+# Task-Force-Laeufe scheiterten an unbekannten Agenten. Jetzt reale SSOT-IDs.
 SPECIALIST_CATALOG = [
-    ("security", {"role_id": "sec_auditor", "title": "Zero-Trust Security Auditor", "focus": "RBAC, PII & Egress-Prüfung"}),
-    ("frontend", {"role_id": "ui_engineer", "title": "Frontend & Design Specialist", "focus": "HTML/JS/CSS & Browser-Audit"}),
-    ("datenbank", {"role_id": "db_architect", "title": "SQLite & RAG Architect", "focus": "FTS5, WAL-Mode & Schema"}),
-    ("api", {"role_id": "backend_lead", "title": "FastAPI Systems Lead", "focus": "REST-Endpunkte & Concurrency"}),
-    ("test", {"role_id": "qa_verifier", "title": "Regression & Eval Engineer", "focus": "End-to-End & Gold-Dataset Tests"})
+    ("security", {"role_id": "compliance_gdpr_auditor", "title": "Zero-Trust Security Auditor", "focus": "RBAC, PII & Egress-Prüfung"}),
+    ("frontend", {"role_id": "brand_uiux_director", "title": "Frontend & Design Specialist", "focus": "HTML/JS/CSS & Browser-Audit"}),
+    ("datenbank", {"role_id": "research_scout", "title": "SQLite & RAG Architect", "focus": "FTS5, WAL-Mode & Schema"}),
+    ("api", {"role_id": "senior_fullstack_engineer", "title": "FastAPI Systems Lead", "focus": "REST-Endpunkte & Concurrency"}),
+    ("test", {"role_id": "agile_scrum_master", "title": "Regression & Eval Engineer", "focus": "End-to-End & Gold-Dataset Tests"})
 ]
 
 
@@ -83,8 +89,8 @@ class EphemeralTeamSpawner:
         mission_title: str,
         mission_brief: str,
         *,
-        execute_dag: bool = False,
-        dry_run: bool = True,
+        execute_dag: bool = True,
+        dry_run: bool = False,
     ) -> Dict[str, Any]:
         cfg = _get_cfg()
         enabled = bool(cfg.get("enabled", True))
@@ -93,7 +99,7 @@ class EphemeralTeamSpawner:
 
         text_low = f"{mission_title} {mission_brief}".lower()
         selected_members: List[Dict[str, str]] = [
-            {"role_id": "squad_commander", "title": "Ephemeral Squad Lead", "focus": "Koordination & Synthese"}
+            {"role_id": SQUAD_LEAD_ROLE_ID, "title": "Ephemeral Squad Lead", "focus": "Koordination & Synthese"}
         ]
 
         for kw, spec in SPECIALIST_CATALOG:
@@ -119,7 +125,7 @@ class EphemeralTeamSpawner:
             try:
                 from backend.workflow_dag_runner import run_workflow_dag
 
-                specialists = [m for m in selected_members if m["role_id"] != "squad_commander"] or selected_members
+                specialists = [m for m in selected_members if m["role_id"] != SQUAD_LEAD_ROLE_ID] or selected_members
                 nodes: List[Dict[str, Any]] = []
                 for idx, member in enumerate(specialists):
                     nodes.append({
@@ -133,7 +139,7 @@ class EphemeralTeamSpawner:
                 nodes.append({
                     "id": "n_squad_synthesis",
                     "type": "task",
-                    "agent_id": "squad_commander",
+                    "agent_id": SQUAD_LEAD_ROLE_ID,
                     "title": "Ephemeral Squad Lead Synthese",
                     "prompt": f"Synthetisiere die Ergebnisse der Task-Force fuer '{mission_title}'.",
                     "depends_on": [n["id"] for n in nodes],
@@ -153,12 +159,19 @@ class EphemeralTeamSpawner:
                 dag_succeeded = False
                 logger.warning(f"[EphemeralTeamSpawner] DAG-Dispatch fuer {team_id} fehlgeschlagen: {dag_exc}")
 
-        final_status = (
-            "completed_and_dissolved" if (auto_dissolve and dag_succeeded)
-            else "failed" if not dag_succeeded
-            else "active"
-        )
-        dissolved_at = now_iso if (auto_dissolve and dag_succeeded) else None
+        # FRUEHER: dry_run=True oder execute_dag=False meldeten
+        # "completed_and_dissolved", obwohl nie gearbeitet wurde.
+        if not execute_dag:
+            final_status = "planned"
+        elif dry_run:
+            final_status = "dry_run"
+        else:
+            final_status = (
+                "completed_and_dissolved" if (auto_dissolve and dag_succeeded)
+                else "failed" if not dag_succeeded
+                else "active"
+            )
+        dissolved_at = now_iso if final_status == "completed_and_dissolved" else None
 
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""

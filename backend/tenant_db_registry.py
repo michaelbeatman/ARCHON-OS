@@ -11,7 +11,10 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+import logging
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("archon_os.tenant_db_registry")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
@@ -37,12 +40,15 @@ def sanitize_tenant_id(tenant_id: str) -> str:
 
 
 def resolve_tenant_db_path(db_name: str, tenant_id: str = "default", base_dir: Optional[str] = None) -> str:
-    """Loest einen DB-Namen physisch isoliert pro Mandant auf (data/tenants/<tid>/<db>)."""
+    """Loest einen DB-Namen physisch isoliert pro Mandant auf (data/tenants/<tid>/<db>).
+
+    Benutzerentscheidung 22.11.2026: auch 'default' bekommt ein eigenes
+    Mandantenverzeichnis. Vorher wurde 'default' auf data/*.db geroutet,
+    wodurch DSGVO Art. 17 fuer den Primaermandanten wirkungslos war.
+    """
     safe_db = os.path.basename(db_name)
     root = base_dir or DEFAULT_DATA_DIR
     tid = sanitize_tenant_id(tenant_id)
-    if tid == "default":
-        return os.path.join(root, safe_db)
     t_dir = os.path.join(root, "tenants", tid)
     os.makedirs(t_dir, exist_ok=True)
     return os.path.join(t_dir, safe_db)
@@ -97,7 +103,27 @@ def gdpr_erase_subject_data(
     )
 
     for db_name in scan_dbs:
-        db_path = resolve_tenant_db_path(db_name, tenant_id=tenant_id, base_dir=base_dir)
+        # Immer ueber tenant_context auflösen: dort liegt die Migrationslogik
+        # fuer Legacy-DBs und die autoritative Isolationsentscheidung.
+        # KRITISCH (Audit 23.11.2026): 'agentic_memory.db' wird vom autoritativen
+        # Resolver abgelehnt; der fruehere Fallback schrieb die Art.-17-
+        # Anonymisierung in eine Datei, die die Anwendung nicht nutzt.
+        resolved_name = db_name
+        try:
+            from backend.db_consolidation import is_consolidation_active
+            from backend.db_paths import APP_DATA_DIR
+            if db_name == "agentic_memory.db" and is_consolidation_active(APP_DATA_DIR):
+                resolved_name = "memory.db"
+        except Exception:
+            pass
+        try:
+            from backend.tenant_context import tenant_context
+            db_path = tenant_context.resolve_active_db(resolved_name, tenant_id)
+        except Exception as exc:
+            # Kein stiller Fallback auf eine falsche Datei: das wuerde Art. 17
+            # nur vortaeuschen, statt personenbezogene Daten zu loeschen.
+            logger.error("[TenantDB] Art.17-Resolver %s fehlgeschlagen: %s", db_name, exc)
+            continue
         if not os.path.exists(db_path):
             continue
         conn = sqlite3.connect(db_path, timeout=10.0)
@@ -111,7 +137,15 @@ def gdpr_erase_subject_data(
                 safe_tbl = str(tbl).replace('"', '""')
                 if str(tbl).lower() in protected_tables:
                     continue  # audit_log / erp_documents: GoBD-schutzwuerdig
-                cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{safe_tbl}")').fetchall() if str(r[2]).upper().startswith("TEXT") or r[2] == ""]
+                # KRITISCH: vorher nur TEXT/leer — VARCHAR, CHAR, CLOB, JSON
+                # und NUMERIC-Spalten mit personenbezogenen Daten (IBAN,
+                # Telefon, contact_email, nachrichtenverlauf JSON) wurden
+                # uebersehen → Art.-17-Loeschung unvollstaendig.
+                _text_types = ("TEXT", "VARCHAR", "CHAR", "CLOB", "JSON", "STRING", "NVARCHAR", "NCHAR", "")
+                cols = [
+                    r[1] for r in conn.execute(f'PRAGMA table_info("{safe_tbl}")').fetchall()
+                    if any(str(r[2] or "").upper().startswith(t) for t in _text_types)
+                ]
                 if not cols:
                     continue
                 # Art. 17: NUR die tatsächlich betroffenen TEXT-Spalten

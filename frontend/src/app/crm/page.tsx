@@ -19,7 +19,6 @@ import { CalendarView } from '@/components/CalendarView';
 import { AlleNachrichtenView } from '@/components/AlleNachrichtenView';
 import { MediaBoardView } from '@/components/MediaBoardView';
 import { MissionControlView } from '@/components/MissionControlView';
-import { ContentStudioView } from '@/components/ContentStudioView';
 import { TeambildungFlowCanvas } from '@/components/TeambildungFlowCanvas';
 import { UnifiedAgentControlPanel } from '@/components/UnifiedAgentControlPanel';
 import CssLiveStudio from '@/components/CssLiveStudio';
@@ -165,7 +164,7 @@ export default function CrmPage() {
   const [kontakte, setKontakte] = useState<KontaktRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pipeline' | 'tabelle'>('pipeline');
-  const [selectedNav, setSelectedNav] = useState<'orchestrator' | 'agent-control' | 'pipeline' | 'kontakte' | 'dashboard' | 'settings' | 'kalender' | 'nachrichten' | 'mediaboard' | 'content-studio' | 'mission'>('mission');
+  const [selectedNav, setSelectedNav] = useState<'orchestrator' | 'agent-control' | 'pipeline' | 'kontakte' | 'dashboard' | 'settings' | 'kalender' | 'nachrichten' | 'mediaboard' | 'mission'>('mission');
   const [activeAgentId, setActiveAgentId] = useState<string>('hermes');
 
   // Auth & User State
@@ -1470,22 +1469,6 @@ export default function CrmPage() {
               <span>Media Board</span>
             </button>
 
-            <button
-              onClick={() => setSelectedNav('content-studio')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold transition cursor-pointer sidebar-item ${
-                selectedNav === 'content-studio'
-                  ? 'sidebar-item-active ' + (isLight
-                    ? 'bg-accent-soft text-accent-main border border-accent-soft shadow-xs font-bold'
-                    : 'bg-accent-light border border-accent-light text-accent-main font-bold')
-                  : isLight
-                  ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
-              }`}
-            >
-              <Clapperboard className="w-4 h-4" />
-              <span>Content Studio</span>
-            </button>
-
           </nav>
         </div>
 
@@ -1547,8 +1530,6 @@ export default function CrmPage() {
                 ? 'Mission Control'
                 : selectedNav === 'mediaboard'
                 ? 'Media Board'
-                : selectedNav === 'content-studio'
-                ? 'Content Studio'
                 : 'PocketBase CRM'}
             </h2>
 
@@ -2090,9 +2071,6 @@ export default function CrmPage() {
           ) : selectedNav === 'mediaboard' ? (
             /* MEDIA BOARD - PINWAND FÜR GRAFIKEN & IDEEN */
             <MediaBoardView themeMode={themeMode} />
-          ) : selectedNav === 'content-studio' ? (
-            /* CONTENT STUDIO - VIDEO KOMPILATIONEN, LINKEDIN GHOSTWRITING & DISTRIBUTION */
-            <ContentStudioView themeMode={themeMode} />
           ) : activeTab === 'pipeline' ? (
 
 

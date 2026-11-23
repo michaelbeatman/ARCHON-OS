@@ -9,6 +9,8 @@ import os
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.cache import invalidate as invalidate_ttl_cache, ttl_cache
 from archon.core.paths import COUPLED_AGENTS_FILE
@@ -18,6 +20,17 @@ from utils.docker_client import DockerError, docker_client
 logger = logging.getLogger("archon.routers.docker_services")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["docker_services"])
+
+
+class DockerContainerActionRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    container_name: Optional[str] = Field(default=None, max_length=200)
+    id: Optional[str] = Field(default=None, max_length=200)
+
+
+class ServiceConfigEntry(BaseModel):
+    """Durchreich-Modell fuer service-Konfigurationen (beliebige Legacy-Felder)."""
+    model_config = ConfigDict(extra="allow")
 
 
 def _require_admin(request: Request):
@@ -218,13 +231,13 @@ def post_docker_container_action(container_name: str, action: str = "start", rai
                 else (getattr(e, "status_code", 0) or 400)
             )
             raise HTTPException(status_code=status, detail=str(e))
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=502, content={"status": "error", "message": str(e)})
     except HTTPException:
         raise
     except Exception as e:
         if raise_on_error:
             raise HTTPException(status_code=500, detail=str(e))
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 @router.get("/api/v1/services")
@@ -234,30 +247,34 @@ def api_get_services():
 
 
 @router.post("/api/docker/start")
-def api_docker_start(payload: Dict, request: Request):
+def api_docker_start(payload: DockerContainerActionRequest, request: Request):
     _require_admin(request)
-    c_name = payload.get("container_name") or payload.get("id")
+    if isinstance(payload, dict):
+        payload = DockerContainerActionRequest(**payload)
+    c_name = payload.container_name or payload.id
     if not c_name:
         raise HTTPException(status_code=400, detail="Missing container_name")
     return post_docker_container_action(c_name, "start", raise_on_error=True)
 
 
 @router.post("/api/docker/stop")
-def api_docker_stop(payload: Dict, request: Request):
+def api_docker_stop(payload: DockerContainerActionRequest, request: Request):
     _require_admin(request)
-    c_name = payload.get("container_name") or payload.get("id")
+    if isinstance(payload, dict):
+        payload = DockerContainerActionRequest(**payload)
+    c_name = payload.container_name or payload.id
     if not c_name:
         raise HTTPException(status_code=400, detail="Missing container_name")
     return post_docker_container_action(c_name, "stop", raise_on_error=True)
 
 
 @router.post("/api/v1/services")
-def api_save_services(request: Request, services: List[Dict]):
+def api_save_services(request: Request, services: List[ServiceConfigEntry]):
     _require_admin(request)
     import main as app_main
 
     if hasattr(app_main, "save_services"):
-        app_main.save_services(services)
+        app_main.save_services([svc.model_dump() for svc in services])
     return {"status": "success"}
 
 

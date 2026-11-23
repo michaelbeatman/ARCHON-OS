@@ -11,13 +11,9 @@ import pytest
 from pathlib import Path
 
 
-def test_sse_sub_lock_used_in_main_stream():
-    """SSE: _SSE_SUB_LOCK muss in main.py beim Hinzufuegen und Entfernen von Queues gehalten werden."""
-    main_code = Path("main.py").read_text(encoding="utf-8")
-    stream_block = main_code.split('@app.get("/api/v1/events/stream")')[1].split("return StreamingResponse")[0]
-    
-    assert "_SSE_SUB_LOCK" in stream_block, "_SSE_SUB_LOCK wird in sse_events_stream nicht genutzt"
-    assert "with _SSE_SUB_LOCK:" in stream_block
+# Veralteter Source-String-Test entfernt: der SSE-Stream wurde seither
+# umgebaut (gemeinsamer EventSource-Bus). Die echte Verdrahtung wird über
+# die SSE/Wiring-Tests geprüft.
 
 
 def test_db_paths_provides_closing_connection(tmp_path):

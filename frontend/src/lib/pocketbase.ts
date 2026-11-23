@@ -1,6 +1,6 @@
 import PocketBase from 'pocketbase';
 
-export const POCKETBASE_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://localhost:8090';
+export const POCKETBASE_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || '/api/media';
 
 export const pb = new PocketBase(POCKETBASE_URL);
 
@@ -67,10 +67,9 @@ export function getProfilbildUrl(record: Partial<KontaktRecord>): string | null 
 
 // ── MEDIA POCKETBASE INSTANCE (PORT 8092) ──────────────────────────────────
 export const POCKETBASE_MEDIA_URL =
-  process.env.NEXT_PUBLIC_POCKETBASE_MEDIA_URL ||
-  (typeof window !== 'undefined'
-    ? `${window.location.protocol}//${window.location.hostname}:8092`
-    : 'http://localhost:8092');
+  typeof window !== 'undefined'
+    ? '/api/media' // Browser IMMER über den Same-Origin-Proxy (Port 8092 ist remote nicht exponiert)
+    : (process.env.INTERNAL_POCKETBASE_MEDIA_URL || 'http://pocketbase-media:8090');
 
 export const pbMedia = new PocketBase(POCKETBASE_MEDIA_URL);
 pbMedia.autoCancellation(false);

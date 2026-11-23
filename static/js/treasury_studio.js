@@ -326,9 +326,16 @@
         const name = (mount.querySelector("#tr-acc-name")?.value || "").trim();
         if (!name) return alert("Bitte Kontoname eingeben.");
         try {
+          let proofToken = null;
+          if (_overview?.passkey_payments_required && typeof window.requirePasskeyForHitl === "function") {
+            const pk = await window.requirePasskeyForHitl("payments", "Treasury-Konto speichern", false, name);
+            if (!pk || !pk.verified) return;
+            proofToken = pk.proof_token || pk.proof?.proof_token || null;
+          }
           await apiJson("/api/v2/treasury/accounts", {
             method: "POST",
             body: JSON.stringify({
+              passkey_proof_token: proofToken,
               name,
               account_type: mount.querySelector("#tr-acc-type")?.value || "bank",
               currency: mount.querySelector("#tr-acc-cur")?.value || "EUR",
@@ -345,9 +352,17 @@
 
     mount.querySelectorAll("[data-acc-del]").forEach((b) => {
       b.onclick = async () => {
+        const accId = b.getAttribute("data-acc-del");
         if (!confirm("Konto/Wallet wirklich entfernen?")) return;
         try {
-          await apiJson(`/api/v2/treasury/accounts/${encodeURIComponent(b.getAttribute("data-acc-del"))}`, { method: "DELETE" });
+          const headers = {};
+          if (_overview?.passkey_payments_required && typeof window.requirePasskeyForHitl === "function") {
+            const pk = await window.requirePasskeyForHitl("payments", "Treasury-Konto entfernen", false, accId);
+            if (!pk || !pk.verified) return;
+            const token = pk.proof_token || pk.proof?.proof_token || null;
+            if (token) headers["x-passkey-proof"] = token;
+          }
+          await apiJson(`/api/v2/treasury/accounts/${encodeURIComponent(accId)}`, { method: "DELETE", headers });
           await window.loadTreasuryStudio();
         } catch (err) {
           alert(err.message);
@@ -388,7 +403,7 @@
         try {
           let passkeyProofToken = null;
           if (_overview?.passkey_payments_required && typeof window.requirePasskeyForHitl === "function") {
-            const pkRes = await window.requirePasskeyForHitl("payments", "Zahlung freigeben");
+            const pkRes = await window.requirePasskeyForHitl("payments", "Zahlung freigeben", false, txId);
             if (!pkRes || !pkRes.verified) return;
             passkeyProofToken = pkRes.proof_token || pkRes.proof?.proof_token || null;
           }

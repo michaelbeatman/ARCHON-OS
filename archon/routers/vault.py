@@ -35,10 +35,20 @@ def _get_vault_cache() -> Dict[str, Any]:
 
 
 @router.get("/api/vault/files")
-def api_get_vault_files():
+def api_get_vault_files(request: Request):
+    require_admin_or_503(request)
     cache = _get_vault_cache()
     now = time.time()
-    if cache.get("data") and (now - cache.get("ts", 0.0)) < 300.0:
+    try:
+        from backend.tenant_context import tenant_context
+        _tenant_id = tenant_context.get_active_tenant_id()
+    except Exception:
+        _tenant_id = "default"
+    if (
+        cache.get("tenant") == _tenant_id
+        and cache.get("data")
+        and (now - cache.get("ts", 0.0)) < 300.0
+    ):
         return cache["data"]
     vault_dir = _get_vault_dir()
     if not os.path.exists(vault_dir):
@@ -53,12 +63,13 @@ def api_get_vault_files():
                 files.append({"name": f, "relative_path": rel_path, "path": os.path.join(root, f)})
     cache["ts"] = now
     cache["data"] = files
+    cache["tenant"] = _tenant_id
     return files
 
 
 @router.get("/api/vault")
-def api_get_vault_list():
-    files = api_get_vault_files()
+def api_get_vault_list(request: Request):
+    files = api_get_vault_files(request)
     result = []
     for item in files:
         result.append({

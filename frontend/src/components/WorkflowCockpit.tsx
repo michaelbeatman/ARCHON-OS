@@ -9,9 +9,9 @@ import {
   WorkflowRunSummary,
   WorkflowTemplate,
 } from '@/lib/archon-api';
+import { useArchonEvents } from '@/lib/useArchonEvents';
 import {
   Check,
-  Clapperboard,
   Database,
   Play,
   RefreshCw,
@@ -50,6 +50,20 @@ export function WorkflowCockpit() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // Live-DAG-Status und HITL-Gates über den gemeinsamen SSE-Bus.
+  useArchonEvents((event) => {
+    // Echte Backend-Typen (broadcast_event): kanban_updated, ticker_update,
+    // workflow_node_state, event_bus, delegation_failed, tool_runtime.
+    // workflow_node_state ist der echte DAG-Knoten-Event (statt dag_node_completed).
+    if (!['kanban_updated', 'ticker_update', 'workflow_node_state', 'event_bus',
+          'delegation_failed', 'tool_runtime',
+          'gate_reached', 'workflow_completed', 'workflow_failed',
+          'dag_node_completed'].includes(event.type)) return;
+    archonApi.listDagRuns()
+      .then((res) => setRuns(res.runs || []))
+      .catch(() => undefined);
+  });
 
   const inspectRun = async (runId: string) => {
     setBusyId(runId);
@@ -105,13 +119,6 @@ export function WorkflowCockpit() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href="/content-studio"
-              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-xs font-medium flex items-center gap-1.5"
-            >
-              <Clapperboard className="w-3.5 h-3.5 text-fuchsia-400" />
-              Content-Maschine
-            </Link>
             <Link
               href="/"
               className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-xs font-medium"

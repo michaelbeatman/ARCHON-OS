@@ -1739,6 +1739,7 @@
       "delete_title": "Archivia / elimina articolo"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "Editor di layout dei moduli attualmente non disponibile",
       "kontakte_crm_adressstamm": "Contatti — Anagrafica indirizzi CRM",
       "mandant_archon_systems": "Tenant: archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "Tabella completa contatti & CRM (SQLite High-Performance)",
@@ -3971,6 +3972,8 @@
       "quality_gate_hint": "Revisione paritaria indipendente prima di spostare su «Fatto»",
       "review_start": "Avvia revisione",
       "human_approve": "Approva",
+      "human_reject": "Rifiuta",
+      "human_reject_title": "Rifiuta manualmente — richiedi modifiche senza revisione IA",
       "critique_label": "Critiche / Modifiche richieste:",
       "next_steps_label": "Prossimi passi:",
       "feedback_loop": "⭐ Ciclo feedback umano",
@@ -4361,7 +4364,7 @@
       "label_saved": "Salvato!",
       "log_connecting": "Connessione al log agente...",
       "log_empty": "Nessun log in background corrente per questo agente.",
-      "log_fallback_ready": "Agente pronto in modalità standby.",
+      "log_fallback_ready": "Feed in tempo reale temporaneamente non disponibile. Riprova.",
       "log_fallback_router": "Porta 20128 attiva. Nessun avviso.",
       "log_telemetry_header": "⚡ Telemetria sistema e daemon:",
       "log_turns_header": "💬 Ultimi turni di conversazione:",
@@ -5393,6 +5396,7 @@
       "move_complete": "Completa",
       "move_failed": "Stato {status}: impossibile aggiornare l'attività",
       "move_open_operations": "Apri in Operations",
+      "task_open_detail_hint": "Apri i dettagli dell'attività",
       "move_reject": "❌ Rifiuta",
       "move_review": "Revisione",
       "move_start": "Avvia",

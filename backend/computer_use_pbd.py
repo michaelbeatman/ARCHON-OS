@@ -31,6 +31,33 @@ import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 
+def _mask_trace_values(value: Any) -> Any:
+    """Maskiert secrets in aufgezeichneten Werten vor der Persistenz.
+
+    PbD zeichnet alles auf, also auch Passwoerter in type-Events. Der Trace
+    und das synthetisierte Skill durfen diese nicht im Klartext enthalten.
+    """
+    try:
+        from backend.secret_masker import mask_sensitive_text
+    except Exception:
+        mask_sensitive_text = None  # type: ignore[assignment]
+
+    def _walk(item: Any) -> Any:
+        if isinstance(item, dict):
+            return {k: _walk(v) for k, v in item.items()}
+        if isinstance(item, list):
+            return [_walk(v) for v in item]
+        if isinstance(item, str) and mask_sensitive_text is not None:
+            try:
+                result = mask_sensitive_text(item)
+                return result[0] if isinstance(result, tuple) else result
+            except Exception:
+                return item
+        return item
+
+    return _walk(value)
+
+
 def _find_line_value(text: str, key: str):
     """Erster Wert einer Zeile, die mit `key` beginnt (z. B. "created_at: ")."""
     for line in text.splitlines():
@@ -367,17 +394,24 @@ class DemonstrationRecorder:
         session = self._current_session
         session["end_time"] = datetime.datetime.now().isoformat()
 
-        # Speicher Trace als JSON
-        trace_file = os.path.join(PBD_TRACES_DIR, f"{session['session_id']}.json")
-        with open(trace_file, "w", encoding="utf-8") as f:
-            json.dump(session, f, indent=2, ensure_ascii=False)
-
-        slug = skill_slug or re.sub(r'[^a-z0-9_-]', '_', session["title"].lower()).strip('_')
-        if not slug:
+        # KRITISCH: skill_slug kam ungeprüft aus dem Request-Body und wurde
+        # direkt in os.path.join(SKILLS_DIR, slug) verwendet -> Path-Traversal
+        # und gespeicherter Python-Code -> RCE. Nur ein strikter Identifier
+        # darf hier landen.
+        raw_slug = str(skill_slug or re.sub(r'[^a-z0-9_-]', '_', session["title"].lower())).strip('_-')
+        slug = re.sub(r'[^a-z0-9_-]', '_', raw_slug.lower()).strip('_-')[:64]
+        if not slug or os.path.basename(slug) != slug or slug in ('.', '..'):
             slug = f"workflow_{session['session_id']}"
 
+        # Trace vor dem Speichern maskieren (Passwoerter landeten im Klartext
+        # in data/pbd_traces/*.json und in SKILL.md).
+        safe_session = _mask_trace_values(session)
+        trace_file = os.path.join(PBD_TRACES_DIR, f"{session['session_id']}.json")
+        with open(trace_file, "w", encoding="utf-8") as f:
+            json.dump(safe_session, f, indent=2, ensure_ascii=False)
+
         # 1. Synthetisiere Python-Skript
-        script_code = self._synthesize_python_script(slug, session)
+        script_code = self._synthesize_python_script(slug, safe_session)
         script_path = os.path.join(SCRIPTS_DIR, f"{slug}.py")
         _write_if_changed(script_path, script_code, ("Erstellt am: ",))
 
@@ -414,7 +448,7 @@ class DemonstrationRecorder:
             "import random",
             "from backend.computer_use_pbd import GhostCursorEngine",
             "",
-            f"def execute_{slug}(target_url: str = '{session.get('target_url', '')}'):",
+            f"def execute_{slug}(target_url: str = {session.get('target_url', '')!r}):",
             f'    print(f"[PbD Execution] Starte Ausführung von {slug} auf {{target_url}}...")',
             "    cursor_engine = GhostCursorEngine()",
             ""
@@ -425,28 +459,35 @@ class DemonstrationRecorder:
             det = ev["details"]
             comm = ev.get("commentary", "")
             if comm:
-                lines.append(f'    # Kommentar des Nutzers: "{comm}"')
+                lines.append(f'    # Kommentar des Nutzers: {comm!r}')
 
+            # Alle externen Werte werden mit repr() in Python-Literale
+            # uebersetzt. f-String-Interpolation in generierten Quelltext
+            # ermoeglichte之前 Code-Injection ueber aufgezeichnete Werte.
             if ev_type == "navigate":
                 url = det.get("url", session.get("target_url", ""))
-                lines.append(f'    print("[Aktion] Navigiere zu {url}")')
-                lines.append(f'    time.sleep(random.uniform(0.6, 1.2))')
+                lines.append("    print(" + repr(f"[Aktion] Navigiere zu {url}") + ")")
+                lines.append('    time.sleep(random.uniform(0.6, 1.2))')
             elif ev_type == "click":
                 target = det.get("target", det.get("selector", "button"))
                 x = det.get("x", 50)
                 y = det.get("y", 50)
-                lines.append(f'    # Klick auf: {target}')
+                lines.append(f'    # Klick auf: {target!r}')
                 lines.append(f'    jx, jy = cursor_engine.apply_bounding_box_jitter({x}, {y}, 40, 20)')
-                lines.append(f'    traj = cursor_engine.calculate_bezier_trajectory((50, 50), (jx, jy), steps=18)')
-                lines.append(f'    print(f"[Aktion] Bewege Maus biomechanisch nach ({{jx}}, {{jy}}) und klicke auf \'{target}\'")')
-                lines.append(f'    time.sleep(random.uniform(0.4, 0.9))')
+                lines.append('    traj = cursor_engine.calculate_bezier_trajectory((50, 50), (jx, jy), steps=18)')
+                lines.append(
+                    "    print(" + repr(f"[Aktion] Bewege Maus biomechanisch nach ({{jx}}, {{jy}}) und klicke auf {target}") + ")"
+                )
+                lines.append('    time.sleep(random.uniform(0.4, 0.9))')
             elif ev_type == "type":
                 val = det.get("value", det.get("text", ""))
                 field = det.get("field", "Eingabefeld")
-                lines.append(f'    # Text tippen: "{val}" in {field}')
-                lines.append(f'    delays = cursor_engine.generate_keystroke_delays("{val}")')
-                lines.append(f'    print(f"[Aktion] Tippe Text in {field} mit variierender menschlicher Kadenz ({{len(delays)}} Anschläge)...")')
-                lines.append(f'    time.sleep(sum(d["delay_ms"] for d in delays) / 1000.0 * 0.4)')
+                lines.append(f'    # Text tippen: {val!r} in {field!r}')
+                lines.append(f'    delays = cursor_engine.generate_keystroke_delays({val!r})')
+                lines.append(
+                    "    print(" + repr(f"[Aktion] Tippe Text in {field} mit variierender menschlicher Kadenz ({{len(delays)}} Anschläge)...") + ")"
+                )
+                lines.append('    time.sleep(sum(d["delay_ms"] for d in delays) / 1000.0 * 0.4)')
             elif ev_type == "scroll":
                 lines.append(f'    print("[Aktion] Scrolle Seite mit natürlicher Verzögerung...")')
                 lines.append(f'    time.sleep(random.uniform(0.3, 0.7))')

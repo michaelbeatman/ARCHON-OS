@@ -2666,19 +2666,85 @@
       switchAgentCadreTab('chat');
     }
     function closeAgentDirectChatModal() {}
+    // Live-Aktivitaet: ein gemeinsamer SSE-Bus (chat_engine.js), keine zweite EventSource.
+    let _agentActivitySseBound = false;
+    let _agentActivityRefreshTimer = null;
+    let _agentActivityAbort = null;
+    let _agentActivityAgentId = "";
+    let _agentActivityLastRefresh = 0;
+
+    // Drosselung statt Debounce: bei Dauerfeuer (task_chunk) darf der Refresh
+    // nicht endlos nach hinten wandern. Maximal alle 2 Sekunden ein Reload.
+    function scheduleAgentActivityRefresh(agentId) {
+      if (!agentId || agentId !== _agentActivityAgentId) return;
+      if (activeAgentCadreTab !== 'overview') return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (!document.getElementById("prof-activity-log-terminal")) return;
+      if (_agentActivityRefreshTimer) return;
+      const elapsed = Date.now() - _agentActivityLastRefresh;
+      const delay = elapsed >= 2000 ? 0 : 2000 - elapsed;
+      _agentActivityRefreshTimer = setTimeout(function () {
+        _agentActivityRefreshTimer = null;
+        _agentActivityLastRefresh = Date.now();
+        loadAgentLiveActivity(agentId);
+      }, delay);
+    }
+
+    function initAgentActivityLiveStream() {
+      if (_agentActivitySseBound || typeof window === "undefined") return;
+      _agentActivitySseBound = true;
+      window.addEventListener("archon:sse", function (ev) {
+        try {
+          const msg = ev && ev.detail;
+          if (!msg || !msg.type) return;
+          const liveTypes = ["kanban_updated", "task_status", "task_chunk", "mission_created", "ticker_update", "chat_message_received", "agent_activity"];
+          if (liveTypes.indexOf(msg.type) === -1) return;
+          const data = msg.data || {};
+          if (_agentActivityAgentId && data.agent_id && data.agent_id !== _agentActivityAgentId) return;
+          scheduleAgentActivityRefresh(_agentActivityAgentId);
+        } catch (err) {}
+      });
+      try {
+        if (window.archonSSEBus && typeof window.archonSSEBus.ensure === "function") {
+          window.archonSSEBus.ensure();
+        }
+      } catch (err) {}
+    }
+
     async function loadAgentLiveActivity(agentId) {
       const term = document.getElementById("prof-activity-log-terminal");
       const statusEl = document.getElementById("prof-log-status");
       if (!term) return;
+      _agentActivityAgentId = agentId;
+      _agentActivityLastRefresh = Date.now();
+      initAgentActivityLiveStream();
+      if (_agentActivityAbort) _agentActivityAbort.abort();
+      const controller = new AbortController();
+      _agentActivityAbort = controller;
       term.innerHTML = `<div class="text-[var(--muted-foreground)] italic">${profT('ui.agent_profiles.log_connecting', 'Verbinde mit Agenten-Log...')}</div>`;
       if (statusEl) statusEl.innerText = "Lade...";
       try {
-        const res = await fetch(`/api/v1/agent/${agentId}/activity`);
+        const res = await fetch(`/api/v1/agent/${encodeURIComponent(agentId)}/activity`, {
+          signal: controller.signal,
+          cache: "no-store"
+        });
         if (!res.ok) throw new Error("Status " + res.status);
+        if (agentId !== _agentActivityAgentId) return;
         const data = await res.json();
         const logs = data.logs || [];
         const turns = data.recent_turns || [];
-        if (statusEl) statusEl.innerText = "Aktiv";
+        const sources = data.sources || {};
+        const eventCount = Object.keys(sources).reduce((sum, key) => sum + (Number(sources[key]) || 0), 0);
+        if (statusEl) statusEl.innerText = eventCount ? `Live · ${eventCount} Events` : "Live";
+        const tagColors = {
+          TASK: "text-sky-600 dark:text-sky-400",
+          EVENT: "text-emerald-600 dark:text-emerald-400",
+          RUN: "text-violet-600 dark:text-violet-400",
+          AUDIT: "text-amber-600 dark:text-amber-400",
+          TRACE: "text-cyan-600 dark:text-cyan-400",
+          RECEIPT: "text-indigo-600 dark:text-indigo-400",
+          EGRESS: "text-orange-600 dark:text-orange-400"
+        };
         let html = "";
         if (turns.length > 0) {
           html += `<div class="text-[10px] text-zinc-900 dark:text-zinc-100 font-bold mb-1 border-b border-[var(--border)] pb-0.5">${profT('ui.agent_profiles.log_turns_header', '💬 Letzte Konversationsturns:')}</div>`;
@@ -2689,11 +2755,13 @@
         }
         if (logs.length > 0) {
           logs.forEach(l => {
-            let color = "text-[var(--muted-foreground)]";
-            if (l.includes("INFO") || l.includes("aktiv") || l.includes("online")) color = "text-emerald-600 dark:text-emerald-400";
-            if (l.includes("WARN") || l.includes("caution")) color = "text-amber-600 dark:text-amber-400";
-            if (l.includes("ERROR") || l.includes("Fehler")) color = "text-rose-600 dark:text-rose-400";
-            html += `<div class="${color} whitespace-pre-wrap leading-tight py-0.5 font-mono">${escapeHtml(l)}</div>`;
+            const text = String(l || "");
+            const tagMatch = text.match(/\[(TASK|EVENT|RUN|AUDIT|TRACE|RECEIPT|EGRESS)\]/);
+            let color = tagMatch && tagColors[tagMatch[1]] ? tagColors[tagMatch[1]] : "text-[var(--muted-foreground)]";
+            if (text.includes("INFO") || text.includes("aktiv") || text.includes("online")) color = "text-emerald-600 dark:text-emerald-400";
+            if (text.includes("WARN") || text.includes("caution") || text.includes("BLOCKED")) color = "text-amber-600 dark:text-amber-400";
+            if (text.includes("ERROR") || text.includes("Fehler")) color = "text-rose-600 dark:text-rose-400";
+            html += `<div class="${color} whitespace-pre-wrap leading-tight py-0.5 font-mono">${escapeHtml(text)}</div>`;
           });
         } else {
           html += `<div class="text-[var(--muted-foreground)] italic">${profT('ui.agent_profiles.log_empty', 'Keine aktuellen Hintergrund-Logs für diesen Agenten.')}</div>`;
@@ -2701,8 +2769,9 @@
         term.innerHTML = html;
         term.scrollTop = term.scrollHeight;
       } catch (err) {
-        term.innerHTML = `<div class="text-[var(--foreground)] font-mono"><span class="font-bold">[DAEMON]</span> ${profT('ui.agent_profiles.log_fallback_ready', 'Agent bereit im Standby-Modus.')}<br><span class="text-[var(--muted-foreground)]">[ROUTER]</span> ${profT('ui.agent_profiles.log_fallback_router', 'Port 20128 aktiv. Keine Warnungen.')}</div>`;
-        if (statusEl) statusEl.innerText = "Bereit";
+        if (err && err.name === "AbortError") return;
+        term.innerHTML = `<div class="text-[var(--muted-foreground)] italic font-mono">${profT('ui.agent_profiles.log_fallback_ready', 'Live-Feed momentan nicht erreichbar. Bitte erneut versuchen.')}</div>`;
+        if (statusEl) statusEl.innerText = "Offline";
       }
     }
     async function loadAgentProjectsHistory(agentId) {

@@ -6,10 +6,31 @@ Ausgelagert aus backend/operations_api.py.
 """
 
 import os
-from typing import Any, Dict
-from fastapi import APIRouter, Body, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.routers._rbac import require_admin_or_503
+
+
+class AgentOperatorNotesRequest(BaseModel):
+    """Validierter Payload für POST /agents/{agent_id}/operator-notes (Etappe 7)."""
+    model_config = ConfigDict(extra="ignore")
+    notes: str = Field(default="", max_length=50_000)
+
+
+class SanitizeInputRequest(BaseModel):
+    """Validierter Payload für POST /security/sanitize (Etappe 7)."""
+    model_config = ConfigDict(extra="ignore")
+    text: str = Field(default="", max_length=500_000)
+    source_id: str = Field(default="unknown", max_length=256)
+    source_type: str = Field(default="external", max_length=64)
+
+
+class ToggleTrustedSourceRequest(BaseModel):
+    """Validierter Payload für POST /security/trusted-sources/toggle (Etappe 7)."""
+    model_config = ConfigDict(extra="ignore")
+    source_id: str = Field(default="", max_length=256)
+
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -30,9 +51,9 @@ def api_get_agent_scorecard(agent_id: str):
 
 
 @router.post("/agents/{agent_id}/operator-notes")
-def api_save_agent_operator_notes(agent_id: str, req: Dict[str, Any] = Body(...)):
+def api_save_agent_operator_notes(agent_id: str, req: AgentOperatorNotesRequest):
     """Speichert Operator-Beurteilungen persistent und synchronisiert sie mit Obsidian."""
-    notes = req.get("notes", "").strip()
+    notes = req.notes.strip()
     try:
         from backend.agent_scorecard_engine import agent_scorecard_engine
         agent_scorecard_engine.save_operator_notes(agent_id, notes)
@@ -46,11 +67,11 @@ def api_save_agent_operator_notes(agent_id: str, req: Dict[str, Any] = Body(...)
 # =========================================================================
 
 @router.post("/security/sanitize")
-def api_sanitize_input(req: Dict[str, Any] = Body(...)):
+def api_sanitize_input(req: SanitizeInputRequest):
     """Stufe 1 Quarantäne: Untersucht externe Inputs auf Prompt Injections."""
-    text = req.get("text", "")
-    source_id = req.get("source_id", "unknown")
-    source_type = req.get("source_type", "external")
+    text = req.text
+    source_id = req.source_id
+    source_type = req.source_type
     try:
         from backend.dual_llm_sanitizer import sanitize_external_input
         result = sanitize_external_input(raw_text=text, source_id=source_id, source_type=source_type)
@@ -71,10 +92,10 @@ def api_get_trusted_sources():
 
 
 @router.post("/security/trusted-sources/toggle")
-def api_toggle_trusted_source(request: Request, req: Dict[str, Any] = Body(...)):
+def api_toggle_trusted_source(request: Request, req: ToggleTrustedSourceRequest):
     """Schaltet den Trusted-Status [T] für einen Absender um."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    source_id = req.get("source_id", "").strip()
+    source_id = req.source_id.strip()
     if not source_id:
         raise HTTPException(status_code=400, detail={"code": "security_no_source_id", "params": {}})
     try:

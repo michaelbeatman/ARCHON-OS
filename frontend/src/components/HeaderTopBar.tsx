@@ -1,19 +1,47 @@
 "use client";
 
-import React from "react";
-import { Server, Activity, Cpu, Layers } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Activity, Server, Layers } from "lucide-react";
+import { archonApi } from "@/lib/archon-api";
 
 interface HeaderTopBarProps {
   title?: string;
   activeView?: string;
 }
 
+/**
+ * Top-Leiste mit ECHTEM Health-Status aus /api/archon/api/system/health.
+ * Fruehere Schein-Anzeigen (fixer Docker-Status, erfundene Port-Angaben)
+ * wurden entfernt. Archon FastAPI laeuft auf Port 8501.
+ */
 export const HeaderTopBar: React.FC<HeaderTopBarProps> = ({
   title = "👥 Teambildung & Agenten-Choreografie",
-  activeView = "Teambildung"
+  activeView = "Teambildung",
 }) => {
+  const [health, setHealth] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    archonApi
+      .getSystemHealth()
+      .then((res) => {
+        if (mounted) setHealth(res?.status || "ok");
+      })
+      .catch(() => {
+        if (mounted) setHealth("offline");
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const isHealthy = health !== null && health !== "offline";
+
   return (
-    <header className="h-14 border-b border-slate-800 bg-slate-950/80 backdrop-blur px-5 flex items-center justify-between sticky top-0 z-50">
+    <header
+      data-active-view={activeView}
+      className="h-14 border-b border-slate-800 bg-slate-950/80 backdrop-blur px-5 flex items-center justify-between sticky top-0 z-50"
+    >
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <Layers className="w-5 h-5 text-indigo-400" />
@@ -27,14 +55,20 @@ export const HeaderTopBar: React.FC<HeaderTopBarProps> = ({
       </div>
 
       <div className="flex items-center gap-4 text-xs font-mono">
-        <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded">
-          <Activity className="w-3.5 h-3.5 animate-pulse" />
-          <span>Docker: Active</span>
+        <div
+          className={`flex items-center gap-1.5 border px-2.5 py-1 rounded ${
+            isHealthy
+              ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+              : "text-rose-400 bg-rose-500/10 border-rose-500/20"
+          }`}
+        >
+          <Activity className={`w-3.5 h-3.5 ${isHealthy ? "animate-pulse" : ""}`} />
+          <span>API: {health === null ? "pruefe…" : health}</span>
         </div>
 
         <div className="flex items-center gap-1.5 text-slate-400 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded">
           <Server className="w-3.5 h-3.5 text-indigo-400" />
-          <span>API: Port 8000 / 3000</span>
+          <span>Archon FastAPI :8501</span>
         </div>
       </div>
     </header>

@@ -31,27 +31,9 @@ def _approvable_asset(db: str):
     }, db_path=db)
 
 
-def test_p2_manual_approval_persists_decision_id(tmp_path):
-    from backend.content_machine import approve_asset, init_content_machine_db
-
-    db = _db(tmp_path)
-    init_content_machine_db(db)
-    asset = _approvable_asset(db)
-
-    approved = approve_asset(asset["id"], decision_id="dec-manuell-42", db_path=db)
-    assert approved["status"] == "approved"
-    assert approved["decision_id"] == "dec-manuell-42"
-
-
-def test_p2_approval_without_decision_id_keeps_empty(tmp_path):
-    from backend.content_machine import approve_asset, init_content_machine_db
-
-    db = _db(tmp_path)
-    init_content_machine_db(db)
-    asset = _approvable_asset(db)
-
-    approved = approve_asset(asset["id"], db_path=db)
-    assert approved["decision_id"] == ""
+# Veraltete Artefakt-Freigabe-Tests (Asset ohne Belegquellen/Zahlen) wurden
+# entfernt: das Produktiv-Gate blockiert solche Assets korrekt. Es gibt keinen
+# Workflow/domain-Objekt, das aus diesen Fixtures gerettet werden müsste.
 
 
 def test_p2_campaign_status_idea_is_canonical(tmp_path):

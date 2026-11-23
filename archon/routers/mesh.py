@@ -97,7 +97,8 @@ def api_approve_skill_proposal(request: Request, proposal_id: str):
 
 
 @router.post("/api/events/inbound/{channel}")
-def api_ingest_inbound_event(channel: str, payload: Dict = Body(...)):
+def api_ingest_inbound_event(request: Request, channel: str, payload: Dict = Body(...)):
+    _require_admin_or_503(request)
     from backend.event_mesh import event_mesh
 
     return event_mesh.ingest_inbound_event(
@@ -291,11 +292,21 @@ def api_browse_and_capture(request: Request, payload: Dict = Body(...)):
 async def api_run_war_room(payload: Dict = Body(...)):
     from backend.war_room_simulator import run_war_room_simulation
 
-    return await run_war_room_simulation(
+    result = await run_war_room_simulation(
         topic=payload.get("topic", "System-Update"),
         proposal_text=payload.get("proposal", ""),
         model=payload.get("model"),
+        task_id=str(payload.get("task_id") or "") or None,
     )
+    # Bei blocked=True wurde echt blockiert (HITL-Decision + Task-Status),
+    # nicht nur eine Empfehlung zurueckgegeben.
+    if result.get("blocked") and not result.get("hitl_enforcement"):
+        result["hitl_enforcement"] = {
+            "decision_created": False,
+            "task_blocked": False,
+            "error": "HITL-Durchsetzung nicht verfuegbar",
+        }
+    return result
 
 
 @router.get("/api/simulation/war-room/history")

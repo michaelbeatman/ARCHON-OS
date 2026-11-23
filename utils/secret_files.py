@@ -16,8 +16,9 @@ import logging
 _archon_exc_logger = logging.getLogger("secret_files")
 
 import os
+import subprocess
 import tempfile
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 from archon.core.paths import HERMES_PROFILES_BASE, OPT_DATA_DIR
 
@@ -35,16 +36,85 @@ def expected_secret_mode() -> int:
     return SAFE_MODE
 
 
-def is_hardened_mode(mode: int) -> bool:
-    """Prueft, ob ein Modus der gehaerteten Variante entspricht.
+# G1: bekannte "Everybody"-Principal-Kennungen in icacls-Ausgaben.
+_WINDOWS_OPEN_ACL_MARKERS = (
+    "everyone:", "*s-1-1-0:", "authenticated users:", "*s-1-5-11:",
+    "builtin\\users:", "*s-1-5-32-545:", "all application packages:",
+    "*s-1-15-2-1:", "(i)",  # (I) = geerbte ACE
+)
 
-    Windows bildet POSIX-Modi nicht ab: ``chmod(0o600)`` laesst die Datei
-    dort weiter schreibbar (stat meldet 0o666). Die Rechtevergabe erfolgt
-    ueber NTFS-ACLs, die ``os.chmod`` nicht korrekt setzen kann. Der Aufruf
-    ist dort therefore best-effort und der Modus gilt als gehaertet.
+
+def _windows_dacl_is_hardened(path: str) -> bool:
+    """Prueft die tatsaechliche NTFS-DACL via icacls (nur Windows)."""
+    if os.name != "nt" or not path or not os.path.exists(path):
+        return False
+    try:
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        proc = subprocess.run(
+            ["icacls", path], capture_output=True, text=True,
+            timeout=15, creationflags=flags,
+        )
+        if proc.returncode != 0:
+            return False
+        lines = [ln.strip() for ln in (proc.stdout or "").splitlines() if ln.strip()]
+        aces = lines[1:] if lines else []  # erste Zeile = Dateipfad
+        if not aces:
+            return False
+        lowered = [ace.lower() for ace in aces]
+        return not any(
+            marker in ace for ace in lowered for marker in _WINDOWS_OPEN_ACL_MARKERS
+        )
+    except Exception as exc:
+        _archon_exc_logger.debug("[secret_files] NTFS-DACL-Pruefung fehlgeschlagen: %s", exc)
+        return False
+
+
+def _windows_principal() -> str:
+    """Aktueller Windows-Principal (whoami, Fallback ENV) fuer icacls."""
+    try:
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        proc = subprocess.run(
+            ["whoami"], capture_output=True, text=True,
+            timeout=10, creationflags=flags,
+        )
+        principal = (proc.stdout or "").strip()
+        if principal:
+            return principal
+    except Exception:
+        pass
+    domain = os.environ.get("USERDOMAIN") or os.environ.get("COMPUTERNAME") or ""
+    user = os.environ.get("USERNAME") or ""
+    if domain and user:
+        return f"{domain}\\{user}"
+    return user or "*S-1-5-11"
+
+
+def _windows_dacl_harden(path: str) -> bool:
+    """Setzt eine restriktive DACL (nur Owner, keine Vererbung) via icacls."""
+    if os.name != "nt":
+        return False
+    try:
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        subprocess.run(
+            ["icacls", path, "/inheritance:r", "/grant:r", f"{_windows_principal()}:(F)"],
+            capture_output=True, text=True, timeout=15,
+            creationflags=flags, check=True,
+        )
+        return _windows_dacl_is_hardened(path)
+    except Exception as exc:
+        _archon_exc_logger.error("[secret_files] NTFS-DACL-Haertung fehlgeschlagen: %s", exc)
+        return False
+
+
+def is_hardened_mode(mode: int, path: Optional[str] = None) -> bool:
+    """Prueft, ob eine Datei gehaertet ist.
+
+    G1: Windows bildet POSIX-Modi nicht ab (chmod 0o600 -> stat 0o666). Statt
+    "immer True" gilt hier nur eine tatsaechlich gepruefte NTFS-DACL als
+    gehaertet; ohne Pfad/Pruefung bleibt der Status 'unverified' = False.
     """
     if os.name == "nt":
-        return True
+        return bool(path) and _windows_dacl_is_hardened(path)
     return mode == SAFE_MODE
 
 
@@ -60,15 +130,18 @@ def is_secret_name(path: str) -> bool:
 
 
 def harden_file(path: str) -> bool:
-    """Setzt Rechte auf 600. True, wenn danach sicher (oder Datei fehlt)."""
+    """Setzt Rechte auf 600 (POSIX) bzw. eine restriktive NTFS-DACL (Windows)."""
     if not path or not os.path.exists(path):
         return True
+    # G1: auf Windows ist chmod wirkungslos — DACL setzen und verifizieren.
+    if os.name == "nt":
+        return _windows_dacl_harden(path)
     try:
         current = os.stat(path).st_mode & 0o777
-        if is_hardened_mode(current):
+        if is_hardened_mode(current, path):
             return True
         os.chmod(path, SAFE_MODE)
-        return is_hardened_mode(os.stat(path).st_mode & 0o777)
+        return is_hardened_mode(os.stat(path).st_mode & 0o777, path)
     except Exception:
         return False
 
@@ -110,17 +183,17 @@ def _walk_secret_files(root: str, max_depth: int = 2) -> List[str]:
 def audit_known_secrets(extra_roots: Iterable[str] = ()) -> List[Tuple[str, int]]:
     """Liste (pfad, modus) aller Secret-Dateien, die zu offen sind."""
     offenders: List[Tuple[str, int]] = []
-    if os.name == "nt":
-        # Windows bildet POSIX-Modi nicht ab (chmod 0o600 -> 0o666). Ein
-        # Mode-basiertes Audit wuerde nur falsche Alarme erzeugen; echte
-        # Rechte werden ueber NTFS-ACLs geprueft (ausserhalb dieses Moduls).
-        return offenders
     seen = set()
 
     def check(p: str) -> None:
         if p in seen or not os.path.exists(p):
             return
         seen.add(p)
+        if os.name == "nt":
+            # G1: auf Windows ist der POSIX-Modus irrelevant — echte DACL pruefen.
+            if not _windows_dacl_is_hardened(p):
+                offenders.append((p, 0))
+            return
         try:
             mode = os.stat(p).st_mode & 0o777
         except Exception:
@@ -158,7 +231,16 @@ def write_secret_file(path: str, content: str) -> bool:
                 f.flush()
                 os.fsync(f.fileno())
             os.chmod(tmp, SAFE_MODE)
+            if os.name == "nt" and not _windows_dacl_harden(tmp):
+                raise OSError(f"NTFS-DACL-Haertung der Temp-Datei fehlgeschlagen: {tmp}")
             os.replace(tmp, path)
+            if os.name == "nt" and not _windows_dacl_harden(path):
+                # G1: kein ungesichertes Secret zuruecklassen.
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+                return False
         except BaseException:
             try:
                 os.unlink(tmp)

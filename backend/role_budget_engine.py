@@ -114,8 +114,20 @@ def _get_conn(db_path: Optional[str] = None) -> sqlite3.Connection:
     return conn
 
 
+_INITIALIZED_BUDGET_DBS: set = set()
+
+
 def init_budget_tables(db_path: Optional[str] = None) -> None:
+    # Vorher wurde bei FAST JEDEM Aufruf (check/reserve/settle/usage) ein
+    # executescript mit 5 CREATE TABLE + 2 CREATE INDEX ausgefuehrt — ein
+    # Dispatch triggert das 5-8x und serialisiert alle Writer. Das Schema
+    # aendert sich zur Laufzeit nicht, daher einmal pro DB-Pfad.
+    target = db_path or BUDGET_DB_PATH
+    if target in _INITIALIZED_BUDGET_DBS:
+        return
     with _BUDGET_LOCK:
+        if target in _INITIALIZED_BUDGET_DBS:
+            return
         with _get_conn(db_path) as conn:
             conn.executescript(
                 """
@@ -193,6 +205,7 @@ def init_budget_tables(db_path: Optional[str] = None) -> None:
                 """
             )
             conn.commit()
+            _INITIALIZED_BUDGET_DBS.add(target)
 
 
 def get_default_role_budget(agent_id: str) -> Dict[str, Any]:
@@ -416,61 +429,22 @@ def record_budget_usage(
     task_id: Optional[str] = None,
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Records actual tokens and EUR/USD spent by an agent role and optional task."""
-    init_budget_tables(db_path)
-    aid = (agent_id or "default").strip()
-    tok = max(0, int(tokens_used or 0))
-    usd = max(0.0, float(cost_usd or 0.0))
-    eur = max(0.0, float(cost_eur)) if cost_eur is not None else round(usd * USD_TO_EUR_RATE, 6)
-    today = _today_str()
-    now_iso = datetime.datetime.now().isoformat()
+    """Duenner Alias auf ``BudgetBank.settle()``.
 
-    policy = get_role_budget_policy(aid, db_path=db_path)
-
-    with _BUDGET_LOCK:
-        with _get_conn(db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO role_daily_budget_ledger (
-                    agent_id, usage_date, tokens_used, cost_eur, cost_usd, dispatch_count, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, 1, ?)
-                ON CONFLICT(agent_id, usage_date) DO UPDATE SET
-                    tokens_used = role_daily_budget_ledger.tokens_used + excluded.tokens_used,
-                    cost_eur = role_daily_budget_ledger.cost_eur + excluded.cost_eur,
-                    cost_usd = role_daily_budget_ledger.cost_usd + excluded.cost_usd,
-                    dispatch_count = role_daily_budget_ledger.dispatch_count + 1,
-                    updated_at = excluded.updated_at
-                """,
-                (aid, today, tok, eur, usd, now_iso),
-            )
-
-            # Check if role just crossed the hard threshold -> auto-pause
-            row = conn.execute(
-                "SELECT tokens_used, cost_eur, paused_at FROM role_daily_budget_ledger WHERE agent_id = ? AND usage_date = ?",
-                (aid, today),
-            ).fetchone()
-            if row and policy["hard_cap_enabled"] and policy["auto_pause_on_exceed"]:
-                if (int(row["tokens_used"]) >= policy["daily_token_budget"] or float(row["cost_eur"]) >= policy["daily_cost_limit_eur"]) and not row["paused_at"]:
-                    conn.execute(
-                        "UPDATE role_daily_budget_ledger SET paused_at = ? WHERE agent_id = ? AND usage_date = ?",
-                        (now_iso, aid, today),
-                    )
-
-            if task_id:
-                conn.execute(
-                    """
-                    UPDATE task_budget_allocations
-                    SET tokens_used = tokens_used + ?,
-                        cost_used_eur = cost_used_eur + ?,
-                        updated_at = ?
-                    WHERE task_id = ?
-                    """,
-                    (tok, eur, now_iso, task_id),
-                )
-            conn.commit()
-
-    return get_role_usage_today(aid, db_path=db_path)
+    Beide Gate-Funktionen gehen jetzt ueber die zentrale BudgetBank. Eine
+    zweite, abweichende Ledger-Schreiblogik ausserhalb der Bank gab es frueher
+    hier — genau das machte die Funktion tot und das Cap inkonsistent.
+    """
+    bank = BudgetBank(db_path=db_path) if db_path else budget_bank
+    eur = max(0.0, float(cost_eur)) if cost_eur is not None else None
+    return bank.settle(
+        None,  # keine Reservierung -> Direktbuchung des echten Verbrauchs
+        actual_tokens=tokens_used,
+        actual_cost_usd=cost_usd,
+        cost_eur=eur,
+        agent_id=agent_id,
+        task_id=task_id,
+    )
 
 
 # =========================================================================
@@ -1057,7 +1031,10 @@ class BudgetBank:
             with _get_conn(self.db_path) as conn:
                 policy = self._policy(conn, aid)
                 used_tok, used_eur = self._usage(conn, aid)
-                res_tok, res_eur = self._reserved(conn, aid, task_id, now)
+                # FRUEHER: nur Reservierungen DESSELBEN task_id -> parallele
+                # Tasks desselben Agenten reservierten sich gegenseitig nicht
+                # und das harte Tages-Cap war wirkungslos.
+                res_tok, res_eur = self._reserved(conn, aid, None, now)
                 usage = get_role_usage_today(aid, db_path=self.db_path)
 
                 if policy["hard_cap_enabled"]:
@@ -1126,7 +1103,10 @@ class BudgetBank:
                 )
                 policy = self._policy(conn, aid)
                 used_tok, used_eur = self._usage(conn, aid)
-                res_tok, res_eur = self._reserved(conn, aid, task_id, now)
+                # FRUEHER: nur Reservierungen DESSELBEN task_id -> parallele
+                # Tasks desselben Agenten reservierten sich gegenseitig nicht
+                # und das harte Tages-Cap war wirkungslos.
+                res_tok, res_eur = self._reserved(conn, aid, None, now)
                 if policy["hard_cap_enabled"]:
                     if used_tok + res_tok + est_tok > policy["daily_token_budget"]:
                         conn.rollback()
@@ -1163,12 +1143,21 @@ class BudgetBank:
 
     def settle(
         self,
-        reservation_id: str,
+        reservation_id: Optional[str],
         actual_tokens: int = 0,
         actual_cost_usd: float = 0.0,
         cost_eur: Optional[float] = None,
+        *,
+        agent_id: Optional[str] = None,
+        task_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Bucht die Reservierung als echten Verbrauch — alles in EINER Transaktion."""
+        """Bucht Verbrauch als echte Ledger-Zeile — alles in EINER Transaktion.
+
+        Mit ``reservation_id`` wird eine bestehende Reservierung abgerechnet.
+        Ohne Reservierung (``None``) wird direkt gebucht — das ist der Pfad fuer
+        ``record_budget_usage`` und verhindert eine zweite, abweichende
+        Ledger-Schreiblogik ausserhalb der BudgetBank.
+        """
         init_budget_tables(self.db_path)
         tok = max(0, int(actual_tokens or 0))
         usd = max(0.0, float(actual_cost_usd or 0.0))
@@ -1178,15 +1167,21 @@ class BudgetBank:
             conn = _get_conn(self.db_path)
             try:
                 conn.execute("BEGIN IMMEDIATE")
-                row = conn.execute(
-                    "SELECT * FROM budget_reservations WHERE reservation_id = ? AND status = 'reserved'",
-                    (reservation_id,),
-                ).fetchone()
-                if not row:
-                    conn.rollback()
-                    return {"status": "not_found", "reservation_id": reservation_id}
-                aid = str(row["agent_id"] or "default")
-                tid = row["task_id"] or None
+                if reservation_id:
+                    row = conn.execute(
+                        "SELECT * FROM budget_reservations WHERE reservation_id = ? AND status = 'reserved'",
+                        (reservation_id,),
+                    ).fetchone()
+                    if not row:
+                        conn.rollback()
+                        return {"status": "not_found", "reservation_id": reservation_id}
+                    aid = str(row["agent_id"] or "default")
+                    tid = row["task_id"] or None
+                else:
+                    # Direktbuchung (record_budget_usage): kein Cap-Check,
+                    # tatsaechlich angefallener Verbrauch MUSS gebucht werden.
+                    aid = (agent_id or "default").strip()
+                    tid = task_id or None
                 conn.execute(
                     "INSERT INTO role_daily_budget_ledger "
                     "(agent_id, usage_date, tokens_used, cost_eur, cost_usd, dispatch_count, updated_at) "
@@ -1222,10 +1217,11 @@ class BudgetBank:
                         "WHERE task_id = ?",
                         (tok, eur, now, tid),
                     )
-                conn.execute(
-                    "UPDATE budget_reservations SET status = 'settled', settled_at = ? WHERE reservation_id = ?",
-                    (now, reservation_id),
-                )
+                if reservation_id:
+                    conn.execute(
+                        "UPDATE budget_reservations SET status = 'settled', settled_at = ? WHERE reservation_id = ?",
+                        (now, reservation_id),
+                    )
                 conn.commit()
                 return {"status": "settled", "reservation_id": reservation_id,
                         "agent_id": aid, "task_id": tid, "tokens_used": tok, "cost_eur": eur}

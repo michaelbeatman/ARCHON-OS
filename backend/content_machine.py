@@ -458,7 +458,11 @@ def create_campaign(payload: Dict[str, Any], db_path: Optional[str] = None) -> D
         raise ValueError("Kampagnen-Titel ('title') ist erforderlich.")
 
     raw_channels = payload.get("channels") or DEFAULT_CHANNELS
-    channels = [c for c in raw_channels if c in CHANNEL_SPECS]
+    # Ein String ("linkedin") wurde frueher zeichenweise iteriert -> leere
+    # Liste -> still ALLE Default-Kanaele. Explizit normalisieren.
+    if isinstance(raw_channels, str):
+        raw_channels = [raw_channels]
+    channels = [c for c in raw_channels if isinstance(c, str) and c in CHANNEL_SPECS] if isinstance(raw_channels, list) else list(DEFAULT_CHANNELS)
     if not channels:
         channels = list(DEFAULT_CHANNELS)
 
@@ -530,6 +534,24 @@ def get_campaign(campaign_id: str, db_path: Optional[str] = None) -> Optional[Di
 def delete_campaign(campaign_id: str, db_path: Optional[str] = None) -> bool:
     init_content_machine_db(db_path)
     with _conn(db_path) as conn:
+        # Kindtabellen zuerst entfernen: FK-Cascade greift nicht von
+        # content_campaigns aus, sonst blieben Metriken/Approvals als Waisen
+        # und die Analytics-Zaehler blieben dauerhaft falsch.
+        asset_ids = [
+            str(r[0]) for r in conn.execute(
+                "SELECT id FROM content_assets WHERE campaign_id = ?", (campaign_id,)
+            ).fetchall()
+        ]
+        for table in ("content_asset_approvals", "content_variants", "content_experiments", "content_metrics"):
+            for aid in asset_ids:
+                try:
+                    conn.execute(f"DELETE FROM {table} WHERE asset_id = ?", (aid,))
+                except Exception:
+                    pass
+        try:
+            conn.execute("DELETE FROM content_repurpose_runs WHERE campaign_id = ?", (campaign_id,))
+        except Exception:
+            pass
         conn.execute("DELETE FROM content_assets WHERE campaign_id = ?", (campaign_id,))
         cur = conn.execute("DELETE FROM content_campaigns WHERE id = ?", (campaign_id,))
         conn.commit()
@@ -688,6 +710,20 @@ def update_asset(asset_id: str, patch: Dict[str, Any], db_path: Optional[str] = 
         params.append(int(q_report["score"]))
         sets.append("quality_report_json = ?")
         params.append(json.dumps(q_report, ensure_ascii=False))
+        # KRITISCH: textabhaengige Gate-Reports bei jedem Patch neu berechnen.
+        # Vorher blieben fact_check/plagiat/channel beim alten "passed=True",
+        # obwohl der Reviewer per PATCH neue Zahlen/kopierten Text einfuegen konnte.
+        if any(k in (patch or {}) for k in ("hook", "body", "cta", "sources", "hashtags")):
+            fc = evaluate_fact_check(merged_for_q)
+            sets.append("fact_check_report_json = ?")
+            params.append(json.dumps(fc, ensure_ascii=False))
+            cv = validate_channel_constraints(merged_for_q)
+            sets.append("channel_validation_json = ?")
+            params.append(json.dumps(cv, ensure_ascii=False))
+            corpus = existing_row["plagiarism_corpus_json"] if "plagiarism_corpus_json" in existing_row.keys() else None
+            pl = evaluate_plagiarism_risk(merged_for_q, corpus=json.loads(corpus) if corpus else None)
+            sets.append("plagiarism_report_json = ?")
+            params.append(json.dumps(pl, ensure_ascii=False))
         params.append(asset_id)
         conn.execute(f"UPDATE content_assets SET {', '.join(sets)} WHERE id = ?", params)
         conn.commit()
@@ -747,7 +783,7 @@ def evaluate_fact_check(asset: Dict[str, Any]) -> Dict[str, Any]:
         if len(n.strip("% ")) >= 2 or "%" in n
     }
     source_text = " ".join(
-        str(s.get("text") or s.get("summary") or s.get("title") or "")
+        str(s.get("text") or s.get("snippet") or s.get("summary") or s.get("content") or s.get("title") or "")
         for s in sources if isinstance(s, dict)
     )
     unbacked = sorted(n for n in numbers if n.strip("% ") not in source_text.replace(",", "."))
@@ -889,6 +925,19 @@ def evaluate_plagiarism_risk(asset: Any, corpus: Any = None) -> Dict[str, Any]:
         docs.append((label, str(txt or "")))
 
     asset_shingles = _text_shingles(text)
+    # Ein LEERER Korpus ist kein durchgefuehrter Vergleich. Vorher ergab
+    # corpus=[] checked=True/passed=True — ein Client konnte das Gate mit
+    # plagiarism_corpus:[] beliebig umgehen.
+    if not docs:
+        return {
+            "passed": False,
+            "checked": False,
+            "max_similarity": 0.0,
+            "issues": ["Leerer Plagiats-Korpus — kein Vergleich durchgefuehrt."],
+            "sources_checked": 0,
+            "matched_source": "",
+            "note": "Keine Belegquellen im Korpus — Freigabe blockiert.",
+        }
     base = {
         "passed": True,
         "checked": True,
@@ -900,6 +949,7 @@ def evaluate_plagiarism_risk(asset: Any, corpus: Any = None) -> Dict[str, Any]:
     }
     if not asset_shingles:
         base["issues"].append("Kein Text im Asset — kein Vergleich moeglich.")
+        base["passed"] = False
         return base
 
     best = 0.0
@@ -952,6 +1002,14 @@ def list_variants(asset_id: str, db_path=None) -> List[Dict[str, Any]]:
 def record_variant_metrics(asset_id: str, variant_id: str, metrics: Dict[str, Any], db_path=None) -> Dict[str, Any]:
     """CM 2.0: Metriken einer Variante verknuepfen (variant_id in payload_json)."""
     with _conn(db_path) as conn:
+        # FRUEHER: erfundene asset_id/variant_id wurden akzeptiert und
+        # verfaelschten Experimente. Beide muessen real existieren.
+        if not conn.execute("SELECT 1 FROM content_assets WHERE id = ?", (asset_id,)).fetchone():
+            raise KeyError(f"Content-Asset '{asset_id}' existiert nicht.")
+        if not conn.execute(
+            "SELECT 1 FROM content_variants WHERE id = ? AND asset_id = ?", (variant_id, asset_id)
+        ).fetchone():
+            raise KeyError(f"Variante '{variant_id}' gehoert nicht zu Asset '{asset_id}'.")
         meta = dict(metrics or {})
         mid = f"cm-{secrets.token_hex(6)}"
         conn.execute(
@@ -967,20 +1025,58 @@ def record_variant_metrics(asset_id: str, variant_id: str, metrics: Dict[str, An
 
 
 def decide_experiment(asset_id: str, metric: str = "ctr_pct", db_path=None) -> Dict[str, Any]:
-    """CM 2.0: A/B-Entscheidung auf Basis der Metriken (einfacher CTR-Vergleich)."""
+    """A/B-Entscheidung mit Mindest-Stichprobe und Wilson-Konfidenzintervall.
+
+    Vorher wurde der `metric`-Parameter ignoriert (immer ctr_pct) und der
+    Gewinner per max() gekuert — eine Variante mit 1 View konnte gewinnen.
+    """
+    allowed_metrics = {"ctr_pct", "views", "likes", "comments", "shares", "saves", "conversions"}
+    metric = metric if metric in allowed_metrics else "ctr_pct"
+    min_views = 30  # Mindest-Stichprobe pro Variante
     variants = list_variants(asset_id, db_path=db_path)
     if len(variants) < 2:
         return {"status": "insufficient_variants", "winner_variant_id": ""}
     with _conn(db_path) as conn:
         rows = conn.execute(
-            "SELECT variant_id, ctr_pct FROM content_metrics WHERE asset_id = ?", (asset_id,)
+            f"SELECT variant_id, {metric} AS metric_value, views FROM content_metrics WHERE asset_id = ?",
+            (asset_id,),
         ).fetchall()
     scores: Dict[str, float] = {v["id"]: 0.0 for v in variants}
+    views_by_variant: Dict[str, int] = {v["id"]: 0 for v in variants}
     for r in rows:
         vid = str(r["variant_id"] or "")
-        if vid in scores:
-            scores[vid] = max(scores[vid], float(r["ctr_pct"] or 0.0))
-    winner = max(scores, key=scores.get) if scores else ""
+        if vid not in scores:
+            continue
+        try:
+            scores[vid] = max(scores[vid], float(r["metric_value"] or 0.0))
+        except (TypeError, ValueError):
+            pass
+        views_by_variant[vid] = max(views_by_variant[vid], int(r["views"] or 0))
+
+    eligible = {vid: s for vid, s in scores.items() if views_by_variant[vid] >= min_views}
+    if not eligible:
+        return {
+            "status": "insufficient_sample",
+            "winner_variant_id": "",
+            "scores": scores,
+            "min_views_required": min_views,
+            "metric": metric,
+        }
+    # Wilson lower bound als konservativer Score (verhindert Gewinner mit
+    # 1 View und 100 % CTR). Für Zaehlmetriken (views) bleibt der Rohwert.
+    import math
+    def _wilson(pct: float, views: int) -> float:
+        if metric != "ctr_pct" or views <= 0:
+            return pct
+        p = min(1.0, max(0.0, pct / 100.0))
+        z = 1.96
+        denom = 1 + z * z / views
+        center = p + z * z / (2 * views)
+        margin = z * math.sqrt((p * (1 - p) + z * z / (4 * views)) / views)
+        return round(100.0 * (center - margin) / denom, 4)
+
+    adjusted = {vid: _wilson(score, views_by_variant[vid]) for vid, score in eligible.items()}
+    winner = max(adjusted, key=lambda k: adjusted[k]) if adjusted else ""
     with _conn(db_path) as conn:
         conn.execute(
             "UPDATE content_variants SET is_winner = 0 WHERE asset_id = ?", (asset_id,)
@@ -1006,7 +1102,7 @@ def _enforce_asset_quality(conn, row) -> Dict[str, Any]:
     """
     raw = None
     try:
-        if "quality_report" in row.keys():
+        if "quality_report_json" in row.keys():
             raw = row["quality_report"]
     except Exception:
         raw = None
@@ -1032,9 +1128,21 @@ def _enforce_asset_quality(conn, row) -> Dict[str, Any]:
             "Kanalvalidierung blockiert Freigabe: " + "; ".join(channel_check["issues"][:3])
         )
     fact_check = asset.get("fact_check") or evaluate_fact_check(asset)
-    if fact_check.get("numbers_found") and not fact_check.get("passed"):
+    # FRUEHER: `numbers_found and not passed` -- bei text ohne Zahlen war
+    # numbers_found=0 und damit passed=False, das Gate liess den Asset durch.
+    # Jetzt gilt: ohne bestandenen Fact-Check keine Freigabe. Reine
+    # Opinion-Formate brauchen einen expliziten Opt-out in settings.json.
+    _cm_cfg = _get_content_machine_cfg()
+    _channel = str(asset.get("channel") or "")
+    _require_facts = bool(_cm_cfg.get("require_facts", True))
+    _per_channel = _cm_cfg.get("require_facts_by_channel") or {}
+    if isinstance(_per_channel, dict) and _channel in _per_channel:
+        _require_facts = bool(_per_channel[_channel])
+    if _require_facts and not fact_check.get("passed"):
         raise ValueError(
-            "Fact-Check blockiert Freigabe: " + "; ".join(fact_check["issues"][:3])
+            "Fact-Check blockiert Freigabe: " + "; ".join(
+                str(i) for i in (fact_check.get("issues") or [])[:3]
+            )
         )
 
     # Batch C: Plagiats-/Rechte-Gate. Bewusst ENG gefasst — blockiert nur bei
@@ -1057,6 +1165,14 @@ def _enforce_asset_quality(conn, row) -> Dict[str, Any]:
         raise ValueError(
             f"Plagiats-Gate blockiert Freigabe: Aehnlichkeit {max_sim:.2f} > 0.8 — "
             + "; ".join(str(i) for i in (sim.get("issues") or [])[:2])
+        )
+    # checked=False war frueher ein stiller Freigabe-Pass. Mit dem
+    # Research-Korpus ist der Check jetzt real; fehlt er, muss der HITL-Pfad
+    # greifen, statt automatisch zu veroeffentlichen.
+    if _require_facts and not sim.get("checked"):
+        raise ValueError(
+            "Plagiats-Gate blockiert Freigabe: kein Belegkorpus vorhanden — "
+            "bitte Research-Quellen an das Asset haengen (checked=False)."
         )
     return report
 
@@ -1411,6 +1527,41 @@ def _safe_skill_path(skill_name: str, workspace_dir: str = "") -> Optional[str]:
     return candidate if os.path.isfile(candidate) else None
 
 
+def _voice_rules_fallback(skill_name: str, max_rules: int) -> str:
+    """Liest echte Stilregeln aus config/voice.md (SSOT der Brand Voice).
+
+    Nur als Fallback, wenn eine SKILL.md fehlt. Gibt bei leerer/quellenloser
+    Datei '' zurueck, damit der Aufrufer klar 'keine Regeln' melden kann.
+    """
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(root, "config", "voice.md")
+        if not os.path.isfile(path):
+            return ""
+        with open(path, "r", encoding="utf-8") as fh:
+            text = fh.read(12000)
+    except Exception:
+        return ""
+    lines: List[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith(("- ", "* ")) or re.match(r"^\d+\.\s", line):
+            rule = re.sub(r"^[*\-]\s*|^\d+\.\s*", "", line).strip()
+            rule = rule.replace("**", "").replace("`", "").strip(" :;-")
+            rule = re.sub(r"\s+", " ", rule)
+            if 6 <= len(rule) <= 220 and rule.lower() not in {r.lower() for r in lines}:
+                lines.append(rule)
+                if len(lines) >= max_rules:
+                    break
+    if not lines:
+        return ""
+    return f"- [Regeln aus config/voice.md — Ersatz für Skill '{skill_name}']\n" + "\n".join(
+        f"- {r}" for r in lines
+    )
+
+
 def _extract_skill_rules(skill_name: str, max_rules: int = 8, workspace_dir: str = "") -> str:
     """Extrahiert eine kompakte Regel-Block aus einer SKILL.md.
 
@@ -1418,9 +1569,16 @@ def _extract_skill_rules(skill_name: str, max_rules: int = 8, workspace_dir: str
     """
     path = _safe_skill_path(skill_name, workspace_dir)
     if not path:
+        # KRITISCH: die 'verpflichtenden' li-human-Regeln wurden frueher nie
+        # injiziert, weil .agents/skills/li-human/SKILL.md nicht existiert.
+        # Fallback auf die echte, vorhandene Regelquelle config/voice.md,
+        # damit der Review-Node nicht mit einer leeren Anweisung arbeitet.
+        voice_fallback = _voice_rules_fallback(skill_name, max_rules)
+        if voice_fallback:
+            return voice_fallback
         return (
-            f"- [Hinweis] Skill '{skill_name}' nicht gefunden — "
-            "Regeln nicht injiziert (Graceful Degradation)."
+            f"- [Hinweis] Skill '{skill_name}' nicht gefunden und keine "
+            "Fallback-Regeln verfuegbar — Regeln nicht injiziert."
         )
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -1484,7 +1642,10 @@ def build_content_repurposing_dag(campaign: Dict[str, Any], *, require_hitl_gate
     feedback_lines: List[str] = []
     try:
         from local_memory_bridge import memory_bridge
-        learnings = memory_bridge.search_learnings(str(topic)[:100], limit=5, agent_id="content_machine")
+        # Die Learnings werden unter den Rollen-IDs geschrieben (z.B.
+        # storyteller_ghostwriter), nicht unter "content_machine". Mit dem
+        # harten Filter blieb der Feedback-Block dauerhaft leer.
+        learnings = memory_bridge.search_learnings(str(topic)[:100], limit=5)
         for learning in learnings or []:
             summary = str(learning.get("summary") or "").strip()
             if summary:
@@ -1742,6 +1903,21 @@ async def run_content_campaign_pipeline(
     dossier_path = str(
         research_out.get("dossier_path") if isinstance(research_out, dict) else ""
     ) or ""
+    # KRITISCH: die Research-Quellen kamen frueher nie bei den Assets an.
+    # Der Kanal-Agent liefert sie nicht, der Research-Knoten schon. Ohne
+    # sources markiert evaluate_fact_check jede Zahl als 'unbacked' und das
+    # Gate blockiert die Freigabe. Gleichzeitig sind die Snippets der
+    # natuerliche Plagiats-Korpus.
+    research_sources: List[Dict[str, Any]] = []
+    if isinstance(research_out, dict):
+        _rs = research_out.get("sources") or []
+        if isinstance(_rs, list):
+            research_sources = [s for s in _rs if isinstance(s, dict)]
+    plagiarism_corpus = [
+        str(s.get("snippet") or s.get("text") or s.get("summary") or "")
+        for s in research_sources
+        if str(s.get("snippet") or s.get("text") or s.get("summary") or "").strip()
+    ]
 
     for node in dag_def["nodes"]:
         ch = node.get("channel")
@@ -1752,7 +1928,23 @@ async def run_content_campaign_pipeline(
             continue
         asset_data = _parse_asset_output(ch, camp["title"], outputs[nid])
         asset_data["campaign_id"] = campaign_id
-        asset_data["status"] = "approved" if gate_approved else ("review" if require_hitl_gate else "draft")
+        # Quellen nur ergaenzen, wenn der Kanal-Agent keine eigenen geliefert hat.
+        if not asset_data.get("sources") and research_sources:
+            asset_data["sources"] = research_sources
+        if not asset_data.get("plagiarism_corpus") and plagiarism_corpus:
+            asset_data["plagiarism_corpus"] = plagiarism_corpus
+        # Gate nur dann direkt freigeben, wenn auch die Qualitaet besteht.
+        _quality = evaluate_asset_quality(asset_data)
+        approved_now = bool(gate_approved and _quality.get("passed", False))
+        asset_data["status"] = (
+            "approved" if approved_now
+            else ("review" if require_hitl_gate else "draft")
+        )
+        # Ein 'approved'-Asset ohne scheduled_at wird vom Publish-Sweep nie
+        # gefunden (Filter scheduled_at != '' AND <= now) — dauerhafte
+        # Sackgasse. Direkt mit aktuellem Zeitstempel planen.
+        if approved_now and not asset_data.get("scheduled_at"):
+            asset_data["scheduled_at"] = _utc_now_iso()
         asset_data["decision_id"] = decision_id
         asset_data["dossier_path"] = dossier_path
         created_assets.append(create_asset(asset_data, db_path=db_path))
@@ -2103,13 +2295,58 @@ def dispatch_asset_to_webhook(
         }
     if delivery.get("status") != "delivered":
         raise RuntimeError(f"Publish-Webhook fehlgeschlagen: {delivery.get('response')}")
-    updated = mark_asset_published(asset_id, db_path=db_path)
+    # Die Plattform-Antwort enthaelt haeufig den echten Permalink. Ohne diese
+    # URL waren geo_jsonld und llms.txt unbrauchbar ("- [Titel](): ...").
+    external_url = ""
+    raw_response = delivery.get("response")
+    if isinstance(raw_response, str) and raw_response.strip():
+        try:
+            parsed = json.loads(raw_response)
+            if isinstance(parsed, dict):
+                for key in ("url", "permalink", "external_url", "link"):
+                    candidate = parsed.get(key)
+                    if isinstance(candidate, str) and candidate.startswith(("http://", "https://")):
+                        external_url = candidate
+                        break
+        except (TypeError, ValueError):
+            pass
+    updated = mark_asset_published(asset_id, external_url=external_url, db_path=db_path)
     return {
         "status": "published",
         "http_status": delivery.get("http_status"),
+        "external_url": external_url,
         "asset": updated,
         "idempotency_key": idem,
     }
+
+
+def _get_content_machine_cfg() -> Dict[str, Any]:
+    """Settings-Sektion der Content-Machine (ein Ort fuer alle Gates)."""
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(root, "settings.json")
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as fh:
+                cfg = json.load(fh)
+            if isinstance(cfg, dict):
+                section = cfg.get("content_machine") or {}
+                if isinstance(section, dict):
+                    return section
+    except Exception:
+        pass
+    return {}
+
+
+def get_default_publish_webhook_url() -> str:
+    """Zentrale Publish-Ziel-URL aus ENV oder settings.json.
+
+    Der Scheduler rief publish_scheduled_due_assets() frueher ohne webhook_url
+    auf — damit wurde nur ein DB-Status gesetzt und kein Content ausgeliefert.
+    """
+    env_url = (os.environ.get("ARCHON_CONTENT_PUBLISH_WEBHOOK") or "").strip()
+    if env_url:
+        return env_url
+    return str(_get_content_machine_cfg().get("publish_webhook_url") or "").strip()
 
 
 def publish_scheduled_due_assets(
@@ -2137,8 +2374,11 @@ def publish_scheduled_due_assets(
     errors: List[Dict[str, str]] = []
     for a in due_assets:
         try:
-            if webhook_url:
-                dispatch_asset_to_webhook(a["id"], webhook_url, dry_run=False, db_path=db_path)
+            # FRUEHER: ohne webhook_url wurde nur der DB-Status gesetzt —
+            # Content verliess das System nie, der Sweep loggte aber "published".
+            target = webhook_url or get_default_publish_webhook_url()
+            if target:
+                dispatch_asset_to_webhook(a["id"], target, dry_run=False, db_path=db_path)
             else:
                 mark_asset_published(a["id"], db_path=db_path)
             published.append(a["id"])
@@ -2298,9 +2538,24 @@ def sweep_content_performance_feedback(
         try:
             voice_sugg_path = os.path.join(WORKSPACE_DIR, "config", "voice_winner_hooks.md")
             os.makedirs(os.path.dirname(voice_sugg_path), exist_ok=True)
-            with open(voice_sugg_path, "w", encoding="utf-8") as vf:
-                vf.write("# Automatische Brand-Voice Hook-Vorschlaege (48h+ Performance-Rueckfluss)\n\n")
-                vf.write("\n".join(suggestions[:15]) + "\n")
+            # Diese Datei ist gleichzeitig Feedback-QUELLE des DAG-Builders.
+            # Mit open("w") sah jeder Sweep nur noch seine eigenen Vorschlaege
+            # und die Historie ging verloren. Jetzt anhaengen + deduplizieren.
+            header = "# Automatische Brand-Voice Hook-Vorschlaege (48h+ Performance-Rueckfluss)\n\n"
+            existing = ""
+            if os.path.exists(voice_sugg_path):
+                try:
+                    with open(voice_sugg_path, "r", encoding="utf-8") as vf:
+                        existing = vf.read()
+                except Exception:
+                    existing = ""
+            known = set(line.strip() for line in existing.splitlines() if line.strip().startswith("- "))
+            fresh = [s for s in suggestions[:15] if s.strip() not in known]
+            if fresh:
+                with open(voice_sugg_path, "a", encoding="utf-8") as vf:
+                    if not existing:
+                        vf.write(header)
+                    vf.write("\n".join(fresh) + "\n")
         except Exception as exc:
             logger.debug(f"[ContentMachine] voice_winner_hooks.md Schreibfehler: {exc}")
 
@@ -2344,11 +2599,21 @@ def finalize_assets_for_workflow_run(
         if not row:
             return {"status": "no_run", "updated": 0, "workflow_run_id": workflow_run_id}
         campaign_id = str(row["campaign_id"] or "")
-        cur = conn.execute(
-            "UPDATE content_assets SET status = ?, updated_at = ? "
-            "WHERE campaign_id = ? AND status IN ('review', 'draft')",
-            (target, now, campaign_id),
-        )
+        # KRITISCH: der Publish-Sweep filtert zwingend
+        # scheduled_at != '' AND scheduled_at <= now. Wurde nur der Status
+        # auf 'scheduled' gesetzt, blieben Assets dauerhaft haengen (Sackgasse).
+        if approved:
+            cur = conn.execute(
+                "UPDATE content_assets SET status = ?, scheduled_at = ?, updated_at = ? "
+                "WHERE campaign_id = ? AND status IN ('review', 'draft')",
+                (target, now, now, campaign_id),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE content_assets SET status = ?, updated_at = ? "
+                "WHERE campaign_id = ? AND status IN ('review', 'draft')",
+                (target, now, campaign_id),
+            )
         updated = int(cur.rowcount or 0)
         conn.commit()
     return {

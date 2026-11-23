@@ -40,6 +40,8 @@ async def api_spawn_ephemeral_team(request: Request, payload: Dict = Body(...)):
     return await ephemeral_team_spawner.spawn_task_force(
         mission_title=payload.get("mission_title", "Spezial-Auftrag"),
         mission_brief=payload.get("mission_brief", ""),
-        execute_dag=bool(payload.get("execute_dag", False)),
-        dry_run=bool(payload.get("dry_run", True)),
+        # Produktiv-Defaults: echter DAG-Lauf, kein Dry-Run. Opt-out bleibt
+        # explizit ueber das Payload moeglich.
+        execute_dag=bool(payload.get("execute_dag", True)),
+        dry_run=bool(payload.get("dry_run", False)),
     )

@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Quellcode auschecken
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
 
       - name: Python 3.13 einrichten
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (gepinnt)
         with:
           python-version: "3.13"
           cache: "pip"
@@ -32,6 +32,11 @@ jobs:
       - name: Profil-SSOT Drift-Check
         run: python scripts/sync_profile_ssot.py --check --allow-missing-hermes --json
 
+      - name: Audit-HMAC-Key vorhanden (GoBD-Startup-Gate)
+        env:
+          ARCHON_AUDIT_HMAC_KEY: ci-test-key-not-for-production
+        run: python scripts/ensure_audit_hmac_key.py --check
+
       - name: Secrets- & Credential-Audit (Zero-Leak Gate)
         run: python scripts/audit_secrets.py --all
 
@@ -40,6 +45,26 @@ jobs:
           for f in static/js/*.js static/hermes-webui/*.js; do
             node --check "$f"
           done
+
+  frontend-build:
+    name: 1b. Next.js Typecheck & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (gepinnt)
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Dependencies (lockfile, reproducible)
+        run: npm ci
+        working-directory: frontend
+      - name: TypeScript Typecheck
+        run: npx tsc --noEmit
+        working-directory: frontend
+      - name: Production Build
+        run: npm run build
+        working-directory: frontend
 
   test-suites:
     name: 2. Unit- & Security-Tests
@@ -51,17 +76,22 @@ jobs:
       ARCHON_SANDBOX_BARE_METAL: "1"
     steps:
       - name: Quellcode auschecken
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
 
       - name: Python 3.13 einrichten
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (gepinnt)
         with:
           python-version: "3.13"
 
       - name: Abhängigkeiten installieren
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Reproduzierbar: Hash-Lockfile statt Versionsbereiche (Audit 23.11.).
+          if [ -f requirements.lock.txt ]; then
+            pip install --require-hashes -r requirements.lock.txt
+          else
+            pip install -r requirements.txt
+          fi
           if [ -f requirements-test.txt ]; then pip install -r requirements-test.txt; fi
           pip install pyyaml requests psutil
           mkdir -p data inbox
@@ -81,10 +111,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Quellcode auschecken
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
 
       - name: Python 3.13 einrichten
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (gepinnt)
         with:
           python-version: "3.13"
 
@@ -103,7 +133,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Quellcode auschecken
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
 
       - name: Docker Compose Syntaxprüfung (alle Varianten)
         run: |
@@ -114,3 +144,37 @@ jobs:
             echo "Prüfe $f"
             docker compose -f "$f" config --quiet
           done
+
+  security-scan:
+    name: 5. SAST / Dependency-Audit / SBOM
+    needs: validate-and-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (gepinnt)
+        with:
+          python-version: "3.13"
+
+      - name: Security-Tools installieren
+        run: python -m pip install --upgrade pip "pip-audit>=2.7,<3.0" "bandit>=1.8,<2.0"
+
+      - name: SBOM (Python-Dependency-Inventar)
+        run: |
+          python -m pip install --require-hashes -r requirements.lock.txt
+          python -m pip list --format=json > sbom-python.json
+
+      - name: SBOM-Artefakt hochladen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 (gepinnt)
+        with:
+          name: sbom-python
+          path: sbom-python.json
+
+      - name: Bekannte CVEs in Abhängigkeiten (pip-audit)
+        # Hartes Gate: keine bekannten CVEs in der hash-geprüften Lockdatei.
+        run: pip-audit -r requirements.lock.txt
+
+      - name: Static Application Security Testing (bandit)
+        # Hartes Gate auf HIGH-Severity-Funde (lokaler Lauf: 0 Funde).
+        env:
+          PYTHONIOENCODING: utf-8
+        run: bandit -q -lll -r main.py core_dispatcher.py backend archon -x tests,scripts

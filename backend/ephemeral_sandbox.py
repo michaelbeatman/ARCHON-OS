@@ -89,7 +89,19 @@ def _ensure_sandbox_network(net_name: Optional[str] = None) -> None:
     except ZeroEgressNetworkIsolationError:
         raise
     except Exception as exc:
-        logger.error("Zero-Egress-Verifikation des Docker-Netzwerks '%s' fehlgeschlagen (Netzwerk-Isolation NICHT verifiziert): %s", target_net, exc)
+        # FRUEHER: nur geloggt und trotzdem ausgefuehrt. Im Compose-Stack ist
+        # NETWORKS=0 fuer den Socket-Proxy, also schlug inspect regelmaessig
+        # fehl und die Isolation wurde NIE verifiziert. Jetzt hart fail-closed.
+        raise ZeroEgressNetworkIsolationError(
+            f"Zero-Egress-Verifikation des Docker-Netzwerks '{target_net}' fehlgeschlagen "
+            f"(Isolation nicht verifiziert): {exc}"
+        ) from exc
+    else:
+        if insp.returncode != 0 or not insp.stdout.strip():
+            raise ZeroEgressNetworkIsolationError(
+                f"Zero-Egress-Verifikation des Docker-Netzwerks '{target_net}' fehlgeschlagen "
+                f"(returncode={insp.returncode}) — Ausführung verweigert!"
+            )
 
 
 def _ensure_sandbox_temp_dir():

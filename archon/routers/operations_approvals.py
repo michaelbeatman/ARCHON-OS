@@ -9,15 +9,44 @@ logger = logging.getLogger("archon.routers.operations_approvals")
 
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.routers._rbac import require_admin_or_503, require_session_actor
+
+
+class ApprovalPolicyUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    policy_key: str = Field(min_length=1, max_length=120)
+    new_value: str = ""
+
+
+class ApprovalRequestCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    domain: str = "finance"
+    title: str = Field(min_length=1, max_length=300)
+    amount: float = Field(default=0.0, ge=0)
+    reference_id: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
+
+
+class ApprovalRejectRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class DelegationSetRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    is_active: bool = False
+    substitute_id: str = "katharina"
+    substitute_name: str = "Katharina Völk (QM)"
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 
 @router.get("/approvals/policies")
-def api_get_approval_policies(domain: Optional[str] = None):
+def api_get_approval_policies(request: Request, domain: Optional[str] = None):
     """Gibt alle aktiven Freigaberegeln (optional gefiltert nach Domain) zurück."""
+    require_admin_or_503(request)  # Freigabepolicies sind administrativ
     try:
         from backend.approval_policy_engine import approval_engine
         policies = approval_engine.get_policies(domain=domain)
@@ -27,11 +56,11 @@ def api_get_approval_policies(domain: Optional[str] = None):
 
 
 @router.post("/approvals/policies")
-def api_update_approval_policy(request: Request, req: Dict[str, Any] = Body(...)):
+def api_update_approval_policy(request: Request, req: ApprovalPolicyUpdateRequest):
     """Aktualisiert eine Freigaberegel revisionssicher mit SHA-256 Hash-Kette."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    policy_key = req.get("policy_key", "").strip()
-    new_value = str(req.get("new_value", "")).strip()
+    policy_key = req.policy_key.strip()
+    new_value = req.new_value.strip()
     user_id = require_session_actor(request)
 
     if not policy_key or new_value == "":
@@ -48,8 +77,9 @@ def api_update_approval_policy(request: Request, req: Dict[str, Any] = Body(...)
 
 
 @router.get("/approvals/requests")
-def api_get_approval_requests(status: Optional[str] = None, domain: Optional[str] = None):
-    """Gibt Freigabeanfragen aus der Warteschlange zurück."""
+def api_get_approval_requests(request: Request, status: Optional[str] = None, domain: Optional[str] = None):
+    """Gibt Freigabeanfragen aus der Warteschlange zurück (inkl. Beträge/Payloads)."""
+    require_admin_or_503(request)
     try:
         from backend.approval_policy_engine import approval_engine
         requests = approval_engine.get_requests(status=status, domain=domain)
@@ -59,16 +89,13 @@ def api_get_approval_requests(status: Optional[str] = None, domain: Optional[str
 
 
 @router.post("/approvals/requests")
-def api_create_approval_request(req: Dict[str, Any] = Body(...)):
+def api_create_approval_request(req: ApprovalRequestCreate):
     """Erstellt eine neue Freigabeanfrage und evaluiert Auto-Freigabe Schwellenwerte."""
-    domain = req.get("domain", "finance").strip()
-    title = req.get("title", "").strip()
-    amount = float(req.get("amount", 0.0))
-    reference_id = req.get("reference_id")
-    payload = req.get("payload")
-
-    if not title:
-        raise HTTPException(status_code=400, detail={"code": "approvals_title_required", "params": {}})
+    domain = req.domain.strip()
+    title = req.title.strip()
+    amount = req.amount
+    reference_id = req.reference_id
+    payload = req.payload
 
     try:
         from backend.approval_policy_engine import approval_engine
@@ -85,7 +112,7 @@ def api_create_approval_request(req: Dict[str, Any] = Body(...)):
 
 
 @router.post("/approvals/requests/{request_id}/approve")
-def api_approve_request(request: Request, request_id: str, req: Dict[str, Any] = Body(default={})):
+def api_approve_request(request: Request, request_id: str):
     """Gibt eine anhängige Anfrage frei (unterstützt 1. und 2. Prüfer)."""
     require_admin_or_503(request)
     approver_id = require_session_actor(request)
@@ -110,13 +137,11 @@ def api_approve_request(request: Request, request_id: str, req: Dict[str, Any] =
 
 
 @router.post("/approvals/requests/{request_id}/reject")
-def api_reject_request(request: Request, request_id: str, req: Dict[str, Any] = Body(...)):
+def api_reject_request(request: Request, request_id: str, req: ApprovalRejectRequest):
     """Lehnt eine anhängige Freigabeanfrage mit Begründung ab."""
     require_admin_or_503(request)
     rejected_by = require_session_actor(request)
-    reason = req.get("reason", "").strip()
-    if not reason:
-        raise HTTPException(status_code=400, detail={"code": "approvals_reason_required", "params": {}})
+    reason = req.reason.strip()
 
     try:
         from backend.approval_policy_engine import approval_engine
@@ -150,13 +175,13 @@ def api_get_delegation(user_id: str = "admin"):
 
 
 @router.post("/approvals/delegation")
-def api_set_delegation(request: Request, req: Dict[str, Any] = Body(...)):
+def api_set_delegation(request: Request, req: DelegationSetRequest):
     """Aktiviert oder deaktiviert den Urlaubsmodus mit Stellvertretung."""
     require_admin_or_503(request)
     user_id = require_session_actor(request)
-    is_active = bool(req.get("is_active", False))
-    substitute_id = req.get("substitute_id", "katharina").strip()
-    substitute_name = req.get("substitute_name", "Katharina Völk (QM)").strip()
+    is_active = req.is_active
+    substitute_id = req.substitute_id.strip()
+    substitute_name = req.substitute_name.strip()
 
     try:
         from backend.approval_policy_engine import approval_engine
@@ -172,8 +197,9 @@ def api_set_delegation(request: Request, req: Dict[str, Any] = Body(...)):
 
 
 @router.get("/approvals/audit-chain")
-def api_get_approval_audit_chain(limit: int = 50):
+def api_get_approval_audit_chain(request: Request, limit: int = 50):
     """Liefert die kryptografisch verkettete Revisionshistorie (GoBD/ISO 27001)."""
+    require_admin_or_503(request)
     try:
         from backend.approval_policy_engine import approval_engine
         chain = approval_engine.get_audit_chain(limit=limit)
@@ -183,8 +209,9 @@ def api_get_approval_audit_chain(limit: int = 50):
 
 
 @router.get("/approvals/audit-verify")
-def api_verify_approval_audit():
+def api_verify_approval_audit(request: Request):
     """Überprüft die mathematische Gültigkeit der gesamten SHA-256 Hash-Kette."""
+    require_admin_or_503(request)
     try:
         from backend.approval_policy_engine import approval_engine
         integrity = approval_engine.verify_audit_integrity()

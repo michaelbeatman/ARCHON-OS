@@ -103,13 +103,22 @@ def classify_prompt(prompt: str) -> dict:
     if cfg["fast_path_enabled"]:
         local_hit = match_local_fast_path(prompt)
         if local_hit:
+            # Lokales Pattern ist echt (0 ms), wird aber nur als Routing-Hinweis
+            # genutzt — nicht als simulierter LLM-Erfolg.
+            local_hit["demo_only"] = False
+            local_hit["mode"] = "local_pattern"
             return local_hit
 
-    # 2. Falls kein lokaler Treffer, aber JEV aktiv:
+    # 2. Kein lokaler Treffer: der fruehere "confidence 0.95" war ein
+    # fest verdrahteter Platzhalter, kein echter JEV-Remote-Entscheid.
+    # Explizit als Demo kennzeichnen statt Erfolg vorzutaeuschen.
     return {
         "action": "llm_required",
         "intent": "general_task",
-        "confidence": 0.95
+        "confidence": 0.0,
+        "demo_only": True,
+        "mode": "heuristic_demo",
+        "reason": "no_remote_jev_decision_available",
     }
 
 def prune_tools(prompt: str, available_tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

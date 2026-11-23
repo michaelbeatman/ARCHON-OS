@@ -151,7 +151,14 @@ def interact_with_bot_screen(request: Request, action_data: ScreenInteractionMod
             detail="Interaktion blockiert: Notfall-Abbruch aktiv oder Steuerung gesperrt.",
         )
     _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
-    return {"status": "success", "echo": action_data.dict()}
+    # Ehrlicher Status: ohne angebundene Computer-Use-Runtime findet keine
+    # echte Interaktion statt. "success" wäre hier Theater (Audit 23.11.).
+    return {
+        "status": "simulated",
+        "simulation": True,
+        "reason": "Keine Computer-Use-Runtime angebunden — Interaktion nicht ausgeführt.",
+        "echo": action_data.model_dump(),
+    }
 
 
 @router.post("/bot-screen/abort")

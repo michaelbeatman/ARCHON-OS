@@ -22,23 +22,31 @@ from backend.delegation_isolation import mark_session_tainted_on_tool_read
 logger = logging.getLogger("archon.tool_runtime")
 
 
-def _emit_tool_event(kind: str, payload: Dict[str, Any]) -> None:
+def _emit_tool_event(kind: str, payload: Dict[str, Any]) -> bool:
+    """Gibt True zurueck, wenn eine erforderliche GoBD-Audit-Schreibung klappte.
+
+    B1: frueher wurden Audit-Fehler verschluckt und der Tool-Call lief trotzdem
+    (oder der Block wurde nicht nachweisbar protokolliert).
+    """
     try:
         from archon.core.runtime import broadcast_event
         broadcast_event("tool_runtime", {"event": kind, **payload})
-    except Exception:
-        pass
-    if kind == "tool.blocked":
-        try:
-            from backend.audit_log import chained_audit_log
-            chained_audit_log.record_event(
-                category="tool_runtime",
-                action="tool_blocked",
-                agent_id=str(payload.get("agent_id") or "system"),
-                payload=payload,
-            )
-        except Exception:
-            pass
+    except Exception as exc:
+        logger.warning("[ToolRuntime] Event-Broadcast fehlgeschlagen: %s", exc)
+    if kind != "tool.blocked":
+        return True
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="tool_runtime",
+            action="tool_blocked",
+            agent_id=str(payload.get("agent_id") or "system"),
+            payload=payload,
+        )
+        return True
+    except Exception as exc:
+        logger.error("[ToolRuntime] GoBD-Audit-Schreibung fuer tool.blocked fehlgeschlagen: %s", exc)
+        return False
 
 
 def enforce_tool_execution(
@@ -68,13 +76,23 @@ def enforce_tool_execution(
         warrant=warrant,
     )
     if not gate.get("allowed"):
-        _emit_tool_event("tool.blocked", {
+        audit_ok = _emit_tool_event("tool.blocked", {
             "agent_id": clean_agent,
             "session_id": clean_session,
             "tool_name": clean_tool,
             "reason": gate.get("reason", "gate_denied"),
             "gate": gate.get("gate"),
         })
+        if not audit_ok:
+            # B1: ohne GoBD-Auditnachweis darf kein (auch kein blockierter)
+            # Tool-Call unbemerkt durchgereicht werden.
+            return {
+                **gate,
+                "allowed": False,
+                "blocked": True,
+                "gate": "audit_write_failed",
+                "reason": "audit_write_failed",
+            }
         return gate
 
     _emit_tool_event("tool.allowed", {
@@ -90,6 +108,56 @@ def enforce_tool_execution(
         "privileged": bool(gate.get("privileged")),
         "obligations": gate.get("obligations") or [],
     }
+
+
+_GUARDED_TEXT_FIELDS = ("content", "result", "output", "text", "error", "message", "stdout", "stderr")
+
+
+def _guard_text(tool_name: str, text: Any) -> Any:
+    try:
+        from backend.tool_output_firewall import guard_tool_output
+        guarded = guard_tool_output(tool_name, text)
+        return guarded.get("output", text)
+    except Exception as exc:
+        # Fail-closed: bei Ausfall des Guards darf kein ungefilterter Output in
+        # den LLM-Kontext (Secrets/Prompt-Injection).
+        logger.error("[ToolRuntime] Output-Guard fehlgeschlagen: %s", exc)
+        return "[OUTPUT_GUARD_UNAVAILABLE — Inhalt aus Sicherheitsgruenden verworfen]"
+
+
+def guard_result(tool_name: str, result: Any) -> Any:
+    """F10: oeffentlicher Pflicht-Chokepoint fuer alle Tool-Resultate.
+
+    Maskiert Secrets/PII, scannt auf Injection und packt externe Outputs in
+    Untrusted-Delimiter. Bei Dict-Results bleiben Struktur und Status erhalten;
+    nur die Textfelder werden gehaertet (DAG-/API-Kompatibilitaet).
+    """
+    if isinstance(result, dict):
+        guarded = dict(result)
+        # FRUEHER: nur eine Whitelist von 8 Feldern — MCP/Plugin-Results mit
+        # data/body/response/structuredContent/html blieben ungefiltert.
+        # Jetzt: alle String-Blätter (mit Tiefe-/Anzahl-Limit) rekursiv haerten.
+        seen = 0
+        def _walk(v: Any, depth: int = 0) -> Any:
+            nonlocal seen
+            if depth > 6 or seen > 200:
+                return v
+            if isinstance(v, str):
+                if v:
+                    seen += 1
+                    return _guard_text(tool_name, v)
+                return v
+            if isinstance(v, dict):
+                return {k: _walk(val, depth + 1) for k, val in v.items()}
+            if isinstance(v, (list, tuple)):
+                return [_walk(x, depth + 1) for x in v]
+            return v
+        return _walk(guarded)
+    return _guard_text(tool_name, result)
+
+
+# Rueckwaerts kompatibel zum bisherigen internen Namen.
+_guard_tool_result = guard_result
 
 
 def record_tool_read_side_effect(session_id: str, tool_name: str) -> None:
@@ -131,7 +199,7 @@ async def execute_agent_tool(
         if tool_name in exported:
             res = await pm.execute_plugin_tool(tool_name, call_args)
             record_tool_read_side_effect(session_id, tool_name)
-            return {"status": "success", "source": "plugin", "result": res}
+            return {"status": "success", "source": "plugin", "result": _guard_tool_result(tool_name, res)}
     except Exception as exc:
         return {"status": "error", "source": "plugin", "error": str(exc)}
 
@@ -147,6 +215,6 @@ async def execute_agent_tool(
                 "result": res,
             }
         record_tool_read_side_effect(session_id, tool_name)
-        return {"status": "success", "source": "mcp", "result": res}
+        return {"status": "success", "source": "mcp", "result": _guard_tool_result(tool_name, res)}
     except Exception as exc:
         return {"status": "error", "source": "mcp", "error": str(exc)}

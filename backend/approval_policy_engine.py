@@ -17,6 +17,8 @@ import datetime
 import threading
 from typing import Dict, Any, List, Optional
 
+WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 try:
     from backend.db_paths import resolve_db
     DB_FILE = resolve_db("agentic_memory.db")

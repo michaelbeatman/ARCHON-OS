@@ -299,11 +299,18 @@
       try { await _withTimeout(fetchMissionControlData(false), 12000, "fetchMissionControlData"); }
       catch (e) { console.error("[AppShell] fetchMissionControlData:", e); }
       startMissionControlStopwatches();
-      if (!window.__mc_poll_interval) {
-        window.__mc_poll_interval = setInterval(() => {
+      // Frueher alle 30s polled — jetzt ereignisgesteuert ueber den gemeinsamen
+      // 'archon:sse'-Bus (eine Verbindung, kein Dauer-Timer).
+      if (!window.__mc_sse_bound) {
+        window.__mc_sse_bound = true;
+        window.addEventListener('archon:sse', function (ev) {
+          const msg = ev && ev.detail;
+          if (!msg || !['kanban_updated', 'task_captured'].includes(msg.type)) return;
           if (document.hidden) return;
           if (typeof currentTab !== "undefined" && currentTab !== "mission-control") return;
           fetchMissionControlData(false);
-        }, 30000);
+        });
+        if (typeof initOpsRealtimeStream === "function") initOpsRealtimeStream();
+        else if (window.archonSSEBus) window.archonSSEBus.ensure();
       }
     };

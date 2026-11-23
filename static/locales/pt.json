@@ -1735,6 +1735,7 @@
       "delete_title": "Arquivar / eliminar artigo"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "Editor de layout de formulário atualmente indisponível",
       "kontakte_crm_adressstamm": "Contatos — Dados mestres do CRM",
       "mandant_archon_systems": "Mandante: archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "Tabela completa de contatos e CRM (SQLite de alto desempenho)",
@@ -3802,6 +3803,8 @@
       "quality_gate_hint": "Revisão por pares independente antes de mover para \"Done\"",
       "review_start": "Iniciar revisão",
       "human_approve": "Aprovar",
+      "human_reject": "Rejeitar",
+      "human_reject_title": "Rejeitar manualmente — solicitar alterações sem revisão por IA",
       "critique_label": "Pontos de crítica / correção:",
       "next_steps_label": "Próximos passos:",
       "feedback_loop": "⭐ Loop de feedback humano",
@@ -4359,7 +4362,7 @@
       "label_saved": "Salvo!",
       "log_connecting": "Conectando ao log do agente...",
       "log_empty": "Nenhum log recente em segundo plano para este agente.",
-      "log_fallback_ready": "Agente pronto em modo de espera.",
+      "log_fallback_ready": "Feed ao vivo temporariamente indisponível. Tente novamente.",
       "log_fallback_router": "Porta 20128 ativa. Sem avisos.",
       "log_telemetry_header": "⚡ Telemetria do sistema e do daemon:",
       "log_turns_header": "💬 Últimos turnos de conversa:",
@@ -5391,6 +5394,7 @@
       "move_complete": "Concluir",
       "move_failed": "Status {status}: a tarefa não pôde ser atualizada",
       "move_open_operations": "Abrir em Operations",
+      "task_open_detail_hint": "Abrir detalhes da tarefa",
       "move_reject": "❌ Rejeitar",
       "move_review": "Revisar",
       "move_start": "Iniciar",

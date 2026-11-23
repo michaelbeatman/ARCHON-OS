@@ -65,7 +65,19 @@ class DeadlockSupervisor:
 
     @staticmethod
     def _pid_alive(pid: Any) -> bool:
-        """Signalfreie Liveness-Prüfung (signal 0 = nur Existenz-Check)."""
+        """Plattform-sichere Liveness-Prüfung.
+
+        WICHTIG: ``os.kill(pid, 0)`` ist auf Windows KEIN harmloser
+        Existenz-Check. Dort ist ``0 == signal.CTRL_C_EVENT``; der Aufruf
+        stellt tatsächlich ein Ctrl+C an den Zielprozess zu (oder schlägt
+        fehl), woraufhin der Supervisor den Worker fälschlich als "tot"
+        markiert und den Task reaktiviert. Der 30-s-Loop könnte so laufende
+        Agenten alle 30 Sekunden unterbrechen.
+
+        Wir verwenden daher psutil (Runtime-Dependency aus requirements.txt).
+        Nur wenn psutil nicht verfügbar ist, gibt es einen POSIX-Fallback;
+        unter Windows gilt im Zweifel "lebendig", niemals "tot".
+        """
         try:
             value = int(pid)
         except (TypeError, ValueError):
@@ -73,10 +85,16 @@ class DeadlockSupervisor:
         if value <= 0:
             return False
         try:
-            os.kill(value, 0)
-            return True
-        except (OSError, ValueError):
-            return False
+            import psutil  # type: ignore[import-not-found]
+            return bool(psutil.pid_exists(value))
+        except Exception:  # pragma: no cover - psutil ist Runtime-Dependency
+            if os.name == "nt":
+                return True
+            try:
+                os.kill(value, 0)
+                return True
+            except (OSError, ValueError):
+                return False
 
     def _ensure_lease_columns(self, conn) -> None:
         """P0-6: MC-`tasks` hatte urspruenglich keine Claim-Spalten.

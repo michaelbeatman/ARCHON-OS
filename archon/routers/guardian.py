@@ -15,6 +15,8 @@ import datetime
 import sqlite3
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import add_ticker, logger, MEMORY_DIR
 from archon.core.paths import (
@@ -29,6 +31,37 @@ from archon.core.paths import (
 from backend.db_paths import get_db_connection
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["guardian"])
+
+
+# --- Pydantic-v2 Payload-Modelle ---
+
+class GuardianConfigSave(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    daily_budget: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    task_budget: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    max_context_tokens: Optional[int] = Field(default=None, ge=1, le=10_000_000)
+    max_history_messages: Optional[int] = Field(default=None, ge=0, le=100_000)
+    max_steps_per_task: Optional[int] = Field(default=None, ge=1, le=100_000)
+    session_timeout_seconds: Optional[int] = Field(default=None, ge=1, le=86_400)
+    loop_detection_enabled: Optional[bool] = None
+    cache_ttl_hours: Optional[int] = Field(default=None, ge=0, le=87_600)
+    max_cache_entries: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    watchdog_interval_seconds: Optional[int] = Field(default=None, ge=1, le=86_400)
+
+
+class PluginToggleRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    plugin_id: Optional[str] = Field(default=None, max_length=128)
+    id: Optional[str] = Field(default=None, max_length=128)
+    enable: Optional[bool] = None
+    enabled: Optional[bool] = None
+
+
+class PluginConfigSave(BaseModel):
+    """Plugin-Config ist plugin-spezifisch: beliebige Schluessel bleiben erhalten."""
+    model_config = ConfigDict(extra="allow")
+    config: Optional[Dict[str, Any]] = None
+
 
 # D-21: Der Cache war unbeschaenzt und der Schluessel ein freier
 # Query-Parameter. Jeder neue ``?timeframe=``-Wert erzeugte einen
@@ -461,10 +494,11 @@ def api_get_guardian_config():
     }
 
 @router.post("/api/guardian/config")
-def api_save_guardian_config(request: Request, payload: dict):
+def api_save_guardian_config(request: Request, payload: GuardianConfigSave):
     """Speichert Budget-Limits, Session-Schranken und Wächter-Einstellungen."""
-    # Speichere Budget
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    payload = payload.model_dump(exclude_unset=True)
+    # Speichere Budget
     cost_budget_file = os.path.expanduser("~/.hermes/cost-budget.json")
     if not os.path.exists(cost_budget_file):
         cost_budget_file = os.path.join(OPT_DATA_DIR, "cost-budget.json")
@@ -519,17 +553,18 @@ def api_save_guardian_config(request: Request, payload: dict):
 
 @router.post("/api/guardian/plugins/toggle")
 @router.post("/api/guardian/plugin/toggle")
-def api_toggle_guardian_plugin(request: Request, payload: dict):
+def api_toggle_guardian_plugin(request: Request, payload: PluginToggleRequest):
     """Aktiviert oder deaktiviert ein Plugin in Hermes."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     import yaml
+    payload = payload.model_dump(exclude_unset=True)
     plugin_id = payload.get("plugin_id") or payload.get("id")
     enable = payload.get("enable")
     if enable is None:
         enable = payload.get("enabled", True)
     
     if not plugin_id:
-        return {"status": "error", "message": "plugin_id fehlt"}
+        return JSONResponse(status_code=400, content={"status": "error", "message": "plugin_id fehlt"})
         
     config_file = os.path.expanduser("~/.hermes/config.yaml")
     if not os.path.exists(config_file):
@@ -579,7 +614,7 @@ def api_toggle_guardian_plugin(request: Request, payload: dict):
         add_ticker("Guardian", f"Modul '{plugin_id}' {'aktiviert' if enable else 'deaktiviert'} (settings.json synchronisiert).")
         return {"status": "success", "plugin_id": plugin_id, "enabled": bool(enable)}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 _PLUGIN_AUTONOMY_BRIDGE = {
@@ -971,12 +1006,16 @@ def api_get_plugin_config(plugin_id: str):
     return {"status": "success", "plugin_id": plugin_id, "config": data}
 
 @router.post("/api/guardian/plugins/{plugin_id}/config")
-def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
+def api_save_plugin_config(request: Request, plugin_id: str, payload: PluginConfigSave):
     """Speichert Konfigurationsänderungen für ein Plugin und synchronisiert sie mit Systemdateien."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     _validate_plugin_id(plugin_id)
     import yaml
-    cfg = payload.get("config", payload)
+    # Direkte Aufrufer senden das Config-Dict oft ohne 'config'-Wrapper.
+    # Pydantic v2 validiert es hier nach (kein 500er mehr).
+    if isinstance(payload, dict):
+        payload = PluginConfigSave(**({"config": payload} if "config" not in payload else payload))
+    cfg = payload.config if payload.config is not None else (payload.model_extra or {})
     if not isinstance(cfg, dict):
         cfg = {}
 
@@ -1173,7 +1212,7 @@ def api_save_plugin_config(request: Request, plugin_id: str, payload: dict):
         add_ticker("Guardian", f"Einstellungen für Modul '{plugin_id}' gespeichert (settings.json synchronisiert).")
         return {"status": "success", "plugin_id": plugin_id, "message": "Gespeichert", "config": cfg}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 @router.post("/api/guardian/cache/clear", dependencies=[_ArchonDepends(require_admin_or_503)])
 def api_clear_guardian_cache():

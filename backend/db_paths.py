@@ -103,6 +103,17 @@ def resolve_db(filename: str) -> str:
     oder `memory.db` umgeleitet, sobald die konsolidierte Zieldatei existiert.
     """
     base = os.path.basename(str(filename or "").strip())
+    # EIN Resolver: bei aktiver Voll-Isolation (Benutzerentscheidung 22.11.)
+    # ist tenant_context.resolve_active_db die einzige Autoritaet. Vorher
+    # lieferte resolve_db globale data/*.db, tenant_context aber
+    # data/tenants/<tid>/*.db -> Split-Brain, DSGVO-Loeschung traf die falsche
+    # Datei und Backup sicherte nur die Haelfte.
+    try:
+        from backend.tenant_context import FULL_TENANT_ISOLATION, tenant_context
+        if FULL_TENANT_ISOLATION:
+            return tenant_context.resolve_active_db(base)
+    except Exception as exc:
+        logger.debug(f"[db_paths] Tenant-Resolver nicht verfuegbar: {exc}")
     try:
         from backend.db_consolidation import is_consolidation_active, resolve_consolidated_domain
         if base not in CONSOLIDATED_DB_FILENAMES and is_consolidation_active(APP_DATA_DIR):

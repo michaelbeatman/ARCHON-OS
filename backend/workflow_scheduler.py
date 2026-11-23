@@ -13,7 +13,7 @@ import os
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DEFAULT_SCHEDULES_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "workflow_schedules.db")
@@ -568,8 +568,16 @@ def _run_content_publish_sweep(now: datetime) -> None:
         return
     _CONTENT_PUBLISH_LAST_TS = now
     try:
-        from backend.content_machine import publish_scheduled_due_assets
-        res = publish_scheduled_due_assets()
+        from backend.content_machine import (
+            publish_scheduled_due_assets,
+            get_default_publish_webhook_url,
+        )
+        # Ohne Ziel-URL markierte der Sweep das Asset nur als 'published',
+        # ohne es tatsaechlich auszuliefern. Die URL kommt zentral aus ENV
+        # (ARCHON_CONTENT_PUBLISH_WEBHOOK) oder settings.json.
+        res = publish_scheduled_due_assets(
+            webhook_url=get_default_publish_webhook_url() or None
+        )
         if res.get("errors"):
             logger.warning(
                 "[WorkflowScheduler] Content-Publish-Sweep mit Fehlern: %s",
@@ -734,6 +742,21 @@ def _create_hitl_decision(
         logger.warning(f"[WorkflowScheduler] HITL-Decision fuer Event {event_id} fehlgeschlagen: {exc}")
 
 
+def _enqueue_telemetry(event_type: str, payload: Dict[str, Any]) -> None:
+    """Optionaler Hook in den Async-Write-Batcher (Finding 8).
+
+    Der Batcher hatte keinen einzigen Produzenten. Alle hier erzeugten
+    Telemetrie-Events fliessen jetzt tatsaechlich in den Batcher (und von dort
+    gebuendelt in `batched_telemetry_events`). Ein Batcher-Ausfall darf nie den
+    Workflow-Dispatch selbst blockieren.
+    """
+    try:
+        from backend.async_write_batcher import async_write_batcher
+        async_write_batcher.enqueue(event_type, "backend.workflow_scheduler", payload)
+    except Exception as exc:
+        logger.debug("[WorkflowScheduler] Telemetrie-Hook nicht verfuegbar: %s", exc)
+
+
 def dispatch_workflow_event(
     source: str,
     event_type: str,
@@ -887,6 +910,13 @@ def dispatch_workflow_event(
             })
         except Exception:
             pass
+        _enqueue_telemetry("workflow_event", {
+            "event_id": event_id,
+            "source": src,
+            "event_type": str(event_type or "event"),
+            "status": status,
+            "triggered": [r.get("run_id") for r in triggered_runs if r.get("run_id")],
+        })
         return {"event_id": event_id, "status": status, "triggered": triggered_runs}
     finally:
         conn.close()
@@ -1045,6 +1075,7 @@ async def workflow_scheduler_background_loop() -> None:
             logger.error(f"[WorkflowScheduler] Loop-Fehler: {exc}")
         # Outbox-Retry: fehlgeschlagene Webhooks werden im Hintergrund
         # erneut zugestellt (mit Idempotency-Key, nach 5 Versuchen → DLQ).
+        outbox: Dict[str, Any] = {}
         try:
             from backend.event_mesh import event_mesh
             outbox = await asyncio.to_thread(event_mesh.process_outbox)
@@ -1052,4 +1083,133 @@ async def workflow_scheduler_background_loop() -> None:
                 logger.info(f"[WorkflowScheduler] Outbox: {outbox}")
         except Exception as exc:
             logger.warning(f"[WorkflowScheduler] Outbox-Retry fehlgeschlagen: {exc}")
+        # Shared Queue: frueher gab es fuer die DLQ keinen produktiven
+        # Consumer — fehlgeschlagene Delegationen blieben ewig 'queued'.
+        dlq_result: Dict[str, Any] = {}
+        try:
+            dlq_result = await _drain_shared_queue()
+        except Exception as exc:
+            logger.warning(f"[WorkflowScheduler] DLQ-Drain fehlgeschlagen: {exc}")
+            dlq_result = {"error": str(exc)[:300]}
+        _enqueue_telemetry("scheduler_cycle", {
+            "outbox_processed": outbox.get("processed", 0),
+            "outbox_dead": outbox.get("dead", 0),
+            "dlq_handled": dlq_result.get("handled", 0),
+            "dlq_failed": dlq_result.get("failed", 0),
+            "dlq_unhandled": dlq_result.get("unhandled", 0),
+        })
         await asyncio.sleep(30)
+
+
+async def _handle_delegation_result(payload: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
+    """Echter Handler: re-dispatched eine fehlgeschlagene Delegation.
+
+    Der DLQ-Eintrag enthaelt task_id/agent_id. Wir starten den Kanban-Task
+    erneut (die gleiche Ausfuehrung, die die Delegation urspruenglich nutzta)
+    und reaktivieren zusaetzlich den Watcher, damit das Ergebnis zurueck zur
+    Sub-Session fliesst.
+    """
+    task_id = str(payload.get("task_id") or "").strip()
+    if not task_id:
+        raise ValueError("delegation_result ohne task_id — kein Re-Dispatch moeglich.")
+
+    from backend.operations_api import _execute_kanban_task_async, _get_kanban_connection
+    conn = _get_kanban_connection()
+    try:
+        row = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    finally:
+        conn.close()
+    status = str(row[0]) if row else ""
+    if not row:
+        raise KeyError(f"Kanban-Task '{task_id}' nicht gefunden — Delegation nicht wiederholbar.")
+    # Nicht in eine laufende/abgeschlossene Ausfuehrung greifen (idempotent).
+    if status in ("in_progress", "done", "review"):
+        return {"redispatched": False, "reason": f"task_status={status}", "task_id": task_id}
+
+    await _execute_kanban_task_async(task_id)
+    try:
+        from archon.core.delegation import resume_pending_delegation_watchers
+        await resume_pending_delegation_watchers()
+    except Exception as exc:
+        logger.debug("[WorkflowScheduler] Delegations-Watcher-Reaktivierung: %s", exc)
+    return {"redispatched": True, "task_id": task_id, "agent_id": payload.get("agent_id")}
+
+
+async def _handle_workflow_resume(payload: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
+    """Echter Handler fuer Startup-Recovery-Checkpoints: Workflow-Restart."""
+    run_id = str(payload.get("run_id") or item.get("task_id") or "").strip()
+    if not run_id:
+        raise ValueError("workflow_resume ohne run_id.")
+    from backend.workflow_dag_runner import resume_workflow_run
+    result = await resume_workflow_run(run_id=run_id)
+    return {"run_id": run_id, "status": result.get("status"), "resume_from_step": payload.get("resume_from_step")}
+
+
+async def _handle_webhook_delivery(payload: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
+    """Echter Konsument fuer dead-Outbox-Einträge (Audit 23.11.2026).
+
+    Der Producer (event_mesh.process_outbox) enqueut `webhook_delivery`; ohne
+    Handler endete der Job in der DLQ dauerhaft dead, statt erneut zugestellt
+    zu werden. Der vorhandene Replay-Executor wird wiederverwendet.
+    """
+    from backend.dead_letter_queue import _builtin_executor
+    executor = _builtin_executor("webhook_delivery")
+    if executor is None:
+        raise RuntimeError("Kein Webhook-Replay-Executor registriert.")
+    return await asyncio.to_thread(executor, payload, item)
+
+
+_SHARED_QUEUE_HANDLERS: Dict[str, Callable[[Dict[str, Any], Dict[str, Any]], Awaitable[Dict[str, Any]]]] = {
+    "delegation_result": _handle_delegation_result,
+    "workflow_resume": _handle_workflow_resume,
+    "webhook_delivery": _handle_webhook_delivery,
+}
+
+
+async def _drain_shared_queue(max_jobs: int = 5) -> Dict[str, Any]:
+    """Claimt und bearbeitet faellige DLQ-Jobs (CAS + Lease, echter Handler je job_type)."""
+    from backend.dead_letter_queue import dead_letter_queue_manager as dlq
+
+    handled = failed = unhandled = 0
+    for _ in range(max_jobs):
+        item = await asyncio.to_thread(dlq.claim_next, "workflow_scheduler", lease_seconds=120)
+        if not item:
+            break
+        job_type = str(item.get("job_type") or "")
+        payload = item.get("payload") or {}
+        try:
+            from archon.core.runtime import add_ticker, broadcast_event
+            broadcast_event("delegation_failed", {
+                "dlq_id": item.get("dlq_id"),
+                "job_type": job_type,
+                "payload": payload,
+            })
+            add_ticker(
+                "Shared Queue",
+                f"Job '{job_type}' aus {item.get('source_module') or 'unbekannt'} — "
+                f"Task {payload.get('task_id', '?')}: {str(payload.get('status', ''))[:60]}",
+            )
+
+            handler = _SHARED_QUEUE_HANDLERS.get(job_type)
+            if handler is None:
+                # Kein Handler => KEIN complete(): der Job bleibt sichtbar und
+                # wird nach Backoff erneut versucht bzw. nach max_retries dead.
+                unhandled += 1
+                await asyncio.to_thread(
+                    dlq.fail, item["dlq_id"], f"unhandled_job_type:{job_type}"
+                )
+                logger.warning("[WorkflowScheduler] Kein Handler fuer DLQ-Job-Typ '%s' (dlq=%s).", job_type, item.get("dlq_id"))
+                continue
+
+            result = await handler(payload, item)
+            await asyncio.to_thread(
+                dlq.complete,
+                item["dlq_id"],
+                {"handled_by": "workflow_scheduler", "handler": job_type, "result": result},
+            )
+            handled += 1
+        except Exception as exc:
+            failed += 1
+            logger.warning("[WorkflowScheduler] DLQ-Job %s fehlgeschlagen: %s", item.get("dlq_id"), exc)
+            await asyncio.to_thread(dlq.fail, item["dlq_id"], str(exc)[:500])
+    return {"handled": handled, "failed": failed, "unhandled": unhandled}

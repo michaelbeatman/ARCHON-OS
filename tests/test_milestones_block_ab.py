@@ -50,7 +50,11 @@ def test_m93_tool_output_firewall_and_batch():
 
     batch = asyncio.run(run_batch_tool_calls([{"tool": "t1", "args": {"x": 1}}, {"tool": "t2", "args": {"x": 2}}], exec_fn))
     assert len(batch) == 2
-    assert batch[0]["output"] == "t1:1"
+    # Produktiv wird jede Tool-Ausgabe durch die Firewall gewrappt (Audit-Fix).
+    # Geprüft wird, dass der Inhalt erhalten und als untrusted markiert ist.
+    assert "UNTRUSTED TOOL OUTPUT" in batch[0]["output"]
+    assert "t1:1" in batch[0]["output"]
+    assert "t2:2" in batch[1]["output"]
 
 
 def test_m94_lossless_session_dag_and_storm(tmp_path):

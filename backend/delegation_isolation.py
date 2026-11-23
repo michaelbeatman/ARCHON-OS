@@ -14,8 +14,23 @@ filesystem, mcp) werden niemals implizit vererbt.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("archon.delegation_isolation")
+
+# B2: verschluckte GoBD-Audit-Fehler protokollieren und zaehlen.
+_AUDIT_ERROR_COUNTS: Dict[str, int] = {}
+
+
+def _record_audit_error(action: str, exc: BaseException) -> None:
+    _AUDIT_ERROR_COUNTS[action] = _AUDIT_ERROR_COUNTS.get(action, 0) + 1
+    logger.error(
+        "[GoBD-Audit] '%s' fehlgeschlagen (count=%d): %s",
+        action, _AUDIT_ERROR_COUNTS[action], exc,
+    )
+
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_PROFILES_PATH = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
@@ -152,11 +167,16 @@ def enforce_runtime_tool_gate(
     approval_id: Optional[str] = None,
     profiles: Optional[List[Dict[str, Any]]] = None,
     taint_db_path: Optional[str] = None,
+    skip_profile_check: bool = False,
 ) -> Dict[str, Any]:
     """
     Harte Laufzeit-Pruefung (M75 + M89) vor jedem Tool-Aufruf:
     1. M75: Prueft, ob `tool_name` im isolierten Profil-Toolset von `agent_id` liegt.
     2. M89: Prueft, ob `session_id` versiegelt (tainted) ist und HITL-Freigabe braucht.
+
+    `skip_profile_check` darf NUR gesetzt werden, wenn ein verifiziertes
+    Warrant die Profilfreigabe ersetzt. Der M89-/HITL-Teil laeuft IMMER —
+    ein Warrant darf niemals die Session-Versiegelung aushebeln.
     """
     if not agent_id:
         # M75 fail-closed: Ohne Agenten-Kontext ist keine Profil-Freigabe pruefbar.
@@ -166,7 +186,7 @@ def enforce_runtime_tool_gate(
             "gate": "m75_delegation_isolation",
             "reason": "Leere agent_id — M75 fail-closed: Aufrufe brauchen einen Agenten mit Profil-Freigabe.",
         }
-    if not is_tool_allowed_for_agent(agent_id, tool_name, profiles=profiles):
+    if not skip_profile_check and not is_tool_allowed_for_agent(agent_id, tool_name, profiles=profiles):
         return {
             "allowed": False,
             "blocked": True,
@@ -251,20 +271,33 @@ class PolicyEngine:
             )
 
         # M75 + M89 (einzige bestehende Implementierung, single source of truth).
-        # Für privilegierte Tools mit verifiziertem Warrant ist das Warrant
-        # autoritativ — sonst würde die Profilprüfung die Freigabe wieder
-        # kippen, obwohl ein Admin das Warrant genau dafür ausgestellt hat.
-        if not (privileged and verified_warrant):
-            gate = enforce_runtime_tool_gate(
-                agent_id=clean_agent,
-                session_id=clean_session,
-                tool_name=clean_tool,
-                args=call_args,
-                approval_id=approval_id,
-                profiles=profiles,
+        # Ein verifiziertes Warrant ersetzt NUR die Profilfreigabe (M75), niemals
+        # den Session-Taint/HITL-Check (M89). Vorher wurde bei Warrant die ganze
+        # Funktion uebersprungen — eine kontaminierte Session konnte direkt
+        # zahlen/versenden, ohne Freigabe.
+        gate = enforce_runtime_tool_gate(
+            agent_id=clean_agent,
+            session_id=clean_session,
+            tool_name=clean_tool,
+            args=call_args,
+            approval_id=approval_id,
+            profiles=profiles,
+            skip_profile_check=bool(privileged and verified_warrant),
+        )
+        if not gate.get("allowed"):
+            return self._deny(str(gate.get("gate") or "m75_m89"), str(gate.get("reason") or "gate_denied"), base)
+
+        # KRITISCH: auch ERLAUBTE privilegierte Calls brauchen einen
+        # GoBD-Nachweis. Frueher gab _emit(allowed=True) bedingungslos True
+        # zurueck — bei gesperrter Audit-DB liefen privilegierte Tools ohne
+        # Nachweis. Jetzt fail-closed.
+        audit_ok = self._emit(result=None, allowed=True, tool=clean_tool, privileged=bool(gate.get("privileged")))
+        if not audit_ok:
+            return self._deny(
+                "audit_write_failed",
+                "GoBD-Audit-Schreibung fehlgeschlagen — Tool-Ausfuehrung verweigert.",
+                base,
             )
-            if not gate.get("allowed"):
-                return self._deny(str(gate.get("gate") or "m75_m89"), str(gate.get("reason") or "gate_denied"), base)
 
         # Tenant-/Rollen-Obligationen (nur wenn vom Aufrufer geliefert)
         obligations: List[str] = []
@@ -311,26 +344,36 @@ class PolicyEngine:
         return result
 
     @staticmethod
-    def _emit(result: Dict[str, Any], *, allowed: bool) -> None:
-        # Blockierte Tool-Calls waren bisher für Prüfer unsichtbar.
-        if allowed:
-            return
+    def _emit(
+        result: Optional[Dict[str, Any]], *, allowed: bool,
+        tool: str = "", privileged: bool = False,
+    ) -> bool:
+        """Gibt True bei erfolgreicher Audit-Schreibung, False bei Fehler.
+
+        Bei allowed=True wird eine kompakte Nachweis-Zeile geschrieben; bei
+        allowed=False der Deny-Event. Beide Pfaele sind GoBD-pflichtig.
+        """
+        result = result or {}
         try:
             from backend.audit_log import chained_audit_log
+            action = "tool_policy_denied" if not allowed else "tool_policy_allowed"
             chained_audit_log.record_event(
                 category="security",
-                action="tool_policy_denied",
+                action=action,
                 agent_id=str(result.get("agent_id") or "system"),
                 payload={
-                    "tool": result.get("tool"),
+                    "tool": result.get("tool") or tool,
                     "gate": result.get("gate"),
                     "reason": result.get("reason"),
-                    "privileged": bool(result.get("privileged")),
+                    "privileged": bool(result.get("privileged", privileged)),
+                    "decision": "allowed" if allowed else "denied",
                 },
             )
+            return True
         except Exception as exc:
-            logger = __import__("logging").getLogger("archon.policy_engine")
-            logger.debug("[PolicyEngine] Audit-Denial fehlgeschlagen: %s", exc)
+            # B2: frueher nur debug — GoBD-Auditlueicken blieben unsichtbar.
+            _record_audit_error("tool_policy_denied", exc)
+            return False
 
 
 policy_engine = PolicyEngine()

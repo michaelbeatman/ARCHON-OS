@@ -14,7 +14,7 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 # Core-Module (kein main.py Import!)
@@ -87,7 +87,17 @@ class TaskMoveRequest(BaseModel):
 @router.get("/api/mission-control/state")
 async def get_mission_control_state():
     now_mc = time.time()
-    if _MC_STATE_CACHE["data"] is not None and (now_mc - _MC_STATE_CACHE["ts"]) < 3.0:
+    try:
+        from backend.tenant_context import tenant_context
+        _tenant_id = tenant_context.get_active_tenant_id()
+    except Exception:
+        _tenant_id = "default"
+    # Audit 23.11.2026: Cache nur innerhalb desselben Mandanten trefferfähig.
+    if (
+        _MC_STATE_CACHE.get("tenant") == _tenant_id
+        and _MC_STATE_CACHE["data"] is not None
+        and (now_mc - _MC_STATE_CACHE["ts"]) < 3.0
+    ):
         return _MC_STATE_CACHE["data"]
     # SYNC-CALLS IM ASYNC-LOOP = BLOCKIERT BEI LANGSAMKEIT ALLES (gemessen:
     # health parallel 47ms -> 24.571ms). Deshalb aus dem Event-Loop auslagern.
@@ -194,6 +204,7 @@ async def get_mission_control_state():
     }
     _MC_STATE_CACHE["ts"] = now_mc
     _MC_STATE_CACHE["data"] = res_payload
+    _MC_STATE_CACHE["tenant"] = _tenant_id
     return res_payload
 
 
@@ -398,9 +409,11 @@ async def move_mission_control_task(req: TaskMoveRequest):
     if plan.get("execute"):
         get_child_token(f"task:{req.task_id}", f"dispatch:{req.task_id}")
         get_child_token(f"task:{req.task_id}", f"run:{req.task_id}")
-        asyncio.create_task(_DEPS["execute"](task["id"]))
+        from archon.core.task_registry import spawn as _spawn_tracked
+        _spawn_tracked(_DEPS["execute"](task["id"]), name=f"mc_execute:{task['id']}")
     if plan.get("fan_in"):
-        asyncio.create_task(_DEPS["fan_in"](plan["fan_in"]))
+        from archon.core.task_registry import spawn as _spawn_tracked
+        _spawn_tracked(_DEPS["fan_in"](plan["fan_in"]), name=f"mc_fan_in:{plan['fan_in']}")
 
     _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
     broadcast_event("kanban_updated", {"action": "move", "task_id": req.task_id, "status": req.target_status})
@@ -411,8 +424,10 @@ async def move_mission_control_task(req: TaskMoveRequest):
 
 
 @router.post("/api/mission-control/tasks/{task_id}/cancel")
-async def cancel_mission_control_task(task_id: str, reason: str = ""):
+async def cancel_mission_control_task(request: Request, task_id: str, reason: str = ""):
     """Zentraler Abbruch: Task-Root → Dispatch → DAG (und deren Kinder)."""
+    from archon.routers._rbac import require_admin_or_503
+    require_admin_or_503(request)  # Abbruch ist eine Admin-Aktion
     why = str(reason or "operator_cancel")
     cancelled = []
     if cancel_scope(f"task:{task_id}", why):

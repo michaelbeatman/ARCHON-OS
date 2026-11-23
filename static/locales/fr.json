@@ -1735,6 +1735,7 @@
       "delete_title": "Archiver / supprimer l'article"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "Éditeur de mise en page de formulaires actuellement indisponible",
       "kontakte_crm_adressstamm": "Contacts — Données de base CRM",
       "mandant_archon_systems": "Mandant : archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "Table complète des contacts et du CRM (SQLite haute performance)",
@@ -3802,6 +3803,8 @@
       "quality_gate_hint": "Revue par les pairs indépendante avant de passer à « Done »",
       "review_start": "Lancer la revue",
       "human_approve": "Valider",
+      "human_reject": "Refuser",
+      "human_reject_title": "Refuser manuellement — demander des modifications sans revue IA",
       "critique_label": "Points critiques / corrections :",
       "next_steps_label": "Prochaines étapes :",
       "feedback_loop": "⭐ Boucle de rétroaction humaine",
@@ -4359,7 +4362,7 @@
       "label_saved": "Enregistré !",
       "log_connecting": "Connexion au journal de l'agent…",
       "log_empty": "Aucun journal d'arrière-plan récent pour cet agent.",
-      "log_fallback_ready": "Agent prêt en mode veille.",
+      "log_fallback_ready": "Flux en direct momentanément indisponible. Veuillez réessayer.",
       "log_fallback_router": "Port 20128 actif. Aucun avertissement.",
       "log_telemetry_header": "⚡ Télémétrie système et daemon :",
       "log_turns_header": "💬 Derniers échanges :",
@@ -5391,6 +5394,7 @@
       "move_complete": "Terminer",
       "move_failed": "Statut {status} : la tâche n'a pas pu être mise à jour",
       "move_open_operations": "Ouvrir dans Operations",
+      "task_open_detail_hint": "Ouvrir les détails de la tâche",
       "move_reject": "❌ Rejeter",
       "move_review": "Révision",
       "move_start": "Démarrer",

@@ -5,6 +5,9 @@ Provides Kanban (Hermes kanban.db), Org-Chart, and Inter-Agent Communication Fee
 
 import os
 import base64
+import logging
+
+logger = logging.getLogger("archon_os.operations_api")
 
 from backend.platform_paths import HERMES_HOME
 import asyncio
@@ -22,7 +25,7 @@ from fastapi import APIRouter, Request, HTTPException, Query, Body, UploadFile, 
 
 from archon.routers._rbac import require_admin_or_503, forbid_viewer_writes
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter(
     prefix="/api/operations",
@@ -836,8 +839,84 @@ def _ensure_consecutive_failures_column(conn: sqlite3.Connection) -> None:
 
 
 async def _execute_kanban_task_async(task_id: str):
+    """CAS-gesicherter Einstieg: nur ein Worker darf einen Task ausführen.
+
+    Ohne Lease sah der 30-s-Deadlock-Watchdog jeden laufenden Task als
+    'stagnierend' und setzte ihn nach 120 s auf todo — ein zweiter Worker
+    startete, während der erste noch im LLM-Call steckte (doppelte Kosten,
+    doppelte E-Mails/Zahlungen). Der Lease wird hier erworben, per Heartbeat
+    gehalten und im finally freigegeben.
+    """
+    lease_token = ""
+    heartbeat_task = None
+    try:
+        from backend.deadlock_supervisor import deadlock_supervisor
+        claim = await asyncio.to_thread(deadlock_supervisor.acquire_lease, task_id)
+        if not claim.get("acquired"):
+            # task_exists=False ist z.B. in isolierten Tests legitime — dort
+            # ohne Lease ausfuehren, aber niemals bei aktivem fremden Claim.
+            if claim.get("task_exists"):
+                logger.debug(
+                    "[KanbanWorker] Lease fuer '%s' nicht erworben (anderer Worker aktiv) — Skip.",
+                    task_id,
+                )
+                return {"skipped": "lease_held", "task_id": task_id}
+        else:
+            lease_token = str(claim.get("lease_token") or "")
+
+            from backend.cancellation import get_token as _get_cancel_token
+            cancel_token = _get_cancel_token(f"task:{task_id}")
+
+            async def _hb() -> None:
+                while True:
+                    await asyncio.sleep(30)
+                    try:
+                        ok = await asyncio.to_thread(
+                            deadlock_supervisor.heartbeat, task_id, lease_token
+                        )
+                        if not ok:
+                            logger.warning(
+                                "[KanbanWorker] Lease '%s' verloren — Ausfuehrung wird abgebrochen.",
+                                task_id,
+                            )
+                            cancel_token.cancel("lease_lost")
+                            return
+                    except Exception as exc:
+                        logger.debug("[KanbanWorker] Heartbeat-Hinweis: %s", exc)
+
+            heartbeat_task = asyncio.create_task(_hb(), name=f"kanban_lease_{task_id}")
+    except Exception as exc:
+        logger.debug("[KanbanWorker] Lease nicht verfuegbar (%s) — Fallback ohne Claim.", exc)
+
+    try:
+        return await _execute_kanban_task_inner(task_id, lease_token=lease_token)
+    finally:
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+        if lease_token:
+            try:
+                await asyncio.to_thread(
+                    deadlock_supervisor.release_lease, task_id, lease_token
+                )
+            except Exception as exc:
+                logger.debug("[KanbanWorker] Lease-Release-Hinweis: %s", exc)
+
+
+async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
     """Führt eine Kanban-Aufgabe autonom über core_dispatcher aus (alter dag_scheduler entfernt)."""
+    import asyncio
     import core_dispatcher
+    # Abbruch (Operator-Cancel oder Lease-Verlust) muss den laufenden
+    # LLM-Call wirklich stoppen (Audit 23.11.2026).
+    try:
+        from backend.cancellation import get_token as _get_cancel_token
+        _cancel_token = _get_cancel_token(f"task:{task_id}")
+        _current = asyncio.current_task()
+        if _current is not None:
+            _cancel_token.register_task(_current)
+        _cancel_token.check()
+    except ImportError:
+        pass
     conn = _get_kanban_connection(maintenance=True)
     try:
         # Fix-Sprint Paket A (Punkt 10): Spalte consecutive_failures sicherstellen
@@ -1139,6 +1218,20 @@ async def _execute_kanban_task_async(task_id: str):
         except Exception as exc:
             print(f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
             
+    except asyncio.CancelledError:
+        # Abgebrochene Aufgabe darf nicht vom Deadlock-Watchdog reaktiviert
+        # werden (Audit 23.11.2026).
+        try:
+            c = _get_kanban_connection(maintenance=True)
+            c.execute(
+                "UPDATE tasks SET status = 'cancelled', result = ? WHERE id = ?",
+                ("Aufgabe abgebrochen (Cancel oder Lease-Verlust)", task_id),
+            )
+            c.commit()
+            c.close()
+        except Exception as exc:
+            print(f"[OperationsAPI] Cancel-Status nicht persistiert: {exc}", file=sys.stderr)
+        raise
     except Exception as ex:
         print(f"[OperationsAPI] Execution failed for {task_id}: {ex}", file=sys.stderr)
         now_iso = datetime.datetime.now().isoformat()
@@ -2738,10 +2831,37 @@ def get_kanban_meta():
     return {"status": "ok", **_load_kanban_meta()}
 
 
+class KanbanMetaSaveRequest(BaseModel):
+    """Bekannte Sidecar-Felder; unbekannte Felder werden ignoriert (Kompatibilitaet)."""
+    model_config = ConfigDict(extra="ignore")
+    kind: str = Field(default="task", max_length=32)
+    limits: Dict[str, Any] = Field(default_factory=dict)
+    task_id: Optional[str] = Field(default=None, max_length=200)
+    due: Optional[str] = Field(default=None, max_length=32)
+    clear_due: bool = False
+    tags: Optional[List[str]] = Field(default=None, max_length=50)
+    obsidian: Optional[str] = Field(default=None, max_length=500)
+    clear_obsidian: bool = False
+    decision: Optional[Dict[str, Any]] = None
+    tokens: Optional[Any] = None
+    cost: Optional[Any] = None
+    soul_mode: Optional[str] = Field(default=None, max_length=100)
+    reasoning_effort: Optional[str] = Field(default=None, max_length=100)
+    tool_preset: Optional[str] = Field(default=None, max_length=100)
+    cron_schedule: Optional[str] = Field(default=None, max_length=200)
+    depends_on: Optional[str] = Field(default=None, max_length=200)
+    token_budget: Optional[Any] = None
+    cost_limit_usd: Optional[Any] = None
+    require_hitl: Optional[bool] = None
+
+
 @router.post("/kanban/meta")
-def save_kanban_meta(request: Request, payload: Dict[str, Any] = Body(...)):
+def save_kanban_meta(request: Request, body: KanbanMetaSaveRequest):
     """Due/Tags (kind=task) oder WIP-Limits (kind=wip) speichern. Engine-DB bleibt unberuehrt."""
     require_admin_or_503(request)
+    # Nur tatsaechlich gesendete Felder: die Logik unten prueft per `"key" in payload`
+    # auf Presence (z. B. clear_due, tokens) — model_dump(exclude_unset=True) erhält das.
+    payload = body.model_dump(exclude_unset=True)
     # 12.10.2026 (Fix Punkt 1, Datenrisiko): die GESAMTE Load-Aendern-Speichern-
     # Sequenz laeuft unter EINER Sperre (backend.kanban_sidecar.update_kanban_meta),
     # sonst verliert paralleler Fan-in Entscheidungs-Metadaten. Validierung VORHER
@@ -3076,15 +3196,33 @@ router.include_router(_sysops_router)
 
 
 
+class EsignSubmissionCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    title: str = Field(default="", max_length=300)
+    signer_email: str = Field(default="", max_length=200)
+    signer_name: str = Field(default="", max_length=200)
+    template_id: Optional[str] = Field(default=None, max_length=100)
+    kanban_task_id: Optional[str] = Field(default=None, max_length=100)
+    company_id: Optional[str] = Field(default=None, max_length=100)
+
+
+class EsignWebhookEvent(BaseModel):
+    """DocuSeal-Webhook: bekannte Felder + restliche Event-Daten (extra="allow")."""
+    model_config = ConfigDict(extra="allow")
+    event_type: Optional[str] = Field(default=None, max_length=120)
+    type: Optional[str] = Field(default=None, max_length=120)
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
 @router.post("/esign/submissions")
-def api_esign_create_submission(request: Request, req: Dict[str, Any] = Body(...)):
+def api_esign_create_submission(request: Request, req: EsignSubmissionCreateRequest):
     """Erstellt eine neue digitale Signaturanfrage via DocuSeal."""
     require_admin_or_503(request)
-    title = req.get("title", "").strip()
-    signer_email = req.get("signer_email", "").strip()
-    signer_name = req.get("signer_name", "").strip()
-    template_id = req.get("template_id")
-    kanban_task_id = req.get("kanban_task_id")
+    title = req.title.strip()
+    signer_email = req.signer_email.strip()
+    signer_name = req.signer_name.strip()
+    template_id = req.template_id
+    kanban_task_id = req.kanban_task_id
 
     if not title or not signer_email or not signer_name:
         raise HTTPException(status_code=400, detail="Felder 'title', 'signer_email' und 'signer_name' sind erforderlich.")
@@ -3097,7 +3235,7 @@ def api_esign_create_submission(request: Request, req: Dict[str, Any] = Body(...
             signer_name=signer_name,
             template_id=template_id,
             kanban_task_id=kanban_task_id,
-            company_id=req.get("company_id"),
+            company_id=req.company_id,
         )
         return {"status": res.get("status", "draft_offline"), "submission": res}
     except Exception as e:
@@ -3119,7 +3257,7 @@ def api_esign_list_contracts(
 
 
 @router.post("/esign/webhook")
-def api_esign_webhook(request: Request, payload: Dict[str, Any] = Body(...)):
+def api_esign_webhook(request: Request, payload: EsignWebhookEvent):
     """Empfängt Webhooks von DocuSeal nach Unterzeichnung eines Dokuments."""
     webhook_secret = os.getenv("DOCUSEAL_WEBHOOK_SECRET")
     if webhook_secret:
@@ -3141,7 +3279,7 @@ def api_esign_webhook(request: Request, payload: Dict[str, Any] = Body(...)):
 
     try:
         from backend.docuseal_client import docuseal_client
-        res = docuseal_client.handle_webhook_event(payload)
+        res = docuseal_client.handle_webhook_event(payload.model_dump())
         return {"status": "success", "webhook_result": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Webhook Verarbeitung fehlgeschlagen: {e}")

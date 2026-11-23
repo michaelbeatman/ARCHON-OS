@@ -565,6 +565,13 @@ def read_env_value(path: str, key: str) -> Optional[str]:
 
 
 def set_env_value(path: str, key: str, value: str) -> bool:
+    # Env-Injection-Schutz: ein Wert darf keine Zeilen-/Steuerzeichen
+    # enthalten, sonst koennten weitere Variablen (zB OMNIROUTE_URL)
+    # eingeschmuggelt werden.
+    if any(c in str(value) for c in ("\n", "\r", "\x00", "=")):
+        return False
+    if not key or any(c in key for c in ("\n", "\r", "=", " ", "\x00")):
+        return False
     lines: List[str] = []
     if os.path.exists(path):
         try:

@@ -6,10 +6,11 @@ M51 — REST-Endpunkte für den .archonpack Squad-Blueprint-Paketmanager.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.routers._rbac import forbid_viewer_writes, require_admin_or_503
 from backend.squad_pack_manager import squad_pack_manager
@@ -21,6 +22,17 @@ router = APIRouter(
 )
 
 
+class SquadPackExportRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str = Field(default="archon-squad", max_length=120)
+    domain: Optional[str] = Field(default=None, max_length=120)
+    agent_ids: Optional[List[str]] = Field(default=None, max_length=200)
+    include_prompts: bool = True
+    include_n8n: bool = True
+    author: str = Field(default="Archon OS", max_length=120)
+    description: str = Field(default="", max_length=2000)
+
+
 @router.get("/domains")
 def list_squad_pack_domains():
     """Listet alle exportierbaren Fachabteilungen (Domänen) auf."""
@@ -28,16 +40,16 @@ def list_squad_pack_domains():
 
 
 @router.post("/export")
-def export_squad_pack(request: Request, payload: Dict[str, Any] = Body(...)):
+def export_squad_pack(request: Request, payload: SquadPackExportRequest):
     """Exportiert eine Fachabteilung / Agenten-Auswahl als .archonpack ZIP-Download."""
     require_admin_or_503(request)
-    name = str(payload.get("name") or "archon-squad").strip()
-    domain = payload.get("domain")
-    agent_ids: Optional[List[str]] = payload.get("agent_ids")
-    include_prompts = bool(payload.get("include_prompts", True))
-    include_n8n = bool(payload.get("include_n8n", True))
-    author = str(payload.get("author") or "Archon OS")
-    description = str(payload.get("description") or "")
+    name = str(payload.name or "archon-squad").strip()
+    domain = payload.domain
+    agent_ids: Optional[List[str]] = payload.agent_ids
+    include_prompts = bool(payload.include_prompts)
+    include_n8n = bool(payload.include_n8n)
+    author = str(payload.author or "Archon OS")
+    description = str(payload.description or "")
 
     zip_bytes, manifest = squad_pack_manager.export_pack(
         name=name,

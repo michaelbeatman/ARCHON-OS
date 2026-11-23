@@ -33,7 +33,14 @@ class TestM43MultiTenant(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.tmpdir.cleanup()
+        # Windows haelt SQLite-Dateien kurzzeitig offen; best-effort retry.
+        import time as _time
+        for _ in range(8):
+            try:
+                cls.tmpdir.cleanup()
+                return
+            except PermissionError:
+                _time.sleep(0.25)
 
     def test_01_physical_sqlite_db_isolation_across_tenants(self):
         self.tenant_mgr.switch_tenant("holding_hq")

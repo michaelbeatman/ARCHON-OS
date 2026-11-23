@@ -1472,8 +1472,12 @@ def test_block3_db_backup_manager_integrity_check(tmp_path, monkeypatch):
     monkeypatch.setattr(db_backup_manager, "DB_TARGETS", [str(src_db)])
     mgr = db_backup_manager.DBBackupManager(backup_dir=str(tmp_path / "bkp"))
     out = mgr.checkpoint_and_backup(keep_days=1)
-    assert out["backed_up_count"] == 1
-    assert out["backups"][0]["integrity"] == "ok"
+    # Der Backup-Manager sichert inzwischen auch Vault-/HITL-Secrets (Audit-Fix).
+    # Gezählt wird hier nur die Datenbank selbst.
+    db_backups = [b for b in out["backups"] if b.get("kind") != "secret"]
+    assert len(db_backups) == 1
+    assert db_backups[0]["db_name"] == "sample.db"
+    assert db_backups[0]["integrity"] == "ok"
 
 
 def test_block3_docuseal_list_contracts_company_filter(tmp_path):

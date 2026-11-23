@@ -68,7 +68,8 @@ def api_egress_firewall_check(payload: Dict = Body(...)):
 
 
 @router.get("/api/security/egress-logs")
-def api_egress_firewall_logs(limit: int = 25):
+def api_egress_firewall_logs(request: Request, limit: int = 25):
+    require_admin_or_503(request)  # Audit-Endpunkt: Admin only
     from backend.egress_firewall import egress_firewall
     return {"status": "success", "logs": egress_firewall.get_logs(limit=limit)}
 
@@ -107,6 +108,7 @@ def api_issue_execution_receipt(request: Request, payload: Dict = Body(...)):
 
 
 @router.get("/api/security/receipts/verify")
-def api_verify_execution_receipts():
+def api_verify_execution_receipts(request: Request):
+    require_admin_or_503(request)  # Audit-Endpunkt: Admin only
     from backend.execution_receipt_ledger import execution_receipt_ledger
     return execution_receipt_ledger.verify_chain_integrity()

@@ -98,14 +98,16 @@ class AsyncWriteBatcher:
 
         should_flush = False
         with self._lock:
-            if len(self._buffer) >= max_queue:
-                # Ältesten Eintrag verwerfen bei Queue-Überlauf
-                self._buffer.popleft()
+            # FRUEHER: popleft() —aelteste Events wurden genau bei hoher Last
+            # still verworfen (Audit-/Telemetrie-Luecke). Jetzt Backpressure:
+            # bei vollem Puffer wird sofort der gesamte Puffer geschrieben,
+            # bevor weitergepuffert wird. Kein Event geht verloren.
+            queue_full = len(self._buffer) >= max_queue
             self._buffer.append(entry)
             self._total_enqueued += 1
 
             elapsed = time.time() - self._last_flush_time
-            if not enabled or len(self._buffer) >= batch_size or elapsed >= flush_interval:
+            if queue_full or not enabled or len(self._buffer) >= batch_size or elapsed >= flush_interval:
                 should_flush = True
 
         flush_result = None

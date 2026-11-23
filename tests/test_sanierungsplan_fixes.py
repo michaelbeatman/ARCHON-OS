@@ -71,15 +71,16 @@ def test_execution_receipt_ledger_detects_payload_tampering(tmp_path, monkeypatc
     assert valid_res["chain_valid"] is True
     assert valid_res["tampered_hashes"] == []
 
-    # Manipuliere Kosten nachträglich ohne prev_hash zu ändern
+    # Append-only-Trigger blockiert nachträgliche Änderungen hart (Audit-Fix).
+    # Die Kette bleibt intakt, statt Manipulation nur zu "erkennen".
     conn = sqlite3.connect(str(db_file))
-    conn.execute("UPDATE execution_receipts_ledger SET cost_usd = 999.0 WHERE receipt_id = ?", (issued["receipt_id"],))
-    conn.commit()
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("UPDATE execution_receipts_ledger SET cost_usd = 999.0 WHERE receipt_id = ?", (issued["receipt_id"],))
+        conn.commit()
     conn.close()
 
     tampered_res = ledger.verify_chain_integrity()
-    assert tampered_res["chain_valid"] is False
-    assert issued["receipt_id"] in tampered_res["tampered_hashes"]
+    assert tampered_res["chain_valid"] is True
 
 
 def test_erp_manager_gobd_blocks_booked_reversion_and_gates_pocketbase(tmp_path, monkeypatch):
@@ -271,6 +272,9 @@ def test_llm_egress_guard_sanitizes_cloud_payload_and_enforces_firewall(tmp_path
 
     # 2. Firewall lässt interne/freigegebene Hosts durch und blockiert unbekannte externe Domains
     monkeypatch.setattr(leg.chained_audit_log, "record_llm_dispatch", lambda **kw: {"ok": True, **kw})
+    # Interner Gateway-Name: DNS im Test auf private IP auflösen (Fail-Closed
+    # bei nicht auflösbarem DNS ist Produktivverhalten und bleibt erhalten).
+    monkeypatch.setattr("socket.getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("127.0.0.1", 20128))])
     assert leg.enforce_egress_firewall_for_url("http://omniroute:20128/v1/chat/completions")["allowed"] is True
     assert leg.enforce_egress_firewall_for_url("http://127.0.0.1:11434/v1/chat/completions")["allowed"] is True
 

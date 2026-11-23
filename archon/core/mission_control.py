@@ -38,7 +38,7 @@ _MC_DATA_LOCK = threading.RLock()
 _MC_ASYNC_LOCK = asyncio.Lock()
 
 # State-Cache für /api/mission-control/state (3s TTL)
-_MC_STATE_CACHE: Dict[str, Any] = {"ts": 0.0, "data": None}
+_MC_STATE_CACHE: Dict[str, Any] = {"ts": 0.0, "data": None, "tenant": ""}
 
 _MIGRATION_DONE = False
 
@@ -59,6 +59,8 @@ _EXTENDED_TASK_KEYS = (
     "active_tool",
     "created_via",
     "synthesis_started",
+    "synthesis_started_at",
+    "synthesis_retry_count",
     "synthesis_draft_path",
     "synthesis_finalized",
     "paperclip_issue",
@@ -553,6 +555,8 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
             "active_tool",
             "created_via",
             "synthesis_started",
+            "synthesis_started_at",
+            "synthesis_retry_count",
             "synthesis_draft_path",
             "synthesis_finalized",
             "paperclip_issue",

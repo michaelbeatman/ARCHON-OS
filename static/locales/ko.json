@@ -1735,6 +1735,7 @@
       "delete_title": "품목 보관 / 삭제"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "양식 레이아웃 편집기를 현재 사용할 수 없습니다",
       "kontakte_crm_adressstamm": "연락처 — CRM 기준 정보",
       "mandant_archon_systems": "테넌트: archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "전체 연락처 및 CRM 테이블(고성능 SQLite)",
@@ -3802,6 +3803,8 @@
       "quality_gate_hint": "\"Done\"으로 이동하기 전 독립적인 피어 리뷰",
       "review_start": "리뷰 시작",
       "human_approve": "승인",
+      "human_reject": "거부",
+      "human_reject_title": "수동 거부 — AI 검토 없이 수정 요청",
       "critique_label": "지적 사항 / 수정:",
       "next_steps_label": "다음 단계:",
       "feedback_loop": "⭐ 사람 피드백 루프",
@@ -4359,7 +4362,7 @@
       "label_saved": "저장되었습니다!",
       "log_connecting": "에이전트 로그 연결 중...",
       "log_empty": "이 에이전트의 최근 백그라운드 로그가 없습니다.",
-      "log_fallback_ready": "에이전트가 대기 모드로 준비되었습니다.",
+      "log_fallback_ready": "라이브 피드를 일시적으로 사용할 수 없습니다. 다시 시도해 주세요.",
       "log_fallback_router": "포트 20128 활성. 경고 없음.",
       "log_telemetry_header": "⚡ 시스템 및 데몬 텔레메트리:",
       "log_turns_header": "💬 최근 대화 턴:",
@@ -5391,6 +5394,7 @@
       "move_complete": "완료",
       "move_failed": "상태 {status}: 작업을 업데이트할 수 없습니다",
       "move_open_operations": "Operations에서 열기",
+      "task_open_detail_hint": "작업 세부 정보 열기",
       "move_reject": "❌ 거부",
       "move_review": "리뷰",
       "move_start": "시작",

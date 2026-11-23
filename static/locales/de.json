@@ -1735,6 +1735,7 @@
       "delete_title": "Artikel archivieren / löschen"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "Formular-Layout-Editor derzeit nicht verfügbar",
       "kontakte_crm_adressstamm": "Kontakte — CRM Adressstamm",
       "mandant_archon_systems": "Mandant: archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "Vollständige Kontakt- & CRM-Tabelle (High-Performance SQLite)",
@@ -3969,6 +3970,8 @@
       "quality_gate_hint": "Unabhängiges Peer-Review vor dem Verschieben auf „Done“",
       "review_start": "Review starten",
       "human_approve": "Freigeben",
+      "human_reject": "Ablehnen",
+      "human_reject_title": "Manuell ablehnen — Nachbesserung anfordern, ohne KI-Review",
       "critique_label": "Kritikpunkte / Nachbesserung:",
       "next_steps_label": "Nächste Schritte:",
       "feedback_loop": "⭐ Human-Feedback-Loop",
@@ -4359,7 +4362,7 @@
       "label_saved": "Gespeichert!",
       "log_connecting": "Verbinde mit Agenten-Log...",
       "log_empty": "Keine aktuellen Hintergrund-Logs für diesen Agenten.",
-      "log_fallback_ready": "Agent bereit im Standby-Modus.",
+      "log_fallback_ready": "Live-Feed momentan nicht erreichbar. Bitte erneut versuchen.",
       "log_fallback_router": "Port 20128 aktiv. Keine Warnungen.",
       "log_telemetry_header": "⚡ System & Daemon Telemetrie:",
       "log_turns_header": "💬 Letzte Konversationsturns:",
@@ -5391,6 +5394,7 @@
       "move_complete": "Abschließen",
       "move_failed": "Status {status}: Aufgabe konnte nicht aktualisiert werden",
       "move_open_operations": "In Operations öffnen",
+      "task_open_detail_hint": "Task-Details öffnen",
       "move_reject": "❌ Ablehnen",
       "move_review": "Review",
       "move_start": "Starten",

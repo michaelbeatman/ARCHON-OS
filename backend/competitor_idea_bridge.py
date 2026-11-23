@@ -337,7 +337,7 @@ def import_crm_telegram_ideas_to_archon(
                     cta, hashtags_json, visual_brief, quality_score, quality_report_json, status,
                     agent_id, scheduled_at, external_url, created_at, updated_at
                 )
-                VALUES (?, ?, 'linkedin', 'post_or_carousel', ?, ?, ?, ?, '["#ArchonOS","#Automation","#AI"]', '', 85, ?, 'draft', 'linkedin_social_media_specialist', '', ?, ?, ?)
+                VALUES (?, ?, 'linkedin', 'post_or_carousel', ?, ?, ?, ?, '["#ArchonOS","#Automation","#AI"]', '', 0, ?, 'draft', 'linkedin_social_media_specialist', '', ?, ?, ?)
                 """,
                 (
                     asset_id,
@@ -346,7 +346,16 @@ def import_crm_telegram_ideas_to_archon(
                     cand["topic"][:180],
                     cand["initial_body"],
                     "Welche Erfahrung habt ihr damit in eurer Infrastruktur gemacht?",
-                    json.dumps({"source": "archon_crm_transfer", "voice_profile": "config/voice.md", "score": 85, "passed": True}),
+                    # FRUEHER: score=85/passed=True hartcodiert — das
+                    # Quality-Gate konnte nie greifen und die Metrik war
+                    # gefälscht. Ein Ideen-Import ist per Definition ungeprüft.
+                    json.dumps({
+                        "source": "archon_crm_transfer",
+                        "voice_profile": "config/voice.md",
+                        "score": 0,
+                        "passed": False,
+                        "pending_quality_gate": True,
+                    }),
                     cand["source_url"],
                     now_iso,
                     now_iso,

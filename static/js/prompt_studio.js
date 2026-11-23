@@ -449,7 +449,9 @@
       if (!modal) return;
       const applyBtnSpan = document.querySelector("#sp-apply-btn span");
       if (applyBtnSpan) {
-        applyBtnSpan.textContent = target === "ops-task" ? psT('ui.prompt_studio.apply_to_task', 'In Aufgabe übernehmen') : psT('ui.prompt_studio.use_in_chat', 'In Chat übernehmen');
+        applyBtnSpan.textContent = (target === "ops-task" || target === "wfd-station")
+          ? psT('ui.prompt_studio.apply_to_task', 'In Aufgabe übernehmen')
+          : psT('ui.prompt_studio.use_in_chat', 'In Chat übernehmen');
       }
       modal.classList.remove("hidden");
       updateSurePromptsFavoriteBadges();
@@ -1150,6 +1152,8 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
         targetId = "agent-chat-input";
       } else if (currentSurePromptsTarget === "ops-task") {
         targetId = "ops-task-body";
+      } else if (currentSurePromptsTarget === "wfd-station") {
+        targetId = "wfd-prompt";
       }
       const textarea = document.getElementById(targetId);
       if (textarea) {
@@ -1163,7 +1167,7 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
         textarea.classList.add("ring-2", "ring-indigo-500");
         setTimeout(() => textarea.classList.remove("ring-2", "ring-indigo-500"), 1500);
       }
-      if (currentSurePromptsTarget === "ops-task") {
+      if (currentSurePromptsTarget === "ops-task" || currentSurePromptsTarget === "wfd-station") {
         setTimeout(() => closeSurePromptsModal(), 350);
         return;
       }
@@ -1207,6 +1211,9 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
       } else if (target === "ops-task") {
         textareaId = "ops-task-body";
         btnId = "ops-task-optimize-btn";
+      } else if (target === "wfd-station") {
+        textareaId = "wfd-prompt";
+        btnId = "wfd-optimize-btn";
       }
       const textarea = document.getElementById(textareaId);
       const btn = document.getElementById(btnId);
@@ -2165,6 +2172,43 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
         });
       } catch (e) { console.error("Error saving roles:", e); }
     }
+    // System Prompt sicher anzeigen: kein alert() und keine Interpolation des
+    // Prompt-Textes in ein onclick-Attribut. textContent verhindert Injektion.
+    function showAgentSystemPrompt(agentId) {
+      const agent = agents.find((a) => String(a.id) === String(agentId));
+      if (!agent) return;
+      let modal = document.getElementById("agent-prompt-viewer-modal");
+      if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "agent-prompt-viewer-modal";
+        modal.className = "fixed inset-0 z-[1000] hidden items-center justify-center bg-black/70 p-4";
+        modal.innerHTML =
+          '<div class="w-full max-w-3xl rounded-xl border theme-border bg-[var(--card)] p-5 space-y-3">' +
+            '<div class="flex items-center justify-between gap-3">' +
+              '<h3 class="text-sm font-bold">System Prompt</h3>' +
+              '<button type="button" data-action="close-prompt" class="px-2 py-1 rounded border theme-border text-xs">✕</button>' +
+            '</div>' +
+            '<pre data-role="prompt-text" class="max-h-[70vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-[var(--secondary)] p-4 text-xs font-mono"></pre>' +
+          '</div>';
+        document.body.appendChild(modal);
+        const closeBtn = modal.querySelector('[data-action="close-prompt"]');
+        if (closeBtn) closeBtn.addEventListener("click", closeAgentSystemPrompt);
+        modal.addEventListener("click", (e) => { if (e.target === modal) closeAgentSystemPrompt(); });
+      }
+      const pre = modal.querySelector('[data-role="prompt-text"]');
+      if (pre) pre.textContent = String(agent.prompt == null ? "" : agent.prompt);
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+    function closeAgentSystemPrompt() {
+      const modal = document.getElementById("agent-prompt-viewer-modal");
+      if (!modal) return;
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+    window.showAgentSystemPrompt = showAgentSystemPrompt;
+    window.closeAgentSystemPrompt = closeAgentSystemPrompt;
+
     function renderAgentRegistryTable() {
       const tbody = document.getElementById("agent-registry-body");
       if (!tbody) return;
@@ -2204,12 +2248,14 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
               <button onclick="restartAgent('${agent.name}')" class="p-1 rounded hover:bg-black/10 transition-colors" title="Restart">
                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-muted-custom"></i>
               </button>
-              <button onclick="alert('System Prompt: ' + '${agent.prompt}')" class="p-1 rounded hover:bg-black/10 transition-colors" title="System Prompt">
+              <button data-action="view-prompt" class="p-1 rounded hover:bg-black/10 transition-colors" title="System Prompt">
                 <i data-lucide="more-horizontal" class="w-3.5 h-3.5 text-muted-custom"></i>
               </button>
             </div>
           </td>
         `;
+        const promptBtn = tr.querySelector('[data-action="view-prompt"]');
+        if (promptBtn) promptBtn.addEventListener("click", () => showAgentSystemPrompt(agent.id));
         tbody.appendChild(tr);
       });
       lucide.createIcons();

@@ -67,7 +67,14 @@ def _init_db() -> None:
                 last_hit_at TEXT
             )
         """)
+        # Tenant-/User-Scope: ohne diese Spalte lieferte der Cache die Antwort
+        # eines anderen Mandanten auf denselben Prompt (Cross-Tenant-Leak).
+        try:
+            conn.execute("ALTER TABLE semantic_response_cache ADD COLUMN scope_key TEXT DEFAULT ''")
+        except Exception:
+            pass
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sem_cache_hash ON semantic_response_cache(exact_hash)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_sem_cache_scope ON semantic_response_cache(scope_key)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sem_cache_expires ON semantic_response_cache(expires_at)")
         conn.commit()
 
@@ -99,6 +106,17 @@ def _cosine_similarity(vec_a: Dict[str, float], vec_b: Dict[str, float]) -> floa
     return round(min(1.0, max(0.0, dot)), 4)
 
 
+def _current_scope() -> str:
+    """Aktueller Mandanten-/User-Scope aus dem Request-Kontext (falls gesetzt)."""
+    tenant = ""
+    try:
+        from backend import tenant_context as _tc
+        tenant = str(_tc._REQUEST_TENANT_VAR.get() or "")
+    except Exception:
+        pass
+    return tenant or "default"
+
+
 class SemanticCacheManager:
     def __init__(self):
         _init_db()
@@ -107,7 +125,8 @@ class SemanticCacheManager:
         self,
         prompt: str,
         model: str = "any",
-        threshold_override: Optional[float] = None
+        threshold_override: Optional[float] = None,
+        scope_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
         cfg = _get_cfg()
@@ -120,8 +139,9 @@ class SemanticCacheManager:
             }
 
         threshold = float(threshold_override if threshold_override is not None else cfg.get("similarity_threshold", 0.95))
+        scope = str(scope_key or _current_scope())
         norm_prompt = _normalize_text(prompt)
-        exact_hash = hashlib.sha256(f"{model}::{norm_prompt}".encode("utf-8")).hexdigest()
+        exact_hash = hashlib.sha256(f"{scope}::{model}::{norm_prompt}".encode("utf-8")).hexdigest()
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
@@ -131,8 +151,8 @@ class SemanticCacheManager:
 
             # 1. Exakter Hash-Match (O(1))
             row = conn.execute(
-                "SELECT * FROM semantic_response_cache WHERE exact_hash = ?",
-                (exact_hash,)
+                "SELECT * FROM semantic_response_cache WHERE exact_hash = ? AND scope_key = ?",
+                (exact_hash, scope)
             ).fetchone()
             if row:
                 conn.execute(
@@ -156,8 +176,8 @@ class SemanticCacheManager:
             query_vec = _build_sparse_vector(norm_prompt)
             rows = conn.execute(
                 "SELECT id, model, prompt_text, vector_json, response_text, hit_count, tokens_saved_estimate "
-                "FROM semantic_response_cache ORDER BY id DESC LIMIT ?",
-                (int(cfg.get("max_entries", 500)),)
+                "FROM semantic_response_cache WHERE scope_key = ? ORDER BY id DESC LIMIT ?",
+                (scope, int(cfg.get("max_entries", 500)))
             ).fetchall()
 
             best_score = 0.0
@@ -200,13 +220,14 @@ class SemanticCacheManager:
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2)
         }
 
-    def store(self, prompt: str, response: str, model: str = "any") -> Dict[str, Any]:
+    def store(self, prompt: str, response: str, model: str = "any", scope_key: Optional[str] = None) -> Dict[str, Any]:
         cfg = _get_cfg()
         if not bool(cfg.get("enabled", True)):
             return {"stored": False, "bypassed": True}
 
+        scope = str(scope_key or _current_scope())
         norm_prompt = _normalize_text(prompt)
-        exact_hash = hashlib.sha256(f"{model}::{norm_prompt}".encode("utf-8")).hexdigest()
+        exact_hash = hashlib.sha256(f"{scope}::{model}::{norm_prompt}".encode("utf-8")).hexdigest()
         vec = _build_sparse_vector(norm_prompt)
         ttl_hours = int(cfg.get("ttl_hours", 24))
         max_entries = int(cfg.get("max_entries", 500))
@@ -218,13 +239,13 @@ class SemanticCacheManager:
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""
                 INSERT INTO semantic_response_cache
-                (exact_hash, model, prompt_text, vector_json, response_text, tokens_saved_estimate, hit_count, created_at, expires_at, last_hit_at)
-                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)
+                (exact_hash, scope_key, model, prompt_text, vector_json, response_text, tokens_saved_estimate, hit_count, created_at, expires_at, last_hit_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)
                 ON CONFLICT(exact_hash) DO UPDATE SET
                     response_text = excluded.response_text,
                     vector_json = excluded.vector_json,
                     expires_at = excluded.expires_at
-            """, (exact_hash, model, prompt.strip(), json.dumps(vec), response, tokens_est, now_iso, exp_iso))
+            """, (exact_hash, scope, model, prompt.strip(), json.dumps(vec), response, tokens_est, now_iso, exp_iso))
 
             # Max-Entries Quota einhalten (älteste löschen)
             conn.execute("""

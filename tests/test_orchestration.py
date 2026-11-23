@@ -864,6 +864,7 @@ class TestFanInMaybeStartSynthesis:
             parent_pid,
             load_mc=mock_load_mc,
             write_mc_atomic=mock_write_mc_atomic,
+            update_mc=None,  # Legacy-Pfad: Test-Fixture statt Produktions-DB
             mc_async_lock=asyncio.Lock(),
             run_cascade=mock_run_cascade,
         )
@@ -895,6 +896,7 @@ class TestFanInMaybeStartSynthesis:
             parent_pid,
             load_mc=mock_load_mc,
             write_mc_atomic=mock_write_mc_atomic,
+            update_mc=None,  # Legacy-Pfad: Test-Fixture statt Produktions-DB
             mc_async_lock=asyncio.Lock(),
             run_cascade=mock_run_cascade,
         )
@@ -920,6 +922,7 @@ class TestFanInMaybeStartSynthesis:
             parent_pid,
             load_mc=mock_load_mc,
             write_mc_atomic=mock_write_mc_atomic,
+            update_mc=None,  # Legacy-Pfad: Test-Fixture statt Produktions-DB
             mc_async_lock=asyncio.Lock(),
             run_cascade=mock_run_cascade,
         )
@@ -943,6 +946,7 @@ class TestFanInMaybeStartSynthesis:
             "missing",
             load_mc=mock_load_mc,
             write_mc_atomic=mock_write_mc_atomic,
+            update_mc=None,  # Legacy-Pfad: Test-Fixture statt Produktions-DB
             mc_async_lock=asyncio.Lock(),
             run_cascade=mock_run_cascade,
         )
@@ -961,6 +965,7 @@ class TestFanInMaybeStartSynthesis:
             "parent-1",
             load_mc=mock_load_mc,
             write_mc_atomic=mock_write_mc_atomic,
+            update_mc=None,  # Legacy-Pfad: Test-Fixture statt Produktions-DB
             mc_async_lock=asyncio.Lock(),
             run_cascade=mock_run_cascade,
         )

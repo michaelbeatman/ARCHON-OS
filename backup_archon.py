@@ -53,17 +53,12 @@ def backup_sqlite_safe(src_path: str, dst_path: str) -> bool:
         dst = sqlite3.connect(dst_path)
         src.backup(dst)
         return True
-    except Exception:
-        # Fallback: direkte Dateikopie (besser als nichts)
-        try:
-            if src:
-                src.close()
-            if dst:
-                dst.close()
-            shutil.copy2(src_path, dst_path)
-            return True
-        except Exception:
-            return False
+    except Exception as exc:
+        # KRITISCH (Audit 23.11.2026): copy2 einer laufenden WAL-DB erzeugt
+        # eine inkonsistente Kopie (letzte Commits fehlen), die sogar
+        # integrity_check bestehen kann. Kein stiller Fallback — hart failen.
+        _archon_exc_logger.error("[backup_archon] Online-Backup %s fehlgeschlagen: %s", src_path, exc)
+        return False
     finally:
         try:
             if src:
@@ -82,9 +77,16 @@ def prune_old_backups(base_dir: str, days: int) -> int:
         entries = os.listdir(base_dir)
     except Exception:
         return 0
+    # KRITISCH (Audit 23.11.2026): die Rotation darf NUR eigene Backup-
+    # Artefakte löschen. Der Break-Glass-Vault liegt im selben Verzeichnis
+    # und würde sonst nach `--local-days` (7) still gelöscht.
+    keep_files = {"break_glass_vault.enc", "break_glass_meta.json"}
+    db_names = {name for name, _path, _required in DATABASES}
     for entry in entries:
         full = os.path.join(base_dir, entry)
         if not os.path.isdir(full):
+            if entry in keep_files or entry not in db_names:
+                continue
             # Einzeldateien (alte flache Backups) nach Alter prüfen
             try:
                 mtime = datetime.datetime.fromtimestamp(os.path.getmtime(full))

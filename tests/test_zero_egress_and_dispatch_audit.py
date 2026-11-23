@@ -283,10 +283,14 @@ def test_agent_router_logs_provider_model_and_target_host_in_sha256_chain(tmp_pa
     fake_client = MagicMock()
     fake_client.post = AsyncMock(return_value=fake_resp)
 
+    # Dieser Test prueft Audit-Logging, nicht die AI-Act-Inventarisierung.
+    # Default-Deny fuer unbekannte Agenten bleibt Produktivverhalten.
     with patch("backend.privacy_router.get_privacy_config", return_value=cfg), \
          patch("backend.llm_egress_guard.get_privacy_config", return_value=cfg), \
          patch.object(router, "_get_shared_client", return_value=fake_client), \
-         patch.object(router, "_daily_spend_usd", return_value=(0.0, True)):
+         patch.object(router, "_daily_spend_usd", return_value=(0.0, True)), \
+         patch("backend.compliance_engine.compliance_engine.check_activation_allowed",
+               return_value={"allowed": True}):
         reply = asyncio.run(
             router.chat_completion(
                 messages=[{"role": "user", "content": "Hallo Welt"}],

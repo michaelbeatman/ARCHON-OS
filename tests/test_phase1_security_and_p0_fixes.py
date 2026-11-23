@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 
 import pytest
 from cryptography.hazmat.primitives import hashes, serialization
@@ -80,7 +81,10 @@ def test_passkey_hitl_requires_uv_for_payments_and_mints_single_use_token(tmp_pa
         )
 
     # 2) Mit UP+UV (0x05) wird ein einmaliges serverseitiges proof_token ausgestellt
-    opts_ok = pk.create_hitl_assertion_options("u1", "localhost", category="payments")
+    opts_ok = pk.create_hitl_assertion_options(
+        "u1", "localhost", category="payments",
+        action_label="Zahlung freigeben", resource="tx-1",
+    )
     cd_ok = json.dumps({
         "type": "webauthn.get",
         "challenge": opts_ok["challenge"],
@@ -102,9 +106,48 @@ def test_passkey_hitl_requires_uv_for_payments_and_mints_single_use_token(tmp_pa
 
     # Falscher User oder falsche Kategorie abgelehnt (Token wird dabei nicht an Fremde vergeben)
     assert pk.consume_hitl_proof_token("forged-token", "u1", category="payments") is False
-    assert pk.consume_hitl_proof_token(tok, "u1", category="payments") is True
+    assert pk.consume_hitl_proof_token(
+        tok, "u1", category="payments",
+        action="Zahlung freigeben", resource="tx-1",
+    ) is True
     # Replay desselben Tokens muss scheitern (single-use)
-    assert pk.consume_hitl_proof_token(tok, "u1", category="payments") is False
+    assert pk.consume_hitl_proof_token(
+        tok, "u1", category="payments",
+        action="Zahlung freigeben", resource="tx-1",
+    ) is False
+
+
+def test_hitl_proof_action_and_resource_binding_fail_closed():
+    """Ein Proof für Zahlung A darf nicht Zahlung B freigeben (Audit 23.11.2026)."""
+    from backend import passkey_hitl as pk
+
+    def _proof(action: str, resource: str) -> str:
+        token = f"binding-{action}-{resource}-{time.time_ns()}"
+        with pk._LOCK:
+            pk._PROOF_TOKENS[token] = {
+                "user_id": "u1",
+                "category": "payments",
+                "uv_verified": True,
+                "created_ts": time.time(),
+                "action": action,
+                "resource": resource,
+            }
+        return token
+
+    # Falsche Ressource → ablehnen (auch bei korrekter Aktion)
+    assert pk.consume_hitl_proof_token(
+        _proof("Zahlung freigeben", "tx-A"), "u1", category="payments",
+        action="Zahlung freigeben", resource="tx-B",
+    ) is False
+    # Falsche Aktion → ablehnen
+    assert pk.consume_hitl_proof_token(
+        _proof("Zahlung freigeben", "tx-A"), "u1", category="payments",
+        action="Konto loeschen", resource="tx-A",
+    ) is False
+    # Fehlende Bindung beim Verbrauch → ablehnen (fail-closed)
+    assert pk.consume_hitl_proof_token(
+        _proof("Zahlung freigeben", "tx-A"), "u1", category="payments",
+    ) is False
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +343,7 @@ def test_fan_in_blocks_parent_when_sibling_fails(tmp_path):
             "proj-1",
             load_mc=_load,
             write_mc_atomic=_write,
+            update_mc=None,  # Legacy-Pfad: Test-Fixture statt Produktions-DB
             mc_async_lock=asyncio.Lock(),
             run_cascade=_cascade,
         )

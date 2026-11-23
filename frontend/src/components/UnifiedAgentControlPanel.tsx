@@ -74,7 +74,8 @@ export const UnifiedAgentControlPanel: React.FC<UnifiedAgentControlPanelProps> =
   const [selectedAgentId, setSelectedAgentId] = useState(initialAgentId);
   const [activeTab, setActiveTab] = useState<"chat" | "skills" | "memory" | "logs">("chat");
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8501";
+  // Browser darf niemals localhost treffen: immer über den Next.js-Proxy.
+const API_BASE = "/api/archon";
 
   // Chat state
   const [promptInput, setPromptInput] = useState("");

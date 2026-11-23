@@ -323,7 +323,8 @@
     // =========================================================================
     // REAL-TIME SSE STREAMING (Pillar 1 & 2 / Live Push statt Polling)
     // =========================================================================
-    let _opsEventSource = null;
+    // Die EINZIGE EventSource liegt im gemeinsamen Bus (chat_engine.js,
+    // window.archonSSEBus). Diese Datei lauscht nur ueber 'archon:sse'.
     // F-16: jedes kanban_updated/task_status/mission_created rief sofort
     // loadOperationsData(false) aus (4 parallele Fetches, keine Bremse, keine
     // In-Flight-Sperre) — ueberlappende Antworten ueberschrieben das Board.
@@ -359,48 +360,37 @@
         }
       }
     }
-    let _opsSseReconnectTimer = null;
+    let _opsSseBridgeBound = false;
 
+    // Initialisiert den gemeinsamen Bus (nur eine Verbindung) und registriert
+    // genau einmal den Board-Listener auf 'archon:sse'.
     function initOpsRealtimeStream() {
-      if (_opsEventSource) return;
-      try {
-        _opsEventSource = new EventSource('/api/v1/events/stream');
-        _opsEventSource.onopen = function() {
-          console.log('[Archon SSE] Verbunden mit /api/v1/events/stream');
-        };
-
-        _opsEventSource.onmessage = function(event) {
-          try {
-            if (!event.data || event.data.startsWith(':')) return;
-            const msg = JSON.parse(event.data);
-            window.dispatchEvent(new CustomEvent('archon:sse', { detail: msg }));
-            const evType = msg.type || '';
-            const evData = msg.data || {};
-
-            if (evType === 'kanban_updated' || evType === 'task_status' || evType === 'mission_created') {
-              console.log('[Archon SSE] Board-Änderung empfangen:', evType, evData);
-              scheduleOpsKanbanReload();   // F-16: gebuendelt statt pro Event ein Voll-Reload
-            } else if (evType === 'task_chunk') {
-              const outEl = document.getElementById(`ops-task-stream-${evData.task_id}`);
-              if (outEl && evData.chunk) {
-                outEl.textContent += evData.chunk;
-                outEl.scrollTop = outEl.scrollHeight;
-              }
-            }
-          } catch(e) {}
-        };
-
-        _opsEventSource.onerror = function() {
-          if (_opsEventSource) {
-            _opsEventSource.close();
-            _opsEventSource = null;
-          }
-          clearTimeout(_opsSseReconnectTimer);
-          _opsSseReconnectTimer = setTimeout(initOpsRealtimeStream, 5000);
-        };
-      } catch(err) {
-        console.warn('[Archon SSE] Initialisierung fehlgeschlagen:', err);
+      if (window.archonSSEBus && typeof window.archonSSEBus.ensure === "function") {
+        window.archonSSEBus.ensure();
       }
+      if (_opsSseBridgeBound) return;
+      _opsSseBridgeBound = true;
+      window.addEventListener('archon:sse', function (event) {
+        try {
+          const msg = event && event.detail;
+          if (!msg || !msg.type) return;
+          const evType = msg.type || '';
+          const evData = msg.data || {};
+
+          if (evType === 'kanban_updated' || evType === 'task_status' || evType === 'mission_created') {
+            console.log('[Archon SSE] Board-Aenderung empfangen:', evType, evData);
+            scheduleOpsKanbanReload();   // F-16: gebuendelt statt pro Event ein Voll-Reload
+          } else if (evType === 'task_chunk') {
+            const outEl = document.getElementById(`ops-task-stream-${evData.task_id}`);
+            if (outEl && evData.chunk) {
+              outEl.textContent += evData.chunk;
+              outEl.scrollTop = outEl.scrollHeight;
+            }
+          }
+        } catch (e) {
+          console.error('[Archon SSE] Event-Verarbeitung fehlgeschlagen:', e);
+        }
+      });
     }
 
     // =========================================================================
@@ -1530,16 +1520,22 @@
     // 10.10.2026 (User-Entscheidung): 5-Spalten-Modell. Maschinen-Status der
     // Engine werden in der To-Do-Spalte gruppiert — reine UI-Sache, kein Engine-Eingriff.
     const OPS_COLUMN_GROUPS = {
-      todo: ['todo', 'ready', 'triage', 'scheduled'],
+      // Audit 23.11.2026: 'queued'/'awaiting_gate' gehörten in keine Spalte
+      // und machten Tasks unsichtbar. Jetzt vollständig abgedeckt.
+      todo: ['todo', 'ready', 'triage', 'scheduled', 'queued', 'awaiting_gate'],
       in_progress: ['in_progress'],
       review: ['review'],
-      blocked: ['blocked', 'failed'],
+      blocked: ['blocked', 'failed', 'cancelled', 'paused'],
       done: ['done']
     };
     const OPS_STATUS_BADGES = {
       ready:     { text: kanT('ui.operations_kanban.ready_lightning', '⚡ bereit'),  cls: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/30' },
       triage:    { text: '🔍 Triage',  cls: 'bg-slate-500/10 text-slate-500 border-slate-500/30' },
-      scheduled: { text: '⏱ geplant', cls: 'bg-amber-500/10 text-amber-600 border-amber-500/30' }
+      scheduled: { text: '⏱ geplant', cls: 'bg-amber-500/10 text-amber-600 border-amber-500/30' },
+      queued:    { text: '⏳ Warteschlange', cls: 'bg-slate-500/10 text-slate-500 border-slate-500/30' },
+      awaiting_gate: { text: '🔐 Gate', cls: 'bg-violet-500/10 text-violet-600 border-violet-500/30' },
+      cancelled: { text: '🚫 abgebrochen', cls: 'bg-rose-500/10 text-rose-600 border-rose-500/30' },
+      paused:    { text: '⏸ pausiert', cls: 'bg-amber-500/10 text-amber-600 border-amber-500/30' }
     };
 
     // Einstellbare Farbpalette (User-Wunsch 10.10.2026, Design-Tab der Einstellungen)
@@ -3362,18 +3358,27 @@
 
     window.humanOverrideQualityReview = async function(verdict) {
       if (!currentOpsDetailTaskId) return;
+      // Backend akzeptiert nur 'approved' | 'changes_requested' — "Ablehnen" ist
+      // fachlich eine Nachbesserungsforderung (score 45), kein 'rejected'.
+      const approved = verdict !== 'changes_requested';
+      const effectiveVerdict = approved ? 'approved' : 'changes_requested';
       try {
         const res = await fetch(`/api/operations/kanban/tasks/${encodeURIComponent(currentOpsDetailTaskId)}/quality-review`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ force_verdict: verdict || 'approved', comment: kanT('ui.operations_kanban.manually_released', 'Manuell freigegeben durch Operator') })
+          body: JSON.stringify({
+            force_verdict: effectiveVerdict,
+            comment: approved
+              ? kanT('ui.operations_kanban.manually_released', 'Manuell freigegeben durch Operator')
+              : kanT('ui.task_detail.request_changes', 'Nachbesserung')
+          })
         });
         const d = await res.json();
         if (!res.ok) throw new Error(d.detail || kanT('ui.operations_kanban.release_error', 'Fehler beim Freigeben'));
         await openTaskDetailModal(currentOpsDetailTaskId);
         await loadOperationsKanban();
       } catch (err) {
-        alert('Freigabe fehlgeschlagen: ' + err.message);
+        alert(kanT('ui.operations_kanban.error_prefix', 'Fehler: ') + err.message);
       }
     };
 
@@ -4151,14 +4156,22 @@
       if (window.lucide) lucide.createIcons();
     }
 
+    // Echte Schema-Felder statt Substring-Heuristik: task_events.kind ist
+    // 'boardroom_turn' (siehe core_dispatcher.py) und der payload-Zielkanal
+    // wird als target_id='boardroom' ausgeliefert (operations_org.py).
+    function isBoardroomCommItem(i) {
+      if (!i) return false;
+      return i.kind === 'boardroom_turn' || i.channel === 'boardroom' || i.target_id === 'boardroom';
+    }
+
     function renderOperationsCommFeedFiltered(commData) {
       if (!commData || !commData.feed) return;
       let items = commData.feed;
 
       if (currentCommChannel === "boardroom") {
-        items = items.filter(i => (i.task_id && i.task_id.includes("boardroom")) || (i.kind && i.kind.includes("boardroom")) || (i.message && i.message.includes("[BOARDROOM]")));
+        items = items.filter(isBoardroomCommItem);
       } else if (currentCommChannel === "projects") {
-        items = items.filter(i => i.task_id && !i.task_id.includes("boardroom") && i.task_id !== "system_broadcast");
+        items = items.filter(i => i.task_id && !isBoardroomCommItem(i) && i.task_id !== "system_broadcast");
       }
 
       if (activeCommFilter) {
@@ -4180,7 +4193,7 @@
       }
 
       messagesContainer.innerHTML = items.map(item => {
-        const isBoardroom = (item.task_id && item.task_id.includes("boardroom")) || (item.kind && item.kind.includes("boardroom"));
+        const isBoardroom = isBoardroomCommItem(item);
         return `
           <div class="p-3 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xs font-sans text-xs flex items-start gap-3">
             <img src="${opsEscapeHtml(item.author_avatar || '/static/avatars/avatar_001.jpg')}" class="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--border)] mt-0.5" />

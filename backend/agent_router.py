@@ -617,21 +617,26 @@ class AgentRouter:
         except Exception as exc:
             logger.warning(f"[AgentRouter] Compliance-Check fuer '{agent_id}' fehlgeschlagen: {exc}")
 
-        eff_cat = category
-        if not eff_cat:
-            try:
-                from backend.data_classifier import DataClassifier
-                user_text = "\n".join(
-                    str(m.get("content", ""))
-                    for m in (messages or [])[-3:]
-                    if m.get("role") in ("user", "tool")
-                )
-                if user_text.strip():
-                    cls_res = DataClassifier.classify(user_text)
-                    if not cls_res.get("cloud_llm_allowed", True):
-                        eff_cat = "confidential"
-            except Exception as exc:
-                logger.warning(f"[AgentRouter] DataClassifier fehlgeschlagen: {exc}")
+        # KRITISCH: der Aufrufer darf die Kategorie NIE abschwächen. Vorher
+        # wurde der DataClassifier nur laufen gelassen, wenn `category` leer
+        # war — mit category="general" ging vertraulicher Inhalt unerkannt
+        # an die Cloud. Jetzt IMMER klassifizieren und die sensiblere Wahl
+        # nehmen (fail-closed bei Klassifikationsfehler).
+        eff_cat = (category or "").strip().lower() or "general"
+        try:
+            from backend.data_classifier import DataClassifier
+            user_text = "\n".join(
+                str(m.get("content", ""))
+                for m in (messages or [])[-3:]
+                if m.get("role") in ("user", "tool")
+            )
+            if user_text.strip():
+                cls_res = DataClassifier.classify(user_text)
+                if not cls_res.get("cloud_llm_allowed", True):
+                    eff_cat = "confidential"
+        except Exception as exc:
+            logger.error(f"[AgentRouter] DataClassifier fehlgeschlagen — fail-closed: {exc}")
+            eff_cat = "confidential"
         return eff_cat
 
     @staticmethod

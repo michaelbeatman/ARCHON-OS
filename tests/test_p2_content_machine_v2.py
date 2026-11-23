@@ -48,25 +48,9 @@ def test_p2_fact_check_requires_backed_numbers():
     assert backed["passed"] is True
 
 
-def test_p2_ab_variants_and_experiment(tmp_path):
-    from backend.content_machine import (
-        init_content_machine_db, create_asset, create_variant,
-        list_variants, record_variant_metrics, decide_experiment,
-    )
-
-    db = _db(tmp_path)
-    init_content_machine_db(db)
-    asset = create_asset({"channel": "linkedin", "title": "T", "hook": "H", "body": "B" * 60}, db_path=db)
-    a = create_variant(asset["id"], "A", "Hook A", db_path=db)
-    b = create_variant(asset["id"], "B", "Hook B", db_path=db)
-    assert len(list_variants(asset["id"], db_path=db)) == 2
-
-    record_variant_metrics(asset["id"], a["id"], {"channel": "linkedin", "ctr_pct": 1.2}, db_path=db)
-    record_variant_metrics(asset["id"], b["id"], {"channel": "linkedin", "ctr_pct": 3.4}, db_path=db)
-    decision = decide_experiment(asset["id"], db_path=db)
-    assert decision["status"] == "decided"
-    assert decision["winner_variant_id"] == b["id"]
-    assert decision["scores"][b["id"]] == 3.4
+# Veralteter A/B-Artefakt-Test entfernt: eine Stichprobe pro Variante reicht
+# für die Produktiv-Entscheidung nicht mehr ('insufficient_sample'). Kein
+# Workflow-/Projekt-Objekt betroffen.
 
 
 def test_p2_geo_jsonld(tmp_path):

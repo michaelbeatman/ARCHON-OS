@@ -47,6 +47,33 @@ SCOPE_GLOBAL = "global"
 VALID_MEMORY_SCOPES = (SCOPE_PRIVATE, SCOPE_SHARED, SCOPE_PROJECT, SCOPE_GLOBAL)
 
 
+def _active_tenant_id() -> str:
+    """Aktiver Mandant aus dem Request-Kontext (Fail-Closed auf 'default')."""
+    try:
+        from backend.tenant_context import tenant_context
+        return str(tenant_context.get_active_tenant_id() or "default")
+    except Exception as _exc:
+        _archon_exc_logger.debug("[offline_memory_vault] Tenant-Kontext nicht verfuegbar: %s", _exc)
+        return "default"
+
+
+def _tenant_vault_paths(tenant_id: Optional[str] = None) -> tuple[str, str]:
+    """Physisch isolierte Vault-DB + Vault-Key pro Mandant.
+
+    'compartment_vault.db' ist in der tenant_db_registry registriert, damit
+    DSGVO Art. 17 (gdpr_erase_subject_data) dieselbe Datei erreicht.
+    """
+    tid = str(tenant_id or _active_tenant_id())
+    try:
+        from backend.tenant_db_registry import resolve_tenant_db_path
+        db_path = resolve_tenant_db_path("compartment_vault.db", tid)
+    except Exception:
+        db_path = os.path.join(WORKSPACE_DIR, "data", "tenants", tid, "compartment_vault.db")
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    key_path = os.path.join(os.path.dirname(db_path), "compartment.key")
+    return db_path, key_path
+
+
 def normalize_scope(scope: Optional[str]) -> str:
     """Validiert einen Scope und liefert den kanonischen Wert (leer => global)."""
     if scope is None or str(scope).strip() == "":
@@ -144,9 +171,24 @@ def load_or_create_vault_key(key_path: Optional[str] = None) -> bytes:
             raw = f.read().strip()
             if len(raw) >= 32:
                 return raw[:32]
+    # KRITISCH: zwei parallel startende Prozesse lesen beide "kein Key" und
+    # ueberschreiben sich gegenseitig -> kreuzweise verschluesselter Vault,
+    # dauerhaft unlesbar. O_EXCL macht die Erzeugung atomar; der Verlierer
+    # liest den bereits geschriebenen Key.
     key = secrets.token_bytes(32)
-    with open(path, "wb") as f:
-        f.write(key)
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(fd, key)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except FileExistsError:
+        with open(path, "rb") as f:
+            existing = f.read().strip()
+        if len(existing) < 32:
+            raise RuntimeError(f"Vault-Key ungueltig: {path}")
+        return existing[:32]
     try:
         os.chmod(path, 0o600)
     except OSError as _exc:
@@ -231,36 +273,47 @@ _VAULT_SELECT = (
 )
 
 
+_INITIALIZED_VAULT_DBS: set = set()
+
+
 @contextmanager
 def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
-    path = db_path or DEFAULT_DB_PATH
+    # C1: ohne expliziten Pfad IMMER die mandantenisolierte Vault-DB nehmen.
+    path = db_path or _tenant_vault_paths()[0]
     os.makedirs(os.path.dirname(path), exist_ok=True)
     conn = sqlite3.connect(path, timeout=10.0)
     try:
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS vault_entries (
-                id TEXT PRIMARY KEY,
-                namespace TEXT NOT NULL,
-                cipher_blob BLOB NOT NULL,
-                created_at REAL NOT NULL,
-                scope TEXT DEFAULT 'global',
-                acl_json TEXT DEFAULT '[]',
-                expires_at REAL DEFAULT 0,
-                project_id TEXT DEFAULT '',
-                agent_id TEXT DEFAULT 'global',
-                scope_explicit INTEGER DEFAULT 0
-            )
-        """)
-        # Migration bestehender DBs (alte Zeilen behalten scope='global' => Legacy-Verhalten).
-        for col, cdef in _VAULT_COLUMNS:
-            try:
-                conn.execute(f"ALTER TABLE vault_entries ADD COLUMN {col} {cdef}")
-            except sqlite3.OperationalError as _exc:
-                _archon_exc_logger.debug("[offline_memory_vault] Ignorierte Ausnahme (Z.150): %s", _exc)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_vault_ns ON vault_entries(namespace)")
-        conn.commit()
+        conn.execute("PRAGMA busy_timeout=5000;")
+        # DDL nur EINMAL pro DB-Pfad: vorher lief bei jeder Verbindung ein
+        # executescript + 6 ALTER TABLE-Versuche (jeder wirft OperationalError)
+        # -> Schreiblock-Contention und Fehler-Log-Spam.
+        if path not in _INITIALIZED_VAULT_DBS:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS vault_entries (
+                    id TEXT PRIMARY KEY,
+                    namespace TEXT NOT NULL,
+                    cipher_blob BLOB NOT NULL,
+                    created_at REAL NOT NULL,
+                    scope TEXT DEFAULT 'global',
+                    acl_json TEXT DEFAULT '[]',
+                    expires_at REAL DEFAULT 0,
+                    project_id TEXT DEFAULT '',
+                    agent_id TEXT DEFAULT 'global',
+                    scope_explicit INTEGER DEFAULT 0
+                )
+            """)
+            existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(vault_entries)").fetchall()}
+            for col, cdef in _VAULT_COLUMNS:
+                if col not in existing_cols:
+                    try:
+                        conn.execute(f"ALTER TABLE vault_entries ADD COLUMN {col} {cdef}")
+                    except sqlite3.OperationalError as _exc:
+                        _archon_exc_logger.debug("[offline_memory_vault] Migration %s: %s", col, _exc)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_vault_ns ON vault_entries(namespace)")
+            conn.commit()
+            _INITIALIZED_VAULT_DBS.add(path)
         yield conn
     finally:
         conn.close()
@@ -281,7 +334,19 @@ def store_memory(
 ) -> str:
     """Speichert einen Eintrag; Scope/ACL/TTL sind rueckwaertskompatibel optional."""
     scope = normalize_scope(scope)
+    tenant = _active_tenant_id()
+    explicit_db, explicit_key = db_path is not None, key is not None
+    if not explicit_db or not explicit_key:
+        tenant_db, tenant_key = _tenant_vault_paths(tenant)
+        if db_path is None:
+            db_path = tenant_db
+        if key is None:
+            key = load_or_create_vault_key(tenant_key)
     k = key or load_or_create_vault_key()
+    # C1: AAD bindet den Ciphertext an Mandant + Namespace. Wenn beide
+    # Pfade/Keys explizit uebergeben werden (Legacy-API/Tests), bleibt das
+    # historische Namespace-AAD erhalten.
+    aad_ns = namespace if (explicit_db and explicit_key) else f"{tenant}|{namespace}"
     eid = f"mem-{secrets.token_hex(6)}"
     payload = json.dumps(
         {
@@ -291,8 +356,7 @@ def store_memory(
         },
         ensure_ascii=False,
     ).encode("utf-8")
-    # AAD bleibt der Namespace - unveraendert zur bestehenden AES-GCM-Verdrahtung.
-    blob = aead_encrypt(k, payload, aad=namespace.encode("utf-8"))
+    blob = aead_encrypt(k, payload, aad=aad_ns.encode("utf-8"))
     expires_at = _expires_from_ttl(ttl_seconds)
     acl_json = json.dumps(_normalize_acl(acl), ensure_ascii=False)
     with _connect(db_path) as conn:
@@ -320,7 +384,16 @@ def recall_memory(
 ) -> List[Dict[str, Any]]:
     """Recall mit Scope-/ACL-/TTL-Sichtbarkeit; Defaults erhalten das alte Verhalten."""
     scope_filter = normalize_scope(scope) if scope is not None else None
+    tenant = _active_tenant_id()
+    explicit_db, explicit_key = db_path is not None, key is not None
+    if not explicit_db or not explicit_key:
+        tenant_db, tenant_key = _tenant_vault_paths(tenant)
+        if db_path is None:
+            db_path = tenant_db
+        if key is None:
+            key = load_or_create_vault_key(tenant_key)
     k = key or load_or_create_vault_key()
+    aad_ns = namespace if (explicit_db and explicit_key) else f"{tenant}|{namespace}"
     q_vec = _local_embed(query)
     q_terms = set(re.findall(r"[a-zA-Z0-9äöüß_-]{2,}", (query or "").lower()))
 
@@ -334,7 +407,7 @@ def recall_memory(
     for r in rows:
         if not _row_is_visible(r, agent_id, project_id=project_id, scope_filter=scope_filter):
             continue
-        data = json.loads(aead_decrypt(k, r["cipher_blob"], aad=namespace.encode("utf-8")).decode("utf-8"))
+        data = json.loads(aead_decrypt(k, r["cipher_blob"], aad=aad_ns.encode("utf-8")).decode("utf-8"))
         c_terms = set(re.findall(r"[a-zA-Z0-9äöüß_-]{2,}", data["content"].lower()))
         lex = (len(q_terms & c_terms) / max(1, len(q_terms))) if q_terms else 0.0
         sim = _cosine(q_vec, data["vec"])

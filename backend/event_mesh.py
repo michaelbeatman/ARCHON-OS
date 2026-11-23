@@ -14,7 +14,10 @@ import datetime
 import hashlib
 import time
 import urllib.request
+import logging
 from typing import Dict, Any, List, Optional
+
+logger = logging.getLogger("archon_os.event_mesh")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -260,7 +263,16 @@ class EventMesh:
                         safe_payload["_security_status"] = "blocked"
                         safe_payload["_detected_patterns"] = san.get("detected_patterns", [])
         except Exception as exc:
-            print(f"[EventMesh] SICHERHEIT: Input-Sanitizer fehlgeschlagen, Payload wird UNSANITIZED weiterverarbeitet: {exc}", file=sys.stderr)
+            # KRITISCH (Audit 23.11.2026): ein fehlgeschlagener Sanitizer darf
+            # NEVER fail-open. Kein Log, kein Kanban-Task, kein Event-Bus.
+            logger.error("[EventMesh] Sanitizer fehlgeschlagen — Event blockiert: %s", exc)
+            return {
+                "status": "blocked",
+                "blocked": True,
+                "channel": channel,
+                "event_type": event_type,
+                "reason": "input_sanitizer_unavailable",
+            }
         payload_str = json.dumps(safe_payload, ensure_ascii=False)
 
         # Idempotenz: stabiler Key aus channel + event_type + kanonischem Payload
@@ -290,6 +302,8 @@ class EventMesh:
                 }
         finally:
             dedup_conn.close()
+
+        side_effect_errors: List[str] = []
 
         # 1. Protokollieren
         conn = self._get_conn()
@@ -321,7 +335,8 @@ class EventMesh:
                     status="todo"
                 )
             except Exception as exc:
-                print(f"[EventMesh] Kanban-Task fuer Event konnte nicht synchronisiert werden: {exc}", file=sys.stderr)
+                side_effect_errors.append(f"kanban_task: {exc}")
+                logger.error("[EventMesh] Kanban-Task fuer Event fehlgeschlagen: %s", exc)
 
         bus_result = None
         if safe_payload.get("_security_status") != "blocked":
@@ -336,7 +351,29 @@ class EventMesh:
                     correlation_id=str(safe_payload.get("correlation_id") or "") or None,
                 )
             except Exception as exc:
-                print(f"[EventMesh] Event-Bus Weiterleitung fehlgeschlagen: {exc}", file=sys.stderr)
+                side_effect_errors.append(f"event_bus: {exc}")
+                logger.error("[EventMesh] Event-Bus Weiterleitung fehlgeschlagen: %s", exc)
+
+        if side_effect_errors:
+            # KRITISCH (Audit 23.11.2026): Dedup-Eintrag zurücknehmen, sonst
+            # wird einRetry als 'duplicate' abgewiesen und der Effekt fehlt
+            # dauerhaft.
+            try:
+                dd = self._get_conn()
+                with dd:
+                    dd.execute("DELETE FROM event_mesh_dedup WHERE dedup_key = ?", (dedup_key,))
+                dd.close()
+            except Exception as exc:
+                logger.error("[EventMesh] Dedup-Rollback fehlgeschlagen: %s", exc)
+            return {
+                "status": "partial_failure",
+                "partial_failure": True,
+                "errors": side_effect_errors,
+                "event_id": evt_id,
+                "channel": channel,
+                "event_type": event_type,
+                "dedup_key": dedup_key,
+            }
 
         return {
             "status": "success",
@@ -556,6 +593,31 @@ class EventMesh:
                 finally:
                     c.close()
                 dead += 1
+                # Ein 'dead'-Outbox-Eintrag darf nicht einfach vergessen werden:
+                # mit demselben Idempotency-Key in die DLQ stellen, damit der
+                # Shared-Queue-Consumer ihn erneut zustellen/replayen kann.
+                try:
+                    from backend.dead_letter_queue import dead_letter_queue_manager as _dlq
+                    try:
+                        dead_payload = json.loads(str(r["payload_json"] or "{}"))
+                    except (ValueError, TypeError):
+                        dead_payload = {}
+                    _dlq.enqueue_task(
+                        job_type="webhook_delivery",
+                        source_module="backend.event_mesh",
+                        payload={
+                            "outbox_id": r["id"],
+                            "target_url": str(r["target_url"] or ""),
+                            "event_type": str(r["event_type"] or ""),
+                            "payload": dead_payload,
+                            "attempts": attempts,
+                            "last_error": str(r["last_error"] or "")[:500],
+                        },
+                        priority=2,
+                        idempotency_key=str(r["idempotency_key"] or f"outbox-dead-{r['id']}"),
+                    )
+                except Exception as exc:
+                    logger.warning("[EventMesh] DLQ-Enqueue fuer dead-Outbox %s fehlgeschlagen: %s", r["id"], exc)
                 continue
             res = self._deliver_outbox(
                 str(r["idempotency_key"]), str(r["target_url"]), str(r["event_type"]),
@@ -592,8 +654,18 @@ class EventMesh:
         except Exception as exc:
             logger.warning("[EventMesh] Claim-Release fehlgeschlagen: %s", exc)
 
-    def scan_inbox_directory(self, inbox_dir: Optional[str] = None) -> Dict[str, Any]:
-        """Prüft das Posteingangs-Verzeichnis (Path-Jailed) auf neue Dokumente und erzeugt Event-Mesh-Einträge."""
+    def scan_inbox_directory(
+        self,
+        inbox_dir: Optional[str] = None,
+        *,
+        channel: str = "file_watcher",
+    ) -> Dict[str, Any]:
+        """Prüft das Posteingangs-Verzeichnis (Path-Jailed) auf neue Dokumente und erzeugt Event-Mesh-Einträge.
+
+        Einzige Dedup-Strategie ist die Cursor-Datei `.event_mesh_processed.json`.
+        `channel` erlaubt es dem Inbox-Watcher, denselben Scan unter `inbox`
+        laufen zu lassen (statt einen zweiten, konkurrierenden Scanner zu betreiben).
+        """
         from utils.path_jail import safe_path_within
         default_inbox = os.path.join(WORKSPACE_DIR, "data", "inbox")
         # Ein explizit übergebener, existierender Ordner ist eine bewusste
@@ -638,10 +710,16 @@ class EventMesh:
                 if seen.get(fname) == fingerprint:
                     continue
                 evt = self.ingest_inbound_event(
-                    channel="file_watcher",
+                    channel=channel or "file_watcher",
                     event_type="document_received",
                     payload={"file_name": fname, "file_path": fpath, "file_size": fsize, "title": f"Posteingang: {fname}"}
                 )
+                evt = dict(evt)
+                # Datei-Kontext zurueckgeben, damit der Inbox-Watcher nur
+                # verschieben muss, statt den Scanner zu duplizieren.
+                evt["file_name"] = fname
+                evt["file_path"] = fpath
+                evt["file_size"] = fsize
                 created.append(evt)
                 if evt.get("status") not in ("error",):
                     new_seen[fname] = fingerprint

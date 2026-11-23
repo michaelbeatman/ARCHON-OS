@@ -2,7 +2,7 @@
 scripts/automated_restore_test.py
 Automatisierter Restore- & Integritätstest für SQLite-Backups und Litestream-Replikate.
 Führt einen wöchentlichen oder On-Demand Prüflauf in einer isolierten Wegwerf-Sandbox aus:
-1. Restore/Snapshot der aktiven Datenbanken (kanban.db, state.db, agentic_memory.db)
+1. Restore echter Backup-Artefakte der konsolidierten DBs (ops/business/memory.db)
 2. PRAGMA integrity_check & foreign_key_check
 3. Smoke-Tests auf Kern-Tabellen & Datensätze
 4. Alarmierung via NotificationHub (Telegram-Push bei Fehlern)
@@ -10,9 +10,12 @@ Führt einen wöchentlichen oder On-Demand Prüflauf in einer isolierten Wegwerf
 
 import os
 import sys
+import glob
+import gzip
 import json
 import time
 import sqlite3
+import shutil
 import tempfile
 import datetime
 from typing import Dict, Any, List
@@ -30,8 +33,29 @@ if WORKSPACE_DIR not in sys.path:
 HISTORY_FILE = os.path.join(WORKSPACE_DIR, "data", "restore_test_history.json")
 
 
+# Audit 23.11.2026: der Test muss ECHTE Backup-Artefakte prüfen, nicht eine
+# Kopie der live DB — sonst bleibt ein seit Wochen kaputter Backup-Job grün.
+BACKUP_DIRS = (
+    os.path.join(os.path.expanduser("~"), ".hermes", "backups", "db"),
+    os.path.join(WORKSPACE_DIR, "data", "backups"),
+)
+
+
+def find_latest_backup(name: str) -> str:
+    """Neuestes echtes Backup-Artefakt für 'name' (db oder db.gz)."""
+    found = []
+    for base in BACKUP_DIRS:
+        for pattern in (f"archon_*/{name}", f"archon_*/{name}.gz", f"{name}", f"{name}.gz"):
+            found.extend(glob.glob(os.path.join(base, pattern)))
+    found = [p for p in found if os.path.isfile(p) and os.path.getsize(p) > 0]
+    return max(found, key=os.path.getmtime) if found else ""
+
+
 def resolve_db_path(name: str) -> str:
-    """Findet den Quellpfad einer Datenbank."""
+    """Findet den Quellpfad einer Datenbank — Backup-Artefakte haben Vorrang."""
+    backup = find_latest_backup(name)
+    if backup:
+        return backup
     candidates = [
         f"/opt/data/{name}",
         os.path.expanduser(f"~/.hermes/{name}"),
@@ -48,10 +72,15 @@ class AutomatedRestoreTester:
     """Führt atomare Restore- und Integritätstests in einer Sandbox durch."""
 
     def __init__(self):
+        # Konsolidierte Domänen-DBs (Audit 23.11.2026: die alten Namen
+        # kanban.db/state.db/agentic_memory.db sind nur noch Legacy-Aliase).
         self.dbs_to_test = [
-            {"name": "kanban.db", "source": resolve_db_path("kanban.db"), "required_table": "tasks"},
-            {"name": "state.db", "source": resolve_db_path("state.db"), "required_table": "messages"},
-            {"name": "agentic_memory.db", "source": resolve_db_path("agentic_memory.db"), "required_table": "prompt_versions"}
+            {"name": "ops.db", "source": resolve_db_path("ops.db"),
+             "required_table": ("tasks", "task_events", "checkpoints")},
+            {"name": "business.db", "source": resolve_db_path("business.db"),
+             "required_table": ("deals", "contracts", "invoices")},
+            {"name": "memory.db", "source": resolve_db_path("memory.db"),
+             "required_table": ("learnings", "prompt_versions")},
         ]
 
     def run_restore_test(self, notify: bool = True) -> Dict[str, Any]:
@@ -94,11 +123,22 @@ class AutomatedRestoreTester:
                     continue
 
                 dest_path = os.path.join(sandbox_dir, f"restored_{db_name}")
+                source_kind = "backup" if find_latest_backup(db_name) else "live"
+                db_report["source_kind"] = source_kind
+                if src_path.endswith(".gz"):
+                    # Reales Backup-Artefakt: erst in der Sandbox dekomprimieren.
+                    raw_path = os.path.join(sandbox_dir, f"source_{db_name}")
+                    with gzip.open(src_path, "rb") as f_src, open(raw_path, "wb") as f_dst:
+                        shutil.copyfileobj(f_src, f_dst)
+                    src_path = raw_path
 
                 try:
-                    # 1. Atomarer Online-Restore via SQLite Backup API (immutable=1 fuer lock-freie Replikation)
+                    # 1. Atomarer Online-Restore via SQLite Backup API.
+                    # KRITISCH: immutable=1 ignorierte WAL-Sidecars komplett —
+                    # der Test pruefte einen veralteten Snapshot und meldete
+                    # PASSED, obwohl die letzten Commits fehlten.
                     try:
-                        src_conn = sqlite3.connect(f"file:{src_path}?mode=ro&immutable=1", uri=True, timeout=10.0)
+                        src_conn = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True, timeout=10.0)
                     except Exception:
                         src_conn = sqlite3.connect(src_path, timeout=10.0)
 
@@ -122,17 +162,29 @@ class AutomatedRestoreTester:
                     tables = [r[0] for r in cur.fetchall()]
                     db_report["tables_found"] = len(tables)
 
-                    if req_table in tables:
-                        cur.execute(f"SELECT COUNT(*) FROM {req_table};")
+                    candidates = req_table if isinstance(req_table, (tuple, list)) else (req_table,)
+                    smoke_table = next((t for t in candidates if t in tables), None)
+                    if smoke_table:
+                        cur.execute(f'SELECT COUNT(*) FROM "{smoke_table}";')
                         cnt = cur.fetchone()[0]
                         db_report["record_count"] = cnt
-                        db_report["smoke_test"] = f"OK ({cnt} Einträge in {req_table})"
+                        db_report["smoke_test"] = f"OK ({cnt} Einträge in {smoke_table})"
                     else:
-                        db_report["smoke_test"] = f"WARN (Tabelle '{req_table}' fehlt, vorhandene: {len(tables)})"
+                        db_report["smoke_test"] = (
+                            f"FEHLER (keine Pflichttabelle {candidates} vorhanden, "
+                            f"tabellen: {len(tables)})"
+                        )
 
                     dest_conn.close()
 
-                    if int_res.lower() != "ok":
+                    if smoke_table is None or not db_report.get("record_count"):
+                        db_report["status"] = "FAILED"
+                        db_report["error"] = (
+                            f"Smoke-Test fehlgeschlagen: keine Pflichttabelle {candidates} "
+                            "vorhanden oder leer."
+                        )
+                        results["databases_failed"] += 1
+                    elif int_res.lower() != "ok":
                         db_report["status"] = "FAILED"
                         db_report["error"] = f"Integritätsprüfung fehlgeschlagen: {int_res}"
                         results["databases_failed"] += 1

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -15,6 +15,7 @@ import "@xyflow/react/dist/style.css";
 import { Search, Code2, Play, Image, Rocket, Layers, Cpu, Wrench, Shield, Check, Copy } from "lucide-react";
 
 import { TriggerManagerModal, PREDEFINED_TRIGGERS, TriggerItem } from "./TriggerManagerModal";
+import { archonApi, archonFetch, WorkflowTemplate } from "@/lib/archon-api";
 
 // --- CUSTOM REACT FLOW NODE 0: TRIGGER NODE ---
 const TriggerNode: React.FC<NodeProps> = ({ data }) => {
@@ -158,6 +159,79 @@ export const TeambildungFlowCanvas: React.FC<TeambildungFlowCanvasProps> = ({
   const [selectedModel, setSelectedModel] = useState("OmniRoute Free");
   const [teamName, setTeamName] = useState("RoundRobin Team Alpha");
   const [searchFilter, setSearchFilter] = useState("");
+
+  // Playground / Gallery / Deploy — frueher reine Platzhalter ohne Handler.
+  const [playgroundPrompt, setPlaygroundPrompt] = useState("");
+  const [playgroundResult, setPlaygroundResult] = useState<string | null>(null);
+  const [playgroundBusy, setPlaygroundBusy] = useState(false);
+  const [gallery, setGallery] = useState<WorkflowTemplate[]>([]);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
+  const [deployResult, setDeployResult] = useState<string | null>(null);
+  const [deployBusy, setDeployBusy] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== "gallery") return;
+    archonApi.listWorkflowTemplates()
+      .then((res) => setGallery(res.templates || []))
+      .catch((err: unknown) => setGalleryError(err instanceof Error ? err.message : "Vorlagen nicht ladbar"));
+  }, [activeTab]);
+
+  const runPlayground = async () => {
+    if (!playgroundPrompt.trim()) return;
+    setPlaygroundBusy(true);
+    setPlaygroundResult(null);
+    try {
+      // Das Team wird als DAG-Vorlage materialisiert und direkt ausgefuehrt.
+      const tpl = await archonApi.saveWorkflowTemplate({
+        title: teamName,
+        description: `Playground: ${playgroundPrompt.slice(0, 120)}`,
+        nodes: selectedAgentsList.map((a, i) => ({
+          id: `n_${i}`, type: "agent", agent_id: a.id,
+          prompt: playgroundPrompt, depends_on: i > 0 ? [`n_${i - 1}`] : [],
+        })),
+      });
+      const tplId = tpl.id || (tpl.template as { id?: string } | undefined)?.id || "";
+      const res = tplId
+        ? await archonApi.runWorkflowTemplate(tplId, { task: playgroundPrompt })
+        : await archonFetch<{ run_id?: string }>("api/v2/workflows/dag/run", {
+            method: "POST",
+            body: JSON.stringify({
+              dag_def: {
+                nodes: selectedAgentsList.map((a, i) => ({
+                  id: `n_${i}`, type: "agent", agent_id: a.id,
+                  prompt: playgroundPrompt, depends_on: i > 0 ? [`n_${i - 1}`] : [],
+                })),
+              },
+            }),
+          });
+      setPlaygroundResult(`Gestartet: Run ${res.run_id || "(siehe Workflow-Cockpit)"}`);
+    } catch (err: unknown) {
+      setPlaygroundResult(`Fehler: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setPlaygroundBusy(false);
+    }
+  };
+
+  const deployTeam = async () => {
+    setDeployBusy(true);
+    setDeployResult(null);
+    try {
+      const res = await archonApi.saveWorkflowTemplate({
+        title: teamName,
+        description: `Deployed squad: ${selectedAgentsList.map((a) => a.id).join(", ")}`,
+        nodes: selectedAgentsList.map((a, i) => ({
+          id: `n_${i}`, type: "agent", agent_id: a.id,
+          prompt: `Akt als Team-Mitglied '${a.name}' von '${teamName}'.`,
+          depends_on: i > 0 ? [`n_${i - 1}`] : [],
+        })),
+      });
+      setDeployResult(`Gespeichert: ${res.id || (res.template as { id?: string } | undefined)?.id || "ok"}`);
+    } catch (err: unknown) {
+      setDeployResult(`Fehler: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDeployBusy(false);
+    }
+  };
 
   const filteredAgents = useMemo(() => {
     if (!searchFilter.trim()) return agents;
@@ -539,12 +613,23 @@ export const TeambildungFlowCanvas: React.FC<TeambildungFlowCanvasProps> = ({
             Sende Aufgaben an das aktive Team <b>{teamName}</b> ({selectedAgentsList.length} Mitglieder).
           </p>
           <textarea
+            value={playgroundPrompt}
+            onChange={(e) => setPlaygroundPrompt(e.target.value)}
             placeholder="z.B. Recherchiere die neusten KI-Trends und schreibe ein Python-Skript."
             className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 h-32 focus:outline-none focus:border-indigo-500"
           ></textarea>
-          <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-lg transition shadow-lg shadow-indigo-600/30">
-            ▶️ Aufruf an Team starten
+          <button
+            onClick={() => void runPlayground()}
+            disabled={playgroundBusy || selectedAgentsList.length === 0}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs rounded-lg transition shadow-lg shadow-indigo-600/30"
+          >
+            {playgroundBusy ? "⏳ Wird gestartet…" : "▶️ Aufruf an Team starten"}
           </button>
+          {playgroundResult && (
+            <div className="text-xs text-slate-300 bg-slate-900 border border-slate-800 rounded-lg p-3">
+              {playgroundResult}
+            </div>
+          )}
         </div>
       )}
 
@@ -554,6 +639,25 @@ export const TeambildungFlowCanvas: React.FC<TeambildungFlowCanvasProps> = ({
             <Image className="w-5 h-5 text-indigo-400" /> 🖼️ Team Gallery & Presets
           </h2>
           <p className="text-xs text-slate-400">Gespeicherte Team-Vorlagen und AutoGen Presets.</p>
+          {galleryError && <p className="text-xs text-rose-400">{galleryError}</p>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {gallery.map((tpl) => (
+              <button
+                key={tpl.id}
+                onClick={() => void archonApi.runWorkflowTemplate(tpl.id, { task: tpl.title })
+                  .then((r) => setPlaygroundResult(`Gestartet: ${r.run_id}`))
+                  .catch((e: unknown) => setPlaygroundResult(`Fehler: ${String(e)}`))}
+                className="text-left bg-slate-900 border border-slate-800 hover:border-indigo-500 rounded-lg p-3"
+              >
+                <div className="text-sm font-semibold text-slate-100">{tpl.title}</div>
+                <div className="text-[11px] text-slate-400 mt-1">{tpl.description || "Keine Beschreibung"}</div>
+                <div className="text-[10px] text-indigo-400 mt-2">{tpl.nodes?.length || 0} Knoten · Starten ▶</div>
+              </button>
+            ))}
+            {!gallery.length && !galleryError && (
+              <p className="text-xs text-slate-500">Keine Vorlagen gespeichert — im Tab „Deploy“ das aktive Team speichern.</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -563,8 +667,21 @@ export const TeambildungFlowCanvas: React.FC<TeambildungFlowCanvasProps> = ({
             <Rocket className="w-5 h-5 text-indigo-400" /> 🚀 Deployment & API Export
           </h2>
           <p className="text-xs text-slate-400">
-            Exportiere das Team <b>{teamName}</b> als REST-API Microservice.
+            Speichert das Team <b>{teamName}</b> als ausführbare DAG-Vorlage (REST-API über
+            <code className="text-indigo-300 mx-1">/api/v2/workflows/templates/&#123;id&#125;/run</code>).
           </p>
+          <button
+            onClick={() => void deployTeam()}
+            disabled={deployBusy || selectedAgentsList.length === 0}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs rounded-lg transition"
+          >
+            {deployBusy ? "⏳ Wird gespeichert…" : "🚀 Team als Vorlage speichern"}
+          </button>
+          {deployResult && (
+            <div className="text-xs text-slate-300 bg-slate-900 border border-slate-800 rounded-lg p-3">
+              {deployResult}
+            </div>
+          )}
         </div>
       )}
 

@@ -10,11 +10,11 @@
       "name": "CEO — Chief Executive Officer",
       "role": "CEO — Chief Executive Officer",
       "category": "1. Strategie, Führung & Lebensplanung",
-      "avatar": "/static/avatars/custom_executive_decision_architect.png",
+      "avatar": "/static/avatars/custom_executive_decision_architect.png?v=1795419380062",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
       "status": "active",
-      "person_name": "Robert",
+      "person_name": "Jenson",
       "provider": "omniroute",
       "reasoning_level": "high"
     },

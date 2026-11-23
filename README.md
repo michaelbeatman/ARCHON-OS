@@ -38,7 +38,7 @@ What that means in practice:
 - **Structured decisions, not one-shot answers.** An AI Boardroom runs isolated multi-perspective debates with critic cross-examination and synthesis across 55 frameworks (OKR, Pre-Mortem, Six Thinking Hats, …).
 - **Cost control per model and per task.** OmniRoute routes each request to local (Ollama, LM Studio) or cloud providers and attributes cost before dispatch (`cost_estimator.py` checks budgets).
 - **Data sovereignty.** Zero-Egress routing keeps finance, contract and CRM work on local models; worker containers run in an `internal: true` Docker network without an internet route.
-- **Tamper-evident audit trail.** A SHA-256 hash-chained audit log records every dispatch, including provider, model and host.
+- **Tamper-evident audit trail.** An HMAC-SHA256 hash-chained audit log (external anchor + startup key check) records every dispatch, including provider, model and host.
 - **Your documents.** An Obsidian vault plus AnythingLLM/Chroma RAG indexes your library locally.
 - **Business operations.** Kanban with four-eyes approval gates, email triage, CRM, and an ERP suite (offers, contracts, invoices, receivables) — **alpha**.
 
@@ -52,7 +52,7 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 - **Governance:** one central PolicyEngine and an atomic BudgetBank (`reserve → settle/release`); signed warrants are now mandatory for privileged tools such as `pay` / `mcp__*`.
 - **Reliability:** idempotency keys and an outbox with retry/DLQ for events, webhooks and the scheduler; the audit log now uses HMAC with an env key and a non-blocking background anchor.
 - **Observability & tooling:** OTel traces in the LLM kernel and DAG, trace-to-eval replay fixtures, Python 3.13, split test requirements.
-- **Workspace:** 5-step onboarding wizard v2, operations calendar and 11 LinkedIn skills.
+- **Workspace:** 4-step onboarding wizard v2, operations calendar and 11 LinkedIn skills.
 
 > **Configuration note:** the code paths for authentication and egress control exist, but the shipped local `settings.json` still has `auth.enabled = false`, `privacy.zero_egress = false` and `zero_egress_strict = false` (only `hard_block_on_local_offline = true`). Enable auth before exposing the UI on a LAN. `config/version.json` is now aligned to `v0.5.7` (single source of truth); the CHANGELOG documents the details.
 
@@ -225,7 +225,7 @@ ARCHON-OS/
 ├── archon/                  # Modular FastAPI routers & core runtime (routers/, core/, services/)
 ├── backend/                 # Auth/RBAC, audit log, privacy router, CRM/ERP, workflow DAG, ~160 modules
 ├── static/                  # Border-first SPA UI, 11 locales & interactive liability modals
-├── frontend/                # Next.js 16 / React 19 cockpit (/content-studio, /workflows, /cockpit)
+├── frontend/                # Next.js 16 / React 19 cockpit (/crm, /workflows, /cockpit)
 ├── .hermes/profiles/        # 70 synced specialist SOUL.md profiles (Hermes runtime)
 ├── .agents/skills/          # Agent skills (LinkedIn suite, SEO, security, MCP bridges, ...)
 ├── data/                    # Runtime state: ops.db / business.db / memory.db, tenants, secrets, backups

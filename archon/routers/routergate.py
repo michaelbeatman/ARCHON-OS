@@ -64,7 +64,7 @@ def api_get_benchmark_history(limit: int = 25):
 @router.post("/api/router/hedged-completion")
 async def api_hedged_completion(payload: Dict = Body(...)):
     from backend.speculative_hedger import speculative_hedger
-    return await speculative_hedger.execute_hedged_call(
+    result = await speculative_hedger.execute_hedged_call(
         prompt=payload.get("prompt", "Test-Anfrage"),
         primary_model=payload.get("primary_model", "openai/gpt-4o"),
         fallback_model_override=payload.get("fallback_model"),
@@ -72,6 +72,11 @@ async def api_hedged_completion(payload: Dict = Body(...)):
         simulate_primary_latency_sec=payload.get("simulate_primary_latency_sec"),
         simulate_fallback_latency_sec=float(payload.get("simulate_fallback_latency_sec", 0.05))
     )
+    # Der Endpoint hat keine echten LLM-Coroutines injiziert: alles, was hier
+    # zurueckkommt, ist ein Demo-La Reserve-Aufruf (kein echter Provider-Call).
+    result["demo_only"] = True
+    result["mode"] = "demo_only" if not result.get("mode") or result.get("mode") == "demo_only" else result["mode"]
+    return result
 
 
 @router.get("/api/router/hedged-stats")

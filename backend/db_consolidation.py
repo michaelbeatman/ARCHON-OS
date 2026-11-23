@@ -336,6 +336,42 @@ def plan_consolidation(
     }
 
 
+def _missing_source_rows(
+    conn: sqlite3.Connection,
+    src_table: str,
+    dst_table: str,
+    columns: List[str],
+) -> int:
+    """Anzahl Quellzeilen, die im Ziel wirklich fehlen.
+
+    `INSERT OR IGNORE` meldet bei einem idempotenten Zweitlauf rowcount=0,
+    obwohl alle Daten da sind. Nur dieser Abgleich unterscheidet "../already
+    present" von echtem DATENVERLUST.
+    """
+    if not columns:
+        return 0
+    dst_info = conn.execute(f'PRAGMA main.table_info("{dst_table}")').fetchall()
+    pk_cols = [str(r[1]) for r in dst_info if int(r[5] or 0) > 0]
+    if pk_cols and all(pk in columns for pk in pk_cols):
+        cond = " AND ".join(f'd."{c}" IS s."{c}"' for c in pk_cols)
+    else:
+        cond = " AND ".join(f'd."{c}" IS s."{c}"' for c in columns)
+    sql = (
+        f'SELECT COUNT(*) FROM legacy_src."{src_table}" s '
+        f'WHERE NOT EXISTS (SELECT 1 FROM main."{dst_table}" d WHERE {cond})'
+    )
+    try:
+        return int(conn.execute(sql).fetchone()[0])
+    except sqlite3.Error as exc:
+        # KRITISCH (Audit 23.11.2026): "0" ist hier KEIN konservativer Wert,
+        # sondern behauptet "kein Verlust", obwohl die Prüfung fehlgeschlagen
+        # ist. Fail-closed: Migration hart abbrechen.
+        raise RuntimeError(
+            f"Verifikation der migrierten Zeilen fehlgeschlagen "
+            f"({src_table}->{dst_table}): {exc}"
+        ) from exc
+
+
 def _rewrite_create_table_sql(create_sql: str, src_table: str, dst_table: str) -> str:
     """Macht CREATE [VIRTUAL] TABLE idempotent (IF NOT EXISTS) und benennt bei Kollision um."""
     sql = (create_sql or "").strip()
@@ -457,6 +493,11 @@ def run_consolidation(
                         for m in mappings:
                             src_tbl = m["source_table"]
                             dst_tbl = m["target_table"]
+                            # Plan-Zahl kann -1 sein (fast_count bei DBs > 25 MB).
+                            # Nach dem ATTACH wird sie durch eine exakte Zählung
+                            # ersetzt — nie als gültige Zahl verwenden (Audit
+                            # 23.11.2026: stiller Datenverlust).
+                            src_count = int(m["row_count"])
                             tmeta = src_info["tables"].get(src_tbl) or {}
                             raw_create = str(tmeta.get("create_sql") or "").strip()
                             # Interne FTS5-Schattentabellen (*_data, *_idx, *_docsize, *_config, *_content)
@@ -489,16 +530,23 @@ def run_consolidation(
                                         f'SELECT {cols_quoted} FROM legacy_src."{src_tbl}"'
                                     )
                                     # INSERT OR IGNORE verwirft Zeilen still bei PK/UNIQUE/
-                                    # NOT NULL-Konflikten. Gegen die QUELLZEILEN dieser
-                                    # Tabelle prüfen, nicht gegen den kumulativen Zielstand.
+                                    # NOT NULL-Konflikten. rowcount=0 ist beim idempotenten
+                                    # Zweitlauf jedoch ERWARTET (Zeilen sind schon da) —
+                                    # deshalb gegen die tatsaechlich fehlenden Quellzeilen
+                                    # pruefen, nicht gegen rowcount allein.
                                     inserted = int(cur.rowcount or 0)
-                                    src_count = int(m["row_count"])
+                                    exact = conn.execute(
+                                        f'SELECT COUNT(*) FROM legacy_src."{src_tbl}"'
+                                    ).fetchone()[0]
+                                    src_count = int(exact)
                                     if inserted < src_count:
-                                        warnings.append(
-                                            f"DATENVERLUST {src_tbl}->{dst_tbl}: "
-                                            f"{inserted}/{src_count} Zeilen übernommen "
-                                            "(PK/UNIQUE/NOT NULL-Konflikt)"
-                                        )
+                                        missing = _missing_source_rows(conn, src_tbl, dst_tbl, common_cols)
+                                        if missing > 0:
+                                            warnings.append(
+                                                f"DATENVERLUST {src_tbl}->{dst_tbl}: "
+                                                f"{missing}/{src_count} Zeilen fehlen im Ziel "
+                                                "(PK/UNIQUE/NOT NULL-Konflikt)"
+                                            )
                                 except sqlite3.Error as ins_err:
                                     warnings.append(f"Datenkopie {src_tbl}->{dst_tbl} uebersprungen: {ins_err}")
 
@@ -523,14 +571,14 @@ def run_consolidation(
 
                             cnt_after = conn.execute(f'SELECT COUNT(*) FROM main."{dst_tbl}"').fetchone()[0]
                             migrated_tables += 1
-                            migrated_rows += int(m["row_count"])
+                            migrated_rows += src_count
                             conn.execute(
                                 """
                                 INSERT OR REPLACE INTO _archon_consolidation_meta
                                     (source_file, source_table, target_table, source_rows, migrated_at)
                                 VALUES (?, ?, ?, ?, ?)
                                 """,
-                                (m["source_file"], src_tbl, dst_tbl, int(m["row_count"]), datetime.datetime.now(datetime.timezone.utc).isoformat()),
+                                (m["source_file"], src_tbl, dst_tbl, src_count, datetime.datetime.now(datetime.timezone.utc).isoformat()),
                             )
                             # cnt_after ist der kumulative Zielstand mehrerer Quellen —
                             # ein Vergleich mit m['row_count'] war irreführend und hat
@@ -556,6 +604,20 @@ def run_consolidation(
             "integrity_check": integrity,
             "warnings": warnings,
         }
+
+    # DATENVERLUST ist kein Hinweis, sondern ein Abbruchgrund: INSERT OR IGNORE
+    # hat Zeilen still verworfen. Kein Manifest, keine Aktivierung, kein
+    # "success" — sonst waere die Konsolidierung ein Datenverlust-Versprechen.
+    data_loss = [
+        f"{dom}: {w}"
+        for dom, report in migration_report.items()
+        for w in report.get("warnings", [])
+        if "DATENVERLUST" in str(w)
+    ]
+    if data_loss:
+        raise RuntimeError(
+            "Konsolidierung abgebrochen — DATENVERLUST erkannt: " + "; ".join(data_loss)
+        )
 
     manifest_data = {
         "active": bool(activate),

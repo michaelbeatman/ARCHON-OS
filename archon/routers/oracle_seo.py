@@ -6,14 +6,31 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 import datetime
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Optional
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 from archon.routers._rbac import require_admin_or_503
 
 logger = logging.getLogger("archon.routers.oracle_seo")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["oracle_seo"])
+
+
+class OracleTriageRequest(BaseModel):
+    """Signal-ID alternativ als 'id' oder 'signal_id' (Kompatibilitaet)."""
+    model_config = ConfigDict(extra="ignore")
+    id: Optional[str] = Field(default=None, max_length=200)
+    signal_id: Optional[str] = Field(default=None, max_length=200)
+
+
+class SeoGenerateRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    topic: str = Field(default="", max_length=500)
+    keyword: Optional[str] = Field(default=None, max_length=200)
+    audience: str = Field(default="B2B / Tech", max_length=200)
+    trigger_n8n: bool = False
+    serp_analysis: Optional[Any] = None
 
 
 # =====================================================================
@@ -44,12 +61,14 @@ def api_run_oracle_cycle():
 
 
 @router.post("/api/oracle/triage")
-def api_triage_oracle_signal(payload: Dict[str, Any] = Body(...)):
+def api_triage_oracle_signal(payload: OracleTriageRequest):
+    if isinstance(payload, dict):  # direkte Aufrufe (Tests/Interop) weiterhin moeglich
+        payload = OracleTriageRequest.model_validate(payload)
     try:
         import oracle_news_radar
 
         radar = oracle_news_radar.OracleNewsRadar()
-        signal_id = payload.get("id") or payload.get("signal_id")
+        signal_id = payload.id or payload.signal_id
         if not signal_id:
             raise HTTPException(status_code=400, detail={"code": "oracle_signal_id_missing", "params": {}})
         return radar.triage_to_task(signal_id)
@@ -65,13 +84,13 @@ def api_triage_oracle_signal(payload: Dict[str, Any] = Body(...)):
 
 
 @router.post("/api/seo/generate")
-async def api_seo_generate(request: Request, payload: Dict[str, Any] = Body(...)):
+async def api_seo_generate(request: Request, payload: SeoGenerateRequest):
     require_admin_or_503(request)  # RBAC: Admin-Sache (HITL-Pfad)
-    topic = payload.get("topic", "")
-    keyword = payload.get("keyword", topic)
-    audience = payload.get("audience", "B2B / Tech")
-    trigger_n8n = payload.get("trigger_n8n", False)
-    serp_analysis = payload.get("serp_analysis")
+    topic = payload.topic
+    keyword = payload.keyword or topic
+    audience = payload.audience
+    trigger_n8n = payload.trigger_n8n
+    serp_analysis = payload.serp_analysis
     if not topic:
         raise HTTPException(status_code=400, detail={"code": "oracle_topic_required", "params": {}})
     try:

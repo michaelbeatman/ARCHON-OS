@@ -19,15 +19,42 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.paths import KANBAN_DB_PATH
 
 logger = logging.getLogger("archon.routers.watchdog")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], prefix="/api/v1/watchdog", tags=["watchdog"])
+
+
+class WatchdogConfigSave(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    enabled: Optional[bool] = None
+    interval_minutes: Optional[int] = Field(default=None, ge=1, le=10080)
+    basket_threshold: Optional[int] = Field(default=None, ge=1, le=100000)
+    priority_keywords: Optional[List[str]] = None
+    basket: Optional[List[Any]] = None
+    channels: Optional[Dict[str, Any]] = None
+    targets: Optional[List[Any]] = None
+
+
+class WatchdogDispatchRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    action_type: str = Field(default="custom", max_length=80)
+    findings: List[Dict[str, Any]] = Field(default_factory=list)
+    custom_prompt: str = Field(default="", max_length=20000)
+    target_profile: Optional[str] = Field(default=None, max_length=120)
+    title: Optional[str] = Field(default=None, max_length=300)
+
+
+class AcknowledgeAlarmRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    alarm_id: Optional[str] = Field(default=None, max_length=200)
 
 
 def _require_admin(request: Request):
@@ -46,10 +73,11 @@ def api_get_watchdog_config():
 
 
 @router.post("/config")
-def api_save_watchdog_config(request: Request, payload: Dict = Body(...)):
+def api_save_watchdog_config(request: Request, payload: WatchdogConfigSave):
     _require_admin(request)
     from backend.internet_watchdog import get_watchdog_config, save_watchdog_config
 
+    payload = payload.model_dump(exclude_unset=True)
     cfg = get_watchdog_config()
     if "enabled" in payload:
         cfg["enabled"] = bool(payload["enabled"])
@@ -120,15 +148,15 @@ def _db_insert_watchdog_task(
 
 @router.post("/dispatch_action")
 async def api_watchdog_dispatch_action(
-    request: Request, payload: Dict = Body(...)
+    request: Request, payload: WatchdogDispatchRequest
 ):
     """Erzeugt eine gezielte Kanban-Aufgabe aus einem oder mehreren Watchdog-Funden."""
     _require_admin(request)
 
-    action_type = payload.get("action_type", "custom")
-    findings = payload.get("findings", [])
-    custom_prompt = payload.get("custom_prompt", "").strip()
-    target_profile = payload.get("target_profile")
+    action_type = payload.action_type
+    findings = payload.findings
+    custom_prompt = payload.custom_prompt.strip()
+    target_profile = payload.target_profile
 
     if not findings:
         return {"ok": False, "error": "Keine Funde uebergeben"}
@@ -191,7 +219,7 @@ async def api_watchdog_dispatch_action(
         )
     else:
         assignee = target_profile or "executive_decision_architect"
-        title = payload.get("title") or (
+        title = payload.title or (
             f"Aufgabe: {findings[0]['title'][:60]}"
             if len(findings) == 1
             else f"Sammel-Aufgabe ({len(findings)} Funde)"
@@ -266,18 +294,18 @@ def trigger_test_watchdog_alarm_endpoint(request: Request):
             },
         )
         return {"status": "ok", "alarms": runner.load_alarms()}
-    return {"status": "error", "message": "Watchdog not running"}
+    return JSONResponse(status_code=503, content={"status": "error", "message": "Watchdog not running"})
 
 
 @router.post("/acknowledge")
-def acknowledge_watchdog_alarm_endpoint(request: Request, payload: dict = None):
+def acknowledge_watchdog_alarm_endpoint(request: Request, payload: Optional[AcknowledgeAlarmRequest] = None):
     _require_admin(request)
     import main as app_main
 
     runner = getattr(app_main, "watchdog_runner", None)
     if runner:
         alarms = runner.load_alarms()
-        alarm_id = payload.get("alarm_id") if payload else None
+        alarm_id = payload.alarm_id if payload else None
         if alarm_id:
             alarms = [a for a in alarms if a.get("id") != alarm_id]
         else:
@@ -290,4 +318,4 @@ def acknowledge_watchdog_alarm_endpoint(request: Request, payload: dict = None):
         except Exception as e:
             logger.warning(f"Error saving alarms after ack: {e}")
         return {"status": "ok", "alarms": alarms}
-    return {"status": "error", "message": "Watchdog not running"}
+    return JSONResponse(status_code=503, content={"status": "error", "message": "Watchdog not running"})

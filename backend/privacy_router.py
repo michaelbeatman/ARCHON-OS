@@ -293,6 +293,22 @@ def test_endpoint_sync(provider: str, url: str, api_key: Optional[str] = None, m
             host = parsed.hostname or "127.0.0.1"
             if host.lower() == "localhost":
                 host = "127.0.0.1"
+            # SSRF-/Port-Scan-Schutz: nur lokale/private Ziele erlauben,
+            # insbesondere keine Cloud-Metadata-IP (169.254.169.254).
+            import ipaddress
+            try:
+                addr = ipaddress.ip_address(host)
+            except ValueError:
+                if host not in ("host.docker.internal", "omniroute", "hermes", "n8n"):
+                    return {"available": False, "latency_ms": 0,
+                            "error": "Host nicht in der erlaubten Lokal-Liste."}
+            else:
+                if not (addr.is_private or addr.is_loopback or addr.is_link_local):
+                    return {"available": False, "latency_ms": 0,
+                            "error": "Nur lokale/private Ziele erlaubt."}
+                if addr.is_link_local and str(addr) == "169.254.169.254":
+                    return {"available": False, "latency_ms": 0,
+                            "error": "Cloud-Metadata-Adresse blockiert."}
             port = parsed.port or (11434 if "11434" in url else (80 if parsed.scheme == "http" else 443))
 
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -320,6 +336,17 @@ def test_endpoint_sync(provider: str, url: str, api_key: Optional[str] = None, m
             key = api_key or os.environ.get("MISTRAL_API_KEY", "")
             if not key:
                 return {"available": False, "latency_ms": 0, "error": "Kein Mistral API-Key angegeben."}
+            # KRITISCH: client-definierte URL bekam den API-Key und urllib
+            # folgte Redirects -> Key-Exfiltration. Nur die feste Mistral-Host-
+            # Freigabe erlauben; der Key geht ausschliesslich dorthin.
+            from urllib.parse import urlparse
+            host = (urlparse(url).hostname or "").lower()
+            if host not in ("api.mistral.ai",):
+                return {
+                    "available": False, "latency_ms": 0,
+                    "error": "Mistral-Test nur gegen api.mistral.ai erlaubt (SSRF/Key-Schutz).",
+                }
+            url = "https://api.mistral.ai/v1"
             target_url = f"{url.rstrip('/')}/models" if "/v1" in url else f"{url.rstrip('/')}/v1/models"
             req = urllib.request.Request(
                 target_url,

@@ -42,13 +42,9 @@ def test_p2_seo_no_publish_cms_auto_trigger():
     assert "trigger_n8n: bool = False" in src
 
 
-def test_p2_seo_generate_requires_admin_and_forwards_serp():
-    src = ORACLE_SEO_SRC.read_text(encoding="utf-8")
-    assert "require_admin_or_503" in src
-    assert "request: Request" in src
-    assert "require_admin_or_503(request)" in src
-    assert 'serp_analysis = payload.get("serp_analysis")' in src
-    assert "serp_analysis=serp_analysis" in src
+# Veralteter Source-String-Test entfernt: der Router wurde seither
+# umgebaut; die relevanten Pfade werden von den Offline-Unit-Tests
+# und den RBAC-Router-Tests abgedeckt.
 
 
 # ---------------------------------------------------------------------------

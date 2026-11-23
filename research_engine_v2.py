@@ -43,7 +43,9 @@ from backend.research_sources import (
 )
 
 OMNIROUTE_URL = os.environ.get("OMNIROUTE_URL", "http://omniroute:20128/v1")
-OMNIROUTE_KEY = os.environ.get("OMNIROUTE_API_KEY", "sk-archon")
+# Kein hartcodierter Fallback-Key (Audit 23.11.2026); der Fehler wird am
+# Nutzungspunkt geworfen, damit Importe/Tests ohne Gateway weiterhin laufen.
+OMNIROUTE_KEY = os.environ.get("OMNIROUTE_API_KEY", "")
 
 USER_AGENT = "Mozilla/5.0 (ArchonOS ResearchEngine v2)"
 MAX_PAGE_BYTES = 1_500_000
@@ -289,6 +291,10 @@ def compress_text(text: str, query: str, max_words: int = 220) -> str:
 # ---------------------------------------------------------------------------
 
 def _chat(model: str, system: str, user: str, max_tokens: int, timeout: int = 40) -> str:
+    if not OMNIROUTE_KEY:
+        raise RuntimeError(
+            "OMNIROUTE_API_KEY fehlt in der Umgebung — kein Request mit leerem/Default-Key."
+        )
     payload = json.dumps({
         "model": model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],

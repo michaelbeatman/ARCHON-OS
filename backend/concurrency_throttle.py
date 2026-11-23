@@ -61,9 +61,24 @@ class PriorityConcurrencyThrottle:
         Versucht einen Ausführungs-Slot zu belegen.
         Tasks mit höherer Priorität (z. B. P3) überholen Tasks mit P1/P2 in der Schlange.
         """
-        cfg = get_concurrency_config()
+        cfg = await asyncio.to_thread(get_concurrency_config)
         max_slots = max(1, int(cfg.get("max_concurrent_agents", 4)))
         timeout = float(cfg.get("queue_timeout_seconds", 60))
+        # Backpressure ist jetzt ein Consumer, kein Dashboard: bei
+        # CPU/RAM/Disk-Ueberlast werden die verfuegbaren Slots reduziert,
+        # statt weiterhin alle Agenten laufen zu lassen.
+        # KRITISCH: _read_host_metrics() enthaelt psutil.cpu_percent(0.05) und
+        # shutil.disk_usage() — synchron im Event-Loop wuerden N Waiter den
+        # Loop mit N x 50 ms blockieren. Deshalb immer in den Threadpool.
+        try:
+            from backend.resource_backpressure import resource_backpressure_protector
+            bp = await asyncio.to_thread(
+                resource_backpressure_protector.check_health_and_backpressure
+            )
+            if bp.get("backpressure_active"):
+                max_slots = max(1, max_slots // 2)
+        except Exception:
+            pass
 
         loop = asyncio.get_running_loop()
         start_time = loop.time()
@@ -77,8 +92,17 @@ class PriorityConcurrencyThrottle:
             try:
                 while True:
                     # Prune ggf. verwaiste Slots bei Laufzeit-Konfig-Aenderung
-                    cfg_now = get_concurrency_config()
+                    cfg_now = await asyncio.to_thread(get_concurrency_config)
                     max_slots = max(1, int(cfg_now.get("max_concurrent_agents", max_slots)))
+                    try:
+                        from backend.resource_backpressure import resource_backpressure_protector
+                        bp_now = await asyncio.to_thread(
+                            resource_backpressure_protector.check_health_and_backpressure
+                        )
+                        if bp_now.get("backpressure_active"):
+                            max_slots = max(1, max_slots // 2)
+                    except Exception:
+                        pass
                     if len(self._active_slots) < max_slots and self._wait_queue and self._wait_queue[0][2] == slot_key:
                         heapq.heappop(self._wait_queue)
                         self._active_slots[slot_key] = {

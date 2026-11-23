@@ -5,9 +5,11 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import asyncio
 import datetime
+import json
 import logging
 import os
 import re
+import sqlite3
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -18,42 +20,419 @@ logger = logging.getLogger("archon.routers.telemetry")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["telemetry"])
 
+_ACTIVITY_LIMIT = 25
+_ACTIVITY_MAX_LINES = 60
 
 
+def _activity_db_candidates(filename: str) -> list[str]:
+    """Mgliche Pfade einer DB - konsolidierte Ziele zuerst, Container-Pfade als Fallback."""
+    candidates = []
+    try:
+        from backend.db_paths import resolve_db as _resolve_db
+
+        candidates.append(_resolve_db(filename))
+    except Exception as exc:
+        logger.debug(f"[Telemetry] DB-Resolver fuer {filename} nicht verfuegbar: {exc}")
+    workspace = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    candidates.extend(
+        [
+            f"/app/data/{filename}",
+            f"/opt/data/{filename}",
+            os.path.join(workspace, "data", filename),
+        ]
+    )
+    seen, ordered = set(), []
+    for path in candidates:
+        if not path:
+            continue
+        path = os.path.abspath(path)
+        if path not in seen:
+            seen.add(path)
+            ordered.append(path)
+    return ordered
+
+
+def _open_activity_db(filename: str):
+    """Read-only Verbindung zur ersten DB mit echter Datei. (conn, path) oder (None, None)."""
+    for path in _activity_db_candidates(filename):
+        if not os.path.isfile(path):
+            continue
+        try:
+            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3.0)
+            conn.execute("PRAGMA busy_timeout=3000;")
+            return conn, path
+        except sqlite3.Error as exc:
+            logger.debug(f"[Telemetry] {path} nicht lesbar: {exc}")
+    return None, None
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    """Spaltennamen einer Tabelle - erlaubt feature-detektive Queries bei Schema-Varianten."""
+    try:
+        return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    except sqlite3.Error:
+        return set()
+
+
+def _parse_epoch(value) -> Optional[float]:
+    """Epoch-Sekunden, Millisekunden und ISO-Zeitstempel auf einen Zeitwert normalisieren."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        return number / 1000 if number > 1e11 else number
+    text = str(value).strip()
+    if not text:
+        return None
+    if re.fullmatch(r"\d+(\.\d+)?", text):
+        return _parse_epoch(float(text))
+    try:
+        parsed = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        return parsed.timestamp()
+    except ValueError:
+        return None
+
+
+def _fmt_activity_time(ts: Optional[float]) -> str:
+    if ts is None:
+        return "--:--:--"
+    try:
+        dt = datetime.datetime.fromtimestamp(ts)
+        if dt.date() == datetime.date.today():
+            return dt.strftime("%H:%M:%S")
+        return dt.strftime("%Y-%m-%d %H:%M")
+    except (OSError, ValueError, OverflowError):
+        return "--:--:--"
+
+
+def _preview(text, maxlen: int = 100) -> str:
+    value = str(text or "").replace("\r", " ").replace("\n", " ").strip()
+    return value if len(value) <= maxlen else value[: maxlen - 1] + "…"
+
+
+def _payload_preview(raw, maxlen: int = 100) -> str:
+    """JSON-Payloads auf die aussagekraeftigsten Felder reduzieren."""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = json.loads(text)
+    except (ValueError, TypeError):
+        return _preview(text, maxlen)
+    if not isinstance(parsed, dict):
+        return _preview(parsed, maxlen)
+    for key in ("message", "detail", "text", "summary", "name", "action", "reason", "note", "error"):
+        if parsed.get(key):
+            return _preview(parsed[key], maxlen)
+    parts = [
+        f"{key}={_preview(value, 40)}"
+        for key, value in list(parsed.items())[:4]
+        if value not in (None, "", {}, [])
+    ]
+    return _preview(" · ".join(parts), maxlen)
+
+
+def _has_json1(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute("SELECT json_extract('{}', '$.probe')").fetchone()
+        return True
+    except sqlite3.Error:
+        return False
+
+
+def _collect_ops_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
+    """Ops-DB: Tasks, Task-Events und Task-Runs des Agenten."""
+    entries, counts = [], {}
+    conn, _path = _open_activity_db("ops.db")
+    if conn is None:
+        return entries, counts
+    try:
+        task_ids = []
+        cols = _table_columns(conn, "tasks")
+        if "assignee" in cols:
+            select = [c for c in ("id", "title", "status", "created_at", "completed_at") if c in cols]
+            rows = conn.execute(
+                "SELECT "
+                + ", ".join(select)
+                + " FROM tasks WHERE LOWER(COALESCE(assignee,'')) = LOWER(?) ORDER BY "
+                + ("created_at DESC" if "created_at" in cols else "id DESC")
+                + " LIMIT ?",
+                (agent_id, limit),
+            ).fetchall()
+            counts["tasks"] = len(rows)
+            for row in rows:
+                item = dict(zip(select, row))
+                task_ids.append(str(item.get("id") or ""))
+                ts = _parse_epoch(item.get("created_at"))
+                line = (
+                    f"[{_fmt_activity_time(ts)}][TASK] {item.get('id') or '?'} · "
+                    f"{_preview(item.get('title'), 70)} · {item.get('status') or 'todo'}"
+                )
+                end_ts = _parse_epoch(item.get("completed_at"))
+                if end_ts:
+                    line += f" · abgeschlossen {_fmt_activity_time(end_ts)}"
+                entries.append((ts or 0.0, line, "tasks"))
+
+        cols = _table_columns(conn, "task_events")
+        if cols and ("task_id" in cols or "payload" in cols):
+            clauses, params = [], []
+            if "task_id" in cols and task_ids:
+                capped = task_ids[:100]
+                clauses.append("task_id IN (" + ",".join("?" * len(capped)) + ")")
+                params.extend(capped)
+            if "payload" in cols:
+                clauses.append("LOWER(COALESCE(payload,'')) LIKE ?")
+                params.append('%"' + agent_id.lower() + '"%')
+                if _has_json1(conn):
+                    clauses.append(
+                        "LOWER(COALESCE(json_extract(payload, '$.agent_id'),'')) = LOWER(?)"
+                    )
+                    params.append(agent_id)
+            if clauses:
+                time_col = "created_at" if "created_at" in cols else "id"
+                select = [
+                    c for c in ("task_id", "kind", "payload", time_col) if c in cols
+                ]
+                rows = conn.execute(
+                    "SELECT "
+                    + ", ".join(select)
+                    + " FROM task_events WHERE "
+                    + " OR ".join(clauses)
+                    + f" ORDER BY {time_col} DESC LIMIT ?",
+                    params + [limit * 2],
+                ).fetchall()
+                seen_events = set()
+                for row in rows:
+                    item = dict(zip(select, row))
+                    dedup_key = (
+                        str(item.get("task_id")),
+                        str(item.get("kind")),
+                        str(item.get(time_col)),
+                    )
+                    if dedup_key in seen_events:
+                        continue
+                    seen_events.add(dedup_key)
+                    ts = _parse_epoch(item.get("created_at")) if "created_at" in cols else None
+                    line = (
+                        f"[{_fmt_activity_time(ts)}][EVENT] {item.get('kind') or 'event'}"
+                    )
+                    if item.get("task_id"):
+                        line += f" · Task {item['task_id']}"
+                    detail = _payload_preview(item.get("payload"))
+                    if detail:
+                        line += f" · {detail}"
+                    entries.append((ts or 0.0, line, "task_events"))
+                counts["task_events"] = len(seen_events)
+
+        cols = _table_columns(conn, "task_runs")
+        if cols:
+            agent_col = next(
+                (c for c in ("agent_id", "assignee", "worker_id", "worker", "agent") if c in cols),
+                None,
+            )
+            time_col = next(
+                (c for c in ("started_at", "created_at", "start_time", "created_ts") if c in cols),
+                None,
+            )
+            status_col = next((c for c in ("status", "state") if c in cols), None)
+            clauses, params = [], []
+            if agent_col:
+                clauses.append(f"LOWER(COALESCE({agent_col},'')) = LOWER(?)")
+                params.append(agent_id)
+            if "task_id" in cols and task_ids:
+                capped = task_ids[:100]
+                clauses.append("task_id IN (" + ",".join("?" * len(capped)) + ")")
+                params.extend(capped)
+            if clauses:
+                select = []
+                for col in ("id", "run_id", "task_id", agent_col, status_col, time_col):
+                    if col and col in cols and col not in select:
+                        select.append(col)
+                order = f"{time_col} DESC" if time_col else "rowid DESC"
+                rows = conn.execute(
+                    "SELECT "
+                    + ", ".join(select)
+                    + " FROM task_runs WHERE "
+                    + " OR ".join(clauses)
+                    + f" ORDER BY {order} LIMIT ?",
+                    params + [limit],
+                ).fetchall()
+                counts["task_runs"] = len(rows)
+                for row in rows:
+                    item = dict(zip(select, row))
+                    ts = _parse_epoch(item.get(time_col)) if time_col else None
+                    line = f"[{_fmt_activity_time(ts)}][RUN] Run {item.get('run_id') or item.get('id') or '?'}"
+                    if item.get("task_id"):
+                        line += f" · Task {item['task_id']}"
+                    if status_col and item.get(status_col):
+                        line += f" · {item[status_col]}"
+                    entries.append((ts or 0.0, line, "task_runs"))
+    except sqlite3.Error as exc:
+        logger.debug(f"[Telemetry] Ops-Aktivitaet fuer '{agent_id}' nicht lesbar: {exc}")
+    finally:
+        conn.close()
+    return entries, counts
+
+
+def _collect_memory_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
+    """Memory-DB: Audit-Log, OTel-Traces, Execution-Receipts und Egress-Log."""
+    entries, counts = [], {}
+    conn, _path = _open_activity_db("memory.db")
+    if conn is None:
+        return entries, counts
+    try:
+        cols = _table_columns(conn, "audit_log")
+        if "agent_id" in cols:
+            select = [
+                c for c in ("timestamp", "category", "action", "event_type", "payload_json", "model")
+                if c in cols
+            ]
+            rows = conn.execute(
+                "SELECT "
+                + ", ".join(select)
+                + " FROM audit_log WHERE LOWER(COALESCE(agent_id,'')) = LOWER(?) ORDER BY id DESC LIMIT ?",
+                (agent_id, limit),
+            ).fetchall()
+            counts["audit_log"] = len(rows)
+            for row in rows:
+                item = dict(zip(select, row))
+                ts = _parse_epoch(item.get("timestamp"))
+                label = item.get("action") or item.get("event_type") or "event"
+                line = (
+                    f"[{_fmt_activity_time(ts)}][AUDIT] "
+                    f"{item.get('category') or 'system'}/{label}"
+                )
+                detail = _payload_preview(item.get("payload_json"))
+                if detail:
+                    line += f" · {detail}"
+                if item.get("model"):
+                    line += f" · {item['model']}"
+                entries.append((ts or 0.0, line, "audit_log"))
+
+        cols = _table_columns(conn, "otel_traces")
+        if "agent_id" in cols:
+            select = [
+                c for c in ("start_time", "name", "status", "total_tokens", "total_cost_usd", "duration_ms", "task_id")
+                if c in cols
+            ]
+            rows = conn.execute(
+                "SELECT "
+                + ", ".join(select)
+                + " FROM otel_traces WHERE LOWER(COALESCE(agent_id,'')) = LOWER(?) ORDER BY start_time DESC LIMIT ?",
+                (agent_id, limit),
+            ).fetchall()
+            counts["otel_traces"] = len(rows)
+            for row in rows:
+                item = dict(zip(select, row))
+                ts = _parse_epoch(item.get("start_time"))
+                line = (
+                    f"[{_fmt_activity_time(ts)}][TRACE] {item.get('name') or 'trace'} · "
+                    f"{item.get('status') or 'OK'}"
+                )
+                if item.get("total_tokens"):
+                    line += f" · {item['total_tokens']} Tokens"
+                if item.get("total_cost_usd"):
+                    try:
+                        line += f" · ${float(item['total_cost_usd']):.4f}"
+                    except (TypeError, ValueError):
+                        pass
+                if item.get("duration_ms"):
+                    line += f" · {item['duration_ms']} ms"
+                entries.append((ts or 0.0, line, "otel_traces"))
+
+        cols = _table_columns(conn, "execution_receipts_ledger")
+        agent_col = next((c for c in ("agent_role", "agent_id") if c in cols), None)
+        if agent_col:
+            select = [
+                c for c in ("created_at", "model_used", "prompt_tokens", "completion_tokens", "cost_usd", "task_id")
+                if c in cols
+            ]
+            rows = conn.execute(
+                "SELECT "
+                + ", ".join(select)
+                + f" FROM execution_receipts_ledger WHERE LOWER(COALESCE({agent_col},'')) = LOWER(?) ORDER BY id DESC LIMIT ?",
+                (agent_id, limit),
+            ).fetchall()
+            counts["execution_receipts_ledger"] = len(rows)
+            for row in rows:
+                item = dict(zip(select, row))
+                ts = _parse_epoch(item.get("created_at"))
+                tokens = int(item.get("prompt_tokens") or 0) + int(item.get("completion_tokens") or 0)
+                line = f"[{_fmt_activity_time(ts)}][RECEIPT] {item.get('model_used') or 'model'}"
+                if tokens:
+                    line += f" · {tokens} Tokens"
+                if item.get("cost_usd"):
+                    try:
+                        line += f" · ${float(item['cost_usd']):.4f}"
+                    except (TypeError, ValueError):
+                        pass
+                if item.get("task_id"):
+                    line += f" · Task {item['task_id']}"
+                entries.append((ts or 0.0, line, "execution_receipts_ledger"))
+
+        cols = _table_columns(conn, "egress_firewall_logs")
+        if "agent_id" in cols:
+            select = [
+                c for c in ("created_at", "hostname", "target_url", "allowed", "reason") if c in cols
+            ]
+            rows = conn.execute(
+                "SELECT "
+                + ", ".join(select)
+                + " FROM egress_firewall_logs WHERE LOWER(COALESCE(agent_id,'')) = LOWER(?) ORDER BY id DESC LIMIT ?",
+                (agent_id, limit),
+            ).fetchall()
+            counts["egress_firewall_logs"] = len(rows)
+            for row in rows:
+                item = dict(zip(select, row))
+                ts = _parse_epoch(item.get("created_at"))
+                verdict = "ALLOWED" if item.get("allowed") else "BLOCKED"
+                line = (
+                    f"[{_fmt_activity_time(ts)}][EGRESS] {item.get('hostname') or 'host'} · "
+                    f"{verdict} · {_preview(item.get('reason'), 70)}"
+                )
+                entries.append((ts or 0.0, line, "egress_firewall_logs"))
+    except sqlite3.Error as exc:
+        logger.debug(f"[Telemetry] Memory-Aktivitaet fuer '{agent_id}' nicht lesbar: {exc}")
+    finally:
+        conn.close()
+    return entries, counts
 
 
 def _read_recent_turns(agent_id: str) -> list[str]:
+    """Letzte Chat-Turns aus conversations - konsolidierte memory.db zuerst."""
     recent_turns = []
-    conn = None
-    try:
+    candidates = _activity_db_candidates("agentic_memory.db") + _activity_db_candidates("memory.db")
+    for db_path in candidates:
+        if not os.path.isfile(db_path):
+            continue
+        conn = None
         try:
-            from backend.db_paths import resolve_db as _resolve_db
-            db_path = _resolve_db("agentic_memory.db")
-        except Exception:
-            db_path = "/app/data/agentic_memory.db"
-        if os.path.exists(db_path):
-            import sqlite3
-
-            conn = sqlite3.connect(db_path, timeout=5.0)
-            conn.execute("PRAGMA busy_timeout=5000;")
-            c = conn.cursor()
-            rows = c.execute(
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=3.0)
+            conn.execute("PRAGMA busy_timeout=3000;")
+            if not _table_columns(conn, "conversations"):
+                continue
+            rows = conn.execute(
                 "SELECT role, content, timestamp FROM conversations WHERE agent_id = ? ORDER BY id DESC LIMIT 5",
                 (agent_id,),
             ).fetchall()
-            for r in reversed(rows):
-                recent_turns.append(f"[{r[2]}] {r[0].upper()}: {r[1][:140]}")
-    except Exception as exc:
-        logger.debug(f"[Telemetry] Konnte letzte Chat-Turns fuer '{agent_id}' nicht laden: {exc}")
-    finally:
-        if conn:
-            conn.close()
+            if not rows:
+                continue
+            for row in reversed(rows):
+                recent_turns.append(f"[{row[2]}] {row[0].upper()}: {str(row[1])[:140]}")
+            break
+        except sqlite3.Error as exc:
+            logger.debug(f"[Telemetry] Konnte letzte Chat-Turns aus {db_path} nicht laden: {exc}")
+        finally:
+            if conn:
+                conn.close()
     return recent_turns
 
 
 @router.get("/api/v1/agent/{agent_id}/activity")
 def api_get_agent_activity(agent_id: str):
-    """Liefert Echtzeit-Aktivitaets- und Task-Logs fuer einen Agenten."""
+    """Liefert echte Aktivitaetsdaten aus ops.db + memory.db statt Standby-Platzhalter."""
     import main as app_main
     from fastapi import HTTPException
     from utils.path_jail import safe_identifier, PathJailError
@@ -63,38 +442,66 @@ def api_get_agent_activity(agent_id: str):
     except PathJailError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    log_candidates = [
-        app_main.agent_log_path(clean_id),
-    ]
-    log_lines = []
-    for lp in log_candidates:
-        if os.path.exists(lp):
-            try:
-                with open(lp, "r", encoding="utf-8", errors="ignore") as f:
-                    all_lines = f.readlines()
-                    log_lines = [
-                        line.strip() for line in all_lines[-40:] if line.strip()
-                    ]
-                break
-            except OSError as exc:
-                logger.debug(f"[Telemetry] Logdatei nicht lesbar: {exc}")
+    entries = []
+    sources = {}
+    for collector in (_collect_ops_activity, _collect_memory_activity):
+        try:
+            items, counts = collector(clean_id)
+            entries.extend(items)
+            sources.update(counts)
+        except Exception as exc:
+            logger.debug(
+                f"[Telemetry] Aktivitaetsquelle {collector.__name__} fuer '{clean_id}' nicht verfuegbar: {exc}"
+            )
 
     recent_turns = _read_recent_turns(clean_id)
+    if recent_turns:
+        sources["conversations"] = len(recent_turns)
 
+    # Legacy-Logdatei weiterhin lesen, falls ein Modul sie doch schreibt.
+    log_path = app_main.agent_log_path(clean_id)
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as handle:
+                log_lines = [line.strip() for line in handle.readlines()[-40:] if line.strip()]
+            sources["agent.log"] = len(log_lines)
+            for line in log_lines:
+                time_match = re.search(r"\[(\d{2}:\d{2}:\d{2})\]", line)
+                ts = None
+                if time_match:
+                    try:
+                        clock = datetime.datetime.strptime(time_match.group(1), "%H:%M:%S").time()
+                        ts = datetime.datetime.combine(datetime.date.today(), clock).timestamp()
+                    except ValueError:
+                        pass
+                entries.append((ts or 0.0, line, "agent.log"))
+        except OSError as exc:
+            logger.debug(f"[Telemetry] Logdatei nicht lesbar: {exc}")
 
-    if not log_lines and not recent_turns:
+    # Duplikate entfernen, nach Zeit absteigend sortieren und begrenzen.
+    unique = {}
+    for ts, line, source in entries:
+        unique.setdefault(line, (ts, line, source))
+    ordered = sorted(unique.values(), key=lambda item: item[0], reverse=True)[:_ACTIVITY_MAX_LINES]
+
+    if not ordered and not recent_turns:
         now_str = datetime.datetime.now().strftime("%H:%M:%S")
-        log_lines = [
-            f"[{now_str}] Agent '{clean_id}' initialisiert im Standby-Modus.",
-            f"[{now_str}] MCP Tools & Provider-Bindings aktiv.",
-            f"[{now_str}] Bereit fuer Arbeitsauftraege und Autonom-Routing.",
+        ordered = [
+            (0.0, f"[{now_str}] Agent '{clean_id}' initialisiert im Standby-Modus.", "standby"),
+            (0.0, f"[{now_str}] MCP Tools & Provider-Bindings aktiv.", "standby"),
+            (0.0, f"[{now_str}] Bereit fuer Arbeitsauftraege und Autonom-Routing.", "standby"),
         ]
+        sources["standby"] = 3
 
     return {
         "status": "success",
         "agent_id": clean_id,
-        "logs": log_lines,
+        "logs": [line for _ts, line, _source in ordered],
         "recent_turns": recent_turns,
+        "sources": sources,
+        "total": len(ordered) + len(recent_turns),
+        "live": True,
+        "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
 
 

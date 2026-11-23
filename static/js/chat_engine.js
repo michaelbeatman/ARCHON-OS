@@ -102,10 +102,47 @@
         return currentMasterChatTab === "group" ? isGroup : !isGroup;
       });
     }
+    // =========================================================================
+    // GEMEINSAMER ARCHON-SSE-BUS — EINZIGE EventSource-Verbindung der static App
+    // =========================================================================
+    // Vorher hatten chat_engine.js und operations_kanban.js je eine eigene
+    // EventSource('/api/v1/events/stream') -> zwei Verbindungen, doppelte Events.
+    // Der Bus besitzt jetzt die einzige Verbindung und verteilt geparste Events
+    // ueber das window-CustomEvent 'archon:sse'. Consumer lauschen nur zu.
+    (function initArchonSSEBus() {
+      if (window.archonSSEBus) return;
+      var EVENTS_URL = "/api/v1/events/stream";
+      var source = null;
+      var reconnectTimer = null;
+
+      function ensure() {
+        if (source || typeof EventSource === "undefined") return;
+        try {
+          source = new EventSource(EVENTS_URL);
+          source.onmessage = function (e) {
+            if (!e.data || e.data.charAt(0) === ":") return;
+            var msg = null;
+            try { msg = JSON.parse(e.data); } catch (_) { return; }
+            if (!msg || !msg.type) return;
+            window.dispatchEvent(new CustomEvent("archon:sse", { detail: msg }));
+          };
+          source.onerror = function () {
+            if (source) { source.close(); source = null; }
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(ensure, 5000);
+          };
+        } catch (err) {
+          source = null;
+          console.warn("[Archon SSE] Bus-Initialisierung fehlgeschlagen:", err);
+        }
+      }
+
+      window.archonSSEBus = { ensure: ensure, url: EVENTS_URL };
+    })();
+
     // 1. Initialisierung
     let masterChatInitPromise = null;
     let masterChatSSEBound = false;
-    let masterChatSSE = null;
     function initMasterChatLiveStream() {
       if (!masterChatSSEBound) {
         masterChatSSEBound = true;
@@ -120,24 +157,12 @@
           } catch(err) {}
         });
       }
+      // Nur noch den gemeinsamen Bus initialisieren; KEINE zweite EventSource.
       if (typeof initOpsRealtimeStream === "function") {
         initOpsRealtimeStream();
-        return;
+      } else if (window.archonSSEBus) {
+        window.archonSSEBus.ensure();
       }
-      if (masterChatSSE) return;
-      try {
-        masterChatSSE = new EventSource("/api/v1/events/stream");
-        masterChatSSE.onmessage = function(e) {
-          try {
-            if (!e.data || e.data.startsWith(":")) return;
-            const msg = JSON.parse(e.data);
-            window.dispatchEvent(new CustomEvent("archon:sse", { detail: msg }));
-          } catch(err) {}
-        };
-        masterChatSSE.onerror = function() {
-          if (masterChatSSE) { masterChatSSE.close(); masterChatSSE = null; }
-        };
-      } catch(err) {}
     }
 
 async function initMasterChat() {

@@ -174,14 +174,27 @@ class HumanFeedbackEngine:
 
         try:
             from backend.prompt_optimizer import PromptOptimizer
-            opt = PromptOptimizer()
-            opt.optimize_role_prompt(
+            from backend.prompt_registry import prompt_registry
+            # Vorher wurde ein Platzhalter optimiert und der Patch landete in
+            # einer Tabelle, die niemand liest. Jetzt: echter aktiver Prompt als
+            # Basis und (bei auto_apply) als neue Registry-Version aktivieren.
+            eff = prompt_registry.get_effective_prompt(agent_id) or {}
+            current_prompt = str(eff.get("prompt") or "") or f"Rollen-Direktiven für {agent_id}"
+            result = PromptOptimizer().optimize_role_prompt(
                 agent_role=agent_id,
-                current_prompt=f"Rollen-Direktiven für {agent_id}",
+                current_prompt=current_prompt,
                 recent_failures=failures
             )
+            applied = bool((result or {}).get("applied")) if isinstance(result, dict) else False
+            optimized = str((result or {}).get("optimized_prompt") or "") if isinstance(result, dict) else ""
+            if applied and optimized:
+                prompt_registry.save_version(
+                    agent_id, optimized,
+                    created_by="prompt_optimizer",
+                    commit_message="Auto-Patch aus negativem Human-Feedback",
+                )
         except Exception as _exc:
-            _archon_exc_logger.debug("[human_feedback_engine] Ignorierte Ausnahme (Z.177): %s", _exc)
+            _archon_exc_logger.warning("[human_feedback_engine] Prompt-Optimierung fehlgeschlagen: %s", _exc)
 
     def get_stats(self) -> Dict[str, Any]:
         """Gibt globale Feedback-Statistiken und Agenten-Rankings zurück."""

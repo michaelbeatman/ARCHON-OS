@@ -23,15 +23,22 @@ WINDOWS_VAULT_ALT = r"./obsidian_vault"
 WINDOWS_HERMES = r"~/.hermes"
 
 # Aktive Pfade
-OBSIDIAN_VAULT = os.environ.get("OBSIDIAN_VAULT_PATH") or (
-    WINDOWS_VAULT if IS_WINDOWS else "/opt/data/obsidian"
-)
-OBSIDIAN_VAULT_ALT = os.environ.get("OBSIDIAN_VAULT_PATH_ALT") or (
-    WINDOWS_VAULT_ALT if IS_WINDOWS else "/opt/data/obsidian"
-)
-HERMES_HOME = os.environ.get("HERMES_HOME") or (
-    WINDOWS_HERMES if IS_WINDOWS else "/opt/data"
-)
+# Immer absolut: drei Module expandierten `~`/`.` unterschiedlich ->
+# Split-Brain mit leeren DBs und fehlenden Profilen.
+OBSIDIAN_VAULT = os.path.abspath(os.path.expanduser(
+    os.environ.get("OBSIDIAN_VAULT_PATH") or (
+        WINDOWS_VAULT if IS_WINDOWS else "/opt/data/obsidian"
+    )
+))
+OBSIDIAN_VAULT_ALT = os.path.abspath(os.path.expanduser(
+    os.environ.get("OBSIDIAN_VAULT_PATH_ALT") or (
+        WINDOWS_VAULT_ALT if IS_WINDOWS else "/opt/data/obsidian"
+    )
+))
+_HERMES_DEFAULT = os.path.abspath(os.path.expanduser(WINDOWS_HERMES)) if IS_WINDOWS else "/opt/data"
+HERMES_HOME = os.path.abspath(os.path.expanduser(
+    os.environ.get("HERMES_HOME") or _HERMES_DEFAULT
+))
 
 # Unterordner-Konventionen
 PERSONALAKTEN_DIR = os.path.join(OBSIDIAN_VAULT, "00_HR_Agenten", "Personalakten")

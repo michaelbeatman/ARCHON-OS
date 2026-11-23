@@ -8,9 +8,31 @@ die Originalwerte nach Erhalt der LLM-Antwort lokal wieder ein (Re-Hydration).
 
 import re
 import uuid
+import hashlib
 import threading
+import time
 from collections import OrderedDict
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
+
+
+def _active_tenant_id() -> str:
+    """C6: Mandant aus dem Request-Kontext (Fail-Closed auf 'default')."""
+    try:
+        from backend.tenant_context import tenant_context
+        return str(tenant_context.get_active_tenant_id() or "default")
+    except Exception:
+        return "default"
+
+
+def _scoped_session_id(session_id: str, agent_id: str = "", hour: Optional[int] = None) -> str:
+    """C6: deterministischer, mandanten- und sessiongebundener Vault-Key.
+
+    Frueher wurde der Vault nur ueber agent+hour adressiert: zwei Mandanten
+    mit gleichem Agenten teilteden denselben PII-Vault (Cross-Tenant-Leak).
+    """
+    hour_val = int(hour) if hour is not None else int(time.time() // 3600)
+    seed = f"{_active_tenant_id()}|{session_id}|{agent_id or ''}|{hour_val}"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
 
 
 def _get_cfg() -> Dict[str, Any]:
@@ -45,8 +67,16 @@ class BidirectionalPIIScrubber:
     def evict_session(self, session_id: str) -> None:
         with self._lock:
             self._sessions.pop(session_id, None)
+            self._sessions.pop(_scoped_session_id(session_id), None)
 
-    def scrub_text(self, text: str, session_id: str = "") -> Dict[str, Any]:
+    def scrub_text(
+        self,
+        text: str,
+        session_id: str = "",
+        *,
+        agent_id: str = "",
+        hour: Optional[int] = None,
+    ) -> Dict[str, Any]:
         cfg = _get_cfg()
         if not bool(cfg.get("enabled", True)):
             return {
@@ -57,7 +87,10 @@ class BidirectionalPIIScrubber:
                 "vault_map": {}
             }
 
-        sid = session_id or f"pii-{uuid.uuid4().hex[:10]}"
+        sid = (
+            _scoped_session_id(session_id, agent_id=agent_id, hour=hour)
+            if session_id else f"pii-{uuid.uuid4().hex[:10]}"
+        )
         with self._lock:
             existing_vault = dict(self._sessions.get(sid) or {})
         vault: Dict[str, str] = existing_vault
@@ -112,13 +145,28 @@ class BidirectionalPIIScrubber:
             "placeholders": list(vault.keys())
         }
 
-    def rehydrate_text(self, response_text: str, session_id: str, custom_vault: Dict[str, str] = None) -> Dict[str, Any]:
+    def rehydrate_text(
+        self,
+        response_text: str,
+        session_id: str,
+        custom_vault: Dict[str, str] = None,
+        *,
+        agent_id: str = "",
+        hour: Optional[int] = None,
+    ) -> Dict[str, Any]:
         cfg = _get_cfg()
         if not bool(cfg.get("enabled", True)) or not bool(cfg.get("auto_rehydrate_response", True)):
             return {"rehydrated": False, "text": response_text}
 
+        scoped_sid = (
+            _scoped_session_id(session_id, agent_id=agent_id, hour=hour)
+            if session_id else session_id
+        )
         with self._lock:
-            vault = custom_vault if custom_vault is not None else dict(self._sessions.get(session_id, {}))
+            vault = (
+                custom_vault if custom_vault is not None
+                else dict(self._sessions.get(scoped_sid, {}))
+            )
         restored = response_text or ""
         restored_count = 0
         for placeholder, real_val in vault.items():

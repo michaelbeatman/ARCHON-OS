@@ -7,10 +7,28 @@ import logging
 import httpx
 import asyncio
 import functools
+import weakref
 import sqlite3
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("archon.core_dispatcher")
+
+
+def _dispatch_cache_scope(agent_id: str = "") -> str:
+    """Tenant-Scope fuer den semantischen Cache (Cross-Tenant-Leak vermeiden)."""
+    tenant = ""
+    try:
+        from backend import tenant_context as _tc
+        tenant = str(_tc._REQUEST_TENANT_VAR.get() or "")
+    except Exception:
+        pass
+    if not tenant:
+        try:
+            from backend.tenant_context import tenant_context
+            tenant = str(tenant_context.get_active_tenant_id() or "")
+        except Exception:
+            pass
+    return f"{tenant or 'default'}:{agent_id or 'default'}"
 
 # --- External Agent URLs ---
 # Defaulting to docker network hostnames, but can be overridden by env vars
@@ -300,29 +318,46 @@ def parse_omniroute_response(resp_text: str) -> str:
 # Globaler Concurrency Throttle (Pillar 2 / Prozessmodell)
 # Drosselt gleichzeitige rechenintensive LLM-Tasks zum Schutz vor 99% CPU-Spitzen / Buffer Overflows
 MAX_CONCURRENT_AGENT_TASKS = int(os.getenv("MAX_CONCURRENT_AGENT_TASKS", "5"))
-_TASK_SEMAPHORES: dict = {}
+# WeakKeyDictionary statt id(loop): id() wird nach GC eines Loops wiederverwendet
+# und lieferte dann einen geschlossenen Client/Semaphore an einen neuen Loop.
+# Ausserdem verhindert die Weak-Referenz, dass tote Loops Pools halten.
+_TASK_SEMAPHORES = weakref.WeakKeyDictionary()
+_DISPATCHER_HTTP_CLIENTS = weakref.WeakKeyDictionary()
 
 
 def _get_task_semaphore() -> asyncio.Semaphore:
-    loop_id = id(asyncio.get_running_loop())
-    sem = _TASK_SEMAPHORES.get(loop_id)
+    loop = asyncio.get_running_loop()
+    sem = _TASK_SEMAPHORES.get(loop)
     if sem is None:
         sem = asyncio.Semaphore(MAX_CONCURRENT_AGENT_TASKS)
-        _TASK_SEMAPHORES[loop_id] = sem
+        _TASK_SEMAPHORES[loop] = sem
     return sem
 
-_DISPATCHER_HTTP_CLIENTS = {}
 
 def _get_dispatcher_http_client() -> httpx.AsyncClient:
-    loop_id = id(asyncio.get_running_loop())
-    c = _DISPATCHER_HTTP_CLIENTS.get(loop_id)
+    loop = asyncio.get_running_loop()
+    c = _DISPATCHER_HTTP_CLIENTS.get(loop)
     if c is None or c.is_closed:
         c = httpx.AsyncClient(
             timeout=90.0,
             limits=httpx.Limits(max_keepalive_connections=25, max_connections=100)
         )
-        _DISPATCHER_HTTP_CLIENTS[loop_id] = c
+        _DISPATCHER_HTTP_CLIENTS[loop] = c
     return c
+
+
+async def close_dispatcher_clients() -> int:
+    """Shutdown-Hook: alle gepoolten Clients kontrolliert schliessen."""
+    closed = 0
+    for client in list(_DISPATCHER_HTTP_CLIENTS.values()):
+        if not client.is_closed:
+            try:
+                await client.aclose()
+                closed += 1
+            except Exception:
+                pass
+    _DISPATCHER_HTTP_CLIENTS.clear()
+    return closed
 
 class _DispClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -334,7 +369,18 @@ class _DispClosingConn(sqlite3.Connection):
         finally:
             self.close()
 
-def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, task_id: str = ""):
+async def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, task_id: str = "") -> None:
+    """Audit-/Budget-Logging nie direkt im Event-Loop: mehrere SQLite-
+    Transaktionen pro Call serialisierten sonst alle parallelen Dispatches."""
+    try:
+        await asyncio.to_thread(
+            _log_dispatcher_usage_sync, agent_id, model, in_tok, out_tok, task_id
+        )
+    except Exception as exc:
+        logger.debug(f"[Dispatcher] Async Usage-Log fehlgeschlagen: {exc}")
+
+
+def _log_dispatcher_usage_sync(agent_id: str, model: str, in_tok: int, out_tok: int, task_id: str = ""):
     try:
         import sqlite3, os, time, sys
         try:
@@ -445,6 +491,7 @@ async def dispatch_to_omniroute_or_container(
     reasoning_level: str = "medium",
     task_id: str = "",
     history: Optional[list] = None,
+    available_tools: Optional[List[Dict[str, Any]]] = None,
 ) -> dict:
     """
     Zentraler Dispatcher: Nutzt dynamisch den im Profil konfigurierten Provider & das Sprachmodell.
@@ -466,8 +513,56 @@ async def dispatch_to_omniroute_or_container(
                 "content": "🛑 [CONCURRENCY-THROTTLE]: Maximalzahl gleichzeitiger Agenten-Tasks erreicht (Timeout).",
             }
         has_throttle_slot = True
-    except Exception:
-        has_throttle_slot = False
+    except Exception as th_exc:
+        # Fail-CLOSED: wenn das Concurrency-Gate nicht auswertbar ist, darf
+        # kein unbegrenzter Dispatch starten (Audit: fail-open war kritisch).
+        logger.error(f"[Dispatcher] Concurrency-Gate nicht verfuegbar - Dispatch blockiert: {th_exc}")
+        return {
+            "status": "blocked",
+            "error": "concurrency_gate_unavailable",
+            "error_code": "CONCURRENCY_GATE_UNAVAILABLE",
+            "content": "🛑 [CONCURRENCY-GATE]: Gate nicht verfügbar — Dispatch blockiert (fail-closed).",
+        }
+
+    # Semantischer Cache VOR dem LLM-Call: ein Treffer erspart Budget-Reservierung
+    # und Provider-Aufruf. Scope enthaelt tenant_id + agent_id (kein Cross-Tenant-Leak).
+    cache_scope = _dispatch_cache_scope(agent_id)
+    cache_hit = None
+    try:
+        from backend.semantic_cache import semantic_cache_manager
+        cache_hit = semantic_cache_manager.lookup(prompt, model=model, scope_key=cache_scope)
+    except Exception as cache_exc:
+        logger.debug(f"[Dispatcher] Semantischer Cache-Lookup nicht verfuegbar: {cache_exc}")
+    if cache_hit and cache_hit.get("hit"):
+        cached_content = str(cache_hit.get("response") or "")
+        try:
+            cached_content = _clean_dispatch_output(
+                cached_content,
+                session_id=task_id or agent_id,
+                is_local=False,
+            )
+        except Exception:
+            pass
+        # KRITISCH: der Slot wurde vor dem Cache-Lookup genommen. Ohne
+        # Freigabe leaket er bei JEDEM Cache-Treffer dauerhaft (Audit 23.11.).
+        if has_throttle_slot:
+            try:
+                from backend.concurrency_throttle import concurrency_throttle
+                await concurrency_throttle.release_slot(slot_id)
+                has_throttle_slot = False
+            except Exception as th_exc:
+                logger.warning(f"[Dispatcher] Throttle-Slot {slot_id} nach Cache-Hit nicht freigegeben: {th_exc}")
+        return {
+            "status": "success",
+            "content": cached_content,
+            "model": cache_hit.get("cached_model") or model,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0.0,
+            "cached": True,
+            "cache_match_type": cache_hit.get("match_type"),
+            "cache_similarity": cache_hit.get("similarity"),
+        }
 
     try:
         async with _get_task_semaphore():
@@ -489,7 +584,11 @@ async def dispatch_to_omniroute_or_container(
                     )
                 except Exception:
                     est_cost_eur = 0.0
-                bg_chk = budget_bank.reserve(
+                # Sync SQLite (BEGIN IMMEDIATE + threading.Lock) — im
+                # Event-Loop auslagern, sonst blockiert jeder Dispatch alle
+                # parallelen DAG-Nodes (Audit 23.11.2026).
+                bg_chk = await asyncio.to_thread(
+                    budget_bank.reserve,
                     agent_id=agent_id,
                     task_id=task_id or None,
                     estimated_tokens=est_in_tokens + est_out_tokens,
@@ -523,7 +622,8 @@ async def dispatch_to_omniroute_or_container(
                 tr_id = None
 
             res = await _dispatch_to_omniroute_or_container_exec(
-                agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id, history=history
+                agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id,
+                history=history, available_tools=available_tools,
             )
             duration_ms = (time.time() - t_start) * 1000.0
             in_tok = int(res.get("input_tokens", 0) or 0)
@@ -532,17 +632,29 @@ async def dispatch_to_omniroute_or_container(
             used_model = res.get("model") or model
             is_ok = res.get("status") == "success"
 
+            # Erfolgreiche Antwort im tenant-scoped Cache speichern (nur echte Calls).
+            if is_ok and res.get("content"):
+                try:
+                    from backend.semantic_cache import semantic_cache_manager
+                    semantic_cache_manager.store(
+                        prompt, str(res["content"]), model=used_model, scope_key=cache_scope
+                    )
+                except Exception as cache_store_exc:
+                    logger.debug(f"[Dispatcher] Semantic-Cache Store nicht verfuegbar: {cache_store_exc}")
+
             if budget_reservation_id:
                 try:
                     from backend.role_budget_engine import budget_bank
                     if is_ok:
-                        budget_bank.settle(
+                        await asyncio.to_thread(
+                            budget_bank.settle,
                             budget_reservation_id,
                             actual_tokens=in_tok + out_tok,
                             actual_cost_usd=est_cost,
                         )
                     else:
-                        budget_bank.release(
+                        await asyncio.to_thread(
+                            budget_bank.release,
                             budget_reservation_id,
                             reason=f"dispatch status={res.get('status')}",
                         )
@@ -598,7 +710,11 @@ async def dispatch_to_omniroute_or_container(
             # Zero-Egress-Block) — sonst wird Budget dauerhaft blockiert.
             try:
                 from backend.role_budget_engine import budget_bank
-                budget_bank.release(budget_reservation_id, reason="dispatch_finished_without_settle")
+                await asyncio.to_thread(
+                    budget_bank.release,
+                    budget_reservation_id,
+                    reason="dispatch_finished_without_settle",
+                )
             except Exception as rel_exc:
                 logger.warning(f"[Dispatcher] Budget-Release im finally fehlgeschlagen: {rel_exc}")
         if has_throttle_slot:
@@ -641,9 +757,9 @@ def _resolve_openrouter_fallback_model(model: str) -> str:
 
 
 async def _dispatch_to_omniroute_or_container_exec(
-    agent_id: str, 
-    agent_name: str, 
-    prompt: str, 
+    agent_id: str,
+    agent_name: str,
+    prompt: str,
     role: str = "Custom",
     system_prompt: str = "",
     model: str = "deepseek/deepseek-chat",
@@ -652,7 +768,62 @@ async def _dispatch_to_omniroute_or_container_exec(
     reasoning_level: str = "medium",
     task_id: str = "",
     history: Optional[list] = None,
+    available_tools: Optional[List[Dict[str, Any]]] = None,
 ) -> dict:
+    """Wrapper mit harter Gesamt-Deadline fuer die Provider-Fallback-Kette.
+
+    Vorher konnten 4 Groq-Modelle + 2 OmniRoute-URLs + OpenRouter + Ollama +
+    3 Container nacheinander probiert werden — bis zu ~308 s bei gehaltenem
+    Concurrency-Slot und gebundener Budget-Reservierung. Ein schlechter
+    Provider legte damit das gesamte System lahm.
+    """
+    budget = float(os.environ.get("ARCHON_DISPATCH_FALLBACK_BUDGET_SEC", "90") or 90)
+    try:
+        async with asyncio.timeout(max(5.0, budget)):
+            return await _dispatch_to_omniroute_or_container_impl(
+                agent_id=agent_id, agent_name=agent_name, prompt=prompt,
+                role=role, system_prompt=system_prompt, model=model,
+                provider=provider, timeout=timeout, reasoning_level=reasoning_level,
+                task_id=task_id, history=history, available_tools=available_tools,
+            )
+    except TimeoutError:
+        logger.error(
+            "[Dispatcher] Fallback-Budget von %ss ueberschritten (task=%s, agent=%s).",
+            budget, task_id, agent_id,
+        )
+        return {
+            "status": "error",
+            "error": "dispatch_fallback_budget_exceeded",
+            "detail": f"Keine Provider-Antwort binnen {budget}s.",
+            "task_id": task_id,
+        }
+
+
+async def _dispatch_to_omniroute_or_container_impl(
+    agent_id: str,
+    agent_name: str,
+    prompt: str,
+    role: str = "Custom",
+    system_prompt: str = "",
+    model: str = "deepseek/deepseek-chat",
+    provider: str = "",
+    timeout: int = 15,
+    reasoning_level: str = "medium",
+    task_id: str = "",
+    history: Optional[list] = None,
+    available_tools: Optional[List[Dict[str, Any]]] = None,
+) -> dict:
+    # JEV Tool-Pruning im echten Dispatch-Pfad: nur die zum Prompt passenden
+    # Werkzeuge gehen in den LLM-Request (statt aller MCP-Tools).
+    pruned_tools: List[Dict[str, Any]] = []
+    if available_tools:
+        try:
+            import jev_router
+            pruned_tools = jev_router.prune_tools(prompt or "", list(available_tools))
+        except Exception as jev_exc:
+            logger.debug(f"[Dispatcher] JEV-Tool-Pruning nicht verfuegbar: {jev_exc}")
+            pruned_tools = list(available_tools)
+
     # Pillar 4 & Punkt 4: Aktive Memory-Injection (Erkenntnisse aus agentic_memory.db)
     memory_context_addon = ""
     try:
@@ -662,7 +833,18 @@ async def _dispatch_to_omniroute_or_container_exec(
         # keine Memory-Injection (Cross-Agent-Leakage).
         if agent_id:
             query_hint = prompt[:100] if prompt else ""
-            learnings = bridge.search_learnings(query_hint, limit=4, agent_id=str(agent_id))
+            # Audit 23.11.2026: tenant_id mitgeben (sonst landen Learnings
+            # eines anderen Mandanten im System-Prompt) und die sync FTS5-
+            # Suche aus dem Event-Loop auslagern.
+            try:
+                from backend.tenant_context import tenant_context as _tc
+                _tenant_id = _tc.get_active_tenant_id()
+            except Exception:
+                _tenant_id = ""
+            learnings = await asyncio.to_thread(
+                bridge.search_learnings, query_hint, limit=4,
+                agent_id=str(agent_id), tenant_id=_tenant_id,
+            )
         else:
             learnings = []
         if learnings:
@@ -697,7 +879,12 @@ async def _dispatch_to_omniroute_or_container_exec(
         from backend.prompt_registry import prompt_registry
         eff = prompt_registry.get_effective_prompt(agent_id, task_id)
         if eff and eff.get("prompt"):
-            system_prompt = eff["prompt"]
+            # WICHTIG: die Registry ersetzt den System-Prompt nicht einfach —
+            # sonst gehen die vom DAG injizierten Brand-Voice-/Memory-Bloecke
+            # verloren. Die Registry ist die BASIS, Addons werden angehaengt.
+            registry_prompt = eff["prompt"]
+            if registry_prompt not in system_prompt:
+                system_prompt = f"{registry_prompt}\n\n{system_prompt}"
             effective_prompt_info = eff
             if eff.get("model") and not model:
                 model = eff["model"]
@@ -761,6 +948,11 @@ async def _dispatch_to_omniroute_or_container_exec(
         selected_model = AUTO_MODEL_MAP[model]
     elif model and model.startswith("auto/"):
         selected_model = AUTO_MODEL_MAP.get(model, "deepseek/deepseek-chat")
+    elif model and model.lower().startswith("omniroute/"):
+        # Audit 23.11.2026: Alias VOR der Kette auflösen, damit Budget,
+        # Telemetrie und OpenRouter-Schritt das echte Modell sehen. Die
+        # Groq/OpenAI/Anthropic-Schritte wählen weiterhin ihre eigenen Modelle.
+        selected_model = _resolve_openrouter_fallback_model(model)
     else:
         selected_model = model.strip() if (model and model not in ("free-forever", "default")) else "deepseek/deepseek-chat"
 
@@ -902,7 +1094,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                 content = parse_omniroute_response(resp.text)
                 if content:
                     i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
-                    _log_dispatcher_usage(agent_id, local_model, i_tok, o_tok, task_id)
+                    await _log_dispatcher_usage(agent_id, local_model, i_tok, o_tok, task_id)
                     return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": local_model, "provider": "local"}
             if preflight_gate.get("zero_egress_active") or _local_requested:
                 return {
@@ -979,7 +1171,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                     content = parse_omniroute_response(resp.text)
                     if content and len(content.strip()) > 5:
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
-                        _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
+                        await _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
                         return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": g_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
@@ -1004,7 +1196,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                     content = parse_omniroute_response(resp.text)
                     if content and len(content.strip()) > 5:
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
-                        _log_dispatcher_usage(agent_id, o_model, i_tok, o_tok, task_id)
+                        await _log_dispatcher_usage(agent_id, o_model, i_tok, o_tok, task_id)
                         return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": o_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
@@ -1050,7 +1242,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                     )
                     if content:
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
-                        _log_dispatcher_usage(agent_id, a_model, i_tok, o_tok, task_id)
+                        await _log_dispatcher_usage(agent_id, a_model, i_tok, o_tok, task_id)
                         return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": a_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
@@ -1066,6 +1258,8 @@ async def _dispatch_to_omniroute_or_container_exec(
                 "max_tokens": 4096,
                 "temperature": 0.4
             }
+            if pruned_tools:
+                or_payload["tools"] = pruned_tools
             r_lvl = (reasoning_level or "medium").strip().lower()
             effort_map = {"minimal": "low", "low": "low", "medium": "medium", "high": "high", "max": "high"}
             if r_lvl == "off":
@@ -1092,7 +1286,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                     content = parse_omniroute_response(resp.text)
                     if content and len(content.strip()) > 5:
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
-                        _log_dispatcher_usage(agent_id, selected_model, i_tok, o_tok, task_id)
+                        await _log_dispatcher_usage(agent_id, selected_model, i_tok, o_tok, task_id)
                         return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": selected_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
@@ -1126,7 +1320,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                     content = parse_omniroute_response(resp.text)
                     if content and len(content.strip()) > 5:
                         i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
-                        _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
+                        await _log_dispatcher_usage(agent_id, g_model, i_tok, o_tok, task_id)
                         return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": g_model}
             except ZeroEgressBlockedError as ze_err:
                 return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
@@ -1143,6 +1337,8 @@ async def _dispatch_to_omniroute_or_container_exec(
         "model": omni_model,
         "messages": messages
     }
+    if pruned_tools:
+        omni_payload["tools"] = pruned_tools
 
     client = _get_dispatcher_http_client()
     for omni_url in omni_urls:
@@ -1159,7 +1355,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                 content = parse_omniroute_response(resp.text)
                 if content:
                     i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
-                    _log_dispatcher_usage(agent_id, omni_model, i_tok, o_tok, task_id)
+                    await _log_dispatcher_usage(agent_id, omni_model, i_tok, o_tok, task_id)
                     return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": omni_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
@@ -1185,7 +1381,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                 content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
                 if content:
                     i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, content)
-                    _log_dispatcher_usage(agent_id, or_model, i_tok, o_tok, task_id)
+                    await _log_dispatcher_usage(agent_id, or_model, i_tok, o_tok, task_id)
                     return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": or_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
@@ -1212,7 +1408,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                 fb_content = parse_omniroute_response(fb_resp.text)
                 if fb_content:
                     i_tok, o_tok = _extract_tokens_usage(fb_resp.text, prompt, fb_content)
-                    _log_dispatcher_usage(agent_id, fb_model, i_tok, o_tok, task_id)
+                    await _log_dispatcher_usage(agent_id, fb_model, i_tok, o_tok, task_id)
                     return {"status": "success", "content": fb_content, "input_tokens": i_tok, "output_tokens": o_tok, "model": fb_model, "provider": "ollama"}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
@@ -1239,7 +1435,7 @@ async def _dispatch_to_omniroute_or_container_exec(
                 data = resp.json()
                 content = data.get("content") or data.get("output") or data.get("result") or str(data)
                 i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, str(content))
-                _log_dispatcher_usage(agent_id, selected_model, i_tok, o_tok, task_id)
+                await _log_dispatcher_usage(agent_id, selected_model, i_tok, o_tok, task_id)
                 return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": selected_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
@@ -1592,8 +1788,51 @@ def _boardroom_cancellation_guard(fn):
     return _wrapped
 
 
-@_boardroom_cancellation_guard
 async def stream_boardroom_debate(
+    task: str,
+    max_rounds: int,
+    chairman_id: str,
+    active_agents: list,
+    framework: str = "Steffi Kieffer Boardroom",
+    timeout: int = 30,
+    use_moa: bool = False,
+    moa_reference_models: list = None,
+    moa_aggregator: dict = None,
+    cancel_token: Optional[Any] = None,
+    task_id: Optional[str] = None,
+):
+    """Oeffentlicher Entry-Point: BEIDE Boardroom-Pfade hängen am Killswitch.
+
+    Vorher erzeugte der Pfad ohne expliziten Token ein ROOT-Token, das
+    cancel_scope('boardroom') nie erreichte und nie aufgeräumt wurde
+    (Audit 23.11.2026).
+    """
+    from backend.cancellation import get_child_token, clear_scope
+    own_token = cancel_token is None
+    if own_token:
+        cancel_token = get_child_token("boardroom", f"boardroom:{time.time_ns()}")
+    try:
+        async for ev in _stream_boardroom_debate_inner(
+            task=task,
+            max_rounds=max_rounds,
+            chairman_id=chairman_id,
+            active_agents=active_agents,
+            framework=framework,
+            timeout=timeout,
+            use_moa=use_moa,
+            moa_reference_models=moa_reference_models,
+            moa_aggregator=moa_aggregator,
+            cancel_token=cancel_token,
+            task_id=task_id,
+        ):
+            yield ev
+    finally:
+        if own_token:
+            clear_scope(cancel_token.scope)
+
+
+@_boardroom_cancellation_guard
+async def _stream_boardroom_debate_inner(
     task: str,
     max_rounds: int,
     chairman_id: str,
@@ -1724,34 +1963,48 @@ async def stream_boardroom_debate(
                     "content": res.get("content", "Keine Antwort.")
                 }
 
-            tasks = [asyncio.create_task(_dispatch_agent(a)) for a in expert_agents]
-            for coro in asyncio.as_completed(tasks):
+            from archon.core.task_registry import spawn as _tracked_spawn
+            tasks = [_tracked_spawn(_dispatch_agent(a), name=f"boardroom_agent_{a.get('id')}") for a in expert_agents]
+            try:
+              for coro in asyncio.as_completed(tasks):
                 res_event = await coro
                 debate_statements.append(res_event)
                 running_transcript += f"[{res_event['agent_name']} ({res_event['role']}) - Runde {round_num}]:\n{res_event['content']}\n\n"
                 # Replicate live into task_events for #boardroom and #all-stream in Operations
                 try:
-                    from backend.operations_api import _get_kanban_connection
-                    _k_conn = _get_kanban_connection()
-                    _k_cur = _k_conn.cursor()
-                    _k_now = datetime.datetime.now().isoformat()
-                    _k_payload = json.dumps({
-                        "author": res_event["agent_id"],
-                        "message": f"[BOARDROOM RUNDE {round_num}] {res_event['content']}",
-                        "target": "boardroom",
-                        "broadcast": True,
-                        "framework": framework
-                    }, ensure_ascii=False)
-                    _k_cur.execute("""
-                        INSERT INTO task_events (task_id, kind, payload, created_at)
-                        VALUES (?, 'boardroom_turn', ?, ?)
-                    """, (f"boardroom_{int(time.time())}", _k_payload, _k_now))
-                    _k_conn.commit()
-                    _k_conn.close()
+                    def _persist_boardroom_turn() -> None:
+                        from backend.operations_api import _get_kanban_connection
+                        _k_conn = _get_kanban_connection()
+                        try:
+                            _k_now = datetime.datetime.now().isoformat()
+                            _k_payload = json.dumps({
+                                "author": res_event["agent_id"],
+                                "message": f"[BOARDROOM RUNDE {round_num}] {res_event['content']}",
+                                "target": "boardroom",
+                                "broadcast": True,
+                                "framework": framework
+                            }, ensure_ascii=False)
+                            _k_conn.execute("""
+                                INSERT INTO task_events (task_id, kind, payload, created_at)
+                                VALUES (?, 'boardroom_turn', ?, ?)
+                            """, (f"boardroom_{int(time.time())}", _k_payload, _k_now))
+                            _k_conn.commit()
+                        finally:
+                            _k_conn.close()
+                    # Sync SQLite pro Agent-Antwort blockiert den Event-Loop
+                    # (Audit 23.11.2026) — in den Threadpool auslagern.
+                    await asyncio.to_thread(_persist_boardroom_turn)
                 except Exception as _e_rep:
                     logger.debug(f"[Dispatcher] Boardroom-Turn Kanban-Protokollierung fehlgeschlagen: {_e_rep}")
 
                 yield res_event
+            finally:
+                # Bei Client-Disconnect/Cancel duerfen keine verwaisten
+                # LLM-Calls weiterlaufen und Kanban-Events schreiben.
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
         else:
             for agent in expert_agents:
                 agent_prompt = (
@@ -1989,6 +2242,12 @@ async def run_boardroom_debate(
             task_res["synthesis"] = ev.get("synthesis", "")
         elif ev_type == "error":
             return {"status": "error", "content": ev.get("content", "")}
+        elif ev_type == "cancelled":
+            # Ein Abbruch darf nie als erfolgreiche Entscheidung archiviert
+            # werden (Decision-Engine/Telegram hingen am status=Feld).
+            task_res["status"] = "cancelled"
+            task_res["cancel_reason"] = ev.get("reason", "")
+            break
         elif ev_type == "round_start":
             continue
         else:
@@ -2067,6 +2326,17 @@ async def execute_with_self_correction(
             )
             
             content = llm_res.get("content", "")
+            if llm_res.get("status") in ("blocked", "error"):
+                # Audit 23.11.2026: ein blockierter Call (Budget/Concurrency/
+                # Egress) darf nicht 3× mit identischen Parametern wiederholt
+                # werden — das erzeugt nur weitere blockierte Calls.
+                return {
+                    "status": llm_res.get("status"),
+                    "error_code": llm_res.get("error_code", "SELF_CORRECTION_BLOCKED"),
+                    "message": str(llm_res.get("error") or "Selbstkorrektur blockiert"),
+                    "attempts": attempt,
+                    "corrections": correction_history,
+                }
             try:
                 clean_json = content
                 if "```json" in clean_json:

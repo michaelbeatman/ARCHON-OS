@@ -151,7 +151,7 @@ def test_p03_approver_comes_from_session_not_request_body():
     from archon.routers import operations_approvals as mod
 
     request = MagicMock()
-    body = {"approver_id": "bob", "reason": "test"}
+    # Der Body mit 'approver_id' wurde bewusst entfernt (Body-Actor-Bypass).
 
     with patch.object(mod, "require_admin_or_503"), patch.object(
         mod, "require_session_actor", return_value="alice"
@@ -159,7 +159,7 @@ def test_p03_approver_comes_from_session_not_request_body():
         "backend.approval_policy_engine.approval_engine.approve_request",
         return_value={"ok": True},
     ) as engine:
-        mod.api_approve_request(request, "req-1", body)
+        mod.api_approve_request(request, "req-1")
 
     engine.assert_called_once()
     assert engine.call_args.kwargs["approver_id"] == "alice"

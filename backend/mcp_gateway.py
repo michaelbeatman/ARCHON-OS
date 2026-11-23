@@ -600,7 +600,7 @@ class ArchonMcpGateway:
 
         # Zentraler ToolRuntime-Chokepoint (M75 + M89 + M90 + PolicyEngine).
         # Fail-closed: wenn die Prüfung selbst scheitert, wird NICHT ausgeführt.
-        from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
+        from backend.tool_runtime import enforce_tool_execution, guard_result, record_tool_read_side_effect
         rt_session = str(key_info.get("session_id") or key_info.get("name") or "mcp_gateway")
         rt_agent = str(key_info.get("agent_id") or "mcp_gateway")
         try:
@@ -633,7 +633,8 @@ class ArchonMcpGateway:
 
         if rt_session:
             record_tool_read_side_effect(rt_session, name)
-        return 0, res
+        # F10: externer Tool-Output gehoert durch den Output-Firewall-Chokepoint.
+        return 0, guard_result(name, res)
 
     # ------------------------------------------------------------------
     # JSON-RPC 2.0 Dispatcher

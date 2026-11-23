@@ -1,5 +1,7 @@
-const BACKEND_TRANSCRIBE_URL = "/api/voice/transcribe";
-const BACKEND_CHAT_URL = "/api/v1/agent/chat";
+// Alle Backend-Calls laufen über den Next.js-Archon-Proxy. Die alten
+// direkten Pfade lieferten im Next.js-Server 404 (nur FastAPI kennt sie).
+const BACKEND_TRANSCRIBE_URL = "/api/archon/api/voice/transcribe";
+const BACKEND_CHAT_URL = "/api/archon/api/v1/agent/chat";
 
 function summarizePrompt(rawTranscript: string): string {
   return `
@@ -20,7 +22,10 @@ Erstelle eine prägnante Zusammenfassung im folgenden Format (halte dich exakt d
 }
 
 /** Transkribiert eine Audiodatei sicher über den Archon-OS Backend-Proxy (kein API-Key im Browser). */
-export async function transcribeAudioOnly(audioBlob: Blob): Promise<string> {
+// Der optionale apiKey wird bewusst ignoriert: der Key gehört nicht in den
+// Browser. Der Parameter existiert nur aus Kompatibilität zu bestehenden
+// Aufrufstellen (sonst TS2554 bei strict: true).
+export async function transcribeAudioOnly(audioBlob: Blob, _apiKey?: string): Promise<string> {
   const formData = new FormData();
   formData.append("file", audioBlob, "recording.webm");
   formData.append("language", "de");
@@ -41,7 +46,7 @@ export async function transcribeAudioOnly(audioBlob: Blob): Promise<string> {
 }
 
 /** Fasst einen bereits vorliegenden Text sicher über den Archon-OS Backend-Endpunkt zusammen. */
-export async function summarizeText(rawTranscript: string): Promise<string> {
+export async function summarizeText(rawTranscript: string, _apiKey?: string): Promise<string> {
   const llmRes = await fetch(BACKEND_CHAT_URL, {
     method: "POST",
     credentials: "include",

@@ -48,6 +48,10 @@ def test_save_key_honest_error_when_deploy_fails():
     with mock.patch.dict(sys.modules, {"api_provider": _fake_api_provider("no_keys_found")}), \
          mock.patch.object(lp, "require_admin_or_503", return_value=None):
         res = save_llm_provider_key(mock.Mock(), LLMProviderSaveKeyRequest(env_name="MY_KEY", key_value="sk-123"))
+    # Bei Fehlern liefert die Route bewusst eine JSONResponse (502), keinen Dict.
+    if hasattr(res, "body"):
+        import json as _json
+        res = _json.loads(res.body)
     assert res["status"] == "error"
     assert "Verteilung fehlgeschlagen" in res["message"]
 

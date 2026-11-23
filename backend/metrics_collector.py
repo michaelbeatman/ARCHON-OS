@@ -12,23 +12,24 @@ import sys
 import time
 import sqlite3
 import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 START_TIME = time.time()
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def resolve_db_path(name: str) -> str:
-    """Findet den tatsächlichen Pfad einer Datenbank (Host oder Container-Mount)."""
-    candidates = [
-        f"/opt/data/{name}",
-        os.path.expanduser(f"~/.hermes/{name}"),
-        os.path.join(WORKSPACE_DIR, "data", name),
-        os.path.join(WORKSPACE_DIR, name)
-    ]
-    for c in candidates:
-        if os.path.exists(c) and os.path.getsize(c) > 0:
-            return c
-    return candidates[0]
+    """Autoritativer DB-Resolver (Audit 23.11.2026).
+
+    Vorher hatte der Metriken-Kollektor einen eigenen Kandidaten-Pfad und
+    las bei aktiver Mandanten-Isolation eine veraltete/leere Legacy-DB —
+    Alerting-Blindflug. Jetzt gilt backend.db_paths.resolve_db als SSOT.
+    """
+    try:
+        from backend.db_paths import resolve_db
+        return resolve_db(name)
+    except Exception as exc:
+        _archon_exc_logger.warning("[Metrics] resolve_db(%s) fehlgeschlagen: %s", name, exc)
+        return os.path.join(WORKSPACE_DIR, "data", name)
 
 def get_kanban_db() -> str:
     return resolve_db_path("kanban.db")
@@ -142,9 +143,22 @@ class MetricsCollector:
             _archon_exc_logger.debug("[metrics_collector] Ignorierte Ausnahme (Z.139): %s", _exc)
         return {"cpu_percent": cpu_pct, "ram_bytes": ram_bytes}
 
-    def check_and_dispatch_alerts(self, kanban: Dict[str, Any], telemetry: Dict[str, Any]) -> List[str]:
-        """Prüft Schwellenwerte und sendet Alarme über den NotificationHub."""
-        alerts = []
+    def check_and_dispatch_alerts(
+        self,
+        kanban: Optional[Dict[str, Any]] = None,
+        telemetry: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Prüft Schwellenwerte und sendet Alarme über den NotificationHub.
+
+        Beide Argumente sind optional: ohne Argumente werden die Werte frisch
+        aus den DBs gelesen. Damit ist die Funktion unabhängig vom
+        ``/metrics``-Scrape aufrufbar (Commit des main.py-Loops).
+        """
+        if kanban is None:
+            kanban = self._get_kanban_metrics()
+        if telemetry is None:
+            telemetry = self._get_execution_and_telemetry()
+        alerts: List[str] = []
         try:
             from backend.notification_hub import get_notification_hub
             hub = get_notification_hub()
@@ -172,7 +186,11 @@ class MetricsCollector:
                 alerts.append(msg)
         except Exception as e:
             print(f"[MetricsCollector] Alerting-Check Fehler: {e}", file=sys.stderr)
-        return alerts
+        return {
+            "dispatched": len(alerts),
+            "alerts": alerts,
+            "checked_at": datetime.datetime.now().isoformat(),
+        }
 
     def generate_prometheus_metrics(self) -> str:
         """Erzeugt Text im Prometheus-Format (0.0.4)."""
@@ -259,3 +277,32 @@ class MetricsCollector:
 
 
 metrics_collector = MetricsCollector()
+
+
+# Eigene 60s-Funktion fuer main.py: Alerting passiert auch dann, wenn niemand
+# Prometheus scrappt. Der Scrape ruft check_and_dispatch_alerts() weiterhin
+# direkt; dieser Hook ist zusaetzlich und idempotent im Intervall.
+_LAST_ALERT_DISPATCH_TS = 0.0
+
+
+def check_and_dispatch_alerts_now(force: bool = False) -> Dict[str, Any]:
+    """Einmalige Alert-Pruefung (min. 60s Abstand), unabhaengig vom Scrape."""
+    global _LAST_ALERT_DISPATCH_TS
+    now = time.time()
+    if not force and (now - _LAST_ALERT_DISPATCH_TS) < 60:
+        return {"dispatched": 0, "alerts": [], "skipped": "interval", "checked_at": datetime.datetime.now().isoformat()}
+    _LAST_ALERT_DISPATCH_TS = now
+    return metrics_collector.check_and_dispatch_alerts()
+
+
+async def alert_dispatch_loop(interval_seconds: int = 60) -> None:
+    """Hintergrund-Loop, der von main.py als Background-Task gestartet wird."""
+    import asyncio
+    while True:
+        try:
+            await asyncio.to_thread(check_and_dispatch_alerts_now, True)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            print(f"[MetricsCollector] Alert-Dispatch-Loop Fehler: {exc}", file=sys.stderr)
+        await asyncio.sleep(max(5, int(interval_seconds)))

@@ -93,6 +93,16 @@ def save_boardroom_history_item(item: dict):
     return hist
 
 
+@router.post("/api/boardroom/cancel")
+async def api_cancel_boardroom(request: Request):
+    """Globaler Kill-Switch: bricht alle laufenden Boardroom-Debatten ab."""
+    from archon.routers._rbac import require_admin_or_503
+    require_admin_or_503(request)
+    from backend.cancellation import cancel_scope
+    ok = cancel_scope("boardroom", reason="global_kill_switch")
+    return {"status": "success" if ok else "not_running", "cancelled": bool(ok)}
+
+
 @router.get("/api/boardroom/history")
 def api_get_boardroom_history():
     return load_boardroom_history()
@@ -394,80 +404,85 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
     async def sse_generator():
         running_transcript = ""
         synthesis_text = ""
-        async for ev in core_dispatcher.stream_boardroom_debate(
-            task=req.task,
-            max_rounds=req.rounds,
-            chairman_id=chairman_agent["id"],
-            active_agents=all_debate_agents,
-            framework=req.framework,
-            use_moa=req.use_moa,
-            moa_reference_models=req.moa_reference_models,
-            moa_aggregator=req.moa_aggregator,
-            cancel_token=cancel_token,
-        ):
-            cancel_token.check()
-            if await request.is_disconnected():
-                print("[AI Boardroom] Client disconnected. Beende Debatten-Stream vorzeitig.")
-                cancel_token.cancel("client_disconnect")
-                break
-            if ev.get("type") == "done":
-                running_transcript = ev.get("transcript", "")
-                synthesis_text = ev.get("synthesis", "")
-                vault_file_name = ""
-                # Save to Obsidian Vault
-                try:
-                    vault_dir = OBSIDIAN_VAULT_DIR
-                    os.makedirs(vault_dir, exist_ok=True)
-                    ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    vault_file_name = f"boardroom_debatte_{ts_str}.md"
-                    vault_file = os.path.join(vault_dir, vault_file_name)
-                    
-                    md_content = f"# AI Boardroom Debatte: {req.task}\n\n"
-                    md_content += f"**Datum:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    md_content += f"**Methodik-Framework:** {req.framework}\n"
-                    md_content += f"**Chairman:** {chairman_agent.get('name', 'Unbekannt')}\n"
-                    md_content += f"**Max Runden:** {req.rounds}\n\n"
-                    md_content += f"## Diskussionsprotokoll\n\n{running_transcript}\n\n"
-                    md_content += f"## Finale Synthese\n\n{synthesis_text}\n"
-                    
-                    def _write_vault_note_stream(path: str, text: str) -> None:
-                        with open(path, "w", encoding="utf-8") as f:
-                            f.write(text)
-                    await asyncio.to_thread(_write_vault_note_stream, vault_file, md_content)
-                    add_ticker("AI Boardroom", f"Protokoll im Vault gespeichert: {vault_file_name}")
-                    ev["vault_file"] = vault_file_name
-                except Exception as e:
-                    print(f"Error saving obsidian vault note: {e}")
+        # KRITISCH (Audit 23.11.2026): clear_scope() muss auch bei
+        # Client-Disconnect / Exception laufen, sonst bleibt der Token in der
+        # Registry und der Killswitch wirkt auf verwaiste Scopes.
+        try:
+            async for ev in core_dispatcher.stream_boardroom_debate(
+                task=req.task,
+                max_rounds=req.rounds,
+                chairman_id=chairman_agent["id"],
+                active_agents=all_debate_agents,
+                framework=req.framework,
+                use_moa=req.use_moa,
+                moa_reference_models=req.moa_reference_models,
+                moa_aggregator=req.moa_aggregator,
+                cancel_token=cancel_token,
+            ):
+                cancel_token.check()
+                if await request.is_disconnected():
+                    print("[AI Boardroom] Client disconnected. Beende Debatten-Stream vorzeitig.")
+                    cancel_token.cancel("client_disconnect")
+                    break
+                if ev.get("type") == "done":
+                    running_transcript = ev.get("transcript", "")
+                    synthesis_text = ev.get("synthesis", "")
+                    vault_file_name = ""
+                    # Save to Obsidian Vault
+                    try:
+                        vault_dir = OBSIDIAN_VAULT_DIR
+                        os.makedirs(vault_dir, exist_ok=True)
+                        ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        vault_file_name = f"boardroom_debatte_{ts_str}.md"
+                        vault_file = os.path.join(vault_dir, vault_file_name)
 
-                # Save structured debate entry to boardroom history
-                try:
-                    hist_entry = {
-                        "id": f"deb_{int(time.time())}_{uuid.uuid4().hex[:6]}",
-                        "timestamp": datetime.datetime.now().isoformat(),
-                        "date_display": datetime.datetime.now().strftime("%d.%m.%Y · %H:%M Uhr"),
-                        "task": req.task,
-                        "framework": req.framework,
-                        "chairman": chairman_agent.get("name", "Moderator"),
-                "use_moa": req.use_moa,
-                        "rounds": req.rounds,
-                        "slots_count": max(0, len(all_debate_agents) - 1),
-                        "slots": [
-                            {"name": a.get("name", ""), "role": a.get("role", ""), "model": a.get("model", "")}
-                            for a in all_debate_agents[1:]
-                        ],
-                        "transcript": running_transcript,
-                        "synthesis": synthesis_text,
-                        "vault_file": vault_file_name
-                    }
-                    save_boardroom_history_item(hist_entry)
-                    ev["history_id"] = hist_entry["id"]
-                except Exception as e:
-                    print(f"Error saving boardroom history item: {e}")
+                        md_content = f"# AI Boardroom Debatte: {req.task}\n\n"
+                        md_content += f"**Datum:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        md_content += f"**Methodik-Framework:** {req.framework}\n"
+                        md_content += f"**Chairman:** {chairman_agent.get('name', 'Unbekannt')}\n"
+                        md_content += f"**Max Runden:** {req.rounds}\n\n"
+                        md_content += f"## Diskussionsprotokoll\n\n{running_transcript}\n\n"
+                        md_content += f"## Finale Synthese\n\n{synthesis_text}\n"
 
-            payload = json.dumps(ev, ensure_ascii=False)
-            yield f"data: {payload}\n\n"
+                        def _write_vault_note_stream(path: str, text: str) -> None:
+                            with open(path, "w", encoding="utf-8") as f:
+                                f.write(text)
+                        await asyncio.to_thread(_write_vault_note_stream, vault_file, md_content)
+                        add_ticker("AI Boardroom", f"Protokoll im Vault gespeichert: {vault_file_name}")
+                        ev["vault_file"] = vault_file_name
+                    except Exception as e:
+                        print(f"Error saving obsidian vault note: {e}")
 
-        clear_scope(cancel_token.scope)
+                    # Save structured debate entry to boardroom history
+                    try:
+                        hist_entry = {
+                            "id": f"deb_{int(time.time())}_{uuid.uuid4().hex[:6]}",
+                            "timestamp": datetime.datetime.now().isoformat(),
+                            "date_display": datetime.datetime.now().strftime("%d.%m.%Y · %H:%M Uhr"),
+                            "task": req.task,
+                            "framework": req.framework,
+                            "chairman": chairman_agent.get("name", "Moderator"),
+                            "use_moa": req.use_moa,
+                            "rounds": req.rounds,
+                            "slots_count": max(0, len(all_debate_agents) - 1),
+                            "slots": [
+                                {"name": a.get("name", ""), "role": a.get("role", ""), "model": a.get("model", "")}
+                                for a in all_debate_agents[1:]
+                            ],
+                            "transcript": running_transcript,
+                            "synthesis": synthesis_text,
+                            "vault_file": vault_file_name
+                        }
+                        save_boardroom_history_item(hist_entry)
+                        ev["history_id"] = hist_entry["id"]
+                    except Exception as e:
+                        print(f"Error saving boardroom history item: {e}")
+
+                payload = json.dumps(ev, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+        finally:
+            cancel_token.cancel("stream_finished")
+            clear_scope(cancel_token.scope)
 
     return StreamingResponse(
         sse_generator(),

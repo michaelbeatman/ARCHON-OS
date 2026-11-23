@@ -52,14 +52,19 @@ def api_restore_snapshot(request: Request, snapshot_id: str):
 
 
 @router.get("/api/audit/logs")
-def api_list_audit_logs(limit: int = 50):
+def api_list_audit_logs(request: Request, limit: int = 50):
+    _require_admin(request)  # Audit-Logs enthalten alle Mandanten + Payload-Daten
     from backend.audit_log import chained_audit_log
+    from backend.tenant_context import tenant_context
 
-    return {"status": "success", "logs": chained_audit_log.list_events(limit=limit)}
+    tid = tenant_context.get_active_tenant_id()
+    result = chained_audit_log.list_events(limit=limit, company_id=tid)
+    return {"status": "success", "logs": result.get("events", result) if isinstance(result, dict) else result}
 
 
 @router.get("/api/audit/verify")
-def api_verify_audit_log():
+def api_verify_audit_log(request: Request):
+    _require_admin(request)
     from backend.audit_log import chained_audit_log
 
     return chained_audit_log.verify_integrity()

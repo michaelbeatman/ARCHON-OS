@@ -1,117 +1,188 @@
 /* ========================================================================= */
-/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-20 09:25:46               */
+/* ARCHON STUDIO BAKED CSS — Eingebrannt am: 2026-11-22 19:52:42               */
 /* ========================================================================= */
 
-div.group > div.p-3 > p.text-muted-custom {
-  height: 99px !important;
-}
-
-#ops-kanban-columns-container .group > div.p-3 > p.text-muted-custom {
-  height: 98px !important;
-}
-
-#ops-kanban-columns-container .group > div.p-3 > div.mt-1 > button.flex-1 {
-  background-color: #00bd16 !important;
-}
-
-div#ops-kanban-toolbar > button.h-8 {
-  background-color: #00bf0d !important;
-}
-
-/* ========================================================================= */
-/* ARCHON STUDIO — Sichere Kanban-Updates (2026-11-20)                       */
-/* ========================================================================= */
-#ops-kanban-filter-assignee {
-  width: 147px !important;
-}
-
-#ops-kanban-search {
-  width: 180px !important;
-}
-
-#ops-task-submit-btn {
-  background-color: #159768 !important;
-}
-
-#ops-kanban-columns-container .group {
-  border-color: #bababa !important;
-}
-
-/* ========================================================================= */
-/* ARCHON STUDIO — Master-Chat & Agent-Tab Rules (2026-11-20)                */
-/* ========================================================================= */
-#agent-tab-chat-status,
-div#agent-tab-status-indicator > span.px-2,
-#master-chat-current-status-badge {
-  display: none !important;
-}
-
-#master-chat-model-cost {
-  border-width: 0px !important;
+#prof-col-stammdaten {
   box-shadow: none !important;
-  font-size: 11px !important;
-  color: #4f4f4f !important;
-  background-color: #ffffff !important;
+  padding-right: 2px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  padding-left: 2px !important;
 }
 
-span#master-chat-model-cost > span.text-emerald-400,
-span#master-chat-model-cost > span.text-amber-400 {
+div.shrink-0 > div.flex > button.w-5 {
+  left: -7px !important;
+  top: -13px !important;
+}
+
+#prof-col-activity-feed {
   box-shadow: none !important;
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+  padding-bottom: 0px !important;
+  padding-top: 0px !important;
+}
+
+div > section.border-t > div.px-3 {
+  padding-top: 2px !important;
   border-width: 0px !important;
 }
 
-#master-chat-context-meter {
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(0,0,0,0.15) !important;
-  border-width: 0px !important;
+div > section.border-t > div.p-2\.5 {
+  border-color: #8a8a8a !important;
+  border-width: 1px !important;
 }
 
-div#master-chat-footer-bar > div.flex {
+#prof-activity-log-terminal {
+  height: 100% !important;
+}
+
+#agent-pane-overview {
+  padding-bottom: 0px !important;
+}
+
+div.prof-box-card > div.grid > div.flex {
+  width: 233px !important;
+}
+
+#prof-projects-list {
+  height: 100% !important;
+}
+
+section.border-t > div.p-2\.5 > div.p-2 {
+  min-width: auto !important;
+  max-width: auto !important;
+  width: 150px !important;
   height: auto !important;
 }
 
-#master-chat-footer-bar {
-  margin-top: 0px !important;
+#prof-edit-model-cost {
+  width: 234px !important;
+  position: relative !important;
+  left: 9px !important;
+  top: -1px !important;
 }
 
-#master-chat-provider-select {
-  width: 100px !important;
+div.shrink-0 > div.flex > h2.text-base {
+  font-size: 28px !important;
+  font-weight: 500 !important;
+  height: 37px !important;
 }
 
-#master-chat-model-select {
-  width: 197px !important;
+#prof-edit-model {
+  width: 239px !important;
+  left: 6px !important;
+  top: -1px !important;
 }
 
-#master-chat-native-container {
-  padding: 4px !important;
+#agent-catalog-col {
+  box-shadow: none !important;
 }
 
-#master-chat-input-wrapper {
-  margin-top: 4px !important;
-  padding-top: 4px !important;
+#wf-palette-plus-btn {
+  height: 64px !important;
 }
 
-#master-chat-input-card {
-  padding-top: 4px !important;
-  padding-bottom: 4px !important;
+#prof-overview-kpi-footer {
+  box-shadow: none !important;
+  padding-top: 0px !important;
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+  padding-bottom: 0px !important;
 }
 
-#master-chat-selected-avatar {
-  width: auto !important;
-  height: 86px !important;
-  max-width: 100% !important;
+div.px-3 > div.flex > button.px-3 {
+  margin-bottom: 0px !important;
+  padding-right: 4px !important;
+  padding-left: 4px !important;
 }
 
-#master-chat-avatar-container {
-  width: 72px !important;
-  height: 72px !important;
-  border-width: 1px !important;
-  border-color: #030303 !important;
+div.space-y-1\.5 > div.flex > span.font-mono {
+  display: none !important;
 }
 
-#master-chat-profile-select {
-  width: 100% !important;
+#prof-edit-reasoning {
+  width: 231px !important;
 }
 
-#master-chat-profile-category {
-  width: 359px !important;
+#catalog-expanded-header {
+  height: 194px !important;
+}
+
+div#catalog-expanded-header > div.flex {
+  height: 42px !important;
+}
+
+div > div > aside.border-l {
+  width: 16px !important;
+}
+
+#wf-ins-prompt {
+  height: 234px !important;
+}
+
+div.border > div.flex > aside.border-l {
+  width: 355px !important;
+}
+
+#wfd-prompt {
+  height: 372px !important;
+}
+
+#wfd-expected {
+  height: 96px !important;
+}
+
+/* ========================================================================= */
+/* MISSION CONTROL & CSS-LIVE STUDIO OVERRIDES (eingebrannt 2026-11-23)      */
+/* ========================================================================= */
+
+#mc-catalog-col {
+  box-shadow: none !important;
+  border-width: 0px !important;
+}
+
+div#mc-cadre-list > div.flex {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1) !important;
+  border-color: #9c9c9c !important;
+}
+
+div#mc-view-cockpit > div.grid > div.shadcn-card {
+  border-color: #9c9c9c !important;
+}
+
+/* To-Do Starten-Button (gruen) */
+button.shadcn-btn-primary.mc-btn-start,
+#mc-col-todo .shadcn-card > div.mt-2 > button.shadcn-btn-primary {
+  background-color: #159768 !important;
+  border-color: #159768 !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+}
+
+button.shadcn-btn-primary.mc-btn-start:hover,
+#mc-col-todo .shadcn-card > div.mt-2 > button.shadcn-btn-primary:hover {
+  background-color: #128259 !important;
+  border-color: #128259 !important;
+}
+
+/* Review & QA Freigabe/Ablehnen-Buttons (weiss mit 2px gruenem/rotem Rand) */
+button.shadcn-btn-primary.mc-btn-approve {
+  background-color: #ffffff !important;
+  border: 2px solid #159768 !important;
+  color: #159768 !important;
+}
+
+button.shadcn-btn-primary.mc-btn-approve:hover {
+  background-color: #ecfdf5 !important;
+}
+
+button.shadcn-btn-outline.mc-btn-reject {
+  background-color: #ffffff !important;
+  border: 2px solid #d82829 !important;
+  color: #d82829 !important;
+}
+
+button.shadcn-btn-outline.mc-btn-reject:hover {
+  background-color: #fef2f2 !important;
 }

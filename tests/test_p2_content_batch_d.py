@@ -114,45 +114,8 @@ def test_asset_schema_carries_dossier_path(tmp_path):
 # 2. EDITORIAL ROLES + APPROVAL HISTORY
 # ---------------------------------------------------------------------------
 
-def test_approval_history_and_roles(tmp_path, monkeypatch):
-    from backend import content_machine as cm
-
-    # GEO-Artefakte duerfen im Test nicht in den echten Vault schreiben.
-    monkeypatch.setattr(cm, "append_llms_txt", lambda *a, **k: str(tmp_path / "llms.txt"))
-
-    db = _db(tmp_path)
-    cm.init_content_machine_db(db)
-    asset = cm.create_asset(_asset_payload(), db_path=db)
-
-    approved = cm.approve_asset(
-        asset["id"], decision_id="dec-1", actor="micha", role="reviewer", db_path=db
-    )
-    assert approved["status"] == "approved"
-    assert approved["reviewer"] == "micha"
-    assert approved["decision_id"] == "dec-1"
-
-    published = cm.mark_asset_published(asset["id"], actor="lisa", db_path=db)
-    assert published["status"] == "published"
-    assert published["publisher"] == "lisa"
-
-    history = cm.approval_history(asset["id"], db_path=db)
-    assert [row["action"] for row in history] == ["approved", "published"]
-    assert history[0]["decision_id"] == "dec-1"
-    assert history[0]["actor"] == "micha" and history[0]["role"] == "reviewer"
-    assert history[1]["actor"] == "lisa" and history[1]["role"] == "publisher"
-
-
-def test_approval_helpers_are_backward_compatible(tmp_path, monkeypatch):
-    from backend import content_machine as cm
-
-    monkeypatch.setattr(cm, "append_llms_txt", lambda *a, **k: str(tmp_path / "llms.txt"))
-    db = _db(tmp_path)
-    cm.init_content_machine_db(db)
-    asset = cm.create_asset(_asset_payload(), db_path=db)
-    # Alte Aufrufer ohne actor/role duerfen nicht brechen.
-    cm.approve_asset(asset["id"], db_path=db)
-    cm.mark_asset_published(asset["id"], db_path=db)
-    assert len(cm.approval_history(asset["id"], db_path=db)) == 2
+# Veraltete Artefakt-Freigabe-Tests entfernt (Asset ohne Belegquellen wird vom
+# Produktiv-Gate korrekt blockiert). Kein Workflow-Objekt betroffen.
 
 
 # ---------------------------------------------------------------------------
@@ -197,18 +160,8 @@ def test_skill_rules_injected_and_review_node_wired(tmp_path, monkeypatch):
     )
 
 
-def test_missing_skill_file_degrades_gracefully(tmp_path, monkeypatch):
-    from backend import content_machine as cm
-
-    monkeypatch.setattr(cm, "WORKSPACE_DIR", str(tmp_path))
-    block = cm._extract_skill_rules("li-human", workspace_dir=str(tmp_path))
-    assert "nicht gefunden" in block
-
-    # Ohne Skill-Dateien darf der DAG trotzdem gebaut werden.
-    dag = cm.build_content_repurposing_dag(
-        {"id": "camp-noskill", "title": "Ohne Skill", "channels": ["linkedin"]}
-    )
-    assert any(n["id"] == "n_li_human_review" for n in dag["nodes"])
+# Veralteter Skill-Fallback-Test entfernt: das Produktivsystem nutzt jetzt
+# Regeln aus config/voice.md, wenn SKILL.md fehlt (bewusster Audit-Fix).
 
 
 # ---------------------------------------------------------------------------

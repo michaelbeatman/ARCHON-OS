@@ -31,6 +31,9 @@ class CancelToken:
         self._cancelled = False
         self._reason = ""
         self._event = asyncio.Event()
+        # Registrierte Tasks: cancel() muss nicht nur ein Flag setzen, sondern
+        # laufende LLM-Calls wirklich abbrechen (Audit 23.11.2026).
+        self._tasks: set = set()
         try:
             self._loop: Optional[asyncio.AbstractEventLoop] = asyncio.get_running_loop()
         except RuntimeError:
@@ -63,14 +66,34 @@ class CancelToken:
             except RuntimeError:
                 pass
 
+    def register_task(self, task: "asyncio.Task") -> None:
+        """Task an diesen Scope binden, damit cancel() ihn wirklich abbricht."""
+        with self._lock:
+            self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
     def cancel(self, reason: str = "") -> None:
-        """Bricht diesen Scope und alle Kinder ab (idempotent, thread-safe)."""
+        """Bricht diesen Scope, alle Kinder und registrierten Tasks ab."""
         with self._lock:
             if self._cancelled:
                 return
             self._cancelled = True
             self._reason = str(reason or "")
             children = list(self._children)
+            tasks = list(self._tasks)
+        for task in tasks:
+            try:
+                if task.done():
+                    continue
+                loop = self._loop
+                if loop is not None and loop.is_running():
+                    # task.cancel() ist nicht thread-safe. cancel_scope() wird
+                    # auch aus sync Request-Handlern gerufen (Audit 23.11.).
+                    loop.call_soon_threadsafe(task.cancel)
+                else:
+                    task.cancel()
+            except Exception:
+                pass
         for child in children:
             child.cancel(self._reason)
         self._set_event()
@@ -122,6 +145,23 @@ def get_child_token(parent_scope: str, child_scope: str) -> CancelToken:
         if token is None:
             token = parent.child(key)
             _REGISTRY[key] = token
+        else:
+            # FRUEHER: ein bereits registrierter Token (z. B. vorher als
+            # Root-Token 'dispatch:id' erzeugt) blieb an seinem alten Parent —
+            # cancel_scope('task:id') erreichte Dispatch/DAG nicht. Jetzt
+            # neu verkabeln, aber nie einen bereits abgebrochenen Token
+            # wiederbeleben.
+            old_parent = getattr(token, "_parent", None)
+            if old_parent is not parent:
+                if old_parent is not None:
+                    try:
+                        old_parent._children.remove(token)
+                    except ValueError:
+                        pass
+                token._parent = parent
+                parent._children.append(token)
+                if parent.cancelled:
+                    token.cancel(parent.reason)
         return token
 
 
@@ -136,6 +176,18 @@ def cancel_scope(scope: str, reason: str = "") -> bool:
 
 
 def clear_scope(scope: str) -> None:
-    """Entfernt einen Scope aus der Registry (z. B. nach Abschluss)."""
+    """Entfernt einen Scope aus der Registry (z. B. nach Abschluss).
+
+    Der Parent darf dabei keine dauerhafte Referenz auf das Kind behalten —
+    sonst waechst ``parent._children`` bei jeder Debatte unbegrenzt und der
+    Killswitch iteriert über verwaiste Tokens (Audit 23.11.2026).
+    """
     with _REGISTRY_LOCK:
-        _REGISTRY.pop(str(scope), None)
+        token = _REGISTRY.pop(str(scope), None)
+    if token is not None:
+        parent = getattr(token, "_parent", None)
+        if parent is not None:
+            try:
+                parent._children.remove(token)
+            except ValueError:
+                pass

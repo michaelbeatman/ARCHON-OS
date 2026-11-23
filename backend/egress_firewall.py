@@ -22,7 +22,7 @@ class _ArchonClosingConn(sqlite3.Connection):
             self.close()
 from urllib.parse import urlparse
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -32,6 +32,26 @@ except Exception:
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 IPV4_PATTERN = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+
+# B2: verschluckte GoBD-Audit-Fehler sind messbar zu machen (kein stummes pass).
+_AUDIT_ERROR_COUNTS: Dict[str, int] = {}
+
+
+def _record_audit_error(action: str, exc: BaseException) -> None:
+    _AUDIT_ERROR_COUNTS[action] = _AUDIT_ERROR_COUNTS.get(action, 0) + 1
+    _archon_exc_logger.error(
+        "[GoBD-Audit] '%s' fehlgeschlagen (count=%d): %s",
+        action, _AUDIT_ERROR_COUNTS[action], exc,
+    )
+
+
+def _active_tenant_id() -> str:
+    """C2: Mandant des aktuellen Requests (Fail-Closed auf 'default')."""
+    try:
+        from backend.tenant_context import tenant_context
+        return str(tenant_context.get_active_tenant_id() or "default")
+    except Exception:
+        return "default"
 
 
 def _get_cfg() -> Dict[str, Any]:
@@ -63,9 +83,17 @@ def _init_db() -> None:
                 hostname TEXT,
                 allowed INTEGER,
                 reason TEXT,
-                created_at TEXT
+                created_at TEXT,
+                tenant_id TEXT DEFAULT ''
             )
         """)
+        # C2: Migration bestehender DBs (alte Zeilen bleiben tenant='' = Legacy).
+        try:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(egress_firewall_logs)").fetchall()}
+            if "tenant_id" not in cols:
+                conn.execute("ALTER TABLE egress_firewall_logs ADD COLUMN tenant_id TEXT DEFAULT ''")
+        except Exception as exc:
+            _archon_exc_logger.error("[EgressFirewall] tenant_id-Migration fehlgeschlagen: %s", exc)
         conn.commit()
 
 
@@ -74,6 +102,7 @@ class EgressFirewall:
         _init_db()
 
     def check_url(self, target_url: str, agent_id: str = "agent-worker") -> Dict[str, Any]:
+        tenant_id = _active_tenant_id()
         cfg = _get_cfg()
         enabled = bool(cfg.get("enabled", True))
         parsed = urlparse(target_url if "://" in target_url else f"https://{target_url}")
@@ -94,8 +123,8 @@ class EgressFirewall:
                 now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
                     conn.execute(
-                        "INSERT INTO egress_firewall_logs (agent_id, target_url, hostname, allowed, reason, created_at) VALUES (?, ?, ?, 0, ?, ?)",
-                        (agent_id, clean_ep, host, reason, now_iso),
+                        "INSERT INTO egress_firewall_logs (agent_id, target_url, hostname, allowed, reason, created_at, tenant_id) VALUES (?, ?, ?, 0, ?, ?, ?)",
+                        (agent_id, clean_ep, host, reason, now_iso, tenant_id),
                     )
                     conn.commit()
                 try:
@@ -106,7 +135,8 @@ class EgressFirewall:
                         payload={"target_endpoint": clean_ep, "target_host": host, "egress_zone": zone, "reason": reason},
                     )
                 except Exception as _exc:
-                    _archon_exc_logger.debug("[egress_firewall] Ignorierte Ausnahme (Z.106): %s", _exc)
+                    # B2: GoBD-Auditfehler duerfen nicht verschluckt werden.
+                    _record_audit_error("zero_egress_firewall_blocked", _exc)
                 return {
                     "allowed": False,
                     "blocked": True,
@@ -141,9 +171,9 @@ class EgressFirewall:
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""
-                INSERT INTO egress_firewall_logs (agent_id, target_url, hostname, allowed, reason, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (agent_id, target_url, host, int(allowed), reason, now_iso))
+                INSERT INTO egress_firewall_logs (agent_id, target_url, hostname, allowed, reason, created_at, tenant_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (agent_id, target_url, host, int(allowed), reason, now_iso, tenant_id))
             conn.commit()
 
         return {
@@ -155,12 +185,14 @@ class EgressFirewall:
             "reason": reason
         }
 
-    def get_logs(self, limit: int = 25) -> List[Dict[str, Any]]:
+    def get_logs(self, limit: int = 25, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        # C2: Logs defaultmaessig auf den aktiven Mandanten einschraenken.
+        tid = str(tenant_id) if tenant_id is not None else _active_tenant_id()
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT * FROM egress_firewall_logs ORDER BY id DESC LIMIT ?",
-                (limit,)
+                "SELECT * FROM egress_firewall_logs WHERE tenant_id = ? ORDER BY id DESC LIMIT ?",
+                (tid, limit)
             ).fetchall()
             return [dict(r) for r in rows]
 

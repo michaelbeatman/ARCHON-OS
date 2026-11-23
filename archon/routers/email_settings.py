@@ -7,6 +7,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger("archon.routers.email_settings")
@@ -36,7 +37,8 @@ class SmtpConfigPayload(BaseModel):
 
 
 @router.get("/api/v1/settings/smtp")
-def api_get_smtp_settings():
+def api_get_smtp_settings(request: Request):
+    _require_admin(request)  # SMTP-Host/User/Empfänger sind Admin-Sache
     from backend.post_task_pipeline import get_smtp_config
 
     cfg = get_smtp_config()
@@ -84,4 +86,4 @@ def api_sync_emails_endpoint():
 
         return sync_imap_inbox(limit=30)
     except Exception as e:
-        return {"status": "error", "message": str(e), "synced": 0}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e), "synced": 0})

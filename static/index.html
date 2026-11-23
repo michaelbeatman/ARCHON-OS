@@ -15,8 +15,7 @@
   <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
   <link rel="stylesheet" href="/static/custom.css?v=2026111113">
   <link rel="stylesheet" href="/static/css/design_system_v2.css?v=2026111901">
-  <!-- Custom Studio CSS Overrides (Active live edits only) -->
-  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=2026112030">
+  <!-- Custom Studio CSS Overrides (Active live edits only — loaded after themes.css) -->
   <script src="/static/vendor/lucide.min.js"></script>
   <script>
     // Performance-Booster: Verhindert, dass lucide.createIcons() bei jedem Aufruf alle 800+ bereits gerenderten SVGs
@@ -96,6 +95,7 @@
     */
   </script>
   <link rel="stylesheet" href="/static/css/themes.css?v=2026112112b">
+  <link rel="stylesheet" id="archon-custom-studio-css" href="/static/custom_studio.css?v=2026112302">
 
   <style id="archon-live-custom-styles">
     :root {
@@ -716,7 +716,7 @@
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 shrink-0 font-sans">
                 
                 <!-- KACHEL 1: FLOTTENLAST -->
-                <div onclick="openKpiDetailModal('fleet')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                <div onclick="openKpiDetailModal('fleet')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors h-[72px]">
                   <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
                     <span data-i18n="ui.dashboard.fleet_load">Flottenlast</span>
                     <i data-lucide="users" class="w-3.5 h-3.5 text-black dark:text-white"></i>
@@ -730,7 +730,7 @@
                   </div>
                 </div>
                 <!-- KACHEL 2: DURCHSATZ (TPM) -->
-                <div onclick="openKpiDetailModal('tpm')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                <div onclick="openKpiDetailModal('tpm')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors h-[72px]">
                   <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
                     <span data-i18n="ui.dashboard.throughput">Durchsatz (TPM)</span>
                     <i data-lucide="activity" class="w-3.5 h-3.5 text-black dark:text-white"></i>
@@ -744,7 +744,7 @@
                   </div>
                 </div>
                 <!-- KACHEL 3: KOSTENWÄCHTER -->
-                <div onclick="openKpiDetailModal('cost')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                <div onclick="openKpiDetailModal('cost')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors h-[72px]">
                   <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
                     <span data-i18n="ui.dashboard.cost_guard">Kostenwächter</span>
                     <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-black dark:text-white"></i>
@@ -758,7 +758,7 @@
                   </div>
                 </div>
                 <!-- KACHEL 4: STABILITÄT -->
-                <div onclick="openKpiDetailModal('stability')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                <div onclick="openKpiDetailModal('stability')" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors h-[72px]">
                   <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
                     <span data-i18n="ui.dashboard.stability">Stabilität</span>
                     <i data-lucide="shield-check" class="w-3.5 h-3.5 text-black dark:text-white"></i>
@@ -772,7 +772,7 @@
                   </div>
                 </div>
                 <!-- KACHEL 5: GOVERNANCE / APPROVAL GATE -->
-                <div id="mc-kpi-governance-card" onclick="onGovernanceCardClick()" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition h-[72px]">
+                <div id="mc-kpi-governance-card" onclick="onGovernanceCardClick()" class="shadcn-card p-2.5 flex flex-col justify-between cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors h-[72px]">
                   <div class="flex items-center justify-between text-xs font-medium text-[var(--muted-foreground)]">
                     <span data-i18n="ui.dashboard.approval_gate" id="mc-kpi-governance-label">Approval Gate</span>
                     <i id="mc-kpi-governance-icon" data-lucide="shield" class="w-3.5 h-3.5 text-black dark:text-white"></i>
@@ -2140,7 +2140,7 @@ print('Ausführung erfolgreich!')</textarea>
       catch (e) { console.warn('[CustomCSS] Start-Anwendung fehlgeschlagen:', e); }
     });
   </script>
-  <script src="/static/js/mission_control_cockpit.js?v=2026111113"></script>
+  <script src="/static/js/mission_control_cockpit.js?v=2026112301"></script>
   <script src="/static/js/research_lab.js?v=2026112201"></script>
   <script src="/static/js/operations_kanban.js?v=2026112202"></script>
   <script src="/static/js/kanban_gantt_graph.js?v=2026112032"></script>
@@ -10511,6 +10511,9 @@ ${logExcerpt}
               </button>
               <button type="button" id="btn-ops-human-approve" onclick="humanOverrideQualityReview('approved')" class="px-2.5 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-[11px] font-bold transition cursor-pointer flex items-center gap-1" data-i18n-title="ui.task_detail.human_approve_title" title="Manuelle Freigabe ohne KI-Review">
                 <i data-lucide="check" class="w-3.5 h-3.5"></i> <span data-i18n="ui.task_detail.human_approve">Freigeben</span>
+              </button>
+              <button type="button" id="btn-ops-human-reject" onclick="humanOverrideQualityReview('changes_requested')" class="px-2.5 py-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 text-[11px] font-bold transition cursor-pointer flex items-center gap-1" data-i18n-title="ui.task_detail.human_reject_title" title="Manuell ablehnen — Nachbesserung anfordern, ohne KI-Review">
+                <i data-lucide="x" class="w-3.5 h-3.5"></i> <span data-i18n="ui.task_detail.human_reject">Ablehnen</span>
               </button>
             </div>
           </div>

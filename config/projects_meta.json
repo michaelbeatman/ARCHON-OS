@@ -16,5 +16,24 @@
   },
   "task-4516": {
     "archived": true
+  },
+  "WF_workflow_media": {
+    "archived": true
+  },
+  "WF_workflow_deliverables": {
+    "archived": true
+  },
+  "WF_wf_vst": {
+    "archived": true
+  },
+  "WF_wf_test": {
+    "archived": true
+  },
+  "project-folder": {
+    "description": "",
+    "goal": "",
+    "status": "in_progress",
+    "lead_agent": "executive_decision_architect",
+    "archived": true
   }
 }

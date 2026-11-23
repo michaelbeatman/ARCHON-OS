@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import weakref
 import urllib.parse
 from typing import Any, Dict, Optional
 
@@ -37,22 +38,28 @@ def _hermes_proxy_token() -> str:
     return ""
 
 
-_HERMES_CLIENTS_BY_LOOP: Dict[int, httpx.AsyncClient] = {}
+# WeakKeyDictionary: id(loop) konnte nach Event-Loop-Neustart recycelt werden
+# und lieferte dann einen Client eines fremden Loops (Audit 23.11.2026).
+_HERMES_CLIENTS_BY_LOOP: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = weakref.WeakKeyDictionary()
 _HERMES_TARGET_CACHE: Dict[str, Any] = {"base": None, "ts": 0.0}
 
 
 def _get_hermes_client() -> httpx.AsyncClient:
     try:
-        loop_key = id(asyncio.get_running_loop())
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        loop_key = 0
-    client = _HERMES_CLIENTS_BY_LOOP.get(loop_key)
+        # Aufruf ohne Loop: temporärer Client, wird vom Caller geschlossen.
+        return httpx.AsyncClient(
+            timeout=httpx.Timeout(15.0, connect=2.5),
+            limits=httpx.Limits(max_connections=30, max_keepalive_connections=10),
+        )
+    client = _HERMES_CLIENTS_BY_LOOP.get(loop)
     if client is None or client.is_closed:
         client = httpx.AsyncClient(
             timeout=httpx.Timeout(15.0, connect=2.5),
             limits=httpx.Limits(max_connections=30, max_keepalive_connections=10),
         )
-        _HERMES_CLIENTS_BY_LOOP[loop_key] = client
+        _HERMES_CLIENTS_BY_LOOP[loop] = client
     return client
 
 

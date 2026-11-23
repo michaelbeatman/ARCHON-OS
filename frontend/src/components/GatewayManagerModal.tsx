@@ -15,7 +15,8 @@ interface GatewayManagerModalProps {
   onClose: () => void;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8501";
+// Browser darf niemals localhost treffen: immer über den Next.js-Proxy.
+const API_BASE = "/api/archon";
 
 export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
   isOpen,
@@ -50,15 +51,37 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
     if (isOpen) fetchProfiles();
   }, [isOpen, fetchProfiles]);
 
+  // HTTP-Fehler duerfen nicht verschluckt werden: res.ok pruefen und den
+  // Fehler im Modal sichtbar machen ( statt stiller Empty-Catch ).
+  const assertOk = async (res: Response, action: string) => {
+    if (res.ok) return;
+    let detail = "";
+    try {
+      const body = await res.json();
+      detail = body?.detail || body?.error || "";
+    } catch {
+      // Body ist kein JSON - HTTP-Status reicht als Fehlermeldung.
+    }
+    throw new Error(`${action} fehlgeschlagen: HTTP ${res.status}${detail ? ` – ${detail}` : ""}`);
+  };
+
+  const reportActionError = (err: unknown) => {
+    setError(err instanceof Error ? err.message : String(err));
+  };
+
   const handleStart = async (profileId: string) => {
     setActionLoading(profileId);
+    setError(null);
     try {
-      await fetch(`${API_BASE}/api/v1/gateway/start`, {
+      const res = await fetch(`${API_BASE}/api/v1/gateway/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profile_id: profileId }),
       });
+      await assertOk(res, "Start");
       await fetchProfiles();
+    } catch (err) {
+      reportActionError(err);
     } finally {
       setActionLoading(null);
     }
@@ -66,13 +89,17 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
 
   const handleStop = async (profileId: string) => {
     setActionLoading(profileId);
+    setError(null);
     try {
-      await fetch(`${API_BASE}/api/v1/gateway/stop`, {
+      const res = await fetch(`${API_BASE}/api/v1/gateway/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profile_id: profileId }),
       });
+      await assertOk(res, "Stop");
       await fetchProfiles();
+    } catch (err) {
+      reportActionError(err);
     } finally {
       setActionLoading(null);
     }
@@ -88,31 +115,39 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
   };
 
   const handleAutostartToggle = async (profileId: string, value: boolean) => {
+    setError(null);
     try {
-      await fetch(`${API_BASE}/api/v1/gateway/config`, {
+      const res = await fetch(`${API_BASE}/api/v1/gateway/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ autostart: { [profileId]: value } }),
       });
+      await assertOk(res, "Autostart-Aktualisierung");
       setProfiles((prev) =>
         prev.map((p) => (p.id === profileId ? { ...p, autostart: value } : p))
       );
-    } catch {}
+    } catch (err) {
+      reportActionError(err);
+    }
   };
 
   const handleSaveTimeout = async () => {
     const val = parseInt(idleInput, 10);
     if (isNaN(val) || val < 1) return;
+    setError(null);
     try {
-      await fetch(`${API_BASE}/api/v1/gateway/config`, {
+      const res = await fetch(`${API_BASE}/api/v1/gateway/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idle_timeout_minutes: val }),
       });
+      await assertOk(res, "Idle-Timeout speichern");
       setIdleTimeout(val);
       setSavedTimeout(true);
       setTimeout(() => setSavedTimeout(false), 1800);
-    } catch {}
+    } catch (err) {
+      reportActionError(err);
+    }
   };
 
   const runningCount = profiles.filter((p) => p.status === "running").length;

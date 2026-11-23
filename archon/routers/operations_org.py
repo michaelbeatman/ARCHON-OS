@@ -758,6 +758,8 @@ def get_audit_log_entries(
     """Liefert die Einträge des revisionssicheren SHA-256 GoBD/ISO 27001 Audit-Logs mit Filterung (inkl. Provider & Ziel-Host)."""
     require_admin_or_503(request)
     from backend.audit_log import chained_audit_log
+    from backend.tenant_context import tenant_context
+    tid = tenant_context.get_active_tenant_id()
     res = chained_audit_log.list_events(
         category=category,
         search=search,
@@ -765,6 +767,7 @@ def get_audit_log_entries(
         target_host=target_host,
         limit=limit,
         offset=offset,
+        company_id=tid,
     )
     return {
         "status": "success",
@@ -786,11 +789,14 @@ def get_audit_llm_dispatches(
     """Liefert alle kryptografisch verketteten LLM-Dispatch-Nachweise (Provider, Modell, Ziel-Host, realer Ziel-Endpunkt)."""
     require_admin_or_503(request)
     from backend.audit_log import chained_audit_log
+    from backend.tenant_context import tenant_context
+    tid = tenant_context.get_active_tenant_id()
     dispatches = chained_audit_log.list_llm_dispatches(
         limit=limit,
         offset=offset,
         provider=provider,
         target_host=target_host,
+        company_id=tid,
     )
     return {
         "status": "success",
@@ -826,7 +832,9 @@ def export_audit_log(request: Request, format: str = Query(default="json")):
     """Generiert einen revisionssicheren Prüfbericht für GoBD / ISO 27001 Auditoren als JSON oder CSV."""
     require_admin_or_503(request)
     from backend.audit_log import chained_audit_log
-    res = chained_audit_log.generate_compliance_export(format_type=format)
+    from backend.tenant_context import tenant_context
+    tid = tenant_context.get_active_tenant_id()
+    res = chained_audit_log.generate_compliance_export(format_type=format, company_id=tid)
     return Response(
         content=res["content"],
         media_type=res["content_type"],

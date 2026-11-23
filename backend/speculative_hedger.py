@@ -83,6 +83,10 @@ class SpeculativeHedger:
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
         cfg = _get_cfg()
+        # Ohne injizierte echte Coroutines ist dieser Call ein Demo-Simulat:
+        # die "Antworten" sind synthetische Platzhalter, kein LLM-Ergebnis.
+        demo_only = primary_coro_fn is None or fallback_coro_fn is None
+        mode = "demo_only" if demo_only else "live_functions"
         enabled = bool(cfg.get("enabled", True))
         hedge_delay = float(
             hedge_delay_override if hedge_delay_override is not None else cfg.get("hedge_delay_seconds", 2.5)
@@ -151,6 +155,8 @@ class SpeculativeHedger:
         return {
             "call_id": call_id,
             "enabled": enabled,
+            "demo_only": demo_only,
+            "mode": mode,
             "hedge_triggered": hedge_triggered,
             "winning_source": winning_source,
             "winning_model": winning_model,

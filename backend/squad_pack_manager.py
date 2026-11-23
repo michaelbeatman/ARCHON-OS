@@ -32,6 +32,19 @@ MAX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024  # 50 MB Schutz vor Zip-Bomben
 SECRET_KEYS = ("api_key", "bot_token", "token", "password", "secret", "private_key")
 
 
+def _as_profile_map(raw: Any) -> Dict[str, Any]:
+    """Normalisiert Listen- und Dict-Formate von agent_profiles.json zu {id: profil}."""
+    if isinstance(raw, dict):
+        return {str(k): v for k, v in raw.items() if isinstance(v, dict)}
+    if isinstance(raw, list):
+        return {
+            str(p.get("id")): p
+            for p in raw
+            if isinstance(p, dict) and p.get("id")
+        }
+    return {}
+
+
 def _scrub_secrets(obj: Any) -> Any:
     """Entfernt potenzielle Secret-Felder rekursiv vor dem Export."""
     if isinstance(obj, dict):
@@ -133,12 +146,15 @@ class SquadPackManager:
                 selected_ids.add(rid)
 
         # 2. Agent-Profile filtern
+        # SSOT ist eine LISTE (agent_profiles.json), der Manager erwartete
+        # frueher ein Dict -> AttributeError/leere Exporte. Beide Formate
+        # normalisieren.
         profiles_raw = self._load_json_safe("agent_profiles.json", {})
+        profile_map = _as_profile_map(profiles_raw)
         selected_profiles: Dict[str, Any] = {}
-        if isinstance(profiles_raw, dict):
-            for pid, pval in profiles_raw.items():
-                if not selected_ids or pid in selected_ids:
-                    selected_profiles[pid] = _scrub_secrets(pval)
+        for pid, pval in profile_map.items():
+            if not selected_ids or pid in selected_ids:
+                selected_profiles[pid] = _scrub_secrets(pval)
 
         # 3. 3-Stufen-SOUL.md Dateien einsammeln (falls vorhanden)
         soul_files: Dict[str, str] = {}
@@ -336,12 +352,18 @@ class SquadPackManager:
             if "agents/agent_profiles.json" in names:
                 incoming_prof = json.loads(zf.read("agents/agent_profiles.json").decode("utf-8"))
                 existing_prof = self._load_json_safe("agent_profiles.json", {})
-                if isinstance(existing_prof, dict) and isinstance(incoming_prof, dict):
-                    for pid, pval in incoming_prof.items():
-                        if pid not in existing_prof or overwrite:
-                            existing_prof[pid] = pval
-                            imported_counts["profiles"] += 1
-                    self._save_json_atomic("agent_profiles.json", existing_prof)
+                existing_map = _as_profile_map(existing_prof)
+                incoming_map = _as_profile_map(incoming_prof)
+                for pid, pval in incoming_map.items():
+                    if pid not in existing_map or overwrite:
+                        existing_map[pid] = pval
+                        imported_counts["profiles"] += 1
+                # SSOT-Format beibehalten: Liste bleiben Liste, Dict bleibt Dict.
+                if isinstance(existing_prof, list):
+                    merged_out = list(existing_map.values())
+                else:
+                    merged_out = existing_map
+                self._save_json_atomic("agent_profiles.json", merged_out)
 
             # 3. Souls, Skills & n8n Dateien schreiben (strikt im Workspace-Jail)
             for fname in sorted(names):

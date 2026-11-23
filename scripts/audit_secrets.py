@@ -27,6 +27,9 @@ FORBIDDEN_FILE_PATTERNS = [
     r".*id_ed25519.*",
     r".*\.kdbx$",
     r".*API-Keys\.md$",
+    # G2: Admin-Erstartpasswort und Passkey-HITL-Stores niemals committen.
+    r"^\.archon_initial_admin_password(?:\..*)?$",
+    r"^passkey_hitl\.json(?:\..*)?$",
 ]
 
 # Zulaessige Ausnahmen (Dateien, die Mustersuchbegriffe oder Dummy-Werte enthalten)
@@ -57,6 +60,9 @@ CONTENT_SECRET_PATTERNS = [
     ("Private Key Header", re.compile(r'-----BEGIN [A-Z ]+PRIVATE KEY-----')),
     ("JWT Token", re.compile(r'\beyJ[a-zA-Z0-9_\-]{15,}\.eyJ[a-zA-Z0-9_\-]{15,}\.[a-zA-Z0-9_\-]{15,}\b')),
     ("Verbindungsstring mit Passwort", re.compile(r'://[a-zA-Z0-9_\.\-]+:[^@\s]{6,}@[a-zA-Z0-9_\.\-]+')),
+    # Eigene Tokenformate (Audit 23.11.2026) — vorher nicht erkannt.
+    ("Archon Live Token", re.compile(r'\barchon_live_[a-zA-Z0-9_\-]{16,}\b')),
+    ("Archon HITL Proof", re.compile(r'\btok_[a-zA-Z0-9_\-]{20,}\b')),
 ]
 
 def is_forbidden_filename(filename: str) -> bool:
@@ -105,19 +111,20 @@ def scan_file_content(filepath: str) -> List[Tuple[int, str, str]]:
 def get_staged_files() -> List[str]:
     """Gibt die Liste aller aktuell gestagten Dateien im Git-Index zurueck."""
     try:
-        res = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        res = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
                              capture_output=True, text=True, check=True)
         return [line.strip() for line in res.stdout.splitlines() if line.strip()]
-    except Exception:
-        return []
+    except Exception as exc:
+        # Fail-closed: ein Git-Fehler darf den Zero-Leak-Gate nicht grün machen.
+        raise RuntimeError(f"[Audit-Secrets] Git-Index nicht lesbar: {exc}") from exc
 
 def get_tracked_files() -> List[str]:
     """Gibt alle von Git getrackten Dateien zurueck."""
     try:
         res = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=True)
         return [line.strip() for line in res.stdout.splitlines() if line.strip()]
-    except Exception:
-        return []
+    except Exception as exc:
+        raise RuntimeError(f"[Audit-Secrets] Git-Tracking nicht lesbar: {exc}") from exc
 
 def main():
     parser = argparse.ArgumentParser(description="Archon OS Secrets & Credentials Audit Scanner")

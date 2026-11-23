@@ -1,113 +1,7 @@
 /**
  * Direkter Archon FastAPI Client fuer Next.js 16 (ohne PocketBase-Abhaengigkeit).
- * Routet ueber den Same-Origin-Proxy `/api/archon/*` direkt an Archon OS (Port 8420).
+ * Routet ueber den Same-Origin-Proxy `/api/archon/*` direkt an Archon OS (Port 8501).
  */
-
-export interface ChannelSpec {
-  id: string;
-  label: string;
-  format: string;
-  aspect_ratio: string;
-  max_chars?: number;
-  target_duration_sec?: number;
-  recommended_agent: string;
-  best_practices: string[];
-}
-
-/**
- * Kanonische Content-Status inkl. `idea` (Vorstufe aus dem competitor_idea_bridge).
- * Asset- und Kampagnen-Status teilen sich diesen Typ, damit 'idea' frontendseitig
- * als erstklassiger Wert behandelt wird.
- */
-export type ContentStatus =
-  | 'idea'
-  | 'draft'
-  | 'review'
-  | 'in_review'
-  | 'approved'
-  | 'scheduled'
-  | 'published'
-  | 'rejected'
-  | 'completed'
-  | 'failed';
-
-export interface ContentCampaign {
-  id: string;
-  title: string;
-  topic: string;
-  target_audience: string;
-  brand_voice: string;
-  pillar: string;
-  source_url: string;
-  source_notes: string;
-  channels: string[];
-  status: ContentStatus;
-  workflow_run_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ContentAssetQualityReport {
-  score: number;
-  passed: boolean;
-  slop_hits: string[];
-  issues: string[];
-  suggestions: string[];
-}
-
-export interface ContentAsset {
-  id: string;
-  campaign_id: string;
-  channel: string;
-  format_type: string;
-  title: string;
-  hook: string;
-  body: string;
-  visual_brief: string;
-  hashtags: string[];
-  cta: string;
-  duration_sec: number;
-  status: ContentStatus;
-  scheduled_at: string;
-  published_at: string;
-  external_url: string;
-  decision_id: string;
-  agent_id: string;
-  quality_score?: number;
-  quality_report?: ContentAssetQualityReport;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ContentOverview {
-  channels: ChannelSpec[];
-  campaigns: ContentCampaign[];
-  assets: ContentAsset[];
-  status_counts: Record<string, number>;
-  analytics: {
-    by_channel: Array<{ channel: string; assets: number; published: number; ready: number }>;
-    metrics_by_channel: Array<{
-      channel: string;
-      views: number;
-      likes: number;
-      comments: number;
-      shares: number;
-      saves: number;
-      avg_ctr: number;
-      conversions: number;
-    }>;
-    top_assets: Array<{
-      id: string;
-      title: string;
-      channel: string;
-      hook: string;
-      views: number;
-      likes: number;
-      shares: number;
-      ctr_pct: number;
-    }>;
-  };
-}
 
 export interface WorkflowTemplate {
   id: string;
@@ -160,7 +54,7 @@ export interface DbConsolidationPlan {
   >;
 }
 
-async function archonFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function archonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const cleanPath = path.replace(/^\/+/, '');
   const res = await fetch(`/api/archon/${cleanPath}`, {
     credentials: 'same-origin',
@@ -178,105 +72,6 @@ async function archonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const archonApi = {
-  // Content Machine v1
-  getContentOverview: () => archonFetch<ContentOverview>('api/v2/content-machine/overview'),
-  createCampaign: (payload: {
-    title: string;
-    topic: string;
-    target_audience?: string;
-    brand_voice?: string;
-    pillar?: string;
-    source_notes?: string;
-    channels: string[];
-  }) =>
-    archonFetch<{ status: string; campaign: ContentCampaign }>('api/v2/content-machine/campaigns', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  deleteCampaign: (campaignId: string) =>
-    archonFetch<{ status: string; deleted: string }>(`api/v2/content-machine/campaigns/${encodeURIComponent(campaignId)}`, {
-      method: 'DELETE',
-    }),
-  generateCampaignAssets: (
-    campaignId: string,
-    opts?: { dry_run?: boolean; require_hitl_gate?: boolean; background?: boolean }
-  ) =>
-    archonFetch<{
-      status: string;
-      workflow_run_id?: string;
-      dag_status?: string;
-      assets_created?: ContentAsset[];
-    }>(`api/v2/content-machine/campaigns/${encodeURIComponent(campaignId)}/generate`, {
-      method: 'POST',
-      body: JSON.stringify(opts || {}),
-    }),
-  updateAsset: (assetId: string, patch: Partial<ContentAsset>) =>
-    archonFetch<{ status: string; asset: ContentAsset }>(`api/v2/content-machine/assets/${encodeURIComponent(assetId)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    }),
-  approveAsset: (assetId: string, scheduledAt = '') =>
-    archonFetch<{ status: string; asset: ContentAsset }>(
-      `api/v2/content-machine/assets/${encodeURIComponent(assetId)}/approve`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ scheduled_at: scheduledAt }),
-      }
-    ),
-  publishAsset: (assetId: string, externalUrl = '') =>
-    archonFetch<{ status: string; asset: ContentAsset }>(
-      `api/v2/content-machine/assets/${encodeURIComponent(assetId)}/publish`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ external_url: externalUrl }),
-      }
-    ),
-  recordAssetMetrics: (
-    assetId: string,
-    metrics: { views: number; likes: number; comments: number; shares: number; saves: number; ctr_pct: number }
-  ) =>
-    archonFetch<{ status: string; metrics: Record<string, unknown> }>(
-      `api/v2/content-machine/assets/${encodeURIComponent(assetId)}/metrics`,
-      {
-        method: 'POST',
-        body: JSON.stringify(metrics),
-      }
-    ),
-  ingestSource: (payload: {
-    source_type: 'url' | 'obsidian' | 'transcript';
-    title?: string;
-    source_url?: string;
-    obsidian_path?: string;
-    transcript?: string;
-    channels?: string[];
-  }) =>
-    archonFetch<{ status: string; campaign: ContentCampaign; ingested_chars: number }>(
-      'api/v2/content-machine/ingest',
-      {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }
-    ),
-  generateClipMatrix: (
-    campaignId: string,
-    opts?: { source_asset_id?: string; clip_count?: number; dry_run?: boolean }
-  ) =>
-    archonFetch<{ status: string; count: number; clips_created: ContentAsset[] }>(
-      `api/v2/content-machine/campaigns/${encodeURIComponent(campaignId)}/clip-matrix`,
-      {
-        method: 'POST',
-        body: JSON.stringify(opts || {}),
-      }
-    ),
-  publishDueAssets: (opts?: { webhook_url?: string; dry_run?: boolean }) =>
-    archonFetch<{ status: string; due_count: number; published?: string[] }>(
-      'api/v2/content-machine/publish-due',
-      {
-        method: 'POST',
-        body: JSON.stringify(opts || {}),
-      }
-    ),
-
   // Executive Cockpit & Operations (ohne PocketBase)
   getSystemHealth: () =>
     archonFetch<{
@@ -310,6 +105,11 @@ export const archonApi = {
     archonFetch<{ status: string; run_id: string }>(`api/v2/workflows/templates/${encodeURIComponent(tplId)}/run`, {
       method: 'POST',
       body: JSON.stringify({ inputs }),
+    }),
+  saveWorkflowTemplate: (template: Record<string, unknown>) =>
+    archonFetch<{ status: string; id?: string; template?: WorkflowTemplate }>('api/v2/workflows/templates', {
+      method: 'POST',
+      body: JSON.stringify(template),
     }),
   listDagRuns: () => archonFetch<{ status: string; runs: WorkflowRunSummary[] }>('api/v2/workflows/dag/runs'),
   getDagRun: (runId: string) =>

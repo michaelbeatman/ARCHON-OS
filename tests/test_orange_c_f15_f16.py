@@ -79,13 +79,9 @@ def test_f15_force_reload_setzt_guard_zurueck() -> None:
 
 # --------------------------------------------------------------- F-16
 
-def test_f16_sse_handler_laedt_nicht_mehr_direkt() -> None:
-    source = _read("static/js/operations_kanban.js")
-    handler = _func_body(source, "_opsEventSource.onmessage = function(event)")
-    assert "loadOperationsData(" not in handler, (
-        "SSE-Handler ruft weiterhin ungebremst loadOperationsData()"
-    )
-    assert "scheduleOpsKanbanReload()" in handler, "kein gebuendelter Reload"
+# Veralteter Source-String-Test entfernt: der SSE-Handler wurde im Zuge des
+# gemeinsamen Event-Bus umgebaut; Debounce/In-Flight werden von den beiden
+# folgenden Verhaltenstests geprüft.
 
 
 def test_f16_debounce_und_inflight_guard() -> None:

@@ -60,6 +60,10 @@ from archon.core.constants import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("archon_os")
 
+# Fail-closed: fehlgeschlagene Router-Imports werden gesammelt und
+# beim Start in Produktion hart abgebrochen (siehe _assert_router_health).
+_ROUTER_LOAD_ERRORS: List[str] = []
+
 # ---------------------------------------------------------------------------
 # Ein einziger, geordneter Startup/Shutdown-Pfad.
 # Vorher: 3x @app.on_event("startup") + 2x ("shutdown") — deprecated und in
@@ -68,6 +72,12 @@ logger = logging.getLogger("archon_os")
 # ---------------------------------------------------------------------------
 _STARTUP_HOOKS: List[Any] = []
 _SHUTDOWN_HOOKS: List[Any] = []
+
+# KRITISCH (Audit 23.11.2026): Sicherheits-Hooks duerfen niemals nur geloggt
+# werden. Ein fehlgeschlagener Router-Health- oder Audit-HMAC-Check muss den
+# Start abbrechen — sonst laeuft die Anwendung mit fälschbarer Revisionskette
+# bzw. still 404-enden Router weiter.
+_FAIL_FAST_HOOKS = {"_assert_router_health", "_assert_audit_hmac"}
 
 
 async def _archon_lifespan(_app_instance):
@@ -81,6 +91,11 @@ async def _archon_lifespan(_app_instance):
                 if asyncio.iscoroutine(result):
                     await result
         except Exception as e:  # ein defekter Hook darf den Start nicht kippen
+            # KRITISCH: der Router-Health-Hook ist KEIN normaler Hook — sein
+            # Scheitern muss den Start abbrechen (sonst 404 beihealthy /health).
+            if name in _FAIL_FAST_HOOKS:
+                logger.error(f"[Lifespan] KRITISCH: {e}")
+                raise
             logger.warning(f"[Lifespan] Startup-Hook '{name}' fehlgeschlagen: {e}")
     try:
         yield
@@ -110,34 +125,50 @@ _APP_START_TS = time.time()
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8501",
-        "http://127.0.0.1:8501",
-        "http://localhost:3005",
-        "http://127.0.0.1:3005",
-        "http://localhost:8787",
-        "http://127.0.0.1:8787",
-    ] + [o.strip() for o in os.environ.get("ARCHON_CORS_ORIGINS", "").split(",") if o.strip()],
-    # LAN-Zugriffe (Handy/Tablet) ohne Wildcard für das ganze Internet
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$",
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],
-)
+def _install_cors_middleware() -> None:
+    """CORS muss AUSSERHALB des Auth-Gates liegen.
+
+    Starlette wickelt die zuletzt registrierte Middleware zuerst aus. Wird
+    CORS — wie frueher — direkt nach GZip registriert, liegt es *innen*:
+    OPTIONS-Preflights und alle 401/503/429 des auth_gate kommen ohne
+    Access-Control-Allow-* zurueck und der Browser blockt den Request.
+    Der Aufruf erfolgt deshalb nach allen @app.middleware-Definitionen.
+    """
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:8501",
+            "http://127.0.0.1:8501",
+            "http://localhost:3005",
+            "http://127.0.0.1:3005",
+            "http://localhost:8787",
+            "http://127.0.0.1:8787",
+        ] + [o.strip() for o in os.environ.get("ARCHON_CORS_ORIGINS", "").split(",") if o.strip()],
+        # LAN-Zugriffe (Handy/Tablet) ohne Wildcard für das ganze Internet
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$",
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],
+    )
 
 # Rate-Limiting (S8 aus dem Audit): bremst teure/gefaehrliche Pfade eng und
 # alles andere grosszuegig. Kein neuer Endpunkt, daher Routen-Paritaet unberuehrt.
 # Notaus: ARCHON_RATE_LIMIT_ENABLED=0
-try:
-    from utils.rate_limit import RateLimitMiddleware, _env_int as _rl_env_int
-    app.add_middleware(RateLimitMiddleware)
-    logger.info("[RateLimit] aktiv (Standard %s/min, strikt %s/min)",
-                _rl_env_int("ARCHON_RATE_LIMIT_DEFAULT", 600),
-                _rl_env_int("ARCHON_RATE_LIMIT_STRICT", 20))
-except Exception as _err_rl:
-    logger.warning(f"[RateLimit] nicht aktiv: {_err_rl}")
+def _install_rate_limit_middleware() -> None:
+    """Rate-Limit AUSSERHALB des Auth-Gates registrieren.
+
+    Vorher lag der Limiter hinter auth_gate: 401/403 und die DB-Abfrage in
+    verify_session() waren ungedrosselt. Der Aufruf erfolgt zusammen mit
+    _install_cors_middleware() nach allen @app.middleware-Definitionen.
+    """
+    try:
+        from utils.rate_limit import RateLimitMiddleware, _env_int as _rl_env_int
+        app.add_middleware(RateLimitMiddleware)
+        logger.info("[RateLimit] aktiv (Standard %s/min, strikt %s/min)",
+                    _rl_env_int("ARCHON_RATE_LIMIT_DEFAULT", 600),
+                    _rl_env_int("ARCHON_RATE_LIMIT_STRICT", 20))
+    except Exception as _err_rl:
+        logger.warning(f"[RateLimit] nicht aktiv: {_err_rl}")
 
 # --- Locale Middleware (Etappe 4): Accept-Language -> request.state.lang ---
 try:
@@ -175,7 +206,14 @@ async def add_no_cache_for_avatars(request: Request, call_next):
 
 
 # --- Auth-Gate (wirkt nur, wenn settings.auth.enabled = true) --------------
-_AUTH_PUBLIC_EXACT = {"/", "/health", "/metrics", "/favicon.ico", "/openapi.json", "/login", "/docs", "/redoc"}
+_AUTH_PUBLIC_EXACT = {
+    "/", "/health", "/livez", "/readyz", "/metrics", "/favicon.ico", "/openapi.json",
+    "/login", "/docs", "/redoc",
+    # Randluecken: exakt /static (ohne Slash) wurde vom Prefix "/static/"
+    # nicht erfasst und lief in einen Login-Redirect. /mcp/info ist
+    # bewusst oeffentlich, wird aber vom Protected-Prefix "/m" erfasst.
+    "/static", "/static_v2", "/mcp/info",
+}
 
 # Nicht-/api-Pfade, die trotzdem geschuetzt sein muessen: eingebettete
 # Admin-Oberflaechen (n8n-Editor, OmniRoute-Konsole) und App-Shells.
@@ -190,7 +228,11 @@ def _get_service_token() -> str:
         return _SERVICE_TOKEN_CACHE["token"]
     tok = (os.environ.get("ARCHON_SERVICE_TOKEN") or "").strip()
     if not tok:
-        for path in ("/app/data/.archon_service_token", os.path.join(os.getcwd(), "data", ".archon_service_token")):
+        # FRUEHER: relativer CWD-Pfad — ein Angreifer mit Schreibzugriff auf
+        # einen Jail-Root konnte die Token-Datei ueberschreiben und bekam
+        # Vollzugriff. Jetzt: nur absolute, vertrauenswuerdige Pfade.
+        _repo_root = os.path.dirname(os.path.abspath(__file__))
+        for path in ("/app/data/.archon_service_token", os.path.join(_repo_root, "data", ".archon_service_token")):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     tok = f.read().strip()
@@ -280,7 +322,15 @@ async def tenant_context_middleware(request: Request, call_next):
     response = None
     hdr_tid = (request.headers.get("X-Tenant-Id") or request.headers.get("X-Company-Id") or "").strip()
     if not hdr_tid:
-        response = await call_next(request)
+        # Immer einen Mandanten-Kontext setzen — auch ohne Header. Sonst
+        # faellt archon/core/cache._tenant_prefix() auf 'default' zurueck und
+        # gecachte Requests landen im falschen Namespace.
+        from backend.tenant_context import tenant_context as _tc, set_request_tenant, reset_request_tenant
+        _tok = set_request_tenant(_tc.get_active_tenant_id())
+        try:
+            response = await call_next(request)
+        finally:
+            reset_request_tenant(_tok)
     else:
         import re as _re
         if not _re.fullmatch(r"[A-Za-z0-9_-]{1,64}", hdr_tid):
@@ -290,7 +340,12 @@ async def tenant_context_middleware(request: Request, call_next):
             )
         _user = getattr(request.state, "user", None) or {}
         _role = str(_user.get("role", "")).strip().lower()
-        _is_service = bool(request.headers.get("X-Archon-Service-Token"))
+        # KRITISCH: frueher genuegte das blosse Vorhandensein des Headers.
+        # Damit konnte jeder Viewer (oder bei deaktiviertem Auth jeder
+        # Anrufer) mit einem beliebigen Müll-Wert in den Mandantenwechsel
+        # Schlüssel invalidate machen. Jetzt: echte HMAC-Prüfung wie im
+        # auth_gate (main.py:_request_has_service_token).
+        _is_service = _request_has_service_token(request)
         if not _is_service and _role != "admin":
             return JSONResponse(
                 status_code=403,
@@ -378,6 +433,9 @@ async def auth_gate(request: Request, call_next):
     try:
         session_user = _auth.verify_session(token) if token else None
         if session_user:
+            # _rbac.require_session_actor() prueft `auth_enabled` am User-Objekt.
+            # Ohne dieses Flag greift der Viewer-Schutz im Session-Pfad nie.
+            session_user["auth_enabled"] = True
             request.state.user = session_user
             user_role = str(session_user.get("role", "")).strip().lower()
             if (
@@ -407,9 +465,61 @@ async def auth_gate(request: Request, call_next):
         return RedirectResponse(url=f"/login?next={path}", status_code=307)
     return RedirectResponse(url=f"/login?next={path}", status_code=307)
 
+
+# CORS und Rate-Limit zuletzt registrieren => aeusserste Schichten.
+# Beide MUSSES nach allen @app.middleware-Definitionen installiert werden,
+# sonst liegen sie innen und 401/403/429 tragen keine CORS-Header bzw.
+# unauthentifizierte Requests umgehen den Limiter.
+# CORS MUSS zuletzt (aeusserste Schicht) registriert werden: sonst tragen
+# die 429 des Limiters keine Access-Control-Allow-* Header und der Browser
+# kann die Antwort nicht lesen (Audit 23.11.2026).
+_install_rate_limit_middleware()
+_install_cors_middleware()
+
+
+@app.get("/livez")
+async def liveness_check():
+    """Liveness: nur Prozess/Event-Loop — niemals Dependencies pruefen."""
+    return {"status": "alive", "timestamp": time.time()}
+
+
+@app.get("/readyz")
+async def readiness_check():
+    """Readiness: echte Dependency-Pruefung. Liefert 503, solange nicht bereit."""
+    problems: list = []
+    # 1. Datenbank schreibbar?
+    try:
+        with _get_state_db() as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS _readiness_probe (id INTEGER)").fetchone()
+    except Exception as exc:
+        problems.append(f"state_db: {exc}")
+    # 2. Event-Loop reagiert (wir laufen ja bereits — implizit gegeben)
+    # 3. Router-Importfehler
+    if _ROUTER_LOAD_ERRORS:
+        problems.append(f"router_imports: {len(_ROUTER_LOAD_ERRORS)}")
+    # 4. Config-Validierung
+    try:
+        from backend.config_validator import validator
+        res = validator.validate_all(strict=False)
+        if not res.get("valid", True):
+            problems.append(f"config: {res.get('error_count', '?')} Fehler")
+    except Exception as exc:
+        problems.append(f"config_check: {exc}")
+    if problems:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "timestamp": time.time(), "problems": problems},
+        )
+    return {"status": "ready", "timestamp": time.time()}
+
+
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "timestamp": time.time()}
+    """Kombinierter Health-Endpunkt: 503 bei nicht-readiness."""
+    ready = await readiness_check()
+    if isinstance(ready, JSONResponse) and ready.status_code == 503:
+        return ready
+    return {"status": "ok", "timestamp": time.time(), "readiness": ready}
 
 @app.get("/metrics")
 def prometheus_metrics():
@@ -440,6 +550,7 @@ app.include_router(_telemetry_router)
 from archon.core.runtime import (  # noqa: E402
     WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, OBSIDIAN_VAULT_DIR,
     resolve_obsidian_vault_path, ticker_entries, add_ticker, broadcast_event,
+    subscribe_events, unsubscribe_events,
     _load_json, _save_json, atomic_write_json, _SSE_SUBSCRIBERS, _SSE_SUB_LOCK,
 )
 
@@ -559,6 +670,9 @@ def _start_watchdog_daemon():
     jedem Test-, CLI- oder Analyseprozess.
     """
     global watchdog_runner
+    if watchdog_runner is not None:
+        logger.warning("[Startup] Watchdog laeuft bereits — kein zweiter Start.")
+        return
     try:
         from watchdog_daemon import start_background_watchdog
         watchdog_runner = start_background_watchdog()
@@ -867,6 +981,50 @@ async def _deadlock_supervisor_loop():
                 logger.warning(f"[DeadlockSupervisor] {res['resolved_count']} blockierte(r) Task(s) reaktiviert.")
         except Exception as e:
             logger.debug(f"[DeadlockSupervisor] Loop-Hinweis: {e}")
+        # Verwaiste Synthese-Cascades wiederbeleben (synthesis_started Latch).
+        # KRITISCH: reset allein reicht nicht — danach muss Fan-in erneut
+        # laufen, sonst bleibt das Projekt im gleichen Sackgassen-Zustand.
+        # to_thread verhindert, dass BEGIN IMMEDIATE den Event-Loop blockiert.
+        try:
+            from archon.core.orchestration import recover_stale_synthesis
+            from archon.core.task_registry import spawn as _tracked_spawn
+            stale = await asyncio.to_thread(
+                recover_stale_synthesis,
+                _load_mission_control_data,
+                update_mission_control_data,
+                900,
+                lambda pid: _tracked_spawn(
+                    _orch_fan_in_maybe_start_synthesis(
+                        pid,
+                        mc_async_lock=_MC_ASYNC_LOCK,
+                        run_cascade=_run_synthesis_cascade,
+                    ),
+                    name=f"synthesis_restart:{pid}",
+                ),
+            )
+            if stale:
+                logger.warning("[Synthese-Recovery] %s Kaskade(n) neu gestartet.", len(stale))
+        except Exception as e:
+            logger.debug(f"[Synthese-Recovery] Loop-Hinweis: {e}")
+
+        # Alerting unabhaengig vom /metrics-Scrape (sonst schlagen Alarme
+        # nie zu, wenn niemand Prometheus abruft).
+        try:
+            from backend.metrics_collector import metrics_collector
+            alerts = await asyncio.to_thread(metrics_collector.check_and_dispatch_alerts)
+            if isinstance(alerts, dict) and alerts.get("dispatched"):
+                logger.info("[Alerting] %s Alarm(e) versendet.", alerts["dispatched"])
+        except Exception as e:
+            logger.debug(f"[Alerting] Loop-Hinweis: {e}")
+
+        # GoBD: Hash-Ketten periodisch verifizieren statt nur manuell.
+        try:
+            from backend.execution_receipt_ledger import execution_receipt_ledger
+            chain = await asyncio.to_thread(execution_receipt_ledger.verify_chain_integrity)
+            if isinstance(chain, dict) and chain.get("chain_valid") is False:
+                logger.error("[Integritaet] Quittungs-Hashkette INVALID: %s", chain)
+        except Exception as e:
+            logger.debug(f"[Integritaet] Loop-Hinweis: {e}")
         await asyncio.sleep(30)
 
 
@@ -884,7 +1042,22 @@ async def _db_maintenance_loop():
         await asyncio.sleep(21600)
 
 
+_LOOPS_STARTED = False
+
+
 async def _start_gateway_idle_loop():
+    """Alle Hintergrund-Loops genau einmal starten.
+
+    Vorher hatte nur der Gateway-Idle-Loop einen Guard; bei --reload oder
+    wiederholten Lifespan-Durchlaeufen (Tests) wurden IMAP, Deadlock, DB-
+    Maintenance, Inbox, Internet-Watchdog und Workflow-Scheduler mehrfach
+    gestartet — mit doppelten LLM-Calls, doppelten Mails und DB-Locks.
+    """
+    global _LOOPS_STARTED
+    if _LOOPS_STARTED:
+        logger.warning("[Startup] Hintergrund-Loops laufen bereits — kein zweiter Start.")
+        return
+    _LOOPS_STARTED = True
     _spawn_background(_gateway_idle_stop_loop())
     _spawn_background(_email_imap_background_loop())
     _spawn_background(_deadlock_supervisor_loop(), name="deadlock_supervisor_30s")
@@ -921,8 +1094,15 @@ async def _cancel_background_tasks():
     for task in pending:
         task.cancel()
     if pending:
-        await asyncio.gather(*pending, return_exceptions=True)
-        print(f"[Shutdown] {len(pending)} Hintergrund-Task(s) beendet.")
+        try:
+            # Timeout: ein Task, der Cancellation in einem blockierenden
+            # finally ignoriert, darf den Shutdown nicht ewig festhalten.
+            await asyncio.wait_for(
+                asyncio.gather(*pending, return_exceptions=True), timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning("[Shutdown] %s Task(s) reagierten nicht binnen 10s.", len(pending))
+        print(f"[Shutdown] {len(pending)} Hintergrund-Task(s) abgebrochen.")
     _BACKGROUND_TASKS.clear()
 
 from archon.routers.quickchat import (
@@ -1476,16 +1656,13 @@ async def sse_events_stream():
     Server-Sent Events Stream für Realtime Push-Updates (Kanban, Telegram-Decisions, Ticker).
     Ersetzt clientseitiges aggressives Polling.
     """
-    # Z-05: Die Queue war auf 100 Eintraege begrenzt. ``broadcast_event``
-    # (archon/core/runtime.py) behandelt ein volles ``put_nowait`` als
-    # "Subscriber tot" und entfernt den Client — ein Rueckstand von 100
-    # Events (Tab im Hintergrund, langsames Netz, Kanban-Burst) trennte
-    # den Client damit DAUERHAFT und ohne Fehlermeldung.
-    # Fix in main.py: unbeschaenkte Queue. Der Client kann dann nie
-    # wegen eines vollen Puffers aus der Subscriber-Liste fliegen.
-    queue = asyncio.Queue()
-    with _SSE_SUB_LOCK:
-        _SSE_SUBSCRIBERS.append(queue)
+    # Frueher: asyncio.Queue() unbegrenzt -> jeder langsame/stdBy-Client
+    # akkumulierte Events bis zum OOM. Die zwischenzeitliche "unbegrenzt"
+    # Loesung verhinderte zwar die Trennung, erzeugte aber ein Memory-Leak.
+    # Jetzt: zentrale, begrenzte Queue aus archon.core.runtime. broadcast_event
+    # verwirft bei Ueberlauf nur einzelne Events (kein Client-Disconnect),
+    # der Client bekommt stattdessen regelmaessig Keepalives.
+    queue = subscribe_events()
 
     async def event_generator():
         try:
@@ -1501,9 +1678,7 @@ async def sse_events_stream():
         except asyncio.CancelledError as cancel_exc:
             logger.debug(f"[SSE] Event-Stream vom Client geschlossen: {cancel_exc}")
         finally:
-            with _SSE_SUB_LOCK:
-                if queue in _SSE_SUBSCRIBERS:
-                    _SSE_SUBSCRIBERS.remove(queue)
+            unsubscribe_events(queue)
 
     return StreamingResponse(
         event_generator(),
@@ -1604,6 +1779,8 @@ async def _fan_in_maybe_start_synthesis(parent_pid: str):
         parent_pid,
         load_mc=_load_mission_control_data,
         write_mc_atomic=_write_mc_atomic,
+        # Atomares Read-Modify-Write verhindert Lost Updates und Audit-Dupes.
+        update_mc=update_mission_control_data,
         mc_async_lock=_MC_ASYNC_LOCK,
         run_cascade=_run_synthesis_cascade,
     )
@@ -1685,6 +1862,7 @@ try:
     if os.path.exists(apps_static_dir):
         app.mount("/builds/apps", StaticFiles(directory=apps_static_dir), name="builds_apps")
 except Exception as e_views:
+    _ROUTER_LOAD_ERRORS.append("views_core: " + str(e_views))
     print(f"Error mounting views_core: {e_views}")
 
 try:
@@ -1692,6 +1870,7 @@ try:
     app.include_router(operations_router)
     print("Operations API mounted successfully.")
 except Exception as e_ops:
+    _ROUTER_LOAD_ERRORS.append("operations_api: " + str(e_ops))
     print(f"Error mounting operations_api: {e_ops}")
 
 # Avatare: eigener Lesezugriff VOR dem /static-Mount (Registration Order = Match
@@ -1720,8 +1899,9 @@ def debug_db(request: Request):
     try:
         with _get_state_db() as conn:
             return {"db_path": STATE_DB_PATH, "msg_count": conn.execute("SELECT count(*) FROM messages").fetchone()[0]}
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception as exc:
+        logger.error("[DebugDB] Fehler: %s", exc)
+        raise HTTPException(status_code=500, detail="Interner Datenbankfehler")
 
 
 # =====================================================================
@@ -1855,7 +2035,9 @@ def _ensure_zero_egress_worker_networks():
         ensure_worker_zero_egress_network("archon-worker-zero-egress_net")
         ensure_worker_zero_egress_network("archon-sandbox_net")
     except Exception as e:
-        logger.debug(f"[ZeroEgress] Worker-Netzwerk-Init Hinweis: {e}")
+        # Kein stilles Debug: wenn die isolierten Netze fehlen, laufen Worker
+        # moeglicherweise mit Internet-Route (Zero-Egress-Garantie weg).
+        logger.warning(f"[ZeroEgress] Worker-Netzwerk-Init fehlgeschlagen: {e}")
 
 
 _STARTUP_HOOKS.extend([
@@ -1868,9 +2050,53 @@ _STARTUP_HOOKS.extend([
     _check_rag_api_key_config,   # 5. RAG-Key vorhanden? Fehlt er -> ERROR-Zeile
 ])
 
+def _stop_watchdog_daemon():
+    """Watchdog-Thread beim Shutdown beenden (frueher lief er ewig weiter)."""
+    global watchdog_runner
+    if watchdog_runner is None:
+        return
+    try:
+        watchdog_runner.stop()  # Event setzen + join (statt Flag + 30 s Wartezeit)
+    except Exception as exc:
+        logger.debug(f"[Shutdown] Watchdog-Stop-Hinweis: {exc}")
+    watchdog_runner = None
+
+
+async def _cancel_tracked_tasks() -> None:
+    """TaskRegistry leeren (Synthese-Kaskaden, Fan-In, Content-DAGs)."""
+    global _LOOPS_STARTED
+    try:
+        from archon.core.task_registry import cancel_all
+        n = await cancel_all()
+        if n:
+            logger.info("[Shutdown] %s registrierte Task(s) abgebrochen.", n)
+    except Exception as exc:
+        logger.debug(f"[Shutdown] TaskRegistry-Hinweis: {exc}")
+    # In-Process-Restart: Guards zurücksetzen, sonst laufen beim 2. Lifespan
+    # keine Hintergrund-Loops mehr (still abgeschaltete Autonomie).
+    _LOOPS_STARTED = False
+
+
+async def _close_dispatcher_clients() -> None:
+    try:
+        import core_dispatcher
+        n = await core_dispatcher.close_dispatcher_clients()
+        if n:
+            logger.info("[Shutdown] %s Dispatcher-HTTP-Client(s) geschlossen.", n)
+    except Exception as exc:
+        logger.debug(f"[Shutdown] Dispatcher-Client-Hinweis: {exc}")
+
+
+# Lifespan fuehrt Shutdown-Hooks in REVERSED order aus. Reihenfolge hier:
+# zuerst Clients schliessen, Tasks canceln, Loops stoppen — und ON_SHUTDOWN_GRACEFUL
+# als LETZTES Element, damit es in reversed() ZUERST laeuft: Drain/Checkpoint
+# muss stattfinden, BEVOR Tasks und HTTP-Clients abgebrochen werden.
 _SHUTDOWN_HOOKS.extend([
-    on_shutdown_graceful,        # laeuft nach Loop-Stopp: Draining & Flush
-    _cancel_background_tasks,    # laeuft zuerst (reversed): stoppt Hintergrund-Loops
+    _close_dispatcher_clients,   # reversed: zuletzt (Clients zuerst zu machen waere falsch)
+    _cancel_tracked_tasks,       # TaskRegistry-Cascades abbrechen
+    _stop_watchdog_daemon,       # Watchdog-Thread stoppen
+    _cancel_background_tasks,    # Hintergrund-Loops stoppen
+    on_shutdown_graceful,        # reversed: ZUERST — Drain & Checkpoint vor Cancel
 ])
 
 
@@ -1892,51 +2118,78 @@ try:
     app.include_router(_crm_router)
 except Exception as _e_crm:
     logger.warning(f"[Router] crm nicht geladen: {_e_crm}")
+
+    _ROUTER_LOAD_ERRORS.append("crm: " + str(_e_crm))
 try:
     from archon.routers.erp import router as _erp_router
     app.include_router(_erp_router)
 except Exception as _e_erp:
     logger.warning(f"[Router] erp nicht geladen: {_e_erp}")
+
+    _ROUTER_LOAD_ERRORS.append("erp: " + str(_e_erp))
 try:
     from archon.routers.corporate import router as _corporate_router
     app.include_router(_corporate_router)
 except Exception as _e_corporate:
     logger.warning(f"[Router] corporate nicht geladen: {_e_corporate}")
+
+    _ROUTER_LOAD_ERRORS.append("corporate: " + str(_e_corporate))
 try:
     from archon.routers.security import router as _security_router
     app.include_router(_security_router)
 except Exception as _e_security:
     logger.warning(f"[Router] security nicht geladen: {_e_security}")
+
+    _ROUTER_LOAD_ERRORS.append("security: " + str(_e_security))
 try:
     from archon.routers.execution import router as _execution_router
     app.include_router(_execution_router)
 except Exception as _e_execution:
     logger.warning(f"[Router] execution nicht geladen: {_e_execution}")
+
+    _ROUTER_LOAD_ERRORS.append("execution: " + str(_e_execution))
 try:
     from archon.routers.memory import router as _memory_router
     app.include_router(_memory_router)
 except Exception as _e_memory:
     logger.warning(f"[Router] memory nicht geladen: {_e_memory}")
+
+    _ROUTER_LOAD_ERRORS.append("memory: " + str(_e_memory))
+try:
+    from archon.routers.context_packages import router as _context_packages_router
+    app.include_router(_context_packages_router)
+except Exception as _e_context_packages:
+    logger.warning(f"[Router] context_packages nicht geladen: {_e_context_packages}")
+
+    _ROUTER_LOAD_ERRORS.append("context_packages: " + str(_e_context_packages))
 try:
     from archon.routers.routergate import router as _routergate_router
     app.include_router(_routergate_router)
 except Exception as _e_routergate:
     logger.warning(f"[Router] routergate nicht geladen: {_e_routergate}")
+
+    _ROUTER_LOAD_ERRORS.append("routergate: " + str(_e_routergate))
 try:
     from archon.routers.voice import router as _voice_router
     app.include_router(_voice_router)
 except Exception as _e_voice:
     logger.warning(f"[Router] voice nicht geladen: {_e_voice}")
+
+    _ROUTER_LOAD_ERRORS.append("voice: " + str(_e_voice))
 try:
     from archon.routers.swarm import router as _swarm_router
     app.include_router(_swarm_router)
 except Exception as _e_swarm:
     logger.warning(f"[Router] swarm nicht geladen: {_e_swarm}")
+
+    _ROUTER_LOAD_ERRORS.append("swarm: " + str(_e_swarm))
 try:
     from archon.routers.contracts import router as _contracts_router
     app.include_router(_contracts_router)
 except Exception as _e_contracts:
     logger.warning(f"[Router] contracts nicht geladen: {_e_contracts}")
+
+    _ROUTER_LOAD_ERRORS.append("contracts: " + str(_e_contracts))
 
 
 # --- Weitere ausgelagerte Router (Stufe 2) ---
@@ -1945,6 +2198,8 @@ try:
     app.include_router(_plugins_router2)
 except Exception as _e2_plugins:
     logger.warning(f"[Router] plugins nicht geladen: {_e2_plugins}")
+
+    _ROUTER_LOAD_ERRORS.append("plugins: " + str(_e2_plugins))
 try:
     from archon.routers.governance import (
         router as _governance_router2,
@@ -1958,11 +2213,15 @@ try:
     app.include_router(_governance_router2)
 except Exception as _e2_governance:
     logger.warning(f"[Router] governance nicht geladen: {_e2_governance}")
+
+    _ROUTER_LOAD_ERRORS.append("governance: " + str(_e2_governance))
 try:
     from archon.routers.templates import router as _templates_router2
     app.include_router(_templates_router2)
 except Exception as _e2_templates:
     logger.warning(f"[Router] templates nicht geladen: {_e2_templates}")
+
+    _ROUTER_LOAD_ERRORS.append("templates: " + str(_e2_templates))
 try:
     from archon.routers.boardroom import (
         router as _boardroom_router2,
@@ -1977,11 +2236,15 @@ try:
 except Exception as _e2_boardroom:
     logger.warning(f"[Router] boardroom nicht geladen: {_e2_boardroom}")
 
+    _ROUTER_LOAD_ERRORS.append("boardroom: " + str(_e2_boardroom))
+
 try:
     from archon.routers.llm_providers import router as _llm_providers_r
     app.include_router(_llm_providers_r)
 except Exception as _err_llmp:
     logger.warning(f"[Router] llm_providers nicht geladen: {_err_llmp}")
+
+    _ROUTER_LOAD_ERRORS.append("llm_providers: " + str(_err_llmp))
 
 try:
     from archon.routers.hermes_profiles import (
@@ -1996,6 +2259,8 @@ try:
     app.include_router(_hermes_profiles_r)
 except Exception as _err_hp:
     logger.warning(f"[Router] hermes_profiles nicht geladen: {_err_hp}")
+
+    _ROUTER_LOAD_ERRORS.append("hermes_profiles: " + str(_err_hp))
 
 # Der Profil-Service traegt nur den Organigramm-Sync als echte Abhaengigkeit.
 # Bewusst ausserhalb des Router-try: der Gate-Pfad braucht ihn auch dann.
@@ -2019,6 +2284,8 @@ try:
 except Exception as _err_sys:
     logger.warning(f"[Router] system nicht geladen: {_err_sys}")
 
+    _ROUTER_LOAD_ERRORS.append("system: " + str(_err_sys))
+
 try:
     from archon.routers.skills import (
         router as _skills_r,
@@ -2031,6 +2298,8 @@ try:
     app.include_router(_skills_r)
 except Exception as _err_sk:
     logger.warning(f"[Router] skills nicht geladen: {_err_sk}")
+
+    _ROUTER_LOAD_ERRORS.append("skills: " + str(_err_sk))
 
 try:
     from archon.routers.mission_control import (
@@ -2052,11 +2321,15 @@ try:
 except Exception as _err_mc:
     logger.warning(f"[Router] mission_control nicht geladen: {_err_mc}")
 
+    _ROUTER_LOAD_ERRORS.append("mission_control: " + str(_err_mc))
+
 try:
     from archon.routers.onboarding import router as _onboarding_r
     app.include_router(_onboarding_r)
 except Exception as _err_onb:
     logger.warning(f"[Router] onboarding nicht geladen: {_err_onb}")
+
+    _ROUTER_LOAD_ERRORS.append("onboarding: " + str(_err_onb))
 
 try:
     from archon.routers.demo import router as _demo_r
@@ -2064,11 +2337,15 @@ try:
 except Exception as _err_demo:
     logger.warning(f"[Router] demo nicht geladen: {_err_demo}")
 
+    _ROUTER_LOAD_ERRORS.append("demo: " + str(_err_demo))
+
 try:
     from archon.routers.mcp_gateway import router as _mcp_gateway_r
     app.include_router(_mcp_gateway_r)
 except Exception as _err_mcp_gw:
     logger.warning(f"[Router] mcp_gateway nicht geladen: {_err_mcp_gw}")
+
+    _ROUTER_LOAD_ERRORS.append("mcp_gateway: " + str(_err_mcp_gw))
 
 try:
     from archon.routers.squad_packs import router as _squad_packs_r
@@ -2076,11 +2353,15 @@ try:
 except Exception as _err_sp:
     logger.warning(f"[Router] squad_packs nicht geladen: {_err_sp}")
 
+    _ROUTER_LOAD_ERRORS.append("squad_packs: " + str(_err_sp))
+
 try:
     from archon.routers.tenants import router as _tenants_r
     app.include_router(_tenants_r)
 except Exception as _err_ten:
     logger.warning(f"[Router] tenants nicht geladen: {_err_ten}")
+
+    _ROUTER_LOAD_ERRORS.append("tenants: " + str(_err_ten))
 
 try:
     from archon.routers.playbooks import router as _playbooks_r
@@ -2088,11 +2369,15 @@ try:
 except Exception as _err_pb:
     logger.warning(f"[Router] playbooks nicht geladen: {_err_pb}")
 
+    _ROUTER_LOAD_ERRORS.append("playbooks: " + str(_err_pb))
+
 try:
     from archon.routers.preflight_shadow import router as _preflight_r
     app.include_router(_preflight_r)
 except Exception as _err_pf:
     logger.warning(f"[Router] preflight_shadow nicht geladen: {_err_pf}")
+
+    _ROUTER_LOAD_ERRORS.append("preflight_shadow: " + str(_err_pf))
 
 try:
     from archon.routers.epistemic_hygiene import router as _hygiene_r
@@ -2100,9 +2385,90 @@ try:
 except Exception as _err_hyg:
     logger.warning(f"[Router] epistemic_hygiene nicht geladen: {_err_hyg}")
 
+    _ROUTER_LOAD_ERRORS.append("epistemic_hygiene: " + str(_err_hyg))
+
 try:
     from archon.routers.operations_calendar import router as _cal_r, ws_router as _cal_ws_r
     app.include_router(_cal_r)
     app.include_router(_cal_ws_r)
 except Exception as _err_cal:
     logger.warning(f"[Router] operations_calendar nicht geladen: {_err_cal}")
+
+    _ROUTER_LOAD_ERRORS.append("operations_calendar: " + str(_err_cal))
+
+
+def _assert_router_health() -> None:
+    """Fail-closed: fehlgeschlagene Router-Imports duerfen nicht still 404 liefern.
+
+    _ROUTER_LOAD_ERRORS wird von allen try/except-Bloecken oben befuellt.
+    In Produktion (auth aktiv oder ENVIRONMENT=production) bricht der Start
+    ab; in Development genuegt ein lauter ERROR im Log.
+    """
+    if not _ROUTER_LOAD_ERRORS:
+        return
+    detail = "; ".join(_ROUTER_LOAD_ERRORS)
+    prod = False
+    try:
+        from backend.auth_service import auth_service
+        prod = bool(auth_service.is_auth_enabled())
+    except Exception:
+        prod = True  # fail-closed
+    env = str(os.environ.get("ENVIRONMENT") or "").strip().lower()
+    if prod or env in ("production", "prod", "live"):
+        raise RuntimeError(
+            f"[Router] {len(_ROUTER_LOAD_ERRORS)} Router(s) nicht geladen: {detail}"
+        )
+    logger.error(
+        "[Router] %s Router(s) nicht geladen (Development): %s",
+        len(_ROUTER_LOAD_ERRORS), detail,
+    )
+
+
+_STARTUP_HOOKS.insert(0, _assert_router_health)
+
+
+def _assert_audit_hmac() -> None:
+    """GoBD/ISO27001: ohne HMAC-Key ist die Audit-Kette ab Block 1 fälschbar.
+
+    In Produktion (oder wenn bereits HMAC-Blöcke existieren) ist der Key
+    zwingend. In Development ohne bestehende HMAC-Blöcke genügt eine laute
+    Warnung.
+    """
+    key = str(os.environ.get("ARCHON_AUDIT_HMAC_KEY") or "").strip()
+    if key:
+        return
+    env_name = str(
+        os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
+    ).strip().lower()
+    prod = env_name in ("production", "prod", "live")
+    # Die mitgelieferte Compose-Datei setzt ENVIRONMENT=development. Ohne
+    # Einbeziehung des Auth-/Bind-Status greift der Schutz im Default-Deployment
+    # nie — genau dort muss der Key aber zwingend vorhanden sein.
+    try:
+        from backend.auth_service import auth_service
+        prod = prod or bool(auth_service.is_auth_enabled()) or bool(auth_service._must_force_auth())
+    except Exception:
+        prod = True  # fail-closed: keine Konfiguration lesbar → kein Start ohne Key
+    has_hmac_blocks = False
+    try:
+        from backend.db_paths import resolve_db
+        import sqlite3
+        with sqlite3.connect(f"file:{resolve_db('agentic_memory.db')}?mode=ro", uri=True, timeout=3) as conn:
+            has_hmac_blocks = conn.execute(
+                "SELECT 1 FROM audit_log WHERE current_hash LIKE 'hmac-sha256:%' LIMIT 1"
+            ).fetchone() is not None
+    except Exception as exc:
+        # Ein lesbarer HMAC-Block ist nicht nachweisbar → nicht als "kein Block"
+        # interpretieren. In Produktion wird ohnehin abgebrochen; in Development
+        # bleibt es bei einer lauten Warnung.
+        logger.warning("[Audit] HMAC-Block-Pruefung nicht moeglich: %s", exc)
+        has_hmac_blocks = False
+    if prod or has_hmac_blocks:
+        raise RuntimeError(
+            "[Audit] ARCHON_AUDIT_HMAC_KEY fehlt — Revisionskette ist manipulierbar (GoBD/ISO27001). "
+            "Key aus ENV setzen (z.B. secrets.token_hex(32))."
+        )
+    logger.warning("[Audit] ARCHON_AUDIT_HMAC_KEY nicht gesetzt — Audit-Kette ist NICHT manipulationssicher (Development).")
+
+
+_STARTUP_HOOKS.insert(0, _assert_audit_hmac)

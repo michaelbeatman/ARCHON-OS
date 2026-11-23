@@ -520,6 +520,13 @@ tags: ["learning", "memory", "{agent_id}"]
         """
         if table not in ("learnings", "conversations"):
             return {"status": "error", "message": "Invalid table name"}
+        # GoBD: 'learnings' steht in tenant_db_registry.protected_tables —
+        # automatische Eviction darf diese Eintraege nicht physisch loeschen.
+        if table == "learnings" and not dry_run:
+            return {
+                "status": "blocked",
+                "message": "Learnings sind GoBD-geschuetzt — Eviction nur als dry_run (Anonymisierung ueber DSGVO-Pfad).",
+            }
         time_col = "timestamp" if table == "conversations" else "created_at"
         with self._get_conn() as conn:
             cur = conn.cursor()
@@ -751,7 +758,14 @@ tags: ["learning", "memory", "{agent_id}"]
         new_words = _get_words(summary)
         with self._get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, summary, obsidian_link FROM learnings ORDER BY id DESC LIMIT 50")
+            # Scope-Filter: vorher wurde mandanten-/agentenuebergreifend
+            # dedupliziert — eine neue Learning von A wurde durch B unterdrueckt
+            # und ging samt Verlinkung verloren.
+            cur.execute(
+                "SELECT id, summary, obsidian_link FROM learnings "
+                "WHERE agent_id = ? ORDER BY id DESC LIMIT 50",
+                (str(agent_id or ""),),
+            )
             existing = cur.fetchall()
             for row in existing:
                 ex_words = _get_words(row["summary"])

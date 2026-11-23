@@ -14,13 +14,13 @@ import os
 import re
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 import httpx
 import yaml
-from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -35,14 +35,27 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 
 class VoiceSynthesizePayload(BaseModel):
-    text: str
-    voice: Optional[str] = "de-DE-ConradNeural"
+    model_config = ConfigDict(extra="ignore")
+    text: str = Field(min_length=1, max_length=5000)
+    voice: Optional[str] = Field(default="de-DE-ConradNeural", max_length=100)
+
+
+class VoiceSpeakRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    text: str = Field(default="", max_length=5000)
+    voice: Optional[str] = Field(default=None, max_length=100)
+
+
+class VoiceCommandRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    transcript: str = Field(default="", max_length=10000)
+
 
 @router.post("/api/voice/speak")
-async def api_voice_speak(request: Request, payload: Dict[str, Any] = Body(...)):
+async def api_voice_speak(request: Request, payload: VoiceSpeakRequest):
     require_admin_or_503(request)  # RBAC: Admin-Sache (K-1)
-    text = payload.get("text", "")
-    voice = payload.get("voice")
+    text = payload.text
+    voice = payload.voice
     if not text:
         raise HTTPException(status_code=400, detail="Text ist erforderlich")
     try:
@@ -55,9 +68,9 @@ async def api_voice_speak(request: Request, payload: Dict[str, Any] = Body(...))
 
 
 @router.post("/api/voice/command")
-async def api_voice_command(request: Request, payload: Dict[str, Any] = Body(...)):
+async def api_voice_command(request: Request, payload: VoiceCommandRequest):
     require_admin_or_503(request)  # RBAC: Admin-Sache (K-1)
-    transcript = payload.get("transcript", "")
+    transcript = payload.transcript
     if not transcript:
         raise HTTPException(status_code=400, detail="Transkript ist erforderlich")
     try:

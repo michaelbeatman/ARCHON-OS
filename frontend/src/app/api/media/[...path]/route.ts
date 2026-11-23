@@ -16,13 +16,35 @@ function getCorsHeaders(req: NextRequest): Record<string, string> {
   };
 }
 
-function hasAuthorizedSession(req: NextRequest): boolean {
-  const auth = req.headers.get('authorization');
-  if (auth && auth.trim().length > 0) return true;
-  if (req.cookies.get('archon_session')?.value || req.cookies.get('pb_auth')?.value) return true;
-  // Allow same-origin browser requests when running in local dev without explicit token
-  const secFetchSite = req.headers.get('sec-fetch-site');
-  if (secFetchSite === 'same-origin') return true;
+async function hasAuthorizedSession(req: NextRequest): Promise<boolean> {
+  // Vorher genügte ein beliebiger nicht-leerer Authorization-Header oder
+  // blosses Vorhandensein eines Cookies/sec-fetch-site -> wirkungsloses Gate.
+  // Jetzt echte Verifikation gegen den Archon-Backend (verify_session).
+  const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
+    || req.cookies.get('archon_session')?.value
+    || '';
+  if (!token) return false;
+  const pbToken = req.cookies.get('pb_auth')?.value;
+  if (pbToken) {
+    try {
+      const pbRes = await fetch(`${MEDIA_PB_URL}/api/auth/refresh`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        cache: 'no-store', signal: AbortSignal.timeout(3000),
+      });
+      if (pbRes.ok) return true;
+    } catch { /* dann Archon-Session versuchen */ }
+  }
+  try {
+    const targets = [process.env.INTERNAL_ARCHON_URL, 'http://archon-os:8501', 'http://127.0.0.1:8501']
+      .filter((u): u is string => Boolean(u && u.trim()));
+    for (const base of targets) {
+      const res = await fetch(`${base.replace(/\/+$/, '')}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store', signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) return true;
+    }
+  } catch { /* fail-closed */ }
   return false;
 }
 
@@ -63,7 +85,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
-  if (!hasAuthorizedSession(request)) {
+  if (!(await hasAuthorizedSession(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { path } = await params;
@@ -134,7 +156,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
-  if (!hasAuthorizedSession(request)) {
+  if (!(await hasAuthorizedSession(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { path } = await params;
@@ -180,7 +202,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
-  if (!hasAuthorizedSession(request)) {
+  if (!(await hasAuthorizedSession(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { path } = await params;
@@ -226,7 +248,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
-  if (!hasAuthorizedSession(request)) {
+  if (!(await hasAuthorizedSession(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { path } = await params;

@@ -87,13 +87,23 @@ def infer_data_category(
     role: str = "",
     explicit_category: str = "",
 ) -> str:
-    if explicit_category and explicit_category.strip():
-        return explicit_category.strip().lower()
     haystack = f"{agent_id} {role}".lower()
+    inferred = "general"
     for cat, markers in _SENSITIVE_AGENT_CATEGORY_MAP.items():
         if any(m in haystack for m in markers):
-            return cat
-    return "general"
+            inferred = cat
+            break
+    want = str(explicit_category or "").strip().lower()
+    if not want:
+        return inferred
+    # KRITISCH (Audit 23.11.2026): explicit_category darf die serverseitige
+    # Klassifikation NIE abschwächen. Eine sensibel klassifizierte Rolle bleibt
+    # sensibel, egal was der Client behauptet.
+    if want in _SENSITIVE_AGENT_CATEGORY_MAP or want == "confidential":
+        return want
+    if inferred in _SENSITIVE_AGENT_CATEGORY_MAP:
+        return inferred
+    return want
 
 
 def _is_local_model_name(model: str) -> bool:
@@ -196,8 +206,12 @@ def evaluate_and_gate_llm_dispatch(
     # oder Cloud-Provider passieren — auch nicht bei LEEREM intended_url (Fail-Closed).
     if zero_active:
         prov_low = (provider or "").strip().lower()
+        # FRUEHER: unbekannte Provider (custom/azure/bedrock/"") ohne
+        # intended_url passierten ungeprüft — sensibler Inhalt konnte die
+        # Umgebung verlassen. Jetzt Default-Deny: alles blocken, was nicht
+        # explizit als lokales Modell ERKANNT wurde.
         if not intended_url:
-            if prov_low in _CLOUD_PROVIDERS:
+            if prov_low in _CLOUD_PROVIDERS or not _is_local_model_name(model):
                 alog = audit_logger or chained_audit_log
                 ev = alog.record_llm_dispatch(
                     agent_id=agent_id or "system",
@@ -482,6 +496,35 @@ def enforce_egress_firewall_for_url(
                 error_code="EGRESS_METADATA_BLOCKED",
             )
     if zone == "LOCAL_ON_PREM" or host_low in _INTERNAL_EGRESS_HOSTS or (zone == "INTERNAL_GATEWAY" and "." not in host_low and not host_low.endswith(".local")):
+        # KRITISCH: die Zonenklassifikation allein darf nie freigeben. Ein
+        # interner Service-Name kann per DNS-Search/Rebinding auf eine
+        # oeffentliche IP zeigen. Vor der Freigabe JEDES aufgeloeste Ziel
+        # gegen private/link-locale Adressen pruefen (auch IPv6).
+        import ipaddress
+        import socket
+        resolved_ok = True
+        try:
+            infos = socket.getaddrinfo(host_low, None)
+            for info in infos:
+                addr = str(info[4][0])
+                try:
+                    ip = ipaddress.ip_address(addr.split("%")[0])
+                except ValueError:
+                    resolved_ok = False
+                    break
+                mapped = getattr(ip, "ipv4_mapped", None)
+                if mapped is not None:
+                    ip = mapped
+                if not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast):
+                    resolved_ok = False
+                    break
+        except (OSError, ValueError):
+            resolved_ok = False  # DNS nicht aufloesbar -> fail-closed
+        if not resolved_ok:
+            raise ZeroEgressBlockedError(
+                f"Zero-Egress: '{host_low}' ({zone}) liefert keine rein lokale/private Adresse — blockiert.",
+                error_code="EGRESS_DNS_NOT_LOCAL",
+            )
         return {"allowed": True, "blocked": False, "zone": zone, "reason": "local_or_internal_gateway"}
 
     try:

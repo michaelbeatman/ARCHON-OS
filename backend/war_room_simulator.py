@@ -9,6 +9,7 @@ _archon_exc_logger = logging.getLogger("war_room_simulator")
 
 import os
 import sys
+import time
 import json
 import sqlite3
 import asyncio
@@ -41,10 +42,59 @@ def _init_war_room_db():
 
 _init_war_room_db()
 
+async def _enforce_hitl_block(
+    *,
+    topic: str,
+    overall_risk: str,
+    mitigation_text: str,
+    task_id: Optional[str],
+) -> Dict[str, Any]:
+    """blocked=True ist eine echte HITL-Blockade, keine blosse Empfehlung.
+
+    Es wird eine Freigabe-Entscheidung im Kanban angelegt und — falls ein
+    task_id uebergeben wurde — der betroffene Task auf 'blocked' gesetzt.
+    """
+    enforcement: Dict[str, Any] = {"decision_created": False, "task_blocked": False}
+    ref_id = f"war-room:{int(time.time())}:{topic[:60]}"
+    try:
+        from archon.routers.decisions import create_decision
+
+        decision = await asyncio.to_thread(
+            create_decision,
+            typ="mission_freigabe",
+            titel=f"HITL-Sperre War-Room: {topic[:100]}"[:180],
+            kurzfassung=(f"War-Room-Risiko {overall_risk}. Freigabe erforderlich.\n{mitigation_text}")[:600],
+            ref_id=ref_id,
+            extra={"war_room": {"topic": topic[:250], "risk": overall_risk, "mitigations": mitigation_text[:1000]}},
+        )
+        enforcement["decision_created"] = bool(decision)
+        enforcement["decision"] = decision or None
+    except Exception as exc:
+        enforcement["decision_error"] = str(exc)[:300]
+
+    if task_id:
+        try:
+            from backend.workflow_dag_runner import _update_kanban_task_status
+
+            await asyncio.to_thread(
+                _update_kanban_task_status,
+                task_id,
+                "blocked",
+                result=f"War-Room blockiert bei Risiko {overall_risk}: {mitigation_text[:500]}",
+                block_kind="war_room_risk",
+            )
+            enforcement["task_blocked"] = True
+            enforcement["task_id"] = task_id
+        except Exception as exc:
+            enforcement["task_block_error"] = str(exc)[:300]
+    return enforcement
+
+
 async def run_war_room_simulation(
     topic: str,
     proposal_text: str,
-    model: Optional[str] = None
+    model: Optional[str] = None,
+    task_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Führt einen 3-Parteien-Stresstest (Kunde, Pentester, Compliance) durch.
@@ -160,12 +210,22 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
     except Exception as e:
         print(f"[WarRoomSimulator] Fehler beim Speichern: {e}", file=sys.stderr)
 
+    hitl = None
+    if should_block:
+        hitl = await _enforce_hitl_block(
+            topic=topic,
+            overall_risk=overall_risk,
+            mitigation_text=mitigation_text,
+            task_id=task_id,
+        )
+
     return {
         "status": "success",
         "topic": topic,
         "overall_risk_level": overall_risk,
         "block_threshold": block_threshold,
         "blocked": should_block,
+        "hitl_enforcement": hitl,
         "adversary_evaluations": results,
         "mitigation_plan": mitigations,
         "recommendation": "STOPP & ÜBERARBEITUNG: Risiko überschreitet Schwellenwert!" if should_block else "Freigabe empfohlen mit Auflagen"

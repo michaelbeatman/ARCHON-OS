@@ -4,14 +4,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   archonApi,
-  ContentOverview,
   DbConsolidationPlan,
   WorkflowRunSummary,
 } from '@/lib/archon-api';
+import { useArchonEvents } from '@/lib/useArchonEvents';
 import {
   Activity,
   CheckCircle2,
-  Clapperboard,
   Database,
   LayoutDashboard,
   RefreshCw,
@@ -38,6 +37,17 @@ interface CrmContact {
   rolle?: string;
 }
 
+/** API liefert je nach Endpunkt 'tasks'/'items' bzw. 'contacts'/'items'. */
+function extractRows<T>(res: unknown, ...keys: string[]): T[] {
+  if (!res || typeof res !== 'object') return [];
+  const obj = res as Record<string, unknown>;
+  for (const key of keys) {
+    const value = obj[key];
+    if (Array.isArray(value)) return value as T[];
+  }
+  return [];
+}
+
 export function ExecutiveCockpit() {
   const [health, setHealth] = useState<{
     status: string;
@@ -46,7 +56,6 @@ export function ExecutiveCockpit() {
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [contacts, setContacts] = useState<CrmContact[]>([]);
   const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
-  const [content, setContent] = useState<ContentOverview | null>(null);
   const [dbPlan, setDbPlan] = useState<DbConsolidationPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,19 +65,17 @@ export function ExecutiveCockpit() {
     setLoading(true);
     setError(null);
     try {
-      const [hRes, tRes, cRes, rRes, cmRes, dbRes] = await Promise.all([
+      const [hRes, tRes, cRes, rRes, dbRes] = await Promise.all([
         archonApi.getSystemHealth().catch(() => null),
         archonApi.listKanbanTasks().catch(() => ({ tasks: [] })),
         archonApi.listCrmContacts(15).catch(() => ({ contacts: [] })),
         archonApi.listDagRuns().catch(() => ({ runs: [] })),
-        archonApi.getContentOverview().catch(() => null),
         archonApi.getDbConsolidationPlan().catch(() => null),
       ]);
       setHealth(hRes);
-      setTasks(((tRes.tasks || tRes.items || []) as unknown) as KanbanTask[]);
-      setContacts(((cRes.contacts || cRes.items || []) as unknown) as CrmContact[]);
+      setTasks(extractRows<KanbanTask>(tRes, 'tasks', 'items'));
+      setContacts(extractRows<CrmContact>(cRes, 'contacts', 'items'));
       setRuns(rRes.runs || []);
-      setContent(cmRes);
       setDbPlan(dbRes);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Cockpit-Daten konnten nicht geladen werden');
@@ -80,6 +87,23 @@ export function ExecutiveCockpit() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // Echtzeit-Kanban/HITL statt manueller Refresh.
+  useArchonEvents((event) => {
+    // Echte Backend-Typen (broadcast_event): kanban_updated, ticker_update,
+    // workflow_node_state, event_bus, delegation_failed, tool_runtime.
+    // Die alten Namen bleiben nur der Rueckwaertskompatibilitaet wegen.
+    if (!['kanban_updated', 'ticker_update', 'workflow_node_state', 'event_bus',
+          'delegation_failed', 'tool_runtime',
+          'gate_reached', 'synthesis_ready', 'workflow_completed', 'asset_ready'].includes(event.type)) return;
+    Promise.all([
+      archonApi.listKanbanTasks().catch(() => ({ tasks: [] })),
+      archonApi.listDagRuns().catch(() => ({ runs: [] })),
+    ]).then(([tRes, rRes]) => {
+      setTasks(extractRows<KanbanTask>(tRes, 'tasks', 'items'));
+      setRuns(rRes.runs || []);
+    }).catch(() => undefined);
+  });
 
   const handleTaskMove = async (taskId: string, nextStatus: string) => {
     setBusyId(taskId);
@@ -109,18 +133,11 @@ export function ExecutiveCockpit() {
             <div>
               <h1 className="text-xl font-bold tracking-tight">Archon Executive Cockpit</h1>
               <p className="text-xs text-slate-400 font-mono">
-                Direkt auf Archon FastAPI (Port 8420) · Ohne PocketBase · Operations, HITL, Content &amp; CRM
+                Direkt auf Archon FastAPI (Port 8501) · Ohne PocketBase · Operations, HITL &amp; CRM
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/content-studio"
-              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-xs font-medium flex items-center gap-1.5"
-            >
-              <Clapperboard className="w-3.5 h-3.5 text-fuchsia-400" />
-              Content-Maschine
-            </Link>
             <Link
               href="/workflows"
               className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-xs font-medium flex items-center gap-1.5"
@@ -170,12 +187,6 @@ export function ExecutiveCockpit() {
               <Workflow className="w-3.5 h-3.5 text-indigo-400" /> DAG-Laeufe
             </div>
             <div className="text-lg font-bold mt-1">{runs.length}</div>
-          </div>
-          <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/70">
-            <div className="text-[11px] font-mono uppercase text-slate-400 flex items-center gap-1">
-              <Clapperboard className="w-3.5 h-3.5 text-fuchsia-400" /> Content-Assets
-            </div>
-            <div className="text-lg font-bold mt-1">{content?.assets?.length || 0}</div>
           </div>
           <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/70">
             <div className="text-[11px] font-mono uppercase text-slate-400 flex items-center gap-1">

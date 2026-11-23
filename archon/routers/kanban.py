@@ -1,5 +1,5 @@
 from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_session_actor
 """
 Kanban Persistenz Router fuer Archon OS.
 Verwaltet /api/kanban Endpunkte (Karten lesen und synchronisieren in kanban.db und JSON).
@@ -12,6 +12,7 @@ import json
 import sqlite3
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from archon.core.runtime import atomic_write_json, logger, run_io_bound
 from archon.core.paths import KANBAN_CARDS_FILE, KANBAN_DB_PATH
 from backend.platform_paths import HERMES_HOME
@@ -135,7 +136,7 @@ async def api_save_kanban(request: Request):
         await run_io_bound(_persist_kanban_sync, cards)
         return {"status": "success"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 # --- M78: Kanban Gantt & Dependency Graph ---
@@ -214,9 +215,11 @@ async def api_kanban_task_hitl(request: Request, task_id: str):
 
 # --- M91: Precedent Log (Tenant-/Project-isoliert) ---
 @router.get("/api/operations/precedents")
-async def api_list_precedents(tenant_id: str = "default", project_id: Optional[str] = None):
+async def api_list_precedents(project_id: Optional[str] = None):
     from backend.precedent_log import list_precedents
-    return {"status": "success", "precedents": list_precedents(tenant_id, project_id)}
+    from backend.tenant_context import tenant_context
+    tid = tenant_context.get_active_tenant_id()
+    return {"status": "success", "precedents": list_precedents(tid, project_id)}
 
 
 @router.post("/api/operations/precedents")
@@ -225,23 +228,27 @@ async def api_create_precedent(request: Request):
     require_admin_or_503(request)
     payload = await request.json()
     from backend.precedent_log import record_precedent
+    from backend.tenant_context import tenant_context
     rec = record_precedent(
-        tenant_id=str(payload.get("tenant_id") or "default"),
+        # Tenant und Actor ausschliesslich aus verifiziertem Kontext (IDOR /
+        # Body-Actor-Schutz, Audit 23.11.2026).
+        tenant_id=tenant_context.get_active_tenant_id(),
         project_id=str(payload.get("project_id") or ""),
         question=str(payload.get("question") or ""),
         ruling_text=str(payload.get("ruling_text") or ""),
-        created_by=str(payload.get("created_by") or "human"),
+        created_by=require_session_actor(request),
         expires_at=payload.get("expires_at"),
     )
     return {"status": "success", "precedent": rec}
 
 
 @router.delete("/api/operations/precedents/{precedent_id}")
-async def api_revoke_precedent(request: Request, precedent_id: str, tenant_id: str = "default"):
+async def api_revoke_precedent(request: Request, precedent_id: str):
     from archon.routers._rbac import require_admin_or_503
     require_admin_or_503(request)
     from backend.precedent_log import revoke_precedent
-    ok = revoke_precedent(precedent_id, tenant_id)
+    from backend.tenant_context import tenant_context
+    ok = revoke_precedent(precedent_id, tenant_context.get_active_tenant_id())
     if not ok:
         raise HTTPException(status_code=404, detail="Precedent not found")
     return {"status": "success", "revoked": precedent_id}
@@ -260,7 +267,7 @@ async def api_resolve_taint_approval(request: Request, approval_id: str):
     require_admin_or_503(request)
     payload = await request.json()
     approved = bool(payload.get("approved", False))
-    reviewer = str(payload.get("reviewer") or "admin")
+    reviewer = require_session_actor(request)
     from backend.session_taint_guard import resolve_taint_approval
     res = resolve_taint_approval(approval_id, approved=approved, reviewer=reviewer)
     if not res:

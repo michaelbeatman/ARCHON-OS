@@ -11,6 +11,7 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from archon.core.config import config
@@ -293,4 +294,4 @@ def api_telegram_send(request: Request, payload: TelegramSendPayload):
     except Exception as e:
         redacted = _redact_telegram_secrets(e)
         logger.warning(f"[TelegramSend] Fehler: {redacted}")
-        return {"status": "error", "message": redacted}
+        return JSONResponse(status_code=500, content={"status": "error", "message": redacted})

@@ -29,7 +29,10 @@ interface Termin {
   kontaktId?: string;
 }
 
-const OMNI_BASE = 'http://localhost:20128/v1';
+// OmniRoute darf nicht direkt vom Browser kontaktiert werden (localhost
+// zeigt beim Remote-Browser auf den Client-Rechner). Archon proxied unter
+// /omniroute-proxy; Next.js leitet /api/archon dorthin weiter.
+const OMNI_BASE = '/api/archon/omniroute-proxy/v1';
 
 export function MissionControlView({ kontakte, themeMode, onOpenKontakt, onNavigateToKontakte, onOpenDesign, onKontaktUpdate }: Props) {
   const isLight = themeMode === 'light';

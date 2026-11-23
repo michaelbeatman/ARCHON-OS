@@ -350,9 +350,21 @@
       if (!parts.length) return '';
       return `<div class="mt-1 text-[9.5px] shadcn-muted space-y-0.5">${parts.map(p => `<div class="truncate">${p}</div>`).join('')}</div>`;
     }
-    function mcKanbanMoveBtn(taskId, target, label, primary) {
+    // Task-Detail aus dem Mini-KANBAN oeffnen (gleiche Modal-Funktion wie Operations).
+    function openOpsTaskDetailFromMC(taskId) {
+      if (!taskId) return;
+      if (typeof window.openOpsTaskDetailModal === 'function') {
+        window.openOpsTaskDetailModal(taskId);
+      } else if (typeof window.openTaskDetailModal === 'function') {
+        window.openTaskDetailModal(taskId);
+      }
+    }
+    window.openOpsTaskDetailFromMC = openOpsTaskDetailFromMC;
+
+    function mcKanbanMoveBtn(taskId, target, label, primary, extraCls = '') {
       const cls = primary ? 'shadcn-btn-primary' : 'shadcn-btn-outline';
-      return `<button onclick="mcKanbanMove('${taskId}', '${target}')" class="${cls} flex-1 py-0.5 text-[10px] cursor-pointer flex items-center justify-center gap-1 h-6"><span>${label}</span></button>`;
+      const extra = extraCls ? ` ${extraCls}` : '';
+      return `<button onclick="event.stopPropagation(); mcKanbanMove('${taskId}', '${target}')" class="${cls}${extra} flex-1 py-0.5 text-[10px] cursor-pointer flex items-center justify-center gap-1 h-6"><span>${label}</span></button>`;
     }
     function mcKanbanCard(t, col) {
       const badgeDef = MC_KANBAN_BADGE_KEYS[t.status];
@@ -367,27 +379,29 @@
           st = isFinite(p) ? p / 1000 : Date.now() / 1000 - 30;
         }
         const diff = Math.max(0, Date.now() / 1000 - st);
-        stopwatch = `<span class="text-[9.5px] font-mono text-[var(--muted-foreground)] font-semibold mc-stopwatch" data-start="${st}">${formatMissionControlDuration(diff)}</span>`;
+        stopwatch = `<span class="text-[10px] font-mono text-slate-500 font-bold mc-stopwatch shrink-0" data-start="${st}">${formatMissionControlDuration(diff)}</span>`;
       }
       let buttons = '';
       if (col === 'todo') {
-        buttons = mcKanbanMoveBtn(t.id, 'in_progress', mcT('ui.mission_control_cockpit.move_start', 'Starten'), true);
+        buttons = mcKanbanMoveBtn(t.id, 'in_progress', mcT('ui.mission_control_cockpit.move_start', 'Starten'), true, 'mc-btn-start');
       } else if (col === 'in_progress') {
         buttons = mcKanbanMoveBtn(t.id, 'review', mcT('ui.mission_control_cockpit.move_review', 'Review'), true) + mcKanbanMoveBtn(t.id, 'blocked', mcT('ui.mission_control_cockpit.move_blocked', 'Blockiert'), false);
       } else if (col === 'review') {
         if (dec) {
-          buttons = `<button onclick="mcKanbanDecide('${t.id}', 'approve')" class="shadcn-btn-primary flex-1 py-0.5 text-[10px] cursor-pointer h-6">${mcT('ui.mission_control_cockpit.move_approve', '✅ Freigeben')}</button>`
-            + `<button onclick="mcKanbanDecide('${t.id}', 'reject')" class="shadcn-btn-outline flex-1 py-0.5 text-[10px] cursor-pointer h-6">${mcT('ui.mission_control_cockpit.move_reject', '❌ Ablehnen')}</button>`;
+          const approveLabel = escapeHtmlMC(mcT('ui.mission_control_cockpit.move_approve', 'Freigeben'));
+          const rejectLabel = escapeHtmlMC(mcT('ui.mission_control_cockpit.move_reject', 'Ablehnen'));
+          buttons = `<button onclick="event.stopPropagation(); mcKanbanDecide('${t.id}', 'approve')" title="${approveLabel}" aria-label="${approveLabel}" class="shadcn-btn-primary mc-btn-approve flex-1 py-0.5 text-[11px] cursor-pointer flex items-center justify-center h-6">✅</button>`
+            + `<button onclick="event.stopPropagation(); mcKanbanDecide('${t.id}', 'reject')" title="${rejectLabel}" aria-label="${rejectLabel}" class="shadcn-btn-outline mc-btn-reject flex-1 py-0.5 text-[11px] cursor-pointer flex items-center justify-center h-6">❌</button>`;
         } else {
           buttons = mcKanbanMoveBtn(t.id, 'done', mcT('ui.mission_control_cockpit.move_complete', 'Abschließen'), true) + mcKanbanMoveBtn(t.id, 'todo', mcT('ui.mission_control_cockpit.move_back', 'Zurück'), false);
         }
       } else if (col === 'blocked') {
         buttons = mcKanbanMoveBtn(t.id, 'todo', mcT('ui.mission_control_cockpit.move_unblock', 'Entsperren'), true);
       } else if (col === 'done') {
-        buttons = `<button onclick="setTab('operations')" class="shadcn-btn-outline w-full py-0.5 text-[9.5px] cursor-pointer h-6">${mcT('ui.mission_control_cockpit.move_open_operations', 'In Operations öffnen')}</button>`;
+        buttons = `<button onclick="event.stopPropagation(); setTab('operations')" class="shadcn-btn-outline w-full py-0.5 text-[9.5px] cursor-pointer h-6">${mcT('ui.mission_control_cockpit.move_open_operations', 'In Operations öffnen')}</button>`;
       }
       return `
-        <div id="mc-task-${t.id}" class="shadcn-card p-2 text-xs">
+        <div id="mc-task-${t.id}" onclick="openOpsTaskDetailFromMC('${escapeHtmlMC(t.id)}')" title="${mcT('ui.mission_control_cockpit.task_open_detail_hint', 'Task-Details öffnen')}" class="shadcn-card p-2 text-xs cursor-pointer">
           ${decBanner}
           <div class="flex items-start justify-between gap-1">
             <h4 class="text-[11.5px] font-medium leading-tight text-[var(--foreground)]">${escapeHtmlMC(t.title)}</h4>
@@ -596,12 +610,19 @@
           if (start > 0) {
             const diff = Math.max(0, nowSec - start);
             el.innerText = formatMissionControlDuration(diff);
-            // Attention-Badge ab > 60 Minuten (3600s)
-            if (diff >= 3600) {
-              el.className = "text-[10px] font-mono text-amber-700 font-bold mc-stopwatch px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 shadow-2xs";
-            } else {
-              el.className = "text-[10px] font-mono text-slate-500 font-bold mc-stopwatch";
-            }
+            // Nur noch die Attention-Klassen umschalten — frueher wurde hier
+            // el.className komplett ersetzt (9.5px->10px, shrink-0 weg),
+            // wodurch die Karten im Sekundentakt sichtbar gewackelt haben.
+            const attention = diff >= 3600;
+            el.classList.toggle('text-amber-700', attention);
+            el.classList.toggle('bg-amber-50', attention);
+            el.classList.toggle('border', attention);
+            el.classList.toggle('border-amber-300', attention);
+            el.classList.toggle('rounded', attention);
+            el.classList.toggle('px-1.5', attention);
+            el.classList.toggle('py-0.5', attention);
+            el.classList.toggle('shadow-2xs', attention);
+            el.classList.toggle('text-slate-500', !attention);
           }
         });
       }, 1000);
@@ -790,12 +811,14 @@
           st = isFinite(p) ? p / 1000 : Date.now() / 1000 - 30;
         }
         const diff = Math.max(0, Date.now() / 1000 - st);
+        const chatIdent = escapeHtmlMC(t.assignee || t.assignee_id || t.assignee_name || '');
         return `
-        <div onclick="openAgentChatFromMissionControl('${escapeHtmlMC(t.assignee || t.assignee_id || t.assignee_name || '')}')" title="${mcT('ui.mission_control_cockpit.cadre_chat_hint', 'Chat mit {name} im Agentenkader öffnen', { name: escapeHtmlMC(t.assignee_name || 'Agent') })}" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] transition cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 shadow-2xs">
+        <div onclick="openOpsTaskDetailFromMC('${escapeHtmlMC(t.id)}')" title="${mcT('ui.mission_control_cockpit.task_open_detail_hint', 'Task-Details öffnen')}" class="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] transition cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 shadow-2xs">
           <div class="text-[11.5px] font-semibold truncate text-[var(--foreground)] leading-tight">${escapeHtmlMC(t.title || '')}</div>
           <div class="mt-0.5 flex items-center justify-between gap-1 text-[9.5px] shadcn-muted">
             <span class="truncate">👤 ${escapeHtmlMC(t.assignee_name || 'Agent')}</span>
-            <span class="font-mono font-semibold mc-stopwatch shrink-0" data-start="${st}">${formatMissionControlDuration(diff)}</span>
+            <span class="text-[10px] font-mono text-slate-500 font-bold mc-stopwatch shrink-0" data-start="${st}">${formatMissionControlDuration(diff)}</span>
+            <button type="button" onclick="event.stopPropagation(); openAgentChatFromMissionControl('${chatIdent}')" title="${mcT('ui.mission_control_cockpit.cadre_chat_hint', 'Chat mit {name} im Agentenkader öffnen', { name: escapeHtmlMC(t.assignee_name || 'Agent') })}" class="px-1 py-0.5 rounded border border-[var(--border)] text-[9px] font-mono shrink-0 hover:bg-[var(--secondary)]">💬</button>
           </div>
         </div>`;
       }).join('');

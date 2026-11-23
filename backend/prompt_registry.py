@@ -309,7 +309,10 @@ class PromptRegistry:
                 canary_pct = canary["canary_percentage"]
                 # Deterministisches Hashing per task_id
                 routing_key = task_id or os.urandom(8).hex()
-                hash_val = int(hashlib.md5(routing_key.encode("utf-8")).hexdigest(), 16) % 100
+                # Deterministischer Canary-Bucket, kein Sicherheitszweck.
+                hash_val = int(
+                    hashlib.md5(routing_key.encode("utf-8"), usedforsecurity=False).hexdigest(), 16
+                ) % 100
                 if hash_val < canary_pct:
                     return {
                         "prompt": canary["prompt"],

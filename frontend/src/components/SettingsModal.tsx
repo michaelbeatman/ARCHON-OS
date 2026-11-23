@@ -83,7 +83,7 @@ const DEFAULT_CAL: CalendarSettings = {
   outlookIcsUrl: '',
   lookAheadDays: '30',
   lookBackDays: '7',
-  aggregatorUrl: 'http://localhost:8421',
+  aggregatorUrl: '/api/calendar',
 };
 
 // ─── Calendar Settings Tab ────────────────────────────────────────────────────
@@ -115,8 +115,9 @@ function CalendarSettingsTab({ isLight }: { isLight: boolean }) {
   const handleSave = () => {
     try {
       localStorage.setItem(CAL_SETTINGS_KEY, JSON.stringify(settings));
-      // Write a .env snippet to the backend API so the Python aggregator can read it
-      // (This is stored client-side only – the backend reads env vars separately)
+      // Nur localStorage – es wird KEIN .env-Snippet geschrieben und KEIN
+      // Backend-Endpunkt aufgerufen. Der Python-Aggregator liest seine Werte
+      // weiterhin aus separat konfigurierten Umgebungsvariablen.
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch {}
@@ -125,7 +126,7 @@ function CalendarSettingsTab({ isLight }: { isLight: boolean }) {
   const handlePingAggregator = async () => {
     setPingStatus('checking');
     try {
-      const url = (settings.aggregatorUrl || 'http://localhost:8421').replace(/\/$/, '') + '/events';
+      const url = (settings.aggregatorUrl || '/api/calendar').replace(/\/$/, '') + '/events';
       const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
       setPingStatus(res.ok ? 'ok' : 'error');
     } catch {
@@ -162,7 +163,7 @@ function CalendarSettingsTab({ isLight }: { isLight: boolean }) {
               type="text"
               value={settings.aggregatorUrl}
               onChange={e => update('aggregatorUrl', e.target.value)}
-              placeholder="http://localhost:8421"
+              placeholder="/api/calendar"
               className={inputCls}
             />
             <button

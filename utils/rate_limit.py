@@ -28,6 +28,7 @@ Konfiguration über Umgebung:
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import os
 import threading
@@ -60,6 +61,19 @@ STRICT_PREFIXES: Tuple[str, ...] = (
     "/api/v1/documents/parse",
     "/api/llm-providers/test-connection",
     "/api/v1/library/upload",
+    # LLM-triggerende Pfade: jeder Request kann einen bezahlten Provider-Call
+    # ausloesen. Vorher waren sie nur mit 600/min gedrosselt und erlaubten
+    # dem Aufrufer sogar die Modellwahl (Kosten-DoS, OWASP LLM10).
+    "/api/chat",
+    "/api/v1/chat",
+    "/api/quickchat",
+    "/api/research",
+    "/api/v1/research",
+    "/api/prompts/optimize",
+    "/api/v1/security/scan-email",
+    "/api/v1/security/validate-output",
+    "/api/boardroom/run",
+    "/api/v2/workflows/dag/run",
 )
 
 # Muss immer antworten bzw. wird nicht als "Nutzung" gezaehlt.
@@ -109,6 +123,37 @@ def _enabled() -> bool:
 
 def _trust_forwarded() -> bool:
     return config.rate_limit_trust_forwarded
+
+
+def _verified_principal(request: Request) -> str:
+    """Principal aus der VERIFIZIERTEN Session (Audit 23.11.2026).
+
+    Der Limiter liegt als aeusserste Schicht VOR dem auth_gate — zum Zeitpunkt
+    von ``dispatch()`` ist ``request.state.user`` daher noch nicht gesetzt.
+    Ein direkter Client-Header darf nie als Principal dienen (Token-Rotation
+    wuerde den Strict-Bucket beliebig umgehen). Deshalb hier dieselben
+    Token-Quellen wie im auth_gate lesen und serverseitig verifizieren.
+    """
+    token = ""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    elif "x-archon-session" in request.headers:
+        token = request.headers.get("x-archon-session", "").strip()
+    elif "archon_session" in request.cookies:
+        token = request.cookies.get("archon_session", "").strip()
+    if not token:
+        return "anon"
+    try:
+        from backend.auth_service import auth_service
+        user = auth_service.verify_session(token)
+        if user:
+            uid = str(user.get("id") or user.get("username") or "").strip()
+            if uid:
+                return hashlib.sha256(uid.encode("utf-8")).hexdigest()[:12]
+    except Exception:
+        pass
+    return "anon"
 
 
 class _Bucket:
@@ -197,7 +242,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         strict = self._strict(path)
         limit = self.strict_limit if strict else self.default_limit
-        bucket_key = (self._client_key(request), "strict" if strict else "default")
+        # Zweiter Bucket-Key neben der IP: Session/Token. Sonst konnten
+        # mehrere Sessions hinter einer NAT-IP die LLM-Limits gemeinsam
+        # aufbrauchen oder eine Session unbegrenzt durch IP-Wechsel umgehen.
+        # KRITISCH: frueher kam der Bucket-Key direkt aus Client-Headern — ein
+        # Angreifer konnte mit wechselndem `Authorization: Bearer <zufall>` den
+        # Strict-Bucket (20/min) beliebig umgehen. Jetzt: verifizierte Session
+        # (siehe _verified_principal), sonst konstanter anon-Bucket pro IP.
+        _principal = _verified_principal(request)
+        bucket_key = (self._client_key(request), _principal, "strict" if strict else "default")
 
         with self._lock:
             bucket = self._buckets.get(bucket_key)

@@ -11,12 +11,24 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.paths import OBSIDIAN_VAULT, PERSONALAKTEN_DIR
 
 logger = logging.getLogger("archon.routers.memory_ops")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["memory_ops"])
+
+
+class MemoryConsolidateRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class MemoryEvictRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    dry_run: Optional[bool] = None
 
 
 def _query_memory_stats() -> tuple[int, int, int]:
@@ -193,20 +205,19 @@ source: "Archon OS Memory Bridge"
 
 
 @router.post("/api/v1/memory/consolidate")
-def api_consolidate_memory(request: Request, payload: Optional[Dict] = Body(None)):
+def api_consolidate_memory(request: Request, payload: Optional[MemoryConsolidateRequest] = None):
     require_admin_or_503(request)
-    return _consolidate_internal(payload)
+    return _consolidate_internal(payload.model_dump(exclude_unset=True) if payload else None)
 
 
 @router.post("/api/v1/memory/evict")
-def api_evict_stale_memory(request: Request, payload: Optional[Dict] = Body(None)):
+def api_evict_stale_memory(request: Request, payload: Optional[MemoryEvictRequest] = None):
     require_admin_or_503(request)
     from local_memory_bridge import LocalMemoryBridge
 
     bridge = LocalMemoryBridge()
-    payload = payload or {}
-    threshold = float(payload.get("threshold", 0.1))
-    dry_run = bool(payload.get("dry_run", False))
+    threshold = float(payload.threshold) if payload and payload.threshold is not None else 0.1
+    dry_run = bool(payload.dry_run) if payload and payload.dry_run is not None else False
 
     res_conv = bridge.evict_stale_memories(threshold=threshold, table="conversations", dry_run=dry_run)
     res_learn = bridge.evict_stale_memories(threshold=threshold, table="learnings", dry_run=dry_run)
@@ -231,7 +242,9 @@ def get_chat_history_api(agent_id: str, limit: int = 30, session_id: Optional[st
     if mb:
         history = mb.get_conversation_history(agent_id, limit=limit, session_id=session_id)
         return {"status": "success", "agent_id": agent_id, "history": history}
-    return {"status": "success", "agent_id": agent_id, "history": []}
+    # Leere Historie war nicht von einem kaputten Memory-Bridge zu
+    # unterscheiden -> stiller Datenverlust im UI.
+    raise HTTPException(status_code=503, detail="Memory-Bridge nicht verfügbar")
 
 
 @router.delete("/api/v1/chat/history")
@@ -243,7 +256,7 @@ def clear_chat_history_api(request: Request, agent_id: str, session_id: Optional
     if mb:
         mb.clear_conversation_history(agent_id, session_id=session_id)
         return {"status": "success", "message": f"History for {agent_id} cleared"}
-    return {"status": "error", "message": "Memory bridge unavailable"}
+    return JSONResponse(status_code=503, content={"status": "error", "message": "Memory bridge unavailable"})
 
 
 @router.get("/api/v1/memory/context")

@@ -122,14 +122,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ events: [], error: 'Invalid URL encoding' }, { status: 400 });
   }
 
-  // Split multiple URLs separated by commas or semicolons
+  // SSRF-Schutz: nur explizit erlaubte Kalender-Hosts. Vorher konnte jeder
+  // Aufrufer ?url=http://169.254.169.254/... oder interne Docker-Hosts
+  // scannen (Redirects folgte fetch ebenfalls).
+  const ALLOWED_ICS_HOSTS = (process.env.ARCHON_ICS_ALLOWED_HOSTS || '')
+    .split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
+  const isAllowedIcsUrl = (raw: string): boolean => {
+    try {
+      const u = new URL(raw);
+      if (!['http:', 'https:'].includes(u.protocol)) return false;
+      const host = u.hostname.toLowerCase();
+      const ip = host.replace(/^\[|\]$/g, '');
+      // Blockiere private/link-lokale Ziele auch ohne Env-Allowlist
+      if (/^(127\.|10\.|192\.168\.|169\.254\.|0\.|::1$|fc00:|fe80:|localhost$)/i.test(ip)) return false;
+      if (ALLOWED_ICS_HOSTS.length === 0) return false;
+      return ALLOWED_ICS_HOSTS.some(h => host === h || host.endsWith('.' + h));
+    } catch { return false; }
+  };
+
   const urls = decoded
     .split(/[;,]/)
     .map(url => url.trim())
-    .filter(url => /^https?:\/\//i.test(url));
+    .filter(isAllowedIcsUrl);
 
   if (urls.length === 0) {
-    return NextResponse.json({ events: [], error: 'No valid HTTP/HTTPS URLs found' }, { status: 400 });
+    return NextResponse.json({ events: [], error: 'No allowed calendar URLs' }, { status: 400 });
   }
 
   const allEvents: ParsedEvent[] = [];
@@ -149,10 +166,11 @@ export async function GET(req: NextRequest) {
           },
           signal: AbortSignal.timeout(8000),
           cache: 'no-store',
+          redirect: 'error', // kein Redirect in ein internes Ziel
         });
 
         if (!res.ok) {
-          errors.push(`${url}: HTTP ${res.status}`);
+          errors.push('Kalender nicht erreichbar');
           return;
         }
 
@@ -164,8 +182,8 @@ export async function GET(req: NextRequest) {
 
         const parsed = parseIcs(text, lookBack, lookAhead, source);
         allEvents.push(...parsed);
-      } catch (err: any) {
-        errors.push(`${url}: ${err?.message || String(err)}`);
+      } catch {
+        errors.push('Kalenderabruf fehlgeschlagen');
       }
     })
   );

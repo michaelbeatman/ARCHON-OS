@@ -111,13 +111,15 @@ def api_get_plugin_tools():
 async def api_execute_plugin_tool(request: Request, payload: dict = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
-    from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
+    from backend.tool_runtime import enforce_tool_execution, guard_result, record_tool_read_side_effect
     pm = get_plugin_manager()
     tool_name = str(payload.get("tool_name") or "").strip()
     args = payload.get("args", {})
-    # Actor/Session aus der authentifizierten Identität — nicht aus dem Body.
+    # Actor/Session/Agent aus der authentifizierten Identität — nie aus dem
+    # Body. Ein client-gesteuertes agent_id umgeht agentenbezogene Taint-/RBAC-
+    # und Budget-Gates (Audit 23.11.2026).
     session_id = f"user:{get_session_actor(request)}"
-    agent_id = str(payload.get("agent_id") or "").strip()
+    agent_id = session_id
     approval_id = payload.get("approval_id")
     # Warrant ausschließlich aus dem serverseitigen Registry, nie aus dem Body.
     from backend.tool_warrants import get_warrant_for_session
@@ -137,6 +139,7 @@ async def api_execute_plugin_tool(request: Request, payload: dict = Body(...)):
     try:
         res = await pm.execute_plugin_tool(tool_name, args)
         record_tool_read_side_effect(session_id, tool_name)
-        return {"status": "success", "result": res}
+        # F10: Plugin-Output vor der Rueckgabe durch den Firewall-Chokepoint.
+        return {"status": "success", "result": guard_result(tool_name, res)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

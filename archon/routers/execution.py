@@ -122,7 +122,10 @@ def api_dlq_replay(request: Request, payload: Dict = Body(...)):
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.replay_job(
         dlq_id=payload.get("dlq_id", ""),
-        simulate_success=bool(payload.get("simulate_success", True))
+        # Default: echter Replay. Simulation nur explizit und gekennzeichnet
+        # (Audit 23.11.2026) — sonst werden Jobs als erfolgreich markiert,
+        # ohne dass jemals ein Zustelldurchlauf stattfand.
+        simulate_success=bool(payload.get("simulate_success", False))
     )
 
 

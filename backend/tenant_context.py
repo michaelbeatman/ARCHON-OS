@@ -25,9 +25,24 @@ import sqlite3
 import threading
 from typing import Any, Dict, List, Optional
 
-from archon.core.runtime import WORKSPACE_DIR
+# Autoritative Basis ist der Repo-Root (identisch mit backend.db_paths).
+# Vorher kam WORKSPACE_DIR aus archon.core.runtime ("./agent_workspace") und
+# erzeugte ein zweites, leeres data/tenants-Verzeichnis -> Split-Brain.
+from backend.db_paths import WORKSPACE_DIR
 
 logger = logging.getLogger("archon.tenant_context")
+
+# B2: GoBD-Auditfehler beim Mandantenwechsel duerfen nie still verschwinden.
+_AUDIT_ERROR_COUNTS: Dict[str, int] = {}
+
+
+def _record_audit_error(action: str, exc: BaseException) -> None:
+    _AUDIT_ERROR_COUNTS[action] = _AUDIT_ERROR_COUNTS.get(action, 0) + 1
+    logger.error(
+        "[GoBD-Audit] '%s' fehlgeschlagen (count=%d): %s",
+        action, _AUDIT_ERROR_COUNTS[action], exc,
+    )
+
 
 _REQUEST_TENANT_VAR: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "archon_request_tenant", default=None
@@ -47,6 +62,15 @@ def reset_request_tenant(token: contextvars.Token) -> None:
 ISOLATED_TENANT_DBS = ("erp.db", "kanban.db", "crm.db", "contracts.db", "deals.db")
 CONSOLIDATED_TENANT_DBS = ("ops.db", "business.db", "memory.db")
 PRIMARY_TENANT_IDS = frozenset({"archon-systems", "default"})
+
+# Benutzerentscheidung 22.11.2026: JEDE Mandant bekommt eine eigene,
+# physisch isolierte Datenbank — auch 'default' und 'archon-systems'.
+# Damit ist DSGVO Art. 17 eindeutig auf eine Datei anwendbar und die
+# 28→3-Konsolidierung bleibt pro Mandant erhalten (3 Domänen-DBs je Tenant).
+FULL_TENANT_ISOLATION = (
+    os.environ.get("ARCHON_TENANT_FULL_ISOLATION", "1").strip().lower()
+    not in ("0", "false", "no", "off")
+)
 
 DEFAULT_NUMBER_PREFIXES = {
     "invoice": "RE",
@@ -389,6 +413,37 @@ class TenantContextManager:
         isolated_path = self.resolve_tenant_db(fname, tid)
 
         with self._lock:
+            # VOLLSTAENDIGE MANDANTEN-ISOLATION (Benutzerentscheidung):
+            # Auch Primärmandanten arbeiten ausschliesslich unter
+            # data/tenants/<tid>/. Bisher gemeinsam genutzte DBs werden einmalig
+            # konsistent in das Mandantenverzeichnis kopiert. Danach gibt es
+            # keine geteilten Daten mehr und Art.-17 kann sauber löschen.
+            if FULL_TENANT_ISOLATION:
+                if not os.path.isfile(isolated_path):
+                    legacy_candidates = [
+                        os.path.join(self.workspace_dir, "data", fname),
+                        os.path.join(os.path.expanduser("~"), ".hermes", fname),
+                    ]
+                    if fname in ("crm.db",):
+                        legacy_candidates.append(
+                            os.path.join(self.workspace_dir, "data", "business.db")
+                        )
+                    env_override = os.environ.get("ARCHON_LEGACY_DB_DIR", "").strip()
+                    if env_override:
+                        legacy_candidates.insert(0, os.path.join(env_override, fname))
+                    for legacy in legacy_candidates:
+                        if _atomic_sqlite_backup(legacy, isolated_path):
+                            logger.warning(
+                                "[TenantContext] Legacy-DB '%s' nach '%s' migriert.",
+                                legacy, isolated_path,
+                            )
+                            break
+                cache_key = (fname, isolated_path)
+                if cache_key not in self._initialized_schemas or not os.path.isfile(isolated_path):
+                    init_tenant_db_schema(fname, isolated_path)
+                    self._initialized_schemas.add(cache_key)
+                return isolated_path
+
             is_primary_prod = self._is_default_workspace and (tid in PRIMARY_TENANT_IDS)
 
             try:
@@ -455,6 +510,9 @@ class TenantContextManager:
     def switch_tenant(self, company_id: str, actor: str = "admin") -> Dict[str, Any]:
         """Wechselt den aktiven Mandanten atomar, initialisiert dessen DBs und schreibt ein GoBD-Audit-Event."""
         mgr = self._get_corporate_manager()
+        # B2: alten Mandanten fuer den Abbruch bei Auditfehlern merken.
+        prev_company = mgr.get_company()
+        previous_id = str((prev_company or {}).get("id") or "default")
         ok = mgr.set_active_company(company_id)
         if not ok:
             raise KeyError(f"Mandant '{company_id}' nicht gefunden.")
@@ -479,7 +537,15 @@ class TenantContextManager:
                     },
                 )
             except Exception as exc:
-                logger.warning(f"[TenantContext] GoBD-Audit-Log fuer Mandantenwechsel fehlgeschlagen: {exc}")
+                # B2: kein Mandantenwechsel ohne GoBD-Auditnachweis.
+                _record_audit_error("tenant_switched", exc)
+                try:
+                    mgr.set_active_company(previous_id)
+                except Exception as rollback_exc:
+                    _record_audit_error("tenant_switch_rollback", rollback_exc)
+                raise RuntimeError(
+                    f"Mandantenwechsel abgebrochen: GoBD-Audit-Log fehlgeschlagen: {exc}"
+                ) from exc
 
         return {
             "status": "switched",
@@ -493,60 +559,167 @@ class TenantContextManager:
     # Getrennte Nummernkreise je Mandant
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Nummernkreise: SQLite als Authorität (prozessübergreifend, GoBD)
+    # ------------------------------------------------------------------
+
     def _ranges_file(self, company_id: Optional[str] = None) -> str:
+        """Legacy-Datei (nur noch fuer die einmalige Migration)."""
         return os.path.join(self.get_tenant_dir(company_id), "number_ranges.json")
+
+    def _numbers_db_path(self, company_id: str) -> str:
+        """Isolierte DB des Mandanten, in der die Sequenzen liegen."""
+        path = self.resolve_tenant_db("erp.db", company_id)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        return path
+
+    def _ensure_number_sequences_table(self, company_id: str) -> str:
+        path = self._numbers_db_path(company_id)
+        with sqlite3.connect(path, timeout=15.0) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS document_number_sequences (
+                    tenant_id TEXT NOT NULL,
+                    doc_type  TEXT NOT NULL,
+                    year      INTEGER NOT NULL,
+                    prefix    TEXT NOT NULL,
+                    next_seq  INTEGER NOT NULL,
+                    padding   INTEGER NOT NULL DEFAULT 4,
+                    PRIMARY KEY (tenant_id, doc_type, year)
+                )
+            """)
+            # Einmalige Migration aus number_ranges.json (Zaehlerstand muss
+            # erhalten bleiben — sonst drohen doppelte Rechnungsnummern).
+            legacy = self._ranges_file(company_id)
+            legacy_migrated = False
+            ranges: Dict[str, Any] = {}
+            if os.path.exists(legacy):
+                try:
+                    with open(legacy, "r", encoding="utf-8") as fh:
+                        ranges = json.load(fh)
+                    if isinstance(ranges, dict):
+                        for doc_type, entry in ranges.items():
+                            if not isinstance(entry, dict):
+                                continue
+                            prefix = str(entry.get("prefix") or "")
+                            year_match = re.search(r"(20\d{2})", prefix)
+                            year = int(year_match.group(1)) if year_match else datetime.datetime.now().year
+                            conn.execute(
+                                """INSERT OR IGNORE INTO document_number_sequences
+                                   (tenant_id, doc_type, year, prefix, next_seq, padding)
+                                   VALUES (?, ?, ?, ?, ?, ?)""",
+                                (company_id, doc_type, year, prefix,
+                                 int(entry.get("next_seq") or 1),
+                                 int(entry.get("padding") or 4)),
+                            )
+                    legacy_migrated = True
+                except Exception as exc:
+                    logger.warning("[TenantContext] Nummernkreis-Migration %s: %s", legacy, exc)
+            conn.commit()
+            # Zaehlerstand ZUERST verifizieren: nichts darf still auf 1 zurueckfallen.
+            expected = sum(
+                1 for v in (ranges.values() if isinstance(ranges, dict) else [])
+                if isinstance(v, dict)
+            )
+            actual = conn.execute(
+                "SELECT COUNT(*) FROM document_number_sequences WHERE tenant_id = ?",
+                (company_id,),
+            ).fetchone()[0]
+            if expected and actual < expected:
+                raise RuntimeError(
+                    f"[TenantContext] Nummernkreis-Migration unvollstaendig: {actual}/{expected} Zaehler "
+                    f"fuer Mandant '{company_id}' — Zaehlerdatei bewusst NICHT archiviert."
+                )
+            # KRITISCH (Audit 23.11.2026): die Legacy-Datei darf ERST nach
+            # Commit UND erfolgreicher Verifikation umbenannt werden. Vorher
+            # war sie bei einem unvollstaendigen Lauf bereits weg → doppelte
+            # Belegnummern (GoBD).
+            if legacy_migrated and os.path.exists(legacy):
+                os.replace(legacy, legacy + ".migrated")
+        return path
 
     def get_number_ranges(self, company_id: Optional[str] = None) -> Dict[str, Any]:
         tid = sanitize_tenant_id(company_id) if company_id else self.get_active_tenant_id()
-        fpath = self._ranges_file(tid)
-        with self._lock:
-            if os.path.exists(fpath):
-                try:
-                    with open(fpath, "r", encoding="utf-8") as fh:
-                        return json.load(fh)
-                except (OSError, ValueError) as exc:
-                    logger.warning(f"[TenantContext] number_ranges.json nicht lesbar ({fpath}): {exc}")
-            year = datetime.datetime.now().year
-            short_code = tid.upper()[:6]
-            defaults = {
-                doc_type: {
-                    "prefix": f"{pfx}-{short_code}-{year}-",
-                    "next_seq": 1,
-                    "padding": 4,
-                }
-                for doc_type, pfx in DEFAULT_NUMBER_PREFIXES.items()
+        path = self._ensure_number_sequences_table(tid)
+        year = datetime.datetime.now().year
+        result: Dict[str, Any] = {}
+        with sqlite3.connect(path, timeout=15.0) as conn:
+            rows = conn.execute(
+                "SELECT doc_type, prefix, next_seq, padding FROM document_number_sequences "
+                "WHERE tenant_id = ? AND year = ?",
+                (tid, year),
+            ).fetchall()
+        for doc_type, prefix, next_seq, padding in rows:
+            result[doc_type] = {
+                "prefix": prefix,
+                "next_seq": int(next_seq),
+                "padding": int(padding),
             }
-            self._save_number_ranges(tid, defaults)
-            return defaults
+        # Fehlende Typen mit Defaults ergaenzen (nur lesend, kein Schreiben
+        # im Read-Pfad — die Tabelle wird bei next_document_number gefuellt).
+        short_code = tid.upper()[:6]
+        for doc_type, pfx in DEFAULT_NUMBER_PREFIXES.items():
+            result.setdefault(doc_type, {
+                "prefix": f"{pfx}-{short_code}-{year}-",
+                "next_seq": 1,
+                "padding": 4,
+            })
+        return result
 
     def _save_number_ranges(self, company_id: str, data: Dict[str, Any]) -> None:
-        fpath = self._ranges_file(company_id)
-        tmp = f"{fpath}.tmp.{os.getpid()}"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2)
-        os.replace(tmp, fpath)
+        """Kompatibilitätswrapper: schreibt in SQLite statt in eine JSON-Datei."""
+        path = self._ensure_number_sequences_table(company_id)
+        year = datetime.datetime.now().year
+        with sqlite3.connect(path, timeout=15.0) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            for doc_type, entry in (data or {}).items():
+                if not isinstance(entry, dict):
+                    continue
+                conn.execute("""
+                    INSERT INTO document_number_sequences
+                        (tenant_id, doc_type, year, prefix, next_seq, padding)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(tenant_id, doc_type, year) DO UPDATE SET
+                        prefix = excluded.prefix,
+                        next_seq = excluded.next_seq,
+                        padding = excluded.padding
+                """, (company_id, doc_type, year, str(entry.get("prefix") or ""),
+                      int(entry.get("next_seq") or 1), int(entry.get("padding") or 4)))
+            conn.commit()
 
     def next_document_number(self, doc_type: str, company_id: Optional[str] = None) -> str:
-        """Vergibt atomar die nächste Belegnummer im Nummernkreis des Mandanten."""
+        """Vergibt prozessübergreifend atomar die nächste Belegnummer (GoBD)."""
         if doc_type not in DEFAULT_NUMBER_PREFIXES:
             raise ValueError(f"Unbekannter Belegtyp '{doc_type}'. Erlaubt: {list(DEFAULT_NUMBER_PREFIXES)}")
         tid = sanitize_tenant_id(company_id) if company_id else self.get_active_tenant_id()
-        with self._lock:
-            ranges = self.get_number_ranges(tid)
-            entry = ranges.setdefault(
-                doc_type,
-                {
-                    "prefix": f"{DEFAULT_NUMBER_PREFIXES[doc_type]}-{tid.upper()[:6]}-{datetime.datetime.now().year}-",
-                    "next_seq": 1,
-                    "padding": 4,
-                },
-            )
-            seq = int(entry.get("next_seq", 1))
-            pad = int(entry.get("padding", 4))
-            formatted = f"{entry['prefix']}{str(seq).zfill(pad)}"
-            entry["next_seq"] = seq + 1
-            self._save_number_ranges(tid, ranges)
-            return formatted
+        path = self._ensure_number_sequences_table(tid)
+        year = datetime.datetime.now().year
+        short_code = tid.upper()[:6]
+        default_prefix = f"{DEFAULT_NUMBER_PREFIXES[doc_type]}-{short_code}-{year}-"
+
+        with sqlite3.connect(path, timeout=15.0) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT prefix, next_seq, padding FROM document_number_sequences "
+                "WHERE tenant_id = ? AND doc_type = ? AND year = ?",
+                (tid, doc_type, year),
+            ).fetchone()
+            if row is None:
+                prefix, seq, pad = default_prefix, 1, 4
+                conn.execute(
+                    "INSERT INTO document_number_sequences "
+                    "(tenant_id, doc_type, year, prefix, next_seq, padding) VALUES (?, ?, ?, ?, ?, ?)",
+                    (tid, doc_type, year, prefix, seq + 1, pad),
+                )
+            else:
+                prefix, seq, pad = str(row[0]), int(row[1]), int(row[2])
+                conn.execute(
+                    "UPDATE document_number_sequences SET next_seq = ? "
+                    "WHERE tenant_id = ? AND doc_type = ? AND year = ?",
+                    (seq + 1, tid, doc_type, year),
+                )
+            conn.commit()
+        return f"{prefix}{str(seq).zfill(pad)}"
 
     def get_isolation_status(self, company_id: Optional[str] = None) -> Dict[str, Any]:
         tid = sanitize_tenant_id(company_id) if company_id else self.get_active_tenant_id()

@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.cache import ttl_cache
 from archon.core.config import config
@@ -37,6 +38,13 @@ def configure(**deps: Any) -> None:
 
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+
+class DbRestoreRequest(BaseModel):
+    """Restore-Payload: Dateiname Pflicht, Ausfuehrung nur mit confirmed=True."""
+    model_config = ConfigDict(extra="ignore")
+    file_name: str = Field(min_length=1, max_length=255)
+    confirmed: bool = False
 
 
 def _require_admin(request: Request) -> None:
@@ -482,6 +490,25 @@ def api_backup_databases(request: Request):
 def api_list_db_backups():
     from backend.db_backup_manager import db_backup_manager
     return {"status": "success", "backups": db_backup_manager.list_backups()}
+
+
+@router.post("/api/system/backup-db/restore")
+def api_restore_db_backup(request: Request, body: DbRestoreRequest):
+    """Getesteter Restore-Pfad: dry_run erst pruefen, dann mit Confirmed-Flag ausführen."""
+    _require_admin(request)
+    from backend.db_backup_manager import db_backup_manager
+    file_name = body.file_name
+    if not file_name:
+        raise HTTPException(status_code=400, detail="file_name erforderlich")
+    confirmed = body.confirmed
+    try:
+        result = db_backup_manager.restore_backup(file_name, dry_run=not confirmed)
+        return {"status": "success", **result}
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("[System] DB-Restore fehlgeschlagen: %s", exc)
+        raise HTTPException(status_code=500, detail="Restore fehlgeschlagen")
 
 
 @router.post("/api/system/optimize-db")

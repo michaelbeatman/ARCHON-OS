@@ -64,6 +64,9 @@ def test_core_dispatcher_omniroute_alias_and_ollama_fallback(monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    # Interner Gateway-Name: DNS im Test auf private IP auflösen. Fail-Closed
+    # bei nicht auflösbarem DNS bleibt Produktivverhalten (Audit 23.11.2026).
+    monkeypatch.setattr("socket.getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("127.0.0.1", 20128))])
 
     posted_urls = []
 

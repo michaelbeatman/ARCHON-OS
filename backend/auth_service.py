@@ -131,6 +131,14 @@ class AuthService:
         # 0.0.0.0 und jede LAN-/oeffentliche IP sind kein Localhost.
         if bind and bind not in local_binds:
             return True
+        # KRITISCH: Docker/Demo-Compose starten uvicorn mit --host 0.0.0.0,
+        # setzen aber oft kein ARCHON_BIND_IP. Beim Host-Port-Mapping auf
+        # 0.0.0.0 darf Auth niemals aus bleiben (Fallback-Admin fuer alle).
+        host = str(
+            os.environ.get("UVICORN_HOST") or os.environ.get("HOST") or ""
+        ).strip()
+        if host and host not in local_binds:
+            return True
         return False
 
     @staticmethod
@@ -392,12 +400,16 @@ class AuthService:
 
         with _get_db() as conn:
             cur = conn.cursor()
+            # KRITISCH: frueher wurde auch der Klartext-Token akzeptiert
+            # (`WHERE s.token IN (hash, raw)`). Wer die DB schreiben kann,
+            # konnte einen Admin-Session-Eintrag mit bekanntem Klartext-Token
+            # einfügen. Nur noch den Hash akzeptieren.
             cur.execute("""
                 SELECT s.token AS stored_token, s.last_seen_at, u.id, u.username, u.display_name, u.email, u.role, u.is_active, s.expires_at
                 FROM user_sessions s
                 JOIN users u ON s.user_id = u.id
-                WHERE s.token IN (?, ?) AND s.expires_at > ?
-            """, (tok_hash, token, now))
+                WHERE s.token = ? AND s.expires_at > ?
+            """, (tok_hash, now))
             row = cur.fetchone()
             if not row or not row["is_active"]:
                 return None

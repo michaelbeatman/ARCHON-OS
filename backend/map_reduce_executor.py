@@ -101,6 +101,11 @@ class MapReduceExecutor:
                     "status": "completed",
                     "item_preview": str(item)[:80],
                     "output": res,
+                    # Ohne injizierten worker_fn findet KEINE echte Analyse
+                    # statt (frueher: sleep(0.01) + erfundener Text). Das muss
+                    # im Ergebnis explizit ausgewiesen werden.
+                    "simulated": worker_fn is None,
+                    "dry_run": worker_fn is None,
                     "duration_ms": round((time.perf_counter() - t0) * 1000, 2)
                 }
             except asyncio.TimeoutError:

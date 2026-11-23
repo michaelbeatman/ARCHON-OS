@@ -41,29 +41,52 @@ async function proxyToArchon(
   if (apiKey) forwardHeaders['X-API-Key'] = apiKey;
 
   let lastError: string = 'Archon Backend nicht erreichbar';
-  for (const base of ARCHON_TARGETS) {
+  let lastResponse: NextResponse | null = null;
+  for (let i = 0; i < ARCHON_TARGETS.length; i += 1) {
+    const base = ARCHON_TARGETS[i];
     const targetUrl = `${base.replace(/\/+$/, '')}/${pathStr}${search}`;
     try {
+      // KRITISCH (Audit 23.11.2026): SSE-Streams dürfen NICHT nach 5 s
+      // abgebrochen werden — der Backend-Bus sendet Keepalive alle 20 s.
+      const isSseRequest = pathStr.includes('events/stream') || pathStr.includes('/stream');
       const upstream = await fetch(targetUrl, {
         method,
         headers: forwardHeaders,
         body: bodyBuffer && bodyBuffer.byteLength > 0 ? bodyBuffer : undefined,
         cache: 'no-store',
+        signal: isSseRequest ? undefined : AbortSignal.timeout(5000),
       });
       const respHeaders: Record<string, string> = {};
       const respCt = upstream.headers.get('content-type');
       if (respCt) respHeaders['Content-Type'] = respCt;
-      return new NextResponse(upstream.body, {
+      if (isSseRequest || respCt?.includes('text/event-stream')) {
+        for (const h of ['Cache-Control', 'X-Accel-Buffering']) {
+          const v = upstream.headers.get(h);
+          if (v) respHeaders[h] = v;
+        }
+      }
+      const response = new NextResponse(upstream.body, {
         status: upstream.status,
         headers: respHeaders,
       });
+      // Früher wurde die ERSTE HTTP-Antwort sofort zurückgegeben — auch ein
+      // 404/500 eines falsch konfigurierten Ziels. Dann wurden die korrekten
+      // Fallbacks nie probiert und die komplette Content-Machine lieferte 404.
+      if (upstream.ok || i === ARCHON_TARGETS.length - 1) {
+        return response;
+      }
+      lastResponse = response;
+      await upstream.body?.cancel().catch(() => undefined);
     } catch (err: unknown) {
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
 
+  if (lastResponse) return lastResponse;
+  // Keine internen_HOST/Port/DNS-Details an den Client (OWASP ASVS 5.0).
+  console.error('[archon-proxy] Backend nicht erreichbar:', lastError);
   return NextResponse.json(
-    { error: 'Archon FastAPI nicht erreichbar', details: lastError },
+    { error: 'Archon Backend nicht erreichbar', request_id: crypto.randomUUID() },
     { status: 502 }
   );
 }
@@ -90,6 +113,14 @@ export async function PATCH(
 ) {
   const { path } = await params;
   return proxyToArchon(request, 'PATCH', path);
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  const { path } = await params;
+  return proxyToArchon(request, 'PUT', path);
 }
 
 export async function DELETE(

@@ -1193,12 +1193,15 @@
            data-i18n-title="view.addresses.title_sterne_bewertung_auf_0_zuruecksetzen">
             🔄
           </button>
+          <!-- Kein Schein-Button mehr: der Formular-/Layout-Editor ist nicht
+               implementiert. Button deaktiviert statt alert() mit Fake-Status. -->
           <button
             type="button"
-            onclick="alert('Formular-Felder &amp; Layout-Editor aktiv')"
-            class="p-2 rounded-xl text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 transition cursor-pointer text-lg leading-none"
-            title="Formular-Felder anpassen"
-           data-i18n-title="view.addresses.title_formular_felder_anpassen">
+            disabled
+            aria-disabled="true"
+            class="p-2 rounded-xl text-slate-400 opacity-50 cursor-not-allowed text-lg leading-none"
+            title="Formular-Layout-Editor derzeit nicht verfügbar"
+            data-i18n-title="view.addresses.title_formular_layout_editor_derzeit_nicht_verfuegbar">
             ⚙️
           </button>
         </div>

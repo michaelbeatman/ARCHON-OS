@@ -9,12 +9,20 @@ logger = logging.getLogger("archon.routers.operations_finetuning")
 
 import os
 import sqlite3
-from typing import Any, Dict
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.paths import OPT_DATA_DIR, STATE_DB_PATH
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+
+class FinetuningPrepareRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    format: str = Field(default="chat", pattern=r"^(chat|alpaca|sharegpt)$")
+    min_score: int = Field(default=0, ge=0, le=100)
+    include_learnings: bool = True
+    split_ratio: float = Field(default=0.9, ge=0.0, le=1.0)
 
 
 def _query_feedback_and_learnings_counts(db_path: str) -> tuple[int, int]:
@@ -69,7 +77,7 @@ def api_finetuning_status():
 
 
 @router.post("/finetuning/prepare-dataset")
-def api_finetuning_prepare(req: Dict[str, Any] = Body(...)):
+def api_finetuning_prepare(req: FinetuningPrepareRequest):
     """Extrahiert Datensätze aus Feedback & Learnings für das Modell-Feintuning."""
     try:
         from scripts.prepare_finetuning_dataset import DEFAULT_DB_PATH, DEFAULT_OUTPUT_DIR, prepare_dataset
@@ -78,10 +86,10 @@ def api_finetuning_prepare(req: Dict[str, Any] = Body(...)):
         db_path = opt_agentic_db if os.path.exists(opt_agentic_db) else DEFAULT_DB_PATH
         out_dir = os.path.join(OPT_DATA_DIR, "finetuning") if os.path.exists(OPT_DATA_DIR) else DEFAULT_OUTPUT_DIR
 
-        fmt = req.get("format", "chat")
-        min_score = int(req.get("min_score", 0))
-        include_learnings = bool(req.get("include_learnings", True))
-        split_ratio = float(req.get("split_ratio", 0.9))
+        fmt = req.format
+        min_score = req.min_score
+        include_learnings = req.include_learnings
+        split_ratio = req.split_ratio
 
         res = prepare_dataset(
             db_path=db_path,

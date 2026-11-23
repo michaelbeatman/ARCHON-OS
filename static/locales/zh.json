@@ -1735,6 +1735,7 @@
       "delete_title": "归档 / 删除物品"
     },
     "addresses": {
+      "title_formular_layout_editor_derzeit_nicht_verfuegbar": "表单布局编辑器当前不可用",
       "kontakte_crm_adressstamm": "联系人 — CRM 主数据",
       "mandant_archon_systems": "租户: archon-systems",
       "vollstaendige_kontakt_crm_tabelle_high_per": "完整联系人及 CRM 数据表（高性能 SQLite）",
@@ -3802,6 +3803,8 @@
       "quality_gate_hint": "移到“Done”前的独立同行评审",
       "review_start": "开始评审",
       "human_approve": "批准",
+      "human_reject": "拒绝",
+      "human_reject_title": "手动拒绝 — 无需 AI 审核即可要求修改",
       "critique_label": "批评点 / 修改：",
       "next_steps_label": "后续步骤：",
       "feedback_loop": "⭐ 人工反馈闭环",
@@ -4359,7 +4362,7 @@
       "label_saved": "已保存！",
       "log_connecting": "正在连接智能体日志...",
       "log_empty": "此智能体没有近期后台日志。",
-      "log_fallback_ready": "智能体已就绪（待机模式）。",
+      "log_fallback_ready": "实时信息流暂不可用，请重试。",
       "log_fallback_router": "端口 20128 已启用，无警告。",
       "log_telemetry_header": "⚡ 系统与守护进程遥测：",
       "log_turns_header": "💬 最近对话轮次：",
@@ -5391,6 +5394,7 @@
       "move_complete": "完成",
       "move_failed": "状态 {status}：无法更新任务",
       "move_open_operations": "在 Operations 中打开",
+      "task_open_detail_hint": "打开任务详情",
       "move_reject": "❌ 拒绝",
       "move_review": "审核",
       "move_start": "开始",

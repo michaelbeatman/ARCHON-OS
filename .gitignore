@@ -10,6 +10,8 @@ ENV/
 env/
 
 # Environment Variables & Secrets (CRITICAL)
+# Laufzeit-Secrets (Passkey/WebAuthn) gehören nicht ins Repository.
+config/passkey_hitl.json
 .env
 .env.*
 !.env.example
@@ -152,3 +154,7 @@ NOTEBOOKLM_SOURCES.md
 *.cat_backup
 *.ssot_backup
 scripts/generate_notebooklm_package.py
+
+
+# Lokale Master-Dev Docker-Compose-Overrides (nicht auf Produktivservern)
+docker-compose.override.yml

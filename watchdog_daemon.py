@@ -73,6 +73,9 @@ class WatchdogDaemon:
         self.token_tracker: Dict[str, int] = {}
         self.last_oracle_run = 0
         self.is_running = True
+        import threading as _threading
+        self._stop_event = _threading.Event()
+        self._thread = None
         logger.info(f"Initialized Watchdog Daemon. Monitoring logs at: {LOG_DIR}")
         logger.info(f"Alarms file: {ALARMS_FILE}")
 
@@ -100,8 +103,23 @@ class WatchdogDaemon:
         alarms.insert(0, new_alarm)
         alarms = alarms[:50]  # Keep last 50 alarms
         try:
-            with open(ALARMS_FILE, "w", encoding="utf-8") as f:
-                json.dump(alarms, f, indent=2, ensure_ascii=False)
+            # Atomar schreiben: ein Abbruch mitten in json.dump wuerde die
+            # Alarmdatei korumpieren (frueher direkt open("w")).
+            import tempfile
+            os.makedirs(os.path.dirname(os.path.abspath(ALARMS_FILE)), exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(ALARMS_FILE)), suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(alarms, f, indent=2, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp, ALARMS_FILE)
+            except BaseException:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
             logger.info(f"Saved alarm record for '{profile_handle}' to {ALARMS_FILE}")
         except Exception as e:
             logger.error(f"Failed to save alarm to {ALARMS_FILE}: {e}")
@@ -255,6 +273,14 @@ class WatchdogDaemon:
         except Exception as _exc:
             logger.debug("[watchdog_daemon] Ignorierte Ausnahme (Z.255): %s", _exc)
 
+    def stop(self, timeout: float = 5.0) -> None:
+        """Sofortiger, joinbarer Stopp (statt Flag + 30 s sleep)."""
+        self.is_running = False
+        self._stop_event.set()
+        t = self._thread
+        if t is not None and t.is_alive() and t is not threading.current_thread():
+            t.join(timeout=timeout)
+
     def run_forever(self):
         logger.info("Watchdog supervisor loop started.")
         while self.is_running:
@@ -280,13 +306,16 @@ class WatchdogDaemon:
 
                 threading.Thread(target=_run_oracle_bg, daemon=True, name="OracleRadarBg").start()
 
-            time.sleep(CONFIG["CHECK_INTERVAL_SEC"])
+            # Event.wait statt sleep: der Stopp wirkt sofort, nicht erst nach 30 s.
+            if self._stop_event.wait(CONFIG["CHECK_INTERVAL_SEC"]):
+                break
 
 
 def start_background_watchdog():
     import threading
     daemon = WatchdogDaemon()
     t = threading.Thread(target=daemon.run_forever, daemon=True, name="ArchonWatchdogThread")
+    daemon._thread = t
     t.start()
     return daemon
 

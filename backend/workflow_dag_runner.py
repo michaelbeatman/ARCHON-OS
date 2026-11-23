@@ -67,6 +67,119 @@ _PRIVILEGED_NODE_TOOLS = frozenset({
 })
 
 
+class _LeaseGuard:
+    """Geteilter Zustand zwischen Lease-Heartbeat und DAG-Hauptausfuehrung.
+
+    `lost` bedeutet: ein anderer Worker hat den Claim uebernommen -> die
+    Hauptausfuehrung muss sofort abbrechen (fail-closed).
+    `suspended` bedeutet: das Run wurde bewusst an einem HITL-Gate
+    suspendiert -> der Heartbeat darf das nicht als Lease-Verlust melden.
+    """
+
+    def __init__(self) -> None:
+        self.lost = asyncio.Event()
+        self.suspended = asyncio.Event()
+
+
+def _claim_kernel_run(
+    kernel: Any,
+    run_id: str,
+    dag_fingerprint: str,
+    fencing_token: Optional[str] = None,
+) -> Dict[str, Any]:
+    """CAS-Claim mit erlaubtem Retry nach FAILED (sonst fail-closed).
+
+    FAILED ist im Kernel terminal, aber ein expliziter Resume eines
+    fehlgeschlagenen Runs ist zulaessig (Transition FAILED -> PENDING ->
+    RUNNING). COMPLETED/CANCELLED bleiben strikt terminal.
+    """
+    from backend.durable_execution_kernel import PENDING, FAILED
+
+    claim = kernel.claim(
+        run_id, ttl_seconds=300,
+        dag_fingerprint=dag_fingerprint[:2000],
+        fencing_token=fencing_token or None,
+    )
+    if claim.get("claimed") or str(claim.get("state") or "") != FAILED:
+        return claim
+    current = kernel.get_state(run_id)
+    current_token = str((current or {}).get("fencing_token") or "")
+    if not current_token:
+        return claim
+    try:
+        kernel.transition(run_id, PENDING, current_token, reason="retry_after_failure")
+        return kernel.claim(
+            run_id, ttl_seconds=300,
+            dag_fingerprint=dag_fingerprint[:2000],
+            fencing_token=current_token,
+        )
+    except Exception as exc:
+        logger.debug("[WorkflowDAG] Retry-Transition %s nicht moeglich: %s", run_id, exc)
+        return claim
+
+
+def _suspend_run_at_gate(
+    run_id: str,
+    wf_id: str,
+    node_id: str,
+    statuses: Dict[str, str],
+    outputs: Dict[str, Any],
+    fencing_token: str = "",
+    lease_guard: Optional[_LeaseGuard] = None,
+) -> Dict[str, Any]:
+    """Produktivaufrufer von ``durable_kernel.suspend()``.
+
+    Ein HITL-Gate ist kein "wir warten mal kurz": der Run wird mit Checkpoint
+    in den Zustand SUSPENDED ueberfuehrt und die Lease freigegeben, damit ein
+    anderer Worker nach der Entscheidung sauber resume darf.
+    """
+    try:
+        from backend.durable_execution_kernel import durable_kernel, SUSPENDED
+
+        existing = durable_kernel.get_state(run_id)
+        if existing and str(existing.get("state")) == SUSPENDED:
+            if lease_guard is not None and fencing_token:
+                lease_guard.suspended.set()
+            return {"suspended": True, "already": True, "run_id": run_id, "gate_node_id": node_id}
+
+        token = fencing_token or str((existing or {}).get("fencing_token") or "")
+        claim = _claim_kernel_run(durable_kernel, run_id, wf_id, token or None)
+        if not claim.get("claimed"):
+            return {"suspended": False, "reason": claim.get("reason", "claim_failed"), "gate_node_id": node_id}
+        token = str(claim["fencing_token"])
+
+        checkpoint_step = sum(
+            1 for st in statuses.values() if st in ("completed", "skipped_cached")
+        )
+        try:
+            state_json = json.loads(json.dumps({
+                "workflow_id": wf_id,
+                "gate_node_id": node_id,
+                "node_statuses": statuses,
+                "outputs": outputs,
+            }, ensure_ascii=False, default=str))
+        except Exception:
+            state_json = {"workflow_id": wf_id, "gate_node_id": node_id}
+
+        durable_kernel.suspend(
+            run_id, token, checkpoint_step, state_json,
+            reason=f"hitl_gate:{node_id}",
+        )
+        # Keine aktive Lease, waehrend ein Mensch entscheidet.
+        durable_kernel.release(run_id, token)
+        if lease_guard is not None and fencing_token:
+            lease_guard.suspended.set()
+        return {
+            "suspended": True,
+            "run_id": run_id,
+            "gate_node_id": node_id,
+            "checkpoint_step": checkpoint_step,
+        }
+    except Exception as exc:
+        logger.debug("[WorkflowDAG] Durable-Suspend am Gate '%s' fehlgeschlagen: %s", node_id, exc)
+        return {"suspended": False, "error": str(exc)[:300], "gate_node_id": node_id}
+
+
 def validate_dag_def(
     dag_def: Dict[str, Any],
     *,
@@ -1147,6 +1260,43 @@ async def run_workflow_dag(
     gate_approvals: Optional[Dict[str, bool]] = None,
     db_path: Optional[str] = None,
     cancel_token: Optional[Any] = None,
+    *,
+    fencing_token: str = "",
+    lease_guard: Optional[_LeaseGuard] = None,
+) -> Dict[str, Any]:
+    """Wrapper: persistiert 'cancelled' auch bei CancelledError (BaseException)."""
+    try:
+        return await _run_workflow_dag_impl(
+            dag_def, executor_fn=executor_fn, run_id=run_id,
+            gate_approvals=gate_approvals, db_path=db_path,
+            cancel_token=cancel_token, fencing_token=fencing_token,
+            lease_guard=lease_guard,
+        )
+    except asyncio.CancelledError:
+        rid = run_id or ""
+        if rid:
+            try:
+                with _connect(db_path) as conn:
+                    conn.execute(
+                        "UPDATE workflow_runs SET status = 'cancelled', updated_at = ? WHERE run_id = ?",
+                        (time.time(), rid),
+                    )
+                    conn.commit()
+            except Exception as exc:
+                logger.debug("[WorkflowDAG] Cancelled-Status nicht persistierbar: %s", exc)
+        raise
+
+
+async def _run_workflow_dag_impl(
+    dag_def: Dict[str, Any],
+    executor_fn: Optional[ExecutorFn] = None,
+    run_id: Optional[str] = None,
+    gate_approvals: Optional[Dict[str, bool]] = None,
+    db_path: Optional[str] = None,
+    cancel_token: Optional[Any] = None,
+    *,
+    fencing_token: str = "",
+    lease_guard: Optional[_LeaseGuard] = None,
 ) -> Dict[str, Any]:
     """
     Fuehrt einen Workflow-DAG aus (mit Per-run_id-Lock gegen Doppel-Ausfuehrung).
@@ -1176,7 +1326,8 @@ async def run_workflow_dag(
     await run_lock.acquire()
     try:
         return await _run_workflow_dag_locked(
-            dag_def, executor_fn, rid, gate_approvals, db_path, cancel_token=cancel_token
+            dag_def, executor_fn, rid, gate_approvals, db_path, cancel_token=cancel_token,
+            fencing_token=fencing_token, lease_guard=lease_guard,
         )
     finally:
         run_lock.release()
@@ -1189,6 +1340,9 @@ async def _run_workflow_dag_locked(
     gate_approvals: Optional[Dict[str, bool]],
     db_path: Optional[str],
     cancel_token: Optional[Any] = None,
+    *,
+    fencing_token: str = "",
+    lease_guard: Optional[_LeaseGuard] = None,
 ) -> Dict[str, Any]:
     """Eigentliche DAG-Ausfuehrung; Per-run_id-Lock wird von run_workflow_dag gehalten."""
     eff_executor = executor_fn or default_agent_node_executor
@@ -1298,6 +1452,10 @@ async def _run_workflow_dag_locked(
         node = node_map[nid]
         if cancel_token is not None:
             cancel_token.check()
+        if lease_guard is not None and lease_guard.lost.is_set():
+            statuses[nid] = "failed"
+            outputs[nid] = {"status": "error", "error": "lease_lost"}
+            return
         inc_edges = edge_map.get(nid, [])
         edge_by_src = {e["from"]: e for e in inc_edges}
         deps = _all_dependencies_for_node(node, inc_edges)
@@ -1362,6 +1520,7 @@ async def _run_workflow_dag_locked(
                 out = {"awaiting_gate": True, "decision_id": deci_id}
                 st = "awaiting_gate"
                 await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe vor Ausfuehrung.", block_kind="hitl_gate")
+
         elif ntype == "quality_gate":
             from backend.content_machine import evaluate_asset_quality
             combined_up = "\n\n".join(
@@ -1511,6 +1670,17 @@ async def _run_workflow_dag_locked(
 
         outputs[nid] = out
         statuses[nid] = st
+
+        # HITL-Gate: Run mit Checkpoint suspendieren (durable_execution_kernel).
+        # Das ist der Produktivaufrufer von suspend() — ohne ihn blieb der
+        # SUSPENDED-Zustand eine Sackgasse.
+        if st == "awaiting_gate":
+            gate_suspend = _suspend_run_at_gate(
+                rid, wf_id, nid, statuses, outputs,
+                fencing_token=fencing_token, lease_guard=lease_guard,
+            )
+            outputs[nid]["durable_suspend"] = gate_suspend
+
         if trace_id:
             await _otel_span(
                 trace_id,
@@ -1554,7 +1724,24 @@ async def _run_workflow_dag_locked(
             await _run_one(nid)
 
     # Event-gesteuerte Topologische Ready-Queue (kein globales Wave-Barrier-Warten)
+    lease_lost = False
     while pending or running_tasks:
+        if lease_guard is not None and lease_guard.lost.is_set():
+            # Fencing-Token wurde entwertet -> ein anderer Worker fuehrt den Run.
+            # Alle noch laufenden Nodes abbrechen, keine neuen mehr starten.
+            lease_lost = True
+            for _t in running_tasks.values():
+                if not _t.done():
+                    _t.cancel()
+            if running_tasks:
+                await asyncio.gather(*running_tasks.values(), return_exceptions=True)
+            running_tasks.clear()
+            for _nid in list(pending):
+                statuses[_nid] = "failed"
+                outputs[_nid] = {"status": "error", "error": "lease_lost"}
+            pending.clear()
+            logger.warning("[WorkflowDAG] Run '%s': Lease verloren — Ausfuehrung abgebrochen.", rid)
+            break
         if cancel_token is not None and cancel_token.cancelled:
             for _t in running_tasks.values():
                 _t.cancel()
@@ -1616,6 +1803,14 @@ async def _run_workflow_dag_locked(
                 # Exceptions im Task abfangen, damit Scheduler nicht abbricht
                 try:
                     fin_task.result()
+                except asyncio.CancelledError:
+                    # CancelledError erbt BaseException — vorher fiel er durch
+                    # das except Exception, verliess die Schleife und liess den
+                    # Run dauerhaft auf 'running'. Jetzt kontrolliert beenden.
+                    logger.warning("[WorkflowDAG] Node '%s' abgebrochen — Run wird beendet.", fin_nid)
+                    statuses[fin_nid] = "cancelled"
+                    outputs[fin_nid] = {"status": "cancelled", "error": "node_cancelled"}
+                    raise
                 except Exception as _texc:
                     logger.error("[WorkflowDAG] Unbehandelter Task-Fehler in Node '%s': %s", fin_nid, _texc, exc_info=_texc)
                     statuses[fin_nid] = "failed"
@@ -1636,7 +1831,16 @@ async def _run_workflow_dag_locked(
     )
     has_awaiting_gate = any(s == "awaiting_gate" for s in statuses.values())
     cycle_error: Optional[str] = None
-    if unrecovered_fail:
+    if any(st == "cancelled" for st in statuses.values()):
+        # Cancel muss als terminaler Zustand persistiert werden, sonst bleibt
+        # der Run dauerhaft 'running' und blockiert Resume/UI.
+        final_status = "cancelled"
+        cycle_error = "Run cancelled"
+    elif lease_lost:
+        final_status = "failed"
+        cycle_error = "Lease lost during execution — run aborted (fenced)"
+        logger.error(f"[WorkflowDAG] Run '{rid}': {cycle_error}")
+    elif unrecovered_fail:
         final_status = "failed"
     elif has_awaiting_gate:
         final_status = "paused"
@@ -1738,6 +1942,8 @@ async def resume_workflow_run(
     gate_approvals: Optional[Dict[str, bool]] = None,
     executor_fn: Optional[ExecutorFn] = None,
     db_path: Optional[str] = None,
+    *,
+    fencing_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     existing = get_workflow_run(run_id, db_path=db_path)
     if not existing:
@@ -1745,30 +1951,66 @@ async def resume_workflow_run(
     dag_def = existing.get("dag") or {}
     if not dag_def.get("nodes"):
         raise ValueError(f"Workflow run '{run_id}' besitzt keine gespeicherte DAG-Definition fuer Resume.")
-    # P2/Durable Execution: CAS-Claim + Fencing-Token statt prozesslokaler
-    # Locks. Der Kernel ist fail-open gegenueber bereits abgeschlossenen
-    # Laeufen (Rueckwaerts-Kompatibilitaet), protokolliert aber jeden Lauf in
-    # Zustandsmaschine + Command-Log.
-    kernel = None
-    fencing_token = ""
+    # P2/Durable Execution: CAS-Claim + Fencing-Token statt prozesslokaler Locks.
+    # FRUEHER fail-open: ein verweigerter Claim wurde ignoriert und der Run
+    # lief trotzdem — zwei Worker konnten denselben DAG parallel ausfuehren.
+    # Jetzt fail-closed: ohne Claim kein Resume.
     try:
         from backend.durable_execution_kernel import durable_kernel, FAILED as _FAILED, COMPLETED as _COMPLETED
-        kernel = durable_kernel
-        import json as _json
-        claim = kernel.claim(
+        claim = _claim_kernel_run(
+            durable_kernel,
             run_id,
-            ttl_seconds=300,
-            dag_fingerprint=_json.dumps(dag_def, sort_keys=True, ensure_ascii=False)[:2000],
+            json.dumps(dag_def, sort_keys=True, ensure_ascii=False),
+            fencing_token or None,
         )
-        if claim.get("claimed"):
-            fencing_token = claim["fencing_token"]
-        else:
-            logger.info(
-                "[WorkflowDAG] Run '%s' bereits im Kernel erfasst (%s) — Resume läuft ohne neuen Claim.",
-                run_id, claim.get("state"),
+        if not claim.get("claimed"):
+            logger.warning(
+                "[WorkflowDAG] Run '%s': CAS-Claim verweigert (%s/%s) — Resume nicht gestartet.",
+                run_id, claim.get("reason"), claim.get("state"),
             )
+            return {
+                "status": "skipped",
+                "run_id": run_id,
+                "reason": "durable_claim_not_acquired",
+                "claim_reason": claim.get("reason"),
+                "claim_state": claim.get("state"),
+            }
+        token = str(claim["fencing_token"])
     except Exception as kc_exc:
-        logger.debug("[WorkflowDAG] Durable-Kernel Claim nicht verfuegbar: %s", kc_exc)
+        logger.error(
+            "[WorkflowDAG] Durable-Kernel Claim nicht verfuegbar — Resume blockiert (fail-closed): %s",
+            kc_exc,
+        )
+        return {
+            "status": "skipped",
+            "run_id": run_id,
+            "reason": "durable_kernel_unavailable",
+            "error": str(kc_exc)[:300],
+        }
+
+    kernel = durable_kernel
+    # Der Claim galt nur 300 s; lange LLM-DAGs wurden danach von einem
+    # anderen Worker uebernommen. Heartbeat verlaengert die Lease alle 60 s.
+    # Bei renew=False wird `guard.lost` gesetzt und die DAG-Hauptausfuehrung
+    # bricht ab (statt still weiterzulaufen).
+    guard = _LeaseGuard()
+
+    async def _renew_lease() -> None:
+        while True:
+            await asyncio.sleep(60)
+            if guard.suspended.is_set():
+                return  # bewusstes HITL-Suspend, kein Lease-Verlust
+            try:
+                if not kernel.renew(run_id, token, ttl_seconds=300):
+                    logger.warning("[WorkflowDAG] Lease '%s' nicht mehr gueltig — Resume abbrechen.", run_id)
+                    guard.lost.set()
+                    return
+            except Exception as exc:
+                logger.debug("[WorkflowDAG] Lease-Renew Hinweis: %s", exc)
+                guard.lost.set()
+                return
+
+    heartbeat = asyncio.create_task(_renew_lease(), name=f"dag_lease_{run_id}")
 
     result = None
     try:
@@ -1778,19 +2020,34 @@ async def resume_workflow_run(
             run_id=run_id,
             gate_approvals=gate_approvals or {},
             db_path=db_path,
+            fencing_token=token,
+            lease_guard=guard,
         )
     except Exception as run_exc:
-        if kernel and fencing_token:
+        if not guard.suspended.is_set():
             try:
-                kernel.transition(run_id, _FAILED, fencing_token, reason=str(run_exc)[:300])
+                kernel.transition(run_id, _FAILED, token, reason=str(run_exc)[:300])
             except Exception:
                 pass
         raise
+    finally:
+        heartbeat.cancel()
+        await asyncio.gather(heartbeat, return_exceptions=True)
 
-    if kernel and fencing_token:
+    if guard.lost.is_set():
+        # Fencing-Token ist veraltet: kein Status-Transition mit diesem Token,
+        # der uebernehmende Worker besitzt die Hoheit.
+        logger.error("[WorkflowDAG] Run '%s': Lease verloren — Resume als fehlgeschlagen markiert.", run_id)
+        if isinstance(result, dict):
+            result["status"] = "failed"
+            result["error"] = "lease_lost"
+    elif guard.suspended.is_set():
+        # Am HITL-Gate suspendiert: Run bleibt 'paused' bis zur Entscheidung.
+        logger.info("[WorkflowDAG] Run '%s' wurde am HITL-Gate suspendiert.", run_id)
+    else:
         try:
             final_state = _COMPLETED if str(result.get("status", "")).lower() in ("success", "completed") else _FAILED
-            kernel.transition(run_id, final_state, fencing_token, reason=str(result.get("status", "")))
+            kernel.transition(run_id, final_state, token, reason=str(result.get("status", "")))
         except Exception as tr_exc:
             logger.debug("[WorkflowDAG] Durable-Kernel Transition fehlgeschlagen: %s", tr_exc)
 
@@ -1800,7 +2057,18 @@ async def resume_workflow_run(
     # (idempotent — ein zweiter Aufruf durch decisions.py trifft 0 Zeilen).
     try:
         from backend.content_machine import finalize_assets_for_workflow_run
-        approved = all(bool(v) for v in (gate_approvals or {}).values())
+        # KRITISCH: all([]) ist True. Der generische Resume-Endpoint uebergibt
+        # standardmaessig {} — frueher wurden Assets damit ohne jede Freigabe
+        # freigegeben (HITL-Bypass). Nur ein expliziter True am Editorial-Gate
+        # (oder ein expliziter boolescher approved-Wert) zaehlt.
+        approvals = gate_approvals or {}
+        if isinstance(approvals, dict) and approvals:
+            approved = all(bool(v) for v in approvals.values())
+        else:
+            approved = False
+        # WICHTIG: nur ein explizites Dict mit True am Editorial-Gate zaehlt.
+        # `gate_approvals: true` aus dem Request-Body darf die Freigabe nicht
+        # erzwingen (Single-Admin-Self-Approval / HITL-Bypass).
         finalized = finalize_assets_for_workflow_run(run_id, approved=approved)
         if finalized.get("updated"):
             logger.info(
@@ -1872,7 +2140,8 @@ async def resume_suspended_workflow_run(
         run_id, resumed["resume_from_step"], completed,
     )
     result = await resume_workflow_run(
-        run_id=run_id, executor_fn=executor_fn, db_path=db_path
+        run_id=run_id, executor_fn=executor_fn, db_path=db_path,
+        fencing_token=resumed["fencing_token"],
     )
     result["resume"] = resumed
     result["resumed_from_step"] = resumed["resume_from_step"]

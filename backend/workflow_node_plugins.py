@@ -124,21 +124,21 @@ CORE_NODE_PLUGINS: Dict[str, Dict[str, Any]] = {
         "description": "Schneidet, konvertiert, skaliert (9:16 / 16:9), brennt Untertitel/Watermarks ein und extrahiert Audio.",
         "outputs_schema": ["video_path", "audio_path", "thumbnail_path", "command", "content"],
         "params_schema": [
-            {"key": "mode", "label": "Modus", "type": "select", "default": "clip_cut", "options": ["clip_cut", "aspect_9_16", "burn_subtitles", "extract_audio", "thumbnail_frame", "speed_ramp"]},
-            {"key": "input_path", "label": "Eingabe-Datei ({{upstream.step_1.video_path}})", "type": "text", "default": "", "placeholder": "/opt/data/obsidian/.../input.mp4"},
-            {"key": "start_sec", "label": "Start (Sekunden)", "type": "number", "default": 0, "min": 0, "max": 86400, "step": 0.5},
-            {"key": "duration_sec", "label": "Dauer (Sekunden, 0 = voll)", "type": "number", "default": 30, "min": 0, "max": 3600, "step": 0.5},
-            {"key": "aspect_ratio", "label": "Seitenverhaeltnis", "type": "select", "default": "9:16", "options": ["9:16", "16:9", "1:1", "4:5", "original"]},
-            {"key": "resolution", "label": "Ziel-Aufloesung", "type": "select", "default": "1080x1920", "options": ["1080x1920", "1920x1080", "1080x1080", "1080x1350", "original"]},
-            {"key": "fps", "label": "FPS", "type": "select", "default": "30", "options": ["24", "25", "30", "60", "original"]},
-            {"key": "crf", "label": "Qualitaet (CRF 16-30)", "type": "number", "default": 21, "min": 14, "max": 35, "step": 1},
-            {"key": "video_codec", "label": "Video-Codec", "type": "select", "default": "libx264", "options": ["libx264", "libx265", "copy"]},
-            {"key": "audio_codec", "label": "Audio-Codec", "type": "select", "default": "aac", "options": ["aac", "mp3", "copy", "none"]},
-            {"key": "audio_bitrate", "label": "Audio-Bitrate", "type": "select", "default": "192k", "options": ["128k", "192k", "256k", "320k"]},
-            {"key": "subtitle_path", "label": "Untertitel (.srt/.ass, optional)", "type": "text", "default": "", "placeholder": "{{upstream.step_1.srt_path}}"},
-            {"key": "watermark_text", "label": "Watermark-Text (optional)", "type": "text", "default": "", "placeholder": "@archon_os"},
-            {"key": "output_format", "label": "Ausgabe-Format", "type": "select", "default": "mp4", "options": ["mp4", "mov", "webm", "mp3", "jpg"]},
-            {"key": "dry_run", "label": "Nur Befehl planen (Dry-Run)", "type": "checkbox", "default": False},
+            {"key": "mode", "label": "Modus", "type": "select", "default": "clip_cut", "options": ["clip_cut", "aspect_9_16", "burn_subtitles", "extract_audio", "thumbnail_frame", "speed_ramp"], "group": "Schnitt"},
+            {"key": "input_path", "label": "Eingabe-Datei ({{upstream.step_1.video_path}})", "type": "text", "default": "", "placeholder": "/opt/data/obsidian/.../input.mp4", "group": "Schnitt", "context_ref": True},
+            {"key": "start_sec", "label": "Start (Sekunden)", "type": "number", "default": 0, "min": 0, "max": 86400, "step": 0.5, "group": "Schnitt"},
+            {"key": "duration_sec", "label": "Dauer (Sekunden, 0 = voll)", "type": "number", "default": 30, "min": 0, "max": 3600, "step": 0.5, "group": "Schnitt"},
+            {"key": "aspect_ratio", "label": "Seitenverhaeltnis", "type": "select", "default": "9:16", "options": ["9:16", "16:9", "1:1", "4:5", "original"], "group": "Format"},
+            {"key": "resolution", "label": "Ziel-Aufloesung", "type": "select", "default": "1080x1920", "options": ["1080x1920", "1920x1080", "1080x1080", "1080x1350", "original"], "group": "Format"},
+            {"key": "fps", "label": "FPS", "type": "select", "default": "30", "options": ["24", "25", "30", "60", "original"], "group": "Encode", "advanced": True},
+            {"key": "crf", "label": "Qualitaet (CRF 16-30)", "type": "number", "default": 21, "min": 14, "max": 35, "step": 1, "group": "Encode", "advanced": True, "help": "Niedriger = bessere Qualitaet, langsamere Kodierung."},
+            {"key": "video_codec", "label": "Video-Codec", "type": "select", "default": "libx264", "options": ["libx264", "libx265", "copy"], "group": "Encode", "advanced": True},
+            {"key": "audio_codec", "label": "Audio-Codec", "type": "select", "default": "aac", "options": ["aac", "mp3", "copy", "none"], "group": "Audio", "advanced": True},
+            {"key": "audio_bitrate", "label": "Audio-Bitrate", "type": "select", "default": "192k", "options": ["128k", "192k", "256k", "320k"], "group": "Audio", "advanced": True},
+            {"key": "subtitle_path", "label": "Untertitel (.srt/.ass, optional)", "type": "text", "default": "", "placeholder": "{{upstream.step_1.srt_path}}", "group": "Overlay", "advanced": True, "context_ref": True},
+            {"key": "watermark_text", "label": "Watermark-Text (optional)", "type": "text", "default": "", "placeholder": "@archon_os", "group": "Overlay", "advanced": True},
+            {"key": "output_format", "label": "Ausgabe-Format", "type": "select", "default": "mp4", "options": ["mp4", "mov", "webm", "mp3", "jpg"], "group": "Format", "advanced": True},
+            {"key": "dry_run", "label": "Nur Befehl planen (Dry-Run)", "type": "checkbox", "default": False, "group": "Schnitt", "advanced": True},
         ],
     },
     "kinocut": {
@@ -281,6 +281,91 @@ def get_workflow_node_plugin(plugin_id: str) -> Optional[Dict[str, Any]]:
 
 def is_workflow_node_plugin(node_type: str) -> bool:
     return get_workflow_node_plugin(node_type) is not None
+
+
+# =====================================================================
+# KONFIGURATIONS-SCHEMA (Stations-Dialog, Drei-Spalten-Layout)
+# =====================================================================
+
+def get_plugin_schema(plugin_id: str) -> Dict[str, Any]:
+    """Gibt das typisierte Parameter-Schema eines Bausteins fuer die UI zurueck."""
+    plugin = get_workflow_node_plugin(plugin_id) or {}
+    return {
+        "plugin_id": plugin.get("plugin_id", str(plugin_id or "")),
+        "label": plugin.get("label", str(plugin_id or "")),
+        "category": plugin.get("category", ""),
+        "fields": plugin.get("params_schema") or [],
+        "outputs": plugin.get("outputs_schema") or [],
+    }
+
+
+def split_schema_fields(fields: List[Dict[str, Any]]) -> tuple:
+    """Teilt Parameter in (primary, advanced, groups) fuer 'Add Optionen'."""
+    primary: List[Dict[str, Any]] = []
+    advanced: List[Dict[str, Any]] = []
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for field in fields or []:
+        if not isinstance(field, dict) or not field.get("key"):
+            continue
+        group = str(field.get("group") or "Allgemein")
+        groups.setdefault(group, []).append(field)
+        (advanced if field.get("advanced") else primary).append(field)
+    return primary, advanced, groups
+
+
+def validate_node_config(plugin_id: str, overlay: Optional[Dict[str, Any]]) -> List[str]:
+    """Validiert ein Config-Overlay gegen das Plugin-Schema (fail-closed)."""
+    errors: List[str] = []
+    fields = get_plugin_schema(plugin_id)["fields"]
+    known = {f.get("key") for f in fields if isinstance(f, dict)}
+    overlay = overlay if isinstance(overlay, dict) else {}
+    for key in overlay:
+        if key not in known:
+            errors.append(f"Unbekannter Parameter: {key}")
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        key = field.get("key")
+        value = overlay.get(key, field.get("default"))
+        ftype = str(field.get("type") or "text").lower()
+        if ftype == "number":
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                errors.append(f"{key}: keine Zahl")
+                continue
+            if field.get("min") is not None and numeric < float(field["min"]):
+                errors.append(f"{key}: unterhalb Minimum {field['min']}")
+            if field.get("max") is not None and numeric > float(field["max"]):
+                errors.append(f"{key}: oberhalb Maximum {field['max']}")
+        elif ftype == "select" and field.get("options"):
+            if str(value) not in {str(o) for o in field["options"]}:
+                errors.append(f"{key}: ungueltige Option {value!r}")
+    return errors
+
+
+def resolve_node_config(
+    plugin_id: str,
+    overlay: Optional[Dict[str, Any]] = None,
+    upstream: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Plugin-Defaults + Overlay + {{upstream...}}-Templates, validiert."""
+    errors = validate_node_config(plugin_id, overlay)
+    if errors:
+        raise ValueError("; ".join(errors))
+    config: Dict[str, Any] = {}
+    for field in get_plugin_schema(plugin_id)["fields"]:
+        if isinstance(field, dict) and field.get("key"):
+            config[field["key"]] = field.get("default")
+    config.update(overlay or {})
+    resolved = resolve_upstream_templates(config, upstream or {})
+    # Kontext-Pakete: `ctx_<id>`-Referenzen zu den abgelegten Dateipfaden auflösen.
+    try:
+        from backend.context_packages import resolve_context_refs
+        resolved = resolve_context_refs(resolved)
+    except Exception as ctx_exc:
+        logger.debug("[NodePlugins] Kontext-Referenzen nicht aufgelöst: %s", ctx_exc)
+    return resolved
 
 
 # =====================================================================
@@ -600,7 +685,7 @@ async def execute_workflow_node_plugin(
     if not spec:
         return {"status": "error", "error": f"Unbekanntes Node-Plugin: '{plugin_id}'", "content": ""}
 
-    from backend.tool_runtime import enforce_tool_execution
+    from backend.tool_runtime import enforce_tool_execution, guard_result
     gate = enforce_tool_execution(
         # M75: rechenschaftsfähiger Engine-Akteur statt leerer agent_id (Fail-closed)
         agent_id="workflow_engine",
@@ -622,7 +707,9 @@ async def execute_workflow_node_plugin(
 
     handler = _CORE_HANDLERS.get(spec["plugin_id"])
     if handler:
-        return await handler(resolved_params, node, upstream or {})
+        # F10: auch Core-Node-Handler liefern externe/untrusted Daten.
+        res = await handler(resolved_params, node, upstream or {})
+        return guard_result(f"node_plugin:{spec['plugin_id']}", res)
 
     # Generischer 3rd-Party HTTP/MCP-Adapter fuer JSON-Plugins in plugins/workflow_nodes/
     adapter = str(spec.get("adapter") or "http").lower()

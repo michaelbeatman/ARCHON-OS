@@ -354,7 +354,8 @@ const STATUS_COLUMN_KEYS = [
   { id: 'Regelmäßiger Kontakt', title: 'Regelmäßiger Kontakt', defaultIcon: '🔁' },
   { id: 'Parkposition', title: 'Parkposition', defaultIcon: '📁' },
   { id: 'Pool', title: 'Pool', defaultIcon: '🔮' },
-  { id: 'Gesperrt_1Jahr', title: 'Gesperrt (1 Jahr)', defaultIcon: '⛔' }
+  { id: 'Gesperrt_1Jahr', title: 'Gesperrt (1 Jahr)', defaultIcon: '⛔' },
+  { id: 'Irrelevant', title: 'Irrelevant', defaultIcon: '❓' }
 ];
 
 export function DesignEditorTab({

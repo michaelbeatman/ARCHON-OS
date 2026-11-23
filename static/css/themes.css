@@ -807,6 +807,15 @@ div.p-3 > div.flex > button.px-2 {
     .shadcn-card:hover {
       border-color: var(--border-strong) !important;
     }
+    /* Dashboard-Inseln (23.11.2026): nur Farbwechsel beim Hover, keine
+       Transform-/Scale-/Animationsbewegung — sonst "wackeln" die Kacheln. */
+    #mc-view-cockpit .shadcn-card,
+    #mc-active-list > div,
+    #mc-cadre-list > div {
+      transform: none !important;
+      animation: none !important;
+      transition: border-color 0.15s ease, background-color 0.15s ease !important;
+    }
     .shadcn-card-subtle {
       background-color: var(--secondary) !important;
       color: var(--foreground) !important;

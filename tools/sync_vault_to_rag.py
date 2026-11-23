@@ -27,7 +27,7 @@ import time
 import json
 import argparse
 from pathlib import Path
-from typing import List, Set, Optional
+from typing import Any, Dict, List, Set, Optional
 
 # Httpx bevorzugen, Fallback auf urllib
 try:
@@ -83,33 +83,46 @@ def get_sync_state_file_path() -> Path:
         return fallback
 
 
-def load_synced_files(state_path: Path) -> Set[str]:
-    """Lädt die Liste bereits erfolgreich synchronisierter Dateipfade (normalisiert)."""
+def load_synced_files(state_path: Path) -> Dict[str, Dict[str, Any]]:
+    """C20: Pfad -> {mtime,size}. Alte Listenformate werden einmalig migriert."""
     if not state_path.exists():
-        return set()
+        return {}
 
     try:
         with open(state_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+            if isinstance(data, dict) and "synced_files" in data:
+                data = data["synced_files"]
             if isinstance(data, list):
-                return set(data)
-            elif isinstance(data, dict) and "synced_files" in data:
-                return set(data["synced_files"])
+                # Legacy: keine mtime vorhanden -> einmal neu synchronisieren
+                return {str(p): {} for p in data}
+            if isinstance(data, dict):
+                return {str(k): (v if isinstance(v, dict) else {}) for k, v in data.items()}
     except Exception as e:
         print(f"[WARNUNG] Status-Datei '{state_path}' konnte nicht gelesen werden: {e}", file=sys.stderr)
 
-    return set()
+    return {}
 
 
-def record_synced_file(state_path: Path, rel_path_str: str) -> None:
-    """Speichert einen neuen synchronisierten Dateipfad atomar in synced_files.json."""
+def _file_fingerprint(file_path: Path) -> Dict[str, Any]:
+    try:
+        st = file_path.stat()
+        return {"mtime": st.st_mtime, "size": st.st_size}
+    except OSError:
+        return {}
+
+
+def record_synced_file(state_path: Path, rel_path_str: str, file_path: Optional[Path] = None) -> None:
+    """Speichert Pfad + Fingerprint atomar (C20: Aenderungen erkennbar)."""
     synced = load_synced_files(state_path)
-    synced.add(rel_path_str)
+    synced[rel_path_str] = _file_fingerprint(file_path) if file_path else {}
     try:
         state_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = state_path.with_suffix(".tmp")
         with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(sorted(list(synced)), f, indent=2, ensure_ascii=False)
+            json.dump(synced, f, indent=2, ensure_ascii=False, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
         temp_path.replace(state_path)
     except Exception as e:
         print(f"[WARNUNG] Status-Datei '{state_path}' konnte nicht aktualisiert werden: {e}", file=sys.stderr)
@@ -140,7 +153,7 @@ def get_anythingllm_base_url() -> str:
     return "http://anything-llm:3001/api/v1"
 
 
-def should_include_file(file_path: Path, vault_base: Path, synced_files: Set[str]) -> bool:
+def should_include_file(file_path: Path, vault_base: Path, synced_files: Dict[str, Dict[str, Any]]) -> bool:
     """
     Prüft, ob eine .md-Datei für den RAG-Index qualifiziert ist:
     - Endung muss .md sein.
@@ -154,9 +167,16 @@ def should_include_file(file_path: Path, vault_base: Path, synced_files: Set[str
     if not filename.lower().endswith(".md"):
         return False
 
-    # 1. Idempotenz-Check: Bereits synchronisiert?
-    if rel_str in synced_files:
-        return False
+    # 1. Idempotenz-Check: nur ueberspringen, wenn der Fingerprint unveraendert
+    # ist. Vorher wurde eine Datei nach der Erstindizierung NIE wieder sync'd.
+    previous = synced_files.get(rel_str)
+    if previous is not None:
+        current = _file_fingerprint(file_path)
+        if previous and current and (
+            abs(float(previous.get("mtime", 0)) - float(current.get("mtime", 0))) < 0.001
+            and previous.get("size") == current.get("size")
+        ):
+            return False
 
     # 2. Ausschluss von Systemordnern & Index-Dateien
     lower_rel = rel_str.lower()
@@ -185,7 +205,7 @@ def should_include_file(file_path: Path, vault_base: Path, synced_files: Set[str
     return False
 
 
-def collect_pending_vault_files(vault_path: Path, synced_files: Set[str]) -> List[Path]:
+def collect_pending_vault_files(vault_path: Path, synced_files: Dict[str, Dict[str, Any]]) -> List[Path]:
     """Sammelt rekursiv alle qualifizierten, noch nicht synchronisierten Markdown-Dateien."""
     if not vault_path.exists():
         return []
@@ -385,7 +405,7 @@ def main():
             print(" -> OK")
             success_count += 1
             # Idempotenz-Tracking: Sofort atomar erfassen
-            record_synced_file(state_file, rel_str)
+            record_synced_file(state_file, rel_str, fpath)
         else:
             print(" -> FEHLER (Embeddings)")
 

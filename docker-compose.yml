@@ -218,6 +218,8 @@ services:
       - N8N_HIRING_BANNER_ENABLED=false
       - N8N_UNVERIFIED_PACKAGES_ENABLED=false
       - N8N_RUNNERS_TASK_TIMEOUT=300
+      # H5: derselbe Secret wie beim Sender — n8n-Code-Node prueft die Signatur
+      - ARCHON_WEBHOOK_HMAC_SECRET=${ARCHON_WEBHOOK_HMAC_SECRET:-}
       - GENERIC_TIMEZONE=${TZ:-UTC}
       - TZ=${TZ:-UTC}
     volumes:

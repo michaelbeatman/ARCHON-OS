@@ -7,9 +7,31 @@ import datetime
 import re
 import time
 import math
+import secrets
+import tempfile
 from typing import List, Dict, Optional, Any
 
 logger = logging.getLogger("archon.local_memory_bridge")
+
+
+def _atomic_write_text(path: str, content: str) -> None:
+    """C20: Temp-Datei + fsync + os.replace — keine truncate-Kollision."""
+    tdir = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(tdir, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=tdir, prefix=".note_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
 
 class _ClosingMemoryConn(sqlite3.Connection):
     """SQLite-Verbindung, die beim Verlassen eines `with`-Blocks automatisch schliesst."""
@@ -22,6 +44,18 @@ class _ClosingMemoryConn(sqlite3.Connection):
 
 class LocalMemoryBridge:
     def __init__(self, db_path=None, vault_path=None):
+        # C20: zuerst den zentralen Resolver (archon.core.runtime) befragen.
+        # Vorher hatte diese Klasse eine eigene Env-Prioritaet und schrieb bei
+        # nur gesetztem ARCHON_OBSIDIAN_DIR in einen ANDEREN Vault als die
+        # /api/vault-Routen (Split-Brain).
+        if not vault_path:
+            try:
+                from archon.core.runtime import resolve_obsidian_vault_path
+                central = resolve_obsidian_vault_path()
+                if central and os.path.isdir(central):
+                    vault_path = central
+            except Exception as exc:
+                logger.debug("[MemoryBridge] Zentraler Vault-Resolver nicht verfuegbar: %s", exc)
         if not vault_path:
             for candidate in [
                 os.environ.get("OBSIDIAN_VAULT_PATH"),
@@ -229,7 +263,9 @@ class LocalMemoryBridge:
             
             safe_title = summary[:50].replace(" ", "_").replace("/", "_").replace("\\", "_").replace(":", "_")
             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            note_filename = f"learning_{safe_title}_{ts}.md"
+            # C20: Zufallssuffix verhindert Ueberschreiben bei identischem
+            # Summary und gleicher Sekunde (zwei Agenten parallel).
+            note_filename = f"learning_{safe_title}_{ts}_{secrets.token_hex(3)}.md"
             note_path = os.path.join(memories_dir, note_filename)
 
             md_content = f"""---
@@ -253,8 +289,7 @@ tags: ["learning", "memory", "{agent_id}"]
 [[00_VAULT_KNOWLEDGE]] | [[Archiv-Hubs]]
 """
             try:
-                with open(note_path, "w", encoding="utf-8") as f:
-                    f.write(md_content)
+                _atomic_write_text(note_path, md_content)
                 obsidian_link = f"[[{note_filename[:-3]}]]"
             except Exception as e:
                 print(f"[MemoryBridge] Warning: Failed to write obsidian note: {e}", file=sys.stderr)

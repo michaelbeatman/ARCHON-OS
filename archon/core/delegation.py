@@ -219,6 +219,12 @@ def _check_delegation_permission(delegator_id: str, target_id: str):
 # Batch D/1: Task -> Handoff-ID, damit verkettete Delegationen reply_to setzen koennen.
 _HANDOFF_IDS_BY_TASK: Dict[str, str] = {}
 
+# C09: Session -> Delegationskette. Verhindert A->B->A-Zirkel und unbegrenzte
+# Tiefe im Hauptpfad (der Mission-Control-Pfad hatte bereits max_depth=3).
+_DELEGATION_CHAIN_BY_SESSION: Dict[str, tuple] = {}
+_MAX_DELEGATION_DEPTH = 5
+_MAX_TRACKED_CHAINS = 5000
+
 
 def _resolve_handoff_criteria(criteria: Optional[str], prof_id: str, task_id: str) -> str:
     """Batch D/2: explizite Akzeptanzkriterien aus dem Delegations-Payload.
@@ -1135,6 +1141,22 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     if not ziel:
         return f"❌ DELEGATION ABGELEHNT — Ziel-Agent '{ziel_raw}' existiert nicht im Agenten-Kader."
 
+    # C09: Zyklus- und Tiefenschranke. Die Kette wird beim Anlegen der
+    # Sub-Session (siehe unten) weitergereicht und beim naechsten Delegations-
+    # Aufruf der Sub-Session ueber origin_session_id wiedergefunden.
+    _chain_key = str(origin_session_id or "")
+    _chain = list(_DELEGATION_CHAIN_BY_SESSION.get(_chain_key, ()))
+    if ziel in _chain:
+        return (
+            f"❌ DELEGATION ABGELEHNT — Zyklus erkannt: "
+            f"{' → '.join(_chain + [ziel])}. Bitte eskalieren statt zurueckdelegieren."
+        )
+    if len(_chain) >= _MAX_DELEGATION_DEPTH:
+        return (
+            f"❌ DELEGATION ABGELEHNT — maximale Delegationstiefe "
+            f"({_MAX_DELEGATION_DEPTH}) erreicht."
+        )
+
     allowed, reason = _check_delegation_permission(delegator_id, ziel)
     if not allowed:
         # Batch D/4: Eskalationshinweis aus der live aufgeloesten Hierarchie.
@@ -1195,6 +1217,11 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     )
 
     tgt_sess = f"mc_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{ziel}_{secrets.token_hex(3)}"
+    # C09: Kette fuer die Sub-Session fortsetzen (mit hartem Groessenlimit).
+    _DELEGATION_CHAIN_BY_SESSION[tgt_sess] = tuple(_chain + [delegator_id, ziel])
+    if len(_DELEGATION_CHAIN_BY_SESSION) > _MAX_TRACKED_CHAINS:
+        for _old in list(_DELEGATION_CHAIN_BY_SESSION)[:_MAX_TRACKED_CHAINS // 2]:
+            _DELEGATION_CHAIN_BY_SESSION.pop(_old, None)
     msg_text = f"{isolation_header}\nMessage from 🤖 {d_name} (@{delegator_id}): {auftrag}"
     with _get_state_db() as conn:
         _ensure_session_exists(conn, tgt_sess, ziel, t_model, auftrag[:50])

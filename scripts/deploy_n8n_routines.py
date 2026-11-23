@@ -502,16 +502,15 @@ def run():
     # Token. Das import_n8n_workflows.py ersetzt ihn bei Bedarf zur Laufzeit.
     template = _prepare_workflows("__ARCHON_SERVICE_TOKEN__")
 
-    # 1. Speichere Template lokal (ohne Secret)
-    json_path = ROOT / "scripts" / "n8n_routine_workflows.json"
-    json_path.write_text(json.dumps(template, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"[OK] Routine-Workflow-Template lokal gespeichert: {json_path}")
-
-    # 1b. Laufzeit-Datei mit echtem Token ausserhalb des Repos
+    # 1. Alles NUR im temporaeren Verzeichnis: der gehaertete Container hat
+    # ein read-only /app und darf keine Repo-Dateien beschreiben.
     runtime_dir = Path(tempfile.mkdtemp(prefix="archon_n8n_deploy_"))
+    template_path = runtime_dir / "n8n_routine_workflows.template.json"
+    template_path.write_text(json.dumps(template, indent=2, ensure_ascii=False), encoding="utf-8")
     runtime_path = runtime_dir / "n8n_routine_workflows.json"
     runtime_path.write_text(json.dumps(workflows, indent=2, ensure_ascii=False), encoding="utf-8")
     os.chmod(runtime_path, 0o600)
+    print(f"[OK] Template + Laufzeitdatei (0600) in {runtime_dir}")
 
     # 2. Kopiere in n8n-Container
     copy_cmd = ["docker", "cp", str(runtime_path), "n8n:/home/node/n8n_routine_workflows.json"]
@@ -547,24 +546,24 @@ def run():
     print("\n[Aktuelle n8n Workflows]:")
     print(res.stdout)
 
-    # 5. Aktualisiere n8n_workflows_bundle.json mit allen Workflows
-    bundle_path = Path("scripts/n8n_workflows_bundle.json")
-    current_bundle = []
-    if bundle_path.exists():
-        try:
-            current_bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
-        except Exception:
-            current_bundle = []
-    
-    # Merge routines into bundle
-    existing_ids = {w["id"] for w in current_bundle if "id" in w}
-    for rw in template:
-        if rw["id"] not in existing_ids:
-            current_bundle.append(rw)
-            existing_ids.add(rw["id"])
-
-    bundle_path.write_text(json.dumps(current_bundle, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"[OK] n8n_workflows_bundle.json aktualisiert ({len(current_bundle)} Workflows).")
+    # 5. Bundle aktualisieren (nur wenn beschreibbar — im Container read-only)
+    bundle_path = ROOT / "scripts" / "n8n_workflows_bundle.json"
+    try:
+        current_bundle = []
+        if bundle_path.exists():
+            try:
+                current_bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+            except Exception:
+                current_bundle = []
+        existing_ids = {w["id"] for w in current_bundle if "id" in w}
+        for rw in template:
+            if rw["id"] not in existing_ids:
+                current_bundle.append(rw)
+                existing_ids.add(rw["id"])
+        bundle_path.write_text(json.dumps(current_bundle, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"[OK] n8n_workflows_bundle.json aktualisiert ({len(current_bundle)} Workflows).")
+    except OSError as exc:
+        print(f"[INFO] Bundle nicht aktualisiert (read-only filesystem): {exc}")
 
 if __name__ == "__main__":
     sys.exit(run() or 0)

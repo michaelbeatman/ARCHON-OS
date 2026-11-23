@@ -330,14 +330,16 @@ def reflect(query: str, sources: List[Dict[str, Any]], asked: List[str], fast_mo
         m = re.search(r"\{.*\}", raw, re.S)
         data = json.loads(m.group(0)) if m else {}
         return {
-            "sufficient": bool(data.get("sufficient", True)),
+            "sufficient": bool(data.get("sufficient", False)),
             "gaps": [str(g) for g in data.get("gaps", [])][:5],
             "queries": [str(q) for q in data.get("queries", [])
                         if str(q).strip() and str(q).strip() not in asked][:3],
         }
     except Exception as e:
         print(f"[ResearchV2] Reflexion nicht moeglich ({e}), beende Schleife.")
-        return {"sufficient": True, "gaps": [], "queries": [], "error": str(e)}
+        # M3: frueher `sufficient=True` — eine kaputte/manipulierte LLM-Antwort
+        # beendete die Recherche vorzeitig und wurde als "ausreichend" gewertet.
+        return {"sufficient": False, "gaps": [], "queries": [], "error": str(e)}
 
 
 # ---------------------------------------------------------------------------

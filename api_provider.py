@@ -217,7 +217,14 @@ def _list_provider_models_uncached(norm_pid: str) -> List[str]:
         for url in ["http://omniroute:20128/v1/models", "http://127.0.0.1:20128/v1/models", "http://host.docker.internal:20128/v1/models"]:
             try:
                 import urllib.request
-                req = urllib.request.Request(url, headers={"User-Agent": "ArchonOS"})
+                headers = {"User-Agent": "ArchonOS"}
+                # M2: der Key wurde bisher nur fuer Chat-Completions injiziert,
+                # /v1/models lief ohne Auth und fiel still auf eine veraltete
+                # statische Liste zurueck.
+                _omni_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()
+                if _omni_key:
+                    headers["Authorization"] = f"Bearer {_omni_key}"
+                req = urllib.request.Request(url, headers=headers)
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
                     if resp.status == 200:
                         data = json.loads(resp.read().decode("utf-8"))
@@ -231,6 +238,11 @@ def _list_provider_models_uncached(norm_pid: str) -> List[str]:
                             return auto_routers + sorted(other_models)
             except Exception as exc:
                 print(f"[APIProvider] Modell-Listen-Provider nicht erreichbar, nutze Fallback-Liste: {exc}", file=sys.stderr)
+        print(
+            "[APIProvider] WARNUNG: OmniRoute-Modelle nicht abrufbar — statische Fallback-Liste "
+            "ist moeglicherweise veraltet.",
+            file=sys.stderr,
+        )
         return [
             "auto/best-coding", "auto/best-reasoning", "auto/best-vision", "auto/best-fast", "auto/best-chat",
             "deepseek-ai/DeepSeek-V4-Pro", "qwen/Qwen3.6-27B", "google/gemma-4-31B-it",

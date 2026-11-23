@@ -4,9 +4,11 @@ title ARCHON AGENTIC OS 2026 - Starter
 cd /d "%~dp0"
 
 set "STACK_PROFILE=standard"
+set "OBS_FLAGS="
 if exist ".env" (
     for /f "usebackq tokens=1,2 delims==" %%A in (".env") do (
         if /i "%%A"=="ARCHON_STACK_PROFILE" set "STACK_PROFILE=%%B"
+        if /i "%%A"=="ARCHON_OBSERVABILITY" if /i "%%B"=="full" set "OBS_FLAGS=--profile monitoring --profile logging --profile replication"
     )
 )
 
@@ -19,7 +21,7 @@ if /i "!STACK_PROFILE!"=="full" set "SERVICES=archon-os docker-socket-proxy herm
 if /i "!STACK_PROFILE!"=="rag" set "SERVICES=archon-os docker-socket-proxy hermes anything-llm chroma n8n ollama-embed"
 
 echo Starte Archon Agentic OS 2026 + Hermes Agent + AnythingLLM (!STACK_PROFILE!)...
-docker compose up -d !SERVICES!
+docker compose !OBS_FLAGS! up -d !SERVICES!
 if %errorlevel% neq 0 (
     echo [FEHLER] Start fehlgeschlagen. Bitte pruefe Docker Desktop.
     pause

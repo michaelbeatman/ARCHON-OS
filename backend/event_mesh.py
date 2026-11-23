@@ -273,7 +273,7 @@ class EventMesh:
                 "event_type": event_type,
                 "reason": "input_sanitizer_unavailable",
             }
-        payload_str = json.dumps(safe_payload, ensure_ascii=False)
+        payload_str = json.dumps(safe_payload, ensure_ascii=False, separators=(",", ":"))
 
         # Idempotenz: stabiler Key aus channel + event_type + kanonischem Payload
         # (oder explizit vom Sender geliefert). EinRetry darf keine zweiten
@@ -398,7 +398,9 @@ class EventMesh:
 
     def emit_outbound_event(self, webhook_url: str, event_type: str, payload: Dict[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
         """Outbox-first: Effekt wird persistiert, dann zugestellt (mit Idempotency-Key)."""
-        payload_str = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+        # H5: kompakte Serialisierung, damit der n8n-Empfaenger mit
+        # JSON.stringify() exakt denselben Bytes-String signiert.
+        payload_str = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), default=str)
         idem = self._outbox_key(webhook_url, event_type, payload)
         now_iso = datetime.datetime.now().isoformat()
         conn = self._get_conn()

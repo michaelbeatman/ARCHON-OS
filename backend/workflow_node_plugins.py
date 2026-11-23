@@ -443,7 +443,7 @@ async def _run_ffmpeg_plugin(params: Dict[str, Any], node: Dict[str, Any], upstr
     if bool(params.get("dry_run")) or not shutil.which("ffmpeg") or not safe_in:
         reason = "dry_run" if params.get("dry_run") else ("ffmpeg_binary_missing" if not shutil.which("ffmpeg") else "no_input_path")
         return {
-            "status": "success",
+            "status": "planned",
             "planned_only": True,
             "reason": reason,
             "command": cmd_str,
@@ -524,7 +524,7 @@ async def _run_tts_plugin(params: Dict[str, Any], node: Dict[str, Any], upstream
 
     if not shutil.which("edge-tts"):
         return {
-            "status": "success",
+            "status": "planned",
             "planned_only": True,
             "reason": "edge_tts_binary_missing",
             "voice": voice,
@@ -556,7 +556,7 @@ async def _run_suno_plugin(params: Dict[str, Any], node: Dict[str, Any], upstrea
     api_key = str(os.environ.get("SUNO_API_KEY") or "").strip()
     if not endpoint or not api_key:
         return {
-            "status": "success",
+            "status": "planned",
             "planned_only": True,
             "reason": "suno_api_not_configured",
             "title": str(params.get("title") or "Track"),
@@ -736,7 +736,7 @@ async def execute_workflow_node_plugin(
             secret_val = str(os.environ.get(env_var) or "").strip()
             if not secret_val:
                 return {
-                    "status": "success",
+                    "status": "planned",
                     "planned_only": True,
                     "reason": "api_key_missing",
                     "missing_env": env_var,

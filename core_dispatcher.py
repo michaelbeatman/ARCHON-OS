@@ -121,7 +121,7 @@ async def trigger_n8n_execution(
     }
     try:
         from utils.safe_http import webhook_signature_headers
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         headers.update(webhook_signature_headers(body))
         async with httpx.AsyncClient(timeout=timeout) as client:

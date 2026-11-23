@@ -132,10 +132,14 @@ def scan_prompt_injection(
             safe_payload = sanitize_outbound_llm_payload(payload_obj, agent_id="security_guard", is_local=bool(gate.get("routed_to_local")))
             data = json.dumps(safe_payload).encode("utf-8")
             
+            headers = {"Content-Type": "application/json"}
+            _omni_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()
+            if _omni_key:
+                headers["Authorization"] = f"Bearer {_omni_key}"
             req = urllib.request.Request(
                 target_ep,
                 data=data,
-                headers={"Content-Type": "application/json"}
+                headers=headers
             )
             with urllib.request.urlopen(req, timeout=3) as resp:
                 res = json.loads(resp.read().decode("utf-8"))
@@ -150,7 +154,13 @@ def scan_prompt_injection(
                 else:
                     llm_verdict = "safe"
         except Exception as _exc:
-            _archon_exc_logger.debug("[local_security_guard] Ignorierte Ausnahme (Z.150): %s", _exc)
+            # M4: frueher fail-open — ein Klassifikatorfehler liess die Eingabe
+            # als "safe" durch. Jetzt mindestens "suspicious" ( kein harter
+            # Block, damit ein Providerausfall nicht den gesamten Ingest stoppt).
+            _archon_exc_logger.warning("[local_security_guard] LLM-Klassifikator fehlgeschlagen (fail-closed): %s", _exc)
+            llm_verdict = "error"
+            if verdict == "safe":
+                verdict = "suspicious"
 
     return {
         "verdict": verdict,
@@ -215,10 +225,14 @@ def validate_ai_output(
             safe_payload = sanitize_outbound_llm_payload(payload_obj, agent_id="security_guard", is_local=bool(gate.get("routed_to_local")))
             data = json.dumps(safe_payload).encode("utf-8")
             
+            headers = {"Content-Type": "application/json"}
+            _omni_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()
+            if _omni_key:
+                headers["Authorization"] = f"Bearer {_omni_key}"
             req = urllib.request.Request(
                 target_ep,
                 data=data,
-                headers={"Content-Type": "application/json"}
+                headers=headers
             )
             with urllib.request.urlopen(req, timeout=4) as resp:
                 res = json.loads(resp.read().decode("utf-8"))
@@ -226,10 +240,14 @@ def validate_ai_output(
                 llm_assessment = reply
                 m = re.search(r"SCORE:\s*(\d+)", reply, re.IGNORECASE)
                 if m:
-                    llm_score = int(m.group(1))
+                    # M4: `SCORE: 999` hob den Wert auf 504 und bestand jedes
+                    # Minimum. Auf den erlaubten Bereich 0-10 begrenzen.
+                    llm_score = max(0, min(10, int(m.group(1))))
                     base_score = round((base_score + llm_score) / 2)
         except Exception as _exc:
-            _archon_exc_logger.debug("[local_security_guard] Ignorierte Ausnahme (Z.229): %s", _exc)
+            # M4: Klassifikatorfehler darf nicht automatisch "TRUST" bedeuten.
+            _archon_exc_logger.warning("[local_security_guard] Output-Klassifikator fehlgeschlagen: %s", _exc)
+            base_score = min(base_score, 3)
 
     if base_score >= min_score:
         recommendation = "TRUST"

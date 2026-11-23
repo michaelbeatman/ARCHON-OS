@@ -238,6 +238,23 @@ def check_local_llm_status(force: bool = False) -> Dict[str, Any]:
     cfg = get_privacy_config()
     target_url = cfg.get("local_llm_url", "http://127.0.0.1:11434/v1")
 
+    # M8: dieser Pfad ist ein administrativer Konnektivitaetscheck, darf aber
+    # nicht genutzt werden, um ausserhalb der LOCAL_ON_PREM-Zone zu verbinden.
+    try:
+        target_url, _target_host, egress_zone = sanitize_llm_endpoint(target_url)
+        if egress_zone != "LOCAL_ON_PREM":
+            _LOCAL_PING_CACHE.update({
+                "ts": now, "available": False, "latency_ms": 0,
+                "models": [], "error": f"blocked_non_local_endpoint:{egress_zone}",
+            })
+            return _LOCAL_PING_CACHE
+    except Exception as exc:
+        _LOCAL_PING_CACHE.update({
+            "ts": now, "available": False, "latency_ms": 0,
+            "models": [], "error": f"endpoint_validation_failed:{exc}",
+        })
+        return _LOCAL_PING_CACHE
+
     try:
         parsed = urlparse(target_url)
         host = parsed.hostname or "127.0.0.1"

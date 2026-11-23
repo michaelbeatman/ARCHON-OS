@@ -138,7 +138,7 @@ class WatchdogDaemon:
         logger.info(f"Sending alarm webhook to n8n ({webhook_url}) for agent '{profile_handle}'...")
         try:
             from utils.safe_http import webhook_signature_headers
-            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             headers = {"Content-Type": "application/json"}
             headers.update(webhook_signature_headers(body))
             if requests:
@@ -178,7 +178,7 @@ class WatchdogDaemon:
         }
         
         from utils.safe_http import webhook_signature_headers
-        abort_body = json.dumps(abort_payload, ensure_ascii=False).encode("utf-8")
+        abort_body = json.dumps(abort_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         abort_headers = {"Content-Type": "application/json"}
         abort_headers.update(webhook_signature_headers(abort_body))
         aborted_successfully = False

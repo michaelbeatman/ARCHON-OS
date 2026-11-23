@@ -353,9 +353,25 @@ class MCPAdapterSkill:
         return self.server_locks[server_name]
 
     async def connect_mcp_server(self, server_script_or_url: str) -> dict:
-        """Registers a connection to an external MCP provider."""
-        self.servers[server_script_or_url] = "active"
-        return {"status": "success", "message": f"MCP connection to '{server_script_or_url}' verified."}
+        """Registriert einen MCP-Endpunkt — ohne Verbindungsaufbau (C21).
+
+        Vorher wurde hier `status: success / connection verified` gemeldet,
+        obwohl kein Handshake und kein JSON-RPC-Kanal existiert. Die Registrierung
+        erlaubt nur den ehrlichen `mcp_execution_not_implemented`-Pfad in
+        `execute_mcp_tool()`.
+        """
+        target = str(server_script_or_url or "").strip()
+        if not target:
+            return {"status": "error", "error": "empty_mcp_target", "verified": False}
+        self.servers[target] = "registered_unverified"
+        return {
+            "status": "registered_unverified",
+            "verified": False,
+            "message": (
+                f"'{target}' wurde registriert, aber NICHT kontaktiert. "
+                "Kein JSON-RPC-Kanal implementiert — MCP-Tool-Ausfuehrung ist nicht verfuegbar."
+            ),
+        }
 
     async def execute_mcp_tool(self, tool_name: str, arguments: dict) -> dict:
         """Executes targeted MCP capability schemas with concurrency locks."""

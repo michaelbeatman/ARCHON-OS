@@ -1542,7 +1542,13 @@ def invalidate_paperclip_agents_cache():
 
 @app.get("/api/paperclip/agents")
 def api_get_paperclip_agents():
-    return {"status": "success", "agents": []}
+    # C21: bisher `status: success` mit leerer Liste — ein totes Endpoint,
+    # das eine funktionierende Integration vortaeuschte.
+    return {
+        "status": "not_configured",
+        "agents": [],
+        "message": "Paperclip-Integration ist nicht angebunden; es werden keine Agenten gemeldet.",
+    }
 
 
 # --- TALENT- & SKILL-MARKTPLATZ ENDPOINTS (ausgelagert nach archon.routers.marketplace) ---

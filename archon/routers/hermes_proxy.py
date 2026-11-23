@@ -83,11 +83,25 @@ async def forward_to_hermes(request: Request) -> Response:
     else:
         ordered_bases = base_candidates
 
-    fwd_headers = {
-        k: v
-        for k, v in request.headers.items()
-        if k.lower() not in ["host", "content-length", "authorization"]
+    # M7: interne Archon-Credentials duerfen niemals an den Hermes-Upstream
+    # weitergegeben werden (gleiche Liste wie utils/reverse_proxy.py:84-105).
+    _blocked = {
+        "host", "content-length", "authorization", "proxy-authorization",
+        "x-archon-session", "x-archon-service-token", "accept-encoding",
     }
+    fwd_headers = {
+        k: v for k, v in request.headers.items() if k.lower() not in _blocked
+    }
+    _cookies = fwd_headers.get("cookie", "")
+    if "archon_session=" in _cookies:
+        _clean = [
+            c.strip() for c in _cookies.split(";")
+            if not c.strip().startswith("archon_session=")
+        ]
+        if _clean:
+            fwd_headers["cookie"] = "; ".join(_clean)
+        else:
+            fwd_headers.pop("cookie", None)
     fwd_headers["Host"] = "localhost:8787"
 
     hermes_token = _hermes_proxy_token()

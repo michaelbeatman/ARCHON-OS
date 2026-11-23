@@ -2,10 +2,13 @@ from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 """Skill-Inventar (Dateiindex, Frontmatter-Parsing, Skills-Endpunkte)."""
 
+import functools
 import json
 import os
 import re
 import sys
+import tempfile
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -72,6 +75,40 @@ _HERMES_SKILLS_CACHE = None
 
 _HERMES_SKILLS_CACHE_TIME = 0
 
+
+def _atomic_write_json(path: str, data: Any) -> None:
+    """C15: Temp-Datei + fsync + os.replace — kein halber Cache bei Abbruch."""
+    tdir = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(tdir, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=tdir, prefix=".skills_cache_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _serialized(lock: threading.Lock):
+    """C15: Check-then-Act-Races auf die Modul-Caches serialisieren."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            with lock:
+                return fn(*args, **kwargs)
+        return wrapper
+    return deco
+
+
+_SKILL_INDEX_LOCK = threading.Lock()
+_SKILLS_CACHE_LOCK = threading.Lock()
+
 GLOBAL_HERMES_SKILLS = [
     # 1. Immobilien & Bau
     {"id": "skill-baugb-checker", "name": "BauGB & B-Plan Prüfer", "category": "Immobilien & Bau", "description": "Prüft Zulässigkeit nach § 30, § 34, § 35 BauGB, GRZ/GFZ und Nachverdichtung.", "tags": ["BauGB", "B-Plan", "§34"]},
@@ -117,6 +154,7 @@ _SKILL_FILE_INDEX = {}
 _SKILL_FILE_INDEX_TIME = 0
 
 
+@_serialized(_SKILL_INDEX_LOCK)
 def build_skills_file_index(force: bool = False):
     global _SKILL_FILE_INDEX, _SKILL_FILE_INDEX_TIME
     now = time.time()
@@ -167,8 +205,7 @@ def build_skills_file_index(force: bool = False):
     _SKILL_FILE_INDEX = index
     _SKILL_FILE_INDEX_TIME = now
     try:
-        with open(_SKILL_INDEX_DISK_PATH, "w", encoding="utf-8") as f:
-            json.dump(index, f)
+        _atomic_write_json(_SKILL_INDEX_DISK_PATH, index)
     except OSError as exc:
         logger.debug(f"[Skills] Disk-Index Cache konnte nicht geschrieben werden: {exc}")
     return index
@@ -321,6 +358,7 @@ _DOMAIN_COMPETENCIES: Dict[str, tuple] = {
 
 
 @router.get("/api/hermes/skills")
+@_serialized(_SKILLS_CACHE_LOCK)
 def api_get_hermes_skills(force: bool = False):
     global _HERMES_SKILLS_CACHE, _HERMES_SKILLS_CACHE_TIME
     now = time.time()
@@ -369,8 +407,7 @@ def api_get_hermes_skills(force: bool = False):
     _HERMES_SKILLS_CACHE = discovered_skills
     _HERMES_SKILLS_CACHE_TIME = now
     try:
-        with open(_SKILLS_CACHE_DISK_PATH, "w", encoding="utf-8") as f:
-            json.dump(discovered_skills, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(_SKILLS_CACHE_DISK_PATH, discovered_skills)
     except OSError as save_err:
         logger.debug(f"[Skills] Skills-Disk-Cache konnte nicht gespeichert werden: {save_err}")
     return discovered_skills

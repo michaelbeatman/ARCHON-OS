@@ -278,6 +278,22 @@ def api_save_services(request: Request, services: List[ServiceConfigEntry]):
     return {"status": "success"}
 
 
+def _configured_model_ids() -> list:
+    """C21: Modellkatalog aus der echten Provider-Konfiguration, nicht erfunden."""
+    try:
+        import api_provider
+        cfg = api_provider.read_active_config() or {}
+        provider = str(cfg.get("provider") or "omniroute")
+        models = [str(m) for m in (api_provider.list_provider_models(provider) or [])]
+        active = str(cfg.get("model") or "")
+        if active and active not in models:
+            models.insert(0, active)
+        return models[:50]
+    except Exception as exc:
+        logger.warning("[Models] Konfigurierte Modelle nicht lesbar: %s", exc)
+        return []
+
+
 @router.get("/api/models")
 async def api_get_models(request: Request):
     if (
@@ -290,9 +306,9 @@ async def api_get_models(request: Request):
 
         return await app_main.forward_to_hermes(request)
 
-    return ["free-forever", "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "hermes-3", "gemini-1.5-pro"]
+    return _configured_model_ids()
 
 
 @router.get("/api/v1/models")
 def api_get_models_v1():
-    return ["free-forever", "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-r1", "hermes-3", "llama-3.3-70b"]
+    return _configured_model_ids()

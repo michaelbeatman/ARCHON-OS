@@ -8,6 +8,7 @@ Extrahiert aus main.py zur Modularisierung.
 
 import os
 import sys
+import tempfile
 import time
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Request
@@ -18,6 +19,25 @@ from utils.path_jail import safe_path, safe_path_within, PathJailError
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["vault"])
 
 _VAULT_FILES_CACHE: Dict[str, Any] = {"ts": 0.0, "data": []}
+
+
+def _atomic_write_text(path: str, content: str) -> None:
+    """C20: Temp+fsync+os.replace — kein halber Vault-Stand bei Abbruch."""
+    tdir = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(tdir, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=tdir, prefix=".vault_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _get_vault_dir() -> str:
@@ -110,9 +130,17 @@ def api_edit_vault_file_direct(request: Request, payload: Dict = Body(...)):
         )
     except PathJailError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    # C20: Turnier-Konflikterkennung — wenn der Client eine erwartete mtime
+    # mitschickt und Obsidian inzwischen gespeichert hat, nicht ueberschreiben.
+    expected_mtime = payload.get("expected_mtime")
+    if expected_mtime is not None and os.path.exists(real_path):
+        try:
+            if abs(float(os.path.getmtime(real_path)) - float(expected_mtime)) > 0.001:
+                raise HTTPException(status_code=409, detail="Vault-Datei wurde inzwischen geaendert.")
+        except (TypeError, ValueError):
+            pass
     os.makedirs(os.path.dirname(real_path), exist_ok=True)
-    with open(real_path, "w", encoding="utf-8") as f:
-        f.write(content)
+    _atomic_write_text(real_path, content)
     cache = _get_vault_cache()
     cache["ts"] = 0.0
     return {"status": "success", "path": real_path}

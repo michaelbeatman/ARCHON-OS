@@ -27,6 +27,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(ROOT, "omniroute_data", "data", "storage.sqlite")
 ENV_FILE = os.path.join(ROOT, ".env")
 COMBO = "strict-free-tier-combo"
+# M5: automatische Modellwechsel nur aus einer expliziten Allowlist.
+MODEL_ALLOWLIST_ENV = "ARCHON_OMNIROUTE_MODEL_ALLOWLIST"
 API = "http://localhost:20128/v1/chat/completions"
 
 
@@ -108,6 +110,7 @@ def candidates(key: str, exclude):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--fix", action="store_true")
+    ap.add_argument("--yes", action="store_true", help="Diff bestaetigen (sonst nur anzeigen)")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
@@ -141,15 +144,34 @@ def main() -> int:
         )
 
     if args.fix and dead:
-        print("\n--fix: suche lebende freie Modelle ...")
-        pool = [m for m in candidates(key, set(models)) if model_alive(m, key)]
+        allowed = {
+            m.strip() for m in os.environ.get(MODEL_ALLOWLIST_ENV, "").split(",")
+            if m.strip()
+        }
+        if not allowed:
+            print(
+                f"FEHLER: --fix ohne {MODEL_ALLOWLIST_ENV} verweigert "
+                "(keine externen Modelle ohne Review)."
+            )
+            return 2
+        print("\n--fix: suche lebende freie Modelle (nur Allowlist) ...")
+        pool = [
+            m for m in candidates(key, set(models))
+            if m in allowed and model_alive(m, key)
+        ]
         print("Kandidaten:", pool[:5])
-        if pool:
-            new_models = [m for m in models if m in [a["model"] for a in alive]] + pool[:3]
-            replace_combo(new_models)
-            print("Combo aktualisiert:", new_models)
-        else:
-            print("Keine lebenden Kandidaten gefunden.")
+        if not pool:
+            print("Keine lebenden Kandidaten in der Allowlist gefunden.")
+            return 1
+        new_models = [m for m in models if m in [a["model"] for a in alive]] + pool[:3]
+        print("\nGeplanter Combo-Wechsel:")
+        print("  alt:", models)
+        print("  neu:", new_models)
+        if not args.yes:
+            print("Keine Aenderung — zum Uebernehmen --yes angeben.")
+            return 0
+        replace_combo(new_models)
+        print("Combo aktualisiert:", new_models)
 
     return 0 if alive else 1
 

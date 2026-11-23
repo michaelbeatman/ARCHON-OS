@@ -32,15 +32,29 @@ db.serialize(() => {
     WHERE id IN ('b1c3f1e9b2d84f11', 'b1c3f1e9b2d84f12', 'b1c3f1e9b2d84f13')
   `);
 
-  // Insert into webhook_entity if not already present
+  // N2: fremde Webhook-Registrierungen nicht mehr ueberschreiben.
   newWebhooks.forEach(wh => {
-    db.run(`
-      INSERT OR REPLACE INTO webhook_entity (workflowId, webhookPath, method, node, webhookId, pathLength)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [wh.workflowId, wh.webhookPath, wh.method, wh.node, wh.webhookPath, wh.webhookPath.length], function(err) {
-      if (err) console.error(`Error inserting webhook ${wh.webhookPath}:`, err);
-      else console.log(`[OK] Registered webhook: ${wh.method} ${wh.webhookPath}`);
-    });
+    db.get(
+      `SELECT workflowId FROM webhook_entity WHERE webhookPath = ? LIMIT 1`,
+      [wh.webhookPath],
+      (selErr, existing) => {
+        if (selErr) {
+          console.error(`Error checking webhook ${wh.webhookPath}:`, selErr);
+          return;
+        }
+        if (existing && existing.workflowId !== wh.workflowId) {
+          console.warn(`[SKIP] Webhook ${wh.webhookPath} gehoert zu ${existing.workflowId} — nicht ueberschrieben.`);
+          return;
+        }
+        db.run(`
+          INSERT OR REPLACE INTO webhook_entity (workflowId, webhookPath, method, node, webhookId, pathLength)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `, [wh.workflowId, wh.webhookPath, wh.method, wh.node, wh.webhookPath, wh.webhookPath.length], function(err) {
+          if (err) console.error(`Error inserting webhook ${wh.webhookPath}:`, err);
+          else console.log(`[OK] Registered webhook: ${wh.method} ${wh.webhookPath}`);
+        });
+      }
+    );
   });
 
   // Verify

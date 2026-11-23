@@ -492,8 +492,11 @@ def execute_post_task_pipeline(task: dict) -> Dict[str, Any]:
     1. Obsidian 3-Ordner-Struktur + PROJEKT.md + Showroom Mirror
     2. Personalakten-Aktualisierung
     3. Self-Improvement Lerneffekt
-    4. Paperclip-Status-Schließung
-    5. E-Mail-Versand (sofern aktiv)
+    4. E-Mail-Versand (sofern aktiv)
+
+    Hinweis (C21): der fruehere Schritt "Paperclip-Status-Schließung" war eine
+    No-Op (`sync_paperclip_completion()` lieferte immer False) und wurde entfernt,
+    statt ihn weiter als Erfolg zu melden.
     """
     raw_title = task.get("title") or "Ohne Titel"
     agent_id = task.get("agent_id", "hermes_default")
@@ -510,10 +513,9 @@ def execute_post_task_pipeline(task: dict) -> Dict[str, Any]:
     # 3. Learning extrahieren
     learning_res = extract_and_record_learning(task, file_stem)
 
-    # 4. Paperclip synchronisieren
-    sync_paperclip_completion(task, final_path)
+    # C21: Paperclip-No-Op entfernt (siehe Docstring) — kein Schein-Schritt mehr.
 
-    # 5. E-Mail prüfen und versenden
+    # 4. E-Mail prüfen und versenden
     smtp_cfg = get_smtp_config()
     email_res = None
     if smtp_cfg.get("enabled") and smtp_cfg.get("auto_send"):

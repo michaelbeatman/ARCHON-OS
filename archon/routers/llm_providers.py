@@ -5,6 +5,7 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 import json
 import os
 import re
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -231,10 +232,19 @@ _openrouter_price_cache = None
 
 
 _openrouter_price_timestamp = 0
+# C15: Single-Flight — ohne Lock starten nach TTL-Ablauf N Threadpool-Threads
+# parallel denselben 5-s-HTTP-Call (Thundering Herd).
+_openrouter_price_lock = threading.Lock()
 
 
 def _get_llm_prices_impl(refresh: int = 0) -> Dict[str, Any]:
     """Kernlogik der Preisabfrage; liefert immer ein Dict (alter Body-Shape)."""
+    global _openrouter_price_cache, _openrouter_price_timestamp
+    with _openrouter_price_lock:
+        return _get_llm_prices_locked(refresh=refresh)
+
+
+def _get_llm_prices_locked(refresh: int = 0) -> Dict[str, Any]:
     global _openrouter_price_cache, _openrouter_price_timestamp
     try:
         now = time.time()

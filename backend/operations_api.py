@@ -896,7 +896,20 @@ async def _execute_kanban_task_async(task_id: str):
 
             heartbeat_task = asyncio.create_task(_hb(), name=f"kanban_lease_{task_id}")
     except Exception as exc:
-        logger.debug("[KanbanWorker] Lease nicht verfuegbar (%s) — Fallback ohne Claim.", exc)
+        # C11: Fail-Closed wie im Mission-Control-Pfad (orchestration.py:250-260).
+        # Ein nicht auswertbarer Lease-Claim darf nicht heissen "kein anderer
+        # Worker" — sonst fuehren zwei Worker denselben Task parallel aus.
+        import os as _os
+        if _os.environ.get("ARCHON_LEASE_FAIL_OPEN", "").strip().lower() in ("1", "true", "yes"):
+            logger.warning(
+                "[KanbanWorker] Lease-Claim fehlgeschlagen (%s) — ARCHON_LEASE_FAIL_OPEN aktiv, Ausfuehrung ohne Claim.", exc
+            )
+        else:
+            logger.warning(
+                "[KanbanWorker] Lease-Claim fehlgeschlagen (%s) — Task %s wird nicht ausgefuehrt (fail-closed).",
+                exc, task_id,
+            )
+            return {"skipped": "lease_unavailable", "task_id": task_id}
 
     try:
         return await _execute_kanban_task_inner(task_id, lease_token=lease_token)

@@ -4026,26 +4026,36 @@
       }
     }
 
-    function solveSimulatedCaptcha() {
-      const cb = document.getElementById("simulated-captcha-check");
-      if (cb) cb.checked = true;
-      const box = document.getElementById("simulated-captcha-box");
-      if (box) {
-        box.className = "p-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 flex items-center justify-between";
-        box.innerHTML = `<span class="text-xs font-bold text-emerald-800 flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i> ${kanT('ui.operations_kanban.verification_ok', 'Verifikation erfolgreich!')}</span>`;
-        if (window.lucide) lucide.createIcons();
-      }
-    }
+    // C21: `solveSimulatedCaptcha()` entfernt — toter Code, der eine Erfolgs-
+    // verifikation simulierte, ohne dass eine echte Pruefung stattfand.
 
-    function handleBotScreenClick(e) {
+    async function handleBotScreenClick(e) {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = Math.round(e.clientX - rect.left);
       const y = Math.round(e.clientY - rect.top);
-      fetch("/api/operations/bot-screen/interact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "click", x, y })
-      }).catch(() => {});
+      // C21: die Antwort nicht mehr verwerfen — der User muss sehen, dass
+      // ohne Computer-Use-Runtime NICHTS ausgefuehrt wurde.
+      const banner = document.getElementById("bot-takeover-alert-banner");
+      const reasonEl = document.getElementById("bot-takeover-reason");
+      const show = (msg) => {
+        if (reasonEl) reasonEl.innerText = msg;
+        if (banner) banner.classList.remove("hidden");
+      };
+      try {
+        const res = await fetch("/api/operations/bot-screen/interact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "click", x, y })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          show(data.detail || "Interaktion abgelehnt.");
+        } else if (data.simulation) {
+          show(data.reason || "Simulation — keine echte Interaktion ausgefuehrt.");
+        }
+      } catch (err) {
+        show("Bot-Screen nicht erreichbar — Interaktion nicht ausgefuehrt.");
+      }
     }
 
     // =========================================================================

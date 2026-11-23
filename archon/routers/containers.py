@@ -484,7 +484,7 @@ async def inject_container_config(request: Request, container_name: str, config:
     payload = {
         "config": {
             "api_base": "http://host.docker.internal:20128/v1",
-            "api_key": "omniroute-local-key",
+            "api_key": os.environ.get("OMNIROUTE_API_KEY", "").strip(),
             "model": config.get("model", "free-forever"),
             "system_prompt": config.get("system_prompt", "")
         }

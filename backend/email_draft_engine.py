@@ -88,6 +88,21 @@ class EmailDraftEngine:
                     created_by TEXT NOT NULL
                 );
             """)
+            # H3 (Audit 23.11.2026): Append-only-Schutz fuer die Entwurfs-Kette.
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS email_draft_audit_no_update
+                BEFORE UPDATE ON email_draft_audit_log
+                BEGIN
+                    SELECT RAISE(ABORT, 'email_draft_audit_log is append-only');
+                END
+            """)
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS email_draft_audit_no_delete
+                BEFORE DELETE ON email_draft_audit_log
+                BEGIN
+                    SELECT RAISE(ABORT, 'email_draft_audit_log is append-only');
+                END
+            """)
             conn.commit()
 
     def _log_audit(self, draft_id: str, action: str, details: Dict[str, Any], created_by: str = "admin", conn: Optional[sqlite3.Connection] = None):
@@ -99,7 +114,9 @@ class EmailDraftEngine:
             row = active_conn.execute("SELECT block_hash FROM email_draft_audit_log ORDER BY id DESC LIMIT 1").fetchone()
             prev_hash = row["block_hash"] if row else GENESIS_HASH
             raw_string = f"{prev_hash}|{draft_id}|{action}|{details_json}|{created_by}|{now_iso}"
-            block_hash = hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
+            # H3: HMAC mit zentralem Chain-Secret statt nacktem SHA-256.
+            from backend.audit_log import _chain_hash
+            block_hash = _chain_hash(raw_string)
 
             active_conn.execute("""
                 INSERT INTO email_draft_audit_log (draft_id, action, details, prev_hash, block_hash, created_at, created_by)

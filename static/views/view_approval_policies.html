@@ -261,13 +261,13 @@
 
             <div class="p-2.5 rounded-xl bg-[var(--secondary)]/30 border border-[var(--border)] space-y-1">
               <label data-i18n="view.approval_policies.bypass_label" class="font-bold text-[var(--foreground)]">Notfall-Bypass (Emergency Override)</label>
-              <p data-i18n="view.approval_policies.bypass_desc" class="text-[10.5px] text-[var(--muted-foreground)]">Nur bei Totalausfall externer Validatoren aktivieren. Löst sofortigen Audit-Alarm aus.</p>
-              <div class="flex items-center gap-2 pt-1">
-                <select id="input-system_emergency_bypass" class="px-2 py-1 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs font-mono">
+              <p class="text-[10.5px] text-rose-400">NICHT IMPLEMENTIERT (Audit W4): dieses Gate hat keinen Backend-Consumer. Ein Aktivieren löst keinen Bypass und keinen Alarm aus.</p>
+              <div class="flex items-center gap-2 pt-1 opacity-50">
+                <select id="input-system_emergency_bypass" disabled class="px-2 py-1 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs font-mono">
                   <option data-i18n="view.approval_policies.opt_normal_operation" value="false">Normalbetrieb (Bypass Inaktiv)</option>
                   <option data-i18n="view.approval_policies.opt_bypass_active" value="true">Notfall-Bypass (Aktiviert - Achtung!)</option>
                 </select>
-                <button data-i18n="view.approval_policies.save" type="button" onclick="savePolicySetting('system_emergency_bypass')" class="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-mono text-[11px] font-bold cursor-pointer transition">
+                <button data-i18n="view.approval_policies.save" type="button" disabled onclick="savePolicySetting('system_emergency_bypass')" class="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-mono text-[11px] font-bold cursor-not-allowed transition">
                   Speichern
                 </button>
               </div>

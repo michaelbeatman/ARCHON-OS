@@ -24,27 +24,43 @@ def update_contact_email(contact_id, email_address):
     response = requests.patch(url, json=payload)
     return response.status_code == 200
 
-def append_email_to_history(contact_id, email_obj):
-    """Fügt E-Mail zum nachrichtenverlauf hinzu (mit Duplikats-Schutz)."""
+def append_email_to_history(contact_id, email_obj, max_retries=3):
+    """Fügt E-Mail zum nachrichtenverlauf hinzu (Duplikats-Schutz + If-Match).
+
+    W2: Read-Modify-Write ohne ETag verlor bei parallelem Mail-Sync die
+    Änderungen des anderen Schreibers (Lost Update). Bei einem 409/412/400
+    wird der aktuelle Stand erneut gelesen und der Merge wiederholt.
+    """
     url = f"{POCKETBASE_URL}/api/collections/{COLLECTION_NAME}/records/{contact_id}"
-    res = requests.get(url)
-    if res.status_code != 200:
-        return False
-    
-    contact = res.json()
-    history = contact.get("nachrichtenverlauf") or []
-    
-    existing_ids = {msg.get("messageId") for msg in history if isinstance(msg, dict) and "messageId" in msg}
-    if email_obj.get("messageId") in existing_ids:
-        return True  # Bereits vorhanden
+    clean_obj = dict(email_obj)
+    if "text" in clean_obj:
+        clean_obj["text"] = re.sub(r'(\r?\n){2,}', '\n', clean_obj.get("text") or "").strip()
 
-    if isinstance(email_obj, dict) and "text" in email_obj:
-        raw_text = email_obj.get("text") or ""
-        email_obj["text"] = re.sub(r'(\r?\n){2,}', '\n', raw_text).strip()
+    for _attempt in range(max_retries):
+        res = requests.get(url, timeout=15)
+        if res.status_code != 200:
+            return False
+        contact = res.json()
+        # PocketBase liefert ETag und/oder revision — beides ist ein
+        # optimistischer Concurrency-Token für den PATCH.
+        etag = res.headers.get("ETag") or contact.get("revision")
+        history = contact.get("nachrichtenverlauf") or []
 
-    history.append(email_obj)
-    update_res = requests.patch(url, json={"nachrichtenverlauf": history})
-    return update_res.status_code == 200
+        existing_ids = {msg.get("messageId") for msg in history if isinstance(msg, dict) and "messageId" in msg}
+        if clean_obj.get("messageId") in existing_ids:
+            return True  # Bereits vorhanden
+
+        history.append(clean_obj)
+        headers = {"If-Match": str(etag)} if etag else {}
+        update_res = requests.patch(
+            url, json={"nachrichtenverlauf": history}, headers=headers, timeout=15
+        )
+        if update_res.status_code == 200:
+            return True
+        if update_res.status_code not in (400, 409, 412):
+            return False
+        # Konflikt -> neu lesen und erneut versuchen.
+    return False
 
 def fetch_local_outlook_emails(limit=200):
     """Liest Mails direkt aus dem lokal geöffneten Windows-Outlook aus."""

@@ -20,9 +20,10 @@ from typing import Dict, Any, List, Optional
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SNAPSHOTS_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "snapshots")
 try:
-    from backend.db_paths import resolve_db as _resolve_db
+    from backend.db_paths import resolve_db as _resolve_db, ClosingConnection as _ClosingConnection
     DB_PATH = _resolve_db("agentic_memory.db")
 except Exception:
+    _ClosingConnection = sqlite3.Connection
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 class SnapshotManager:
@@ -33,7 +34,10 @@ class SnapshotManager:
         self._init_db()
 
     def _get_conn(self):
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
+        # W2: Connection.__exit__ committet, schliesst aber NICHT — mit der
+        # ClosingConnection-Factory wird bei jedem Snapshot kein FD mehr
+        # geleakt (bei häufigen Snapshots sonst FD-Erschöpfung).
+        conn = sqlite3.connect(self.db_path, timeout=10.0, factory=_ClosingConnection)
         conn.execute("PRAGMA busy_timeout=5000;")
         conn.row_factory = sqlite3.Row
         return conn

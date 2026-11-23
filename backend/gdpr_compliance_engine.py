@@ -202,6 +202,22 @@ class GDPRComplianceEngine:
                             hash TEXT NOT NULL
                         )
                     """)
+                    # H3 (Audit 23.11.2026): DSGVO-Löschquittungen sind
+                    # revisionsrelevant -> append-only wie die Zentralkette.
+                    conn.execute("""
+                        CREATE TRIGGER IF NOT EXISTS gdpr_audit_no_update
+                        BEFORE UPDATE ON gdpr_audit_log
+                        BEGIN
+                            SELECT RAISE(ABORT, 'gdpr_audit_log is append-only');
+                        END
+                    """)
+                    conn.execute("""
+                        CREATE TRIGGER IF NOT EXISTS gdpr_audit_no_delete
+                        BEFORE DELETE ON gdpr_audit_log
+                        BEGIN
+                            SELECT RAISE(ABORT, 'gdpr_audit_log is append-only');
+                        END
+                    """)
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS gdpr_ropa_activities (
                             activity_id TEXT PRIMARY KEY,
@@ -1003,7 +1019,8 @@ class GDPRComplianceEngine:
         import uuid
         receipt_id = f"gdpr-rcpt-{uuid.uuid4().hex[:8]}"
         id_hash = hashlib.sha256(term.lower().encode("utf-8")).hexdigest()
-        now_iso = datetime.datetime.now().isoformat()
+        # GoBD: eindeutige UTC-Zeitreferenz (früher naive Lokalzeit).
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
         details_str = json.dumps({"mode": mode, "breakdown": breakdown})
 
         prev_hash = "GENESIS"
@@ -1015,7 +1032,9 @@ class GDPRComplianceEngine:
                 prev_hash = row[0]
 
             record_payload = f"{receipt_id}|ERASE_ART17|{now_iso}|{id_hash}|{count}|{details_str}|{prev_hash}"
-            record_hash = hashlib.sha256(record_payload.encode("utf-8")).hexdigest()
+            # H3: HMAC mit zentralem Chain-Secret statt nacktem SHA-256.
+            from backend.audit_log import _chain_hash
+            record_hash = _chain_hash(record_payload)
 
             cur.execute("""
                 INSERT INTO gdpr_audit_log (receipt_id, action, identifier_hash, records_affected, details_json, prev_hash, hash)

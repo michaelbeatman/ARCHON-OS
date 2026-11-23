@@ -36,6 +36,11 @@ HERMES_URL = os.getenv("HERMES_URL", "http://hermes-dashboard:9119")
 ODYSSEUS_URL = os.getenv("ODYSSEUS_URL", "http://odysseus:7000")
 OPENCLAW_URL = os.getenv("OPENCLAW_URL", "http://openclaw:8080")
 OMNIROUTE_URL = os.getenv("OMNIROUTE_URL", "http://omniroute:20128/v1")
+# W4: der konfigurierte Key wurde im Haupt-Dispatcher nie in die Requests
+# injiziert (nur in agent_router.py) — OmniRoute lieferte dann 401 und die
+# Kette fiel auf OpenRouter/Ollama zurück, ohne dass der Router je erreicht
+# wurde.
+OMNIROUTE_API_KEY = os.getenv("OMNIROUTE_API_KEY", "").strip()
 N8N_URL = os.getenv("N8N_URL", "http://n8n:5678")
 
 def detect_target_action(text: str, frontmatter: str = "") -> str:
@@ -530,7 +535,12 @@ async def dispatch_to_omniroute_or_container(
     cache_hit = None
     try:
         from backend.semantic_cache import semantic_cache_manager
-        cache_hit = semantic_cache_manager.lookup(prompt, model=model, scope_key=cache_scope)
+        # H11: lookup ist reine Sync-SQLite + JSON-Parse + Cosine über bis zu
+        # 500 Vektoren. Direkt im Event-Loop serialisiert das bei parallelen
+        # Agenten den Dispatch (und erzeugt Write-Locks durch den DELETE).
+        cache_hit = await asyncio.to_thread(
+            semantic_cache_manager.lookup, prompt, model=model, scope_key=cache_scope
+        )
     except Exception as cache_exc:
         logger.debug(f"[Dispatcher] Semantischer Cache-Lookup nicht verfuegbar: {cache_exc}")
     if cache_hit and cache_hit.get("hit"):
@@ -636,8 +646,9 @@ async def dispatch_to_omniroute_or_container(
             if is_ok and res.get("content"):
                 try:
                     from backend.semantic_cache import semantic_cache_manager
-                    semantic_cache_manager.store(
-                        prompt, str(res["content"]), model=used_model, scope_key=cache_scope
+                    await asyncio.to_thread(
+                        semantic_cache_manager.store,
+                        prompt, str(res["content"]), model=used_model, scope_key=cache_scope,
                     )
                 except Exception as cache_store_exc:
                     logger.debug(f"[Dispatcher] Semantic-Cache Store nicht verfuegbar: {cache_store_exc}")
@@ -1060,7 +1071,19 @@ async def _dispatch_to_omniroute_or_container_impl(
         post_kwargs: dict[str, Any] = {"headers": headers, "json": safe_body}
         if timeout is not None:
             post_kwargs["timeout"] = timeout
-        r = await http_client.post(url, **post_kwargs)
+        # W3: Fail-Fast für ausgefallene Provider statt Thundering Herd.
+        from backend.provider_circuit_breaker import provider_breaker
+        if not provider_breaker.allow(provider_id):
+            raise RuntimeError(f"Provider '{provider_id}' ist circuit-open (Fail-Fast).")
+        try:
+            r = await http_client.post(url, **post_kwargs)
+        except Exception:
+            provider_breaker.record_failure(provider_id)
+            raise
+        if r.status_code >= 500 or r.status_code == 429:
+            provider_breaker.record_failure(provider_id)
+        else:
+            provider_breaker.record_success(provider_id)
         log_completed_llm_dispatch(
             agent_id=agent_id,
             provider=provider_id,
@@ -1348,6 +1371,10 @@ async def _dispatch_to_omniroute_or_container_impl(
                 omni_url,
                 provider_id="omniroute",
                 model_id=omni_model,
+                headers=(
+                    {"Authorization": f"Bearer {OMNIROUTE_API_KEY}", "Content-Type": "application/json"}
+                    if OMNIROUTE_API_KEY else {"Content-Type": "application/json"}
+                ),
                 json_body=omni_payload,
                 timeout=timeout,
             )
@@ -1811,6 +1838,13 @@ async def stream_boardroom_debate(
     own_token = cancel_token is None
     if own_token:
         cancel_token = get_child_token("boardroom", f"boardroom:{time.time_ns()}")
+    # H6 (Audit 23.11.2026): der Kill-Switch setzte nur ein Flag, aber der
+    # laufende HTTP-LLM-Call blieb am Leben. Task registrieren wie in
+    # archon/core/orchestration.py — cancel() bricht ihn jetzt aktiv ab.
+    try:
+        cancel_token.register_task(asyncio.current_task())
+    except Exception:
+        pass
     try:
         async for ev in _stream_boardroom_debate_inner(
             task=task,
@@ -1914,6 +1948,20 @@ async def _stream_boardroom_debate_inner(
     }
 
     # 2. ROUND-BASED DEBATE
+    def _prompt_transcript(full: str, limit: int = 24000) -> str:
+        """W5 / Zielkonflikt Z5: das VOLLE Protokoll bleibt in Historie und
+        Audit-Kette (Nachvollziehbarkeit), aber in die LLM-Prompts geht nur
+        ein gekürztes Fenster. Sonst wachsen Eingabe-Tokens mit O(R²·A)."""
+        if len(full) <= limit:
+            return full
+        head = full[:limit // 3]
+        tail = full[-(limit - limit // 3):]
+        return (
+            head
+            + "\n\n... [gekürzt — vollständiges Protokoll in der Audit-Historie] ...\n\n"
+            + tail
+        )
+
     running_transcript = f"--- MODERATOR INITIALISIERUNG ---\n{init_text}\n\n"
     # Alle Agent-Aussagen dieser Debatte fuer die offline Konsensauswertung sammeln.
     debate_statements: List[Any] = []
@@ -1927,7 +1975,30 @@ async def _stream_boardroom_debate_inner(
         # Abbruch zu Beginn jeder Runde pruefen (nach round_start, damit das
         # cancelled-Event die korrekte Rundennummer trägt).
         token.check()
-        
+        # H5 (Audit 23.11.2026): der Circuit-Breaker existierte nur im
+        # Master-Chat-Pfad. Ping-Pong/Endlosschleifen in Boardroom- und
+        # Subagenten-Ketten wurden nicht erkannt. Wir übergeben nur ein
+        # Fenster der letzten Aussagen, damit die globale max_steps-Grenze
+        # (15) nicht fälschlich bei 10 Agenten × 2 Runden auslöst.
+        try:
+            from backend.agent_router import router_instance
+            _recent = debate_statements[-8:]
+            _cb_messages = [
+                {"role": "agent", "content": str(s.get("content", ""))}
+                for s in _recent if isinstance(s, dict)
+            ]
+            _cb = router_instance.check_loop_or_circuit_breaker(_cb_messages)
+            if _cb.get("tripped"):
+                yield {
+                    "type": "cancelled",
+                    "round": round_num,
+                    "reason": _cb.get("reason", "circuit_breaker"),
+                    "content": "Debatte durch Circuit-Breaker beendet (Endlosschleife erkannt).",
+                }
+                return
+        except Exception as _cb_exc:
+            logger.debug("[Boardroom] Circuit-Breaker-Prüfung nicht verfügbar: %s", _cb_exc)
+
         if round_num == 1 and len(expert_agents) > 1:
             async def _dispatch_agent(ag):
                 prompt = (
@@ -1935,7 +2006,7 @@ async def _stream_boardroom_debate_inner(
                     f"Ursprüngliche Aufgabe: {task}\n"
                     f"METHODIK-FRAMEWORK: {framework}\n"
                     f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
-                    f"Bisheriger Diskussionsverlauf:\n{running_transcript}\n\n"
+                    f"Bisheriger Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
                     f"Instruktion: Reagiere auf die Initialisierung des Moderators. "
                     f"Behalte strikt deine Rolle ({ag.get('role', 'Expert')}) bei und wende das Framework '{framework}' an. "
                     f"Formuliere deine klare Fachperspektive."
@@ -1976,7 +2047,7 @@ async def _stream_boardroom_debate_inner(
                         from backend.operations_api import _get_kanban_connection
                         _k_conn = _get_kanban_connection()
                         try:
-                            _k_now = datetime.datetime.now().isoformat()
+                            _k_now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
                             _k_payload = json.dumps({
                                 "author": res_event["agent_id"],
                                 "message": f"[BOARDROOM RUNDE {round_num}] {res_event['content']}",
@@ -2012,7 +2083,7 @@ async def _stream_boardroom_debate_inner(
                     f"Ursprüngliche Aufgabe: {task}\n"
                     f"METHODIK-FRAMEWORK: {framework}\n"
                     f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
-                    f"Bisheriger Diskussionsverlauf:\n{running_transcript}\n\n"
+                    f"Bisheriger Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
                     f"Instruktion: Reagiere auf die Aussagen der anderen Agenten. "
                     f"Behalte strikt deine Rolle ({agent.get('role', 'Expert')}) bei und wende das Framework '{framework}' an. "
                     f"Hinterfrage, validiere oder erweitere die Argumente deiner Vorredner explizit."
@@ -2091,7 +2162,7 @@ async def _stream_boardroom_debate_inner(
             f"Du bist ein unabhängiges Referenz-Modell im Mixture-of-Agents (MoA) Verbund.\n"
             f"Debatten-Aufgabe: '{task}'\n"
             f"Framework: '{framework}'\n\n"
-            f"Diskussionsprotokoll:\n{running_transcript}\n\n"
+            f"Diskussionsprotokoll:\n{_prompt_transcript(running_transcript)}\n\n"
             f"Erstelle eine präzise, eigenständige Entscheidungsvorlage mit Konsenspunkten, offenen Risiken und Empfehlungen."
         )
 
@@ -2133,7 +2204,7 @@ async def _stream_boardroom_debate_inner(
         agg_prompt = (
             f"Du bist der MoA-Aggregator (Mixture of Agents) für den AI Boardroom.\n"
             f"Aufgabe: '{task}' | Framework: '{framework}'\n\n"
-            f"Vorheriger Diskussionsverlauf:\n{running_transcript}\n\n"
+            f"Vorheriger Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
             f"Die folgenden Referenzmodelle haben unabhängig voneinander Analysen geliefert:\n"
         )
         for idx, r in enumerate(moa_results):
@@ -2172,7 +2243,7 @@ async def _stream_boardroom_debate_inner(
             f"Du bist der Chairman ({chairman['name']}).\n"
             f"Die Debatte zu '{task}' unter Anwendung des Frameworks '{framework}' ist beendet.\n"
             f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
-            f"Gesamter Diskussionsverlauf:\n{running_transcript}\n\n"
+            f"Gesamter Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
             f"Erstelle eine finale, strukturierte Synthese im Markdown-Format mit folgenden 3 Abschnitten:\n"
             f"### 1. Key Consensus Points (Haupt-Konsenspunkte)\n"
             f"### 2. Unresolved Risks / Counterarguments (Offene Risiken & Gegenargumente)\n"

@@ -29,10 +29,16 @@ Environment variables (put in .env or set before starting):
 
     LOOK_AHEAD_DAYS          How many days ahead to fetch (default: 30).
     LOOK_BACK_DAYS           How many days back to fetch (default: 7).
+
+    CALENDAR_AGGREGATOR_TOKEN  Shared secret for the Next.js proxy. Required for
+                             BOTH /events and /create-google-event. If unset the
+                             server starts but refuses every request (fail-closed).
+                             Bind is 127.0.0.1 only — never expose this on the LAN.
 """
 
 import os
 import json
+import hmac
 import uuid
 import logging
 from datetime import datetime, timezone, timedelta
@@ -416,11 +422,34 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         log.info(fmt, *args)
 
+    def _authorized(self) -> bool:
+        """Fail-closed shared-secret check.
+
+        Audit 23.11.2026 (K4): dieser Microserver hatte `Access-Control-Allow-Origin: *`
+        und keinerlei Auth — jede fremde Website konnte mit den Google-Credentials
+        des Opfers Termine anlegen. Der Server ist ausschliesslich für den lokalen
+        Next.js-Proxy gedacht, deshalb: fester Token, kein CORS-Wildcard.
+        """
+        token = os.getenv("CALENDAR_AGGREGATOR_TOKEN", "").strip()
+        if not token:
+            log.error("CALENDAR_AGGREGATOR_TOKEN ist nicht gesetzt — Anfrage abgelehnt.")
+            return False
+        supplied = self.headers.get("X-Archon-Token", "")
+        return hmac.compare_digest(supplied, token)
+
+    def _deny(self, code: int, message: str) -> None:
+        body = json.dumps({"error": message}, ensure_ascii=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", "http://localhost:3000")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Archon-Token")
         self.end_headers()
 
     def do_GET(self):
@@ -429,13 +458,16 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"error":"not found"}')
             return
+        if not self._authorized():
+            self._deny(503 if not os.getenv("CALENDAR_AGGREGATOR_TOKEN", "").strip() else 401,
+                       "Calendar aggregator authentication required")
+            return
 
         try:
             events = get_combined_events()
             body = json.dumps({"events": events, "count": len(events)}, ensure_ascii=False).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -450,6 +482,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             self.wfile.write(b'{"error":"not found"}')
+            return
+        if not self._authorized():
+            self._deny(503 if not os.getenv("CALENDAR_AGGREGATOR_TOKEN", "").strip() else 401,
+                       "Calendar aggregator authentication required")
             return
 
         try:
@@ -476,7 +512,6 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(res, ensure_ascii=False).encode()
             self.send_response(200 if res.get("success") else 400)
             self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -489,14 +524,17 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     log.info("Calendar Aggregator starting on port %d ...", PORT)
+    if not os.getenv("CALENDAR_AGGREGATOR_TOKEN", "").strip():
+        log.error("CALENDAR_AGGREGATOR_TOKEN fehlt — Server läuft, lehnt aber alle Anfragen ab (fail-closed).")
     log.info("Google Credentials: %s", os.getenv("GOOGLE_CREDENTIALS_FILE", "(not set)"))
     log.info("Outlook mode:       %s",
         "Graph API" if os.getenv("OUTLOOK_TENANT_ID") else
         "ICS Feed" if os.getenv("OUTLOOK_ICS_URL") else
         "(not configured)")
 
-    server = HTTPServer(("0.0.0.0", PORT), Handler)
-    log.info("Ready. Listening at http://localhost:%d/events", PORT)
+    # Audit 23.11.2026 (K4): nur lokaler Proxy-Zugriff. Kein LAN-Binding mehr.
+    server = HTTPServer(("127.0.0.1", PORT), Handler)
+    log.info("Ready. Listening at http://127.0.0.1:%d/events", PORT)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

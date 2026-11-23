@@ -57,8 +57,31 @@ from archon.core.constants import (
     DELEGATION_PROTOCOL_PROMPT,
     STUDIO_BG_UPLOAD_DIR,
 )
-logging.basicConfig(level=logging.INFO)
+# W3: Log-Level zur Laufzeit konfigurierbar (Incidents brauchen DEBUG ohne
+# Code-Änderung/Neustart).
+_LOG_LEVEL_NAME = os.getenv("ARCHON_LOG_LEVEL", os.getenv("LOG_LEVEL", "INFO")).strip().upper()
+logging.basicConfig(level=getattr(logging, _LOG_LEVEL_NAME, logging.INFO))
 logger = logging.getLogger("archon_os")
+
+# W3: Promtail mountet ./data/logs und erwartet *.log im Format
+# "timestamp - logger - level - message". Vorher schrieb die App nur auf
+# stderr — Loki/Grafana waren für App-Logs komplett blind. Rotierend, damit
+# im Non-Container-Betrieb keine unbegrenzte Logdatei entsteht.
+try:
+    from logging.handlers import RotatingFileHandler as _RotatingFileHandler
+    _log_dir = os.getenv("ARCHON_LOG_DIR") or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "data", "logs"
+    )
+    os.makedirs(_log_dir, exist_ok=True)
+    _file_handler = _RotatingFileHandler(
+        os.path.join(_log_dir, "archon.log"), maxBytes=20_000_000, backupCount=5, encoding="utf-8"
+    )
+    _file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    ))
+    logging.getLogger().addHandler(_file_handler)
+except Exception as _log_exc:
+    logger.debug("[Logging] File-Handler nicht verfügbar: %s", _log_exc)
 
 # Fail-closed: fehlgeschlagene Router-Imports werden gesammelt und
 # beim Start in Produktion hart abgebrochen (siehe _assert_router_health).
@@ -483,6 +506,12 @@ async def liveness_check():
     return {"status": "alive", "timestamp": time.time()}
 
 
+# H10: Dependency-Probes gecacht, damit /readyz nicht bei jedem Scrape
+# blockierende HTTP-Calls auslöst.
+_DEPENDENCY_PROBE_CACHE: dict = {"ts": 0.0, "problems": []}
+_DEPENDENCY_PROBE_TTL = 10.0
+
+
 @app.get("/readyz")
 async def readiness_check():
     """Readiness: echte Dependency-Pruefung. Liefert 503, solange nicht bereit."""
@@ -505,6 +534,31 @@ async def readiness_check():
             problems.append(f"config: {res.get('error_count', '?')} Fehler")
     except Exception as exc:
         problems.append(f"config_check: {exc}")
+    # 5. Externe Dependencies (H10): nur in Produktion oder explizit aktiviert,
+    #    denn eine lokale Installation ohne OmniRoute/n8n darf nicht dauerhaft
+    #    503 liefern. In Docker übernimmt zusätzlich depends_on: service_healthy.
+    _probe_enabled = (
+        os.getenv("ARCHON_READINESS_PROBES", "").strip().lower() in ("1", "true", "yes")
+        or os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod", "live")
+    )
+    if _probe_enabled:
+        import urllib.request
+        now = time.time()
+        if now - _DEPENDENCY_PROBE_CACHE["ts"] > _DEPENDENCY_PROBE_TTL:
+            dep_problems = []
+            probes = (
+                ("omniroute", os.getenv("OMNIROUTE_URL", "http://omniroute:20128/v1").rstrip("/") + "/models"),
+                ("n8n", os.getenv("N8N_URL", "http://n8n:5678").rstrip("/") + "/healthz"),
+            )
+            for name, url in probes:
+                try:
+                    with urllib.request.urlopen(url, timeout=1.5) as resp:
+                        if resp.status >= 400:
+                            dep_problems.append(f"{name}: HTTP {resp.status}")
+                except Exception as exc:
+                    dep_problems.append(f"{name}: {exc}")
+            _DEPENDENCY_PROBE_CACHE.update(ts=now, problems=dep_problems)
+        problems.extend(_DEPENDENCY_PROBE_CACHE["problems"])
     if problems:
         return JSONResponse(
             status_code=503,
@@ -930,6 +984,10 @@ async def _gateway_idle_stop_loop():
         _idle_stop_running = False
 
 
+from backend.process_lock import exclusive_loop as _exclusive_loop
+
+
+@_exclusive_loop("email_imap")
 async def _email_imap_background_loop():
     await asyncio.sleep(15)
     while True:
@@ -937,7 +995,9 @@ async def _email_imap_background_loop():
             from backend.email_service import sync_imap_inbox
             await asyncio.to_thread(sync_imap_inbox, limit=20)
         except Exception as e:
-            print(f"[EmailService] Background sync error: {e}")
+            # W3: kein reines stdout mehr — IMAP-Fehler (z. B. abgelaufenes
+            # Token) landen im strukturierten Log und damit in Loki.
+            logger.warning("[EmailService] Background sync error: %s", e)
         await asyncio.sleep(180)
 
 _BACKGROUND_TASKS: list = []
@@ -970,6 +1030,7 @@ def _spawn_background(coro, name: str = ""):
     return task
 
 
+@_exclusive_loop("deadlock_supervisor")
 async def _deadlock_supervisor_loop():
     """30-Sekunden Watchdog/Deadlock-Loop (Pillar 1): befreit stagnierende Kanban-Tasks."""
     await asyncio.sleep(15)
@@ -1010,8 +1071,11 @@ async def _deadlock_supervisor_loop():
         # Alerting unabhaengig vom /metrics-Scrape (sonst schlagen Alarme
         # nie zu, wenn niemand Prometheus abruft).
         try:
-            from backend.metrics_collector import metrics_collector
-            alerts = await asyncio.to_thread(metrics_collector.check_and_dispatch_alerts)
+            from backend.metrics_collector import check_and_dispatch_alerts_now
+            # W3: die Rohmethode hat KEINE Zeitbremse -> bei anhaltender
+            # Störung alle 30 s erneuter Alert (Alarmmüdigkeit). Die
+            # deduplizierte Variante liegt bereits im selben Modul.
+            alerts = await asyncio.to_thread(check_and_dispatch_alerts_now)
             if isinstance(alerts, dict) and alerts.get("dispatched"):
                 logger.info("[Alerting] %s Alarm(e) versendet.", alerts["dispatched"])
         except Exception as e:
@@ -1028,6 +1092,7 @@ async def _deadlock_supervisor_loop():
         await asyncio.sleep(30)
 
 
+@_exclusive_loop("db_maintenance")
 async def _db_maintenance_loop():
     """Periodische DB-Sicherung & Optimierung (WAL-Truncate, Backup, VACUUM alle 6h)."""
     await asyncio.sleep(120)
@@ -1090,6 +1155,23 @@ async def _cancel_background_tasks():
     Ohne das wartet `uvicorn --reload` beim Code-Wechsel unbegrenzt auf diese
     Tasks ("Waiting for connections to close") und der Server bleibt hängen.
     """
+    # H9 (Audit 23.11.2026): der RAG-Sync läuft als Subprocess, nicht als
+    # asyncio-Task. Ohne terminate() überlebt er Reload/Shutdown als Orphan
+    # und schreibt konkurrierend in dieselbe RAG-DB / denselben API-Key.
+    global _RAG_SYNC_PROCESS
+    _rag_proc = _RAG_SYNC_PROCESS
+    if _rag_proc is not None and _rag_proc.poll() is None:
+        try:
+            logger.info("[Shutdown] RAG-Sync-Subprocess wird beendet.")
+            _rag_proc.terminate()
+            try:
+                _rag_proc.wait(timeout=5.0)
+            except Exception:
+                _rag_proc.kill()
+        except Exception as exc:
+            logger.warning("[Shutdown] RAG-Sync konnte nicht beendet werden: %s", exc)
+    _RAG_SYNC_PROCESS = None
+
     pending = [t for t in _BACKGROUND_TASKS if not t.done()]
     for task in pending:
         task.cancel()
@@ -1487,6 +1569,12 @@ def on_startup_drain_recovery():
 
 
 async def on_shutdown_graceful():
+    # W3: Audit-Anker-Thread kontrolliert stoppen, bevor der Prozess stirbt.
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.stop_anchor_worker()
+    except Exception as _anchor_exc:
+        logger.debug("[Shutdown] Audit-Anker-Stopp: %s", _anchor_exc)
     try:
         from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
         res = await graceful_shutdown_coordinator.execute_graceful_shutdown(reason="Server shutdown / restart")

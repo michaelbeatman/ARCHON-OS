@@ -15,6 +15,7 @@ Jetzt: eine Klasse, konfiguriert pro Ziel. Verhalten identisch:
 from __future__ import annotations
 
 import asyncio
+import weakref
 from typing import Optional, Sequence
 
 import httpx
@@ -24,20 +25,21 @@ from starlette.background import BackgroundTask
 
 __all__ = ["ReverseProxy", "get_shared_client"]
 
-_PROXY_CLIENTS: dict[int, httpx.AsyncClient] = {}
+# H12: Loop-Objekt als schwacher Schlüssel (kein id()-Recycling, kein Leak).
+_PROXY_CLIENTS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = weakref.WeakKeyDictionary()
 
 
 def get_shared_client() -> httpx.AsyncClient:
     """Ein AsyncClient pro Event-Loop (verhindert 'bound to different loop')."""
-    loop_id = id(asyncio.get_running_loop())
-    client = _PROXY_CLIENTS.get(loop_id)
+    loop = asyncio.get_running_loop()
+    client = _PROXY_CLIENTS.get(loop)
     if client is None or client.is_closed:
         client = httpx.AsyncClient(
             follow_redirects=False,
             timeout=60.0,
             limits=httpx.Limits(max_keepalive_connections=30, max_connections=120),
         )
-        _PROXY_CLIENTS[loop_id] = client
+        _PROXY_CLIENTS[loop] = client
     return client
 
 

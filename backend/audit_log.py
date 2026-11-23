@@ -217,6 +217,10 @@ class ChainedAuditLog:
         self.db_path = db_path
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._lock = threading.Lock()
+        # W3: stoppbarer Anker-Thread. Vorher konnte der Daemon beim
+        # Graceful Shutdown mitten in _write_anchor() abgebrochen werden
+        # -> halb geschriebene Integritätsdatei.
+        self._anchor_stop = threading.Event()
         self._init_db()
         self._start_anchor_worker()
 
@@ -236,12 +240,18 @@ class ChainedAuditLog:
         worker.start()
 
     def _anchor_loop(self, path: str) -> None:
-        while True:
+        while not self._anchor_stop.is_set():
             try:
                 self._write_anchor(path)
             except Exception as exc:
                 logger.warning("Audit-Log: Anker-Schreibfehler: %s", exc)
-            time.sleep(ANCHOR_INTERVAL_SEC)
+            # Event.wait statt time.sleep: sofortiger, kontrollierter Stopp.
+            if self._anchor_stop.wait(ANCHOR_INTERVAL_SEC):
+                break
+
+    def stop_anchor_worker(self) -> None:
+        """Wird vom Graceful-Shutdown-Coordinator aufgerufen."""
+        self._anchor_stop.set()
 
     def _write_anchor(self, path: Optional[str] = None) -> Optional[str]:
         anchor = (path or os.environ.get("ARCHON_AUDIT_ANCHOR_PATH", "")).strip()

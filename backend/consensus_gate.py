@@ -135,11 +135,15 @@ async def review_task_output(
         from backend.autonomy_settings import get_module_config
         cfg = get_module_config("consensus_gate")
         if not cfg.get("enabled", True):
+            # H2 (Audit 23.11.2026): ein abgeschaltetes Gate darf niemals
+            # "approved" bedeuten. approved=False ist fail-closed; der
+            # Verdict macht sichtbar, dass keine Prüfung stattgefunden hat.
             return {
-                "approved": True,
-                "score": 10,
-                "verdict": "APPROVED_BYPASSED",
-                "critique": "Konsens-Gate ist in den Einstellungen deaktiviert.",
+                "approved": False,
+                "reviewed": False,
+                "score": 0,
+                "verdict": "NOT_REVIEWED_DISABLED",
+                "critique": "Konsens-Gate ist deaktiviert — keine Prüfung durchgeführt.",
                 "risks": []
             }
         min_prio = int(cfg.get("min_priority", 3))
@@ -150,11 +154,15 @@ async def review_task_output(
             model = "deepseek/deepseek-chat"
 
     if priority < min_prio:
+        # H2: frueher wurde unterhalb des Schwellenwerts "APPROVED_AUTO"
+        # zurueckgegeben — ein Agent konnte sich durch priority=1 selbst
+        # freigeben. Jetzt: nicht geprüft => nicht freigegeben.
         return {
-            "approved": True,
-            "score": 10,
-            "verdict": "APPROVED_AUTO",
-            "critique": f"Prioritaet ({priority}) < Schwellenwert ({min_prio}): Direkt freigegeben.",
+            "approved": False,
+            "reviewed": False,
+            "score": 0,
+            "verdict": "NOT_REVIEWED_LOW_PRIORITY",
+            "critique": f"Prioritaet ({priority}) < Schwellenwert ({min_prio}): keine Pruefung durchgefuehrt.",
             "risks": []
         }
 
@@ -242,7 +250,11 @@ async def run_tri_agent_council(
         from backend.autonomy_settings import get_module_config
         cfg = get_module_config("consensus_gate")
         if not cfg.get("enabled", True):
-            return {"status": "disabled", "task_id": task_id, "approved": True, "verdict": "BYPASSED_DISABLED"}
+            return {
+                "status": "disabled", "task_id": task_id,
+                "approved": False, "reviewed": False,
+                "verdict": "NOT_REVIEWED_DISABLED",
+            }
         majority_rule = cfg.get("majority_rule", "two_thirds")
         if not model:
             model = cfg.get("default_model", "deepseek/deepseek-chat")

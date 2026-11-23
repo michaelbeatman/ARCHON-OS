@@ -18,6 +18,8 @@ import os
 import sys
 import json
 import time
+import re
+import hashlib
 import socket
 from typing import Dict, Any, List, Optional
 import urllib.request
@@ -242,13 +244,18 @@ class N8nMcpDriver:
         self.base_url = (base_url or resolve_n8n_base_url()).rstrip("/")
         self.api_key = api_key
 
-    def _http_post_json(self, url: str, payload: Dict[str, Any], timeout: float = 20.0) -> Dict[str, Any]:
+    def _http_post_json(self, url: str, payload: Dict[str, Any], timeout: float = 20.0,
+                        idempotency_key: str = "") -> Dict[str, Any]:
         """Perform HTTP POST with standard library urllib."""
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "Archon-Mesh-Kernel/2.0",
             "X-Archon-Timestamp": str(time.time())
         }
+        # W4: Retry nach verlorener Response darf keine zweite Seitenwirkung
+        # auslösen (doppelter Nachrichtenversand / CRM-Schreibvorgang).
+        if idempotency_key:
+            headers["X-Idempotency-Key"] = idempotency_key
         if self.api_key:
             headers["X-N8N-API-KEY"] = self.api_key
 
@@ -277,12 +284,21 @@ class N8nMcpDriver:
 
     def execute_webhook(self, webhook_path: str, payload: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
         """Execute webhook with exponential backoff."""
-        clean_path = webhook_path.lstrip("/")
+        # W4: Pfad-Traversal blockieren. lstrip('/') liess '../../rest/...'
+        # durch — damit wurde der X-N8N-API-KEY an Admin-Endpunkte gesendet.
+        clean_path = str(webhook_path or "").strip().lstrip("/")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9/_-]{0,127}", clean_path) or ".." in clean_path:
+            return {"status": "error", "error": "Ungueltiger Webhook-Pfad."}
         url = f"{self.base_url}/webhook/{clean_path}"
+
+        # Deterministischer Schlüssel: gleiche Anfrage = gleiche Aktion,
+        # auch über mehrere retries hinweg.
+        canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+        idem_key = hashlib.sha256(f"{clean_path}|{canonical}".encode("utf-8")).hexdigest()
 
         last_error = None
         for attempt in range(1, max_retries + 1):
-            res = self._http_post_json(url, payload)
+            res = self._http_post_json(url, payload, idempotency_key=idem_key)
             if res.get("status") == "success":
                 res["attempt"] = attempt
                 return res
@@ -342,6 +358,18 @@ class N8nMcpDriver:
             "available_tools": tools_summary
         }
 
+    @staticmethod
+    def _validate_arguments(schema: Dict[str, Any], arguments: Dict[str, Any]) -> str:
+        """W4: deklarierte inputSchema zur Laufzeit prüfen (required + enum)."""
+        for field in (schema or {}).get("required", []) or []:
+            value = arguments.get(field)
+            if value is None or value == "":
+                return f"Pflichtfeld fehlt: {field}"
+        for key, spec in ((schema or {}).get("properties") or {}).items():
+            if key in arguments and "enum" in spec and arguments[key] not in spec["enum"]:
+                return f"Ungueltiger Wert fuer {key}: {arguments[key]}"
+        return ""
+
     def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Dispatch a tool call to the appropriate webhook or internal handler."""
         if name == "mcp__n8n__health_check":
@@ -349,13 +377,22 @@ class N8nMcpDriver:
         if name == "mcp__n8n__list_capabilities":
             return self.list_capabilities()
         if name == "mcp__n8n__trigger_workflow":
-            webhook_path = arguments.get("webhook_path", "")
+            webhook_path = str(arguments.get("webhook_path", "")).strip()
+            # Nur registrierte Webhooks — kein freier Pfad (API-Key-Exposition).
+            known = {c.get("webhook_path") for c in self.CAPABILITIES if c.get("webhook_path")}
+            if webhook_path not in known:
+                return {"status": "error", "message": "Unbekannter/registrierter Webhook-Pfad erforderlich."}
             payload = arguments.get("payload", {})
+            if not isinstance(payload, dict):
+                return {"status": "error", "message": "payload muss ein Objekt sein."}
             return self.execute_webhook(webhook_path, payload)
 
         # Lookup capability definition
         for cap in self.CAPABILITIES:
             if cap["name"] == name:
+                validation_error = self._validate_arguments(cap.get("inputSchema", {}), arguments)
+                if validation_error:
+                    return {"status": "error", "message": validation_error}
                 webhook_path = cap.get("webhook_path")
                 if webhook_path:
                     return self.execute_webhook(webhook_path, arguments)

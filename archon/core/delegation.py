@@ -1005,7 +1005,7 @@ async def _watch_delegated_task(
                     "task_id": task_id,
                     "status": status
                 })
-                if not parent_pid and orig_delegator in ("executive_decision_architect", "hermes-orchestrator", "founder", "micha", "default"):
+                if not parent_pid and orig_delegator in ("executive_decision_architect", "robert", "hermes-orchestrator", "founder", "micha", "default"):
                     _spawn_background(_trigger_autonomous_orchestrator_followup(
                         orig_delegator, origin_sess_id, task_id, status, result, final_title, parent_pid
                     ), name=f"followup_{task_id}")

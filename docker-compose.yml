@@ -29,9 +29,17 @@ services:
       - archon-admin_net
       # Internal Zero-Egress bridge to isolated workers & On-Premise inference
       - archon-worker-zero-egress_net
+    # H10 (Audit 23.11.2026): nicht nur "Container gestartet", sondern
+    # echte Readiness — sonst nimmt Archon Requests an, während OmniRoute
+    # und der Socket-Proxy noch nicht antworten.
     depends_on:
-      - docker-socket-proxy
-      - omniroute
+      docker-socket-proxy:
+        condition: service_healthy
+      # W3: omniroute darf den Start nicht blockieren — die Anwendung hat
+      # echte Provider-Fallbacks (OpenRouter/Ollama) und die Laufzeit-
+      # Unhealthigkeit wird über /readyz (Dependency-Probes) gemeldet.
+      omniroute:
+        condition: service_started
     ports:
       - "${ARCHON_BIND_IP:-127.0.0.1}:${ARCHON_HOST_PORT:-8501}:8501"
     extra_hosts:
@@ -99,6 +107,12 @@ services:
       start_period: 20s
     mem_limit: 2g
     memswap_limit: 2g
+    # W3: Docker-Log-Rotation (sonst wächst das JSON-Log unbegrenzt).
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m
@@ -141,8 +155,12 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
       - omniroute_data:/app/data
+    # W3: der alte wget-/'-Probe schlug bei Images ohne wget bzw. bei
+    # umgeleiteter Root-Route fehl -> omniroute dauerhaft "unhealthy", obwohl
+    # der Router lief. Node ist im Image garantiert vorhanden. Jede HTTP-
+    # Antwort < 500 (auch 401 mit Password-Auth) bedeutet: Service lebt.
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:20128/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:20128/v1/models',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -275,8 +293,13 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     depends_on:
-      - docker-socket-proxy
-      - omniroute
+      docker-socket-proxy:
+        condition: service_healthy
+      # W3: omniroute darf den Start nicht blockieren — die Anwendung hat
+      # echte Provider-Fallbacks (OpenRouter/Ollama) und die Laufzeit-
+      # Unhealthigkeit wird über /readyz (Dependency-Probes) gemeldet.
+      omniroute:
+        condition: service_started
     ports:
       - "127.0.0.1:${HERMES_HOST_PORT:-8644}:8642"
     extra_hosts:

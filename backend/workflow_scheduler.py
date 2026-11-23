@@ -102,7 +102,7 @@ def _init_policies_table() -> None:
                 id TEXT PRIMARY KEY,
                 source TEXT NOT NULL,
                 target TEXT NOT NULL,
-                policy TEXT NOT NULL DEFAULT 'allow',
+                policy TEXT NOT NULL DEFAULT 'deny',
                 max_per_min INTEGER NOT NULL DEFAULT 20,
                 note TEXT DEFAULT '',
                 updated_at TEXT NOT NULL
@@ -987,7 +987,12 @@ def _default_policy_for(source: str, target: str) -> Dict[str, Any]:
         return {"source": source, "target": target, "policy": "deny", "max_per_min": 20, "note": "Standard-Schutz: Watchdog darf keine Finanzen/Systeme triggern"}
     if source in ("inbox", "calendar") and target == "treasury":
         return {"source": source, "target": target, "policy": "require_hitl", "max_per_min": 20, "note": "Standard-Schutz: Zahlungen erfordern HITL-Freigabe"}
-    return {"source": source, "target": target, "policy": "allow", "max_per_min": 20, "note": ""}
+    # H1 (Audit 23.11.2026): echte Default-Deny-Policy. Same-Domain-Events
+    # bleiben erlaubt (kein Rechte-Uebergang), alle domänenuebergreifenden
+    # Kombinationen brauchen eine explizite Freigabe via upsert_event_policy.
+    if source == target:
+        return {"source": source, "target": target, "policy": "allow", "max_per_min": 20, "note": "Same-Domain erlaubt (kein Rechte-Uebergang)"}
+    return {"source": source, "target": target, "policy": "deny", "max_per_min": 20, "note": "Default-Deny: explizite Freigabe erforderlich"}
 
 
 def list_event_policies() -> List[Dict[str, Any]]:
@@ -1011,9 +1016,10 @@ def upsert_event_policy(source: str, target: str, policy: str, max_per_min: int 
     _init_policies_table()
     src = str(source or "").strip().lower()
     tgt = str(target or "").strip().lower()
-    pol = str(policy or "allow").strip().lower()
+    # H1: unbekannte/fehlerhafte Werte duerfen nie still zu "allow" werden.
+    pol = str(policy or "deny").strip().lower()
     if pol not in {"allow", "require_hitl", "deny"}:
-        pol = "allow"
+        pol = "deny"
     pid = f"{src}__{tgt}"
     now_iso = datetime.now(timezone.utc).isoformat()
     conn = _get_conn()

@@ -4,6 +4,7 @@ import time
 import uuid
 import logging
 import asyncio
+import weakref
 import json
 import httpx
 from typing import Dict, Any, List, Optional, AsyncGenerator
@@ -42,7 +43,10 @@ class AgentRouter:
         self.active_tasks: Dict[str, Any] = {}
         self._guardian_cache: Dict[str, Any] = {"ts": 0.0, "daily_budget": 2.0, "max_context_tokens": 32000}
         self._spend_cache: Dict[str, Any] = {"ts": 0.0, "spend": 0.0, "ok": False}
-        self._http_clients: Dict[int, httpx.AsyncClient] = {}
+        # H12: id()-basierte Caches veralten nach GC eines Loops und halten
+        # Connection-Pools ewig fest. WeakKeyDictionary wie in
+        # core_dispatcher.py:321 — der Loop ist der richtige Schlüssel.
+        self._http_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = weakref.WeakKeyDictionary()
 
     # --- Token Guard: Verbrauchsmessung -------------------------------------
     # Bewusst NICHT über /api/guardian/stats: dieser Endpunkt blockiert bei
@@ -141,14 +145,14 @@ class AgentRouter:
             logger.warning(f"[TokenGuard] Budget-Warnung nicht gesendet: {e}")
 
     def _get_shared_client(self) -> httpx.AsyncClient:
-        loop_id = id(asyncio.get_running_loop())
-        client = self._http_clients.get(loop_id)
+        loop = asyncio.get_running_loop()
+        client = self._http_clients.get(loop)
         if client is None or client.is_closed:
             client = httpx.AsyncClient(
                 timeout=90.0,
                 limits=httpx.Limits(max_keepalive_connections=25, max_connections=100)
             )
-            self._http_clients[loop_id] = client
+            self._http_clients[loop] = client
         return client
 
     def _get_guardian_policy(self) -> Dict[str, Any]:

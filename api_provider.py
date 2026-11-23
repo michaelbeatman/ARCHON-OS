@@ -45,6 +45,7 @@ import shutil
 import subprocess
 import sys
 import time
+import threading
 from typing import Any, Dict, Iterable, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -180,6 +181,17 @@ def list_providers(limit: Optional[int] = None) -> List[Dict[str, Any]]:
 
 _MODELS_TTL_CACHE: Dict[str, tuple] = {}
 _MODELS_TTL_SECONDS = 120.0
+# W5: Single-Flight pro Provider. Ohne Lock lief bei parallelen Requests der
+# komplette 3-URL-Fallback (bis 6 s) mehrfach gleichzeitig (Thundering Herd).
+_MODEL_LOCKS: Dict[str, threading.Lock] = {}
+_MODEL_LOCK_GUARD = threading.Lock()
+
+
+def _model_lock(pid: str) -> threading.Lock:
+    with _MODEL_LOCK_GUARD:
+        if pid not in _MODEL_LOCKS:
+            _MODEL_LOCKS[pid] = threading.Lock()
+        return _MODEL_LOCKS[pid]
 
 
 def list_provider_models(pid: str) -> List[str]:
@@ -189,12 +201,13 @@ def list_provider_models(pid: str) -> List[str]:
     (2 s Timeout) und wurde vorher pro Aufruf mehrfach ausgeloest.
     """
     norm_pid = (pid or "").strip().lower()
-    _cached = _MODELS_TTL_CACHE.get(norm_pid)
-    if _cached and (time.time() - _cached[0]) < _MODELS_TTL_SECONDS:
-        return list(_cached[1])
-    _result = _list_provider_models_uncached(norm_pid)
-    _MODELS_TTL_CACHE[norm_pid] = (time.time(), list(_result))
-    return _result
+    with _model_lock(norm_pid):
+        _cached = _MODELS_TTL_CACHE.get(norm_pid)
+        if _cached and (time.time() - _cached[0]) < _MODELS_TTL_SECONDS:
+            return list(_cached[1])
+        _result = _list_provider_models_uncached(norm_pid)
+        _MODELS_TTL_CACHE[norm_pid] = (time.time(), list(_result))
+        return _result
 
 
 def _list_provider_models_uncached(norm_pid: str) -> List[str]:

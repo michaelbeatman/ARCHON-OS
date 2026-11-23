@@ -442,7 +442,7 @@ async def _execute_mission_control_task(
             logger.warning(f"[Auto-Staffing] Fehler beim Parsen der Nominierungsmatrix: {parse_err}")
 
         # Cascade-Loop Schritt A: Hat Robert strategisch vorgelegt ohne direkte Nominierung? -> Sandy beauftragen
-        if agent_id in ("executive_decision_architect", "robert") and not task.get("parent_project_id"):
+        if agent_id in ("executive_decision_architect", "robert", "micha", "default") and not task.get("parent_project_id"):
             if not task.get("subtask_ids"):
                 _spawn_tracked(trigger_sandy(task, profiles), name="sandy_staffing")
 
@@ -738,6 +738,21 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                 continue
             nominated = parsed.get("nominated_agents", [])
             if isinstance(nominated, list) and len(nominated) > 0:
+                # H7 (Audit 23.11.2026): dieser Sandy-Staffing-Pfad hatte —
+                # anders als der Parallelpfad (Zeile 357+) — KEINE Tiefen- oder
+                # Fanout-Begrenzung und schrieb kein delegation_depth, sodass
+                # die Rekursionsschranke bei jedem Lauf neu bei 0 begann.
+                max_depth = 3
+                max_fanout = 5
+                depth = int(parent_task.get("delegation_depth", 0) or 0) + 1
+                if depth > max_depth:
+                    logger.warning(
+                        "[Delegation] Sandy-Pfad: Tiefe %s > %s bei Task %s — Nominierung abgelehnt.",
+                        depth, max_depth, parent_id,
+                    )
+                    ticker("Delegation", f"Task #{parent_id}: maximale Delegationstiefe erreicht.")
+                    continue
+                nominated = nominated[:max_fanout]
                 for idx, nom in enumerate(nominated):
                     sub_agent_id = nom.get("agent_id", "").strip()
                     sub_role = nom.get("role", "Spezialist")
@@ -764,6 +779,7 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                         "estimated_tokens": 60000,
                         "estimated_cost_eur": 0.08,
                         "subagents_count": 1,
+                        "delegation_depth": depth,
                         "status": "approval",
                         "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "result_summary": "",

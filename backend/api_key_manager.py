@@ -111,6 +111,21 @@ class ApiKeyManager:
                     created_by TEXT NOT NULL
                 );
             """)
+            # H3 (Audit 23.11.2026): Append-only wie die Zentralkette.
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS api_key_audit_no_update
+                BEFORE UPDATE ON api_key_audit_log
+                BEGIN
+                    SELECT RAISE(ABORT, 'api_key_audit_log is append-only');
+                END
+            """)
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS api_key_audit_no_delete
+                BEFORE DELETE ON api_key_audit_log
+                BEGIN
+                    SELECT RAISE(ABORT, 'api_key_audit_log is append-only');
+                END
+            """)
             conn.commit()
 
     @staticmethod
@@ -137,7 +152,11 @@ class ApiKeyManager:
             row = active_conn.execute("SELECT block_hash FROM api_key_audit_log ORDER BY id DESC LIMIT 1").fetchone()
             prev_hash = row["block_hash"] if row else GENESIS_HASH
             raw_chain_string = f"{prev_hash}|{key_id}|{action}|{details_json}|{created_by}|{now_iso}"
-            block_hash = hashlib.sha256(raw_chain_string.encode("utf-8")).hexdigest()
+            # H3: HMAC mit dem zentralen Chain-Secret statt nacktem SHA-256,
+            # sonst kann die Kette mit DB-Schreibzugriff ab Block 1 neu
+            # signiert werden.
+            from backend.audit_log import _chain_hash
+            block_hash = _chain_hash(raw_chain_string)
 
             active_conn.execute("""
                 INSERT INTO api_key_audit_log (key_id, action, details, prev_hash, block_hash, created_at, created_by)

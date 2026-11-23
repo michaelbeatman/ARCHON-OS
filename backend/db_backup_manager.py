@@ -15,6 +15,7 @@ import sqlite3
 import datetime
 import shutil
 import tempfile
+import threading
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("archon.db_backup_manager")
@@ -22,6 +23,10 @@ logger = logging.getLogger("archon.db_backup_manager")
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKUP_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "backups", "db")
 TENANTS_DIR = os.path.join(WORKSPACE_DIR, "data", "tenants")
+# K2 (Audit 23.11.2026): PocketBase-CRM war in keinem wiederkehrenden Backup.
+# Fester Pfad statt resolve_db("data.db") — letzteres würde eine leere DB
+# neu anlegen, weil "data.db" nicht in der db_paths-Registry steht.
+POCKETBASE_DB_PATH = os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data", "data.db")
 
 # Sensible Konfigurationsdateien, die ohne DB-Backup nicht wiederhergestellt
 # werden koennten (Settings, HITL-Passkeys, HMAC-Keys, Service-Token).
@@ -34,6 +39,9 @@ SECRET_FILES: Dict[str, str] = {
     "initial_admin_password": os.path.join(WORKSPACE_DIR, ".archon_initial_admin_password"),
 }
 _SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+\.secret\.gz$")
+
+# K1 (Audit 23.11.2026): parallele Restores müssen serialisiert werden.
+_RESTORE_LOCK = threading.RLock()
 
 
 def _tenant_secret_files() -> Dict[str, str]:
@@ -87,7 +95,7 @@ def _resolve_target(filename: str, legacy_subpath: str) -> str:
 
 
 def _collect_db_targets() -> List[str]:
-    return [
+    targets = [
         _resolve_target("ops.db", "~/.hermes/ops.db"),
         _resolve_target("business.db", "~/.hermes/business.db"),
         _resolve_target("memory.db", "~/.hermes/memory.db"),
@@ -98,6 +106,9 @@ def _collect_db_targets() -> List[str]:
         _resolve_target("deals.db", "~/.hermes/deals.db"),
         _resolve_target("corporate.db", "~/.hermes/corporate.db"),
     ]
+    if os.path.isfile(POCKETBASE_DB_PATH):
+        targets.append(POCKETBASE_DB_PATH)
+    return targets
 
 
 _INITIAL_DB_TARGETS = _collect_db_targets()
@@ -135,7 +146,10 @@ class DBBackupManager:
 
         tenants_prefix = os.path.abspath(os.path.join(WORKSPACE_DIR, "data", "tenants")) + os.sep
         for db_path in all_targets:
-            if db_path.startswith(tenants_prefix):
+            if db_path == POCKETBASE_DB_PATH:
+                # Eindeutiger Backup-Name, sonst kollidiert er mit anderen data.db.
+                db_name = "pb_data.db"
+            elif db_path.startswith(tenants_prefix):
                 rel = db_path[len(tenants_prefix):].replace(os.sep, "__")
                 db_name = f"tenant_{rel}"
             else:
@@ -144,12 +158,18 @@ class DBBackupManager:
             backup_file = os.path.join(self.backup_dir, f"{db_name}_{now_str}.db.gz")
             tmp_snapshot = None
             try:
-                src_conn = sqlite3.connect(db_path, timeout=10.0)
+                if db_path == POCKETBASE_DB_PATH:
+                    # PocketBase owns schema and WAL of this DB. Never issue a
+                    # write PRAGMA against the live file (D3-H7). A read-only
+                    # connection + backup API still sees a consistent snapshot.
+                    src_conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10.0)
+                else:
+                    src_conn = sqlite3.connect(db_path, timeout=10.0)
                 try:
-                    try:
-                        src_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-                    except Exception as e:
-                        print(f"[DBBackupManager] Checkpoint notice for {db_name}: {e}", file=sys.stderr)
+                    # W2: kein wal_checkpoint(TRUNCATE) mehr auf der Live-DB.
+                    # Die SQLite-Backup-API unten erzeugt einen konsistenten
+                    # Snapshot inkl. WAL; der TRUNCATE war ein schreibender
+                    # Eingriff mit SQLITE_BUSY-Risiko für andere Connections.
                     fd, tmp_snapshot = tempfile.mkstemp(prefix="archon_bkp_", suffix=".db", dir=self.backup_dir)
                     os.close(fd)
                     dst_conn = sqlite3.connect(tmp_snapshot)
@@ -283,6 +303,8 @@ class DBBackupManager:
             tenant_target = _tenant_restore_target(db_name)
             if tenant_target is not None:
                 target_path = tenant_target
+            elif db_name == "pb_data.db":
+                target_path = POCKETBASE_DB_PATH
             else:
                 candidates = {os.path.abspath(p): p for p in DB_TARGETS}
                 target_path = next((p for candidate, p in candidates.items()
@@ -314,20 +336,74 @@ class DBBackupManager:
             if dry_run:
                 return result
             os.makedirs(os.path.dirname(target), exist_ok=True)
-            if os.path.exists(target):
-                _stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                shutil.copy2(target, target + f".pre_restore.{_stamp}")
-            # KRITISCH: alte WAL/SHM-Sidecars muessen weg, bevor die neue DB
-            # eingesetzt wird — sonst wendet SQLite beim nächsten Öffnen das
-            # alte WAL auf die restaurierte Datei an (falsche Daten/Korruption).
-            for suffix in ("-wal", "-shm", "-journal"):
-                sidecar = target + suffix
-                if os.path.exists(sidecar):
+            with _RESTORE_LOCK:
+                # K1: Fail-Closed statt Split-Brain. Ein EXCLUSIVE-Lock bricht
+                # ab, wenn gerade andere Schreiber auf der Zieldatenbank aktiv
+                # sind — dann wird der Restore abgelehnt (Stattdessen vorher
+                # in den Drain-Modus gehen). Ein stilles Weiterspielen auf der
+                # ausgetauschten Datei erzeugte früher zwei konkurrierende Inodes.
+                guard = None
+                try:
+                    if os.path.exists(target):
+                        # 1) Konsistente pre_restore-Kopie über die Backup-API,
+                        #    noch OHNE Schreib-Lock. shutil.copy2 verlor bei
+                        #    WAL-DBs die letzten Commits. Read-first vermeidet
+                        #    einen Lock-Konflikt bei DBs ohne WAL-Modus.
+                        _stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        pre_path = target + f".pre_restore.{_stamp}"
+                        src_ro = sqlite3.connect(f"file:{target}?mode=ro", uri=True, timeout=2.0)
+                        try:
+                            with sqlite3.connect(pre_path, timeout=10.0) as pre_conn:
+                                src_ro.backup(pre_conn)
+                        finally:
+                            src_ro.close()
+                        result["pre_restore"] = pre_path
+                        # 2) Erst danach weitere Schreiber blockieren.
+                        guard = sqlite3.connect(target, timeout=2.0, isolation_level=None)
+                        guard.execute("BEGIN EXCLUSIVE")
+                except sqlite3.Error as exc:
+                    raise RuntimeError(
+                        f"Restore abgelehnt: Zieldatenbank nicht verfügbar ({exc}). "
+                        "Erst Hintergrund-Loops/Agenten in den Drain-Modus schicken."
+                    ) from exc
+                finally:
+                    if guard is not None:
+                        try:
+                            guard.execute("ROLLBACK")
+                        except Exception:
+                            pass
+                        guard.close()
+
+                # Erst nach Freigabe des Guards: alte WAL/SHM-Sidecars entfernen.
+                # Sonst wendet SQLite beim nächsten Öffnen das alte WAL auf die
+                # restaurierte Datei an (falsche Daten/Korruption).
+                for suffix in ("-wal", "-shm", "-journal"):
+                    sidecar = target + suffix
+                    if os.path.exists(sidecar):
+                        try:
+                            os.remove(sidecar)
+                        except OSError as exc:
+                            logger.warning("[DBBackup] Sidecar %s nicht entfernbar: %s", sidecar, exc)
+                os.replace(tmp_path, target)
+
+                # Directory-fsync: ohne ihn kann der Rename nach Stromausfall
+                # im Dateisystem-Journal verloren gehen.
+                try:
+                    dir_fd = os.open(os.path.dirname(target), os.O_RDONLY)
                     try:
-                        os.remove(sidecar)
-                    except OSError as exc:
-                        logger.warning("[DBBackup] Sidecar %s nicht entfernbar: %s", sidecar, exc)
-            os.replace(tmp_path, target)
+                        os.fsync(dir_fd)
+                    finally:
+                        os.close(dir_fd)
+                except OSError as exc:
+                    logger.debug("[DBBackup] Directory-fsync nicht verfügbar: %s", exc)
+
+                # Der gecachte Pragma-Status gehört zur alten Datei. Ohne Reset
+                # läuft die restaurierte DB ohne WAL weiter.
+                try:
+                    from backend.db_paths import _DB_PRAGMA_INITIALIZED
+                    _DB_PRAGMA_INITIALIZED.discard(target)
+                except Exception:
+                    pass
             return result
         finally:
             if os.path.exists(tmp_path):

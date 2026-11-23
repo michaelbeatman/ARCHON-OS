@@ -84,12 +84,52 @@ def load_boardroom_history():
     return hist
 
 
-def save_boardroom_history_item(item: dict):
+def _audit_boardroom(action: str, actor_id: str, payload: Dict[str, Any]) -> None:
+    """K5: jede Historie-Änderung zusätzlich in die HMAC-Kette schreiben."""
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event("boardroom", action, actor_id or "system", payload)
+    except Exception as exc:
+        # Audit-Ausfall darf die Debatte nicht beschädigen, muss aber auffallen.
+        logger.error("[Boardroom] Audit-Spiegelung fehlgeschlagen (%s): %s", action, exc)
+
+
+def _boardroom_utc_now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def save_boardroom_history_item(item: dict, actor_id: str = "system"):
+    """K5: Historie ist revisionssicher gespiegelt, nicht mehr nur eine JSON-Datei.
+
+    - Actor und Korrelations-ID kommen aus der verifizierten Session (siehe
+      Call-Sites), nie aus dem JSON-Body.
+    - UTC-Zeitstempel mit Offset (GoBD).
+    - verdrängte Einträge (>100) werden vor dem Verwerfen in die Kette
+      übernommen — keine stille Spurenlöschung mehr.
+    """
+    entry = dict(item)
+    # Abwärtskompatibel: Actor kann im Dict liegen, damit bestehende
+    # 1-Argument-Mocks/Call-Sites weiter funktionieren (kein neues Keyword).
+    actor_id = str(entry.pop("_actor_id", "") or actor_id or "system")
+    entry["actor_id"] = actor_id
+    entry.setdefault("correlation_id", entry.get("id"))
+    entry["timestamp"] = _boardroom_utc_now()
     hist = load_boardroom_history()
-    hist.insert(0, item)
+    hist.insert(0, entry)
     if len(hist) > 100:
+        for old in hist[100:]:
+            _audit_boardroom("decision_evicted", actor_id, {
+                "id": old.get("id"), "timestamp": old.get("timestamp")})
         hist = hist[:100]
-    _save_json(BOARDROOM_HISTORY_FILE, hist)
+    # atomar statt "komplett neu schreiben" (D3): kein halber JSON-Stand.
+    atomic_write_json(BOARDROOM_HISTORY_FILE, hist)
+    _audit_boardroom("decision_saved", actor_id, {
+        "id": entry.get("id"),
+        "correlation_id": entry.get("correlation_id"),
+        "task": str(entry.get("task", ""))[:500],
+        "framework": entry.get("framework"),
+        "timestamp": entry.get("timestamp"),
+    })
     return hist
 
 
@@ -120,10 +160,26 @@ def api_get_boardroom_history_item(item_id: str):
 @router.delete("/api/boardroom/history/{item_id}")
 def api_delete_boardroom_history_item(request: Request, item_id: str):
     require_admin_or_503(request)
+    from archon.routers._rbac import get_session_actor
+    actor = get_session_actor(request, fallback="admin")
     hist = load_boardroom_history()
-    hist = [h for h in hist if h.get("id") != item_id]
-    _save_json(BOARDROOM_HISTORY_FILE, hist)
-    return {"status": "success"}
+    found = False
+    for h in hist:
+        if h.get("id") != item_id:
+            continue
+        found = True
+        # K5 / Zielkonflikt Z3: DSGVO-Recht auf Vergessen erfüllen, ohne die
+        # GoBD-Kette zu beschädigen. Tombstone statt physischem Löschen.
+        h["redacted"] = True
+        h["redacted_at"] = _boardroom_utc_now()
+        h["redacted_by"] = actor
+        for key in ("task", "transcript", "synthesis", "slots", "vault_file"):
+            h.pop(key, None)
+    if not found:
+        raise HTTPException(status_code=404, detail="Debatte nicht gefunden")
+    atomic_write_json(BOARDROOM_HISTORY_FILE, hist)
+    _audit_boardroom("decision_redacted", actor, {"id": item_id})
+    return {"status": "success", "redacted": True}
 
 
 def _resolve_boardroom_lang(lang: Optional[str] = None, request: Request = cast(Request, None)) -> str:
@@ -368,6 +424,8 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
                 "synthesis": res.get("synthesis", ""),
                 "vault_file": f"boardroom_debatte_{ts_str}.md"
             }
+            from archon.routers._rbac import get_session_actor
+            hist_entry["_actor_id"] = get_session_actor(request, fallback="boardroom-service")
             save_boardroom_history_item(hist_entry)
             res["history_id"] = hist_entry["id"]
             try:
@@ -473,6 +531,8 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                             "synthesis": synthesis_text,
                             "vault_file": vault_file_name
                         }
+                        from archon.routers._rbac import get_session_actor
+                        hist_entry["_actor_id"] = get_session_actor(request, fallback="boardroom-service")
                         save_boardroom_history_item(hist_entry)
                         ev["history_id"] = hist_entry["id"]
                     except Exception as e:

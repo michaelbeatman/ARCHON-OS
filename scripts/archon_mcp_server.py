@@ -132,7 +132,11 @@ class ArchonMcpServer:
                     "type": "object",
                     "properties": {
                         "topic": {"type": "string", "description": "Die zu untersuchende Fragestellung oder Entscheidungsvorlage"},
-                        "framework": {"type": "string", "enum": ["6_thinking_hats", "first_principles", "devils_advocate", "swot"], "default": "6_thinking_hats"},
+                        "framework": {
+                            "type": "string",
+                            "enum": ["Steffi Kieffer Boardroom", "CLEAR-Model", "Six Thinking Hats", "Red-Teaming"],
+                            "default": "Steffi Kieffer Boardroom",
+                        },
                         "budget": {"type": "string", "enum": ["free", "cheap", "balanced", "premium"], "default": "balanced"}
                     },
                     "required": ["topic"]
@@ -387,24 +391,66 @@ class ArchonMcpServer:
         return {"status": "success", "category": cat, "count": len(messages), "messages": messages}
 
     def _trigger_boardroom(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        topic = args.get("topic")
-        framework = args.get("framework", "6_thinking_hats")
-        budget = args.get("budget", "balanced")
-        
-        # Debatte über core_dispatcher anstoßen oder als Task registrieren
-        task_res = self._create_task({
-            "title": f"AI Boardroom: {topic[:60]}",
-            "body": f"Thema: {topic}\nFramework: {framework}\nBudget: {budget}",
-            "assignee": "executive_decision_architect",
-            "priority": 3
-        })
+        """K7: echte Debatte starten — früher wurde nur ein Kanban-Task erzeugt
+        und trotzdem `status: success / boardroom_scheduled` gemeldet."""
+        topic = str(args.get("topic") or "").strip()
+        if not topic:
+            return {"status": "error", "message": "topic ist erforderlich."}
+        framework = str(args.get("framework") or "Steffi Kieffer Boardroom")
+        budget = str(args.get("budget") or "balanced")
+        # Frühere Enum-Werte existierten im Framework-Katalog gar nicht und
+        # wurden still zum Default umgewandelt. Alte Clients weiter akzeptieren.
+        legacy = {
+            "6_thinking_hats": "Six Thinking Hats",
+            "devils_advocate": "Red-Teaming",
+            "first_principles": "Steffi Kieffer Boardroom",
+            "swot": "Steffi Kieffer Boardroom",
+        }
+        framework = legacy.get(framework, framework)
+        res = None
+        reason = ""
+        try:
+            try:
+                from trigger_boardroom_debate import run_debate
+            except ImportError:
+                from scripts.trigger_boardroom_debate import run_debate
+            res = run_debate(task=topic, framework=framework, budget=budget)
+            if isinstance(res, dict) and res.get("status") == "error":
+                reason = str(res.get("message", res))
+        except Exception as exc:
+            # Exceptions müssen denselben Queued-Fallback nehmen wie ein
+            # explizites error-Result (sonst bleibt der HITL-Test rot).
+            reason = f"Boardroom-Debatte fehlgeschlagen: {exc}"
+        if not isinstance(res, dict) or res.get("status") == "error":
+            # Kein laufender Archon-/LLM-Server (Offline-/Testumgebung):
+            # ehrlich als "queued" melden statt einen fehlgeschlagenen Call
+            # als success auszugeben. Der Kanban-Task ist die echte Wirkung.
+            task_res = self._create_task({
+                "title": f"AI Boardroom: {topic[:60]}",
+                "body": f"Thema: {topic}\nFramework: {framework}\nBudget: {budget}\n"
+                        f"Hinweis: Debatte nicht gestartet — {reason}",
+                "assignee": "executive_decision_architect",
+                "priority": 3,
+            })
+            return {
+                "status": "success",
+                "action": "boardroom_queued",
+                "deferred": True,
+                "reason": reason,
+                "task_id": task_res.get("task_id"),
+                "topic": topic,
+                "framework": framework,
+                "budget": budget,
+            }
         return {
             "status": "success",
-            "action": "boardroom_scheduled",
-            "task_id": task_res.get("task_id"),
+            "action": "boardroom_debate_completed",
+            "task_id": res.get("history_id"),
             "topic": topic,
             "framework": framework,
-            "budget": budget
+            "budget": budget,
+            "synthesis": str(res.get("synthesis", ""))[:2000],
+            "transcript_length": len(str(res.get("transcript", ""))),
         }
 
     def _get_metrics(self, args: Dict[str, Any]) -> Dict[str, Any]:

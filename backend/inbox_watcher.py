@@ -129,4 +129,18 @@ async def inbox_watcher_background_loop():
         except asyncio.CancelledError:
             break
         except Exception as e:
+            # W3: kein stiller Tod mehr — Fehler müssen im Log und im
+            # Notification-Hub auftauchen, sonst verarbeitet der Watcher
+            # eingehende Mails unbemerkt nie wieder.
+            _archon_exc_logger.error("[InboxWatcher] Scan fehlgeschlagen: %s", e, exc_info=True)
+            try:
+                from backend.notification_hub import get_notification_hub
+                get_notification_hub().dispatch_notification(
+                    title="Inbox-Watcherfehler",
+                    message=f"Scan fehlgeschlagen: {e}",
+                    severity="CRITICAL",
+                    category="inbox",
+                )
+            except Exception as _notify_exc:
+                _archon_exc_logger.debug("[InboxWatcher] Alarm nicht sendbar: %s", _notify_exc)
             await asyncio.sleep(10)

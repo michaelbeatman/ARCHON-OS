@@ -20,7 +20,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -32,6 +32,79 @@ from archon.core.runtime import (  # noqa: F401
 from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+
+class _MemoryRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class MemoryHarvestRequest(_MemoryRequest):
+    text: str = ""
+    agent_id: str = "orchestrator"
+
+
+class MemoryCompactRequest(_MemoryRequest):
+    messages: List[Dict[str, Any]] = Field(default_factory=list)
+    force: bool = False
+    keep_recent_turns: Optional[int] = None
+
+
+class MemoryIndexRequest(_MemoryRequest):
+    doc_id: str = "DOC-1"
+    title: str = "Unbenanntes Dokument"
+    content: str = ""
+    source: str = "system_docs"
+
+
+class MemorySearchRequest(_MemoryRequest):
+    query: str = ""
+    top_k: Optional[int] = None
+    rrf_k: Optional[int] = None
+
+
+class MemoryTripleRequest(_MemoryRequest):
+    subject: str = ""
+    predicate: str = "RELATED_TO"
+    object: str = ""
+    confidence: float = Field(default=0.90, ge=0.0, le=1.0)
+    source: str = "manual"
+
+
+class MemoryIngestRequest(_MemoryRequest):
+    text: str = ""
+    source: str = "auto_extractor"
+
+
+class MemoryCragRequest(_MemoryRequest):
+    query: str = ""
+    relevance_threshold: Optional[float] = None
+
+
+class MemoryCoreBlockRequest(_MemoryRequest):
+    scope: Optional[str] = None
+    block_key: str = "custom_block"
+    content: str = ""
+    block_title: str = ""
+    mode: str = "replace"
+    acl: Optional[Any] = None
+    ttl_seconds: Optional[int] = None
+    project_id: Optional[str] = ""
+
+
+class MemoryCompartmentStoreRequest(_MemoryRequest):
+    scope: Optional[str] = None
+    namespace: str = "default"
+    content: str = ""
+    tags: List[str] = Field(default_factory=list)
+    acl: Optional[Any] = None
+    ttl_seconds: Optional[int] = None
+    agent_id: str = "global"
+    project_id: str = ""
+
+
+class MemoryPinCitationsRequest(_MemoryRequest):
+    response_text: str = ""
+    sources: List[Any] = Field(default_factory=list)
 
 
 def _validate_scope(scope: Optional[str]) -> Optional[str]:
@@ -49,8 +122,9 @@ def _validate_scope(scope: Optional[str]) -> Optional[str]:
 
 
 @router.post("/api/memory/harvest")
-def api_harvest_memory(request: Request, payload: Dict = Body(...)):
+def api_harvest_memory(request: Request, payload: MemoryHarvestRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from local_memory_bridge import LocalMemoryBridge
     bridge = LocalMemoryBridge()
     text = payload.get("text", "")
@@ -59,8 +133,9 @@ def api_harvest_memory(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/compact-context")
-def api_compact_context(request: Request, payload: Dict = Body(...)):
+def api_compact_context(request: Request, payload: MemoryCompactRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.context_compactor import context_compactor
     return context_compactor.compact_messages(
         messages=payload.get("messages", []),
@@ -70,8 +145,9 @@ def api_compact_context(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/hybrid-index")
-def api_hybrid_index_doc(request: Request, payload: Dict = Body(...)):
+def api_hybrid_index_doc(request: Request, payload: MemoryIndexRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.hybrid_search_engine import hybrid_search_engine
     return hybrid_search_engine.index_document(
         doc_id=payload.get("doc_id", "DOC-1"),
@@ -82,8 +158,9 @@ def api_hybrid_index_doc(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/hybrid-search")
-def api_hybrid_search(request: Request, payload: Dict = Body(...)):
+def api_hybrid_search(request: Request, payload: MemorySearchRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.hybrid_search_engine import hybrid_search_engine
     return hybrid_search_engine.search(
         query=payload.get("query", ""),
@@ -93,8 +170,9 @@ def api_hybrid_search(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/knowledge-graph/triple")
-def api_kg_add_triple(request: Request, payload: Dict = Body(...)):
+def api_kg_add_triple(request: Request, payload: MemoryTripleRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.knowledge_graph_store import knowledge_graph_store
     return knowledge_graph_store.add_triple(
         subject=payload.get("subject", ""),
@@ -106,8 +184,9 @@ def api_kg_add_triple(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/knowledge-graph/ingest")
-def api_kg_ingest_text(request: Request, payload: Dict = Body(...)):
+def api_kg_ingest_text(request: Request, payload: MemoryIngestRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.knowledge_graph_store import knowledge_graph_store
     return knowledge_graph_store.ingest_text(
         text=payload.get("text", ""),
@@ -122,8 +201,9 @@ def api_kg_subgraph(entity: str, hops: Optional[int] = None):
 
 
 @router.post("/api/memory/crag-retrieve")
-def api_crag_retrieve(request: Request, payload: Dict = Body(...)):
+def api_crag_retrieve(request: Request, payload: MemoryCragRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.corrective_rag import corrective_rag_engine
     return corrective_rag_engine.retrieve_and_verify(
         query=payload.get("query", ""),
@@ -146,8 +226,9 @@ def api_get_core_memory_blocks(
 
 
 @router.post("/api/memory/core-blocks")
-def api_upsert_core_memory_block(request: Request, payload: Dict = Body(...)):
+def api_upsert_core_memory_block(request: Request, payload: MemoryCoreBlockRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     scope = _validate_scope(payload.get("scope"))
     from backend.core_memory_manager import core_memory_manager
     return core_memory_manager.upsert_block(
@@ -163,8 +244,9 @@ def api_upsert_core_memory_block(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/memory/compartment/store")
-def api_compartment_store(request: Request, payload: Dict = Body(...)):
+def api_compartment_store(request: Request, payload: MemoryCompartmentStoreRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     scope = _validate_scope(payload.get("scope"))
     from backend.offline_memory_vault import store_memory
     eid = store_memory(
@@ -203,8 +285,9 @@ def api_compartment_recall(
 
 
 @router.post("/api/memory/pin-citations")
-def api_pin_citations(request: Request, payload: Dict = Body(...)):
+def api_pin_citations(request: Request, payload: MemoryPinCitationsRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = payload.model_dump()
     from backend.citation_pinner import citation_pinner
     return citation_pinner.pin_citations(
         response_text=payload.get("response_text", ""),

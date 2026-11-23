@@ -6,13 +6,103 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 import datetime
 import logging
 import os
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 
 logger = logging.getLogger("archon.routers.mesh")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["mesh"])
+
+
+class _MeshRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class MeshDiffPreviewRequest(_MeshRequest):
+    file_path: str = ""
+    new_content: str = ""
+    context_lines: int = 3
+
+
+class InboundEventRequest(_MeshRequest):
+    model_config = ConfigDict(extra="allow")  # kompletter Payload geht an event_mesh
+    event_type: str = "generic_event"
+
+
+class InboxScanRequest(_MeshRequest):
+    inbox_dir: Optional[str] = None
+
+
+class ConcurrencyConfigRequest(_MeshRequest):
+    model_config = ConfigDict(extra="allow")  # cfg.update(payload)
+
+
+class VisionAnalyzeRequest(_MeshRequest):
+    image_path: str = ""
+    focus_prompt: str = "Beschreibe den Inhalt dieses Screenshots detailliert."
+
+
+class HandoffCreateRequest(_MeshRequest):
+    task_id: str = ""
+    from_agent: str = ""
+    to_agent: str = ""
+    deliverables: Dict[str, Any] = Field(default_factory=dict)
+    acceptance_criteria: str = ""
+
+
+class HandoffAcceptRequest(_MeshRequest):
+    receiving_agent: str = ""
+
+
+class TaskConsensusReviewRequest(_MeshRequest):
+    task_id: str = "task-gen"
+    title: str = ""
+    output: str = ""
+    worker_agent: str = "hermes-coder"
+    priority: int = 3
+
+
+class TaskBudgetCheckRequest(_MeshRequest):
+    cost_usd: float = 0.0
+    budget_usd: float = 0.25
+    title: str = ""
+
+
+class CouncilVoteRequest(_MeshRequest):
+    task_id: str = "council-task"
+    title: str = ""
+    output: str = ""
+    model: Optional[str] = None
+
+
+class SandboxExecuteRequest(_MeshRequest):
+    code: str = ""
+    language: str = "python"
+    memory_limit_mb: Optional[int] = None
+    cpu_limit: Optional[float] = None
+    timeout_seconds: Optional[int] = None
+    network_enabled: Optional[bool] = None
+
+
+class MemoryConsolidationConfigRequest(_MeshRequest):
+    model_config = ConfigDict(extra="allow")  # cfg.update(payload)
+
+
+class BrowseCaptureRequest(_MeshRequest):
+    task_id: Optional[str] = None
+    url: str = "https://example.com"
+    actions: Optional[Any] = None
+    extract_selector: Optional[str] = None
+
+
+class WarRoomRequest(_MeshRequest):
+    topic: str = "System-Update"
+    proposal: str = ""
+    model: Optional[str] = None
+    task_id: Optional[str] = None
 
 
 def _require_admin(request: Request):
@@ -42,8 +132,9 @@ def api_query_rag(q: str = Query(..., description="Suchbegriff für das Anything
 
 
 @router.post("/api/diff/preview")
-def api_diff_preview(request: Request, payload: Dict = Body(...)):
+def api_diff_preview(request: Request, payload: MeshDiffPreviewRequest = Body(...)):
     _require_admin_or_503(request)
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.diff_engine import compute_file_diff
     from utils.path_jail import PathJailError, safe_path_within
 
@@ -97,8 +188,9 @@ def api_approve_skill_proposal(request: Request, proposal_id: str):
 
 
 @router.post("/api/events/inbound/{channel}")
-def api_ingest_inbound_event(request: Request, channel: str, payload: Dict = Body(...)):
+def api_ingest_inbound_event(request: Request, channel: str, payload: InboundEventRequest = Body(...)):
     _require_admin_or_503(request)
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.event_mesh import event_mesh
 
     return event_mesh.ingest_inbound_event(
@@ -116,8 +208,9 @@ def api_list_event_history(limit: int = 50):
 
 
 @router.post("/api/events/scan-directory")
-def api_scan_inbox_directory(request: Request, payload: Dict = Body(default={})):
+def api_scan_inbox_directory(request: Request, payload: InboxScanRequest = Body(default=InboxScanRequest())):
     _require_admin(request)
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.event_mesh import event_mesh
 
     return event_mesh.scan_inbox_directory(inbox_dir=payload.get("inbox_dir"))
@@ -134,8 +227,9 @@ def api_get_concurrency_status():
 
 
 @router.post("/api/concurrency/config")
-def api_save_concurrency_config(request: Request, payload: Dict = Body(...)):
+def api_save_concurrency_config(request: Request, payload: ConcurrencyConfigRequest = Body(...)):
     _require_admin(request)
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.concurrency_throttle import get_concurrency_config, save_concurrency_config
 
     cfg = get_concurrency_config()
@@ -148,7 +242,8 @@ def api_save_concurrency_config(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/vision/analyze")
-def api_analyze_vision(payload: Dict = Body(...)):
+def api_analyze_vision(payload: VisionAnalyzeRequest = Body(...)):
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.vision_pipeline import analyze_image_file
 
     return analyze_image_file(
@@ -161,7 +256,8 @@ def api_analyze_vision(payload: Dict = Body(...)):
 
 
 @router.post("/api/handoff/create")
-def api_create_handoff(payload: Dict = Body(...)):
+def api_create_handoff(payload: HandoffCreateRequest = Body(...)):
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.handoff_desk import handoff_desk
 
     return handoff_desk.create_handoff(
@@ -174,7 +270,8 @@ def api_create_handoff(payload: Dict = Body(...)):
 
 
 @router.post("/api/handoff/{handoff_id}/accept")
-def api_accept_handoff(handoff_id: str, payload: Dict = Body(...)):
+def api_accept_handoff(handoff_id: str, payload: HandoffAcceptRequest = Body(...)):
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.handoff_desk import handoff_desk
 
     return handoff_desk.accept_handoff(
@@ -186,7 +283,8 @@ def api_accept_handoff(handoff_id: str, payload: Dict = Body(...)):
 
 
 @router.post("/api/tasks/review-consensus")
-async def api_review_task_consensus(payload: Dict = Body(...)):
+async def api_review_task_consensus(payload: TaskConsensusReviewRequest = Body(...)):
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.consensus_gate import review_task_output
 
     task_id = payload.get("task_id", "task-gen")
@@ -200,7 +298,8 @@ async def api_review_task_consensus(payload: Dict = Body(...)):
 
 
 @router.post("/api/tasks/{task_id}/budget/check")
-def api_check_task_budget(task_id: str, payload: Dict = Body(...)):
+def api_check_task_budget(task_id: str, payload: TaskBudgetCheckRequest = Body(...)):
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.agent_router import check_task_budget
 
     return check_task_budget(
@@ -212,7 +311,8 @@ def api_check_task_budget(task_id: str, payload: Dict = Body(...)):
 
 
 @router.post("/api/consensus/council-vote")
-async def api_run_council_vote(payload: Dict = Body(...)):
+async def api_run_council_vote(payload: CouncilVoteRequest = Body(...)):
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.consensus_gate import run_tri_agent_council
 
     return await run_tri_agent_council(
@@ -234,8 +334,11 @@ def api_get_consensus_history(limit: int = 25):
 
 
 @router.post("/api/sandbox/execute")
-def api_execute_sandbox(request: Request, payload: Dict = Body(...)):
+def api_execute_sandbox(request: Request, payload: SandboxExecuteRequest = Body(...)):
     _require_admin(request)
+    # Der Handler prueft per `"key" in payload` — None-Werte muessen daher
+    # entfernt werden, sonst int(None)/float(None)/bool(None).
+    payload = payload.model_dump(exclude_none=True)
     from backend.ephemeral_sandbox import ephemeral_sandbox
 
     return ephemeral_sandbox.execute_in_sandbox(
@@ -259,8 +362,9 @@ def api_get_memory_consolidation_settings():
 
 
 @router.post("/api/settings/memory-consolidation")
-def api_save_memory_consolidation_settings(request: Request, payload: Dict = Body(...)):
+def api_save_memory_consolidation_settings(request: Request, payload: MemoryConsolidationConfigRequest = Body(...)):
     _require_admin(request)
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.memory_consolidator import get_consolidation_config, save_consolidation_config
 
     cfg = get_consolidation_config()
@@ -273,8 +377,9 @@ def api_save_memory_consolidation_settings(request: Request, payload: Dict = Bod
 
 
 @router.post("/api/browser/browse-and-capture")
-def api_browse_and_capture(request: Request, payload: Dict = Body(...)):
+def api_browse_and_capture(request: Request, payload: BrowseCaptureRequest = Body(...)):
     _require_admin(request)
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.visual_web_agent import visual_web_agent
 
     return visual_web_agent.browse_and_capture(
@@ -289,7 +394,8 @@ def api_browse_and_capture(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/simulation/war-room")
-async def api_run_war_room(payload: Dict = Body(...)):
+async def api_run_war_room(payload: WarRoomRequest = Body(...)):
+    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.war_room_simulator import run_war_room_simulation
 
     result = await run_war_room_simulation(

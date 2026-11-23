@@ -50,7 +50,7 @@ def test_tokens(monkeypatch):
     assert config.archon_service_token == "secret-token"
 
     monkeypatch.delenv("OMNIROUTE_API_KEY", raising=False)
-    assert config.omniroute_api_key == "sk-archon-local-dev"
+    assert config.omniroute_api_key == ""
 
     monkeypatch.setenv("OMNIROUTE_API_KEY", "sk-custom")
     assert config.omniroute_api_key == "sk-custom"

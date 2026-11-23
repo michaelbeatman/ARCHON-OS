@@ -68,7 +68,7 @@ def acquire_restore_lock(target_path: str, timeout: float = 0.3) -> LoopLock:
     liegt deshalb auf einer separaten Lock-DB (OS-verwaltet, keine stale
     Files) und serialisiert Restores über Prozessgrenzen hinweg.
     """
-    digest = hashlib.sha1(os.path.abspath(str(target_path)).encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha256(os.path.abspath(str(target_path)).encode("utf-8")).hexdigest()[:12]
     lock = try_acquire_loop_lock(f"restore_{digest}", timeout=timeout)
     if lock is None:
         raise RuntimeError(

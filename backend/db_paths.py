@@ -24,7 +24,13 @@ from typing import Optional
 logger = logging.getLogger("archon.db_paths")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP_DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
+# W6: Test-DB-Isolation. Wenn pytest und der laufende Container gleichzeitig
+# auf dasselbe Bind-Mount ./data/*.db schreiben, entsteht WAL-Korruption
+# (am 23.11. passiert). Mit ARCHON_DATA_DIR zeigt ALLE DB-Auflösung auf ein
+# getrenntes Verzeichnis. Muss VOR dem Import der App-Module gesetzt sein.
+APP_DATA_DIR = os.path.abspath(
+    os.getenv("ARCHON_DATA_DIR", "").strip() or os.path.join(WORKSPACE_DIR, "data")
+)
 
 # Hermes-Heimat (Agenten-State, Sessions, Kanban) — bleibt getrennt vom App-Data-Ordner.
 HERMES_DATA_DIR = "/opt/data" if os.path.isdir("/opt/data") else os.path.expanduser("~/.hermes")

@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 # Autoritative Basis ist der Repo-Root (identisch mit backend.db_paths).
 # Vorher kam WORKSPACE_DIR aus archon.core.runtime ("./agent_workspace") und
 # erzeugte ein zweites, leeres data/tenants-Verzeichnis -> Split-Brain.
-from backend.db_paths import WORKSPACE_DIR
+from backend.db_paths import WORKSPACE_DIR, APP_DATA_DIR
 
 logger = logging.getLogger("archon.tenant_context")
 
@@ -346,7 +346,14 @@ class TenantContextManager:
     ) -> None:
         self.workspace_dir = os.path.realpath(workspace_dir)
         self._is_default_workspace = self.workspace_dir == os.path.realpath(WORKSPACE_DIR)
-        self.tenants_base_dir = os.path.join(self.workspace_dir, "data", "tenants")
+        # W6: bei ARCHON_DATA_DIR (Test-Isolation) liegt auch der Tenant-Store
+        # im getrennten Datenverzeichnis, nicht unter WORKSPACE_DIR/data.
+        # Explizit übergebene workspace_dir (Tests mit tmp_path) bleibt unberührt.
+        self._data_root = (
+            APP_DATA_DIR if self._is_default_workspace
+            else os.path.join(self.workspace_dir, "data")
+        )
+        self.tenants_base_dir = os.path.join(self._data_root, "tenants")
         self._corporate_mgr = corporate_mgr
         self._lock = threading.RLock()
         self._initialized_schemas: set[tuple[str, str]] = set()
@@ -421,12 +428,12 @@ class TenantContextManager:
             if FULL_TENANT_ISOLATION:
                 if not os.path.isfile(isolated_path):
                     legacy_candidates = [
-                        os.path.join(self.workspace_dir, "data", fname),
+                        os.path.join(self._data_root, fname),
                         os.path.join(os.path.expanduser("~"), ".hermes", fname),
                     ]
                     if fname in ("crm.db",):
                         legacy_candidates.append(
-                            os.path.join(self.workspace_dir, "data", "business.db")
+                            os.path.join(self._data_root, "business.db")
                         )
                     env_override = os.environ.get("ARCHON_LEGACY_DB_DIR", "").strip()
                     if env_override:
@@ -448,7 +455,7 @@ class TenantContextManager:
 
             try:
                 from backend.db_consolidation import is_consolidation_active, resolve_consolidated_domain
-                data_dir = os.path.join(self.workspace_dir, "data")
+                data_dir = self._data_root
                 if is_consolidation_active(data_dir):
                     dom_name = fname if fname in CONSOLIDATED_TENANT_DBS else resolve_consolidated_domain(fname)
                     if tid in PRIMARY_TENANT_IDS:
@@ -463,11 +470,11 @@ class TenantContextManager:
                 logger.debug(f"[TenantContext] Konsolidierungs-Aufloesung uebersprungen: {cons_exc}")
 
             if fname in CONSOLIDATED_TENANT_DBS:
-                return os.path.join(self.workspace_dir, "data", fname) if (tid in PRIMARY_TENANT_IDS) else isolated_path
+                return os.path.join(self._data_root, fname) if (tid in PRIMARY_TENANT_IDS) else isolated_path
 
             if is_primary_prod and fname == "crm.db":
                 # Archon OS CRM nutzt die interne business.db (saubere Trennung von externem PocketBase-LinkedIn-CRM)
-                biz_db = os.path.join(self.workspace_dir, "data", "business.db")
+                biz_db = os.path.join(self._data_root, "business.db")
                 cache_key = ("crm.db", biz_db)
                 if cache_key not in self._initialized_schemas or not os.path.isfile(biz_db):
                     init_tenant_db_schema("crm.db", biz_db)
@@ -479,12 +486,12 @@ class TenantContextManager:
                     from backend.db_paths import resolve_db as _resolve_db
                     cand = _resolve_db("kanban.db")
                 except Exception:
-                    cand = os.path.join(self.workspace_dir, "data", "kanban.db")
+                    cand = os.path.join(self._data_root, "kanban.db")
                 if cand and os.path.isfile(cand):
                     return cand
 
             if is_primary_prod and fname in ("deals.db", "contracts.db") and not _db_has_tables(isolated_path):
-                legacy_path = os.path.join(self.workspace_dir, "data", fname)
+                legacy_path = os.path.join(self._data_root, fname)
                 if _db_has_tables(legacy_path):
                     _atomic_sqlite_backup(legacy_path, isolated_path)
 

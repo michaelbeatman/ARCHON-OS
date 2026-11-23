@@ -32,6 +32,7 @@ def configure(**deps: Any) -> None:
     """Registriert Dependencies (z.B. _sync_org_hierarchy_node)."""
     _DEPS.update(deps)
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["hermes-config"])
 
 
@@ -283,8 +284,9 @@ def api_get_hermes_form_config(path: Optional[str] = None):
     }
 
 @router.post("/api/hermes/settings")
-def api_save_hermes_form_config(request: Request, payload: dict = Body(...)):
+def api_save_hermes_form_config(request: Request, payload: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    payload = as_payload(payload)
     import yaml, shutil
     target_path = payload.get("config_path")
     settings = payload.get("settings", {})
@@ -712,8 +714,9 @@ def api_get_hermes_raw_config(request: Request, path: Optional[str] = None):
     }
 
 @router.post("/api/hermes/raw_config")
-def api_save_hermes_raw_config(request: Request, payload: dict = Body(...)):
+def api_save_hermes_raw_config(request: Request, payload: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    payload = as_payload(payload)
     import yaml, shutil
     target_path = payload.get("config_path")
     yaml_content = payload.get("yaml_content", "")

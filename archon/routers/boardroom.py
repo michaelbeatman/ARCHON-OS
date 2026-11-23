@@ -44,6 +44,7 @@ def configure(**deps: Any) -> None:
 
 from copy import deepcopy as _deepcopy
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 
@@ -213,8 +214,9 @@ def api_get_boardroom_frameworks(lang: Optional[str] = None, request: Request = 
 
 
 @router.post("/api/boardroom/frameworks")
-def api_save_boardroom_frameworks(request: Request, frameworks: Dict = Body(...)):
+def api_save_boardroom_frameworks(request: Request, frameworks: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    frameworks = as_payload(frameworks)
     core_dispatcher.CATEGORIZED_FRAMEWORKS = frameworks
     _save_json(FRAMEWORKS_FILE, frameworks)
     return {"status": "success"}

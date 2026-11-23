@@ -22,6 +22,7 @@ from archon.core.permissions import (
 
 logger = logging.getLogger("archon.routers.decisions")
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["decisions"])
 
 _FOLGE_OK = "Folgeaktion ausgeführt"
@@ -47,7 +48,7 @@ def _require_admin(request: Request):
 
 
 @router.post("/api/permission-gates/{gate_id}/decide")
-def api_decide_permission_gate(request: Request, gate_id: str, body: Dict = Body(...)):
+def api_decide_permission_gate(request: Request, gate_id: str, body: PassthroughBody = Body(...)):
     """Owner-Entscheidung ueber Telegram (Buttons gate:approve/reject oder
     Textbefehl 'Erlauben/Verbieten <gate_id>' via Skill).
     12.10: bewusst SYNCHRON (fastapi-Threadpool) - als async blockierte
@@ -56,6 +57,7 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Dict = Body
 
     fn_admin = getattr(app_main, "require_admin", _require_admin)
     fn_admin(request)
+    body = as_payload(body)
 
     decision = str(body.get("decision") or "").lower().strip()
     if decision not in ("approve", "reject"):
@@ -527,7 +529,8 @@ async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
 
 
 @router.post("/api/decisions/decide", dependencies=[_ArchonDepends(_require_admin)])
-async def api_decide_decision(body: Dict = Body(...)):
+async def api_decide_decision(body: PassthroughBody = Body(...)):
+    body = as_payload(body)
     """EINZIGER Schreibpfad für Entscheidungen — Telegram UND Kanban rufen ihn."""
     import main as app_main
 

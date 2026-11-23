@@ -20,6 +20,7 @@ from archon.core.runtime import (
 
 logger = logging.getLogger("archon.routers.core_settings")
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["core_settings"])
 
 
@@ -84,8 +85,9 @@ async def get_settings(request: Request):
 
 
 @router.post("/api/settings")
-async def api_save_settings(request: Request, settings: Dict = Body(None)):
+async def api_save_settings(request: Request, settings: PassthroughBody = Body(None)):
     _require_admin(request)
+    settings = as_payload(settings)
     if "x-hermes-session-token" in request.headers or "x-hermes-csrf-token" in request.headers:
         import main as app_main
         return await app_main.forward_to_hermes(request)
@@ -166,7 +168,8 @@ def api_save_roles(request: Request, roles: List[Dict]):
 
 
 @router.post("/api/v1/jev/test")
-def api_test_jev(payload: Dict = Body(None)):
+def api_test_jev(payload: PassthroughBody = Body(None)):
+    payload = as_payload(payload)
     import jev_router
 
     payload = payload or {}

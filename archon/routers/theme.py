@@ -19,6 +19,7 @@ from archon.core.paths import THEMES_DIR, THEME_FILE, THEME_LIVE_FILE
 from archon.core.runtime import _load_json, _save_json
 from archon.routers._rbac import require_admin_or_503
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["theme"])
 
 os.makedirs(THEMES_DIR, exist_ok=True)
@@ -126,7 +127,8 @@ def api_get_theme_by_name(theme_name: str):
 
 
 @router.post("/api/themes/{theme_name}", dependencies=[_ArchonDepends(_check_admin)])
-def api_save_theme_by_name(theme_name: str, theme_data: dict = Body(...)):
+def api_save_theme_by_name(theme_name: str, theme_data: PassthroughBody = Body(...)):
+    theme_data = as_payload(theme_data)
     path = _safe_theme_path(theme_name)
     _save_json_delegate(path, theme_data)
     return {"status": "success", "theme_name": theme_name}
@@ -159,7 +161,8 @@ def api_get_design_themes():
 
 
 @router.post("/api/design/themes", dependencies=[_ArchonDepends(_check_admin)])
-def api_save_design_themes(payload: Dict = Body(...)):
+def api_save_design_themes(payload: PassthroughBody = Body(...)):
+    payload = as_payload(payload)
     current = api_get_design_themes()
     if "active_theme_id" in payload:
         current["active_theme_id"] = payload["active_theme_id"]
@@ -223,7 +226,8 @@ def api_get_theme():
 
 
 @router.post("/api/theme", dependencies=[_ArchonDepends(_check_admin)])
-def api_save_theme(theme_data: Dict = Body(...)):
+def api_save_theme(theme_data: PassthroughBody = Body(...)):
+    theme_data = as_payload(theme_data)
     save_theme(theme_data)
     return {"status": "success"}
 
@@ -234,7 +238,8 @@ def api_get_theme_live_overrides():
 
 
 @router.post("/api/theme/live-overrides", dependencies=[_ArchonDepends(_check_admin)])
-def api_save_theme_live_overrides(payload: Dict = Body(...)):
+def api_save_theme_live_overrides(payload: PassthroughBody = Body(...)):
+    payload = as_payload(payload)
     target_file = _get_theme_live_file()
     existing = _load_json_delegate(target_file, {"rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {}})
     merged = dict(existing) if isinstance(existing, dict) else {}
@@ -265,7 +270,8 @@ def api_save_theme_live_overrides(payload: Dict = Body(...)):
 
 
 @router.post("/api/theme/bake-into-main-design", dependencies=[_ArchonDepends(_check_admin)])
-def api_bake_theme_into_main_design(payload: Dict = Body(None)):
+def api_bake_theme_into_main_design(payload: PassthroughBody = Body(None)):
+    payload = as_payload(payload)
     """Kompiliert alle Live-Studio-Regeln direkt in static/custom_studio.css,
     leert die temporären Overrides auf Server und Client und setzt den Zähler auf 0 zurück.
     """

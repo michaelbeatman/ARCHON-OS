@@ -16,6 +16,7 @@ from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import logger, OBSIDIAN_VAULT_DIR
 from utils.path_jail import safe_path, safe_path_within, PathJailError
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["vault"])
 
 _VAULT_FILES_CACHE: Dict[str, Any] = {"ts": 0.0, "data": []}
@@ -117,8 +118,9 @@ def api_read_vault_file_direct(path: str = Query(...)):
 
 
 @router.post("/api/vault/edit")
-def api_edit_vault_file_direct(request: Request, payload: Dict = Body(...)):
+def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body(...)):
     require_admin_or_503(request)
+    payload = as_payload(payload)
     path = payload.get("path", "")
     content = payload.get("content", "")
     if not path:

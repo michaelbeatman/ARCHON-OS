@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, HTTPException, Request
 
 logger = logging.getLogger("archon.routers.updater")
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["updater"])
 
 
@@ -21,7 +22,8 @@ def api_hermes_update_check(force: bool = False):
 
 
 @router.post("/api/v1/hermes/update/apply")
-def api_hermes_update_apply(request: Request, payload: Dict = Body(default={})):
+def api_hermes_update_apply(request: Request, payload: PassthroughBody = Body(default={})):
+    payload = as_payload(payload)
     import main as app_main
 
     curr_user = app_main.get_current_user_from_request(request)

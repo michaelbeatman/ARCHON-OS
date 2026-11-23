@@ -24,6 +24,7 @@ def configure(**deps: Any) -> None:
     """Registriert Dependencies (z.B. save_all_agent_profiles)."""
     _DEPS.update(deps)
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["marketplace"])
 
 try:
@@ -83,8 +84,9 @@ def api_get_skill_detail(source: str = Query(...), id: str = Query(...)):
 
 
 @router.post("/api/marketplace/skills/assign")
-def api_assign_skill_to_profile(request: Request, data: Dict = Body(...)):
+def api_assign_skill_to_profile(request: Request, data: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    data = as_payload(data)
     import re as _re
     profile_id = data.get("profile_id")
     skill_name = data.get("skill_name") or data.get("skill_id")
@@ -143,8 +145,9 @@ def api_assign_skill_to_profile(request: Request, data: Dict = Body(...)):
 
 
 @router.post("/api/marketplace/recruit")
-def api_marketplace_recruit(request: Request, data: Dict = Body(...)):
+def api_marketplace_recruit(request: Request, data: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    data = as_payload(data)
     source = data.get("source", "fabric")
     template_id = data.get("template_id") or data.get("id")
     custom_name = data.get("name")

@@ -31,6 +31,10 @@ Alle weiteren Zahlen in diesem Dokument wurden entsprechend korrigiert.
 | 2e | `memory` (10), `mesh` (14): Gedächtnis, Event-Mesh, Handoff, Sandbox, Consensus | 24 | ✅ erledigt (23.11.2026) |
 | 2f | `execution` (11), `gateway` (4), `resilience` (3), `system` (2), `swarm` (1) | 21 | ✅ erledigt (23.11.2026) |
 | 2g | `contracts` (5), `crm` (3), `deals` (2), `notebooks` (4), `corporate` (4) | 18 | ✅ erledigt (23.11.2026) |
+| 2h | `autonomy_settings` (6), `theme` (5), `hermes_config` (2), `hermes_ops` (2), `inbox_tools` (3), `decisions` (2), `boardroom` (1), `containers` (2), `core_settings` (2), `context_help` (1), `marketplace` (2), `skills` (2), `updater` (1), `vault` (1) | 32 | ✅ erledigt (24.11.2026) |
+
+**Alle 136 Body-Dicts migriert — Grep liefert 0 Funde.** Offen bleiben
+ausschließlich die 18 HTTP-200-Fehler (separate Etappe).
 | 2 | `llm_providers` (Rest), `governance`, `guardian`, `docker_services`, `watchdog`, `hermes_profiles`, `email_settings`, `kanban`, `memory_ops`, `telegram` | ~19 | offen |
 | 3 | `v2_capabilities` (Teil 1) | ~20 | offen |
 | 4 | `v2_capabilities` (Teil 2) + `content_machine` (Teil 1) | ~20 | offen |
@@ -39,7 +43,9 @@ Alle weiteren Zahlen in diesem Dokument wurden entsprechend korrigiert.
 | 7 | `operations_emails`, `operations_prompts`, `playbooks`, `operations_security`, `preflight_shadow`, `tenants` | ~20 | offen |
 | 8 | `documents`, `oracle_seo`, `voice`, `system`, `squad_packs`, `operations_finetuning`, `backend/operations_api` | ~19 | offen |
 
-**Verifizierter Stand nach Etappe 2g:** 32 Body-Dicts per Grep nachgezählt
+**Verifizierter Endstand nach Etappe 2h:** 0 Body-Dicts per Grep
+(136 gesamt − 136 migriert).  
+**Stand nach Etappe 2g war:** 32 Body-Dicts per Grep nachgezählt
 (136 gesamt − 104 migriert).  
 **Stand nach Etappe 2f war:** 50 Body-Dicts per Grep nachgezählt
 (136 gesamt − 86 migriert) — deckt sich exakt mit dem Startzustand "~136".  

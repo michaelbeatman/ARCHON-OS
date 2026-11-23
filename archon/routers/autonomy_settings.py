@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 
 logger = logging.getLogger("archon.routers.autonomy_settings")
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["autonomy_settings"])
 
 
@@ -34,8 +35,9 @@ def api_get_model_routing():
 
 
 @router.post("/api/settings/model-routing")
-def api_save_model_routing(request: Request, payload: Dict = Body(...)):
+def api_save_model_routing(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
+    payload = as_payload(payload)
     from backend.model_routing import save_config
 
     try:
@@ -63,8 +65,9 @@ def api_get_autonomy_modules_settings():
 
 
 @router.post("/api/settings/autonomy-modules")
-def api_save_autonomy_modules_settings(request: Request, payload: Dict = Body(...)):
+def api_save_autonomy_modules_settings(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
+    payload = as_payload(payload)
     import main as app_main
     from backend.autonomy_settings import save_autonomy_settings
 
@@ -128,7 +131,8 @@ def api_save_autonomy_modules_settings(request: Request, payload: Dict = Body(..
 
 
 @router.post("/api/cache/semantic-lookup")
-def api_semantic_cache_lookup(payload: Dict = Body(...)):
+def api_semantic_cache_lookup(payload: PassthroughBody = Body(...)):
+    payload = as_payload(payload)
     from backend.semantic_cache import semantic_cache_manager
 
     return semantic_cache_manager.lookup(
@@ -139,7 +143,8 @@ def api_semantic_cache_lookup(payload: Dict = Body(...)):
 
 
 @router.post("/api/cache/semantic-store")
-def api_semantic_cache_store(payload: Dict = Body(...)):
+def api_semantic_cache_store(payload: PassthroughBody = Body(...)):
+    payload = as_payload(payload)
     from backend.semantic_cache import semantic_cache_manager
 
     return semantic_cache_manager.store(
@@ -168,8 +173,9 @@ def api_semantic_cache_clear(request: Request):
 
 
 @router.post("/api/evolution/optimize-prompt")
-def api_optimize_role_prompt(request: Request, payload: Dict = Body(...)):
+def api_optimize_role_prompt(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
+    payload = as_payload(payload)
     from backend.prompt_optimizer import prompt_optimizer
 
     return prompt_optimizer.optimize_role_prompt(
@@ -180,7 +186,8 @@ def api_optimize_role_prompt(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/evolution/eval-suite/run")
-def api_run_eval_regression_suite(payload: Dict = Body(default={})):
+def api_run_eval_regression_suite(payload: PassthroughBody = Body(default={})):
+    payload = as_payload(payload)
     from backend.eval_regression_runner import eval_regression_runner
 
     return eval_regression_runner.run_suite(

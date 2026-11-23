@@ -12,6 +12,7 @@ from fastapi import APIRouter, Body, Request
 
 logger = logging.getLogger("archon.routers.inbox_tools")
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["inbox_tools"])
 
 
@@ -35,8 +36,9 @@ def api_get_inbox_watcher_config():
 
 
 @router.post("/api/inbox-watcher/config")
-def api_save_inbox_watcher_config(request: Request, payload: Dict = Body(...)):
+def api_save_inbox_watcher_config(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
+    payload = as_payload(payload)
     from backend.inbox_watcher import get_inbox_config, save_inbox_config
 
     current = get_inbox_config()
@@ -68,8 +70,9 @@ def api_list_tool_proposals(status: Optional[str] = None):
 
 
 @router.post("/api/tools/proposals")
-def api_create_tool_proposal(request: Request, payload: Dict = Body(...)):
+def api_create_tool_proposal(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
+    payload = as_payload(payload)
     from backend.tool_permission_manager import tool_permission_manager
 
     return tool_permission_manager.propose_tool_installation(
@@ -82,8 +85,9 @@ def api_create_tool_proposal(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/tools/proposals/{permission_id}/resolve")
-def api_resolve_tool_proposal(request: Request, permission_id: str, payload: Dict = Body(...)):
+def api_resolve_tool_proposal(request: Request, permission_id: str, payload: PassthroughBody = Body(...)):
     _require_admin(request)
+    payload = as_payload(payload)
     from backend.tool_permission_manager import tool_permission_manager
 
     action = payload.get("action", "grant")

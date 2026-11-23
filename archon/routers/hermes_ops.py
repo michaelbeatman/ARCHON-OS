@@ -15,6 +15,7 @@ from archon.core.paths import HERMES_CONFIG_YAML, OPT_DATA_DIR, STATE_DB_PATH
 
 logger = logging.getLogger("archon.routers.hermes_ops")
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["hermes_ops"])
 
 
@@ -115,8 +116,9 @@ def _restore_masked_dict_secrets(existing: Any, updated: Any) -> Any:
 
 
 @router.post("/api/hermes/config")
-def api_save_hermes_config(request: Request, payload: Dict = Body(...)):
+def api_save_hermes_config(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
+    payload = as_payload(payload)
     import main as app_main
 
     cfg_file = _get_hermes_config_path()
@@ -199,9 +201,10 @@ def _purge_state_memory(purge_options: Dict) -> Dict:
 
 
 @router.post("/api/hermes/memory/purge")
-def api_hermes_memory_purge(request: Request, purge_options: Dict = Body(default={})):
+def api_hermes_memory_purge(request: Request, purge_options: PassthroughBody = Body(default={})):
     """Cleans sessions and chat messages while strictly preserving session_model_usage."""
     _require_admin(request)
+    purge_options = as_payload(purge_options)
     try:
         return _purge_state_memory(purge_options)
     except Exception as e:

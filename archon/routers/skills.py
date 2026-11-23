@@ -39,6 +39,7 @@ def configure(**deps: Any) -> None:
 
 import shutil
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 
@@ -634,8 +635,9 @@ def api_skills_rag_query(prompt: str):
 
 
 @router.post("/api/v1/skills/rag/store")
-def api_skills_rag_store(request: Request, event_data: Dict = Body(...)):
+def api_skills_rag_store(request: Request, event_data: PassthroughBody = Body(...)):
     require_admin_or_503(request)
+    event_data = as_payload(event_data)
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     return _DEPS["skills_engine"].rag.store_system_metric(event_data)
@@ -666,8 +668,9 @@ async def api_skills_mcp_connect(request: Request, server_script_or_url: str = B
 
 
 @router.post("/api/v1/skills/mcp/execute")
-async def api_skills_mcp_execute(request: Request, tool_name: str = Body(...), arguments: Dict = Body(...), agent_id: str = Body(None)):
+async def api_skills_mcp_execute(request: Request, tool_name: str = Body(...), arguments: PassthroughBody = Body(...), agent_id: str = Body(None)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    arguments = as_payload(arguments)
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     if not agent_id:

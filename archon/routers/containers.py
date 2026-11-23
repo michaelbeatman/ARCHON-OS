@@ -36,6 +36,7 @@ def configure(**deps: Any) -> None:
     """Registriert Dependencies (z.B. detect_container_port, post_docker_container_action)."""
     _DEPS.update(deps)
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["containers"])
 
 
@@ -108,8 +109,9 @@ def get_container_settings(container_name: str):
 
 
 @router.post("/api/v1/container/settings")
-def save_container_settings(request: Request, container_name: str, config: Dict = Body(...)):
+def save_container_settings(request: Request, container_name: str, config: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    config = as_payload(config)
     save_agent_config(container_name, config)
     return {"status": "success"}
 
@@ -448,8 +450,9 @@ def run_container_action(request: Request, req: ContainerActionRequest):
 
 
 @router.post("/api/v1/container/inject_config")
-async def inject_container_config(request: Request, container_name: str, config: Dict = Body(...)):
+async def inject_container_config(request: Request, container_name: str, config: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    config = as_payload(config)
     ports_map = {
         "odysseus": 7000,
         "hermes": 8787,

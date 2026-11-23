@@ -10,6 +10,7 @@ logger = logging.getLogger("archon.routers.context_help")
 from typing import Any, Dict
 from fastapi import APIRouter, Body, HTTPException
 
+from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["context-help"])
 
 HELP_CONTEXT_DATA = {
@@ -222,7 +223,8 @@ def api_get_help_context(view_id: str):
 
 
 @router.post("/api/help/ask")
-async def api_ask_help_assistant(payload: dict = Body(...)):
+async def api_ask_help_assistant(payload: PassthroughBody = Body(...)):
+    payload = as_payload(payload)
     view_id = payload.get("view_id", "operations")
     question = payload.get("question", "").strip()
     if not question:

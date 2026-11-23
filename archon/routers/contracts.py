@@ -21,6 +21,7 @@ import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
+from archon.routers._validated_body import TypedBody, PassthroughBody, as_payload
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -32,6 +33,32 @@ from archon.core.runtime import (  # noqa: F401
 from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+
+class ContractSaveBody(PassthroughBody):
+    pass
+
+
+class ContractParseBody(TypedBody):
+    text: str = ""
+
+
+class ContractScanBody(TypedBody):
+    send_telegram: bool = True
+    create_kanban_task: bool = True
+
+
+class ContractCreateBody(TypedBody):
+    task_id: str = "task-sla"
+    delegator: str = "agent-lead"
+    assignee: str = "agent-worker"
+    required_keys: list = []
+    acceptance_criteria: str = ""
+
+
+class ContractValidateBody(TypedBody):
+    contract_id: str = ""
+    delivery: dict = {}
 
 @router.get("/api/contracts")
 @router.get("/api/v1/contracts")
@@ -65,8 +92,9 @@ def api_get_contract(contract_id: str):
 
 @router.post("/api/contracts")
 @router.post("/api/v1/contracts")
-def api_save_contract(request: Request, payload: dict = Body(...)):
+def api_save_contract(request: Request, payload: ContractSaveBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = as_payload(payload)
     from backend.contract_manager import ContractManager
     saved = ContractManager.create_or_update(payload)
     return {"status": "success", "contract": saved}
@@ -83,8 +111,9 @@ def api_delete_contract(request: Request, contract_id: str):
 
 @router.post("/api/contracts/parse")
 @router.post("/api/v1/contracts/parse")
-def api_parse_contract(request: Request, payload: dict = Body(...)):
+def api_parse_contract(request: Request, payload: ContractParseBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = as_payload(payload)
     from backend.contract_manager import ContractParser
     text = payload.get("text", "")
     parsed = ContractParser.parse(text)
@@ -93,8 +122,9 @@ def api_parse_contract(request: Request, payload: dict = Body(...)):
 
 @router.post("/api/contracts/scan-deadlines")
 @router.post("/api/v1/contracts/scan-deadlines")
-def api_scan_contract_deadlines(request: Request, payload: dict = Body(default={})):
+def api_scan_contract_deadlines(request: Request, payload: ContractScanBody = Body(default=ContractScanBody())):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = as_payload(payload)
     from backend.contract_manager import ContractManager
     send_telegram = payload.get("send_telegram", True)
     create_kanban = payload.get("create_kanban_task", True)
@@ -114,8 +144,10 @@ def api_renew_contract(request: Request, contract_id: str):
 
 
 @router.post("/api/contracts/create")
-def api_create_contract(request: Request, payload: Dict = Body(...)):
+def api_create_contract(request: Request, payload: ContractCreateBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    # Handler prueft per `"key" in payload` -> None-Werte entfernen.
+    payload = as_payload(payload, exclude_none=True)
     from backend.sla_contract_enforcer import sla_contract_enforcer
     return sla_contract_enforcer.create_contract(
         task_id=payload.get("task_id", "task-sla"),
@@ -129,8 +161,9 @@ def api_create_contract(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/contracts/validate")
-def api_validate_contract(request: Request, payload: Dict = Body(...)):
+def api_validate_contract(request: Request, payload: ContractValidateBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = as_payload(payload)
     from backend.sla_contract_enforcer import sla_contract_enforcer
     return sla_contract_enforcer.validate_delivery(
         contract_id=payload.get("contract_id", ""),

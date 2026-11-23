@@ -21,6 +21,7 @@ import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
+from archon.routers._validated_body import TypedBody, PassthroughBody, as_payload
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -32,6 +33,22 @@ from archon.core.runtime import (  # noqa: F401
 from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+
+class CorporateCompanyBody(PassthroughBody):
+    pass
+
+
+class CorporateTemplateBody(TypedBody):
+    template_type: str = "letterhead"
+    company_id: str = ""
+    custom: dict = {}
+
+
+class CorporateLayoutBody(TypedBody):
+    template_type: str = "letterhead"
+    company_id: str = ""
+    layout: dict = {}
 
 @router.get("/api/corporate/companies")
 def api_list_corporate_companies():
@@ -49,8 +66,9 @@ def api_get_corporate_company(company_id: str):
 
 
 @router.post("/api/corporate/companies")
-def api_save_corporate_company(request: Request, payload: Dict = Body(...)):
+def api_save_corporate_company(request: Request, payload: CorporateCompanyBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = as_payload(payload)
     from backend.corporate_manager import corporate_manager
     saved = corporate_manager.save_company(payload)
     return {"success": True, "company": saved}
@@ -77,8 +95,9 @@ def api_delete_corporate_company(request: Request, company_id: str):
 
 
 @router.post("/api/corporate/render-template")
-def api_render_corporate_template(request: Request, payload: Dict = Body(...)):
+def api_render_corporate_template(request: Request, payload: CorporateTemplateBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = as_payload(payload)
     from backend.corporate_manager import corporate_manager
     template_type = payload.get("template_type", "letterhead")
     company_id = payload.get("company_id")
@@ -106,8 +125,9 @@ def api_get_corporate_template_layout(
 
 
 @router.post("/api/corporate/template-layout")
-def api_save_corporate_template_layout(request: Request, payload: Dict = Body(...)):
+def api_save_corporate_template_layout(request: Request, payload: CorporateLayoutBody = Body(...)):
     require_admin_or_503(request)
+    payload = as_payload(payload)
     from backend.corporate_manager import corporate_manager
     template_type = str(payload.get("template_type") or "letterhead")
     company_id = payload.get("company_id")
@@ -124,8 +144,9 @@ def api_save_corporate_template_layout(request: Request, payload: Dict = Body(..
 
 
 @router.post("/api/corporate/render-pdf")
-def api_render_corporate_template_pdf(request: Request, payload: Dict = Body(...)):
+def api_render_corporate_template_pdf(request: Request, payload: CorporateTemplateBody = Body(...)):
     require_admin_or_503(request)
+    payload = as_payload(payload)
     from backend.corporate_manager import corporate_manager
     from backend.erp_zugferd_pdf import build_corporate_template_pdf
     template_type = str(payload.get("template_type") or "letterhead")

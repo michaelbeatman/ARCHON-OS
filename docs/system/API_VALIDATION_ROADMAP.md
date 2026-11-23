@@ -30,6 +30,7 @@ Alle weiteren Zahlen in diesem Dokument wurden entsprechend korrigiert.
 | 2d | `erp` (10): Entitäten, Kontakte, Belege, Bankimport, PocketBase-Sync | 10 | ✅ erledigt (23.11.2026) |
 | 2e | `memory` (10), `mesh` (14): Gedächtnis, Event-Mesh, Handoff, Sandbox, Consensus | 24 | ✅ erledigt (23.11.2026) |
 | 2f | `execution` (11), `gateway` (4), `resilience` (3), `system` (2), `swarm` (1) | 21 | ✅ erledigt (23.11.2026) |
+| 2g | `contracts` (5), `crm` (3), `deals` (2), `notebooks` (4), `corporate` (4) | 18 | ✅ erledigt (23.11.2026) |
 | 2 | `llm_providers` (Rest), `governance`, `guardian`, `docker_services`, `watchdog`, `hermes_profiles`, `email_settings`, `kanban`, `memory_ops`, `telegram` | ~19 | offen |
 | 3 | `v2_capabilities` (Teil 1) | ~20 | offen |
 | 4 | `v2_capabilities` (Teil 2) + `content_machine` (Teil 1) | ~20 | offen |
@@ -38,7 +39,9 @@ Alle weiteren Zahlen in diesem Dokument wurden entsprechend korrigiert.
 | 7 | `operations_emails`, `operations_prompts`, `playbooks`, `operations_security`, `preflight_shadow`, `tenants` | ~20 | offen |
 | 8 | `documents`, `oracle_seo`, `voice`, `system`, `squad_packs`, `operations_finetuning`, `backend/operations_api` | ~19 | offen |
 
-**Verifizierter Stand nach Etappe 2f:** 50 Body-Dicts per Grep nachgezählt
+**Verifizierter Stand nach Etappe 2g:** 32 Body-Dicts per Grep nachgezählt
+(136 gesamt − 104 migriert).  
+**Stand nach Etappe 2f war:** 50 Body-Dicts per Grep nachgezählt
 (136 gesamt − 86 migriert) — deckt sich exakt mit dem Startzustand "~136".  
 **Stand nach Etappe 2e war:** 71 Body-Dicts per Grep nachgezählt
 (`: (dict|Dict[...]) = Body` über `archon/routers/**/*.py`) — die früher

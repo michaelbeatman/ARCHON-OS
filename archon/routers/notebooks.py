@@ -15,7 +15,28 @@ except ImportError:
         pass
 
 
+from archon.routers._validated_body import TypedBody, PassthroughBody, as_payload
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["notebooks"])
+
+
+class NotebookCreateBody(TypedBody):
+    name: str = ""
+    description: str = ""
+
+
+class NotebookAttachBody(TypedBody):
+    rel_path: str = ""
+
+
+class NotebookQueryBody(TypedBody):
+    prompt: str = ""
+
+
+class NotebookSyncBody(TypedBody):
+    query: str = ""
+    response: str = ""
+    citations: str = ""
 
 
 @router.get("/api/v1/notebooks")
@@ -28,8 +49,9 @@ def api_get_notebooks():
 
 
 @router.post("/api/v1/notebooks")
-def api_create_notebook(request: Request, payload: dict = Body(...)):
+def api_create_notebook(request: Request, payload: NotebookCreateBody = Body(...)):
     require_admin_or_503(request)
+    payload = as_payload(payload)
     try:
         from utils.notebook_engine import create_notebook
         name = payload.get("name", "").strip()
@@ -93,8 +115,9 @@ async def api_upload_notebook_source(nb_id: str, request: Request):
 
 
 @router.post("/api/v1/notebooks/{nb_id}/sources/attach-vault")
-def api_attach_vault_source(request: Request, nb_id: str, payload: dict = Body(...)):
+def api_attach_vault_source(request: Request, nb_id: str, payload: NotebookAttachBody = Body(...)):
     require_admin_or_503(request)
+    payload = as_payload(payload)
     try:
         from utils.notebook_engine import add_source_from_vault
         rel_path = payload.get("rel_path")
@@ -142,7 +165,8 @@ def api_get_notebook_chat(nb_id: str):
 
 
 @router.post("/api/v1/notebooks/{nb_id}/query")
-async def api_query_notebook(nb_id: str, payload: dict = Body(...)):
+async def api_query_notebook(nb_id: str, payload: NotebookQueryBody = Body(...)):
+    payload = as_payload(payload)
     try:
         from utils.notebook_engine import query_notebook
         prompt = payload.get("prompt", "").strip()
@@ -157,8 +181,9 @@ async def api_query_notebook(nb_id: str, payload: dict = Body(...)):
 
 
 @router.post("/api/v1/notebooks/{nb_id}/sync-obsidian")
-def api_sync_notebook_obsidian(request: Request, nb_id: str, payload: dict = Body(...)):
+def api_sync_notebook_obsidian(request: Request, nb_id: str, payload: NotebookSyncBody = Body(...)):
     require_admin_or_503(request)
+    payload = as_payload(payload)
     try:
         from utils.notebook_engine import save_to_obsidian
         query = payload.get("query", "")

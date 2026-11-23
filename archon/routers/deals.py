@@ -10,7 +10,18 @@ from typing import Optional
 from fastapi import APIRouter, Body, HTTPException
 from archon.routers._rbac import require_admin_or_503
 
+from archon.routers._validated_body import TypedBody, PassthroughBody, as_payload
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["deals"])
+
+
+class DealSaveBody(PassthroughBody):
+    pass
+
+
+class DealStageBody(TypedBody):
+    stage: str = ""
+    notes: str = ""
 
 
 @router.get("/api/deals")
@@ -39,7 +50,8 @@ def api_get_deal(deal_id: str):
 
 @router.post("/api/deals")
 @router.post("/api/v1/deals")
-def api_save_deal(payload: dict = Body(...)):
+def api_save_deal(payload: DealSaveBody = Body(...)):
+    payload = as_payload(payload)
     from backend.deal_pipeline import DealPipelineManager
     saved = DealPipelineManager.create_or_update(payload)
     return {"status": "success", "deal": saved}
@@ -47,7 +59,8 @@ def api_save_deal(payload: dict = Body(...)):
 
 @router.post("/api/deals/{deal_id}/move-stage")
 @router.post("/api/v1/deals/{deal_id}/move-stage")
-def api_move_deal_stage(deal_id: str, payload: dict = Body(...)):
+def api_move_deal_stage(deal_id: str, payload: DealStageBody = Body(...)):
+    payload = as_payload(payload)
     from backend.deal_pipeline import DealPipelineManager
     new_stage = payload.get("stage", "")
     notes = payload.get("notes")

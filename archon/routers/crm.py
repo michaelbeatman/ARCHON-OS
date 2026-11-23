@@ -23,6 +23,7 @@ import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
+from archon.routers._validated_body import TypedBody, PassthroughBody, as_payload
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -34,6 +35,17 @@ from archon.core.runtime import (  # noqa: F401
 from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+
+class CrmContactBody(PassthroughBody):
+    pass
+
+
+class CrmMessageBody(TypedBody):
+    text: str = ""
+    channel: str = "note"
+    direction: str = "outbound"
+    sender: str = "Michael Keller"
 
 @router.get("/api/crm/contacts")
 def api_crm_list_contacts(
@@ -67,15 +79,17 @@ def api_crm_get_contact(contact_id: str, request: Request):
 
 
 @router.post("/api/crm/contacts")
-def api_crm_create_contact(request: Request, payload: Dict = Body(...)):
+def api_crm_create_contact(request: Request, payload: CrmContactBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = as_payload(payload)
     from backend.crm_service import crm_service
     return crm_service.save_contact(contact_id=payload.get("id"), payload=payload)
 
 
 @router.put("/api/crm/contacts/{contact_id}")
-def api_crm_update_contact(request: Request, contact_id: str, payload: Dict = Body(...)):
+def api_crm_update_contact(request: Request, contact_id: str, payload: CrmContactBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = as_payload(payload)
     from backend.crm_service import crm_service
     return crm_service.save_contact(contact_id=contact_id, payload=payload)
 
@@ -89,8 +103,9 @@ def api_crm_delete_contact(request: Request, contact_id: str):
 
 
 @router.post("/api/crm/contacts/{contact_id}/messages")
-def api_crm_add_message(request: Request, contact_id: str, payload: Dict = Body(...)):
+def api_crm_add_message(request: Request, contact_id: str, payload: CrmMessageBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
+    payload = as_payload(payload)
     from backend.crm_service import crm_service
     text = payload.get("text", "")
     channel = payload.get("channel", "note")

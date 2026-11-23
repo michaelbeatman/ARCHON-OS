@@ -15,6 +15,9 @@ export async function GET() {
 
   try {
     const res = await fetch(aggregatorUrl, {
+      headers: {
+        'X-Archon-Token': process.env.CALENDAR_AGGREGATOR_TOKEN || '',
+      },
       next: { revalidate: 60 }, // cache 60 s
       signal: AbortSignal.timeout(5000), // 5 s timeout
     });
@@ -47,6 +50,7 @@ export async function POST(req: Request) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Archon-Token': process.env.CALENDAR_AGGREGATOR_TOKEN || '',
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(10000),

@@ -471,6 +471,7 @@ VIEWS_PENDING = frozenset()
 # Nicht uebersetzbare Knoten je View: Laufzeitwerte aus JS/Backend, technische
 # Identifier, Einheiten, Beispielwerte. Textgleichheit ist eindeutig genug.
 VIEW_EXCEPTIONS = {
+    # --- Governance -------------------------------------------------------
     # --- Research Lab ----------------------------------------------------
     # Laufzeitwerte aus research_lab.js, Modell-/Produkt-Identifier und
     # technische Platzhalter.
@@ -509,6 +510,8 @@ VIEW_EXCEPTIONS = {
         "0 Items": "Zaehler inbox-total-badge, wird per JS aus der Trefferzahl gesetzt",
     },
     "view_approval_policies.html": {
+        # W4: statischer Audit-Hinweis (Entwickler-/Prüfnotiz), keine lokalisierbare UI-Botschaft.
+        "NICHT IMPLEMENTIERT (Audit W4): dieses Gate hat keinen Backend-Consumer. Ein Aktivieren löst keinen Bypass und keinen Alarm aus.": "statischer Audit-Hinweis, kein übersetzbarer UI-Text",
         # Laufzeitwerte aus approval_policies_controller.js / Backend
         "0 Ausstehend": "Zaehler approvals-pending-badge, approval_policies_controller.js:178",
         "24 h": "Laufzeitwert val-finance_timeout_hours (Wert + Einheit)",

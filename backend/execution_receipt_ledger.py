@@ -21,7 +21,7 @@ class _ArchonClosingConn(sqlite3.Connection):
             super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -134,7 +134,8 @@ class ExecutionReceiptLedger:
             return {"issued": False, "bypassed": True}
 
         receipt_id = f"rcpt-{uuid.uuid4().hex[:12]}"
-        now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # GoBD: eindeutige UTC-Zeitreferenz mit Offset.
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
         tools_json = json.dumps(tools_invoked or [], ensure_ascii=False)
         rounded_cost = round(float(cost_usd), 6)
 

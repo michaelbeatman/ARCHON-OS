@@ -13,6 +13,7 @@ _archon_exc_logger = logging.getLogger("concurrency_throttle")
 import os
 import sys
 import json
+import time
 import asyncio
 import heapq
 from typing import Dict, Any, Optional, List
@@ -20,7 +21,16 @@ from typing import Dict, Any, Optional, List
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
 
+# W5: settings.json wurde pro wartendem Agenten (~1/s) neu gelesen und
+# geparst. Kurzer TTL-Cache, Invalidierung beim Speichern.
+_CONFIG_CACHE: dict = {"ts": 0.0, "cfg": None}
+_CONFIG_TTL = 5.0
+
+
 def get_concurrency_config() -> Dict[str, Any]:
+    now = time.time()
+    if _CONFIG_CACHE["cfg"] is not None and (now - _CONFIG_CACHE["ts"]) < _CONFIG_TTL:
+        return dict(_CONFIG_CACHE["cfg"])
     cfg = {
         "max_concurrent_agents": 4,
         "queue_timeout_seconds": 60
@@ -33,6 +43,7 @@ def get_concurrency_config() -> Dict[str, Any]:
                     cfg.update(s["concurrency"])
         except Exception as _exc:
             _archon_exc_logger.debug("[concurrency_throttle] Ignorierte Ausnahme (Z.32): %s", _exc)
+    _CONFIG_CACHE.update(ts=time.time(), cfg=dict(cfg))
     return cfg
 
 def save_concurrency_config(new_cfg: Dict[str, Any]) -> bool:
@@ -43,10 +54,27 @@ def save_concurrency_config(new_cfg: Dict[str, Any]) -> bool:
             current["concurrency"] = new_cfg
 
         atomic_update_settings(SETTINGS_FILE, _apply)
+        _CONFIG_CACHE["cfg"] = None  # W5: Cache invalidieren
         return True
     except Exception as e:
         print(f"[ConcurrencyThrottle] Config save error: {e}", file=sys.stderr)
         return False
+
+# W5: psutil.cpu_percent/virtual_memory/disk_usage wurde pro wartendem
+# Agenten jede Sekunde neu gemessen (12+ Messungen/s bei 6 Wartenden).
+_BP_CACHE: dict = {"ts": 0.0, "data": {}}
+_BP_TTL = 2.0
+
+
+def _cached_backpressure() -> Dict[str, Any]:
+    now = time.time()
+    if _BP_CACHE["data"] and (now - _BP_CACHE["ts"]) < _BP_TTL:
+        return _BP_CACHE["data"]
+    from backend.resource_backpressure import resource_backpressure_protector
+    data = resource_backpressure_protector.check_health_and_backpressure()
+    _BP_CACHE.update(ts=now, data=data if isinstance(data, dict) else {})
+    return _BP_CACHE["data"]
+
 
 class PriorityConcurrencyThrottle:
     def __init__(self):
@@ -71,14 +99,15 @@ class PriorityConcurrencyThrottle:
         # shutil.disk_usage() — synchron im Event-Loop wuerden N Waiter den
         # Loop mit N x 50 ms blockieren. Deshalb immer in den Threadpool.
         try:
-            from backend.resource_backpressure import resource_backpressure_protector
-            bp = await asyncio.to_thread(
-                resource_backpressure_protector.check_health_and_backpressure
-            )
+            bp = await asyncio.to_thread(_cached_backpressure)
             if bp.get("backpressure_active"):
                 max_slots = max(1, max_slots // 2)
-        except Exception:
-            pass
+        except Exception as bp_init_exc:
+            # W3: auch beim Initial-Check fail-safe (konservativ drosseln).
+            _archon_exc_logger.warning(
+                "[ConcurrencyThrottle] Initialer Backpressure-Check fehlgeschlagen: %s", bp_init_exc
+            )
+            max_slots = 1
 
         loop = asyncio.get_running_loop()
         start_time = loop.time()
@@ -95,14 +124,18 @@ class PriorityConcurrencyThrottle:
                     cfg_now = await asyncio.to_thread(get_concurrency_config)
                     max_slots = max(1, int(cfg_now.get("max_concurrent_agents", max_slots)))
                     try:
-                        from backend.resource_backpressure import resource_backpressure_protector
-                        bp_now = await asyncio.to_thread(
-                            resource_backpressure_protector.check_health_and_backpressure
-                        )
+                        bp_now = await asyncio.to_thread(_cached_backpressure)
                         if bp_now.get("backpressure_active"):
                             max_slots = max(1, max_slots // 2)
-                    except Exception:
-                        pass
+                    except Exception as bp_exc:
+                        # W3: „Schutz schützt sich nicht selbst" — wenn die
+                        # Backpressure-Erkennung ausfällt, konservativ
+                        # drosseln statt ungebremst weiterzulaufen (OOM-Risiko).
+                        _archon_exc_logger.warning(
+                            "[ConcurrencyThrottle] Backpressure-Check fehlgeschlagen "
+                            "— konservativ auf 1 Slot drosseln: %s", bp_exc
+                        )
+                        max_slots = 1
                     if len(self._active_slots) < max_slots and self._wait_queue and self._wait_queue[0][2] == slot_key:
                         heapq.heappop(self._wait_queue)
                         self._active_slots[slot_key] = {

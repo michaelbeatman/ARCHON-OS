@@ -100,6 +100,29 @@ def get_recent_messages(db_path: Path, session_id: str, limit: int = 3):
         return []
 
 
+def count_messages(db_path: Path, session_id: str) -> int:
+    """W2: echte Nachrichtenzahl zählen, nicht den gespeicherten Zähler lesen.
+
+    `sessions.message_count` kann veraltet sein; ein Delete auf Basis dieses
+    Feldes löschte echte Verläufe (auch bei 0 == 0).
+    """
+    if not db_path.is_file():
+        return 0
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=5.0)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM messages "
+                "WHERE session_id = ? AND active = 1 AND role != 'session_meta'",
+                (session_id,),
+            ).fetchone()
+            return int(row[0]) if row else 0
+        finally:
+            conn.close()
+    except Exception:
+        return -1  # unbekannt -> niemals destruktiv handeln
+
+
 def run_sync(fix_mode: bool = False):
     hermes_dir, root_db, profile_db, gw_state_file = get_hermes_paths()
     print("=" * 70)
@@ -131,14 +154,16 @@ def run_sync(fix_mode: bool = False):
         for sid in duplicates:
             p_s = prof_sessions[sid]
             r_s = root_sessions[sid]
-            p_cnt = p_s.get("message_count", 0)
-            r_cnt = r_s.get("message_count", 0)
+            p_cnt = count_messages(profile_db, sid)
+            r_cnt = count_messages(root_db, sid)
             print(f"  - Session ID: {sid}")
             print(f"      Profil-DB: {p_cnt} Nachrichten, Titel: '{p_s.get('title')}', Quelle: {p_s.get('source')}")
             print(f"      Root-DB:   {r_cnt} Nachrichten, Titel: '{r_s.get('title')}', Quelle: {r_s.get('source')}")
 
             if fix_mode:
-                if p_cnt >= r_cnt:
+                # W2: nur löschen, wenn die Root-Kopie nachweislich LEER ist.
+                # Bei Gleichstand oder unbekanntem Zähler (-1) nie destruktiv.
+                if r_cnt == 0 and p_cnt > 0:
                     # Root DB enthält nur Phantomkopie -> löschen
                     try:
                         conn = sqlite3.connect(str(root_db), timeout=5.0)

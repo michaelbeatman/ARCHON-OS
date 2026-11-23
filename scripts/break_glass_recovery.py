@@ -20,6 +20,8 @@ import zipfile
 import io
 import shutil
 import hashlib
+import sqlite3
+import tempfile
 import hmac
 import secrets
 import struct
@@ -108,31 +110,73 @@ def generate_emergency_key() -> str:
     groups = ["".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(5)]
     return f"ARCHON-BG-{'-'.join(groups)}"
 
+def _archive_into_zip(zf: "zipfile.ZipFile", full_src: str, arcname: str, staging_dir: str) -> None:
+    """W2: laufende SQLite-DBs konsistent sichern (inkl. WAL) statt rohem zf.write."""
+    if not full_src.lower().endswith(".db"):
+        zf.write(full_src, arcname)
+        return
+    fd, tmp_path = tempfile.mkstemp(suffix=".db", dir=staging_dir)
+    os.close(fd)
+    try:
+        src = sqlite3.connect(f"file:{full_src}?mode=ro", uri=True, timeout=10.0)
+        try:
+            dst = sqlite3.connect(tmp_path)
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+        finally:
+            src.close()
+        zf.write(tmp_path, arcname)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 def create_break_glass_vault(operator: str = "admin") -> Dict[str, Any]:
     """Packt das kritische Systeminventar in einen verschlüsselten Notfall-Vault."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
     recovery_key = generate_emergency_key()
-    now_iso = datetime.datetime.now().isoformat()
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
 
     # 1. Sammle alle existierenden Notfall-Dateien in ein ZIP
     zip_buffer = io.BytesIO()
     archived_files = []
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for rel_src, arcname in CRITICAL_FILES:
-            full_src = os.path.join(WORKSPACE_DIR, rel_src)
-            if os.path.exists(full_src) and os.path.isfile(full_src):
-                try:
-                    zf.write(full_src, arcname)
-                    archived_files.append(arcname)
-                except Exception as e:
-                    pass
+    with tempfile.TemporaryDirectory(prefix="break_glass_stage_") as staging_dir:
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for rel_src, arcname in CRITICAL_FILES:
+                full_src = os.path.join(WORKSPACE_DIR, rel_src)
+                if os.path.exists(full_src) and os.path.isfile(full_src):
+                    try:
+                        _archive_into_zip(zf, full_src, arcname, staging_dir)
+                        archived_files.append(arcname)
+                    except Exception as e:
+                        # W2: kein stilles Verschlucken — ein unvollständiger
+                        # Notfall-Vault ist schlimmer als ein harter Fehler.
+                        raise RuntimeError(
+                            f"Break-Glass: {arcname} konnte nicht konsistent archiviert werden: {e}"
+                        ) from e
 
     zip_bytes = zip_buffer.getvalue()
 
     # 2. Verschlüssele das ZIP-Archiv
     encrypted_vault = encrypt_bytes(zip_bytes, recovery_key)
-    with open(VAULT_FILE, "wb") as f:
-        f.write(encrypted_vault)
+    # W2: der Vault ist der einzige Notfallzugang — nie mit O_TRUNC direkt
+    # überschreiben. Temp-Datei + fsync + atomarer Replace.
+    fd, tmp_vault = tempfile.mkstemp(dir=BACKUP_DIR, prefix=".break_glass_", suffix=".tmp")
+    os.close(fd)
+    try:
+        with open(tmp_vault, "wb") as f:
+            f.write(encrypted_vault)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_vault, VAULT_FILE)
+    finally:
+        if os.path.exists(tmp_vault):
+            try:
+                os.unlink(tmp_vault)
+            except OSError:
+                pass
 
     vault_sha256 = hashlib.sha256(encrypted_vault).hexdigest()
 

@@ -20,7 +20,8 @@ import datetime
 import argparse
 
 HOME = os.path.expanduser("~")
-PROJECT = r"."
+# Audit 23.11.2026: relativ zum CWD bedeutete "falsche Datei je nach Aufrufort".
+PROJECT = os.path.dirname(os.path.abspath(__file__))
 
 # (Anzeigename, vollständiger Pfad, Pflicht?)
 # Pfade decken sich mit config/litestream.yml (Hermes-Home, Konsolidierungs-DBs)
@@ -35,10 +36,18 @@ DATABASES = [
     ("ops.db", os.path.join(PROJECT, "data", "ops.db"), False),
     ("business.db", os.path.join(PROJECT, "data", "business.db"), True),
     ("memory.db", os.path.join(PROJECT, "data", "memory.db"), False),
-    ("kanban.db", os.path.join(PROJECT, "data", "kanban.db"), True),
+    # W2: die echte Kanban-DB liegt laut backend/db_paths.py in ~/.hermes
+    # (siehe hermes_kanban.db oben). data/kanban.db ist ein Legacy-Leerpfad
+    # und löste此前 Fehlalarme mit Exit-Code 1 aus — nicht mehr Pflicht.
+    ("kanban.db", os.path.join(PROJECT, "data", "kanban.db"), False),
     ("contracts.db", os.path.join(PROJECT, "data", "contracts.db"), True),
     ("deals.db", os.path.join(PROJECT, "data", "deals.db"), True),
     ("workflow_schedules.db", os.path.join(PROJECT, "data", "workflow_schedules.db"), True),
+    # KRITISCH (Audit 23.11.2026, K2): die CRM-Hauptdatenbank war in KEINEM
+    # wiederkehrenden Backup enthalten. Kontakte, nachrichtenverlauf und
+    # DSGVO-Felder wären bei Datenverlust dauerhaft weg. Online-Backup über
+    # die SQLite Backup-API (siehe backup_sqlite_safe) ist WAL-sicher.
+    ("pb_data.db", os.path.join(PROJECT, "pocketbase", "pb_data", "data.db"), True),
 ]
 
 LOCAL_BACKUP_DIR = os.path.join(PROJECT, "data", "backups")

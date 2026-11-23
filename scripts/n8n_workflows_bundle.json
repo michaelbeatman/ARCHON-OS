@@ -2,7 +2,7 @@
   {
     "id": "b1c3f1e9b2d84f01",
     "name": "Archon Article Extractor",
-    "active": true,
+    "active": false,
     "nodes": [
       {
         "parameters": {
@@ -28,7 +28,7 @@
               {
                 "id": "e1",
                 "name": "status",
-                "value": "success",
+                "value": "not_implemented",
                 "type": "string"
               },
               {
@@ -46,7 +46,7 @@
               {
                 "id": "e4",
                 "name": "message",
-                "value": "Webseite fuer Extraktion verarbeitet",
+                "value": "NOT IMPLEMENTED (Audit K6): nur Webhook+Set-Stub, kein Extraktions-Node. Workflow deaktiviert.",
                 "type": "string"
               }
             ]
@@ -83,7 +83,7 @@
   {
     "id": "b1c3f1e9b2d84f02",
     "name": "Archon Multi-Channel Dispatcher",
-    "active": true,
+    "active": false,
     "nodes": [
       {
         "parameters": {
@@ -109,7 +109,7 @@
               {
                 "id": "d1",
                 "name": "status",
-                "value": "success",
+                "value": "not_implemented",
                 "type": "string"
               },
               {
@@ -127,7 +127,7 @@
               {
                 "id": "d4",
                 "name": "dispatched",
-                "value": true,
+                "value": false,
                 "type": "boolean"
               }
             ]
@@ -164,7 +164,7 @@
   {
     "id": "b1c3f1e9b2d84f03",
     "name": "Archon Document Renderer",
-    "active": true,
+    "active": false,
     "nodes": [
       {
         "parameters": {
@@ -190,7 +190,7 @@
               {
                 "id": "r1",
                 "name": "status",
-                "value": "success",
+                "value": "not_implemented",
                 "type": "string"
               },
               {
@@ -208,7 +208,7 @@
               {
                 "id": "r4",
                 "name": "rendered",
-                "value": true,
+                "value": false,
                 "type": "boolean"
               }
             ]
@@ -245,7 +245,7 @@
   {
     "id": "b1c3f1e9b2d84f04",
     "name": "Archon Feed & Search Engine",
-    "active": true,
+    "active": false,
     "nodes": [
       {
         "parameters": {
@@ -271,7 +271,7 @@
               {
                 "id": "f1",
                 "name": "status",
-                "value": "success",
+                "value": "not_implemented",
                 "type": "string"
               },
               {
@@ -326,7 +326,7 @@
   {
     "id": "b1c3f1e9b2d84f05",
     "name": "Archon CRM Sync Pipeline",
-    "active": true,
+    "active": false,
     "nodes": [
       {
         "parameters": {
@@ -352,7 +352,7 @@
               {
                 "id": "c1",
                 "name": "status",
-                "value": "success",
+                "value": "not_implemented",
                 "type": "string"
               },
               {
@@ -370,7 +370,7 @@
               {
                 "id": "c4",
                 "name": "synced",
-                "value": true,
+                "value": false,
                 "type": "boolean"
               }
             ]

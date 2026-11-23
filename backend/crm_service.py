@@ -296,7 +296,7 @@ class CRMService:
         conn = _get_pb_conn()
         try:
             cid = contact_id or payload.get("id")
-            now_iso = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.000Z")
+            now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.000Z")
 
             tags_val = payload.get("tags")
             if isinstance(tags_val, list):
@@ -499,7 +499,7 @@ class CRMService:
 
                     conn.execute(
                         "UPDATE kontakte SET nachrichtenverlauf = ?, updated = ? WHERE id = ?",
-                        (json.dumps(messages, ensure_ascii=False), datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.000Z"), contact_id)
+                        (json.dumps(messages, ensure_ascii=False), datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.000Z"), contact_id)
                     )
 
                 return {"success": True, "message": new_msg, "total_messages": len(messages)}
@@ -864,7 +864,7 @@ class CRMService:
             "export_metadata": {
                 "regulation": "EU-DSGVO (Verordnung EU 2016/679)",
                 "articles": ["Art. 15 (Auskunftsrecht)", "Art. 20 (Datenübertragbarkeit)"],
-                "exported_at": datetime.datetime.utcnow().isoformat() + "Z",
+                "exported_at": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
                 "mandant": "Archon OS CRM",
                 "subject_id": contact_id
             },
@@ -920,7 +920,7 @@ class CRMService:
     def anonymize_gdpr(self, contact_id: str) -> bool:
         conn = _get_pb_conn()
         try:
-            now_iso = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.000Z")
+            now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.000Z")
             with conn:
                 res = conn.execute("""
                     UPDATE kontakte SET

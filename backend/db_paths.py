@@ -178,6 +178,10 @@ def get_db_connection(db_name_or_path: str, timeout: float = 15.0) -> sqlite3.Co
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=timeout, factory=ClosingConnection)
     conn.execute(f"PRAGMA busy_timeout = {int(timeout * 1000)};")
+    # W2: SQLite schaltet foreign_keys standardmässig AUS. Ohne dieses
+    # PRAGMA wirkten deklarierte Relations und ON DELETE CASCADE nirgends
+    # (verwaiste Zeilen in tasks/task_links, sessions/messages, ...).
+    conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA cache_size = -32000;")
     conn.execute("PRAGMA temp_store = MEMORY;")
     if db_path not in _DB_PRAGMA_INITIALIZED:

@@ -549,7 +549,10 @@ class ApprovalPolicyEngine:
                     payload = f"{r['prev_hash']}|{r['timestamp']}|{r['user_id']}|INIT|{r['domain']}|{r['policy_key']}|{r['new_value']}"
                 else:
                     payload = f"{r['prev_hash']}|{r['timestamp']}|{r['user_id']}|{r['action']}|{r['domain']}|{r['policy_key']}|{r['old_value']}->{r['new_value']}"
-                if not _verify_hash(payload, str(r["current_hash"] or "")):
+                # H4 (Audit 23.11.2026): Block-ID uebergeben, sonst werden
+                # nach einer HMAC-Epochen-Rotation alle alten Bloecke mit dem
+                # NEUEN Key geprueft -> falscher Manipulationsalarm.
+                if not _verify_hash(payload, str(r["current_hash"] or ""), r["id"]):
                     return {
                         "valid": False,
                         "broken_at_id": r["id"],

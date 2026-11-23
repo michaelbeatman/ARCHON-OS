@@ -48,34 +48,18 @@ export function PbSettingsModal({
   const [s3Endpoint, setS3Endpoint] = useState('https://s3.eu-central-1.amazonaws.com');
   const [maxUploadSizeMb, setMaxUploadSizeMb] = useState(52428800); // 50MB
 
-  // Backups State
-  const [backups, setBackups] = useState([
-    { id: '1', name: 'pb_backup_2026-08-04_12-00.zip', size: '14.2 MB', date: '4.8.2026 12:00' },
-    { id: '2', name: 'pb_backup_2026-08-01_00-00.zip', size: '13.8 MB', date: '1.8.2026 00:00' },
-  ]);
-
-  // Crons State
-  const [crons, setCrons] = useState([
-    { id: 'c1', name: 'cleanup_temp_tokens', schedule: '0 0 * * *', status: 'Active', lastRun: 'Heute 00:00' },
-    { id: 'c2', name: 'sync_linkedin_imports', schedule: '*/15 * * * *', status: 'Active', lastRun: 'Vor 5 Min' },
-    { id: 'c3', name: 'sperrfrist_auto_unlock', schedule: '0 3 * * *', status: 'Active', lastRun: 'Gestern 03:00' },
-  ]);
-
-  // Logs State
-  const [logs, setLogs] = useState([
-    { id: 'l1', status: 200, method: 'GET', url: '/api/collections/kontakte/records', duration: '2ms', ip: '127.0.0.1', time: '23:38:12' },
-    { id: 'l2', status: 200, method: 'GET', url: '/api/collections/kontakte/records', duration: '1ms', ip: '127.0.0.1', time: '23:37:45' },
-    { id: 'l3', status: 200, method: 'PATCH', url: '/api/collections/kontakte/records/xigypws76x7c8gl', duration: '4ms', ip: '127.0.0.1', time: '23:35:10' },
-    { id: 'l4', status: 200, method: 'POST', url: '/api/admins/auth-with-password', duration: '12ms', ip: '127.0.0.1', time: '23:30:00' },
-  ]);
+  // W4 (Audit): keine erfundenen Backups/Crons/Logs/Ergebnisse mehr.
+  // Die Daten stammen aus echten Endpunkten oder bleiben leer.
+  const [backups, setBackups] = useState<Array<{ id: string; name: string; size: string; date: string }>>([]);
+  const [crons, setCrons] = useState<Array<{ id: string; name: string; schedule: string; status: string; lastRun: string }>>([]);
+  const [logs, setLogs] = useState<Array<{ id: string; status: number; method: string; url: string; duration: string; ip: string; time: string }>>([]);
 
   // SQL Console State
   const [sqlQuery, setSqlQuery] = useState('SELECT id, name, unternehmen, status, rating FROM kontakte LIMIT 5;');
-  const [sqlResult, setSqlResult] = useState<any[] | null>([
-    { id: 'xigypws76x7c8gl', name: 'Julia Becker', unternehmen: 'DataWorks Solutions', status: 'Erstnachricht', rating: 3 },
-    { id: 'p1xp1i431cg6ih9', name: 'Marcus Vance', unternehmen: 'Vance Capital', status: 'Im Dialog', rating: 5 },
-    { id: 'nqs7e79k4pyqbit', name: 'Sarah Lindner', unternehmen: 'Innovate Software', status: 'Vernetzt', rating: 4 },
-  ]);
+  const [sqlResult, setSqlResult] = useState<any[] | null>(null);
+
+  // Ehrlicher Hinweis für noch nicht verdrahtete Admin-Funktionen.
+  const [featureNotice, setFeatureNotice] = useState<string | null>(null);
 
   // Global UI feedback state
   const [saving, setSaving] = useState(false);
@@ -110,48 +94,54 @@ export function PbSettingsModal({
 
   const handleSave = async () => {
     setSaving(true);
+    setFeatureNotice(null);
     try {
       await pb.settings.update({
         meta: { appName, appUrl }
       });
-    } catch (err) {
-      // Local fallback state management
-    } finally {
-      setSaving(false);
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 1500);
+    } catch (err) {
+      // W4: kein grünes "Gespeichert!" bei Fehlschlag.
+      setFeatureNotice(`Speichern fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleSendTestEmail = () => {
+  const handleSendTestEmail = async () => {
+    // W4: echter Aufruf statt setTimeout-Erfolg.
     setTestEmailStatus('sending');
-    setTimeout(() => {
-      setTestEmailStatus('success');
-      setTimeout(() => setTestEmailStatus(null), 2500);
-    }, 1000);
+    try {
+      const res = await fetch('/api/v1/settings/smtp/test', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.status !== 'error') {
+        setTestEmailStatus('success');
+      } else {
+        setTestEmailStatus('error');
+        setFeatureNotice(`SMTP-Test fehlgeschlagen: ${data?.error || `HTTP ${res.status}`}`);
+      }
+    } catch (err) {
+      setTestEmailStatus('error');
+      setFeatureNotice(`SMTP-Test nicht erreichbar: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    setTimeout(() => setTestEmailStatus(null), 4000);
   };
 
   const handleCreateBackup = () => {
-    const now = new Date();
-    const backupName = `pb_backup_${now.toISOString().split('T')[0]}_${now.getHours()}-${now.getMinutes()}.zip`;
-    setBackups(prev => [
-      { id: Date.now().toString(), name: backupName, size: '14.5 MB', date: now.toLocaleString('de-DE') },
-      ...prev
-    ]);
+    // W4: kein Fake-Backup mit hartcodierter "14.5 MB".
+    setFeatureNotice('Backup-Erstellung ist hier noch nicht verdrahtet — bitte backup_archon.py oder die PocketBase-Admin-API nutzen.');
   };
 
   const handleRunCron = (cronName: string) => {
-    setCrons(prev => prev.map(c => c.name === cronName ? { ...c, lastRun: 'Gerade eben' } : c));
+    // W4: kein "Gerade eben", wenn kein Job gestartet wurde.
+    setFeatureNotice(`Cron „${cronName}“ kann hier noch nicht gestartet werden — kein Trigger-Endpunkt vorhanden.`);
   };
 
   const handleRunSqlQuery = () => {
-    // Simple client-side mock SQL runner for previewing
-    setSqlResult([
-      { id: 'xigypws76x7c8gl', name: 'Julia Becker', unternehmen: 'DataWorks Solutions', status: 'Erstnachricht', rating: 3 },
-      { id: 'p1xp1i431cg6ih9', name: 'Marcus Vance', unternehmen: 'Vance Capital', status: 'Im Dialog', rating: 5 },
-      { id: 'nqs7e79k4pyqbit', name: 'Sarah Lindner', unternehmen: 'Innovate Software', status: 'Vernetzt', rating: 4 },
-      { id: 'nsduux6nm4pdx07', name: 'Max Mustermann', unternehmen: 'N/A', status: 'Ausstehend', rating: 1 }
-    ]);
+    // W4: die Query wurde früher komplett ignoriert.
+    setSqlResult(null);
+    setFeatureNotice('SQL-Konsole ist hier nicht verdrahtet — keine Abfrage ausgeführt. Bitte PocketBase-Admin-UI nutzen.');
   };
 
   const handleExportSchema = () => {
@@ -173,6 +163,13 @@ export function PbSettingsModal({
       <div className={`w-full max-w-5xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col h-[85vh] animate-in zoom-in-95 duration-150 ${
         isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
       }`}>
+
+        {/* W4: ehrlicher Hinweis statt vorgetäuschtem Erfolg */}
+        {featureNotice && (
+          <div className="shrink-0 border-b border-amber-500/40 bg-amber-500/10 px-6 py-2 text-xs text-amber-300">
+            {featureNotice}
+          </div>
+        )}
 
         {/* Top Header Bar (Bild 1 Style) */}
         <div className={`h-14 border-b px-6 flex items-center justify-between shrink-0 font-mono text-xs ${

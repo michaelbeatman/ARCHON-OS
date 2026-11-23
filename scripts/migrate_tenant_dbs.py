@@ -52,6 +52,22 @@ def _copy_db(src: str, dst: str) -> bool:
         s.close()
 
 
+def _copy_db_verified(src: str, dst: str) -> bool:
+    """K3: Kopie nur als Erfolg zählen, wenn sie lesbar und intakt ist."""
+    if not _copy_db(src, dst):
+        return False
+    try:
+        con = sqlite3.connect(f"file:{dst}?mode=ro", uri=True, timeout=5.0)
+        try:
+            row = con.execute("PRAGMA integrity_check").fetchone()
+            return bool(row) and str(row[0]).lower() == "ok" and _has_tables(dst)
+        finally:
+            con.close()
+    except Exception as exc:
+        print(f"  ! Verifikation von {dst} fehlgeschlagen: {exc}")
+        return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--execute", action="store_true", help="Änderungen tatsächlich schreiben")
@@ -91,6 +107,7 @@ def main() -> int:
             src_dir = os.path.join(legacy_tenants, tid)
             if not os.path.isdir(src_dir):
                 continue
+            copies_ok = True
             for name in sorted(os.listdir(src_dir)):
                 if not name.endswith(".db"):
                     continue
@@ -99,12 +116,17 @@ def main() -> int:
                 if os.path.exists(dst) or not _has_tables(src):
                     continue
                 actions.append(f"COPY agent_workspace/data/tenants/{tid}/{name} -> data/tenants/{tid}/{name}")
+                if args.execute and not _copy_db_verified(src, dst):
+                    copies_ok = False
+            # K3: Archivierung NUR bei verifizierter Kopie — sonst verschwindet
+            # die einzige echte DB aus dem aktiven Pfad.
+            if copies_ok:
+                actions.append(f"ARCHIVE agent_workspace/data/tenants/{tid} -> data/{os.path.basename(archive_dir)}/workspace_tenant_{tid}")
                 if args.execute:
-                    _copy_db(src, dst)
-            actions.append(f"ARCHIVE agent_workspace/data/tenants/{tid} -> data/{os.path.basename(archive_dir)}/workspace_tenant_{tid}")
-            if args.execute:
-                os.makedirs(archive_dir, exist_ok=True)
-                shutil.move(src_dir, os.path.join(archive_dir, f"workspace_tenant_{tid}"))
+                    os.makedirs(archive_dir, exist_ok=True)
+                    shutil.move(src_dir, os.path.join(archive_dir, f"workspace_tenant_{tid}"))
+            else:
+                actions.append(f"SKIP ARCHIVE agent_workspace/data/tenants/{tid} — Kopie nicht verifiziert")
 
     # 2) Verwaiste Root-DBs archivieren (aus dem aktiven Pfad entfernen)
     if not args.skip_root:
@@ -115,14 +137,23 @@ def main() -> int:
             if not os.path.isfile(src):
                 continue
             dst_tenant = os.path.join(tenant_dir, name)
+            copy_ok = False
             if _has_tables(src) and not os.path.exists(dst_tenant):
                 actions.append(f"COPY {name} -> data/tenants/{tenant}/{name}")
                 if args.execute:
-                    _copy_db(src, dst_tenant)
-            actions.append(f"ARCHIVE ./{name} -> data/{os.path.basename(archive_dir)}/{name}")
-            if args.execute:
-                os.makedirs(archive_dir, exist_ok=True)
-                shutil.move(src, os.path.join(archive_dir, name))
+                    copy_ok = _copy_db_verified(src, dst_tenant)
+                else:
+                    copy_ok = True  # Dry-Run: Verify erst im Execute-Modus.
+            # K3: die ARCHIVE-Aktion war früher nicht vom COPY-Erfolg abhängig.
+            # `_copy_db` gab bei vorhandenem Ziel still False zurück, der
+            # Returnwert wurde ignoriert → Root-DB ohne gültige Kopie entfernt.
+            if copy_ok or os.path.exists(dst_tenant):
+                actions.append(f"ARCHIVE ./{name} -> data/{os.path.basename(archive_dir)}/{name}")
+                if args.execute:
+                    os.makedirs(archive_dir, exist_ok=True)
+                    shutil.move(src, os.path.join(archive_dir, name))
+            else:
+                actions.append(f"SKIP ARCHIVE ./{name} — keine verifizierte Kopie vorhanden")
 
     print(f"{'EXECUTE' if args.execute else 'DRY-RUN'}: {len(actions)} Aktion(en)")
     for a in actions:

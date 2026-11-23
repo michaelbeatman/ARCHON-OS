@@ -3,6 +3,7 @@ scripts/automated_restore_test.py
 Automatisierter Restore- & Integritätstest für SQLite-Backups und Litestream-Replikate.
 Führt einen wöchentlichen oder On-Demand Prüflauf in einer isolierten Wegwerf-Sandbox aus:
 1. Restore echter Backup-Artefakte der konsolidierten DBs (ops/business/memory.db)
+   sowie der PocketBase-CRM-DB (pb_data.db → pocketbase/pb_data/data.db)
 2. PRAGMA integrity_check & foreign_key_check
 3. Smoke-Tests auf Kern-Tabellen & Datensätze
 4. Alarmierung via NotificationHub (Telegram-Push bei Fehlern)
@@ -56,11 +57,20 @@ def resolve_db_path(name: str) -> str:
     backup = find_latest_backup(name)
     if backup:
         return backup
+    # K2-Fix (Rückmeldung nach Welle 0): die CRM-DB heisst auf Platte
+    # `data.db`, im Backup-Artefakt aber `pb_data.db`. Der alte Kandidat
+    # `/opt/data/pb_data.db` existiert ausserhalb des PocketBase-Containers
+    # nicht und liess den Test auf Windows/CI rot werden.
+    if name == "pb_data.db":
+        env_path = os.getenv("ARCHON_POCKETBASE_DB", "").strip()
+        if env_path:
+            return os.path.abspath(os.path.expanduser(env_path))
+        return os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data", "data.db")
     candidates = [
         f"/opt/data/{name}",
         os.path.expanduser(f"~/.hermes/{name}"),
         os.path.join(WORKSPACE_DIR, "data", name),
-        os.path.join(WORKSPACE_DIR, name)
+        os.path.join(WORKSPACE_DIR, name),
     ]
     for c in candidates:
         if os.path.exists(c) and os.path.getsize(c) > 0:
@@ -81,6 +91,11 @@ class AutomatedRestoreTester:
              "required_table": ("deals", "contracts", "invoices")},
             {"name": "memory.db", "source": resolve_db_path("memory.db"),
              "required_table": ("learnings", "prompt_versions")},
+            # K2 (Audit 23.11.2026): PocketBase-CRM war in keinem Restore-Test.
+            # optional: in Container-Deployments liegt die DB im PocketBase-
+            # Volume und ist hier nicht sichtbar -> SKIPPED statt FAILED.
+            {"name": "pb_data.db", "source": resolve_db_path("pb_data.db"),
+             "required_table": ("kontakte",), "optional": True},
         ]
 
     def run_restore_test(self, notify: bool = True) -> Dict[str, Any]:
@@ -92,6 +107,7 @@ class AutomatedRestoreTester:
             "overall_status": "PASSED",
             "databases_checked": 0,
             "databases_failed": 0,
+            "databases_skipped": 0,
             "details": [],
             "duration_seconds": 0.0
         }
@@ -116,9 +132,17 @@ class AutomatedRestoreTester:
                 }
 
                 if not os.path.exists(src_path):
-                    db_report["status"] = "FAILED"
-                    db_report["error"] = f"Quelldatenbank nicht gefunden: {src_path}"
-                    results["databases_failed"] += 1
+                    if item.get("optional"):
+                        db_report["status"] = "SKIPPED"
+                        db_report["skip_reason"] = (
+                            "PocketBase nicht lokal verfügbar — ARCHON_POCKETBASE_DB setzen "
+                            "oder Backup-Artefakt pb_data.db bereitstellen."
+                        )
+                        results["databases_skipped"] += 1
+                    else:
+                        db_report["status"] = "FAILED"
+                        db_report["error"] = f"Quelldatenbank nicht gefunden: {src_path}"
+                        results["databases_failed"] += 1
                     results["details"].append(db_report)
                     continue
 
@@ -243,12 +267,13 @@ class AutomatedRestoreTester:
 
             details_lines = []
             for d in report["details"]:
-                st_icon = "✓" if d["status"] == "PASSED" else "✗"
+                st_icon = "✓" if d["status"] == "PASSED" else ("–" if d["status"] == "SKIPPED" else "✗")
                 details_lines.append(f"{st_icon} {d['database']}: {d['integrity_check']} ({d['smoke_test']})")
 
             body_msg = (
                 f"Automatisierter Restore- & Integritätstest: {report['overall_status']}\n"
-                f"Geprüfte Datenbanken: {report['databases_checked']}/{len(self.dbs_to_test)}\n"
+                f"Geprüfte Datenbanken: {report['databases_checked']}/{len(self.dbs_to_test)} "
+                f"(übersprungen: {report['databases_skipped']})\n"
                 f"Dauer: {report['duration_seconds']}s\n\n" +
                 "\n".join(details_lines)
             )
@@ -267,8 +292,21 @@ restore_tester = AutomatedRestoreTester()
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Archon OS – automatisierter Restore- & Integritätstest (Sandbox)."
+    )
+    parser.add_argument("--notify", action="store_true",
+                        help="Ergebnis via NotificationHub / Telegram melden (default: aus)")
+    parser.add_argument("--json", action="store_true",
+                        help="Roh-Report als JSON ausgeben")
+    args = parser.parse_args()
+
     tester = AutomatedRestoreTester()
-    res = tester.run_restore_test(notify=False)
+    res = tester.run_restore_test(notify=args.notify)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        sys.exit(0 if res["overall_status"] == "PASSED" else 1)
     print("=" * 65)
     print("  Archon OS – Automatisierter Restore- & Integritäts-Report")
     print("=" * 65)
@@ -277,10 +315,12 @@ if __name__ == "__main__":
     print(f"Dauer:       {res['duration_seconds']}s")
     print("-" * 65)
     for d in res["details"]:
-        status_symbol = "[OK]" if d["status"] == "PASSED" else "[FAIL]"
+        status_symbol = {"PASSED": "[OK]", "SKIPPED": "[SKIP]"}.get(d["status"], "[FAIL]")
         print(f"  {status_symbol} {d['database']:<18}: Integrität={d['integrity_check']} | Smoke={d['smoke_test']}")
         if d.get("error"):
             print(f"      Fehler: {d['error']}")
+        if d.get("skip_reason"):
+            print(f"      Hinweis: {d['skip_reason']}")
     print("=" * 65)
     if res["overall_status"] == "PASSED":
         print("[ERFOLG] Alle SQLite-Datenbanken wurden fehlerfrei in der Sandbox wiederhergestellt.")

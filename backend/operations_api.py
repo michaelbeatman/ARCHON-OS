@@ -882,7 +882,17 @@ async def _execute_kanban_task_async(task_id: str):
                             cancel_token.cancel("lease_lost")
                             return
                     except Exception as exc:
-                        logger.debug("[KanbanWorker] Heartbeat-Hinweis: %s", exc)
+                        # H8 (Audit 23.11.2026): ein fehlgeschlagener
+                        # Lease-Renew darf NICHT unbemerkt zum Ablauf der Lease
+                        # führen, während der Task weiterläuft (Doppel-Execution,
+                        # doppelte LLM-Kosten). Gleicher Fail-Closed-Pfad wie
+                        # in archon/core/orchestration.py.
+                        logger.warning(
+                            "[KanbanWorker] Heartbeat fehlgeschlagen — Task %s wird abgebrochen: %s",
+                            task_id, exc,
+                        )
+                        cancel_token.cancel("lease_heartbeat_failed")
+                        return
 
             heartbeat_task = asyncio.create_task(_hb(), name=f"kanban_lease_{task_id}")
     except Exception as exc:

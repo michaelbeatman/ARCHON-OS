@@ -12,7 +12,7 @@ import sys
 import tempfile
 import threading
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional, Tuple
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
@@ -242,7 +242,7 @@ class CorporateManager:
         with _DATA_LOCK:
             data = self._load_data()
             company_id = payload.get("id") or str(uuid.uuid4())[:8]
-            now_iso = datetime.utcnow().isoformat() + "Z"
+            now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
             existing_idx = None
             existing_layouts: Dict[str, Any] = {}
@@ -369,7 +369,7 @@ class CorporateManager:
                 layouts = {}
             layouts[norm_type] = clean_layout
             matched["template_layouts"] = layouts
-            matched["updated_at"] = datetime.utcnow().isoformat() + "Z"
+            matched["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             self._save_data(data)
         return clean_layout
 
@@ -1224,7 +1224,7 @@ class CorporateManager:
             "normalized_type": norm_type,
             "company_id": company.get("id"),
             "company_name": c_name,
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "layout": layout,
             "compliance": compliance,
             "placeholders": sorted(list(placeholder_map.keys()) + ["invoice.items_table"]),

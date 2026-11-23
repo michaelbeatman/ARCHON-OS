@@ -560,7 +560,31 @@ def delete_campaign(campaign_id: str, db_path: Optional[str] = None) -> bool:
 
 def create_asset(payload: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
     init_content_machine_db(db_path)
-    campaign_id = str(payload.get("campaign_id") or "").strip()
+    campaign_id = str(payload.get("campaign_id") or "").strip() or f"campaign-{secrets.token_hex(4)}"
+    aid = f"asset-{secrets.token_hex(4)}"
+    # W2/W4: content_assets.campaign_id hat einen FK auf content_campaigns.
+    # Früher wurde ohne Eltern-Zeile eingefügt — das funktionierte nur,
+    # solange PRAGMA foreign_keys AUS war. Jetzt wird für JEDEN nicht
+    # existierenden Wert (leer ODER z. B. 'wf_standalone_test') implizit
+    # eine Kampagne angelegt: echte referenzielle Integrität statt
+    # stiller Verwaiste-Rows.
+    now_auto = _utc_now_iso()
+    with _conn(db_path) as conn:
+        parent = conn.execute(
+            "SELECT 1 FROM content_campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        if parent is None:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO content_campaigns
+                    (id, title, topic, target_audience, brand_voice, pillar,
+                     source_url, source_notes, channels_json, status,
+                     workflow_run_id, created_at, updated_at)
+                VALUES (?, ?, ?, '', '', '', '', '', '[]', 'draft', '', ?, ?)
+                """,
+                (campaign_id, f"Auto-Kampagne {aid}", f"Auto-Kampagne {aid}", now_auto, now_auto),
+            )
+            conn.commit()
     channel = str(payload.get("channel") or "linkedin").strip().lower()
     if channel not in CHANNEL_SPECS:
         raise ValueError(f"Unbekannter Kanal: {channel!r}")
@@ -569,7 +593,6 @@ def create_asset(payload: Dict[str, Any], db_path: Optional[str] = None) -> Dict
     if status not in VALID_ASSET_STATUSES:
         status = "draft"
 
-    aid = f"asset-{secrets.token_hex(4)}"
     now = _utc_now_iso()
     hashtags = payload.get("hashtags") if isinstance(payload.get("hashtags"), list) else []
     asset_view = {

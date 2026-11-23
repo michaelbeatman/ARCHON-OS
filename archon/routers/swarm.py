@@ -22,7 +22,7 @@ from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, 
 
 from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -33,9 +33,22 @@ from archon.core.runtime import (  # noqa: F401
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
+
+class SwarmSpawnRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    mission_title: str = "Spezial-Auftrag"
+    mission_brief: str = ""
+    execute_dag: bool = True
+    dry_run: bool = False
+
+
+def _as_payload(value) -> Dict[str, Any]:
+    return value.model_dump() if hasattr(value, "model_dump") else dict(value)
+
 @router.post("/api/swarm/spawn-ephemeral-team")
-async def api_spawn_ephemeral_team(request: Request, payload: Dict = Body(...)):
+async def api_spawn_ephemeral_team(request: Request, payload: SwarmSpawnRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
+    payload = _as_payload(payload)
     from backend.ephemeral_team_spawner import ephemeral_team_spawner
     return await ephemeral_team_spawner.spawn_task_force(
         mission_title=payload.get("mission_title", "Spezial-Auftrag"),

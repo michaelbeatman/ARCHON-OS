@@ -5,13 +5,40 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 from archon.routers._rbac import require_admin_or_503
 
 import logging
-from typing import Dict
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, ConfigDict
 
 from fastapi import APIRouter, Body, Request
 
 logger = logging.getLogger("archon.routers.resilience")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["resilience"])
+
+
+class _ResilienceRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class NotificationDispatchRequest(_ResilienceRequest):
+    title: str = "System-Benachrichtigung"
+    message: str = ""
+    severity: str = "INFO"
+    category: str = "system"
+
+
+class TraceForkRequest(_ResilienceRequest):
+    from_step: int = 1
+    new_prompt: Optional[str] = None
+    new_model: Optional[str] = None
+
+
+class TraceRollbackRequest(_ResilienceRequest):
+    to_step: int = 0
+
+
+def _as_payload(value) -> Dict[str, Any]:
+    return value.model_dump() if hasattr(value, "model_dump") else dict(value)
 
 
 def _require_admin(request: Request):
@@ -93,8 +120,9 @@ def api_fleet_health_check(request: Request):
 
 
 @router.post("/api/notifications/dispatch")
-def api_dispatch_notification(request: Request, payload: Dict = Body(...)):
+def api_dispatch_notification(request: Request, payload: NotificationDispatchRequest = Body(...)):
     _require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.notification_hub import notification_hub
 
     return notification_hub.dispatch_notification(
@@ -127,8 +155,9 @@ def api_get_task_trace(task_id: str):
 
 
 @router.post("/api/traces/{task_id}/fork")
-def api_fork_task_trace(request: Request, task_id: str, payload: Dict = Body(...)):
+def api_fork_task_trace(request: Request, task_id: str, payload: TraceForkRequest = Body(...)):
     _require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.time_travel_debugger import time_travel_debugger
 
     return time_travel_debugger.fork_execution(
@@ -140,8 +169,9 @@ def api_fork_task_trace(request: Request, task_id: str, payload: Dict = Body(...
 
 
 @router.post("/api/traces/{task_id}/rollback")
-def api_rollback_task_trace(request: Request, task_id: str, payload: Dict = Body(...)):
+def api_rollback_task_trace(request: Request, task_id: str, payload: TraceRollbackRequest = Body(...)):
     _require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.time_travel_debugger import time_travel_debugger
 
     return time_travel_debugger.rollback_to_step(

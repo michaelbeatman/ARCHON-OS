@@ -8,7 +8,9 @@ import datetime
 import json
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
@@ -17,6 +19,33 @@ from archon.core.paths import HERMES_PROFILES_BASE, OPT_DATA_DIR
 logger = logging.getLogger("archon.routers.gateway")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], prefix="/api/v1/gateway", tags=["gateway"])
+
+
+class _GatewayRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class GatewayStartRequest(_GatewayRequest):
+    profile_id: str = ""
+
+
+class GatewayStopRequest(_GatewayRequest):
+    profile_id: str = ""
+
+
+class GatewayAutostartRequest(_GatewayRequest):
+    profile_id: str = ""
+    autostart: bool = False
+
+
+class GatewayConfigRequest(_GatewayRequest):
+    model_config = ConfigDict(extra="allow")
+    idle_timeout_minutes: Optional[int] = None
+    autostart: Optional[Dict[str, Any]] = None
+
+
+def _as_payload(value) -> Dict[str, Any]:
+    return value.model_dump() if hasattr(value, "model_dump") else dict(value)
 
 _idle_stop_running = False
 
@@ -238,8 +267,9 @@ def api_gateway_list():
 
 
 @router.post("/start")
-async def api_gateway_start(request: Request, payload: Dict = Body(...)):
+async def api_gateway_start(request: Request, payload: GatewayStartRequest = Body(...)):
     _require_admin(request)
+    payload = _as_payload(payload)
     profile_id = payload.get("profile_id", "").strip()
     if not profile_id:
         raise HTTPException(status_code=400, detail="profile_id required")
@@ -266,8 +296,9 @@ async def api_gateway_start(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/stop")
-async def api_gateway_stop(request: Request, payload: Dict = Body(...)):
+async def api_gateway_stop(request: Request, payload: GatewayStopRequest = Body(...)):
     _require_admin(request)
+    payload = _as_payload(payload)
     profile_id = payload.get("profile_id", "").strip()
     if not profile_id:
         raise HTTPException(status_code=400, detail="profile_id required")
@@ -300,8 +331,10 @@ def api_get_gateway_config():
 
 
 @router.post("/config")
-def api_save_gateway_config_endpoint(request: Request, payload: Dict = Body(...)):
+def api_save_gateway_config_endpoint(request: Request, payload: GatewayConfigRequest = Body(...)):
     _require_admin(request)
+    # Handler prueft per `"key" in payload` — None-Werte muessen weg.
+    payload = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
     import main as app_main
     cfg = app_main._load_gateway_config()
     if "idle_timeout_minutes" in payload:
@@ -316,8 +349,9 @@ def api_save_gateway_config_endpoint(request: Request, payload: Dict = Body(...)
 
 
 @router.post("/autostart")
-def api_gateway_autostart(request: Request, payload: Dict = Body(...)):
+def api_gateway_autostart(request: Request, payload: GatewayAutostartRequest = Body(...)):
     _require_admin(request)
+    payload = _as_payload(payload)
     profile_id = str(payload.get("profile_id", "")).strip()
     if not profile_id:
         raise HTTPException(status_code=400, detail="profile_id required")

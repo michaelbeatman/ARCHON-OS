@@ -88,6 +88,22 @@ class DrainShutdownRequest(BaseModel):
     grace_seconds: float = 5.0
 
 
+class MemoryConsolidationTriggerRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    force: bool = True
+
+
+class WriteBatcherEnqueueRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    event_type: str = "telemetry"
+    source_module: str = "router"
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
+def _as_payload(value) -> Dict[str, Any]:
+    return value.model_dump() if hasattr(value, "model_dump") else dict(value)
+
+
 def _require_admin(request: Request) -> None:
     """Rollenzaun (RBAC-Pilot) — nutzt die aus main.py injizierte Pruefung.
 
@@ -581,16 +597,18 @@ def api_generate_dossier(request: Request):
 
 
 @router.post("/api/system/consolidate-memory")
-def api_trigger_memory_consolidation(request: Request, payload: Dict = Body(default={})):
+def api_trigger_memory_consolidation(request: Request, payload: MemoryConsolidationTriggerRequest = Body(default=MemoryConsolidationTriggerRequest())):
     _require_admin(request)
+    payload = _as_payload(payload)
     from backend.memory_consolidator import run_sleep_cycle_consolidation
     force = bool(payload.get("force", True))
     return run_sleep_cycle_consolidation(force=force)
 
 
 @router.post("/api/system/write-batcher/enqueue")
-def api_write_batcher_enqueue(request: Request, payload: Dict = Body(...)):
+def api_write_batcher_enqueue(request: Request, payload: WriteBatcherEnqueueRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
+    payload = _as_payload(payload)
     from backend.async_write_batcher import async_write_batcher
     return async_write_batcher.enqueue(
         event_type=payload.get("event_type", "telemetry"),

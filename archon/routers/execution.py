@@ -20,7 +20,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
@@ -31,9 +31,88 @@ from archon.core.runtime import (  # noqa: F401
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
+
+class _ExecRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+def _as_payload(value) -> Dict[str, Any]:
+    """Tolerant: interne/direkte Aufrufer uebergeben weiterhin Dicts."""
+    return value.model_dump(by_alias=True) if hasattr(value, "model_dump") else dict(value)
+
+
+class MapReduceRequest(_ExecRequest):
+    task_title: str = "Map-Reduce Batch"
+    items: List[Any] = []
+    instruction: str = "Analysiere und extrahiere Kernergebnisse"
+    max_parallel_workers: Optional[int] = None
+
+
+class StructuredOutputRequest(_ExecRequest):
+    raw_output: str = ""
+    json_schema: Optional[Any] = Field(default=None, alias="schema")
+
+
+class DurableCheckpointRequest(_ExecRequest):
+    workflow_id: str = "wf-default"
+    task_title: str = "Workflow"
+    current_step_index: int = 1
+    total_steps: int = 5
+    state: Dict[str, Any] = {}
+    completed_steps: List[Any] = []
+    status: str = "in_progress"
+
+
+class IdempotencyCheckRequest(_ExecRequest):
+    tool_name: str = "send_email"
+    params: Dict[str, Any] = {}
+    idempotency_key: Optional[str] = None
+    execution_result: Optional[Any] = None
+
+
+class DryRunRequest(_ExecRequest):
+    task_title: str = "Shadow Simulation"
+    proposed_actions: List[Any] = []
+
+
+class DlqEnqueueRequest(_ExecRequest):
+    job_type: str = "webhook_delivery"
+    source_module: str = "router"
+    payload: Dict[str, Any] = {}
+    error_message: str = "Unbekannter Fehler"
+
+
+class DlqReplayRequest(_ExecRequest):
+    dlq_id: str = ""
+    simulate_success: bool = False
+
+
+class QueueEnqueueRequest(_ExecRequest):
+    job_type: str = "generic"
+    source_module: str = "router"
+    payload: Dict[str, Any] = {}
+    priority: int = 0
+    idempotency_key: str = ""
+    max_retries: Optional[int] = None
+
+
+class QueueClaimRequest(_ExecRequest):
+    worker_id: str = "api-worker"
+    lease_seconds: int = 120
+    job_types: Optional[List[str]] = None
+
+
+class QueueCompleteRequest(_ExecRequest):
+    result: Dict[str, Any] = {}
+
+
+class QueueFailRequest(_ExecRequest):
+    error_message: str = "Worker-Fehler"
+
 @router.post("/api/execution/map-reduce")
-async def api_execute_map_reduce(request: Request, payload: Dict = Body(...)):
+async def api_execute_map_reduce(request: Request, payload: MapReduceRequest = Body(...)):
     require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.map_reduce_executor import map_reduce_executor
     return await map_reduce_executor.execute_map_reduce(
         task_title=payload.get("task_title", "Map-Reduce Batch"),
@@ -50,7 +129,8 @@ def api_map_reduce_history(limit: int = 20):
 
 
 @router.post("/api/execution/structured-output")
-def api_structured_output_validate(payload: Dict = Body(...)):
+def api_structured_output_validate(payload: StructuredOutputRequest = Body(...)):
+    payload = _as_payload(payload)
     from backend.structured_output_enforcer import structured_output_enforcer
     return structured_output_enforcer.validate_and_enforce(
         raw_output=payload.get("raw_output", ""),
@@ -59,7 +139,8 @@ def api_structured_output_validate(payload: Dict = Body(...)):
 
 
 @router.post("/api/execution/checkpoints/save")
-def api_save_durable_checkpoint(payload: Dict = Body(...)):
+def api_save_durable_checkpoint(payload: DurableCheckpointRequest = Body(...)):
+    payload = _as_payload(payload)
     from backend.durable_checkpoint_manager import durable_checkpoint_manager
     return durable_checkpoint_manager.save_checkpoint(
         workflow_id=payload.get("workflow_id", "wf-default"),
@@ -85,7 +166,8 @@ def api_list_durable_checkpoints(status: Optional[str] = None):
 
 
 @router.post("/api/execution/idempotency/check")
-def api_idempotency_check(payload: Dict = Body(...)):
+def api_idempotency_check(payload: IdempotencyCheckRequest = Body(...)):
+    payload = _as_payload(payload)
     from backend.idempotency_guard import idempotency_guard
     return idempotency_guard.check_or_register(
         tool_name=payload.get("tool_name", "send_email"),
@@ -96,7 +178,8 @@ def api_idempotency_check(payload: Dict = Body(...)):
 
 
 @router.post("/api/execution/dry-run")
-def api_dry_run_simulate(payload: Dict = Body(...)):
+def api_dry_run_simulate(payload: DryRunRequest = Body(...)):
+    payload = _as_payload(payload)
     from backend.dry_run_simulator import dry_run_simulator
     return dry_run_simulator.simulate_task_plan(
         task_title=payload.get("task_title", "Shadow Simulation"),
@@ -105,8 +188,9 @@ def api_dry_run_simulate(payload: Dict = Body(...)):
 
 
 @router.post("/api/execution/dlq/enqueue")
-def api_dlq_enqueue(request: Request, payload: Dict = Body(...)):
+def api_dlq_enqueue(request: Request, payload: DlqEnqueueRequest = Body(...)):
     require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.enqueue_failed_job(
         job_type=payload.get("job_type", "webhook_delivery"),
@@ -117,8 +201,9 @@ def api_dlq_enqueue(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/execution/dlq/replay")
-def api_dlq_replay(request: Request, payload: Dict = Body(...)):
+def api_dlq_replay(request: Request, payload: DlqReplayRequest = Body(...)):
     require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.replay_job(
         dlq_id=payload.get("dlq_id", ""),
@@ -140,8 +225,9 @@ def api_dlq_list(status: Optional[str] = None):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/execution/queue/enqueue")
-def api_queue_enqueue(request: Request, payload: Dict = Body(...)):
+def api_queue_enqueue(request: Request, payload: QueueEnqueueRequest = Body(...)):
     require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.enqueue_task(
         job_type=payload.get("job_type", "generic"),
@@ -154,8 +240,9 @@ def api_queue_enqueue(request: Request, payload: Dict = Body(...)):
 
 
 @router.post("/api/execution/queue/claim")
-def api_queue_claim(request: Request, payload: Dict = Body(default={})):
+def api_queue_claim(request: Request, payload: QueueClaimRequest = Body(default=QueueClaimRequest())):
     require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     item = dead_letter_queue_manager.claim_next(
         worker_id=str(payload.get("worker_id") or "api-worker"),
@@ -166,15 +253,17 @@ def api_queue_claim(request: Request, payload: Dict = Body(default={})):
 
 
 @router.post("/api/execution/queue/{dlq_id}/complete")
-def api_queue_complete(request: Request, dlq_id: str, payload: Dict = Body(default={})):
+def api_queue_complete(request: Request, dlq_id: str, payload: QueueCompleteRequest = Body(default=QueueCompleteRequest())):
     require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return {"completed": dead_letter_queue_manager.complete(dlq_id, payload.get("result") or {})}
 
 
 @router.post("/api/execution/queue/{dlq_id}/fail")
-def api_queue_fail(request: Request, dlq_id: str, payload: Dict = Body(default={})):
+def api_queue_fail(request: Request, dlq_id: str, payload: QueueFailRequest = Body(default=QueueFailRequest())):
     require_admin_or_503(request)
+    payload = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.fail(
         dlq_id, str(payload.get("error_message") or "Worker-Fehler")

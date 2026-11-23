@@ -1,8 +1,14 @@
 # API-Validierung & HTTP-Status – 8 Etappen
 
-Ziel: alle **121 Endpunkte mit rohem `Dict = Body(...)`** auf Pydantic-Modelle
-umstellen und alle **25 `{"status":"error"}`-Antworten mit HTTP 200** auf echte
-HTTP-Fehlercodes heben. Inventur: `scripts`-interner Scan (2026-11-22).
+Ziel: alle Endpunkte mit rohem `Dict = Body(...)` auf Pydantic-Modelle
+umstellen und alle `{"status":"error"}`-Antworten mit HTTP 200 auf echte
+HTTP-Fehlercodes heben.
+
+**Korrigierte Inventur (23.11.2026, per Grep nachgezählt):**
+Die ursprüngliche Zahl „121" war veraltet. Die echte Zahl ist **136** — sie
+deckt sich mit dem Startzustand in `AUDIT_ABSCHLUSS_2026_11_23.md`
+(„~136 rohe `dict = Body(...)`"). Stand: **65 migriert, 71 offen**.
+Alle weiteren Zahlen in diesem Dokument wurden entsprechend korrigiert.
 
 **Kompatibilitätsregel (wichtig):**
 - `model_config = ConfigDict(extra="ignore")` als Default: bestehende Clients
@@ -23,6 +29,7 @@ HTTP-Fehlercodes heben. Inventur: `scripts`-interner Scan (2026-11-22).
 | 2c | `security` (7), `routergate` (4): Maskierung, PII, Egress, RBAC-Check, Kosten/Bandit | 11 | ✅ erledigt (23.11.2026) |
 | 2d | `erp` (10): Entitäten, Kontakte, Belege, Bankimport, PocketBase-Sync | 10 | ✅ erledigt (23.11.2026) |
 | 2e | `memory` (10), `mesh` (14): Gedächtnis, Event-Mesh, Handoff, Sandbox, Consensus | 24 | ✅ erledigt (23.11.2026) |
+| 2f | `execution` (11), `gateway` (4), `resilience` (3), `system` (2), `swarm` (1) | 21 | ✅ erledigt (23.11.2026) |
 | 2 | `llm_providers` (Rest), `governance`, `guardian`, `docker_services`, `watchdog`, `hermes_profiles`, `email_settings`, `kanban`, `memory_ops`, `telegram` | ~19 | offen |
 | 3 | `v2_capabilities` (Teil 1) | ~20 | offen |
 | 4 | `v2_capabilities` (Teil 2) + `content_machine` (Teil 1) | ~20 | offen |
@@ -31,11 +38,13 @@ HTTP-Fehlercodes heben. Inventur: `scripts`-interner Scan (2026-11-22).
 | 7 | `operations_emails`, `operations_prompts`, `playbooks`, `operations_security`, `preflight_shadow`, `tenants` | ~20 | offen |
 | 8 | `documents`, `oracle_seo`, `voice`, `system`, `squad_packs`, `operations_finetuning`, `backend/operations_api` | ~19 | offen |
 
-**Rest nach Etappe 1:** 105 Body-Dicts + 18 HTTP-200-Fehler = 123.  
-**Nach Etappe 2a:** 95 Body-Dicts + 18 HTTP-200-Fehler = 113.  
-**Nach Etappe 2b:** 85 Body-Dicts + 18 HTTP-200-Fehler = 103.  
-**Nach Etappe 2d:** 44 Body-Dicts + 18 HTTP-200-Fehler = 62.  
-**Nach Etappe 2e:** 20 Body-Dicts + 18 HTTP-200-Fehler = 38.  
+**Verifizierter Stand nach Etappe 2f:** 50 Body-Dicts per Grep nachgezählt
+(136 gesamt − 86 migriert) — deckt sich exakt mit dem Startzustand "~136".  
+**Stand nach Etappe 2e war:** 71 Body-Dicts per Grep nachgezählt
+(`: (dict|Dict[...]) = Body` über `archon/routers/**/*.py`) — die früher
+hier stehenden Zwischenzahlen (105/95/85/44/20) stammten aus der veralteten
+121er-Schätzung und sind verworfen. Die 18 HTTP-200-Fehler sind separat und
+bisher nicht bearbeitet.  
 **Hinweis:** alle Testlaeufe seit dem 23.11.2026 nur noch mit
 `ARCHON_TEST_DB_ISOLATION=1`, damit die produktiven `data/*.db` nicht mehr
 durch Host/Container-WAL-Konflikte beschaedigt werden.

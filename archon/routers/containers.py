@@ -17,7 +17,7 @@ from typing import Dict, Any, List, Optional
 import httpx
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Query, Body, Request
-from fastapi.responses import Response as _HttpResponse
+from fastapi.responses import Response as _HttpResponse, JSONResponse
 from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import add_ticker, logger, WORKSPACE_DIR
 from archon.core.config import config
@@ -506,8 +506,10 @@ async def inject_container_config(request: Request, container_name: str, config:
                 "response": resp_data
             }
     except Exception as e:
-        return {
+        # Audit 23.11.2026: Fehler duerfen nicht mit HTTP 200 zurueckgehen.
+        # Body-Shape bleibt unverändert (Kompatibilitaetsregel der Roadmap).
+        return JSONResponse(status_code=502, content={
             "status": "error",
             "target_url": config_url,
             "message": f"Could not inject config to {config_url}: {e}"
-        }
+        })

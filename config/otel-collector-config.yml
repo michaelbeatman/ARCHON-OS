@@ -1,0 +1,35 @@
+# Archon OS — OpenTelemetry Collector Configuration (D16 / P1)
+# Einbindung in docker-compose.yml erfolgt durch P0 (Hy4) via HANDOFF_NOTES.md.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 256
+    spike_limit_mib: 64
+  batch:
+    send_batch_size: 256
+    timeout: 5s
+
+exporters:
+  debug:
+    verbosity: basic
+  # Optional: Langfuse / Tempo OTLP-Ziel via Env-Variablen im Collector-Service
+  otlphttp/downstream:
+    endpoint: ${OTEL_DOWNSTREAM_OTLP_ENDPOINT:-http://langfuse:3000/api/public/otel}
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]

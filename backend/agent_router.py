@@ -791,6 +791,13 @@ class AgentRouter:
                         last_err = RuntimeError(f"Provider '{provider}' circuit-open")
                         logger.warning(f"[AgentRouter] Provider '{provider}' circuit-open — Fallback")
                         continue
+                    active_trace_id = ""
+                    try:
+                        from backend.trace_context import current_trace_id, inject_headers as _inject_trace_headers
+                        request_headers = _inject_trace_headers(request_headers)
+                        active_trace_id = current_trace_id()
+                    except Exception:
+                        pass
                     try:
                         resp = await client.post(target_url, headers=request_headers, json=safe_payload)
                     except Exception:
@@ -816,6 +823,7 @@ class AgentRouter:
                         http_status=resp.status_code,
                         data_category=hop_gate["data_category"],
                         zero_egress_active=hop_gate["zero_egress_active"],
+                        trace_id=active_trace_id,
                     )
                     if resp.status_code in (429, 500, 502, 503, 504, 404) and idx < len(candidate_models) - 1:
                         logger.warning(f"[AgentRouter] Model '{m_try}' returned {resp.status_code}, falling back to '{candidate_models[idx+1]}'...")

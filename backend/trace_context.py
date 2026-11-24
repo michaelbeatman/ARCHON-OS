@@ -10,10 +10,11 @@ ein eigener Folgeschritt.
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import re
 import secrets
-from typing import Any, Mapping, Optional
+from typing import Any, Iterator, Mapping, Optional
 
 _TRACEPARENT_RE = re.compile(
     r"^(00)-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$", re.IGNORECASE
@@ -78,3 +79,51 @@ def extract_headers(headers: Mapping[str, str]) -> Optional[str]:
     lowered = {str(k).lower(): v for k, v in headers.items()}
     value = lowered.get("traceparent")
     return str(value) if value else None
+
+
+def ensure_trace() -> tuple[str, str]:
+    """Liefert den aktiven Trace-Kontext oder startet automatisch einen neuen W3C-Trace."""
+    tid = current_trace_id()
+    sid = current_span_id()
+    if tid and sid:
+        return tid, sid
+    return start_trace()
+
+
+@contextlib.contextmanager
+def child_span(incoming: Optional[str] = None) -> Iterator[tuple[str, str, Optional[str]]]:
+    """Erzeugt einen Kind-Span im aktiven Trace (oder startet einen Root-Trace).
+
+    Liefert ``(trace_id, span_id, parent_span_id)`` und stellt beim Verlassen
+    die vorherigen ContextVars deterministisch wieder her.
+    """
+    parent_tid = current_trace_id()
+    parent_sid = current_span_id() or None
+    if incoming:
+        parsed = parse_traceparent(incoming)
+        if parsed:
+            parent_tid, parent_sid = parsed
+    if not parent_tid:
+        parent_tid, new_sid = new_ids()
+        parent_sid = None
+    else:
+        new_sid = secrets.token_hex(8)
+    tok_t = _current_trace.set(parent_tid)
+    tok_s = _current_span.set(new_sid)
+    try:
+        yield parent_tid, new_sid, parent_sid
+    finally:
+        _current_span.reset(tok_s)
+        _current_trace.reset(tok_t)
+
+
+def inject_payload(payload: Optional[Mapping[str, Any]] = None) -> dict[str, Any]:
+    """Fuegt trace_id (und falls vorhanden span_id) non-destruktiv in ein Webhook-Payload ein."""
+    out = dict(payload or {})
+    tid = current_trace_id()
+    sid = current_span_id()
+    if tid and "trace_id" not in out:
+        out["trace_id"] = tid
+    if sid and "span_id" not in out:
+        out["span_id"] = sid
+    return out

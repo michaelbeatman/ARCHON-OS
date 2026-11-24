@@ -120,10 +120,17 @@ async def trigger_n8n_execution(
         "executed_at": datetime.datetime.now().isoformat()
     }
     try:
+        from backend.trace_context import inject_headers as _inject_trace_headers, inject_payload as _inject_trace_payload
+        payload = _inject_trace_payload(payload)
+    except Exception:
+        _inject_trace_headers = None
+    try:
         from utils.safe_http import webhook_signature_headers
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         headers.update(webhook_signature_headers(body))
+        if _inject_trace_headers is not None:
+            headers = _inject_trace_headers(headers)
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, content=body, headers=headers)
             if resp.status_code == 200:
@@ -646,6 +653,14 @@ async def dispatch_to_omniroute_or_container(
                 }
 
             tr_id = None
+            parent_sp_id = None
+            try:
+                from backend.trace_context import current_span_id, current_trace_id, ensure_trace
+                if not current_trace_id():
+                    ensure_trace()
+                parent_sp_id = current_span_id() or None
+            except Exception:
+                parent_sp_id = None
             try:
                 from backend.otel_tracer import tracer
                 tr_id = tracer.start_trace(f"exec.{agent_id}", task_id=task_id or None, agent_id=agent_id)
@@ -703,6 +718,7 @@ async def dispatch_to_omniroute_or_container(
                         trace_id=tr_id,
                         name=f"llm.{agent_id}",
                         span_type="llm",
+                        parent_span_id=parent_sp_id,
                         agent_id=agent_id,
                         model=used_model,
                         input_data=prompt[:500],
@@ -1142,6 +1158,13 @@ async def _dispatch_to_omniroute_or_container_impl(
             session_id=task_id or agent_id,
             is_local=is_local_hop,
         )
+        active_trace_id = ""
+        try:
+            from backend.trace_context import current_trace_id, inject_headers as _inject_trace_headers
+            headers = _inject_trace_headers(headers)
+            active_trace_id = current_trace_id()
+        except Exception:
+            pass
         post_kwargs: dict[str, Any] = {"headers": headers, "json": safe_body}
         if timeout is not None:
             post_kwargs["timeout"] = timeout
@@ -1161,6 +1184,7 @@ async def _dispatch_to_omniroute_or_container_impl(
                     data_category=hop_gate["data_category"],
                     zero_egress_active=hop_gate["zero_egress_active"],
                     task_id=task_id,
+                    trace_id=active_trace_id,
                 )
             except Exception as audit_exc:
                 logger.warning("[LLM-Dispatch] Audit-Block nicht schreibbar: %s", audit_exc)
@@ -1189,6 +1213,7 @@ async def _dispatch_to_omniroute_or_container_impl(
             data_category=hop_gate["data_category"],
             zero_egress_active=hop_gate["zero_egress_active"],
             task_id=task_id,
+            trace_id=active_trace_id,
         )
         return r
 

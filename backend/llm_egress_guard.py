@@ -270,10 +270,18 @@ def log_completed_llm_dispatch(
     data_category: str = "general",
     zero_egress_active: bool = False,
     task_id: str = "",
+    trace_id: str = "",
     audit_logger: Any = None,
 ) -> Dict[str, Any]:
     """Schreibt den Nachweis eines real ausgeführten LLM-Calls in die SHA-256-Hashkette."""
     alog = audit_logger or chained_audit_log
+    resolved_tid = (trace_id or "").strip()
+    if not resolved_tid:
+        try:
+            from backend.trace_context import current_trace_id
+            resolved_tid = current_trace_id()
+        except Exception:
+            resolved_tid = ""
     extra: Dict[str, Any] = {}
     if task_id:
         extra["task_id"] = task_id
@@ -286,6 +294,7 @@ def log_completed_llm_dispatch(
         data_category=data_category,
         http_status=int(http_status),
         zero_egress_active=zero_egress_active,
+        trace_id=resolved_tid,
         extra=extra,
     )
 

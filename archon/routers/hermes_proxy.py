@@ -124,6 +124,13 @@ async def forward_to_hermes(request: Request) -> Response:
 
     fwd_headers["X-Hermes-Session-Token"] = hermes_token
     fwd_headers["Authorization"] = f"Bearer {hermes_token}"
+    try:
+        from backend.trace_context import current_trace_id, extract_headers, inject_headers, start_trace
+        if not current_trace_id():
+            start_trace(extract_headers(request.headers))
+        fwd_headers = inject_headers(fwd_headers)
+    except Exception:
+        pass
 
     body = await request.body()
     client = _get_hermes_client()
@@ -139,9 +146,14 @@ async def forward_to_hermes(request: Request) -> Response:
             )
             _HERMES_TARGET_CACHE["base"] = base
             _HERMES_TARGET_CACHE["ts"] = _time.monotonic()
+            resp_headers: dict[str, str] = {}
+            tp_out = resp.headers.get("traceparent") or fwd_headers.get("traceparent")
+            if tp_out:
+                resp_headers["traceparent"] = tp_out
             return Response(
                 content=resp.content,
                 status_code=resp.status_code,
+                headers=resp_headers,
                 media_type=resp.headers.get("Content-Type", "application/json"),
             )
         except Exception as e:

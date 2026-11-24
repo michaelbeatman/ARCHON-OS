@@ -155,8 +155,14 @@ def send_prompt_to_agent(
                 "messages": clean_msgs,
                 "stream": False,
             }
+            req_headers = dict(headers)
+            try:
+                from backend.trace_context import inject_headers as _inject_trace_headers
+                req_headers = _inject_trace_headers(req_headers)
+            except Exception:
+                pass
             with httpx.Client(timeout=40.0) as client:
-                res = client.post(url, json=payload, headers=headers)
+                res = client.post(url, json=payload, headers=req_headers)
                 log_completed_llm_dispatch(
                     agent_id=agent_name,
                     provider=str(gate.get("provider") or "omniroute"),

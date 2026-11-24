@@ -128,6 +128,16 @@ def api_list_otel_traces(limit: int = Query(25, ge=1, le=100)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/traces/otel/status")
+def api_get_otel_tracing_status():
+    """F18: Ehrlicher Status des externen Trace-Exports (OTLP / Langfuse) + Export-Zaehler."""
+    try:
+        from backend.otel_tracer import get_tracing_status
+        return {"status": "success", **get_tracing_status()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/traces/otel/{trace_or_task_id}")
 def api_get_otel_trace_tree(trace_or_task_id: str):
     """OpenTelemetry & Langfuse Tracing: Liefert den vollständigen hierarchischen Trace- und Span-Baum."""

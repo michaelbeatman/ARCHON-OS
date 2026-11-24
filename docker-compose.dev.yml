@@ -92,28 +92,9 @@ services:
       # Zero-Egress Worker-Isolationsnetz (internal: true -> keine Internet-Route fuer Worker)
       - archon-worker-zero-egress_net
 
-  # Isolierter Zero-Egress Worker-Pool (keine Internet-Route, kein NAT-Gateway, read-only, cap_drop ALL)
-  archon-worker:
-    image: python:3.11-alpine@sha256:bb1d70c1df30d8ee1e05214dbe82d6cdfd29833c1f47ce917f20991aca93acaa
-    container_name: archon-worker-zero-egress
-    logging:
-      <<: *default-logging
-    profiles: ["workers"]
-    user: "1000:1000"
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=64m
-    cap_drop:
-      - ALL
-    security_opt:
-      - "no-new-privileges:true"
-    mem_limit: 512m
-    memswap_limit: 512m
-    pids_limit: 50
-    command: ["python", "-c", "import time; time.sleep(86400)"]
-    restart: unless-stopped
-    networks:
-      - archon-worker-zero-egress_net
+  # Audit D10/D01: Platzhalter-Worker (`time.sleep(86400)`) entfernt.
+  # On-Demand-Sandboxes laufen ueber backend/ephemeral_sandbox.py in
+  # `archon-worker-zero-egress_net` (internal:true, cap_drop ALL, read_only).
 
   # Docker-API-Proxy: einziger durch die Anwendung genutzter Weg zum Daemon.
   # Ist-Stand 1:1 übernommen (netzwerk-, mount- und env-gleich), bewusst nur

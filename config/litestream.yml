@@ -70,6 +70,7 @@ dbs:
   - dir: /app/data/tenants
     pattern: "*.db"
     recursive: true
+    watch: true   # Audit D03: neue Mandanten-DBs ohne Litestream-Neustart erfassen
     replica:
       type: file
       path: /opt/litestream_replicas/tenants

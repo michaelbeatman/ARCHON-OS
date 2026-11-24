@@ -119,9 +119,34 @@ async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPE
     )
 
 
+async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Audit D07: letzte Verteidigungslinie für unerwartete Fehler.
+
+    Kein Stacktrace an den Client (Info-Disclosure), aber trace_id aus dem
+    aktiven W3C-Kontext, damit Log/Audit/HTTP-Antwort korrelierbar bleiben.
+    """
+    from backend.trace_context import current_trace_id as _current_trace_id
+
+    trace_id = _current_trace_id()
+    logger.exception(
+        "[Unhandled] %s %s -> 500 (trace_id=%s)",
+        request.method, request.url.path, trace_id or "-",
+    )
+    payload = {
+        "error": True,
+        "code": "internal_error",
+        "detail": "Interner Fehler. Bitte trace_id an die Administration melden.",
+        "status_code": 500,
+    }
+    if trace_id:
+        payload["trace_id"] = trace_id
+    return JSONResponse(status_code=500, content=payload)
+
+
 def register_exception_handlers(app):
     """Registriert alle Exception-Handler in der FastAPI App."""
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(StarletteHTTPException, starlette_http_exception_handler)
-    logger.info("[i18n] Exception-Handler registriert (code+params Format)")
+    app.add_exception_handler(Exception, generic_exception_handler)
+    logger.info("[i18n] Exception-Handler registriert (code+params Format, inkl. 500-Catch-All)")

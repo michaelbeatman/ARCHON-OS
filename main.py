@@ -207,6 +207,29 @@ _APP_START_TS = time.time()
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+
+# Audit D16: W3C Trace Context an der Systemgrenze. Zuletzt registriert =
+# äußerste Middleware = läuft vor Auth/RateLimit/Locale. Der Kontext wird in
+# contextvars gesetzt und damit in alle nachgelagerten Tasks vererbt.
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+from backend.trace_context import (  # noqa: E402
+    start_trace as _start_trace,
+    current_trace_id as _current_trace_id,
+    extract_headers as _extract_traceparent,
+)
+
+
+class TraceContextMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        trace_id, _span_id = _start_trace(_extract_traceparent(request.headers))
+        response = await call_next(request)
+        response.headers["X-Trace-Id"] = trace_id
+        return response
+
+
+app.add_middleware(TraceContextMiddleware)
+
+
 def _install_cors_middleware() -> None:
     """CORS muss AUSSERHALB des Auth-Gates liegen.
 

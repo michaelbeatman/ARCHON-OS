@@ -224,6 +224,10 @@ def _list_provider_models_uncached(norm_pid: str) -> List[str]:
                 _omni_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()
                 if _omni_key:
                     headers["Authorization"] = f"Bearer {_omni_key}"
+                # Audit D16: traceparent an die Systemgrenze zu OmniRoute mitführen.
+                from backend.trace_context import inject_headers as _inject_traceparent
+
+                headers = _inject_traceparent(headers)
                 req = urllib.request.Request(url, headers=headers)
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
                     if resp.status == 200:
@@ -706,8 +710,28 @@ def _read_flat_env(path: str) -> Dict[str, str]:
     return d
 
 
+# Audit D08: früher scanste collect_keys() bei JEDEM Dispatch synchron ~70
+# Profil-.env-Dateien — ein Event-Loop-Blocker unter Parallelität. Kurzer TTL-
+# Cache mit Lock; Invalidierung nach Schreibvorgängen über invalidate_key_cache().
+_KEY_CACHE_TTL_SEC = 30.0
+_key_cache_lock = threading.Lock()
+_key_cache: Dict[str, Any] = {"at": 0.0, "keys": {}}
+
+
+def invalidate_key_cache() -> None:
+    with _key_cache_lock:
+        _key_cache["at"] = 0.0
+        _key_cache["keys"] = {}
+
+
 def collect_keys() -> Dict[str, str]:
     """env_var → Wert, Quelle: process env > zentrale .env > aktuelles profil-.env > profile-Sweep."""
+    now = time.monotonic()
+    with _key_cache_lock:
+        cached = _key_cache["keys"]
+        if cached and (now - float(_key_cache["at"])) < _KEY_CACHE_TTL_SEC:
+            return dict(cached)
+
     found: Dict[str, str] = {}
     # 1. process env / all provider env vars (best effort; wir sammeln nur was existiert)
     cat = load_provider_catalog()
@@ -740,6 +764,9 @@ def collect_keys() -> Dict[str, str]:
             for k, v in dd.items():
                 if k.endswith(("_API_KEY", "_KEY", "_TOKEN")):
                     found.setdefault(k, v)
+    with _key_cache_lock:
+        _key_cache["at"] = time.monotonic()
+        _key_cache["keys"] = dict(found)
     return found
 
 
@@ -756,6 +783,8 @@ def keys_for_provider(pid: str) -> Dict[str, str]:
 
 def deploy_keys(dry_run: bool = True) -> Dict[str, Any]:
     """Verteilt alle gefundenen API-Keys in config + zentrale .env + ALLE Profil-.env."""
+    if not dry_run:
+        invalidate_key_cache()  # Schreibvorgang darf keinen veralteten Cache hinterlassen
     keys = collect_keys()
     targets: List[str] = [ENV_PATH, os.path.join(HERMES_DATA, ".env")]
     if os.path.isdir(PROFILES_DIR):

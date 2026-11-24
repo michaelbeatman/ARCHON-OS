@@ -172,3 +172,8 @@ static/hermes-webui/static/
 !templates/**
 !souls/
 !souls/**
+
+# Audit-Dokumentation (Fix-Status + 16 Domänenberichte) versionieren,
+# obwohl die breite **/*report*-Regel sie sonst verschluckt.
+!audit_reports/
+!audit_reports/2026-11-24_*.md

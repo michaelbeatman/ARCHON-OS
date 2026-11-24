@@ -26,8 +26,11 @@ def test_canonical_souls_manifest_is_complete():
     for rel, expected in manifest.items():
         path = ROOT / "souls" / rel
         assert path.is_file(), f"fehlt: {rel}"
-        raw = path.read_bytes().replace(b"\r\n", b"\n")
-        assert hashlib.sha256(raw).hexdigest() == expected, f"Hash abweichend: {rel}"
+        # Git-checkout auf Windows liefert CRLF; der Generator hasht normalisierte
+        # Texte (read_text macht Universal-Newline-Konvertierung). Daher auch hier
+        # ueber read_text() hasht, nicht ueber rohe Bytes.
+        content = path.read_text(encoding="utf-8")
+        assert hashlib.sha256(content.encode("utf-8")).hexdigest() == expected, f"Hash abweichend: {rel}"
 
 
 def test_regulated_domains_are_high_risk():

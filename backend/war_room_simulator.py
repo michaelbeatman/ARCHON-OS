@@ -166,12 +166,16 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
                 c = c.split("```")[1].split("```")[0].strip()
             return json.loads(c)
         except Exception as e:
+            # Audit D01: früher wurde hier ein MEDIUM-Risiko erfunden, das
+            # anschließend echte HITL-Blockaden ausgelöst hat. Bewusst UNKNOWN
+            # und evaluation_failed — nie ein erfundener Risikowert.
             return {
                 "adversary": r["name"],
-                "risk_rating": "MEDIUM",
-                "top_vulnerabilities": [f"Simulation-Fallback: {e}"],
-                "worst_case_scenario": "Unbekannte Risiken durch Provider-Timeout",
-                "mandatory_fix": "Manueller Pre-Mortem Check erforderlich"
+                "risk_rating": "UNKNOWN",
+                "evaluation_failed": True,
+                "top_vulnerabilities": [f"Simulation fehlgeschlagen: {e}"],
+                "worst_case_scenario": "Nicht bewertet (Provider/Parser-Fehler)",
+                "mandatory_fix": "Manueller Pre-Mortem Check vor Freigabe erforderlich"
             }
 
     results = await asyncio.gather(*[_attack(r) for r in roles])
@@ -187,7 +191,12 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
         overall_risk = "LOW"
 
     risk_order = {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
-    should_block = risk_order.get(overall_risk, 2) >= risk_order.get(block_threshold, 3)
+    evaluation_failed = any(bool(res.get("evaluation_failed")) for res in results)
+    if evaluation_failed:
+        overall_risk = "UNKNOWN"
+    # Fail-closed: eine fehlgeschlagene Bewertung blockiert immer, statt als
+    # MEDIUM durchzuwinken und eine Scheinfreigabe zu erzeugen.
+    should_block = evaluation_failed or (risk_order.get(overall_risk, 4) >= risk_order.get(block_threshold, 3))
 
     mitigations = [res.get("mandatory_fix", "") for res in results if res.get("mandatory_fix")]
     mitigation_text = "\n".join(f"• {m}" for m in mitigations)
@@ -220,7 +229,8 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
         )
 
     return {
-        "status": "success",
+        "status": "incomplete" if evaluation_failed else "success",
+        "evaluation_failed": evaluation_failed,
         "topic": topic,
         "overall_risk_level": overall_risk,
         "block_threshold": block_threshold,

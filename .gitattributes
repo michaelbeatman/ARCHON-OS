@@ -1,0 +1,3 @@
+# Audit D15: kanonische SOUL-Artefakte muessen bytegenau stabil sein,
+# damit das SHA-256-Manifest unabhaengig vom Checkout eol=lf bleibt.
+souls/** text eol=lf

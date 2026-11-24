@@ -168,7 +168,12 @@ def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt:
     except ZeroEgressBlockedError:
         raise
     except Exception as exc:
-        logger.warning(f"[Dispatcher] Compliance-Check fehlgeschlagen: {exc}")
+        # F-041: kein Dispatch ohne auswertbares Compliance-Gate.
+        logger.error(f"[Dispatcher] Compliance-Check fehlgeschlagen — blockiert: {exc}")
+        raise ZeroEgressBlockedError(
+            f"Compliance-Gate nicht verfuegbar: {exc}",
+            error_code="COMPLIANCE_GATE_UNAVAILABLE",
+        ) from exc
 
     explicit_cat = ""
     try:
@@ -1009,15 +1014,62 @@ async def _dispatch_to_omniroute_or_container_impl(
                 "content": f"🛑 [COMPLIANCE GUARDRAIL BLOCK]: {chk.get('reason')}",
             }
     except Exception as cmp_err:
-        logger.warning(f"[Dispatcher] Compliance-Engine Pruefung fuer '{agent_id}' fehlgeschlagen: {cmp_err}")
+        # F-041: fail-closed statt Warnung + Weiterlauf des LLM-Dispatchs.
+        logger.error(f"[Dispatcher] Compliance-Engine Pruefung fuer '{agent_id}' fehlgeschlagen — blockiert: {cmp_err}")
+        return {
+            "status": "blocked",
+            "error": f"Compliance-Gate nicht verfuegbar: {cmp_err}",
+            "error_code": "COMPLIANCE_GATE_UNAVAILABLE",
+            "content": "🛑 [COMPLIANCE GUARDRAIL UNAVAILABLE]",
+        }
 
     try:
         from backend.execution_routing_guard import classify_execution_layer
         _erg = classify_execution_layer((prompt or "")[:160], prompt or "")
         if _erg.get("layer") in ("deterministic_n8n", "deterministic_script"):
-            logger.info(f"[ExecutionRoutingGuard] Hinweis fuer '{agent_id}': deterministische Route empfohlen ({_erg.get('recommended_engine')})")
-    except Exception:
-        pass
+            # F-009: Klassifikation ist KEIN Hinweis mehr, sondern ein echter
+            # 0-Token-Effekt. Deterministische Arbeit darf niemals durch ein
+            # Sprachmodell halluziniert werden.
+            _action = str(_erg.get("webhook_action") or "none")
+            logger.info(
+                "[ExecutionRoutingGuard] '%s' -> %s (%s, 0 Tokens)",
+                agent_id, _erg.get("layer"), _action,
+            )
+            if _erg.get("requires_hitl"):
+                return {
+                    "status": "blocked",
+                    "error_code": "DETERMINISTIC_HITL_REQUIRED",
+                    "error": "Deterministische Ausfuehrung mit Aussenwirkung erfordert Freigabe.",
+                    "content": "🛑 [HITL] Freigabe erforderlich — kein LLM-Dispatch.",
+                    "engine": _erg.get("recommended_engine"),
+                    "tokens": 0,
+                }
+            if _erg.get("layer") == "deterministic_n8n":
+                _n8n = await trigger_n8n_execution(
+                    parent_project_id=task_id or f"det-{agent_id}",
+                    title=(prompt or "")[:120],
+                    final_report_path="",
+                    content=(prompt or "")[:2000],
+                    target_action=_action,
+                )
+                return {
+                    "status": "success" if _n8n.get("status") != "error" else "failed",
+                    "engine": "n8n",
+                    "webhook_action": _action,
+                    "tokens": 0,
+                    "n8n_result": _n8n,
+                    "content": f"Deterministisch an n8n delegiert ({_action}).",
+                }
+            return {
+                "status": "blocked",
+                "error_code": "DETERMINISTIC_SCRIPT_SCHEDULER_ONLY",
+                "error": "Skriptläufe sind nur über den Scheduler/n8n zulässig — kein LLM-Dispatch.",
+                "engine": _erg.get("recommended_engine"),
+                "tokens": 0,
+            }
+    except Exception as exc:
+        # F-049: keine stillen Swallower im Dispatch-Pfad.
+        logger.debug("[Dispatcher] ExecutionRoutingGuard nicht verfuegbar: %s", exc)
 
     classified_cat = ""
     try:

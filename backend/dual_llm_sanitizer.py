@@ -24,8 +24,17 @@ _TRUST_LOCK = threading.RLock()
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRUSTED_SOURCES_FILE = os.path.join(WORKSPACE_DIR, "data", "trusted_sources.json")
 
-# Heuristische Signaturen bekannter Prompt-Injection-Muster
-INJECTION_SIGNATURES = [
+# F-024 (S-4.7): Single Source of Truth für Injection-Muster ist
+# `local_security_guard.INJECTION_PATTERNS` (25 Muster inkl. `curl https://`,
+# `wget`, `rm -rf`, `drop table`, `<<SYS>>`). Der Quarantäner importiert die
+# Liste direkt, statt eine eigene, unvollständige 9-Muster-Liste zu pflegen.
+from local_security_guard import INJECTION_PATTERNS
+
+# Die 9 benannten Signaturen bleiben ausschließlich für die Severity-
+# Klassifizierung (threat_level "critical") erhalten. Sie werden mit der
+# SSOT-Liste vereint, damit keine Erkennung verloren geht (z. B. Base64-,
+# Zero-Width- und Role-Delimiter-Muster stehen so nicht in der SSOT-Liste).
+_NAMED_INJECTION_SIGNATURES = [
     (r"(?i)ignore\s+(all\s+|any\s+|previous\s+|above\s+)*(instructions|directions|prompts|rules)", "INSTRUCTION_OVERRIDE"),
     (r"(?i)system\s+prompt\s+(override|leak|reveal|show|bypass)", "SYSTEM_PROMPT_TARGETING"),
     (r"(?i)you\s+are\s+now\s+(in\s+developer\s+mode|dan|unrestricted|god\s+mode|jailbroken)", "JAILBREAK_ATTEMPT"),
@@ -36,6 +45,9 @@ INJECTION_SIGNATURES = [
     (r"[\u200B-\u200D\uFEFF]", "ZERO_WIDTH_CHARACTER_INJECTION"),
     (r"(?im)(?:<\|im_start\|>\s*system|<\|system\|>|^\s*(?:###\s*)?SYSTEM\s*:|\[INST\]|</?system>)", "ROLE_DELIMITER_INJECTION"),
 ]
+
+# Vom Quarantäner tatsächlich gescannte Muster: 25 SSOT + 9 benannte Signaturen.
+INJECTION_SIGNATURES = _NAMED_INJECTION_SIGNATURES + list(INJECTION_PATTERNS)
 
 def load_trusted_sources() -> List[str]:
     """Lädt die Whitelist verifizierter Absender/Quellen."""

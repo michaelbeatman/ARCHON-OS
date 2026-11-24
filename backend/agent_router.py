@@ -4,6 +4,7 @@ import time
 import uuid
 import logging
 import asyncio
+import threading
 import random
 import weakref
 import json
@@ -55,10 +56,18 @@ class AgentRouter:
         self.active_tasks: Dict[str, Any] = {}
         self._guardian_cache: Dict[str, Any] = {"ts": 0.0, "daily_budget": 2.0, "max_context_tokens": 32000}
         self._spend_cache: Dict[str, Any] = {"ts": 0.0, "spend": 0.0, "ok": False}
+        # F-056/F-059: der Guard laeuft jetzt im Worker-Thread; die Caches
+        # brauchen eine Sperre gegen parallele Rebuilds.
+        self._guard_cache_lock = threading.Lock()
         # H12: id()-basierte Caches veralten nach GC eines Loops und halten
         # Connection-Pools ewig fest. WeakKeyDictionary wie in
         # core_dispatcher.py:321 — der Loop ist der richtige Schlüssel.
         self._http_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = weakref.WeakKeyDictionary()
+
+    def _enforce_token_guard(self, messages: List[Dict], provider: str, model: str, reasoning_level: str) -> tuple:
+        """F-056: gesperrter Einstieg — kein paralleler Cache-Rebuild."""
+        with self._guard_cache_lock:
+            return self._enforce_token_guard_unlocked(messages, provider, model, reasoning_level)
 
     # --- Token Guard: Verbrauchsmessung -------------------------------------
     # Bewusst NICHT über /api/guardian/stats: dieser Endpunkt blockiert bei
@@ -375,7 +384,7 @@ class AgentRouter:
 
         return {"loop_detected": False, "tripped": False}
 
-    def _enforce_token_guard(self, messages: List[Dict], provider: str, model: str, reasoning_level: str) -> tuple:
+    def _enforce_token_guard_unlocked(self, messages: List[Dict], provider: str, model: str, reasoning_level: str) -> tuple:
         policy = self._get_guardian_policy()
         # 0. Loop-Detection & Circuit-Breaker Prüfung
         cb_res = self.check_loop_or_circuit_breaker(messages)
@@ -631,7 +640,13 @@ class AgentRouter:
         except ZeroEgressBlockedError:
             raise
         except Exception as exc:
-            logger.warning(f"[AgentRouter] Compliance-Check fuer '{agent_id}' fehlgeschlagen: {exc}")
+            # F-041: Ein nicht auswertbarer EU-AI-Act-Gate darf NIE fall-through
+            # in den LLM-Dispatch erlauben (fail-closed, analog DataClassifier).
+            logger.error(f"[AgentRouter] Compliance-Check fuer '{agent_id}' fehlgeschlagen — blockiert: {exc}")
+            raise ZeroEgressBlockedError(
+                f"Compliance-Gate nicht verfuegbar: {exc}",
+                error_code="COMPLIANCE_GATE_UNAVAILABLE",
+            ) from exc
 
         # KRITISCH: der Aufrufer darf die Kategorie NIE abschwächen. Vorher
         # wurde der DataClassifier nur laufen gelassen, wenn `category` leer
@@ -707,7 +722,10 @@ class AgentRouter:
             log_completed_llm_dispatch,
         )
 
-        messages, model, reasoning_level = self._enforce_token_guard(messages, provider, model, reasoning_level)
+        # F-056: bis zu 2 s SQLite/Glob-I/O im Worker-Thread, nicht im Loop.
+        messages, model, reasoning_level = await asyncio.to_thread(
+            self._enforce_token_guard, messages, provider, model, reasoning_level
+        )
         category = self._run_compliance_and_classify(agent_id, messages, category)
         gate = evaluate_and_gate_llm_dispatch(
             agent_id=agent_id,
@@ -864,7 +882,9 @@ class AgentRouter:
         )
 
         try:
-            messages, model, reasoning_level = self._enforce_token_guard(messages, provider, model, reasoning_level)
+            messages, model, reasoning_level = await asyncio.to_thread(
+                self._enforce_token_guard, messages, provider, model, reasoning_level
+            )
         except BudgetExceededError as budget_err:
             yield f"ERROR: [Token Guard] {budget_err}"
             return

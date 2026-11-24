@@ -839,6 +839,83 @@ def _ensure_consecutive_failures_column(conn: sqlite3.Connection) -> None:
     _CONSECUTIVE_FAILURES_MIGRATED_DBS.add(target_db)
 
 
+def _kanban_load_task_sync(task_id: str):
+    """F-055: SQLite-Punktabfrage im Worker-Thread statt im Event-Loop."""
+    conn = _get_kanban_connection(maintenance=True)
+    try:
+        _ensure_consecutive_failures_column(conn)
+        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def _kanban_autonomy_gate_sync(task_id: str, autonomy: str) -> str:
+    """F-055: Autonomie-/Freigabe-Gate im Worker-Thread. Liefert die Aktion."""
+    gate = _get_kanban_connection(maintenance=True)
+    try:
+        now = datetime.datetime.now().isoformat()
+        row = gate.execute("SELECT block_kind FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        block_kind = row["block_kind"] if row is not None and hasattr(row, "keys") else (row[0] if row else None)
+        if autonomy == "manual":
+            gate.execute("UPDATE tasks SET status = 'todo' WHERE id = ?", (task_id,))
+            gate.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'autonomy_manual', ?, ?)",
+                (task_id, json.dumps({"level": "manual", "reason": "Nur Vorschlag — Ausführung gesperrt"}), now),
+            )
+            gate.commit()
+            print(f"[Autonomy] Task {task_id} nicht gestartet (manual).")
+            return "manual"
+        if block_kind != "approval_granted":
+            gate.execute("UPDATE tasks SET status = 'blocked', block_kind = 'approval' WHERE id = ?", (task_id,))
+            gate.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'awaiting_approval', ?, ?)",
+                (task_id, json.dumps({"level": "approval", "reason": "Freigabe erforderlich"}), now),
+            )
+            gate.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'blocked', ?, ?)",
+                (task_id, json.dumps({"reason": "approval_required"}), now),
+            )
+            gate.commit()
+            print(f"[Autonomy] Task {task_id} wartet auf Freigabe.")
+            return "awaiting_approval"
+        gate.execute("UPDATE tasks SET block_kind = NULL WHERE id = ?", (task_id,))
+        gate.commit()
+        return "continue"
+    finally:
+        gate.close()
+
+
+def _kanban_mark_started_sync(task_id: str, assignee: str) -> None:
+    """F-055: Status-Update + Event im Worker-Thread."""
+    conn = _get_kanban_connection(maintenance=True)
+    try:
+        now = datetime.datetime.now().isoformat()
+        conn.execute("UPDATE tasks SET status = 'in_progress', started_at = ? WHERE id = ?", (now, task_id))
+        conn.execute(
+            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'started', ?, ?)",
+            (task_id, json.dumps({"status": "in_progress", "agent": assignee}), now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _kanban_assign_orchestrator_sync(task_id: str) -> None:
+    """F-055: Auto-Zuweisung im Worker-Thread."""
+    conn = _get_kanban_connection(maintenance=True)
+    try:
+        now = datetime.datetime.now().isoformat()
+        conn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", ("default", task_id))
+        conn.execute(
+            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'auto_assigned_orchestrator', ?, ?)",
+            (task_id, json.dumps({"assignee": "default", "reason": "Kein Profil gesetzt — automatische Zuweisung an Orchestrator"}), now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 async def _execute_kanban_task_async(task_id: str):
     """CAS-gesicherter Einstieg: nur ein Worker darf einen Task ausführen.
 
@@ -932,6 +1009,12 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
     import core_dispatcher
     # Abbruch (Operator-Cancel oder Lease-Verlust) muss den laufenden
     # LLM-Call wirklich stoppen (Audit 23.11.2026).
+    _cancel_token = None
+
+    def _check_cancel() -> None:
+        if _cancel_token is not None:
+            _cancel_token.check()
+
     try:
         from backend.cancellation import get_token as _get_cancel_token
         _cancel_token = _get_cancel_token(f"task:{task_id}")
@@ -959,18 +1042,9 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         raise
     except ImportError:
         pass
-    conn = _get_kanban_connection(maintenance=True)
-    try:
-        # Fix-Sprint Paket A (Punkt 10): Spalte consecutive_failures sicherstellen
-        _ensure_consecutive_failures_column(conn)
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
-        row = cur.fetchone()
-        if not row:
-            return
-        t_dict = dict(row)
-    finally:
-        conn.close()
+    t_dict = await asyncio.to_thread(_kanban_load_task_sync, task_id)
+    if not t_dict:
+        return
 
     # G: Registrierung erst unmittelbar vor dem geschuetzten Hauptblock.
     # Vorher lag sie vor mehreren Early-Returns (dag-*/Autonomie-Gate), die
@@ -993,54 +1067,15 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         _autonomy = "approval"
 
     if _autonomy != "autonomous":
-        _gate = _get_kanban_connection(maintenance=True)
-        try:
-            _now = datetime.datetime.now().isoformat()
-            _row = _gate.execute("SELECT block_kind FROM tasks WHERE id = ?", (task_id,)).fetchone()
-            _block_kind = _row["block_kind"] if _row is not None and hasattr(_row, "keys") else (_row[0] if _row else None)
-            if _autonomy == "manual":
-                _gate.execute("UPDATE tasks SET status = 'todo' WHERE id = ?", (task_id,))
-                _gate.execute(
-                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'autonomy_manual', ?, ?)",
-                    (task_id, json.dumps({"level": "manual", "reason": "Nur Vorschlag — Ausführung gesperrt"}), _now),
-                )
-                _gate.commit()
-                print(f"[Autonomy] Task {task_id} nicht gestartet (manual).")
-                return
-            if _block_kind != "approval_granted":
-                _gate.execute("UPDATE tasks SET status = 'blocked', block_kind = 'approval' WHERE id = ?", (task_id,))
-                _gate.execute(
-                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'awaiting_approval', ?, ?)",
-                    (task_id, json.dumps({"level": "approval", "reason": "Freigabe erforderlich"}), _now),
-                )
-                # Hermes-Kanban-Protokoll: ein 'blocked'-Event macht die Sperre "sticky",
-                # sonst hebt promote_ready_tasks den Task wieder auf 'ready'.
-                _gate.execute(
-                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'blocked', ?, ?)",
-                    (task_id, json.dumps({"reason": "approval_required"}), _now),
-                )
-                _gate.commit()
-                print(f"[Autonomy] Task {task_id} wartet auf Freigabe.")
-                return
-            # Freigabe erteilt: Marker löschen und weiterlaufen
-            _gate.execute("UPDATE tasks SET block_kind = NULL WHERE id = ?", (task_id,))
-            _gate.commit()
-        finally:
-            _gate.close()
+        # F-055: komplettes Gate im Worker-Thread — vorher blockierte dieses
+        # SQLite-Bündel den Event-Loop bei jedem Kanban-Task.
+        if await asyncio.to_thread(_kanban_autonomy_gate_sync, task_id, _autonomy) != "continue":
+            return
 
     # Fall 2: Einzelaufgabe
     # Sofort als 'in_progress' markieren, damit im Kanban und UI der aktive Lauf sichtbar ist
     try:
-        c_start = _get_kanban_connection(maintenance=True)
-        try:
-            now_start_iso = datetime.datetime.now().isoformat()
-            c_start.execute("UPDATE tasks SET status = 'in_progress', started_at = ? WHERE id = ?", (now_start_iso, task_id))
-            c_start.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'started', ?, ?)", 
-                            (task_id, json.dumps({"status": "in_progress", "agent": t_dict.get("assignee")}), now_start_iso))
-            c_start.commit()
-        finally:
-            # H: Connection auch bei Exception/Partial-Write schliessen.
-            c_start.close()
+        await asyncio.to_thread(_kanban_mark_started_sync, task_id, t_dict.get("assignee") or "")
     except Exception as exc:
         print(f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
@@ -1050,24 +1085,13 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         # Kein Profil manuell zugewiesen -> automatisch an den Root-Orchestrator ('default') uebergeben
         raw_assignee = "default"
         try:
-            c_asgn = _get_kanban_connection(maintenance=True)
-            try:
-                now_asgn_iso = datetime.datetime.now().isoformat()
-                c_asgn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", (raw_assignee, task_id))
-                c_asgn.execute(
-                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'auto_assigned_orchestrator', ?, ?)",
-                    (task_id, json.dumps({"assignee": raw_assignee, "reason": "Kein Profil gesetzt — automatische Zuweisung an Orchestrator"}), now_asgn_iso),
-                )
-                c_asgn.commit()
-            finally:
-                # H: Connection auch bei Exception schliessen.
-                c_asgn.close()
+            await asyncio.to_thread(_kanban_assign_orchestrator_sync, task_id)
         except Exception as exc:
             print(f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     assignee = resolve_agent_id(raw_assignee)
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
-    profiles = _load_profiles_map()
+    profiles = await asyncio.to_thread(_load_profiles_map)
     prof = profiles.get(assignee, {})
     model = (t_dict.get("model_override") or "").strip()
     provider_override = (t_dict.get("provider_override") or "").strip()
@@ -1128,12 +1152,23 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
             from backend.precedent_log import find_matching_precedents, format_precedents_for_prompt
             _tenant_id = str(t_dict.get("tenant_id") or "default")
             _project_id = str(t_dict.get("project_id") or "")
-            _matched_precs = find_matching_precedents(_tenant_id, _project_id, f"{title} {body}")
+            _matched_precs = await asyncio.to_thread(
+                find_matching_precedents, _tenant_id, _project_id, f"{title} {body}"
+            )
             precedent_block = format_precedents_for_prompt(_matched_precs)
         except Exception as exc:
             print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
         task_prompt = f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\nTITEL: {title}\nAUFTRAG / DETAILS:\n{body}{proj_context}{precedent_block}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte."
+        # F-011/F-012: Fencing + Cancel unmittelbar vor dem kostenpflichtigen
+        # Dispatch. heartbeat().False beweist verlorenen Lease (fail-closed).
+        _check_cancel()
+        if lease_token:
+            from backend.deadlock_supervisor import deadlock_supervisor as _fence
+            if not await asyncio.to_thread(_fence.heartbeat, task_id, lease_token):
+                if _cancel_token is not None:
+                    _cancel_token.cancel("lease_lost")
+                raise asyncio.CancelledError("lease_lost")
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
             agent_id=assignee,
             agent_name=agent_name,
@@ -1171,6 +1206,14 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
             retry_count=_retry_cnt,
         )
         if verdict["status"] == "retry":
+            # F-011/F-012: auch vor dem Retry-Dispatch erneut pruefen.
+            _check_cancel()
+            if lease_token:
+                from backend.deadlock_supervisor import deadlock_supervisor as _fence2
+                if not await asyncio.to_thread(_fence2.heartbeat, task_id, lease_token):
+                    if _cancel_token is not None:
+                        _cancel_token.cancel("lease_lost")
+                    raise asyncio.CancelledError("lease_lost")
             res = await core_dispatcher.dispatch_to_omniroute_or_container(
                 agent_id=assignee,
                 agent_name=agent_name,

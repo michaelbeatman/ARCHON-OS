@@ -398,7 +398,8 @@ async def _execute_mission_control_task(
                             "model": (sub_prof.get("model") if sub_prof else None) or "auto/best-free",
                             "estimated_tokens": 60000,
                             "estimated_cost_eur": 0.08,
-                            "subagents_count": 1,
+                            "subagents_count": 0,  # F-007: noch keine eigenen Subtasks
+
                             "status": "approval",
                             "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                             "result_summary": "",
@@ -649,6 +650,9 @@ def _merge_finalize_synthesis_delta(fresh: dict, parent_pid: str, final_obs_path
             t["result_summary"] = local_parent.get("result_summary", t.get("result_summary"))
             t["synthesis_finalized"] = local_parent.get("synthesis_finalized", t.get("synthesis_finalized"))
             t["completed_at"] = local_parent.get("completed_at", t.get("completed_at"))
+            # F-040: Fehlergrund muss im persistierten Task sichtbar bleiben.
+            if "failure_reason" in local_parent:
+                t["failure_reason"] = local_parent["failure_reason"]
             break
     # audit_logs Eintrag hinzufügen
     fresh.setdefault("audit_logs", []).insert(0, audit_entry)
@@ -778,7 +782,8 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                         "model": (sub_prof.get("model") if sub_prof else None) or "auto/best-free",
                         "estimated_tokens": 60000,
                         "estimated_cost_eur": 0.08,
-                        "subagents_count": 1,
+                        "subagents_count": 0,  # F-007: noch keine eigenen Subtasks
+
                         "delegation_depth": depth,
                         "status": "approval",
                         "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -901,6 +906,7 @@ async def _finalize_synthesis_after_approval(
             _fan_ordner = ""
         final_obs_path = (os.path.join(PROJEKTE_DIR, _fan_ordner, "03_Endprodukte", final_name)
                           if _fan_ordner else os.path.join(PROJEKTE_DIR, final_name))
+        written = False
         for d in target_dirs:
             try:
                 d_ziel = os.path.join(d, _fan_ordner, "03_Endprodukte") if _fan_ordner else d
@@ -908,9 +914,39 @@ async def _finalize_synthesis_after_approval(
                 p = os.path.join(d_ziel, final_name)
                 with open(p, "w", encoding="utf-8") as f:
                     f.write(final_body)
-                final_obs_path = p
+                # F-040: nur eine tatsaechlich vorhandene, nicht leere Datei
+                # berechtigt zum Erfolgsstatus.
+                if os.path.isfile(p) and os.path.getsize(p) > 0:
+                    final_obs_path = p
+                    written = True
             except Exception as we:
                 logger.warning(f"[Synthese] Konnte finalen Bericht nicht nach {d} schreiben: {we}")
+
+        if not written:
+            # F-040: fehlgeschlagene Verifikation darf NIE `completed`+"finalisiert"
+            # ergeben. Stattdessen terminal blockieren und eskalieren.
+            reason = "Synthese-Artefakt konnte in keinem Zielverzeichnis abgelegt werden"
+            logger.error(f"[Synthese] {reason} (parent={parent_pid})")
+            parent_task["status"] = "blocked"
+            parent_task["phase"] = "blocked"
+            parent_task["artifact_path"] = ""
+            parent_task["failure_reason"] = reason
+            parent_task["synthesis_finalized"] = False
+            if update_mc is not None:
+                update_mc(lambda fresh: _merge_finalize_synthesis_delta(
+                    fresh, parent_pid, "", parent_task,
+                    {"time": datetime.datetime.now().strftime("%H:%M:%S"),
+                     "source": "Synthese-Loop",
+                     "msg": f"FEHLER: {reason} (#{parent_pid})"},
+                ))
+            if ticker is not None:
+                ticker("Synthese-Loop", f"⛔ {reason} — Eskalation erforderlich")
+            try:
+                if tg_ping is not None:
+                    tg_ping(f"⛔ Synthese #{parent_pid} blockiert: {reason}")
+            except Exception:
+                pass
+            return
 
         # Parent-Task lokal updaten
         parent_task["status"] = "completed"

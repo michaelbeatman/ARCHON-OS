@@ -142,7 +142,20 @@ def _legacy_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
+def _treasury_epoch_cutoff() -> int:
+    """Erster Block, der mit dem aktuellen HMAC-Key signiert wurde.
+
+    F-026: Treasury nutzt TEXT-IDs ('tx-...'), daher wird die 1-basierte Position
+    in der Append-only-Kette als numerische Block-ID verwendet. Blöcke vor dem
+    Cutoff werden beim Verifizieren mit dem Legacy-Key (None) geprüft.
+    """
+    try:
+        return int(os.environ.get("ARCHON_TREASURY_HMAC_EPOCH_FROM", "0") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any], block_id=None) -> str:
     """Lauf-5 K-01: HMAC-SHA256 + company_id im signierten Payload.
 
     'status' bleibt bewusst ausgenommen: approve/reject aendert den Status per
@@ -171,7 +184,10 @@ def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
         sort_keys=True,
     )
     from backend.audit_log import _chain_hash
-    return _chain_hash(payload)
+    # F-026: block_id an die Epochenwahl weitergeben — ohne ID würde nach einer
+    # Key-Rotation der juengste Key auch fuer alte Bloecke benutzt und die Kette
+    # faelschlich als manipuliert gemeldet.
+    return _chain_hash(payload, block_id)
 
 
 def _last_hash(conn: sqlite3.Connection) -> str:
@@ -226,11 +242,15 @@ def verify_treasury_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
                     },
                     sort_keys=True,
                 )
-                # E (Audit): Schreibpfad (_compute_entry_hash) uebergibt keine
-                # Block-ID. Treasury nutzt TEXT-IDs ('tx-...'), die nicht in
-                # _key_for_block() konvertierbar sind — auch None zu uebergeben
-                # haelt Schreib- und Pruefpfad konsistent (juengster Key).
-                if not _verify_hash(payload, stored, None):
+                # F-026: 1-basierte Kettenposition als Block-ID (identisch zum
+                # Schreibpfad). Bloecke vor ARCHON_TREASURY_HMAC_EPOCH_FROM
+                # falling back auf den Legacy-Key, damit Rotation die Kette
+                # nicht bricht.
+                bid = idx + 1
+                ok = _verify_hash(payload, stored, bid)
+                if not ok and bid < _treasury_epoch_cutoff():
+                    ok = _verify_hash(payload, stored, None)
+                if not ok:
                     return {
                         "valid": False, "broken_at_id": r["id"],
                         "message": f"Treasury-Payload-Manipulation bei ID {r['id']}.",
@@ -504,7 +524,11 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
             "executed_at": executed_at,
         }
         tx_obj["company_id"] = active_company
-        tx_obj["entry_hash"] = _compute_entry_hash(prev_h, tx_obj)
+        # F-026: stabile 1-basierte Blocknummer als Schluessel-Epochen-Anker.
+        _next_block_id = int(conn.execute(
+            "SELECT COUNT(*) FROM treasury_transactions"
+        ).fetchone()[0]) + 1
+        tx_obj["entry_hash"] = _compute_entry_hash(prev_h, tx_obj, _next_block_id)
 
         conn.execute(
             """

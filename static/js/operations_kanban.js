@@ -368,6 +368,8 @@
       if (window.archonSSEBus && typeof window.archonSSEBus.ensure === "function") {
         window.archonSSEBus.ensure();
       }
+      // F-061: Comm-Listener fuer den Funkverkehr am selben Bus registrieren.
+      initCommRealtimeStream();
       if (_opsSseBridgeBound) return;
       _opsSseBridgeBound = true;
       window.addEventListener('archon:sse', function (event) {
@@ -3997,7 +3999,7 @@
     // =========================================================================
 
     let currentCommViewMode = "chat"; // "chat" | "screen"
-    let commEventSource = null;
+    let _commSseBound = false;
 
     function setCommViewMode(mode) {
       currentCommViewMode = mode;
@@ -4096,32 +4098,33 @@
     }
 
     // =========================================================================
-    // REALTIME SSE STREAM FÜR DEN INTER-AGENTEN FUNKVERKEHR
+    // REALTIME FUNKVERKEHR — gemeinsamer archon:sse-Bus (F-061)
     // =========================================================================
+    // Frueher: zweite EventSource('/api/operations/comm-feed/stream') mit
+    // eigenem SQLite-Poll pro Client. Jetzt: der zentrale Server-Bridge-Poller
+    // broadcastet 'comm_message' auf den einen archon:sse-Bus; wir lauschen nur.
     function initCommRealtimeStream() {
-      if (commEventSource) {
-        commEventSource.close();
+      if (window.archonSSEBus && typeof window.archonSSEBus.ensure === "function") {
+        window.archonSSEBus.ensure();
       }
-      try {
-        commEventSource = new EventSource("/api/operations/comm-feed/stream");
-        commEventSource.onmessage = function(e) {
-          try {
-            const data = JSON.parse(e.data);
-            if (data.type === "new_message") {
-              appendRealtimeCommMessage(data);
-              if (data.takeover_requested) {
-                const badge = document.getElementById("comm-takeover-badge");
-                if (badge) badge.classList.remove("hidden");
-              }
+      if (_commSseBound) return;
+      _commSseBound = true;
+      window.addEventListener("archon:sse", function (event) {
+        try {
+          const msg = event && event.detail;
+          if (!msg || msg.type !== "comm_message") return;
+          const data = msg.data || {};
+          if (data.type === "new_message") {
+            appendRealtimeCommMessage(data);
+            if (data.takeover_requested) {
+              const badge = document.getElementById("comm-takeover-badge");
+              if (badge) badge.classList.remove("hidden");
             }
-          } catch (err) {}
-        };
-        commEventSource.onerror = function() {
-          console.warn("[Comm-Feed SSE] Verbindung unterbrochen, erneuter Versuch...");
-        };
-      } catch (err) {
-        console.warn("[Comm-Feed SSE] Nicht unterstützt oder blockiert:", err);
-      }
+          }
+        } catch (err) {
+          console.warn("[Comm-Feed SSE] Event-Verarbeitung fehlgeschlagen:", err);
+        }
+      });
     }
 
     function appendRealtimeCommMessage(item) {

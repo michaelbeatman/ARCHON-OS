@@ -1,4 +1,6 @@
-FROM python:3.13-slim
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+# F-063: Multi-Arch-Index-Digest von python:3.13-slim (3.13.18-slim-trixie).
+# Aufgeloest am 24.11.2026 via `docker buildx imagetools inspect python:3.13-slim`.
 
 ARG TARGETARCH
 WORKDIR /app

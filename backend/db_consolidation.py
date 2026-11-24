@@ -28,6 +28,8 @@ import re
 import sqlite3
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from backend.db_paths import DB_BUSY_TIMEOUT_MS  # F-013: SSOT busy_timeout
+
 logger = logging.getLogger("archon.db_consolidation")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -193,7 +195,7 @@ def _inspect_sqlite_file(db_path: str, *, fast_count: bool = False) -> Dict[str,
     conn = None
     try:
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
-        conn.execute("PRAGMA busy_timeout=1500;")
+        conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
         rows = conn.execute(
             "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
         ).fetchall()
@@ -459,12 +461,12 @@ def run_consolidation(
         migrated_rows = 0
         warnings: List[str] = []
 
-        conn = sqlite3.connect(dom_path, timeout=15.0)
+        conn = sqlite3.connect(dom_path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
         try:
             if os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes"):
                 conn.execute("PRAGMA journal_mode=WAL;")
                 conn.execute("PRAGMA synchronous=NORMAL;")
-            conn.execute("PRAGMA busy_timeout=10000;")
+            conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS _archon_consolidation_meta (

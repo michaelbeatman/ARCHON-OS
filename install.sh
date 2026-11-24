@@ -269,8 +269,9 @@ fi
 COMPOSE_ARGS=(up -d --build)
 OBSERVABILITY="$(grep -E '^ARCHON_OBSERVABILITY=' .env 2>/dev/null | head -n1 | cut -d= -f2- || true)"
 if [[ "${OBSERVABILITY,,}" == "full" ]]; then
-  COMPOSE_ARGS+=(--profile monitoring --profile logging --profile replication)
-  SERVICES+=(prometheus grafana uptime-kuma loki promtail litestream)
+  COMPOSE_ARGS+=(--profile monitoring --profile logging --profile replication --profile tracing)
+  # F-073: Alertmanager explizit aufnehmen (Prometheus hat kein depends_on).
+  SERVICES+=(prometheus grafana uptime-kuma loki promtail litestream alertmanager langfuse)
 fi
 docker compose "${COMPOSE_ARGS[@]}" "${SERVICES[@]}"
 

@@ -11,6 +11,10 @@ import uuid
 import hashlib
 import sqlite3
 import threading
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -22,7 +26,7 @@ class _ArchonClosingConn(sqlite3.Connection):
         finally:
             self.close()
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _LEDGER_LOCK = threading.RLock()
@@ -154,6 +158,19 @@ def _init_db(db_path: str = None) -> None:
                 created_at TEXT
             )
         """)
+        # F-032: persistente Marker fuer explizite Bypass-Ereignisse. Ohne
+        # diese Tabelle war ARCHON_ALLOW_RECEIPT_BYPASS eine unsichtbare
+        # Luecke in der ansonsten unveraenderbaren Quittungskette.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS execution_receipt_bypass_markers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT,
+                agent_role TEXT,
+                reason TEXT,
+                audit_event_id TEXT,
+                created_at TEXT
+            )
+        """)
         # Append-only: UPDATE/DELETE an Quittungen muss fehlschlagen.
         try:
             conn.execute("""
@@ -193,7 +210,48 @@ class ExecutionReceiptLedger:
             # deaktivieren — sonst entsteht eine signierte Audit-Luecke.
             # Fail-closed, nur mit explizitem Opt-out.
             if os.environ.get("ARCHON_ALLOW_RECEIPT_BYPASS", "").strip().lower() == "true":
-                return {"issued": False, "bypassed": True}
+                # F-032: Bypass darf nicht unsichtbar eine Kettenluecke reissen.
+                # Signiertes Zentral-Event (Grund + Akteur) und ein persistenter
+                # Marker, den verify_chain_integrity() als INVALID meldet.
+                reason = "ARCHON_ALLOW_RECEIPT_BYPASS=true"
+                audit_ev = None
+                try:
+                    from backend.audit_log import chained_audit_log as _alog
+                    audit_ev = _alog.record_event(
+                        category="receipt_bypass",
+                        action="receipt_issuance_bypassed",
+                        agent_id=agent_role or "system",
+                        payload={
+                            "task_id": task_id,
+                            "agent_role": agent_role,
+                            "reason": reason,
+                            "actor": agent_role or "system",
+                        },
+                    )
+                except Exception as exc:
+                    logger.error("[Receipt] Bypass-Audit-Event fehlgeschlagen: %s", exc)
+                audit_event_id = str(audit_ev.get("event_id")) if audit_ev else "audit_error"
+                try:
+                    with sqlite3.connect(self.db_path, timeout=15.0, factory=_ArchonClosingConn) as mconn:
+                        mconn.execute(
+                            "INSERT INTO execution_receipt_bypass_markers "
+                            "(task_id, agent_role, reason, audit_event_id, created_at) "
+                            "VALUES (?, ?, ?, ?, ?)",
+                            (task_id, agent_role, reason, audit_event_id,
+                             datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")),
+                        )
+                        mconn.commit()
+                except Exception as exc:
+                    logger.error("[Receipt] Bypass-Marker nicht persistiert: %s", exc)
+                return {
+                    "issued": False,
+                    "bypassed": True,
+                    # persistent sichtbarer Ungueltig-Marker
+                    "chain_valid": False,
+                    "audit_status": "ok" if audit_ev else "error",
+                    "audit_event_id": audit_event_id,
+                    "reason": reason,
+                }
 
         receipt_id = f"rcpt-{uuid.uuid4().hex[:12]}"
         # GoBD: eindeutige UTC-Zeitreferenz mit Offset.
@@ -252,10 +310,34 @@ class ExecutionReceiptLedger:
         with sqlite3.connect(self.db_path, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("SELECT * FROM execution_receipts_ledger ORDER BY id ASC").fetchall()
+            # F-032: persistente Bypass-Marker sind ein Integritaetsvorfall.
+            bypass_markers: List[Dict[str, Any]] = []
+            try:
+                for m in conn.execute(
+                    "SELECT id, task_id, agent_role, reason, audit_event_id, created_at "
+                    "FROM execution_receipt_bypass_markers ORDER BY id ASC"
+                ).fetchall():
+                    bypass_markers.append({
+                        "id": m["id"], "task_id": m["task_id"], "agent_role": m["agent_role"],
+                        "reason": m["reason"], "audit_event_id": m["audit_event_id"],
+                        "created_at": m["created_at"],
+                    })
+            except sqlite3.Error:
+                pass  # alte DB ohne Marker-Tabelle
 
         expected_prev = "GENESIS_BLOCK_00000000"
         broken_links = []
         tampered_hashes = []
+        # F-032: Sequenzluecken ueber die numerische id erkennbar machen —
+        # eine uebersprungene Quittung (z. B. durch einen Bypass) brach frueher
+        # die prev_hash-Kette nicht und blieb daher unsichtbar.
+        sequence_gaps: List[Dict[str, Any]] = []
+        prev_id: Optional[int] = None
+        for r in rows:
+            cur_id = int(r["id"])
+            if prev_id is not None and cur_id != prev_id + 1:
+                sequence_gaps.append({"after_id": prev_id, "expected": prev_id + 1, "actual": cur_id})
+            prev_id = cur_id
         for idx, r in enumerate(rows):
             rid = r["receipt_id"]
             if r["prev_hash"] != expected_prev:
@@ -284,11 +366,16 @@ class ExecutionReceiptLedger:
             expected_prev = r["receipt_hash"]
 
         return {
-            "chain_valid": len(broken_links) == 0 and len(tampered_hashes) == 0,
+            "chain_valid": (
+                len(broken_links) == 0 and len(tampered_hashes) == 0
+                and len(sequence_gaps) == 0 and len(bypass_markers) == 0
+            ),
             "hmac_protected": bool(_receipt_key()),
             "total_receipts": len(rows),
             "broken_links": broken_links,
             "tampered_hashes": tampered_hashes,
+            "sequence_gaps": sequence_gaps,
+            "bypass_markers": bypass_markers,
             "latest_hash": expected_prev if rows else None
         }
 

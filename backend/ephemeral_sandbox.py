@@ -393,7 +393,11 @@ class EphemeralSandbox:
                     "memory_limit_mb": memory_limit_mb,
                     "network_enabled": network_enabled,
                     "limits_enforced": False,
-                    "destroyed": True
+                    # F-052: kein Container existierte — 'destroyed: True' wäre
+                    # ein Fake-Erfolg. Ehrlich 'nicht anwendbar' melden.
+                    "destroyed": None,
+                    "cleanup_verified": False,
+                    "container_created": False,
                 }
 
             duration = round(time.time() - t0, 3)

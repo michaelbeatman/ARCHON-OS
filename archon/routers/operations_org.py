@@ -12,14 +12,58 @@ import datetime
 import json
 import os
 import sys
+import weakref
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from archon.routers._rbac import require_admin_or_503
+from archon.core.runtime import broadcast_event, subscribe_events, unsubscribe_events
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+
+# =========================================================================
+# F-061: EIN zentraler Comm-Feed-Poller pro Event-Loop.
+# =========================================================================
+# Vorher oeffnete operations_kanban.js eine ZWEITE EventSource auf
+# /comm-feed/stream; der Generator pollte SQLite alle 1,5 s PRO CLIENT.
+# Jetzt liest genau eine Hintergrundaufgabe pro Loop die task_events und
+# verteilt sie ueber broadcast_event("comm_message", ...) an den gemeinsamen
+# archon:sse-Bus (eine Verbindung pro Seite, eine Poll-Frequenz total).
+_COMM_BRIDGE_TASKS = weakref.WeakKeyDictionary()  # loop -> asyncio.Task
+
+
+async def _comm_feed_bridge_loop():
+    _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, _, _, _ = _get_ops_deps()
+    last_seen_time = datetime.datetime.now().isoformat()
+    while True:
+        try:
+            last_seen_time, items = await asyncio.to_thread(
+                _poll_comm_feed_sync,
+                last_seen_time,
+                _get_kanban_connection,
+                _load_profiles_map,
+                _get_fallback_avatar,
+            )
+            for item in items:
+                broadcast_event("comm_message", item)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            _archon_exc_logger.warning("[CommBridge] Poll-Fehler: %s", exc)
+        await asyncio.sleep(1.5)
+
+
+async def _ensure_comm_bridge() -> None:
+    """Startet den zentralen Comm-Bridge genau einmal pro Event-Loop."""
+    loop = asyncio.get_running_loop()
+    task = _COMM_BRIDGE_TASKS.get(loop)
+    if task is not None and not task.done():
+        return
+    task = asyncio.create_task(_comm_feed_bridge_loop(), name="archon-comm-feed-bridge")
+    _COMM_BRIDGE_TASKS[loop] = task
 
 
 def _get_ops_deps():
@@ -282,8 +326,13 @@ def broadcast_comm_message(req: CommBroadcastRequest):
 
 
 @router.get("/comm-feed")
-def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] = Query(None)):
-    """Liefert den chronologischen internen Kommunikationsfluss aller Agenten."""
+async def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] = Query(None)):
+    """Liefert den chronologischen internen Kommunikationsfluss aller Agenten.
+
+    F-061: der Initial-Snapshot startet zugleich den EINEN zentralen
+    Bridge-Poller. Danach kommen neue Meldungen ueber den gemeinsamen
+    archon:sse-Bus — die Seite braucht keine zweite EventSource mehr.
+    """
     if hasattr(limit, "default"):
         limit = limit.default
     try:
@@ -293,122 +342,127 @@ def get_communication_feed(limit: int = Query(50), agent_filter: Optional[str] =
     if hasattr(agent_filter, "default"):
         agent_filter = agent_filter.default
 
-    _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, _, _, _ = _get_ops_deps()
-    conn = _get_kanban_connection()
-    cursor = conn.cursor()
+    await _ensure_comm_bridge()
 
-    cursor.execute("""
-        SELECT e.id, e.task_id, e.kind, e.payload, e.created_at, t.title as task_title, t.assignee
-        FROM task_events e
-        LEFT JOIN tasks t ON e.task_id = t.id
-        WHERE e.kind IN ('task_comment', 'broadcast', 'status_change', 'agent_started', 'agent_completed', 'human_takeover_requested', 'human_takeover_resolved', 'emergency_abort')
-        ORDER BY e.created_at DESC
-        LIMIT ?
-    """, (limit * 2,))
+    def _load_feed_sync():
+        _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, _, _, _ = _get_ops_deps()
+        conn = _get_kanban_connection()
+        cursor = conn.cursor()
 
-    events = cursor.fetchall()
-    conn.close()
+        cursor.execute("""
+            SELECT e.id, e.task_id, e.kind, e.payload, e.created_at, t.title as task_title, t.assignee
+            FROM task_events e
+            LEFT JOIN tasks t ON e.task_id = t.id
+            WHERE e.kind IN ('task_comment', 'broadcast', 'status_change', 'agent_started', 'agent_completed', 'human_takeover_requested', 'human_takeover_resolved', 'emergency_abort')
+            ORDER BY e.created_at DESC
+            LIMIT ?
+        """, (limit * 2,))
 
-    profiles = _load_profiles_map()
-    feed_items = []
+        events = cursor.fetchall()
+        conn.close()
 
-    for r in events:
-        row = dict(r)
-        payload_data = {}
-        try:
-            payload_data = json.loads(row["payload"])
-        except Exception as exc:
-            print(f"[OperationsAPI] Ungueltiges Event-Payload uebersprungen: {exc}", file=sys.stderr)
+        profiles = _load_profiles_map()
+        feed_items = []
 
-        kind = row.get("kind") or "comment"
-        author_id = payload_data.get("author") or payload_data.get("agent") or "system"
-        target_id = payload_data.get("target") or row.get("assignee")
+        for r in events:
+            row = dict(r)
+            payload_data = {}
+            try:
+                payload_data = json.loads(row["payload"])
+            except Exception as exc:
+                print(f"[OperationsAPI] Ungueltiges Event-Payload uebersprungen: {exc}", file=sys.stderr)
 
-        prof = profiles.get(author_id, {})
-        author_name = prof.get("name") or author_id
-        author_avatar = prof.get("avatar") or _get_fallback_avatar(author_id)
+            kind = row.get("kind") or "comment"
+            author_id = payload_data.get("author") or payload_data.get("agent") or "system"
+            target_id = payload_data.get("target") or row.get("assignee")
 
-        target_prof = profiles.get(target_id, {}) if target_id else {}
-        target_name = target_prof.get("name") or target_id
+            prof = profiles.get(author_id, {})
+            author_name = prof.get("name") or author_id
+            author_avatar = prof.get("avatar") or _get_fallback_avatar(author_id)
 
-        msg_text = payload_data.get("message") or payload_data.get("comment") or ""
-        if not msg_text and kind == "status_change":
-            msg_text = f"Status geändert auf '{payload_data.get('to_status', 'unbekannt')}'"
-        elif not msg_text and kind == "agent_started":
-            msg_text = f"Agent {author_name} hat die Bearbeitung begonnen."
-        elif not msg_text and kind == "agent_completed":
-            msg_text = f"Agent {author_name} hat den Auftrag abgeschlossen."
+            target_prof = profiles.get(target_id, {}) if target_id else {}
+            target_name = target_prof.get("name") or target_id
 
-        is_broadcast = payload_data.get("broadcast", False) or kind == "broadcast"
+            msg_text = payload_data.get("message") or payload_data.get("comment") or ""
+            if not msg_text and kind == "status_change":
+                msg_text = f"Status geändert auf '{payload_data.get('to_status', 'unbekannt')}'"
+            elif not msg_text and kind == "agent_started":
+                msg_text = f"Agent {author_name} hat die Bearbeitung begonnen."
+            elif not msg_text and kind == "agent_completed":
+                msg_text = f"Agent {author_name} hat den Auftrag abgeschlossen."
 
-        item = {
-            "id": f"event_{row['id']}",
-            "timestamp": row["created_at"],
-            "author_id": author_id,
-            "author_name": author_name,
-            "author_avatar": author_avatar,
-            "target_id": target_id,
-            "target_name": target_name,
-            "task_id": row["task_id"],
-            "task_title": row.get("task_title") or "System",
-            "kind": kind,
-            "message": msg_text,
-            "is_broadcast": is_broadcast,
-            "takeover_requested": kind == "human_takeover_requested",
-            "takeover_resolved": kind == "human_takeover_resolved",
-            "emergency_abort": kind == "emergency_abort",
+            is_broadcast = payload_data.get("broadcast", False) or kind == "broadcast"
+
+            item = {
+                "id": f"event_{row['id']}",
+                "timestamp": row["created_at"],
+                "author_id": author_id,
+                "author_name": author_name,
+                "author_avatar": author_avatar,
+                "target_id": target_id,
+                "target_name": target_name,
+                "task_id": row["task_id"],
+                "task_title": row.get("task_title") or "System",
+                "kind": kind,
+                "message": msg_text,
+                "is_broadcast": is_broadcast,
+                "takeover_requested": kind == "human_takeover_requested",
+                "takeover_resolved": kind == "human_takeover_resolved",
+                "emergency_abort": kind == "emergency_abort",
+            }
+
+            if kind == "human_takeover_requested":
+                item["author_name"] = "Hermes Bot Desktop"
+                item["author_avatar"] = "/static/avatars/avatar_002.jpg"
+                item["target_name"] = "Commander (Leitstand)"
+            elif kind == "human_takeover_resolved":
+                item["author_name"] = "Commander (Leitstand)"
+                item["author_avatar"] = "/static/avatars/avatar_001.jpg"
+                item["target_name"] = "Alle Agenten"
+            elif kind == "emergency_abort":
+                item["author_name"] = "Commander (Not-Aus)"
+                item["author_avatar"] = "/static/avatars/avatar_001.jpg"
+                item["target_name"] = "System-Sicherheit"
+
+            feed_items.append(item)
+
+        def _parse_ts(val):
+            if not val:
+                return 0.0
+            if isinstance(val, (int, float)):
+                return float(val) if val < 1e11 else float(val) / 1000.0
+            if isinstance(val, str):
+                try:
+                    if val.isdigit():
+                        v = float(val)
+                        return v if v < 1e11 else v / 1000.0
+                    dt = datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
+                    return dt.timestamp()
+                except Exception:
+                    return 0.0
+            return 0.0
+
+        for item in feed_items:
+            ts = item.get("timestamp")
+            if isinstance(ts, (int, float)):
+                try:
+                    sec = ts if ts < 1e11 else ts / 1000.0
+                    item["timestamp"] = datetime.datetime.fromtimestamp(sec).isoformat()
+                except Exception:
+                    item["timestamp"] = str(ts)
+
+        feed_items.sort(key=lambda x: _parse_ts(x.get("timestamp")), reverse=True)
+
+        if agent_filter:
+            feed_items = [item for item in feed_items if item.get("author_id") == agent_filter or item.get("target_id") == agent_filter]
+
+        return {
+            "status": "success",
+            "feed": feed_items[:limit],
+            "total": len(feed_items),
         }
 
-        if kind == "human_takeover_requested":
-            item["author_name"] = "Hermes Bot Desktop"
-            item["author_avatar"] = "/static/avatars/avatar_002.jpg"
-            item["target_name"] = "Commander (Leitstand)"
-        elif kind == "human_takeover_resolved":
-            item["author_name"] = "Commander (Leitstand)"
-            item["author_avatar"] = "/static/avatars/avatar_001.jpg"
-            item["target_name"] = "Alle Agenten"
-        elif kind == "emergency_abort":
-            item["author_name"] = "Commander (Not-Aus)"
-            item["author_avatar"] = "/static/avatars/avatar_001.jpg"
-            item["target_name"] = "System-Sicherheit"
-
-        feed_items.append(item)
-
-    def _parse_ts(val):
-        if not val:
-            return 0.0
-        if isinstance(val, (int, float)):
-            return float(val) if val < 1e11 else float(val) / 1000.0
-        if isinstance(val, str):
-            try:
-                if val.isdigit():
-                    v = float(val)
-                    return v if v < 1e11 else v / 1000.0
-                dt = datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
-                return dt.timestamp()
-            except Exception:
-                return 0.0
-        return 0.0
-
-    for item in feed_items:
-        ts = item.get("timestamp")
-        if isinstance(ts, (int, float)):
-            try:
-                sec = ts if ts < 1e11 else ts / 1000.0
-                item["timestamp"] = datetime.datetime.fromtimestamp(sec).isoformat()
-            except Exception:
-                item["timestamp"] = str(ts)
-
-    feed_items.sort(key=lambda x: _parse_ts(x.get("timestamp")), reverse=True)
-
-    if agent_filter:
-        feed_items = [item for item in feed_items if item.get("author_id") == agent_filter or item.get("target_id") == agent_filter]
-
-    return {
-        "status": "success",
-        "feed": feed_items[:limit],
-        "total": len(feed_items),
-    }
+    return await asyncio.to_thread(_load_feed_sync)
 
 
 def _poll_comm_feed_sync(
@@ -467,38 +521,38 @@ def _poll_comm_feed_sync(
 
 @router.get("/comm-feed/stream")
 async def stream_comm_feed(request: Request):
-    """Server-Sent Events (SSE) Stream für Realtime-Inter-Agenten-Kommunikation."""
-    _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, _, _, _ = _get_ops_deps()
+    """Kompatibilitaets-Endpoint — Meldungen laufen ueber den gemeinsamen Bus.
+
+    F-061: frueher oeffnete die Seite hier eine ZWEITE EventSource und der
+    Generator pollte SQLite alle 1,5 s PRO CLIENT. Jetzt startet der Aufruf
+    nur den EINEN zentralen Bridge-Poller und leitet dessen 'comm_message'-
+    Events aus dem archon:sse-Bus an Legacy-SSE-Clients weiter. Es findet kein
+    eigenes SQLite-Polling mehr statt; die Poll-Frequenz skaliert nicht mehr
+    mit der Clientzahl.
+    """
+    await _ensure_comm_bridge()
 
     async def sse_event_generator():
-        last_seen_time = datetime.datetime.now().isoformat()
-        yield f"data: {json.dumps({'type': 'init', 'timestamp': last_seen_time, 'message': 'Comm-Feed Stream verbunden'})}\n\n"
-        idle_ticks = 0
-
-        while True:
-            if await request.is_disconnected():
-                break
-
-            try:
-                last_seen_time, items = await asyncio.to_thread(
-                    _poll_comm_feed_sync,
-                    last_seen_time,
-                    _get_kanban_connection,
-                    _load_profiles_map,
-                    _get_fallback_avatar,
-                )
-                for item in items:
-                    idle_ticks = 0
-                    yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
-                if not items:
-                    idle_ticks += 1
-                    if idle_ticks >= 10:
-                        idle_ticks = 0
-                        yield ": keepalive\n\n"
-            except Exception as exc:
-                print(f"[OperationsAPI] SSE-Poll-Fehler im Event-Stream: {exc}", file=sys.stderr)
-
-            await asyncio.sleep(1.5)
+        queue = subscribe_events()
+        try:
+            yield f"data: {json.dumps({'type': 'init', 'timestamp': datetime.datetime.now().isoformat(), 'message': 'Comm-Feed ueber archon:sse verbunden', 'shared_bus': True})}\n\n"
+            while not await request.is_disconnected():
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=20.0)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                try:
+                    msg = json.loads(payload)
+                except Exception:
+                    continue
+                if msg.get("type") != "comm_message":
+                    continue
+                yield f"data: {json.dumps(msg.get('data') or {}, ensure_ascii=False)}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            unsubscribe_events(queue)
 
     return StreamingResponse(
         sse_event_generator(),
@@ -710,6 +764,31 @@ class ConcurrencyUpdateRequest(BaseModel):
     max_tasks: int
 
 
+def _retune_semaphore(sem: asyncio.Semaphore, new_value: int) -> bool:
+    """Passt die Kapazität einer bestehenden Semaphore an, ohne sie zu leeren.
+
+    F-060: ``sems.clear()`` beraubt laufende Dispatches ihres Throttles.
+    asyncio.Semaphore hat keine öffentliche Resize-API; ``_value`` ist der
+    zaehlende Slot-Wert. Eine Erhoehung weckt wartende Tasks, eine Reduktion
+    wird erst beim naechsten acquire wirksam (aktive Holder behalten ihren
+    Slot). Gibt False zurueck, wenn die Semaphore keine interne Value hat.
+    """
+    current = getattr(sem, "_value", None)
+    if not isinstance(current, int):
+        return False
+    target = max(0, int(new_value))
+    delta = target - current
+    if delta == 0:
+        return True
+    sem._value = target
+    if delta > 0:
+        wakeup = getattr(sem, "_wakeup_next", None)
+        if callable(wakeup):
+            for _ in range(min(delta, 1000)):
+                wakeup()
+    return True
+
+
 @router.get("/governance/concurrency")
 def get_concurrency_settings():
     """Liefert aktuellen Concurrency Throttle Status und Task-Semaphore."""
@@ -733,11 +812,21 @@ async def update_concurrency_settings(request: Request, req: ConcurrencyUpdateRe
     import core_dispatcher
     val = max(1, min(20, req.max_tasks))
     core_dispatcher.MAX_CONCURRENT_AGENT_TASKS = val
-    loop_id = id(asyncio.get_running_loop())
+    # F-060: _TASK_SEMAPHORES ist eine weakref.WeakKeyDictionary, KEIN dict —
+    # die alte isinstance(sems, dict)-Pruefung war deshalb immer False und der
+    # dynamische Limit nie wirksam. Key ist das Loop-Objekt selbst, nicht
+    # id(loop) (id wird nach GC eines Loops recycled). Bestehende Semaphoren
+    # werden nicht geleert, sondern in ihrer Kapazitaet angepasst.
+    loop = asyncio.get_running_loop()
     sems = getattr(core_dispatcher, "_TASK_SEMAPHORES", None)
-    if isinstance(sems, dict):
-        sems.clear()
-        sems[loop_id] = asyncio.Semaphore(val)
+    if isinstance(sems, weakref.WeakKeyDictionary):
+        sem = sems.get(loop)
+        if sem is None:
+            sems[loop] = asyncio.Semaphore(val)
+        elif not _retune_semaphore(sem, val):
+            _archon_exc_logger.error(
+                "[Governance] Semaphore konnte nicht auf %d angepasst werden.", val
+            )
     return {
         "status": "success",
         "message": f"Concurrency-Limit erfolgreich auf {val} Tasks gesetzt.",

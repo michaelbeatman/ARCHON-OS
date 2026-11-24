@@ -58,11 +58,11 @@
   function createSyncButton() {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'archon-global-sync-btn w-9 h-9 p-0 border-0 bg-transparent hover:opacity-80 transition cursor-pointer flex items-center justify-center shrink-0';
+    btn.className = 'archon-global-sync-btn px-1.5 py-1 border-0 bg-transparent hover:opacity-80 transition cursor-pointer flex flex-col items-center justify-center gap-0.5 shrink-0';
     btn.title = 'Inhalte aktualisieren (Sync)';
     btn.setAttribute('aria-label', 'Sync');
     btn.onclick = function () { syncActiveView(btn); };
-    btn.innerHTML = '<img src="/static/img/sync_icon.png" alt="Sync" class="w-8 h-8 object-contain pointer-events-none">';
+    btn.innerHTML = '<img src="/static/img/sync_icon.png" alt="Sync" class="w-7 h-7 object-contain pointer-events-none"><span class="font-bold uppercase pointer-events-none" style="font-size: 9px; line-height: 1; letter-spacing: 0.06em; color: #DE2A34;">SYNC</span>';
     return btn;
   }
 

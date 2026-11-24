@@ -274,6 +274,16 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
     # als Kinder daran hängen und zentral abgebrochen werden können.
     get_token(f"task:{task_id}")
     broadcast_event("kanban_updated", {"action": "capture", "task_id": task_id, "status": "backlog"})
+    # F-008: 'task_captured' hatte zwei Konsumenten (mission_control_cockpit.js,
+    # appshell_architect.js), aber keinen Produzenten. Jetzt emittiert der
+    # Capture-Pfad das Event zusätzlich zum kanban_updated, damit die Consumer
+    # nicht nur zufällig über das andere Event aktualisiert werden.
+    broadcast_event("task_captured", {
+        "action": "capture",
+        "task_id": task_id,
+        "status": "backlog",
+        "title": title,
+    })
     return {"status": "ok", "task": new_task}
 
 

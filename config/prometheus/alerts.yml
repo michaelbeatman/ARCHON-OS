@@ -93,8 +93,10 @@ groups:
     interval: 30s
     rules:
       # Queue-Stau: deckt sich bewusst mit dem In-App-Schwellenwert (> 50).
-      # Keine doppelte Benachrichtigung, da Alertmanager nur einen
-      # null-Receiver hat; Prometheus liefert hier Sichtbarkeit/Historie.
+      # F-078: frueher hiess es hier, Alertmanager habe "nur einen
+      # null-Receiver" — tatsächlich ist der `archon-telegram`-Receiver
+      # (config/alertmanager/alertmanager.yml, telegram_configs) aktiv.
+      # Prometheus liefert hier zusaetzlich Sichtbarkeit/Historie.
       - alert: ArchonTaskQueueBacklog
         expr: archon_queue_depth > 50
         for: 15m
@@ -107,9 +109,12 @@ groups:
             archon_queue_depth beträgt {{ $value }} (Schwelle 50) seit 15
             Minuten. Queue tiefer als die Verarbeitungskapazität.
 
-      # Disk-Platz: Es gibt KEINE Metrik für freien Festplattenspeicher
-      # (kein node_exporter im Profil). Diese Regel überwacht stattdessen
-      # das DATEIWACHSTUM der SQLite-DBs - die einzige echte Disk-Metrik.
+      # F-078: Diese Regel überwacht das DATEIWACHSTUM der SQLite-DBs als
+      # komplementären Frühindikator. Freier Diskplatz wird sehr wohl
+      # exportiert (archon_free_disk_bytes / archon_disk_used_percent aus
+      # backend/metrics_collector.py) — die korrekten Alarme < 2 GiB und
+      # > 90 % stehen in der Gruppe `archon-disk` weiter unten.
+      # Kein node_exporter nötig.
       - alert: ArchonDatabaseFileSizeHigh
         expr: archon_database_size_bytes > 1073741824
         for: 1h
@@ -121,9 +126,9 @@ groups:
           description: >-
             archon_database_size_bytes{database="{{ $labels.database }}"}
             beträgt {{ $value | humanize1024 }} Bytes seit 1 Stunde. Dies ist ein
-            Wachstums-Proxy: freier Diskplatz wird NICHT exportiert (kein
-            node_exporter). Für echte Disk-Free-Alerts wäre ein Exporter
-            nötig (außerhalb dieses Konfigurations-Scopes).
+            Wachstums-Proxy. Freier Diskplatz wird direkt über
+            archon_free_disk_bytes / archon_disk_used_percent exportiert
+            (siehe Gruppe `archon-disk`) — dafür ist kein node_exporter nötig.
 
       # Hohe Fehlerrate: direkter, im Code vorhandener Gauge (kumulativ aus
       # otel_spans). Ergänzt die Burn-Rate-Regeln um den aktuellen DB-Wert.

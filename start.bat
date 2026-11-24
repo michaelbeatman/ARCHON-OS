@@ -8,7 +8,7 @@ set "OBS_FLAGS="
 if exist ".env" (
     for /f "usebackq tokens=1,2 delims==" %%A in (".env") do (
         if /i "%%A"=="ARCHON_STACK_PROFILE" set "STACK_PROFILE=%%B"
-        if /i "%%A"=="ARCHON_OBSERVABILITY" if /i "%%B"=="full" set "OBS_FLAGS=--profile monitoring --profile logging --profile replication"
+        if /i "%%A"=="ARCHON_OBSERVABILITY" if /i "%%B"=="full" set "OBS_FLAGS=--profile monitoring --profile logging --profile replication --profile tracing"
     )
 )
 
@@ -22,7 +22,9 @@ if /i "!STACK_PROFILE!"=="rag" set "SERVICES=archon-os docker-socket-proxy herme
 
 rem C23: Profile starten keine Container, wenn eine explizite Service-Liste
 rem uebergeben wird -> die Profil-Services ergoenzend aufnehmen.
-if defined OBS_FLAGS set "SERVICES=!SERVICES! prometheus grafana uptime-kuma loki promtail litestream"
+rem F-073: Alertmanager muss explizit mitgestartet werden — Prometheus hat
+rem kein depends_on darauf, sonst bleiben alle 8 Alarme adressenlos.
+if defined OBS_FLAGS set "SERVICES=!SERVICES! prometheus grafana uptime-kuma loki promtail litestream alertmanager langfuse"
 
 echo Starte Archon Agentic OS 2026 + Hermes Agent + AnythingLLM (!STACK_PROFILE!)...
 docker compose !OBS_FLAGS! up -d !SERVICES!

@@ -572,8 +572,9 @@
 
           <!-- RECHTSBÜNDIG: GLOBALER SYNC-BUTTON (ÄUSSERSTES ICON, OHNE RAND) -->
           <div class="flex items-center gap-2 shrink-0">
-            <button data-i18n-title="ui.dashboard.refresh_title" type="button" onclick="window.syncActiveView ? window.syncActiveView(this) : fetchMissionControlData()" class="archon-global-sync-btn w-9 h-9 p-0 border-0 bg-transparent hover:opacity-80 transition cursor-pointer flex items-center justify-center shrink-0" title="Inhalte aktualisieren (Sync)">
-              <img src="/static/img/sync_icon.png" alt="Sync" class="w-8 h-8 object-contain pointer-events-none">
+            <button data-i18n-title="ui.dashboard.refresh_title" type="button" onclick="window.syncActiveView ? window.syncActiveView(this) : fetchMissionControlData()" class="archon-global-sync-btn px-1.5 py-1 border-0 bg-transparent hover:opacity-80 transition cursor-pointer flex flex-col items-center justify-center gap-0.5 shrink-0" title="Inhalte aktualisieren (Sync)">
+              <img src="/static/img/sync_icon.png" alt="Sync" class="w-7 h-7 object-contain pointer-events-none">
+              <span class="font-bold uppercase pointer-events-none" style="font-size: 9px; line-height: 1; letter-spacing: 0.06em; color: #DE2A34;">SYNC</span>
             </button>
           </div>
 

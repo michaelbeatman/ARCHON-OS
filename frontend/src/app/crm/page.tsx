@@ -9,6 +9,7 @@ import { ProfileModal } from '@/components/ProfileModal';
 import { SettingsModal, AccentColor, ACCENT_COLORS } from '@/components/SettingsModal';
 import { DesignEditorTab } from '@/components/DesignEditorTab';
 import { applyCustomAccentColors } from '@/lib/colorTheme';
+import { sanitizeSvgIcon } from '@/lib/sanitizeSvg';
 import { CsvImportModal } from '@/components/CsvImportModal';
 import { ApiPreviewModal } from '@/components/ApiPreviewModal';
 import { NachrichtenverlaufModal } from '@/components/NachrichtenverlaufModal';
@@ -264,12 +265,16 @@ export default function CrmPage() {
   const ColumnIcon = ({ colId }: { colId: string }) => {
     const raw = getColumnIcon(colId);
     if (typeof raw === 'string' && /<\s*svg[\s>]/i.test(raw)) {
-      return (
+      // F-068: NIE den Rohstring in dangerouslySetInnerHTML geben. Der
+      // gemeinsame Sanitizer entfernt on*-Handler, Skripte und gefährliche
+      // URLs; bei Verdacht wird gar nichts gerendert (Fail-Closed).
+      const safeSvg = sanitizeSvgIcon(raw);
+      return safeSvg ? (
         <span
           className="inline-flex items-center justify-center h-[1.25em] w-[1.25em] [&_svg]:w-full [&_svg]:h-full"
-          dangerouslySetInnerHTML={{ __html: raw }}
+          dangerouslySetInnerHTML={{ __html: safeSvg }}
         />
-      );
+      ) : null;
     }
     return <>{raw}</>;
   };

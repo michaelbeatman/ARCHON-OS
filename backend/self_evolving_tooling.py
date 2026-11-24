@@ -13,6 +13,7 @@ _archon_exc_logger = logging.getLogger("self_evolving_tooling")
 
 import os
 import sys
+import ast
 import json
 import sqlite3
 import datetime
@@ -32,13 +33,49 @@ os.makedirs(DYNAMIC_TOOLS_DIR, exist_ok=True)
 os.makedirs(SKILLS_DIR, exist_ok=True)
 
 
+# F-020: AST-Sperre fuer synthetisierten Code. Die Sandbox (python -I, rlimit,
+# TemporaryDirectory) allein reicht nicht: generierter Code darf niemals
+# Prozesse, Sockets, Dateien oder Fremdcode laden koennen.
+_FORBIDDEN_IMPORTS = frozenset({"os", "subprocess", "socket", "ctypes", "urllib"})
+
+
+def _validate_synthetic_imports(code: str, label: str = "tool_code") -> None:
+    """Lehnt gefaehrliche Importe im synthetisierten Code hart ab (fail-closed)."""
+    try:
+        tree = ast.parse(code or "", filename=f"<synthetic_{label}>")
+    except SyntaxError as exc:
+        raise ValueError(f"{label}: Syntaxfehler — {exc}") from exc
+    for node in ast.walk(tree):
+        names: List[str] = []
+        if isinstance(node, ast.Import):
+            names = [a.name.split(".")[0] for a in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            names = [(node.module or "").split(".")[0]]
+        for name in names:
+            if name in _FORBIDDEN_IMPORTS:
+                raise ValueError(
+                    f"{label}: Import von '{name}' ist in synthetisiertem Code verboten "
+                    f"(Zeile {getattr(node, 'lineno', '?')})."
+                )
+
+
+class _ClosingMemoryConn(sqlite3.Connection):
+    """F-047: sqlite3's Kontextmanager committet, schliesst aber nicht."""
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
+
+
 class SelfEvolvingToolEngine:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self._init_db()
 
     def _get_conn(self):
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
+        conn = sqlite3.connect(self.db_path, timeout=10.0, factory=_ClosingMemoryConn)
         conn.execute("PRAGMA busy_timeout=5000;")
         conn.row_factory = sqlite3.Row
         return conn
@@ -83,6 +120,9 @@ class SelfEvolvingToolEngine:
         (`ephemeral_sandbox`) aus. Nur wenn kein Docker-Daemon verfügbar ist und
         `ARCHON_REQUIRE_DOCKER_SANDBOX` nicht aktiviert wurde, greift ein isolierter Python `-I`-Fallback.
         """
+        # F-020: AST-Sperre VOR jeder Ausführung (auch im Docker-Pfad).
+        _validate_synthetic_imports(tool_code, "tool_code")
+        _validate_synthetic_imports(test_code, "test_code")
         combined_script = f"""# -*- coding: utf-8 -*-
 import sys
 import os
@@ -193,6 +233,8 @@ if __name__ == "__main__":
             iteration += 1
             # Einfache heuristische Reparatur / Fallback
             current_code = self._attempt_auto_fix(current_code, last_error)
+            # F-020: auch reparierter Code darf keine gesperrten Imports enthalten.
+            _validate_synthetic_imports(current_code, "tool_code")
 
         if not passed:
             return {
@@ -341,8 +383,8 @@ Sandbox-Selbsttest erfolgreich bestanden am {skill_created_at}.
             fixed = "import json\n" + fixed
         if "NameError: name 're' is not defined" in error_trace and "import re" not in fixed:
             fixed = "import re\n" + fixed
-        if "NameError: name 'os' is not defined" in error_trace and "import os" not in fixed:
-            fixed = "import os\n" + fixed
+        # F-020: 'import os' wird NICHT mehr injiziert — os steht auf der
+        # Sandbox-Sperrliste und die Reparatur darf sie nicht umgehen.
         return fixed
 
 

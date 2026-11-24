@@ -125,8 +125,10 @@ class ReceiptOCREngine:
         # Zero-Egress & Privacy-Router Pre-Flight Gate (Belege = sensible Finanzdaten!)
         from backend.llm_egress_guard import (
             ZeroEgressBlockedError,
+            enforce_egress_firewall_for_url,
             evaluate_and_gate_llm_dispatch,
             log_completed_llm_dispatch,
+            sanitize_outbound_llm_payload,
         )
 
         try:
@@ -160,12 +162,26 @@ class ReceiptOCREngine:
                     explicit_category="finance",
                     intended_url=ep,
                 )
-                data_bytes = json.dumps(payload).encode("utf-8")
-                req = urllib.request.Request(
-                    ep,
-                    data=data_bytes,
-                    headers={"Content-Type": "application/json", "Authorization": "Bearer internal-archon"}
+                # F-019/F-021: Egress-Firewall UND DLP vor JEDEM externen Dispatch.
+                # Belege sind Finance-Daten — der zentrale Pfad macht beides,
+                # dieser Pfad hatte beides ausgelassen.
+                enforce_egress_firewall_for_url(ep, agent_id="receipt_ocr_engine")
+                outbound = sanitize_outbound_llm_payload(
+                    payload,
+                    agent_id="receipt_ocr_engine",
+                    is_local=bool(hop_gate.get("routed_to_local")),
                 )
+                api_key = os.getenv("OMNIROUTE_API_KEY", "").strip()
+                headers = {"Content-Type": "application/json"}
+                if api_key:
+                    headers["Authorization"] = f"Bearer {api_key}"
+                elif eff_provider == "omniroute":
+                    raise ZeroEgressBlockedError(
+                        "OMNIROUTE_API_KEY fehlt — OCR-Dispatch an den Gateway blockiert.",
+                        error_code="OMNIROUTE_KEY_MISSING",
+                    )
+                data_bytes = json.dumps(outbound).encode("utf-8")
+                req = urllib.request.Request(ep, data=data_bytes, headers=headers)
                 with urllib.request.urlopen(req, timeout=12.0) as resp:
                     log_completed_llm_dispatch(
                         agent_id="receipt_ocr_engine",

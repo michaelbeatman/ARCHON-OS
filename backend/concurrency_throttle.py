@@ -16,6 +16,8 @@ import json
 import time
 import asyncio
 import heapq
+import threading
+from types import MappingProxyType
 from typing import Dict, Any, Optional, List
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,30 +25,45 @@ SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
 
 # W5: settings.json wurde pro wartendem Agenten (~1/s) neu gelesen und
 # geparst. Kurzer TTL-Cache, Invalidierung beim Speichern.
-_CONFIG_CACHE: dict = {"ts": 0.0, "cfg": None}
+# F-059: Ein EINZIGER unveraenderlicher Wert; die Referenz-Zuweisung ist
+# atomar. Double-Check unter Lock macht den TTL-Rebuild single-flight, damit
+# Event-Loop und FastAPI-Threadpool sich nicht gegenseitig ueberschreiben.
+_CONFIG_CACHE_LOCK = threading.Lock()
+_CONFIG_CACHE = MappingProxyType({"ts": 0.0, "cfg": None})
 _CONFIG_TTL = 5.0
 
 
 def get_concurrency_config() -> Dict[str, Any]:
+    global _CONFIG_CACHE
     now = time.time()
-    if _CONFIG_CACHE["cfg"] is not None and (now - _CONFIG_CACHE["ts"]) < _CONFIG_TTL:
-        return dict(_CONFIG_CACHE["cfg"])
-    cfg = {
-        "max_concurrent_agents": 4,
-        "queue_timeout_seconds": 60
-    }
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                s = json.load(f)
-                if "concurrency" in s and isinstance(s["concurrency"], dict):
-                    cfg.update(s["concurrency"])
-        except Exception as _exc:
-            _archon_exc_logger.debug("[concurrency_throttle] Ignorierte Ausnahme (Z.32): %s", _exc)
-    _CONFIG_CACHE.update(ts=time.time(), cfg=dict(cfg))
-    return cfg
+    cached = _CONFIG_CACHE
+    cfg = cached["cfg"]
+    if cfg is not None and (now - cached["ts"]) < _CONFIG_TTL:
+        return dict(cfg)
+
+    with _CONFIG_CACHE_LOCK:
+        cached = _CONFIG_CACHE
+        now = time.time()
+        cfg = cached["cfg"]
+        if cfg is not None and (now - cached["ts"]) < _CONFIG_TTL:
+            return dict(cfg)
+        cfg = {
+            "max_concurrent_agents": 4,
+            "queue_timeout_seconds": 60
+        }
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    s = json.load(f)
+                    if "concurrency" in s and isinstance(s["concurrency"], dict):
+                        cfg.update(s["concurrency"])
+            except Exception as _exc:
+                _archon_exc_logger.debug("[concurrency_throttle] Ignorierte Ausnahme (Z.32): %s", _exc)
+        _CONFIG_CACHE = MappingProxyType({"ts": now, "cfg": dict(cfg)})
+        return cfg
 
 def save_concurrency_config(new_cfg: Dict[str, Any]) -> bool:
+    global _CONFIG_CACHE
     try:
         from backend.settings_json import atomic_update_settings
 
@@ -54,7 +71,10 @@ def save_concurrency_config(new_cfg: Dict[str, Any]) -> bool:
             current["concurrency"] = new_cfg
 
         atomic_update_settings(SETTINGS_FILE, _apply)
-        _CONFIG_CACHE["cfg"] = None  # W5: Cache invalidieren
+        # W5: Cache invalidieren — ebenfalls atomar und unter demselben Lock,
+        # damit ein parallel laufender Rebuild die Invalidierung nicht verliert.
+        with _CONFIG_CACHE_LOCK:
+            _CONFIG_CACHE = MappingProxyType({"ts": 0.0, "cfg": None})
         return True
     except Exception as e:
         print(f"[ConcurrencyThrottle] Config save error: {e}", file=sys.stderr)
@@ -62,18 +82,34 @@ def save_concurrency_config(new_cfg: Dict[str, Any]) -> bool:
 
 # W5: psutil.cpu_percent/virtual_memory/disk_usage wurde pro wartendem
 # Agenten jede Sekunde neu gemessen (12+ Messungen/s bei 6 Wartenden).
-_BP_CACHE: dict = {"ts": 0.0, "data": {}}
+# F-059: gleicher Single-Flight-Double-Check wie beim Config-Cache: genau ein
+# Thread misst die Host-Metriken, alle anderen lesen danach den fertigen Wert.
+_BP_CACHE_LOCK = threading.Lock()
+_BP_CACHE = MappingProxyType({"ts": 0.0, "data": {}})
 _BP_TTL = 2.0
 
 
 def _cached_backpressure() -> Dict[str, Any]:
+    global _BP_CACHE
     now = time.time()
-    if _BP_CACHE["data"] and (now - _BP_CACHE["ts"]) < _BP_TTL:
+    cached = _BP_CACHE
+    data = cached["data"]
+    if data and (now - cached["ts"]) < _BP_TTL:
+        return data
+
+    with _BP_CACHE_LOCK:
+        cached = _BP_CACHE
+        now = time.time()
+        data = cached["data"]
+        if data and (now - cached["ts"]) < _BP_TTL:
+            return data
+        from backend.resource_backpressure import resource_backpressure_protector
+        data = resource_backpressure_protector.check_health_and_backpressure()
+        if not isinstance(data, dict):
+            data = {}
+        # Atomare Zuweisung des kompletten (ts, data)-Paares als Immutable-Dict.
+        _BP_CACHE = MappingProxyType({"ts": now, "data": dict(data)})
         return _BP_CACHE["data"]
-    from backend.resource_backpressure import resource_backpressure_protector
-    data = resource_backpressure_protector.check_health_and_backpressure()
-    _BP_CACHE.update(ts=now, data=data if isinstance(data, dict) else {})
-    return _BP_CACHE["data"]
 
 
 class PriorityConcurrencyThrottle:

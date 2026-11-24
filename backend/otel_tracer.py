@@ -247,5 +247,24 @@ class OpenTelemetryTracer:
             self._export_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="otel_export")
         self._export_pool.submit(_do_export)
 
+def get_tracing_status() -> dict:
+    """F-075: ehrlicher Zustand des externen Exports (statt stummer No-Op).
+
+    Ohne Keys/Host exportiert der Tracer weiterhin lokal in `otel_traces`;
+    dieser Status wird von der Governance-/System-UI angezeigt, damit kein
+    „Tracing aktiv" behauptet wird, wo kein Empfaenger existiert.
+    """
+    host = os.getenv("LANGFUSE_HOST") or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or ""
+    pub = os.getenv("LANGFUSE_PUBLIC_KEY") or ""
+    sec = os.getenv("LANGFUSE_SECRET_KEY") or ""
+    configured = bool(host and pub and sec)
+    return {
+        "configured": configured,
+        "status": "configured" if configured else "not_configured",
+        "target": "langfuse" if os.getenv("LANGFUSE_HOST") else ("otlp" if host else None),
+        "local_trace_db": True,
+    }
+
+
 # Globales Singleton
 tracer = OpenTelemetryTracer()

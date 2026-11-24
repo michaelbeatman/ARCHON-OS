@@ -466,8 +466,10 @@ async def generate_grounded_llm_response(prompt: str, context_chunks: List[dict]
     if httpx:
         from backend.llm_egress_guard import (
             ZeroEgressBlockedError,
+            enforce_egress_firewall_for_url,
             evaluate_and_gate_llm_dispatch,
             log_completed_llm_dispatch,
+            sanitize_outbound_llm_payload,
         )
         for url, extra_payload in endpoints:
             try:
@@ -490,6 +492,16 @@ async def generate_grounded_llm_response(prompt: str, context_chunks: List[dict]
                     ],
                     **({"model": eff_mod} if gate.get("routed_to_local") else extra_payload),
                 }
+                # F-023 (S-4.9): Zero-Egress-URL-Firewall + DLP vor JEDEM
+                # externen Dispatch. Beide Gates sind fail-closed;
+                # ZeroEgressBlockedError wird unten abgefangen (break →
+                # lokaler Fallback), alle anderen Fehler überspringt den Hop.
+                enforce_egress_firewall_for_url(eff_url, agent_id="notebook_engine")
+                payload = sanitize_outbound_llm_payload(
+                    payload,
+                    agent_id="notebook_engine",
+                    is_local=bool(gate.get("routed_to_local")),
+                )
                 async with httpx.AsyncClient(timeout=25.0) as client:
                     resp = await client.post(eff_url, json=payload)
                     log_completed_llm_dispatch(

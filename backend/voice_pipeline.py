@@ -45,6 +45,38 @@ async def transcribe_audio_file(file_path: str, language: str = "de") -> str:
     return await transcribe_audio_bytes(audio_bytes, filename=p.name, language=language)
 
 
+def _gate_cloud_voice_dispatch(url: str, *, provider: str, model: str,
+                               metadata: dict, data_category: str = "general") -> dict:
+    """F-022: ein gemeinsames Egress+DLP-Gate fuer ALLE Cloud-Audio-Zweige.
+
+    Vorher hatte nur der Groq-Zweig die URL-Firewall; OpenAI, Gemini und TTS
+    schickten Audio/PII ohne Pre-Flight-Gate und ohne Maskierung nach draussen.
+    """
+    from backend.llm_egress_guard import (
+        ZeroEgressBlockedError,
+        enforce_egress_firewall_for_url,
+        evaluate_and_gate_llm_dispatch,
+        sanitize_outbound_llm_payload,
+    )
+    enforce_egress_firewall_for_url(url, agent_id="voice_pipeline")
+    gate = evaluate_and_gate_llm_dispatch(
+        agent_id="voice_pipeline",
+        provider=provider,
+        model=model,
+        messages=[{"role": "user", "content": "audio transcription metadata"}],
+        explicit_category=data_category,
+        intended_url=url,
+    )
+    if not gate.get("allowed", True):
+        raise ZeroEgressBlockedError(
+            "Voice-Dispatch durch Egress-Gate blockiert.",
+            error_code=gate.get("error_code") or "VOICE_EGRESS_BLOCKED",
+        )
+    return sanitize_outbound_llm_payload(
+        metadata, agent_id="voice_pipeline", is_local=bool(gate.get("routed_to_local"))
+    ) or {}
+
+
 async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", language: str = "de") -> str:
     """
     Transkribiert rohe Audio-Bytes (Zero-Egress-geschuetzt).
@@ -63,10 +95,12 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
         try:
             import httpx
             groq_url = "https://api.groq.com/openai/v1/audio/transcriptions"
-            enforce_egress_firewall_for_url(groq_url, agent_id="voice_pipeline")
             headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
             files = {"file": (filename, data, "audio/ogg")}
-            data_fields = {"model": "whisper-large-v3", "language": language}
+            data_fields = _gate_cloud_voice_dispatch(
+                groq_url, provider="groq", model="whisper-large-v3",
+                metadata={"model": "whisper-large-v3", "language": language},
+            )
             async with httpx.AsyncClient(timeout=20.0) as client:
                 resp = await client.post(groq_url, headers=headers, files=files, data=data_fields)
                 if resp.status_code == 200:
@@ -82,12 +116,15 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
     if OPENAI_API_KEY:
         try:
             import httpx
+            openai_url = "https://api.openai.com/v1/audio/transcriptions"
             headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
             files = {"file": (filename, data, "audio/ogg")}
-            data_fields = {"model": "whisper-1", "language": language}
+            data_fields = _gate_cloud_voice_dispatch(
+                openai_url, provider="openai", model="whisper-1",
+                metadata={"model": "whisper-1", "language": language},
+            )
             async with httpx.AsyncClient(timeout=25.0) as client:
-                resp = await client.post("https://api.openai.com/v1/audio/transcriptions",
-                                         headers=headers, files=files, data=data_fields)
+                resp = await client.post(openai_url, headers=headers, files=files, data=data_fields)
                 if resp.status_code == 200:
                     result = resp.json()
                     txt = result.get("text", "").strip()
@@ -106,7 +143,7 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
         try:
             import httpx
             b64_audio = base64.b64encode(data).decode("utf-8")
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GOOGLE_API_KEY}"
+            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
             payload = {
                 "contents": [{
                     "parts": [
@@ -115,8 +152,15 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
                     ]
                 }]
             }
+            # F-022: API-Key in den Header (nicht in die URL, damit er nicht
+            # signiert/geloggt wird) und gemeinsames Egress+DLP-Gate.
+            headers = {"x-goog-api-key": GOOGLE_API_KEY}
+            _gate_cloud_voice_dispatch(
+                url, provider="gemini", model="gemini-1.5-flash",
+                metadata={"prompt": "audio transcription", "mime_type": "audio/ogg"},
+            )
             async with httpx.AsyncClient(timeout=25.0) as client:
-                resp = await client.post(url, json=payload)
+                resp = await client.post(url, json=payload, headers=headers)
                 if resp.status_code == 200:
                     res_json = resp.json()
                     txt = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -147,6 +191,16 @@ async def synthesize_speech(text: str, output_path: Optional[str] = None, voice:
     if not output_path:
         fd, output_path = tempfile.mkstemp(prefix="archon_voice_", suffix=".mp3")
         os.close(fd)
+
+    # F-022: auch die Sprachsynthese ist ein externer Dispatch — bei aktivem
+    # Zero-Egress darf sie nicht still nach draussen gehen.
+    from backend.privacy_router import get_privacy_config
+    if bool(get_privacy_config().get("zero_egress_strict")):
+        from backend.llm_egress_guard import ZeroEgressBlockedError
+        raise ZeroEgressBlockedError(
+            "Cloud-TTS bei aktivem Zero-Egress blockiert.",
+            error_code="VOICE_TTS_EGRESS_BLOCKED",
+        )
 
     try:
         import edge_tts

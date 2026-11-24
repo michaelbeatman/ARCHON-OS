@@ -1160,6 +1160,19 @@ async def _deadlock_supervisor_loop():
         except Exception as e:
             logger.debug(f"[Alerting] Loop-Hinweis: {e}")
 
+        # F-077: Disk-Backpressure muss auch ohne externen Traffic periodisch
+        # geprueft werden, sonst bleibt der disk_space_critical-Alarm stumm.
+        # via to_thread, damit die sync-Messung den Event-Loop nicht blockiert.
+        try:
+            from backend.resource_backpressure import resource_backpressure_protector
+            bp = await asyncio.to_thread(
+                resource_backpressure_protector.check_health_and_backpressure
+            )
+            if isinstance(bp, dict) and bp.get("disk_critical"):
+                logger.error("[Backpressure] Disk kritisch: %s", bp)
+        except Exception as e:
+            logger.error(f"[Backpressure] Periodischer Check fehlgeschlagen: {e}")
+
         # GoBD: Hash-Ketten periodisch verifizieren statt nur manuell.
         try:
             from backend.execution_receipt_ledger import execution_receipt_ledger
@@ -1179,11 +1192,17 @@ async def _deadlock_supervisor_loop():
             from backend.approval_policy_engine import approval_engine as _approval_chain
             from backend.api_key_manager import api_key_manager as _api_key_chain
             from backend.treasury_engine import verify_treasury_chain
+            # F-033: Email-Draft- und DSGVO-Verifikatoren hatten bisher keinen
+            # Produktivkonsumenten — jetzt ebenfalls im 30-s-Loop (G-03).
+            from backend.email_draft_engine import verify_email_draft_chain
+            from backend.gdpr_compliance_engine import verify_gdpr_audit_chain
             for label, verify_fn in (
                 ("Zentrale Audit-Kette", _audit_chain.verify_integrity),
                 ("Approval-Kette", _approval_chain.verify_audit_integrity),
                 ("API-Key-Kette", _api_key_chain.verify_integrity),
                 ("Treasury-Kette", verify_treasury_chain),
+                ("Email-Draft-Kette", verify_email_draft_chain),
+                ("DSGVO-Audit-Kette", verify_gdpr_audit_chain),
             ):
                 try:
                     res = await asyncio.to_thread(verify_fn)
@@ -1312,7 +1331,16 @@ async def _cancel_background_tasks():
             try:
                 _rag_proc.wait(timeout=5.0)
             except Exception:
+                # F-043: kill() allein reicht nicht — ohne wait() bleibt der
+                # Prozess als Zombie zurueck, bis der Parent beendet wird.
                 _rag_proc.kill()
+                try:
+                    _rag_proc.wait(timeout=5.0)
+                except Exception:
+                    logger.warning(
+                        "[Shutdown] RAG-Sync bleibt nach kill() unresponsive "
+                        "(Zombie-Risiko)."
+                    )
         except Exception as exc:
             logger.warning("[Shutdown] RAG-Sync konnte nicht beendet werden: %s", exc)
     _RAG_SYNC_PROCESS = None
@@ -2298,7 +2326,9 @@ def _stop_watchdog_daemon():
     try:
         watchdog_runner.stop()  # Event setzen + join (statt Flag + 30 s Wartezeit)
     except Exception as exc:
-        logger.debug(f"[Shutdown] Watchdog-Stop-Hinweis: {exc}")
+        # F-042: frueher nur DEBUG -> der NameError im stop() war im Produktivlog
+        # unsichtbar und der Thread lief beim Reload weiter.
+        logger.error(f"[Shutdown] Watchdog-Stop fehlgeschlagen: {type(exc).__name__}: {exc}")
     watchdog_runner = None
 
 
@@ -2327,12 +2357,24 @@ async def _close_dispatcher_clients() -> None:
         logger.debug(f"[Shutdown] Dispatcher-Client-Hinweis: {exc}")
 
 
+async def _close_proxy_clients() -> None:
+    """F-054: id(loop)-HTTP-Clients der Proxy-Router sauber schliessen."""
+    try:
+        from archon.routers.proxies import close_proxy_clients
+        n = await close_proxy_clients()
+        if n:
+            logger.info("[Shutdown] %s Proxy-HTTP-Client(s) geschlossen.", n)
+    except Exception as exc:
+        logger.debug("[Shutdown] Proxy-Client-Close-Hinweis: %s", exc)
+
+
 # Lifespan fuehrt Shutdown-Hooks in REVERSED order aus. Reihenfolge hier:
 # zuerst Clients schliessen, Tasks canceln, Loops stoppen — und ON_SHUTDOWN_GRACEFUL
 # als LETZTES Element, damit es in reversed() ZUERST laeuft: Drain/Checkpoint
 # muss stattfinden, BEVOR Tasks und HTTP-Clients abgebrochen werden.
 _SHUTDOWN_HOOKS.extend([
     _close_dispatcher_clients,   # reversed: zuletzt (Clients zuerst zu machen waere falsch)
+    _close_proxy_clients,        # F-054: Proxy-HTTP-Clients (id(loop)) schliessen
     _cancel_tracked_tasks,       # TaskRegistry-Cascades abbrechen
     _stop_watchdog_daemon,       # Watchdog-Thread stoppen
     _cancel_background_tasks,    # Hintergrund-Loops stoppen
@@ -2638,29 +2680,31 @@ except Exception as _err_cal:
 
 
 def _assert_router_health() -> None:
-    """Fail-closed: fehlgeschlagene Router-Imports duerfen nicht still 404 liefern.
+    """Fail-closed: fehlgeschlagene Router-Imports brechen den Start ab.
 
-    _ROUTER_LOAD_ERRORS wird von allen try/except-Bloecken oben befuellt.
-    In Produktion (auth aktiv oder ENVIRONMENT=production) bricht der Start
-    ab; in Development genuegt ein lauter ERROR im Log.
+    F-076: frueher galt die Produktionsbedingung (auth aktiv oder
+    ENVIRONMENT=production). Im Default-Start (ENVIRONMENT=development, lokale
+    Auth aus) genuegte ein ERROR-Log — die Anwendung lief mit still 404-enden
+    Routern weiter. Jeder Eintrag in _ROUTER_LOAD_ERRORS (von den
+    try/except-Bloecken oben) fuehrt jetzt unbedingt zu RuntimeError.
+    Nur fuer lokale Dev-Debugs gibt es den expliziten Opt-Out
+    ARCHON_ALLOW_BROKEN_ROUTERS=true, der laut im Log dokumentiert wird.
     """
     if not _ROUTER_LOAD_ERRORS:
         return
     detail = "; ".join(_ROUTER_LOAD_ERRORS)
-    prod = False
-    try:
-        from backend.auth_service import auth_service
-        prod = bool(auth_service.is_auth_enabled())
-    except Exception:
-        prod = True  # fail-closed
-    env = str(os.environ.get("ENVIRONMENT") or "").strip().lower()
-    if prod or env in ("production", "prod", "live"):
-        raise RuntimeError(
-            f"[Router] {len(_ROUTER_LOAD_ERRORS)} Router(s) nicht geladen: {detail}"
+    opt_out = os.environ.get("ARCHON_ALLOW_BROKEN_ROUTERS", "").strip().lower() in (
+        "1", "true", "yes",
+    )
+    if opt_out:
+        logger.error(
+            "[Router] OPT-OUT ARCHON_ALLOW_BROKEN_ROUTERS=true: %s Router(s) "
+            "nicht geladen: %s",
+            len(_ROUTER_LOAD_ERRORS), detail,
         )
-    logger.error(
-        "[Router] %s Router(s) nicht geladen (Development): %s",
-        len(_ROUTER_LOAD_ERRORS), detail,
+        return
+    raise RuntimeError(
+        f"[Router] {len(_ROUTER_LOAD_ERRORS)} Router(s) nicht geladen: {detail}"
     )
 
 

@@ -3,6 +3,7 @@ import {
   Paintbrush, Palette, Sun, Moon, X, Trash2, Plus, Copy, RotateCcw
 } from 'lucide-react';
 import { USER_COLOR_PALETTES } from '@/lib/colorTheme';
+import { sanitizeSvgIcon } from '@/lib/sanitizeSvg';
 
 interface DesignEditorTabProps {
   isLight: boolean;
@@ -814,6 +815,8 @@ export function DesignEditorTab({
                 {STATUS_COLUMN_KEYS.map((col) => {
                   const val = customIcons[col.id] || col.defaultIcon;
                   const isSvg = typeof val === 'string' && /<\s*svg[\s>]/i.test(val);
+                  // F-069: gleicher Sanitizer-Pfad wie im CRM (SSOT in src/lib).
+                  const safeSvg = isSvg ? sanitizeSvgIcon(val) : '';
                   return (
                     <div key={col.id} className="flex items-center gap-2">
                       <span className="text-[10px] text-slate-400 w-1/4 truncate">
@@ -822,10 +825,12 @@ export function DesignEditorTab({
                       {/* Vorschau: SVGs als echtes Symbol, Emojis direkt */}
                       <span className="flex items-center justify-center w-6 h-6 shrink-0">
                         {isSvg ? (
-                          <span
-                            className="inline-flex items-center justify-center w-[1.25em] h-[1.25em] [&_svg]:w-full [&_svg]:h-full"
-                            dangerouslySetInnerHTML={{ __html: val }}
-                          />
+                          safeSvg ? (
+                            <span
+                              className="inline-flex items-center justify-center w-[1.25em] h-[1.25em] [&_svg]:w-full [&_svg]:h-full"
+                              dangerouslySetInnerHTML={{ __html: safeSvg }}
+                            />
+                          ) : null
                         ) : (
                           <span className="text-base leading-none">{val}</span>
                         )}

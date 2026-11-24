@@ -469,12 +469,25 @@ def _edge_condition_matches(condition: str, parent_status: str) -> bool:
     return parent_status in TERMINAL_NODE_STATES
 
 
+def _raw_output_status(raw_out: Any) -> str:
+    """F-045: Status aus einem Nicht-Dict-Raw-Output ableiten (fail-closed).
+
+    ``None`` und leere/whitespace Strings sind keine Erfolgsergebnisse: ein
+    Executor, der nichts liefert, darf nicht still zu ``success`` werden.
+    """
+    if raw_out is None:
+        return "error"
+    if isinstance(raw_out, str) and not raw_out.strip():
+        return "error"
+    return "success"
+
+
 def _shape_upstream_output(raw_out: Any, data_mode: str) -> Any:
     mode = (data_mode or "full").strip().lower()
     if mode == "none":
         if isinstance(raw_out, dict):
             return {"status": raw_out.get("status", "success")}
-        return {"status": "success"}
+        return {"status": _raw_output_status(raw_out)}
     if mode == "artifact_only":
         if isinstance(raw_out, dict):
             return {
@@ -482,7 +495,7 @@ def _shape_upstream_output(raw_out: Any, data_mode: str) -> Any:
                 "artifacts": raw_out.get("artifacts") or raw_out.get("files") or [],
                 "obsidian_path": raw_out.get("obsidian_path") or "",
             }
-        return {"artifacts": []}
+        return {"status": _raw_output_status(raw_out), "artifacts": []}
     if mode == "summary":
         if isinstance(raw_out, dict):
             txt = str(raw_out.get("content") or raw_out.get("result") or json.dumps(raw_out, ensure_ascii=False))
@@ -490,7 +503,10 @@ def _shape_upstream_output(raw_out: Any, data_mode: str) -> Any:
                 "status": raw_out.get("status", "success"),
                 "summary": txt[:1200],
             }
-        return {"summary": str(raw_out or "")[:1200]}
+        return {
+            "status": _raw_output_status(raw_out),
+            "summary": str(raw_out or "")[:1200],
+        }
     return raw_out
 
 
@@ -1269,7 +1285,20 @@ async def _exec_with_retry_and_timeout(
                 except Exception as _idem_exc:
                     logger.debug("[WorkflowDAG] Idempotency-Check uebersprungen: %s", _idem_exc)
             res = await asyncio.wait_for(executor_fn(node, upstream), timeout=timeout_sec)
-            out = res if isinstance(res, dict) else {"status": "success", "result": res}
+            if isinstance(res, dict):
+                out = res
+            elif res is None or (isinstance(res, str) and not res.strip()):
+                # F-045: None/leere Strings duerfen nicht als Erfolg gewertet
+                # werden — sonst wird ein fehlgeschlagener Node-Dispatch als
+                # 'completed' persistiert (S-7.4).
+                out = {
+                    "status": "error",
+                    "error": "executor returned non-dict/empty",
+                    "node_id": node.get("id"),
+                }
+            else:
+                # Erfolgreiche Nicht-Dict-Werte explizit als Erfolg kennzeichnen.
+                out = {"status": "success", "result": res}
             if out.get("status") != "error":
                 if idempotency_key:
                     try:

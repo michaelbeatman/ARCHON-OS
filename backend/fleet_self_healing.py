@@ -10,14 +10,13 @@ import os
 import sys
 import time
 import json
-import subprocess
 import datetime
 import logging
 import urllib.request
 from typing import Dict, Any, List, Optional
 
 from archon.core.cache import ttl_cache  # noqa: E402
-from utils.docker_client import DockerError, docker_cli_host_args, validate_container_name
+from utils.docker_client import DockerClient, DockerError, validate_container_name
 
 logger = logging.getLogger("archon.fleet_self_healing")
 
@@ -88,7 +87,9 @@ def _post_heartbeat_webhook(status: str, *, force: bool = False, **extra: Any) -
         "timestamp": datetime.datetime.now().isoformat(),
         **extra,
     }
-    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+    # F-036: exakt dieselbe kompakte Serialisierung wie alle anderen HMAC-Sender,
+    # damit ein n8n-Empfaenger mit JSON.stringify() dieselben Bytes signiert.
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), default=str).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     try:
         try:
@@ -167,8 +168,36 @@ def resolve_container_target(service_name: str) -> str:
     return target
 
 
+def _docker_client() -> DockerClient:
+    """Proxy-faehiger Docker-Client.
+
+    C13-BLOCKER: Der Container hat keinen Docker-Socket gemountet, sondern nur
+    ``DOCKER_HOST=tcp://docker-socket-proxy:2375``. Die fruehere docker-CLI mit
+    ``-H unix://...`` lief deshalb gegen einen nicht existierenden Socket, lieferte
+    leere Ausgabe und der Self-Healing-Loop meldete ``status: ok`` ohne Effekt.
+    ``DockerClient`` respektiert DOCKER_HOST und prueft den HTTP-Status; der Proxy
+    sperrt ``restart`` (ALLOW_RESTARTS=0), deshalb ``restart_container()`` als
+    stop+start ueber freigegebene Aktionen verwenden.
+    """
+    return DockerClient()
+
+
+def _list_containers() -> Dict[str, str]:
+    """Liefert ``{name: status}`` ueber den Proxy (GET /containers/json?all=1)."""
+    raw = _docker_client().request("GET", "/containers/json?all=1", timeout=10.0)
+    items = json.loads(raw.decode("utf-8", errors="replace") or "[]")
+    result: Dict[str, str] = {}
+    for item in items if isinstance(items, list) else []:
+        names = item.get("Names") or []
+        name = str(names[0]).lstrip("/") if names else str(item.get("Id") or "")
+        status = str(item.get("Status") or item.get("State") or "")
+        if name:
+            result[name] = status
+    return result
+
+
 def restart_service_container(service_name: str) -> Dict[str, Any]:
-    """Startet einen ausgefallenen Docker-Container autonom neu."""
+    """Startet einen ausgefallenen Docker-Container autonom neu (via Socket-Proxy)."""
     now_iso = datetime.datetime.now().isoformat()
     try:
         container_target = resolve_container_target(service_name)
@@ -176,48 +205,49 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
         return {"status": "error", "service": service_name,
                 "container": None, "error": str(exc)}
 
-    # argv-Liste, kein shell=True; -H pinnt den Socket (M-21): die CLI folgt sonst
-    # dem globalen DOCKER_HOST und laeuft in den Proxy, der `restart` sperrt.
-    cmd = ["docker", *docker_cli_host_args(), "restart", container_target]
+    try:
+        _docker_client().restart_container(container_target)
+        success = True
+        output = "stop+start via docker-socket-proxy"
+    except Exception as exc:
+        success = False
+        output = f"{type(exc).__name__}: {exc}"
+
+    # Audit und Benachrichtigung MUESSEN auf beiden Pfaden laufen (Erfolg wie
+    # Fehler), sonst verschwindet der Nachweis ueber die Selbstheilung.
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="resilience",
+            action="FLEET_SELF_HEALING_RESTART",
+            agent_id="Watchdog-Daemon",
+            payload={"service": service_name, "container": container_target,
+                     "success": success, "log": output[:200]}
+        )
+    except Exception as exc:
+        logger.debug("Audit-Log-Eintrag für Selbstheilung von '%s' fehlgeschlagen: %s", service_name, exc)
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        success = proc.returncode == 0
-        output = proc.stdout.strip() if success else proc.stderr.strip()
+        from backend.notification_hub import notification_hub
+        severity = "INFO" if success else "CRITICAL"
+        msg = (f"Dienst '{service_name}' wurde autonom neugestartet." if success
+               else f"Selbstheilung von '{service_name}' fehlgeschlagen: {output[:150]}")
+        notification_hub.dispatch_notification(
+            title=f"Flotten-Selbstheilung: {service_name}",
+            message=msg,
+            severity=severity,
+            category="fleet_health"
+        )
+    except Exception as exc:
+        logger.debug("Benachrichtigung über Selbstheilung von '%s' konnte nicht versendet werden: %s", service_name, exc)
 
-        try:
-            from backend.audit_log import chained_audit_log
-            chained_audit_log.record_event(
-                category="resilience",
-                action="FLEET_SELF_HEALING_RESTART",
-                agent_id="Watchdog-Daemon",
-                payload={"service": service_name, "container": container_target, "success": success, "log": output[:200]}
-            )
-        except Exception as exc:
-            logger.debug("Audit-Log-Eintrag für Selbstheilung von '%s' fehlgeschlagen: %s", service_name, exc)
-
-        try:
-            from backend.notification_hub import notification_hub
-            severity = "INFO" if success else "CRITICAL"
-            msg = f"Dienst '{service_name}' wurde autonom neugestartet." if success else f"Selbstheilung von '{service_name}' fehlgeschlagen: {output[:150]}"
-            notification_hub.dispatch_notification(
-                title=f"Flotten-Selbstheilung: {service_name}",
-                message=msg,
-                severity=severity,
-                category="fleet_health"
-            )
-        except Exception as exc:
-            logger.debug("Benachrichtigung über Selbstheilung von '%s' konnte nicht versendet werden: %s", service_name, exc)
-
-        return {
-            "status": "success" if success else "failed",
-            "service": service_name,
-            "container": container_target,
-            "restarted_at": now_iso,
-            "output": output
-        }
-    except Exception as e:
-        return {"status": "error", "service": service_name, "error": str(e)}
+    return {
+        "status": "success" if success else "failed",
+        "service": service_name,
+        "container": container_target,
+        "restarted_at": now_iso,
+        "output": output
+    }
 
 @ttl_cache(seconds=30)
 def check_fleet_and_heal(services: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -238,17 +268,7 @@ def check_fleet_and_heal(services: Optional[List[str]] = None) -> Dict[str, Any]
         logger.debug("Fleet-Konfiguration 'fleet_and_hygiene' nicht lesbar, nutze Default auto_container_restart=True: %s", exc)
 
     try:
-        proc = subprocess.run(
-            ["docker", *docker_cli_host_args(), "ps", "-a", "--format", "{{.Names}}\t{{.Status}}"],
-            capture_output=True, text=True, timeout=10,
-        )
-        containers: Dict[str, str] = {}
-        for line in proc.stdout.strip().splitlines():
-            parts = line.split("\t", 1)
-            name = parts[0].strip()
-            if name:
-                containers[name] = parts[1].strip() if len(parts) > 1 else ""
-
+        containers = _list_containers()
         aliases = [a for a in KNOWN_SERVICES if services is None or a in services]
         healed = []
         missing = []

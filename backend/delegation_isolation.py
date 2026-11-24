@@ -337,10 +337,48 @@ class PolicyEngine:
                 break
         return normalized
 
+    # F-025 (S-4.5): alle in `tool_warrants.verify_warrant_for_call()` und im
+    # RBAC-Jail gängigen Pfad-Aliase abdecken. Ein `{"uri": "../.env"}` darf
+    # nicht deshalb durchgehen, weil der Key nicht in der Liste stand.
     _PATH_ARG_KEYS = (
         "path", "file_path", "filepath", "file", "target_path", "filename",
         "notebook_path", "source_path", "destination_path", "workspace",
+        "uri", "target", "src", "dst", "image_path", "url",
+        # Node-Plugin-/Media-Pfade muessen geprueft (nicht pauschal denied)
+        # werden — sonst bremst der F-025-Fail-Closed legitime Workflow-Nodes.
+        "input_path", "output_path", "output_dir", "input_dir", "media_path",
+        "source_dir", "target_dir", "workdir", "cwd",
     )
+
+    # Erkennungsmerkmale für Tools/Argumente mit Pfad-Constraint-Relevanz.
+    # Wird ein solches Tool erkannt, aber kein bekannter Pfad-Key übergeben,
+    # greift fail-closed (analog tool_warrants.py:187-190).
+    _PATH_TOOL_MARKERS = (
+        "file", "path", "dir", "folder", "notebook", "image", "read", "write",
+        "open", "upload", "download", "copy", "move", "delete", "remove",
+        "filesystem", "resource", "artifact", "attachment", "config", "secret",
+        "vault",
+    )
+    _PATH_LIKE_ARG_MARKERS = (
+        "path", "file", "uri", "url", "src", "dst", "source", "destination",
+        "target", "dir", "folder", "image", "notebook", "location", "resource",
+        "attachment", "artifact", "filename",
+    )
+
+    @staticmethod
+    def _is_path_constraint_relevant(tool: str, args: Dict[str, Any]) -> bool:
+        """Heuristik: Tool oder Argumente deuten auf einen Pfad-Zugriff hin."""
+        norm_tool = str(tool or "").strip().lower()
+        if any(marker in norm_tool for marker in PolicyEngine._PATH_TOOL_MARKERS):
+            return True
+        for key, value in (args or {}).items():
+            norm_key = str(key or "").strip().lower()
+            if (
+                any(marker in norm_key for marker in PolicyEngine._PATH_LIKE_ARG_MARKERS)
+                and isinstance(value, str) and value.strip()
+            ):
+                return True
+        return False
 
     @staticmethod
     def _enforce_file_jail(tool: str, args: Dict[str, Any]) -> Optional[Dict[str, str]]:
@@ -358,6 +396,18 @@ class PolicyEngine:
             if isinstance(args.get(key), str) and str(args[key]).strip()
         ]
         if not targets:
+            # F-025: pfadrelevantes Tool erkannt, aber kein bekannter Pfad-Key
+            # vorhanden → nicht still durchlassen, sondern fail-closed deny
+            # (analog tool_warrants.py:187-190). Sonst könnte ein Call mit
+            # z. B. {"location": "../.env"} am Jail vorbeilaufen.
+            if PolicyEngine._is_path_constraint_relevant(tool, args):
+                return {
+                    "gate": "path_jail_no_path_arg",
+                    "reason": (
+                        f"Pfadrelevantes Tool '{tool}' ohne bekannten Pfad-Argument-Key "
+                        "— Zugriff fail-closed verweigert."
+                    ),
+                }
             return None
         try:
             from backend.agent_rbac_jail import agent_rbac_jail

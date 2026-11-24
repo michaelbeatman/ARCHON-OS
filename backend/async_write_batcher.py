@@ -23,6 +23,7 @@ class _ArchonClosingConn(sqlite3.Connection):
 import threading
 from collections import deque
 from datetime import datetime
+from types import MappingProxyType
 from typing import Dict, Any, List, Deque
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -32,26 +33,43 @@ try:
 except Exception:
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
-_CFG_CACHE: Dict[str, Any] = {"ts": 0.0, "cfg": None}
+_CFG_TTL = 5.0
+_CFG_CACHE_LOCK = threading.Lock()
+# F-059: Ein EINZIGER unveraenderlicher Wert. Die Referenz-Zuweisung ist atomar,
+# damit parallele Reader (Event-Loop + FastAPI-Threadpool) nie ein teils
+# aktualisiertes Cache-Paar (ts/cfg) sehen.
+_CFG_CACHE = MappingProxyType({"ts": 0.0, "cfg": None})
 
 
 def _get_cfg() -> Dict[str, Any]:
+    global _CFG_CACHE
     now = time.monotonic()
-    if _CFG_CACHE["cfg"] is not None and (now - _CFG_CACHE["ts"]) < 5.0:
-        return _CFG_CACHE["cfg"]
-    try:
-        from backend.autonomy_settings import get_module_config
-        cfg = get_module_config("write_batcher")
-    except Exception:
-        cfg = {
-            "enabled": True,
-            "batch_size": 25,
-            "flush_interval_seconds": 2.0,
-            "max_queue_size": 1000
-        }
-    _CFG_CACHE["cfg"] = cfg
-    _CFG_CACHE["ts"] = now
-    return cfg
+    cached = _CFG_CACHE
+    cfg = cached["cfg"]
+    if cfg is not None and (now - cached["ts"]) < _CFG_TTL:
+        return cfg
+
+    # Double-Check unter Lock: bei einem TTL-Miss baut genau EIN Thread den
+    # Cache neu (Single-Flight), alle anderen warten und lesen danach das
+    # fertige Ergebnis statt den Import/get_module_config parallel auszufuehren.
+    with _CFG_CACHE_LOCK:
+        cached = _CFG_CACHE
+        now = time.monotonic()
+        cfg = cached["cfg"]
+        if cfg is not None and (now - cached["ts"]) < _CFG_TTL:
+            return cfg
+        try:
+            from backend.autonomy_settings import get_module_config
+            cfg = get_module_config("write_batcher")
+        except Exception:
+            cfg = {
+                "enabled": True,
+                "batch_size": 25,
+                "flush_interval_seconds": 2.0,
+                "max_queue_size": 1000
+            }
+        _CFG_CACHE = MappingProxyType({"ts": now, "cfg": cfg})
+        return cfg
 
 
 def _init_db() -> None:

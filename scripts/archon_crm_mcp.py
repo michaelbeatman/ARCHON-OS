@@ -2,6 +2,9 @@ import requests
 import json
 import sys
 import re
+import logging
+
+logger = logging.getLogger("archon.crm_mcp")
 
 POCKETBASE_URL = "http://127.0.0.1:8090"
 COLLECTION_NAME = "kontakte"
@@ -91,6 +94,7 @@ def fetch_local_outlook_emails(limit=200):
                 sender_email = getattr(item, "SenderEmailAddress", "")
 
                 sec_status = "safe"
+                quarantined = False
                 try:
                     import sys, os
                     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -101,8 +105,25 @@ def fetch_local_outlook_emails(limit=200):
                     sec_status = scan_res.get("verdict", "safe")
                     if sec_status != "safe":
                         cleaned_text = sanitize_injection_text(cleaned_text)
-                except Exception:
-                    pass
+                    if sec_status == "blocked":
+                        quarantined = True
+                        logger.warning(
+                            "[CRMMCP] Mail %s: Injection-Scan verdict='blocked' — Eintrag quaraentiniert.",
+                            getattr(item, "EntryID", str(idx)),
+                        )
+                except Exception as exc:
+                    # F-048: Ein Fehler im Injection-Scan darf niemals still
+                    # passieren (Fail-Open in einer Security-Pipeline).
+                    logger.error(
+                        "[CRMMCP] Injection-Scan fehlgeschlagen (Mail %s): %s — Inhalt wird quaraentiniert.",
+                        getattr(item, "EntryID", str(idx)), exc,
+                    )
+                    sec_status = "unknown"
+                    quarantined = True
+                    cleaned_text = (
+                        "[QUARANTÄNIERT — Injection-Scan nicht verfuegbar; "
+                        "Inhalt nicht zur Verarbeitung freigegeben]"
+                    )
 
                 emails.append({
                     "type": "inbound",
@@ -112,6 +133,7 @@ def fetch_local_outlook_emails(limit=200):
                     "subject": subject_text,
                     "text": cleaned_text,
                     "security_status": sec_status,
+                    "quarantined": quarantined,
                     "timestamp": str(getattr(item, "ReceivedTime", "")),
                     "messageId": f"outlook_in_{getattr(item, 'EntryID', str(idx))}"
                 })

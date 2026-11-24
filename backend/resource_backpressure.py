@@ -4,6 +4,10 @@ Paket 5 (Feature 25): Live-Ressourcen-Protector (Host CPU-, RAM- & Disk-Backpres
 Misst die aktuelle Systemlast (CPU-Last, RAM-Belegung, freier Festplattenspeicher).
 Überschreitet ein Wert die konfigurierten Schwellenwerte (`max_cpu_pct`, `max_ram_pct`, `min_free_disk_gb`),
 aktiviert der Protector automatisch Backpressure (Pausieren niedrig priorisierter Hintergrund-Jobs).
+
+F-077: Schwellen decken sich jetzt mit den Prometheus-Regeln — 2 GiB (2*1024**3
+Bytes, nicht 2.0 dezialmal-GB) und 90 % Belegung. Der Check laeuft zusaetzlich
+periodisch im 30-s-Loop (main.py), damit der Alarm auch ohne Requests feuert.
 """
 import logging
 _archon_exc_logger = logging.getLogger("resource_backpressure")
@@ -47,10 +51,15 @@ def _read_host_metrics() -> Dict[str, float]:
             _archon_exc_logger.debug("[resource_backpressure] Ignorierte Ausnahme (Z.43): %s", _exc)
 
     free_disk_gb = 25.0
+    free_disk_bytes = 25 * 1024 ** 3
     disk_used_percent = 0.0
     try:
         usage = shutil.disk_usage(WORKSPACE_DIR)
-        free_disk_gb = round(usage.free / (1024 ** 3), 2)
+        # F-077: Roh-Bytes fuer die exakte 2-GiB-Schwelle behalten (das auf
+        # 2 Nachkommastellen gerundete free_disk_gb kann 1,999 GiB als 2.0
+        # ausgeben und damit den Alarm unterdruecken).
+        free_disk_bytes = int(usage.free)
+        free_disk_gb = round(free_disk_bytes / (1024 ** 3), 2)
         # shutil.disk_usage liefert kein .percent — selbst berechnen.
         disk_used_percent = round(float(usage.used) / float(usage.total) * 100.0, 1) if usage.total else 0.0
     except Exception:
@@ -60,12 +69,16 @@ def _read_host_metrics() -> Dict[str, float]:
         "cpu_pct": round(cpu_pct, 1),
         "ram_pct": round(ram_pct, 1),
         "free_disk_gb": free_disk_gb,
+        "free_disk_bytes": free_disk_bytes,
         "disk_used_percent": disk_used_percent
     }
 
 
+_MIN_FREE_DISK_BYTES = 2 * 1024 ** 3  # F-077: 2 GiB (Prometheus: 2147483648)
+
+
 def _get_max_disk_usage_percent() -> float:
-    """G: guardian 'disk-cleanup'.max_disk_usage_percent (Default 85) als Schwelle lesen."""
+    """G: guardian 'disk-cleanup'.max_disk_usage_percent (Default 90) als Schwelle lesen."""
     try:
         from backend.autonomy_settings import get_module_config
         cfg = get_module_config("disk_cleanup")
@@ -82,7 +95,7 @@ def _get_max_disk_usage_percent() -> float:
             return float(saved["max_disk_usage_percent"])
     except Exception:
         pass
-    return 85.0
+    return 90.0
 
 
 class ResourceBackpressureProtector:
@@ -105,21 +118,25 @@ class ResourceBackpressureProtector:
                 reasons.append(f"CPU ({metrics['cpu_pct']}%) > {max_cpu}%")
             if metrics["ram_pct"] > max_ram:
                 reasons.append(f"RAM ({metrics['ram_pct']}%) > {max_ram}%")
-            if metrics["free_disk_gb"] < min_disk:
-                reasons.append(f"Disk Free ({metrics['free_disk_gb']} GB) < {min_disk} GB")
+            if metrics.get("free_disk_bytes", metrics["free_disk_gb"] * 1024 ** 3) < float(min_disk) * 1024 ** 3:
+                reasons.append(f"Disk Free ({metrics['free_disk_gb']} GiB) < {min_disk} GiB")
 
         backpressure_active = len(reasons) > 0
 
-        # G: die Disk-Schwelle war bisher reine Config und hatte keine Wirkung.
-        # Kritisch: < 2 GB frei ODER belegt > max_disk_usage_percent. Nur
-        # Alarm/Log — kein harter Stop (zu riskant fuer laufende Dienste).
+        # G/F-077: die Disk-Schwelle war bisher reine Config und hatte keine
+        # Wirkung. Kritisch: < 2 GiB frei ODER belegt > max_disk_usage_percent
+        # (Default 90 %). Nur Alarm/Log — kein harter Stop (zu riskant fuer
+        # laufende Dienste). Roh-Bytes vermeiden Rundungs-Unterschleife.
         max_disk_pct = _get_max_disk_usage_percent()
-        disk_critical = (metrics["free_disk_gb"] < 2.0) or (metrics["disk_used_percent"] > max_disk_pct)
+        disk_critical = (
+            metrics.get("free_disk_bytes", metrics["free_disk_gb"] * 1024 ** 3) < _MIN_FREE_DISK_BYTES
+            or metrics["disk_used_percent"] > max_disk_pct
+        )
         try:
             from backend.metrics_collector import report_external_alert
             if disk_critical:
                 msg = (
-                    f"Kritischer Disk-Platz: {metrics['free_disk_gb']} GB frei, "
+                    f"Kritischer Disk-Platz: {metrics['free_disk_gb']} GiB frei, "
                     f"{metrics['disk_used_percent']} % belegt (Limit {max_disk_pct} %). "
                     f"Empfehlung: {action}."
                 )

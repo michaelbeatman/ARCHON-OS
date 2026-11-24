@@ -1,6 +1,10 @@
 import os
 import time
 import shutil
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger("archon.garbage_collector")
 
 WORKSPACE_DIR = r".\agent_workspace"
 DAYS = 7
@@ -8,6 +12,7 @@ SECONDS_IN_DAY = 86400
 current_time = time.time()
 deleted_files = 0
 deleted_dirs = 0
+failed_deletions = 0
 
 print(f"Starte rekursive Garbage Collection fr {WORKSPACE_DIR}")
 
@@ -20,7 +25,9 @@ if os.path.exists(WORKSPACE_DIR):
                 try:
                     os.remove(filepath)
                     deleted_files += 1
-                except: pass
+                except OSError as exc:
+                    failed_deletions += 1
+                    logger.warning("Konnte Datei nicht loeschen: %s (%s)", filepath, exc)
                 
         # Lsche leere Ordner, nachdem die Dateien drinnen gelscht wurden
         for dirname in dirs:
@@ -29,6 +36,8 @@ if os.path.exists(WORKSPACE_DIR):
                 try:
                     os.rmdir(dirpath)
                     deleted_dirs += 1
-                except: pass
+                except OSError as exc:
+                    failed_deletions += 1
+                    logger.warning("Konnte Ordner nicht loeschen: %s (%s)", dirpath, exc)
 
-print(f"Garbage Collection abgeschlossen: {deleted_files} alte Scratchpads und {deleted_dirs} leere Ordner gelscht.")
+print(f"Garbage Collection abgeschlossen: {deleted_files} alte Scratchpads und {deleted_dirs} leere Ordner gelscht; {failed_deletions} fehlgeschlagene Loeschungen.")

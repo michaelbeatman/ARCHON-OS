@@ -401,6 +401,30 @@ def load_all_settings() -> Dict[str, Any]:
 load_autonomy_settings = load_all_settings
 
 
+def is_sha256_dispatch_audit_enforced() -> bool:
+    """GoBD-Invariante: SHA-256-Dispatch-Audit ist unveraenderbar aktiv.
+
+    Single Source of Truth fuer den Kryptopfad in ``backend/audit_log.py``.
+    Default True; jeder Lesefehler gilt als fail-closed (True). Nur ein
+    expliziter False-Wert in settings.json erlaubt einen ungeschuetzten
+    nackten SHA-256-Block — dieser wird im Aufrufer laut protokolliert.
+
+    Bewusst schlank: liest direkt settings.json statt load_all_settings(),
+    um den circular import ueber privacy_router -> audit_log zu vermeiden.
+    """
+    try:
+        from backend.settings_json import _load_raw
+        data = _load_raw(SETTINGS_FILE, strict=True) if os.path.exists(SETTINGS_FILE) else {}
+        ze = data.get("zero_egress_governance") or {}
+        return bool(ze.get("sha256_dispatch_audit_enforced", True))
+    except Exception as exc:
+        logger.error(
+            "[Autonomy] sha256_dispatch_audit_enforced nicht lesbar: %s "
+            "— fail-closed (True).", exc,
+        )
+        return True
+
+
 def get_module_config(section: str) -> Dict[str, Any]:
     """Gibt den Konfigurationsblock für ein spezifisches Modul zurück."""
     all_cfg = load_all_settings()

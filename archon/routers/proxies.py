@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import time
+import weakref
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
@@ -18,20 +19,37 @@ logger = logging.getLogger("archon.routers.proxies")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["proxies"])
 
-_PROXY_HTTP_CLIENTS: Dict[int, httpx.AsyncClient] = {}
+# F-054: `id(loop)` wird nach GC eines Event-Loops recycled — ein neuer Loop
+# uebernahm den Client/Connection-Pool des toten Loops. WeakKeyDictionary ist
+# der im Repo bereits etablierte Standard (core_dispatcher.py:358).
+_PROXY_HTTP_CLIENTS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = weakref.WeakKeyDictionary()
 
 
 def _get_shared_proxy_client() -> httpx.AsyncClient:
-    loop_id = id(asyncio.get_running_loop())
-    c = _PROXY_HTTP_CLIENTS.get(loop_id)
+    loop = asyncio.get_running_loop()
+    c = _PROXY_HTTP_CLIENTS.get(loop)
     if c is None or c.is_closed:
         c = httpx.AsyncClient(
             follow_redirects=False,
             timeout=60.0,
             limits=httpx.Limits(max_keepalive_connections=30, max_connections=120),
         )
-        _PROXY_HTTP_CLIENTS[loop_id] = c
+        _PROXY_HTTP_CLIENTS[loop] = c
     return c
+
+
+async def close_proxy_clients() -> int:
+    """Shutdown-Hook: gepoolte Proxy-Clients kontrolliert schliessen (F-054)."""
+    closed = 0
+    for client in list(_PROXY_HTTP_CLIENTS.values()):
+        if not client.is_closed:
+            try:
+                await client.aclose()
+                closed += 1
+            except Exception as exc:
+                logger.debug("[proxies] Client-Close fehlgeschlagen: %s", exc)
+    _PROXY_HTTP_CLIENTS.clear()
+    return closed
 
 
 _OMNIROUTE_PROXY = None

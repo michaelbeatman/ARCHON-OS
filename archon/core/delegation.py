@@ -666,6 +666,27 @@ def _poll_kanban_row(task_id: str):
         kc.close()
 
 
+def _mark_delegation_blocked(task_id: str, reason: str) -> None:
+    """F-039: Task nach fehlgeschlagenem Worker-Spawn terminal blockieren."""
+    try:
+        from backend.operations_api import _get_kanban_connection
+        kconn = _get_kanban_connection()
+        try:
+            cols = {r[1] for r in kconn.execute("PRAGMA table_info(tasks)").fetchall()}
+            if "block_kind" in cols:
+                kconn.execute(
+                    "UPDATE tasks SET status='blocked', block_kind='worker_spawn_failed' WHERE id=?",
+                    (task_id,),
+                )
+            else:
+                kconn.execute("UPDATE tasks SET status='blocked' WHERE id=?", (task_id,))
+            kconn.commit()
+        finally:
+            kconn.close()
+    except Exception as exc:
+        logger.error("[Delegation] Block-Markierung fuer '%s' fehlgeschlagen: %s", task_id, exc)
+
+
 def _enqueue_delegation_failure(task_id: str, prof_id: str, status: str, result: str) -> Dict[str, Any]:
     """Fehlgeschlagene Delegation in die Shared Queue stellen (idempotent).
 
@@ -1317,9 +1338,13 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     _save_message_to_db(tgt_sess, "user", msg_text)
 
     task_id = None
+    delegation_error = None
     try:
         from backend.operations_api import _get_kanban_connection
-        task_id = f"t-{secrets.token_hex(3)}"
+        # F-039: die ID erst NACH erfolgreichem commit uebernehmen. Vorher war
+        # sie bereits gesetzt, sodass ein fehlgeschlagener INSERT trotzdem eine
+        # Erfolgs-Quittung und einen Watcher auf einen nie angelegten Task erzeugte.
+        new_task_id = f"t-{secrets.token_hex(3)}"
         now_iso = datetime.datetime.now().isoformat()
         prio_num = 2 if prioritaet in ("hoch", "high", "sofort", "critical", "urgent") else (1 if prioritaet in ("mittel", "normal", "medium") else 0)
         kconn = _get_kanban_connection()
@@ -1345,14 +1370,14 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                 pass
             kconn.execute(
                 "INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, started_at, model_override, project_id, block_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (task_id, auftrag[:80] + ("..." if len(auftrag) > 80 else ""),
+                (new_task_id, auftrag[:80] + ("..." if len(auftrag) > 80 else ""),
                  # Audit v3 2.1.3: isolation_header (M75 Tools/Skills) in tasks.body persistieren —
                  # er ging vorher nur in state.db.messages verloren und fehlte bei der Ausfuehrung.
                  f"Delegation von @{delegator_id} an @{ziel}:\n{isolation_header}\n{auftrag}", ziel, "in_progress", prio_num, delegator_id, now_iso, now_iso, t_model, parent_pid, _block_kind)
             )
             kconn.execute(
                 "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
-                (task_id, "created", json.dumps({
+                (new_task_id, "created", json.dumps({
                     "title": auftrag[:80],
                     "assignee": ziel,
                     "via": "delegation_engine_v2",
@@ -1374,6 +1399,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                 }), now_iso)
             )
             kconn.commit()
+            task_id = new_task_id
         finally:
             kconn.close()
         try:
@@ -1384,9 +1410,17 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             if worker_task is not None and hasattr(worker_task, "cancel"):
                 _DELEGATED_WORKER_TASKS[task_id] = worker_task
         except Exception as exe_err:
-            logger.warning(f"[Delegation] Sofortige Ausfuehrung fehlgeschlagen: {exe_err}")
+            # F-039: Worker-Spawn-Fehler ist ein harter Fehler, kein Hinweis.
+            delegation_error = f"Worker-Spawn fehlgeschlagen: {exe_err}"
+            logger.error(f"[Delegation] {delegation_error}")
+            _mark_delegation_blocked(task_id, delegation_error)
+            _enqueue_delegation_failure(task_id, ziel, "blocked", delegation_error)
     except Exception as e:
-        logger.warning(f"[Delegation] Kanban-Insert fehlgeschlagen: {e}")
+        delegation_error = f"Kanban-Insert fehlgeschlagen: {e}"
+        logger.error(f"[Delegation] {delegation_error}")
+        if task_id:
+            _enqueue_delegation_failure(task_id, ziel, "blocked", delegation_error)
+        task_id = None
 
     # --- FAN-IN BRUECKE (nativ auf kanban.db + task_links) ---
     parent_pid = str(payload.get("parent_project_id") or payload.get("projekt") or "").strip()
@@ -1419,7 +1453,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         except Exception as fan_err:
             logger.warning(f"[Delegation] Fan-in-Anbindung fehlgeschlagen: {fan_err}")
 
-    if task_id:
+    if task_id and not delegation_error:
         _spawn_background(
             _watch_delegated_task(
                 task_id, tgt_sess, ziel, origin_session_id, delegator_id, parent_pid,
@@ -1428,6 +1462,12 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             name=f"bg_watch_{task_id}",
         )
     resolve_str = f" [aufgelöst von '{ziel_raw}']" if ziel_raw and ziel_raw != ziel else ""
+    if delegation_error:
+        # F-039: ehrlicher Fehlerstatus statt gruener Quittung.
+        return (f"❌ DELEGATION BLOCKIERT — Ziel: {ziel} ({t_name}{resolve_str}) | "
+                f"Kanban-Task: {task_id or 'n/a'} | Grund: {delegation_error} | "
+                f"Der Fehler liegt in der DLQ (`delegation_result`). "
+                f"Eskalation: @{resolve_supervisor(ziel)}")
     return (f"✅ DELEGATION QUITTUNG — Ziel: {ziel} ({t_name}{resolve_str}) | Kanban-Task: {task_id or 'n/a'} | "
             f"Sub-Session: {tgt_sess} | Modell (Empfehlung): {t_model} | "
             f"Ausführung: Hermes-Agent-Worker | Ergebnis erscheint im Kanban und wird automatisch in die Sub-Session gespiegelt."

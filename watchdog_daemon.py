@@ -9,6 +9,7 @@ import sys
 import time
 import json
 import logging
+import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -313,6 +314,12 @@ class WatchdogDaemon:
         t = self._thread
         if t is not None and t.is_alive() and t is not threading.current_thread():
             t.join(timeout=timeout)
+            if t.is_alive():
+                logger.error(
+                    "[Shutdown] Watchdog-Thread %s konnte nach %.1f s nicht beendet werden.",
+                    t.name, timeout,
+                )
+        logger.info("[Shutdown] Watchdog-Daemon gestoppt.")
 
     def run_forever(self):
         logger.info("Watchdog supervisor loop started.")

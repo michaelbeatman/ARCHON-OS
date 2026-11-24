@@ -49,6 +49,85 @@ jobs:
       - name: Python Syntax Check (compileall)
         run: python -m compileall -q archon backend scripts tools utils core_dispatcher.py main.py
 
+      - name: YAML-Parse-Gate (yaml.safe_load)
+        # F-070: harter Gate für alle Workflow-/Compose-YAMLs (kein `|| true`).
+        run: |
+          python - <<'PY'
+          import glob
+          import sys
+          import yaml
+
+          files = sorted(set(
+              glob.glob(".github/workflows/*.yml")
+              + glob.glob(".github/workflows/*.yaml")
+              + glob.glob("docker-compose*.yml")
+              + glob.glob("docker-compose*.yaml")
+          ))
+          if not files:
+              sys.exit("Keine YAML-Dateien fuer den Parse-Gate gefunden")
+          for path in files:
+              with open(path, "r", encoding="utf-8") as fh:
+                  yaml.safe_load(fh)
+              print(f"yaml.safe_load OK: {path}")
+          PY
+
+      - name: Restore-Test-Gate (5/5)
+        # F-070: fuehrt den echten Restore-Test aus. Deterministische Fixtures
+        # werden im CI-Runner erzeugt; als Quelle dient ausschliesslich ein
+        # frisches Backup-Artefakt, nie eine Live-DB (Audit A).
+        run: |
+          set -e
+          python - <<'PY'
+          import gzip
+          import os
+          import sqlite3
+          import tempfile
+
+          backup_dir = os.path.join(".hermes", "backups", "db")
+          os.makedirs(backup_dir, exist_ok=True)
+          specs = (
+              ("ops.db", "tasks"),
+              ("business.db", "deals"),
+              ("memory.db", "learnings"),
+              ("pb_data.db", "kontakte"),
+          )
+          with tempfile.TemporaryDirectory() as tmp:
+              for name, table in specs:
+                  raw = os.path.join(tmp, name)
+                  con = sqlite3.connect(raw)
+                  con.execute(f'CREATE TABLE "{table}" (id INTEGER PRIMARY KEY, payload TEXT)')
+                  con.execute(f'INSERT INTO "{table}" (payload) VALUES (?)', ("ci-fixture",))
+                  con.commit()
+                  con.close()
+                  with open(raw, "rb") as src, gzip.open(
+                          os.path.join(backup_dir, f"{name}_ci.db.gz"), "wb") as dst:
+                      dst.write(src.read())
+
+          # Das Tenant-Artefakt aktiviert den 5. Check (TENANT_REPLICATION).
+          tenant_dir = os.path.join("data", "tenants", "ci_verify")
+          os.makedirs(tenant_dir, exist_ok=True)
+          con = sqlite3.connect(os.path.join(tenant_dir, "tenant.db"))
+          con.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+          con.commit()
+          con.close()
+          PY
+          python scripts/automated_restore_test.py --json > restore_report.json
+          python - <<'PY'
+          import json
+          import sys
+
+          with open("restore_report.json", "r", encoding="utf-8") as fh:
+              report = json.load(fh)
+          details = report.get("details", [])
+          passed = [d for d in details if d.get("status") == "PASSED"]
+          print(f"Restore-Test: {len(passed)}/{len(details)} Checks bestanden")
+          for d in details:
+              print(f"  {d.get('status')}: {d.get('database')} {d.get('error') or ''}")
+          if (report.get("overall_status") != "PASSED"
+                  or len(details) != 5 or len(passed) != 5):
+              sys.exit("Restore-Gate fehlgeschlagen: 5/5 erwartet")
+          PY
+
   frontend-build:
     name: 1b. Next.js Typecheck & Build
     runs-on: ubuntu-latest

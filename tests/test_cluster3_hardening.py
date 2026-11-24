@@ -125,68 +125,74 @@ class TestTaskSelfHealerRollback:
 # ---------------------------------------------------------------------------
 
 class TestFleetSelfHealing:
+    """F-072: Self-Healing läuft ueber DOCKER_HOST-Proxy, nicht mehr ueber
+    einen direkt gemounteten Unix-Socket. Die Security-Invarianten
+    (Namens-Allowlist, keine Shell, kein direkter Socket) bleiben erhalten.
+    """
+
+    def _client(self, monkeypatch, **attrs):
+        from backend import fleet_self_healing as fsh
+        client = MagicMock()
+        for key, value in attrs.items():
+            setattr(client, key, value)
+        monkeypatch.setattr(fsh, "_docker_client", lambda: client)
+        return client
 
     def test_rejects_injection_attempt(self, monkeypatch):
         from backend import fleet_self_healing as fsh
 
-        monkeypatch.setattr(fsh.subprocess, "run",
-                            MagicMock(side_effect=AssertionError("darf nicht laufen")))
+        client = self._client(monkeypatch)
+        client.restart_container.side_effect = AssertionError("darf nicht laufen")
         for payload in ("n8n; id", "n8n && id", "../n8n", "n8n/../x", "$(id)"):
             res = fsh.restart_service_container(payload)
             assert res["status"] in ("error", "rejected"), payload
+        client.restart_container.assert_not_called()
 
-    def test_restart_uses_argv_and_pinned_socket(self, monkeypatch):
+    def test_restart_uses_proxy_client_not_direct_socket(self, monkeypatch):
         from backend import fleet_self_healing as fsh
 
-        captured = {}
-
-        def fake_run(cmd, **kwargs):
-            captured["cmd"] = cmd
-            captured["kwargs"] = kwargs
-            return MagicMock(returncode=0, stdout="n8n\n", stderr="")
-
-        monkeypatch.setattr(fsh.subprocess, "run", fake_run)
+        calls = []
+        client = self._client(monkeypatch,
+                              restart_container=lambda name: calls.append(name) or b"")
         res = fsh.restart_service_container("n8n")
 
         assert res["status"] == "success"
-        cmd = captured["cmd"]
-        assert isinstance(cmd, list)
-        assert cmd[0] == "docker"
-        assert "-H" in cmd, "Auth-/ACL-Grenze: CLI muss am gepinnten Socket laufen"
-        assert cmd[cmd.index("-H") + 1].startswith("unix://")
-        assert cmd[-2:] == ["restart", "n8n"]
-        assert captured["kwargs"].get("shell") is not True
+        assert calls == ["n8n"]
+        # Kein docker-CLI-Mehr, damit kein -H unix://... am nicht gemounteten
+        # Socket haengen bleibt (genau der F-072-BLOCKER).
+        assert not hasattr(fsh, "subprocess")
 
     def test_container_name_is_validated(self, monkeypatch):
         from backend import fleet_self_healing as fsh
         from utils.docker_client import validate_container_name
 
         assert validate_container_name("n8n") == "n8n"
-        monkeypatch.setattr(fsh.subprocess, "run", MagicMock(return_value=MagicMock(
-            returncode=0, stdout="", stderr="")))
+        calls = []
+        self._client(monkeypatch, restart_container=lambda name: calls.append(name) or b"")
         # Alias-Auflösung bleibt erhalten (CRM -> ef47f1b25a78_CRM)
         res = fsh.restart_service_container("crm")
         assert res["container"] == "ef47f1b25a78_CRM"
+        assert calls == ["ef47f1b25a78_CRM"]
 
-    def test_check_fleet_uses_argv_ps(self, monkeypatch):
+    def test_check_fleet_uses_proxy_container_list(self, monkeypatch):
         from backend import fleet_self_healing as fsh
 
-        captured = {}
+        requests = []
+        raw = b'[{"Names":["/omniroute"],"Status":"Up 2 minutes (healthy)"}]'
 
-        def fake_run(cmd, **kwargs):
-            captured["cmd"] = cmd
-            captured["kwargs"] = kwargs
-            return MagicMock(returncode=0, stdout="", stderr="")
+        def fake_request(method, path, **kwargs):
+            requests.append((method, path))
+            return raw
 
-        monkeypatch.setattr(fsh.subprocess, "run", fake_run)
+        self._client(monkeypatch, request=fake_request)
         monkeypatch.setattr(fsh, "restart_service_container",
                             lambda name: {"status": "stub", "service": name})
-        fsh.check_fleet_and_heal.__wrapped__()
+        result = fsh.check_fleet_and_heal.__wrapped__()
 
-        cmd = captured["cmd"]
-        assert isinstance(cmd, list)
-        assert cmd[0] == "docker" and "ps" in cmd
-        assert captured["kwargs"].get("shell") is not True
+        assert requests
+        assert requests[0][0] == "GET"
+        assert requests[0][1] == "/containers/json?all=1"
+        assert result["status"] == "ok"
 
 
 # ---------------------------------------------------------------------------

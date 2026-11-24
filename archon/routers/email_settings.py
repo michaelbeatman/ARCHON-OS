@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger("archon.routers.email_settings")
 
@@ -25,6 +25,9 @@ def _require_admin(request: Request):
 
 
 class SmtpConfigPayload(BaseModel):
+    # F-035: Pydantic v2 — extra-Felder ignorieren, keine v1-.dict()-Aufrufe.
+    model_config = ConfigDict(extra="ignore")
+
     enabled: Optional[bool] = False
     auto_send: Optional[bool] = False
     host: Optional[str] = ""
@@ -54,7 +57,7 @@ def api_save_smtp_settings(request: Request, payload: SmtpConfigPayload):
     from backend.post_task_pipeline import get_smtp_config, save_smtp_config
 
     current = get_smtp_config()
-    cfg_data = payload.dict()
+    cfg_data = payload.model_dump()
     if cfg_data.get("password") == "••••••••":
         cfg_data["password"] = current.get("password", "")
     success = save_smtp_config(cfg_data)
@@ -67,7 +70,7 @@ def api_test_smtp_settings(request: Request, payload: SmtpConfigPayload):
     from backend.post_task_pipeline import get_smtp_config, save_smtp_config, send_smtp_email
 
     current = get_smtp_config()
-    cfg_data = payload.dict()
+    cfg_data = payload.model_dump()
     if cfg_data.get("password") == "••••••••":
         cfg_data["password"] = current.get("password", "")
     save_smtp_config(cfg_data)

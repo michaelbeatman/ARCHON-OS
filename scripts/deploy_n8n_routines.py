@@ -11,6 +11,19 @@ ROOT = Path(__file__).resolve().parent.parent
 TOKEN_FILE = ROOT / "data" / ".archon_service_token"
 ARCHON_HOST = "http://archon-os:8501"
 
+# F-037: EINE kanonische Quelle fuer die Routine-Workflows. Frueher lagen die
+# drei Routinen dreimal vor (JSON-Vorlage, inline in diesem Skript, Bundle) und
+# drifteten bei Host-Gross-/Kleinschreibung und Token-Platzhalter auseinander.
+# Die JSON-Datei ist jetzt die SSOT; alles andere wird daraus erzeugt.
+ROUTINE_TEMPLATE_PATH = ROOT / "scripts" / "n8n_routine_workflows.json"
+TOKEN_PLACEHOLDER = "__ARCHON_SERVICE_TOKEN__"
+
+
+def _load_routine_workflows() -> list:
+    """Laedt die kanonischen Routine-Workflows per json.load aus der SSOT."""
+    with ROUTINE_TEMPLATE_PATH.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
 # A/H5: Fail-closed HMAC-SHA256-Verifikation fuer die On-Demand-Webhooks.
 # Der Secret kommt ausschliesslich aus ARCHON_WEBHOOK_HMAC_SECRET (in n8n via
 # docker-compose vorhanden). Ohne Secret oder Signatur bricht der Code-Node ab,
@@ -121,513 +134,46 @@ def _load_service_token() -> str:
 def _prepare_workflows(token: str):
     """Nur an Archon-API-HTTP-Nodes den Token injizieren, Host korrigieren.
 
-    C17: Dieses Skript hat frueher die tokenhaltige Vorlage
+    C17/F-037: Dieses Skript hat frueher die tokenhaltige Vorlage
     `n8n_routine_workflows.json` mit tokenlosen AKTIVEN Workflows ueberschrieben.
-    Ohne Token brechen wir ab, statt ein funktionsloses/wirkungsloses Deployment
-    zu erzeugen.
+    Heute ist die JSON-Datei die einzige Quelle (json.load in
+    `_load_routine_workflows`); ohne Token brechen wir ab, statt ein
+    funktionsloses/wirkungsloses Deployment zu erzeugen.
 
     A(2): Der Service-Token gehoert ausschliesslich an HTTP-Nodes, die den
     lokalen Archon-API-Endpunkt aufrufen — nicht an beliebige/externe
     httpRequest-Nodes (Sonst waere das Token ein Exfiltrationsrisiko bei
     spaeter ergaenzten Nodes).
     """
-    workflows = json.loads(json.dumps(ROUTINE_WORKFLOWS))
+    workflows = json.loads(json.dumps(_load_routine_workflows()))
     for wf in workflows:
         for node in wf.get("nodes", []):
             params = node.get("parameters", {})
             url = params.get("url")
             if isinstance(url, str):
-                params["url"] = url.replace("http://ARCHON-OS:8501", ARCHON_HOST)
+                # F-037: beide historischen Host-Schreibweisen auf die SSOT
+                # zurueckfuehren (Gross-/Kleinschreibung war der Driftpunkt).
+                for legacy in ("http://ARCHON-OS:8501", "http://archon-os:8501"):
+                    if url.startswith(legacy):
+                        params["url"] = ARCHON_HOST + url[len(legacy):]
+                        break
             is_archon_api = str(params.get("url", "")).startswith(ARCHON_HOST)
             if node.get("type") == "n8n-nodes-base.httpRequest" and is_archon_api:
                 params["sendHeaders"] = True
                 headers = params.setdefault("headerParameters", {}).setdefault("parameters", [])
-                if not any(
-                    str(h.get("name", "")).lower() == "x-archon-service-token"
-                    for h in headers
-                ):
+                token_header = next(
+                    (h for h in headers if str(h.get("name", "")).lower() == "x-archon-service-token"),
+                    None,
+                )
+                if token_header is None:
                     headers.append({"name": "X-Archon-Service-Token", "value": token})
+                elif str(token_header.get("value", "")).strip() in ("", TOKEN_PLACEHOLDER):
+                    # SSOT enthaelt nur den Platzhalter; beim Deployment wird
+                    # er durch den echten Token ersetzt, beim Template durch
+                    # denselben Platzhalter (nie ein echter Token im Repo).
+                    token_header["value"] = token
     return workflows
 
-
-ROUTINE_WORKFLOWS = [
-    {
-        "id": "b1c3f1e9b2d84f11",
-        "name": "Archon Morning-Briefing Routine",
-        "active": True,
-        "nodes": [
-            {
-                "parameters": {
-                    "rule": {
-                        "interval": [
-                            {
-                                "field": "cronExpression",
-                                "expression": "30 7 * * 1-5"
-                            }
-                        ]
-                    }
-                },
-                "id": "cron-briefing",
-                "name": "Schedule (07:30 Mo-Fr)",
-                "type": "n8n-nodes-base.scheduleTrigger",
-                "typeVersion": 1.2,
-                "position": [0, -80]
-            },
-            {
-                "parameters": {
-                    "httpMethod": "POST",
-                    "path": "archon-morning-briefing",
-                    "responseMode": "lastNode",
-                    "options": {}
-                },
-                "id": "wh-briefing",
-                "name": "Webhook On-Demand",
-                "type": "n8n-nodes-base.webhook",
-                "typeVersion": 2,
-                "position": [0, 100],
-                "webhookId": "archon-morning-briefing"
-            },
-            _hmac_node(
-                "hmac-verify-briefing",
-                "A/H5: Constant-Time-HMAC-Vergleich (XOR) gegen ARCHON_WEBHOOK_HMAC_SECRET. Nur signierte Webhook-Trigger erreichen /api/system/standup/run und /api/telegram/send; der Schedule-Trigger bleibt bewusst ohne diesen Node (vertrauenswuerdig).",
-            ),
-            {
-                "parameters": {
-                    "method": "POST",
-                    "url": "http://ARCHON-OS:8501/api/system/standup/run",
-                    "sendBody": False,
-                    "options": {}
-                },
-                "id": "http-standup",
-                "name": "Run Morning Standup",
-                "type": "n8n-nodes-base.httpRequest",
-                "typeVersion": 4.2,
-                "position": [240, 0]
-            },
-            {
-                "parameters": {
-                    "method": "POST",
-                    "url": "http://ARCHON-OS:8501/api/telegram/send",
-                    "sendBody": True,
-                    "specifyBody": "keypair",
-                    "bodyParameters": {
-                        "parameters": [
-                            {
-                                "name": "text",
-                                "value": "={{ $json.briefing_markdown }}"
-                            }
-                        ]
-                    },
-                    "options": {}
-                },
-                "id": "http-telegram",
-                "name": "Send Telegram Briefing",
-                "type": "n8n-nodes-base.httpRequest",
-                "typeVersion": 4.2,
-                "position": [480, 0]
-            },
-            {
-                "parameters": {
-                    "assignments": {
-                        "assignments": [
-                            {
-                                "id": "m1",
-                                "name": "status",
-                                "value": "success",
-                                "type": "string"
-                            },
-                            {
-                                "id": "m2",
-                                "name": "routine",
-                                "value": "morning_briefing",
-                                "type": "string"
-                            },
-                            {
-                                "id": "m3",
-                                "name": "date",
-                                "value": "={{ $json.date }}",
-                                "type": "string"
-                            },
-                            {
-                                "id": "m4",
-                                "name": "message",
-                                "value": "Morning-Briefing erfolgreich generiert und verteilt.",
-                                "type": "string"
-                            }
-                        ]
-                    },
-                    "options": {}
-                },
-                "id": "set-briefing",
-                "name": "Format Response",
-                "type": "n8n-nodes-base.set",
-                "typeVersion": 3.4,
-                "position": [720, 0]
-            }
-        ],
-        "connections": {
-            "Schedule (07:30 Mo-Fr)": {
-                "main": [
-                    [
-                        {
-                            "node": "Run Morning Standup",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Webhook On-Demand": {
-                "main": [
-                    [
-                        {
-                            "node": "Archon HMAC Verify",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Archon HMAC Verify": {
-                "main": [
-                    [
-                        {
-                            "node": "Run Morning Standup",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Run Morning Standup": {
-                "main": [
-                    [
-                        {
-                            "node": "Send Telegram Briefing",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Send Telegram Briefing": {
-                "main": [
-                    [
-                        {
-                            "node": "Format Response",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            }
-        },
-        "settings": {
-            "executionOrder": "v1"
-        }
-    },
-    {
-        "id": "b1c3f1e9b2d84f12",
-        "name": "Archon Weekly Maintenance & System-Audit",
-        "active": True,
-        "nodes": [
-            {
-                "parameters": {
-                    "rule": {
-                        "interval": [
-                            {
-                                "field": "cronExpression",
-                                "expression": "0 23 * * 0"
-                            }
-                        ]
-                    }
-                },
-                "id": "cron-audit",
-                "name": "Schedule (So 23:00)",
-                "type": "n8n-nodes-base.scheduleTrigger",
-                "typeVersion": 1.2,
-                "position": [0, -80]
-            },
-            {
-                "parameters": {
-                    "httpMethod": "POST",
-                    "path": "archon-weekly-audit",
-                    "responseMode": "lastNode",
-                    "options": {}
-                },
-                "id": "wh-audit",
-                "name": "Webhook On-Demand",
-                "type": "n8n-nodes-base.webhook",
-                "typeVersion": 2,
-                "position": [0, 100],
-                "webhookId": "archon-weekly-audit"
-            },
-            _hmac_node(
-                "hmac-verify-audit",
-                "A/H5: Constant-Time-HMAC-Vergleich (XOR) gegen ARCHON_WEBHOOK_HMAC_SECRET. Nur signierte Webhook-Trigger erreichen /api/system/backup-db und /api/system/health; der Schedule-Trigger bleibt bewusst ohne diesen Node (vertrauenswuerdig).",
-            ),
-            {
-                "parameters": {
-                    "method": "POST",
-                    "url": "http://ARCHON-OS:8501/api/system/backup-db",
-                    "sendBody": False,
-                    "options": {}
-                },
-                "id": "http-backup",
-                "name": "Create DB Backup",
-                "type": "n8n-nodes-base.httpRequest",
-                "typeVersion": 4.2,
-                "position": [240, 0]
-            },
-            {
-                "parameters": {
-                    "method": "GET",
-                    "url": "http://ARCHON-OS:8501/api/system/health",
-                    "options": {}
-                },
-                "id": "http-health",
-                "name": "Check System Health",
-                "type": "n8n-nodes-base.httpRequest",
-                "typeVersion": 4.2,
-                "position": [480, 0]
-            },
-            {
-                "parameters": {
-                    "assignments": {
-                        "assignments": [
-                            {
-                                "id": "w1",
-                                "name": "status",
-                                "value": "success",
-                                "type": "string"
-                            },
-                            {
-                                "id": "w2",
-                                "name": "routine",
-                                "value": "weekly_maintenance",
-                                "type": "string"
-                            },
-                            {
-                                "id": "w3",
-                                "name": "system_health",
-                                "value": "={{ $json.status }}",
-                                "type": "string"
-                            },
-                            {
-                                "id": "w4",
-                                "name": "message",
-                                "value": "Woechentliche System-Wartung und SQLite-Backup erfolgreich abgeschlossen.",
-                                "type": "string"
-                            }
-                        ]
-                    },
-                    "options": {}
-                },
-                "id": "set-audit",
-                "name": "Format Audit Response",
-                "type": "n8n-nodes-base.set",
-                "typeVersion": 3.4,
-                "position": [720, 0]
-            }
-        ],
-        "connections": {
-            "Schedule (So 23:00)": {
-                "main": [
-                    [
-                        {
-                            "node": "Create DB Backup",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Webhook On-Demand": {
-                "main": [
-                    [
-                        {
-                            "node": "Archon HMAC Verify",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Archon HMAC Verify": {
-                "main": [
-                    [
-                        {
-                            "node": "Create DB Backup",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Create DB Backup": {
-                "main": [
-                    [
-                        {
-                            "node": "Check System Health",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Check System Health": {
-                "main": [
-                    [
-                        {
-                            "node": "Format Audit Response",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            }
-        },
-        "settings": {
-            "executionOrder": "v1"
-        }
-    },
-    {
-        "id": "b1c3f1e9b2d84f13",
-        "name": "Archon RSS & News Watchdog Routine",
-        "active": True,
-        "nodes": [
-            {
-                "parameters": {
-                    "rule": {
-                        "interval": [
-                            {
-                                "field": "cronExpression",
-                                "expression": "0 * * * *"
-                            }
-                        ]
-                    }
-                },
-                "id": "cron-rss",
-                "name": "Schedule (Stündlich)",
-                "type": "n8n-nodes-base.scheduleTrigger",
-                "typeVersion": 1.2,
-                "position": [0, -80]
-            },
-            {
-                "parameters": {
-                    "httpMethod": "POST",
-                    "path": "archon-rss-watchdog",
-                    "responseMode": "lastNode",
-                    "options": {}
-                },
-                "id": "wh-rss",
-                "name": "Webhook On-Demand",
-                "type": "n8n-nodes-base.webhook",
-                "typeVersion": 2,
-                "position": [0, 100],
-                "webhookId": "archon-rss-watchdog"
-            },
-            _hmac_node(
-                "hmac-verify-rss",
-                "A/H5: Constant-Time-HMAC-Vergleich (XOR) gegen ARCHON_WEBHOOK_HMAC_SECRET. Nur signierte Webhook-Trigger erreichen /api/inbox-watcher/scan-now; der Schedule-Trigger bleibt bewusst ohne diesen Node (vertrauenswuerdig).",
-            ),
-            {
-                "parameters": {
-                    "method": "POST",
-                    "url": "http://ARCHON-OS:8501/api/inbox-watcher/scan-now",
-                    "sendBody": False,
-                    "options": {}
-                },
-                "id": "http-scan",
-                "name": "Scan RSS Feeds",
-                "type": "n8n-nodes-base.httpRequest",
-                "typeVersion": 4.2,
-                "position": [240, 0]
-            },
-            {
-                "parameters": {
-                    "assignments": {
-                        "assignments": [
-                            {
-                                "id": "r1",
-                                "name": "status",
-                                "value": "success",
-                                "type": "string"
-                            },
-                            {
-                                "id": "r2",
-                                "name": "routine",
-                                "value": "rss_watchdog",
-                                "type": "string"
-                            },
-                            {
-                                "id": "r3",
-                                "name": "message",
-                                "value": "RSS & News Radar Scan abgeschlossen.",
-                                "type": "string"
-                            }
-                        ]
-                    },
-                    "options": {}
-                },
-                "id": "set-rss",
-                "name": "Format Scan Response",
-                "type": "n8n-nodes-base.set",
-                "typeVersion": 3.4,
-                "position": [480, 0]
-            }
-        ],
-        "connections": {
-            "Schedule (Stündlich)": {
-                "main": [
-                    [
-                        {
-                            "node": "Scan RSS Feeds",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Webhook On-Demand": {
-                "main": [
-                    [
-                        {
-                            "node": "Archon HMAC Verify",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Archon HMAC Verify": {
-                "main": [
-                    [
-                        {
-                            "node": "Scan RSS Feeds",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            },
-            "Scan RSS Feeds": {
-                "main": [
-                    [
-                        {
-                            "node": "Format Scan Response",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
-                ]
-            }
-        },
-        "settings": {
-            "executionOrder": "v1"
-        }
-    }
-]
 
 def run():
     print("=" * 60)
@@ -646,7 +192,7 @@ def run():
     workflows = _prepare_workflows(token)
     # Repo-getrackte Dateien enthalten NUR den Platzhalter — nie den echten
     # Token. Das import_n8n_workflows.py ersetzt ihn bei Bedarf zur Laufzeit.
-    template = _prepare_workflows("__ARCHON_SERVICE_TOKEN__")
+    template = _prepare_workflows(TOKEN_PLACEHOLDER)
 
     # 1. Alles NUR im temporaeren Verzeichnis: der gehaertete Container hat
     # ein read-only /app und darf keine Repo-Dateien beschreiben.
@@ -692,7 +238,10 @@ def run():
     print("\n[Aktuelle n8n Workflows]:")
     print(res.stdout)
 
-    # 5. Bundle aktualisieren (nur wenn beschreibbar — im Container read-only)
+    # 7. Bundle aktualisieren (nur wenn beschreibbar — im Container read-only)
+    # F-037: das Bundle ist ein GENERIERTES Artefakt. Die Routine-Sektion wird
+    # bei jedem Lauf komplett aus der SSOT (template) ersetzt — nie mehr
+    # haendisch gepflegt, daher kein Drift mehr bei Host/Token-Platzhalter.
     bundle_path = ROOT / "scripts" / "n8n_workflows_bundle.json"
     try:
         current_bundle = []
@@ -701,11 +250,9 @@ def run():
                 current_bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
             except Exception:
                 current_bundle = []
-        existing_ids = {w["id"] for w in current_bundle if "id" in w}
-        for rw in template:
-            if rw["id"] not in existing_ids:
-                current_bundle.append(rw)
-                existing_ids.add(rw["id"])
+        routine_ids = {rw["id"] for rw in template if "id" in rw}
+        current_bundle = [w for w in current_bundle if w.get("id") not in routine_ids]
+        current_bundle.extend(template)
         # B/H5: kein unauthentifizierter Execution-Bridge-Empfaenger im Bundle.
         current_bundle = _ensure_bridge_hmac_receiver(current_bundle)
         bundle_path.write_text(json.dumps(current_bundle, indent=2, ensure_ascii=False), encoding="utf-8")

@@ -374,7 +374,13 @@ def get_role_usage_today(agent_id: str, db_path: Optional[str] = None) -> Dict[s
 
     tok_pct = round(min(100.0, (tokens_today / tok_limit) * 100.0), 1)
     eur_pct = round(min(100.0, (cost_eur_today / eur_limit) * 100.0), 1)
-    exceeded = (tokens_today >= tok_limit) or (cost_eur_today >= eur_limit)
+    # F-010: das Monatslimit ist kein Anzeigewert mehr, sondern hart.
+    month_eur = float(month_row["m_eur"]) if month_row else 0.0
+    exceeded = (
+        (tokens_today >= tok_limit)
+        or (cost_eur_today >= eur_limit)
+        or (month_eur >= float(policy["monthly_cost_limit_eur"]))
+    )
 
     return {
         "agent_id": aid,
@@ -1138,6 +1144,20 @@ class BudgetBank:
                         return {"allowed": False, "agent_id": aid, "task_id": task_id,
                                 "error_code": "ROLE_EUR_BUDGET_EXCEEDED",
                                 "reason": "Budget inklusive aktiver Reservierungen überschritten."}
+                    # F-010: Monatslimit atomar im selben BEGIN IMMEDIATE
+                    # erzwingen (vorher nur Schema/Report/API-Setter).
+                    m_row = conn.execute(
+                        "SELECT COALESCE(SUM(cost_eur), 0.0) AS m_eur "
+                        "FROM role_daily_budget_ledger WHERE agent_id = ? AND usage_date LIKE ?",
+                        (aid, f"{_month_str()}%"),
+                    ).fetchone()
+                    m_eur = float(m_row["m_eur"]) if m_row else 0.0
+                    m_limit = float(policy["monthly_cost_limit_eur"] or 0.0)
+                    if m_limit > 0 and m_eur + res_eur + est_eur > m_limit:
+                        conn.rollback()
+                        return {"allowed": False, "agent_id": aid, "task_id": task_id,
+                                "error_code": "ROLE_MONTHLY_EUR_BUDGET_EXCEEDED",
+                                "reason": f"Monatsbudget von {m_limit:.2f} EUR überschritten."}
                 reservation_id = f"res-{uuid.uuid4().hex[:12]}"
                 conn.execute(
                     "INSERT INTO budget_reservations "

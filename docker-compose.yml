@@ -96,6 +96,11 @@ services:
       - ARCHON_AUDIT_ANCHOR_PATH=${ARCHON_AUDIT_ANCHOR_PATH:-}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GH_TOKEN=${GH_TOKEN:-}
+      # F-075: Langfuse/OTel-Export — nur aus .env, keine Defaults.
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     volumes:
       # P0-11: KEIN `./:/app` mehr. Der alte Bind-Mount legte die .env mit dem
       # Audit-HMAC-Key als /app/.env lesbar in den Container. Der Anwendungscode

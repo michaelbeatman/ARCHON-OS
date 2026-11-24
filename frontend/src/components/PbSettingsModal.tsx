@@ -92,17 +92,43 @@ export function PbSettingsModal({
 
   if (!isOpen) return null;
 
+  const smtpPayload = () => ({
+    enabled: true,
+    host: smtpHost,
+    port: Number(smtpPort),
+    username: smtpUser,
+    password: smtpPass,
+    from_email: senderAddress,
+    to_email: senderAddress,
+  });
+
   const handleSave = async () => {
     setSaving(true);
     setFeatureNotice(null);
+    setSavedNotice(false);
     try {
-      await pb.settings.update({
-        meta: { appName, appUrl }
-      });
+      if (activeSection === 'Mail settings') {
+        // F-001: SMTP-Felder an den echten, admin-gesicherten Endpunkt senden.
+        const res = await fetch('/api/v1/settings/smtp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(smtpPayload()),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data?.status === 'error') {
+          throw new Error(data?.message || data?.error || `HTTP ${res.status}`);
+        }
+      } else if (activeSection === 'Files storage') {
+        // F-001: kein Backend-Endpunkt vorhanden -> ehrlicher Hinweis statt
+        // eines grünen "Gespeichert!" ohne Seiteneffekt.
+        setFeatureNotice('Storage-Einstellungen sind hier noch nicht verdrahtet — es gibt keinen Backend-Endpunkt. Werte wurden nicht gespeichert.');
+        return;
+      } else {
+        await pb.settings.update({ meta: { appName, appUrl } });
+      }
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 1500);
     } catch (err) {
-      // W4: kein grünes "Gespeichert!" bei Fehlschlag.
       setFeatureNotice(`Speichern fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSaving(false);
@@ -110,22 +136,76 @@ export function PbSettingsModal({
   };
 
   const handleSendTestEmail = async () => {
-    // W4: echter Aufruf statt setTimeout-Erfolg.
     setTestEmailStatus('sending');
     try {
-      const res = await fetch('/api/v1/settings/smtp/test', { method: 'POST' });
+      // F-002: der Endpunkt verlangt ein SmtpConfigPayload — ohne Body gibt es
+      // dauerhaft HTTP 422. Jetzt alle eingegebenen Felder mitsenden.
+      const res = await fetch('/api/v1/settings/smtp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(smtpPayload()),
+      });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.status !== 'error') {
+      if (res.ok && data?.status === 'success') {
         setTestEmailStatus('success');
       } else {
         setTestEmailStatus('error');
-        setFeatureNotice(`SMTP-Test fehlgeschlagen: ${data?.error || `HTTP ${res.status}`}`);
+        setFeatureNotice(`SMTP-Test fehlgeschlagen: ${data?.message || data?.error || `HTTP ${res.status}`}`);
       }
     } catch (err) {
       setTestEmailStatus('error');
       setFeatureNotice(`SMTP-Test nicht erreichbar: ${err instanceof Error ? err.message : String(err)}`);
     }
     setTimeout(() => setTestEmailStatus(null), 4000);
+  };
+
+  const handleReloadLogs = async () => {
+    // F-005: kein Fake-Refresh einer leeren Liste.
+    setFeatureNotice('Request-Logs sind hier noch nicht verdrahtet — kein Endpunkt abgefragt. Bitte das zentrale Audit-Log verwenden.');
+  };
+
+  const handleExportSchema = async () => {
+    // F-003: echte Collection-Struktur von PocketBase holen (Admin-Sitzung),
+    // keinen hartcodierten lokalen Fallback als "Export" ausgeben.
+    try {
+      const collections = (pb as any).collections;
+      if (!collections || typeof collections.getOne !== 'function') {
+        throw new Error('Collection-API nicht verfügbar');
+      }
+      const collection = await collections.getOne('kontakte');
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(
+        JSON.stringify({ source: 'pocketbase', collection }, null, 2)
+      );
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute('download', 'archon_schema.json');
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (err) {
+      setFeatureNotice(`Schema-Export fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const handleImportSchema = async (file: File | undefined) => {
+    // F-004: echte Datei -> Validierung -> PocketBase Collection-Update.
+    if (!file) return;
+    setFeatureNotice(null);
+    try {
+      const parsed = JSON.parse(await file.text());
+      const collection = parsed?.collection ?? parsed;
+      if (!collection || typeof collection !== 'object') {
+        throw new Error('Ungültiges schema.json Format');
+      }
+      const collections = (pb as any).collections;
+      if (!collections || typeof collections.update !== 'function') {
+        throw new Error('Collection-API nicht verfügbar (Admin-Rechte erforderlich)');
+      }
+      await collections.update('kontakte', collection);
+      setFeatureNotice('Schema-Import von PocketBase bestätigt.');
+    } catch (err) {
+      setFeatureNotice(`Schema-Import fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   const handleCreateBackup = () => {
@@ -142,20 +222,6 @@ export function PbSettingsModal({
     // W4: die Query wurde früher komplett ignoriert.
     setSqlResult(null);
     setFeatureNotice('SQL-Konsole ist hier nicht verdrahtet — keine Abfrage ausgeführt. Bitte PocketBase-Admin-UI nutzen.');
-  };
-
-  const handleExportSchema = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
-      collections: [
-        { name: 'kontakte', type: 'base', schema: INITIAL_SCHEMA }
-      ]
-    }, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "archon_schema.json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
   };
 
   return (
@@ -645,7 +711,7 @@ export function PbSettingsModal({
               <div className="space-y-4 font-mono text-xs">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-sm font-sans">PocketBase Request Logs</h3>
-                  <button onClick={() => setLogs(prev => [...prev])} className="px-3 py-1 rounded bg-slate-200 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                  <button onClick={handleReloadLogs} className="px-3 py-1 rounded bg-slate-200 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
                     <RefreshCw className="w-3.5 h-3.5" /> Reload
                   </button>
                 </div>
@@ -690,6 +756,14 @@ export function PbSettingsModal({
                   <Upload className="w-8 h-8 text-emerald-600 mx-auto" />
                   <p className="font-bold">Ziehe deine `schema.json` hierher</p>
                   <p className="text-slate-400 text-[11px]">Unterstützt PocketBase Schema Definitions</p>
+                  {/* F-004: echter Datei-Import statt Dekoration */}
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    aria-label="schema.json Datei auswählen"
+                    className="mx-auto block text-xs"
+                    onChange={(event) => void handleImportSchema(event.target.files?.[0])}
+                  />
                 </div>
               </div>
             )}

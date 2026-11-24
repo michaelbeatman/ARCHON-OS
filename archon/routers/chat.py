@@ -644,7 +644,43 @@ async def api_chat_stream(req: ChatStreamRequest):
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
             return StreamingResponse(_blocked_sse(), media_type="text/event-stream")
     except Exception as san_exc:
-        logger.debug(f"[Chat] Dual-LLM-Sanitizer uebersprungen: {san_exc}")
+        # F-038 (S-6.6 / S-4.7): Ein fehlgeschlagener Sanitizer darf NEVER
+        # fail-open. Analog zu backend/event_mesh.py:299-321 wird die Eingabe
+        # mit Status 'blocked' zurueckgewiesen: kein Dispatch, kein Rohtext im
+        # Log, Audit-Eintrag und ERROR-Log. Vorher lief die ungepruefte Nachricht
+        # hier still weiter (logger.debug + Fallthrough).
+        logger.error("[Chat] Dual-LLM-Sanitizer fehlgeschlagen — Eingabe blockiert: %s", san_exc)
+        blocked_reason = "input_sanitizer_unavailable"
+        try:
+            from backend.audit_log import chained_audit_log
+            await asyncio.to_thread(
+                chained_audit_log.record_event,
+                "chat_input",
+                "input_blocked",
+                agent_id,
+                {
+                    "session_id": session_id,
+                    "status": "blocked",
+                    "reason": blocked_reason,
+                    "error": str(san_exc)[:200],
+                },
+            )
+        except Exception as audit_exc:
+            # Audit-Fehler darf die fail-closed-Entscheidung nicht aufheben.
+            logger.error("[Chat] Audit-Eintrag fuer blockierte Eingabe fehlgeschlagen: %s", audit_exc)
+
+        blocked_msg = (
+            "🛑 [PROMPT-INJECTION-GUARD]: Eingabe blockiert — "
+            "Eingabeprüfung nicht verfügbar (input_sanitizer_unavailable). "
+            "Bitte später erneut versuchen."
+        )
+
+        async def _sanitizer_unavailable_sse():
+            yield f"data: {json.dumps({'type': 'blocked', 'reason': blocked_reason, 'status': 'blocked'})}\n\n"
+            yield f"data: {json.dumps({'type': 'chunk', 'content': blocked_msg})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        return StreamingResponse(_sanitizer_unavailable_sse(), media_type="text/event-stream")
 
     if user_msg.lower().startswith("/termin ") or user_msg.lower().startswith("/kalender "):
         from backend.operations_calendar import operations_calendar
@@ -701,7 +737,7 @@ async def api_chat_stream(req: ChatStreamRequest):
             "model": model,
             "estimated_tokens": est_tokens,
             "estimated_cost_eur": est_cost,
-            "subagents_count": 2,
+            "subagents_count": 0,  # F-007: ehrlich — noch keine Subtasks erzeugt
             "status": "approval",  # HITL Gate sperrt Ausführung zwingend
             "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
             "result_summary": "",

@@ -889,7 +889,40 @@ tags: ["learning", "memory", "{agent_id}"]
             "learnings": extracted_learnings
         }
 
+    @staticmethod
+    def _decode_checkpoint_state(entry: Dict[str, Any]) -> None:
+        """F-046: state_json fail-closed dekodieren.
+
+        Ein korruptes/unvollstaendiges ``state_json`` darf nicht still durch
+        ``{}`` ersetzt werden — sonst kann der Aufrufer einen beschaedigten
+        Checkpoint nicht von einem leeren State unterscheiden und ein Resume
+        laeuft ins Leere. Bei Decode-Fehler: ``state=None``,
+        ``checkpoint_error="corrupt_state_json"``, ``resume_blocked=True``.
+        """
+        try:
+            entry["state"] = json.loads(entry.get("state_json") or "")
+            entry["checkpoint_error"] = None
+            entry["resume_blocked"] = False
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            entry["state"] = None
+            entry["checkpoint_error"] = "corrupt_state_json"
+            entry["resume_blocked"] = True
+            logger.error(
+                "[MemoryBridge] Checkpoint '%s' hat korruptes state_json (%s); Resume blockiert.",
+                entry.get("checkpoint_id"), exc,
+            )
+
     def save_workflow_checkpoint(self, checkpoint_id: str, workflow_id: str, agent_id: str, current_step: int, total_steps: int, state_data: dict, status: str = "running", pause_reason: str = None) -> bool:
+        # F-046: Ein beschaedigter Checkpoint darf nicht ueber einen Resume
+        # still mit leerem State ueberschrieben werden (fail-closed).
+        if status == "resumed":
+            existing = self.get_workflow_checkpoint(checkpoint_id)
+            if existing and existing.get("resume_blocked"):
+                logger.error(
+                    "[MemoryBridge] Resume fuer Checkpoint '%s' blockiert: %s.",
+                    checkpoint_id, existing.get("checkpoint_error"),
+                )
+                return False
         with self._get_conn() as conn:
             # J (dieses Audits): INSERT OR REPLACE löschte die Zeile und setzte
             # dadurch created_at (DEFAULT CURRENT_TIMESTAMP) bei jedem Save
@@ -920,10 +953,7 @@ tags: ["learning", "memory", "{agent_id}"]
             if not row:
                 return None
             d = dict(row)
-            try:
-                d["state"] = json.loads(d["state_json"])
-            except Exception:
-                d["state"] = {}
+            self._decode_checkpoint_state(d)
             return d
 
     def list_workflow_checkpoints(self, status: str = None, limit: int = 50) -> list:
@@ -935,10 +965,7 @@ tags: ["learning", "memory", "{agent_id}"]
                 cur.execute("SELECT * FROM workflow_checkpoints ORDER BY updated_at DESC LIMIT ?", (limit,))
             rows = [dict(r) for r in cur.fetchall()]
             for r in rows:
-                try:
-                    r["state"] = json.loads(r["state_json"])
-                except Exception:
-                    r["state"] = {}
+                self._decode_checkpoint_state(r)
             return rows
 
 

@@ -1,8 +1,8 @@
 {
-  "version": "v0.5.7.5",
+  "version": "v0.5.7.6",
   "codename": "Execution Hardening & Agentic Reliability",
-  "released_at": "2026-11-24 07:24",
-  "previous_version": "v0.5.7.4",
+  "released_at": "2026-11-24 10:05",
+  "previous_version": "v0.5.7.5",
   "commit": "v0.5.7",
   "features": [
     "Hermes Marketplace Integration: 18 Skills (.agents/skills/) & 6 MCP Servers (.mcp.json) assigned to specialist profiles",

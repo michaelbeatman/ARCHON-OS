@@ -137,9 +137,59 @@ def _verify_hash(raw_str: str, stored: str, block_id=None) -> bool:
         return hmac.compare_digest(expected, stored)
     return hmac.compare_digest(hashlib.sha256(raw_str.encode("utf-8")).hexdigest(), stored)
 
+
+# F-027: Die GoBD-Invariante sha256_dispatch_audit_enforced wird im Kryptopfad
+# tatsächlich ausgewertet (nicht nur als Statusanzeige in settings.json).
+# Default True = fail-closed: ohne HMAC-Key werden keine neuen Blöcke mehr mit
+# nacktem SHA-256 geschrieben. Legacy-SHA256 bleibt ausschließlich LESEND ueber
+# legacy_max / _verify_hash zulaessig. Cache mit kurzem TTL vermeidet einen
+# settings.json-Read pro Audit-Event.
+_FAUDIT_ENFORCE_CACHE_TTL_SEC = 30.0
+_faudit_enforce_cache = None
+
+
+def _dispatch_audit_enforced() -> bool:
+    global _faudit_enforce_cache
+    now = time.monotonic()
+    if _faudit_enforce_cache and (now - _faudit_enforce_cache[0]) < _FAUDIT_ENFORCE_CACHE_TTL_SEC:
+        return _faudit_enforce_cache[1]
+    enforced = True
+    try:
+        from backend.autonomy_settings import is_sha256_dispatch_audit_enforced
+        enforced = bool(is_sha256_dispatch_audit_enforced())
+    except Exception as exc:
+        logger.error("[Audit] sha256_dispatch_audit_enforced nicht lesbar: %s — fail-closed (True)", exc)
+        enforced = True
+    _faudit_enforce_cache = (now, enforced)
+    return enforced
+
+
+# F-029: substring-basierte Erkennung statt exakter Matchliste. Die alte
+# exakte Liste liess refresh_token, id_token, auth_token, sig, signature,
+# code, session und X-Amz-Signature unredigiert im signierten Endpoint stehen.
 _SENSITIVE_QUERY_KEYS = frozenset({
     "key", "api_key", "apikey", "token", "access_token", "secret", "password", "auth"
 })
+_SENSITIVE_QUERY_SUBSTRINGS = (
+    "token", "secret", "key", "sig", "auth", "password", "code", "session",
+)
+# Explizite Allowlist harmloser Parameter, die einen Sensitivitäts-Substring
+# enthalten (z. B. "design" enthaelt "sig", "author" enthaelt "auth").
+_SENSITIVE_QUERY_ALLOWLIST = frozenset({
+    "design", "designer", "signal", "signals", "keyword", "keywords",
+    "keyboard", "author", "authors", "codec", "encode", "decode",
+})
+
+
+def _is_sensitive_query_key(key: str) -> bool:
+    kl = (key or "").strip().lower()
+    if not kl:
+        return False
+    if kl in _SENSITIVE_QUERY_ALLOWLIST:
+        return False
+    if kl in _SENSITIVE_QUERY_KEYS:
+        return True
+    return any(token in kl for token in _SENSITIVE_QUERY_SUBSTRINGS)
 
 _LOCAL_ON_PREM_HOSTS = frozenset({
     "localhost",
@@ -208,7 +258,7 @@ def sanitize_llm_endpoint(endpoint: str) -> Tuple[str, str, str]:
     if parsed.query:
         filtered_pairs = []
         for k, v in parse_qsl(parsed.query, keep_blank_values=True):
-            if k.lower() in _SENSITIVE_QUERY_KEYS:
+            if _is_sensitive_query_key(k):
                 filtered_pairs.append((k, "REDACTED"))
             else:
                 filtered_pairs.append((k, v))
@@ -425,6 +475,23 @@ class ChainedAuditLog:
                 company_id_val = sanitize_tenant_id(company_id_val)
             except Exception as exc:
                 logger.debug("Audit-Log: sanitize_tenant_id nicht verfuegbar: %s", exc)
+
+        # F-027: Neue Bloecke NEVER mit nacktem SHA-256 schreiben. Die
+        # GoBD-Invariante sha256_dispatch_audit_enforced erzwingt den HMAC-Key
+        # im Schreibpfad; nacktes SHA-256 bleibt lesend auf den explizit
+        # markierten legacy_max-Bereich beschraenkt (siehe verify_integrity).
+        if not _hmac_epochs():
+            if _dispatch_audit_enforced():
+                raise RuntimeError(
+                    "[Audit] ARCHON_AUDIT_HMAC_KEY fehlt: neue Audit-Bloecke duerfen "
+                    "nicht mit nacktem SHA-256 geschrieben werden "
+                    "(sha256_dispatch_audit_enforced=True)."
+                )
+            logger.error(
+                "[Audit] OPT-OUT sha256_dispatch_audit_enforced=False: neuer Block "
+                "%s/%s wird UNGESCHUETZT mit nacktem SHA-256 geschrieben.",
+                category, action,
+            )
 
         with self._lock:
             conn = self._get_conn()
@@ -707,13 +774,28 @@ class ChainedAuditLog:
                                 "corrupted_id": r["id"],
                                 "reason": f"Ungültiges Payload-JSON in LLM-Dispatch Block #{r['id']}.",
                             }
-                        for req_key in ("provider", "model", "target_host", "target_endpoint"):
+                        # F-028: egress_zone ist Pflichtfeld des Beweises
+                        # (S-5.2) und darf nicht leer bleiben.
+                        for req_key in ("provider", "model", "target_host", "target_endpoint", "egress_zone"):
                             if not str(parsed_payload.get(req_key, "")).strip():
                                 return {
                                     "valid": False,
                                     "corrupted_id": r["id"],
                                     "reason": f"Unvollständiger LLM-Dispatch-Nachweis bei Block #{r['id']}: Feld '{req_key}' fehlt.",
                                 }
+                        # F-028: zusaetzlich auf eine der drei definierten
+                        # Zonen validieren — beliebiger/manipulierter Wert
+                        # (z. B. "" oder "GARBAGE") ist kein gueltiger Nachweis.
+                        zone_val = str(parsed_payload.get("egress_zone", "") or "").strip()
+                        if zone_val not in {"LOCAL_ON_PREM", "INTERNAL_GATEWAY", "EXTERNAL_CLOUD"}:
+                            return {
+                                "valid": False,
+                                "corrupted_id": r["id"],
+                                "reason": (
+                                    f"Ungueltige egress_zone bei LLM-Dispatch Block #{r['id']}: "
+                                    f"'{zone_val}'."
+                                ),
+                            }
                         if has_dispatch_cols:
                             for col_key in ("provider", "model", "target_host", "target_endpoint", "egress_zone"):
                                 col_val = str(r[col_key] or "")

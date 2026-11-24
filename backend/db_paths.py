@@ -23,6 +23,11 @@ from typing import Optional
 
 logger = logging.getLogger("archon.db_paths")
 
+# F-013: einzige autoritative busy_timeout für ALLE SQLite-Verbindungen (S-3.1).
+# Früher standen 15000/10000/1500/5000 verstreut in den Modulen — Drift und
+# Lock-Contention waren die Folge. Alle Module importieren diese Konstante.
+DB_BUSY_TIMEOUT_MS = 5000
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # W6: Test-DB-Isolation. Wenn pytest und der laufende Container gleichzeitig
 # auf dasselbe Bind-Mount ./data/*.db schreiben, entsteht WAL-Korruption
@@ -174,8 +179,14 @@ class ClosingConnection(sqlite3.Connection):
             self.close()
 
 
-def get_db_connection(db_name_or_path: str, timeout: float = 15.0) -> sqlite3.Connection:
-    """Erzeugt eine gehärtete ClosingConnection mit busy_timeout und WAL-Modus."""
+def get_db_connection(db_name_or_path: str, timeout: float = DB_BUSY_TIMEOUT_MS / 1000.0) -> sqlite3.Connection:
+    """Erzeugt eine gehärtete ClosingConnection mit busy_timeout und WAL-Modus.
+
+    F-013: Der Default (und der PRAGMA) kommen aus der SSOT `DB_BUSY_TIMEOUT_MS`.
+    Ein explizit übergebener `timeout` steuert nur noch den
+    sqlite3.connect()-Parameter, nicht den PRAGMA — damit bleibt der Wert
+    verbindlich 5000 ms, selbst wenn ein Aufrufer abweichend übergibt.
+    """
     if os.path.isabs(db_name_or_path) or "/" in db_name_or_path or "\\" in db_name_or_path:
         db_path = os.path.abspath(db_name_or_path)
     else:
@@ -183,7 +194,7 @@ def get_db_connection(db_name_or_path: str, timeout: float = 15.0) -> sqlite3.Co
 
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=timeout, factory=ClosingConnection)
-    conn.execute(f"PRAGMA busy_timeout = {int(timeout * 1000)};")
+    conn.execute(f"PRAGMA busy_timeout = {DB_BUSY_TIMEOUT_MS};")
     # W2: SQLite schaltet foreign_keys standardmässig AUS. Ohne dieses
     # PRAGMA wirkten deklarierte Relations und ON DELETE CASCADE nirgends
     # (verwaiste Zeilen in tasks/task_links, sessions/messages, ...).

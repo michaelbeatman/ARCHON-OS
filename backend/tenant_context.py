@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 # Autoritative Basis ist der Repo-Root (identisch mit backend.db_paths).
 # Vorher kam WORKSPACE_DIR aus archon.core.runtime ("./agent_workspace") und
 # erzeugte ein zweites, leeres data/tenants-Verzeichnis -> Split-Brain.
-from backend.db_paths import WORKSPACE_DIR, APP_DATA_DIR
+from backend.db_paths import WORKSPACE_DIR, APP_DATA_DIR, DB_BUSY_TIMEOUT_MS  # F-013: SSOT
 
 logger = logging.getLogger("archon.tenant_context")
 
@@ -79,6 +79,20 @@ DEFAULT_NUMBER_PREFIXES = {
     "credit_note": "GS",
     "contract": "VTR",
 }
+
+# F-018: einzige Schema-Definition der Nummernkreis-Authority. Wird sowohl
+# von tenant_context als auch von der ERP-Legacy-Migration verwendet.
+DOCUMENT_NUMBER_SEQUENCES_DDL = """
+    CREATE TABLE IF NOT EXISTS document_number_sequences (
+        tenant_id TEXT NOT NULL,
+        doc_type  TEXT NOT NULL,
+        year      INTEGER NOT NULL,
+        prefix    TEXT NOT NULL,
+        next_seq  INTEGER NOT NULL,
+        padding   INTEGER NOT NULL DEFAULT 4,
+        PRIMARY KEY (tenant_id, doc_type, year)
+    )
+"""
 
 
 def sanitize_tenant_id(company_id: Optional[str]) -> str:
@@ -138,7 +152,7 @@ def init_tenant_db_schema(db_filename: str, db_path: str) -> None:
     try:
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
-        conn.execute("PRAGMA busy_timeout=5000;")
+        conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
         with conn:
             if fname == "deals.db":
                 conn.execute(
@@ -426,7 +440,12 @@ class TenantContextManager:
             # konsistent in das Mandantenverzeichnis kopiert. Danach gibt es
             # keine geteilten Daten mehr und Art.-17 kann sauber löschen.
             if FULL_TENANT_ISOLATION:
-                if not os.path.isfile(isolated_path):
+                # F-014: Die Legacy-Kopie darf NUR fuer Primärmandanten laufen.
+                # Ohne diesen Guard erbt jeder neu angelegte Sekundärmandant die
+                # Business-/CRM-Daten des Primärmandanten (reale Cross-Tenant-
+                # Vermischung, im Bestand nachgewiesen). Sekundärmandanten erhalten
+                # ausschliesslich ein leeres, inicialisiertes Schema.
+                if (not os.path.isfile(isolated_path)) and (tid in PRIMARY_TENANT_IDS):
                     legacy_candidates = [
                         os.path.join(self._data_root, fname),
                         os.path.join(os.path.expanduser("~"), ".hermes", fname),
@@ -580,21 +599,50 @@ class TenantContextManager:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         return path
 
+    def migrate_legacy_erp_sequences(self, conn: sqlite3.Connection, company_id: str) -> None:
+        """F-018: erp_sequences (alter, nicht jahresbezogener Zaehler) nach
+        document_number_sequences migrieren — einmalig und verlustfrei.
+
+        `erp_sequences.current_val` enthaelt die *zuletzt vergebene* Nummer
+        (`_next_sequence` erhoeht vor dem Lesen). Der neue Zaehler speichert
+        die *naechste* Nummer, daher `next_seq = current_val + 1`.
+        `INSERT OR IGNORE` schuetzt bereits vorhandene, hoehere Staende.
+        """
+        conn.execute(DOCUMENT_NUMBER_SEQUENCES_DDL)
+        year = datetime.datetime.now().year
+        legacy_map = {
+            "offer": ("offer", f"ANG-{year}-"),
+            "order": ("order", f"AB-{year}-"),
+            "invoice": ("invoice", f"RE-{year}-"),
+            "credit_note": ("credit_note", f"GS-{year}-"),
+        }
+        tid = sanitize_tenant_id(company_id)
+        for seq_key, (doc_type, prefix) in legacy_map.items():
+            try:
+                row = conn.execute(
+                    "SELECT current_val FROM erp_sequences WHERE seq_key = ?", (seq_key,)
+                ).fetchone()
+            except sqlite3.Error:
+                return  # Tabelle existiert nicht (frische DB) — nichts zu migrieren.
+            if not row:
+                continue
+            next_seq = max(1, int(row[0]) + 1)
+            conn.execute(
+                """INSERT OR IGNORE INTO document_number_sequences
+                   (tenant_id, doc_type, year, prefix, next_seq, padding)
+                   VALUES (?, ?, ?, ?, ?, 4)""",
+                (tid, doc_type, year, prefix, next_seq),
+            )
+
     def _ensure_number_sequences_table(self, company_id: str) -> str:
         path = self._numbers_db_path(company_id)
-        with sqlite3.connect(path, timeout=15.0) as conn:
+        with sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0) as conn:
             conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS document_number_sequences (
-                    tenant_id TEXT NOT NULL,
-                    doc_type  TEXT NOT NULL,
-                    year      INTEGER NOT NULL,
-                    prefix    TEXT NOT NULL,
-                    next_seq  INTEGER NOT NULL,
-                    padding   INTEGER NOT NULL DEFAULT 4,
-                    PRIMARY KEY (tenant_id, doc_type, year)
-                )
-            """)
+            conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+            conn.execute(DOCUMENT_NUMBER_SEQUENCES_DDL)
+            # F-018: Legacy-Zaehler aus der ERP-Tabelle erp_sequences in die
+            # eine Authority ueberfuehren (Zaehlerstaende erhalten).
+            self.migrate_legacy_erp_sequences(conn, company_id)
             # Einmalige Migration aus number_ranges.json (Zaehlerstand muss
             # erhalten bleiben — sonst drohen doppelte Rechnungsnummern).
             legacy = self._ranges_file(company_id)
@@ -650,7 +698,8 @@ class TenantContextManager:
         path = self._ensure_number_sequences_table(tid)
         year = datetime.datetime.now().year
         result: Dict[str, Any] = {}
-        with sqlite3.connect(path, timeout=15.0) as conn:
+        with sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0) as conn:
+            conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
             rows = conn.execute(
                 "SELECT doc_type, prefix, next_seq, padding FROM document_number_sequences "
                 "WHERE tenant_id = ? AND year = ?",
@@ -677,7 +726,8 @@ class TenantContextManager:
         """Kompatibilitätswrapper: schreibt in SQLite statt in eine JSON-Datei."""
         path = self._ensure_number_sequences_table(company_id)
         year = datetime.datetime.now().year
-        with sqlite3.connect(path, timeout=15.0) as conn:
+        with sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0) as conn:
+            conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
             conn.execute("BEGIN IMMEDIATE")
             for doc_type, entry in (data or {}).items():
                 if not isinstance(entry, dict):
@@ -694,39 +744,76 @@ class TenantContextManager:
                       int(entry.get("next_seq") or 1), int(entry.get("padding") or 4)))
             conn.commit()
 
-    def next_document_number(self, doc_type: str, company_id: Optional[str] = None) -> str:
-        """Vergibt prozessübergreifend atomar die nächste Belegnummer (GoBD)."""
+    def next_document_number(
+        self,
+        doc_type: str,
+        company_id: Optional[str] = None,
+        *,
+        conn: Optional[sqlite3.Connection] = None,
+        prefix: Optional[str] = None,
+    ) -> str:
+        """F-018: einzige Authority für Belegnummern (jahresbezogen, atomar).
+
+        Der Zähler liegt in `document_number_sequences` mit
+        `PRIMARY KEY (tenant_id, doc_type, year)` — dadurch startet jedes Jahr
+        wieder bei 0001. Ohne `conn` wird `BEGIN IMMEDIATE` auf einer eigenen
+        Verbindung ausgeführt (Tenant-Endpoint). Wird `conn` übergeben
+        (ERP-Belegpfad), läuft die Zähler-Transaktion innerhalb der bereits
+        offenen Transaktion desselben Connects — sonst Deadlock am DB-Lock.
+
+        `prefix` erlaubt dem ERP das DATEV-/GoBD-Format `RE-YYYY-0001`, ohne
+        einen zweiten Zähler einzuführen. Ohne Override bleibt das historische
+        `RE-{MANDANT}-{YYYY}-0001`-Format (kompatibel mit tests/test_m43_*).
+        """
         if doc_type not in DEFAULT_NUMBER_PREFIXES:
             raise ValueError(f"Unbekannter Belegtyp '{doc_type}'. Erlaubt: {list(DEFAULT_NUMBER_PREFIXES)}")
         tid = sanitize_tenant_id(company_id) if company_id else self.get_active_tenant_id()
-        path = self._ensure_number_sequences_table(tid)
         year = datetime.datetime.now().year
         short_code = tid.upper()[:6]
         default_prefix = f"{DEFAULT_NUMBER_PREFIXES[doc_type]}-{short_code}-{year}-"
+        override_prefix = str(prefix) if prefix is not None else None
 
-        with sqlite3.connect(path, timeout=15.0) as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute(
+        own_conn: Optional[sqlite3.Connection] = None
+        target: sqlite3.Connection
+        if conn is not None:
+            target = conn
+            target.execute(DOCUMENT_NUMBER_SEQUENCES_DDL)
+        else:
+            path = self._ensure_number_sequences_table(tid)
+            own_conn = sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
+            own_conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+            own_conn.execute("BEGIN IMMEDIATE")
+            target = own_conn
+
+        try:
+            row = target.execute(
                 "SELECT prefix, next_seq, padding FROM document_number_sequences "
                 "WHERE tenant_id = ? AND doc_type = ? AND year = ?",
                 (tid, doc_type, year),
             ).fetchone()
+            store_prefix = override_prefix if override_prefix is not None else default_prefix
             if row is None:
-                prefix, seq, pad = default_prefix, 1, 4
-                conn.execute(
+                seq, pad = 1, 4
+                target.execute(
                     "INSERT INTO document_number_sequences "
                     "(tenant_id, doc_type, year, prefix, next_seq, padding) VALUES (?, ?, ?, ?, ?, ?)",
-                    (tid, doc_type, year, prefix, seq + 1, pad),
+                    (tid, doc_type, year, store_prefix, seq + 1, pad),
                 )
+                out_prefix = store_prefix
             else:
-                prefix, seq, pad = str(row[0]), int(row[1]), int(row[2])
-                conn.execute(
+                seq, pad = int(row[1]), int(row[2] or 4)
+                target.execute(
                     "UPDATE document_number_sequences SET next_seq = ? "
                     "WHERE tenant_id = ? AND doc_type = ? AND year = ?",
                     (seq + 1, tid, doc_type, year),
                 )
-            conn.commit()
-        return f"{prefix}{str(seq).zfill(pad)}"
+                out_prefix = override_prefix if override_prefix is not None else str(row[0])
+            if own_conn is not None:
+                own_conn.commit()
+            return f"{out_prefix}{str(seq).zfill(pad)}"
+        finally:
+            if own_conn is not None:
+                own_conn.close()
 
     def get_isolation_status(self, company_id: Optional[str] = None) -> Dict[str, Any]:
         tid = sanitize_tenant_id(company_id) if company_id else self.get_active_tenant_id()

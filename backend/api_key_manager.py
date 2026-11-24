@@ -143,8 +143,12 @@ class ApiKeyManager:
         salted = f"{LEGACY_KEY_SALT}:{raw_token}".encode("utf-8")
         return hashlib.sha256(salted).hexdigest()
 
-    def _log_audit(self, key_id: str, action: str, details: Dict[str, Any], created_by: str = "admin", conn: Optional[sqlite3.Connection] = None, emit_global: bool = True):
-        """Fuegt einen Eintrag in die SHA-256 Hash-Kette fuer API-Keys ein."""
+    def _log_audit(self, key_id: str, action: str, details: Dict[str, Any], created_by: str = "admin", conn: Optional[sqlite3.Connection] = None, emit_global: bool = True) -> Dict[str, Any]:
+        """Fuegt einen Eintrag in die SHA-256 Hash-Kette fuer API-Keys ein.
+
+        F-031: Fehler beim globalen Audit-Schreiben werden als ERROR geloggt
+        und als ``audit_status: "error"`` im Result zurueckgegeben.
+        """
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         details_json = json.dumps(details, sort_keys=True, ensure_ascii=False)
 
@@ -175,6 +179,7 @@ class ApiKeyManager:
             with self._get_conn() as local_conn:
                 _do_log(local_conn)
                 local_conn.commit()
+        audit_result: Dict[str, Any] = {"audit_status": "ok"}
         if emit_global and conn is None:
             try:
                 from backend.audit_log import chained_audit_log
@@ -185,7 +190,9 @@ class ApiKeyManager:
                     payload={"key_id": key_id, **details}
                 )
             except Exception as exc:
-                logger.debug("API-Key-Manager: Audit-Log-Eintrag fehlgeschlagen: %s", exc)
+                logger.error("API-Key-Manager: Audit-Log-Eintrag fehlgeschlagen: %s", exc)
+                audit_result = {"audit_status": "error", "audit_error": type(exc).__name__}
+        return audit_result
 
     def verify_integrity(self) -> Dict[str, Any]:
         """Lauf-5 H-02: kryptografische Pruefung der API-Key-Audit-Kette.
@@ -255,7 +262,8 @@ class ApiKeyManager:
             }
 
     @staticmethod
-    def _emit_global_audit(key_id: str, action: str, details: Dict[str, Any], created_by: str) -> None:
+    def _emit_global_audit(key_id: str, action: str, details: Dict[str, Any], created_by: str) -> Dict[str, Any]:
+        """F-031: globalen Audit-Fehler sichtbar machen (ERROR + audit_status)."""
         try:
             from backend.audit_log import chained_audit_log
             chained_audit_log.record_event(
@@ -264,8 +272,10 @@ class ApiKeyManager:
                 agent_id=created_by,
                 payload={"key_id": key_id, **details},
             )
+            return {"audit_status": "ok"}
         except Exception as exc:
-            logger.debug("API-Key-Manager: Globaler Audit-Log-Eintrag fehlgeschlagen: %s", exc)
+            logger.error("API-Key-Manager: Globaler Audit-Log-Eintrag fehlgeschlagen: %s", exc)
+            return {"audit_status": "error", "audit_error": type(exc).__name__}
 
     def create_key(
         self,
@@ -323,7 +333,7 @@ class ApiKeyManager:
             }
             self._log_audit(key_id, "KEY_CREATED", audit_details, created_by=created_by, conn=conn, emit_global=False)
             conn.commit()
-        self._emit_global_audit(key_id, "KEY_CREATED", audit_details, created_by)
+        global_audit = self._emit_global_audit(key_id, "KEY_CREATED", audit_details, created_by)
 
         return {
             "key_id": key_id,
@@ -334,7 +344,9 @@ class ApiKeyManager:
             "rate_limit_rpm": rate_limit_rpm,
             "rate_limit_rpd": rate_limit_rpd,
             "created_at": now_iso,
-            "created_by": created_by
+            "created_by": created_by,
+            # F-031: Audit-Fehler im Aktions-Result sichtbar.
+            **global_audit,
         }
 
     def list_keys(self) -> List[Dict[str, Any]]:

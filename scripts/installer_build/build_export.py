@@ -1,6 +1,11 @@
 import os
 import shutil
 import re
+import sys
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger("archon.installer_build")
 
 SOURCE_DIR = r"."
 DEST_DIR = r"/path/to/archon-os"
@@ -18,6 +23,9 @@ OBSIDIAN_DEST = os.path.join(DEST_DIR, "Obsidian_Vault")
 OBSIDIAN_ALLOWED = {"02_Wissensbibliothek": "00_Wissensbibliothek", "00_HR_Agenten": "00_HR_Agenten"}
 
 print(f"Starte Export Pipeline...")
+
+# F-051: Fehlgeschlagene Scrub-Vorgänge dürfen nicht unsichtbar bleiben.
+failed_files = []
 
 if os.path.exists(DEST_DIR):
     shutil.rmtree(DEST_DIR, ignore_errors=True)
@@ -75,6 +83,18 @@ if os.path.exists(OBSIDIAN_SOURCE):
                             clean_cont = scrub_content(cont)
                             with open(p, "w", encoding="utf-8") as file_obj:
                                 file_obj.write(clean_cont)
-                        except: pass
+                        except (OSError, ValueError) as exc:
+                            # F-051: Nie nacktes `except: pass` — ein fehlgeschlagener
+                            # Scrub darf nicht als erfolgreicher Export gemeldet werden.
+                            failed_files.append(p)
+                            logger.error("[Export] Scrub fehlgeschlagen fuer '%s': %s", p, exc)
+
+if failed_files:
+    print(f"\n[!] Export mit {len(failed_files)} fehlerhaften Dateien abgeschlossen:")
+    for _p in failed_files[:20]:
+        print(f"    - {_p}")
+    # Obsidian-Markdown ist kritischer Export-Inhalt: kein Erfolgs-Exit bei
+    # nicht bereinigten Dateien (fail-closed, kein BaseException-Catch).
+    sys.exit(1)
 
 print("\n[+] Export abgeschlossen!")

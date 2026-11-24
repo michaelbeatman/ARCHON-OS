@@ -38,6 +38,7 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ARCHON_DATA_DIR); der Alias bleibt nur für bestehende Importe (Tests)
 # erhalten und ist jetzt aus der SSOT abgeleitet.
 from backend.db_paths import APP_DATA_DIR as _APP_DATA_DIR  # noqa: E402
+from backend.db_paths import DB_BUSY_TIMEOUT_MS  # F-013: SSOT busy_timeout
 
 TENANTS_BASE_DIR = os.path.join(_APP_DATA_DIR, "tenants")
 _DEFAULT_TENANTS_BASE_DIR = TENANTS_BASE_DIR
@@ -97,11 +98,11 @@ class ERPManager:
         db_path = get_tenant_db_path(cid)
         is_new_file = not os.path.exists(db_path)
 
-        conn = sqlite3.connect(db_path, timeout=10.0)
+        conn = sqlite3.connect(db_path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
         conn.execute("PRAGMA foreign_keys=ON;")
-        conn.execute("PRAGMA busy_timeout=5000;")
+        conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
         conn.row_factory = sqlite3.Row
 
         if cid not in self._initialized_tenants or is_new_file:
@@ -133,6 +134,15 @@ class ERPManager:
                     "INSERT OR IGNORE INTO erp_sequences (seq_key, current_val) VALUES (?, ?)",
                     (k, v)
                 )
+
+            # F-018: Legacy-Zähler aus erp_sequences einmalig in die
+            # jahresbezogene, atomare Authority document_number_sequences
+            # überführen. INSERT OR IGNORE erhält bereits vorhandene Stände.
+            try:
+                from backend.tenant_context import tenant_context
+                tenant_context.migrate_legacy_erp_sequences(conn, cid)
+            except Exception as exc:
+                logger.warning("[ERP] Nummernkreis-Migration (erp_sequences) fuer '%s': %s", cid, exc)
 
             # 2. PocketBase Sync-Konfiguration pro Mandant
             conn.execute("""
@@ -378,7 +388,7 @@ class ERPManager:
         if cid in ("default", "archon-systems"):
             count_ent = conn.execute("SELECT COUNT(*) FROM crm_entities").fetchone()[0]
             if count_ent == 0:
-                self._seed_primary_tenant(conn)
+                self._seed_primary_tenant(conn, cid)
 
     def _next_sequence(self, conn: sqlite3.Connection, seq_key: str) -> int:
         conn.execute(
@@ -391,19 +401,38 @@ class ERPManager:
         ).fetchone()
         return int(row["current_val"]) if row else 1
 
-    def _format_doc_number(self, conn: sqlite3.Connection, doc_type: str) -> str:
+    def _format_doc_number(
+        self,
+        conn: sqlite3.Connection,
+        doc_type: str,
+        company_id: Optional[str] = None,
+    ) -> str:
+        """F-018: Belegnummern ausschließlich über die eine Authority vergeben.
+
+        `tenant_context.next_document_number()` ist der einzige Zähler
+        (jahresbezogen, `BEGIN IMMEDIATE`, PK inkl. Jahr). Der übergebene
+        Prefix erhält das DATEV-/GoBD-Format `RE-YYYY-0001`. Die Verbindung
+        wird weitergereicht, damit kein zweiter Connection im laufenden
+        `with conn:`-Block gegen denselben DB-Lock läuft (Deadlock-Schutz).
+        """
         prefix_map = {
             "offer": "ANG",
             "order": "AB",
             "invoice": "RE",
             "credit_note": "GS"
         }
-        seq_key = doc_type if doc_type in prefix_map else "offer"
-        num = self._next_sequence(conn, seq_key)
+        kind = doc_type if doc_type in prefix_map else "offer"
         year = datetime.date.today().year
-        return f"{prefix_map.get(doc_type, 'DOK')}-{year}-{num:04d}"
+        erp_prefix = f"{prefix_map[kind]}-{year}-"
+        from backend.tenant_context import tenant_context
+        return tenant_context.next_document_number(
+            kind,
+            company_id or _sanitize_company_id(None),
+            conn=conn,
+            prefix=erp_prefix,
+        )
 
-    def _seed_primary_tenant(self, conn: sqlite3.Connection):
+    def _seed_primary_tenant(self, conn: sqlite3.Connection, company_id: Optional[str] = None):
         """Legt initiale Referenzdaten für den Hauptmandanten archon-systems an."""
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         today = datetime.date.today().isoformat()
@@ -578,7 +607,7 @@ class ERPManager:
                 "country_code": "DE"
             }, ensure_ascii=False)
 
-            offer_no = self._format_doc_number(conn, "offer")
+            offer_no = self._format_doc_number(conn, "offer", company_id)
             conn.execute("""
                 INSERT INTO erp_documents (
                     id, doc_type, doc_number, status, entity_id, contact_id,
@@ -608,7 +637,7 @@ class ERPManager:
                  1.0, 'Pauschal', 2400.00, 0.0, 19.0, 2400.00, 456.00, 2856.00)
             """)
 
-            inv_no = self._format_doc_number(conn, "invoice")
+            inv_no = self._format_doc_number(conn, "invoice", company_id)
             conn.execute("""
                 INSERT INTO erp_documents (
                     id, doc_type, doc_number, status, entity_id, contact_id, source_doc_id,
@@ -1341,6 +1370,7 @@ class ERPManager:
         conn: sqlite3.Connection,
         src_doc: Dict[str, Any],
         reason: str = "",
+        company_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Erzeugt einen GoBD-konformen Stornobeleg (credit_note / Typ 381) als Gegenbuchung."""
         existing_storno = conn.execute(
@@ -1357,7 +1387,7 @@ class ERPManager:
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         today = datetime.date.today().isoformat()
         storno_id = f"doc-{uuid.uuid4().hex[:8]}"
-        storno_num = self._format_doc_number(conn, "credit_note")
+        storno_num = self._format_doc_number(conn, "credit_note", company_id)
         src_num = str(src_doc.get("doc_number") or src_doc["id"])
         note_prefix = f"Stornobeleg (Gegenbuchung) zu {src_num}"
         if reason:
@@ -1495,6 +1525,7 @@ class ERPManager:
                                     conn,
                                     ex,
                                     reason=str(payload.get("cancel_reason") or ""),
+                                    company_id=cid,
                                 )
                         elif new_status in ("booked", "paid") and int(ex.get("stock_deducted") or 0) == 0:
                             self._apply_inventory_stock_delta(conn, doc_id, sign=-1)
@@ -1679,7 +1710,7 @@ class ERPManager:
                     if existing_num and not existing_num.startswith("ENTWURF-"):
                         doc_number = existing_num
                     else:
-                        doc_number = payload.get("doc_number") or self._format_doc_number(conn, doc_type)
+                        doc_number = payload.get("doc_number") or self._format_doc_number(conn, doc_type, cid)
 
                 conn.execute("""
                     INSERT INTO erp_documents (
@@ -1803,7 +1834,7 @@ class ERPManager:
                         (doc_id,),
                     )
                     if ex.get("doc_type") in ("invoice", "credit_note") or ex.get("booked_at"):
-                        storno_info = self._create_storno_credit_note(conn, ex, reason=reason)
+                        storno_info = self._create_storno_credit_note(conn, ex, reason=reason, company_id=cid)
         finally:
             conn.close()
 

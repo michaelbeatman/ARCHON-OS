@@ -521,8 +521,28 @@ def enforce_egress_firewall_for_url(
         except (OSError, ValueError):
             resolved_ok = False  # DNS nicht aufloesbar -> fail-closed
         if not resolved_ok:
+            # F-030: auch der DNS-/Rebinding-Fail-Closed-Block braucht einen
+            # signierten Dispatch-Proof — alle anderen Blockpfade dieser
+            # Funktion schreiben ebenfalls einen (S-5.2 „auch geblockte").
+            alog = audit_logger or chained_audit_log
+            reason = (
+                f"Zero-Egress: '{host_low}' ({zone}) liefert keine rein lokale/private "
+                "Adresse — blockiert."
+            )
+            ev = alog.record_llm_dispatch(
+                agent_id=agent_id or "system",
+                provider=host_low or "external",
+                model="egress-firewall",
+                target_endpoint=clean_ep,
+                action="llm_dispatch_blocked_dns_not_local",
+                data_category="egress_firewall",
+                http_status=0,
+                zero_egress_active=True,
+                extra={"reason": reason, "egress_zone": zone, "error_code": "EGRESS_DNS_NOT_LOCAL"},
+            )
             raise ZeroEgressBlockedError(
-                f"Zero-Egress: '{host_low}' ({zone}) liefert keine rein lokale/private Adresse — blockiert.",
+                reason,
+                audit_event=ev,
                 error_code="EGRESS_DNS_NOT_LOCAL",
             )
         return {"allowed": True, "blocked": False, "zone": zone, "reason": "local_or_internal_gateway"}

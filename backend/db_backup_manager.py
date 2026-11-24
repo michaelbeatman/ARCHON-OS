@@ -447,12 +447,20 @@ class DBBackupManager:
             try:
                 integrity = conn.execute("PRAGMA integrity_check").fetchone()
                 quick = conn.execute("PRAGMA quick_check").fetchone()
+                # F-015: FK-Check gehoert zwingend VOR den Austausch. Ein
+                # FK-inkonsistentes Backup wurde bisher still in den Produktions-
+                # pfad gespielt (genau die Korruption, die P1-24 bereinigte).
+                fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
             finally:
                 conn.close()
             if not integrity or str(integrity[0]).lower() != "ok":
                 raise RuntimeError(f"Integritätsprüfung fehlgeschlagen: {integrity}")
             if not quick or str(quick[0]).lower() != "ok":
                 raise RuntimeError(f"Quick-Check des Backup-Snapshots fehlgeschlagen: {quick}")
+            if fk_violations:
+                raise RuntimeError(
+                    f"Restore abgelehnt: {len(fk_violations)} FK-Verletzung(en) im Backup-Snapshot."
+                )
             result = {
                 "restored": not dry_run,
                 "backup": name,
@@ -613,6 +621,16 @@ class DBBackupManager:
                 result.update(_audit_backup_restore(_meta))
             else:
                 _audit_backup_restore(_meta)
+            # F-016: SQLite legt beim Öffnen des Tempfiles WAL/SHM-Sidecars an.
+            # Ohne Cleanup bleiben verwaiste Artefakte zurück (real beobachtet:
+            # .memory.db.restore.*.tmp-shm/-wal in data/).
+            for suffix in ("-wal", "-shm", "-journal"):
+                sidecar = tmp_path + suffix
+                if os.path.exists(sidecar):
+                    try:
+                        os.unlink(sidecar)
+                    except OSError as exc:
+                        logger.warning("[DBBackup] Temp-Sidecar %s nicht entfernbar: %s", sidecar, exc)
             if os.path.exists(tmp_path):
                 try:
                     os.unlink(tmp_path)

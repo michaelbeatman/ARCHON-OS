@@ -457,13 +457,46 @@ class WatchdogDaemon:
                     logger.error("[Watchdog] Alarm 'watchdog_thread_dead' konnte nicht gemeldet werden: %s", exc)
 
 
+def _watchdog_process_main() -> None:
+    """Entry-Point für den externen Supervisor-Prozess (spawn-fähig)."""
+    try:
+        WatchdogDaemon().run_forever()
+    except Exception as exc:  # pragma: no cover
+        logger.error("[Watchdog] Supervisor-Prozess beendet: %s", exc)
+
+
 def start_background_watchdog():
-    import threading
+    """D10/HIGH: Supervisor als EIGENER PROZESS mit eigenem Interpreter.
+
+    Vorher lief der 30-s-Watchdog als `daemon=True`-Thread im selben Prozess
+    wie die überwachte Anwendung — bei Event-Loop-Hang/Freeze konnte er nicht
+    eingreifen. Die Liveness wird über eine atomare Datei cross-process
+    geteilt; der externe `archon-autoheal`-Container liest sie jetzt via
+    `/livez` und restartet bei `watchdog_stale` (siehe D10-Fund 1).
+    """
+    import multiprocessing
     daemon = WatchdogDaemon()
-    t = threading.Thread(target=daemon.run_forever, daemon=True, name="ArchonWatchdogThread")
-    daemon._thread = t
-    t.start()
-    return daemon
+    try:
+        ctx = multiprocessing.get_context("spawn")
+        proc = ctx.Process(
+            target=_watchdog_process_main,
+            name="ArchonWatchdogProcess",
+            daemon=True,
+        )
+        daemon._process = proc
+        proc.start()
+        logger.info("[Watchdog] Supervisor-Prozess gestartet (pid=%s)", getattr(proc, "pid", "?"))
+        return daemon
+    except Exception as exc:
+        # Fallback nur, wenn die Plattform keinen Process-Spawn erlaubt.
+        logger.error("[Watchdog] Prozess-Start fehlgeschlagen, Fallback Thread: %s", exc)
+        import threading
+        t = threading.Thread(
+            target=daemon.run_forever, daemon=True, name="ArchonWatchdogThread"
+        )
+        daemon._thread = t
+        t.start()
+        return daemon
 
 
 if __name__ == "__main__":

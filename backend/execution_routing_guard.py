@@ -94,8 +94,10 @@ def classify_execution_layer(title: str, body: str = "") -> Dict[str, Any]:
     """
     text = f"{title or ''} {body or ''}".strip().lower()
 
-    # Check explicit directive tags first
-    if "layer:n8n" in text or "action:webhook_" in text or "action:publish_" in text:
+    # Check explicit directive tags first (Leerzeichen um ':' tolerant —
+    # "ACTION: WEBHOOK_CRM" muss genauso greifen wie "action:webhook_crm").
+    compact = re.sub(r"\s+", "", text)
+    if "layer:n8n" in compact or "action:webhook_" in compact or "action:publish_" in compact:
         return {
             "layer": "deterministic_n8n",
             "rule_id": "explicit_n8n_directive",

@@ -1167,6 +1167,40 @@ class AgentRouter:
     ) -> AsyncGenerator[str, None]:
         """D13: Budget-Gate + Flightlog-Guard + finally-release (Stream)."""
         tid = str(task_id or f"agent-router:{agent_id}")
+        # D02: 0-Token-Deterministikpfad im PRODUKTIVEN Master-Chat. Vorher
+        # wurde `classify_execution_layer()` nur in core_dispatcher/Inspektion
+        # gerufen — der Chat-Pfad baute direkt einen LLM-Request (Theater).
+        try:
+            from backend.execution_routing_guard import classify_execution_layer
+            _prompt_text = " ".join(
+                str(m.get("content", "")) for m in messages[-4:]
+                if isinstance(m, dict)
+            )
+            _erg = classify_execution_layer(_prompt_text[:160], _prompt_text)
+            if _erg.get("layer") in ("deterministic_n8n", "deterministic_script"):
+                if _erg.get("requires_hitl"):
+                    yield "ERROR: DETERMINISTIC_HITL_REQUIRED — kein LLM-Dispatch ohne Freigabe."
+                    return
+                if _erg.get("layer") == "deterministic_n8n":
+                    from core_dispatcher import trigger_n8n_execution
+                    _res = await asyncio.to_thread(
+                        trigger_n8n_execution,
+                        parent_project_id=tid or f"det-{agent_id}",
+                        title=_prompt_text[:120],
+                        final_report_path="",
+                        content=_prompt_text[:2000],
+                        target_action=str(_erg.get("webhook_action") or "none"),
+                    )
+                    yield f"Deterministisch via n8n ausgeführt (0 Tokens): {_res.get('status')}"
+                    return
+                yield "Deterministische Aufgabe (0 Tokens) — kein LLM-Dispatch erforderlich."
+                return
+        except Exception as _route_exc:
+            logger.error(
+                "[AgentRouter] Execution-Routing-Guard fehlgeschlagen (fail-closed): %s", _route_exc
+            )
+            yield "ERROR: EXECUTION_ROUTING_GUARD_UNAVAILABLE"
+            return
         try:
             reservation, tokens, eur = await self._reserve_task_budget(
                 agent_id, tid, messages, model, provider, 4096

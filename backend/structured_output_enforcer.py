@@ -108,12 +108,12 @@ class StructuredOutputEnforcer:
 
         missing_filled = []
         type_coercions = []
+        coercion_failures = []
 
         if schema and strict_schema:
             for field_name, expected_type in schema.items():
                 exp_low = str(expected_type).lower()
                 if field_name not in parsed_obj or parsed_obj[field_name] is None:
-                    parsed_obj[field_name] = TYPE_DEFAULTS.get(exp_low, "")
                     missing_filled.append(field_name)
                 else:
                     val = parsed_obj[field_name]
@@ -128,8 +128,25 @@ class StructuredOutputEnforcer:
                             parsed_obj[field_name] = str(val)
                             type_coercions.append(field_name)
                     except Exception:
-                        parsed_obj[field_name] = TYPE_DEFAULTS.get(exp_low, "")
-                        type_coercions.append(field_name)
+                        coercion_failures.append(field_name)
+
+        # d01/d12: Fehlende Pflichtfelder oder fehlgeschlagene Typ-Konvertierungen
+        # duerfen NICHT mit 0/"" aufgefuellt und als valid=True gemeldet werden.
+        if missing_filled or coercion_failures:
+            reasons = []
+            if missing_filled:
+                reasons.append(f"Fehlende Pflichtfelder: {', '.join(missing_filled)}")
+            if coercion_failures:
+                reasons.append(f"Ungueltige Feldtypen: {', '.join(coercion_failures)}")
+            return {
+                "valid": False,
+                "repaired": repaired_used,
+                "error": "; ".join(reasons),
+                "missing_fields_filled": missing_filled,
+                "type_coercions": type_coercions,
+                "coercion_failures": coercion_failures,
+                "data": parsed_obj,
+            }
 
         return {
             "valid": True,

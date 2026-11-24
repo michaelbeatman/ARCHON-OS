@@ -805,12 +805,12 @@ class AgentRouter:
                             provider, resp.status_code,
                         )
                     elif resp.status_code >= 500 or resp.status_code == 429:
-                        provider_breaker.record_failure(provider)
-                    else:
-                        provider_breaker.record_success(provider)
+                        provider_breaker.record_failure(eff_provider)
+                    elif 200 <= resp.status_code < 300:
+                        provider_breaker.record_success(eff_provider)
                     log_completed_llm_dispatch(
                         agent_id=agent_id,
-                        provider=provider,
+                        provider=eff_provider,
                         model=m_try,
                         target_endpoint=target_url,
                         http_status=resp.status_code,
@@ -823,29 +823,48 @@ class AgentRouter:
                         continue
                     resp.raise_for_status()
                     data = resp.json()
+                    if not isinstance(data, dict):
+                        raise RuntimeError(f"Ungueltige LLM-Antwortstruktur von {eff_provider}/{m_try} (kein JSON-Objekt).")
                     if eff_provider == "anthropic":
                         blocks = data.get("content") or []
+                        if not isinstance(blocks, list) or not blocks:
+                            raise RuntimeError(f"Leere Anthropic-Antwort ohne content-Bloecke von {m_try}.")
                         raw_text = "".join(
                             b.get("text", "")
                             for b in blocks
                             if isinstance(b, dict) and b.get("type") == "text"
                         )
                     else:
-                        raw_text = data["choices"][0]["message"]["content"]
+                        choices = data.get("choices")
+                        if not isinstance(choices, list) or not choices:
+                            raise RuntimeError(f"Leere LLM-Antwort ohne choices von {eff_provider}/{m_try}.")
+                        msg_obj = choices[0].get("message") if isinstance(choices[0], dict) else None
+                        raw_text = msg_obj.get("content") if isinstance(msg_obj, dict) else None
+                    if not isinstance(raw_text, str) or not raw_text.strip():
+                        raise RuntimeError(f"Leerer LLM-Antworttext von {eff_provider}/{m_try} (HTTP 200 ohne Inhalt).")
                     raw_text = self._finalize_output_guard(raw_text, hop_sid, is_local_hop)
+                    usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+                    p_toks = int(usage.get("prompt_tokens") or usage.get("input_tokens") or max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4))
+                    c_toks = int(usage.get("completion_tokens") or usage.get("output_tokens") or max(1, len(raw_text) // 4))
+                    est_cost = 0.0
+                    try:
+                        from backend.llm_kernel import estimate_cost_usd
+                        est_cost = float(estimate_cost_usd(m_try, p_toks, c_toks))
+                    except Exception:
+                        est_cost = 0.0
                     try:
                         from backend.execution_receipt_ledger import execution_receipt_ledger
                         execution_receipt_ledger.issue_receipt(
                             task_id=hop_sid,
                             agent_role=agent_id or "router",
                             model_used=m_try,
-                            prompt_tokens=max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4),
-                            completion_tokens=max(1, len(raw_text) // 4),
-                            cost_usd=0.0,
+                            prompt_tokens=p_toks,
+                            completion_tokens=c_toks,
+                            cost_usd=est_cost,
                             tools_invoked=["agent_router.chat_completion"],
                         )
                     except Exception as log_exc:
-                        logger.debug(f"[AgentRouter] Audit-Logging (chat_completion) fehlgeschlagen: {log_exc}")
+                        logger.warning(f"[AgentRouter] Audit-Logging (chat_completion) fehlgeschlagen: {log_exc}")
                     return raw_text
                 except ZeroEgressBlockedError:
                     raise

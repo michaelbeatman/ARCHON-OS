@@ -33,14 +33,30 @@ os.makedirs(DYNAMIC_TOOLS_DIR, exist_ok=True)
 os.makedirs(SKILLS_DIR, exist_ok=True)
 
 
-# F-020: AST-Sperre fuer synthetisierten Code. Die Sandbox (python -I, rlimit,
-# TemporaryDirectory) allein reicht nicht: generierter Code darf niemals
-# Prozesse, Sockets, Dateien oder Fremdcode laden koennen.
-_FORBIDDEN_IMPORTS = frozenset({"os", "subprocess", "socket", "ctypes", "urllib"})
+# F-020 / d04: Strenge AST-Sperre fuer synthetisierten Code.
+# Blockiert gefaehrliche Importe, dynamische Ausfuehrung (__import__, eval, exec,
+# compile, open, getattr/setattr/delattr, globals/locals/vars) und Dunder-Zugriffe.
+_FORBIDDEN_IMPORTS = frozenset({
+    "os", "subprocess", "socket", "ctypes", "urllib", "shutil", "pathlib",
+    "sys", "importlib", "builtins", "pickle", "marshal", "pty", "fcntl",
+    "signal", "multiprocessing", "http", "ftplib", "smtplib", "telnetlib",
+    "webbrowser", "tempfile", "glob", "io", "codecs",
+})
+
+_FORBIDDEN_CALLS = frozenset({
+    "__import__", "eval", "exec", "compile", "open", "getattr", "setattr",
+    "delattr", "globals", "locals", "vars", "breakpoint", "input",
+    "__build_class__",
+})
+
+_FORBIDDEN_NAMES = frozenset({
+    "__builtins__", "__import__", "__loader__", "__spec__", "__subclasses__",
+    "__globals__", "__code__", "__closure__", "__class__", "__bases__", "__mro__",
+})
 
 
 def _validate_synthetic_imports(code: str, label: str = "tool_code") -> None:
-    """Lehnt gefaehrliche Importe im synthetisierten Code hart ab (fail-closed)."""
+    """Lehnt gefaehrliche Importe, Builtin-Calls und Dunder-Zugriffe hart ab (fail-closed)."""
     try:
         tree = ast.parse(code or "", filename=f"<synthetic_{label}>")
     except SyntaxError as exc:
@@ -55,6 +71,30 @@ def _validate_synthetic_imports(code: str, label: str = "tool_code") -> None:
             if name in _FORBIDDEN_IMPORTS:
                 raise ValueError(
                     f"{label}: Import von '{name}' ist in synthetisiertem Code verboten "
+                    f"(Zeile {getattr(node, 'lineno', '?')})."
+                )
+        if isinstance(node, ast.Call):
+            fn = node.func
+            fn_name = ""
+            if isinstance(fn, ast.Name):
+                fn_name = fn.id
+            elif isinstance(fn, ast.Attribute):
+                fn_name = fn.attr
+            if fn_name in _FORBIDDEN_CALLS:
+                raise ValueError(
+                    f"{label}: Aufruf von '{fn_name}()' ist in synthetisiertem Code verboten "
+                    f"(Zeile {getattr(node, 'lineno', '?')})."
+                )
+        elif isinstance(node, ast.Attribute):
+            if node.attr.startswith("__") and node.attr.endswith("__"):
+                raise ValueError(
+                    f"{label}: Dunder-Attributzugriff '.{node.attr}' ist in synthetisiertem Code verboten "
+                    f"(Zeile {getattr(node, 'lineno', '?')})."
+                )
+        elif isinstance(node, ast.Name):
+            if node.id in _FORBIDDEN_NAMES:
+                raise ValueError(
+                    f"{label}: Zugriff auf '{node.id}' ist in synthetisiertem Code verboten "
                     f"(Zeile {getattr(node, 'lineno', '?')})."
                 )
 

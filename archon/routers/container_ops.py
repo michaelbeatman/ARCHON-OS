@@ -193,10 +193,13 @@ def send_prompt_to_agent(
                             break
                 else:
                     last_err = f"[SYSTEM FEHLER {res.status_code}]: {res.text}"
+        except ZeroEgressBlockedError:
+            # d04/d12: Zero-Egress-Blockade niemals schlucken oder in Fake-Text umwandeln.
+            raise
         except Exception as e:
             last_err = f"[VERBINDUNGSFEHLER]: {e}"
 
-    final_output = ai_resp if ai_resp else (last_err or f"[{agent_name}]: Anweisung empfangen mit Rolle '{role_name}'.")
+    final_output = ai_resp if ai_resp else (last_err or f"[FEHLER]: Keine Antwort von Agent '{agent_name}' erhalten.")
 
     if memory_bridge:
         try:
@@ -272,7 +275,7 @@ def exec_container_command_api(req: ContainerExecRequest, request: Request):
 
 @router.post("/api/v1/agent/abort")
 def abort_agent_endpoint(request: Request, payload: dict):
-    require_admin_or_503(request)
+    _require_admin(request)
     import main as app_main
 
     agent_id = payload.get("agent_id") or payload.get("profile") or payload.get("profile_handle", "unknown")

@@ -230,6 +230,7 @@ jobs:
           # Audit D09: Hash-Lock ist zwingend — kein stiller Fallback auf Bereiche.
           test -f requirements.lock.txt
           pip install --require-hashes --no-deps -r requirements.lock.txt
+          pip install -r requirements-test.txt
           pip install pyyaml requests psutil
           mkdir -p data inbox
 
@@ -354,6 +355,7 @@ jobs:
           python -m pip install --upgrade pip
           test -f requirements.lock.txt
           pip install --require-hashes --no-deps -r requirements.lock.txt
+          pip install -r requirements-test.txt
           pip install pyyaml requests psutil
           mkdir -p data inbox
 

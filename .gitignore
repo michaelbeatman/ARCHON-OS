@@ -170,3 +170,5 @@ docker-compose.override.yml
 !static/quartz-garden/static/*.png
 !templates/
 !templates/**
+!souls/
+!souls/**

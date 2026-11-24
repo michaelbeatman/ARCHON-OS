@@ -156,6 +156,9 @@ jobs:
       # GitHub-Runner ist Bare-Metal (kein /.dockerenv): Sandbox-Run-Verzeichnis
       # ist bereits ein Host-Pfad, DooD-Mount-Auflösung ist nicht nötig.
       ARCHON_SANDBOX_BARE_METAL: "1"
+      # Audit D09: Tests dürfen niemals in das shared data/ schreiben.
+      # tests/conftest.py:60-64 erzeugt bei gesetztem Flag ein temp. ARCHON_DATA_DIR.
+      ARCHON_TEST_DB_ISOLATION: "1"
     steps:
       - name: Quellcode auschecken
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
@@ -191,6 +194,8 @@ jobs:
     name: 3. End-to-End Lebenszyklus (Telegram -> Triage -> Task -> Fan-In -> Freigabe)
     needs: test-suites
     runs-on: ubuntu-latest
+    env:
+      ARCHON_TEST_DB_ISOLATION: "1"
     steps:
       - name: Quellcode auschecken
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
@@ -261,16 +266,17 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: bandit -q -lll -r main.py core_dispatcher.py backend archon -x tests,scripts
 
-  quality-warn-only:
-    name: 6. Quality Checks (WARN-ONLY, nicht blockierend)
-    # Register C24: Ruff/mypy/Coverage/ESLint sind bewusst deferred.
-    # Job-weites continue-on-error garantiert, dass dieser Job die CI niemals
-    # rot macht - auch nicht bei Installations- oder Setup-Fehlern.
-    # Die harten Jobs (node --check, compileall, pytest, pip-audit, bandit)
-    # bleiben unverändert.
-    continue-on-error: true
+  quality-gates:
+    name: 6. Quality Gates (scharf)
+    # Audit D09 / Register C24 aufgelöst: der Job darf wieder rot werden.
+    # Scharf: kritischer Ruff-Subset (E9,F63,F7,F82), Coverage/Pytest, Install/Setup.
+    # Die vollständigen Style-Läufe (ruff/mypy/eslint) bleiben vorerst als
+    # explizit gekennzeichnete BASELINE sichtbar (nov. 2026: ~11k Funde) und
+    # werden in einem eigenen Ratchet-Schritt schrittweise geschärft.
     needs: validate-and-audit
     runs-on: ubuntu-latest
+    env:
+      ARCHON_TEST_DB_ISOLATION: "1"
     steps:
       - name: Quellcode auschecken
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
@@ -297,23 +303,28 @@ jobs:
       - name: Qualitäts-Tools installieren (gepinnt, isolierter Schritt)
         run: pip install "ruff==0.17.6" "mypy==2.4.1" "coverage==7.17.5"
 
-      - name: Ruff (WARN-ONLY)
-        continue-on-error: true
-        run: ruff check archon backend scripts tools utils core_dispatcher.py main.py --output-format=concise || true
+      - name: Ruff – kritische Fehlerklassen (HARTES GATE)
+        # E9 = Syntaxfehler, F63/F7/F82 = ungültige Syntax/undefinierte Namen.
+        # Diese Klassen bedeuten kaputten Code, nicht Style – null Toleranz.
+        run: ruff check --select E9,F63,F7,F82 --output-format=concise archon backend scripts tools utils core_dispatcher.py main.py
 
-      - name: mypy (WARN-ONLY)
+      - name: Ruff – vollständiger Style-Lauf (BASELINE, nicht blockierend)
+        # Bewusst als Baseline markiert: ~11k historische Funde. Ratchet folgt.
         continue-on-error: true
-        run: mypy --ignore-missing-imports archon backend scripts tools utils core_dispatcher.py main.py || true
+        run: ruff check archon backend scripts tools utils core_dispatcher.py main.py --output-format=concise
 
-      - name: Coverage (WARN-ONLY, kein fail-under)
+      - name: mypy (BASELINE, nicht blockierend)
         continue-on-error: true
+        run: mypy --ignore-missing-imports archon backend scripts tools utils core_dispatcher.py main.py
+
+      - name: Coverage (HARTES GATE – pytest muss laufen)
         run: |
-          coverage run -m pytest tests/ -q || true
-          coverage report || true
+          coverage run -m pytest tests/ -q
+          coverage report
 
       - name: Frontend-Abhängigkeiten für ESLint installieren
         run: npm ci --prefix frontend
 
-      - name: ESLint (WARN-ONLY)
+      - name: ESLint (BASELINE, nicht blockierend)
         continue-on-error: true
-        run: npm --prefix frontend run lint || true
+        run: npm --prefix frontend run lint

@@ -1,6 +1,9 @@
 # Archon OS – Litestream SQLite Live-Replikation & Disaster Recovery
 
 *Stand: Oktober 2026 (aktualisiert: Litestream v0.5.1, Konsolidierung 28→3) | Resilienz-Architektur & Pillar 4*
+*Korrigiert: 24.11.2026 nach Audit D10*
+
+> **Audit D10:** Das Replikatziel ist jetzt über `ARCHON_LITESTREAM_REPLICA_DIR` konfigurierbar (Compose-Bind-Mount). Default bleibt `./data/litestream_replicas` für lokale Entwicklung — für Produktion zwingend auf ein **anderes** Volume/NAS zeigen. Tenant-DBs unter `data/tenants/<tid>/*.db` werden per `dir`-Replikat mit `watch: true` automatisch erfasst (auch neu angelegte Mandanten ohne Neustart). RPO ~5–10 s (sync-interval), RTO = Zeit bis zum Restore; der Restore-Test darf nie auf die Live-DB zurückfallen. `backup_archon.py` sichert die Tenant-DBs ebenfalls mit.
 
 ---
 

@@ -25,20 +25,24 @@ B wurde auf A und anschließend auf `origin/main` (9947e098) rebase't; beide Str
 | `8726cb1b` | D01 | War-Room: UNKNOWN + `evaluation_failed` statt erfundenem MEDIUM, fail-closed; Eval-Suite-Endpoint mit RBAC |
 | `dbfdf0b0` | D16 | `backend/trace_context.py` (W3C traceparent, contextvars), `TraceContextMiddleware`, Audit-Korrelation, OmniRoute-Header, Doku-Korrektur |
 | `7406fca` | Doku | `.gitignore`-Ausnahme: alle 16 Domänenberichte + Gesamt- und Statusbericht sind jetzt versioniert |
-| `B7` | D08 | `api_provider.collect_keys()` korrekt mit 30-s-TTL-Cache + Lock + Invalidierung nach `deploy_keys()` — kein Profil-.env-Scan pro Dispatch mehr |
+| `4cc84d56` | D08 | `api_provider.collect_keys()` mit 30-s-TTL-Cache + Lock + Invalidierung nach `deploy_keys()` |
+| `6a72586f` | D07 | Globaler 500-Handler mit `trace_id`, kein Stacktrace-Leak |
+| `e97f0bc6` | D10 | P0: Ansible Produktiv-Compose + `/readyz`-Gate, Dead-Man-Switch-Env, DR-Ziel, Guides |
+| `6c031c89` (Antigravity) | D16 | P1: End-to-end W3C-Propagation, OTLP/Langfuse-Export, Collector-Config |
+| `P0-Followup` | D16 | OTel-Collector in `docker-compose.yml` eingebunden (P1-Handoff), `.env.example`, 4. Test |
 
 *(Die Commit-Hashes können nach dem Rebase abweichen — maßgeblich ist `git log audit-fixes-mass`.)*
 
 ## Verifikation
-- **40 kombinierte Regressionstests grün** (`tests/test_core_a1…a4`, `test_audit_b2…b5`), `.ci_venv`, `ARCHON_TEST_DB_ISOLATION=1`.
+- **55 kombinierte Regressionstests grün** (A1–A4, B2–B8, P0, P1), `.ci_venv`, `ARCHON_TEST_DB_ISOLATION=1`.
 - `py_compile` über alle geänderten Module, YAML-Parse von `ci.yml`/`litestream.yml`/beiden Compose-Dateien.
 - `souls/build_souls_ssot.py --check`: 490/490 Artefakte hash-konsistent.
 
 ## Offene Punkte (ausdrücklich noch NICHT behoben)
 1. **D16:** Trace-Propagation über alle 18 Systemgrenzen (n8n, Hermes, PocketBase, MCP, SSE, Outbox, `to_thread`) und echter OTel-Collector/Langfuse-Export mit Sampling.
 2. **D08 (Rest):** Performance-Hotpaths (`chat.py` SQLite-Writes via `to_thread`, `SELECT *`/`fetchall()` ohne `LIMIT`, Frontend-Virtualisierung der 832 Templates). Der `api_provider.py`-Key-Cache ist behoben.
-3. **D11/D14 (Rest):** Pydantic-Handoffs ohne stille Truncation; vollständiges `NO_CONSENSUS`-Tie-Breaking; Vier-Augen-Ersteller-Abgleich. Der globale 500-Catch-All ist behoben (B8).
-4. **D10:** Produktiv-Deploy-Pfad (Ansible nutzt weiterhin `docker-compose.dev.yml` mit `--reload`); externer Dead-Man-Switch; RPO/RTO.
+3. **D11/D14 (Rest):** P1 Governance: Prompt-Version im signierten Dispatch-Proof, Kürzungen explizit markiert, Approver-Identität aus Session statt Body, Vier-Augen-Ersteller-Abgleich (Greifer muss `created_by` übergeben). Vollständiges `NO_CONSENSUS`-Tie-Breaking und durchgängige Pydantic-Handoff-Schemata bleiben offen.
+4. **D10 (Rest):** Ansible deployt jetzt `docker-compose.yml` + `/readyz`-Gate (P0 erledigt); externe `ARCHON_HEARTBEAT_WEBHOOK_URL` und `ARCHON_LITESTREAM_REPLICA_DIR` sind konfigurierbar und dokumentiert — **die tatsächlichen Ziel-URLs müssen vom Betreiber gesetzt werden**; RPO ~5–10 s / RTO = Restore-Zeit dokumentiert. Ein echter Watchdog-Supervisor außerhalb des überwachten 30-s-Loops fehlt weiterhin.
 5. **Laufzeit-Caches:** `.hermes/profiles/` und `data/hermes_profiles/` müssen im Haupt-Repo einmalig mit `python scripts/sync_soul_modes.py --mode compact` aus der neuen SSOT regeneriert werden (gitignorierte Caches, nicht im Worktree sichtbar).
 6. **skip-worktree:** `agent_profiles.json`, `roles.json`, `settings.json`, `config/kanban_meta.json` bleiben lokal geschützt (73 lokale vs. 70 GitHub-Profile). Neue allgemeine Rollen in `roles.json` werden nicht automatisch gepusht.
 

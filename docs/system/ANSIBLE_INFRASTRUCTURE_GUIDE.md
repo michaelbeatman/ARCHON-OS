@@ -2,6 +2,8 @@
 
 Dieser Leitfaden beschreibt die wiederholbare und automatisierte Bereitstellung von Archon OS Nodes mittels Ansible. Er ersetzt manuelle Setup-Skripte (`setup_homeserver.sh`, `setup_new_machine.sh`) durch deklarative Infrastructure-as-Code Playbooks.
 
+> **Audit D10 (24.11.2026):** Die Rolle deployt jetzt `docker-compose.yml` (Produktivstack) statt `docker-compose.dev.yml` mit `--reload`. Vor dem Health-Check wird `/readyz` (Dependency-Probes) geprüft; erst danach `/health`. `--remove-orphans` verhindert verwaiste Container. Der externe Dead-Man-Switch wird über `ARCHON_HEARTBEAT_WEBHOOK_URL` konfiguriert; ohne URL meldet der Selbstheilungs-Report `dead_man_switch_configured: false` und loggt eine Warnung. Das Litestream-Replikat kann über `ARCHON_LITESTREAM_REPLICA_DIR` auf ein externes Volume/NAS gelegt werden (RPO ~5–10 s, RTO = Restore-Zeit).
+
 ---
 
 ## 1. Verzeichnisstruktur

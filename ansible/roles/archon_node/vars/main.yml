@@ -38,6 +38,9 @@ archon_directories:
   - "{{ archon_data_root }}/snapshots"
   - "{{ ansible_env.HOME }}/.hermes"
 
-# Services to expose and check
-archon_compose_file: "docker-compose.dev.yml"
+# Audit D10: Produktiv-Deploy nutzt die produktive Compose-Datei.
+# Die Dev-Variante contained --reload und hostgebundene /mnt/raid-Mounts
+# und ist bewusst NICHT fuer den 24/7-Betrieb gedacht.
+archon_compose_file: "docker-compose.yml"
 archon_healthcheck_url: "http://localhost:8501/health"
+archon_readycheck_url: "http://localhost:8501/readyz"

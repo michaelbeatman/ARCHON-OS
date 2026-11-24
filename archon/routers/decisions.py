@@ -225,6 +225,7 @@ def register_decision(
     body: str = "",
     extra: dict = None,
     obsidian: str = None,
+    created_by: str = "",
 ) -> dict:
     """Haengt den Entscheidungs-Block an einen BESTEHENDEN Kanban-Task und pingt den Owner mit ✅/❌."""
     import main as app_main
@@ -241,6 +242,9 @@ def register_decision(
             "dossier": dossier or "",
             "status": "offen",
             "kanal": "telegram+kanban",
+            # Audit D14: Ersteller mitführen, damit api_decide_decision das
+            # Vier-Augen-Prinzip hart prüfen kann (leer = nicht zuordenbar).
+            "created_by": (created_by or "").strip(),
         }
         if extra:
             dec.update(extra)
@@ -311,6 +315,7 @@ def create_decision(
     body: str = "",
     extra: dict = None,
     obsidian: str = None,
+    created_by: str = "",
 ) -> dict:
     """Legt einen NEUEN Entscheidungs-Task im Kanban an und registriert die Entscheidung darauf."""
     import main as app_main
@@ -339,7 +344,7 @@ def create_decision(
         logger.warning(f"[Decision] Konnte Entscheidungs-Task nicht anlegen: {e}")
         return {}
     fn_reg = getattr(app_main, "register_decision", register_decision)
-    return fn_reg(task_id, typ, titel, kurzfassung, ref_id, dossier, body, extra, obsidian)
+    return fn_reg(task_id, typ, titel, kurzfassung, ref_id, dossier, body, extra, obsidian, created_by)
 
 
 def _folge_nicht(aktion: str, grund: str) -> str:
@@ -668,7 +673,11 @@ async def api_decide_decision(request: Request, body: PassthroughBody = Body(...
 
     task_id = str(body.get("task_id") or "").strip()
     decision = str(body.get("decision") or "").lower().strip()
-    von = str(body.get("von") or "owner")
+    # Audit D14: ApproverIdentity NIE aus dem Body — sonst kann ein Client
+    # beliebige "von"-Werte simulieren und Vier-Augen vortäuschen.
+    from archon.routers._rbac import require_session_actor
+
+    von = require_session_actor(request)
     if decision not in ("approve", "reject"):
         raise HTTPException(status_code=400, detail="decision muss approve oder reject sein")
     if not task_id:
@@ -696,6 +705,13 @@ async def api_decide_decision(request: Request, body: PassthroughBody = Body(...
                 return {"_error": "no_decision"}
             if (dec_local.get("status") or "offen") != "offen":
                 return {"_error": "already_decided", "dec": dec_local}
+            creator = str(dec_local.get("created_by") or "").strip()
+            if creator and creator == von:
+                logger.warning(
+                    "[Decision] Vier-Augen-Verletzung: Task %s wurde von '%s' erstellt "
+                    "und soll von derselben Person freigegeben werden.", task_id, von
+                )
+                return {"_error": "four_eyes_violation", "detail": "Ersteller darf nicht selbst freigeben (Vier-Augen-Prinzip)."}
             if decision == "approve" and str(dec_local.get("typ") or "") in _DECISION_HITL_TYPEN:
                 try:
                     proof_token, proof_uid = _decision_hitl_proof(
@@ -715,7 +731,11 @@ async def api_decide_decision(request: Request, body: PassthroughBody = Body(...
                 fn_self_api(
                     "POST",
                     "/api/operations/kanban/meta",
-                    {"kind": "task", "task_id": task_id, "decision": {"status": "in_bearbeitung"}},
+                    {
+                        "kind": "task",
+                        "task_id": task_id,
+                        "decision": {"status": "in_bearbeitung", "decided_by": von, "decision": decision},
+                    },
                 )
             except Exception as e:
                 logger.warning(f"[Decision] CAS-Marker ('in_bearbeitung') konnte nicht gesetzt werden: {e}")
@@ -732,6 +752,8 @@ async def api_decide_decision(request: Request, body: PassthroughBody = Body(...
         raise HTTPException(status_code=404, detail={"code": "decisions_no_decision_block", "params": {"task_id": task_id}})
     if claim.get("_error") == "hitl_proof_required":
         raise HTTPException(status_code=int(claim.get("status") or 403), detail=claim.get("detail") or "Passkey-Verifizierung erforderlich.")
+    if claim.get("_error") == "four_eyes_violation":
+        raise HTTPException(status_code=403, detail=claim.get("detail") or "Vier-Augen-Prinzip verletzt.")
     if claim.get("_error") == "already_decided":
         dec = claim.get("dec") or {}
         return {

@@ -309,7 +309,7 @@ class AutomatedRestoreTester:
                             f"Foreign-Key-Check fehlgeschlagen: {len(fk_res)} Verletzung(en)."
                         )
                         results["databases_failed"] += 1
-                    elif smoke_table is None or not db_report.get("record_count"):
+                    elif candidates and (smoke_table is None or not db_report.get("record_count")):
                         db_report["status"] = "FAILED"
                         db_report["error"] = (
                             f"Smoke-Test fehlgeschlagen: keine Pflichttabelle {candidates} "

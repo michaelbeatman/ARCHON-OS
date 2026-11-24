@@ -511,7 +511,12 @@ class ChainedAuditLog:
         als auch in dedizierten Index-Spalten abgelegt.
         """
         safe_payload = dict(payload or {})
-        trace_id_val = str(trace_id or safe_payload.get("trace_id") or "").strip()
+        # Audit D16: ohne expliziten Parameter den aktiven W3C-Trace aus
+        # contextvars übernehmen — damit Audit-Eintrag und OTel-/HTTP-Trace
+        # dieselbe Korrelations-ID tragen.
+        from backend.trace_context import current_trace_id as _current_trace_id
+
+        trace_id_val = str(trace_id or safe_payload.get("trace_id") or _current_trace_id() or "").strip()
         session_id_val = str(session_id or safe_payload.get("session_id") or "").strip()
         correlation_id_val = str(correlation_id or safe_payload.get("correlation_id") or "").strip()
         if trace_id_val and "trace_id" not in safe_payload:

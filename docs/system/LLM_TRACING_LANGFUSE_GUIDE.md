@@ -1,6 +1,33 @@
 # Archon OS – LLM-Tracing mit OpenTelemetry & Langfuse
 
 *Stand: Oktober 2026 | Observability & Säule 1 & 6*
+*Korrigiert: 24.11.2026 nach Audit D16 (siehe `audit_reports/2026-11-24_d16_tracing.md`)*
+
+---
+
+## 0. Ist-Zustand nach dem Audit 24.11.2026 (bitte zuerst lesen)
+
+Die Aussage „vollwertiges, OpenTelemetry-konformes Tracing" in Abschnitt 1 war **nicht code-gedeckt**:
+
+- Es ist **kein OpenTelemetry-SDK** installiert; `opentelemetry-api` war nur eine transitive FastAPI-Abhängigkeit.
+- Es gab **kein `traceparent`** und keinen W3C-Propagator. An allen 18 untersuchten Systemgrenzen (Hermes, OmniRoute, n8n, PocketBase, MCP, SSE, Outbox, Async-Tasks) brach der Trace ab.
+- `backend/otel_tracer.py` ist ein **lokaler SQLite-Span-Recorder** mit eigener ID-Generierung — kein OTel-Exporter. Der Langfuse-Export schluckt Fehler auf DEBUG-Ebene.
+- `audit_log` und Receipt-Ledger hatten zunächst keine `trace_id`-Spalte — Audit und Tracing waren zwei getrennte Welten.
+
+**Nach den Fix-Wellen (A1 + B6) gilt jetzt:**
+
+| Fähigkeit | Status |
+| :--- | :--- |
+| W3C `traceparent` parsen/formatieren (`backend/trace_context.py`) | ✅ implementiert |
+| Trace-/Span-IDs via `contextvars`, 128/64 Bit, konform | ✅ implementiert |
+| Eingehender Request → Trace-Kontext (`TraceContextMiddleware`, Response-Header `X-Trace-Id`) | ✅ implementiert |
+| Ausgehende OmniRoute-Anfrage → `traceparent`-Header | ✅ implementiert |
+| Audit-Log übernimmt aktive `trace_id` automatisch aus dem Kontext | ✅ implementiert |
+| Spalten `trace_id`/`session_id`/`correlation_id` in `audit_log` (aus A1) | ✅ implementiert |
+| Propagation über **alle** 18 Grenzen (n8n, Hermes, PocketBase, MCP, SSE, Outbox, `to_thread`) | ⚠️ **Folgeschritt** |
+| Echter OTel-Collector + Langfuse-Export mit Sampling/Alerting | ⚠️ **Folgeschritt** |
+
+Die folgenden Abschnitte beschreiben das **Zielbild**; Abschnitt 0 beschreibt den **Ist-Zustand**.
 
 ---
 

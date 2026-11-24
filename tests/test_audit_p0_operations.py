@@ -23,6 +23,19 @@ def test_dead_man_switch_has_env_override_and_status():
     assert "dead_man_switch_configured" in text
 
 
+def test_otel_collector_wired_from_p1_handoff():
+    import yaml
+
+    text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    doc = yaml.safe_load(text)
+    collector = (doc.get("services") or {}).get("otel-collector")
+    assert collector is not None
+    assert "4317" in str(collector.get("ports", ""))
+    assert "4318" in str(collector.get("ports", ""))
+    assert "tracing" in (collector.get("profiles") or [])
+    assert "OTEL_SERVICE_NAME" in text
+
+
 def test_dr_replica_is_configurable():
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     assert "ARCHON_LITESTREAM_REPLICA_DIR" in compose

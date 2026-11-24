@@ -101,6 +101,8 @@ services:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      # Audit D16/P1: Dienstname für OTel-Spans (Collector/ downstream)
+      - OTEL_SERVICE_NAME=archon-os
     volumes:
       # P0-11: KEIN `./:/app` mehr. Der alte Bind-Mount legte die .env mit dem
       # Audit-HMAC-Key als /app/.env lesbar in den Container. Der Anwendungscode
@@ -531,6 +533,36 @@ services:
       resources:
         limits:
           memory: 256M
+          cpus: "0.5"
+
+  # Audit D16/P1: OTel Collector (gRPC 4317 / HTTP 4318). Nur mit Profil
+  # tracing/observability/all aktiv; Konfiguration aus config/otel-collector-config.yml.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    container_name: ${ARCHON_OTEL_COLLECTOR_CONTAINER_NAME:-archon-otel-collector}
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    logging:
+      <<: *default-logging
+    restart: unless-stopped
+    profiles: ["tracing", "observability", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "${ARCHON_BIND_IP:-127.0.0.1}:4317:4317"
+      - "${ARCHON_BIND_IP:-127.0.0.1}:4318:4318"
+    volumes:
+      - ./config/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
+    environment:
+      - OTEL_DOWNSTREAM_OTLP_ENDPOINT=${OTEL_DOWNSTREAM_OTLP_ENDPOINT:-http://langfuse:3000/api/public/otel}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4318/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
           cpus: "0.5"
 
   langfuse:

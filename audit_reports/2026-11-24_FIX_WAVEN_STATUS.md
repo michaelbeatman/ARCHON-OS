@@ -25,12 +25,16 @@ B wurde auf A und anschließend auf `origin/main` (9947e098) rebase't; beide Str
 | `8726cb1b` | D01 | War-Room: UNKNOWN + `evaluation_failed` statt erfundenem MEDIUM, fail-closed; Eval-Suite-Endpoint mit RBAC |
 | `dbfdf0b0` | D16 | `backend/trace_context.py` (W3C traceparent, contextvars), `TraceContextMiddleware`, Audit-Korrelation, OmniRoute-Header, Doku-Korrektur |
 | `7406fca` | Doku | `.gitignore`-Ausnahme: alle 16 Domänenberichte + Gesamt- und Statusbericht sind jetzt versioniert |
-| `B7` | D08 | `api_provider.collect_keys()` korrekt mit 30-s-TTL-Cache + Lock + Invalidierung nach `deploy_keys()` — kein Profil-.env-Scan pro Dispatch mehr |
+| `4cc84d56` | D08 | `api_provider.collect_keys()` mit 30-s-TTL-Cache + Lock + Invalidierung nach `deploy_keys()` |
+| `6a72586f` | D07 | Globaler 500-Handler mit `trace_id`, kein Stacktrace-Leak |
+| `e97f0bc6` | D10 | P0: Ansible Produktiv-Compose + `/readyz`-Gate, Dead-Man-Switch-Env, DR-Ziel, Guides |
+| `6c031c89` (Antigravity) | D16 | P1: End-to-end W3C-Propagation, OTLP/Langfuse-Export, Collector-Config |
+| `P0-Followup` | D16 | OTel-Collector in `docker-compose.yml` eingebunden (P1-Handoff), `.env.example`, 4. Test |
 
 *(Die Commit-Hashes können nach dem Rebase abweichen — maßgeblich ist `git log audit-fixes-mass`.)*
 
 ## Verifikation
-- **40 kombinierte Regressionstests grün** (`tests/test_core_a1…a4`, `test_audit_b2…b5`), `.ci_venv`, `ARCHON_TEST_DB_ISOLATION=1`.
+- **55 kombinierte Regressionstests grün** (A1–A4, B2–B8, P0, P1), `.ci_venv`, `ARCHON_TEST_DB_ISOLATION=1`.
 - `py_compile` über alle geänderten Module, YAML-Parse von `ci.yml`/`litestream.yml`/beiden Compose-Dateien.
 - `souls/build_souls_ssot.py --check`: 490/490 Artefakte hash-konsistent.
 

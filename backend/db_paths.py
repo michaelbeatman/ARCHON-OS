@@ -115,13 +115,18 @@ def resolve_db(filename: str) -> str:
     """
     base = os.path.basename(str(filename or "").strip())
     # EIN Resolver: bei aktiver Voll-Isolation (Benutzerentscheidung 22.11.)
-    # ist tenant_context.resolve_active_db die einzige Autoritaet. Vorher
-    # lieferte resolve_db globale data/*.db, tenant_context aber
-    # data/tenants/<tid>/*.db -> Split-Brain, DSGVO-Loeschung traf die falsche
-    # Datei und Backup sicherte nur die Haelfte.
+    # ist tenant_context.resolve_active_db die einzige Autoritaet fuer alle
+    # mandantenfaehigen DBs. System-DBs ausserhalb ISOLATED/CONSOLIDATED
+    # laufen deterministisch ueber den Konsolidierungs-/Heimat-Resolver
+    # (kein stilles ValueError-Catch-and-Fallthrough mehr, d03).
     try:
-        from backend.tenant_context import FULL_TENANT_ISOLATION, tenant_context
-        if FULL_TENANT_ISOLATION:
+        from backend.tenant_context import (
+            CONSOLIDATED_TENANT_DBS,
+            FULL_TENANT_ISOLATION,
+            ISOLATED_TENANT_DBS,
+            tenant_context,
+        )
+        if FULL_TENANT_ISOLATION and (base in ISOLATED_TENANT_DBS or base in CONSOLIDATED_TENANT_DBS):
             return tenant_context.resolve_active_db(base)
     except Exception as exc:
         logger.debug(f"[db_paths] Tenant-Resolver nicht verfuegbar: {exc}")

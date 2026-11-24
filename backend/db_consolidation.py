@@ -352,12 +352,13 @@ def _missing_source_rows(
     """
     if not columns:
         return 0
-    dst_info = conn.execute(f'PRAGMA main.table_info("{dst_table}")').fetchall()
-    pk_cols = [str(r[1]) for r in dst_info if int(r[5] or 0) > 0]
-    if pk_cols and all(pk in columns for pk in pk_cols):
-        cond = " AND ".join(f'd."{c}" IS s."{c}"' for c in pk_cols)
-    else:
-        cond = " AND ".join(f'd."{c}" IS s."{c}"' for c in columns)
+    # d03 / #20: IMMER alle gemeinsamen Spalten vergleichen, NICHT nur pk_cols!
+    # Vorher gab ein PK-Only-Check bei PK-Kollision mit abweichendem Inhalt
+    # (Quelle A: id=1,'Alice'; Quelle B: id=1,'Bob') faelschlich 0 zurueck,
+    # obwohl INSERT OR IGNORE 'Bob' still verworfen hatte.
+    # Bei einem idempotenten Zweitlauf sind alle Spalten identisch -> 0;
+    # bei divergierender PK-Kollision -> > 0 -> harter Abbruch (DATENVERLUST).
+    cond = " AND ".join(f'd."{c}" IS s."{c}"' for c in columns)
     sql = (
         f'SELECT COUNT(*) FROM legacy_src."{src_table}" s '
         f'WHERE NOT EXISTS (SELECT 1 FROM main."{dst_table}" d WHERE {cond})'

@@ -440,6 +440,18 @@ class TenantContextManager:
             # konsistent in das Mandantenverzeichnis kopiert. Danach gibt es
             # keine geteilten Daten mehr und Art.-17 kann sauber löschen.
             if FULL_TENANT_ISOLATION:
+                # d03: Auch bei FULL_TENANT_ISOLATION bleibt die 28->3-Konsolidierung
+                # erreichbar — pro Mandant unter data/tenants/<tid>/{ops,business,memory}.db,
+                # damit Voll-Isolation und 3-DB-Konsolidierung keinen Split-Brain bilden.
+                try:
+                    from backend.db_consolidation import is_consolidation_active, resolve_consolidated_domain
+                    if is_consolidation_active(self._data_root):
+                        dom_name = fname if fname in CONSOLIDATED_TENANT_DBS else resolve_consolidated_domain(fname)
+                        cons_tenant = os.path.join(self.get_tenant_dir(tid), dom_name)
+                        if _db_has_tables(cons_tenant):
+                            return cons_tenant
+                except Exception as cons_exc:
+                    logger.debug(f"[TenantContext] Konsolidierungs-Aufloesung (full-isolation) uebersprungen: {cons_exc}")
                 # F-014: Die Legacy-Kopie darf NUR fuer Primärmandanten laufen.
                 # Ohne diesen Guard erbt jeder neu angelegte Sekundärmandant die
                 # Business-/CRM-Daten des Primärmandanten (reale Cross-Tenant-

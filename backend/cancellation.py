@@ -42,9 +42,12 @@ class CancelToken:
         except RuntimeError:
             self._loop = None
         if parent is not None:
-            parent._children.append(self)
-            if parent.cancelled:
-                self.cancel(parent.reason)
+            with parent._lock:
+                parent._children.append(self)
+                parent_cancelled = parent._cancelled
+                parent_reason = parent._reason
+            if parent_cancelled:
+                self.cancel(parent_reason)
 
     @property
     def cancelled(self) -> bool:
@@ -88,15 +91,19 @@ class CancelToken:
             try:
                 if task.done():
                     continue
-                loop = self._loop
+                loop = None
+                try:
+                    loop = task.get_loop()
+                except Exception:
+                    loop = self._loop
                 if loop is not None and loop.is_running():
                     # task.cancel() ist nicht thread-safe. cancel_scope() wird
                     # auch aus sync Request-Handlern gerufen (Audit 23.11.).
                     loop.call_soon_threadsafe(task.cancel)
                 else:
                     task.cancel()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("[CancelToken] Task-Abbruch in scope=%s fehlgeschlagen: %s", self.scope, exc)
         for child in children:
             child.cancel(self._reason)
         self._set_event()
@@ -250,6 +257,26 @@ def cancel_scope(scope: str, reason: str = "") -> bool:
     return True
 
 
+def cancel_and_reset_scope(scope: str, reason: str = "") -> bool:
+    """d07: Bricht einen Scope (inkl. aktiver Kinder) ab und entfernt den
+    Root-Token atomar, damit kuenftige Laeufe im selben globalen Scope
+    (z. B. 'boardroom') nicht dauerhaft blockiert bleiben."""
+    key = str(scope)
+    with _REGISTRY_LOCK:
+        token = _REGISTRY.pop(key, None)
+    if token is None:
+        return False
+    parent = getattr(token, "_parent", None)
+    if parent is not None:
+        with parent._lock:
+            try:
+                parent._children.remove(token)
+            except ValueError:
+                pass
+    token.cancel(reason)
+    return True
+
+
 def clear_scope(scope: str) -> None:
     """Entfernt einen Scope aus der Registry (z. B. nach Abschluss).
 
@@ -262,7 +289,8 @@ def clear_scope(scope: str) -> None:
     if token is not None:
         parent = getattr(token, "_parent", None)
         if parent is not None:
-            try:
-                parent._children.remove(token)
-            except ValueError:
-                pass
+            with parent._lock:
+                try:
+                    parent._children.remove(token)
+                except ValueError:
+                    pass

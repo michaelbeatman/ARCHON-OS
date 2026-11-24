@@ -557,52 +557,45 @@ async def dispatch_to_omniroute_or_container(
             "content": "🛑 [CONCURRENCY-GATE]: Gate nicht verfügbar — Dispatch blockiert (fail-closed).",
         }
 
-    # Semantischer Cache VOR dem LLM-Call: ein Treffer erspart Budget-Reservierung
-    # und Provider-Aufruf. Scope enthaelt tenant_id + agent_id (kein Cross-Tenant-Leak).
-    cache_scope = _dispatch_cache_scope(agent_id)
-    cache_hit = None
+    # d07: try/finally MUSS unmittelbar nach acquire_slot beginnen, damit ein
+    # Abbruch (CancelledError) waehrend des Cache-Lookups den Slot niemals leakt.
     try:
-        from backend.semantic_cache import semantic_cache_manager
-        # H11: lookup ist reine Sync-SQLite + JSON-Parse + Cosine über bis zu
-        # 500 Vektoren. Direkt im Event-Loop serialisiert das bei parallelen
-        # Agenten den Dispatch (und erzeugt Write-Locks durch den DELETE).
-        cache_hit = await asyncio.to_thread(
-            semantic_cache_manager.lookup, prompt, model=model, scope_key=cache_scope
-        )
-    except Exception as cache_exc:
-        logger.debug(f"[Dispatcher] Semantischer Cache-Lookup nicht verfuegbar: {cache_exc}")
-    if cache_hit and cache_hit.get("hit"):
-        cached_content = str(cache_hit.get("response") or "")
+        # Semantischer Cache VOR dem LLM-Call: ein Treffer erspart Budget-Reservierung
+        # und Provider-Aufruf. Scope enthaelt tenant_id + agent_id (kein Cross-Tenant-Leak).
+        cache_scope = _dispatch_cache_scope(agent_id)
+        cache_hit = None
         try:
-            cached_content = _clean_dispatch_output(
-                cached_content,
-                session_id=task_id or agent_id,
-                is_local=False,
+            from backend.semantic_cache import semantic_cache_manager
+            # H11: lookup ist reine Sync-SQLite + JSON-Parse + Cosine über bis zu
+            # 500 Vektoren. Direkt im Event-Loop serialisiert das bei parallelen
+            # Agenten den Dispatch (und erzeugt Write-Locks durch den DELETE).
+            cache_hit = await asyncio.to_thread(
+                semantic_cache_manager.lookup, prompt, model=model, scope_key=cache_scope
             )
-        except Exception:
-            pass
-        # KRITISCH: der Slot wurde vor dem Cache-Lookup genommen. Ohne
-        # Freigabe leaket er bei JEDEM Cache-Treffer dauerhaft (Audit 23.11.).
-        if has_throttle_slot:
+        except Exception as cache_exc:
+            logger.debug(f"[Dispatcher] Semantischer Cache-Lookup nicht verfuegbar: {cache_exc}")
+        if cache_hit and cache_hit.get("hit"):
+            cached_content = str(cache_hit.get("response") or "")
             try:
-                from backend.concurrency_throttle import concurrency_throttle
-                await concurrency_throttle.release_slot(slot_id)
-                has_throttle_slot = False
-            except Exception as th_exc:
-                logger.warning(f"[Dispatcher] Throttle-Slot {slot_id} nach Cache-Hit nicht freigegeben: {th_exc}")
-        return {
-            "status": "success",
-            "content": cached_content,
-            "model": cache_hit.get("cached_model") or model,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0.0,
-            "cached": True,
-            "cache_match_type": cache_hit.get("match_type"),
-            "cache_similarity": cache_hit.get("similarity"),
-        }
+                cached_content = _clean_dispatch_output(
+                    cached_content,
+                    session_id=task_id or agent_id,
+                    is_local=False,
+                )
+            except Exception:
+                pass
+            return {
+                "status": "success",
+                "content": cached_content,
+                "model": cache_hit.get("cached_model") or model,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_usd": 0.0,
+                "cached": True,
+                "cache_match_type": cache_hit.get("match_type"),
+                "cache_similarity": cache_hit.get("similarity"),
+            }
 
-    try:
         async with _get_task_semaphore():
             # Atomare Budget-Reservierung statt Check-then-Use: parallele
             # DAG-Nodes können das harte Cap nicht mehr überschreiten.
@@ -950,7 +943,13 @@ async def _dispatch_to_omniroute_or_container_impl(
         except Exception as bn_err:
             logger.debug(f"[Dispatcher] Bandit-Router Auswahl uebersprungen: {bn_err}")
 
-    full_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}{core_mem_addon}{memory_context_addon}{prefetch_addon}".strip()
+    static_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip()
+    dynamic_system_addon = f"{core_mem_addon}{memory_context_addon}{prefetch_addon}".strip()
+    full_system_prompt = (
+        f"{static_system_prompt}\n\n{dynamic_system_addon}".strip()
+        if dynamic_system_addon
+        else static_system_prompt
+    )
 
     chat_history_turns = []
     if history:
@@ -1345,9 +1344,14 @@ async def _dispatch_to_omniroute_or_container_impl(
                         "system": [
                             {
                                 "type": "text",
-                                "text": full_system_prompt.strip(),
+                                "text": static_system_prompt,
                                 "cache_control": {"type": "ephemeral"}
-                            }
+                            },
+                            *(
+                                [{"type": "text", "text": dynamic_system_addon}]
+                                if dynamic_system_addon
+                                else []
+                            ),
                         ],
                         "messages": chat_history_turns + [{"role": "user", "content": prompt}],
                         "max_tokens": 1500

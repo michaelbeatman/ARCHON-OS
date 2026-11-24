@@ -1158,6 +1158,33 @@ class BudgetBank:
                         return {"allowed": False, "agent_id": aid, "task_id": task_id,
                                 "error_code": "ROLE_MONTHLY_EUR_BUDGET_EXCEEDED",
                                 "reason": f"Monatsbudget von {m_limit:.2f} EUR überschritten."}
+                # d02/d08: Optionales globales Tages-Kosten-Cap ueber alle Agenten
+                # (verhindert unbegrenzte Summenkosten bei vielen parallelen Rollen).
+                global_cap_raw = os.environ.get("ARCHON_GLOBAL_DAILY_COST_CAP_EUR", "").strip()
+                if global_cap_raw:
+                    try:
+                        global_cap_eur = float(global_cap_raw)
+                    except ValueError:
+                        global_cap_eur = 0.0
+                    if global_cap_eur > 0.0:
+                        g_led = conn.execute(
+                            "SELECT COALESCE(SUM(cost_eur), 0.0) AS g_eur "
+                            "FROM role_daily_budget_ledger WHERE usage_date = ?",
+                            (_today_str(),),
+                        ).fetchone()
+                        g_res = conn.execute(
+                            "SELECT COALESCE(SUM(cost_eur_reserved), 0.0) AS r_eur "
+                            "FROM budget_reservations WHERE status = 'reserved' AND expires_at > ?",
+                            (now,),
+                        ).fetchone()
+                        g_total = float(g_led["g_eur"] if g_led else 0.0) + float(g_res["r_eur"] if g_res else 0.0) + est_eur
+                        if g_total > global_cap_eur:
+                            conn.rollback()
+                            return {
+                                "allowed": False, "agent_id": aid, "task_id": task_id,
+                                "error_code": "GLOBAL_DAILY_EUR_BUDGET_EXCEEDED",
+                                "reason": f"Globales Tagesbudget von {global_cap_eur:.2f} EUR überschritten.",
+                            }
                 reservation_id = f"res-{uuid.uuid4().hex[:12]}"
                 conn.execute(
                     "INSERT INTO budget_reservations "

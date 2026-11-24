@@ -71,6 +71,10 @@ _EXTENDED_TASK_KEYS = (
     "result_summary",
     "started_at",
     "completed_at",
+    "delegation_depth",
+    "delegation_chain",
+    "replan_count",
+    "failure_reason",
 )
 
 
@@ -224,6 +228,10 @@ def _mc_status_to_db(mc_status: Optional[str]) -> str:
         return "in_progress"
     if s in ("approval", "waiting_approval", "review", "gate"):
         return "review"
+    if s in ("cancelled", "canceled"):
+        return "cancelled"
+    if s == "paused":
+        return "paused"
     if s in ("failed", "blocked"):
         return "blocked"
     if s == "archived":
@@ -242,6 +250,10 @@ def _db_status_to_mc(db_status: Optional[str], meta_mc_status: Optional[str] = N
         return "active" if m == "active" else "in_progress"
     if s in ("review", "waiting_approval", "approval", "gate"):
         return "approval"
+    if s in ("cancelled", "canceled"):
+        return "cancelled"
+    if s == "paused":
+        return "paused"
     if s in ("blocked", "failed"):
         # Vorher wurde 'blocked' beim Reload immer zu 'failed' — die Eskalation
         # in orchestration.py war damit dauerhaft verloren.
@@ -560,6 +572,10 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
             "synthesis_draft_path",
             "synthesis_finalized",
             "paperclip_issue",
+            "delegation_depth",
+            "delegation_chain",
+            "replan_count",
+            "failure_reason",
         ):
             if opt_k in meta and meta[opt_k] is not None:
                 task_dict[opt_k] = meta[opt_k]
@@ -749,9 +765,15 @@ def _load_single_task_from_conn(conn: sqlite3.Connection, task_id: str) -> Optio
         "active_tool",
         "created_via",
         "synthesis_started",
+        "synthesis_started_at",
+        "synthesis_retry_count",
         "synthesis_draft_path",
         "synthesis_finalized",
         "paperclip_issue",
+        "delegation_depth",
+        "delegation_chain",
+        "replan_count",
+        "failure_reason",
     ):
         if opt_k in meta and meta[opt_k] is not None:
             task_dict[opt_k] = meta[opt_k]

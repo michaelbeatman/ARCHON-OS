@@ -138,11 +138,13 @@ def save_boardroom_history_item(item: dict, actor_id: str = "system"):
 
 @router.post("/api/boardroom/cancel")
 async def api_cancel_boardroom(request: Request):
-    """Globaler Kill-Switch: bricht alle laufenden Boardroom-Debatten ab."""
+    """Globaler Kill-Switch: bricht alle laufenden Boardroom-Debatten ab und
+    setzt den Root-Scope zurueck, damit kuenftige Debatten nicht dauerhaft
+    blockiert bleiben (d07)."""
     from archon.routers._rbac import require_admin_or_503
     require_admin_or_503(request)
-    from backend.cancellation import cancel_scope
-    ok = cancel_scope("boardroom", reason="global_kill_switch")
+    from backend.cancellation import cancel_and_reset_scope
+    ok = cancel_and_reset_scope("boardroom", reason="global_kill_switch")
     return {"status": "success" if ok else "not_running", "cancelled": bool(ok)}
 
 
@@ -304,8 +306,19 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
             return override_reasoning
         return prof_dict.get("reasoning_level") or "medium"
 
-    # Chairman Profil
-    chairman_id = req.chairman_id or "orchestrator"
+    # Chairman Profil (d14: nur bekannte/registrierte Chairman-Rollen zulassen)
+    chairman_id = (req.chairman_id or "orchestrator").strip()
+    if req.chairman_id and chairman_id not in roles_map and chairman_id != "orchestrator":
+        try:
+            from backend.role_budget_engine import EXECUTIVE_ROLE_IDS, LEAD_ROLE_IDS
+            allowed_extra = EXECUTIVE_ROLE_IDS | LEAD_ROLE_IDS
+        except Exception:
+            allowed_extra = set()
+        if chairman_id.lower() not in allowed_extra:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unbekannte oder nicht autorisierte Chairman-Rolle: '{chairman_id}'",
+            )
     chairman_prof = roles_map.get(chairman_id, {
         "id": chairman_id,
         "name": "Orchestrator & System-Architekt",
@@ -410,6 +423,13 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
 
         # Speichere strukturierten Eintrag in boardroom_history
         try:
+            _consensus_status = str(res.get("consensus_status") or "").strip().upper()
+            _debate_status = str(res.get("status") or "").strip().lower()
+            _is_final_decision = (
+                _consensus_status != "NO_CONSENSUS"
+                and _debate_status not in ("cancelled", "canceled", "error", "aborted")
+                and not bool(res.get("cancelled"))
+            )
             hist_entry = {
                 "id": f"deb_{int(time.time())}_{uuid.uuid4().hex[:6]}",
                 "timestamp": datetime.datetime.now().isoformat(),
@@ -419,6 +439,7 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
                 "chairman": chairman_agent.get("name", "Moderator"),
                 "use_moa": req.use_moa,
                 "rounds": req.rounds,
+                "decision_status": "approved" if _is_final_decision else (_consensus_status.lower() or _debate_status or "no_consensus"),
                 "slots_count": max(0, len(all_debate_agents) - 1),
                 "slots": [
                     {"name": a.get("name", ""), "role": a.get("role", ""), "model": a.get("model", "")}
@@ -432,18 +453,24 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
             hist_entry["_actor_id"] = get_session_actor(request, fallback="boardroom-service")
             save_boardroom_history_item(hist_entry)
             res["history_id"] = hist_entry["id"]
-            try:
-                from backend.workflow_scheduler import dispatch_workflow_event
-                dispatch_workflow_event(
-                    source="boardroom",
-                    event_type="decision",
-                    title=req.task[:140],
-                    summary=str(res.get("synthesis", ""))[:600],
-                    payload={"framework": req.framework, "history_id": hist_entry["id"]},
-                    correlation_id=hist_entry["id"],
+            if _is_final_decision:
+                try:
+                    from backend.workflow_scheduler import dispatch_workflow_event
+                    dispatch_workflow_event(
+                        source="boardroom",
+                        event_type="decision",
+                        title=req.task[:140],
+                        summary=str(res.get("synthesis", ""))[:600],
+                        payload={"framework": req.framework, "history_id": hist_entry["id"]},
+                        correlation_id=hist_entry["id"],
+                    )
+                except Exception as wf_err:
+                    print(f"[Boardroom] Workflow-Event notice: {wf_err}")
+            else:
+                logger.info(
+                    "[Boardroom] Debatte %s ohne finalen Konsens (%s) — kein Decision-Workflow-Event ausgeloest.",
+                    hist_entry["id"], hist_entry["decision_status"],
                 )
-            except Exception as wf_err:
-                print(f"[Boardroom] Workflow-Event notice: {wf_err}")
         except Exception as e:
             print(f"Error saving boardroom history item in run: {e}")
     except Exception as e:

@@ -28,6 +28,7 @@ import secrets
 import datetime
 from typing import Dict, Any, List, Optional
 
+WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
     from backend.db_paths import resolve_db
     DB_FILE = resolve_db("agentic_memory.db")
@@ -590,6 +591,14 @@ def verify_email_draft_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
             return {
                 "valid": False, "cutoff": cutoff, "hmac_active": False,
                 "message": "HMAC-Bloecke ohne passenden ARCHON_AUDIT_HMAC_KEY.",
+            }
+        if key_active and any(
+            int(r["id"]) >= cutoff and not str(r["block_hash"] or "").startswith(HMAC_PREFIX)
+            for r in rows
+        ):
+            return {
+                "valid": False, "cutoff": cutoff, "hmac_active": True,
+                "message": "HMAC-Key aktiv, aber Block ab Epoche ohne HMAC-Signatur (Downgrade).",
             }
         return {
             "valid": True, "count": len(rows), "cutoff": cutoff,

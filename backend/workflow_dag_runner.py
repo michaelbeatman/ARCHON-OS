@@ -23,6 +23,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import re
 import secrets
 import sqlite3
@@ -1201,6 +1202,42 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     return out
 
 
+def _enqueue_dag_node_dlq(
+    node: Dict[str, Any],
+    idempotency_key: Optional[str],
+    error_text: str,
+) -> None:
+    """H: Retry-Erschöpfung in die bestehende DLQ stellen — stabiler Key verhindert Duplikate."""
+    stable_key = (
+        "dag-node-retry-exhausted:"
+        f"{idempotency_key or node.get('id') or 'unknown'}"
+    )
+    payload = {
+        "node_id": str(node.get("id") or ""),
+        "node_type": str(node.get("type") or ""),
+        "idempotency_key": str(idempotency_key or ""),
+        "error": str(error_text)[:1000],
+    }
+    try:
+        from backend.dead_letter_queue import dead_letter_queue_manager as _dlq
+        result = _dlq.enqueue_task(
+            job_type="workflow_node",
+            source_module="backend.workflow_dag_runner",
+            payload=payload,
+            priority=1,
+            idempotency_key=stable_key,
+        )
+        if result.get("queued"):
+            logger.warning(
+                "[WorkflowDAG] Node '%s' nach Retry-Erschöpfung in DLQ gestellt: %s",
+                node.get("id"), stable_key,
+            )
+        else:
+            logger.debug("[WorkflowDAG] DLQ-Eintrag %s bereits vorhanden: %s", stable_key, result)
+    except Exception as exc:
+        logger.warning("[WorkflowDAG] DLQ-Eintrag für Node '%s' fehlgeschlagen: %s", node.get("id"), exc)
+
+
 async def _exec_with_retry_and_timeout(
     executor_fn: ExecutorFn,
     node: Dict[str, Any],
@@ -1243,13 +1280,16 @@ async def _exec_with_retry_and_timeout(
                 return out
             last_err = str(out.get("error") or "node_returned_error")
             if attempt == max_retries:
+                _enqueue_dag_node_dlq(node, idempotency_key, last_err)
                 return out
         except asyncio.TimeoutError:
             last_err = f"Timeout nach {timeout_sec}s (Versuch {attempt + 1}/{max_retries + 1})"
         except Exception as exc:
             last_err = str(exc)
         if attempt < max_retries:
-            await asyncio.sleep(min(2.0 * (attempt + 1), 6.0))
+            # H: Jitter bricht die Synchronisation paralleler Nodes auf.
+            await asyncio.sleep(min(2.0 * (attempt + 1), 6.0) * random.uniform(0.75, 1.25))
+    _enqueue_dag_node_dlq(node, idempotency_key, last_err)
     return {"status": "error", "error": last_err, "node_id": node.get("id")}
 
 
@@ -1406,6 +1446,7 @@ async def _run_workflow_dag_locked(
     trace_id = await _otel_start(f"workflow.{wf_id}", rid)
 
     approvals: Dict[str, bool] = {}
+    approvals_parse_failed = False
     with _connect(db_path) as conn:
         prev_run = conn.execute(
             "SELECT gate_approvals_json FROM workflow_runs WHERE run_id = ?",
@@ -1416,8 +1457,14 @@ async def _run_workflow_dag_locked(
                 stored_app = json.loads(prev_run["gate_approvals_json"])
                 if isinstance(stored_app, dict):
                     approvals.update({str(k): bool(v) for k, v in stored_app.items()})
-            except Exception:
-                pass
+            except Exception as exc:
+                # B: Ein Parsefehler darf NIE zum Überschreiben mit einem leeren
+                # Dict führen — das würde erteilte Freigaben dauerhaft löschen.
+                approvals_parse_failed = True
+                logger.error(
+                    "[WorkflowDAG] Run '%s': gate_approvals_json konnte nicht gelesen werden "
+                    "(%s); alter Wert wird bewahrt.", rid, exc,
+                )
         if gate_approvals:
             approvals.update({str(k): bool(v) for k, v in gate_approvals.items()})
         conn.execute(
@@ -1427,10 +1474,11 @@ async def _run_workflow_dag_locked(
             ON CONFLICT(run_id) DO UPDATE SET
                 status='running',
                 dag_json=CASE WHEN excluded.dag_json != '{}' THEN excluded.dag_json ELSE workflow_runs.dag_json END,
-                gate_approvals_json=excluded.gate_approvals_json,
+                gate_approvals_json=CASE WHEN ? THEN workflow_runs.gate_approvals_json ELSE excluded.gate_approvals_json END,
                 updated_at=excluded.updated_at
             """,
-            (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), json.dumps(approvals, ensure_ascii=False), now, now),
+            (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), json.dumps(approvals, ensure_ascii=False),
+             now, now, int(approvals_parse_failed)),
         )
         conn.commit()
         cached_rows = conn.execute(

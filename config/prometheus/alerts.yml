@@ -1,0 +1,186 @@
+# config/prometheus/alerts.yml
+# SLO- und Burn-Rate-Regeln für Archon OS.
+#
+# ECHTE Metriknamen (Quelle: backend/metrics_collector.py,
+# generate_prometheus_metrics / Prometheus-intern):
+#   archon_agent_dispatches_total{status="ok"|"error"}  (counter)
+#   archon_agent_error_rate_percent                     (gauge, kumulativ)
+#   archon_queue_depth                                  (gauge)
+#   archon_database_size_bytes{database="..."}          (gauge, Dateigröße)
+#   archon_free_disk_bytes                              (gauge, echter freier Platz)
+#   archon_disk_used_percent                            (gauge, Belegung in %)
+#   up{job="..."}                                       (von Prometheus erzeugt)
+#
+# BEWUSST NICHT VERWENDET (würden erfundene Namen darstellen):
+#   archon_dispatch_total / archon_dispatch_errors_total ->
+#     existieren nicht; korrekt ist archon_agent_dispatches_total
+#   node_filesystem_* / node_disk_* ->
+#     kein node_exporter im compose; Archon exportiert Disk selbst.
+#
+# Zustellung: Alertmanager -> Telegram-Bot (config/alertmanager/alertmanager.yml).
+# Die In-App-Alarmierung (metrics_collector.py: Dedup + Auto-Resolve) bleibt
+# zusätzlich aktiv; historische 30d-Retention-Notiz unten ist obsolet (compose
+# nutzt jetzt --storage.tsdb.retention.time=30d).
+
+groups:
+  - name: archon-slo
+    interval: 30s
+    rules:
+      # SLO: >= 99,5 % erfolgreiche Dispatches => Error Budget = 0,5 %.
+      # Multiwindow: 30d (Budget über das SLO-Fenster) AND 6h (aktuell brennend).
+      # HINWEIS: 30d-Fenster benötigt TSDB-Retention >= 30d. Die aktuelle
+      # compose nutzt jetzt --storage.tsdb.retention.time=30d.
+      - alert: ArchonDispatchSuccessRateSLO30d
+        expr: |
+          (
+            sum(rate(archon_agent_dispatches_total{status="error"}[30d]))
+            /
+            clamp_min(sum(rate(archon_agent_dispatches_total[30d])), 0.001)
+            > 0.005
+          )
+          and
+          (
+            sum(rate(archon_agent_dispatches_total{status="error"}[6h]))
+            /
+            clamp_min(sum(rate(archon_agent_dispatches_total[6h])), 0.001)
+            > 0.005
+          )
+        for: 10m
+        labels:
+          severity: warning
+          service: archon-fastapi-core
+          slo: archon_dispatch_success_rate
+        annotations:
+          summary: "Dispatch-SLO verletzt: Erfolgsrate unter 99,5 % (30d/6h)"
+          description: >-
+            Die Dispatch-Fehlerrate liegt über dem 0,5-%-Error-Budget
+            ({{ $value | humanizePercentage }} im 30d-Fenster) und brennt
+            auch im 6h-Fenster weiter. Quelle:
+            archon_agent_dispatches_total{status="ok"|"error"}.
+            Voraussetzung: Prometheus-Retention >= 30d.
+
+      # Schneller Burn: 14,4x das Budget (0,072 = 14,4 * 0,005),
+      # Multiwindow 30m AND 6h -> Page-relevant.
+      - alert: ArchonDispatchErrorBudgetBurnFast
+        expr: |
+          (
+            sum(rate(archon_agent_dispatches_total{status="error"}[30m]))
+            /
+            clamp_min(sum(rate(archon_agent_dispatches_total[30m])), 0.001)
+            > 0.072
+          )
+          and
+          (
+            sum(rate(archon_agent_dispatches_total{status="error"}[6h]))
+            /
+            clamp_min(sum(rate(archon_agent_dispatches_total[6h])), 0.001)
+            > 0.072
+          )
+        for: 5m
+        labels:
+          severity: critical
+          service: archon-fastapi-core
+          slo: archon_dispatch_success_rate
+        annotations:
+          summary: "Schneller Error-Budget-Verbrauch: Dispatch-Fehlerrate > 7,2 %"
+          description: >-
+            Fehlerrate {{ $value | humanizePercentage }} über 30m und 6h
+            (Schwelle 7,2 % = 14,4x des 0,5-%-Budgets). Bei diesem Burn ist
+            das 30d-Error-Budget in rund 2 Tagen aufgebraucht. Quelle:
+            archon_agent_dispatches_total{status="error"}.
+
+  - name: archon-operations
+    interval: 30s
+    rules:
+      # Queue-Stau: deckt sich bewusst mit dem In-App-Schwellenwert (> 50).
+      # Keine doppelte Benachrichtigung, da Alertmanager nur einen
+      # null-Receiver hat; Prometheus liefert hier Sichtbarkeit/Historie.
+      - alert: ArchonTaskQueueBacklog
+        expr: archon_queue_depth > 50
+        for: 15m
+        labels:
+          severity: warning
+          service: archon-fastapi-core
+        annotations:
+          summary: "Task-Queue-Stau: mehr als 50 Aufgaben warten"
+          description: >-
+            archon_queue_depth beträgt {{ $value }} (Schwelle 50) seit 15
+            Minuten. Queue tiefer als die Verarbeitungskapazität.
+
+      # Disk-Platz: Es gibt KEINE Metrik für freien Festplattenspeicher
+      # (kein node_exporter im Profil). Diese Regel überwacht stattdessen
+      # das DATEIWACHSTUM der SQLite-DBs - die einzige echte Disk-Metrik.
+      - alert: ArchonDatabaseFileSizeHigh
+        expr: archon_database_size_bytes > 1073741824
+        for: 1h
+        labels:
+          severity: warning
+          service: archon-fastapi-core
+        annotations:
+          summary: "SQLite-Datenbankdatei > 1 GiB ({{ $labels.database }})"
+          description: >-
+            archon_database_size_bytes{database="{{ $labels.database }}"}
+            beträgt {{ $value | humanize1024 }} Bytes seit 1 Stunde. Dies ist ein
+            Wachstums-Proxy: freier Diskplatz wird NICHT exportiert (kein
+            node_exporter). Für echte Disk-Free-Alerts wäre ein Exporter
+            nötig (außerhalb dieses Konfigurations-Scopes).
+
+      # Hohe Fehlerrate: direkter, im Code vorhandener Gauge (kumulativ aus
+      # otel_spans). Ergänzt die Burn-Rate-Regeln um den aktuellen DB-Wert.
+      - alert: ArchonAgentErrorRateHigh
+        expr: archon_agent_error_rate_percent > 25
+        for: 10m
+        labels:
+          severity: critical
+          service: archon-fastapi-core
+        annotations:
+          summary: "Hohe Agenten-Fehlerquote: > 25 %"
+          description: >-
+            archon_agent_error_rate_percent beträgt {{ $value }} % seit 10
+            Minuten. Hinweis: der Gauge ist kumulativ über otel_spans; die
+            In-App-Dedup in metrics_collector.py nutzt denselben Schwellenwert,
+            versendet aber die einzige echte Benachrichtigung.
+
+      # Prometheus-eigene Metrik: Target nicht mehr scrape-bar.
+      - alert: ArchonTargetDown
+        expr: up{job=~"archon-os|omniroute"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: monitoring
+        annotations:
+          summary: "Prometheus-Target nicht erreichbar: {{ $labels.job }}"
+          description: >-
+            up{job="{{ $labels.job }}",instance="{{ $labels.instance }}"}
+            ist seit 2 Minuten 0. Scrape oder Container ist ausgefallen.
+
+  - name: archon-disk
+    interval: 30s
+    rules:
+      # Echter freier Diskplatz des Workspace-Volumens (Archon exportiert
+      # selbst, kein node_exporter nötig). Negative Werte = Messfehler ->
+      # kein Alert (Vergleich greift nicht).
+      - alert: ArchonDiskSpaceLow
+        expr: archon_free_disk_bytes < 2147483648
+        for: 5m
+        labels:
+          severity: critical
+          service: archon-os
+        annotations:
+          summary: "Kritisch wenig freier Diskplatz (< 2 GiB)"
+          description: >-
+            archon_free_disk_bytes liegt seit 5 Minuten unter 2 GiB
+            (aktuell {{ $value | humanize1024 }} Bytes). Bitte Logs,
+            Backups und temporäre Artefakte prüfen. Zustellung per Telegram.
+
+      - alert: ArchonDiskNearlyFull
+        expr: archon_disk_used_percent > 90
+        for: 10m
+        labels:
+          severity: warning
+          service: archon-os
+        annotations:
+          summary: "Disk-Belegung über 90 %"
+          description: >-
+            archon_disk_used_percent beträgt {{ $value }} % seit 10 Minuten.
+            Wachstums-Proxy archon_database_size_bytes ebenfalls prüfen.

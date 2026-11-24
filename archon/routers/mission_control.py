@@ -32,7 +32,7 @@ from archon.core.runtime import (
     logger,
 )
 from archon.core.profiles import api_get_hermes_profiles
-from backend.cancellation import cancel_scope, get_child_token, get_token
+from backend.cancellation import cancel_scope, get_child_token, get_token, reset_scope
 
 # Externe Dependencies (wie in main.py)
 import core_dispatcher
@@ -435,6 +435,15 @@ async def cancel_mission_control_task(request: Request, task_id: str, reason: st
     for scope in (f"dispatch:{task_id}", f"run:{task_id}", task_id):
         if cancel_scope(scope, why):
             cancelled.append(scope)
+    # E: gecancelte Tokens duerfen nicht dauerhaft in der Registry bleiben.
+    # Der laufende Worker haelt seine Token-Referenz und registriert den Cancel
+    # weiterhin; ein spaeter erneut gestarteter Task bekommt jedoch frische
+    # Tokens (altes Verhalten: sofort CancelledError ohne Status-Update).
+    try:
+        for scope in (f"task:{task_id}", f"dispatch:{task_id}", f"run:{task_id}"):
+            reset_scope(scope)
+    except Exception as exc:
+        logger.warning("[MissionControl] Cancel-Scope-Reset fehlgeschlagen: %s", exc)
     broadcast_event("task_cancelled", {"task_id": task_id, "reason": why, "scopes": cancelled})
     return {"status": "ok", "task_id": task_id, "cancelled_scopes": cancelled}
 

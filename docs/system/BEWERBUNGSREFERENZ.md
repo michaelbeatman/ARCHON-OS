@@ -35,7 +35,7 @@ Python 3.12/3.13 · FastAPI · Pydantic v2 · asyncio · SQLite (WAL, CAS, Lease
 ### Product Profile
 
 - **Multi-agent orchestration:** 70 specialist profiles with three-tier `SOUL.md` prompts (Compact / Pro / Full) so tokens are spent only where domain expertise is needed. Work runs as structured workflows with delegation, fan-in/synthesis, HITL gates and persistent checkpoints — not one-shot answers.
-- **AI Boardroom:** 55 structured decision frameworks (OKR, Pre-Mortem, Six Thinking Hats, …) for isolated multi-perspective debates with critic cross-examination and synthesis; results are archived tamper-evidently in the Obsidian vault and the decision engine.
+- **AI Boardroom:** 55 structured decision frameworks (OKR, Pre-Mortem, Six Thinking Hats, …) for isolated multi-perspective debates with a critique prompt and deterministic synthesis; results are archived tamper-evidently in the Obsidian vault and the decision engine.
 - **Cost & provider control:** routing between local models (Ollama, LM Studio) and cloud providers (OpenRouter, OmniRoute, Groq, OpenAI, Anthropic, Mistral), upfront cost estimation, per-role/per-task budgets, bandit-based model feedback and a semantic cache.
 - **Data sovereignty:** zero-egress gate and privacy router with fail-closed hard block for finance, contract and CRM data when the local model is offline; worker containers on an internal Docker network with no internet route; local RAG indexing via Obsidian vault and AnythingLLM/Chroma.
 - **Business operations:** Kanban with four-eyes approvals, email triage, CRM and an ERP suite (offers, contracts, invoices, receivables), treasury, calendar, time tracking and n8n/Telegram integration.

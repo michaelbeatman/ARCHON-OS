@@ -29,7 +29,7 @@ Das Break-Glass-Verfahren nutzt ausschließlich Module der Python 3 Standardbibl
 ## 3. Dateistruktur des Notfall-Tresors
 
 - **Tresor-Datei:** `data/backups/break_glass_vault.enc` (verschlüsseltes Archiv).
-  - Enthält: `.env`, `config/`, alle SQLite-Datenbanken (`agent_os.db`, `agentic_memory.db`, `kanban.db`, `state.db`).
+  - Enthält: `.env`, `config/`, alle SQLite-Datenbanken (`ops.db`, `business.db`, `memory.db`).
 - **Anleitung für den Notfall:** `data/backups/BREAK_GLASS_RECOVERY_KIT.md` (Notfall-Handbuch zum Ausdrucken und Verwahren im physischen Panzerschrank).
 
 ---

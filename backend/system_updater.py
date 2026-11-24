@@ -708,24 +708,63 @@ def apply_update(make_backup: bool = True) -> Dict[str, Any]:
     invalidate(get_update_status)
     invalidate(get_local_changes)
 
+    # Der Produktions-Container laeuft ohne `--reload` (siehe Dockerfile): ein
+    # main.py-Touch erreichte ihn nie. Das Update ist am Host angewendet, der
+    # Prozess muss neu gestartet werden. `status` bleibt absichtlich "success",
+    # damit der bestehende Aufrufer den Reload-Task weiterhin plant.
     return {
         "status": "success",
         "new_commit": new_commit,
         "snapshot": snapshot_info,
         "git_output": pull_res["stdout"],
-        "message": f"Update erfolgreich auf Commit {new_commit} angewendet."
+        "restart_required": True,
+        "reload_mode": "restart_required",
+        "message": f"Update auf Commit {new_commit} angewendet. Container-Neustart erforderlich (kein uvicorn --reload im Produktions-Image)."
     }
 
 
-def schedule_delayed_reload(delay: float = 2.0):
-    """Führt einen verzögerten Code-Reload durch, damit die HTTP-Response sauber beendet werden kann."""
+def schedule_delayed_reload(delay: float = 2.0) -> Dict[str, Any]:
+    """Markiert den Neustartbedarf und fuehrt ihn nur explizit freigegeben aus.
+
+    Das frühere `os.utime(main.py)` war ein Reload-Signal fuer einen
+    uvicorn `--reload`-Prozess. Das Produktions-Image startet ohne `--reload`;
+    der Touch war damit wirkungslos. Jetzt: ehrlicher Status + optionaler,
+    dokumentierter Container-Restart (nur mit ARCHON_ALLOW_SELF_RESTART=true).
+    """
     import time
     time.sleep(delay)
     main_file = os.path.join(WORKSPACE_DIR, "main.py")
     try:
         os.utime(main_file, None)
     except Exception as exc:
-        logger.debug(f"[SystemUpdater] main.py-Touch (Reload-Signal) fehlgeschlagen: {exc}")
+        logger.debug(f"[SystemUpdater] main.py-Touch (nur noch Informationssignal) fehlgeschlagen: {exc}")
+
+    allow_restart = str(os.environ.get("ARCHON_ALLOW_SELF_RESTART", "")).strip().lower() in ("1", "true", "yes", "on")
+    if not allow_restart:
+        msg = ("Restart erforderlich: ARCHON_ALLOW_SELF_RESTART=true setzen und "
+               "im Projektverzeichnis `docker compose restart archon-os` ausfuehren "
+               "(fuer Codeaenderungen ggf. `docker compose up -d --build archon-os`).")
+        logger.warning("[SystemUpdater] %s", msg)
+        return {"status": "restart_required", "restarted": False, "message": msg}
+
+    try:
+        proc = subprocess.run(
+            ["docker", "compose", "restart", "archon-os"],
+            cwd=WORKSPACE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        success = proc.returncode == 0
+        msg = (proc.stdout or proc.stderr or "").strip()[-500:]
+        if success:
+            logger.info("[SystemUpdater] Container 'archon-os' neu gestartet.")
+            return {"status": "restarted", "restarted": True, "message": msg}
+        logger.error("[SystemUpdater] Container-Restart fehlgeschlagen: %s", msg)
+        return {"status": "error", "restarted": False, "message": msg}
+    except Exception as exc:
+        logger.error("[SystemUpdater] Container-Restart nicht moeglich: %s", exc)
+        return {"status": "error", "restarted": False, "message": str(exc)}
 
 
 def push_changes(commit_message: Optional[str] = None, custom_version: Optional[str] = None, version_step: str = "custom") -> Dict[str, Any]:
@@ -806,13 +845,23 @@ def push_changes(commit_message: Optional[str] = None, custom_version: Optional[
 
 
 def rollback_snapshot(snapshot_id: str) -> Dict[str, Any]:
-    """Stellt Datenbanken und Konfigurationsdateien aus einem Snapshot wieder her."""
+    """Stellt Datenbanken und Konfigurationsdateien aus einem Snapshot wieder her.
+
+    C07-Pfad: .db-Ziele laufen ueber denselben Cross-Prozess-Gate und dieselbe
+    quick_check-Verifikation wie db_backup_manager.restore_backup(). Bei einem
+    einzigen Teilfehler ist der Gesamtstatus "error" (vorher still "success").
+    """
     source_dir = os.path.join(SNAPSHOT_DIR, snapshot_id)
     if not os.path.exists(source_dir):
         return {"status": "error", "message": f"Snapshot {snapshot_id} existiert nicht."}
 
+    import tempfile
+    from backend import db_backup_manager as _dbbm  # C07: gleicher Gate wie Restore
+
     restored = []
-    for fname in os.listdir(source_dir):
+    verified = []
+    errors = []
+    for fname in sorted(os.listdir(source_dir)):
         if fname == "snapshot_meta.json":
             continue
         src = os.path.join(source_dir, fname)
@@ -828,18 +877,64 @@ def rollback_snapshot(snapshot_id: str) -> Dict[str, Any]:
         else:
             target_path = os.path.join(WORKSPACE_DIR, fname)
 
+        tmp_path = None
         try:
-            shutil.copy2(src, target_path)
+            if fname.endswith(".db"):
+                parent = os.path.dirname(target_path) or WORKSPACE_DIR
+                os.makedirs(parent, exist_ok=True)
+                fd, tmp_path = tempfile.mkstemp(prefix=".rollback_", suffix=".db", dir=parent)
+                os.close(fd)
+                shutil.copy2(src, tmp_path)
+
+                # Lock über die gesamte Austausch- und verify-Phase halten.
+                with _dbbm._RESTORE_LOCK, _dbbm._restore_gate(target_path):
+                    for suffix in ("-wal", "-shm", "-journal"):
+                        sidecar = target_path + suffix
+                        if os.path.exists(sidecar):
+                            try:
+                                os.remove(sidecar)
+                            except OSError as exc:
+                                raise RuntimeError(f"Sidecar {sidecar} nicht entfernbar: {exc}") from exc
+                    os.replace(tmp_path, target_path)
+
+                    try:
+                        verify = sqlite3.connect(f"file:{target_path}?mode=ro", uri=True, timeout=5.0)
+                        try:
+                            check = verify.execute("PRAGMA quick_check").fetchone()
+                        finally:
+                            verify.close()
+                    except sqlite3.Error as exc:
+                        raise RuntimeError(f"quick_check nicht moeglich: {exc}") from exc
+                    if not check or str(check[0]).lower() != "ok":
+                        raise RuntimeError(f"quick_check fehlgeschlagen: {check}")
+                    verified.append(fname)
+            else:
+                shutil.copy2(src, target_path)
             restored.append(fname)
         except Exception as e:
+            errors.append(f"{fname}: {e}")
             print(f"[SystemUpdater] Rollback Fehler für {fname}: {e}", file=sys.stderr)
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
-    return {
-        "status": "success",
+    result: Dict[str, Any] = {
+        "status": "error" if errors else "success",
         "snapshot_id": snapshot_id,
         "restored_files": restored,
-        "message": f"{len(restored)} Dateien aus Snapshot {snapshot_id} erfolgreich wiederhergestellt."
+        "verified_databases": verified,
+        "message": (
+            f"{len(restored)} Dateien wiederhergestellt, {len(errors)} Fehler: " + "; ".join(errors[:10])
+            if errors else
+            f"{len(restored)} Dateien aus Snapshot {snapshot_id} erfolgreich wiederhergestellt."
+        ),
     }
+    if errors:
+        result["errors"] = errors
+    return result
 
 
 if __name__ == "__main__":

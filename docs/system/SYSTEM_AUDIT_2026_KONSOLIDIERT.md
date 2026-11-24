@@ -28,7 +28,7 @@ Abhängigkeit: Fundament → Sicherheit → Orchestrierung → Content → Front
 - Neue Modelle überwiegend Pydantic v2, `extra="ignore"`; vereinzelt noch
   `extra="allow"` und `.dict()`-Reste. Direkte Python-Aufrufer vieler Router
   akzeptieren inzwischen Dict **oder** Modell (kein `AttributeError`-500 mehr).
-- Verifikation: `compileall` grün; `pytest tests/ -q`: **1727 passed, 16 skipped**.
+- Verifikation: `compileall` grün; `pytest tests/ -q`: **1765 passed, 16 skipped** (Stand nach Phase-1-Welle 24.11.2026).
 
 ## Zweite Welle — zusätzlich behoben
 
@@ -111,8 +111,8 @@ Abhängigkeit: Fundament → Sicherheit → Orchestrierung → Content → Front
 
 ## Verifikationsstand (Korrektur 23.11.2026)
 
-- **pytest**: `.ci_venv\Scripts\python.exe -m pytest tests/ -q` → **1727 passed,
-  16 skipped** (lokal ausgeführt, Exit 0). Der Gesamtlauf ist nachgeholt.
+- **pytest**: `.ci_venv\Scripts\python.exe -m pytest tests/ -q` → **1765 passed,
+  16 skipped** (Stand nach Phase-1-Welle 24.11.2026; lokal ausgeführt, Exit 0). Der Gesamtlauf ist nachgeholt.
 - **compileall**: über alle Produktivdateien → Exit 0.
 - **Frontend**: `node_modules` fehlt lokal; `npm ci && npx tsc --noEmit &&
   npm run build` bleibt ein CI-Gate und ist hier **nicht** verifiziert.

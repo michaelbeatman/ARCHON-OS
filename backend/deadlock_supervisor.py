@@ -265,12 +265,28 @@ class DeadlockSupervisor:
                     # zurückgesetzt — sonst läuft ein 90-s-LLM-Call doppelt.
                     pid = t["worker_pid"] if has_worker_pid else None
                     if self._pid_alive(pid):
-                        if has_claim_expires:
-                            conn.execute(
-                                "UPDATE tasks SET claim_expires = ? WHERE id = ?",
-                                (time.time() + MIN_LEASE_TTL_SECONDS, t_id),
-                            )
-                        continue
+                        # I: Im Single-Prozess-Container ist der Worker-PID
+                        # IMMER alive (gleicher Prozess wie Supervisor). Ohne
+                        # Heartbeat-Prüfung würden Leases endlos verlängert.
+                        # Fail-closed: nur ein frischer Heartbeat verlängert.
+                        hb_fresh = False
+                        if has_heartbeat and t["last_heartbeat_at"]:
+                            last_hb = _to_dt(t["last_heartbeat_at"])
+                            if last_hb is not None:
+                                hb_fresh = (now - last_hb).total_seconds() <= MIN_LEASE_TTL_SECONDS
+                        if hb_fresh:
+                            if has_claim_expires:
+                                conn.execute(
+                                    "UPDATE tasks SET claim_expires = ? WHERE id = ?",
+                                    (time.time() + MIN_LEASE_TTL_SECONDS, t_id),
+                                )
+                            continue
+                        _archon_exc_logger.warning(
+                            "[deadlock_supervisor] Task %s: PID %s lebt, aber Heartbeat "
+                            "fehlt oder ist älter als %ss — Lease wird NICHT verlängert "
+                            "(fail-closed).",
+                            t_id, pid, MIN_LEASE_TTL_SECONDS,
+                        )
                     expires = float(t["claim_expires"] or 0) if has_claim_expires else 0.0
                     if expires > time.time():
                         # Lease von einem anderen Prozess gehalten.

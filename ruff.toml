@@ -1,0 +1,21 @@
+# Ruff-Konfiguration für den WARN-ONLY-Qualitätscheck (Register C24).
+# Funde aus `ruff check ... --output-format=concise` blockieren aktuell nichts;
+# die CI-Stufe ist bewusst als `continue-on-error` ausgelegt.
+line-length = 100
+target-version = "py313"
+
+[lint]
+select = ["E", "F", "I"]
+
+# Bewusste Deferrals: Der Legacy-Bestand ist noch nicht auf diese Regeln
+# aufgeräumt. Sie bleiben als Warnung sichtbar, sobald sie aktiviert werden.
+ignore = [
+  "E401",  # multiple imports on one line - kosmetisch
+  "E402",  # module import not at top - Skripte setzen sys.path bewusst
+  "E501",  # line too long - 100 Zeichen ist Zielwert, nicht hart erzwungen
+  "E701",  # multiple statements on one line (colon) - kosmetisch
+  "E702",  # multiple statements on one line (semicolon) - kosmetisch
+  "E741",  # ambiguous variable name - Legacy-Namen (l, O, I)
+  "F401",  # unused import - großer Legacy-Rückstand, deferred
+  "F841",  # unused variable - deferred
+]

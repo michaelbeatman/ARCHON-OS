@@ -77,7 +77,14 @@ def main():
         return
     print(f"Applying {len(updates)} updates...")
     for upd in updates:
-        resp = requests.patch(f"{PB_URL}/api/collections/{COLLECTION}/records/{upd['id']}", json=upd)
+        # D: konsistent zu fetch_all_contacts() (Zeilen 24-29): Timeout und
+        # Fehlerabbruch statt endlos blockierendem Request / stillem 4xx/5xx.
+        resp = requests.patch(
+            f"{PB_URL}/api/collections/{COLLECTION}/records/{upd['id']}",
+            json=upd,
+            timeout=10,
+        )
+        resp.raise_for_status()
         if resp.status_code == 200:
             print(f"  Updated {upd['id']} -> rating {upd['rating']}")
         else:

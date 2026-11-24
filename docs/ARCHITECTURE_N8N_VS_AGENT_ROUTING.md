@@ -7,7 +7,7 @@ Dieses Dokument legt die verbindliche Architektur-Abgrenzung für **Archon OS (V
 ## 1. Das 3-Schichten-Bauprinzip
 
 ### Schicht A: Orchestrierungs-, Budget- & UI-Layer (Archon Mission Control & Organigramm)
-- **Zuständigkeit:** Hierarchisches Organigramm (Tier 1 Executive/Orchestrator, Tier 2 Department Leads, Tier 3 Spezialisten), visuelles Kanban-/Issue-Board (`kanban.db`) und Artefakt-Ablage im Obsidian Vault (`01_PROJEKTE`).
+- **Zuständigkeit:** Hierarchisches Organigramm (Tier 1 Executive/Orchestrator, Tier 2 Department Leads, Tier 3 Spezialisten), visuelles Kanban-/Issue-Board (`ops.db`) und Artefakt-Ablage im Obsidian Vault (`01_PROJEKTE`).
 - **Harte Token- & Euro-Budgets ([backend/role_budget_engine.py](file:///c:/.Antigravity-projekte/AgenticOS-2026/backend/role_budget_engine.py)):**
   - Jede Rolle besitzt ein hartes Tages- und Monatslimit in Tokens und Euro (`role_budget_policies` + `role_daily_budget_ledger`).
   - Bei Überschreitung wird die Rolle für den restlichen Tag automatisch auf `paused_budget` gesetzt.

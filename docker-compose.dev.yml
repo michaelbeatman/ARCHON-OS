@@ -1,3 +1,10 @@
+# D: einheitliche JSON-Log-Rotation (wie in docker-compose.yml).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   archon:
     build:
@@ -5,6 +12,8 @@ services:
       dockerfile: Dockerfile
     image: archon-os-dev:latest
     container_name: ARCHON-OS-dev
+    logging:
+      <<: *default-logging
     init: true
     user: "1000:1000"
     group_add:
@@ -87,6 +96,8 @@ services:
   archon-worker:
     image: python:3.11-alpine@sha256:bb1d70c1df30d8ee1e05214dbe82d6cdfd29833c1f47ce917f20991aca93acaa
     container_name: archon-worker-zero-egress
+    logging:
+      <<: *default-logging
     profiles: ["workers"]
     user: "1000:1000"
     read_only: true
@@ -113,6 +124,8 @@ services:
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:latest@sha256:be1ac64f33bd82043beb504822a17ba6b71668ea1ad7cf51a9a01d27bb7ab047
     container_name: docker-socket-proxy
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     # Entrypoint rendert weiterhin /tmp/haproxy.cfg aus dem Image-Template
     # (unbenutzt, kollidiert nicht mit unserem Pfad) und ruft dann

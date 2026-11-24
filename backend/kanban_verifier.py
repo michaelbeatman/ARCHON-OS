@@ -15,6 +15,14 @@ from typing import Any, Dict, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# HARTUNG: Proof-Kommande sind Agenten-gesteuerte Subprozesse. Ohne Policy
+# konnten beliebige Binarys (inkl. shell -c) mit den Rechten des Servers
+# ausgefuehrt werden. Positiv-Liste + Jail statt Blacklist.
+_ALLOWED_PROOF_BINARIES = frozenset({
+    "pytest", "python", "python3", "node", "npm", "npx", "ruff", "mypy",
+})
+_PROOF_SHELL_METACHARS = (";", "&&", "||", "|", "`", "$(", ">", "<", "\n", "\r")
+
 
 def run_proof_command(
     proof_command: str,
@@ -25,8 +33,37 @@ def run_proof_command(
     cmd_str = (proof_command or "").strip()
     if not cmd_str:
         return {"passed": True, "exit_code": 0, "stdout": "", "stderr": "", "skipped": True}
+
+    def _rejected(reason: str) -> Dict[str, Any]:
+        return {
+            "passed": False, "exit_code": -1, "stdout": "",
+            "stderr": f"Proof-Kommando abgelehnt (Policy): {reason}", "skipped": False,
+        }
+
+    if any(token in cmd_str for token in _PROOF_SHELL_METACHARS):
+        return _rejected("Shell-Metazeichen sind nicht erlaubt.")
     try:
         args = shlex.split(cmd_str, posix=True)
+    except ValueError as exc:
+        return _rejected(f"Ungueltige Kommando-Syntax: {exc}")
+    if not args:
+        return _rejected("Leeres Kommando.")
+    binary = os.path.splitext(os.path.basename(args[0]))[0].lower()  # Windows: python.exe -> python
+    if binary not in _ALLOWED_PROOF_BINARIES:
+        return _rejected(f"Binary '{binary}' steht nicht auf der Allowlist.")
+    # Pfad-Jail: keine traversal/absoluten Pfade aus dem Agenten-Kommando.
+    base = os.path.abspath(cwd or WORKSPACE_DIR)
+    for arg in args[1:]:
+        if arg.startswith("-"):
+            continue
+        candidate = arg if os.path.isabs(arg) else os.path.join(base, arg)
+        try:
+            inside = os.path.commonpath([base, os.path.abspath(candidate)]) == base
+        except ValueError:
+            inside = False  # anderes Laufwerk (Windows) -> ablehnen
+        if not inside:
+            return _rejected(f"Pfad ausserhalb des Arbeitsverzeichnisses: {arg}")
+    try:
         proc = subprocess.run(
             args,
             cwd=cwd or WORKSPACE_DIR,

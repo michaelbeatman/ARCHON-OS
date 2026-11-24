@@ -5,6 +5,18 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# SLO-/Burn-Rate-Regeln (reine Konfiguration, kein neuer Python-Service).
+# ACHTUNG (compose): Die Datei muss zusätzlich nach /etc/prometheus/alerts.yml
+# gemountet werden, sonst startet Prometheus nicht ("no such file").
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+# Alertmanager läuft im selben Docker-Netz (agentic_mesh) wie Prometheus.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   - job_name: "archon-os"
     metrics_path: "/metrics"

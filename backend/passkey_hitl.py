@@ -147,17 +147,23 @@ def is_passkey_required(user_id: str, category: str = "all") -> bool:
         _archon_exc_logger.error("[passkey_hitl] Passkey-Pruefung fehlgeschlagen (fail-closed): %s", exc)
         return True
     if not cfg["enabled"] or not cfg["has_credentials"]:
-        # Audit 23.11.2026 (F-02): fehlende/abgeschaltete Passkey-Konfiguration
-        # bedeutete bisher „kein HITL noetig" — Zahlungen und destruktive
-        # Aktionen konnten ohne Vier-Augen-Prinzip ausgefuehrt werden.
-        # Fuer Hochrisiko-Kategorien gilt jetzt fail-closed: HITL ist Pflicht,
-        # solange kein gueltiger Passkey hinterlegt ist.
-        # Nur Zahlungen: Gate-Freigaben (system/destructive_actions) sind im
-        # lokalen Single-User-Modus bewusst auch ohne enrolten Passkey nutzbar
-        # (tests/test_gate_approve_ausfuehrung.py vertraegt sich darauf).
-        if str(category).strip().lower() == "payments":
-            return True
-        return False
+        # Audit 23.11.2026 (F-02): ohne registrierte Credentials kann gar kein
+        # Proof erzeugt werden. Eine "fail-closed" Pflicht wuerde alle
+        # Freigaben unmoeglich machen (Sackgasse) — daher bewusst FALSE, aber
+        # die inkonsistente Konfiguration (Kategorien=true bei enabled=false)
+        # laut melden. Der echte Bypass-Pfad ist stattdessen in
+        # decisions.py (_decision_hitl_proof / _followup_permission_gate) über
+        # die Session-Identitaet abgesichert.
+        if any(bool(cfg["categories"].get(k)) for k in _HIGH_RISK_CATEGORIES):
+            _archon_exc_logger.warning(
+                "[passkey_hitl] Inkonsistente Konfiguration für '%s': Hochrisiko-Kategorien aktiv, "
+                "aber Passkey deaktiviert oder keine Credentials — HITL kann nicht erzwungen werden.",
+                user_id,
+            )
+        # F-02 (bestätigter Baseline-Test): Zahlungen bleiben IMMER fail-closed.
+        # Die übrigen Kategorien wuerden ohne Credentials eine unmoegliche
+        # Proof-Pflicht erzeugen (Sackgasse) und bleiben daher bei False.
+        return str(category).strip().lower() == "payments"
     if cfg["scope"] == "all":
         return True
     return bool(cfg["categories"].get(category, False))
@@ -179,6 +185,8 @@ def consume_hitl_proof_token(
     category: str = "all",
     action: str = "",
     resource: str = "",
+    *,
+    consume: bool = True,
 ) -> bool:
     """Prueft und verbraucht ein Einmal-Passkey-Proof-Token.
 
@@ -186,6 +194,12 @@ def consume_hitl_proof_token(
     destructive_actions) ist die Bindung an ``action`` und ``resource``
     ZWINGEND. Ein Proof ohne oder mit abweichender Zielangabe wird abgelehnt —
     sonst konnte ein Proof fuer Zahlung A beliebige Zahlung B freigeben.
+
+    ``consume=False`` (Audit A, HITL-Bypass): nur PRUEFEN, nicht aus dem Store
+    entfernen. Der Decision-Followup muss denselben Proof unverbraucht an den
+    Gate-Endpoint weiterleiten, wo er genau einmal konsumiert wird. Ohne diese
+    Option wuerde eine Vorab-Pruefung den Proof verbrauchen und die Weiterleitung
+    scheitern lassen (oder einen Bypass erzwingen).
     """
     raw = str(token or "").strip()
     if not raw:
@@ -193,7 +207,7 @@ def consume_hitl_proof_token(
     uid = str(user_id or "admin").strip() or "admin"
     with _LOCK:
         _cleanup_challenges()
-        entry = _PROOF_TOKENS.pop(raw, None)
+        entry = _PROOF_TOKENS.pop(raw, None) if consume else _PROOF_TOKENS.get(raw)
     if not entry:
         return False
     if entry.get("user_id") != uid:

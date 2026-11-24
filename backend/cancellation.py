@@ -16,8 +16,11 @@ damit es von allen Schichten importiert werden kann.
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from typing import Dict, List, Optional
+
+logger = logging.getLogger("archon_os.cancellation")
 
 
 class CancelToken:
@@ -111,6 +114,10 @@ class CancelToken:
     def check(self) -> None:
         """Wirft CancelledError, wenn der Scope abgebrochen wurde."""
         if self.cancelled:
+            logger.info(
+                "[CancelToken] check() abbrechen: scope=%s reason=%s",
+                self.scope, self.reason,
+            )
             raise asyncio.CancelledError(
                 f"{self.scope} abgebrochen{': ' + self.reason if self.reason else ''}"
             )
@@ -122,16 +129,83 @@ class CancelToken:
 
 _REGISTRY: Dict[str, CancelToken] = {}
 _REGISTRY_LOCK = threading.Lock()
+# E (Härtungsaudit): analog workflow_dag_runner._MAX_RUN_LOCKS — die Registry
+# wuchs frueher pro Task/Session unbegrenzt und hielt gecancelte Tokens ewig.
+_MAX_CANCEL_TOKENS = 512
 
 
-def get_token(scope: str, *, create: bool = True) -> Optional[CancelToken]:
-    """Liefert den Token für einen Scope (optional neu anlegen)."""
+def _evict_if_needed_locked() -> None:
+    """Cap einhalten; zuerst gecancelte, dann die aeltesten Tokens entfernen.
+
+    Muß mit gehaltenem ``_REGISTRY_LOCK`` aufgerufen werden.
+    """
+    overflow = len(_REGISTRY) - _MAX_CANCEL_TOKENS
+    if overflow <= 0:
+        return
+    for key in [k for k, t in _REGISTRY.items() if t.cancelled][:overflow]:
+        token = _REGISTRY.pop(key, None)
+        if token is not None:
+            parent = getattr(token, "_parent", None)
+            if parent is not None:
+                try:
+                    parent._children.remove(token)
+                except ValueError:
+                    pass
+    overflow = len(_REGISTRY) - _MAX_CANCEL_TOKENS
+    if overflow > 0:
+        for key in list(_REGISTRY)[:overflow]:
+            _REGISTRY.pop(key, None)
+
+
+def reset_scope(scope: str) -> bool:
+    """E: Scope samt Kind-Tokens entfernen, damit ein neuer Lauf frische Tokens bekommt.
+
+    ``cancel_scope()`` setzt das Flag dauerhaft; ein gecancelter ``task:<id>``-
+    Token liess einen spaeter erneut gestarteten Worker sofort in
+    ``CancelledError`` laufen, ohne Status-Update. Kinder (dispatch/run) werden
+    mit entfernt, sonst bleibt der neue Root-Token mit gecancelten Kindern.
+    """
     key = str(scope)
+    with _REGISTRY_LOCK:
+        root = _REGISTRY.get(key)
+        if root is None:
+            return False
+        doomed = {key}
+        frontier = [root]
+        while frontier:
+            parent = frontier.pop()
+            for child in list(getattr(parent, "_children", ())):
+                child_key = str(getattr(child, "scope", ""))
+                if child_key and _REGISTRY.get(child_key) is child and child_key not in doomed:
+                    doomed.add(child_key)
+                    frontier.append(child)
+        for k in doomed:
+            token = _REGISTRY.pop(k, None)
+            if token is not None:
+                parent = getattr(token, "_parent", None)
+                if parent is not None:
+                    try:
+                        parent._children.remove(token)
+                    except ValueError:
+                        pass
+        return True
+
+
+def get_token(scope: str, *, create: bool = True, reset: bool = False) -> Optional[CancelToken]:
+    """Liefert den Token für einen Scope (optional neu anlegen).
+
+    ``reset=True`` entfernt einen vorhandenen Token (inkl. Kinder) zuerst —
+    für erneute Läufe desselben Scopes nach einem Cancel.
+    """
+    key = str(scope)
+    if reset:
+        reset_scope(key)
     with _REGISTRY_LOCK:
         token = _REGISTRY.get(key)
         if token is None and create:
             token = CancelToken(key)
             _REGISTRY[key] = token
+        _evict_if_needed_locked()
         return token
 
 
@@ -162,6 +236,7 @@ def get_child_token(parent_scope: str, child_scope: str) -> CancelToken:
                 parent._children.append(token)
                 if parent.cancelled:
                     token.cancel(parent.reason)
+        _evict_if_needed_locked()
         return token
 
 

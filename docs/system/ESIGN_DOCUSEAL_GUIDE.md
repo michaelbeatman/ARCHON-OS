@@ -12,7 +12,7 @@ DocuSeal läuft isoliert im Docker-Netzwerk `agentic_mesh`:
 - **Profil:** `esign` / `legal`
 - **Host-Port:** `http://localhost:3080` (Container-Port 3000)
 - **Persistenz:** Docker Volume `docuseal_data` (`/data/docuseal.sqlite3`)
-- **Archon Integration:** `backend/docuseal_client.py` synchronisiert Signatur-Zustände automatisch mit `kanban.db` und `agentic_memory.db`.
+- **Archon Integration:** `backend/docuseal_client.py` synchronisiert Signatur-Zustände automatisch mit `ops.db` und `memory.db`.
 
 ---
 
@@ -41,7 +41,7 @@ docker compose --profile esign stop docuseal
    - Der Vertragspartner öffnet den Link im Browser und unterzeichnet digital.
 3. **Webhook & Rückfluss:**
    - DocuSeal sendet nach erfolgreicher Signatur einen Webhook an `POST /api/operations/esign/webhook`.
-   - Der verknüpfte Task in `kanban.db` wird automatisch auf `done` gesetzt (`Vollständig digital unterzeichnet via DocuSeal`).
+   - Der verknüpfte Task in `ops.db` wird automatisch auf `done` gesetzt (`Vollständig digital unterzeichnet via DocuSeal`).
    - Im NotificationHub wird eine Benachrichtigung an das Team gesendet.
 
 ---

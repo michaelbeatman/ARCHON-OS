@@ -26,6 +26,7 @@ import sys
 import time
 import json
 import argparse
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Set, Optional
 
@@ -44,7 +45,17 @@ SYNC_TIMEOUT = float(os.environ.get("RAG_SYNC_TIMEOUT", "900"))
 
 
 def get_default_vault_path() -> Path:
-    """Ermittelt den Vault-Pfad abhängig von der Laufzeitumgebung (Docker vs. Host)."""
+    """Ermittelt den Vault-Pfad — SSOT-Resolver zuerst (G dieses Audits)."""
+    # G: vorher hatte dieses Skript eine eigene Kandidatenliste und konnte
+    # einen anderen Vault als die /api/vault-Routen indizieren (Split-Brain).
+    try:
+        from archon.core.runtime import resolve_obsidian_vault_path
+        central = resolve_obsidian_vault_path()
+        if central and os.path.isdir(central):
+            return Path(central)
+    except Exception:
+        pass
+
     env_path = os.environ.get("OBSIDIAN_VAULT_PATH")
     if env_path and os.path.exists(env_path):
         return Path(env_path)
@@ -116,16 +127,37 @@ def record_synced_file(state_path: Path, rel_path_str: str, file_path: Optional[
     """Speichert Pfad + Fingerprint atomar (C20: Aenderungen erkennbar)."""
     synced = load_synced_files(state_path)
     synced[rel_path_str] = _file_fingerprint(file_path) if file_path else {}
+    temp_path = None
     try:
         state_path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path = state_path.with_suffix(".tmp")
-        with open(temp_path, "w", encoding="utf-8") as f:
+        # H (dieses Audits): fester Name `.tmp` kollidierte bei parallelen
+        # Sync-Läufen. mkstemp liefert einen eindeutigen Namen im Zielordner.
+        fd, temp_path = tempfile.mkstemp(
+            dir=str(state_path.parent), prefix=".synced_", suffix=".tmp"
+        )
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(synced, f, indent=2, ensure_ascii=False, sort_keys=True)
             f.flush()
             os.fsync(f.fileno())
-        temp_path.replace(state_path)
+        os.replace(temp_path, state_path)
+        # Directory-fsync: der Rename muss nach Stromausfall sichtbar bleiben.
+        try:
+            dir_fd = os.open(str(state_path.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+        temp_path = None
     except Exception as e:
         print(f"[WARNUNG] Status-Datei '{state_path}' konnte nicht aktualisiert werden: {e}", file=sys.stderr)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
 
 
 def get_anythingllm_base_url() -> str:

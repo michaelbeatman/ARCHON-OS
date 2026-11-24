@@ -2,6 +2,7 @@ from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 """Skill-Inventar (Dateiindex, Frontmatter-Parsing, Skills-Endpunkte)."""
 
+import asyncio
 import functools
 import json
 import os
@@ -220,7 +221,9 @@ def find_skill_file(skill_id: str) -> Optional[str]:
     except PathJailError:
         return None
 
-    index = build_skills_file_index()
+    # Copy-on-write: nie den globalen, parallel gelesenen Index mutieren
+    # (sonst `RuntimeError: dictionary changed size during iteration`).
+    index = dict(build_skills_file_index())
     if clean_skill_id in index and os.path.exists(index[clean_skill_id]):
         return index[clean_skill_id]
     
@@ -524,6 +527,9 @@ async def api_save_single_hermes_skill(skill_id: str, request: Request):
 
     try:
         saved_path = await asyncio.to_thread(_persist_skill_sync)
+        # `orig_path` lebt nur in der Closure _persist_skill_sync und war hier
+        # eine NameError. Aus dem gespeicherten Pfad neu ableiten.
+        backup_path = os.path.join(os.path.dirname(str(saved_path)), ".SKILL.md.orig")
         print(f"[Skills API] Saved skill {skill_id} to {saved_path}")
     except Exception as e:
         print(f"[Skills API] Error writing skill {skill_id}: {e}")
@@ -537,7 +543,7 @@ async def api_save_single_hermes_skill(skill_id: str, request: Request):
         "status": "ok", 
         "id": skill_id, 
         "file_path": file_path, 
-        "has_original_backup": os.path.exists(orig_path)
+        "has_original_backup": os.path.exists(backup_path)
     }
 
 

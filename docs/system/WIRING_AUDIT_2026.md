@@ -49,4 +49,4 @@ mit `FUND` erfasst.
 ## Status
 
 _Abgeschlossen (23.11.2026): 15 Audits konsolidiert, Produktivpfade nachgezogen,
-Gesamt-Testlauf grün (1727 passed)._details siehe `AUDIT_ABSCHLUSS_2026_11_23.md`._
+Gesamt-Testlauf grün (1765 passed / 16 skipped, Stand 24.11.2026)._details siehe `AUDIT_ABSCHLUSS_2026_11_23.md`._

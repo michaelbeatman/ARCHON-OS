@@ -18,6 +18,7 @@ import secrets
 import shutil
 import sqlite3
 import sys
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -222,6 +223,7 @@ _HANDOFF_IDS_BY_TASK: Dict[str, str] = {}
 # C09: Session -> Delegationskette. Verhindert A->B->A-Zirkel und unbegrenzte
 # Tiefe im Hauptpfad (der Mission-Control-Pfad hatte bereits max_depth=3).
 _DELEGATION_CHAIN_BY_SESSION: Dict[str, tuple] = {}
+_CHAIN_LOCK = threading.Lock()
 _MAX_DELEGATION_DEPTH = 5
 _MAX_TRACKED_CHAINS = 5000
 
@@ -690,6 +692,52 @@ def _enqueue_delegation_failure(task_id: str, prof_id: str, status: str, result:
         return {"queued": False, "error": str(exc)}
 
 
+def _mark_delegation_task_timed_out(task_id: str, reason: str) -> bool:
+    """D (Härtungsaudit): Delegations-Timeout terminal im Kanban persistieren.
+
+    Vorher blieb der Task trotz ``worker.cancel()`` auf ``in_progress``; der
+    Deadlock-Supervisor setzte ihn nach 120 s auf ``todo`` und ein zweiter
+    Worker lief mit doppelten Seiteneffekten. Fail-Closed: bereits terminale
+    Status werden nie ueberschrieben. Nutzt exakt denselben
+    ``_get_kanban_connection(maintenance=True)``-Mechanismus wie
+    ``operations_api.py`` (inkl. ``task_events``- und Broadcast-Event).
+    """
+    now_iso = datetime.datetime.now().isoformat()
+    from backend.operations_api import _get_kanban_connection as _kgc
+    conn = _kgc(maintenance=True)
+    changed = False
+    try:
+        cur = conn.execute(
+            "UPDATE tasks SET status = 'failed', result = ?, completed_at = ? "
+            "WHERE id = ? AND status NOT IN ('done', 'blocked', 'review', 'failed', 'cancelled')",
+            (f"DELEGATION-TIMEOUT: {reason}"[:2000], now_iso, str(task_id)),
+        )
+        changed = bool(getattr(cur, "rowcount", 0))
+        if changed:
+            conn.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'failed', ?, ?)",
+                (str(task_id), json.dumps({
+                    "status": "failed",
+                    "reason": "delegation_timeout",
+                    "summary": reason[:200],
+                }), now_iso),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    if changed:
+        try:
+            broadcast_event("kanban_updated", {
+                "action": "status_changed",
+                "task_id": str(task_id),
+                "from": "in_progress",
+                "to": "failed",
+            })
+        except Exception as exc:
+            logger.debug(f"[Delegation] Timeout-Broadcast fehlgeschlagen: {exc}")
+    return changed
+
+
 async def _watch_delegated_task(
     task_id: str,
     s_id: str,
@@ -728,6 +776,16 @@ async def _watch_delegated_task(
         deadline_seconds = _cfg_number("watcher_deadline_seconds", 1200, float)
         fallback_poll_seconds = _cfg_number("watcher_fallback_poll_seconds", 60, float)
         retry_count = int(_cfg_number("watcher_retry_count", 3, float))
+
+        # D: die Lease hat eine MIN-TTL von 120 s (deadlock_supervisor). Der
+        # alte Konfigurations-Default lag weit darueber; der Heartbeat haelt die
+        # Lease zwar, aber fail-closed bleiben wir unter der TTL, damit ein
+        # verwaister Watcher nie in den Supervisor-Rollover (todo) laeuft.
+        try:
+            from backend.deadlock_supervisor import MIN_LEASE_TTL_SECONDS as _LEASE_TTL
+        except Exception:
+            _LEASE_TTL = 120
+        deadline_seconds = min(deadline_seconds, max(30.0, float(_LEASE_TTL) - 30.0))
 
         deadline = time.time() + deadline_seconds
         final = None
@@ -800,17 +858,28 @@ async def _watch_delegated_task(
         if final is None:
             # C10: der "Timeout" war vorher kosmetisch — der Sub-Agent lief
             # ungebremst weiter und verbrauchte Budget. Jetzt Task abbrechen.
-            worker = _DELEGATED_WORKER_TASKS.pop(task_id, None)
-            if worker is not None and not worker.done():
-                worker.cancel()
-                logger.warning("[Delegation] Worker-Task %s nach Deadline abgebrochen", task_id)
             timeout_text = (
                 f"{deadline_seconds / 60:g} Minuten" if deadline_seconds >= 60
                 else f"{deadline_seconds:g} Sekunden"
             )
+            timeout_reason = (
+                f"länger als {timeout_text} ohne Endstatus (Deadline {deadline_seconds:g}s)"
+            )
+            # D: ZUERST terminal markieren und in die DLQ stellen, DANN den
+            # Worker abbrechen. Der Worker koennte in einem blockierenden Call
+            # stecken und die CancelledError-Statusmeldung nie ausfuehren.
+            timed_out = _mark_delegation_task_timed_out(task_id, timeout_reason)
+            _enqueue_delegation_failure(task_id, prof_id, "failed", timeout_reason)
+            logger.warning(
+                "[Delegation] Timeout %s — Task terminal markiert: %s", task_id, timed_out
+            )
+            worker = _DELEGATED_WORKER_TASKS.pop(task_id, None)
+            if worker is not None and not worker.done():
+                worker.cancel()
+                logger.warning("[Delegation] Worker-Task %s nach Deadline abgebrochen", task_id)
             _save_message_to_db(s_id, "assistant",
-                f"⏱️ DELEGATION-TIMEOUT — Der Task läuft länger als {timeout_text} ohne Endstatus. "
-                "Aktueller Stand bitte im Kanban prüfen (Task-ID siehe Delegations-Quittung).")
+                f"⏱️ DELEGATION-TIMEOUT — Der Task läuft {timeout_reason}. "
+                "Status im Kanban: fehlgeschlagen (kein automatischer Wiederholungslauf).")
             return
         _DELEGATED_WORKER_TASKS.pop(task_id, None)
         status, result = final[0], (final[1] or "").strip()
@@ -1107,6 +1176,23 @@ async def resume_pending_delegation_watchers() -> int:
             delegator = meta.get("delegator") or "executive_decision_architect"
             tgt_sess = meta.get("tgt_session_id") or f"sub_{delegator}_{assignee}_{tid}"
             origin_sess = meta.get("origin_session_id") or None
+            # I: Kette aus dem persistierten created-Event wiederherstellen —
+            # das RAM-Dict ueberlebt keinen Neustart.
+            _restored_chain = meta.get("delegation_chain")
+            if isinstance(_restored_chain, list) and _restored_chain:
+                with _CHAIN_LOCK:
+                    _DELEGATION_CHAIN_BY_SESSION[tgt_sess] = tuple(
+                        str(x) for x in _restored_chain if x
+                    )[:_MAX_DELEGATION_DEPTH + 1]
+            else:
+                logger.warning(
+                    "[Delegation] Keine persistierte Delegationskette fuer %s — "
+                    "Zyklus-/Tiefenschranke nach Resume nur teilweise wiederhergestellt.", tid
+                )
+                with _CHAIN_LOCK:
+                    _DELEGATION_CHAIN_BY_SESSION[tgt_sess] = tuple(
+                        str(x) for x in (assignee,) if x
+                    )
             _spawn_background(
                 _watch_delegated_task(
                     tid, tgt_sess, assignee or "default", origin_sess, delegator, project_id or None,
@@ -1145,7 +1231,8 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     # Sub-Session (siehe unten) weitergereicht und beim naechsten Delegations-
     # Aufruf der Sub-Session ueber origin_session_id wiedergefunden.
     _chain_key = str(origin_session_id or "")
-    _chain = list(_DELEGATION_CHAIN_BY_SESSION.get(_chain_key, ()))
+    with _CHAIN_LOCK:
+        _chain = list(_DELEGATION_CHAIN_BY_SESSION.get(_chain_key, ()))
     if ziel in _chain:
         return (
             f"❌ DELEGATION ABGELEHNT — Zyklus erkannt: "
@@ -1217,11 +1304,13 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     )
 
     tgt_sess = f"mc_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{ziel}_{secrets.token_hex(3)}"
-    # C09: Kette fuer die Sub-Session fortsetzen (mit hartem Groessenlimit).
-    _DELEGATION_CHAIN_BY_SESSION[tgt_sess] = tuple(_chain + [delegator_id, ziel])
-    if len(_DELEGATION_CHAIN_BY_SESSION) > _MAX_TRACKED_CHAINS:
-        for _old in list(_DELEGATION_CHAIN_BY_SESSION)[:_MAX_TRACKED_CHAINS // 2]:
-            _DELEGATION_CHAIN_BY_SESSION.pop(_old, None)
+    # I: genau EIN Eintrag pro Hop (frueher zwei => effektive Tiefe 3 statt 5).
+    _persisted_chain = tuple(_chain + [ziel])
+    with _CHAIN_LOCK:
+        _DELEGATION_CHAIN_BY_SESSION[tgt_sess] = _persisted_chain
+        if len(_DELEGATION_CHAIN_BY_SESSION) > _MAX_TRACKED_CHAINS:
+            for _old in list(_DELEGATION_CHAIN_BY_SESSION)[:_MAX_TRACKED_CHAINS // 2]:
+                _DELEGATION_CHAIN_BY_SESSION.pop(_old, None)
     msg_text = f"{isolation_header}\nMessage from 🤖 {d_name} (@{delegator_id}): {auftrag}"
     with _get_state_db() as conn:
         _ensure_session_exists(conn, tgt_sess, ziel, t_model, auftrag[:50])
@@ -1270,6 +1359,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     "delegator": delegator_id,
                     "tgt_session_id": tgt_sess,
                     "origin_session_id": origin_session_id,
+                    # I: RAM-Kette persistieren, damit resume_pending_delegation_watchers()
+                    # Zyklus-/Tiefenschranke nach einem Neustart wiederherstellen kann.
+                    "delegation_chain": list(_persisted_chain),
                     "reasoning_level": reasoning_lvl,
                     "isolated": True,
                     "allowed_tools": isolated_scope["allowed_tools"],

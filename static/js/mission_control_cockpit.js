@@ -461,9 +461,36 @@
     }
     async function mcKanbanDecide(taskId, decision) {
       try {
+        // HITL: Der Proof muss an die Decision-ref_id gebunden sein. Bei
+        // permission_gate ist das die gate-ID, NICHT die task_id — daher die
+        // Metadaten vorher laden. Ohne Metadaten bei approve fail-closed.
+        let dec = null;
+        if (decision === 'approve') {
+          const rd = await fetch(`/api/operations/kanban/tasks/${encodeURIComponent(taskId)}`, { signal: AbortSignal.timeout(12000) });
+          if (!rd.ok) throw new Error('Decision-Metadaten nicht ladbar — Freigabe abgebrochen.');
+          const dd = await rd.json().catch(() => ({}));
+          dec = (dd.task || dd).decision || null;
+          if (!dec) throw new Error('Kein Decision-Block gefunden — Freigabe abgebrochen.');
+        }
+        let proofToken = null;
+        if (decision === 'approve' && (dec.typ === 'permission_gate' || dec.typ === 'mission_freigabe')) {
+          if (typeof window.archonDecisionProofContext !== 'function') {
+            throw new Error('Passkey-Modul nicht geladen — Freigabe abgebrochen.');
+          }
+          const ctx = await window.archonDecisionProofContext(dec.typ, dec.ref_id);
+          if (ctx.needed) {
+            const hitl = await window.requirePasskeyForHitl('all', ctx.actionLabel, true, ctx.ref, ctx.sessionUid);
+            if (!hitl || !String(hitl.proof_token || '').trim()) {
+              throw new Error('Passkey-Proof fehlt — Freigabe abgebrochen.');
+            }
+            proofToken = hitl.proof_token;
+          }
+        }
+        const headers = { 'Content-Type': 'application/json' };
+        if (proofToken) headers['x-passkey-proof'] = proofToken;
         const res = await fetch('/api/decisions/decide', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           signal: AbortSignal.timeout(25000),
           body: JSON.stringify({ task_id: taskId, decision, von: 'mc-startseite' })
         });

@@ -174,3 +174,150 @@ zurückschreiben. Hier bitte **manuell** vorgehen.
 - **Gültig ist unsere Reihenfolge, ergänzt um C14/C06/C13/C12** als neue Welle 0b.
 - **C07** ist ein echter, von uns übersehener Gap in unserem eigenen K1-Fix → nach C14.
 - **C25** bleibt `ACCEPTED`; der andere Lauf bewertet es als 🟡, nicht als Blocker.
+
+---
+
+## 8. Phase-1-Härtung & Bugfix-Welle (24.11.2026, HEAD `90237b70`)
+
+**Auftrag:** ausschließlich Bugfixes und Härtung, keine neuen Features. `NEVER_DO_LIST.md`
+(kein PostgreSQL, kein Coroutine-Replay) eingehalten. 8 parallele, strikt disjunkte
+Domänen-Subagenten + zentrale Verifikation durch den Koordinator.
+
+### 8.1 Verifikation (final)
+
+| Prüfung | Ergebnis |
+|---|---|
+| `.ci_venv\Scripts\python.exe -m py_compile` aller geänderten `.py` | Exit 0 |
+| `.ci_venv\Scripts\python.exe -m pytest tests/ -q` | **1765 passed, 16 skipped** (vorher 1745/12 failed/9 errors) |
+| `docker compose config --quiet` (main / `--profile all` / dev) | 3× Exit 0 |
+| `install.sh` `bash -n`, n8n-JSON `JSON.parse`, HMAC-JS gegen `node:crypto` | OK (3/3 Match) |
+
+### 8.2 Behobene Register-Punkte
+
+| ID | alter Status | neuer Status | Nachweis |
+|---|---|---|---|
+| C23 (Observability-Profile) | `FIXED` (falsch) | **`REGRESSION` → `FIXED`** | `start.bat:23–25`, `install.sh:267–275`, `.env.example:16–20` — Profil-Services werden jetzt tatsächlich gestartet |
+| M9 (Timeouts) | `FIXED` (falsch) | **`PARTIAL` → `FIXED`** | `scripts/rescore_contacts.py:80–87` `timeout=10` + `raise_for_status()` |
+| C04 (Passkey-HITL) | `FIXED` (nur Direktpfad) | **`PARTIAL` → `FIXED`** | `decisions.py:84–95,402–468,563–621,627–721`: Followup ohne verifizierten Proof → kein Approve; Decision bleibt `pending`. Proof nur erforderlich, wenn `is_passkey_required()`真的 wahr |
+| C10 (Abbruchkette) | `FIXED` (unvollständig) | **`FIXED`** | Timeout markiert Task terminal (`delegation.py:695–738`), Cancel-Token-Reset (`cancellation.py:160–209`, `mission_control.py:435–445`), MoA-Cleanup, Watchdog `abort_failed` (`watchdog_daemon.py:92–105,187–236`) |
+| C07 (Restore-TOCTOU) | `FIXED` (Happy Path) | **`FIXED` + Rollback** | `db_backup_manager.py:403–425,488–520`: Verifikation VOR `os.replace`, danach Rollback unter `_restore_gate`, `rollback_ok` im Result |
+| C08 (Audit-Ketten) | `FIXED` | **`FIXED` (gehärtet)** | Treasury-/Approval-Trigger, Downgrade-Schutz, Receipt-Epochen, `block_id` im Write-Pfad, Anker-Präfix statt Head-Gleichheit, Verify-Lock nur noch für Snapshot |
+| H5 (Webhook-HMAC) | `PARTIAL` | **`PARTIAL` (ehrlich)** | Sender+HMAC-Verify in 3 n8n-Routinen (`deploy_n8n_routines.py:20–56`); Execution-Bridge-Empfänger als `active:false` im Bundle versioniert. Kein aktiver Empfänger erfunden |
+| H1/M1 (Backoff/Breaker) | `FIXED` | **`FIXED`** | Fallback Dead-End behoben (`agent_router.py:770–775,834–843,1038–1060`), `probe_at`-Expiry, Stream-`record_failure` |
+| C (Restore-Test) | `FIXED` (falsch) | **`FIXED` (harte Fehler)** | `automated_restore_test.py:41–58,184–195,248,277–298`: echte Artefakte, `source_kind=="backup"` Pflicht, FK-Check ausgewertet, Tenant-Replikations-Check |
+| K3 (statische Keys) | `NEW` | **`FIXED`** | `setup_media_pocketbase.py:17–20,47–50` env-only (Subagent D6); Frontend-Key-Default in `system_settings_modal.html:833`/`wissensbibliothek.js:906` entfernt, leer → `KEY FEHLT` (Koordinator, nachträgliche Korrektur) |
+
+### 8.3 Neue Funde (Phase 1, alle `FIXED`)
+
+| ID | Krit. | Fund | Datei:Zeile |
+|---|---|---|---|
+| P1-01 | KRITISCH | Eval-Gate erzeugte erwartete Keywords selbst → immer 100 % / `release_approved` | `backend/eval_regression_runner.py:113–141` |
+| P1-02 | KRITISCH | Tool-Output-Firewall prüfte nie gelieferten `blocked`-Key → Injection-Schutz tot | `backend/tool_output_firewall.py:53–66` |
+| P1-03 | KRITISCH | `reserve()` prüfte Task-Budgets nicht (nur Preflight) | `backend/role_budget_engine.py:1109–1134` |
+| P1-04 | KRITISCH | `/api/hermes/skills/{id}` NameError (`asyncio` nicht importiert, Closure-Variable) | `archon/routers/skills.py:1–13,528–547` |
+| P1-05 | KRITISCH | Host-Sandbox-Fallback ohne Opt-in erlaubt | `backend/self_evolving_tooling.py:116–124` |
+| P1-06 | KRITISCH | `proof_command` führte beliebige Binarys ohne Policy/Jail aus | `backend/kanban_verifier.py:18–80` |
+| P1-07 | KRITISCH | Auth-Fail-Open bei `--host 0.0.0.0` (nur Env geprüft) | `main.py:103–162` |
+| P1-08 | KRITISCH | n8n-Routine-Webhooks unauthentifiziert → Admin-Endpunkte | `scripts/n8n_routine_workflows.json:44–57,263–276,472–485` |
+| P1-09 | HOCH | Kalender-Push 401 trotz K1-Fix (`ARCHON_REQUIRE_AUTH=true`) | `main.py:291–303` |
+| P1-10 | HOCH | Watchdog meldete `triggered_and_aborted` ohne Abbruchverifikation | `watchdog_daemon.py:92–105,187–236` |
+| P1-11 | HOCH | Restore ohne Rollback nach fehlgeschlagener Verifikation | `backend/db_backup_manager.py:403–425,488–520` |
+| P1-12 | HOCH | Observability-Profile starteten nicht (Explicit-Service-Liste) | `start.bat:23–25`, `install.sh:267–275` |
+| P1-13 | HOCH | Update per `os.utime` wirkungslos; Rollback ohne Lock | `backend/system_updater.py:711–767,808–…` |
+| P1-14 | HOCH | Blockierender HTTP-Call im SSE-Event-Loop | `archon/routers/chat.py:947–949` |
+| P1-15 | HOCH | Framework-Instruktion 2× pro LLM-Call (Token-Overhead) | `core_dispatcher.py:1821,1962,2046,2123,2303` |
+| P1-16 | HOCH | n8n-Token-Rest in 0644-Tempdateien, kein Cleanup | `scripts/import_n8n_workflows.py:30–67` |
+| P1-17 | HOCH | Tenant-Resolver-Split-Brain (`erp_manager`) | `backend/erp_manager.py:36–79` |
+| P1-18 | HOCH | Memory-Dedup/Vault ohne Tenant-Scope | `local_memory_bridge.py:386–399,798–841`, `archon/routers/vault.py:54–94` |
+| P1-19 | HOCH | Treasury-/Approval-Kette ohne Trigger, K-1-Downgrade, Receipt-Rotationsbruch | `backend/treasury_engine.py:99–122,245–264`, `backend/approval_policy_engine.py:78–99`, `backend/execution_receipt_ledger.py:39–120` |
+| P1-20 | HOCH | UNKNOWN-Reconciliation ohne CAS → doppelte Webhook-Zustellung | `backend/event_mesh.py:533–582` |
+
+(Weitere mittlere/niedrige Funde: DLQ-Replay-Claim, DAG-Approval-Verlust, fail-silent Loops,
+Disk-Backpressure, Alert-Dedup, Log-Rotation für 21 Services, `x-logging`-Anker, Custom-HMAC
+im n8n-Runner, Directory-fsync, Skill-Index-COW, Cancel-Registry-Cap.)
+
+### 8.4 Bewusst akzeptierte Restrisiken (keine neuen Features)
+
+| Risiko | Grund |
+|---|---|
+| Litestream repliziert weiterhin keine Tenant-DBs | Gepinnte v0.3.13 unterstützt keine Wildcards/Directory-Replication. Stattdessen harter `FAILED` im Restore-Test + Upgrade-Skizze als Kommentar (`config/litestream.yml:8–27`) |
+| ~~142 echte FK-Verletzungen in `business.db`~~ | **ERLEDIGT** mit expliziter User-Freigabe (24.11.): 136 Legacy-`content_assets` (`campaign_id='wf_standalone_test'`, noch vor dem `create_asset()`-Eltern-Fix angelegt) + 6 Demo-`contract_alerts` (`ct-alert-01`) gelöscht. Safety-Backup via SQLite-Backup-API, danach `PRAGMA foreign_key_check` = 0, `integrity_check` = ok, frische Backup-Artefakte erzeugt. Restore-Test jetzt 4/5 OK — nur noch `TENANT_REPLICATION` offen (siehe nächste Zeile) |
+| H5-Empfänger-Workflow bleibt `active:false` | Kein aktives Artefakt erfinden; die Doku-Behauptung bleibt sichtbar (Register H5) |
+| Kein Alertmanager / keine SLOs / kein Offsite-Ziel | User-Vorgabe: keine neuen Dienste/Features. Bestehende Alarmierung wurde dedupliziert und fail-closed gemacht |
+| `email_draft_engine.py:119`, `gdpr_compliance_engine.py:1037` ohne `block_id` | Ein Wechsel würde die Verifizierer dieser Nebenketten brechen; dokumentiert statt riskant geändert |
+| Frontend-Freigaben ohne Passkey-Proof | UI hat noch keine Proof-Beschaffung für `/api/decisions/decide`; ohne konfigurierte Credentials greift der Proof-Zwang bewusst nicht (sonst Sackgasse). Bei konfiguriertem Passkey → 403 mit klarer Meldung |
+| Kein Image-Upgrade im Self-Restart-Pfad | `docker compose restart` lädt kein neues Image; Updater meldet `restart_required` + `up -d --build`-Hinweis |
+
+### 8.5 Register-Regel
+
+Alle IDs P1-01…P1-20 sind hiermit eingetragen (`FIXED`). Die Korrekturen in 8.2 ersetzen
+die früheren, zu optimistischen Stati. Kein Fix ohne Register-Eintrag — diese Welle ist
+damit registerkonform abgeschlossen.
+
+### 8.6 Doku-SSOT-Korrekturen
+
+Rein dokumentarische Korrekturen ohne Code-Änderung. SSOT für die Architektur ist
+`docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md`.
+
+- `README.md` / `README.de.md`: Release auf **v0.5.7.4** (2026-11-24, Commit `v0.5.7`) korrigiert; `config/version.json`-Hinweis angepasst und Boardroom auf „4 Phasen + optionales MoA" statt 6 Phasen korrigiert.
+- `docs/system/system_architecture_spec.json`: mit `_status: DEPRECATED` und `_authoritative_source` markiert; Version, 73 Profile, DB-Pfade `ops.db`/`business.db`/`memory.db`, `freellmapi` inaktiv, HMAC-Auditkette/RBAC vorhanden und statischer Fallback-Token als behoben korrigiert. JSON nach Änderung validiert.
+- `docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md`: Kanban auf `ops.db`, HMAC-SHA256 (Env-Key) statt SHA-256, `resolve_debate_consensus()` statt `aggregation_lisa`/`FREIGABE`-Marker, RBAC mit lokalem Single-User-Modus präzisiert.
+- `docs/system/AUDIT_ABSCHLUSS_2026_11_23.md`: Testzahl auf **1765 passed / 16 skipped** (Stand nach Phase-1-Welle 24.11.2026) aktualisiert; 1727 bleibt als historischer Wert vom 23.11. gekennzeichnet.
+
+### 8.7 Zweite Nachbesserungswelle (24.11.2026, Fortsetzung)
+
+| ID | Krit. | Maßnahme | Nachweis |
+|---|---|---|---|
+| P1-21 | HOCH | Audit-Lücken F-08 geschlossen: RBAC-Denials, DB-/Snapshot-Restore, Webhook-In/-Out schreiben jetzt signierte Events in die Zentralkette. Keine Payloads/URL-Query/Secrets im Event; Audit-Fehler → `audit_status:"error"` im Result, nie Exception in eine laufende Transaktion | `archon/routers/_rbac.py:91–120,128–165`, `backend/db_backup_manager.py:59–80,429–615,690–692`, `backend/snapshot_manager.py:30–62,151–185`, `backend/event_mesh.py:31–61,313–448,498–727` |
+| P1-22 | MITTEL | CI-Härtung ohne neue Dependencies: `node --check` auf alle 14 `scripts/*.js` erweitert, harter `compileall`-Gate (ohne `continue-on-error`) | `.github/workflows/ci.yml:45,49–50` |
+| P1-23 | HOCH | Statischer OmniRoute-Key im Frontend entfernt (K3 war unvollständig): leeres Feld, JS-Fallback → `KEY FEHLT` | `static/views/system_settings_modal.html:833`, `static/js/wissensbibliothek.js:904–922`, `tests/test_locale_parity.py:321` |
+| P1-24 | HOCH | 142 FK-Artefakte mit User-Freigabe bereinigt, frische Backup-Artefakte, Restore-Test 4/5 OK | `data/business.db`, `.hermes/backups/db/*_20261124_072806.db.gz` |
+
+**Verifikation dieser Welle:** Gesamtsuite **1765 passed / 16 skipped** (141,56 s); 354 gezielte Tests +
+34 Locale-Tests grün; Kette-Smoke 5 Events `valid=True`; `compileall` Exit 0; `node --check scripts/*.js`
+0 Fehler; `yaml.safe_load(ci.yml)` OK; `docker compose config` (main / `--profile all` / dev) 3× Exit 0.
+
+### 8.8 Abschlusswelle aller 9 offenen Punkte (24.11.2026, User-Freigaben eingeholt)
+
+Der User hat zu allen 9 Punkten explizit entschieden (Fragen + Antworten in der Session). Umgesetzt:
+
+| Nr. | Punkt | Umsetzung |
+|---|---|---|
+| 1 | Litestream | User wollte **Upgrade ≥0.5**: Image `litestream/litestream:0.5.1@sha256:b6b174e7…` (Multi-Arch-Digest) in `docker-compose.yml:528`; `config/litestream.yml` mit `dir:/app/data/tenants`, `pattern:"*.db"`, `recursive:true`, globaler `snapshot.retention: 72h`; Restore-Test erkennt `dir:`-Einträge → **5/5 PASSED** |
+| 2 | n8n H5 | User wollte **direkten Import**. Live-Bridge hat die ID `a7c3f1e9b2d84f6a` (nicht die Bundle-ID!) → Backup aller 9 Workflows, HMAC-Verify-Node per AST-Injektion in die Live-Workflow, Import via CLI (`--activeState fromJson` wird im Single-Main-Modus abgelehnt → Import ohne Flag + `publish:workflow`), n8n neu gestartet. Verifikation: `ACTIVE True`, 4 Nodes, Reihenfolge `Webhook → HMAC Verify → Set → Notiz` |
+| 3 | Observability | Alertmanager v0.28.1 mit Digest als Service im `monitoring`/`observability`/`all`-Profil, Prometheus `rule_files` + `alerting` + `retention.time=30d`, `config/prometheus/alerts.yml` mit 6 Regeln (echte Metriken: `archon_agent_dispatches_total`, `archon_queue_depth`, `archon_database_size_bytes`, `archon_agent_error_rate_percent`, `up`), Loki-Ruler auf `alertmanager:9093`. Kein Offsite/S3 (nicht gewünscht). Alertmanager nutzt `null`-Receiver, da kein Webhook-Endpunkt existiert |
+| 4 | Refactor (gestaffelt) | `archon/core/provider_registry.py` neu; `archon/routers/gateway.py` 13→0, `backend/operations_api.py` 9→0 `import main`. Shim liefert weiterhin das live `main`-Modul → alle Guards/Monkeypatches unverändert. 501 gezielte Tests grün |
+| 5 | Passkey-UID | **Session-Actor ist Autorität** (User): `_decision_session_actor_uid()` in `decisions.py`, `requirePasskeyForHitl(..., userIdOverride)` + `getArchonSessionUid()` (via `/api/auth/me`), Decision-Kontext mit exaktem actionLabel/ref in 4 Frontend-Stellen. Kategorie `all` statt `system`, damit `profil_loeschen` (`destructive_actions`) nicht fälschlich 403 liefert — weiterhin UV/action/resource-gebunden |
+| 6 | Linter | `quality-warn-only`-Job mit gepinnten `ruff 0.17.6`/`mypy 2.4.1`/`coverage 7.17.5`, Job-weit `continue-on-error`; `ruff.toml` (`E,F,I`, line-length 100). Ruff-Baseline: 11.417 Funde → Ignore-Liste begründet. Harte Gates unverändert |
+| 7 | Chain `block_id` | Epochen-Migration in `email_draft_engine.py`/`gdpr_compliance_engine.py`: neue Blöcke mit `MAX(id)+1`, Verifizierer mit stabilem CUTOFF aus ENV (`ARCHON_{EMAIL_DRAFT,GDPR}_HMAC_EPOCH_FROM`), Legacy-Fallback ohne ID. 10 neue Tests. Keine Zeile neu signiert |
+| 8 | Doku global | 19 Dateien korrigiert: `critic cross-examination` → `critique prompt`, 6→4 Phasen, SHA-256→HMAC-SHA256 (Env-Key), 1727→1765, `kanban.db`→`ops.db`, `aggregation_lisa`→`resolve_debate_consensus()`. Legitime Demo-/Historien-Treffer bleiben begründet |
+| 9 | Commit | **User will nicht committen** — alle Änderungen liegen als ungestagter Diff bereit. Safety-Backup `business_pre_fk_cleanup_20261124_072806.db` in Temp liegt noch zur Rückfall-Nutzung |
+
+**Finale Verifikation:**
+```
+pytest tests/ -q                 1775 passed, 16 skipped (123,10 s)
+compileall                       Exit 0
+node --check static/js/*.js      OK
+docker compose config (main/all/dev)  3× Exit 0
+automated_restore_test.py        PASSED — 5/5 (inkl. TENANT_REPLICATION)
+n8n                              ACTIVE True, HMAC-Verify-Node verdrahtet, Restart erfolgt
+```
+
+**Verbleibendes Restrisiko (bewusst, klein):**
+- Alertmanager hat keinen externen Empfänger (`null`-Receiver) — ein `POST /api/alerts/webhook`-Endpunkt existiert nicht; In-App-Alarmierung bleibt der Benachrichtigungsweg.
+- Kein `node_exporter` im Profil → kein Alert auf freien Diskplatz, nur DB-Dateigröße als Proxy.
+- 89 „kanban.db/agentic_memory.db"-Erwähnungen in Betriebs-/Konfigurationsguides sind echter Drift, aber erfordern koordinierte Pfad-Rewrites (separate Welle, kein Bugfix).
+- `config/voice.md:48` (SHA-256-Formulierung) bewusst unberührt. `NOTEBOOKLM_SOURCES.md` wurde auf User-Wunsch vollständig entfernt (generiertes Artefakt, Generator `scripts/generate_notebooklm_package.py` ist selbst ignoriert).
+- `passkey_hitl.js:328` vorbestehender `uid`-Fehler in `testPasskeyHitlVerification` (außerhalb Auftrag).
+- **NICHT committen** (User-Entscheidung).
+
+### 8.9 Telegram-Alarmierung, Disk-Alarm, Doku-Pfade, Artefakt-Entfernung (24.11.2026)
+
+| Nr. | Maßnahme | Nachweis |
+|---|---|---|
+| 1 | **Alertmanager → Telegram:** `config/alertmanager/alertmanager.yml` mit `telegram_configs`, `bot_token_file` (0600, vom Entrypoint aus `$TELEGRAM_BOT_TOKEN` geschrieben), `chat_id` wird beim Start aus `$TELEGRAM_CHAT_ID` in die Config gerendert (v0.28.1 kennt weder Env-Expansion noch `chat_id_file`). Compose: Template-Mount + Entryoint-Skript, Service gestartet. `amtool check-config` SUCCESS, Container healthy. **Testzustellung ausstehend:** Telegram antwortet aktuell `429 Too Many Requests` bereits auf `getMe` — externe Drosselung, keine Konfigurationsursache. User hat Tests vorerst gestoppt; Alertmanager respektiert `retry_after` | `config/alertmanager/alertmanager.yml`, `docker-compose.yml` (alertmanager-Service), `docker logs alertmanager` |
+| 2 | **Disk-Alarm:** neue Metriken `archon_free_disk_bytes` / `archon_disk_used_percent` aus `shutil.disk_usage` (ohne node_exporter), 2 neue Prometheus-Regeln (`ArchonDiskSpaceLow` < 2 GiB, `ArchonDiskNearlyFull` > 90 %), beide route über den Telegram-Receiver. `promtool check rules`: 8 Regeln SUCCESS. **Dabei echten Bug behoben:** `shutil.disk_usage()` hat kein `.percent` — beide Stellen lieferten -1/0; jetzt `used/total*100`. Live geprüft: 127,7 GB frei / 87,5 % belegt | `backend/metrics_collector.py`, `backend/resource_backpressure.py`, `config/prometheus/alerts.yml`, `curl /metrics` |
+| 3 | **Doku-DB-Pfade:** 20 `.md`-Dateien korrigiert (Handbuch, Litestream/Restore-Guides, security/system-Guides). Von ~89 Drift-Treffern bleiben 39 legitime (Mandanten-DB-Namen, Hermes-Runtime-Pfade, historisch gekennzeichnete Audit-Aussagen, Resolver-Erklärung) — **0 ungekennzeichnete aktive-alt-DB-Aussagen**. Litestream-Guide jetzt v0.5.1 + Tenant-`dir:`, Restore-Guide 5/5 PASSED | Subagent-Report, `rg` |
+| 4 | **`NOTEBOOKLM_SOURCES.md` entfernt** (generiertes Artefakt; Generator ist selbst ignoriert), `.gitignore`-Eintrag und Register-Erwähnung angepasst | `Test-Path` = False |
+
+**Verifikation dieser Welle:** `compileall` Exit 0; `docker compose config` (main/all) Exit 0; `promtool check rules` 8 Regeln; `amtool check-config` SUCCESS; `automated_restore_test.py` PASSED 5/5; Archon-OS neu gestartet, `/metrics` liefert echte Disk-Werte; **`pytest tests/ -q`: 1775 passed, 16 skipped (128,42 s)**.

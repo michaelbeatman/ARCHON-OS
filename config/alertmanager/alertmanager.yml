@@ -1,0 +1,54 @@
+# config/alertmanager/alertmanager.yml
+# Alertmanager-Zustellung per Telegram-Bot an den Owner.
+# Secrets kommen ausschliesslich aus der Umwelt (docker-compose.yml):
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+# Keine Secret-Werte in dieser Datei oder im Repository.
+
+global:
+  resolve_timeout: 5m
+  telegram_api_url: https://api.telegram.org
+
+route:
+  receiver: archon-telegram
+  group_by: ["alertname", "service"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+
+receivers:
+  - name: archon-telegram
+    telegram_configs:
+      # TEMPLATE: der Container ersetzt __TELEGRAM_CHAT_ID__ beim Start durch
+      # den Wert aus $TELEGRAM_CHAT_ID. v0.28.1 unterstuetzt kein chat_id_file
+      # und keine Env-Expansion in der Config. Das Bot-Token kommt aus einer
+      # 0600-Datei, die der Entrypoint aus $TELEGRAM_BOT_TOKEN schreibt.
+      - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+        chat_id: __TELEGRAM_CHAT_ID__
+        parse_mode: ''
+        send_resolved: true
+        message: |
+          ARCHON OS — {{ .Status }} / {{ .Alerts | len }} Alert(s)
+          Name: {{ .CommonLabels.alertname }}
+          Severity: {{ .CommonLabels.severity }}
+          Service: {{ .CommonLabels.service }}
+          Instance: {{ .CommonLabels.instance }}
+          Summary: {{ .CommonAnnotations.summary }}
+          Description: {{ .CommonAnnotations.description }}
+          Started: {{ (index .Alerts 0).StartsAt }}
+
+inhibit_rules:
+  # Ein kritischer Burn unterdrueckt die warnende SLO-Regel desselben SLO.
+  - source_matchers:
+      - 'severity = critical'
+      - 'slo = archon_dispatch_success_rate'
+    target_matchers:
+      - 'severity = warning'
+      - 'slo = archon_dispatch_success_rate'
+    equal: ["job"]
+
+  # Wenn ein Target down ist, sind Folgealarme desselben Targets Rauschen.
+  - source_matchers:
+      - 'alertname = ArchonTargetDown'
+    target_matchers:
+      - 'severity =~ "critical|warning"'
+    equal: ["instance"]

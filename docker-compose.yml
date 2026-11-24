@@ -1,5 +1,13 @@
 name: archon-os
 
+# D: einheitliche JSON-Log-Rotation fuer alle Dienste. Bestehende explizite
+# logging:-Bloecke (z. B. archon-os) bleiben unberuehrt.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 networks:
   agentic_mesh:
     driver: bridge
@@ -146,6 +154,8 @@ services:
   omniroute:
     image: ${OMNIROUTE_IMAGE:-diegosouzapw/omniroute:3.8.50@sha256:085c57adf499a8aaa9f35ccde95c0df9c11bd9ecd18d6c9edbf3b68b8079ba9d}
     container_name: ${OMNIROUTE_CONTAINER_NAME:-omniroute}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     networks:
       - agentic_mesh
@@ -188,6 +198,8 @@ services:
   n8n:
     image: ${N8N_IMAGE:-n8nio/n8n:2.36.8@sha256:cfe2704ff858395503d42548206c2c99ea351a205e941063a9d9b77b0f404478}
     container_name: ${N8N_CONTAINER_NAME:-n8n}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["automation", "full", "all"]
     networks:
@@ -243,6 +255,8 @@ services:
   docker-socket-proxy:
     image: ${SOCKET_PROXY_IMAGE:-tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459}
     container_name: ${SOCKET_PROXY_CONTAINER_NAME:-docker-socket-proxy}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     networks:
       - archon-admin_net
@@ -294,6 +308,8 @@ services:
   hermes:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:v0.23.1@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08}
     container_name: ${HERMES_CONTAINER_NAME:-hermes}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     networks:
       agentic_mesh:
@@ -355,6 +371,8 @@ services:
   hermes-dashboard:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:v0.23.1@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08}
     container_name: ${HERMES_DASHBOARD_CONTAINER_NAME:-hermes-dashboard}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["dashboard", "observability", "all"]
     networks:
@@ -386,6 +404,8 @@ services:
   hermes-dashboard-proxy:
     image: alpine/socat:1.8.0.1@sha256:87d88ff79bf42ca723fb360e9585c40e2923a2f4df9b9d148b127568ef6b99e7
     container_name: ${HERMES_PROXY_CONTAINER_NAME:-hermes-dashboard-proxy}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["dashboard", "observability", "all"]
     network_mode: "service:hermes-dashboard"
@@ -402,7 +422,16 @@ services:
   anything-llm:
     image: mintplexlabs/anythingllm:1.7.4@sha256:db45b3f9242b87e650e46081b81fb9004b88971c2e53cc85047200df7e110ee8
     container_name: ${ANYTHINGLLM_CONTAINER_NAME:-anything-llm}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
+    # H: bekannter Endpunkt /api/ping; node ist im Image garantiert vorhanden.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/api/ping',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - agentic_mesh
       - archon-worker-zero-egress_net
@@ -431,6 +460,8 @@ services:
   ollama-embed:
     image: ollama/ollama:0.5.7@sha256:7e672211886f8bd4448a98ed577e26c816b9e8b052112860564afaa2c105800e
     container_name: ${OLLAMA_EMBED_CONTAINER_NAME:-ollama-embed}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["rag", "full", "all"]
     networks:
@@ -450,6 +481,8 @@ services:
   chroma:
     image: chromadb/chroma:0.6.3@sha256:e0e78dc7609a599b63c99753442c7d01b1d3d369ce0e3bf3e0540536fec4fa7a
     container_name: ${CHROMA_CONTAINER_NAME:-chroma}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     networks:
       - archon-worker-zero-egress_net
@@ -467,6 +500,8 @@ services:
   archon-worker:
     image: python:3.11-alpine@sha256:bb1d70c1df30d8ee1e05214dbe82d6cdfd29833c1f47ce917f20991aca93acaa
     container_name: ${ARCHON_WORKER_CONTAINER_NAME:-archon-worker-zero-egress}
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["workers"]
     user: "${ARCHON_UID:-1000}:${ARCHON_GID:-1000}"
@@ -490,8 +525,10 @@ services:
           pids: 50
 
   litestream:
-    image: litestream/litestream:0.3.13@sha256:027eda2a89a86015b9797d2129d4dd447e8953097b4190e1d5a30b73e76d8d58
+    image: litestream/litestream:0.5.1@sha256:b6b174e740f00e624fe15053f65348ab7e42daa3cc3ce1fa4cf6b89db5e3788d
     container_name: litestream
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["backup", "replication", "all"]
     networks:
@@ -512,6 +549,8 @@ services:
   langfuse:
     image: langfuse/langfuse:2@sha256:85c278dcab96c15db94191a5c1664f85aba2d7fb6771a00e99681c902c4b7015
     container_name: langfuse
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["tracing", "observability", "all"]
     networks:
@@ -533,7 +572,16 @@ services:
   prometheus:
     image: prom/prometheus:v2.54.1@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
     container_name: prometheus
+    logging:
+      <<: *default-logging
     restart: unless-stopped
+    # H: prom/prometheus hat einen dokumentierten /-/healthy-Endpunkt.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     profiles: ["monitoring", "observability", "all"]
     networks:
       - agentic_mesh
@@ -541,10 +589,12 @@ services:
       - "${ARCHON_BIND_IP:-127.0.0.1}:9090:9090"
     volumes:
       - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
       - "--web.enable-lifecycle"
     deploy:
       resources:
@@ -552,10 +602,62 @@ services:
           memory: 512M
           cpus: "0.5"
 
+  alertmanager:
+    image: prom/alertmanager:v0.28.1@sha256:27c475db5fb156cab31d5c18a4251ac7ed567746a2483ff264516437a39b15ba
+    container_name: alertmanager
+    logging:
+      <<: *default-logging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    profiles: ["monitoring", "observability", "all"]
+    networks:
+      - agentic_mesh
+    ports:
+      - "${ARCHON_BIND_IP:-127.0.0.1}:9093:9093"
+    volumes:
+      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager-template/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    environment:
+      # Keine Defaults: ohne Werte ist die gerenderte Config ungueltig (fail-closed).
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mkdir -p /etc/alertmanager/secrets
+        printf '%s' "$$TELEGRAM_BOT_TOKEN" > /etc/alertmanager/secrets/telegram_bot_token
+        chmod 600 /etc/alertmanager/secrets/telegram_bot_token
+        sed "s/__TELEGRAM_CHAT_ID__/$$TELEGRAM_CHAT_ID/" \
+          /etc/alertmanager-template/alertmanager.yml > /etc/alertmanager/alertmanager.yml
+        exec /bin/alertmanager \
+          --config.file=/etc/alertmanager/alertmanager.yml \
+          --storage.path=/alertmanager
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
   grafana:
     image: grafana/grafana:11.1.0@sha256:079600c9517b678c10cda6006b4487d3174512fd4c6cface37df7822756ed7a5
     container_name: grafana
+    logging:
+      <<: *default-logging
     restart: unless-stopped
+    # H: grafana/grafana hat einen dokumentierten /api/health-Endpunkt.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     profiles: ["monitoring", "observability", "all"]
     networks:
       - agentic_mesh
@@ -578,6 +680,8 @@ services:
   uptime-kuma:
     image: louislam/uptime-kuma:1@sha256:70233f4acb5163fd2a59a49909cf01e44415cecff13dba69e3a86647a2919f83
     container_name: uptime-kuma
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["monitoring", "observability", "all"]
     networks:
@@ -595,6 +699,8 @@ services:
   caddy:
     image: caddy:2.8.4-alpine@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17
     container_name: caddy-gateway
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["gateway", "proxy", "all"]
     networks:
@@ -615,6 +721,8 @@ services:
   authelia:
     image: authelia/authelia:4.38@sha256:46021dc20efdcc5cdc38a29e3050b8835429a155ae6215388ed3b793a02eb0ab
     container_name: authelia-sso
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["gateway", "proxy", "all"]
     networks:
@@ -636,7 +744,16 @@ services:
   loki:
     image: grafana/loki:3.1.0@sha256:d947e68a84d9e44915dfa08c3bec27e2124efd5ba6c83443eb53578101ec69e3
     container_name: loki
+    logging:
+      <<: *default-logging
     restart: unless-stopped
+    # H: grafana/loki hat einen dokumentierten /-/healthy-Endpunkt.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3100/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     profiles: ["logging", "observability", "all"]
     networks:
       - agentic_mesh
@@ -655,6 +772,8 @@ services:
   promtail:
     image: grafana/promtail:3.1.0@sha256:b3db8e7b1cba0e8c45ce2ae72ebddfd88ebdcae86383f1680edf0074e9010ff6
     container_name: promtail
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["logging", "observability", "all"]
     networks:
@@ -676,6 +795,8 @@ services:
   metabase:
     image: metabase/metabase:v0.50.23@sha256:489b7f9c943fb7bf36c46acbad41fed895118952e78cf2495e6283dfe4cc40eb
     container_name: metabase-bi
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["bi", "analytics", "all"]
     networks:
@@ -699,6 +820,8 @@ services:
   docuseal:
     image: docuseal/docuseal:1.8.4@sha256:664690ea8a1e50e83f1c6810db297633929e49de274539c71a3566c4b630fbb6
     container_name: docuseal-esign
+    logging:
+      <<: *default-logging
     restart: unless-stopped
     profiles: ["esign", "legal", "all"]
     networks:
@@ -724,6 +847,7 @@ volumes:
   ollama_embed_data:
   chroma_data:
   prometheus_data:
+  alertmanager_data:
   grafana_data:
   uptime_kuma_data:
   caddy_data:

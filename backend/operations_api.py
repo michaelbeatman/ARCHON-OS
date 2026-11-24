@@ -10,6 +10,7 @@ import logging
 logger = logging.getLogger("archon_os.operations_api")
 
 from backend.platform_paths import HERMES_HOME
+from archon.core.provider_registry import get_provider
 import asyncio
 import sys
 import json
@@ -799,7 +800,7 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
                 print(f"[OperationsAPI] Single-Task Budget-Registration warning: {alloc_err}", file=sys.stderr)
 
         try:
-            import main
+            main = get_provider("app_main")
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {"action": "created", "task_id": task_id, "status": target_status})
         except Exception as exc:
@@ -938,6 +939,24 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         if _current is not None:
             _cancel_token.register_task(_current)
         _cancel_token.check()
+    except asyncio.CancelledError as cancel_exc:
+        # E: dieser Check liegt VOR dem grossen try/finally unten — ohne
+        # eigenen Status-Update stuerbt der Worker als stille BaseException
+        # und der Task bleibt in_progress (danach Deadlock-Rollover).
+        logger.warning("[KanbanWorker] Cancel-Token vor Ausfuehrung: %s", cancel_exc)
+        try:
+            c_cancel = _get_kanban_connection(maintenance=True)
+            try:
+                c_cancel.execute(
+                    "UPDATE tasks SET status = 'cancelled', result = ? WHERE id = ?",
+                    (f"Aufgabe abgebrochen: {cancel_exc}"[:500], task_id),
+                )
+                c_cancel.commit()
+            finally:
+                c_cancel.close()
+        except Exception as exc:
+            print(f"[OperationsAPI] Cancel-Status nicht persistiert: {exc}", file=sys.stderr)
+        raise
     except ImportError:
         pass
     conn = _get_kanban_connection(maintenance=True)
@@ -953,19 +972,9 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
     finally:
         conn.close()
 
-    # Task beim GracefulShutdownCoordinator registrieren (M-14)
-    try:
-        from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-        graceful_shutdown_coordinator.register_task(
-            task_id=task_id,
-            title=t_dict.get("title", task_id),
-            agent_name=t_dict.get("assignee", "system"),
-            total_steps=1,
-            current_step=0,
-            state_payload={"task_id": task_id, "status": t_dict.get("status")}
-        )
-    except Exception as exc:
-        print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
+    # G: Registrierung erst unmittelbar vor dem geschuetzten Hauptblock.
+    # Vorher lag sie vor mehreren Early-Returns (dag-*/Autonomie-Gate), die
+    # kein unregister_task() erreichten — der Task blieb dauerhaft "aktiv".
 
     # Fall 1: DAG-Epics des ALTEN 2-Tier-Schedulers — Scheduler ist entfernt (21.11.2026).
     if t_dict["id"].startswith("dag-") and not any(t_dict["id"].endswith(f"-{s}") for s in ["1", "2", "3", "4", "syn"]):
@@ -1023,12 +1032,15 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
     # Sofort als 'in_progress' markieren, damit im Kanban und UI der aktive Lauf sichtbar ist
     try:
         c_start = _get_kanban_connection(maintenance=True)
-        now_start_iso = datetime.datetime.now().isoformat()
-        c_start.execute("UPDATE tasks SET status = 'in_progress', started_at = ? WHERE id = ?", (now_start_iso, task_id))
-        c_start.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'started', ?, ?)", 
-                        (task_id, json.dumps({"status": "in_progress", "agent": t_dict.get("assignee")}), now_start_iso))
-        c_start.commit()
-        c_start.close()
+        try:
+            now_start_iso = datetime.datetime.now().isoformat()
+            c_start.execute("UPDATE tasks SET status = 'in_progress', started_at = ? WHERE id = ?", (now_start_iso, task_id))
+            c_start.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'started', ?, ?)", 
+                            (task_id, json.dumps({"status": "in_progress", "agent": t_dict.get("assignee")}), now_start_iso))
+            c_start.commit()
+        finally:
+            # H: Connection auch bei Exception/Partial-Write schliessen.
+            c_start.close()
     except Exception as exc:
         print(f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
@@ -1039,14 +1051,17 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         raw_assignee = "default"
         try:
             c_asgn = _get_kanban_connection(maintenance=True)
-            now_asgn_iso = datetime.datetime.now().isoformat()
-            c_asgn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", (raw_assignee, task_id))
-            c_asgn.execute(
-                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'auto_assigned_orchestrator', ?, ?)",
-                (task_id, json.dumps({"assignee": raw_assignee, "reason": "Kein Profil gesetzt — automatische Zuweisung an Orchestrator"}), now_asgn_iso),
-            )
-            c_asgn.commit()
-            c_asgn.close()
+            try:
+                now_asgn_iso = datetime.datetime.now().isoformat()
+                c_asgn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", (raw_assignee, task_id))
+                c_asgn.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'auto_assigned_orchestrator', ?, ?)",
+                    (task_id, json.dumps({"assignee": raw_assignee, "reason": "Kein Profil gesetzt — automatische Zuweisung an Orchestrator"}), now_asgn_iso),
+                )
+                c_asgn.commit()
+            finally:
+                # H: Connection auch bei Exception schliessen.
+                c_asgn.close()
         except Exception as exc:
             print(f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
     assignee = resolve_agent_id(raw_assignee)
@@ -1075,6 +1090,21 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
     system_prompt = prof.get("prompt") or prof.get("system_prompt") or f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
 
     try:
+        # G: Registrierung NUN innerhalb des try/finally-Blocks, der unten
+        # immer unregister_task() aufruft (auch bei CancelledError/Exception).
+        try:
+            from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
+            graceful_shutdown_coordinator.register_task(
+                task_id=task_id,
+                title=t_dict.get("title", task_id),
+                agent_name=t_dict.get("assignee", "system"),
+                total_steps=1,
+                current_step=0,
+                state_payload={"task_id": task_id, "status": t_dict.get("status")}
+            )
+        except Exception as exc:
+            print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
+
         proj_context = ""
         p_rel = _resolve_task_obsidian_rel(task_id)
         if p_rel:
@@ -1234,7 +1264,7 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
             print(f"[OperationsAPI] Could not update obsidian markdown: {e_upd}", file=sys.stderr)
 
         try:
-            import main
+            main = get_provider("app_main")
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": "in_progress", "to": target_status})
                 main.broadcast_event("ticker_update", {"agent": agent_name, "message": f"Aufgabe '{title[:30]}...' ({target_status}).", "time": datetime.datetime.now().strftime("%H:%M:%S")})
@@ -1266,7 +1296,7 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         finally:
             c.close()
         try:
-            import main
+            main = get_provider("app_main")
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": "in_progress", "to": "blocked"})
         except Exception as exc:
@@ -1366,10 +1396,13 @@ async def update_task_status(request: Request, task_id: str, req: TaskStatusUpda
 
     # Autonome LLM-Ausführung starten, wenn Task auf 'in_progress' oder von 'review'/'failed'/'blocked' auf 'todo' gesetzt wurde
     # (Fix-Sprint Paket A, Punkt 1: create_task läuft hier garantiert im aktiven Event-Loop)
+    # F: Fire-and-Forget-Tasks muessen in der zentralen Registry landen, sonst
+    # kennt weder GracefulShutdown noch task_registry.cancel_all() sie.
+    from archon.core.task_registry import spawn as _spawn_tracked
     if new_status == "in_progress" and old_status != "in_progress":
-        asyncio.create_task(_execute_kanban_task_async(task_id))
+        _spawn_tracked(_execute_kanban_task_async(task_id), name=f"kanban_task:{task_id}")
     elif new_status == "todo" and old_status in ("review", "failed", "blocked", "done"):
-        asyncio.create_task(_execute_kanban_task_async(task_id))
+        _spawn_tracked(_execute_kanban_task_async(task_id), name=f"kanban_task:{task_id}")
 
     # 12.10.2026 (Decision-Service, Richtung Kanban -> Telegram): Wird ein
     # Entscheidungs-Task (Sidecar-Block 'decision') ueber die Oberflaeche
@@ -1390,7 +1423,7 @@ async def update_task_status(request: Request, task_id: str, req: TaskStatusUpda
             print(f"[OperationsAPI] Telegram-Benachrichtigung fehlgeschlagen: {_tg_err}", file=sys.stderr)
 
     try:
-        import main
+        main = get_provider("app_main")
         if hasattr(main, "broadcast_event"):
             main.broadcast_event("kanban_updated", {"action": "status_changed", "task_id": task_id, "from": old_status, "to": new_status})
     except Exception as exc:
@@ -1593,7 +1626,7 @@ def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
 
         # Broadcast WebSocket Event
         try:
-            import main
+            main = get_provider("app_main")
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {
                     "action": f"bulk_{action}",
@@ -1675,7 +1708,7 @@ def api_kanban_bulk_undo(request: Request, req: KanbanBulkUndoRequest):
 
         # Broadcast
         try:
-            import main
+            main = get_provider("app_main")
             if hasattr(main, "broadcast_event"):
                 main.broadcast_event("kanban_updated", {
                     "action": "bulk_undone",
@@ -1723,9 +1756,10 @@ async def approve_kanban_task(request: Request, task_id: str):
     """Erteilt die Autonomie-Freigabe (approval) und startet die Aufgabe."""
     require_admin_or_503(request)
     await asyncio.to_thread(_approve_kanban_task_db, task_id)
-    # Fix-Sprint Paket A (Punkt 1): to_thread gibt im aktiven Event-Loop zurück —
-    # create_task hängt damit garantiert am laufenden Loop.
-    asyncio.create_task(_execute_kanban_task_async(task_id))
+    # F: to_thread gibt im aktiven Event-Loop zurück; registry-gestuetzter
+    # Spawn statt nacktem create_task (Shutdown kennt den Worker sonst nicht).
+    from archon.core.task_registry import spawn as _spawn_tracked
+    _spawn_tracked(_execute_kanban_task_async(task_id), name=f"kanban_task:{task_id}")
     return {"status": "success", "task_id": task_id, "message": "Freigegeben und gestartet."}
 
 
@@ -1916,7 +1950,7 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
     await asyncio.to_thread(_record_review_sync)
 
     try:
-        import main
+        main = get_provider("app_main")
         if hasattr(main, "broadcast_event"):
             main.broadcast_event("kanban_updated", {
                 "action": "quality_review",
@@ -1973,7 +2007,7 @@ def reset_zombie_kanban_tasks(request: Request, payload: dict = Body(default={})
 
         conn.commit()
         try:
-            import main
+            main = get_provider("app_main")
             if hasattr(main, "broadcast_event") and reset_ids:
                 main.broadcast_event("kanban_updated", {"action": "zombie_reset", "task_ids": reset_ids, "to": target_status})
         except Exception as exc:
@@ -2993,7 +3027,7 @@ def save_kanban_meta(request: Request, body: KanbanMetaSaveRequest):
 
     _, saved = update_kanban_meta(_apply_task)
     try:
-        import main
+        main = get_provider("app_main")
         if hasattr(main, "broadcast_event"):
             main.broadcast_event("kanban_updated", {"action": "meta_update", "task_id": task_id})
     except Exception as exc:

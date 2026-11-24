@@ -9,7 +9,7 @@ Dieses Handbuch beschreibt die Chaos-Engineering- und Resilienz-Test-Suite (`scr
 Die Suite prüft vier kritische Resilienz-Dimensionen des Agentic OS:
 
 1. **SQLite Concurrency & Lock Resilience:**
-   - Erzeugt extreme Nebenläufigkeit (8 Threads, jeweils 50 Transaktionen) gegen `kanban.db`.
+   - Erzeugt extreme Nebenläufigkeit (8 Threads, jeweils 50 Transaktionen) gegen `ops.db`.
    - Misst Durchschnitts- und Maximallatenzen in Millisekunden.
    - Verifiziert, dass der Write-Ahead-Log (WAL-Mode) Lock-Fehler vollständig verhindert.
 2. **Container Discovery & Health:**

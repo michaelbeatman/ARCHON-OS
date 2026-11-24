@@ -33,7 +33,14 @@ from typing import Dict, Any, List, Optional, Tuple
 import logging
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TENANTS_BASE_DIR = os.path.join(WORKSPACE_DIR, "data", "tenants")
+# E (dieses Audits): kein eigener, harter TENANTS_BASE_DIR mehr. Die
+# autoritative Wurzel liegt in backend.db_paths.APP_DATA_DIR (respektiert
+# ARCHON_DATA_DIR); der Alias bleibt nur für bestehende Importe (Tests)
+# erhalten und ist jetzt aus der SSOT abgeleitet.
+from backend.db_paths import APP_DATA_DIR as _APP_DATA_DIR  # noqa: E402
+
+TENANTS_BASE_DIR = os.path.join(_APP_DATA_DIR, "tenants")
+_DEFAULT_TENANTS_BASE_DIR = TENANTS_BASE_DIR
 
 logger = logging.getLogger("archon.erp_manager")
 
@@ -49,25 +56,40 @@ def _sanitize_company_id(company_id: Optional[str]) -> str:
             logger.debug("Standard-Firma aus Corporate-Manager nicht ermittelbar, nutze übergebene company_id: %s", exc)
     try:
         from backend.tenant_context import sanitize_tenant_id
-        return sanitize_tenant_id(company_id or "archon-systems")
+        # Default-ID ist "default" (identisch mit tenant_context/db_paths).
+        return sanitize_tenant_id(company_id or "default")
     except Exception:
-        cid = (company_id or "archon-systems").strip()
+        cid = (company_id or "default").strip()
         cid = re.sub(r"[^a-zA-Z0-9_-]", "_", cid).strip("_")
-        return cid or "archon-systems"
+        return cid or "default"
 
 
 def get_tenant_db_path(company_id: Optional[str] = None) -> str:
+    """Autoritative ERP-DB über tenant_context auflösen (kein Split-Brain)."""
     cid = _sanitize_company_id(company_id)
-    tenant_dir = os.path.join(TENANTS_BASE_DIR, cid)
-    os.makedirs(tenant_dir, exist_ok=True)
-    return os.path.join(tenant_dir, "erp.db")
+    if os.path.abspath(TENANTS_BASE_DIR) != os.path.abspath(_DEFAULT_TENANTS_BASE_DIR):
+        # Bewusster Override (v.a. Test-Isolation via monkeypatch): hier darf
+        # der Resolver nicht in den echten Workspace schreiben.
+        path = os.path.join(TENANTS_BASE_DIR, cid, "erp.db")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        return path
+    try:
+        from backend.tenant_context import tenant_context
+        return tenant_context.resolve_active_db("erp.db", cid)
+    except Exception as exc:
+        logger.debug("[ERP] Tenant-Resolver nicht verfügbar, nutze APP_DATA_DIR: %s", exc)
+        from backend.db_paths import APP_DATA_DIR
+        path = os.path.join(APP_DATA_DIR, "tenants", cid, "erp.db")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        return path
 
 
 class ERPManager:
     """Mandantenfähige CRM- & Mini-ERP-Engine für Archon OS."""
 
     def __init__(self):
-        os.makedirs(TENANTS_BASE_DIR, exist_ok=True)
+        # Verzeichnisse entstehen beim Auflösen über tenant_context;
+        # kein separater, vom Daten-Root abgekoppelter Basisordner mehr.
         self._initialized_tenants = set()
 
     def _get_conn(self, company_id: Optional[str] = None) -> Tuple[sqlite3.Connection, str]:
@@ -124,10 +146,12 @@ class ERPManager:
                     last_sync_summary TEXT DEFAULT ''
                 )
             """)
+            # "archon-systems" bleibt als Legacy-Alias des Primärmandanten
+            # erhalten, damit bestehende Tenant-DBs ihren Sync-Status behalten.
             conn.execute("""
                 INSERT OR IGNORE INTO erp_sync_config (id, pocketbase_url, collection_name, sync_enabled)
                 VALUES (1, 'http://127.0.0.1:8090', 'kontakte', ?)
-            """, (1 if cid == "archon-systems" else 0,))
+            """, (1 if cid in ("default", "archon-systems") else 0,))
 
             # 3. Geschäftspartner / Adressen (crm_entities)
             conn.execute("""
@@ -350,7 +374,8 @@ class ERPManager:
                 conn.execute("ALTER TABLE erp_documents ADD COLUMN stock_deducted INTEGER DEFAULT 0")
 
         # Seed initial basis data ONLY for primary company if completely empty
-        if cid == "archon-systems":
+        # (Default ist "default"; "archon-systems" ist der Legacy-Alias).
+        if cid in ("default", "archon-systems"):
             count_ent = conn.execute("SELECT COUNT(*) FROM crm_entities").fetchone()[0]
             if count_ent == 0:
                 self._seed_primary_tenant(conn)
@@ -638,7 +663,7 @@ class ERPManager:
 
             return {
                 "company_id": cid,
-                "db_path": f"data/tenants/{cid}/erp.db",
+                "db_path": os.path.relpath(get_tenant_db_path(cid), WORKSPACE_DIR).replace(os.sep, "/"),
                 "counts": {
                     "entities": total_entities,
                     "customers": customers_count,

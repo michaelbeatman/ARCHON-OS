@@ -18,7 +18,7 @@ Das Audit-Log von Archon OS garantiert:
 
 ## 2. Kryptografische SHA-256-Formel & Datenstruktur
 
-Jeder Eintrag in `data/agentic_memory.db` (Tabelle `audit_log`, SQLite-WAL mit `BEGIN IMMEDIATE`) berechnet seinen Block-Hash deterministisch über:
+Jeder Eintrag in `data/memory.db` (Tabelle `audit_log`, SQLite-WAL mit `BEGIN IMMEDIATE`) berechnet seinen Block-Hash deterministisch über:
 
 $$\text{current\_hash} = \text{SHA-256}(\text{prev\_hash} \parallel \text{"|"} \parallel \text{timestamp} \parallel \text{"|"} \parallel \text{category} \parallel \text{"|"} \parallel \text{action} \parallel \text{"|"} \parallel \text{agent\_id} \parallel \text{"|"} \parallel \text{payload\_json})$$
 

@@ -151,17 +151,23 @@ class ApiKeyManager:
         def _do_log(active_conn: sqlite3.Connection):
             row = active_conn.execute("SELECT block_hash FROM api_key_audit_log ORDER BY id DESC LIMIT 1").fetchone()
             prev_hash = row["block_hash"] if row else GENESIS_HASH
+            # E (Audit): Block-ID muss mit der ID uebereinstimmen, mit der
+            # verify_integrity() den Hash prueft (_verify_hash(payload, hash, id)).
+            # Ohne ID wuerde _chain_hash() immer den juengsten Epochen-Key nehmen.
+            next_id = int(active_conn.execute(
+                "SELECT COALESCE(MAX(id), 0) + 1 FROM api_key_audit_log"
+            ).fetchone()[0])
             raw_chain_string = f"{prev_hash}|{key_id}|{action}|{details_json}|{created_by}|{now_iso}"
             # H3: HMAC mit dem zentralen Chain-Secret statt nacktem SHA-256,
             # sonst kann die Kette mit DB-Schreibzugriff ab Block 1 neu
             # signiert werden.
             from backend.audit_log import _chain_hash
-            block_hash = _chain_hash(raw_chain_string)
+            block_hash = _chain_hash(raw_chain_string, next_id)
 
             active_conn.execute("""
-                INSERT INTO api_key_audit_log (key_id, action, details, prev_hash, block_hash, created_at, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (key_id, action, details_json, prev_hash, block_hash, now_iso, created_by))
+                INSERT INTO api_key_audit_log (id, key_id, action, details, prev_hash, block_hash, created_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (next_id, key_id, action, details_json, prev_hash, block_hash, now_iso, created_by))
 
         if conn is not None:
             _do_log(conn)

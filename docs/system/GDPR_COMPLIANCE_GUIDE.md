@@ -11,7 +11,7 @@ Archon OS speichert Nutzerdaten über mehrere relationale und dokumentenbasierte
 - **Art. 17 DSGVO (Recht auf Vergessenwerden / Löschung):**
   Löscht oder anonymisiert personenbezogene Daten (`[ANONYMISIERT_DSGVO_ART17]`). Das Löschen erfolgt atomar über die SQLite-Datenbanken und PocketBase.
 - **Art. 30 DSGVO (Nachweispflicht & Audit-Log):**
-  Zur Beweisbarkeit wird für jede Löschung eine kryptografische Quittung erzeugt. Diese enthält den SHA-256-Hash des Identifikators (niemals Klartext-PII) und wird in einer Hash-Kette (`gdpr_audit_log`) in `agentic_memory.db` unveränderlich festgehalten.
+  Zur Beweisbarkeit wird für jede Löschung eine kryptografische Quittung erzeugt. Diese enthält den SHA-256-Hash des Identifikators (niemals Klartext-PII) und wird in einer Hash-Kette (`gdpr_audit_log`) in `memory.db` unveränderlich festgehalten.
 
 ---
 
@@ -19,9 +19,9 @@ Archon OS speichert Nutzerdaten über mehrere relationale und dokumentenbasierte
 
 | Speicher | Datei / Service | Art. 15 Export | Art. 17 Löschung / Anonymisierung |
 | :--- | :--- | :--- | :--- |
-| **Kanban Engine** | `kanban.db` | Titel, Beschreibung, Resultat | Textuelle Anonymisierung in Tasks |
-| **Chat & Sessions** | `state.db` | Nachrichten (`messages`) | Content-Anonymisierung |
-| **Agenten-Gedächtnis** | `agentic_memory.db` | `learnings`, `human_feedback` | Zusammenfassungen & Feedback bereinigen |
+| **Kanban Engine** | `ops.db` | Titel, Beschreibung, Resultat | Textuelle Anonymisierung in Tasks |
+| **Chat & Sessions** | `ops.db` | Nachrichten (`messages`) | Content-Anonymisierung |
+| **Agenten-Gedächtnis** | `memory.db` | `learnings`, `human_feedback` | Zusammenfassungen & Feedback bereinigen |
 | **CRM Kontakte** | PocketBase (`/api/collections/kontakte`) | Kontaktdaten, E-Mail, Firma | Records löschen / bereinigen |
 | **Obsidian Vault** | Markdown-Dateien | Dateinamen- & Volltextsuche | Manuelle Revision / Bereinigungsliste |
 

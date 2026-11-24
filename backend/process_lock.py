@@ -12,9 +12,12 @@ Connection für seine gesamte Laufzeit.
 
 import functools
 import hashlib
+import logging
 import os
 import sqlite3
 from typing import Optional
+
+logger = logging.getLogger("archon_os.process_lock")
 
 try:
     from backend.db_paths import resolve_db as _resolve_db
@@ -45,18 +48,35 @@ def try_acquire_loop_lock(name: str, timeout: float = 0.3) -> Optional[LoopLock]
     """Gibt den Lock zurück oder None, wenn ein anderer Prozess ihn hält."""
     safe = "".join(c for c in str(name) if c.isalnum() or c in "-_") or "default"
     path = os.path.join(_LOCK_DIR, f".loop_lock_{safe}.db")
+    conn = None
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         conn = sqlite3.connect(path, timeout=timeout, isolation_level=None)
         conn.execute("BEGIN EXCLUSIVE")
         return LoopLock(conn, path)
-    except sqlite3.OperationalError:
-        try:
-            conn.close()
-        except Exception:
-            pass
+    except sqlite3.OperationalError as exc:
+        # E: Kein stilles Returns mehr — ein nicht gestarteter Loop muss im
+        # Log sichtbar sein. "Lebender" Lock anderer Prozess = erwartbar.
+        logger.warning(
+            "[LoopLock] Lock '%s' nicht verfügbar (Timeout %ss): %s — Loop startet NICHT.",
+            safe, timeout, exc,
+        )
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
         return None
-    except Exception:
+    except Exception as exc:
+        logger.error(
+            "[LoopLock] Unerwarteter Fehler beim Lock '%s': %s — Loop startet NICHT.",
+            safe, exc,
+        )
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
         return None
 
 
@@ -85,6 +105,9 @@ def exclusive_loop(name: str):
         async def wrapper(*args, **kwargs):
             lock = try_acquire_loop_lock(name)
             if lock is None:
+                # E: main.py startet den Loop sonst lautlos nie — laut loggen,
+                # aber nicht raisen, damit andere Loops weiterlaufen.
+                logger.error("[ExclusiveLoop] Lock nicht verfügbar: Loop %s startet NICHT", name)
                 return None
             try:
                 return await fn(*args, **kwargs)

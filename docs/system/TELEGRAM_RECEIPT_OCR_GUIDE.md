@@ -21,8 +21,8 @@ Dieses Handbuch beschreibt die Architektur und Bedienung der Belegverarbeitung (
      - **Einzelpositionen** mit Namen und Preisen
 3. **Persistenz & Buchhaltung:**
    - Das Originalbild wird revisionssicher unter `/opt/data/inbox/receipts/{receipt_id}.jpg` archiviert.
-   - Die Metadaten werden in der SQLite-Tabelle `receipts` in `agentic_memory.db` und als Sidecar-JSON gespeichert.
-   - Automatisch wird eine Aufgabe in `kanban.db` für das Finanzteam (`finance_lead`) angelegt:
+   - Die Metadaten werden in der SQLite-Tabelle `receipts` in `memory.db` und als Sidecar-JSON gespeichert.
+   - Automatisch wird eine Aufgabe in `ops.db` für das Finanzteam (`finance_lead`) angelegt:
      `[Beleg] {Händler}: {Betrag} EUR ({Kategorie})`.
 
 ---

@@ -274,7 +274,7 @@ Das Gesamtsystem umfasst 57 spezialisierte Rollenprofile, die nach den 7 strateg
 | **Strategic Founder & System Architect** | `founder` | omniroute / strict-free-tier-combo-Reasoning | `SPECIFIC_TRANSPARENCY` | Master-Profil für die Unternehmensführung: Strategische Gesamtführung, Zieldefinition und Koordination aller Agenten. |
 | **Agile Scrum Master & Task Triage** | `agile_scrum_master` | omniroute / strict-free-tier-combo-Reasoning | `MINIMAL_RISK` | Strukturiert Projekte in handhabbare Meilensteine, Backlog-Items und Sprints. |
 | **CEO - Chief Executive Officer** | `executive_decision_architect` | omniroute / strict-free-tier-combo-Reasoning | `MINIMAL_RISK` | Strukturiert komplexe Geschäftsentscheidungen anhand von Entscheidungsbäumen und Nutzwertanalysen. |
-| **Ergebnis-Kuratorin - Aggregation & Synthese** | `aggregation_lisa` | omniroute / strict-free-tier-combo-Reasoning | `MINIMAL_RISK` | Fügt die Teilergebnisse mehrerer Fachagenten zu einem konsistenten Gesamtergebnis zusammen, markiert offene Konflikte und erste... |
+| **Ergebnis-Kuratorin - Aggregation & Synthese (Legacy)** | `aggregation_lisa` (inaktiv; Synthese über `resolve_debate_consensus()`) | omniroute / strict-free-tier-combo-Reasoning | `MINIMAL_RISK` | Fügt die Teilergebnisse mehrerer Fachagenten zu einem konsistenten Gesamtergebnis zusammen, markiert offene Konflikte und erste... |
 | **Hermes Orchestrator (Root)** | `default` | omniroute / strict-free-tier-combo-Reasoning | `MINIMAL_RISK` | Zentrales Hermes-Basissystem mit Vollzugriff auf Container-Tools und Dateisystem. |
 | **Knowledge Graph, RAG & Vault Archivar** | `knowledge_librarian` | omniroute / strict-free-tier-combo-Reasoning | `MINIMAL_RISK` | Kuratiert den Obsidian-Vault, das LLM-Wiki und die AnythingLLM-Vektordatenbank, bereinigt Dubletten und verknüpft isolierte Wis... |
 | **Negotiation Master (Harvard-Prinzip)** | `negotiation_master` | omniroute / strict-free-tier-combo-Reasoning | `MINIMAL_RISK` | Entwickelt Verhandlungsstrategien, BATNA-Analysen und psychologische Argumentationsleitfäden. |
@@ -708,7 +708,7 @@ Archon OS speichert Nutzerdaten über mehrere relationale und dokumentenbasierte
 - **Art. 17 DSGVO (Recht auf Vergessenwerden / Löschung):**
   Löscht oder anonymisiert personenbezogene Daten (`[ANONYMISIERT_DSGVO_ART17]`). Das Löschen erfolgt atomar über die SQLite-Datenbanken und PocketBase.
 - **Art. 30 DSGVO (Nachweispflicht & Audit-Log):**
-  Zur Beweisbarkeit wird für jede Löschung eine kryptografische Quittung erzeugt. Diese enthält den SHA-256-Hash des Identifikators (niemals Klartext-PII) und wird in einer Hash-Kette (`gdpr_audit_log`) in `agentic_memory.db` unveränderlich festgehalten.
+  Zur Beweisbarkeit wird für jede Löschung eine kryptografische Quittung erzeugt. Diese enthält den SHA-256-Hash des Identifikators (niemals Klartext-PII) und wird in einer Hash-Kette (`gdpr_audit_log`) in `memory.db` unveränderlich festgehalten.
 
 ---
 
@@ -716,9 +716,9 @@ Archon OS speichert Nutzerdaten über mehrere relationale und dokumentenbasierte
 
 | Speicher | Datei / Service | Art. 15 Export | Art. 17 Löschung / Anonymisierung |
 | :--- | :--- | :--- | :--- |
-| **Kanban Engine** | `kanban.db` | Titel, Beschreibung, Resultat | Textuelle Anonymisierung in Tasks |
-| **Chat & Sessions** | `state.db` | Nachrichten (`messages`) | Content-Anonymisierung |
-| **Agenten-Gedächtnis** | `agentic_memory.db` | `learnings`, `human_feedback` | Zusammenfassungen & Feedback bereinigen |
+| **Kanban Engine** | `ops.db` | Titel, Beschreibung, Resultat | Textuelle Anonymisierung in Tasks |
+| **Chat & Sessions** | `ops.db` | Nachrichten (`messages`) | Content-Anonymisierung |
+| **Agenten-Gedächtnis** | `memory.db` | `learnings`, `human_feedback` | Zusammenfassungen & Feedback bereinigen |
 | **CRM Kontakte** | PocketBase (`/api/collections/kontakte`) | Kontaktdaten, E-Mail, Firma | Records löschen / bereinigen |
 | **Obsidian Vault** | Markdown-Dateien | Dateinamen- & Volltextsuche | Manuelle Revision / Bereinigungsliste |
 
@@ -832,7 +832,7 @@ Das Audit-Log von Archon OS garantiert:
 
 ## 2. Kryptografische SHA-256-Formel & Datenstruktur
 
-Jeder Eintrag in `data/agentic_memory.db` (Tabelle `audit_log`, SQLite-WAL mit `BEGIN IMMEDIATE`) berechnet seinen Block-Hash deterministisch über:
+Jeder Eintrag in `data/memory.db` (Tabelle `audit_log`, SQLite-WAL mit `BEGIN IMMEDIATE`) berechnet seinen Block-Hash deterministisch über:
 
 $$\text{current\_hash} = \text{SHA-256}(\text{prev\_hash} \parallel \text{"|"} \parallel \text{timestamp} \parallel \text{"|"} \parallel \text{category} \parallel \text{"|"} \parallel \text{action} \parallel \text{"|"} \parallel \text{agent\_id} \parallel \text{"|"} \parallel \text{payload\_json})$$
 
@@ -986,7 +986,7 @@ Archon OS stellt eine revisionssichere Governance-Schicht für externe Schnittst
 ## 2. Rechtssicherheit & GoBD / ISO 27001 Konformität
 1. **Einmalanzeige (Zero-Plaintext-Persistence):**
    * Der Klartext-Token (`archon_live_<48-hex-zeichen>`) wird dem Nutzer **exakt einmalig** in einem modalen Kopier-Dialog präsentiert.
-   * In der Datenbank (`agentic_memory.db`) wird ausschließlich ein kryptografischer SHA-256 Hash (`KEY_SALT:raw_token`) gespeichert. Selbst bei einem unbefugten Datenbankabzug existieren keine Klartext-Zugangsdaten.
+   * In der Datenbank (`memory.db`) wird ausschließlich ein kryptografischer SHA-256 Hash (`KEY_SALT:raw_token`) gespeichert. Selbst bei einem unbefugten Datenbankabzug existieren keine Klartext-Zugangsdaten.
 2. **Kryptografische SHA-256 Audit-Kette:**
    * Jede Schlüsselerstellung (`KEY_CREATED`), Deaktivierung (`KEY_REVOKED`) und Löschung (`KEY_DELETED`) wird mit Zeitstempel, Nutzer-ID und Vorgänger-Hash in der Tabelle `api_key_audit_log` unveränderlich verkettet.
 
@@ -1321,7 +1321,7 @@ Das Break-Glass-Verfahren nutzt ausschließlich Module der Python 3 Standardbibl
 ## 3. Dateistruktur des Notfall-Tresors
 
 - **Tresor-Datei:** `data/backups/break_glass_vault.enc` (verschlüsseltes Archiv).
-  - Enthält: `.env`, `config/`, alle SQLite-Datenbanken (`agent_os.db`, `agentic_memory.db`, `kanban.db`, `state.db`).
+  - Enthält: `.env`, `config/`, alle SQLite-Datenbanken (`ops.db`, `business.db`, `memory.db`).
 - **Anleitung für den Notfall:** `data/backups/BREAK_GLASS_RECOVERY_KIT.md` (Notfall-Handbuch zum Ausdrucken und Verwahren im physischen Panzerschrank).
 
 ---
@@ -1418,7 +1418,7 @@ Das Modal bietet eine vollständige Ansicht mit:
 
 ---
 
-## 4. Datenbank-Schema (`agentic_memory.db`)
+## 4. Datenbank-Schema (`memory.db`)
 
 ```sql
 CREATE TABLE email_drafts (
@@ -1728,7 +1728,7 @@ Damit können externe Clients wie **Claude Desktop**, **Cursor**, **VS Code**, *
 | Tool-Name | Beschreibung | Wichtige Parameter |
 |---|---|---|
 | `archon__create_task` | Legt eine neue Aufgabe im Operations Kanban Board an. | `title` (erforderlich), `body`, `assignee`, `priority` (1-4) |
-| `archon__list_tasks` | Liest Aufgaben gefiltert nach Spalte/Status aus `kanban.db`. | `status` (`ready`, `in_progress`, `review`, `done`, `all`), `limit` |
+| `archon__list_tasks` | Liest Aufgaben gefiltert nach Spalte/Status aus `ops.db`. | `status` (`ready`, `in_progress`, `review`, `done`, `all`), `limit` |
 | `archon__update_task_status` | Verschiebt eine Aufgabe im Kanban Board. | `task_id` (z. B. `t-123456`), `status` |
 | `archon__search_crm_contacts` | Durchsucht die PocketBase-Kontakte nach Name, E-Mail oder Firma. | `query` (Suchbegriff), `limit` |
 | `archon__get_inbox_messages` | Liest eingehende Nachrichten aus dem Posteingang. | `category` (`all`, `emails`, `telegram`, `internal`), `limit` |
@@ -1870,7 +1870,7 @@ DocuSeal läuft isoliert im Docker-Netzwerk `agentic_mesh`:
 - **Profil:** `esign` / `legal`
 - **Host-Port:** `http://localhost:3080` (Container-Port 3000)
 - **Persistenz:** Docker Volume `docuseal_data` (`/data/docuseal.sqlite3`)
-- **Archon Integration:** `backend/docuseal_client.py` synchronisiert Signatur-Zustände automatisch mit `kanban.db` und `agentic_memory.db`.
+- **Archon Integration:** `backend/docuseal_client.py` synchronisiert Signatur-Zustände automatisch mit `ops.db` und `memory.db`.
 
 ---
 
@@ -1899,7 +1899,7 @@ docker compose --profile esign stop docuseal
    - Der Vertragspartner öffnet den Link im Browser und unterzeichnet digital.
 3. **Webhook & Rückfluss:**
    - DocuSeal sendet nach erfolgreicher Signatur einen Webhook an `POST /api/operations/esign/webhook`.
-   - Der verknüpfte Task in `kanban.db` wird automatisch auf `done` gesetzt (`Vollständig digital unterzeichnet via DocuSeal`).
+   - Der verknüpfte Task in `ops.db` wird automatisch auf `done` gesetzt (`Vollständig digital unterzeichnet via DocuSeal`).
    - Im NotificationHub wird eine Benachrichtigung an das Team gesendet.
 
 ---
@@ -1965,8 +1965,8 @@ Dieses Handbuch beschreibt die Architektur und Bedienung der Belegverarbeitung (
      - **Einzelpositionen** mit Namen und Preisen
 3. **Persistenz & Buchhaltung:**
    - Das Originalbild wird revisionssicher unter `/opt/data/inbox/receipts/{receipt_id}.jpg` archiviert.
-   - Die Metadaten werden in der SQLite-Tabelle `receipts` in `agentic_memory.db` und als Sidecar-JSON gespeichert.
-   - Automatisch wird eine Aufgabe in `kanban.db` für das Finanzteam (`finance_lead`) angelegt:
+   - Die Metadaten werden in der SQLite-Tabelle `receipts` in `memory.db` und als Sidecar-JSON gespeichert.
+   - Automatisch wird eine Aufgabe in `ops.db` für das Finanzteam (`finance_lead`) angelegt:
      `[Beleg] {Händler}: {Betrag} EUR ({Kategorie})`.
 
 ---
@@ -2277,7 +2277,7 @@ Mit 56 autonomen Spezialisten-Rollen und mehrstufigen Fan-in-Delegationen (Rober
 
 Archon OS integriert ein vollwertiges, OpenTelemetry-konformes Tracing-System:
 - **Hierarchische Spans:** Jeder Kanban-Task und LLM-Aufruf wird als standardisierter Span mit Start-/Endzeit, Latenz in Millisekunden, Input- und Output-Tokens sowie Status erfasst.
-- **Transaktionale Persistenz:** Alle Traces werden primär in `agentic_memory.db` in den Tabellen `otel_traces` und `otel_spans` (WAL-Modus) gespeichert – vollständig unabhängig von externer Cloud-Software.
+- **Transaktionale Persistenz:** Alle Traces werden primär in `memory.db` in den Tabellen `otel_traces` und `otel_spans` (WAL-Modus) gespeichert – vollständig unabhängig von externer Cloud-Software.
 - **Langfuse & OTLP Export:** Über Umgebungsvariablen (`LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`) streamt der Tracer Spans automatisch asynchron an eine selbst-gehostete Langfuse-Instanz.
 
 ---
@@ -2320,7 +2320,7 @@ Der Tracer erkennt diese Variablen automatisch und leitet künftige Spans ohne N
 ## Überblick
 Vor Einführung der Prompt-Registry wurden Änderungen an System-Prompts direkt in `agent_profiles.json` überschrieben oder erzeugten unstrukturierte Backup-Dateien (`agent_profiles.json.bak.N`). 
 
-Die Prompt-Registry (`backend/prompt_registry.py`) überführt das Prompt-Management in eine transaktionale SQLite-Architektur (`prompt_versions` in `agentic_memory.db`) und ergänzt:
+Die Prompt-Registry (`backend/prompt_registry.py`) überführt das Prompt-Management in eine transaktionale SQLite-Architektur (`prompt_versions` in `memory.db`) und ergänzt:
 1. **Lückenlose Versionierung:** Jede Änderung speichert den Prompt, das Modell, Ersteller, Zeitstempel und eine Commit-Nachricht.
 2. **1-Click Rollback:** Ermöglicht die sofortige Wiederherstellung jedes historischen Stands unter Wahrung der Historie.
 3. **Unified Diff:** Textueller Zeilenvergleich zwischen beliebigen Versionen (`difflib.unified_diff`).
@@ -2741,7 +2741,7 @@ Metabase läuft als containerisierter Dienst im Docker-Compose-Netzwerk `agentic
 - **Profil:** `bi` / `analytics`
 - **Host-Port:** `http://localhost:3030` (Container-Port 3000)
 - **Persistenz:** Docker Volume `metabase_data` unter `/metabase-data/metabase.db`
-- **Datenbank-Mounts:** Read-Only Mount von `/opt/data` für `kanban.db` und PocketBase
+- **Datenbank-Mounts:** Read-Only Mount von `./data` (im Container `/opt/data`) für `ops.db`, `memory.db` und PocketBase
 
 ---
 
@@ -2766,11 +2766,11 @@ Nach dem ersten Start unter `http://localhost:3030` den initialen Admin-Benutzer
 
 ### A. Archon Kanban & Task-Analytics
 - **Datenbanktyp:** SQLite
-- **Dateipfad:** `/opt/data/kanban.db`
+- **Dateipfad:** `/opt/data/ops.db`
 
 ### B. Agentic Memory & Receipts
 - **Datenbanktyp:** SQLite
-- **Dateipfad:** `/opt/data/agentic_memory.db`
+- **Dateipfad:** `/opt/data/memory.db`
 
 ---
 
@@ -2833,10 +2833,12 @@ LIMIT 10;
 
 ## 1. Übersicht & Zielsetzung
 
-Archon OS setzt für seine Kernprozesse auf SQLite-Datenbanken im Write-Ahead-Logging-Modus (WAL):
-- `kanban.db`: Task-Queue, Status und Delegation (Single Source of Truth)
-- `state.db`: Sitzungshistorie und Token-Kontexte
-- `agentic_memory.db`: Langzeitgedächtnis (Learnings, User-Profile, KV-Store)
+Archon OS setzt für seine Kernprozesse auf SQLite-Datenbanken im Write-Ahead-Logging-Modus (WAL). Seit der aktiven Konsolidierung 28 → 3 (`data/.db_consolidated.json`) sind die drei domänenisolierten DBs die primären Replikationsziele:
+- `ops.db`: Operative Steuerung, Kanban-Tasks, Workflows, Audit & Security (ehem. `kanban.db`, `state.db`, `agent_os.db`)
+- `business.db`: CRM, ERP, Deals, Verträge, Treasury & Content
+- `memory.db`: Langzeitgedächtnis (Learnings, User-Profile, KV-Store), OTel-Traces & Prompt-Registry (ehem. `agentic_memory.db`)
+
+Zusätzlich bleiben die Hermes-Runtime-Pfade `/opt/data/kanban.db` und `/opt/data/state.db` sowie die Tenant-DBs unter `data/tenants/<id>/*.db` gesichert.
 
 Während traditionelle Dump-Backups (`backup_to_nas.py`) einmal täglich laufen und im Fehlerfall bis zu 24 Stunden Datenverlust bedeuten können, repliziert **Litestream** jede Transaktion kontinuierlich im Sekundentakt auf ein Replikationsziel (lokales Dateisystem, NAS-Freigabe oder MinIO/S3-Bucket).
 
@@ -2847,7 +2849,34 @@ Während traditionelle Dump-Backups (`backup_to_nas.py`) einmal täglich laufen 
 Die Konfiguration liegt unter [`config/litestream.yml`](../../config/litestream.yml):
 
 ```yaml
+# Auszug aus config/litestream.yml (Litestream v0.5.1)
+snapshot:
+  retention: 72h
+
 dbs:
+  # --- Konsolidierte Archon-Domaenen (Phase 2.1, aktiv) ---
+  - path: /app/data/ops.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/ops.db
+        sync-interval: 5s
+        retention: 72h
+
+  - path: /app/data/business.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/business.db
+        sync-interval: 5s
+        retention: 72h
+
+  - path: /app/data/memory.db
+    replicas:
+      - type: file
+        path: /opt/litestream_replicas/memory.db
+        sync-interval: 10s
+        retention: 72h
+
+  # --- Hermes-Runtime (/opt/data = ./.hermes Mount) ---
   - path: /opt/data/kanban.db
     replicas:
       - type: file
@@ -2862,13 +2891,18 @@ dbs:
         sync-interval: 10s
         retention: 72h
 
-  - path: /app/data/agentic_memory.db
-    replicas:
-      - type: file
-        path: /opt/litestream_replicas/agentic_memory.db
-        sync-interval: 10s
-        retention: 72h
+  # --- Tenant-DBs: Directory Replication (Litestream >= 0.5) ---
+  - dir: /app/data/tenants
+    pattern: "*.db"
+    recursive: true
+    replica:
+      type: file
+      path: /opt/litestream_replicas/tenants
+      sync-interval: 5s
+      retention: 72h   # v0.5: global wirksam via snapshot.retention (s. oben)
 ```
+
+Hinweise zur v0.5-Migration: `replica:` (Singular) für neue Einträge, `retention` global im `snapshot`-Block, und `dir:` + `pattern: "*.db"` + `recursive: true` für alle Tenant-DBs. Die fünf Bestandseinträge nutzen weiterhin das deprecatede `replicas:`-Array mit einem Eintrag.
 
 ---
 
@@ -2895,16 +2929,18 @@ docker compose --profile replication up -d litestream
 
 ## 4. Wiederherstellung im Notfall (Restore)
 
-Sollte eine Datenbank korrumpieren oder gelöscht werden:
+Sollte eine Datenbank korrumpieren oder gelöscht werden, Beispiel für `ops.db`:
 ```bash
-# Wiederherstellung des letzten konsistenten Stands für kanban.db
+# Wiederherstellung des letzten konsistenten Stands für ops.db
 docker run --rm \
-  -v C:/Users/User/.hermes:/opt/data \
+  -v ./data:/app/data \
   -v ./data/litestream_replicas:/opt/litestream_replicas \
-  litestream/litestream:0.3.13 restore \
-  -replica /opt/litestream_replicas/kanban.db \
-  /opt/data/kanban.db
+  litestream/litestream:0.5.1 restore \
+  -replica /opt/litestream_replicas/ops.db \
+  /app/data/ops.db
 ```
+Für `business.db` und `memory.db` entsprechend die Pfade ersetzen. Die Hermes-Legacy-Ziele `/opt/data/kanban.db` und `/opt/data/state.db` werden aus ihren eigenen Replikaten wiederhergestellt; Tenant-DBs liegen unter `/opt/litestream_replicas/tenants`.
+
 Nach Abschluss ist der exakte Stand bis auf wenige Sekunden vor dem Ausfall verlustfrei wiederhergestellt.
 
 ---
@@ -2917,20 +2953,24 @@ Backups sind erst dann vertrauenswürdig, wenn ihre Wiederherstellbarkeit und Da
 
 Archon OS implementiert mit [`scripts/automated_restore_test.py`](../../scripts/automated_restore_test.py) einen automatisierten Restore-Tester:
 1. **Wegwerf-Sandbox:** Erzeugt ein isoliertes temporäres Dateisystem für jeden Prüflauf.
-2. **Lock-freier Online-Restore:** Nutzt die atomare SQLite Backup-API (`pages=200` mit `immutable=1`), um aktive WAL-Datenbanken verlustfrei ohne Schreibblockaden zu spiegeln.
-3. **PRAGMA Prüfungen:** Führt auf allen drei Kern-Datenbanken (`kanban.db`, `state.db`, `agentic_memory.db`) `PRAGMA integrity_check` und `PRAGMA foreign_key_check` aus.
-4. **Smoke-Tests:** Validiert Tabellenschemata und echte Datensatzmengen (Aufgaben, Dialog-Nachrichten, Prompt-Versionen).
+2. **Lock-freier Online-Restore:** Nutzt die atomare SQLite Backup-API (`pages=200`), um echte Backup-Artefakte verlustfrei ohne Schreibblockaden in die Sandbox zu spiegeln. Die Live-DB als Quelle führt bewusst zu `FAILED`.
+3. **PRAGMA Prüfungen:** Führt auf allen geprüften Zielen `PRAGMA integrity_check` und `PRAGMA foreign_key_check` aus.
+4. **Smoke-Tests:** Validiert Tabellenschemata und echte Datensatzmengen der konsolidierten Domänen-DBs, der PocketBase-CRM-DB sowie die Litestream-Abdeckung der Mandanten-DBs.
 5. **Alarmierung & Governance:** Schlägt ein Test fehl, wird sofort ein Alarm der Stufe `CRITICAL` ausgelöst (Telegram-Push durchbricht Ruhezeiten). Erfolgreiche Läufe werden im Morgen-Standup zusammengefasst.
 
 ---
 
 ## 1. Getestete Datenbanken & Kriterien
 
-| Datenbank | Typischer Umfang | Smoke-Test Kriterium |
+| Ziel | Umfang / Zweck | Smoke-Test Kriterium |
 |---|---|---|
-| `kanban.db` | Operations Kanban Board | Tabelle `tasks` vorhanden, Datensatzanzahl > 0 |
-| `state.db` | Dialogprotokolle & Sessions | Tabelle `messages` vorhanden, Datensatzanzahl > 0 |
-| `agentic_memory.db` | Langzeitgedächtnis & Registry | Tabelle `prompt_versions` und `otel_spans` intakt |
+| `ops.db` | Operative Steuerung, Kanban-Tasks, Workflows & Security | Tabelle `tasks` (alternativ `task_events`, `checkpoints`) vorhanden, Datensatzanzahl > 0 |
+| `business.db` | ERP, CRM, Deals, Verträge & Treasury | Tabelle `deals` (alternativ `contracts`, `invoices`) vorhanden, Datensatzanzahl > 0 |
+| `memory.db` | Langzeitgedächtnis, Learnings & Prompt-Registry | Tabelle `learnings` (alternativ `prompt_versions`) vorhanden, Datensatzanzahl > 0 |
+| `pb_data.db` | PocketBase-CRM (optional) | Tabelle `kontakte` vorhanden; `SKIPPED`, wenn PocketBase lokal nicht verfügbar ist |
+| `TENANT_REPLICATION` | Mandanten-DBs `data/tenants/<id>/*.db` | `config/litestream.yml` enthält `dir: /app/data/tenants` oder explizite Tenant-Pfade |
+
+Der Test prüft damit **5 Ziele (`PASSED 5/5`)**. Die alten Dateinamen `kanban.db`, `state.db` und `agentic_memory.db` bleiben als Legacy-Aliase erhalten; `backend/db_paths.py` routet sie bei aktiver Konsolidierung transparent auf `ops.db` bzw. `memory.db`.
 
 ---
 
@@ -2952,12 +2992,14 @@ python scripts/automated_restore_test.py --notify
   Archon OS – Automatisierter Restore- & Integritäts-Report
 =================================================================
 Status:      PASSED
-Zeitpunkt:   2026-10-30T20:52:11
-Dauer:       10.41s
+Zeitpunkt:   2026-11-24T08:02:52
+Dauer:       0.24s
 -----------------------------------------------------------------
-  [OK] kanban.db         : Integrität=ok | Smoke=OK (94 Einträge in tasks)
-  [OK] state.db          : Integrität=ok | Smoke=OK (11339 Einträge in messages)
-  [OK] agentic_memory.db : Integrität=ok | Smoke=OK (3 Einträge in prompt_versions)
+  [OK] ops.db             : Integrität=ok | Smoke=OK (189 Einträge in tasks)
+  [OK] business.db        : Integrität=ok | Smoke=OK (1 Einträge in deals)
+  [OK] memory.db          : Integrität=ok | Smoke=OK (152 Einträge in learnings)
+  [OK] pb_data.db         : Integrität=ok | Smoke=OK (2332 Einträge in kontakte)
+  [OK] TENANT_REPLICATION : Integrität=N/A | Smoke=OK (20 Tenant-DBs via Litestream abgedeckt)
 =================================================================
 [ERFOLG] Alle SQLite-Datenbanken wurden fehlerfrei in der Sandbox wiederhergestellt.
 ```
@@ -2997,7 +3039,7 @@ Dieses Handbuch beschreibt die Chaos-Engineering- und Resilienz-Test-Suite (`scr
 Die Suite prüft vier kritische Resilienz-Dimensionen des Agentic OS:
 
 1. **SQLite Concurrency & Lock Resilience:**
-   - Erzeugt extreme Nebenläufigkeit (8 Threads, jeweils 50 Transaktionen) gegen `kanban.db`.
+   - Erzeugt extreme Nebenläufigkeit (8 Threads, jeweils 50 Transaktionen) gegen `ops.db`.
    - Misst Durchschnitts- und Maximallatenzen in Millisekunden.
    - Verifiziert, dass der Write-Ahead-Log (WAL-Mode) Lock-Fehler vollständig verhindert.
 2. **Container Discovery & Health:**
@@ -3286,8 +3328,8 @@ AgenticOS-2026 (Archon OS) ist ein modulares, containerisiertes Betriebssystem f
 Das System nutzt SQLite (WAL-Modus) als durchgängige Single Source of Truth:
 
 1. **SQLite Datenbanken (Transaktional & Systemzustand):**
-   - [`data/kanban.db`](../../data/kanban.db): **Einzige Single Source of Truth** für alle operativen Aufgaben, Mission Control, Delegation und Fan-In (`tasks`, `task_links`, `task_events`, `task_comments`, `task_attachments`, `mc_task_meta`, `mc_kv`). Die frühere parallele Datei `mission_control_data.json` ist vollständig abgelöst.
-   - [`data/agentic_memory.db`](../../data/agentic_memory.db): Zentraler Zustandsspeicher mit Write-Ahead-Logging (WAL) inkl. den 5 Standardtabellen (`user_profile`, `learnings`, `kv_store`, `tasks`, `conversations`) sowie SHA-256-verkettetem Audit-Log (`audit_log`).
+   - [`data/ops.db`](../../data/ops.db): **Einzige Single Source of Truth** für alle operativen Aufgaben, Mission Control, Delegation und Fan-In (`tasks`, `task_links`, `task_events`, `task_comments`, `task_attachments`, `mc_task_meta`, `mc_kv`). Die frühere parallele Datei `mission_control_data.json` ist vollständig abgelöst.
+   - [`data/memory.db`](../../data/memory.db): Zentraler Zustandsspeicher mit Write-Ahead-Logging (WAL) inkl. den 5 Standardtabellen (`user_profile`, `learnings`, `kv_store`, `tasks`, `conversations`) sowie HMAC-SHA256-verkettetem Audit-Log (`audit_log`, Env-Key).
    - `/opt/data/state.db`: Hermes Sitzungshistorie, Prompt-Kontexte und Interaktionslogs.
    - `pocketbase/pb_data`: CRM-Datenbank für Kontakte, Nachrichtenverläufe und Bewerbungen.
 
@@ -3311,15 +3353,15 @@ Das System nutzt SQLite (WAL-Modus) als durchgängige Single Source of Truth:
 
 ## 3. Workflow-Engine & Board-Architektur
 
-### 3.1 Operations Kanban & Mission Control auf `kanban.db`
-Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite-Datenbank (`kanban.db`):
+### 3.1 Operations Kanban & Mission Control auf `ops.db`
+Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite-Datenbank (`ops.db`):
 - **Operations Kanban:** 5 Standard-Spalten (`To-Do`, `In Bearbeitung`, `Review & QA`, `Blockiert`, `Abgeschlossen`) mit 10 %-Spaltentönung und SSE-Echtzeit-Push (`docs/system/LIVE_STREAMING_SSE_WEBSOCKET_GUIDE.md`).
-- **Mission Control Store (`archon/core/mission_control.py`):** Schreibt und liest direkt gegen `kanban.db` (`tasks`, `task_links`, `task_events`, `mc_task_meta`, `mc_kv`) mit Prozess-Serialisierung (`_MC_DATA_LOCK` + `BEGIN IMMEDIATE`) sowie `backend/audit_log.py`.
+- **Mission Control Store (`archon/core/mission_control.py`):** Schreibt und liest direkt gegen `ops.db` (`tasks`, `task_links`, `task_events`, `mc_task_meta`, `mc_kv`) mit Prozess-Serialisierung (`_MC_DATA_LOCK` + `BEGIN IMMEDIATE`) sowie `backend/audit_log.py`.
 
 ### 3.2 Delegation, Synthese & Governance-Kaskade
-1. **Strategische Aufgabenteilung:** Chef-Stratege Robert (`executive_decision_architect`) bzw. `archon/core/delegation.py` zerlegt komplexe Vorhaben in Teilaufgaben und verknüpft Parent und Child direkt über `task_links` und `project_id` in `kanban.db`.
-2. **Fan-in-Synchronisation (`archon/core/orchestration.py`):** Sobald alle Kind-Tasks in `kanban.db` den Status `completed`/`done` erreichen, startet die Synthese automatisch unter Sperrschutz (`_MC_ASYNC_LOCK` + `_MC_DATA_LOCK`).
-3. **Synthese-Qualitätsprüfung (Marker-Kontrakt):** Lisa (`aggregation_lisa`) bündelt die Fachberichte mit Marker-Prüfung (`SYNTHESE-BEREIT` + Reparatur-Retry).
+1. **Strategische Aufgabenteilung:** Chef-Stratege Robert (`executive_decision_architect`) bzw. `archon/core/delegation.py` zerlegt komplexe Vorhaben in Teilaufgaben und verknüpft Parent und Child direkt über `task_links` und `project_id` in `ops.db`.
+2. **Fan-in-Synchronisation (`archon/core/orchestration.py`):** Sobald alle Kind-Tasks in `ops.db` den Status `completed`/`done` erreichen, startet die Synthese automatisch unter Sperrschutz (`_MC_ASYNC_LOCK` + `_MC_DATA_LOCK`).
+3. **Synthese-Qualitätsprüfung (Konsens-Auflösung):** `resolve_debate_consensus()` bündelt die Fachberichte und ermittelt den Konsens (statt `aggregation_lisa` mit `SYNTHESE-BEREIT`-Marker und Reparatur-Retry).
 4. **Strikte Robert-Freigabe & HITL:** Robert prüft den konsolidierten Bericht. Nur explizites `FREIGABE` in der ersten Zeile finalisiert das Projekt; alles andere landet als Kanban-Entscheidung beim Owner.
 
 ---
@@ -3339,11 +3381,11 @@ Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite
 | Säule | Vorgabe | Aktueller Zustand | Status |
 | :--- | :--- | :--- | :--- |
 | **1. Kernel & Scheduling** | Daemon-Architektur, Tickless Sleep, Watchdog 30s, OTel Tracing | Watchdog läuft in eigenem Thread (`watchdog_daemon.py`); App auf Port `8501` via Uvicorn; OpenTelemetry & Langfuse Tracing ([Guide](LLM_TRACING_LANGFUSE_GUIDE.md)); Pre-Flight Validator ([Guide](CONFIG_VALIDATION_GUIDE.md)); Prometheus & Grafana Monitoring ([Guide](PROMETHEUS_GRAFANA_MONITORING_GUIDE.md)); Zentrale Logs mit Loki & Promtail ([Guide](CENTRAL_LOGGING_LOKI_GUIDE.md)); Live-Streaming per SSE & WebSocket ([Guide](LIVE_STREAMING_SSE_WEBSOCKET_GUIDE.md)). | **Erfüllt** |
-| **2. Prozessmodell** | Subagenten als Prozesse, Task-Zustände, Crash-Recovery, Concurrency Throttle | 70 Profile mit einheitlichem 3-Stufen-`SOUL.md` (DE/EN) & Skills-Wiring aktiv; Tasks und Subagenten-Links über `kanban.db` nachverfolgt; Auto-Crash-Recovery (6h); Prompt-Registry mit Canary-Rollout ([Guide](PROMPT_REGISTRY_CANARY_GUIDE.md)); Chaos- und Resilienz-Tests ([Guide](CHAOS_RESILIENCE_GUIDE.md)). | **Erfüllt** |
+| **2. Prozessmodell** | Subagenten als Prozesse, Task-Zustände, Crash-Recovery, Concurrency Throttle | 70 Profile mit einheitlichem 3-Stufen-`SOUL.md` (DE/EN) & Skills-Wiring aktiv; Tasks und Subagenten-Links über `ops.db` nachverfolgt; Auto-Crash-Recovery (6h); Prompt-Registry mit Canary-Rollout ([Guide](PROMPT_REGISTRY_CANARY_GUIDE.md)); Chaos- und Resilienz-Tests ([Guide](CHAOS_RESILIENCE_GUIDE.md)). | **Erfüllt** |
 | **3. Device Driver (MCP)** | MCP Server-Ecosystem, `mcp__{server}__{tool}`, Lock-Scheduler | MCP-Treiber für CRM (`archon_crm_mcp.py`), n8n (`scripts/mcp_n8n_driver.py`) und nativer Archon OS MCP-Server (`scripts/archon_mcp_server.py`) aktiv ([Guide](ARCHON_MCP_SERVER_GUIDE.md)). | **Erfüllt** |
-| **4. Dateisystem & RAM** | SQLite WAL, 5 Tabellen, einheitliche Persistenz, Litestream | Vollständig vereinheitlicht auf SQLite WAL (`kanban.db` + `agentic_memory.db`), atomare Sidecars (`kanban_sidecar.py`), Obsidian-Ablage, Litestream-Replikation ([Guide](LITESTREAM_REPLICATION_GUIDE.md)) und Restore-Tests ([Guide](AUTOMATED_RESTORE_TEST_GUIDE.md)). | **Erfüllt** |
+| **4. Dateisystem & RAM** | SQLite WAL, 5 Tabellen, einheitliche Persistenz, Litestream | Vollständig vereinheitlicht auf SQLite WAL (`ops.db` / `business.db` / `memory.db`), atomare Sidecars (`kanban_sidecar.py`), Obsidian-Ablage, Litestream-Replikation ([Guide](LITESTREAM_REPLICATION_GUIDE.md)) und Restore-Tests ([Guide](AUTOMATED_RESTORE_TEST_GUIDE.md)). | **Erfüllt** |
 | **5. Hardware-Routing** | Multi-Provider Routing über OmniRoute, Logit-Snapshots | OmniRoute läuft auf Port `20128`; vorgeschaltetes Zero-Egress- & Privacy-Router-Gate (`backend/llm_egress_guard.py`, `backend/privacy_router.py`) erzwingt On-Premise-Routing für Finanzen/Verträge/CRM mit **hartem Fail-Closed Block** bei Offline-Lokalmodell sowie isoliertem Docker-Worker-Netz `archon-worker-zero-egress_net` (`internal: true`, keine Internet-Route) ([Guide](../security/LOCAL_LLM_PRIVACY_ROUTING_GUIDE.md)). | **Erfüllt** |
-| **6. Governance & Sicherheit** | RBAC, HITL-Approval, manipulationssicheres Audit-Log, Injection-Filter | RBAC über alle schreibenden Admin-Routen; 25 Prompt-Injection-Muster (`local_security_guard.py`); **SHA-256-verkettetes Audit-Log inkl. lückenloser LLM-Dispatch-Protokollierung (Provider, Modell, Ziel-Host, Ziel-Endpunkt & Spaltenkonsistenz)** ([Guide](../security/GOBD_ISO27001_AUDIT_LOG_GUIDE.md)); **EU AI Act Compliance-Engine, Art.-4-Register & 1-Klick GoBD-Verfahrensdokumentations-PDF** ([Guide](EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md)); Secrets-Gate (`scripts/audit_secrets.py`); Caddy Reverse Proxy & Authelia SSO ([Guide](../security/REVERSE_PROXY_SSO_GUIDE.md)); DSGVO Art. 15/17 ([Guide](GDPR_COMPLIANCE_GUIDE.md)). | **Erfüllt** |
+| **6. Governance & Sicherheit** | RBAC, HITL-Approval, manipulationssicheres Audit-Log, Injection-Filter | RBAC über alle schreibenden Admin-Routen; 25 Prompt-Injection-Muster (`local_security_guard.py`); **HMAC-SHA256-verkettetes Audit-Log (Env-Key) inkl. lückenloser LLM-Dispatch-Protokollierung (Provider, Modell, Ziel-Host, Ziel-Endpunkt & Spaltenkonsistenz)** ([Guide](../security/GOBD_ISO27001_AUDIT_LOG_GUIDE.md)); **EU AI Act Compliance-Engine, Art.-4-Register & 1-Klick GoBD-Verfahrensdokumentations-PDF** ([Guide](EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md)); Secrets-Gate (`scripts/audit_secrets.py`); Caddy Reverse Proxy & Authelia SSO ([Guide](../security/REVERSE_PROXY_SSO_GUIDE.md)); DSGVO Art. 15/17 ([Guide](GDPR_COMPLIANCE_GUIDE.md)). | **Erfüllt** |
 | **7. Selbst-Evolution** | Dynamisches Laden & Testen neuer Skills, Feedback-Loop | [`core_skills_engine.py`](../../core_skills_engine.py) & Runtime-Skill-Wiring über `skill_resolver.py`; Human-Feedback-Loop ([Guide](HUMAN_FEEDBACK_LOOP_GUIDE.md)). | **Erfüllt** |
 
 ---
@@ -3353,7 +3395,7 @@ Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite
 Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sind vollständig umgesetzt:
 
 1. **Vollständige Vereinheitlichung der Datenzugriffe (Erledigt):**
-   - `mission_control_data.json` vollständig durch native SQLite-Zugriffe auf [`data/kanban.db`](../../data/kanban.db) (`tasks`, `task_links`, `task_events`, `mc_task_meta`, `mc_kv`) abgelöst; historische Daten beim Start nach `.bak` migriert.
+   - `mission_control_data.json` vollständig durch native SQLite-Zugriffe auf [`data/ops.db`](../../data/ops.db) (`tasks`, `task_links`, `task_events`, `mc_task_meta`, `mc_kv`) abgelöst; historische Daten beim Start nach `.bak` migriert.
 2. **Kryptografische Hash-Kette für das Audit-Log (Erledigt):**
    - Lückenlose SHA-256-Hashverkettung (`hash = SHA256(prev_hash + timestamp + payload)`) für DSGVO-Löschungen, Governance-Aktionen und Boardroom-Entscheidungen über `backend/audit_log.py`.
 3. **Automatisierte CI/CD- & E2E-Testpipeline (Erledigt):**
@@ -3361,7 +3403,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 4. **Resilienz & zentrale Log-Aggregation (Erledigt):**
    - Chaos-Testing für Concurrency und Restart-Verhalten ([Guide](CHAOS_RESILIENCE_GUIDE.md)) sowie Grafana Loki / Promtail Logsammlung ([Guide](CENTRAL_LOGGING_LOKI_GUIDE.md)).
 5. **Business Intelligence, Beleg-OCR & E-Signatur (Erledigt):**
-   - Telegram-Belegdigitalisierung mit Vision-OCR nach `kanban.db` ([Guide](TELEGRAM_RECEIPT_OCR_GUIDE.md)), Metabase BI-Dashboards ([Guide](BI_DASHBOARD_METABASE_GUIDE.md)) und DocuSeal E-Signatur ([Guide](ESIGN_DOCUSEAL_GUIDE.md)).
+   - Telegram-Belegdigitalisierung mit Vision-OCR nach `ops.db` ([Guide](TELEGRAM_RECEIPT_OCR_GUIDE.md)), Metabase BI-Dashboards ([Guide](BI_DASHBOARD_METABASE_GUIDE.md)) und DocuSeal E-Signatur ([Guide](ESIGN_DOCUSEAL_GUIDE.md)).
 6. **Mahnwesen & Forderungsmanagement (Erledigt):**
    - 3-stufiges BGB-konformes Mahnwesen mit HITL-Freigabe vor Versand ([Guide](DUNNING_ENGINE_GUIDE.md)).
 7. **Infrastruktur als Code mit Ansible (Erledigt):**
@@ -3492,7 +3534,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 ### Meilenstein 1: Updatesystem erarbeiten (Abgeschlossen)
 - **Sync & Release-Lifecycle:** Automatisierte Update-Pipeline zwischen Entwicklungsrechner und Homeserver (`backend/system_updater.py`).
 - **In-App 1-Klick-Update:** Eigener Tab *System-Update & Server-Sync* in den Systemeinstellungen mit Status-Anzeige, Commit-Differenz und Installations-Button.
-- **Datenintegrität & Snapshots:** Konsistente Online-Snapshots aller Datenbanken (`agent_os.db`, `agentic_memory.db`, `kanban.db`, `state.db`) und Konfigurationen vor jedem Git-Pull.
+- **Datenintegrität & Snapshots:** Konsistente Online-Snapshots aller Datenbanken (`ops.db`, `business.db`, `memory.db`) und Konfigurationen vor jedem Git-Pull.
 - **Rollback-Fähigkeit:** Snapshots können mit 1 Klick im Web-UI oder per CLI wiederhergestellt werden.
 - **Server-Skripte:** Bereitstellung von 1-Klick-Host-Skripten (`scripts/update_archon.bat` für Windows, `scripts/update_archon.sh` für Linux/Ubuntu).
 

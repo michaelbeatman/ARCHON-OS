@@ -10,6 +10,7 @@ _archon_exc_logger = logging.getLogger("metrics_collector")
 import os
 import sys
 import time
+import shutil
 import sqlite3
 import datetime
 from typing import Dict, Any, List, Optional
@@ -40,6 +41,132 @@ def get_memory_db() -> str:
 def get_state_db() -> str:
     return resolve_db_path("state.db")
 
+
+# --- Zustandsbasierte Alert-Dedup (Audit-Phase 1) -------------------------
+# Der 30-s-Loop und der Prometheus-Scrape rufen denselben Check auf. Ohne
+# Inhalts-Dedup ging bei anhaltender Stoerung alle 30 s ein Neuer Alarm raus.
+# Key = (alert_type, severity, entity). Wiederholungen eskalieren 1h/6h/24h;
+# entfaellt die Bedingung, folgt genau EIN RESOLVED-Event. Kein externer Dienst.
+_ALERT_STATE: Dict[tuple, Dict[str, Any]] = {}
+_EXTERNAL_ALERTS: Dict[tuple, Dict[str, Any]] = {}
+_ALERT_REPEAT_AFTER = (3600.0, 6 * 3600.0, 24 * 3600.0)
+_EXTERNAL_ALERT_TTL = 600.0
+_LAST_HEARTBEAT_TS = 0.0
+
+
+def _notification_hub():
+    from backend.notification_hub import get_notification_hub
+    return get_notification_hub()
+
+
+def _dispatch_one(key: tuple, info: Dict[str, Any], severity: str, *, resolved: bool = False, repeat: bool = False) -> Optional[str]:
+    """Sendet genau ein Event ueber den bestehenden NotificationHub."""
+    alert_type, _sev, entity = key
+    title = f"[RESOLVED] {info['title']}" if resolved else info["title"]
+    if repeat and not resolved:
+        title = f"[WIEDERHOLUNG] {title}"
+    message = info["message"]
+    category = "alert_resolved" if resolved else info.get("category", alert_type)
+    try:
+        _notification_hub().dispatch_notification(
+            title=title,
+            message=message,
+            severity="INFO" if resolved else severity,
+            category=category,
+        )
+        return message
+    except Exception as exc:
+        _archon_exc_logger.warning("[Metrics] Alert-Dispatch fehlgeschlagen (%s/%s): %s", alert_type, entity, exc)
+        return None
+
+
+def _sync_alert_state(observed: Dict[tuple, Dict[str, Any]]) -> List[str]:
+    """Dedup + Auto-Resolve + eskalierende Wiederholung. Gibt gesendete Events zurueck."""
+    now = time.time()
+    dispatched: List[str] = []
+
+    # Externe Quellen (z. B. Disk-Backpressure) melden sich selbst ab; wenn
+    # sie ganz wegfallen, uebernimmt der TTL die automatische Aufloesung.
+    for key, ext in list(_EXTERNAL_ALERTS.items()):
+        if (now - float(ext.get("last_seen", 0.0))) > _EXTERNAL_ALERT_TTL:
+            _EXTERNAL_ALERTS.pop(key, None)
+        else:
+            observed.setdefault(key, ext)
+
+    # Auto-Resolve: Bedingung nicht mehr aktiv -> genau ein RESOLVED-Event.
+    for key in list(_ALERT_STATE.keys()):
+        if key in observed:
+            continue
+        entry = _ALERT_STATE[key]
+        resolved_info = {
+            "title": entry.get("title") or key[0],
+            "message": f"Bedingung nicht mehr aktiv (Typ {key[0]}, Entitaet {key[2]}). Dauer: {int(now - entry.get('first_seen', now))} s.",
+        }
+        msg = _dispatch_one(key, resolved_info, "INFO", resolved=True)
+        if msg:
+            _ALERT_STATE.pop(key, None)
+            dispatched.append(msg)
+
+    for key, info in observed.items():
+        entry = _ALERT_STATE.get(key)
+        escalate = False
+        if entry is not None:
+            idx = int(entry.get("repeat_index", 0))
+            wait = _ALERT_REPEAT_AFTER[min(idx, len(_ALERT_REPEAT_AFTER) - 1)]
+            if (now - float(entry.get("last_dispatched", 0.0))) < wait:
+                entry["last_seen"] = now
+                continue
+            escalate = True
+        msg = _dispatch_one(key, info, key[1], repeat=escalate)
+        if not msg:
+            continue
+        if entry is None:
+            entry = {"first_seen": now, "repeat_index": 0, "title": info["title"]}
+            _ALERT_STATE[key] = entry
+        entry["last_seen"] = now
+        entry["last_dispatched"] = now
+        entry["repeat_index"] = int(entry.get("repeat_index", 0)) + (1 if escalate else 0)
+        entry["title"] = info["title"]
+        dispatched.append(msg)
+
+    return dispatched
+
+
+def report_external_alert(
+    alert_type: str,
+    severity: str,
+    entity: str,
+    message: str,
+    *,
+    active: bool = True,
+    title: Optional[str] = None,
+) -> None:
+    """Alarm anderer Module (Disk, Self-Healing) in dieselbe Dedup-Kette einspeisen.
+
+    `active=False` nimmt den Alarm aus dem Snapshot; der naechste Check
+    erzeugt dann das RESOLVED-Event. Kein neuer Service, kein Alertmanager.
+    """
+    key = (str(alert_type), str(severity), str(entity))
+    if not active:
+        _EXTERNAL_ALERTS.pop(key, None)
+        return
+    _EXTERNAL_ALERTS[key] = {
+        "title": title or str(alert_type).replace("_", " ").title(),
+        "message": str(message),
+        "category": str(alert_type),
+        "last_seen": time.time(),
+    }
+
+
+def touch_heartbeat() -> float:
+    """Lebenszeichen des aktiven Prozesses (vom 30-s-Alert-Loop gepflegt)."""
+    global _LAST_HEARTBEAT_TS
+    _LAST_HEARTBEAT_TS = time.time()
+    return _LAST_HEARTBEAT_TS
+
+
+def get_last_heartbeat_ts() -> float:
+    return _LAST_HEARTBEAT_TS
 
 
 class MetricsCollector:
@@ -158,37 +285,35 @@ class MetricsCollector:
             kanban = self._get_kanban_metrics()
         if telemetry is None:
             telemetry = self._get_execution_and_telemetry()
-        alerts: List[str] = []
+        observed: Dict[tuple, Dict[str, Any]] = {}
+
+        # 1. Hohe Fehlerquote (> 25% bei mind. 10 Dispatches)
+        if telemetry["total_dispatches"] >= 10 and telemetry["error_rate_pct"] > 25.0:
+            msg = f"Kritische Fehlerquote bei Agenten-Aufrufen: {telemetry['error_rate_pct']}% ({telemetry['failed_dispatches']} Fehler bei {telemetry['total_dispatches']} Tasks)."
+            observed[("agent_error_rate", "WARNING", "agent_dispatch")] = {
+                "title": "Hohe Agenten-Fehlerquote",
+                "message": msg,
+                "category": "telemetry_alert",
+            }
+
+        # 2. Hohe Warteschlangen-Stagnation (> 50 unbearbeitete Ready-Tasks)
+        if kanban["queue_depth"] > 50:
+            msg = f"Hohe Task-Queue-Tiefe: {kanban['queue_depth']} Aufgaben warten auf Zuteilung."
+            observed[("task_queue_depth", "INFO", "kanban_queue")] = {
+                "title": "Task-Queue Stau",
+                "message": msg,
+                "category": "queue_depth",
+            }
+
         try:
-            from backend.notification_hub import get_notification_hub
-            hub = get_notification_hub()
-
-            # 1. Hohe Fehlerquote (> 25% bei mind. 10 Dispatches)
-            if telemetry["total_dispatches"] >= 10 and telemetry["error_rate_pct"] > 25.0:
-                msg = f"Kritische Fehlerquote bei Agenten-Aufrufen: {telemetry['error_rate_pct']}% ({telemetry['failed_dispatches']} Fehler bei {telemetry['total_dispatches']} Tasks)."
-                hub.dispatch_notification(
-                    title="Hohe Agenten-Fehlerquote",
-                    message=msg,
-                    severity="WARNING",
-                    category="telemetry_alert"
-                )
-                alerts.append(msg)
-
-            # 2. Hohe Warteschlangen-Stagnation (> 50 unbearbeitete Ready-Tasks)
-            if kanban["queue_depth"] > 50:
-                msg = f"Hohe Task-Queue-Tiefe: {kanban['queue_depth']} Aufgaben warten auf Zuteilung."
-                hub.dispatch_notification(
-                    title="Task-Queue Stau",
-                    message=msg,
-                    severity="INFO",
-                    category="queue_depth"
-                )
-                alerts.append(msg)
+            alerts = _sync_alert_state(observed)
         except Exception as e:
             print(f"[MetricsCollector] Alerting-Check Fehler: {e}", file=sys.stderr)
+            alerts = []
         return {
             "dispatched": len(alerts),
             "alerts": alerts,
+            "active_alerts": len(_ALERT_STATE),
             "checked_at": datetime.datetime.now().isoformat(),
         }
 
@@ -246,6 +371,25 @@ class MetricsCollector:
         for db_name, bsize in storage.items():
             lines.append(f'archon_database_size_bytes{{database="{db_name}"}} {bsize}')
 
+        # Disk-Alarm: echter freier Platz des Workspace-Volumens (kein
+        # node_exporter nötig). Bei Fehler negative Werte -> Alert greift nicht.
+        try:
+            _du = shutil.disk_usage(WORKSPACE_DIR)
+            _free_bytes = int(_du.free)
+            _disk_pct = round(float(_du.used) / float(_du.total) * 100.0, 1) if _du.total else -1
+        except Exception:
+            _free_bytes, _disk_pct = -1, -1
+        lines.extend([
+            "",
+            "# HELP archon_free_disk_bytes Freier Diskplatz des Workspace-Volumens in Bytes.",
+            "# TYPE archon_free_disk_bytes gauge",
+            f"archon_free_disk_bytes {_free_bytes}",
+            "",
+            "# HELP archon_disk_used_percent Belegter Diskplatz des Workspace-Volumens in Prozent.",
+            "# TYPE archon_disk_used_percent gauge",
+            f"archon_disk_used_percent {_disk_pct}",
+        ])
+
         lines.extend([
             "",
             "# HELP archon_system_cpu_percent Aktuelle CPU-Auslastung in Prozent.",
@@ -281,7 +425,8 @@ metrics_collector = MetricsCollector()
 
 # Eigene 60s-Funktion fuer main.py: Alerting passiert auch dann, wenn niemand
 # Prometheus scrappt. Der Scrape ruft check_and_dispatch_alerts() weiterhin
-# direkt; dieser Hook ist zusaetzlich und idempotent im Intervall.
+# direkt; dieser Hook ist zusaetzlich und idempotent im Intervall. Die
+# Inhalts-Dedup liegt in _sync_alert_state() und greift auch bei force=True.
 _LAST_ALERT_DISPATCH_TS = 0.0
 
 
@@ -289,6 +434,8 @@ def check_and_dispatch_alerts_now(force: bool = False) -> Dict[str, Any]:
     """Einmalige Alert-Pruefung (min. 60s Abstand), unabhaengig vom Scrape."""
     global _LAST_ALERT_DISPATCH_TS
     now = time.time()
+    # Jeder Aufruf ist ein Lebenszeichen des Hauptprozesses (Self-Healing F).
+    touch_heartbeat()
     if not force and (now - _LAST_ALERT_DISPATCH_TS) < 60:
         return {"dispatched": 0, "alerts": [], "skipped": "interval", "checked_at": datetime.datetime.now().isoformat()}
     _LAST_ALERT_DISPATCH_TS = now

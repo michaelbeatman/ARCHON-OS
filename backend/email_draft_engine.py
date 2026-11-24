@@ -35,6 +35,36 @@ except Exception:
     DB_FILE = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
 
+# Epochen-Migration (block_id): neue Bloecke werden mit
+# _chain_hash(canonical, next_id) signiert; die ID steht explizit in der Tabelle.
+# CUTOFF markiert die erste ID der id-bewussten Epoche. Stabile, persistente
+# Variante: ARCHON_EMAIL_DRAFT_HMAC_EPOCH_FROM. Ohne ENV wird CUTOFF zur
+# Laufzeit aus MAX(id)+1 der DB abgeleitet (siehe _chain_migration_cutoff).
+_EMAIL_DRAFT_CUTOFF_ENV = "ARCHON_EMAIL_DRAFT_HMAC_EPOCH_FROM"
+_EMAIL_DRAFT_AUDIT_TABLE = "email_draft_audit_log"
+
+
+def _chain_migration_cutoff(conn, table: str, env_name: str) -> int:
+    """Erste Block-ID, ab der der id-bewusste Signaturpfad gilt.
+
+    Die ENV-Variable ist die empfohlene Variante: sie ist ueber Neustarts
+    hinweg stabil und kann zusammen mit ARCHON_AUDIT_HMAC_EPOCHS/..._FROM eine
+    Key-Rotation ab genau diesem Block markieren. Ohne ENV wird MAX(id)+1 aus
+    der DB gelesen — alle heute vorhandenen Bloecke sind dann Legacy und
+    bleiben (auch mit altem Verfahren) verifizierbar. Es wird keine Tabelle,
+    keine Spalte und keine Zeile hinzugefuegt oder veraendert.
+    """
+    raw = os.environ.get(env_name, "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+    return int(conn.execute(
+        f"SELECT COALESCE(MAX(id), 0) + 1 FROM {table}"
+    ).fetchone()[0])
+
+
 class EmailDraftEngine:
     def __init__(self, db_path: str = DB_FILE):
         self.db_path = db_path
@@ -113,15 +143,22 @@ class EmailDraftEngine:
         def _do_log(active_conn: sqlite3.Connection):
             row = active_conn.execute("SELECT block_hash FROM email_draft_audit_log ORDER BY id DESC LIMIT 1").fetchone()
             prev_hash = row["block_hash"] if row else GENESIS_HASH
+            # Epochen-Migration: Schreib- und Pruefpfad muessen dieselbe ID
+            # verwenden, sonst ist eine Key-Rotation mit EPOCH_FROM wirkungslos
+            # (gleicher Fix wie in audit_log.record_event / api_key_manager).
+            next_id = int(active_conn.execute(
+                "SELECT COALESCE(MAX(id), 0) + 1 FROM email_draft_audit_log"
+            ).fetchone()[0])
             raw_string = f"{prev_hash}|{draft_id}|{action}|{details_json}|{created_by}|{now_iso}"
             # H3: HMAC mit zentralem Chain-Secret statt nacktem SHA-256.
+            # id-bewusst: Epochen-Key des Blocks statt immer juengstem Key.
             from backend.audit_log import _chain_hash
-            block_hash = _chain_hash(raw_string)
+            block_hash = _chain_hash(raw_string, next_id)
 
             active_conn.execute("""
-                INSERT INTO email_draft_audit_log (draft_id, action, details, prev_hash, block_hash, created_at, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (draft_id, action, details_json, prev_hash, block_hash, now_iso, created_by))
+                INSERT INTO email_draft_audit_log (id, draft_id, action, details, prev_hash, block_hash, created_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (next_id, draft_id, action, details_json, prev_hash, block_hash, now_iso, created_by))
             try:
                 from backend.audit_log import chained_audit_log
                 chained_audit_log.record_event(
@@ -460,6 +497,10 @@ class EmailDraftEngine:
                 counts["total"] += cnt
         return counts
 
+    def verify_chain(self) -> Dict[str, Any]:
+        """Kryptografische Pruefung der Entwurfs-Audit-Kette (Legacy + Epoche)."""
+        return verify_email_draft_chain(self.db_path)
+
     def get_audit_trail(self, limit: int = 50) -> List[Dict[str, Any]]:
         with self._get_conn() as conn:
             rows = conn.execute("""
@@ -468,5 +509,95 @@ class EmailDraftEngine:
                 ORDER BY id DESC LIMIT ?
             """, (limit,)).fetchall()
             return [dict(r) for r in rows]
+
+
+def verify_email_draft_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Prueft die email_draft_audit_log-Kette inkl. Epochen-Migration.
+
+    Strategie pro Block:
+      * id >= CUTOFF: streng id-bewusst via _verify_hash(canonical, hash, id).
+      * id <  CUTOFF: zuerst id-bewusst, danach als Fallback das alte Verfahren
+        ohne ID (_verify_hash(canonical, hash, None)). Der Fallback ist
+        erforderlich, damit Legacy-Bloecke auch nach einer Key-Rotation mit
+        ARCHON_AUDIT_HMAC_EPOCHS / ARCHON_AUDIT_HMAC_EPOCH_FROM gueltig
+        bleiben: der alte Pfad nimmt den zum Schreibzeitpunkt juengsten Key,
+        der id-bewusste Pfad den Epochen-Key des Blocks.
+
+    CUTOFF = ARCHON_EMAIL_DRAFT_HMAC_EPOCH_FROM (stabil, dokumentiert), sonst
+    MAX(id)+1 zur Laufzeit. Die prev_hash-Verkettung ist Verfahren-unabhaengig:
+    der Hash eines neuen Blocks haengt vom gespeicherten prev_hash ab, nicht
+    davon, wie der Vorgänger signiert wurde — der Uebergang ist daher bruchfrei.
+    """
+    from backend.audit_log import HMAC_PREFIX, _verify_hash, _hmac_epochs
+
+    conn = sqlite3.connect(db_path or DB_FILE, timeout=15.0, factory=_ArchonClosingConn)
+    conn.row_factory = sqlite3.Row
+    try:
+        has_tbl = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (_EMAIL_DRAFT_AUDIT_TABLE,),
+        ).fetchone()
+        if not has_tbl:
+            return {"valid": True, "count": 0, "message": "Email-Draft-Kette ist leer."}
+        rows = conn.execute(
+            "SELECT * FROM email_draft_audit_log ORDER BY id ASC"
+        ).fetchall()
+        if not rows:
+            return {"valid": True, "count": 0, "message": "Email-Draft-Kette ist leer."}
+
+        cutoff = _chain_migration_cutoff(conn, _EMAIL_DRAFT_AUDIT_TABLE, _EMAIL_DRAFT_CUTOFF_ENV)
+        expected_prev = GENESIS_HASH
+        hmac_blocks = 0
+        for r in rows:
+            if str(r["prev_hash"]) != expected_prev:
+                return {
+                    "valid": False, "broken_at_id": r["id"], "cutoff": cutoff,
+                    "message": f"Kettenbruch bei Email-Draft-Audit ID {r['id']}.",
+                }
+            # Exakt derselbe kanonische String wie im Schreibpfad (_log_audit).
+            canonical = (
+                f"{r['prev_hash']}|{r['draft_id']}|{r['action']}|"
+                f"{r['details']}|{r['created_by']}|{r['created_at']}"
+            )
+            stored = str(r["block_hash"] or "")
+            if stored.startswith(HMAC_PREFIX):
+                hmac_blocks += 1
+            bid = int(r["id"])
+            ok = _verify_hash(canonical, stored, bid)
+            if not ok and bid < cutoff:
+                ok = _verify_hash(canonical, stored, None)
+            if not ok:
+                return {
+                    "valid": False, "broken_at_id": bid, "cutoff": cutoff,
+                    "message": f"Payload-Manipulation bei Email-Draft-Audit ID {bid}.",
+                }
+            expected_prev = stored
+
+        key_active = bool(_hmac_epochs())
+        first_hmac_id = next(
+            (int(r["id"]) for r in rows if str(r["block_hash"] or "").startswith(HMAC_PREFIX)),
+            None,
+        )
+        if first_hmac_id is not None and any(
+            int(r["id"]) > first_hmac_id and not str(r["block_hash"] or "").startswith(HMAC_PREFIX)
+            for r in rows
+        ):
+            return {
+                "valid": False, "cutoff": cutoff, "hmac_active": key_active,
+                "message": "HMAC-Signatur auf nacktes SHA-256 zurueckgesetzt (Downgrade).",
+            }
+        if hmac_blocks and not key_active:
+            return {
+                "valid": False, "cutoff": cutoff, "hmac_active": False,
+                "message": "HMAC-Bloecke ohne passenden ARCHON_AUDIT_HMAC_KEY.",
+            }
+        return {
+            "valid": True, "count": len(rows), "cutoff": cutoff,
+            "hmac_active": key_active, "hmac_blocks": hmac_blocks,
+            "latest_hash": expected_prev,
+        }
+    finally:
+        conn.close()
+
 
 email_draft_engine = EmailDraftEngine()

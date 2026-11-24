@@ -1957,7 +1957,11 @@ class OperationsCalendarManager:
                 exp_ts = 0.0
             if exp_ts and (exp_ts - now_ts) < 12 * 3600:
                 try:
-                    base_url = os.environ.get("ARCHON_PUBLIC_URL", "http://localhost:8501").rstrip("/")
+                    # F: kanonischer Docker-Host statt localhost. 'localhost'
+                    # zeigt im Container auf sich selbst und ist als Webhook-
+                    # Ziel unerreichbar (bzw. faellt durch interne-Host-Pruefung
+                    # des Egress-Guards). ARCHON_PUBLIC_URL hat weiterhin Vorrang.
+                    base_url = os.environ.get("ARCHON_PUBLIC_URL", "http://archon-os:8501").rstrip("/")
                     res = self.register_webhook_watch(src["id"], f"{base_url}/api/v1/calendar/webhooks/push")
                     renewed.append({"source_id": src["id"], **res})
                 except Exception as exc:

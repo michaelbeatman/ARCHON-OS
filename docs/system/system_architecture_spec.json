@@ -1,7 +1,9 @@
 {
+  "_status": "DEPRECATED",
+  "_authoritative_source": "docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md",
   "system": {
     "name": "AgenticOS-2026 (Archon OS)",
-    "version": "2.4.0-2026",
+    "version": "v0.5.7.4",
     "architecture_type": "Multi-Agent Executive Operating System",
     "primary_gateway_port": 8501,
     "daemon_target_port": 8420,
@@ -84,13 +86,13 @@
       "name": "freellmapi",
       "image": "freellmapi",
       "host_port": 3002,
-      "role": "Free LLM Proxy / Fallback Layer",
-      "health": "HEALTHY",
+      "role": "Legacy Free LLM Proxy / Fallback Layer (inaktiv, nicht Teil des aktiven Stacks)",
+      "health": "INACTIVE",
       "internal_network": "agents_net"
     }
   ],
   "agent_ecosystem": {
-    "total_agent_profiles": 56,
+    "total_agent_profiles": 73,
     "organizational_hierarchy_nodes": 56,
     "hierarchical_links": 55,
     "teams_count": 6,
@@ -136,21 +138,27 @@
   "storage_architecture": {
     "databases": [
       {
-        "path": "data/agentic_memory.db",
+        "path": "data/memory.db",
         "type": "SQLite (WAL mode)",
         "tables": ["user_profile", "learnings", "kv_store", "tasks", "conversations"],
         "status": "active"
       },
       {
-        "path": "opt/data/kanban.db",
+        "path": "data/ops.db",
         "type": "SQLite",
         "tables": ["tasks", "task_comments", "task_events", "task_links"],
         "status": "active"
       },
       {
-        "path": "opt/data/state.db",
+        "path": "data/ops.db",
         "type": "SQLite",
-        "role": "Hermes conversation session logs & chat history",
+        "role": "Hermes conversation session logs & chat history (konsolidiert in ops.db)",
+        "status": "active"
+      },
+      {
+        "path": "data/business.db",
+        "type": "SQLite",
+        "role": "ERP, CRM, Verträge, Treasury & Content-Maschine (Konsolidierung 28 → 3)",
         "status": "active"
       },
       {
@@ -197,7 +205,7 @@
     "6_governance_security": {
       "target": "RBAC, HITL approval gating, tamper-proof hash-chain audit log, prompt injection scanner",
       "implementation_status": "PARTIAL",
-      "current_reality": "Prompt injection sanitizer active in local_security_guard.py; cryptographical hash-chain audit log and strict user RBAC missing."
+      "current_reality": "Prompt injection sanitizer active in local_security_guard.py; audit log with HMAC-SHA256 hash chain (env key) and RBAC implemented (local single-user mode without auth block)."
     },
     "7_self_evolution": {
       "target": "Dynamic runtime skill compilation and automated test gating",
@@ -207,10 +215,10 @@
   },
   "identified_risks_and_debt": [
     {
-      "severity": "CRITICAL",
-      "issue": "Hardcoded API fallback token in core_dispatcher.py",
+      "severity": "RESOLVED",
+      "issue": "Hardcoded API fallback token in core_dispatcher.py (behoben: statische Fallback-Keys entfernt, env-only OMNIROUTE_API_KEY)",
       "file": "core_dispatcher.py",
-      "recommendation": "Purge hardcoded token and require environment variable injection."
+      "recommendation": "Behoben — keine Aktion erforderlich."
     },
     {
       "severity": "HIGH",

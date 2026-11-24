@@ -100,7 +100,66 @@ _SHUTDOWN_HOOKS: List[Any] = []
 # werden. Ein fehlgeschlagener Router-Health- oder Audit-HMAC-Check muss den
 # Start abbrechen — sonst laeuft die Anwendung mit fälschbarer Revisionskette
 # bzw. still 404-enden Router weiter.
-_FAIL_FAST_HOOKS = {"_assert_router_health", "_assert_audit_hmac"}
+_FAIL_FAST_HOOKS = {"_assert_router_health", "_assert_audit_hmac", "_assert_auth_on_nonloopback_bind"}
+
+_LOCAL_BINDS = {"127.0.0.1", "localhost", "::1", "[::1]"}
+
+
+def _nonloopback_bind_detected() -> bool:
+    """Erkennt einen Nicht-Loopback-Bind aus ENV *und* Prozess-Kommandozeile.
+
+    Dockerfile:57 und docker-compose.dev.yml:13 starten uvicorn hart mit
+    ``--host 0.0.0.0``, ohne ``ARCHON_BIND_IP`` zu setzen. auth_service sah
+    dadurch keinen Bind und liess Auth aus (Fail-Open). Diese Funktion
+    schliesst die Luecke — ENV bleibt erhalten, sys.argv kommt hinzu.
+    """
+    for var in ("ARCHON_BIND_IP", "UVICORN_HOST", "HOST"):
+        val = str(os.environ.get(var) or "").strip().strip("[]")
+        if val and val not in _LOCAL_BINDS:
+            return True
+    argv = list(sys.argv or [])
+    for idx, arg in enumerate(argv):
+        val = ""
+        if arg == "--host" and idx + 1 < len(argv):
+            val = str(argv[idx + 1] or "").strip()
+        elif arg.startswith("--host="):
+            val = arg.split("=", 1)[1].strip()
+        val = val.strip("[]")
+        if val and val not in _LOCAL_BINDS:
+            return True
+    return False
+
+
+def _must_force_auth() -> bool:
+    """Erweitert auth_service._must_force_auth() um den echten uvicorn-Bind.
+
+    Bei jeder Unklarheit (Modul/Attribut nicht lesbar) fail-closed True.
+    """
+    try:
+        from backend.auth_service import auth_service
+        if auth_service._must_force_auth():
+            return True
+    except Exception as exc:
+        logger.error(f"[Auth] _must_force_auth nicht lesbar (fail-closed): {exc}")
+        return True
+    return _nonloopback_bind_detected()
+
+
+def _assert_auth_on_nonloopback_bind() -> None:
+    """Nicht-Loopback-Bind ohne Auth ist Fail-Open -> Start hart abbrechen."""
+    if not _must_force_auth():
+        return  # lokaler 127.0.0.1-Single-User-Modus bleibt doku-konform erlaubt
+    try:
+        from backend.auth_service import auth_service
+        auth_enabled = auth_service.is_auth_enabled()
+    except Exception as exc:
+        logger.error(f"[Auth] Auth-Status bei Nicht-Loopback-Bind nicht pruefbar: {exc}")
+        raise RuntimeError("[Auth] Auth-Status nicht pruefbar — Start abgebrochen (fail-closed).") from exc
+    if not auth_enabled:
+        raise RuntimeError(
+            "[Auth] Nicht-Loopback-Bind (z. B. 0.0.0.0) erkannt, aber Auth ist deaktiviert — "
+            "Start abgebrochen (fail-closed). Auth aktivieren oder an 127.0.0.1 binden."
+        )
 
 
 async def _archon_lifespan(_app_instance):
@@ -236,6 +295,11 @@ _AUTH_PUBLIC_EXACT = {
     # nicht erfasst und lief in einen Login-Redirect. /mcp/info ist
     # bewusst oeffentlich, wird aber vom Protected-Prefix "/m" erfasst.
     "/static", "/static_v2", "/mcp/info",
+    # Kalender-Push (Google/Graph) kommt ohne Session-Token. Absicherung
+    # AUSSCHLIESSLICH ueber clientState/watch_id per hmac.compare_digest in
+    # backend/operations_calendar.py — bewusst NUR dieser exakte Pfad, kein
+    # Prefix, damit kein weiterer /api/-Pfad geoeffnet wird.
+    "/api/v1/calendar/webhooks/push",
 }
 
 # Nicht-/api-Pfade, die trotzdem geschuetzt sein muessen: eingebettete
@@ -1103,7 +1167,9 @@ async def _deadlock_supervisor_loop():
             if isinstance(chain, dict) and chain.get("chain_valid") is False:
                 logger.error("[Integritaet] Quittungs-Hashkette INVALID: %s", chain)
         except Exception as e:
-            logger.debug(f"[Integritaet] Loop-Hinweis: {e}")
+            # Audit D: ein Fehler der Ketten-Pruefung ist selbst ein
+            # Integritaetsvorfall und gehoert ins Produktionslog, nicht auf DEBUG.
+            logger.error(f"[Integritaet] Quittungs-Hashkette nicht pruefbar: {e}")
 
         # C08: zentrale Audit-Kette und Approval-Kette ebenfalls im 30-s-Loop.
         # Vorher liefen diese Nur-On-Demand — Manipulationen blieben unbemerkt,
@@ -1124,9 +1190,11 @@ async def _deadlock_supervisor_loop():
                     if isinstance(res, dict) and res.get("valid") is False:
                         logger.error("[Integritaet] %s INVALID: %s", label, res)
                 except Exception as exc:
-                    logger.debug(f"[Integritaet] {label}: {exc}")
+                    # Audit D: Kettenname + Exception sichtbar im Produktionslog.
+                    logger.error(f"[Integritaet] {label} nicht pruefbar: {exc}")
         except Exception as e:
-            logger.debug(f"[Integritaet] Nebenketten-Import: {e}")
+            # Audit D: Importfehler wuerden alle vier Ketten gleichzeitig blind machen.
+            logger.error(f"[Integritaet] Nebenketten-Import fehlgeschlagen: {e}")
         await asyncio.sleep(30)
 
 
@@ -1405,9 +1473,10 @@ async def _followup_mission_start(ref: str) -> str:
     """Wrapper delegating to _impl_followup_mission_start; retains _pruefe_move_antwort."""
     return await _impl_followup_mission_start(ref)  # _pruefe_move_antwort
 
-async def _followup_permission_gate(ref: str) -> str:
+async def _followup_permission_gate(ref: str, proof_token: str = "", proof_uid: str = "") -> str:
     """Wrapper delegating to _impl_followup_permission_gate; retains _pruefe_gate_antwort."""
-    return await _impl_followup_permission_gate(ref)  # _pruefe_gate_antwort
+    # HITL: Proof und uid der Decision unveraendert an den Gate-Followup durchreichen.
+    return await _impl_followup_permission_gate(ref, proof_token, proof_uid)  # _pruefe_gate_antwort
 
 async def _followup_synthesis(pid: str, dossier: str, dec: dict) -> str:
     """Wrapper delegating to _impl_followup_synthesis; retains _pruefe_synthese_beleg."""
@@ -2643,3 +2712,6 @@ def _assert_audit_hmac() -> None:
 
 
 _STARTUP_HOOKS.insert(0, _assert_audit_hmac)
+
+# B (Auth-Fail-Open): Nicht-Loopback-Bind ohne Auth muss den Start abbrechen.
+_STARTUP_HOOKS.insert(0, _assert_auth_on_nonloopback_bind)

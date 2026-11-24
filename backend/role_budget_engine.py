@@ -1107,6 +1107,26 @@ class BudgetBank:
                 # Tasks desselben Agenten reservierten sich gegenseitig nicht
                 # und das harte Tages-Cap war wirkungslos.
                 res_tok, res_eur = self._reserved(conn, aid, None, now)
+                # FUND P0#10: Der Preflight prueft Task-Limits, reserve() aber
+                # nur das Rollen-Cap -> parallele Reservierungen konnten das
+                # Task-Budget umgehen. Gleiche Pruefung atomar in der Reserve.
+                if task_id:
+                    t = conn.execute(
+                        "SELECT token_budget, cost_limit_eur, tokens_used, cost_used_eur "
+                        "FROM task_budget_allocations WHERE task_id = ?",
+                        (task_id,),
+                    ).fetchone()
+                    if t:
+                        if int(t["token_budget"] or 0) > 0 and int(t["tokens_used"] or 0) + res_tok + est_tok > int(t["token_budget"]):
+                            conn.rollback()
+                            return {"allowed": False, "agent_id": aid, "task_id": task_id,
+                                    "error_code": "TASK_TOKEN_BUDGET_EXCEEDED",
+                                    "reason": f"Aufgaben-Tokenlimit für Task '{task_id}' überschritten."}
+                        if float(t["cost_limit_eur"] or 0) > 0.0 and float(t["cost_used_eur"] or 0) + res_eur + est_eur > float(t["cost_limit_eur"]):
+                            conn.rollback()
+                            return {"allowed": False, "agent_id": aid, "task_id": task_id,
+                                    "error_code": "TASK_EUR_BUDGET_EXCEEDED",
+                                    "reason": f"Aufgaben-Kostenlimit für Task '{task_id}' überschritten."}
                 if policy["hard_cap_enabled"]:
                     if used_tok + res_tok + est_tok > policy["daily_token_budget"]:
                         conn.rollback()

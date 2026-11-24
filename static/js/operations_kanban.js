@@ -3067,8 +3067,26 @@
               if (!decOffen) return;
               if (!confirm(decision === 'approve' ? kanT('ui.operations_kanban.confirm_approve', 'Diese Entscheidung wirklich FREIGEBEN?') : kanT('ui.operations_kanban.confirm_reject', 'Diese Entscheidung wirklich ABLEHNEN?'))) return;
               try {
+                // HITL: nur Freigaben der Proof-Typen brauchen einen Passkey.
+                // Kein Proof -> KEIN Fetch (fail-closed). Bei reject nie nötig.
+                let proofToken = null;
+                if (decision === 'approve' && (dec.typ === 'permission_gate' || dec.typ === 'mission_freigabe')) {
+                  if (typeof window.archonDecisionProofContext !== 'function') {
+                    throw new Error('Passkey-Modul nicht geladen — Freigabe abgebrochen.');
+                  }
+                  const ctx = await window.archonDecisionProofContext(dec.typ, dec.ref_id);
+                  if (ctx.needed) {
+                    const hitl = await window.requirePasskeyForHitl('all', ctx.actionLabel, true, ctx.ref, ctx.sessionUid);
+                    if (!hitl || !String(hitl.proof_token || '').trim()) {
+                      throw new Error('Passkey-Proof fehlt — Freigabe abgebrochen.');
+                    }
+                    proofToken = hitl.proof_token;
+                  }
+                }
+                const headers = { 'Content-Type': 'application/json' };
+                if (proofToken) headers['x-passkey-proof'] = proofToken;
                 const r = await fetch('/api/decisions/decide', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  method: 'POST', headers,
                   body: JSON.stringify({ task_id: task.id, decision, von: 'kanban' }),
                   signal: AbortSignal.timeout(40000)
                 });
@@ -3398,9 +3416,28 @@
           const aufloesend = { todo: 'approve', in_progress: 'approve', done: 'approve', archived: 'reject' };
           const dec2 = aufloesend[String(newStatus).toLowerCase()];
           if (dec2) {
+            // HITL: dec wurde oben via GET geladen und enthaelt typ + ref_id.
+            // ref_id ist bei Gates die gate-ID (NICHT die task_id) und bei
+            // Missionen task-/evt-ID — daher zwingend aus den Metadaten nutzen.
+            let proofToken = null;
+            if (dec2 === 'approve' && (dec.typ === 'permission_gate' || dec.typ === 'mission_freigabe')) {
+              if (typeof window.archonDecisionProofContext !== 'function') {
+                throw new Error('Passkey-Modul nicht geladen — Freigabe abgebrochen.');
+              }
+              const ctx = await window.archonDecisionProofContext(dec.typ, dec.ref_id);
+              if (ctx.needed) {
+                const hitl = await window.requirePasskeyForHitl('all', ctx.actionLabel, true, ctx.ref, ctx.sessionUid);
+                if (!hitl || !String(hitl.proof_token || '').trim()) {
+                  throw new Error('Passkey-Proof fehlt — Freigabe abgebrochen.');
+                }
+                proofToken = hitl.proof_token;
+              }
+            }
+            const headers2 = { 'Content-Type': 'application/json' };
+            if (proofToken) headers2['x-passkey-proof'] = proofToken;
             const r2 = await fetch('/api/decisions/decide', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: headers2,
               body: JSON.stringify({ task_id: currentOpsDetailTaskId, decision: dec2, von: 'kanban' }),
               signal: AbortSignal.timeout(40000)
             });

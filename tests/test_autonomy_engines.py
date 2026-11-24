@@ -21,8 +21,11 @@ from backend.speculative_prefetcher import get_speculative_prefetcher
 from backend.jit_persona_engine import get_jit_persona_engine
 
 
-def test_self_evolving_tooling():
+def test_self_evolving_tooling(monkeypatch):
     print("--- [TEST 1] Feature 6: Self-Evolving Tooling (Voyager) ---")
+    # Härtung: der Host-Fallback ist nur mit explizitem Opt-in erlaubt.
+    # Dieser Test läuft bewusst ohne Docker und nutzt daher den Opt-in-Pfad.
+    monkeypatch.setenv("ARCHON_ALLOW_HOST_SANDBOX", "true")
     engine = get_evolving_tool_engine()
     
     tool_code = """

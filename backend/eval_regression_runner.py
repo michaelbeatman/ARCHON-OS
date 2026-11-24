@@ -110,15 +110,16 @@ class EvalRegressionRunner:
             expected = json.loads(c["expected_keywords_json"] or "[]")
             forbidden = json.loads(c["forbidden_keywords_json"] or "[]")
 
-            if simulated_outputs and cid in simulated_outputs:
-                out_text = simulated_outputs[cid]
-            else:
-                out_text = f"System-Antwort für {cid}: {' '.join(expected)}."
+            # FAIL-CLOSED: ohne echte Kandidaten-Ausgabe darf kein Fall als
+            # bestanden gelten. Frueher wurden die erwarteten Keywords selbst
+            # in die Antwort geschrieben -> immer 100 % und release_approved.
+            evaluated = simulated_outputs is not None and cid in simulated_outputs
+            out_text = str(simulated_outputs[cid]) if evaluated else ""
 
             out_low = out_text.lower()
             has_expected = any(k.lower() in out_low for k in expected) if expected else True
             has_forbidden = any(f.lower() in out_low for f in forbidden) if forbidden else False
-            case_passed = has_expected and not has_forbidden
+            case_passed = evaluated and bool(out_text.strip()) and has_expected and not has_forbidden
             if case_passed:
                 passed_count += 1
 
@@ -126,11 +127,18 @@ class EvalRegressionRunner:
                 "case_id": cid,
                 "category": c["category"],
                 "passed": case_passed,
+                "evaluated": evaluated,
                 "output_preview": out_text[:120]
             })
 
         pass_rate = round((passed_count / max(1, len(cases))) * 100, 1)
-        approved = True if not (enabled and block_on_reg) else (pass_rate >= min_pass_rate)
+        all_evaluated = bool(results) and all(r["evaluated"] for r in results)
+        if not all_evaluated:
+            approved = False
+        elif not (enabled and block_on_reg):
+            approved = True
+        else:
+            approved = pass_rate >= min_pass_rate
         run_id = f"eval-{uuid.uuid4().hex[:10]}"
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

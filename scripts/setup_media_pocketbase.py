@@ -14,8 +14,10 @@ import sys
 import os
 
 BASE_URL = os.getenv("POCKETBASE_URL", "http://127.0.0.1:8090")
-ADMIN_EMAIL = "admin@agenticos.local"
-ADMIN_PASS = "admin1234567890"
+# E: keine hartcodierten Superuser-Credentials mehr. Ausschliesslich aus der
+# Umwelt lesen — ohne gesetzte Werte bricht main() mit Exit 2 ab (fail-closed).
+ADMIN_EMAIL = os.getenv("POCKETBASE_ADMIN_EMAIL", "").strip()
+ADMIN_PASS = os.getenv("POCKETBASE_ADMIN_PASS", "").strip()
 
 def api_request(endpoint, data=None, method="GET", token=None):
     url = f"{BASE_URL}{endpoint}"
@@ -44,7 +46,8 @@ def login_superuser():
         "password": ADMIN_PASS
     }, method="POST")
     token = auth_data.get("token")
-    print(f"[OK] Authenticated as superuser: {ADMIN_EMAIL}")
+    # Keine echten Credential-Werte in die Ausgabe schreiben.
+    print("[OK] Authenticated as superuser (POCKETBASE_ADMIN_EMAIL).")
     return token
 
 def setup_collections(token):
@@ -196,6 +199,13 @@ def setup_collections(token):
         print("[INFO] Collection studio_settings already exists.")
 
 if __name__ == "__main__":
+    if not ADMIN_EMAIL or not ADMIN_PASS:
+        print(
+            "FEHLER: POCKETBASE_ADMIN_EMAIL und POCKETBASE_ADMIN_PASS muessen beide "
+            "gesetzt sein (keine Defaults). Setup abgebrochen.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     print(f"Connecting to Media-PocketBase at {BASE_URL}...")
     token = login_superuser()
     setup_collections(token)

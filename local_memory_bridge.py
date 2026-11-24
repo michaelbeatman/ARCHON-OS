@@ -94,6 +94,10 @@ class LocalMemoryBridge:
     def _get_conn(self):
         conn = sqlite3.connect(self.db_path, timeout=10.0, factory=_ClosingMemoryConn)
         conn.execute("PRAGMA busy_timeout=5000;")
+        # J (dieses Audits): SQLite schaltet FK standardmässig aus. Ohne dieses
+        # PRAGMA wirken deklarierte Relations/ON DELETE-Actions nicht (siehe
+        # db_paths.py:190).
+        conn.execute("PRAGMA foreign_keys=ON;")
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -379,10 +383,19 @@ tags: ["learning", "memory", "{agent_id}"]
                 conn.execute("DELETE FROM conversations WHERE agent_id = ?", (agent_id,))
             conn.commit()
 
-    def get_agent_context_injection(self, agent_id, limit=5):
+    def get_agent_context_injection(self, agent_id, limit=5, tenant_id: str = "", project_id: str = ""):
+        """Kontext-Injection mit Scope-Filter (F dieses Audits).
+
+        Ohne übergebenen Scope bleibt das Verhalten kompatibel zu Legacy-
+        Einträgen (tenant_id=''), aber ein gesetzter Tenant/Projekt darf nie
+        mehr Einträge eines anderen Scopes in den Prompt einspeisen.
+        """
         profile = self.get_user_profile()
-        
-        recent_learnings = self.search_learnings("", limit=limit, agent_id=agent_id)
+
+        recent_learnings = self.search_learnings(
+            "", limit=limit, agent_id=agent_id,
+            tenant_id=tenant_id, project_id=project_id,
+        )
 
         context_lines = [
             "### [SYSTEM MEMORY & USER CONTEXT]",
@@ -631,12 +644,14 @@ tags: ["learning", "memory", "{agent_id}"]
             if agent_id:
                 where.append("agent_id = ?")
                 params.append(agent_id)
-            if tenant_id:
+            # 'None' bedeutet "bewusst kein Scope-Filter"; '' ist ein
+            # expliziter Scope (Legacy-Einträge) und MUSS gefiltert werden.
+            if tenant_id is not None:
                 where.append("tenant_id = ?")
-                params.append(tenant_id)
-            if project_id:
+                params.append(str(tenant_id or ""))
+            if project_id is not None:
                 where.append("project_id = ?")
-                params.append(project_id)
+                params.append(str(project_id or ""))
             if memory_tier:
                 where.append("memory_tier = ?")
                 params.append(memory_tier)
@@ -780,7 +795,7 @@ tags: ["learning", "memory", "{agent_id}"]
 
 
 
-    def deduplicate_and_record_learning(self, agent_id: str, category: str, summary: str, detailed_note: str = None, similarity_threshold: float = 0.85) -> Dict[str, Any]:
+    def deduplicate_and_record_learning(self, agent_id: str, category: str, summary: str, detailed_note: str = None, similarity_threshold: float = 0.85, tenant_id: str = "", project_id: str = "") -> Dict[str, Any]:
         """
         Pillar 4: Semantic Memory Deduplication
         Prüft vor dem Speichern, ob eine inhaltlich identische Lektion bereits existiert.
@@ -793,13 +808,14 @@ tags: ["learning", "memory", "{agent_id}"]
         new_words = _get_words(summary)
         with self._get_conn() as conn:
             cur = conn.cursor()
-            # Scope-Filter: vorher wurde mandanten-/agentenuebergreifend
-            # dedupliziert — eine neue Learning von A wurde durch B unterdrueckt
-            # und ging samt Verlinkung verloren.
+            # Scope-Filter (F dieses Audits): vorher wurde mandanten- und
+            # projektuebergreifend dedupliziert — eine neue Learning von A
+            # wurde durch B unterdrueckt und ging samt Verlinkung verloren.
             cur.execute(
                 "SELECT id, summary, obsidian_link FROM learnings "
-                "WHERE agent_id = ? ORDER BY id DESC LIMIT 50",
-                (str(agent_id or ""),),
+                "WHERE agent_id = ? AND tenant_id = ? AND project_id = ? "
+                "ORDER BY id DESC LIMIT 50",
+                (str(agent_id or ""), str(tenant_id or ""), str(project_id or "")),
             )
             existing = cur.fetchall()
             for row in existing:
@@ -817,8 +833,12 @@ tags: ["learning", "memory", "{agent_id}"]
                             "existing_summary": row["summary"]
                         }
 
-        # Kein Duplikat gefunden -> regulär speichern
-        res = self.record_learning(agent_id, category, summary, detailed_note)
+        # Kein Duplikat gefunden -> regulär speichern, Scope unverändert
+        # durchreichen (sonst landete der Eintrag mit ''/'' in der Scope-Spalte).
+        res = self.record_learning(
+            agent_id, category, summary, detailed_note,
+            tenant_id=tenant_id, project_id=project_id,
+        )
         res["status"] = "created"
         return res
 
@@ -871,9 +891,23 @@ tags: ["learning", "memory", "{agent_id}"]
 
     def save_workflow_checkpoint(self, checkpoint_id: str, workflow_id: str, agent_id: str, current_step: int, total_steps: int, state_data: dict, status: str = "running", pause_reason: str = None) -> bool:
         with self._get_conn() as conn:
+            # J (dieses Audits): INSERT OR REPLACE löschte die Zeile und setzte
+            # dadurch created_at (DEFAULT CURRENT_TIMESTAMP) bei jedem Save
+            # zurück. Upsert erhält die ursprüngliche Erstellzeit.
             conn.execute("""
-                INSERT OR REPLACE INTO workflow_checkpoints (checkpoint_id, workflow_id, agent_id, current_step, total_steps, state_json, status, pause_reason, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO workflow_checkpoints
+                    (checkpoint_id, workflow_id, agent_id, current_step, total_steps,
+                     state_json, status, pause_reason, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(checkpoint_id) DO UPDATE SET
+                    workflow_id = excluded.workflow_id,
+                    agent_id = excluded.agent_id,
+                    current_step = excluded.current_step,
+                    total_steps = excluded.total_steps,
+                    state_json = excluded.state_json,
+                    status = excluded.status,
+                    pause_reason = excluded.pause_reason,
+                    updated_at = CURRENT_TIMESTAMP
             """, (checkpoint_id, workflow_id, agent_id, current_step, total_steps, json.dumps(state_data, ensure_ascii=False), status, pause_reason))
             conn.commit()
             return True

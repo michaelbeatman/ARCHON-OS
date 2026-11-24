@@ -207,8 +207,15 @@
   }
   window.deleteUserPasskey = deleteUserPasskey;
 
-  async function requirePasskeyForHitl(category = 'all', actionLabel = 'HITL-Freigabe', force = false, resource = '') {
-    const uid = document.getElementById('passkey-user-select')?.value || 'admin';
+  async function requirePasskeyForHitl(category = 'all', actionLabel = 'HITL-Freigabe', force = false, resource = '', userIdOverride = '') {
+    // Optionaler UID-Override (5. Parameter, rueckwaertskompatibel): bei
+    // Decision-Freigaben ist der Session-Actor die einzige Autoritaet fuer den
+    // Proof. `#passkey-user-select` ist nur die Admin-Konfigurationsauswahl und
+    // darf die Proof-Identitaet NICHT bestimmen. Die uebergebene UID wird fuer
+    // Options UND Verify verwendet (beide muessen identisch sein).
+    const uid = String(userIdOverride || '').trim()
+      || document.getElementById('passkey-user-select')?.value
+      || 'admin';
     const optRes = await fetch('/api/auth/passkey/hitl/options', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -250,6 +257,75 @@
     };
   }
   window.requirePasskeyForHitl = requirePasskeyForHitl;
+
+  // ---------------------------------------------------------------------------
+  // Decision-Freigaben (Audit 24.11.2026): Session-Actor = einzige Autoritaet.
+  // Die UID kommt ausschliesslich vom Backend (/api/auth/me), niemals aus dem
+  // Body oder aus der Admin-Auswahl `#passkey-user-select`.
+  // ---------------------------------------------------------------------------
+  let _sessionUidPromise = null;
+  async function getArchonSessionUid() {
+    if (!_sessionUidPromise) {
+      _sessionUidPromise = (async () => {
+        const res = await fetch('/api/auth/me', { signal: AbortSignal.timeout(10000) });
+        if (!res.ok) throw new Error('Session-Identitaet nicht verfuegbar (HTTP ' + res.status + ').');
+        const data = await res.json().catch(() => ({}));
+        const actor = data.user || {};
+        const uid = String(actor.id || actor.username || '').trim();
+        if (!uid) throw new Error('Session-Identitaet leer — Passkey-Proof nicht moeglich.');
+        return uid;
+      })().catch(err => { _sessionUidPromise = null; throw err; });
+    }
+    return _sessionUidPromise;
+  }
+  window.getArchonSessionUid = getArchonSessionUid;
+
+  // Probed die Passkey-Konfiguration mit exakt derselben Challenge-Bindung wie
+  // der spaetere Proof (category/action_label/resource). `force:false` liefert
+  // `required:false`, wenn der Session-Actor keinen Passkey konfiguriert hat —
+  // dann darf die Freigabe ohne Proof laufen (sonst Sackgasse in Installationen
+  // ohne Credentials). Der Entscheidungs-Endpoint prueft identisch fail-closed.
+  async function isDecisionPasskeyRequired(uid, actionLabel, resource) {
+    const res = await fetch('/api/auth/passkey/hitl/options', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10000),
+      body: JSON.stringify({
+        user_id: uid,
+        // 'all' statt 'system': Gate-Freigaben können backendseitig
+        // 'system' ODER 'destructive_actions' prüfen (profil_loeschen).
+        // Ein 'all'-Proof wird von beiden akzeptiert und bleibt zusätzlich
+        // an action_label + resource + UV gebunden.
+        category: 'all',
+        action_label: actionLabel,
+        force: false,
+        resource: resource,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || 'Passkey-Konfiguration nicht lesbar.');
+    return !!data.required;
+  }
+  window.isDecisionPasskeyRequired = isDecisionPasskeyRequired;
+
+  // Liefert die Proof-Kontext-Daten fuer die 4 Decide-Aufrufstellen. actionLabel
+  // muss EXAKT dem Backend entsprechen: `Gate-Freigabe {ref}` /
+  // `Mission-Freigabe {ref}`. `ref` ist die Decision-ref_id (bei Gates die
+  // gate-ID, bei Missionen task- oder evt-ID), niemals einfach die task_id.
+  async function archonDecisionProofContext(typ, ref) {
+    if (typeof window.requirePasskeyForHitl !== 'function') {
+      throw new Error('Passkey-Modul nicht geladen — Freigabe aus Sicherheitsgruenden abgebrochen.');
+    }
+    const rid = String(ref || '').trim();
+    if (!rid) {
+      throw new Error('Entscheidung ohne ref_id — Freigabe aus Sicherheitsgruenden abgebrochen.');
+    }
+    const sessionUid = await getArchonSessionUid();
+    const actionLabel = (String(typ) === 'permission_gate' ? 'Gate-Freigabe ' : 'Mission-Freigabe ') + rid;
+    const needed = await isDecisionPasskeyRequired(sessionUid, actionLabel, rid);
+    return { needed, sessionUid, actionLabel, ref: rid };
+  }
+  window.archonDecisionProofContext = archonDecisionProofContext;
 
   async function testPasskeyHitlVerification() {
     try {

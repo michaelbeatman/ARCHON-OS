@@ -23,7 +23,7 @@ Damit können externe Clients wie **Claude Desktop**, **Cursor**, **VS Code**, *
 | Tool-Name | Beschreibung | Wichtige Parameter |
 |---|---|---|
 | `archon__create_task` | Legt eine neue Aufgabe im Operations Kanban Board an. | `title` (erforderlich), `body`, `assignee`, `priority` (1-4) |
-| `archon__list_tasks` | Liest Aufgaben gefiltert nach Spalte/Status aus `kanban.db`. | `status` (`ready`, `in_progress`, `review`, `done`, `all`), `limit` |
+| `archon__list_tasks` | Liest Aufgaben gefiltert nach Spalte/Status aus `ops.db`. | `status` (`ready`, `in_progress`, `review`, `done`, `all`), `limit` |
 | `archon__update_task_status` | Verschiebt eine Aufgabe im Kanban Board. | `task_id` (z. B. `t-123456`), `status` |
 | `archon__search_crm_contacts` | Durchsucht die PocketBase-Kontakte nach Name, E-Mail oder Firma. | `query` (Suchbegriff), `limit` |
 | `archon__get_inbox_messages` | Liest eingehende Nachrichten aus dem Posteingang. | `category` (`all`, `emails`, `telegram`, `internal`), `limit` |

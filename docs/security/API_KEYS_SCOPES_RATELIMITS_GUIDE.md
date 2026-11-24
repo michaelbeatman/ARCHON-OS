@@ -8,7 +8,7 @@ Archon OS stellt eine revisionssichere Governance-Schicht für externe Schnittst
 ## 2. Rechtssicherheit & GoBD / ISO 27001 Konformität
 1. **Einmalanzeige (Zero-Plaintext-Persistence):**
    * Der Klartext-Token (`archon_live_<48-hex-zeichen>`) wird dem Nutzer **exakt einmalig** in einem modalen Kopier-Dialog präsentiert.
-   * In der Datenbank (`agentic_memory.db`) wird ausschließlich ein kryptografischer SHA-256 Hash (`KEY_SALT:raw_token`) gespeichert. Selbst bei einem unbefugten Datenbankabzug existieren keine Klartext-Zugangsdaten.
+   * In der Datenbank (`memory.db`) wird ausschließlich ein kryptografischer SHA-256 Hash (`KEY_SALT:raw_token`) gespeichert. Selbst bei einem unbefugten Datenbankabzug existieren keine Klartext-Zugangsdaten.
 2. **Kryptografische SHA-256 Audit-Kette:**
    * Jede Schlüsselerstellung (`KEY_CREATED`), Deaktivierung (`KEY_REVOKED`) und Löschung (`KEY_DELETED`) wird mit Zeitstempel, Nutzer-ID und Vorgänger-Hash in der Tabelle `api_key_audit_log` unveränderlich verkettet.
 

@@ -22,6 +22,11 @@ import datetime
 from typing import Dict, Any, List
 
 try:
+    import yaml  # PyYAML 6.x ist im Archon-Container verfügbar
+except ImportError:  # Fallback: minimale Textprüfung ohne PyYAML
+    yaml = None
+
+try:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -33,23 +38,87 @@ if WORKSPACE_DIR not in sys.path:
 
 HISTORY_FILE = os.path.join(WORKSPACE_DIR, "data", "restore_test_history.json")
 
+# Audit 23.11.2026 / Härtung: Verzeichnis UND Namensmuster kommen aus dem
+# Backup-Manager (SSOT). Der alte Test suchte unter ~/.hermes/backups/db nach
+# `ops.db`/`ops.db.gz`, während der Job `<name>_YYYYmmdd_HHMMSS.db.gz` unter
+# <workspace>/.hermes/backups/db schreibt — dadurch griff er stets auf die
+# Live-DB zurück und meldete grün. Keine Duplizierung der Konstanten mehr.
+from backend.db_backup_manager import BACKUP_DIR, BACKUP_GLOB_PATTERN  # noqa: E402
 
-# Audit 23.11.2026: der Test muss ECHTE Backup-Artefakte prüfen, nicht eine
-# Kopie der live DB — sonst bleibt ein seit Wochen kaputter Backup-Job grün.
 BACKUP_DIRS = (
-    os.path.join(os.path.expanduser("~"), ".hermes", "backups", "db"),
-    os.path.join(WORKSPACE_DIR, "data", "backups"),
+    BACKUP_DIR,
+    os.path.join(WORKSPACE_DIR, "data", "backups"),  # nur Legacy-Ziel, niemals Live-Quelle
 )
 
 
 def find_latest_backup(name: str) -> str:
-    """Neuestes echtes Backup-Artefakt für 'name' (db oder db.gz)."""
+    """Neuestes echtes Backup-Artefakt für 'name' (Muster aus db_backup_manager)."""
     found = []
     for base in BACKUP_DIRS:
-        for pattern in (f"archon_*/{name}", f"archon_*/{name}.gz", f"{name}", f"{name}.gz"):
+        found.extend(glob.glob(os.path.join(base, BACKUP_GLOB_PATTERN.format(db_name=name))))
+        # Ältere Hermes-Ringpuffer-Artefakte nur ergänzend berücksichtigen.
+        for pattern in (f"archon_*/{name}.db.gz", f"archon_*/{name}.gz"):
             found.extend(glob.glob(os.path.join(base, pattern)))
     found = [p for p in found if os.path.isfile(p) and os.path.getsize(p) > 0]
     return max(found, key=os.path.getmtime) if found else ""
+
+
+def _tenant_dbs_present() -> List[str]:
+    """Physisch isolierte Mandanten-DBs (FULL_TENANT_ISOLATION defaultet '1')."""
+    return sorted(glob.glob(os.path.join(WORKSPACE_DIR, "data", "tenants", "*", "*.db")))
+
+
+def _is_tenant_target(value: Any) -> bool:
+    """True für Pfade wie /app/data/tenants oder /app/data/tenants/<tid>/x.db."""
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().replace("\\", "/").strip("\"'")
+    return "/tenants/" in normalized or normalized.endswith("/tenants")
+
+
+def _litestream_covers_tenants() -> bool:
+    """True, wenn litestream.yml Tenant-DBs tatsächlich repliziert.
+
+    Zwei gleichwertige Formen zählen:
+      1) explizite `path:`-Einträge unter .../tenants/ (v0.3-Stil),
+      2) ein `dir:`-Eintrag auf das Tenant-Verzeichnis (v0.5 Directory
+         Replication). `pattern:`/`recursive:` sind dabei erlaubt und dürfen
+         die Erkennung nicht verhindern.
+
+    Kommentarzeilen zählen bewusst nicht: ein hingewiesener
+    `# TENANT_DBS: ...`-Hinweis darf den Test nicht grün färben.
+    """
+    config_path = os.path.join(WORKSPACE_DIR, "config", "litestream.yml")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except OSError:
+        return False
+
+    if yaml is not None:
+        try:
+            cfg = yaml.safe_load(raw) or {}
+            dbs = cfg.get("dbs") or []
+            for db in dbs:
+                if not isinstance(db, dict):
+                    continue
+                # dir: (v0.5) ODER path: (explizit) — pattern/recursive ignorieren
+                if _is_tenant_target(db.get("dir")) or _is_tenant_target(db.get("path")):
+                    return True
+            return False
+        except Exception:
+            pass  # Defektes/unkonventionelles YAML -> Text-Fallback
+
+    # Fallback ohne PyYAML: nur kommentarfreie Zeilen, keine value-Abhängigkeit.
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        # YAML-Listeneintraege beginnen mit "- "; das Prefix entfernen.
+        candidate = stripped[2:].strip() if stripped.startswith("- ") else stripped
+        if (candidate.startswith("path:") or candidate.startswith("dir:")) and "/tenants" in candidate:
+            return True
+    return False
 
 
 def resolve_db_path(name: str) -> str:
@@ -149,6 +218,18 @@ class AutomatedRestoreTester:
                 dest_path = os.path.join(sandbox_dir, f"restored_{db_name}")
                 source_kind = "backup" if find_latest_backup(db_name) else "live"
                 db_report["source_kind"] = source_kind
+                if source_kind != "backup":
+                    # Pflichtbedingung (Audit A): der Test darf NIEMALS mit
+                    # einer Kopie der Live-DB erfolgreich sein — das war der
+                    # Grund, warum ein kaputter Backup-Job wochenlang grün war.
+                    db_report["status"] = "FAILED"
+                    db_report["error"] = (
+                        f"Kein echtes Backup-Artefakt für {db_name} gefunden "
+                        f"({BACKUP_DIR}); Live-DB als Quelle ist nicht zulässig."
+                    )
+                    results["databases_failed"] += 1
+                    results["details"].append(db_report)
+                    continue
                 if src_path.endswith(".gz"):
                     # Reales Backup-Artefakt: erst in der Sandbox dekomprimieren.
                     raw_path = os.path.join(sandbox_dir, f"source_{db_name}")
@@ -201,7 +282,15 @@ class AutomatedRestoreTester:
 
                     dest_conn.close()
 
-                    if smoke_table is None or not db_report.get("record_count"):
+                    if fk_res:
+                        # Audit B: foreign_key_check wurde bisher gespeichert,
+                        # aber nie in die Status-Entscheidung einbezogen.
+                        db_report["status"] = "FAILED"
+                        db_report["error"] = (
+                            f"Foreign-Key-Check fehlgeschlagen: {len(fk_res)} Verletzung(en)."
+                        )
+                        results["databases_failed"] += 1
+                    elif smoke_table is None or not db_report.get("record_count"):
                         db_report["status"] = "FAILED"
                         db_report["error"] = (
                             f"Smoke-Test fehlgeschlagen: keine Pflichttabelle {candidates} "
@@ -221,6 +310,41 @@ class AutomatedRestoreTester:
                     results["databases_failed"] += 1
 
                 results["details"].append(db_report)
+
+        # Audit D / v0.5-Härtung: Tenant-DBs liegen bei FULL_TENANT_ISOLATION=1
+        # unter data/tenants/<tid>/*.db. `_litestream_covers_tenants()` akzeptiert
+        # explizite Pfade ODER einen `dir:`-Eintrag (Directory Replication).
+        # Nur wenn beides fehlt, ist das ein harter FAIL — kein SKIPPED, kein
+        # stilles Grün. Bei vorhandener Abdeckung wird das jetzt explizit als
+        # OK ausgewiesen. Die Versionsnummer der Image-Konfiguration ist hier
+        # irrelevant: geprüft wird ausschliesslich die Config-Datei.
+        tenant_dbs = _tenant_dbs_present()
+        if tenant_dbs:
+            tenant_covered = _litestream_covers_tenants()
+            results["details"].append({
+                "database": "TENANT_REPLICATION",
+                "source_path": os.path.join(WORKSPACE_DIR, "data", "tenants"),
+                "source_exists": True,
+                "source_size_bytes": 0,
+                "integrity_check": "N/A",
+                "foreign_key_check": "N/A",
+                "smoke_test": (
+                    f"OK ({len(tenant_dbs)} Tenant-DBs via Litestream abgedeckt)"
+                    if tenant_covered else
+                    f"FEHLER ({len(tenant_dbs)} Tenant-DBs ohne Litestream-Abdeckung)"
+                ),
+                "source_kind": "configured" if tenant_covered else "unreplicated",
+                "status": "PASSED" if tenant_covered else "FAILED",
+                "error": None if tenant_covered else (
+                    f"{len(tenant_dbs)} Tenant-DBs vorhanden, aber config/litestream.yml "
+                    "enthält weder einen expliziten Tenant-`path:` noch einen `dir:`-Eintrag "
+                    "für /app/data/tenants. Bitte Directory Replication konfigurieren "
+                    "(dir: /app/data/tenants, pattern: \"*.db\", recursive: true) oder "
+                    "die Tenant-DBs einzeln unter dbs: aufführen."
+                ),
+            })
+            if not tenant_covered:
+                results["databases_failed"] += 1
 
         results["duration_seconds"] = round(time.time() - t_start, 2)
         if results["databases_failed"] > 0:

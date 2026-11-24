@@ -36,17 +36,75 @@ RECEIPT_HMAC_PREFIX = "hmac-sha256:"
 _RECEIPT_KEY_ENV = "ARCHON_RECEIPT_HMAC_KEY"
 _LEGACY_KEY_ENV = "ARCHON_AUDIT_HMAC_KEY"
 _HMAC_DOMAIN = b"archon-receipt-chain:v1:"
+_RECEIPT_EPOCHS_ENV = "ARCHON_RECEIPT_HMAC_EPOCHS"
+_LEGACY_EPOCHS_ENV = "ARCHON_AUDIT_HMAC_EPOCHS"
+_RECEIPT_EPOCH_FROM_ENV = "ARCHON_RECEIPT_HMAC_EPOCH_FROM"
+_LEGACY_EPOCH_FROM_ENV = "ARCHON_AUDIT_HMAC_EPOCH_FROM"
+
+
+def _receipt_epochs() -> list:
+    """C (Audit): (from_block, key)-Epochen analog zu audit_log.py.
+
+    Jeder Block wird mit dem Key verifiziert, der bei seinem Schreiben galt.
+    Ohne Konfiguration gibt es genau eine Epoche ab Block 0 — damit bleiben
+    alle bestehenden Quittungen nach diesem Fix unveraendert verifizierbar.
+    Das JSON-Format entspricht ARCHON_AUDIT_HMAC_EPOCHS:
+    ``[{"key": "...", "from_block": 1}, ...]``.
+    """
+    epochs: list = []
+    raw = os.environ.get(_RECEIPT_EPOCHS_ENV, "").strip()
+    if not raw:
+        raw = os.environ.get(_LEGACY_EPOCHS_ENV, "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+            if isinstance(data, list):
+                for item in data:
+                    key = str(item.get("key", "")).strip().encode("utf-8")
+                    if key:
+                        epochs.append((int(item.get("from_block", 0)), key))
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error("Ungueltige Receipt-HMAC-Epochen: %s", exc)
+    key = os.environ.get(_RECEIPT_KEY_ENV, "").strip()
+    if key:
+        from_env = _RECEIPT_EPOCH_FROM_ENV
+    else:
+        key = os.environ.get(_LEGACY_KEY_ENV, "").strip()
+        from_env = _LEGACY_EPOCH_FROM_ENV
+    if key:
+        try:
+            start = int(os.environ.get(from_env, "0") or 0)
+        except ValueError:
+            start = 0
+        epochs.append((start, key.encode("utf-8")))
+    try:
+        return sorted(set(epochs))
+    except Exception:
+        return epochs
+
+
+def _receipt_key_for_block(block_id) -> bytes:
+    epochs = _receipt_epochs()
+    if not epochs:
+        return b""
+    if block_id is None:
+        return epochs[-1][1]
+    try:
+        block_num = int(block_id)
+    except (TypeError, ValueError):
+        return epochs[-1][1]
+    usable = [key for start, key in epochs if start <= block_num]
+    return usable[-1] if usable else b""
 
 
 def _receipt_key() -> bytes:
-    key = os.environ.get(_RECEIPT_KEY_ENV, "").strip()
-    if not key:
-        key = os.environ.get(_LEGACY_KEY_ENV, "").strip()
-    return key.encode("utf-8")
+    """Aktueller (juengster) Key — rueckwaerts kompatibel mit alten Aufrufern."""
+    return _receipt_key_for_block(None)
 
 
-def _receipt_digest(canonical: str) -> str:
-    key = _receipt_key()
+def _receipt_digest(canonical: str, block_id=None) -> str:
+    key = _receipt_key_for_block(block_id)
     payload = canonical.encode("utf-8")
     if key:
         import hmac as _hmac
@@ -131,7 +189,11 @@ class ExecutionReceiptLedger:
     ) -> Dict[str, Any]:
         cfg = _get_cfg()
         if not bool(cfg.get("enabled", True)):
-            return {"issued": False, "bypassed": True}
+            # I (Audit): Die Modul-Config allein darf die Quittungskette nicht
+            # deaktivieren — sonst entsteht eine signierte Audit-Luecke.
+            # Fail-closed, nur mit explizitem Opt-out.
+            if os.environ.get("ARCHON_ALLOW_RECEIPT_BYPASS", "").strip().lower() == "true":
+                return {"issued": False, "bypassed": True}
 
         receipt_id = f"rcpt-{uuid.uuid4().hex[:12]}"
         # GoBD: eindeutige UTC-Zeitreferenz mit Offset.
@@ -147,20 +209,26 @@ class ExecutionReceiptLedger:
                 ).fetchone()
                 # Immer kryptografisch verketten, damit verify_chain_integrity nie an Config-Wechseln bricht
                 prev_hash = row[0] if row else "GENESIS_BLOCK_00000000"
+                # C (Audit): Block-ID an den Schreibpfad geben, damit bei einer
+                # Key-Rotation derselbe Epochen-Key wie in
+                # verify_chain_integrity() (r["id"]) verwendet wird.
+                next_id = int(conn.execute(
+                    "SELECT COALESCE(MAX(id), 0) + 1 FROM execution_receipts_ledger"
+                ).fetchone()[0])
 
                 canonical_str = (
                     f"{receipt_id}|{task_id}|{agent_role}|{model_used}|"
                     f"{prompt_tokens}|{completion_tokens}|{rounded_cost:.6f}|{tools_json}|{prev_hash}|{now_iso}"
                 )
-                receipt_hash = _receipt_digest(canonical_str)
+                receipt_hash = _receipt_digest(canonical_str, next_id)
 
                 conn.execute("""
                     INSERT INTO execution_receipts_ledger
-                    (receipt_id, task_id, agent_role, model_used, prompt_tokens, completion_tokens,
+                    (id, receipt_id, task_id, agent_role, model_used, prompt_tokens, completion_tokens,
                      cost_usd, tools_invoked_json, prev_hash, receipt_hash, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    receipt_id, task_id, agent_role, model_used,
+                    next_id, receipt_id, task_id, agent_role, model_used,
                     prompt_tokens, completion_tokens, rounded_cost,
                     tools_json, prev_hash, receipt_hash, now_iso
                 ))
@@ -199,7 +267,9 @@ class ExecutionReceiptLedger:
             )
             stored = str(r["receipt_hash"] or "")
             if stored.startswith(RECEIPT_HMAC_PREFIX):
-                recomputed = _receipt_digest(canonical_str)
+                # C (Audit): mit dem Key der Epoche des Blocks pruefen, nicht
+                # mit dem aktuellen — sonst loest Rotation einen Fehlalarm aus.
+                recomputed = _receipt_digest(canonical_str, r["id"])
             elif _receipt_key():
                 # Audit 23.11.2026: bei aktivem eigenen HMAC-Key darf keine
                 # Quittung ohne HMAC-Praefix akzeptiert werden (Downgrade).

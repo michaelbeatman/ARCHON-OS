@@ -903,10 +903,17 @@
     }
     async function testOmniRouteConnection() {
       const gwUrl = (document.getElementById("setting-gateway-url").value.trim() || "http://localhost:20128/v1").replace(/\/+$/, '');
-      const gwKey = document.getElementById("setting-gateway-key").value.trim() || "omniroute-local-key";
+      const gwKey = document.getElementById("setting-gateway-key").value.trim();
       const ledEl = document.getElementById("omniroute-status-led");
       const textEl = document.getElementById("omniroute-status-text");
       const modelListEl = document.getElementById("omniroute-model-list");
+      // Kein statischer Fallback-Key mehr im Frontend (Audit K3). Ohne Key
+      // fail-closed mit klarer Meldung statt stummer Benutzung eines Defaults.
+      if (!gwKey) {
+        if (ledEl) { ledEl.className = "inline-block w-2 h-2 rounded-full bg-zinc-400"; }
+        if (textEl) { textEl.textContent = "KEY FEHLT"; textEl.className = "text-[9px] font-bold uppercase tracking-wider text-[var(--muted-foreground)]"; }
+        return;
+      }
       if (ledEl) { ledEl.className = "inline-block w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-500 animate-pulse"; }
       if (textEl) { textEl.textContent = "PRÜFE..."; textEl.className = "text-[9px] font-bold uppercase tracking-wider text-[var(--muted-foreground)]"; }
       try {

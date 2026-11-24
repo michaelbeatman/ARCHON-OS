@@ -1096,12 +1096,32 @@ async def _dispatch_to_omniroute_or_container_impl(
             post_kwargs["timeout"] = timeout
         # W3: Fail-Fast für ausgefallene Provider statt Thundering Herd.
         from backend.provider_circuit_breaker import provider_breaker
+
+        def _audit_dispatch_blocked(status: int) -> None:
+            # SECURITY.md: "Every executed and blocked LLM call is atomically recorded".
+            # Circuit-Open und Netzwerkfehler blieben bisher ohne Audit-Block.
+            try:
+                log_completed_llm_dispatch(
+                    agent_id=agent_id,
+                    provider=provider_id,
+                    model=model_id,
+                    target_endpoint=url,
+                    http_status=status,
+                    data_category=hop_gate["data_category"],
+                    zero_egress_active=hop_gate["zero_egress_active"],
+                    task_id=task_id,
+                )
+            except Exception as audit_exc:
+                logger.warning("[LLM-Dispatch] Audit-Block nicht schreibbar: %s", audit_exc)
+
         if not provider_breaker.allow(provider_id):
+            _audit_dispatch_blocked(0)
             raise RuntimeError(f"Provider '{provider_id}' ist circuit-open (Fail-Fast).")
         try:
             r = await http_client.post(url, **post_kwargs)
         except Exception:
             provider_breaker.record_failure(provider_id)
+            _audit_dispatch_blocked(0)
             await _provider_backoff(provider=provider_id)
             raise
         if r.status_code >= 500 or r.status_code == 429:
@@ -1953,7 +1973,7 @@ async def _stream_boardroom_debate_inner(
         f"Du bist der Moderator / Chairman des AI Boardrooms.\n"
         f"Strategische Aufgabe: '{task}'\n"
         f"METHODIK-FRAMEWORK: {framework}\n"
-        f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
+        f"Wende das Framework '{framework}' an (vollstaendige Instruktion im System-Prompt).\n\n"
         f"Aufgabe: Rahmen das Problem kurz ein, definiere Bewertungskriterien im Sinne des Frameworks '{framework}' "
         f"und weise den Experten-Agenten ({', '.join([a['name'] for a in expert_agents])}) "
         f"erste Fokusbereiche für die Debatte zu."
@@ -2043,7 +2063,7 @@ async def _stream_boardroom_debate_inner(
                     f"--- AI BOARDROOM DEBATTE - RUNDE {round_num} VON {max_rounds} ---\n"
                     f"Ursprüngliche Aufgabe: {task}\n"
                     f"METHODIK-FRAMEWORK: {framework}\n"
-                    f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
+                    f"Wende das Framework '{framework}' an (vollstaendige Instruktion im System-Prompt).\n\n"
                     f"Bisheriger Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
                     f"Instruktion: Reagiere auf die Initialisierung des Moderators. "
                     f"Behalte strikt deine Rolle ({ag.get('role', 'Expert')}) bei und wende das Framework '{framework}' an. "
@@ -2120,7 +2140,7 @@ async def _stream_boardroom_debate_inner(
                     f"--- AI BOARDROOM DEBATTE - RUNDE {round_num} VON {max_rounds} ---\n"
                     f"Ursprüngliche Aufgabe: {task}\n"
                     f"METHODIK-FRAMEWORK: {framework}\n"
-                    f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
+                    f"Wende das Framework '{framework}' an (vollstaendige Instruktion im System-Prompt).\n\n"
                     f"Bisheriger Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
                     f"Instruktion: Reagiere auf die Aussagen der anderen Agenten. "
                     f"Behalte strikt deine Rolle ({agent.get('role', 'Expert')}) bei und wende das Framework '{framework}' an. "
@@ -2280,7 +2300,7 @@ async def _stream_boardroom_debate_inner(
         synthesis_prompt = (
             f"Du bist der Chairman ({chairman['name']}).\n"
             f"Die Debatte zu '{task}' unter Anwendung des Frameworks '{framework}' ist beendet.\n"
-            f"METHODIK-INSTRUKTION: {framework_instruction}\n\n"
+            f"Wende das Framework '{framework}' an (vollstaendige Instruktion im System-Prompt).\n\n"
             f"Gesamter Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
             f"Erstelle eine finale, strukturierte Synthese im Markdown-Format mit folgenden 3 Abschnitten:\n"
             f"### 1. Key Consensus Points (Haupt-Konsenspunkte)\n"

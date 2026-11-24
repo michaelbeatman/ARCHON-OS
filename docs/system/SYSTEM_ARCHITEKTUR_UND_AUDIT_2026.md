@@ -62,16 +62,16 @@ Das System nutzt SQLite (WAL-Modus) als durchgängige Single Source of Truth:
 
 ## 3. Workflow-Engine & Board-Architektur
 
-### 3.1 Operations Kanban & Mission Control auf `kanban.db`
-Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite-Datenbank (`kanban.db`):
+### 3.1 Operations Kanban & Mission Control auf `ops.db` (konsolidiert)
+Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite-Datenbank (`data/ops.db`, Konsolidierung `28 → 3`):
 - **Operations Kanban:** 5 Standard-Spalten (`To-Do`, `In Bearbeitung`, `Review & QA`, `Blockiert`, `Abgeschlossen`) mit 10 %-Spaltentönung und SSE-Echtzeit-Push (`docs/system/LIVE_STREAMING_SSE_WEBSOCKET_GUIDE.md`).
-- **Mission Control Store (`archon/core/mission_control.py`):** Schreibt und liest direkt gegen `kanban.db` (`tasks`, `task_links`, `task_events`, `mc_task_meta`, `mc_kv`) mit Prozess-Serialisierung (`_MC_DATA_LOCK` + `BEGIN IMMEDIATE`) sowie `backend/audit_log.py`.
+- **Mission Control Store (`archon/core/mission_control.py`):** Schreibt und liest direkt gegen `data/ops.db` (`tasks`, `task_links`, `task_events`, `mc_task_meta`, `mc_kv`) mit Prozess-Serialisierung (`_MC_DATA_LOCK` + `BEGIN IMMEDIATE`) sowie `backend/audit_log.py`.
 
 ### 3.2 Delegation, Synthese & Governance-Kaskade
-1. **Strategische Aufgabenteilung:** Chef-Stratege Robert (`executive_decision_architect`) bzw. `archon/core/delegation.py` zerlegt komplexe Vorhaben in Teilaufgaben und verknüpft Parent und Child direkt über `task_links` und `project_id` in `kanban.db`.
-2. **Fan-in-Synchronisation (`archon/core/orchestration.py`):** Sobald alle Kind-Tasks in `kanban.db` den Status `completed`/`done` erreichen, startet die Synthese automatisch unter Sperrschutz (`_MC_ASYNC_LOCK` + `_MC_DATA_LOCK`).
-3. **Synthese-Qualitätsprüfung (Marker-Kontrakt):** Lisa (`aggregation_lisa`) bündelt die Fachberichte mit Marker-Prüfung (`SYNTHESE-BEREIT` + Reparatur-Retry).
-4. **Strikte Robert-Freigabe & HITL:** Robert prüft den konsolidierten Bericht. Nur explizites `FREIGABE` in der ersten Zeile finalisiert das Projekt; alles andere landet als Kanban-Entscheidung beim Owner.
+1. **Strategische Aufgabenteilung:** Chef-Stratege Robert (`executive_decision_architect`) bzw. `archon/core/delegation.py` zerlegt komplexe Vorhaben in Teilaufgaben und verknüpft Parent und Child direkt über `task_links` und `project_id` in `data/ops.db`.
+2. **Fan-in-Synchronisation (`archon/core/orchestration.py`):** Sobald alle Kind-Tasks in `data/ops.db` den Status `completed`/`done` erreichen, startet die Synthese automatisch unter Sperrschutz (`_MC_ASYNC_LOCK` + `_MC_DATA_LOCK`).
+3. **Synthese-Qualitätsprüfung (Konsens-Auflösung):** `resolve_debate_consensus()` bündelt die Fachberichte und ermittelt den Konsens (statt `aggregation_lisa` mit `SYNTHESE-BEREIT`-Marker und Reparatur-Retry).
+4. **Freigabe & HITL:** Das konsolidierte Ergebnis wird als Kanban-Entscheidung dem Owner vorgelegt; die Finalisierung erfolgt über die HITL-Freigabekaskade (statt starrem `FREIGABE`-Marker in der ersten Zeile).
 
 ---
 
@@ -90,11 +90,11 @@ Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite
 | Säule | Vorgabe | Aktueller Zustand | Status |
 | :--- | :--- | :--- | :--- |
 | **1. Kernel & Scheduling** | Daemon-Architektur, Tickless Sleep, Watchdog 30s, OTel Tracing | Watchdog läuft in eigenem Thread (`watchdog_daemon.py`); App auf Port `8501` via Uvicorn; OpenTelemetry & Langfuse Tracing ([Guide](LLM_TRACING_LANGFUSE_GUIDE.md)); Pre-Flight Validator ([Guide](CONFIG_VALIDATION_GUIDE.md)); Prometheus & Grafana Monitoring ([Guide](PROMETHEUS_GRAFANA_MONITORING_GUIDE.md)); Zentrale Logs mit Loki & Promtail ([Guide](CENTRAL_LOGGING_LOKI_GUIDE.md)); Live-Streaming per SSE & WebSocket ([Guide](LIVE_STREAMING_SSE_WEBSOCKET_GUIDE.md)). | **Erfüllt** |
-| **2. Prozessmodell** | Subagenten als Prozesse, Task-Zustände, Crash-Recovery, Concurrency Throttle | 70 Profile mit einheitlichem 3-Stufen-`SOUL.md` (DE/EN) & Skills-Wiring aktiv; Tasks und Subagenten-Links über `kanban.db` nachverfolgt; Auto-Crash-Recovery (6h); Prompt-Registry mit Canary-Rollout ([Guide](PROMPT_REGISTRY_CANARY_GUIDE.md)); Chaos- und Resilienz-Tests ([Guide](CHAOS_RESILIENCE_GUIDE.md)). | **Erfüllt** |
+| **2. Prozessmodell** | Subagenten als Prozesse, Task-Zustände, Crash-Recovery, Concurrency Throttle | 70 Profile mit einheitlichem 3-Stufen-`SOUL.md` (DE/EN) & Skills-Wiring aktiv; Tasks und Subagenten-Links über `ops.db` nachverfolgt; Auto-Crash-Recovery (6h); Prompt-Registry mit Canary-Rollout ([Guide](PROMPT_REGISTRY_CANARY_GUIDE.md)); Chaos- und Resilienz-Tests ([Guide](CHAOS_RESILIENCE_GUIDE.md)). | **Erfüllt** |
 | **3. Device Driver (MCP)** | MCP Server-Ecosystem, `mcp__{server}__{tool}`, Lock-Scheduler | MCP-Treiber für CRM (`archon_crm_mcp.py`), n8n (`scripts/mcp_n8n_driver.py`) und nativer Archon OS MCP-Server (`scripts/archon_mcp_server.py`) aktiv ([Guide](ARCHON_MCP_SERVER_GUIDE.md)). | **Erfüllt** |
-| **4. Dateisystem & RAM** | SQLite WAL, 5 Tabellen, einheitliche Persistenz, Litestream | Vollständig vereinheitlicht auf SQLite WAL (`kanban.db` + `agentic_memory.db`), atomare Sidecars (`kanban_sidecar.py`), Obsidian-Ablage, Litestream-Replikation ([Guide](LITESTREAM_REPLICATION_GUIDE.md)) und Restore-Tests ([Guide](AUTOMATED_RESTORE_TEST_GUIDE.md)). | **Erfüllt** |
+| **4. Dateisystem & RAM** | SQLite WAL, 5 Tabellen, einheitliche Persistenz, Litestream | Vollständig vereinheitlicht auf SQLite WAL (`ops.db` / `business.db` / `memory.db`), atomare Sidecars (`kanban_sidecar.py`), Obsidian-Ablage, Litestream-Replikation ([Guide](LITESTREAM_REPLICATION_GUIDE.md)) und Restore-Tests ([Guide](AUTOMATED_RESTORE_TEST_GUIDE.md)). | **Erfüllt** |
 | **5. Hardware-Routing** | Multi-Provider Routing über OmniRoute, Logit-Snapshots | OmniRoute läuft auf Port `20128`; vorgeschaltetes Zero-Egress- & Privacy-Router-Gate (`backend/llm_egress_guard.py`, `backend/privacy_router.py`) erzwingt On-Premise-Routing für Finanzen/Verträge/CRM mit **hartem Fail-Closed Block** bei Offline-Lokalmodell sowie isoliertem Docker-Worker-Netz `archon-worker-zero-egress_net` (`internal: true`, keine Internet-Route) ([Guide](../security/LOCAL_LLM_PRIVACY_ROUTING_GUIDE.md)). | **Erfüllt** |
-| **6. Governance & Sicherheit** | RBAC, HITL-Approval, manipulationssicheres Audit-Log, Injection-Filter | RBAC über alle schreibenden Admin-Routen; 25 Prompt-Injection-Muster (`local_security_guard.py`); **SHA-256-verkettetes Audit-Log inkl. lückenloser LLM-Dispatch-Protokollierung (Provider, Modell, Ziel-Host, Ziel-Endpunkt & Spaltenkonsistenz)** ([Guide](../security/GOBD_ISO27001_AUDIT_LOG_GUIDE.md)); **EU AI Act Compliance-Engine, Art.-4-Register & 1-Klick GoBD-Verfahrensdokumentations-PDF** ([Guide](EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md)); Secrets-Gate (`scripts/audit_secrets.py`); Caddy Reverse Proxy & Authelia SSO ([Guide](../security/REVERSE_PROXY_SSO_GUIDE.md)); DSGVO Art. 15/17 ([Guide](GDPR_COMPLIANCE_GUIDE.md)). | **Erfüllt** |
+| **6. Governance & Sicherheit** | RBAC, HITL-Approval, manipulationssicheres Audit-Log, Injection-Filter | RBAC über allen schreibenden Admin-Routen (produktiv); lokaler Desktop-Betrieb ohne `auth`-Block bewusst Single-User-Modus ohne Login (nicht für LAN/Produktion); 25 Prompt-Injection-Muster (`local_security_guard.py`); **HMAC-SHA256-verkettetes Audit-Log (Env-Key) inkl. lückenloser LLM-Dispatch-Protokollierung (Provider, Modell, Ziel-Host, Ziel-Endpunkt & Spaltenkonsistenz)** ([Guide](../security/GOBD_ISO27001_AUDIT_LOG_GUIDE.md)); **EU AI Act Compliance-Engine, Art.-4-Register & 1-Klick GoBD-Verfahrensdokumentations-PDF** ([Guide](EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md)); Secrets-Gate (`scripts/audit_secrets.py`); Caddy Reverse Proxy & Authelia SSO ([Guide](../security/REVERSE_PROXY_SSO_GUIDE.md)); DSGVO Art. 15/17 ([Guide](GDPR_COMPLIANCE_GUIDE.md)). | **Erfüllt** |
 | **7. Selbst-Evolution** | Dynamisches Laden & Testen neuer Skills, Feedback-Loop | [`core_skills_engine.py`](../../core_skills_engine.py) & Runtime-Skill-Wiring über `skill_resolver.py`; Human-Feedback-Loop ([Guide](HUMAN_FEEDBACK_LOOP_GUIDE.md)). | **Erfüllt** |
 
 ---
@@ -104,15 +104,15 @@ Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite
 Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sind vollständig umgesetzt:
 
 1. **Vollständige Vereinheitlichung der Datenzugriffe (Erledigt):**
-   - `mission_control_data.json` vollständig durch native SQLite-Zugriffe auf [`data/kanban.db`](../../data/kanban.db) (`tasks`, `task_links`, `task_events`, `mc_task_meta`, `mc_kv`) abgelöst; historische Daten beim Start nach `.bak` migriert.
+   - `mission_control_data.json` vollständig durch native SQLite-Zugriffe auf [`data/ops.db`](../../data/ops.db) (`tasks`, `task_links`, `task_events`, `mc_task_meta`, `mc_kv`) abgelöst; historische Daten beim Start nach `.bak` migriert.
 2. **Kryptografische Hash-Kette für das Audit-Log (Erledigt):**
-   - Lückenlose SHA-256-Hashverkettung (`hash = SHA256(prev_hash + timestamp + payload)`) für DSGVO-Löschungen, Governance-Aktionen und Boardroom-Entscheidungen über `backend/audit_log.py`.
+   - Lückenlose HMAC-SHA256-Hashverkettung mit Env-Key (`hash = HMAC_SHA256(env_key, prev_hash + timestamp + payload)`) für DSGVO-Löschungen, Governance-Aktionen und Boardroom-Entscheidungen über `backend/audit_log.py`.
 3. **Automatisierte CI/CD- & E2E-Testpipeline (Erledigt):**
    - End-to-End Lebenszyklus-Tests (`tests/test_e2e_lifecycle.py`), lokales Qualitätstor (`scripts/run_ci_suite.py`) und GitHub Actions Workflow ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), [Guide](CI_PIPELINE_E2E_TESTING_GUIDE.md)).
 4. **Resilienz & zentrale Log-Aggregation (Erledigt):**
    - Chaos-Testing für Concurrency und Restart-Verhalten ([Guide](CHAOS_RESILIENCE_GUIDE.md)) sowie Grafana Loki / Promtail Logsammlung ([Guide](CENTRAL_LOGGING_LOKI_GUIDE.md)).
 5. **Business Intelligence, Beleg-OCR & E-Signatur (Erledigt):**
-   - Telegram-Belegdigitalisierung mit Vision-OCR nach `kanban.db` ([Guide](TELEGRAM_RECEIPT_OCR_GUIDE.md)), Metabase BI-Dashboards ([Guide](BI_DASHBOARD_METABASE_GUIDE.md)) und DocuSeal E-Signatur ([Guide](ESIGN_DOCUSEAL_GUIDE.md)).
+   - Telegram-Belegdigitalisierung mit Vision-OCR nach `ops.db` ([Guide](TELEGRAM_RECEIPT_OCR_GUIDE.md)), Metabase BI-Dashboards ([Guide](BI_DASHBOARD_METABASE_GUIDE.md)) und DocuSeal E-Signatur ([Guide](ESIGN_DOCUSEAL_GUIDE.md)).
 6. **Mahnwesen & Forderungsmanagement (Erledigt):**
    - 3-stufiges BGB-konformes Mahnwesen mit HITL-Freigabe vor Versand ([Guide](DUNNING_ENGINE_GUIDE.md)).
 7. **Infrastruktur als Code mit Ansible (Erledigt):**

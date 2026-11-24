@@ -33,6 +33,35 @@ import urllib.parse
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Epochen-Migration (block_id): neue Quittungen werden mit
+# _chain_hash(canonical, next_id) signiert; die ID steht explizit in der Tabelle.
+# CUTOFF markiert die erste ID der id-bewussten Epoche. Stabile, persistente
+# Variante: ARCHON_GDPR_HMAC_EPOCH_FROM. Ohne ENV wird CUTOFF zur Laufzeit aus
+# MAX(id)+1 der DB abgeleitet (siehe _chain_migration_cutoff).
+_GDPR_CUTOFF_ENV = "ARCHON_GDPR_HMAC_EPOCH_FROM"
+_GDPR_AUDIT_TABLE = "gdpr_audit_log"
+
+
+def _chain_migration_cutoff(conn, table: str, env_name: str) -> int:
+    """Erste Block-ID, ab der der id-bewusste Signaturpfad gilt.
+
+    Die ENV-Variable ist die empfohlene Variante: sie ist ueber Neustarts
+    hinweg stabil und kann zusammen mit ARCHON_AUDIT_HMAC_EPOCHS/..._FROM eine
+    Key-Rotation ab genau diesem Block markieren. Ohne ENV wird MAX(id)+1 aus
+    der DB gelesen — alle heute vorhandenen Bloecke sind dann Legacy und
+    bleiben (auch mit altem Verfahren) verifizierbar. Es wird keine Tabelle,
+    keine Spalte und keine Zeile hinzugefuegt oder veraendert.
+    """
+    raw = os.environ.get(env_name, "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+    return int(conn.execute(
+        f"SELECT COALESCE(MAX(id), 0) + 1 FROM {table}"
+    ).fetchone()[0])
+
 
 def _resolve_db(name: str) -> str:
     """Delegiert an die zentrale, validierende Auflösung (backend/db_paths.py)."""
@@ -1031,15 +1060,25 @@ class GDPRComplianceEngine:
             if row:
                 prev_hash = row[0]
 
+            # Epochen-Migration: Schreib- und Pruefpfad muessen dieselbe ID
+            # verwenden, sonst ist eine Key-Rotation mit EPOCH_FROM wirkungslos
+            # (gleicher Fix wie in audit_log.record_event / api_key_manager).
+            next_id = int(cur.execute(
+                "SELECT COALESCE(MAX(id), 0) + 1 FROM gdpr_audit_log"
+            ).fetchone()[0])
             record_payload = f"{receipt_id}|ERASE_ART17|{now_iso}|{id_hash}|{count}|{details_str}|{prev_hash}"
             # H3: HMAC mit zentralem Chain-Secret statt nacktem SHA-256.
+            # id-bewusst: Epochen-Key des Blocks statt immer juengstem Key.
             from backend.audit_log import _chain_hash
-            record_hash = _chain_hash(record_payload)
+            record_hash = _chain_hash(record_payload, next_id)
 
+            # timestamp explizit schreiben: der kanonische String enthaelt
+            # now_iso, der SQLite-Default CURRENT_TIMESTAMP hatte eine andere
+            # Form und machte neue Quittungen nicht rekonstruierbar.
             cur.execute("""
-                INSERT INTO gdpr_audit_log (receipt_id, action, identifier_hash, records_affected, details_json, prev_hash, hash)
-                VALUES (?, 'ERASE_ART17', ?, ?, ?, ?, ?)
-            """, (receipt_id, id_hash, count, details_str, prev_hash, record_hash))
+                INSERT INTO gdpr_audit_log (id, receipt_id, action, identifier_hash, records_affected, details_json, prev_hash, hash, timestamp)
+                VALUES (?, ?, 'ERASE_ART17', ?, ?, ?, ?, ?, ?)
+            """, (next_id, receipt_id, id_hash, count, details_str, prev_hash, record_hash, now_iso))
             conn.commit()
 
         return {
@@ -1050,6 +1089,10 @@ class GDPRComplianceEngine:
             "tamper_proof_hash": record_hash,
             "previous_receipt_hash": prev_hash
         }
+
+    def verify_audit_chain(self) -> Dict[str, Any]:
+        """Kryptografische Pruefung der DSGVO-Quittungskette (Legacy + Epoche)."""
+        return verify_gdpr_audit_chain(self.memory_db)
 
     def list_audit_receipts(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Gibt die gespeicherten DSGVO-Löschquittungen zurück."""
@@ -1068,6 +1111,91 @@ class GDPRComplianceEngine:
                     d["details"] = {}
                 rows.append(d)
             return rows
+
+
+def verify_gdpr_audit_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Prueft die gdpr_audit_log-Kette inkl. Epochen-Migration.
+
+    Strategie pro Block:
+      * id >= CUTOFF: streng id-bewusst via _verify_hash(canonical, hash, id).
+      * id <  CUTOFF: zuerst id-bewusst, danach als Fallback das alte Verfahren
+        ohne ID. Der Fallback erhaelt Legacy-Quittungen auch nach einer
+        Key-Rotation mit ARCHON_AUDIT_HMAC_EPOCHS / ..._EPOCH_FROM gueltig.
+
+    CUTOFF = ARCHON_GDPR_HMAC_EPOCH_FROM (stabil, dokumentiert), sonst MAX(id)+1
+    zur Laufzeit. Die prev_hash-Verkettung ist Verfahren-unabhaengig: der Hash
+    einer neuen Quittung haengt vom gespeicherten prev_hash ab, nicht davon,
+    wie der Vorgaenger signiert wurde — der Uebergang ist daher bruchfrei.
+    """
+    from backend.audit_log import HMAC_PREFIX, _verify_hash, _hmac_epochs
+
+    conn = sqlite3.connect(db_path or _resolve_db("agentic_memory.db"), timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        has_tbl = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (_GDPR_AUDIT_TABLE,),
+        ).fetchone()
+        if not has_tbl:
+            return {"valid": True, "count": 0, "message": "DSGVO-Kette ist leer."}
+        rows = conn.execute("SELECT * FROM gdpr_audit_log ORDER BY id ASC").fetchall()
+        if not rows:
+            return {"valid": True, "count": 0, "message": "DSGVO-Kette ist leer."}
+
+        cutoff = _chain_migration_cutoff(conn, _GDPR_AUDIT_TABLE, _GDPR_CUTOFF_ENV)
+        expected_prev = "GENESIS"
+        hmac_blocks = 0
+        for r in rows:
+            if str(r["prev_hash"]) != expected_prev:
+                return {
+                    "valid": False, "broken_at_id": r["id"], "cutoff": cutoff,
+                    "message": f"Kettenbruch bei DSGVO-Audit ID {r['id']}.",
+                }
+            # Exakt derselbe kanonische String wie im Schreibpfad.
+            canonical = (
+                f"{r['receipt_id']}|ERASE_ART17|{r['timestamp']}|"
+                f"{r['identifier_hash']}|{int(r['records_affected'])}|"
+                f"{r['details_json']}|{r['prev_hash']}"
+            )
+            stored = str(r["hash"] or "")
+            if stored.startswith(HMAC_PREFIX):
+                hmac_blocks += 1
+            bid = int(r["id"])
+            ok = _verify_hash(canonical, stored, bid)
+            if not ok and bid < cutoff:
+                ok = _verify_hash(canonical, stored, None)
+            if not ok:
+                return {
+                    "valid": False, "broken_at_id": bid, "cutoff": cutoff,
+                    "message": f"Payload-Manipulation bei DSGVO-Audit ID {bid}.",
+                }
+            expected_prev = stored
+
+        key_active = bool(_hmac_epochs())
+        first_hmac_id = next(
+            (int(r["id"]) for r in rows if str(r["hash"] or "").startswith(HMAC_PREFIX)),
+            None,
+        )
+        if first_hmac_id is not None and any(
+            int(r["id"]) > first_hmac_id and not str(r["hash"] or "").startswith(HMAC_PREFIX)
+            for r in rows
+        ):
+            return {
+                "valid": False, "cutoff": cutoff, "hmac_active": key_active,
+                "message": "HMAC-Signatur auf nacktes SHA-256 zurueckgesetzt (Downgrade).",
+            }
+        if hmac_blocks and not key_active:
+            return {
+                "valid": False, "cutoff": cutoff, "hmac_active": False,
+                "message": "HMAC-Bloecke ohne passenden ARCHON_AUDIT_HMAC_KEY.",
+            }
+        return {
+            "valid": True, "count": len(rows), "cutoff": cutoff,
+            "hmac_active": key_active, "hmac_blocks": hmac_blocks,
+            "latest_hash": expected_prev,
+        }
+    finally:
+        conn.close()
 
 
 gdpr_engine = GDPRComplianceEngine()

@@ -96,6 +96,29 @@ def init_treasury_db() -> None:
                 conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN company_id TEXT NOT NULL DEFAULT 'default'")
             except sqlite3.OperationalError:
                 pass  # Spalte existiert bereits
+
+        # A (Audit): Append-only. Nur in der Schema-Init — keine Daten werden
+        # veraendert. DELETE ist generell verboten; UPDATE darf ausschliesslich
+        # die legitimen Freigabefelder beruehren (approve_payment/reject_payment).
+        # Alle in den Hash eingehenden Spalten bleiben damit unveraenderlich.
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS treasury_tx_no_tamper
+            BEFORE UPDATE OF id, account_id, direction, amount, currency,
+                             recipient, category, purpose, workflow_run_id,
+                             receipt_id, idempotency_key, company_id,
+                             requested_by, prev_hash, entry_hash, created_at
+            ON treasury_transactions
+            BEGIN
+                SELECT RAISE(ABORT, 'treasury_transactions hash fields are append-only');
+            END
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS treasury_tx_no_delete
+            BEFORE DELETE ON treasury_transactions
+            BEGIN
+                SELECT RAISE(ABORT, 'treasury_transactions is append-only');
+            END
+        """)
         conn.commit()
     finally:
         conn.close()
@@ -123,8 +146,14 @@ def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any]) -> str:
     """Lauf-5 K-01: HMAC-SHA256 + company_id im signierten Payload.
 
     'status' bleibt bewusst ausgenommen: approve/reject aendert den Status per
-    UPDATE und wuerde sonst jeden Hash brechen. Der Statusverlauf liegt in der
-    Tabelle und im zentralen Audit-Log.
+    UPDATE und wuerde sonst jeden Hash brechen. A (Audit): Die Status-,
+    Approver- und Passkey-Flags werden deshalb als signierte Events im
+    zentralen, append-only Audit-Log erfasst (payment_approved /
+    payment_rejected inkl. tx_id, amount, currency, recipient, approver,
+    passkey_verified, status). Das erhaelt die Verifizierbarkeit bestehender
+    Legacy-Ketten, deren Hashes diese Felder nicht enthalten. Zustaetzlich
+    blockieren die Trigger in init_treasury_db() Aenderungen aller
+    hashrelevanten Spalten sowie DELETE.
     """
     payload = json.dumps(
         {
@@ -171,7 +200,8 @@ def verify_treasury_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
             return {"valid": True, "count": 0, "message": "Treasury-Kette ist leer."}
         prev_hash = "GENESIS"
         hmac_blocks = 0
-        for r in rows:
+        hmac_positions: List[int] = []
+        for idx, r in enumerate(rows):
             if str(r["prev_hash"]) != prev_hash:
                 return {
                     "valid": False, "broken_at_id": r["id"],
@@ -180,6 +210,7 @@ def verify_treasury_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
             stored = str(r["entry_hash"] or "")
             if stored.startswith(HMAC_PREFIX):
                 hmac_blocks += 1
+                hmac_positions.append(idx)
                 payload = json.dumps(
                     {
                         "prev": r["prev_hash"],
@@ -195,7 +226,11 @@ def verify_treasury_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
                     },
                     sort_keys=True,
                 )
-                if not _verify_hash(payload, stored, r["id"]):
+                # E (Audit): Schreibpfad (_compute_entry_hash) uebergibt keine
+                # Block-ID. Treasury nutzt TEXT-IDs ('tx-...'), die nicht in
+                # _key_for_block() konvertierbar sind — auch None zu uebergeben
+                # haelt Schreib- und Pruefpfad konsistent (juengster Key).
+                if not _verify_hash(payload, stored, None):
                     return {
                         "valid": False, "broken_at_id": r["id"],
                         "message": f"Treasury-Payload-Manipulation bei ID {r['id']}.",
@@ -207,6 +242,25 @@ def verify_treasury_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
                 }
             prev_hash = stored
         key_active = bool(_hmac_epochs())
+        if key_active and hmac_positions:
+            # B (Audit): Ein Plain-SHA-Block NACH dem ersten HMAC-Block ist ein
+            # Downgrade (K-1-Angriff): der Angreifer setzt entry_hash eines
+            # HMAC-Blocks auf _legacy_entry_hash() und wuerde sonst akzeptiert.
+            # Treasury-IDs sind Texte, darum die Position in der Kette statt
+            # einer numerischen ID (analog api_key_manager.first_hmac_id).
+            first_hmac_pos = hmac_positions[0]
+            if any(
+                not str(r["entry_hash"] or "").startswith(HMAC_PREFIX)
+                for r in rows[first_hmac_pos + 1:]
+            ):
+                return {
+                    "valid": False, "count": len(rows), "hmac_active": True,
+                    "hmac_blocks": hmac_blocks,
+                    "message": (
+                        "HMAC-Signatur auf nacktes SHA-256 zurueckgesetzt "
+                        "(Block nach erstem HMAC-Block)."
+                    ),
+                }
         if hmac_blocks and not key_active:
             return {
                 "valid": False, "count": len(rows), "hmac_active": False,
@@ -576,7 +630,16 @@ def approve_payment(tx_id: str, approver_id: str = "admin", passkey_verified: bo
             category="treasury",
             action="payment_approved",
             agent_id=approver_id,
-            payload={"tx_id": tx_id, "amount": updated["amount"], "currency": updated["currency"], "passkey_verified": passkey_verified},
+            payload={
+                "tx_id": tx_id,
+                "amount": updated["amount"],
+                "currency": updated["currency"],
+                "recipient": updated.get("recipient", ""),
+                "status": updated["status"],
+                "approved_by": approver_id,
+                "passkey_verified": passkey_verified,
+                "entry_hash": updated.get("entry_hash", ""),
+            },
         )
     except Exception as _exc:
         _archon_exc_logger.debug("[treasury_engine] Audit-Log fuer payment_approved fehlgeschlagen: %s", _exc)
@@ -613,9 +676,32 @@ def reject_payment(tx_id: str, rejected_by: str = "admin", reason: str = "") -> 
             (rejected_by, reason or "Abgelehnt durch Benutzer", tx_id),
         )
         conn.commit()
-        return _row_to_tx(conn.execute("SELECT * FROM treasury_transactions WHERE id = ?", (tx_id,)).fetchone())
+        updated = _row_to_tx(conn.execute("SELECT * FROM treasury_transactions WHERE id = ?", (tx_id,)).fetchone())
     finally:
         conn.close()
+
+    # A (Audit): Statuswechsel signiert im zentralen append-only Log erfassen
+    # (analog approve_payment), damit reject/approve nicht unbemerkt bleibt.
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="treasury",
+            action="payment_rejected",
+            agent_id=rejected_by,
+            payload={
+                "tx_id": tx_id,
+                "amount": updated["amount"],
+                "currency": updated["currency"],
+                "recipient": updated.get("recipient", ""),
+                "status": updated["status"],
+                "approved_by": rejected_by,
+                "passkey_verified": bool(updated.get("passkey_verified")),
+                "entry_hash": updated.get("entry_hash", ""),
+            },
+        )
+    except Exception as _exc:
+        _archon_exc_logger.debug("[treasury_engine] Audit-Log fuer payment_rejected fehlgeschlagen: %s", _exc)
+    return updated
 
 
 def get_treasury_overview(user_id: str = "admin") -> Dict[str, Any]:

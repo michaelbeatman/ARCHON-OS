@@ -26,6 +26,42 @@ except Exception:
     _ClosingConnection = sqlite3.Connection
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
+
+def _audit_snapshot_restore(result: Dict[str, Any]) -> Dict[str, Any]:
+    """D5/F-08: Snapshot-Restore signiert in die Zentralkette (append-only).
+
+    Fail-closed: der Rollback ist zum Zeitpunkt des Aufrufs bereits entschieden.
+    Ein Audit-Fehler darf keine Exception in die laufende DB-Transaktion werfen;
+    er wird geloggt und im Result sichtbar gemacht. Protokolliert werden nur
+    IDs/Status/Metadaten — kein Dateiinhalt, kein vollstaendiger Pfad.
+    """
+    restored_file = str(result.get("restored_file") or "")
+    payload = {
+        "status": str(result.get("status") or ""),
+        "snapshot_id": str(result.get("snapshot_id") or ""),
+        "file_name": os.path.basename(restored_file) if restored_file else "",
+        "bytes_restored": int(result.get("bytes_restored") or 0),
+    }
+    try:
+        from backend.audit_log import chained_audit_log
+
+        event = chained_audit_log.record_event(
+            category="snapshot",
+            action="snapshot_restored",
+            agent_id="system",
+            payload=payload,
+        )
+        result["audit_status"] = "recorded"
+        result["audit_event_id"] = event.get("event_id")
+    except Exception as exc:
+        _archon_exc_logger.error(
+            "[snapshot_manager] Audit-Eintrag snapshot_restored fehlgeschlagen: %s", exc
+        )
+        result["audit_status"] = "error"
+        result["audit_error"] = type(exc).__name__
+    return result
+
+
 class SnapshotManager:
     def __init__(self, snapshots_dir: str = SNAPSHOTS_DIR, db_path: str = DB_PATH):
         self.snapshots_dir = snapshots_dir
@@ -112,14 +148,20 @@ class SnapshotManager:
             cur.execute("SELECT * FROM file_snapshots WHERE id = ?", (snapshot_id,))
             row = cur.fetchone()
             if not row:
-                return {"status": "error", "message": f"Snapshot {snapshot_id} nicht gefunden."}
+                return _audit_snapshot_restore({
+                    "status": "error", "snapshot_id": snapshot_id,
+                    "reason": "snapshot_not_found",
+                })
 
             item = dict(row)
             comp_file = item["compressed_path"]
             target_path = item["file_path"]
 
             if not os.path.exists(comp_file):
-                return {"status": "error", "message": f"Archivdatei {comp_file} existiert nicht."}
+                return _audit_snapshot_restore({
+                    "status": "error", "snapshot_id": snapshot_id,
+                    "reason": "archive_missing",
+                })
 
             try:
                 with gzip.open(comp_file, "rb") as f_in:
@@ -132,15 +174,19 @@ class SnapshotManager:
                 conn.execute("UPDATE file_snapshots SET restored_at = CURRENT_TIMESTAMP WHERE id = ?", (snapshot_id,))
                 conn.commit()
 
-                return {
+                return _audit_snapshot_restore({
                     "status": "success",
                     "snapshot_id": snapshot_id,
                     "restored_file": target_path,
                     "bytes_restored": len(data),
                     "message": f"Datei {os.path.basename(target_path)} erfolgreich auf Stand vor der Agenten-Änderung zurückgesetzt."
-                }
+                })
             except Exception as e:
-                return {"status": "error", "message": f"Rollback fehlgeschlagen: {e}"}
+                return _audit_snapshot_restore({
+                    "status": "error", "snapshot_id": snapshot_id,
+                    "reason": f"rollback_failed:{type(e).__name__}",
+                    "message": f"Rollback fehlgeschlagen: {e}",
+                })
 
     def list_snapshots(self, limit: int = 50) -> List[Dict[str, Any]]:
         with self._get_conn() as conn:

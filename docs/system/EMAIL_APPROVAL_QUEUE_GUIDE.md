@@ -51,7 +51,7 @@ Das Modal bietet eine vollständige Ansicht mit:
 
 ---
 
-## 4. Datenbank-Schema (`agentic_memory.db`)
+## 4. Datenbank-Schema (`memory.db`)
 
 ```sql
 CREATE TABLE email_drafts (

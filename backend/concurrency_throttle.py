@@ -111,31 +111,39 @@ class PriorityConcurrencyThrottle:
 
         loop = asyncio.get_running_loop()
         start_time = loop.time()
+        # B) Der globale Scheduling-Lock darf KEINE await-Hops (Threadpool-
+        # Roundtrips) umspannen: sonst blockiert jeder Waiter release_slot().
+        # Config/Backpressure werden VOR dem Lock gelesen; im Lock stehen nur
+        # noch Heap-/Registry-Mutationen und cond.wait().
+        registered = False
+        slot_key = f"{task_id}#pending"
+        try:
+            while True:
+                # Prune ggf. verwaiste Slots bei Laufzeit-Konfig-Aenderung
+                cfg_now = await asyncio.to_thread(get_concurrency_config)
+                max_slots = max(1, int(cfg_now.get("max_concurrent_agents", max_slots)))
+                try:
+                    bp_now = await asyncio.to_thread(_cached_backpressure)
+                    if bp_now.get("backpressure_active"):
+                        max_slots = max(1, max_slots // 2)
+                except Exception as bp_exc:
+                    # W3: „Schutz schützt sich nicht selbst" — wenn die
+                    # Backpressure-Erkennung ausfällt, konservativ
+                    # drosseln statt ungebremst weiterzulaufen (OOM-Risiko).
+                    _archon_exc_logger.warning(
+                        "[ConcurrencyThrottle] Backpressure-Check fehlgeschlagen "
+                        "— konservativ auf 1 Slot drosseln: %s", bp_exc
+                    )
+                    max_slots = 1
 
-        async with self._cond:
-            self._seq += 1
-            seq = self._seq
-            slot_key = task_id if (task_id not in self._active_slots and all(x[2] != task_id for x in self._wait_queue)) else f"{task_id}#{seq}"
-            heapq.heappush(self._wait_queue, (-int(priority), seq, slot_key, task_id, agent_id))
+                async with self._cond:
+                    if not registered:
+                        self._seq += 1
+                        seq = self._seq
+                        slot_key = task_id if (task_id not in self._active_slots and all(x[2] != task_id for x in self._wait_queue)) else f"{task_id}#{seq}"
+                        heapq.heappush(self._wait_queue, (-int(priority), seq, slot_key, task_id, agent_id))
+                        registered = True
 
-            try:
-                while True:
-                    # Prune ggf. verwaiste Slots bei Laufzeit-Konfig-Aenderung
-                    cfg_now = await asyncio.to_thread(get_concurrency_config)
-                    max_slots = max(1, int(cfg_now.get("max_concurrent_agents", max_slots)))
-                    try:
-                        bp_now = await asyncio.to_thread(_cached_backpressure)
-                        if bp_now.get("backpressure_active"):
-                            max_slots = max(1, max_slots // 2)
-                    except Exception as bp_exc:
-                        # W3: „Schutz schützt sich nicht selbst" — wenn die
-                        # Backpressure-Erkennung ausfällt, konservativ
-                        # drosseln statt ungebremst weiterzulaufen (OOM-Risiko).
-                        _archon_exc_logger.warning(
-                            "[ConcurrencyThrottle] Backpressure-Check fehlgeschlagen "
-                            "— konservativ auf 1 Slot drosseln: %s", bp_exc
-                        )
-                        max_slots = 1
                     if len(self._active_slots) < max_slots and self._wait_queue and self._wait_queue[0][2] == slot_key:
                         heapq.heappop(self._wait_queue)
                         self._active_slots[slot_key] = {
@@ -154,11 +162,13 @@ class PriorityConcurrencyThrottle:
                     try:
                         await asyncio.wait_for(self._cond.wait(), timeout=min(remaining, 1.0))
                     except asyncio.TimeoutError:
-                        continue
-            except asyncio.CancelledError:
-                self._wait_queue = [item for item in self._wait_queue if item[2] != slot_key]
-                heapq.heapify(self._wait_queue)
-                raise
+                        pass  # naechster Durchlauf liest Config/Backpressure neu
+        except asyncio.CancelledError:
+            if registered:
+                async with self._cond:
+                    self._wait_queue = [item for item in self._wait_queue if item[2] != slot_key]
+                    heapq.heapify(self._wait_queue)
+            raise
 
     async def release_slot(self, task_id: str):
         """Gibt den Slot nach Ausführung frei und weckt wartende Tasks sofort."""

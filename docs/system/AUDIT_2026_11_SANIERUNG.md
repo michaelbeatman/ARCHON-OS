@@ -1,5 +1,9 @@
 # Archon OS — Code-Audit & Sanierung (22.11.2026)
 
+> **Aktualisierungshinweis:** Historischer Stand 22.11.2026. Die damals genannten
+> Einzel-DB-Namen sind heute Legacy-Aliase; aktiv sind `ops.db`, `business.db`
+> und `memory.db` (`backend/db_paths.py` routet alte Pfade transparent).
+
 > **Ehrlichkeitshinweis:** Die bisherige Doku (`MULTI_AGENT_CONTENT_ROADMAP_2026_GUIDE.md`)
 > meldet „28/28 umgesetzt" und `SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md` meldet
 > „Alle Erfüllt". Das war nicht mit dem Code vereinbar: mehrere Gates waren

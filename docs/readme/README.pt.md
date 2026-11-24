@@ -19,7 +19,7 @@
 
 ---
 
-O Archon OS substitui chatbots isolados por um **Sistema Operacional Agêntico** persistente e auto-hospedado. Ele coordena **70 especialistas em 8 domínios principais**, conduz debates estruturados no **AI Boardroom com 55 frameworks**, une **roteamento local Zero-Egress** com **log de auditoria SHA-256 (GoBD / ISO 27001)** e integra **Obsidian Second Brain**, **n8n**, **Telegram** e um módulo **CRM & ERP *(Alpha)***.
+O Archon OS substitui chatbots isolados por um **Sistema Operacional Agêntico** persistente e auto-hospedado. Ele coordena **70 especialistas em 8 domínios principais**, conduz debates estruturados no **AI Boardroom com 55 frameworks**, une **roteamento local Zero-Egress** com **log de auditoria HMAC-SHA256 (GoBD / ISO 27001)** e integra **Obsidian Second Brain**, **n8n**, **Telegram** e um módulo **CRM & ERP *(Alpha)***.
 
 > **Status de localização:** A interface suporta 11 idiomas (`en`, `de`, `es`, `fr`, `pt`, `it`, `nl`, `ru`, `ja`, `ko`, `zh`). Os arquivos `SOUL.md` e metodologias estão atualmente em alemão; a tradução está em andamento ([Roadmap M31](../system/ROADMAP_2026.md)).
 

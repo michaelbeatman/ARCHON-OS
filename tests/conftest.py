@@ -25,6 +25,11 @@ import tempfile
 
 import pytest
 
+# main._assert_audit_hmac() ist jetzt fail-closed, sobald HMAC-Bloecke in der
+# (dev-)DB existieren. Tests brauchen einen deterministischen, nicht-echten
+# Key — sonst bricht der App-Lifespan beim ersten Test-Client ab.
+os.environ.setdefault("ARCHON_AUDIT_HMAC_KEY", "test-only-" + "a" * 64)
+
 
 @pytest.fixture(autouse=True)
 def _reset_graceful_shutdown_gate():

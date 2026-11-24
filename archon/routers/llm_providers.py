@@ -234,6 +234,10 @@ _openrouter_price_cache = None
 _openrouter_price_timestamp = 0
 # C15: Single-Flight — ohne Lock starten nach TTL-Ablauf N Threadpool-Threads
 # parallel denselben 5-s-HTTP-Call (Thundering Herd).
+# Bewusst ein threading.Lock (KEIN asyncio.Lock): get_llm_prices() wird auch
+# von Sync-Pfaden genutzt (api_get_llm_provider_models, api_get_llm_prices_route,
+# backend.llm_kernel). Async Caller (chat.py SSE) rufen ueber asyncio.to_thread
+# auf — dann haelt ein Worker-Thread das Lock, nie der Event-Loop.
 _openrouter_price_lock = threading.Lock()
 
 

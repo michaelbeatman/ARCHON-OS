@@ -12,7 +12,7 @@ Metabase läuft als containerisierter Dienst im Docker-Compose-Netzwerk `agentic
 - **Profil:** `bi` / `analytics`
 - **Host-Port:** `http://localhost:3030` (Container-Port 3000)
 - **Persistenz:** Docker Volume `metabase_data` unter `/metabase-data/metabase.db`
-- **Datenbank-Mounts:** Read-Only Mount von `/opt/data` für `kanban.db` und PocketBase
+- **Datenbank-Mounts:** Read-Only Mount von `./data` (im Container `/opt/data`) für `ops.db`, `memory.db` und PocketBase
 
 ---
 
@@ -37,11 +37,11 @@ Nach dem ersten Start unter `http://localhost:3030` den initialen Admin-Benutzer
 
 ### A. Archon Kanban & Task-Analytics
 - **Datenbanktyp:** SQLite
-- **Dateipfad:** `/opt/data/kanban.db`
+- **Dateipfad:** `/opt/data/ops.db`
 
 ### B. Agentic Memory & Receipts
 - **Datenbanktyp:** SQLite
-- **Dateipfad:** `/opt/data/agentic_memory.db`
+- **Dateipfad:** `/opt/data/memory.db`
 
 ---
 

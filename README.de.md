@@ -7,7 +7,7 @@
 **Autonomes, lokal betreibbares Multi-Agenten-Betriebssystem für Gründer, Teams & Fachdomänen**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release: v0.5.7](https://img.shields.io/badge/Release-v0.5.7-6366f1.svg)](CHANGELOG.md)
+[![Release: v0.5.7.4](https://img.shields.io/badge/Release-v0.5.7.4-6366f1.svg)](CHANGELOG.md)
 [![Agenten: 70 Spezialisten](https://img.shields.io/badge/Spezialisten-70%20in%208%20Dom%C3%A4nen%20(DE%2FEN)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
@@ -23,11 +23,11 @@
 
 > **Zuerst die Basis:** Archon OS ist ein Aufsatz auf **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** von **[Nous Research](https://nousresearch.com)** — der autonomen Multi-Agenten-Runtime. Hermes ist die Engine; Archon OS macht daraus ein vollständiges, selbst gehostetes Betriebs-Ökosystem für Unternehmen.
 
-Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehostetes **Agentic Operating System**. Das System koordiniert **70 Fachspezialisten in 8 Fachdomänen**, führt strukturierte **AI-Boardroom-Debatten über 55 Entscheidungs-Frameworks**, routet sensible Daten über einen **Zero-Egress-Privacy-Router** direkt an lokale LLMs, protokolliert Transaktionen in einem **GoBD-/ISO-27001-Audit-Log (SHA-256)** und verbindet **Obsidian Second Brain**, **n8n**, **Telegram** sowie ein integriertes **CRM- & ERP-Modul *(Alpha)***.
+Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehostetes **Agentic Operating System**. Das System koordiniert **70 Fachspezialisten in 8 Fachdomänen**, führt strukturierte **AI-Boardroom-Debatten über 55 Entscheidungs-Frameworks**, routet sensible Daten über einen **Zero-Egress-Privacy-Router** direkt an lokale LLMs, protokolliert Transaktionen in einem **GoBD-/ISO-27001-Audit-Log (HMAC-SHA256, Env-Key)** und verbindet **Obsidian Second Brain**, **n8n**, **Telegram** sowie ein integriertes **CRM- & ERP-Modul *(Alpha)***.
 
 ---
 
-### Aktueller Release-Stand (`v0.5.7`, 22.11.2026)
+### Aktueller Release-Stand (`v0.5.7.4`, 24.11.2026)
 
 Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen seit `v0.5.6.0`:
 
@@ -37,9 +37,9 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen sei
 - **Observability & Tooling:** OTel-Traces in LLM-Kernel und DAG, Trace-to-Eval-Replay-Fixtures, Python 3.13, getrennte Test-Requirements.
 - **Workspace:** 5-Stufen-Onboarding-Wizard v2, Operations-Kalender und 11 LinkedIn-Skills.
 
-> **Konfigurations- & Sicherheitshinweis (Audit 23.11.2026):** Die mitgelieferte `settings.json` enthält **keinen `auth`-Block**. Das System läuft daher bei Bindung auf `127.0.0.1` bewusst im **lokalen Single-User-Modus** (Fallback-Admin, kein Login). **Dieser Modus ist ausschließlich für die lokale Desktop-Nutzung gedacht.** Nicht-Loopback-Binds erzwingen Auth bereits über `_must_force_auth()`; vor LAN- oder Produktionsbetrieb muss zusätzlich `"auth": {"enabled": true}` gesetzt werden. Auch die Egress-Flags sind standardmäßig aus (`privacy.zero_egress = false`, `zero_egress_strict = false`; nur `hard_block_on_local_offline = true`). `config/version.json` meldet **v0.5.7.3**, Badge und Handbuch sagen noch v0.5.7.
+> **Konfigurations- & Sicherheitshinweis (Audit 23.11.2026):** Die mitgelieferte `settings.json` enthält **keinen `auth`-Block**. Das System läuft daher bei Bindung auf `127.0.0.1` bewusst im **lokalen Single-User-Modus** (Fallback-Admin, kein Login). **Dieser Modus ist ausschließlich für die lokale Desktop-Nutzung gedacht.** Nicht-Loopback-Binds erzwingen Auth bereits über `_must_force_auth()`; vor LAN- oder Produktionsbetrieb muss zusätzlich `"auth": {"enabled": true}` gesetzt werden. Auch die Egress-Flags sind standardmäßig aus (`privacy.zero_egress = false`, `zero_egress_strict = false`; nur `hard_block_on_local_offline = true`). `config/version.json` meldet **v0.5.7.4** (veröffentlicht 2026-11-24 00:24, Commit `v0.5.7`) und stimmt damit mit dem Badge überein; das PDF-Handbuch nennt weiterhin v0.5.2.1.
 
-> **In diesem Checkout gemessene Zahlen:** 73 Einträge in `agent_profiles.json` (70 Spezialisten + 3 System-/Meta-Profile), 73 Rollen in `roles.json`, 73 synchronisierte Profile in `.hermes/profiles/`, 312 Portrait-Assets in `static/avatars/`, 832 Prompt-Templates und 11 UI-Sprachen. Die PDF-Handbücher wurden für `v0.5.2.1` erzeugt und noch nicht für `v0.5.7` aktualisiert.
+> **In diesem Checkout gemessene Zahlen:** 73 Einträge in `agent_profiles.json` (70 Spezialisten + 3 System-/Meta-Profile), 73 Rollen in `roles.json`, 73 synchronisierte Profile in `.hermes/profiles/`, 312 Portrait-Assets in `static/avatars/`, 832 Prompt-Templates und 11 UI-Sprachen. Die PDF-Handbücher wurden für `v0.5.2.1` erzeugt und noch nicht für `v0.5.7.4` aktualisiert.
 
 ## Dokumentation & Handbücher (PDF)
 
@@ -58,10 +58,10 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen sei
 | Merkmal | Klassischer Chat | Einzelner „Super-Agent“ | **Archon Agentic OS** |
 |---|---|---|---|
 | **Spezialisten-Kader** | 1 Generalist | 1 Agent mit Tool-Liste | **70 Fachspezialisten** (`agent_profiles.json`) mit **3-Stufen-`SOUL.md`** (`Compact` / `Pro` / `Full`) |
-| **Entscheidungen** | Einmalige Antwort | Iterativer Loop | **AI-Boardroom**: getrennte Perspektiven, Kritiker-Kreuzverhör & Synthese über **55 Frameworks** |
+| **Entscheidungen** | Einmalige Antwort | Iterativer Loop | **AI-Boardroom**: getrennte Perspektiven, Kritik-Prompt & Synthese über **55 Frameworks** |
 | **Langzeitgedächtnis** | Flacher Verlauf | Vektor-Snippets | **Obsidian Vault Sync**, Agenten-Personalakten, SQLite WAL & LRU-K Paging |
 | **Datenschutz** | Cloud-Zwang | Keys in Env | **Zero-Egress-Gate & Privacy-Router Hard-Block** (Fail-Closed für Finanzen/Verträge/CRM bei Offline-Lokalmodell) + **Docker-Worker-Netz ohne Internet-Route (`internal: true`)** + **Dual-LLM Guard** |
-| **Haftung & Kontrolle** | Ungeprüfter Output | Unkontrollierte Tools | **EU AI Act Engine (Art. 4 / Anh. III)**, **1-Klick GoBD-Verfahrensdoku-PDF**, **HITL-Gates** & **SHA-256 Hash-Kette (inkl. LLM-Dispatch-Nachweis je Call)** |
+| **Haftung & Kontrolle** | Ungeprüfter Output | Unkontrollierte Tools | **EU AI Act Engine (Art. 4 / Anh. III)**, **1-Klick GoBD-Verfahrensdoku-PDF**, **HITL-Gates** & **HMAC-SHA256 Hash-Kette (Env-Key; inkl. LLM-Dispatch-Nachweis je Call)** |
 | **Unternehmensbetrieb** | Keine Integration | Externe SaaS-Ketten | **Multi-Mandanten-DB-Isolation (Holding/GmbH/SPV)**, **Kanban (4-Augen-Gate)**, **Postfach-Triage**, **CRM** & **ERP *(Alpha)*** |
 
 ---
@@ -143,7 +143,7 @@ chmod +x install.sh
 
 ### Weg C: Sofortige Read-Only Live-Demo (`ARCHON_DEMO_MODE=true`)
 
-Cockpit, 6-Phasen-Boardroom-Debatte (*„Mittelstand Muster GmbH“*), Kanban und 70 Spezialisten **ohne API-Keys und ohne Token-Kosten** in 30 Sekunden testen (oder sicher auf einer 5-€-VPS hosten):
+Cockpit, 4-Phasen-Boardroom-Debatte (+ optionales MoA; *„Mittelstand Muster GmbH“*), Kanban und 70 Spezialisten **ohne API-Keys und ohne Token-Kosten** in 30 Sekunden testen (oder sicher auf einer 5-€-VPS hosten):
 
 ```bash
 ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
@@ -162,7 +162,7 @@ flowchart LR
     OR --> PR["Zero-Egress Privacy-Router"]
     PR -->|Sensible Daten| LOC["Ollama / LM Studio (Lokal)"]
     PR -->|Allgemein / Cloud| CLD["OpenRouter / OpenAI / Anthropic / Gemini"]
-    UI --> DB["SQLite WAL + SHA-256 Audit-Log + Obsidian Vault"]
+    UI --> DB["SQLite WAL + HMAC-SHA256 Audit-Log + Obsidian Vault"]
     UI --> ERP["CRM & ERP-Modul (Alpha) + Kanban HITL"]
     UI <-->|TCP via Socket-Proxy| DOC["Docker Socket Proxy (Least Privilege)"]
     UI <-->|Webhooks| N8N["n8n Automation & RSS-Watchdog"]

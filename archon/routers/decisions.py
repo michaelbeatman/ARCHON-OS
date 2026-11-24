@@ -82,7 +82,17 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Passthrough
             try:
                 from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required
                 _user = getattr(request.state, "user", None) or {}
-                uid = str(_user.get("id") or _user.get("username") or "owner")
+                uid = str(_user.get("id") or _user.get("username") or "")
+                if not uid:
+                    # A (HITL-Bypass): der Decision-Followup ruft per Service-Token
+                    # ohne Session an. Nur fuer diesen internen Fall darf er die
+                    # uid des Menschen mitgeben, damit der weitergeleitete Proof
+                    # gegen dieselbe Identitaet geprueft wird. Externe Aufrufer
+                    # koennen die Identitaet nicht ueber den Body ueberschreiben.
+                    _has_svc = getattr(app_main, "_request_has_service_token", None)
+                    if callable(_has_svc) and _has_svc(request):
+                        uid = str(body.get("user_id") or "").strip()
+                uid = uid or "owner"
                 category = (
                     "destructive_actions" if gate.get("kind") == "profil_loeschen" else "system"
                 )
@@ -389,6 +399,105 @@ def _pruefe_gate_antwort(antwort: Any, ref: str) -> str:
     return _pruefe_gate_persistiert(ref)
 
 
+# A (Audit 23.11.2026): Decision-Freigaben dieser Typen duerfen niemals ohne
+# verifizierten, an die ref_id gebundenen Passkey-Proof ausgefuehrt werden.
+_DECISION_HITL_TYPEN = {"permission_gate", "mission_freigabe"}
+
+
+def _decision_session_actor_uid(request: Request) -> str:
+    """Einzige Autoritaet fuer die Proof-Identitaet: der Session-Actor.
+
+    WICHTIG (User-Entscheidung 24.11.2026): Der externe Decision-Endpoint
+    akzeptiert NIEMALS eine Client-UID aus dem Body (``user_id``, ``username``
+    o. a.) als Proof-Identitaet. Body-``user_id`` wird ausschliesslich vom
+    internen Service-Token-Followup an den Gate-Endpoint weitergegeben
+    (siehe ``_followup_permission_gate``). Diese Funktion liest bewusst nur
+    den Request (Session/Cookie/Header) — nie den Body.
+    """
+    try:
+        from archon.routers.auth import get_current_user_from_request
+        actor = get_current_user_from_request(request)
+    except Exception as exc:
+        logger.error(f"[Decision] HITL-Actor nicht ermittelbar (fail-closed): {exc}")
+        raise HTTPException(status_code=503, detail="HITL-Actor nicht verfuegbar")
+    uid = str(actor.get("id") or actor.get("username") or "").strip()
+    if not uid or str(actor.get("role") or "") == "anonymous":
+        raise HTTPException(status_code=403, detail="Kein authentifizierter Session-Actor fuer den Passkey-Proof.")
+    return uid
+
+
+def _decision_hitl_proof(request: Request, body: dict, typ: str, ref: str) -> tuple:
+    """Prueft den HITL-Proof einer Decision-Freigabe (fail-closed).
+
+    Liefert ``(proof_token, uid)`` zurueck. Der Proof wird bewusst NICHT
+    konsumiert (``consume=False``): derselbe Token wird vom Followup an den
+    Gate-Endpoint weitergeleitet und dort genau einmal verbraucht.
+
+    Die Bindung an ``resource=ref`` stellt sicher, dass ein Proof fuer Gate A
+    keine Mission B oder Gate B freigeben kann.
+
+    Identitaet: ausschliesslich ``_decision_session_actor_uid(request)``. Der
+    ``body``-Parameter existiert nur fuer den Proof-Token; eine dort mitgelieferte
+    UID wird ignoriert (siehe ``_decision_session_actor_uid``).
+    """
+    import main as app_main
+    from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required
+
+    # Ohne ref_id gibt es keine Zielbindung fuer den Proof -> fail-closed.
+    if not str(ref or "").strip():
+        raise HTTPException(status_code=403, detail="Entscheidung ohne ref_id — kein HITL-Proof moeglich.")
+
+    uid = _decision_session_actor_uid(request)
+
+    if typ == "permission_gate":
+        fn_load_gates = getattr(app_main, "_load_permission_gates", _load_permission_gates)
+        try:
+            gates = fn_load_gates() or {}
+        except Exception:
+            gates = {}  # Kategorie bleibt 'system' (Hochrisiko) -> fail-closed
+        gate = next((g for g in gates.get("gates", []) if str(g.get("id")) == str(ref)), None)
+        category = "destructive_actions" if gate and gate.get("kind") == "profil_loeschen" else "system"
+        action = f"Gate-Freigabe {ref}"
+    else:
+        category = "system"
+        action = f"Mission-Freigabe {ref}"
+
+    # Kompatibilitaet: der direkte Gate-Endpoint verlangt ebenfalls NUR dann
+    # einen Proof, wenn fuer die Identitaet/Kategorie ein Passkey konfiguriert
+    # ist. Ohne diese Prüfung blockierte der Härtungs-Fix alle UI-Freigaben,
+    # auch in Installationen ohne registrierte Credentials.
+    try:
+        if not is_passkey_required(uid, category):
+            return "", uid
+    except Exception as exc:
+        logger.error(f"[Decision] Passkey-Konfiguration nicht lesbar (fail-closed): {exc}")
+        raise HTTPException(status_code=503, detail="HITL-Konfiguration nicht verfuegbar")
+
+    proof = str(body.get("passkey_proof_token") or "").strip()
+    if not proof:
+        proof = str(request.headers.get("x-passkey-proof") or "").strip()
+    if not proof:
+        raise HTTPException(
+            status_code=403,
+            detail="Passkey-Verifizierung erforderlich, um diese Entscheidung freizugeben.",
+        )
+
+    try:
+        ok = consume_hitl_proof_token(
+            proof, uid, category, action=action, resource=ref, consume=False
+        )
+    except Exception as exc:
+        logger.error(f"[Decision] HITL-Pruefung fehlgeschlagen (fail-closed): {exc}")
+        raise HTTPException(status_code=503, detail="HITL-Pruefung nicht verfuegbar")
+    if not ok:
+        logger.warning(f"[Decision] Ungueltiger/abweichend gebundener HITL-Proof fuer {typ} {ref} (uid={uid}).")
+        raise HTTPException(
+            status_code=403,
+            detail="Ungueltiger oder nicht an diese Entscheidung gebundener Passkey-Proof.",
+        )
+    return proof, uid
+
+
 def _pruefe_synthese_beleg(task: Any) -> str:
     """Persistierter Parent-Task der Synthese: finalized UND completed."""
     if task is None:
@@ -481,16 +590,41 @@ async def _followup_mission_start(ref: str) -> str:
     )
 
 
-async def _followup_permission_gate(ref: str) -> str:
+async def _followup_permission_gate(ref: str, proof_token: str = "", proof_uid: str = "") -> str:
     import main as app_main
 
     aktion = f"Rechte-Gate {ref or '(ohne ref_id)'}"
     if not ref:
         return _folge_nicht(aktion, "Entscheidungs-Block trägt keine ref_id")
+    # A (HITL-Bypass): Ist fuer die Identitaet ein Passkey konfiguriert, darf der
+    # Service-Token-Aufruf das Gate ohne Proof NEVER freigeben. Ohne konfigurierte
+    # Credentials bleibt das bestehende (dokumentierte) Verhalten erhalten.
+    proof = str(proof_token or "").strip()
+    if not proof:
+        try:
+            from backend.passkey_hitl import is_passkey_required
+            _uid = str(proof_uid or "owner").strip() or "owner"
+            if is_passkey_required(_uid, "system") or is_passkey_required(_uid, "destructive_actions"):
+                logger.error(f"[Gate] Kein HITL-Proof für {ref} — Freigabe NICHT ausgeführt, Decision bleibt pending.")
+                return _folge_nicht(aktion, "kein verifizierter Passkey-Proof — Decision bleibt pending")
+        except Exception as exc:
+            logger.error(f"[Gate] Passkey-Konfiguration nicht lesbar (fail-closed) für {ref}: {exc}")
+            return _folge_nicht(aktion, "HITL-Konfiguration nicht verfuegbar — Decision bleibt pending")
+    payload = {
+        "decision": "approve",
+    }
+    if proof:
+        # Zielfeldname des Gate-Endpoints (decisions.py:91): passkey_proof_token.
+        payload["passkey_proof_token"] = proof
+    # Der Followup läuft per Service-Token ohne Session: die uid des Menschen
+    # aus der Decision wird nur für diesen internen Aufruf mitgegeben, damit
+    # der Gate-Endpoint denselben Proof gegen dieselbe Identität prüft.
+    if str(proof_uid or "").strip():
+        payload["user_id"] = str(proof_uid).strip()
     try:
         fn_self_api = getattr(app_main, "_decision_self_api", _decision_self_api)
         antwort = await asyncio.to_thread(
-            fn_self_api, "POST", f"/api/permission-gates/{ref}/decide", {"decision": "approve"}
+            fn_self_api, "POST", f"/api/permission-gates/{ref}/decide", payload
         )
     except Exception as e:
         return _folge_nicht(aktion, f"Aufruf fehlgeschlagen: {e}")
@@ -500,7 +634,7 @@ async def _followup_permission_gate(ref: str) -> str:
     return f"{_FOLGE_OK}: Rechte-Gate {ref} freigegeben (belegt: status=ok, Gate persistiert als 'approved')."
 
 
-async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
+async def _decision_followup(typ: str, dec: dict, decision: str, proof_token: str = "", proof_uid: str = "") -> str:
     """Fuehrt nach der Statusaenderung die typ-spezifische Folgeaktion aus."""
     import main as app_main
 
@@ -524,12 +658,12 @@ async def _decision_followup(typ: str, dec: dict, decision: str) -> str:
         return await fn_fm(ref)
     if typ == "permission_gate":
         fn_fp = getattr(app_main, "_followup_permission_gate", _followup_permission_gate)
-        return await fn_fp(ref)
+        return await fn_fp(ref, proof_token, proof_uid)
     return "Keine Folgeaktion nötig (Statusänderung genügt)."
 
 
 @router.post("/api/decisions/decide", dependencies=[_ArchonDepends(_require_admin)])
-async def api_decide_decision(body: PassthroughBody = Body(...)):
+async def api_decide_decision(request: Request, body: PassthroughBody = Body(...)):
     body = as_payload(body)
     """EINZIGER Schreibpfad für Entscheidungen — Telegram UND Kanban rufen ihn."""
     import main as app_main
@@ -544,10 +678,19 @@ async def api_decide_decision(body: PassthroughBody = Body(...)):
 
     fn_self_api = getattr(app_main, "_decision_self_api", _decision_self_api)
 
+    # A (HITL-Bypass): Proof wird VOR dem CAS-Marker geprüft. Bei Fehlschlag
+    # bleibt der Decision-Block 'offen' (pending) und es läuft keine Folgeaktion.
+    # Session-Actor ist einzige Autorität: proof_uid kommt ausschließlich aus
+    # _decision_hitl_proof() -> _decision_session_actor_uid(request). Eine
+    # Client-UID aus `body` wird bewusst nicht übernommen (auch nicht als
+    # Fallback) und fließt damit nie in den Service-Token-Followup.
+    proof_token, proof_uid = "", ""
+
     # Vorgabe 4: Compare-And-Set atomar in EINEM to_thread-Block unter prozessweitem Lock:
     # Sidecar-Status-Read -> already_decided-Check -> 'in_bearbeitung'-Marker vor dem Followup.
     # Wer 'offen' nicht mehr antrifft, bekommt already_decided (kein doppeltes Followup).
     def _cas_claim() -> dict:
+        nonlocal proof_token, proof_uid
         with _DECIDE_RACE_LOCK:
             meta = fn_self_api("GET", "/api/operations/kanban/meta")
             dec_local = (meta.get("tasks", {}).get(task_id, {}) or {}).get("decision")
@@ -555,6 +698,21 @@ async def api_decide_decision(body: PassthroughBody = Body(...)):
                 return {"_error": "no_decision"}
             if (dec_local.get("status") or "offen") != "offen":
                 return {"_error": "already_decided", "dec": dec_local}
+            if decision == "approve" and str(dec_local.get("typ") or "") in _DECISION_HITL_TYPEN:
+                try:
+                    proof_token, proof_uid = _decision_hitl_proof(
+                        request, body, str(dec_local.get("typ")), str(dec_local.get("ref_id") or "")
+                    )
+                except HTTPException as proof_err:
+                    logger.error(
+                        f"[Decision] HITL-Proof fehlt/ungueltig für Task {task_id} "
+                        f"(typ={dec_local.get('typ')}): {proof_err.detail} — Decision bleibt pending."
+                    )
+                    return {
+                        "_error": "hitl_proof_required",
+                        "status": proof_err.status_code,
+                        "detail": proof_err.detail,
+                    }
             try:
                 fn_self_api(
                     "POST",
@@ -574,6 +732,8 @@ async def api_decide_decision(body: PassthroughBody = Body(...)):
         raise HTTPException(status_code=502, detail={"code": "decisions_cas_write_failed", "params": {"error": claim.get("detail", "")}})
     if claim.get("_error") == "no_decision":
         raise HTTPException(status_code=404, detail={"code": "decisions_no_decision_block", "params": {"task_id": task_id}})
+    if claim.get("_error") == "hitl_proof_required":
+        raise HTTPException(status_code=int(claim.get("status") or 403), detail=claim.get("detail") or "Passkey-Verifizierung erforderlich.")
     if claim.get("_error") == "already_decided":
         dec = claim.get("dec") or {}
         return {
@@ -601,7 +761,7 @@ async def api_decide_decision(body: PassthroughBody = Body(...)):
 
     try:
         fn_followup = getattr(app_main, "_decision_followup", _decision_followup)
-        ergebnis = await fn_followup(typ, dec, decision)
+        ergebnis = await fn_followup(typ, dec, decision, proof_token, proof_uid)
     except Exception as e:
         logger.error(f"[Decision] Folgeaktion fehlgeschlagen: {e}")
         ergebnis = f"FEHLER bei der Folgeaktion: {e}"

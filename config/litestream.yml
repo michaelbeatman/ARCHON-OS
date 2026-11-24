@@ -5,6 +5,26 @@
 # konsolidierten DBs sind die primären Replikationsziele. Die Hermes-Runtime
 # (/opt/data = ./.hermes) schreibt weiterhin kanban.db / state.db — diese
 # bleiben zusaetzlich gesichert.
+#
+# TENANT_DBS: repliziert via Directory Replication (Litestream >= 0.5).
+# FULL_TENANT_ISOLATION defaultet auf "1", d.h. alle Mandanten-DBs liegen unter
+# /app/data/tenants/<tid>/*.db. Der `dir:`-Eintrag unten erfasst mit
+# `pattern: "*.db"` und `recursive: true` alle Tenant-DBs beim Start (neue
+# Tenant-DBs nach Neustart; `watch: true` wäre optional möglich). Das
+# Replikat-Feld heisst in v0.5 `replica:` (singular);
+# das `replicas:`-Array der 5 Bestandseinträge lädt mit genau einem Eintrag
+# weiter (deprecated), bleibt hier aber bewusst unverändert.
+#
+# v0.5-Migration: `retention` ist kein Replikat-Feld mehr und wird dort
+# ignoriert. Die gewünschten 72h sind deshalb im globalen `snapshot`-Block
+# unten wirksam; die `retention: 72h` in den Replikaten sind nur noch
+# Dokumentation im gewohnten Stil der Bestandseinträge.
+#
+# scripts/automated_restore_test.py meldet FAILED, wenn Tenant-DBs existieren,
+# aber weder ein expliziter Tenant-Pfad noch ein `dir:`-Eintrag konfiguriert ist.
+snapshot:
+  retention: 72h
+
 dbs:
   # --- Konsolidierte Archon-Domaenen (Phase 2.1, aktiv) ---
   - path: /app/data/ops.db
@@ -42,3 +62,16 @@ dbs:
         path: /opt/litestream_replicas/state.db
         sync-interval: 10s
         retention: 72h
+
+  # --- Tenant-DBs: Directory Replication (Litestream >= 0.5) ---
+  # Erfasst data/tenants/<tid>/*.db rekursiv beim Start. Neu angelegte Tenant-
+  # DBs werden beim Litestream-Neustart übernommen (optional `watch: true` für
+  # automatische Erkennung). `replica:` (singular) ist die v0.5-Syntax.
+  - dir: /app/data/tenants
+    pattern: "*.db"
+    recursive: true
+    replica:
+      type: file
+      path: /opt/litestream_replicas/tenants
+      sync-interval: 5s
+      retention: 72h   # v0.5: global wirksam via snapshot.retention (s. oben)

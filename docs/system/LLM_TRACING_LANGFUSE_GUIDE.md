@@ -10,7 +10,7 @@ Mit 56 autonomen Spezialisten-Rollen und mehrstufigen Fan-in-Delegationen (Rober
 
 Archon OS integriert ein vollwertiges, OpenTelemetry-konformes Tracing-System:
 - **Hierarchische Spans:** Jeder Kanban-Task und LLM-Aufruf wird als standardisierter Span mit Start-/Endzeit, Latenz in Millisekunden, Input- und Output-Tokens sowie Status erfasst.
-- **Transaktionale Persistenz:** Alle Traces werden primär in `agentic_memory.db` in den Tabellen `otel_traces` und `otel_spans` (WAL-Modus) gespeichert – vollständig unabhängig von externer Cloud-Software.
+- **Transaktionale Persistenz:** Alle Traces werden primär in `memory.db` in den Tabellen `otel_traces` und `otel_spans` (WAL-Modus) gespeichert – vollständig unabhängig von externer Cloud-Software.
 - **Langfuse & OTLP Export:** Über Umgebungsvariablen (`LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`) streamt der Tracer Spans automatisch asynchron an eine selbst-gehostete Langfuse-Instanz.
 
 ---

@@ -88,16 +88,57 @@ def require_session_actor(request: Request) -> str:
     raise HTTPException(status_code=401, detail="Keine verifizierte Identitaet.")
 
 
+def _audit_rbac_denial(
+    request: Any, *, required_role: str, reason: str, actor: Optional[str] = None
+) -> None:
+    """D5/F-08: RBAC-Denial signiert in die Zentralkette (append-only).
+
+    Fail-closed: der Zugriff ist hier bereits verweigert. Ein Audit-Fehler darf
+    diese Entscheidung NIE in einen Allow kippen — deshalb nur loggen, keine
+    Exception werfen. Es werden ausschliesslich Route/Rolle/Grund protokolliert,
+    niemals Request-Bodies oder Session-Daten.
+    """
+    try:
+        from backend.audit_log import chained_audit_log
+
+        chain_actor = str(actor or get_session_actor(request, fallback="unknown"))
+        chained_audit_log.record_event(
+            category="rbac",
+            action="rbac_denied",
+            agent_id=chain_actor,
+            payload={
+                "route": str(getattr(getattr(request, "url", None), "path", "") or ""),
+                "method": str(getattr(request, "method", "") or ""),
+                "required_role": str(required_role),
+                "reason": str(reason),
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "[RBAC] Audit-Eintrag rbac_denied fehlgeschlagen (Denial bleibt bestehen): %s",
+            exc,
+        )
+
+
 def require_admin_or_503(request: Request) -> None:
     """Rollenzaun; ohne Injektion bewusst laut sperren statt still durchlassen."""
     checker = _checker
     if checker is None:
         logger.error("[RBAC] require_admin nicht injiziert — Route sperrt.")
+        _audit_rbac_denial(
+            request, required_role="admin", reason="require_admin_not_injected"
+        )
         raise HTTPException(
             status_code=503,
             detail="Rollenzaun nicht verdrahtet (require_admin fehlt); Aktion gesperrt.",
         )
-    checker(request)
+    try:
+        checker(request)
+    except HTTPException as exc:
+        _audit_rbac_denial(
+            request, required_role="admin", reason=f"checker_rejected:{exc.status_code}"
+        )
+        raise
 
 
 def forbid_viewer_writes(request: HTTPConnection) -> None:
@@ -113,9 +154,19 @@ def forbid_viewer_writes(request: HTTPConnection) -> None:
         user = get_current_user_from_request(request)
     except Exception as exc:
         logger.error("[RBAC] Session-Pruefung in forbid_viewer_writes fehlgeschlagen: %s", exc)
+        _audit_rbac_denial(
+            request,
+            required_role="admin_or_operator",
+            reason="session_check_unavailable",
+        )
         raise HTTPException(status_code=503, detail="RBAC-Pruefung nicht verfuegbar.")
     role = str(user.get("role") or "").lower()
     if role in ("viewer", "anonymous"):
+        _audit_rbac_denial(
+            request,
+            required_role="admin_or_operator",
+            reason=f"write_forbidden_for_role:{role}",
+        )
         raise HTTPException(
             status_code=403,
             detail=f"Nur Administratoren oder Operatoren duerfen schreibende Aktionen ausfuehren (erkannte Rolle: {role}).",

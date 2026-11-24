@@ -33,6 +33,16 @@ def _atomic_write_text(path: str, content: str) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, path)
+        # H (dieses Audits): ohne Directory-fsync kann der Rename nach
+        # Stromausfall im FS-Journal verloren gehen (siehe db_backup_manager).
+        try:
+            dir_fd = os.open(tdir, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
     except BaseException:
         try:
             os.unlink(tmp)
@@ -41,11 +51,47 @@ def _atomic_write_text(path: str, content: str) -> None:
         raise
 
 
+def _active_tenant_id() -> str:
+    try:
+        from backend.tenant_context import tenant_context
+        return tenant_context.get_active_tenant_id() or "default"
+    except Exception:
+        return "default"
+
+
 def _get_vault_dir() -> str:
+    """Einzige, tenant-bewusste Vault-Wurzel für ALLE Vault-Endpunkte.
+
+    G (dieses Audits): vorher war nur die Liste tenant-aware (nur als
+    Cache-Key), Lese-/Schreib-/Löschpfade nutzten stets die globale Wurzel.
+    Fail-closed: existiert <vault_root>/<tenant_id>, wird ausschliesslich
+    dieser Mandantenordner verwendet. Andernfalls gilt der bewusst geteilte
+    Vault; dann werden Mutationen zwingend auditiert (_audit_vault_mutation).
+    """
     main_mod = sys.modules.get("main")
     if main_mod and hasattr(main_mod, "OBSIDIAN_VAULT_DIR"):
-        return getattr(main_mod, "OBSIDIAN_VAULT_DIR")
-    return OBSIDIAN_VAULT_DIR
+        root = getattr(main_mod, "OBSIDIAN_VAULT_DIR")
+    else:
+        root = OBSIDIAN_VAULT_DIR
+    tenant_dir = os.path.join(root, _active_tenant_id())
+    if os.path.isdir(tenant_dir):
+        return tenant_dir
+    return root
+
+
+def _audit_vault_mutation(action: str, path: str, tenant_id: str) -> None:
+    """GoBD-Audit vor Vault-Änderungen. Bei Fehler fail-closed (kein Write)."""
+    from backend.audit_log import chained_audit_log
+    chained_audit_log.record_event(
+        category="governance",
+        action=action,
+        agent_id=tenant_id,
+        payload={
+            "tenant_id": tenant_id,
+            "vault_root": _get_vault_dir(),
+            "path": path,
+        },
+    )
 
 
 def _get_vault_cache() -> Dict[str, Any]:
@@ -60,11 +106,7 @@ def api_get_vault_files(request: Request):
     require_admin_or_503(request)
     cache = _get_vault_cache()
     now = time.time()
-    try:
-        from backend.tenant_context import tenant_context
-        _tenant_id = tenant_context.get_active_tenant_id()
-    except Exception:
-        _tenant_id = "default"
+    _tenant_id = _active_tenant_id()
     if (
         cache.get("tenant") == _tenant_id
         and cache.get("data")
@@ -141,6 +183,21 @@ def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body
                 raise HTTPException(status_code=409, detail="Vault-Datei wurde inzwischen geaendert.")
         except (TypeError, ValueError):
             pass
+    # H (dieses Audits): mtime allein ist kein ETag — eine Aenderung gleicher
+    # Länge innerhalb derselben Sekunde blieb unbemerkt.
+    expected_size = payload.get("expected_size")
+    if expected_size is not None and os.path.exists(real_path):
+        try:
+            if int(os.path.getsize(real_path)) != int(expected_size):
+                raise HTTPException(status_code=409, detail="Vault-Datei wurde inzwischen geaendert (Groesse).")
+        except (TypeError, ValueError):
+            pass
+    # G: Audit vor der Mutation; ohne Auditnachweis wird abgelehnt.
+    try:
+        _audit_vault_mutation("vault_file_edited", real_path, _active_tenant_id())
+    except Exception as exc:
+        logger.warning("[Vault] Audit fehlgeschlagen, Edit abgelehnt: %s", exc)
+        raise HTTPException(status_code=500, detail="Audit-Log nicht verfügbar — Vault-Aenderung abgelehnt.")
     os.makedirs(os.path.dirname(real_path), exist_ok=True)
     _atomic_write_text(real_path, content)
     cache = _get_vault_cache()
@@ -165,6 +222,12 @@ def api_delete_vault_file_direct(request: Request, path: str = Query(...)):
         )
     if not os.path.isfile(real_path):
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+    # G: Audit vor der Mutation; ohne Auditnachweis wird abgelehnt.
+    try:
+        _audit_vault_mutation("vault_file_deleted", real_path, _active_tenant_id())
+    except Exception as exc:
+        logger.warning("[Vault] Audit fehlgeschlagen, Delete abgelehnt: %s", exc)
+        raise HTTPException(status_code=500, detail="Audit-Log nicht verfügbar — Vault-Löschung abgelehnt.")
     os.remove(real_path)
     cache = _get_vault_cache()
     cache["ts"] = 0.0

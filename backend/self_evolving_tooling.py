@@ -113,11 +113,13 @@ if __name__ == "__main__":
                 out = f"{sbx_res.get('stdout', '')}\n{sbx_res.get('stderr', '')}".strip()
                 passed = sbx_res.get("status") == "success" and "__VOYAGER_TEST_PASSED__" in out
                 return passed, out
-            if os.environ.get("ARCHON_REQUIRE_DOCKER_SANDBOX", "").strip().lower() in ("1", "true", "yes"):
-                return False, str(sbx_res.get("error") or "Docker-Sandbox erforderlich, aber nicht verfügbar.")
+            # HARTUNG: Host-Fallback nur noch mit explizitem Opt-in. Ohne
+            # Docker-Sandbox darf generierter Code nicht auf dem Host laufen.
+            if os.environ.get("ARCHON_ALLOW_HOST_SANDBOX", "").strip().lower() not in ("1", "true", "yes"):
+                return False, str(sbx_res.get("error") or "Docker-Sandbox erforderlich, aber nicht verfügbar (ARCHON_ALLOW_HOST_SANDBOX=true erlaubt den Host-Fallback explizit).")
         except Exception as sbx_err:
-            if os.environ.get("ARCHON_REQUIRE_DOCKER_SANDBOX", "").strip().lower() in ("1", "true", "yes"):
-                return False, f"Docker-Sandbox fehlgeschlagen: {sbx_err}"
+            if os.environ.get("ARCHON_ALLOW_HOST_SANDBOX", "").strip().lower() not in ("1", "true", "yes"):
+                return False, f"Docker-Sandbox fehlgeschlagen: {sbx_err} (Host-Fallback nur mit ARCHON_ALLOW_HOST_SANDBOX=true)"
 
         import tempfile
         with tempfile.TemporaryDirectory(prefix="archon_voyager_sbx_") as sbx_dir:

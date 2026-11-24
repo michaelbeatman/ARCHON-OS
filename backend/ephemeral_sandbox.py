@@ -398,6 +398,24 @@ class EphemeralSandbox:
 
             duration = round(time.time() - t0, 3)
 
+            # D: `--rm` entfernt den Container beim normalen Exit. Bisher wurde
+            # `destroyed: True` jedoch ohne jeden Beleg zurueckgegeben. Jetzt
+            # verifizieren und bei Bedarf nachtraeumlich aufraeumen.
+            present = _container_present(run_id)
+            if present is None:
+                # Docker nicht mehr erreichbar: --rm ist die einzige Garantie,
+                # aber nicht verifizierbar — ehrlich als solches melden.
+                destroyed = True
+                cleanup_verified = False
+            elif present:
+                # --rm hat nicht gegriffen: explizit killen und entfernen.
+                cleanup = _terminate_container(run_id)
+                destroyed = cleanup["destroyed"]
+                cleanup_verified = cleanup["cleanup_verified"]
+            else:
+                destroyed = True
+                cleanup_verified = True
+
             return {
                 "status": "success" if exit_code == 0 else "failed",
                 "run_id": run_id,
@@ -410,7 +428,9 @@ class EphemeralSandbox:
                 "memory_limit_mb": memory_limit_mb,
                 "network_enabled": network_enabled,
                 "limits_enforced": limits_enforced,
-                "destroyed": True
+                "destroyed": destroyed,
+                "destroyed_via_rm": True,
+                "cleanup_verified": cleanup_verified,
             }
 
         except subprocess.TimeoutExpired:

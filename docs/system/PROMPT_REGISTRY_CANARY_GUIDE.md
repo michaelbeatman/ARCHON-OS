@@ -3,7 +3,7 @@
 ## Überblick
 Vor Einführung der Prompt-Registry wurden Änderungen an System-Prompts direkt in `agent_profiles.json` überschrieben oder erzeugten unstrukturierte Backup-Dateien (`agent_profiles.json.bak.N`). 
 
-Die Prompt-Registry (`backend/prompt_registry.py`) überführt das Prompt-Management in eine transaktionale SQLite-Architektur (`prompt_versions` in `agentic_memory.db`) und ergänzt:
+Die Prompt-Registry (`backend/prompt_registry.py`) überführt das Prompt-Management in eine transaktionale SQLite-Architektur (`prompt_versions` in `memory.db`) und ergänzt:
 1. **Lückenlose Versionierung:** Jede Änderung speichert den Prompt, das Modell, Ersteller, Zeitstempel und eine Commit-Nachricht.
 2. **1-Click Rollback:** Ermöglicht die sofortige Wiederherstellung jedes historischen Stands unter Wahrung der Historie.
 3. **Unified Diff:** Textueller Zeilenvergleich zwischen beliebigen Versionen (`difflib.unified_diff`).

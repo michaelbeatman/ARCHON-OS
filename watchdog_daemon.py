@@ -89,7 +89,8 @@ class WatchdogDaemon:
                 return []
         return []
 
-    def save_alarm(self, profile_handle: str, reason: str, details: dict):
+    def save_alarm(self, profile_handle: str, reason: str, details: dict,
+                   aborted_successfully: bool = True):
         alarms = self.load_alarms()
         new_alarm = {
             "id": f"alarm_{int(time.time())}_{profile_handle}",
@@ -98,7 +99,9 @@ class WatchdogDaemon:
             "profile_handle": profile_handle,
             "reason": reason,
             "details": details,
-            "status": "triggered_and_aborted"
+            # A: Nie "aborted" melden, wenn kein Abort-Endpunkt den Abbruch
+            # bestaetigt hat — sonst luegt der Kill-Switch im Alarm-File.
+            "status": "triggered_and_aborted" if aborted_successfully else "abort_failed"
         }
         alarms.insert(0, new_alarm)
         alarms = alarms[:50]  # Keep last 50 alarms
@@ -182,6 +185,7 @@ class WatchdogDaemon:
         abort_headers = {"Content-Type": "application/json"}
         abort_headers.update(webhook_signature_headers(abort_body))
         aborted_successfully = False
+        failed_endpoints = []
         for ep in abort_endpoints:
             try:
                 if requests:
@@ -190,6 +194,8 @@ class WatchdogDaemon:
                         logger.info(f"Successfully aborted thread via {ep}")
                         aborted_successfully = True
                         break
+                    failed_endpoints.append(f"{ep}: HTTP {res.status_code}")
+                    logger.error(f"[WATCHDOG] Abort-Endpunkt {ep} für '{profile_handle}' lehnte ab: HTTP {res.status_code}")
                 else:
                     req = urllib.request.Request(
                         ep,
@@ -201,14 +207,33 @@ class WatchdogDaemon:
                             logger.info(f"Successfully aborted thread via {ep}")
                             aborted_successfully = True
                             break
-            except Exception:
+                        failed_endpoints.append(f"{ep}: HTTP {res.status}")
+                        logger.error(f"[WATCHDOG] Abort-Endpunkt {ep} für '{profile_handle}' lehnte ab: HTTP {res.status}")
+            except Exception as exc:
+                # A: Fehler nicht mehr still verschlucken — jeder Endpunkt
+                # einzeln loggen, damit ein wirkungsloser Kill-Switch sichtbar ist.
+                failed_endpoints.append(f"{ep}: {exc}")
+                logger.error(f"[WATCHDOG] Abort-Endpunkt {ep} für '{profile_handle}' fehlgeschlagen: {exc}")
                 continue
 
+        alarm_details = dict(details or {})
+        if failed_endpoints:
+            alarm_details["failed_abort_endpoints"] = failed_endpoints
+        if not aborted_successfully:
+            logger.critical(
+                f"🚨 [WATCHDOG] KILL-SWITCH FEHLGESCHLAGEN für Agent '{profile_handle}': "
+                f"keiner der {len(abort_endpoints)} Abort-Endpunkte hat einen Abbruch bestätigt. "
+                f"Fehler: {'; '.join(failed_endpoints) or 'keine Details'}"
+            )
+
         # 2. Local State Alarm dokumentieren
-        self.save_alarm(profile_handle, reason, details)
+        self.save_alarm(
+            profile_handle, reason, alarm_details,
+            aborted_successfully=aborted_successfully,
+        )
 
         # 3. Asynchrone n8n Benachrichtigung
-        self.trigger_n8n_webhook(profile_handle, reason, details)
+        self.trigger_n8n_webhook(profile_handle, reason, alarm_details)
 
     def scan_logs_and_metrics(self):
         """

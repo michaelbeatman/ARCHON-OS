@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from fastapi import APIRouter, Body, HTTPException, Request
 
 from archon.core.paths import HERMES_PROFILES_BASE, OPT_DATA_DIR
+from archon.core.provider_registry import get_provider
 
 logger = logging.getLogger("archon.routers.gateway")
 
@@ -52,7 +53,7 @@ _idle_stop_running = False
 
 def _run_docker_exec(cmd: list) -> tuple[int, str, str]:
     """Run a command inside the hermes container via docker_client (allowlisted)."""
-    import main as app_main
+    app_main = get_provider("app_main")
 
     if hasattr(app_main, "_run_docker_exec") and app_main._run_docker_exec is not _run_docker_exec:
         return app_main._run_docker_exec(cmd)
@@ -161,7 +162,7 @@ async def _gateway_idle_stop_loop():
 
 
 def _require_admin(request: Request):
-    import main as app_main
+    app_main = get_provider("app_main")
     if hasattr(app_main, "require_admin"):
         return app_main.require_admin(request)
     from archon.routers._rbac import require_admin_or_503
@@ -169,7 +170,7 @@ def _require_admin(request: Request):
 
 
 def _load_gateway_config() -> Dict:
-    import main as app_main
+    app_main = get_provider("app_main")
     cfg = app_main._load_json(app_main.GATEWAY_CONFIG_FILE, {})
     if not isinstance(cfg, dict):
         cfg = {}
@@ -180,13 +181,13 @@ def _load_gateway_config() -> Dict:
 
 
 def _save_gateway_config(cfg: Dict):
-    import main as app_main
+    app_main = get_provider("app_main")
     app_main._save_json(app_main.GATEWAY_CONFIG_FILE, cfg)
 
 
 def _get_all_installed_profiles() -> list[str]:
     """List profile names from the mounted profiles volume directory."""
-    import main as app_main
+    app_main = get_provider("app_main")
     candidates = [HERMES_PROFILES_BASE, os.path.join(app_main.MEMORY_DIR, "hermes_profiles")]
     for d in candidates:
         if os.path.exists(d) and os.path.isdir(d):
@@ -202,7 +203,7 @@ def _get_all_installed_profiles() -> list[str]:
 
 
 def _update_profile_status(profile_id: str, new_status: str):
-    import main as app_main
+    app_main = get_provider("app_main")
     try:
         prof_file = os.path.join(app_main.WORKSPACE_DIR, "agent_profiles.json")
         if os.path.exists(prof_file):
@@ -233,7 +234,7 @@ def _update_profile_status(profile_id: str, new_status: str):
 
 @router.get("/list")
 def api_gateway_list():
-    import main as app_main
+    app_main = get_provider("app_main")
     all_profiles = app_main._get_all_installed_profiles()
     cfg = app_main._load_gateway_config()
     autostart_map = cfg.get("autostart", {})
@@ -275,7 +276,7 @@ async def api_gateway_start(request: Request, payload: GatewayStartRequest = Bod
         raise HTTPException(status_code=400, detail="profile_id required")
 
     cmd = ["hermes", "gateway", "start"] if profile_id == "default" else ["hermes", "--profile", profile_id, "gateway", "start"]
-    import main as app_main
+    app_main = get_provider("app_main")
     rc, stdout, stderr = await asyncio.to_thread(app_main._run_docker_exec, cmd)
     if rc != 0:
         logger.error(f"[Gateway] Start fuer '{profile_id}' fehlgeschlagen (rc={rc}): {stderr or stdout}")
@@ -306,7 +307,7 @@ async def api_gateway_stop(request: Request, payload: GatewayStopRequest = Body(
         raise HTTPException(status_code=400, detail="default gateway cannot be stopped")
 
     cmd = ["hermes", "--profile", profile_id, "gateway", "stop"]
-    import main as app_main
+    app_main = get_provider("app_main")
     rc, stdout, stderr = await asyncio.to_thread(app_main._run_docker_exec, cmd)
     if rc != 0:
         logger.error(f"[Gateway] Stop fuer '{profile_id}' fehlgeschlagen (rc={rc}): {stderr or stdout}")
@@ -326,7 +327,7 @@ async def api_gateway_stop(request: Request, payload: GatewayStopRequest = Body(
 
 @router.get("/config")
 def api_get_gateway_config():
-    import main as app_main
+    app_main = get_provider("app_main")
     return app_main._load_gateway_config()
 
 
@@ -335,7 +336,7 @@ def api_save_gateway_config_endpoint(request: Request, payload: GatewayConfigReq
     _require_admin(request)
     # Handler prueft per `"key" in payload` — None-Werte muessen weg.
     payload = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
-    import main as app_main
+    app_main = get_provider("app_main")
     cfg = app_main._load_gateway_config()
     if "idle_timeout_minutes" in payload:
         try:
@@ -356,7 +357,7 @@ def api_gateway_autostart(request: Request, payload: GatewayAutostartRequest = B
     if not profile_id:
         raise HTTPException(status_code=400, detail="profile_id required")
     enable = bool(payload.get("autostart", False))
-    import main as app_main
+    app_main = get_provider("app_main")
     cfg = app_main._load_gateway_config()
     cfg.setdefault("autostart", {})
     cfg["autostart"][profile_id] = enable
@@ -367,7 +368,7 @@ def api_gateway_autostart(request: Request, payload: GatewayAutostartRequest = B
 @router.post("/stop-all")
 def api_gateway_stop_all(request: Request):
     _require_admin(request)
-    import main as app_main
+    app_main = get_provider("app_main")
     cfg = app_main._load_gateway_config()
     active_map = cfg.get("active_gateways", {})
     stopped = []

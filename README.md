@@ -7,7 +7,7 @@
 **Self-Hosted Multi-Agent Operating System for Founders, Teams & Domain Specialists**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release: v0.5.7](https://img.shields.io/badge/Release-v0.5.7-6366f1.svg)](CHANGELOG.md)
+[![Release: v0.5.7.4](https://img.shields.io/badge/Release-v0.5.7.4-6366f1.svg)](CHANGELOG.md)
 [![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
@@ -23,7 +23,7 @@
 
 > **Foundation first:** Archon OS is an extension built on **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** by **[Nous Research](https://nousresearch.com)** — the autonomous multi-agent runtime. Hermes is the engine; Archon OS turns it into a complete self-hosted business operating system.
 
-Archon OS replaces isolated single-prompt chatbots with a persistent, self-hosted **Agentic Operating System**. It orchestrates **70 domain specialists across 8 specialized domains**, runs structured **55-framework AI Boardroom debates**, pairs **Zero-Egress local AI routing** with a tamper-evident **GoBD/ISO-27001 SHA-256 audit log**, and connects directly to your **Obsidian Second Brain**, **n8n automations**, **Telegram**, and an integrated **CRM & ERP suite *(Alpha)***.
+Archon OS replaces isolated single-prompt chatbots with a persistent, self-hosted **Agentic Operating System**. It orchestrates **70 domain specialists across 8 specialized domains**, runs structured **55-framework AI Boardroom debates**, pairs **Zero-Egress local AI routing** with a tamper-evident **GoBD/ISO-27001 HMAC-SHA256 audit log (Env-Key)**, and connects directly to your **Obsidian Second Brain**, **n8n automations**, **Telegram**, and an integrated **CRM & ERP suite *(Alpha)***.
 
 > **Localization & Global Edition (`v0.5.2.1`):** Full bilingual (`en` & `de`) parity across all **70 specialist `SOUL.md` profiles**, **832 parametric Prompt Studio templates**, **55 AI Boardroom frameworks**, and the **First-Run Web Setup Wizard**; core UI localized in 11 languages (`en`, `de`, `es`, `fr`, `it`, `ja`, `ko`, `nl`, `pt`, `ru`, `zh`). The **User Manual**, **Complete Feature List (`v0.5.2.1`)**, and **55 Boardroom Frameworks Reference** are available immediately below as indexed **English & German PDFs**.
 
@@ -35,7 +35,7 @@ Archon OS is a self-hosted multi-agent workspace built on [Hermes Agent](https:/
 
 What that means in practice:
 
-- **Structured decisions, not one-shot answers.** An AI Boardroom runs isolated multi-perspective debates with critic cross-examination and synthesis across 55 frameworks (OKR, Pre-Mortem, Six Thinking Hats, …).
+- **Structured decisions, not one-shot answers.** An AI Boardroom runs isolated multi-perspective debates with a critique prompt and synthesis across 55 frameworks (OKR, Pre-Mortem, Six Thinking Hats, …).
 - **Cost control per model and per task.** OmniRoute routes each request to local (Ollama, LM Studio) or cloud providers and attributes cost before dispatch (`cost_estimator.py` checks budgets).
 - **Data sovereignty.** Zero-Egress routing keeps finance, contract and CRM work on local models; worker containers run in an `internal: true` Docker network without an internet route.
 - **Tamper-evident audit trail.** An HMAC-SHA256 hash-chained audit log (external anchor + startup key check) records every dispatch, including provider, model and host.
@@ -44,7 +44,7 @@ What that means in practice:
 
 **Pre-1.0, and we say that up front:** interfaces and config keys change between releases, the ERP/CRM module is alpha, and multi-user role enforcement is still being hardened. If that works for you, issues and PRs are welcome.
 
-### Current Release State (`v0.5.7`, 2026-11-22)
+### Current Release State (`v0.5.7.4`, 2026-11-24)
 
 The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions since `v0.5.6.0`:
 
@@ -54,9 +54,9 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 - **Observability & tooling:** OTel traces in the LLM kernel and DAG, trace-to-eval replay fixtures, Python 3.13, split test requirements.
 - **Workspace:** 4-step onboarding wizard v2, operations calendar and 11 LinkedIn skills.
 
-> **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.3** while the badge/manual still say v0.5.7.
+> **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.4** (released 2026-11-24 00:24, commit `v0.5.7`), matching the badge; the PDF manual still targets v0.5.2.1.
 
-> **Counts measured in this checkout:** 73 entries in `agent_profiles.json` (70 specialists + 3 system/meta profiles), 73 roles in `roles.json`, 73 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7`.
+> **Counts measured in this checkout:** 73 entries in `agent_profiles.json` (70 specialists + 3 system/meta profiles), 73 roles in `roles.json`, 73 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7.4`.
 
 ### Product Tour
 
@@ -87,10 +87,10 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 | Capability | Classic AI Chat | Single "Super-Agent" | **Archon Agentic OS** |
 |---|---|---|---|
 | **Agent Roster** | 1 generic assistant | 1 generalist with tool plugins | **70 distinct specialists** (`agent_profiles.json`) with **3-tier `SOUL.md`** (`Compact` / `Pro` / `Full`) |
-| **Strategic Decisions** | One-shot answer | Iterative tool loop | **AI Boardroom**: isolated multi-perspective debate, critic cross-examination & synthesis across **55 frameworks** |
+| **Strategic Decisions** | One-shot answer | Iterative tool loop | **AI Boardroom**: isolated multi-perspective debate, critique prompt & synthesis across **55 frameworks** |
 | **Long-Term Memory** | Flat chat history | Vector store snippets | **Obsidian Vault sync**, per-agent HR scorecards (`Personalakten/`), WAL SQLite DBs & LRU-K paging |
 | **Privacy & Egress** | All data to cloud APIs | API keys in runtime env | **Zero-Egress Gate & Privacy-Router Hard-Block** (fail-closed for finance/contracts/CRM when local LLM is offline) + **`internal: true` Worker Network (no internet route)** + **Dual-LLM Guard** |
-| **Governance & Liability** | Blind output | Unchecked tool calls | **EU AI Act Engine (Art. 4 / Annex III)**, **1-Click GoBD Procedural PDF**, **HITL Gates** & **SHA-256 Audit Chain (incl. per-call LLM-Dispatch provider/model/host proof)** |
+| **Governance & Liability** | Blind output | Unchecked tool calls | **EU AI Act Engine (Art. 4 / Annex III)**, **1-Click GoBD Procedural PDF**, **HITL Gates** & **HMAC-SHA256 Audit Chain (Env-Key; incl. per-call LLM-Dispatch provider/model/host proof)** |
 | **Business Ops** | None | External SaaS integrations | **Multi-Tenant SQLite Isolation (Holding/GmbH/SPV)**, **Kanban (4-eyes gate)**, **Email Triage**, **CRM** & **ERP *(Alpha)*** |
 
 ---
@@ -160,7 +160,7 @@ chmod +x install.sh
 
 ### Option C: Instant Zero-Key Read-Only Demo (`ARCHON_DEMO_MODE=true`)
 
-Want to explore the full Cockpit, the **Mittelstand Muster GmbH** 6-phase AI Boardroom debate, Kanban cards, and 70 specialists **in 30 seconds without a single API key or LLM cost** (or host a safe public showcase on a €5 VPS)?
+Want to explore the full Cockpit, the **Mittelstand Muster GmbH** 4-phase AI Boardroom debate (+ optional MoA), Kanban cards, and 70 specialists **in 30 seconds without a single API key or LLM cost** (or host a safe public showcase on a €5 VPS)?
 
 ```bash
 ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
@@ -179,7 +179,7 @@ flowchart LR
     OR --> OM["OmniRoute Switchboard (Port 20128)"]
     OM -->|Local / Zero-Egress| LOC["Ollama / LM Studio (On-Premise)"]
     OM -->|Cloud Providers| CLD["OpenRouter / OpenAI / Anthropic / Gemini"]
-    UI --> DB["SQLite WAL + SHA-256 Audit Log + Obsidian Vault"]
+    UI --> DB["SQLite WAL + HMAC-SHA256 Audit Log + Obsidian Vault"]
     UI --> ERP["CRM & ERP Module (Alpha) + Kanban HITL"]
     UI <-->|TCP via Socket Proxy| DOC["Docker Socket Proxy (Least Privilege)"]
     UI <-->|Webhooks| N8N["n8n Automation & RSS Watchdog"]
@@ -187,7 +187,7 @@ flowchart LR
 
 ### The 4 Navigation Pillars
 1. **Command & Operations:** Operations Command Center, Master Chat, Triage Inbox (Webhooks, Email, Messenger, Approvals), **70-Specialist Agent Fleet** (incl. Bot Screen PbD & 3-tier SOUL), **832-Template Prompt Studio**, Showroom Sandbox.
-2. **Cognition & Knowledge:** Internet-Watchdog (RSS/Web Radar), Research Lab (multi-source triangulation & dossiers), Central Library (Obsidian Vault + AnythingLLM RAG), AI Boardroom (6-phase debate across 55 frameworks).
+2. **Cognition & Knowledge:** Internet-Watchdog (RSS/Web Radar), Research Lab (multi-source triangulation & dossiers), Central Library (Obsidian Vault + AnythingLLM RAG), AI Boardroom (4-phase debate + optional MoA across 55 frameworks).
 3. **Economy & ERP *(Alpha)*:** CRM (addresses, contacts, pipeline), ERP suite (offers, contracts, invoices, receivables/dunning, receipts), OmniRoute token FinOps with per-model cost control.
 4. **Infrastructure & Governance:** Org-Chart & Teams, Guardian (Concurrency, Sessions, Rate Limits), System Control Center (First-Run Wizard, API Keys, Routing, Kernel Watchdog, Updates), Tamper-Evident Audit Log Stream.
 

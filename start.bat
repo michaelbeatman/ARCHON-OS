@@ -20,6 +20,10 @@ if /i "!STACK_PROFILE!"=="core" set "SERVICES=archon-os docker-socket-proxy herm
 if /i "!STACK_PROFILE!"=="full" set "SERVICES=archon-os docker-socket-proxy hermes anything-llm chroma n8n ollama-embed"
 if /i "!STACK_PROFILE!"=="rag" set "SERVICES=archon-os docker-socket-proxy hermes anything-llm chroma n8n ollama-embed"
 
+rem C23: Profile starten keine Container, wenn eine explizite Service-Liste
+rem uebergeben wird -> die Profil-Services ergoenzend aufnehmen.
+if defined OBS_FLAGS set "SERVICES=!SERVICES! prometheus grafana uptime-kuma loki promtail litestream"
+
 echo Starte Archon Agentic OS 2026 + Hermes Agent + AnythingLLM (!STACK_PROFILE!)...
 docker compose !OBS_FLAGS! up -d !SERVICES!
 if %errorlevel% neq 0 (

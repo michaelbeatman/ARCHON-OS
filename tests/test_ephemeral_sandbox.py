@@ -207,12 +207,13 @@ class TestEphemeralSandboxFailClosed:
                 mock_run.side_effect = [
                     MagicMock(returncode=0, stdout="", stderr=""),  # docker info
                     MagicMock(returncode=0, stdout="4\n", stderr="", timeout=30),  # docker run
+                    MagicMock(returncode=0, stdout="", stderr=""),  # C12: docker ps -a (Cleanup-Verifikation)
                 ]
-                
+
                 result = ephemeral_sandbox.execute_in_sandbox("print(2+2)")
-                
-                # Wenn docker info OK, wird docker run aufgerufen
-                assert mock_run.call_count == 2
+
+                # docker info + docker run + verifizierendes docker ps -a
+                assert mock_run.call_count == 3
                 # Der zweite Aufruf sollte docker run als Liste sein
                 call_args = mock_run.call_args_list[1][0][0]
                 assert call_args[0] == "docker"

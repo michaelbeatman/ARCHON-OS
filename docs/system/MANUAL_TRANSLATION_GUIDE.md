@@ -27,7 +27,7 @@ Translate descriptive prose into natural technical English, **but keep code path
 | Infrastruktur & Governance | Infrastructure & Governance | Pillar 4 |
 | Agenten-Kader (70 Spezialisten) | Specialist Fleet (70 Specialists) | Keep 8 + 5b domain numbering |
 | 3-Stufen-SOUL-Mechanik | 3-Tier SOUL Architecture | Keep `SOUL_COMPACT.md`, `SOUL_PRO.md`, `SOUL_FULL.md` |
-| AI-Boardroom (55 Frameworks) | AI Boardroom (55 Frameworks) | Keep 6-phase structure |
+| AI-Boardroom (55 Frameworks) | AI Boardroom (55 Frameworks) | Keep 4-phase structure (+ optional MoA) |
 | Eingang / Triage | Inbox & Event Triage | View #2 |
 | Zentralbibliothek / Wissensvault | Central Library & Obsidian Vault | Keep `Personalakten/` / file paths exact |
 | Freigabe-Gate (HITL) | Human-in-the-Loop (HITL) Approval Gate | Keep `[T]` trusted badge naming |

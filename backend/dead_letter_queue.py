@@ -12,7 +12,10 @@ import uuid
 import inspect
 import asyncio
 import sqlite3
+import logging
 from typing import Callable
+
+logger = logging.getLogger("archon_os.dead_letter_queue")
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -94,6 +97,26 @@ def _init_db() -> None:
 # Replay abgelehnt (fail-closed) statt einfach eine Erfolgsmeldung zu erfinden.
 _JOB_EXECUTORS: Dict[str, Callable[..., Any]] = {}
 
+# C: Referenzen auf fire-and-forget Replay-Tasks. Ohne Registry kann ein
+# Replay-Thread den Task verlieren und ein zweiter Replay denselben Job
+# noch einmal zustellen (doppelte Webhooks/Mails).
+_RUNNING_TASKS = set()
+
+
+def _track_replay_task(task: "asyncio.Task[Any]") -> None:
+    """Task bis zum Abschluss halten und Ausnahmen sichtbar machen."""
+    _RUNNING_TASKS.add(task)
+
+    def _done(done_task: "asyncio.Task[Any]") -> None:
+        _RUNNING_TASKS.discard(done_task)
+        if done_task.cancelled():
+            return
+        exc = done_task.exception()
+        if exc is not None:
+            logger.error("[DLQ] Hintergrund-Replay fehlgeschlagen: %s", exc)
+
+    task.add_done_callback(_done)
+
 
 def register_job_executor(job_type: str, executor: Optional[Callable[..., Any]] = None):
     """Registriert einen Replay-Executor (auch als Dekorator nutzbar)."""
@@ -128,7 +151,9 @@ def _run_executor(executor: Callable[..., Any], payload: Dict[str, Any], item: D
             loop = None
         if loop is not None and loop.is_running():
             # Aus async Kontext: nicht blockieren, Task im laufenden Loop fortfuehren.
-            loop.create_task(result)
+            # C: Task referenzieren, damit er nicht GC-verloren geht und
+            # Exceptions nicht unbemerkt bleiben.
+            _track_replay_task(loop.create_task(result))
             return {"status": "scheduled"}
         return asyncio.run(result)
     return result
@@ -201,6 +226,7 @@ class DeadLetterQueueManager:
         new_retry = int(row["retry_count"] or 0) + 1
         replay_result: Any = None
         error_text = ""
+        claim_worker: Optional[str] = None
         if simulate_success:
             # Demo: bewusst KEIN Seiteneffekt, aber explizit gekennzeichnet.
             new_status = "replayed_success"
@@ -215,6 +241,30 @@ class DeadLetterQueueManager:
                     "error": f"Kein Replay-Executor fuer job_type '{row['job_type']}' registriert.",
                     "job_type": row["job_type"],
                     "dlq_id": dlq_id,
+                }
+            # C: CAS-Claim nach dem Muster von claim_next(). Erst mit
+            # gehaltenem Claim darf zugestellt und danach der Status
+            # (insbesondere 'queued') geschrieben werden.
+            claim_worker = f"{os.getpid()}:{uuid.uuid4().hex[:8]}"
+            now_ts = datetime.now().timestamp()
+            with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                cur = conn.execute(
+                    "UPDATE dead_letter_queue SET claimed_by = ?, claim_expires = ? "
+                    "WHERE dlq_id = ? AND "
+                    "(claimed_by = '' OR claimed_by IS NULL OR claim_expires IS NULL OR claim_expires <= ?)",
+                    (claim_worker, now_ts + 120, dlq_id, now_ts),
+                )
+                claimed = int(cur.rowcount or 0) == 1
+                conn.commit()
+            if not claimed:
+                return {
+                    "replayed": False,
+                    "status": "queued",
+                    "error": f"DLQ-Eintrag '{dlq_id}' wird bereits von einem anderen Worker geclaimt.",
+                    "job_type": row["job_type"],
+                    "dlq_id": dlq_id,
+                    "claim_conflict": True,
                 }
             try:
                 replay_result = _run_executor(executor, item["payload"], item)
@@ -238,13 +288,22 @@ class DeadLetterQueueManager:
             if new_status == "queued" else 0.0
         )
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
-            conn.execute("""
-                UPDATE dead_letter_queue
-                SET retry_count = ?, status = ?, next_backoff_seconds = ?, next_try_at = ?,
-                    last_replay_at = ?, error_message = ?
-                WHERE dlq_id = ?
-            """, (new_retry, new_status, next_backoff, next_try_at, now_iso, error_text, dlq_id))
+            set_sql = (
+                "retry_count = ?, status = ?, next_backoff_seconds = ?, next_try_at = ?, "
+                "last_replay_at = ?, error_message = ?"
+            )
+            if claim_worker is not None:
+                set_sql += ", claimed_by = '', claim_expires = 0"
+            sql = f"UPDATE dead_letter_queue SET {set_sql} WHERE dlq_id = ?"
+            params: List[Any] = [new_retry, new_status, next_backoff, next_try_at, now_iso, error_text, dlq_id]
+            if claim_worker is not None:
+                # C: Nur schreiben, wenn wir den Claim noch halten.
+                sql += " AND claimed_by = ?"
+                params.append(claim_worker)
+            changed = conn.execute(sql, params).rowcount
             conn.commit()
+            if claim_worker is not None and int(changed or 0) != 1:
+                logger.warning("[DLQ] Claim für '%s' verloren; Status wurde nicht geschrieben.", dlq_id)
 
         return {
             "replayed": bool(new_status == "replayed_success"),

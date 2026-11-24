@@ -19,7 +19,7 @@
 
 ---
 
-Archon OS는 일회성 챗봇을 대체하는 영구적·셀프 호스팅 **Agentic Operating System**입니다. **8개 핵심 도메인 70명 전문가**를 오케스트레이션하고, **55개 프레임워크 기반 AI 보드룸 토론**, **Zero-Egress 로컬 AI 라우팅**, 위변조 검증 가능한 **SHA-256 감사 로그(GoBD / ISO 27001)**, 그리고 **Obsidian Second Brain**·**n8n**·**Telegram**·**CRM & ERP *(Alpha)*** 모듈을 하나로 연결합니다.
+Archon OS는 일회성 챗봇을 대체하는 영구적·셀프 호스팅 **Agentic Operating System**입니다. **8개 핵심 도메인 70명 전문가**를 오케스트레이션하고, **55개 프레임워크 기반 AI 보드룸 토론**, **Zero-Egress 로컬 AI 라우팅**, 위변조 검증 가능한 **HMAC-SHA256 감사 로그(GoBD / ISO 27001)**, 그리고 **Obsidian Second Brain**·**n8n**·**Telegram**·**CRM & ERP *(Alpha)*** 모듈을 하나로 연결합니다.
 
 > **로컬라이제이션 현황:** UI는 9개 언어(`en`, `de`, `es`, `fr`, `pt`, `ru`, `ja`, `ko`, `zh`)를 지원합니다. 에이전트 `SOUL.md` 및 보드룸 방법론은 현재 독일어 기반이며 다국어 번역이 진행 중입니다([Roadmap M31](../system/ROADMAP_2026.md)).
 

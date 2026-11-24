@@ -150,7 +150,6 @@ docs/_archive/
 
 # Lokale NotebookLM-/SSOT-Artefakte (nicht Teil eines Releases)
 notebooklm/
-NOTEBOOKLM_SOURCES.md
 *.cat_backup
 *.ssot_backup
 scripts/generate_notebooklm_package.py

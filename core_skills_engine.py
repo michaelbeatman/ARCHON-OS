@@ -7,6 +7,34 @@ import subprocess
 from typing import List, Dict, Optional
 
 try:
+    from archon.core.cache import ttl_cache  # SSOT: TTL-Cache mit Single-Flight
+except ImportError:  # pragma: no cover - Root nicht im sys.path (direkter CLI-Aufruf)
+    import functools
+    import threading
+    import time as _cache_time
+
+    def ttl_cache(seconds: float = 30.0, maxsize: int = 256):
+        """Minimaler, arg-keyed Fallback ohne externe Dependencies."""
+        def decorator(fn):
+            store = {}
+            lock = threading.Lock()
+
+            @functools.wraps(fn)
+            def wrapper(*args, **kwargs):
+                key = (args, tuple(sorted(kwargs.items())))
+                now = _cache_time.time()
+                with lock:
+                    hit = store.get(key)
+                    if hit and hit[0] > now:
+                        return hit[1]
+                value = fn(*args, **kwargs)
+                with lock:
+                    store[key] = (_cache_time.time() + seconds, value)
+                return value
+            return wrapper
+        return decorator
+
+try:
     from utils.path_jail import safe_path_within, safe_filename, PathJailError
 except ImportError:  # pragma: no cover - direkter Aufruf ausserhalb des Repo-Roots
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -173,8 +201,14 @@ class ObsidianVaultSkill:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    @ttl_cache(seconds=60)
     def search_obsidian_notes(self, query: str) -> Dict:
-        """Searches vault notes for matching query content."""
+        """Searches vault notes for matching query content.
+
+        D) os.walk + f.read() ueber alle .md-Dateien lief bei JEDEM Request.
+        Der Cache ist pro (Instanz, Query) 60 s gueltig; der zentrale
+        Single-Flight verhindert parallele Duplicate-Scans.
+        """
         results = []
         try:
             for root, _, files in os.walk(self.vault_dir):

@@ -18,6 +18,7 @@ import datetime
 import ipaddress
 import threading
 import time
+import contextlib
 from typing import Dict, Any, List, Optional, Tuple
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 import logging
@@ -31,6 +32,29 @@ try:
 except Exception:
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 GENESIS_HASH = "0" * 64
+
+
+@contextlib.contextmanager
+def _read_snapshot(lock: threading.RLock, conn: sqlite3.Connection):
+    """F (Audit): In-Process-Lock nur fuer den Transaktionsstart halten.
+
+    ``verify_integrity()`` wird von main.py alle 30 s aufgerufen. Der fruehere
+    Volltabellen-Scan unter ``self._lock`` blockierte jeden Schreibvorgang.
+    Eine explizite READ-Transaktion in WAL liefert ueber die gesamte Prüfung
+    einen konsistenten Snapshot, ohne dass die Lock waehrend des Scans gehalten
+    wird. Parallel appends bleiben moeglich; der (asynchrone) Anker wird
+    dadurch praefix-tolerant geprueft (siehe G).
+    """
+    with lock:
+        conn.execute("BEGIN")
+    try:
+        yield
+    finally:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
 
 # HMAC statt nacktem SHA-256: ohne Separat-Secret kann jemand mit DB-Schreibzugriff
 # die Kette ab Block 1 neu signieren. Der Key kommt ausschließlich aus der ENV
@@ -82,7 +106,14 @@ def _key_for_block(block_id) -> bytes:
         return b""
     if block_id is None:
         return epochs[-1][1]
-    usable = [key for start, key in epochs if start <= int(block_id)]
+    try:
+        block_num = int(block_id)
+    except (TypeError, ValueError):
+        # E (Audit): z. B. treasury_transactions nutzt TEXT-IDs ('tx-...').
+        # Nicht mit ValueError abbrechen, sondern konsistent zum Schreibpfad
+        # (der None uebergibt) den juengsten Key verwenden.
+        return epochs[-1][1]
+    usable = [key for start, key in epochs if start <= block_num]
     return usable[-1] if usable else b""
 
 
@@ -400,17 +431,25 @@ class ChainedAuditLog:
             try:
                 conn.execute("BEGIN IMMEDIATE")
                 cur = conn.cursor()
-                cur.execute("SELECT current_hash FROM audit_log ORDER BY id DESC LIMIT 1")
+                cur.execute("SELECT id, current_hash FROM audit_log ORDER BY id DESC LIMIT 1")
                 last_row = cur.fetchone()
                 prev_hash = last_row["current_hash"] if last_row and last_row["current_hash"] else GENESIS_HASH
+                # E (Audit): Schreib- und Lesepfad muessen dieselbe Block-ID
+                # verwenden. verify_integrity() uebergibt r["id"] an
+                # _verify_hash(); ohne ID naehme _chain_hash() immer den
+                # juengsten Key und eine Rotation mit EPOCH_FROM waere wirkungslos.
+                next_id = int(cur.execute(
+                    "SELECT COALESCE(MAX(id), 0) + 1 FROM audit_log"
+                ).fetchone()[0])
 
                 # company_id in den signierten String aufnehmen: sonst kann die
                 # Mandantenzuordnung nachträglich geändert werden, ohne dass
                 # verify_integrity() alarmiert.
                 raw_str = f"{prev_hash}|{now_iso}|{category}|{action}|{agent_id}|{company_id_val}|{payload_str}"
-                current_hash = _chain_hash(raw_str)
+                current_hash = _chain_hash(raw_str, next_id)
 
                 col_map = {
+                    "id": next_id,
                     "timestamp": now_iso,
                     "category": category,
                     "action": action,
@@ -478,6 +517,9 @@ class ChainedAuditLog:
         http_status: int = 200,
         zero_egress_active: bool = False,
         extra: Optional[Dict[str, Any]] = None,
+        cost_usd: Optional[float] = None,
+        prompt_tokens: Optional[int] = None,
+        completion_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Protokolliert einen einzelnen LLM-Dispatch (oder geblockten Versuch) revisionssicher
@@ -497,6 +539,15 @@ class ChainedAuditLog:
             "http_status": int(http_status),
             "zero_egress_active": bool(zero_egress_active),
         }
+        # H (Audit): Kosten und Token-Verbrauch sind revisionsrelevant und
+        # gehoeren in den signierten Payload, sofern der Aufrufer sie liefert.
+        # Optionale Parameter -> bestehende Aufrufer bleiben kompatibel.
+        if cost_usd is not None:
+            payload["cost_usd"] = float(cost_usd)
+        if prompt_tokens is not None:
+            payload["prompt_tokens"] = int(prompt_tokens)
+        if completion_tokens is not None:
+            payload["completion_tokens"] = int(completion_tokens)
         if extra and isinstance(extra, dict):
             for k, v in extra.items():
                 if k not in payload:
@@ -516,8 +567,8 @@ class ChainedAuditLog:
         inklusive lückenloser Validierung aller `llm_dispatch`-Nachweisfelder
         (`provider`, `model`, `target_host`, `target_endpoint`, `egress_zone`).
         """
-        with self._lock:
-            conn = self._get_conn()
+        conn = self._get_conn()
+        with _read_snapshot(self._lock, conn):
             try:
                 cur = conn.cursor()
                 select_cols = [
@@ -599,6 +650,7 @@ class ChainedAuditLog:
 
                 expected_prev = GENESIS_HASH
                 llm_dispatch_count = 0
+                chain_hashes: List[str] = []  # G: alle Head-Hashes fuer Anker-Pruefung
 
                 for r in rows:
                     # 1. Kettenglied-Prüfung
@@ -673,12 +725,13 @@ class ChainedAuditLog:
                                         "reason": f"Spaltenmanipulation bei Block #{r['id']}: Indexspalte '{col_key}' ('{col_val}') weicht vom signierten Hash-Payload ('{pay_val}') ab.",
                                     }
 
+                    chain_hashes.append(str(r["current_hash"] or ""))
                     expected_prev = r["current_hash"]
 
-                # Externer Anker: der zuletzt geschriebene Head-Hash muss mit
-                # dem tatsaechlichen Head der Kette uebereinstimmen. Ohne
-                # diesen Abgleich ist der Anker ein reiner Schreibvorgang ohne
-                # Beweiswert (Tail-Loeschung bleibt unentdeckt).
+                # Externer Anker: der verankerte Head muss in der Kette
+                # vorhanden sein (Praefix-Pruefung, s. u.). Ohne diesen Abgleich
+                # ist der Anker ein reiner Schreibvorgang ohne Beweiswert
+                # (Tail-Loeschung bleibt unentdeckt).
                 anchor_path = os.environ.get("ARCHON_AUDIT_ANCHOR_PATH", "").strip()
                 anchor_ok: Optional[bool] = None
                 if anchor_path and os.path.isfile(anchor_path):
@@ -687,7 +740,13 @@ class ChainedAuditLog:
                             lines = [ln for ln in fh.read().splitlines() if ln.strip()]
                         if lines:
                             last_anchor = lines[-1].split("\t")[-1].strip()
-                            anchor_ok = last_anchor == str(expected_prev or "")
+                            # G (Audit): Der Anker wird asynchron/non-blocking
+                            # geschrieben und kann daher einen aelteren Head
+                            # enthalten. Er muss als frueherer Head in der Kette
+                            # vorkommen (Praefix), nicht zwingend deren Head sein.
+                            # Tail-Loeschung bleibt erkennbar: der Anker-Hash
+                            # verschwindet dann aus der Kette.
+                            anchor_ok = last_anchor in chain_hashes
                     except Exception as exc:
                         logger.error("Audit-Log: Anker nicht lesbar: %s", exc)
                         anchor_ok = False
@@ -866,7 +925,7 @@ class ChainedAuditLog:
         meta = {
             "standard": "GoBD & ISO/IEC 27001 Revisionssicherheits-Nachweis",
             "system": "Archon OS - Zero-Trust Cryptographic Ledger",
-            "exported_at": datetime.datetime.now().isoformat(),
+            "exported_at": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
             "verification_status": "VALID_INTACT" if verification["valid"] else "COMPROMISED",
             "total_blocks": len(rows),
             "llm_dispatch_blocks": verification.get("llm_dispatch_records", 0),

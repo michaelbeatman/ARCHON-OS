@@ -31,8 +31,31 @@ _PBKDF2_ITERATIONS = 600000
 _LEGACY_PBKDF2_ITERATIONS = 100000
 _MAX_FAILED_LOGINS = 5
 _LOCKOUT_WINDOW_SEC = 900
+# C) Harte Obergrenze: ohne Cap waechst _FAILED_LOGINS mit jedem neuen
+# Username/IP-Key unbegrenzt (nur erfolgreiche Logins entfernten Keys).
+_MAX_FAILED_LOGIN_KEYS = 10_000
 _AUTH_LOCK = threading.RLock()
 _FAILED_LOGINS: Dict[str, List[float]] = {}
+
+
+def _record_failed_login(fail_key: str, now_mono: float) -> None:
+    """Zeichnet einen Fehlversuch auf und begrenzt die Key-Anzahl hart.
+
+    C) Wechselnde Username/IP-Kombinationen konnten _FAILED_LOGINS sonst
+    unbegrenzt wachsen lassen. Die Dict-Reihenfolge ist die Insertion-Order,
+    daher werden bei Ueberlauf die aeltesten Keys zuerst entfernt.
+    """
+    with _AUTH_LOCK:
+        attempts = _FAILED_LOGINS.get(fail_key)
+        if attempts is None:
+            attempts = []
+            _FAILED_LOGINS[fail_key] = attempts
+        attempts.append(now_mono)
+        overflow = len(_FAILED_LOGINS) - _MAX_FAILED_LOGIN_KEYS
+        if overflow > 0:
+            for _ in range(overflow):
+                _FAILED_LOGINS.pop(next(iter(_FAILED_LOGINS)), None)
+
 
 logger = logging.getLogger("archon.auth")
 
@@ -349,16 +372,14 @@ class AuthService:
             user = cur.fetchone()
 
             if not user:
-                with _AUTH_LOCK:
-                    _FAILED_LOGINS.setdefault(fail_key, []).append(now_mono)
+                _record_failed_login(fail_key, now_mono)
                 return None
             if not user["is_active"]:
                 raise PermissionError("Dieses Benutzerkonto ist deaktiviert.")
 
             ok_pw, needs_upgrade = _verify_password_hash(password, user["password_hash"], user["salt"])
             if not ok_pw:
-                with _AUTH_LOCK:
-                    _FAILED_LOGINS.setdefault(fail_key, []).append(now_mono)
+                _record_failed_login(fail_key, now_mono)
                 return None
 
             with _AUTH_LOCK:

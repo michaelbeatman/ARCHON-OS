@@ -75,6 +75,27 @@ class ApprovalPolicyEngine:
                 );
             """)
 
+            # D (Audit): Die Kette war nur per Docstring "append-only". Ein
+            # DELETE am Tail wurde von verify_audit_integrity() nicht erkannt.
+            # Hash-/Identitaetsspalten duerfen nicht mehr veraendert werden;
+            # inhaltliche Aenderungen (z. B. new_value) bleiben absichtlich
+            # moeglich, damit verify_audit_integrity() sie als Manipulation
+            # erkennen und melden kann (bestehender Pruefpfad).
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS approval_chain_no_hash_update
+                BEFORE UPDATE OF id, prev_hash, current_hash ON approval_policy_audit_chain
+                BEGIN
+                    SELECT RAISE(ABORT, 'approval_policy_audit_chain is append-only');
+                END
+            """)
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS approval_chain_no_delete
+                BEFORE DELETE ON approval_policy_audit_chain
+                BEGIN
+                    SELECT RAISE(ABORT, 'approval_policy_audit_chain is append-only');
+                END
+            """)
+
             # 3. Approval Requests Queue
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS approval_requests (
@@ -133,6 +154,12 @@ class ApprovalPolicyEngine:
                 ]
                 
                 prev_h = GENESIS_HASH
+                # E (Audit): Block-ID an den Schreibpfad geben, damit der
+                # gleiche HMAC-Epochen-Key wie in verify_audit_integrity()
+                # (r["id"]) verwendet wird.
+                next_audit_id = int(cur.execute(
+                    "SELECT COALESCE(MAX(id), 0) + 1 FROM approval_policy_audit_chain"
+                ).fetchone()[0])
                 for domain, key, val, label, desc, user in default_policies:
                     cur.execute("""
                         INSERT INTO approval_policies (domain, policy_key, policy_value, label, description, updated_at, updated_by)
@@ -142,13 +169,14 @@ class ApprovalPolicyEngine:
                     # Chained audit log (HMAC-SHA256 wenn ARCHON_AUDIT_HMAC_KEY gesetzt, sonst SHA-256)
                     from backend.audit_log import _chain_hash
                     payload = f"{prev_h}|{now}|{user}|INIT|{domain}|{key}|{val}"
-                    curr_h = _chain_hash(payload)
+                    curr_h = _chain_hash(payload, next_audit_id)
                     cur.execute("""
                         INSERT INTO approval_policy_audit_chain 
-                        (prev_hash, current_hash, timestamp, user_id, action, domain, policy_key, old_value, new_value)
-                        VALUES (?, ?, ?, ?, 'INIT', ?, ?, '', ?)
-                    """, (prev_h, curr_h, now, user, domain, key, val))
+                        (id, prev_hash, current_hash, timestamp, user_id, action, domain, policy_key, old_value, new_value)
+                        VALUES (?, ?, ?, ?, ?, 'INIT', ?, ?, '', ?)
+                    """, (next_audit_id, prev_h, curr_h, now, user, domain, key, val))
                     prev_h = curr_h
+                    next_audit_id += 1
 
                 # Seed default delegation
                 cur.execute("""
@@ -176,13 +204,17 @@ class ApprovalPolicyEngine:
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
             payload = f"{prev_h}|{now}|{user_id}|{action}|{domain}|{key}|{old_val}->{new_val}"
-            curr_h = _chain_hash(payload)
+            # E (Audit): gleiche Block-ID wie in verify_audit_integrity().
+            next_id = int(cur.execute(
+                "SELECT COALESCE(MAX(id), 0) + 1 FROM approval_policy_audit_chain"
+            ).fetchone()[0])
+            curr_h = _chain_hash(payload, next_id)
 
             cur.execute("""
                 INSERT INTO approval_policy_audit_chain 
-                (prev_hash, current_hash, timestamp, user_id, action, domain, policy_key, old_value, new_value)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (prev_h, curr_h, now, user_id, action, domain, key, old_val, new_val))
+                (id, prev_hash, current_hash, timestamp, user_id, action, domain, policy_key, old_value, new_value)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (next_id, prev_h, curr_h, now, user_id, action, domain, key, old_val, new_val))
             conn.commit()
 
             if should_close:

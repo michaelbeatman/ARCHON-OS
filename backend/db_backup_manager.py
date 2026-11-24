@@ -15,6 +15,7 @@ import logging
 import sqlite3
 import datetime
 import shutil
+import tarfile
 import tempfile
 import threading
 from typing import Dict, Any, List, Optional
@@ -27,7 +28,17 @@ TENANTS_DIR = os.path.join(WORKSPACE_DIR, "data", "tenants")
 # K2 (Audit 23.11.2026): PocketBase-CRM war in keinem wiederkehrenden Backup.
 # Fester Pfad statt resolve_db("data.db") — letzteres würde eine leere DB
 # neu anlegen, weil "data.db" nicht in der db_paths-Registry steht.
-POCKETBASE_DB_PATH = os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data", "data.db")
+POCKETBASE_DATA_DIR = os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data")
+POCKETBASE_DB_PATH = os.path.join(POCKETBASE_DATA_DIR, "data.db")
+# K (dieses Audits): PocketBase legt zusätzliche Daten ab — auxiliary.db und
+# storage/**. Ohne diese Artefakte ist ein pb_data-Restore unvollständig.
+POCKETBASE_AUX_DB_PATH = os.path.join(POCKETBASE_DATA_DIR, "auxiliary.db")
+
+# SSOT für das Artefakt-Namensmuster. Früher hatte der Restore-Test sein eigenes
+# (falsches) Muster und suchte dadurch nie echte Backups. Beide Seiten nutzen
+# jetzt diese Konstanten.
+BACKUP_FILENAME_TEMPLATE = "{db_name}_{now_str}.db.gz"
+BACKUP_GLOB_PATTERN = "{db_name}_*.db.gz"
 
 # Sensible Konfigurationsdateien, die ohne DB-Backup nicht wiederhergestellt
 # werden koennten (Settings, HITL-Passkeys, HMAC-Keys, Service-Token).
@@ -43,6 +54,29 @@ _SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+\.secret\.gz$")
 
 # K1 (Audit 23.11.2026): parallele Restores müssen serialisiert werden.
 _RESTORE_LOCK = threading.RLock()
+
+
+def _audit_backup_restore(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """D5/F-08: Restore signiert in die Zentralkette (append-only).
+
+    Fail-closed: der Restore ist zum Zeitpunkt dieses Aufrufs bereits
+    abgeschlossen (oder fehlgeschlagen). Ein Audit-Schreibfehler darf keine
+    Exception in die Restore-Transaktion werfen; er wird geloggt und im
+    Result-Feld sichtbar gemacht. Nur IDs/Status/Metadaten, keine Inhalte.
+    """
+    try:
+        from backend.audit_log import chained_audit_log
+
+        event = chained_audit_log.record_event(
+            category="backup",
+            action="backup_restored",
+            agent_id=str(metadata.get("agent_id") or "system"),
+            payload=metadata,
+        )
+        return {"audit_status": "recorded", "audit_event_id": event.get("event_id")}
+    except Exception as exc:
+        logger.error("[DBBackup] Audit-Eintrag backup_restored fehlgeschlagen: %s", exc)
+        return {"audit_status": "error", "audit_error": type(exc).__name__}
 
 
 @contextmanager
@@ -126,6 +160,10 @@ def _collect_db_targets() -> List[str]:
     ]
     if os.path.isfile(POCKETBASE_DB_PATH):
         targets.append(POCKETBASE_DB_PATH)
+    # PocketBase-owned Zusatz-DB (Auth/Records-Metadaten) gehoert zum
+    # Wiederherstellungsumfang. Read-only gesichert (siehe checkpoint_and_backup).
+    if os.path.isfile(POCKETBASE_AUX_DB_PATH):
+        targets.append(POCKETBASE_AUX_DB_PATH)
     return targets
 
 
@@ -167,17 +205,22 @@ class DBBackupManager:
             if db_path == POCKETBASE_DB_PATH:
                 # Eindeutiger Backup-Name, sonst kollidiert er mit anderen data.db.
                 db_name = "pb_data.db"
+            elif db_path == POCKETBASE_AUX_DB_PATH:
+                db_name = "pb_auxiliary.db"
             elif db_path.startswith(tenants_prefix):
                 rel = db_path[len(tenants_prefix):].replace(os.sep, "__")
                 db_name = f"tenant_{rel}"
             else:
                 db_name = os.path.basename(db_path)
 
-            backup_file = os.path.join(self.backup_dir, f"{db_name}_{now_str}.db.gz")
+            backup_file = os.path.join(
+                self.backup_dir,
+                BACKUP_FILENAME_TEMPLATE.format(db_name=db_name, now_str=now_str),
+            )
             tmp_snapshot = None
             try:
-                if db_path == POCKETBASE_DB_PATH:
-                    # PocketBase owns schema and WAL of this DB. Never issue a
+                if db_path in (POCKETBASE_DB_PATH, POCKETBASE_AUX_DB_PATH):
+                    # PocketBase owns schema and WAL of these DBs. Never issue a
                     # write PRAGMA against the live file (D3-H7). A read-only
                     # connection + backup API still sees a consistent snapshot.
                     src_conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10.0)
@@ -219,6 +262,10 @@ class DBBackupManager:
                     except OSError as rm_exc:
                         logger.debug(f"[DBBackupManager] Temp-Snapshot {tmp_snapshot} nicht entfernt: {rm_exc}")
 
+        # PocketBase storage/** (PDF-/Bild-Anhaenge) liegt ausserhalb der DBs
+        # und war bisher gar nicht im Backup. Eigenes, eindeutiges Artefakt.
+        backed_up.extend(self._backup_pocketbase_storage(now_str))
+
         # Secret-Dateien gehoeren zum Wiederherstellungs-Umfang: ohne sie
         # hilft das beste DB-Backup nichts (settings/HITL/Token weg).
         backed_up.extend(self._backup_secret_files(now_str))
@@ -233,6 +280,47 @@ class DBBackupManager:
             "backed_up_count": len(backed_up),
             "backups": backed_up
         }
+
+    def _backup_pocketbase_storage(self, now_str: str) -> List[Dict[str, Any]]:
+        """Sichert pocketbase/pb_data/storage/** als eigenes tar.gz-Artefakt.
+
+        Der Name `pb_storage_<stamp>.tar.gz` greift nicht in die bestehenden
+        `<db_name>_<stamp>.db.gz`-Namen ein. Fehlt das Verzeichnis (z.B. in
+        Tests), wird nichts angelegt.
+        """
+        secured: List[Dict[str, Any]] = []
+        # Pfad zur Laufzeit aus WORKSPACE_DIR ableiten (Tests monkeypatchen
+        # diese Konstante auf ein tmp_path).
+        storage_dir = os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data", "storage")
+        if not os.path.isdir(storage_dir):
+            return secured
+        backup_file = os.path.join(self.backup_dir, f"pb_storage_{now_str}.tar.gz")
+        tmp_archive = None
+        try:
+            fd, tmp_archive = tempfile.mkstemp(
+                prefix="archon_pb_storage_", suffix=".tar.gz", dir=self.backup_dir
+            )
+            os.close(fd)
+            with tarfile.open(tmp_archive, "w:gz") as tar:
+                tar.add(storage_dir, arcname="storage")
+            os.replace(tmp_archive, backup_file)
+            secured.append({
+                "db_name": "pb_storage",
+                "kind": "pocketbase_storage",
+                "source_path": storage_dir,
+                "backup_file": backup_file,
+                "size_bytes": os.path.getsize(backup_file),
+                "integrity": "ok",
+            })
+        except Exception as exc:
+            print(f"[DBBackupManager] PocketBase-Storage-Backup fehlgeschlagen: {exc}", file=sys.stderr)
+            for stale in (tmp_archive, backup_file):
+                if stale and os.path.exists(stale):
+                    try:
+                        os.unlink(stale)
+                    except OSError:
+                        pass
+        return secured
 
     def _backup_secret_files(self, now_str: str) -> List[Dict[str, Any]]:
         """Sichert settings.json, compartment.key, warrant_hmac.key,
@@ -323,6 +411,8 @@ class DBBackupManager:
                 target_path = tenant_target
             elif db_name == "pb_data.db":
                 target_path = POCKETBASE_DB_PATH
+            elif db_name == "pb_auxiliary.db":
+                target_path = POCKETBASE_AUX_DB_PATH
             else:
                 candidates = {os.path.abspath(p): p for p in DB_TARGETS}
                 target_path = next((p for candidate, p in candidates.items()
@@ -333,25 +423,45 @@ class DBBackupManager:
         if not _within(target, WORKSPACE_DIR):
             raise ValueError(f"Restore-Ziel ausserhalb des Workspace: {target}")
 
+        # D5/F-08: genau ein signiertes Event pro Restore-Versuch. `result`
+        # bleibt None, wenn vor der Integritätsprüfung abgebrochen wurde.
+        result: Optional[Dict[str, Any]] = None
+        audit_status = "failed"
+        audit_meta: Dict[str, Any] = {
+            "source_kind": "db_backup",
+            "backup": name,
+            "target": target,
+            "integrity": "unknown",
+            "restored": False,
+            "dry_run": bool(dry_run),
+            "rollback_ok": None,
+        }
         with tempfile.NamedTemporaryFile(dir=self.backup_dir, suffix=".restore.db", delete=False) as tmp:
             tmp_path = tmp.name
         try:
             with gzip.open(src, "rb") as fin, open(tmp_path, "wb") as fout:
                 shutil.copyfileobj(fin, fout)
+            # C (dieses Audits): VOR dem Austausch der Produktionsdatei
+            # prüfen. Schlägt die Prüfung fehl, bleibt die Live-DB unberührt.
             conn = sqlite3.connect(tmp_path)
             try:
                 integrity = conn.execute("PRAGMA integrity_check").fetchone()
+                quick = conn.execute("PRAGMA quick_check").fetchone()
             finally:
                 conn.close()
             if not integrity or str(integrity[0]).lower() != "ok":
                 raise RuntimeError(f"Integritätsprüfung fehlgeschlagen: {integrity}")
+            if not quick or str(quick[0]).lower() != "ok":
+                raise RuntimeError(f"Quick-Check des Backup-Snapshots fehlgeschlagen: {quick}")
             result = {
                 "restored": not dry_run,
                 "backup": name,
                 "target": target,
                 "integrity": "ok",
+                "rollback_ok": None,  # None = kein Rollback noetig
             }
             if dry_run:
+                audit_status = "dry_run"
                 return result
             os.makedirs(os.path.dirname(target), exist_ok=True)
             with _RESTORE_LOCK, _restore_gate(target):
@@ -361,6 +471,7 @@ class DBBackupManager:
                 # in den Drain-Modus gehen). Ein stilles Weiterspielen auf der
                 # ausgetauschten Datei erzeugte früher zwei konkurrierende Inodes.
                 guard = None
+                pre_path: Optional[str] = None
                 try:
                     if os.path.exists(target):
                         # 1) Konsistente pre_restore-Kopie über die Backup-API,
@@ -408,8 +519,10 @@ class DBBackupManager:
                 os.replace(tmp_path, target)
 
                 # Post-Condition: die restaurierte Datei muss lesbar und
-                # integr sein. Schlägt das fehl, wird der Restore als Fehler
-                # gemeldet statt still als Erfolg zurückgegeben.
+                # integr sein. Schlägt sie fehl, wird die pre_restore-Kopie
+                # unter dem noch gehaltenen Gate zurückgespielt. Damit bleibt
+                # nie eine defekte DB am Produktionspfad liegen (Audit C).
+                verify_error: Optional[BaseException] = None
                 try:
                     verify = sqlite3.connect(f"file:{target}?mode=ro", uri=True, timeout=5.0)
                     try:
@@ -419,8 +532,29 @@ class DBBackupManager:
                     result["verified"] = bool(check and str(check[0]).lower() == "ok")
                     if not result["verified"]:
                         raise RuntimeError(f"Restore-Verifikation fehlgeschlagen: {check}")
-                except sqlite3.Error as exc:
-                    raise RuntimeError(f"Restore-Verifikation nicht möglich: {exc}") from exc
+                except (sqlite3.Error, RuntimeError) as exc:
+                    verify_error = exc
+                    result["verified"] = False
+
+                if verify_error is not None:
+                    result["rollback_ok"] = False
+                    if pre_path and os.path.isfile(pre_path):
+                        try:
+                            for suffix in ("-wal", "-shm", "-journal"):
+                                sidecar = target + suffix
+                                if os.path.exists(sidecar):
+                                    try:
+                                        os.remove(sidecar)
+                                    except OSError as sc_exc:
+                                        logger.warning("[DBBackup] Rollback-Sidecar %s nicht entfernbar: %s", sidecar, sc_exc)
+                            os.replace(pre_path, target)
+                            result["rollback_ok"] = True
+                        except OSError as rb_exc:
+                            logger.error("[DBBackup] Rollback von %s fehlgeschlagen: %s", pre_path, rb_exc)
+                    raise RuntimeError(
+                        f"Restore-Verifikation fehlgeschlagen: {verify_error}. "
+                        f"Rollback {'erfolgreich' if result['rollback_ok'] else 'FEHLGESCHLAGEN'}."
+                    ) from verify_error
 
                 # Directory-fsync: ohne ihn kann der Rename nach Stromausfall
                 # im Dateisystem-Journal verloren gehen.
@@ -440,8 +574,45 @@ class DBBackupManager:
                     _DB_PRAGMA_INITIALIZED.discard(target)
                 except Exception:
                     pass
+
+                # I (dieses Audits): archon.core.state_db merkt sich pro
+                # Prozesslebensdauer, bei welchen Dateien journal_mode=WAL
+                # bereits gesetzt wurde. Nach einem Restore zeigt der Cache
+                # auf die alte Inode. Vorsichtiger Inside-Import mit
+                # hasattr-Guard, damit dieser Manager nicht hart von state_db
+                # abhaengig wird (auch für Profile-DBs).
+                try:
+                    from archon.core import state_db as _state_db
+                    wal_init = getattr(_state_db, "_STATE_WAL_INIT", None)
+                    if wal_init is not None and hasattr(wal_init, "discard"):
+                        wal_init.discard(os.path.abspath(target))
+                        # state_db.STATE_DB_PATH kann von target abweichen;
+                        # zusätzlich den konfigurierten Pfad invalidieren.
+                        cfg_path = getattr(_state_db, "STATE_DB_PATH", "")
+                        if cfg_path:
+                            wal_init.discard(os.path.abspath(cfg_path))
+                except Exception:
+                    pass
+            audit_status = "success"
             return result
         finally:
+            # D5/F-08: Auch Dry-Runs und fehlgeschlagene Restores werden
+            # protokolliert. Der Helper verschluckt Audit-Fehler absichtlich
+            # (siehe _audit_backup_restore), damit die Restore-Transaktion
+            # nicht durch einen Audit-Ausfall zerstoert wird.
+            _meta = dict(audit_meta)
+            _meta["status"] = audit_status
+            if result is not None:
+                _meta.update({
+                    "integrity": result.get("integrity", "unknown"),
+                    "restored": bool(result.get("restored")),
+                    "rollback_ok": result.get("rollback_ok"),
+                    "verified": result.get("verified"),
+                })
+            if result is not None:
+                result.update(_audit_backup_restore(_meta))
+            else:
+                _audit_backup_restore(_meta)
             if os.path.exists(tmp_path):
                 try:
                     os.unlink(tmp_path)
@@ -477,6 +648,7 @@ class DBBackupManager:
         if not os.path.isfile(src):
             raise FileNotFoundError(f"Secret-Backup '{name}' nicht gefunden.")
 
+        result: Optional[Dict[str, Any]] = None
         with tempfile.NamedTemporaryFile(dir=self.backup_dir, suffix=".restore.secret", delete=False) as tmp:
             tmp_path = tmp.name
         try:
@@ -498,6 +670,26 @@ class DBBackupManager:
             os.replace(tmp_path, target)
             return result
         finally:
+            # D5/F-08: auch abgelehnte (unbestaetigte) Secret-Restores sind
+            # revisionsrelevant. Kein Secret-Inhalt, nur Name/Status/Ziel.
+            _meta = {
+                "source_kind": "secret_backup",
+                "backup": name,
+                "secret": logical,
+                "target": target,
+                "integrity": "not_applicable",
+                "restored": bool(result and result.get("restored")),
+                "dry_run": bool(dry_run),
+                "confirmed": bool(confirm),
+                "rollback_ok": None,
+                "status": "success" if result and result.get("restored") else (
+                    "dry_run" if dry_run or not confirm else "failed"
+                ),
+            }
+            if result is not None:
+                result.update(_audit_backup_restore(_meta))
+            else:
+                _audit_backup_restore(_meta)
             if os.path.exists(tmp_path):
                 try:
                     os.unlink(tmp_path)

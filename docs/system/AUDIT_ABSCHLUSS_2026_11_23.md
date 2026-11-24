@@ -1,5 +1,9 @@
 # Archon OS — Abschluss-Audit & Sanierung (23.11.2026)
 
+> **Aktualisierungshinweis:** Historischer Stand 23.11.2026. Die damals genannten
+> Einzel-DB-Namen sind heute Legacy-Aliase; aktiv sind `ops.db`, `business.db`
+> und `memory.db` (`backend/db_paths.py` routet alte Pfade transparent).
+
 ## Zweck
 
 Dieses Dokument dokumentiert ein vollständiges, skeptisches Code-Audit der
@@ -23,7 +27,7 @@ nachvollziehbaren Verifikation. Es dient als technische Referenz.
 
 | Prüfung | Ergebnis |
 |---|---|
-| `.ci_venv\Scripts\python.exe -m pytest tests/ -q` | **1727 passed, 16 skipped** (Exit 0, ~2 min) |
+| `.ci_venv\Scripts\python.exe -m pytest tests/ -q` | **1765 passed, 16 skipped** (Stand nach Phase-1-Welle 24.11.2026; der Lauf vom 23.11.2026 war 1727 passed, 16 skipped; Exit 0, ~2 min) |
 | `python -m compileall` (alle Produktivdateien) | Exit 0 |
 | `npm ci` (frontend/) | 380 Pakete, Exit 0 |
 | `npx tsc --noEmit` | Exit 0 |

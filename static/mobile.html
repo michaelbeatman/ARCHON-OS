@@ -546,6 +546,8 @@
   <!-- Toast Notification -->
   <div class="toast" id="toast" data-i18n="ui.mobile.toast_action_done">Aktion ausgeführt</div>
 
+  <!-- HITL-Passkey: stellt window.requirePasskeyForHitl / archonDecisionProofContext bereit -->
+  <script src="/static/js/passkey_hitl.js"></script>
   <script>
     let activeTab = 'chat';
     let currentAgentId = 'default';
@@ -785,9 +787,36 @@
       const card = document.getElementById('task-card-' + taskId);
       if (card) card.style.opacity = '0.5';
       try {
+        // HITL: Proof an die Decision-ref_id binden (bei Gates die gate-ID,
+        // nicht die task_id). Metadaten per GET laden; bei approve ohne
+        // Metadaten fail-closed. Bei reject ist kein Proof nötig.
+        let dec = null;
+        if (decision === 'approve') {
+          const rd = await fetch('/api/operations/kanban/tasks/' + encodeURIComponent(taskId), { signal: AbortSignal.timeout(12000) });
+          if (!rd.ok) throw new Error('Decision-Metadaten nicht ladbar — Freigabe abgebrochen.');
+          const dd = await rd.json().catch(() => ({}));
+          dec = (dd.task || dd).decision || null;
+          if (!dec) throw new Error('Kein Decision-Block gefunden — Freigabe abgebrochen.');
+        }
+        let proofToken = null;
+        if (decision === 'approve' && (dec.typ === 'permission_gate' || dec.typ === 'mission_freigabe')) {
+          if (typeof window.archonDecisionProofContext !== 'function') {
+            throw new Error('Passkey-Modul nicht geladen — Freigabe abgebrochen.');
+          }
+          const ctx = await window.archonDecisionProofContext(dec.typ, dec.ref_id);
+          if (ctx.needed) {
+            const hitl = await window.requirePasskeyForHitl('all', ctx.actionLabel, true, ctx.ref, ctx.sessionUid);
+            if (!hitl || !String(hitl.proof_token || '').trim()) {
+              throw new Error('Passkey-Proof fehlt — Freigabe abgebrochen.');
+            }
+            proofToken = hitl.proof_token;
+          }
+        }
+        const headers = { 'Content-Type': 'application/json' };
+        if (proofToken) headers['x-passkey-proof'] = proofToken;
         const res = await fetch('/api/decisions/decide', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: headers,
           body: JSON.stringify({ task_id: taskId, decision: decision, von: 'mobile_owner' })
         });
         if (res.ok) {
@@ -799,7 +828,7 @@
           if (card) card.style.opacity = '1';
         }
       } catch (e) {
-        showToast('Fehler bei Entscheidung');
+        showToast('Freigabe abgebrochen: ' + (e && e.message ? e.message : e));
         if (card) card.style.opacity = '1';
       }
     }

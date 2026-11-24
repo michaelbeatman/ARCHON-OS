@@ -768,6 +768,9 @@ class AgentRouter:
                     )
                     from backend.provider_circuit_breaker import provider_breaker
                     if not provider_breaker.allow(provider):
+                        # A: auch der Circuit-Breaker-Skip ist ein Fehlerfall —
+                        # ohne last_err wuerde die Kette still None zurueckgeben.
+                        last_err = RuntimeError(f"Provider '{provider}' circuit-open")
                         logger.warning(f"[AgentRouter] Provider '{provider}' circuit-open — Fallback")
                         continue
                     try:
@@ -776,7 +779,14 @@ class AgentRouter:
                         provider_breaker.record_failure(provider)
                         await _router_provider_backoff()
                         raise
-                    if resp.status_code >= 500 or resp.status_code == 429:
+                    if resp.status_code in (401, 403, 404):
+                        # C: Auth-/Routing-Fehler sind kein Provider-Ausfall und
+                        # kein Provider-Erfolg — den Breaker-Zustand nicht antasten.
+                        logger.debug(
+                            "[AgentRouter] Provider '%s' antwortete %s (kein Breaker-Event)",
+                            provider, resp.status_code,
+                        )
+                    elif resp.status_code >= 500 or resp.status_code == 429:
                         provider_breaker.record_failure(provider)
                     else:
                         provider_breaker.record_success(provider)
@@ -827,6 +837,10 @@ class AgentRouter:
                         logger.warning(f"[AgentRouter] Call to '{m_try}' failed ({e}), trying fallback '{candidate_models[idx+1]}'...")
                         continue
                     raise last_err
+            # A: wenn jeder Kandidat per Circuit-Breaker uebersprungen wurde,
+            # endet die Schleife ohne return/raise. Ein stilles None wird von
+            # Konsumenten (z. B. context_help.py) als leerer Treffer gewertet.
+            raise last_err or RuntimeError("all candidates circuit-open / unavailable")
 
     async def stream_chat_completion(
         self,
@@ -885,6 +899,7 @@ class AgentRouter:
                 if fb != model and fb not in candidate_models:
                     candidate_models.append(fb)
 
+        last_err = None
         for idx, m_try in enumerate(candidate_models):
             try:
                 from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
@@ -927,6 +942,7 @@ class AgentRouter:
                 if True:
                     from backend.provider_circuit_breaker import provider_breaker
                     if not provider_breaker.allow(provider):
+                        last_err = RuntimeError(f"Provider '{provider}' circuit-open")
                         logger.warning(f"[AgentRouter Stream] Provider '{provider}' circuit-open — Fallback")
                         continue
                     async with client.stream("POST", target_url, headers=request_headers, json=safe_payload) as response:
@@ -939,7 +955,15 @@ class AgentRouter:
                             data_category=hop_gate["data_category"],
                             zero_egress_active=hop_gate["zero_egress_active"],
                         )
-                        if response.status_code >= 500 or response.status_code == 429:
+                        if response.status_code in (401, 403, 404):
+                            # C: Auth-/Routing-Fehler zaehlen weder als Success
+                            # noch als Failure (sonst wird ein downer Provider
+                            # durch 404-Fallbacks kuenstlich "gesund" gemeldet).
+                            logger.debug(
+                                "[AgentRouter Stream] Provider '%s' antwortete %s (kein Breaker-Event)",
+                                provider, response.status_code,
+                            )
+                        elif response.status_code >= 500 or response.status_code == 429:
                             provider_breaker.record_failure(provider)
                         else:
                             provider_breaker.record_success(provider)
@@ -1012,12 +1036,28 @@ class AgentRouter:
                                 logger.debug(f"[AgentRouter] Audit-Logging (stream) fehlgeschlagen: {log_exc}")
                             return
             except Exception as e:
+                last_err = e
+                # B: der Half-Open-Probe muss bei Verbindungsfehlern als Failure
+                # verbucht werden, sonst bleibt `probing=True` gesetzt und
+                # allow() verweigert den Provider dauerhaft (gleiches Muster wie
+                # im Non-Stream-Pfad bei client.post).
+                try:
+                    from backend.provider_circuit_breaker import provider_breaker as _stream_breaker
+                    _stream_breaker.record_failure(provider)
+                except Exception as _pb_err:
+                    logger.debug(f"[AgentRouter Stream] Breaker-Failure-Record fehlgeschlagen: {_pb_err}")
                 if idx < len(candidate_models) - 1:
                     logger.warning(f"[AgentRouter Stream] Error with '{m_try}' ({e}), falling back to '{candidate_models[idx+1]}'...")
                     continue
                 logger.error(f"[AgentRouter] Stream error: {e}")
                 yield f"ERROR: Verbindungsfehler zum LLM-Provider ({e})"
                 return
+
+        # A: alle Kandidaten circuit-open/uebersprungen -> nie mit einem leeren
+        # Stream enden. "ERROR: " wird von chat.py als Provider-Fehler erkannt.
+        logger.error(f"[AgentRouter Stream]Alle Kandidaten nicht verfuegbar: {last_err}")
+        yield f"ERROR: Alle LLM-Provider nicht verfuegbar ({last_err or 'circuit-open'})"
+        return
 
     def suspend_task(self, task_id: str) -> bool:
         if task_id in self.active_tasks and self.active_tasks[task_id]["status"] == "in_progress":

@@ -33,29 +33,43 @@ class ProviderCircuitBreaker:
             open_until = float(st.get("open_until") or 0.0)
             if open_until <= 0:
                 return True
-            if time.time() >= open_until:
+            now = time.time()
+            if now >= open_until:
                 # M1 (Audit-Lauf 5): bisher wurde `probing` gesetzt, aber nie
                 # geprüft -> after cooldown dürfen ALLE wartenden Threads
                 # gleichzeitig durch (Thundering Herd). Genau ein Probe.
                 if st.get("probing"):
-                    return False
+                    # B (Härtungsaudit): Stream-Generatoren koennen nach dem
+                    # Probe-Start durch den Konsumenten geschlossen werden
+                    # (GeneratorExit/CancelledError) — dann erreicht uns kein
+                    # record_failure() und `probing` haelt den Provider
+                    # dauerhaft gesperrt. Ein verwaister Probe verfällt nach
+                    # der Cooldown-Zeit und darf erneut gestartet werden.
+                    probe_at = float(st.get("probe_at") or 0.0)
+                    if probe_at and (now - probe_at) > (self.cooldown if self.cooldown > 0 else 5.0):
+                        st["probing"] = False
+                        st["probe_at"] = 0.0
+                    else:
+                        return False
                 st["probing"] = True
+                st["probe_at"] = now
                 return True
             return False
 
     def record_failure(self, provider: str) -> None:
         key = str(provider or "unknown").strip().lower()
         with self._lock:
-            st = self._state.setdefault(key, {"fails": 0, "open_until": 0.0, "probing": False})
+            st = self._state.setdefault(key, {"fails": 0, "open_until": 0.0, "probing": False, "probe_at": 0.0})
             st["fails"] = int(st.get("fails", 0)) + 1
             st["probing"] = False
+            st["probe_at"] = 0.0
             if st["fails"] >= self.threshold:
                 st["open_until"] = time.time() + self.cooldown
 
     def record_success(self, provider: str) -> None:
         key = str(provider or "unknown").strip().lower()
         with self._lock:
-            self._state[key] = {"fails": 0, "open_until": 0.0, "probing": False}
+            self._state[key] = {"fails": 0, "open_until": 0.0, "probing": False, "probe_at": 0.0}
 
     def snapshot(self) -> Dict[str, Dict[str, Any]]:
         with self._lock:

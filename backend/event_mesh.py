@@ -15,6 +15,7 @@ import hashlib
 import time
 import urllib.request
 import logging
+import random
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("archon_os.event_mesh")
@@ -25,6 +26,39 @@ try:
     DB_PATH = _resolve_db("agentic_memory.db")
 except Exception:
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+
+
+def _webhook_target_host(url: str) -> str:
+    """Nur den Hostnamen fuer Audit-Metadaten — nie Query/Parameter (Tokens)."""
+    try:
+        from urllib.parse import urlparse
+        return (urlparse(str(url or "")).hostname or "unknown").lower()
+    except Exception:
+        return "unknown"
+
+
+def _audit_webhook_event(action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """D5/F-08: Webhook-Inbound/Outbox in die Zentralkette (append-only).
+
+    Fail-closed: die Zustell-/Verarbeitungsentscheidung ist bereits getroffen.
+    Ein Audit-Fehler darf keine Exception in den Ledger-/Outbox-Flow werfen;
+    er wird geloggt und im Result-Feld sichtbar gemacht. Protokolliert werden
+    nur IDs/Status/Metadaten — niemals Payload, URL-Query oder Signaturheader.
+    """
+    try:
+        from backend.audit_log import chained_audit_log
+
+        event = chained_audit_log.record_event(
+            category="webhook",
+            action=action,
+            agent_id=str(payload.get("actor") or "event_mesh"),
+            payload=payload,
+        )
+        return {"audit_status": "recorded", "audit_event_id": event.get("event_id")}
+    except Exception as exc:
+        logger.error("[EventMesh] Audit-Eintrag %s fehlgeschlagen: %s", action, exc)
+        return {"audit_status": "error", "audit_error": type(exc).__name__}
+
 
 class EffectLedger:
     """M110: Zustandsbuch für externe Seiteneffekte.
@@ -266,12 +300,24 @@ class EventMesh:
             # KRITISCH (Audit 23.11.2026): ein fehlgeschlagener Sanitizer darf
             # NEVER fail-open. Kein Log, kein Kanban-Task, kein Event-Bus.
             logger.error("[EventMesh] Sanitizer fehlgeschlagen — Event blockiert: %s", exc)
+            blocked_key = hashlib.sha256(json.dumps(
+                {"channel": channel, "event_type": event_type, "payload": safe_payload},
+                sort_keys=True, ensure_ascii=False, default=str,
+            ).encode("utf-8")).hexdigest()
             return {
                 "status": "blocked",
                 "blocked": True,
                 "channel": channel,
                 "event_type": event_type,
                 "reason": "input_sanitizer_unavailable",
+                **_audit_webhook_event("webhook_received", {
+                    "direction": "inbound",
+                    "channel": channel,
+                    "event_type": event_type,
+                    "idempotency_key": blocked_key,
+                    "status": "blocked",
+                    "reason": "input_sanitizer_unavailable",
+                }),
             }
         payload_str = json.dumps(safe_payload, ensure_ascii=False, separators=(",", ":"))
 
@@ -299,6 +345,13 @@ class EventMesh:
                     "status": "duplicate", "duplicate": True,
                     "dedup_key": dedup_key, "channel": channel, "event_type": event_type,
                     "message": "Event bereits verarbeitet — Idempotenz greift (keine zweiten Seiteneffekte).",
+                    **_audit_webhook_event("webhook_received", {
+                        "direction": "inbound",
+                        "channel": channel,
+                        "event_type": event_type,
+                        "idempotency_key": dedup_key,
+                        "status": "duplicate",
+                    }),
                 }
         finally:
             dedup_conn.close()
@@ -373,6 +426,15 @@ class EventMesh:
                 "channel": channel,
                 "event_type": event_type,
                 "dedup_key": dedup_key,
+                **_audit_webhook_event("webhook_received", {
+                    "direction": "inbound",
+                    "channel": channel,
+                    "event_type": event_type,
+                    "idempotency_key": dedup_key,
+                    "event_id": evt_id,
+                    "status": "partial_failure",
+                    "security_status": str(safe_payload.get("_security_status") or "ok"),
+                }),
             }
 
         return {
@@ -382,7 +444,17 @@ class EventMesh:
             "event_type": event_type,
             "kanban_task_id": task_id,
             "event_bus": bus_result,
-            "message": f"Ereignis aus Kanal '{channel}' erfolgreich im Event-Mesh verarbeitet."
+            "message": f"Ereignis aus Kanal '{channel}' erfolgreich im Event-Mesh verarbeitet.",
+            **_audit_webhook_event("webhook_received", {
+                "direction": "inbound",
+                "channel": channel,
+                "event_type": event_type,
+                "idempotency_key": dedup_key,
+                "event_id": evt_id,
+                "status": "success",
+                "security_status": str(safe_payload.get("_security_status") or "ok"),
+                "kanban_created": bool(task_id),
+            }),
         }
 
     @staticmethod
@@ -423,6 +495,15 @@ class EventMesh:
                     "idempotency_key": idem,
                     "outbox_status": str(row["status"]) if row else "unknown",
                     "target_url": webhook_url,
+                    **_audit_webhook_event("webhook_delivered", {
+                        "direction": "outbound",
+                        "event_type": event_type,
+                        "idempotency_key": idem,
+                        "status": "duplicate",
+                        "outbox_status": str(row["status"]) if row else "unknown",
+                        "target_host": _webhook_target_host(webhook_url),
+                        "http_status": 0,
+                    }),
                 }
         finally:
             conn.close()
@@ -450,6 +531,7 @@ class EventMesh:
         # WHERE state='UNKNOWN' auf 0 Zeilen und der Fall bleibt ungeklaert.
         from utils.safe_http import safe_http_request, webhook_signature_headers
         definitive_rejection = False
+        retry_after_sec = 0.0
         try:
             body_bytes = payload_str.encode("utf-8")
             headers = {"Content-Type": "application/json", "X-Idempotency-Key": idem}
@@ -464,6 +546,13 @@ class EventMesh:
             )
             status_code = int(_st)
             res_body = raw_body.decode("utf-8", errors="ignore")[:300]
+            # G: Retry-After (vom Server vorgegebene Wartezeit) respektieren.
+            ra = _hd.get("retry-after") if isinstance(_hd, dict) else None
+            if ra:
+                try:
+                    retry_after_sec = max(0.0, float(ra))
+                except (TypeError, ValueError):
+                    pass  # HTTP-Datum o. a.: nicht interpretierbar → Jitter-Backoff
             status_str = "delivered" if status_code < 400 else ("dead" if 400 <= status_code < 500 else "delivery_failed")
             definitive_rejection = 400 <= status_code < 500
         except Exception as e:
@@ -483,7 +572,10 @@ class EventMesh:
 
         next_attempt = int(attempts) + 1
         delivered_at = datetime.datetime.now().isoformat() if status_str == "delivered" else None
-        backoff = min(3600.0, 2.0 ** min(next_attempt, 10))
+        # G: Jitter verhindert Thundering Herd bei parallelen Workern.
+        backoff = min(3600.0, (2.0 ** min(next_attempt, 10)) * random.uniform(0.75, 1.25))
+        if retry_after_sec > 0:
+            backoff = min(3600.0, max(backoff, retry_after_sec * random.uniform(0.75, 1.25)))
         conn = self._get_conn()
         try:
             with conn:
@@ -514,11 +606,24 @@ class EventMesh:
             "response": res_body,
             "idempotency_key": idem,
             "attempts": next_attempt,
+            **_audit_webhook_event("webhook_delivered", {
+                "direction": "outbound",
+                "event_type": event_type,
+                "idempotency_key": idem,
+                "status": status_str,
+                "http_status": status_code,
+                "target_host": _webhook_target_host(target),
+                "attempts": next_attempt,
+                "ledger_updated": bool(update_ledger),
+            }),
         }
 
     def process_outbox(self, limit: int = 25, max_attempts: int = 5) -> Dict[str, Any]:
         """Zuerst UNKNOWN-Effekte reconcilen, dann retrybare Einträge zustellen."""
         reconciled = 0
+        worker_id = f"{os.getpid()}:{uuid.uuid4().hex[:8]}"
+        claim_ttl = 120.0
+        unknown_claimed_skipped = 0
         # M110: UNKNOWN nie direkt retryen. Reconciliation = erneuter Versand
         # mit DEMSELBEN Idempotency-Key; der Zielserver dedupliziert. Das
         # Ergebnis wird als Beweis (Evidence) im Ledger festgehalten.
@@ -533,17 +638,38 @@ class EventMesh:
                 c.close()
             if not out:
                 continue
-            res = self._deliver_outbox(
-                idem, str(out["target_url"]), str(out["event_type"]),
-                str(out["payload_json"]), 5.0, int(out["attempts"] or 0),
-                update_ledger=False,  # P0-7b: Ledger bleibt UNKNOWN bis reconcile()
-            )
-            final_state = "COMMITTED" if res.get("status") == "delivered" else "FAILED"
-            if self.effect_ledger.reconcile(
-                idem, final_state,
-                {"http_status": res.get("http_status"), "response": str(res.get("response"))[:300]},
-            ):
-                reconciled += 1
+            # F: CAS-Claim auch für UNKNOWN-Zeilen — sonst stellt ein
+            # paralleler process_outbox()-Lauf denselben HTTP-Call doppelt zu.
+            c = self._get_conn()
+            try:
+                c.execute("BEGIN IMMEDIATE")
+                cur = c.execute(
+                    "UPDATE event_mesh_outbox SET claimed_by = ?, claim_expires = ? "
+                    "WHERE idempotency_key = ? "
+                    "AND (claimed_by IS NULL OR claim_expires IS NULL OR claim_expires <= ?)",
+                    (worker_id, time.time() + claim_ttl, idem, time.time()),
+                )
+                got_claim = int(cur.rowcount or 0) == 1
+                c.commit()
+            finally:
+                c.close()
+            if not got_claim:
+                unknown_claimed_skipped += 1
+                continue
+            try:
+                res = self._deliver_outbox(
+                    idem, str(out["target_url"]), str(out["event_type"]),
+                    str(out["payload_json"]), 5.0, int(out["attempts"] or 0),
+                    update_ledger=False,  # P0-7b: Ledger bleibt UNKNOWN bis reconcile()
+                )
+                final_state = "COMMITTED" if res.get("status") == "delivered" else "FAILED"
+                if self.effect_ledger.reconcile(
+                    idem, final_state,
+                    {"http_status": res.get("http_status"), "response": str(res.get("response"))[:300]},
+                ):
+                    reconciled += 1
+            finally:
+                self._release_outbox_claim(int(out["id"]), worker_id)
 
         conn = self._get_conn()
         try:
@@ -557,8 +683,6 @@ class EventMesh:
         finally:
             conn.close()
         delivered = failed = dead = claimed_skipped = 0
-        worker_id = f"{os.getpid()}:{uuid.uuid4().hex[:8]}"
-        claim_ttl = 120.0
         for r in rows:
             # P2: atomarer CAS-Claim — genau ein Worker darf diese Zeile
             # zustellen. Ein abgelaufener Claim (abgestuerzter Worker) darf
@@ -598,6 +722,18 @@ class EventMesh:
                 finally:
                     c.close()
                 dead += 1
+                # D5/F-08: auch das endgueltige Aufgeben (DLQ) ist ein
+                # signiertes Delivery-Ereignis — kein stilles Verschwinden.
+                _audit_webhook_event("webhook_delivered", {
+                    "direction": "outbound",
+                    "event_type": str(r["event_type"] or ""),
+                    "idempotency_key": str(r["idempotency_key"] or ""),
+                    "status": "dead",
+                    "outbox_id": int(r["id"]),
+                    "attempts": attempts,
+                    "target_host": _webhook_target_host(str(r["target_url"] or "")),
+                    "http_status": 0,
+                })
                 # Ein 'dead'-Outbox-Eintrag darf nicht einfach vergessen werden:
                 # mit demselben Idempotency-Key in die DLQ stellen, damit der
                 # Shared-Queue-Consumer ihn erneut zustellen/replayen kann.
@@ -640,6 +776,7 @@ class EventMesh:
             "delivered": delivered, "failed": failed, "dead": dead,
             "reconciled_unknown": reconciled,
             "claimed_skipped": claimed_skipped,
+            "unknown_claimed_skipped": unknown_claimed_skipped,
         }
 
     def _release_outbox_claim(self, row_id: int, worker_id: str) -> None:

@@ -78,6 +78,21 @@ ensure_env_secret() {
   fi
 }
 
+# Dokumentations-Key nur ergaenzen, wenn er noch nicht gesetzt ist; ein
+# wiederholter Installationslauf darf eine bewusst gesetzte Auswahl nicht
+# zuruecksetzen.
+ensure_env_default() {
+  local key="$1"
+  local default_val="$2"
+  local cur=""
+  if [[ -f ".env" ]]; then
+    cur="$(grep -E "^${key}=" .env 2>/dev/null | head -n1 | cut -d= -f2- || true)"
+  fi
+  if [[ -z "${cur// }" ]]; then
+    upsert_env "$key" "$default_val"
+  fi
+}
+
 echo "=================================================================="
 echo "     ARCHON AGENTIC OS 2026 - FULL STACK INSTALLER (UNIX)"
 echo "  Foundations: Docker | Hermes Agent | OmniRoute | RAG | Obsidian"
@@ -217,6 +232,9 @@ fi
 upsert_env "ARCHON_BIND_IP" "$BIND_IP"
 upsert_env "ARCHON_LANGUAGE" "$ARCHON_LANG"
 upsert_env "ARCHON_STACK_PROFILE" "$STACK_PROFILE"
+# C23: Observability-Key dokumentieren. "full" aktiviert die bereits in
+# docker-compose.yml vorhandenen Profile monitoring/logging/replication.
+ensure_env_default "ARCHON_OBSERVABILITY" "off"
 upsert_env "ARCHON_HERMES_DIR" "./.hermes"
 upsert_env "ARCHON_OBSIDIAN_DIR" "$OBSIDIAN_DIR"
 upsert_env "PRIVACY_ZERO_EGRESS" "$ZERO_EGRESS"
@@ -246,7 +264,15 @@ elif [[ "$STACK_PROFILE" == "full" || "$STACK_PROFILE" == "rag" ]]; then
   SERVICES+=(anything-llm chroma n8n ollama-embed)
 fi
 
-docker compose up -d --build "${SERVICES[@]}"
+# C23: explizite Service-Listen schliessen Profil-Container aus. Deshalb die
+# Profil-Flags UND die zugehoerigen, bereits definierten Services aufnehmen.
+COMPOSE_ARGS=(up -d --build)
+OBSERVABILITY="$(grep -E '^ARCHON_OBSERVABILITY=' .env 2>/dev/null | head -n1 | cut -d= -f2- || true)"
+if [[ "${OBSERVABILITY,,}" == "full" ]]; then
+  COMPOSE_ARGS+=(--profile monitoring --profile logging --profile replication)
+  SERVICES+=(prometheus grafana uptime-kuma loki promtail litestream)
+fi
+docker compose "${COMPOSE_ARGS[@]}" "${SERVICES[@]}"
 
 # 5. Sync 70 SOUL.md + profile.yaml Specialist Profiles
 echo "[5/6] Generating 70 Specialist SOUL.md & Hermes profile.yaml configurations ($ARCHON_LANG)..."

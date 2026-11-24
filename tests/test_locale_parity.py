@@ -318,7 +318,9 @@ SETTINGS_MODAL_EXCEPTIONS = {
     "Port 20128": "Portnummer des lokalen Gateways",
     "Port 5678 (": "Portnummer des n8n-Containers",
     "http://localhost:20128/v1": "Gateway-URL im Placeholder (Laufzeitwert)",
-    "omniroute-local-key": "Beispiel-Key im Placeholder (technischer Wert)",
+    # 'omniroute-local-key' entfernt (Audit K3): kein statischer Key mehr im
+    # Frontend — der Platzhalter fordert jetzt den Key aus ENV/Secret-Store.
+    "Key aus ENV/Secret-Store — leer lassen, wenn dort gesetzt": "Technischer Hinweis im Passwort-Feld (kein Prosa-Text)",
     "lisa@unternehmen.de": "Beispiel-Adresse im Placeholder (kein Prosa-Text)",
     # Tab kernel: Werte, die die View per JS ueberschreibt (Tab HERMES CORE)
     "Lade Profile...": "Platzhalter-Option, system_settings.js befuellt das Select neu",

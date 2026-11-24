@@ -944,7 +944,9 @@ async def api_chat_stream(req: ChatStreamRequest):
         try:
             prices = None
             try:
-                p_res = get_llm_prices()
+                # A) Kein blockierender HTTP-Call im SSE-Event-Loop: nach
+                # TTL-Ablauf wartet urlopen(timeout=5) im Thread, nicht im Loop.
+                p_res = await asyncio.to_thread(get_llm_prices)
                 if isinstance(p_res, dict) and "prices" in p_res:
                     prices = p_res["prices"]
             except Exception as price_err:

@@ -19,7 +19,7 @@
 
 ---
 
-Archon OS 用持久化的自托管 **智能体操作系统（Agentic OS）** 取代孤立的对话机器人。它统一调度 **8 大核心领域的 70 位领域专家**，基于 **55 套决策框架** 开展 **AI 董事会（Boardroom）多视角辩论**，并将 **Zero-Egress 本地隐私路由**、可防篡改的 **SHA-256 审计日志（GoBD / ISO 27001）** 与 **Obsidian 第二大脑**、**n8n**、**Telegram** 以及内置的 **CRM 与 ERP *(Alpha)*** 模块深度打通。
+Archon OS 用持久化的自托管 **智能体操作系统（Agentic OS）** 取代孤立的对话机器人。它统一调度 **8 大核心领域的 70 位领域专家**，基于 **55 套决策框架** 开展 **AI 董事会（Boardroom）多视角辩论**，并将 **Zero-Egress 本地隐私路由**、可防篡改的 **HMAC-SHA256 审计日志（GoBD / ISO 27001）** 与 **Obsidian 第二大脑**、**n8n**、**Telegram** 以及内置的 **CRM 与 ERP *(Alpha)*** 模块深度打通。
 
 > **本地化进度：** 界面支持 11 种语言（`en`, `de`, `es`, `fr`, `pt`, `it`, `nl`, `ru`, `ja`, `ko`, `zh`）。专家 `SOUL.md` 与董事会方法论目前为德语原版，多语言本地化正在持续推进中（[Roadmap M31](../system/ROADMAP_2026.md)）。
 

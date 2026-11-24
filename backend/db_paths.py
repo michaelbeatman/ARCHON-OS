@@ -276,3 +276,43 @@ def audit_busy_timeout_ssot(root_dir: Optional[str] = None) -> list[tuple[str, i
         except OSError:
             continue
     return sorted(offenders)
+
+
+def audit_busy_timeout_cli(argv: Optional[list[str]] = None) -> int:
+    """D03/MED: echter Konsument des SSOT-Detektors (hartes Gate, exit!=0).
+
+    Der Detektor war vorher toter Code. Dieser Einstieg macht die SSOT-Behauptung
+    ``python -m backend.db_paths --audit-busy-timeout`` prüfbar. Bekannte, noch
+    nicht migrierte Setter aus fremden Modulen können einzeln über
+    ``--allow-drift <pfad>`` tolerated werden; neue Drifts lassen den Exit-Code
+    auf 1 gehen. Das erlaubt einen CI-Gate ohne das Gate durch Altlasten rot zu
+    machen.
+    """
+    import argparse as _argparse
+    import json as _json
+
+    parser = _argparse.ArgumentParser(description="SSOT-Gate fuer SQLite busy_timeout")
+    parser.add_argument("--audit-busy-timeout", action="store_true", help="Detektor ausfuehren")
+    parser.add_argument("--root", default=None, help="Repo-Wurzel (Default: Workspace)")
+    parser.add_argument(
+        "--allow-drift", action="append", default=[],
+        help="Bekannte Altlast als '<relative_datei>[:<zeile>]' tolerieren (mehrfach)",
+    )
+    args = parser.parse_args(argv)
+    offenders = audit_busy_timeout_ssot(args.root)
+    allowed = set(args.allow_drift or ())
+    unexpected = [
+        (path, line, value)
+        for path, line, value in offenders
+        if path not in allowed and f"{path}:{line}" not in allowed
+    ]
+    print(_json.dumps({
+        "ssot_ms": DB_BUSY_TIMEOUT_MS,
+        "offenders": [{"file": p, "line": l, "value": v} for p, l, v in offenders],
+        "unexpected": [{"file": p, "line": l, "value": v} for p, l, v in unexpected],
+    }, ensure_ascii=False))
+    return 1 if unexpected else 0
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI-Einstieg
+    raise SystemExit(audit_busy_timeout_cli())

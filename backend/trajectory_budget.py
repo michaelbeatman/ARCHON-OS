@@ -375,7 +375,14 @@ def record_tokens(
     *,
     db_path: Optional[str] = None,
     reason: str = "usage",
+    set_total: bool = False,
 ) -> Dict[str, Any]:
+    """Bucht Token-Verbrauch. Additiv (Reservierung) oder als Abschluss-Total.
+
+    D13/MED: `set_total=True` verhindert die Doppelbuchung, wenn vorab schon
+    `reserve_tokens()` atomar reserviert hat — der groessere der beiden Werte
+    gewinnt, nie die Summe.
+    """
     tid = normalize_trajectory_id(trajectory_id)
     delta = max(0, int(tokens or 0))
     with _WRITE_LOCK, _connect(db_path) as conn:
@@ -393,7 +400,13 @@ def record_tokens(
         ).fetchone()
         used = int(row["tokens_used"] or 0)
         cap = int(row["max_tokens"])
-        if used + delta > cap:
+        if set_total:
+            new_used = max(used, delta)
+            overflow = delta > cap
+        else:
+            new_used = used + delta
+            overflow = new_used > cap
+        if overflow:
             blocked = _block(conn, tid, "TOKEN_CAP_REACHED")
             _audit(tid, f"TOKEN_CAP_REACHED ({used}+{delta}>{cap}) via {reason}")
             return {"allowed": False, "reason": "TOKEN_CAP_REACHED",
@@ -401,10 +414,27 @@ def record_tokens(
                     "state": str(blocked.get("state") or "blocked")}
         conn.execute(
             "UPDATE trajectory_budgets SET tokens_used = ?, updated_at = ? WHERE trajectory_id = ?",
-            (used + delta, time.time(), tid),
+            (new_used, time.time(), tid),
         )
         conn.commit()
-        return {"allowed": True, "tokens_used": used + delta, "max_tokens": cap}
+        return {"allowed": True, "tokens_used": new_used, "max_tokens": cap}
+
+
+def reserve_tokens(
+    trajectory_id: str,
+    tokens: int,
+    *,
+    db_path: Optional[str] = None,
+    reason: str = "dispatch",
+) -> Dict[str, Any]:
+    """D13/MED: atomare Token-Reservierung VOR einem teuren Dispatch.
+
+    Wie `reserve_hop()`: BEGIN IMMEDIATE, hartes Cap, bei Ueberlauf `blocked`
+    und Audit. Damit bleibt `tokens_used` waehrend des Runs nicht konstant 0.
+    """
+    return record_tokens(
+        trajectory_id, tokens, db_path=db_path, reason=reason, set_total=False
+    )
 
 
 def close_trajectory(
@@ -510,6 +540,6 @@ __all__ = [
     "DEFAULT_MAX_DELEGATIONS_PER_RESPONSE", "RESERVATION_TTL_SECONDS",
     "resolve_trajectory_db_path", "stable_trajectory_id", "normalize_trajectory_id",
     "ensure_trajectory", "get_trajectory", "reserve_hop", "reserve_replan",
-    "inherit_replan_count", "record_tokens", "close_trajectory",
+    "inherit_replan_count", "record_tokens", "reserve_tokens", "close_trajectory",
     "guard_window_size", "zombie_eligible", "init_trajectory_tables",
 ]

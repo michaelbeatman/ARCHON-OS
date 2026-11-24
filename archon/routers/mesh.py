@@ -16,6 +16,17 @@ logger = logging.getLogger("archon.routers.mesh")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["mesh"])
 
+# D06/MED: explizite Allowlists fuer alle per HTTP setzbaren Config-Felder.
+# Alles andere (insbesondere Steuerungs-/Laufzeitfelder) wird verworfen.
+_CONCURRENCY_CONFIG_KEYS = ("max_concurrent_agents", "queue_timeout_seconds")
+_CONSOLIDATION_CONFIG_KEYS = (
+    "enabled",
+    "schedule_time",
+    "retention_days",
+    "archive_threshold_similarity",
+    "auto_prune_temporary_logs",
+)
+
 
 class _MeshRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -37,7 +48,15 @@ class InboxScanRequest(_MeshRequest):
 
 
 class ConcurrencyConfigRequest(_MeshRequest):
-    model_config = ConfigDict(extra="allow")  # cfg.update(payload)
+    # D06/MED: extra="allow" + cfg.update() liess den Body beliebige
+    # Steuerungsfelder in die persistierte Config schreiben. Nur explizit
+    # typisierte Felder duerfen den Wert ueberschreiben (siehe _CONCURRENCY_CONFIG_KEYS).
+    max_concurrent_agents: Optional[int] = Field(default=None, ge=1, le=128)
+    queue_timeout_seconds: Optional[int] = Field(default=None, ge=1, le=3600)
+    # Legacy-Felder alter Clients (test_p0_api_validation_memory_mesh): sie
+    # bleiben im Modell, werden aber vom Handler NICHT in die Config uebernommen.
+    max_concurrent: Optional[int] = Field(default=None, ge=1, le=128)
+    custom_option: Optional[str] = Field(default=None, max_length=200)
 
 
 class VisionAnalyzeRequest(_MeshRequest):
@@ -88,7 +107,13 @@ class SandboxExecuteRequest(_MeshRequest):
 
 
 class MemoryConsolidationConfigRequest(_MeshRequest):
-    model_config = ConfigDict(extra="allow")  # cfg.update(payload)
+    # D06/MED: nur fachliche Einstellungen, keine Laufzeit-/Steuerungsfelder
+    # (last_run, last_pruned_records_count) aus dem Body.
+    enabled: Optional[bool] = None
+    schedule_time: Optional[str] = Field(default=None, max_length=32)
+    retention_days: Optional[int] = Field(default=None, ge=1, le=3650)
+    archive_threshold_similarity: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    auto_prune_temporary_logs: Optional[bool] = None
 
 
 class BrowseCaptureRequest(_MeshRequest):
@@ -227,11 +252,13 @@ def api_get_concurrency_status():
 @router.post("/api/concurrency/config")
 def api_save_concurrency_config(request: Request, payload: ConcurrencyConfigRequest = Body(...)):
     _require_admin(request)
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    payload = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
     from backend.concurrency_throttle import get_concurrency_config, save_concurrency_config
 
     cfg = get_concurrency_config()
-    cfg.update(payload)
+    for key in _CONCURRENCY_CONFIG_KEYS:
+        if key in payload:
+            cfg[key] = payload[key]
     ok = save_concurrency_config(cfg)
     return {"status": "success" if ok else "error", "concurrency": cfg}
 
@@ -362,11 +389,13 @@ def api_get_memory_consolidation_settings():
 @router.post("/api/settings/memory-consolidation")
 def api_save_memory_consolidation_settings(request: Request, payload: MemoryConsolidationConfigRequest = Body(...)):
     _require_admin(request)
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    payload = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
     from backend.memory_consolidator import get_consolidation_config, save_consolidation_config
 
     cfg = get_consolidation_config()
-    cfg.update(payload)
+    for key in _CONSOLIDATION_CONFIG_KEYS:
+        if key in payload:
+            cfg[key] = payload[key]
     ok = save_consolidation_config(cfg)
     return {"status": "success" if ok else "error", "config": cfg}
 

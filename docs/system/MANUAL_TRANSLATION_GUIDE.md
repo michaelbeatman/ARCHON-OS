@@ -25,7 +25,7 @@ Translate descriptive prose into natural technical English, **but keep code path
 | Kognition & Wissen | Cognition & Knowledge | Pillar 2 |
 | Wirtschaft & ERP *(alpha)* | Business & ERP *(alpha)* | Pillar 3 — keep `alpha` marker |
 | Infrastruktur & Governance | Infrastructure & Governance | Pillar 4 |
-| Agenten-Kader (70 Spezialisten) | Specialist Fleet (70 Specialists) | Keep 8 + 5b domain numbering |
+| Agenten-Kader (71 Profile) | Specialist Fleet (71 Profiles) | Keep 8 + 5b domain numbering |
 | 3-Stufen-SOUL-Mechanik | 3-Tier SOUL Architecture | Keep `SOUL_COMPACT.md`, `SOUL_PRO.md`, `SOUL_FULL.md` |
 | AI-Boardroom (55 Frameworks) | AI Boardroom (55 Frameworks) | Keep 4-phase structure (+ optional MoA) |
 | Eingang / Triage | Inbox & Event Triage | View #2 |
@@ -42,7 +42,7 @@ Translate descriptive prose into natural technical English, **but keep code path
 |---|---|---|
 | **Vorwort & `( ? )` Guide** | System philosophy, 4 pillars, context help | Cleaned (`v0.6.0-rc1`) |
 | **0. Installationshinweise** | Hardware, DAU Installer (`setup.bat`/`install.sh`), `INSTALL_AGENT.md` | Updated |
-| **1. – 19. Hauptkapitel** | All 19 UI views, 70 specialists in 8 domains, ERP *(Alpha)*, Guardian, Control Center | Clean master |
+| **1. – 19. Hauptkapitel** | All 19 UI views, 71 profiles in 8 domains, ERP *(Alpha)*, Guardian, Control Center | Clean master |
 | **Anhang I – IV** | Practical use cases, full glossary, 55 frameworks, Security & Compliance guides | Clean master |
 | **Anhang V (V.1 – V.22)** | DevOps, MCP drivers, Observability, Architecture Audit, **44-Milestone Roadmap (V.21)**, ERP Spec (V.22) | Updated |
 

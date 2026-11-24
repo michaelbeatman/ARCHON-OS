@@ -253,8 +253,10 @@ def _check_delegation_permission(delegator_id: str, target_id: str):
     return False, f"Spezialist '{delegator_id}' (Tier 3) darf nicht delegieren. Bitte beim eigenen LEAD eskalieren."
 
 
-# Batch D/1: Task -> Handoff-ID, damit verkettete Delegationen reply_to setzen koennen.
-_HANDOFF_IDS_BY_TASK: Dict[str, str] = {}
+# D11/MED (Re-Audit): die reply_to-Kette lag frueher in einem RAM-Dict und wurde
+# unter task_id geschrieben, aber unter parent_pid (einer Projekt-ID!) gelesen.
+# SSOT ist jetzt die SQLite-Spalte `agent_handoffs.reply_to`; Seele liest
+# `handoff_desk.latest_handoff_id_for_task()` mit demselben Key (task_id/project_id).
 
 # C09: Session -> Delegationskette. Verhindert A->B->A-Zirkel und unbegrenzte
 # Tiefe im Hauptpfad (der Mission-Control-Pfad hatte bereits max_depth=3).
@@ -598,7 +600,8 @@ def _build_kader_roster_summary():
         lines = []
         for p in profiles:
             pid = p.get("id")
-            if not pid or pid in ("founder", "micha", "telegram_bot"):
+            # D02/MED: 'micha' ist aus der SSOT entfernt — nie wieder Sonderfall.
+            if not pid or pid in ("founder", "telegram_bot"):
                 continue
             pname = p.get("person_name") or p.get("name") or pid
             role = p.get("role") or p.get("name") or ""
@@ -1268,6 +1271,11 @@ async def _watch_delegated_task(
                 handoff_id = ""
                 try:
                     from backend.handoff_desk import handoff_desk, mark_truncated
+                    try:
+                        from backend.trace_context import current_trace_id
+                        _handoff_trace = str(current_trace_id() or "")
+                    except Exception:
+                        _handoff_trace = ""
                     # Batch D/1: vollständiges, typisiertes A2A-Envelope.
                     _status_key = str(status).strip().lower()
                     _confidence = 1.0 if _status_key == "done" else (0.6 if _status_key == "review" else 0.0)
@@ -1277,6 +1285,11 @@ async def _watch_delegated_task(
                             str(proj_folder or ""),
                         ) if p
                     ]
+                    # D11/MED: Korrelation aus dem echten Trace-Kontext. Der
+                    # Legacy-Fallback bleibt `correlation_id=f"task:{task_id}"`,
+                    # greift aber nur ohne verfuegbaren Trace. Die reply_to-Kette
+                    # kommt aus SQLite statt aus einem RAM-Dict.
+                    correlation_id = f"task:{task_id}"
                     envelope = handoff_desk.create_handoff(
                         task_id=str(task_id),
                         from_agent=str(prof_id or "unknown"),
@@ -1292,10 +1305,12 @@ async def _watch_delegated_task(
                             acceptance_criteria, prof_id, task_id
                         ),
                         message_id=f"msg-{secrets.token_hex(6)}",
-                        correlation_id=f"task:{task_id}",
-                        reply_to=str(reply_to or _HANDOFF_IDS_BY_TASK.get(str(parent_pid or ""), "")),
+                        correlation_id=(f"trace:{_handoff_trace}" if _handoff_trace else f"task:{task_id}"),
+                        reply_to=str(reply_to or handoff_desk.latest_handoff_id_for_task(parent_pid)),
                         confidence=_confidence,
                         attachments=_attachments,
+                        trace_id=_handoff_trace,
+                        session_id=str(origin_sess_id or s_id or ""),
                     )
                     handoff_id = str(envelope.get("handoff_id") or "")
                     # D11: HMAC wird nicht nur erzeugt, sondern im automatischen
@@ -1307,7 +1322,8 @@ async def _watch_delegated_task(
                             handoff_id,
                         )
                         handoff_id = ""
-                    _HANDOFF_IDS_BY_TASK[str(task_id)] = handoff_id
+                    # D11/MED: kein RAM-Dict mehr. Der Envelope liegt bereits
+                    # in `agent_handoffs` und wird dort unter task_id gelesen.
                 except Exception as he:
                     logger.debug(f"[Delegation] Handoff-Envelope nicht angelegt: {he}")
 
@@ -1329,7 +1345,7 @@ async def _watch_delegated_task(
                     "task_id": task_id,
                     "status": status
                 })
-                if not parent_pid and orig_delegator in ("executive_decision_architect", "robert", "hermes-orchestrator", "founder", "micha", "default"):
+                if not parent_pid and orig_delegator in ("executive_decision_architect", "robert", "hermes-orchestrator", "founder", "default"):
                     _spawn_background(_trigger_autonomous_orchestrator_followup(
                         orig_delegator, origin_sess_id, task_id, status, result, final_title, parent_pid
                     ), name=f"followup_{task_id}")

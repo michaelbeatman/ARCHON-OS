@@ -62,6 +62,18 @@ def _read_snapshot(lock: threading.RLock, conn: sqlite3.Connection):
 HMAC_PREFIX = "hmac-sha256:"
 ANCHOR_INTERVAL_SEC = 300
 
+# D05/M: Platzhalter sind keine echte Versionsangabe. Ein signierter
+# Dispatch-Proof mit "unknown" war bisher als vollstaendiger Nachweis
+# akzeptiert — in Produktion ist das fail-closed zu behandeln.
+_PLACEHOLDER_VERSIONS = frozenset(
+    {"unknown", "none", "null", "n/a", "na", "-", "unspecified"}
+)
+
+
+def _is_placeholder_version(value: Any) -> bool:
+    text = str(value or "").strip().lower()
+    return not text or text in _PLACEHOLDER_VERSIONS
+
 
 def _hmac_epochs() -> list:
     """Sortierte (from_block, key)-Epochen aus der Umgebung.
@@ -729,12 +741,20 @@ class ChainedAuditLog:
                 pass
         pv = pv_raw or "unknown"
         cv = cv_raw or "unknown"
-        if pv_raw == "" or cv_raw == "":
+        if _is_placeholder_version(pv) or _is_placeholder_version(cv):
             logger.error(
                 "[Audit] LLM-Dispatch-Proof ohne vollstaendige Prompt-/Canary-Version "
                 "(agent=%s, action=%s) — 'unknown' gesetzt; Aufrufer pruefen.",
                 agent_id, action,
             )
+            # D05/M: in Produktion darf kein Platzhalter signiert werden.
+            # Dev/Test bleiben kompatibel (alte Aufrufer ohne Registry-Kontext),
+            # der Verify meldet die Bloecke dort aber als `unverified_versions`.
+            if _is_production():
+                raise RuntimeError(
+                    "[Audit] LLM-Dispatch-Proof ohne echte Prompt-/Canary-Version "
+                    f"(agent={agent_id}, action={action}) — 'unknown' ist kein Nachweis."
+                )
 
         payload: Dict[str, Any] = {
             "provider": norm_provider,
@@ -821,6 +841,11 @@ class ChainedAuditLog:
                     )
                 except ValueError:
                     legacy_max = 0
+                # D05/M: Platzhalter-Versionen sind in Produktion kein Nachweis.
+                is_prod = str(os.environ.get("ENVIRONMENT") or "").strip().lower() in (
+                    "production", "prod", "live"
+                )
+                unverified_version_blocks: List[int] = []
 
                 # Audit 23.11.2026 (K-1): mit aktivem HMAC-Key duerfen keine
                 # ungesalzten SHA-256-Bloecke ausserhalb des explizit markierten
@@ -956,15 +981,24 @@ class ChainedAuditLog:
                         # Pflichtfelder. Alt-Bloecke bis legacy_max bleiben
                         # verifizierbar (default 0 = alle neuen Bloecke streng).
                         for req_key in ("prompt_version", "canary_version"):
-                            if not str(parsed_payload.get(req_key, "")).strip() and int(r["id"]) > legacy_max:
-                                return {
-                                    "valid": False,
-                                    "corrupted_id": r["id"],
-                                    "reason": (
-                                        f"Unvollständiger LLM-Dispatch-Nachweis bei Block #{r['id']}: "
-                                        f"Pflichtfeld '{req_key}' fehlt."
-                                    ),
-                                }
+                            req_value = str(parsed_payload.get(req_key, "") or "").strip()
+                            placeholder = _is_placeholder_version(req_value)
+                            if int(r["id"]) > legacy_max and (not req_value or placeholder):
+                                if placeholder:
+                                    unverified_version_blocks.append(int(r["id"]))
+                                # In Produktion ist "unknown" genauso ungueltig wie
+                                # ein fehlendes Feld — sonst gilt ein Platzhalter
+                                # als vollstaendiger GoBD-Nachweis (D05/M).
+                                if not req_value or is_prod:
+                                    return {
+                                        "valid": False,
+                                        "corrupted_id": r["id"],
+                                        "reason": (
+                                            f"Unvollständiger LLM-Dispatch-Nachweis bei Block #{r['id']}: "
+                                            f"Pflichtfeld '{req_key}' "
+                                            f"{f'enthält nur einen Platzhalter ({req_value})' if placeholder else 'fehlt'}."
+                                        ),
+                                    }
                         # F-028: zusaetzlich auf eine der drei definierten
                         # Zonen validieren — beliebiger/manipulierter Wert
                         # (z. B. "" oder "GARBAGE") ist kein gueltiger Nachweis.
@@ -999,8 +1033,6 @@ class ChainedAuditLog:
                 anchor_ok: Optional[bool] = None
                 id_to_hash = {int(r["id"]): str(r["current_hash"] or "") for r in rows}
                 max_id = int(rows[-1]["id"]) if rows else 0
-                prod_env = str(os.environ.get("ENVIRONMENT") or "").strip().lower()
-                is_prod = prod_env in ("production", "prod", "live")
                 akey = _anchor_key()
                 if anchor_path and os.path.isfile(anchor_path):
                     try:
@@ -1090,6 +1122,9 @@ class ChainedAuditLog:
                     "hmac_blocks": hmac_blocks,
                     "total_records": len(rows),
                     "llm_dispatch_records": llm_dispatch_count,
+                    # D05/M: auch ausserhalb Produktion sichtbar machen, wie viele
+                    # Dispatch-Proofs nur Platzhalter-Versionen tragen.
+                    "unverified_version_blocks": sorted(set(unverified_version_blocks)),
                     "genesis_hash": GENESIS_HASH,
                     "latest_hash": expected_prev,
                     "message": f"Kryptografische GoBD/ISO Audit-Kette vollständig intakt ({len(rows)} Blöcke verifiziert, davon {llm_dispatch_count} LLM-Dispatches).",

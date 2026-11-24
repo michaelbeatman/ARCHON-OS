@@ -253,14 +253,18 @@ def api_call_mcp_tool(request: Request, req: McpToolCallRequest):
     require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
         from scripts.archon_mcp_server import ArchonMcpServer
-        from backend.tool_runtime import enforce_tool_execution, record_tool_read_side_effect
+        # D04/MED: Tool-Output-Firewall im echten Chokepoint (wie in plugins.py,
+        # mcp_gateway.py und workflow_node_plugins.py).
+        from backend.tool_runtime import enforce_tool_execution, guard_result, record_tool_read_side_effect
         tool_name = req.name
         arguments = req.arguments
         if not tool_name:
             raise HTTPException(status_code=400, detail={"code": "sysops_name_required", "params": {}})
         # Actor/Session und Warrant serverseitig — nie aus dem Request-Body.
+        # Ein client-gesteuertes agent_id wuerde die agentenbezogenen Taint-/
+        # Warrant-Gates umgehen (identisch zu plugins.py:144-145).
         session_id = f"user:{get_session_actor(request)}"
-        agent_id = str(req.agent_id or "").strip()
+        agent_id = session_id
         from backend.tool_warrants import get_warrant_for_session
         warrant = get_warrant_for_session(session_id, str(tool_name))
         gate = enforce_tool_execution(
@@ -276,7 +280,16 @@ def api_call_mcp_tool(request: Request, req: McpToolCallRequest):
         server = ArchonMcpServer()
         result = server.execute_tool(tool_name, arguments)
         record_tool_read_side_effect(session_id, tool_name)
-        return {"status": "success", "result": result}
+        try:
+            guarded = guard_result(tool_name, result)
+        except Exception as exc:
+            # Firewall-Fehler darf NIE den Roh-Output durchlassen.
+            logger.error(
+                "[SysOps] Tool-Output-Firewall fehlgeschlagen (%s: %s) — Response gesperrt.",
+                tool_name, exc,
+            )
+            raise HTTPException(status_code=503, detail={"code": "sysops_tool_output_guard_failed", "params": {}})
+        return {"status": "success", "result": guarded}
     except HTTPException:
         raise
     except Exception as e:
@@ -325,7 +338,10 @@ async def api_stream_task_execution(task_id: str):
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
         except asyncio.CancelledError as exc:
-            logger.debug(f"SSE-Stream wurde abgebrochen: {exc}")
+            # D16/M5: ein abgebrochener Stream ist ein sichtbares Ereignis,
+            # kein stiller DEBUG-Fall.
+            logger.info("SSE-Stream wurde abgebrochen: %s", exc)
+            raise
         finally:
             try:
                 import main

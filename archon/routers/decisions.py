@@ -733,7 +733,9 @@ async def _decision_followup(typ: str, dec: dict, decision: str, proof_token: st
         verdict = str(extra.get("consensus_verdict") or extra.get("consensus_status") or "NO_CONSENSUS")
         archived = create_decision(
             "synthesis_freigabe",
-            titel=f"[HITL-Auflösung] Boardroom: {str(ref or task_id)[:100]}",
+            # D14: `task_id` ist hier NICHT definiert (Parameter ist `dec`);
+            # ein leeres ref_id darf keinen NameError ausloesen.
+            titel=f"[HITL-Auflösung] Boardroom: {str(ref or dec.get('task_id') or 'hitl-task')[:100]}",
             kurzfassung=f"Manuell aufgelöst trotz {verdict}. Synthese: {synthesis[:400]}",
             ref_id=str(ref or ""),
             body=synthesis,

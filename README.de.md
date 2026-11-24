@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release: v0.5.7.7](https://img.shields.io/badge/Release-v0.5.7.7-6366f1.svg)](CHANGELOG.md)
-[![Agenten: 70 Spezialisten](https://img.shields.io/badge/Spezialisten-70%20in%208%20Dom%C3%A4nen%20(DE%2FEN)-emerald.svg)](agent_profiles.json)
+[![Agenten: 71 Profile](https://img.shields.io/badge/Profile-71%20in%208%20Dom%C3%A4nen%20(DE%2FEN)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
 [![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](SECURITY.md)
@@ -23,11 +23,11 @@
 
 > **Zuerst die Basis:** Archon OS ist ein Aufsatz auf **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** von **[Nous Research](https://nousresearch.com)** — der autonomen Multi-Agenten-Runtime. Hermes ist die Engine; Archon OS macht daraus ein vollständiges, selbst gehostetes Betriebs-Ökosystem für Unternehmen.
 
-Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehostetes **Agentic Operating System**. Das System koordiniert **70 Fachspezialisten in 8 Fachdomänen**, führt strukturierte **AI-Boardroom-Debatten über 55 Entscheidungs-Frameworks**, routet sensible Daten über einen **Zero-Egress-Privacy-Router** direkt an lokale LLMs, protokolliert Transaktionen in einem **GoBD-/ISO-27001-Audit-Log (HMAC-SHA256, Env-Key)** und verbindet **Obsidian Second Brain**, **n8n**, **Telegram** sowie ein integriertes **CRM- & ERP-Modul *(Alpha)***.
+Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehostetes **Agentic Operating System**. Das System koordiniert **71 Agenten-Profile in 8 Fachdomänen**, führt strukturierte **AI-Boardroom-Debatten über 55 Entscheidungs-Frameworks**, routet sensible Daten über einen **Zero-Egress-Privacy-Router** direkt an lokale LLMs, protokolliert Transaktionen in einem **GoBD-/ISO-27001-Audit-Log (HMAC-SHA256, Env-Key)** und verbindet **Obsidian Second Brain**, **n8n**, **Telegram** sowie ein integriertes **CRM- & ERP-Modul *(Alpha)***.
 
 ---
 
-### Aktueller Release-Stand (`v0.5.7.4`, 24.11.2026)
+### Aktueller Release-Stand (`v0.5.7.7`, 24.11.2026)
 
 Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen seit `v0.5.6.0`:
 
@@ -37,9 +37,9 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen sei
 - **Observability & Tooling:** OTel-Traces in LLM-Kernel und DAG, Trace-to-Eval-Replay-Fixtures, Python 3.13, getrennte Test-Requirements.
 - **Workspace:** 5-Stufen-Onboarding-Wizard v2, Operations-Kalender und 11 LinkedIn-Skills.
 
-> **Konfigurations- & Sicherheitshinweis (Audit 23.11.2026):** Die mitgelieferte `settings.json` enthält **keinen `auth`-Block**. Das System läuft daher bei Bindung auf `127.0.0.1` bewusst im **lokalen Single-User-Modus** (Fallback-Admin, kein Login). **Dieser Modus ist ausschließlich für die lokale Desktop-Nutzung gedacht.** Nicht-Loopback-Binds erzwingen Auth bereits über `_must_force_auth()`; vor LAN- oder Produktionsbetrieb muss zusätzlich `"auth": {"enabled": true}` gesetzt werden. Auch die Egress-Flags sind standardmäßig aus (`privacy.zero_egress = false`, `zero_egress_strict = false`; nur `hard_block_on_local_offline = true`). `config/version.json` meldet **v0.5.7.4** (veröffentlicht 2026-11-24 00:24, Commit `v0.5.7`) und stimmt damit mit dem Badge überein; das PDF-Handbuch nennt weiterhin v0.5.2.1.
+> **Konfigurations- & Sicherheitshinweis (Audit 23.11.2026):** Die mitgelieferte `settings.json` enthält **keinen `auth`-Block**. Das System läuft daher bei Bindung auf `127.0.0.1` bewusst im **lokalen Single-User-Modus** (Fallback-Admin, kein Login). **Dieser Modus ist ausschließlich für die lokale Desktop-Nutzung gedacht.** Nicht-Loopback-Binds erzwingen Auth bereits über `_must_force_auth()`; vor LAN- oder Produktionsbetrieb muss zusätzlich `"auth": {"enabled": true}` gesetzt werden. Auch die Egress-Flags sind standardmäßig aus (`privacy.zero_egress = false`, `zero_egress_strict = false`; nur `hard_block_on_local_offline = true`). `config/version.json` meldet **v0.5.7.7** (veröffentlicht 2026-11-24 12:39, Commit `v0.5.7`) und stimmt damit mit dem Badge überein; das PDF-Handbuch nennt weiterhin v0.5.2.1.
 
-> **In diesem Checkout gemessene Zahlen:** 73 Einträge in `agent_profiles.json` (70 Spezialisten + 3 System-/Meta-Profile), 73 Rollen in `roles.json`, 73 synchronisierte Profile in `.hermes/profiles/`, 312 Portrait-Assets in `static/avatars/`, 832 Prompt-Templates und 11 UI-Sprachen. Die PDF-Handbücher wurden für `v0.5.2.1` erzeugt und noch nicht für `v0.5.7.4` aktualisiert.
+> **In diesem Checkout gemessene Zahlen:** 71 Einträge in `agent_profiles.json`, 71 Rollen in `roles.json`, 71 synchronisierte Profile in `.hermes/profiles/`, 312 Portrait-Assets in `static/avatars/`, 832 Prompt-Templates und 11 UI-Sprachen. Die PDF-Handbücher wurden für `v0.5.2.1` erzeugt und noch nicht für `v0.5.7.7` aktualisiert.
 
 ## Dokumentation & Handbücher (PDF)
 
@@ -57,7 +57,7 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen sei
 
 | Merkmal | Klassischer Chat | Einzelner „Super-Agent“ | **Archon Agentic OS** |
 |---|---|---|---|
-| **Spezialisten-Kader** | 1 Generalist | 1 Agent mit Tool-Liste | **70 Fachspezialisten** (`agent_profiles.json`) mit **3-Stufen-`SOUL.md`** (`Compact` / `Pro` / `Full`) |
+| **Spezialisten-Kader** | 1 Generalist | 1 Agent mit Tool-Liste | **71 Profile** (`agent_profiles.json`) mit **3-Stufen-`SOUL.md`** (`Compact` / `Pro` / `Full`) |
 | **Entscheidungen** | Einmalige Antwort | Iterativer Loop | **AI-Boardroom**: getrennte Perspektiven, Kritik-Prompt & Synthese über **55 Frameworks** |
 | **Langzeitgedächtnis** | Flacher Verlauf | Vektor-Snippets | **Obsidian Vault Sync**, Agenten-Personalakten, SQLite WAL & LRU-K Paging |
 | **Datenschutz** | Cloud-Zwang | Keys in Env | **Zero-Egress-Gate & Privacy-Router Hard-Block** (Fail-Closed für Finanzen/Verträge/CRM bei Offline-Lokalmodell) + **Docker-Worker-Netz ohne Internet-Route (`internal: true`)** + **Dual-LLM Guard** |
@@ -70,7 +70,7 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen sei
 
 ### Animierte Produkt-Tour
 
-| Prompt Studio (direkt im Chat) | 70-Spezialisten-Flotte (3-Stufen-SOUL) |
+| Prompt Studio (direkt im Chat) | 71-Profil-Flotte (3-Stufen-SOUL) |
 |---|---|
 | ![Prompt Studio](docs/system/screenshots/demo_1_prompt_studio.gif) | ![Agent Fleet](docs/system/screenshots/demo_2_agent_fleet.gif) |
 | **Organisations-Hierarchie & Teams** | **AI-Boardroom-Debatte (55 Frameworks)** |
@@ -78,7 +78,7 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen sei
 
 ### System-Ansichten
 
-| Mission Control & Operations | 70-Spezialisten-Kader & 3-Stufen-SOUL |
+| Mission Control & Operations | 71-Profil-Kader & 3-Stufen-SOUL |
 |---|---|
 | ![Mission Control](docs/system/screenshots/mission_control.png) | ![Agenten-Kader](docs/system/screenshots/kader.png) |
 | **AI-Boardroom (Multi-Agenten-Debatte)** | **Org-Chart & Teams** |
@@ -117,7 +117,7 @@ Der Agent prüft Docker, RAM und laufende lokale Modelle, fragt Zielordner, Obsi
 
 ### Weg B: Interaktiver 1-Click-Installer (für Einsteiger)
 
-Beide Installer prüfen und installieren bei Bedarf **Docker** sowie **Obsidian Desktop**, legen die Vault-Struktur an, laden den **Nous Research Hermes Agent**, bauen Archon OS und synchronisieren alle 70 `SOUL.md`-Profile automatisch.
+Beide Installer prüfen und installieren bei Bedarf **Docker** sowie **Obsidian Desktop**, legen die Vault-Struktur an, laden den **Nous Research Hermes Agent**, bauen Archon OS und synchronisieren alle 71 `SOUL.md`-Profile automatisch.
 
 #### Windows (Doppelklick)
 1. Repository klonen oder als ZIP herunterladen und entpacken.
@@ -143,7 +143,7 @@ chmod +x install.sh
 
 ### Weg C: Sofortige Read-Only Live-Demo (`ARCHON_DEMO_MODE=true`)
 
-Cockpit, 4-Phasen-Boardroom-Debatte (+ optionales MoA; *„Mittelstand Muster GmbH“*), Kanban und 70 Spezialisten **ohne API-Keys und ohne Token-Kosten** in 30 Sekunden testen (oder sicher auf einer 5-€-VPS hosten):
+Cockpit, 4-Phasen-Boardroom-Debatte (+ optionales MoA; *„Mittelstand Muster GmbH“*), Kanban und 71 Profile **ohne API-Keys und ohne Token-Kosten** in 30 Sekunden testen (oder sicher auf einer 5-€-VPS hosten):
 
 ```bash
 ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
@@ -157,7 +157,7 @@ ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
 ```mermaid
 flowchart LR
     U["Nutzer / LAN-Browser / Telegram"] -->|HTTP 8501 + RBAC Login| UI["Archon Web-Cockpit (FastAPI + SPA)"]
-    UI --> OR["Orchestrator & 70-Spezialisten-Flotte (3-Stufen-SOUL)"]
+    UI --> OR["Orchestrator & 71-Profil-Flotte (3-Stufen-SOUL)"]
     OR --> BR["AI-Boardroom (55 Entscheidungs-Frameworks)"]
     OR --> PR["Zero-Egress Privacy-Router"]
     PR -->|Sensible Daten| LOC["Ollama / LM Studio (Lokal)"]
@@ -168,14 +168,14 @@ flowchart LR
     UI <-->|Webhooks| N8N["n8n Automation & RSS-Watchdog"]
 ```
 
-1. **Steuerung & Operation:** Mission Control, Master Chat, Triage-Postfach (Webhooks, E-Mail, Messenger, Freigaben), **70-Spezialisten-Kader** (inkl. Bot Screen PbD & 3-Stufen-SOUL), Showroom Sandbox.
+1. **Steuerung & Operation:** Mission Control, Master Chat, Triage-Postfach (Webhooks, E-Mail, Messenger, Freigaben), **71-Profil-Kader** (inkl. Bot Screen PbD & 3-Stufen-SOUL), Showroom Sandbox.
 2. **Kognition & Wissen:** Internet-Watchdog (RSS/Web-Radar), Research Lab (Quellen-Triangulation & Dossiers), Zentralbibliothek (Obsidian Vault + AnythingLLM RAG), AI-Boardroom.
 3. **Wirtschaft & ERP *(Alpha)*:** CRM (Adressen, Kontakte, Pipeline), ERP-Suite (Angebote, Verträge, Rechnungen, OPOS/Mahnwesen, Belege), OmniRoute Token-FinOps mit Kostenkontrolle je Modell.
 4. **Infrastruktur & Governance:** Org-Chart & Teams, Guardian (Parallelität, Sitzungen, Rate-Limits), System Control Center (API-Keys, Modell-Routing, Kernel-Watchdog, In-App-Update), manipulationssicherer Revisions-Audit-Log.
 
 ---
 
-## Flotten-Kader: 70 Spezialisten in 8 Kern-Domänen
+## Flotten-Kader: 71 Profile in 8 Kern-Domänen
 
 | Nr. | Fachdomäne | Anzahl | Kernfokus & Schutzmechanismen |
 |---|---|---|---|

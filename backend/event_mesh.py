@@ -21,6 +21,16 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("archon_os.event_mesh")
 
+# Re-Audit D05/M: verschluckte GoBD-Audit-Fehler sind messbar zu machen
+# (Vorbild backend/egress_firewall.py:_AUDIT_ERROR_COUNTS).
+_AUDIT_ERROR_COUNTS: Dict[str, int] = {}
+
+
+def get_audit_error_counts() -> Dict[str, int]:
+    """Lesender Zugriff auf die Audit-Schreibfehler-Zaehler (Status/Test)."""
+    return dict(_AUDIT_ERROR_COUNTS)
+
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
     from backend.db_paths import resolve_db as _resolve_db
@@ -57,8 +67,18 @@ def _audit_webhook_event(action: str, payload: Dict[str, Any]) -> Dict[str, Any]
         )
         return {"audit_status": "recorded", "audit_event_id": event.get("event_id")}
     except Exception as exc:
-        logger.error("[EventMesh] Audit-Eintrag %s fehlgeschlagen: %s", action, exc)
-        return {"audit_status": "error", "audit_error": type(exc).__name__}
+        # D05/M: ERROR + Zaehler statt eines blossen Result-Feldes, damit der
+        # GoBD-Verlust auch ohne Result-Inspection sichtbar/verfolgbar bleibt.
+        _AUDIT_ERROR_COUNTS[action] = _AUDIT_ERROR_COUNTS.get(action, 0) + 1
+        logger.error(
+            "[GoBD-Audit] '%s' fehlgeschlagen (count=%d): %s",
+            action, _AUDIT_ERROR_COUNTS[action], exc,
+        )
+        return {
+            "audit_status": "error",
+            "audit_error": type(exc).__name__,
+            "audit_error_count": _AUDIT_ERROR_COUNTS[action],
+        }
 
 
 _TRACE_COLS = ("trace_id", "span_id", "traceparent", "tracestate")

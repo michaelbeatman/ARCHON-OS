@@ -7,7 +7,7 @@
 **Sistema Operacional Multi-Agente Auto-Hospedado para Fundadores, Equipes e Especialistas de Domínio**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
+[![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
 [![Python 3.13+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](../../requirements.txt)
 [![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-2496ED.svg)](../../docker-compose.yml)
 
@@ -19,7 +19,7 @@
 
 ---
 
-O Archon OS substitui chatbots isolados por um **Sistema Operacional Agêntico** persistente e auto-hospedado. Ele coordena **70 especialistas em 8 domínios principais**, conduz debates estruturados no **AI Boardroom com 55 frameworks**, une **roteamento local Zero-Egress** com **log de auditoria HMAC-SHA256 (GoBD / ISO 27001)** e integra **Obsidian Second Brain**, **n8n**, **Telegram** e um módulo **CRM & ERP *(Alpha)***.
+O Archon OS substitui chatbots isolados por um **Sistema Operacional Agêntico** persistente e auto-hospedado. Ele coordena **71 perfis de agente em 8 domínios principais**, conduz debates estruturados no **AI Boardroom com 55 frameworks**, une **roteamento local Zero-Egress** com **log de auditoria HMAC-SHA256 (GoBD / ISO 27001)** e integra **Obsidian Second Brain**, **n8n**, **Telegram** e um módulo **CRM & ERP *(Alpha)***.
 
 > **Status de localização:** A interface suporta 11 idiomas (`en`, `de`, `es`, `fr`, `pt`, `it`, `nl`, `ru`, `ja`, `ko`, `zh`). Os arquivos `SOUL.md` e metodologias estão atualmente em alemão; a tradução está em andamento ([Roadmap M31](../system/ROADMAP_2026.md)).
 
@@ -58,7 +58,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ## Prévia do Sistema
 
-| Mission Control & Operations | Frota de 70 Especialistas (`SOUL.md`) |
+| Mission Control & Operations | Frota de 71 Perfis (`SOUL.md`) |
 |---|---|
 | ![Mission Control](../system/screenshots/mission_control.png) | ![Agent Fleet](../system/screenshots/kader.png) |
 | **AI Boardroom (Debate Multi-Agente)** | **Org-Chart & Teams** |
@@ -66,7 +66,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ---
 
-## A Frota de 70 Especialistas (8 Domínios)
+## A Frota de 71 Perfis (8 Domínios)
 
 1. **Estratégia, Liderança e Vida (12):** Orquestração, Copiloto CEO, decisões M&A, OKRs., síntese entre domínios e verificação final
 2. **Comércio, Compras e E-Commerce (7):** Cadeia de suprimentos, estoque, negociação, Shopify.

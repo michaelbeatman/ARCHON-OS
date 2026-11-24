@@ -17,6 +17,7 @@ import {
   Radar,
   Workflow
 } from "lucide-react";
+import { tracedFetch } from "@/lib/archon-api";
 import { GatewayManagerModal } from "./GatewayManagerModal";
 import { WatchdogModal } from "./WatchdogModal";
 
@@ -49,9 +50,11 @@ export const SidebarNav: React.FC = () => {
 
   React.useEffect(() => {
     // Echte Agentenliste aus der Archon-API (statt leerer Pseudo-Anzeige)
-    fetch(`/api/archon/api/hermes/profiles`)
+    const controller = new AbortController();
+    tracedFetch(`/api/archon/api/hermes/profiles`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : Promise.resolve({ profiles: [] })))
       .then((d) => {
+        if (controller.signal.aborted) return;
         const rows = Array.isArray(d) ? d : (d.profiles || d.agents || []);
         setAgentsList(rows.slice(0, 6).map((p: any) => ({
           id: p.id || p.agent_id || "",
@@ -60,17 +63,21 @@ export const SidebarNav: React.FC = () => {
         })));
       })
       .catch(() => {});
+    return () => controller.abort();
   }, []);
 
   // Fetch running gateway count on mount (non-blocking, best-effort via Archon FastAPI proxy)
   React.useEffect(() => {
-    fetch(`/api/archon/api/v1/gateway/list`)
+    const controller = new AbortController();
+    tracedFetch(`/api/archon/api/v1/gateway/list`, { signal: controller.signal })
       .then((r) => r.json())
       .then((d) => {
+        if (controller.signal.aborted) return;
         const count = (d.profiles || []).filter((p: any) => p.status === "running").length;
         setRunningGatewayCount(count);
       })
       .catch(() => {});
+    return () => controller.abort();
   }, []);
 
   return (

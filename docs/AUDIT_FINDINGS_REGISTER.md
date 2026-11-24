@@ -321,3 +321,7 @@ n8n                              ACTIVE True, HMAC-Verify-Node verdrahtet, Resta
 | 4 | **`NOTEBOOKLM_SOURCES.md` entfernt** (generiertes Artefakt; Generator ist selbst ignoriert), `.gitignore`-Eintrag und Register-Erwähnung angepasst | `Test-Path` = False |
 
 **Verifikation dieser Welle:** `compileall` Exit 0; `docker compose config` (main/all) Exit 0; `promtool check rules` 8 Regeln; `amtool check-config` SUCCESS; `automated_restore_test.py` PASSED 5/5; Archon-OS neu gestartet, `/metrics` liefert echte Disk-Werte; **`pytest tests/ -q`: 1775 passed, 16 skipped (128,42 s)**.
+
+### 8.10 SSOT-Zahl 71 statt 70/73 (Re-Audit 24.11.2026)
+
+Nach der akzeptierten Entfernung von `micha` und `alpha` sind **71 Profile** verbindlich (`agent_profiles.json` = `roles.json` = `.hermes/profiles/` = `souls/manifest.json`: 71×7 = 497 Artefakte). Die früheren Angaben 70 Spezialisten + 3 Meta = 73 waren veraltet und wurden in `README.md`, `README.de.md`, `docs/readme/*.md`, `docs/SYSTEM_HANDBUCH.md`, `docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md`, `docs/system/MANUAL_TRANSLATION_GUIDE.md` und `docs/system/system_architecture_spec.json` korrigiert. Die verwaisten Runtime-Cache-Verzeichnisse `data/hermes_profiles/{alpha,micha,agility_story,hermes_default,ruediger_cheng}` wurden entfernt; `negative_scope` (71/71) und bytegleiche Prompts in `roles.json`/`agent_profiles.json` sind bereits aus früheren Wellen erfüllt. Statische Absicherung: `tests/test_med2_h_ssot.py`. Historische Einträge (8.6, `docs/_archive/**`) bleiben als Zeitdokument unangetastet.

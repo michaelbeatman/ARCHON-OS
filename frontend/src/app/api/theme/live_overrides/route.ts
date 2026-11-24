@@ -22,6 +22,11 @@ function forwardHeaders(request: Request, withBody: boolean): HeadersInit {
   const cookie = request.headers.get('cookie');
   if (cookie) headers['Cookie'] = cookie;
   if (withBody) headers['Content-Type'] = 'application/json';
+  // D16: Browser-Kontext (tracedFetch) ueber die Next.js-Grenze weitergeben.
+  const traceparent = request.headers.get('traceparent');
+  if (traceparent) headers['traceparent'] = traceparent;
+  const tracestate = request.headers.get('tracestate');
+  if (tracestate) headers['tracestate'] = tracestate;
   return headers;
 }
 

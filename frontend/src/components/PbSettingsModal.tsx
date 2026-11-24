@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { pb } from '@/lib/pocketbase';
+import { archonFetch } from '@/lib/archon-api';
 import {
   X, Settings, Mail, HardDrive, Shield, Clock, Terminal, Download, Upload,
   Cpu, Check, Activity, Database, Play, RefreshCw, Send, FileCode, CheckCircle2, AlertTriangle, Layers
@@ -26,11 +27,13 @@ export function PbSettingsModal({
   // Application Settings State
   const [appName, setAppName] = useState('Archon OS CRM');
   const [appUrl, setAppUrl] = useState('http://localhost:8090');
-  const [accentColor, setAccentColor] = useState('#1055c9');
-  const [batchApiEnabled, setBatchApiEnabled] = useState(true);
-  const [ipProxyEnabled, setIpProxyEnabled] = useState(false);
-  const [rateLimitingEnabled, setRateLimitingEnabled] = useState(false);
-  const [rateLimitMax, setRateLimitMax] = useState(300);
+  const [accentColor] = useState('#1055c9');
+  const [batchApiEnabled] = useState(true);
+  const [ipProxyEnabled] = useState(false);
+  const [rateLimitingEnabled] = useState(false);
+  // D01: accentColor / batchApiEnabled / ipProxyEnabled / rateLimitingEnabled
+  // und rateLimitMax haben keinen Backend-Endpunkt. Sie bleiben absichtlich
+  // nicht persistsiert und werden deaktiviert statt als "gespeichert" gezeigt.
 
   // Mail Settings State
   const [smtpHost, setSmtpHost] = useState('smtp.mailtrap.io');
@@ -63,16 +66,20 @@ export function PbSettingsModal({
 
   // Global UI feedback state
   const [saving, setSaving] = useState(false);
-  const [savedNotice, setSavedNotice] = useState(false);
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setActiveSection(defaultSection);
 
+    // D08: kein State-Update nach Unmount/Schliessen des Modals.
+    const controller = new AbortController();
+
     // Attempt fetching settings from PocketBase SDK if admin logged in
     const loadPbSettings = async () => {
       try {
         const result = await pb.settings.getAll();
+        if (controller.signal.aborted) return;
         if (result) {
           if (result.appName) setAppName(result.appName);
           if (result.appUrl) setAppUrl(result.appUrl);
@@ -87,7 +94,8 @@ export function PbSettingsModal({
       }
     };
 
-    loadPbSettings();
+    void loadPbSettings();
+    return () => controller.abort();
   }, [isOpen, defaultSection]);
 
   if (!isOpen) return null;
@@ -105,18 +113,17 @@ export function PbSettingsModal({
   const handleSave = async () => {
     setSaving(true);
     setFeatureNotice(null);
-    setSavedNotice(false);
+    setSavedNotice(null);
     try {
       if (activeSection === 'Mail settings') {
         // F-001: SMTP-Felder an den echten, admin-gesicherten Endpunkt senden.
-        const res = await fetch('/api/v1/settings/smtp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(smtpPayload()),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || data?.status === 'error') {
-          throw new Error(data?.message || data?.error || `HTTP ${res.status}`);
+        // Der Endpunkt kann auch bei HTTP 200 `status: "error"` liefern.
+        const data = await archonFetch<{ status?: string; message?: string }>(
+          'api/v1/settings/smtp',
+          { method: 'POST', body: JSON.stringify(smtpPayload()) }
+        );
+        if (data?.status === 'error') {
+          throw new Error(data.message || 'SMTP-Konfiguration vom Backend abgelehnt');
         }
       } else if (activeSection === 'Files storage') {
         // F-001: kein Backend-Endpunkt vorhanden -> ehrlicher Hinweis statt
@@ -124,10 +131,12 @@ export function PbSettingsModal({
         setFeatureNotice('Storage-Einstellungen sind hier noch nicht verdrahtet — es gibt keinen Backend-Endpunkt. Werte wurden nicht gespeichert.');
         return;
       } else {
+        // D01/MED: nur Name und URL werden tatsaechlich persistiert. Die
+        // uebrigen Application-Controls sind deaktiviert (siehe Hinweis).
         await pb.settings.update({ meta: { appName, appUrl } });
       }
-      setSavedNotice(true);
-      setTimeout(() => setSavedNotice(false), 1500);
+      setSavedNotice(activeSection === 'Mail settings' ? 'SMTP-Einstellungen gespeichert' : 'Name & URL gespeichert');
+      setTimeout(() => setSavedNotice(null), 1500);
     } catch (err) {
       setFeatureNotice(`Speichern fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -140,17 +149,15 @@ export function PbSettingsModal({
     try {
       // F-002: der Endpunkt verlangt ein SmtpConfigPayload — ohne Body gibt es
       // dauerhaft HTTP 422. Jetzt alle eingegebenen Felder mitsenden.
-      const res = await fetch('/api/v1/settings/smtp/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(smtpPayload()),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.status === 'success') {
+      const data = await archonFetch<{ status?: string; message?: string; error?: string }>(
+        'api/v1/settings/smtp/test',
+        { method: 'POST', body: JSON.stringify(smtpPayload()) }
+      );
+      if (data?.status === 'success') {
         setTestEmailStatus('success');
       } else {
         setTestEmailStatus('error');
-        setFeatureNotice(`SMTP-Test fehlgeschlagen: ${data?.message || data?.error || `HTTP ${res.status}`}`);
+        setFeatureNotice(`SMTP-Test fehlgeschlagen: ${data?.message || data?.error || 'kein Erfolgsstatus'}`);
       }
     } catch (err) {
       setTestEmailStatus('error');
@@ -251,7 +258,7 @@ export function PbSettingsModal({
             {savedNotice && (
               <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 font-sans animate-in fade-in duration-150">
                 <Check className="w-3.5 h-3.5" />
-                <span>Gespeichert!</span>
+                <span>{savedNotice}</span>
               </span>
             )}
             <button
@@ -400,6 +407,12 @@ export function PbSettingsModal({
             {/* 1. APPLICATION SECTION */}
             {activeSection === 'Application' && (
               <div className="max-w-2xl space-y-6">
+                {/* D01/MED: nur Name/URL haben einen Persistenzpfad. */}
+                <p className="text-[11px] font-mono text-amber-400 border border-amber-500/40 bg-amber-500/10 rounded-lg px-3 py-2">
+                  Hinweis: Es werden nur Name und URL gespeichert. Akzentfarbe, Batch-Web-API,
+                  IP-Proxy, Rate-Limiting und Rate-Limit-Maximum haben keinen Backend-Endpunkt
+                  und sind deshalb deaktiviert.
+                </p>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="col-span-1">
                     <label className="block text-xs font-bold mb-1 font-mono">Application name *</label>
@@ -428,8 +441,11 @@ export function PbSettingsModal({
                     <input
                       type="text"
                       value={accentColor}
-                      onChange={(e) => setAccentColor(e.target.value)}
-                      className="w-full p-2.5 border rounded-lg text-xs font-mono bg-blue-600 text-white font-bold"
+                      readOnly
+                      disabled
+                      title="Kein Backend-Endpunkt — nicht speicherbar"
+                      aria-label="Akzentfarbe (nicht konfigurierbar)"
+                      className="w-full p-2.5 border rounded-lg text-xs font-mono bg-blue-600 text-white font-bold opacity-60 cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -443,8 +459,11 @@ export function PbSettingsModal({
                       <span>Batch Web API</span>
                     </span>
                     <button
-                      onClick={() => setBatchApiEnabled(!batchApiEnabled)}
-                      className={`px-2.5 py-0.5 rounded text-[11px] font-bold ${
+                      type="button"
+                      disabled
+                      title="Kein Backend-Endpunkt — nicht speicherbar"
+                      aria-label="Batch Web API (nicht konfigurierbar)"
+                      className={`px-2.5 py-0.5 rounded text-[11px] font-bold opacity-60 cursor-not-allowed ${
                         batchApiEnabled ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30' : 'bg-slate-100 text-slate-400'
                       }`}
                     >
@@ -458,8 +477,11 @@ export function PbSettingsModal({
                       <span>IP proxy headers</span>
                     </span>
                     <button
-                      onClick={() => setIpProxyEnabled(!ipProxyEnabled)}
-                      className={`px-2.5 py-0.5 rounded text-[11px] font-bold ${
+                      type="button"
+                      disabled
+                      title="Kein Backend-Endpunkt — nicht speicherbar"
+                      aria-label="IP-Proxy-Header (nicht konfigurierbar)"
+                      className={`px-2.5 py-0.5 rounded text-[11px] font-bold opacity-60 cursor-not-allowed ${
                         ipProxyEnabled ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30' : 'bg-slate-100 text-slate-400'
                       }`}
                     >
@@ -473,8 +495,11 @@ export function PbSettingsModal({
                       <span>Rate limiting</span>
                     </span>
                     <button
-                      onClick={() => setRateLimitingEnabled(!rateLimitingEnabled)}
-                      className={`px-2.5 py-0.5 rounded text-[11px] font-bold ${
+                      type="button"
+                      disabled
+                      title="Kein Backend-Endpunkt — nicht speicherbar"
+                      aria-label="Rate-Limiting (nicht konfigurierbar)"
+                      className={`px-2.5 py-0.5 rounded text-[11px] font-bold opacity-60 cursor-not-allowed ${
                         rateLimitingEnabled ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30' : 'bg-slate-100 text-slate-400'
                       }`}
                     >

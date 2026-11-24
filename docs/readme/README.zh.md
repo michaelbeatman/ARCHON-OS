@@ -7,7 +7,7 @@
 **面向创始人、团队与专业领域专家的自托管多智能体操作系统**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
+[![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
 [![Python 3.13+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](../../requirements.txt)
 [![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-2496ED.svg)](../../docker-compose.yml)
 
@@ -19,7 +19,7 @@
 
 ---
 
-Archon OS 用持久化的自托管 **智能体操作系统（Agentic OS）** 取代孤立的对话机器人。它统一调度 **8 大核心领域的 70 位领域专家**，基于 **55 套决策框架** 开展 **AI 董事会（Boardroom）多视角辩论**，并将 **Zero-Egress 本地隐私路由**、可防篡改的 **HMAC-SHA256 审计日志（GoBD / ISO 27001）** 与 **Obsidian 第二大脑**、**n8n**、**Telegram** 以及内置的 **CRM 与 ERP *(Alpha)*** 模块深度打通。
+Archon OS 用持久化的自托管 **智能体操作系统（Agentic OS）** 取代孤立的对话机器人。它统一调度 **8 大核心领域的 71 个智能体配置文件**，基于 **55 套决策框架** 开展 **AI 董事会（Boardroom）多视角辩论**，并将 **Zero-Egress 本地隐私路由**、可防篡改的 **HMAC-SHA256 审计日志（GoBD / ISO 27001）** 与 **Obsidian 第二大脑**、**n8n**、**Telegram** 以及内置的 **CRM 与 ERP *(Alpha)*** 模块深度打通。
 
 > **本地化进度：** 界面支持 11 种语言（`en`, `de`, `es`, `fr`, `pt`, `it`, `nl`, `ru`, `ja`, `ko`, `zh`）。专家 `SOUL.md` 与董事会方法论目前为德语原版，多语言本地化正在持续推进中（[Roadmap M31](../system/ROADMAP_2026.md)）。
 
@@ -58,7 +58,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ## 系统界面预览
 
-| Mission Control & Operations | 70 位专业智能体阵列 (`SOUL.md`) |
+| Mission Control & Operations | 71 个智能体配置阵列 (`SOUL.md`) |
 |---|---|
 | ![Mission Control](../system/screenshots/mission_control.png) | ![Agent Fleet](../system/screenshots/kader.png) |
 | **AI Boardroom（多智能体协同辩论）** | **Org-Chart & Teams** |
@@ -66,7 +66,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ---
 
-## 70 位专家阵列（8 核心领域）
+## 71 个配置阵列（8 核心领域）
 
 1. **战略、领导力与个人规划 (12)：** 系统总控、CEO 副驾、并购决策、OKR 管理，并负责跨域综合与终审
 2. **贸易、采购与电商 (7)：** 供应链、库存预测、供应商谈判、Shopify 运营

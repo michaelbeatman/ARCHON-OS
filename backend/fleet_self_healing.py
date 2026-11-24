@@ -20,6 +20,24 @@ from utils.docker_client import DockerClient, DockerError, validate_container_na
 
 logger = logging.getLogger("archon.fleet_self_healing")
 
+# Re-Audit D05/M: verschluckte GoBD-Audit-Fehler sind messbar zu machen
+# (Vorbild backend/egress_firewall.py:_AUDIT_ERROR_COUNTS).
+_AUDIT_ERROR_COUNTS: Dict[str, int] = {}
+
+
+def _record_audit_error(action: str, exc: BaseException) -> None:
+    _AUDIT_ERROR_COUNTS[action] = _AUDIT_ERROR_COUNTS.get(action, 0) + 1
+    logger.error(
+        "[GoBD-Audit] '%s' fehlgeschlagen (count=%d): %s",
+        action, _AUDIT_ERROR_COUNTS[action], exc,
+    )
+
+
+def get_audit_error_counts() -> Dict[str, int]:
+    """Lesender Zugriff auf die Zaehler (Status-/Testzwecke)."""
+    return dict(_AUDIT_ERROR_COUNTS)
+
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 KNOWN_SERVICES = {
@@ -227,6 +245,7 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
 
     # Audit und Benachrichtigung MUESSEN auf beiden Pfaden laufen (Erfolg wie
     # Fehler), sonst verschwindet der Nachweis ueber die Selbstheilung.
+    audit_write_failed = False
     try:
         from backend.audit_log import chained_audit_log
         chained_audit_log.record_event(
@@ -237,7 +256,10 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
                      "success": success, "log": output[:200]}
         )
     except Exception as exc:
-        logger.debug("Audit-Log-Eintrag für Selbstheilung von '%s' fehlgeschlagen: %s", service_name, exc)
+        # D05/M: frueher nur DEBUG und danach `status: success` — der
+        # GoBD-Nachweis der Selbstheilung war damit unsichtbar verschwunden.
+        audit_write_failed = True
+        _record_audit_error("FLEET_SELF_HEALING_RESTART", exc)
 
     try:
         from backend.notification_hub import notification_hub
@@ -258,7 +280,9 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
         "service": service_name,
         "container": container_target,
         "restarted_at": now_iso,
-        "output": output
+        "output": output,
+        "audit_status": "error" if audit_write_failed else "recorded",
+        "audit_write_failed": audit_write_failed,
     }
 
 @ttl_cache(seconds=30)

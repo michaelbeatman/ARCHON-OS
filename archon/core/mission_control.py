@@ -325,6 +325,14 @@ def enforce_task_budget_caps(meta: Dict[str, Any]) -> Dict[str, Any]:
     `used <= cap` wird deshalb beim Upsert atomar erzwungen und ein Ueberlauf
     als `blocked` markiert (nie still weitergezaehlt).
     """
+    # D11/MED: `replan_count` ist im Soll-Spec der persistierte Zaehler, im
+    # Produktivpfad schreibt `enforce_task_budget_caps` aber `replans_used`.
+    # Beide Namen muessen denselben Wert tragen, sonst geht der Zaehler über
+    # einen SQLite-Reload verloren (nur strukturell, nicht funktional).
+    if "replans_used" in meta:
+        meta["replan_count"] = meta["replans_used"]
+    elif "replan_count" in meta:
+        meta["replans_used"] = meta["replan_count"]
     for used_key, cap_key in (
         ("hops_used", "max_hops"), ("tokens_used", "max_tokens"),
         ("replans_used", "max_replans"), ("delegation_depth", "max_hops"),
@@ -623,6 +631,11 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
         ):
             if opt_k in meta and meta[opt_k] is not None:
                 task_dict[opt_k] = meta[opt_k]
+        # D11/MED: Alias auch nach dem SQLite-Reload synchronisieren.
+        if "replans_used" in task_dict:
+            task_dict["replan_count"] = task_dict["replans_used"]
+        elif "replan_count" in task_dict:
+            task_dict["replans_used"] = task_dict["replan_count"]
         if r["started_at"] is not None:
             task_dict["started_at"] = r["started_at"]
         elif meta.get("started_at") is not None:
@@ -824,6 +837,11 @@ def _load_single_task_from_conn(conn: sqlite3.Connection, task_id: str) -> Optio
     ):
         if opt_k in meta and meta[opt_k] is not None:
             task_dict[opt_k] = meta[opt_k]
+    # D11/MED: Alias auch beim Laden eines einzelnen Tasks synchronisieren.
+    if "replans_used" in task_dict:
+        task_dict["replan_count"] = task_dict["replans_used"]
+    elif "replan_count" in task_dict:
+        task_dict["replans_used"] = task_dict["replan_count"]
     if r["started_at"] is not None:
         task_dict["started_at"] = r["started_at"]
     elif meta.get("started_at") is not None:

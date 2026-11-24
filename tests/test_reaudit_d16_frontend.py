@@ -65,9 +65,12 @@ def test_archon_fetch_injects_without_overwriting_existing_headers():
     assert "headers.set('traceparent', createTraceparent())" in src
     assert "headers.has('tracestate')" in src
     fetch = _function_body(src, "export async function archonFetch", "\nexport const archonApi")
-    assert "withTraceHeaders(init)" in fetch
-    assert "fetch(`/api/archon/${cleanPath}`" in fetch
-    assert "setArchonTracestate(res.headers.get('tracestate'))" in fetch
+    # D16/MED2: archonFetch delegiert an den zentralen tracedFetch-Wrapper,
+    # der seinerseits withTraceHeaders(init) anwendet.
+    assert "tracedFetch(" in fetch or "withTraceHeaders(init)" in fetch
+    assert "tracedFetch(`/api/archon/${cleanPath}`" in fetch or "fetch(`/api/archon/${cleanPath}`" in fetch
+    # Response-tracestate wird im zentralen tracedFetch zurückgelesen.
+    assert "setArchonTracestate(res.headers.get('tracestate'))" in src
 
 
 def test_proxy_generates_valid_root_when_header_missing():

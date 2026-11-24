@@ -27,9 +27,10 @@ logger = logging.getLogger("archon.durable_execution")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
-    from backend.db_paths import resolve_db as _resolve_db
+    from backend.db_paths import DB_BUSY_TIMEOUT_MS, resolve_db as _resolve_db
     DB_PATH = _resolve_db("agentic_memory.db")
 except Exception:
+    DB_BUSY_TIMEOUT_MS = 5000
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 
@@ -75,9 +76,10 @@ class _ArchonClosingConn(sqlite3.Connection):
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path, timeout=15.0, factory=_ArchonClosingConn)
+    conn = sqlite3.connect(db_path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0, factory=_ArchonClosingConn)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout=15000;")
+    # D03/MED: busy_timeout kommt ausschliesslich aus der SSOT (5000 ms).
+    conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
     return conn
 
 

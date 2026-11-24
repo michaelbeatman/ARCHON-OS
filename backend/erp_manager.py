@@ -78,6 +78,17 @@ def get_tenant_db_path(company_id: Optional[str] = None) -> str:
         from backend.tenant_context import tenant_context
         return tenant_context.resolve_active_db("erp.db", cid)
     except Exception as exc:
+        # D03/HIGH: bei FULL_TENANT_ISOLATION darf ein Resolverfehler NIE auf
+        # einen (auch mandantenartigen) Fallback-Pfad zurückfallen — sonst
+        # entsteht eine zweite, unauditierte Wahrheit über die ERP-DB.
+        full_isolation = os.environ.get(
+            "ARCHON_TENANT_FULL_ISOLATION", "1"
+        ).strip().lower() not in ("0", "false", "no", "off")
+        if full_isolation:
+            raise RuntimeError(
+                f"[ERP] Tenant-Resolver fehlgeschlagen bei FULL_TENANT_ISOLATION "
+                f"für {cid}: {exc}"
+            ) from exc
         logger.debug("[ERP] Tenant-Resolver nicht verfügbar, nutze APP_DATA_DIR: %s", exc)
         from backend.db_paths import APP_DATA_DIR
         path = os.path.join(APP_DATA_DIR, "tenants", cid, "erp.db")
@@ -325,6 +336,20 @@ class ERPManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (entity_id) REFERENCES crm_entities(id)
                 )
+            """)
+            # D03/MED: GoBD-Unveränderlichkeit als DB-Constraint, nicht nur als
+            # App-Level-Guard in save_document(). Jeder andere Write-Pfad und
+            # direkter SQL-Zugriff muss gebuchte Belege unverändert lassen.
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS erp_documents_gobd_no_tamper
+                BEFORE UPDATE ON erp_documents
+                WHEN OLD.booked_at IS NOT NULL AND (
+                    NEW.booked_at IS NOT OLD.booked_at
+                    OR NEW.recipient_snapshot_json IS NOT OLD.recipient_snapshot_json
+                )
+                BEGIN
+                    SELECT RAISE(ABORT, 'GoBD: booked document immutable');
+                END
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_type_status ON erp_documents(doc_type, status);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_entity ON erp_documents(entity_id);")

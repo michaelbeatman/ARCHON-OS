@@ -7,6 +7,19 @@ import {
   Move, Type, Square, Maximize2, Layout, Sparkles,
   PlusCircle, ChevronDown, List, PaintBucket, GripVertical
 } from 'lucide-react';
+import { tracedFetch } from '@/lib/archon-api';
+
+/**
+ * D09/XSS: `rawCss` landet in `styleTag.innerHTML`. HTML-Sequenzen und
+ * `@import`/`url(javascript:)` duerfen dort niemals geparst werden.
+ */
+function sanitizeCssSink(css: string): string {
+  return css
+    .replace(/<\/?(?:style|script|iframe|object|embed)[^>]*>/gi, '')
+    .replace(/[<>]/g, '')
+    .replace(/@import\b[^;]*;?/gi, '')
+    .replace(/url\(\s*['"]?\s*(?:javascript|data)\s*:[^)]*\)/gi, 'none');
+}
 
 interface StudioRules {
   [selector: string]: {
@@ -91,7 +104,7 @@ export default function CssLiveStudio() {
           if (parsed.rawCss) setRawCss(parsed.rawCss);
         }
         
-        const res = await fetch('/api/theme/live_overrides');
+        const res = await tracedFetch('/api/theme/live_overrides');
         if (res.ok) {
           const data = await res.json();
           if (data.rules && Object.keys(data.rules).length > 0) {
@@ -206,7 +219,7 @@ export default function CssLiveStudio() {
       cssText += rawCss + '\n';
     }
 
-    styleTag.innerHTML = cssText;
+    styleTag.innerHTML = sanitizeCssSink(cssText);
     updateGizmoRect();
   }, [studioRules, rawCss, updateGizmoRect]);
 
@@ -522,7 +535,7 @@ export default function CssLiveStudio() {
       const payload = { rules: studioRules, rawCss: rawCss };
       localStorage.setItem('crm_theme_live_overrides', JSON.stringify(payload));
       
-      const res = await fetch('/api/theme/live_overrides', {
+      const res = await tracedFetch('/api/theme/live_overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1385,7 +1398,7 @@ export default function CssLiveStudio() {
                   setStudioRules({});
                   setRawCss('');
                   localStorage.removeItem('crm_theme_live_overrides');
-                  fetch('/api/theme/live_overrides', { method: 'DELETE' }).catch(() => {});
+                  void tracedFetch('/api/theme/live_overrides', { method: 'DELETE' }).catch(() => {});
                 }
               }}
               className="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"

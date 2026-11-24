@@ -320,6 +320,13 @@ def use_trace_context(
     sid = str(span_id or (parsed[1] if parsed else "") or current_span_id()).strip()
     if parsed and traceparent_sampled(traceparent) is not None:
         sampled = traceparent_sampled(traceparent) if sampled is None else sampled
+    # Re-Audit D16/M1: `llm_kernel` ruft use_trace_context(trace_id=active_trace)
+    # ohne sampled/traceparent auf. Das ist ein Re-Bind des *aktiven* Kontexts,
+    # kein neuer Root — die parentbasierte Sampling-Entscheidung darf nicht
+    # neu gewuerfelt werden (…-01 koennte sonst auf 00 kippen).
+    rebinding_active = parsed is None and sampled is None and tid == current_trace_id() and bool(tid)
+    if rebinding_active:
+        sampled = _current_sampled.get()
     tok_t = _current_trace.set(tid)
     tok_s = _current_span.set(sid)
     tok_ts = _current_tracestate.set(

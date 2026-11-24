@@ -37,6 +37,9 @@ class CancelToken:
         # Registrierte Tasks: cancel() muss nicht nur ein Flag setzen, sondern
         # laufende LLM-Calls wirklich abbrechen (Audit 23.11.2026).
         self._tasks: set = set()
+        # D07/MED: fehlgeschlagene Task-Abbrüche werden nicht mehr verschluckt.
+        self._failed_cancels: List[str] = []
+        self._cancellation_failed = False
         try:
             self._loop: Optional[asyncio.AbstractEventLoop] = asyncio.get_running_loop()
         except RuntimeError:
@@ -59,18 +62,37 @@ class CancelToken:
         with self._lock:
             return self._reason
 
+    @property
+    def cancellation_failed(self) -> bool:
+        """True, wenn mindestens ein Task-Abbruch fehlgeschlagen ist."""
+        with self._lock:
+            return self._cancellation_failed
+
+    @property
+    def failed_cancels(self) -> List[str]:
+        """Kopie der fehlgeschlagenen Abbrüche (DLQ-/HITL-Eskalation)."""
+        with self._lock:
+            return list(self._failed_cancels)
+
+    def _record_failed_cancel(self, message: str) -> None:
+        """D07/MED: Fehler sichtbar machen statt nur auf DEBUG zu loggen."""
+        logger.error("[CancelToken] %s (scope=%s) — HITL/DLQ Eskalation erforderlich", message, self.scope)
+        with self._lock:
+            self._cancellation_failed = True
+            self._failed_cancels.append(message)
+
     def _set_event(self) -> None:
         loop = self._loop
         if loop is not None and loop.is_running():
             try:
                 loop.call_soon_threadsafe(self._event.set)
-            except RuntimeError:
-                pass
+            except RuntimeError as exc:
+                self._record_failed_cancel(f"Event-Set via Loop fehlgeschlagen: {exc}")
         else:
             try:
                 self._event.set()
-            except RuntimeError:
-                pass
+            except RuntimeError as exc:
+                self._record_failed_cancel(f"Event-Set fehlgeschlagen: {exc}")
 
     def register_task(self, task: "asyncio.Task") -> None:
         """Task an diesen Scope binden, damit cancel() ihn wirklich abbricht."""
@@ -78,8 +100,14 @@ class CancelToken:
             self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    def cancel(self, reason: str = "") -> None:
-        """Bricht diesen Scope, alle Kinder und registrierten Tasks ab."""
+    def cancel(self, reason: str = "", *, strict: bool = False) -> None:
+        """Bricht diesen Scope, alle Kinder und registrierten Tasks ab.
+
+        Fehlgeschlagene Abbrüche werden als ``cancellation_failed`` persistiert
+        und auf ERROR eskaliert. Mit ``strict=True`` wird zusätzlich ein
+        ``RuntimeError`` geworfen, damit Aufrufer den Zombie-Task nicht als
+        erfolgreich quittieren können.
+        """
         with self._lock:
             if self._cancelled:
                 return
@@ -103,10 +131,18 @@ class CancelToken:
                 else:
                     task.cancel()
             except Exception as exc:
-                logger.debug("[CancelToken] Task-Abbruch in scope=%s fehlgeschlagen: %s", self.scope, exc)
+                self._record_failed_cancel(f"Task-Abbruch fehlgeschlagen: {exc}")
         for child in children:
-            child.cancel(self._reason)
+            try:
+                child.cancel(self._reason, strict=strict)
+            except RuntimeError as exc:
+                self._record_failed_cancel(f"Kind-Scope-Abbruch fehlgeschlagen: {exc}")
         self._set_event()
+        if strict and self.cancellation_failed:
+            raise RuntimeError(
+                f"Cancel-Scope '{self.scope}' konnte nicht vollständig abgebrochen werden: "
+                + "; ".join(self.failed_cancels)
+            )
 
     async def wait(self, timeout: Optional[float] = None) -> bool:
         """Wartet auf Abbruch; liefert True, wenn der Token abgebrochen ist."""
@@ -247,14 +283,25 @@ def get_child_token(parent_scope: str, child_scope: str) -> CancelToken:
         return token
 
 
-def cancel_scope(scope: str, reason: str = "") -> bool:
+def cancel_scope(scope: str, reason: str = "", *, strict: bool = False) -> bool:
     """Bricht einen registrierten Scope ab. False, wenn er nicht existiert."""
     with _REGISTRY_LOCK:
         token = _REGISTRY.get(str(scope))
     if token is None:
         return False
-    token.cancel(reason)
+    token.cancel(reason, strict=strict)
     return True
+
+
+def failed_cancellations() -> Dict[str, List[str]]:
+    """D07/MED: Monitor-/DLQ-Abfrage aller fehlgeschlagenen Abbrüche."""
+    with _REGISTRY_LOCK:
+        tokens = list(_REGISTRY.values())
+    return {
+        token.scope: token.failed_cancels
+        for token in tokens
+        if token.cancellation_failed
+    }
 
 
 def cancel_and_reset_scope(scope: str, reason: str = "") -> bool:

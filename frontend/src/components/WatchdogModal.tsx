@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { tracedFetch } from "@/lib/archon-api";
 import { 
   Radar, 
   X, 
@@ -83,44 +84,50 @@ export const WatchdogModal: React.FC<WatchdogModalProps> = ({
   const [newType, setNewType] = useState<"search_feed" | "rss" | "web_diff">("search_feed");
   const [newQueryOrUrl, setNewQueryOrUrl] = useState("");
 
-  const fetchConfig = useCallback(async () => {
+  const fetchConfig = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/watchdog/config`);
+      const res = await tracedFetch(`${API_BASE}/api/v1/watchdog/config`, { signal });
       if (res.ok) {
         const data = await res.json();
+        if (signal?.aborted) return;
         setConfig(data);
       } else {
         setSaveStatus(`Fehler: HTTP ${res.status} (Konfiguration nicht geladen)`);
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
       console.error("Watchdog config fetch error:", e);
       setSaveStatus("Fehler: Watchdog nicht erreichbar");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      fetchConfig();
-    }
+    if (!isOpen) return;
+    // D08: Config-Load beim Schliessen/Unmount abbrechen.
+    const controller = new AbortController();
+    void fetchConfig(controller.signal);
+    return () => controller.abort();
   }, [isOpen, fetchConfig]);
 
   const saveConfigToServer = async (updated: WatchdogConfig) => {
-    setConfig(updated);
     try {
       setSaveStatus("Speichern...");
-      const res = await fetch(`${API_BASE}/api/v1/watchdog/config`, {
+      const res = await tracedFetch(`${API_BASE}/api/v1/watchdog/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updated)
       });
-      if (res.ok) {
+      const body = await res.json().catch(() => ({}));
+      // FEHLER-Signal nicht als Erfolg rendern: der Endpunkt meldet ok=True.
+      if (res.ok && body?.ok === true) {
+        setConfig(updated);
         setSaveStatus("Gespeichert");
         setTimeout(() => setSaveStatus(null), 2000);
       } else {
-        setSaveStatus(`Fehler: HTTP ${res.status}`);
+        setSaveStatus(`Fehler: ${body?.detail || body?.error || `HTTP ${res.status}`}`);
       }
     } catch (e) {
       setSaveStatus("Fehler beim Speichern");
@@ -176,18 +183,17 @@ export const WatchdogModal: React.FC<WatchdogModalProps> = ({
   const handleRunNow = async () => {
     setRunning(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/watchdog/run_now`, {
+      const res = await tracedFetch(`${API_BASE}/api/v1/watchdog/run_now`, {
         method: "POST"
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.config) {
-          setConfig(data.config);
-        }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.status === 'success') {
+        if (data.config) setConfig(data.config);
         setSaveStatus(`${data.new_findings_count || 0} neue Treffer erfasst`);
         setTimeout(() => setSaveStatus(null), 3000);
       } else {
-        setSaveStatus(`Fehler: HTTP ${res.status}`);
+        // "paused"/"error" ist kein erfolgreicher Suchlauf.
+        setSaveStatus(`Suchlauf nicht ausgeführt: ${data?.status || `HTTP ${res.status}`}`);
       }
     } catch (e) {
       setSaveStatus("Fehler beim Suchlauf");

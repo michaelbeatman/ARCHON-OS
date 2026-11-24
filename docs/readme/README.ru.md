@@ -7,7 +7,7 @@
 **Автономная мультиагентная операционная система с локальным хостингом для основателей, команд и экспертов**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
+[![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
 [![Python 3.13+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](../../requirements.txt)
 [![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-2496ED.svg)](../../docker-compose.yml)
 
@@ -19,7 +19,7 @@
 
 ---
 
-Archon OS заменяет разрозненные чат-боты единой саморазворачиваемой **агентной операционной системой**. Она координирует **70 профильных специалистов в 8 основных доменах**, проводит структурированные дебаты в **AI Boardroom по 55 фреймворкам**, объединяет **локальную маршрутизацию Zero-Egress** с **журналом аудита на базе хэш-цепочки HMAC-SHA256 (GoBD / ISO 27001)** и интегрируется с **Obsidian Second Brain**, **n8n**, **Telegram** и модулем **CRM и ERP *(Alpha)***.
+Archon OS заменяет разрозненные чат-боты единой саморазворачиваемой **агентной операционной системой**. Она координирует **71 профиль агента в 8 основных доменах**, проводит структурированные дебаты в **AI Boardroom по 55 фреймворкам**, объединяет **локальную маршрутизацию Zero-Egress** с **журналом аудита на базе хэш-цепочки HMAC-SHA256 (GoBD / ISO 27001)** и интегрируется с **Obsidian Second Brain**, **n8n**, **Telegram** и модулем **CRM и ERP *(Alpha)***.
 
 > **Статус локализации:** Интерфейс поддерживает 11 языков (`en`, `de`, `es`, `fr`, `pt`, `it`, `nl`, `ru`, `ja`, `ko`, `zh`). Профили `SOUL.md` и методики Boardroom пока написаны на немецком языке; многоязычная локализация ведётся ([Roadmap M31](../system/ROADMAP_2026.md)).
 
@@ -58,7 +58,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ## Обзор интерфейса
 
-| Mission Control & Operations | Флот из 70 специалистов (`SOUL.md`) |
+| Mission Control & Operations | Флот из 71 профиля (`SOUL.md`) |
 |---|---|
 | ![Mission Control](../system/screenshots/mission_control.png) | ![Agent Fleet](../system/screenshots/kader.png) |
 | **AI Boardroom (мультиагентные дебаты)** | **Org-Chart & Teams** |
@@ -66,7 +66,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ---
 
-## Флот из 70 специалистов (8 основных доменов)
+## Флот из 71 профиля (8 основных доменов)
 
 1. **Стратегия, управление и жизнь (12):** Оркестрация, CEO-копилот, M&A-решения, OKR., междоменный синтез и финальная проверка
 2. **Торговля, закупки и E-Commerce (7):** Цепочки поставок, прогнозирование запасов, переговоры, Shopify.

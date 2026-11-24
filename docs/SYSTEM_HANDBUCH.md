@@ -4,7 +4,7 @@
 > **System-Version:** v0.5.7 (Execution Hardening & Agentic Reliability)  
 > **Klassifizierung:** Intern / Streng Vertraulich (GoBD, EU AI Act & ISO 27001 konform)  
 > **Stand:** 22. November 2026  
-> **Geltungsbereich:** Gesamtes Archon OS Ökosystem (70 Fachagenten, 3 konsolidierte Domänen-Datenbanken `ops.db`/`business.db`/`memory.db`, Multi-Channel Content-Maschine v2, Workflow-DAG-Engine, Next.js 16 Cockpits, Daemon-Kernel, Governance & Spezialleitfäden)
+> **Geltungsbereich:** Gesamtes Archon OS Ökosystem (71 Agenten-Profile, 3 konsolidierte Domänen-Datenbanken `ops.db`/`business.db`/`memory.db`, Multi-Channel Content-Maschine v2, Workflow-DAG-Engine, Next.js 16 Cockpits, Daemon-Kernel, Governance & Spezialleitfäden)
 
 ---
 
@@ -1712,7 +1712,7 @@ Archon OS stellt einen vollwertigen, dem MCP-Standard (`2024-11-05` & `2025-03-2
 
 Damit können externe Clients wie **Claude Desktop**, **Cursor**, **VS Code**, **Antigravity** oder **Hermes** direkt auf die Kernfähigkeiten des Betriebssystems zugreifen (inkl. Scoped API-Keys `read_only` / `kanban_rw` / `agent_execute` / `admin_full` und HITL-Freigabe-Gate):
 - Erstellen und Verwalten von Kanban-Aufgaben
-- Auflisten und Delegieren an die 70 Fachspezialisten (`archon__list_specialists`, `archon__ask_specialist`)
+- Auflisten und Delegieren an die 71 Profile (`archon__list_specialists`, `archon__ask_specialist`)
 - Durchsuchen des lokalen Obsidian-Vaults (`archon__search_vault`)
 - CRM- und Kontaktrecherche in PocketBase
 - Auslesen der Triage-Inbox (E-Mails, Telegram, Systemmeldungen)
@@ -3334,7 +3334,7 @@ Das System nutzt SQLite (WAL-Modus) als durchgängige Single Source of Truth:
    - `pocketbase/pb_data`: CRM-Datenbank für Kontakte, Nachrichtenverläufe und Bewerbungen.
 
 2. **JSON-Deklarationen & Sidecar-Dateien:**
-   - [`agent_profiles.json`](../../agent_profiles.json): **70 vollständige Agenten-Profile** mit zweisprachigen System-Prompts (DE/EN), 3-Stufen-`SOUL.md` (`Compact`, `Pro / Skills+`, `Full-SOUL`), Tool-Scopes, Fähigkeiten (`skills`), Avataren und Modell-Routings.
+   - [`agent_profiles.json`](../../agent_profiles.json): **71 vollständige Agenten-Profile** mit zweisprachigen System-Prompts (DE/EN), 3-Stufen-`SOUL.md` (`Compact`, `Pro / Skills+`, `Full-SOUL`), Tool-Scopes, Fähigkeiten (`skills`), Avataren und Modell-Routings.
    - [`prompt_studio_catalog.json`](../../prompt_studio_catalog.json): **832 zweisprachige Prompt-Vorlagen** (DE/EN) mit verifizierter 100 % Variablen-Parität für das Archon Prompt Studio.
    - [`core_dispatcher.py`](../../core_dispatcher.py): **55 Boardroom-Frameworks** (DE/EN) für mehrperspektivische Exekutiv-Debatten.
    - [`backend/onboarding_wizard.py`](../../backend/onboarding_wizard.py): **Web-Setup-Wizard (M30)** für geführtes 4-Schritte-First-Run-Onboarding.
@@ -3342,7 +3342,7 @@ Das System nutzt SQLite (WAL-Modus) als durchgängige Single Source of Truth:
    - [`backend/mcp_gateway.py`](../../backend/mcp_gateway.py): **Nativer MCP-Server (`/mcp` Gateway, M48)** mit Streamable HTTP/SSE, Scoped API-Keys & HITL-Gate.
    - [`backend/squad_pack_manager.py`](../../backend/squad_pack_manager.py): **Squad-Blueprint-Paketmanager (`.archonpack`, M51)** für portablen Export/Import.
    - [`backend/tenant_context.py`](../../backend/tenant_context.py): **Multi-Mandanten-Kontext (M43)** mit durchgängiger physischer SQLite-DB-Isolation (`data/tenants/<id>/` für `erp.db`, `kanban.db`, `crm.db`, `contracts.db`, `deals.db`), 1-Klick-Mandantenanlage & atomaren Nummernkreisen ([Guide](EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md)).
-   - [`backend/compliance_engine.py`](../../backend/compliance_engine.py) & [`backend/compliance_pdf.py`](../../backend/compliance_pdf.py): **EU AI Act Compliance-Engine & 1-Klick GoBD-Verfahrensdokumentation PDF (M49)** mit präziser Anhang-III-/Art.-50-Klassifizierung aller 70 Spezialisten, `SOUL.md`-SHA-256-Hashes, Art.-4-KI-Kompetenzregister und abhängigkeitsfreiem DIN-A4-PDF-1.4-Export ([Guide](EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md)).
+   - [`backend/compliance_engine.py`](../../backend/compliance_engine.py) & [`backend/compliance_pdf.py`](../../backend/compliance_pdf.py): **EU AI Act Compliance-Engine & 1-Klick GoBD-Verfahrensdokumentation PDF (M49)** mit präziser Anhang-III-/Art.-50-Klassifizierung aller 71 Profile, `SOUL.md`-SHA-256-Hashes, Art.-4-KI-Kompetenzregister und abhängigkeitsfreiem DIN-A4-PDF-1.4-Export ([Guide](EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md)).
    - [`backend/playbooks_engine.py`](../../backend/playbooks_engine.py): **Business Playbooks (M44)** mit 10 aktiven Vorlagen, 15 Katalog-Rezepten & Editor-CRUD.
    - [`backend/shadow_mode.py`](../../backend/shadow_mode.py) & [`backend/epistemic_hygiene.py`](../../backend/epistemic_hygiene.py) & [`backend/operations_calendar.py`](../../backend/operations_calendar.py): **Pre-Flight/Shadow-Mode (M52)**, **Obsidian Epistemic Hygiene (M53)** & **Operations-Kalender (M25)**.
    - [`config/kanban_meta.json`](../../config/kanban_meta.json): Sidecar-Metadaten (WIP-Limits, Obsidian-Verknüpfungen, Tags) über [`backend/kanban_sidecar.py`](../../backend/kanban_sidecar.py).
@@ -3381,7 +3381,7 @@ Die operative Steuerung und das Monitoring-Cockpit arbeiten auf derselben SQLite
 | Säule | Vorgabe | Aktueller Zustand | Status |
 | :--- | :--- | :--- | :--- |
 | **1. Kernel & Scheduling** | Daemon-Architektur, Tickless Sleep, Watchdog 30s, OTel Tracing | Watchdog läuft in eigenem Thread (`watchdog_daemon.py`); App auf Port `8501` via Uvicorn; OpenTelemetry & Langfuse Tracing ([Guide](LLM_TRACING_LANGFUSE_GUIDE.md)); Pre-Flight Validator ([Guide](CONFIG_VALIDATION_GUIDE.md)); Prometheus & Grafana Monitoring ([Guide](PROMETHEUS_GRAFANA_MONITORING_GUIDE.md)); Zentrale Logs mit Loki & Promtail ([Guide](CENTRAL_LOGGING_LOKI_GUIDE.md)); Live-Streaming per SSE & WebSocket ([Guide](LIVE_STREAMING_SSE_WEBSOCKET_GUIDE.md)). | **Erfüllt** |
-| **2. Prozessmodell** | Subagenten als Prozesse, Task-Zustände, Crash-Recovery, Concurrency Throttle | 70 Profile mit einheitlichem 3-Stufen-`SOUL.md` (DE/EN) & Skills-Wiring aktiv; Tasks und Subagenten-Links über `ops.db` nachverfolgt; Auto-Crash-Recovery (6h); Prompt-Registry mit Canary-Rollout ([Guide](PROMPT_REGISTRY_CANARY_GUIDE.md)); Chaos- und Resilienz-Tests ([Guide](CHAOS_RESILIENCE_GUIDE.md)). | **Erfüllt** |
+| **2. Prozessmodell** | Subagenten als Prozesse, Task-Zustände, Crash-Recovery, Concurrency Throttle | 71 Profile mit einheitlichem 3-Stufen-`SOUL.md` (DE/EN) & Skills-Wiring aktiv; Tasks und Subagenten-Links über `ops.db` nachverfolgt; Auto-Crash-Recovery (6h); Prompt-Registry mit Canary-Rollout ([Guide](PROMPT_REGISTRY_CANARY_GUIDE.md)); Chaos- und Resilienz-Tests ([Guide](CHAOS_RESILIENCE_GUIDE.md)). | **Erfüllt** |
 | **3. Device Driver (MCP)** | MCP Server-Ecosystem, `mcp__{server}__{tool}`, Lock-Scheduler | MCP-Treiber für CRM (`archon_crm_mcp.py`), n8n (`scripts/mcp_n8n_driver.py`) und nativer Archon OS MCP-Server (`scripts/archon_mcp_server.py`) aktiv ([Guide](ARCHON_MCP_SERVER_GUIDE.md)). | **Erfüllt** |
 | **4. Dateisystem & RAM** | SQLite WAL, 5 Tabellen, einheitliche Persistenz, Litestream | Vollständig vereinheitlicht auf SQLite WAL (`ops.db` / `business.db` / `memory.db`), atomare Sidecars (`kanban_sidecar.py`), Obsidian-Ablage, Litestream-Replikation ([Guide](LITESTREAM_REPLICATION_GUIDE.md)) und Restore-Tests ([Guide](AUTOMATED_RESTORE_TEST_GUIDE.md)). | **Erfüllt** |
 | **5. Hardware-Routing** | Multi-Provider Routing über OmniRoute, Logit-Snapshots | OmniRoute läuft auf Port `20128`; vorgeschaltetes Zero-Egress- & Privacy-Router-Gate (`backend/llm_egress_guard.py`, `backend/privacy_router.py`) erzwingt On-Premise-Routing für Finanzen/Verträge/CRM mit **hartem Fail-Closed Block** bei Offline-Lokalmodell sowie isoliertem Docker-Worker-Netz `archon-worker-zero-egress_net` (`internal: true`, keine Internet-Route) ([Guide](../security/LOCAL_LLM_PRIVACY_ROUTING_GUIDE.md)). | **Erfüllt** |
@@ -3466,7 +3466,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 | **28** | **ERP-Modul zum vollwertigen Kernsystem ausbauen** | Kritisch | Abgeschlossen | EN 16931 / XRechnung-3.0-UBL-XML (`/xrechnung.xml`), ZUGFeRD-2.2 / Factur-X Hybrid-PDF (`/zugferd.pdf`), DATEV-EXTF-SKR03-CSV (`/export/datev.csv`), `leitweg_id`, atomare Lagerbestands-Abbuchung (`stock_deducted`) sowie Bank-Import (`CAMT.053` / `MT940` / `CSV`) & OPOS-Abgleich (`/api/erp/bank/*`) |
 | **29** | **Visueller Formular- & Beleg-Editor (im ERP-Modul)** | Hoch | Abgeschlossen | WYSIWYG-/Block-Editor (System Control Center → `CORPORATE & MANDANT`, `corporate_controller.js`) für 6 Belegtypen (Brief, Angebot, AB, Rechnung, Mahnung 1–3, NDA) inkl. Live-§ 14-UStG-Prüfung, Platzhaltern (`{{customer.*}}`/`{{doc.*}}`), DIN-5008-Falzmarken, Pure-Python EPC-QR GiroCode (`backend/qr_girocode.py`), Layout-Persistenz & direktem A4-PDF-Download (`/api/corporate/render-pdf`) |
 | **30** | **Interaktiver Setup-Wizard & Installationsprogramm** | Kritisch | Abgeschlossen | Geführter First-Run-Installer (GUI & CLI) mit Abfrage von Firmendaten, Mandantenstamm, API-Keys, lokalen LLM-Pfaden, IMAP/SMTP und Telegram-Bot-Setup |
-| **31** | **Vollständige Englische Version (Global Edition)** | Kritisch | Abgeschlossen | Durchgehende Übersetzung aller 70 Spezialisten-Profile (`SOUL.md`), 832 Prompt-Templates, 55 Boardroom-Frameworks, UI-Masken und Dokumentation auf Englisch |
+| **31** | **Vollständige Englische Version (Global Edition)** | Kritisch | Abgeschlossen | Durchgehende Übersetzung aller 71 Spezialisten-Profile (`SOUL.md`), 832 Prompt-Templates, 55 Boardroom-Frameworks, UI-Masken und Dokumentation auf Englisch |
 | **32** | **Telegram-Kommunikation & Gateway-Härtung** | Hoch | Abgeschlossen | Konfliktfreies Session-Keying, Slash-Command-Routing, Inline-HITL-Buttons & Live-Status-Formatter (`backend/telegram_gateway_v2.py`) |
 | **33** | **Watchdog & Internet-Radar 2.0** | Hoch | Abgeschlossen | Semantisches Relevanz-Scoring, SHA-256-Dubletten-Sperre & Auto-Fallback-Selbstheilung (`backend/watchdog_radar_v2.py`) |
 | **34** | **Android-App (Mobile Command & Receipt Scanner)** | Mittel | Geplant | Mobile App für Direkt-Chat, Push-Freigaben (Approval Gates), Sprachnotizen und Kamera-Beleg-Scan direkt in die ERP-Buchhaltung |
@@ -3703,10 +3703,10 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
   1. *Unternehmensstamm & Mandant:* Firmenname, Branche, Rechtsform, Standardwährung (`EUR`/`USD`/`CHF`), Steuernummer und Admin-E-Mail.
   2. *LLM- & Provider-Orchestrierung:* Schnellauswahl & API-Key-Validierung für OpenRouter, Hermes-Local, vLLM, Ollama und LM Studio mit Live-Ping-Test.
   3. *Kommunikation & Kanäle:* SMTP/IMAP-Postfächer für Auto-E-Mail-Sync und Telegram-Bot-Token mit Sofort-Validierung (`getMe`).
-  4. *Domänen-Auswahl:* Auswahl, welche der 8 Fachdomänen (70 Spezialisten) sofort aktiv geschaltet werden sollen.
+  4. *Domänen-Auswahl:* Auswahl, welche der 8 Fachdomänen (71 Profile) sofort aktiv geschaltet werden sollen.
 
 ### Meilenstein 31: Vollständige Englische Version – Global Release Edition (Abgeschlossen)
-- **Systemweite Zweisprachigkeit (DE / EN):** Vollständige Übersetzung aller 70 Spezialisten-Profile (`SOUL_COMPACT.md`, `SOUL_PRO.md`, `SOUL_FULL.md`), der 832 Prompt-Studio-Vorlagen und der 55 Boardroom-Frameworks ins Englische.
+- **Systemweite Zweisprachigkeit (DE / EN):** Vollständige Übersetzung aller 71 Spezialisten-Profile (`SOUL_COMPACT.md`, `SOUL_PRO.md`, `SOUL_FULL.md`), der 832 Prompt-Studio-Vorlagen und der 55 Boardroom-Frameworks ins Englische.
 - **Internationale Rechts- & Steuer-Adaption:** Umschaltbare Normen-Profile für den englischsprachigen Raum (z. B. US-GAAP/IFRS, GDPR/CCPA, FDA/OSHA statt reinem HGB/BauGB/StBerG).
 - **Englisches Systemhandbuch:** Vollständige englische Ausgabe des 218-seitigen Archon-OS-Handbuchs (`ARCHON_OS_SYSTEM_MANUAL_2026_EN.docx` / PDF).
 
@@ -3722,12 +3722,12 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 
 ### Meilenstein 34: Native Android-App & Mobile Command Center (Geplant – Mittel)
 - **Mobiler Begleiter für Unterwegs:** Dedizierte Android-App (Kotlin/Capacitor-PWA) mit biometrischer Entsperrung (Fingerabdruck/Face-Unlock).
-- **Kamera-Belegscanner & Sprach-First:** Direktes Fotografieren von Tank-/Bewirtungsbelegen mit sofortiger Übergabe an die ERP-Beleg-OCR sowie Push-to-Talk-Sprachbefehle an alle 70 Agenten.
+- **Kamera-Belegscanner & Sprach-First:** Direktes Fotografieren von Tank-/Bewirtungsbelegen mit sofortiger Übergabe an die ERP-Beleg-OCR sowie Push-to-Talk-Sprachbefehle an alle 71 Agenten.
 - **Echtzeit-Push für HITL-Gates:** Sofortige Push-Benachrichtigung, wenn ein Agent auf eine kritische Freigabe (Zahlung, E-Mail, Vertragsentwurf) wartet.
 
 ### Meilenstein 35: GitHub-Präsentation & Public Launch Kit (Abgeschlossen)
 - **High-Impact Repository-Auftritt:** Zweigeteilte `README.md` (Englisch als Hauptsprache für globale Reichweite + Deutsch-Link) mit interaktiver Architektur-Grafik, Vergleichstabelle (*Single Chatbot vs. Super-Agent vs. Archon OS*) und 3-Befehle-Schnellstart.
-- **Visuelle Produkt-Tour:** Eingebettete kurze GIF-/MP4-Demos für die 4 Kern-Highlights: *70-Agenten-Kader mit 3-Stufen-SOUL*, *AI Boardroom Debatte*, *ERP/CRM mit HITL-Freigabe* und *Obsidian Second Brain*.
+- **Visuelle Produkt-Tour:** Eingebettete kurze GIF-/MP4-Demos für die 4 Kern-Highlights: *71-Profil-Kader mit 3-Stufen-SOUL*, *AI Boardroom Debatte*, *ERP/CRM mit HITL-Freigabe* und *Obsidian Second Brain*.
 
 ### Meilenstein 36: Ökosystem-Verzeichnisse & Community-Integrationen (Abgeschlossen)
 - **Kuratierte Open-Source-Kataloge:** Strukturierte Bereitstellung von Metadaten, Self-Hosting-Manifesten und Architektur-Steckbriefen für *Awesome-Selfhosted*, *Awesome-AI-Agents* und *Awesome-MCP-Servers*.
@@ -3765,7 +3765,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 
 ### Meilenstein 43: Multi-Mandanten-Umschalter (Holding / Operative GmbH / SPV) (Abgeschlossen)
 - **Mandantenfähigkeit in einer Instanz:** Auswahl-Dropdown in der Topbar (`tenant_switcher.js`) zum nahtlosen Wechsel zwischen mehreren eigenen Gesellschaften (z. B. Holding, operative GmbH, Immobilien-SPV oder Privatvermögen).
-- **Strikte Kontext- & Nummernkreis-Trennung:** Jede Gesellschaft besitzt eigene isolierte SQLite-Datenbanken, ERP-Nummernkreise, Briefbögen, Steuernummern, Bankkonten, Kostenstellen und getrennte Buchhaltungs-Exporte bei gleichzeitigem Zugriff auf dieselbe 70-köpfige Spezialisten-Flotte.
+- **Strikte Kontext- & Nummernkreis-Trennung:** Jede Gesellschaft besitzt eigene isolierte SQLite-Datenbanken, ERP-Nummernkreise, Briefbögen, Steuernummern, Bankkonten, Kostenstellen und getrennte Buchhaltungs-Exporte bei gleichzeitigem Zugriff auf dieselbe 71-köpfige Profil-Flotte.
 
 ### Meilenstein 44: Fertige „1-Click Business Playbooks“ – Workflow-Rezepte (Abgeschlossen)
 - **Sofort startbare Prozess-Vorlagen für Einsteiger:** Kuratierte Bibliothek mit 10 mehrstufigen Standard-Workflows, die mehrere Spezialisten automatisch nacheinander orchestrieren:
@@ -3798,7 +3798,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 - **Granulare Tool-Freigabe pro API-Key:** Jeder verbundene MCP-Client sieht ausschließlich die ihm per Scope freigegebenen Fach-Agenten und Lese-/Schreib-Werkzeuge.
 
 ### Meilenstein 49: EU AI Act Compliance-Engine & 1-Klick-Verfahrensdokumentation (Abgeschlossen)
-- **Automatische EU-AI-Act-Risikoklassifizierung je Spezialist:** Präzise rollen- und wortgrenzenbasierte Einstufung aller 70 Spezialisten-Profile nach EU-KI-Verordnung (`HIGH_RISK` Anhang III Nr. 4/5, `SPECIFIC_TRANSPARENCY` Art. 50, `MINIMAL_RISK` Art. 95) inkl. kryptografischer `SOUL.md`-SHA-256-Prüfsumme und Pflicht-Guardrail-Prüfung (`backend/eu_ai_act_inventory.py`, `backend/compliance_engine.py`).
+- **Automatische EU-AI-Act-Risikoklassifizierung je Spezialist:** Präzise rollen- und wortgrenzenbasierte Einstufung aller 71 Spezialisten-Profile nach EU-KI-Verordnung (`HIGH_RISK` Anhang III Nr. 4/5, `SPECIFIC_TRANSPARENCY` Art. 50, `MINIMAL_RISK` Art. 95) inkl. kryptografischer `SOUL.md`-SHA-256-Prüfsumme und Pflicht-Guardrail-Prüfung (`backend/eu_ai_act_inventory.py`, `backend/compliance_engine.py`).
 - **KI-Kompetenznachweis- & Governance-Register (Art. 4 EU AI Act):** Revisionssicheres Protokoll über eingewiesene Bediener, freigegebene Modelle, System-Prompt-Hashes und Zero-Egress-Status, automatisch verkettet in `audit_log` (M21).
 - **1-Klick-PDF-Verfahrensdokumentation (GoBD + EU AI Act):** Abhängigkeitsfreier DIN-A4-PDF-1.4-Generator (`backend/compliance_pdf.py`), der live aus Mandantenstamm, physischer DB-Isolation (M43), Nummernkreisen, Datenschutz-Routing (M22), GoBD-Merkle-Hashkette (M21) und EU-AI-Act-Inventar ein prüferfertiges Verfahrensdokumentations-PDF erzeugt (`/api/v1/governance/compliance/verfahrensdokumentation.pdf`).
 

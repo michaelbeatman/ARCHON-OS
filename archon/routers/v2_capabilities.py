@@ -613,6 +613,25 @@ class PortalLinkCreateRequest(BaseModel):
     ttl_hours: int = Field(default=72, ge=1, le=8760)
 
 
+class ClientDecisionSubmitRequest(BaseModel):
+    """D04/MED (EU AI Act Art. 50): Produktiv-Payload fuer die Client-Entscheidung.
+
+    ``ai_disclosure_shown`` bestaetigt die explizite UI-Bestaetigung;
+    ``ai_disclosure_token`` ist der vom Server bei Link-Erzeugung signierte
+    Wert. Beides zusammen ersetzt das bisher tote ``submit_client_decision()``.
+    """
+    model_config = ConfigDict(extra="ignore")
+    token: str = Field(min_length=1, max_length=200)
+    decision: str = Field(min_length=1, max_length=40)
+    comment: str = Field(default="", max_length=4000)
+    password: str = Field(default="", max_length=200)
+    terms_accepted: bool = False
+    ai_disclosure_shown: bool = False
+    ai_disclosure_token: str = Field(default="", max_length=200)
+    client_ip: str = Field(default="", max_length=64)
+    document_sha256: str = Field(default="", max_length=64)
+
+
 class TimeStartRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     project_id: str = Field(default="default", max_length=120)
@@ -876,6 +895,49 @@ def api_v2_create_portal_link(request: Request, req: PortalLinkCreateRequest):
         password=req.password,
         ttl_hours=req.ttl_hours,
     )
+
+
+@router.post("/api/v2/portal/decisions")
+def api_v2_submit_client_decision(req: ClientDecisionSubmitRequest):
+    """D04/MED: produktiver Konsument von ``submit_client_decision()``.
+
+    Der Art.-50-Hinweis ist Pflicht: ohne explizite UI-Bestaetigung UND den
+    serverseitig signierten Token gibt es keine Entscheidung. Der Legacy-
+    Break-Glass-Env-Pfad der Engine wird hier bewusst nicht angeboten.
+    """
+    if not req.ai_disclosure_shown or not req.ai_disclosure_token:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "ai_act_art50_disclosure_required",
+                "message": (
+                    "EU AI Act Art. 50: Der KI-Transparenzhinweis muss im Client-Dialog "
+                    "explizit bestaetigt und der signierte ai_disclosure_token zurueckgegeben werden."
+                ),
+            },
+        )
+    from backend.client_approval_portal import submit_client_decision
+
+    try:
+        res = submit_client_decision(
+            token=req.token,
+            decision=req.decision,
+            comment=req.comment,
+            password=req.password,
+            terms_accepted=req.terms_accepted,
+            ai_disclosure_shown=True,
+            ai_disclosure_token=req.ai_disclosure_token,
+            client_ip=req.client_ip,
+            document_sha256=req.document_sha256,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "client_decision_invalid", "message": str(exc)},
+        )
+    if not res.get("allowed"):
+        raise HTTPException(status_code=403, detail=res)
+    return {"status": "success", **res}
 
 
 @router.post("/api/v2/time/start")

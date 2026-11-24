@@ -7,7 +7,7 @@
 **Sistema Operativo Multi-Agente Autoalojado para Fundadores, Equipos y Especialistas de Dominio**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
+[![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
 [![Python 3.13+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](../../requirements.txt)
 [![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-2496ED.svg)](../../docker-compose.yml)
 
@@ -19,7 +19,7 @@
 
 ---
 
-Archon OS reemplaza los chatbots aislados por un **Sistema Operativo Agéntico** persistente y autoalojado. Coordina **70 especialistas de dominio en 8 áreas principales**, ejecuta debates estructurados en el **AI Boardroom con 55 marcos de decisión**, combina **enrutamiento de IA local Zero-Egress** con un **registro de auditoría HMAC-SHA256 (GoBD / ISO 27001)** y conecta directamente tu **Obsidian Second Brain**, **n8n**, **Telegram** y un módulo nativo de **CRM y ERP *(Alpha)***.
+Archon OS reemplaza los chatbots aislados por un **Sistema Operativo Agéntico** persistente y autoalojado. Coordina **71 perfiles de agente en 8 áreas principales**, ejecuta debates estructurados en el **AI Boardroom con 55 marcos de decisión**, combina **enrutamiento de IA local Zero-Egress** con un **registro de auditoría HMAC-SHA256 (GoBD / ISO 27001)** y conecta directamente tu **Obsidian Second Brain**, **n8n**, **Telegram** y un módulo nativo de **CRM y ERP *(Alpha)***.
 
 > **Estado de localización:** La interfaz principal soporta 11 idiomas (`en`, `de`, `es`, `fr`, `pt`, `it`, `nl`, `ru`, `ja`, `ko`, `zh`). Los archivos `SOUL.md` y metodologías del Boardroom están actualmente en alemán; la localización multilingüe está en curso ([Roadmap M31](../system/ROADMAP_2026.md)).
 
@@ -58,7 +58,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ## Vista Previa del Sistema
 
-| Mission Control & Operations | Flota de 70 Especialistas (`SOUL.md`) |
+| Mission Control & Operations | Flota de 71 Perfiles (`SOUL.md`) |
 |---|---|
 | ![Mission Control](../system/screenshots/mission_control.png) | ![Agent Fleet](../system/screenshots/kader.png) |
 | **AI Boardroom (Debate Multi-Agente)** | **Org-Chart & Teams** |
@@ -66,7 +66,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ---
 
-## Flota de 70 Especialistas (8 Dominios)
+## Flota de 71 Perfiles (8 Dominios)
 
 1. **Estrategia, Dirección y Vida (12):** Orquestador, Copiloto CEO, Decisiones M&A, OKRs., síntesis transversal y verificación final
 2. **Comercio, Compras y E-Commerce (7):** Cadena de suministro, stock, negociación con proveedores, Shopify.

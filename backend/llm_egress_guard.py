@@ -96,6 +96,15 @@ def _proof_prompt_versions(agent_id: str = "") -> Tuple[str, str]:
                 )
     except Exception as exc:
         logger.error("[EgressGuard] Prompt-Version nicht lesbar (Proof 'unknown'): %s", exc)
+    else:
+        # D05/M: "unknown" ist kein Nachweis. In Produktion lehnt
+        # record_llm_dispatch den Proof ab; hier zusaetzlich sichtbar machen,
+        # damit die Ursache (kein aktives Prompt) nicht im Verborgenen bleibt.
+        logger.error(
+            "[EgressGuard] Keine aktive Prompt-/Canary-Version fuer Agent '%s' — "
+            "signierter Block-Proof enthaelt nur Platzhalter.",
+            agent_id or "default",
+        )
     return "unknown", "unknown"
 
 

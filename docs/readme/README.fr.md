@@ -7,7 +7,7 @@
 **Système d'Exploitation Multi-Agents Auto-Hébergé pour Fondateurs, Équipes et Spécialistes Métier**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
+[![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
 [![Python 3.13+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](../../requirements.txt)
 [![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-2496ED.svg)](../../docker-compose.yml)
 
@@ -19,7 +19,7 @@
 
 ---
 
-Archon OS remplace les chatbots isolés par un **Système d'Exploitation Agentique** persistant et auto-hébergé. Il orchestre **70 spécialistes dans 8 domaines principaux**, organise des débats structurés dans l'**AI Boardroom selon 55 frameworks**, associe un **routage IA local Zero-Egress** à un **journal d'audit HMAC-SHA256 (GoBD / ISO 27001)** et connecte **Obsidian Second Brain**, **n8n**, **Telegram** ainsi qu'un module **CRM & ERP *(Alpha)***.
+Archon OS remplace les chatbots isolés par un **Système d'Exploitation Agentique** persistant et auto-hébergé. Il orchestre **71 profils d'agent dans 8 domaines principaux**, organise des débats structurés dans l'**AI Boardroom selon 55 frameworks**, associe un **routage IA local Zero-Egress** à un **journal d'audit HMAC-SHA256 (GoBD / ISO 27001)** et connecte **Obsidian Second Brain**, **n8n**, **Telegram** ainsi qu'un module **CRM & ERP *(Alpha)***.
 
 > **État de la traduction :** L'interface supporte 11 langues (`en`, `de`, `es`, `fr`, `pt`, `it`, `nl`, `ru`, `ja`, `ko`, `zh`). Les profils `SOUL.md` et méthodologies sont actuellement en allemand ; la localisation est en cours ([Roadmap M31](../system/ROADMAP_2026.md)).
 
@@ -58,7 +58,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ## Aperçu du Système
 
-| Mission Control & Operations | Flotte de 70 Spécialistes (`SOUL.md`) |
+| Mission Control & Operations | Flotte de 71 Profils (`SOUL.md`) |
 |---|---|
 | ![Mission Control](../system/screenshots/mission_control.png) | ![Agent Fleet](../system/screenshots/kader.png) |
 | **AI Boardroom (Débat Multi-Agents)** | **Org-Chart & Teams** |
@@ -66,7 +66,7 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ---
 
-## La Flotte des 70 Spécialistes (8 Domaines)
+## La Flotte des 71 Profils (8 Domaines)
 
 1. **Stratégie, Direction & Vie (12) :** Orchestration, Copilote CEO, décisions M&A, OKRs., synthèse inter-domaines et vérification finale
 2. **Commerce, Achats & E-Commerce (7) :** Chaîne logistique, prévisions de stock, négociation fournisseurs, Shopify.

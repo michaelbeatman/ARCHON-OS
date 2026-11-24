@@ -52,7 +52,7 @@ EXECUTIVE_ROLE_IDS = {
     "executive_decision_architect",
     "robert",
     "founder",
-    "micha",
+    # D02/MED: 'micha' ist aus der Rollen-SSOT entfernt — kein Tier-Gewicht mehr.
     "system_architect_orchestrator",
     "aggregation_lisa",
     "labor_law_hr_governance",

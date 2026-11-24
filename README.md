@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release: v0.5.7.7](https://img.shields.io/badge/Release-v0.5.7.7-6366f1.svg)](CHANGELOG.md)
-[![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](agent_profiles.json)
+[![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
 [![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](SECURITY.md)
@@ -23,7 +23,7 @@
 
 ## What is Archon OS?
 
-Archon OS is a self-hosted multi-agent workspace built on [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research). It runs on your own server and orchestrates **70 specialist agent profiles** plus 3 system/meta profiles (73 entries in `agent_profiles.json`) across 8 domains — tax, law, procurement, sales, software, real estate, medicine, strategy. Each profile has a 3-tier `SOUL.md` prompt (Compact / Pro / Full), so agents only spend tokens when their domain is actually needed.
+Archon OS is a self-hosted multi-agent workspace built on [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research). It runs on your own server and orchestrates **71 agent profiles** (system/meta and domain specialists in `agent_profiles.json`) across 8 domains — tax, law, procurement, sales, software, real estate, medicine, strategy. Each profile has a 3-tier `SOUL.md` prompt (Compact / Pro / Full), so agents only spend tokens when their domain is actually needed.
 
 What that means in practice:
 
@@ -49,11 +49,11 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 
 > **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.7**; the PDF manual still targets v0.5.2.1.
 
-> **Counts measured in this checkout:** 73 entries in `agent_profiles.json` (70 specialists + 3 system/meta profiles), 73 roles in `roles.json`, 73 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7.7`.
+> **Counts measured in this checkout:** 71 entries in `agent_profiles.json`, 71 roles in `roles.json`, 71 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7.7`.
 
 ### Product Tour
 
-| Prompt Studio (opened in chat) | 70-Specialist Agent Fleet (3-tier SOUL) |
+| Prompt Studio (opened in chat) | 71-Profile Agent Fleet (3-tier SOUL) |
 |---|---|
 | ![Prompt Studio](docs/system/screenshots/demo_1_prompt_studio.gif) | ![Agent Fleet](docs/system/screenshots/demo_2_agent_fleet.gif) |
 | **Org Hierarchy & Teams** | **AI Boardroom Debate (55 frameworks)** |
@@ -79,7 +79,7 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 
 | Capability | Classic AI Chat | Single "Super-Agent" | **Archon Agentic OS** |
 |---|---|---|---|
-| **Agent Roster** | 1 generic assistant | 1 generalist with tool plugins | **70 distinct specialists** (`agent_profiles.json`) with **3-tier `SOUL.md`** (`Compact` / `Pro` / `Full`) |
+| **Agent Roster** | 1 generic assistant | 1 generalist with tool plugins | **71 distinct profiles** (`agent_profiles.json`) with **3-tier `SOUL.md`** (`Compact` / `Pro` / `Full`) |
 | **Strategic Decisions** | One-shot answer | Iterative tool loop | **AI Boardroom**: isolated multi-perspective debate, critique prompt & synthesis across **55 frameworks** |
 | **Long-Term Memory** | Flat chat history | Vector store snippets | **Obsidian Vault sync**, per-agent HR scorecards (`Personalakten/`), WAL SQLite DBs & LRU-K paging |
 | **Privacy & Egress** | All data to cloud APIs | API keys in runtime env | **Zero-Egress Gate & Privacy-Router Hard-Block** (fail-closed for finance/contracts/CRM when local LLM is offline) + **`internal: true` Worker Network (no internet route)** + **Dual-LLM Guard** |
@@ -90,7 +90,7 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 
 ## System Preview
 
-| Mission Control & Operations | 70-Specialist Fleet & 3-Tier SOUL |
+| Mission Control & Operations | 71-Profile Fleet & 3-Tier SOUL |
 |---|---|
 | ![Mission Control](docs/system/screenshots/mission_control.png) | ![Agenten-Kader](docs/system/screenshots/kader.png) |
 | **AI Boardroom (Multi-Agent Debate)** | **Org-Chart & Teams** |
@@ -127,7 +127,7 @@ Your AI agent will check Docker, RAM, and local LLMs, ask you where to install, 
 
 ### Option B: Interactive 1-Click Installer (Zero-CLI Friendly)
 
-Both installers automatically check/offer **Docker** and **Obsidian Desktop**, initialize your Vault folders, pull **Nous Research Hermes Agent**, build Archon OS, and sync all 70 `SOUL.md` profiles.
+Both installers automatically check/offer **Docker** and **Obsidian Desktop**, initialize your Vault folders, pull **Nous Research Hermes Agent**, build Archon OS, and sync all 71 `SOUL.md` profiles.
 
 #### Windows (Double-Click Setup)
 1. Clone or download & extract this repository.
@@ -153,7 +153,7 @@ chmod +x install.sh
 
 ### Option C: Instant Zero-Key Read-Only Demo (`ARCHON_DEMO_MODE=true`)
 
-Want to explore the full Cockpit, the **Mittelstand Muster GmbH** 4-phase AI Boardroom debate (+ optional MoA), Kanban cards, and 70 specialists **in 30 seconds without a single API key or LLM cost** (or host a safe public showcase on a €5 VPS)?
+Want to explore the full Cockpit, the **Mittelstand Muster GmbH** 4-phase AI Boardroom debate (+ optional MoA), Kanban cards, and 71 profiles **in 30 seconds without a single API key or LLM cost** (or host a safe public showcase on a €5 VPS)?
 
 ```bash
 ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
@@ -167,7 +167,7 @@ ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
 ```mermaid
 flowchart LR
     U["User / LAN Browser / Telegram"] -->|HTTP 8501 + RBAC Auth| UI["Archon Web Cockpit (FastAPI + SPA)"]
-    UI --> OR["Orchestrator & 70-Specialist Fleet (3-Tier SOUL · EN/DE)"]
+    UI --> OR["Orchestrator & 71-Profile Fleet (3-Tier SOUL · EN/DE)"]
     OR --> BR["AI Boardroom (55 Decision Frameworks)"]
     OR --> OM["OmniRoute Switchboard (Port 20128)"]
     OM -->|Local / Zero-Egress| LOC["Ollama / LM Studio (On-Premise)"]
@@ -179,14 +179,14 @@ flowchart LR
 ```
 
 ### The 4 Navigation Pillars
-1. **Command & Operations:** Operations Command Center, Master Chat, Triage Inbox (Webhooks, Email, Messenger, Approvals), **70-Specialist Agent Fleet** (incl. Bot Screen PbD & 3-tier SOUL), **832-Template Prompt Studio**, Showroom Sandbox.
+1. **Command & Operations:** Operations Command Center, Master Chat, Triage Inbox (Webhooks, Email, Messenger, Approvals), **71-Profile Agent Fleet** (incl. Bot Screen PbD & 3-tier SOUL), **832-Template Prompt Studio**, Showroom Sandbox.
 2. **Cognition & Knowledge:** Internet-Watchdog (RSS/Web Radar), Research Lab (multi-source triangulation & dossiers), Central Library (Obsidian Vault + AnythingLLM RAG), AI Boardroom (4-phase debate + optional MoA across 55 frameworks).
 3. **Economy & ERP *(Alpha)*:** CRM (addresses, contacts, pipeline), ERP suite (offers, contracts, invoices, receivables/dunning, receipts), OmniRoute token FinOps with per-model cost control.
 4. **Infrastructure & Governance:** Org-Chart & Teams, Guardian (Concurrency, Sessions, Rate Limits), System Control Center (First-Run Wizard, API Keys, Routing, Kernel Watchdog, Updates), Tamper-Evident Audit Log Stream.
 
 ---
 
-## The 70-Specialist Fleet (8 Domains)
+## The 71-Profile Fleet (8 Domains)
 
 | # | Domain | Count | Focus & Guardrails |
 |---|---|---|---|
@@ -219,7 +219,7 @@ ARCHON-OS/
 ├── backend/                 # Auth/RBAC, audit log, privacy router, CRM/ERP, workflow DAG, ~160 modules
 ├── static/                  # Border-first SPA UI, 11 locales & interactive liability modals
 ├── frontend/                # Next.js 16 / React 19 cockpit (/crm, /workflows, /cockpit)
-├── .hermes/profiles/        # 70 synced specialist SOUL.md profiles (Hermes runtime)
+├── .hermes/profiles/        # 71 synced SOUL.md profiles (Hermes runtime)
 ├── .agents/skills/          # Agent skills (LinkedIn suite, SEO, security, MCP bridges, ...)
 ├── data/                    # Runtime state: ops.db / business.db / memory.db, tenants, secrets, backups
 ├── obsidian_vault/          # Markdown Second Brain (HR, projects, radar, content)

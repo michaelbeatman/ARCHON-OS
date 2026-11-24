@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { KontaktRecord, STATUS_COLUMNS, pb, getProfilbildUrl } from '@/lib/pocketbase';
 import { transcribeAudioOnly, summarizeText } from '@/utils/aiAudio';
+import { tracedFetch } from '@/lib/archon-api';
 import {
   X, Save, Trash2, Calendar, Star, Building2, MapPin, User, MessageSquare, Search,
   AlertTriangle, CheckCircle2, Send, Clock, Image as ImageIcon, Upload, SlidersHorizontal, Settings,
@@ -943,7 +944,7 @@ export function KontaktDrawer({
         alert(`CRM Nachfassen-Termin erfolgreich für den ${new Date(dateTime).toLocaleString('de-DE')} angelegt!`);
       } else {
         const attendeeList = attendees ? attendees.split(',').map(e => e.trim()).filter(Boolean) : [];
-        const res = await fetch('/api/calendar/events', {
+        const res = await tracedFetch('/api/calendar/events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

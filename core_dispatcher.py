@@ -167,7 +167,9 @@ async def _guard_silent_failures(res: dict, agent_id: str, task_id: str) -> dict
                     },
                 )
         except Exception as audit_exc:
-            logger.warning("[Dispatcher] Silent-Failure-Audit fehlgeschlagen: %s", audit_exc)
+            # D05/S-5.4: GoBD-relevanter Audit-Schreibfehler darf nie nur als
+            # WARNING verschwinden, während der Dispatch als Erfolg gilt.
+            logger.error("[Dispatcher] Silent-Failure-Audit fehlgeschlagen: %s", audit_exc)
 
     await asyncio.to_thread(_write_audit)
     return res
@@ -485,10 +487,16 @@ async def _dispatch_to_container_endpoint(
                         tools_invoked=[f"core_dispatcher.dispatch_to_{provider}"],
                     )
                 except Exception as log_exc:
-                    logger.warning("[Dispatcher] Receipt fehlgeschlagen (%s): %s", provider, log_exc)
+                    # D05/S-5.4: Quittungsfehler nie verschlucken. Der Erfolg
+                    # wird explizit als ohne signierten Beweis markiert.
+                    logger.error("[Dispatcher] Receipt fehlgeschlagen (%s): %s", provider, log_exc)
+                    receipt_unverified = True
+                else:
+                    receipt_unverified = False
                 return _with_prompt_info({
                     "status": "success", "content": content,
                     "cost_usd": est_cost, "cost_unverified": cost_unverified,
+                    "receipt_unverified": receipt_unverified,
                 })
             return _with_prompt_info({
                 "status": "error", "error_code": "CONTAINER_HTTP_ERROR",
@@ -759,7 +767,9 @@ def _log_dispatcher_usage_sync(agent_id: str, model: str, in_tok: int, out_tok: 
                 tools_invoked=["core_dispatcher"],
             )
         except Exception as log_exc:
-            logger.debug(f"[Dispatcher] Usage-Audit-Log fehlgeschlagen: {log_exc}")
+            # D05/S-5.4: Usage-/Receipt-Schreibfehler sind GoBD-relevant —
+            # nicht auf DEBUG verschlucken, sondern sichtbar eskalieren.
+            logger.error(f"[Dispatcher] Usage-Audit-Log fehlgeschlagen: {log_exc}")
     except Exception as e:
         print(f"[DISPATCHER] Token telemetry write error: {e}", file=sys.stderr)
 
@@ -853,6 +863,7 @@ async def dispatch_to_omniroute_or_container(
                 cache_hit = None
         if cache_hit and cache_hit.get("hit"):
             cached_content = str(cache_hit.get("response") or "")
+            cache_clean_ok = True
             try:
                 cached_content = _clean_dispatch_output(
                     cached_content,
@@ -860,20 +871,24 @@ async def dispatch_to_omniroute_or_container(
                     is_local=False,
                 )
             except Exception as cache_clean_exc:
-                logger.debug("[Dispatcher] Cache-Content-Cleanup fehlgeschlagen: %s", cache_clean_exc)
-            return _with_prompt_info({
-                "status": "success",
-                "content": cached_content,
-                "model": cache_hit.get("cached_model") or model,
-                "input_tokens": 0,
-                "output_tokens": 0,
-                # Kein echter Call: 0 ist korrekt, aber explizit als ungeprüft markieren.
-                "cost_usd": 0.0,
-                "cost_unverified": True,
-                "cached": True,
-                "cache_match_type": cache_hit.get("match_type"),
-                "cache_similarity": cache_hit.get("similarity"),
-            })
+                # D07/S-7.6: kein "success" mit ungeprüftem Cache-Inhalt. Den
+                # Treffer verwerfen und darunter regulär zum Provider laufen.
+                logger.error("[Dispatcher] Cache-Content-Cleanup fehlgeschlagen: %s", cache_clean_exc)
+                cache_clean_ok = False
+            if cache_clean_ok:
+                return _with_prompt_info({
+                    "status": "success",
+                    "content": cached_content,
+                    "model": cache_hit.get("cached_model") or model,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    # Kein echter Call: 0 ist korrekt, aber explizit als ungeprüft markieren.
+                    "cost_usd": 0.0,
+                    "cost_unverified": True,
+                    "cached": True,
+                    "cache_match_type": cache_hit.get("match_type"),
+                    "cache_similarity": cache_hit.get("similarity"),
+                })
 
         async with _get_task_semaphore():
             # Atomare Budget-Reservierung statt Check-then-Use: parallele
@@ -949,8 +964,25 @@ async def dispatch_to_omniroute_or_container(
             duration_ms = (time.time() - t_start) * 1000.0
             in_tok = int(res.get("input_tokens", 0) or 0)
             out_tok = int(res.get("output_tokens", 0) or 0)
-            est_cost = float(res["cost_usd"]) if res.get("cost_usd") is not None else round((in_tok * 0.00000015) + (out_tok * 0.00000030), 6)
             used_model = res.get("model") or model
+            # D12/S-12.3: die Provider-Hops liefern meist keinen cost_usd.
+            # Nicht still eine hartcodierte Konstante als echten Preis ausgeben,
+            # sondern echt schätzen und das Ergebnis als ungeprüft markieren.
+            if res.get("cost_usd") is not None:
+                est_cost = float(res["cost_usd"])
+                est_cost_unverified = bool(res.get("cost_unverified", False))
+            else:
+                est_cost_unverified = True
+                try:
+                    est_cost = float(estimate_model_cost_usd(
+                        used_model, in_tok, out_tok,
+                        provider=str(res.get("provider") or provider or ""),
+                    ))
+                except Exception as cost_est_exc:
+                    logger.error("[Dispatcher] Kosten-Schaetzung fehlgeschlagen: %s", cost_est_exc)
+                    est_cost = round((in_tok * 0.00000015) + (out_tok * 0.00000030), 6)
+                res["cost_usd"] = est_cost
+            res["cost_unverified"] = est_cost_unverified
             is_ok = res.get("status") == "success"
 
             # Erfolgreiche Antwort im tenant-scoped Cache speichern (nur echte Calls).
@@ -1003,6 +1035,8 @@ async def dispatch_to_omniroute_or_container(
                         output_tokens=out_tok,
                         cost_usd=est_cost,
                         duration_ms=duration_ms,
+                        # D12: Ungeprüfte Kostenschätzung auch im Span sichtbar.
+                        attributes={"cost_unverified": est_cost_unverified},
                         status="OK" if is_ok else "ERROR"
                     )
                     tracer.end_trace(tr_id, status="OK" if is_ok else "ERROR")
@@ -1291,7 +1325,9 @@ async def _dispatch_to_omniroute_or_container_impl(
     collected_keys = {}
     try:
         import api_provider
-        collected_keys = api_provider.collect_keys()
+        # D08/S-8.1: der Profil-.env-Scan liest ~70 Dateien synchron. Nicht im
+        # Event-Loop blockieren — der TTL-Cache begrenzt nur die Frequenz.
+        collected_keys = await asyncio.to_thread(api_provider.collect_keys)
     except Exception as key_err:
         logger.warning(f"[Dispatcher] API-Keys aus api_provider konnten nicht geladen werden: {key_err}")
 
@@ -2447,7 +2483,11 @@ async def _stream_boardroom_debate_inner(
         # (15) nicht fälschlich bei 10 Agenten × 2 Runden auslöst.
         try:
             from backend.agent_router import router_instance
-            _recent = debate_statements[-8:]
+            # D13/S-13.4: feste 8er-Fenster konnte die max_steps-Grenze (15)
+            # nie erreichen. Die Policy-Fenstergröße aus trajectory_budget
+            # verwenden (>= max_steps+1).
+            _window = max(8, int(router_instance.guard_window_size()))
+            _recent = debate_statements[-_window:]
             _cb_messages = [
                 {"role": "agent", "content": str(s.get("content", ""))}
                 for s in _recent if isinstance(s, dict)
@@ -2462,7 +2502,16 @@ async def _stream_boardroom_debate_inner(
                 }
                 return
         except Exception as _cb_exc:
-            logger.debug("[Boardroom] Circuit-Breaker-Prüfung nicht verfügbar: %s", _cb_exc)
+            # D13: Guard-Ausfall darf die Debatte nicht unkontrolliert
+            # weiterlaufen lassen (fail-open) — hart abbrechen.
+            logger.error("[Boardroom] Circuit-Breaker-Prüfung fehlgeschlagen (fail-closed): %s", _cb_exc)
+            yield {
+                "type": "cancelled",
+                "round": round_num,
+                "reason": "circuit_breaker_unavailable",
+                "content": "Debatte abgebrochen: Loop-Guard nicht verfügbar.",
+            }
+            return
 
         if round_num == 1 and len(expert_agents) > 1:
             async def _dispatch_agent(ag):
@@ -2843,8 +2892,12 @@ async def run_boardroom_debate(
     moa_aggregator: dict = None
 ) -> dict:
     events = []
+    # D01/S-1.7: solange kein done-Event mit Synthese eingegangen ist, darf
+    # das Ergebnis NICHT "success" sein (sonst wird eine leere Debatte als
+    # erfolgreiche Entscheidung archiviert).
+    done_seen = False
     task_res = {
-        "status": "success",
+        "status": "incomplete",
         "task": task,
         "framework": framework,
         "chairman": active_agents[0] if active_agents else {},
@@ -2867,6 +2920,7 @@ async def run_boardroom_debate(
         if ev_type == "start":
             task_res["chairman"] = ev.get("chairman", task_res["chairman"])
         elif ev_type == "done":
+            done_seen = True
             task_res["transcript"] = ev.get("transcript", "")
             task_res["synthesis"] = ev.get("synthesis", "")
             verdict = str(ev.get("consensus_verdict") or ev.get("consensus_status") or "NO_CONSENSUS").upper()
@@ -2880,6 +2934,8 @@ async def run_boardroom_debate(
             task_res["is_final_decision"] = verdict.startswith("CONSENSUS_REACHED")
             if not task_res["is_final_decision"]:
                 task_res["status"] = "no_consensus"
+            elif str(task_res.get("synthesis") or "").strip():
+                task_res["status"] = "success"
         elif ev_type == "error":
             return {"status": "error", "content": ev.get("content", "")}
         elif ev_type == "cancelled":
@@ -2894,6 +2950,11 @@ async def run_boardroom_debate(
             events.append(ev)
 
     task_res["events"] = events
+    # D01/S-1.7: Stream ohne done-Event oder ohne Synthese ist keine
+    # erfolgreiche Entscheidung — nie als "success" an Client/Archiv geben.
+    if not done_seen or not str(task_res.get("synthesis") or "").strip():
+        task_res["status"] = "incomplete"
+        task_res["incomplete_reason"] = "no_done_event" if not done_seen else "empty_synthesis"
     return task_res
 
 async def execute_with_self_correction(

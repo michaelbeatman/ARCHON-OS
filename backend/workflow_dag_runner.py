@@ -67,6 +67,11 @@ async def _otel_end(trace_id: str, status: str) -> None:
 # planen und damit Budget/Deadline endlos umgehen.
 MAX_REPLAN_COUNT = 2
 
+# D02/MED (Re-Audit): der Lease-Heartbeat lief alle 60 s, die Spezifikation
+# fordert 30 s. TTL bleibt 300 s (>= 3x Intervall).
+HEARTBEAT_INTERVAL_SEC = 30
+LEASE_TTL_SEC = 300
+
 _PRIVILEGED_NODE_TOOLS = frozenset({
     "pay", "terminal", "execute_code", "filesystem", "computer_use", "mcp", "pay-cli",
 })
@@ -84,6 +89,42 @@ class _LeaseGuard:
     def __init__(self) -> None:
         self.lost = asyncio.Event()
         self.suspended = asyncio.Event()
+
+
+async def _lease_heartbeat(run_id: str, kernel: Any, token: str, guard: _LeaseGuard) -> None:
+    """Ein Heartbeat fuer Initiallauf UND Resume (30 s statt 60 s, D02/MED).
+
+    Bei verweigerter Verlaengerung wird `guard.lost` gesetzt; die DAG-
+    Hauptausfuehrung bricht then fail-closed ab. Bewusste HITL-Suspends
+    beenden den Heartbeat, ohne einen Lease-Verlust zu melden.
+    """
+    while True:
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SEC)
+        if guard.suspended.is_set():
+            return
+        try:
+            if not kernel.renew(run_id, token, ttl_seconds=LEASE_TTL_SEC):
+                logger.warning("[WorkflowDAG] Lease '%s' nicht mehr gueltig — Run abbrechen.", run_id)
+                guard.lost.set()
+                return
+        except Exception as exc:
+            logger.debug("[WorkflowDAG] Lease-Renew Hinweis: %s", exc)
+            guard.lost.set()
+            return
+
+
+def _kernel_for_run(db_path: Optional[str] = None) -> Any:
+    """D02/MED: Claim an die Run-DB binden statt globalen Singleton zu nutzen.
+
+    Ohne explizites `db_path` (Produktivpfad) bleibt der globale Kernel erhalten;
+    mit `db_path` (Tests, mandantenfaehige Laeufe) liegt der Claim in derselben
+    Datenbank wie der Run — kein fremder, ggf. beschaedigter Global-Store.
+    """
+    if not db_path:
+        from backend.durable_execution_kernel import durable_kernel
+        return durable_kernel
+    from backend.durable_execution_kernel import DurableExecutionKernel
+    return DurableExecutionKernel(db_path=db_path)
 
 
 def _claim_kernel_run(
@@ -131,6 +172,7 @@ def _suspend_run_at_gate(
     outputs: Dict[str, Any],
     fencing_token: str = "",
     lease_guard: Optional[_LeaseGuard] = None,
+    kernel: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Produktivaufrufer von ``durable_kernel.suspend()``.
 
@@ -139,16 +181,17 @@ def _suspend_run_at_gate(
     anderer Worker nach der Entscheidung sauber resume darf.
     """
     try:
-        from backend.durable_execution_kernel import durable_kernel, SUSPENDED
+        from backend.durable_execution_kernel import SUSPENDED
 
-        existing = durable_kernel.get_state(run_id)
+        kernel = kernel or _kernel_for_run()
+        existing = kernel.get_state(run_id)
         if existing and str(existing.get("state")) == SUSPENDED:
             if lease_guard is not None and fencing_token:
                 lease_guard.suspended.set()
             return {"suspended": True, "already": True, "run_id": run_id, "gate_node_id": node_id}
 
         token = fencing_token or str((existing or {}).get("fencing_token") or "")
-        claim = _claim_kernel_run(durable_kernel, run_id, wf_id, token or None)
+        claim = _claim_kernel_run(kernel, run_id, wf_id, token or None)
         if not claim.get("claimed"):
             return {"suspended": False, "reason": claim.get("reason", "claim_failed"), "gate_node_id": node_id}
         token = str(claim["fencing_token"])
@@ -166,12 +209,12 @@ def _suspend_run_at_gate(
         except Exception:
             state_json = {"workflow_id": wf_id, "gate_node_id": node_id}
 
-        durable_kernel.suspend(
+        kernel.suspend(
             run_id, token, checkpoint_step, state_json,
             reason=f"hitl_gate:{node_id}",
         )
         # Keine aktive Lease, waehrend ein Mensch entscheidet.
-        durable_kernel.release(run_id, token)
+        kernel.release(run_id, token)
         if lease_guard is not None and fencing_token:
             lease_guard.suspended.set()
         return {
@@ -798,6 +841,22 @@ async def _dispatch_with_node_budget(
     phase = str(kwargs.pop("_phase", "dispatch"))
     if not _node_budget_ok(node, res, str(kwargs.get("model") or base_model), phase):
         return _blocked_node_result(node, "NODE_TOKEN_BUDGET_EXCEEDED"), True
+    # D13/MED: Token-Cap ZUR LAUFZEIT durchsetzen. `record_tokens()` lief frueher
+    # erst nach dem Run — `tokens_used` blieb waehrenddessen konstant 0.
+    _tid = str(node.get("_trajectory_id") or "")
+    if _tid.startswith("traj-"):
+        _projected = max(1, int(res.get("input_tokens") or 0) + int(res.get("output_tokens") or 0))
+        try:
+            from backend.trajectory_budget import reserve_tokens
+            _token_res = reserve_tokens(
+                _tid, _projected, reason=f"dag_dispatch:{node.get('id')}:{phase}"
+            )
+            if not _token_res.get("allowed", True):
+                logger.error("[WorkflowDAG] Trajectory-Token-Cap vor Dispatch: %s", _token_res.get("reason"))
+                return _blocked_node_result(node, "TRAJECTORY_TOKEN_CAP"), True
+        except Exception as _tok_exc:
+            logger.error("[WorkflowDAG] Token-Reservierung fehlgeschlagen (fail-closed): %s", _tok_exc)
+            return _blocked_node_result(node, "TRAJECTORY_TOKEN_CAP"), True
     import core_dispatcher
     out = await core_dispatcher.dispatch_to_omniroute_or_container(**kwargs)
     return out, False
@@ -1504,6 +1563,7 @@ async def run_workflow_dag(
     *,
     fencing_token: str = "",
     lease_guard: Optional[_LeaseGuard] = None,
+    kernel: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Wrapper: persistiert 'cancelled' auch bei CancelledError (BaseException)."""
     try:
@@ -1511,7 +1571,7 @@ async def run_workflow_dag(
             dag_def, executor_fn=executor_fn, run_id=run_id,
             gate_approvals=gate_approvals, db_path=db_path,
             cancel_token=cancel_token, fencing_token=fencing_token,
-            lease_guard=lease_guard,
+            lease_guard=lease_guard, kernel=kernel,
         )
     except asyncio.CancelledError:
         rid = run_id or ""
@@ -1538,6 +1598,7 @@ async def _run_workflow_dag_impl(
     *,
     fencing_token: str = "",
     lease_guard: Optional[_LeaseGuard] = None,
+    kernel: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Fuehrt einen Workflow-DAG aus (mit Per-run_id-Lock gegen Doppel-Ausfuehrung).
@@ -1564,13 +1625,71 @@ async def _run_workflow_dag_impl(
             "node_statuses": {},
             "outputs": {},
         }
+
+    # D02/MED (Re-Audit): der Initiallauf hatte NUR diesen prozesslokalen Lock.
+    # Zwei Prozesse konnten denselben run_id parallel ausfuehren. Jetzt gilt
+    # derselbe fail-closed CAS-Claim + Fencing-Token + Heartbeat wie im Resume.
+    # Ein bereits gesetztes Token (Resume-Ruf) wird nicht erneut geclaimt.
+    heartbeat: Optional[asyncio.Task] = None
+    own_lease = False
+    if not fencing_token:
+        try:
+            kernel = kernel or _kernel_for_run(db_path)
+            claim = _claim_kernel_run(
+                kernel, rid,
+                json.dumps(dag_def, sort_keys=True, ensure_ascii=False), None,
+            )
+            if not claim.get("claimed"):
+                logger.warning(
+                    "[WorkflowDAG] Run '%s': CAS-Claim verweigert (%s/%s) — Initiallauf nicht gestartet.",
+                    rid, claim.get("reason"), claim.get("state"),
+                )
+                return {
+                    "status": "skipped", "run_id": rid,
+                    "reason": "durable_claim_not_acquired",
+                    "claim_reason": claim.get("reason"), "claim_state": claim.get("state"),
+                    "workflow_id": str(dag_def.get("id") or "workflow"),
+                    "node_statuses": {}, "outputs": {},
+                }
+            fencing_token = str(claim["fencing_token"])
+            lease_guard = _LeaseGuard()
+            own_lease = True
+        except Exception as kc_exc:
+            logger.error(
+                "[WorkflowDAG] Durable-Kernel Claim nicht verfuegbar — Initiallauf blockiert (fail-closed): %s",
+                kc_exc,
+            )
+            return {
+                "status": "skipped", "run_id": rid,
+                "reason": "durable_kernel_unavailable", "error": str(kc_exc)[:300],
+                "workflow_id": str(dag_def.get("id") or "workflow"),
+                "node_statuses": {}, "outputs": {},
+            }
+
     await run_lock.acquire()
     try:
-        return await _run_workflow_dag_locked(
+        if own_lease and lease_guard is not None and fencing_token:
+            try:
+                heartbeat = asyncio.create_task(
+                    _lease_heartbeat(rid, kernel, fencing_token, lease_guard),
+                    name=f"dag_lease_{rid}",
+                )
+            except Exception as hb_exc:
+                logger.debug("[WorkflowDAG] Lease-Heartbeat nicht gestartet: %s", hb_exc)
+        result = await _run_workflow_dag_locked(
             dag_def, executor_fn, rid, gate_approvals, db_path, cancel_token=cancel_token,
-            fencing_token=fencing_token, lease_guard=lease_guard,
+            fencing_token=fencing_token, lease_guard=lease_guard, kernel=kernel,
         )
+        if lease_guard is not None and lease_guard.lost.is_set() and isinstance(result, dict):
+            result = dict(result)
+            result["status"] = "blocked"
+            result["error"] = result.get("error") or "Lease lost during execution — run aborted (fenced)"
+            result["needs_human"] = True
+        return result
     finally:
+        if heartbeat is not None:
+            heartbeat.cancel()
+            await asyncio.gather(heartbeat, return_exceptions=True)
         run_lock.release()
 
 
@@ -1584,6 +1703,7 @@ async def _run_workflow_dag_locked(
     *,
     fencing_token: str = "",
     lease_guard: Optional[_LeaseGuard] = None,
+    kernel: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Eigentliche DAG-Ausfuehrung; Per-run_id-Lock wird von run_workflow_dag gehalten."""
     eff_executor = executor_fn or default_agent_node_executor
@@ -2006,7 +2126,7 @@ async def _run_workflow_dag_locked(
         if st == "awaiting_gate":
             gate_suspend = _suspend_run_at_gate(
                 rid, wf_id, nid, statuses, outputs,
-                fencing_token=fencing_token, lease_guard=lease_guard,
+                fencing_token=fencing_token, lease_guard=lease_guard, kernel=kernel,
             )
             outputs[nid]["durable_suspend"] = gate_suspend
 
@@ -2254,7 +2374,10 @@ async def _run_workflow_dag_locked(
                 # R-B3 (Re-Audit D13): Das Ergebnis der Budgetbuchung auswerten.
                 # Vorher wurde `blocked` ignoriert und vom Abschluss auf
                 # `completed`/`failed` ueberschrieben.
-                _token_res = record_tokens(_tid, _total_tokens, reason=f"dag_run:{rid}")
+                # D13/MED: Reservierungen aus der Laufzeit nicht doppelt buchen.
+                _token_res = record_tokens(
+                    _tid, _total_tokens, reason=f"dag_run:{rid}", set_total=True
+                )
                 if isinstance(_token_res, dict) and not _token_res.get("allowed", True):
                     final_status = "blocked"
                     cycle_error = cycle_error or f"TRAJECTORY_TOKEN_CAP: {_token_res.get('reason')}"
@@ -2364,9 +2487,10 @@ async def resume_workflow_run(
     # lief trotzdem — zwei Worker konnten denselben DAG parallel ausfuehren.
     # Jetzt fail-closed: ohne Claim kein Resume.
     try:
-        from backend.durable_execution_kernel import durable_kernel, FAILED as _FAILED, COMPLETED as _COMPLETED
+        from backend.durable_execution_kernel import FAILED as _FAILED, COMPLETED as _COMPLETED
+        kernel = _kernel_for_run(db_path)
         claim = _claim_kernel_run(
-            durable_kernel,
+            kernel,
             run_id,
             json.dumps(dag_def, sort_keys=True, ensure_ascii=False),
             fencing_token or None,
@@ -2396,29 +2520,13 @@ async def resume_workflow_run(
             "error": str(kc_exc)[:300],
         }
 
-    kernel = durable_kernel
-    # Der Claim galt nur 300 s; lange LLM-DAGs wurden danach von einem
-    # anderen Worker uebernommen. Heartbeat verlaengert die Lease alle 60 s.
-    # Bei renew=False wird `guard.lost` gesetzt und die DAG-Hauptausfuehrung
-    # bricht ab (statt still weiterzulaufen).
+    # D02/MED: Heartbeat alle 30 s (statt 60 s) — gemeinsam mit dem
+    # Initiallauf. Bei renew=False wird `guard.lost` gesetzt und die DAG-
+    # Hauptausfuehrung bricht fail-closed ab (statt still weiterzulaufen).
     guard = _LeaseGuard()
-
-    async def _renew_lease() -> None:
-        while True:
-            await asyncio.sleep(60)
-            if guard.suspended.is_set():
-                return  # bewusstes HITL-Suspend, kein Lease-Verlust
-            try:
-                if not kernel.renew(run_id, token, ttl_seconds=300):
-                    logger.warning("[WorkflowDAG] Lease '%s' nicht mehr gueltig — Resume abbrechen.", run_id)
-                    guard.lost.set()
-                    return
-            except Exception as exc:
-                logger.debug("[WorkflowDAG] Lease-Renew Hinweis: %s", exc)
-                guard.lost.set()
-                return
-
-    heartbeat = asyncio.create_task(_renew_lease(), name=f"dag_lease_{run_id}")
+    heartbeat = asyncio.create_task(
+        _lease_heartbeat(run_id, kernel, token, guard), name=f"dag_lease_{run_id}"
+    )
 
     result = None
     try:
@@ -2430,6 +2538,7 @@ async def resume_workflow_run(
             db_path=db_path,
             fencing_token=token,
             lease_guard=guard,
+            kernel=kernel,
         )
     except Exception as run_exc:
         if not guard.suspended.is_set():

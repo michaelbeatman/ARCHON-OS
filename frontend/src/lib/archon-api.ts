@@ -107,21 +107,30 @@ function withSignal(init: RequestInit | undefined, signal?: AbortSignal): Reques
   return { ...(init || {}), signal };
 }
 
-export async function archonFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const cleanPath = path.replace(/^\/+/, '');
-  const traced = withTraceHeaders(init);
-  const headers = new Headers(traced.headers);
-  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
-  const res = await fetch(`/api/archon/${cleanPath}`, {
-    ...traced,
-    credentials: traced.credentials || 'same-origin',
-    headers,
-  });
+/**
+ * D16/R-B6: zentraler Fetch-Wrapper fuer ALLE Browser-Requests (auch die,
+ * die nicht ueber `archonFetch` laufen). Injiziert traceparent/tracestate,
+ * ohne vom Aufrufer gesetzte Header zu ueberschreiben.
+ */
+export async function tracedFetch(url: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(url, withTraceHeaders(init));
   // Der Proxy gibt den fortgefuehrten Kontext zurueck -> naechster Hop erbt ihn.
   setArchonTracestate(res.headers.get('tracestate'));
+  return res;
+}
+
+export async function archonFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const cleanPath = path.replace(/^\/+/, '');
+  const headers = new Headers(init?.headers);
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  const res = await tracedFetch(`/api/archon/${cleanPath}`, {
+    ...init,
+    credentials: init?.credentials || 'same-origin',
+    headers,
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+    throw new Error(data.detail || data.error || data.message || `HTTP ${res.status}`);
   }
   return data as T;
 }

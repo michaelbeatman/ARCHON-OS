@@ -231,9 +231,10 @@ def resolve_card_hitl_decision(
             xres = cross_model_verify_card("hitl-override", primary_model or "default", diff_text=diff_text)
             verified = verified and bool(xres.get("passed"))
             reason = f"{reason} | {xres.get('reason') or ''}"
-        if not verified and os.environ.get(
-            "ARCHON_KANBAN_HITL_ALLOW_UNVERIFIED_OVERRIDE", ""
-        ).strip().lower() not in ("1", "true", "yes"):
+        # D14/MED: der Env-Fail-Open-Schalter
+        # ARCHON_KANBAN_HITL_ALLOW_UNVERIFIED_OVERRIDE wurde entfernt. Ohne
+        # erfolgreiche Reverifikation gibt es keinen Override — immer blocked.
+        if not verified:
             return {
                 "resolution": act,
                 "next_status": "blocked",

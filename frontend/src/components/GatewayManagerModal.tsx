@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { X, Play, Square, RefreshCw, Loader2, Settings2 } from "lucide-react";
+import { tracedFetch } from "@/lib/archon-api";
 
 interface GatewayProfile {
   id: string;
@@ -34,7 +35,7 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/gateway/list`, { signal });
+      const res = await tracedFetch(`${API_BASE}/api/v1/gateway/list`, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setProfiles(data.profiles || []);
@@ -78,7 +79,7 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
     setActionLoading(profileId);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/gateway/start`, {
+      const res = await tracedFetch(`${API_BASE}/api/v1/gateway/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profile_id: profileId }),
@@ -96,7 +97,7 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
     setActionLoading(profileId);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/gateway/stop`, {
+      const res = await tracedFetch(`${API_BASE}/api/v1/gateway/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profile_id: profileId }),
@@ -122,7 +123,7 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
   const handleAutostartToggle = async (profileId: string, value: boolean) => {
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/gateway/config`, {
+      const res = await tracedFetch(`${API_BASE}/api/v1/gateway/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ autostart: { [profileId]: value } }),
@@ -141,7 +142,7 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
     if (isNaN(val) || val < 1) return;
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/gateway/config`, {
+      const res = await tracedFetch(`${API_BASE}/api/v1/gateway/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idle_timeout_minutes: val }),

@@ -210,28 +210,17 @@ def api_create_approval_request(request: Request, req: ApprovalRequestCreate):
 
     try:
         from backend.approval_policy_engine import approval_engine
-        try:
-            # Handoff: backend/approval_policy_engine.py (anderer Agent) muss
-            # requester_id akzeptieren und in `approval_requests` persistieren.
-            res = approval_engine.evaluate_and_enqueue(
-                domain=domain,
-                title=title,
-                amount=amount,
-                reference_id=reference_id,
-                payload=payload,
-                requester_id=requester_id,
-            )
-        except TypeError:
-            # Rueckwaertskompatibel bis Handoff: der Antragsteller steht dann
-            # wenigstens im signierten Payload und wird von approve_request()
-            # ueber die defense-in-depth-Pruefung unten beruecksichtigt.
-            res = approval_engine.evaluate_and_enqueue(
-                domain=domain,
-                title=title,
-                amount=amount,
-                reference_id=reference_id,
-                payload=payload,
-            )
+        # D04/D14: kein TypeError-Schlucken mehr — der Engine-Vertrag
+        # (`requester_id`) ist verdrahtet. Ein fehlender Antragsteller ist ein
+        # Fehler und darf nicht still durch einen Aufruf ohne ihn ersetzt werden.
+        res = approval_engine.evaluate_and_enqueue(
+            domain=domain,
+            title=title,
+            amount=amount,
+            reference_id=reference_id,
+            payload=payload,
+            requester_id=requester_id,
+        )
         return {"status": "success", "result": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

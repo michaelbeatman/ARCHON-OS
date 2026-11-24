@@ -116,7 +116,10 @@ class OpenTelemetryTracer:
             active_tid = current_trace_id()
             if not active_tid and not trace_id:
                 active_tid, _ = ensure_trace()
-        except Exception:
+        except Exception as exc:
+            # Re-Audit D16/H4: frueher `except Exception: active_tid = ''` —
+            # der Fehler war unsichtbar und der Trace bekam einen zweiten Root.
+            self.note_local_trace_error("start_trace-context", exc)
             active_tid = ""
         resolved_tid = (trace_id or active_tid or secrets.token_hex(16)).strip()
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -159,7 +162,10 @@ class OpenTelemetryTracer:
                         if st.tzinfo is None:
                             st = st.replace(tzinfo=datetime.timezone.utc)
                         tot_dur = max(0.0, (now_dt - st).total_seconds() * 1000.0)
-                    except Exception:
+                    except Exception as exc:
+                        # Re-Audit D16/H4: fehlerhafte Startzeit darf nicht
+                        # still durch die Span-Summe ersetzt werden.
+                        self.note_local_trace_error("end_trace-duration", exc)
                         tot_dur = span_sum_ms
 
                 cur.execute("""

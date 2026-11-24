@@ -7,7 +7,7 @@
 **Sistema Operativo Multi-Agente Self-Hosted per Founder, Team e Specialisti di Dominio**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
+[![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains-emerald.svg)](../../agent_profiles.json)
 [![Python 3.13+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](../../requirements.txt)
 [![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-2496ED.svg)](../../docker-compose.yml)
 
@@ -19,7 +19,7 @@
 
 ---
 
-Archon OS sostituisce i chatbot isolati con un **Sistema Operativo Agentico** persistente e self-hosted. Coordina **70 specialisti di dominio in 8 aree principali**, dibatte in modo strutturato nell'**AI Boardroom con 55 framework decisionali**, combina **routing IA locale Zero-Egress** con un **audit log HMAC-SHA256 (GoBD / ISO 27001)** e collega direttamente **Obsidian Second Brain**, **n8n**, **Telegram** e un modulo nativo **CRM ed ERP *(Alpha)***.
+Archon OS sostituisce i chatbot isolati con un **Sistema Operativo Agentico** persistente e self-hosted. Coordina **71 profili agente in 8 aree principali**, dibatte in modo strutturato nell'**AI Boardroom con 55 framework decisionali**, combina **routing IA locale Zero-Egress** con un **audit log HMAC-SHA256 (GoBD / ISO 27001)** e collega direttamente **Obsidian Second Brain**, **n8n**, **Telegram** e un modulo nativo **CRM ed ERP *(Alpha)***.
 
 > **Stato della localizzazione:** l'interfaccia principale supporta 11 lingue (`en`, `de`, `es`, `fr`, `pt`, `it`, `nl`, `ru`, `ja`, `ko`, `zh`). I file `SOUL.md` e le metodologie Boardroom sono attualmente in tedesco; la localizzazione è in corso ([Roadmap M31](../system/ROADMAP_2026.md)).
 

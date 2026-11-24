@@ -810,6 +810,12 @@ class TenantContextManager:
         if conn is not None:
             target = conn
             target.execute(DOCUMENT_NUMBER_SEQUENCES_DDL)
+            # D03/MED: der Docstring versprach BEGIN IMMEDIATE, der Conn-Pfad
+            # lief aber implizit als DEFERRED-Transaktion (SQLITE_BUSY_SNAPSHOT
+            # bei Nebenläufigkeit im WAL). Nur wenn der Aufrufer noch keine
+            # Transaktion geöffnet hat, hier die Schreibsperre nehmen.
+            if not target.in_transaction:
+                target.execute("BEGIN IMMEDIATE")
         else:
             path = self._ensure_number_sequences_table(tid)
             own_conn = sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)

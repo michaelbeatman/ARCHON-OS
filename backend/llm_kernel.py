@@ -270,7 +270,9 @@ async def dispatch_llm(
             if system_prompt:
                 msgs.append({"role": "system", "content": system_prompt})
             msgs.append({"role": "user", "content": prompt})
-        all_keys = api_provider.collect_keys() or {}
+        # D08/S-8.1: der Profil-.env-Scan liest ~70 Dateien synchron — nicht
+        # im Event-Loop blockieren (der TTL-Cache begrenzt nur die Frequenz).
+        all_keys = (await asyncio.to_thread(api_provider.collect_keys)) or {}
         eff_provider = (provider or "").strip().lower() or (
             "openrouter" if all_keys.get("OPENROUTER_API_KEY") else "omniroute"
         )

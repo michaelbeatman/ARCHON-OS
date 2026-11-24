@@ -453,10 +453,19 @@ class DunningEngine:
                     f"Entwurfstext:\n{body_text}"
                 )
                 with sqlite3.connect(self.kanban_db, timeout=5.0, factory=_ArchonClosingConn) as conn:
+                    # D03/MED: INSERT OR REPLACE löschte einen bereits
+                    # existierenden Mahn-Task inkl. status/result/completed_at
+                    # und setzte ihn still auf 'ready' zurück. Der UPSERT
+                    # aktualisiert nur den Entwurf und lässt den Zustand unberührt.
                     conn.execute("""
-                        INSERT OR REPLACE INTO tasks (
+                        INSERT INTO tasks (
                             id, title, body, assignee, status, priority, created_by, created_at
                         ) VALUES (?, ?, ?, 'finance_lead', 'ready', 1, 'dunning_engine', ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                            title = excluded.title,
+                            body = excluded.body,
+                            assignee = excluded.assignee,
+                            priority = excluded.priority
                     """, (task_id, t_title, t_body, datetime.datetime.now().isoformat()))
                     conn.commit()
             except Exception as e:

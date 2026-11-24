@@ -18,9 +18,12 @@ import sqlite3
 import datetime
 import hashlib
 import secrets
+import logging
 import contextlib
 import contextvars
 from typing import Dict, Any, List, Optional, Iterator
+
+logger = logging.getLogger("archon.handoff_desk")
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -413,6 +416,28 @@ class HandoffDesk:
                 "handoff_id": handoff_id,
                 "message": f"Übergabe von '{receiving_agent}' quittiert. Bearbeitung freigegeben."
             }
+
+    def latest_handoff_id_for_task(self, task_id: Optional[str]) -> str:
+        """D11/MED: reply_to-Kette aus SQLite lesen (SSOT), nicht aus einem RAM-Dict.
+
+        Der Key ist immer dieselbe Aufgabe-/Projekt-ID, unter der auch
+        ``create_handoff`` den Envelope ablegt. Ein Prozess-Reload verliert
+        damit keine Kante mehr.
+        """
+        key = str(task_id or "").strip()
+        if not key:
+            return ""
+        try:
+            with self._get_conn() as conn:
+                row = conn.execute(
+                    "SELECT id FROM agent_handoffs WHERE task_id = ? "
+                    "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+                    (key,),
+                ).fetchone()
+                return str(row[0]) if row else ""
+        except Exception as exc:
+            logger.warning("[HandoffDesk] reply_to-Lookup fehlgeschlagen: %s", exc)
+            return ""
 
     def get_handoff(self, handoff_id: str) -> Optional[Dict[str, Any]]:
         with self._get_conn() as conn:

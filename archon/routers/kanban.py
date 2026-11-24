@@ -226,6 +226,21 @@ async def api_kanban_task_hitl(request: Request, task_id: str):
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
 
+    # D14/MED: Der Verifier hat einen Env-Fail-Open
+    # (ARCHON_KANBAN_HITL_ALLOW_UNVERIFIED_OVERRIDE). Im Router wird die
+    # Reverifikationspflicht hart durchgesetzt: ohne erfolgreichen Proof gibt
+    # es keinen Uebergang nach 'todo' — unabhaengig von der Env-Variable.
+    if (
+        action in ("override", "override_budget")
+        and decision.get("next_status") == "todo"
+        and not decision.get("verified")
+    ):
+        decision["next_status"] = "blocked"
+        decision["reason"] = (
+            "Override ohne erfolgreiche Reverifikation gesperrt "
+            "(Vier-Augen-Prinzip; Env-Fail-Open ist wirkungslos)."
+        )
+
     # Signiertes Audit-Event mit Resolution, Actor und alter/neuer Budgetwert.
     try:
         from backend.audit_log import chained_audit_log

@@ -114,8 +114,12 @@ def gdpr_erase_subject_data(
             from backend.db_paths import APP_DATA_DIR
             if db_name == "agentic_memory.db" and is_consolidation_active(APP_DATA_DIR):
                 resolved_name = "memory.db"
-        except Exception:
-            pass
+        except Exception as exc:
+            # D07/MED: kein stiller Fallback auf 'agentic_memory.db' — das ist
+            # exakt die Datei, die der autoritative Resolver ablehnt. Art. 17
+            # würde nur vorgetäuscht. Fail-closed: DB überspringen.
+            logger.error("[TenantDB] Konsolidierungscheck für %s fehlgeschlagen: %s", db_name, exc)
+            continue
         try:
             from backend.tenant_context import tenant_context
             db_path = tenant_context.resolve_active_db(resolved_name, tenant_id)

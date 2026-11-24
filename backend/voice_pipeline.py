@@ -109,6 +109,12 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
                     if txt:
                         logger.info(f"[Voice] Transkription via Groq Whisper erfolgreich: {len(txt)} Zeichen")
                         return txt
+        except ZeroEgressBlockedError:
+            # D04/MED: der Block-Proof wurde bereits im Gate signiert
+            # (chained_audit_log.record_llm_dispatch). Ein blockierter Dispatch
+            # darf NIEMALS zum nächsten Cloud-Provider fallen.
+            logger.error("[Voice] Groq-Dispatch durch Egress-Gate blockiert — kein Fallback.")
+            raise
         except Exception as e:
             logger.warning(f"[Voice] Groq Whisper fehlgeschlagen: {e}")
 
@@ -131,6 +137,9 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
                     if txt:
                         logger.info(f"[Voice] Transkription via OpenAI Whisper erfolgreich: {len(txt)} Zeichen")
                         return txt
+        except ZeroEgressBlockedError:
+            logger.error("[Voice] OpenAI-Dispatch durch Egress-Gate blockiert — kein Fallback.")
+            raise
         except Exception as e:
             logger.warning(f"[Voice] OpenAI Whisper fehlgeschlagen: {e}")
 
@@ -166,6 +175,9 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
                     txt = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
                     logger.info(f"[Voice] Transkription via Gemini Flash erfolgreich: {len(txt)} Zeichen")
                     return txt
+        except ZeroEgressBlockedError:
+            logger.error("[Voice] Gemini-Dispatch durch Egress-Gate blockiert — kein Fallback.")
+            raise
         except Exception as e:
             logger.warning(f"[Voice] Gemini Transkription fehlgeschlagen: {e}")
 
@@ -192,19 +204,26 @@ async def synthesize_speech(text: str, output_path: Optional[str] = None, voice:
         fd, output_path = tempfile.mkstemp(prefix="archon_voice_", suffix=".mp3")
         os.close(fd)
 
-    # F-022: auch die Sprachsynthese ist ein externer Dispatch — bei aktivem
-    # Zero-Egress darf sie nicht still nach draussen gehen.
-    from backend.privacy_router import get_privacy_config
-    if bool(get_privacy_config().get("zero_egress_strict")):
-        from backend.llm_egress_guard import ZeroEgressBlockedError
-        raise ZeroEgressBlockedError(
-            "Cloud-TTS bei aktivem Zero-Egress blockiert.",
-            error_code="VOICE_TTS_EGRESS_BLOCKED",
-        )
+    # D04/MED: auch die Sprachsynthese ist ein externer Dispatch und läuft
+    # deshalb über dasselbe Egress+DLP-Gate wie die Transkription. Vorher
+    # wurde nur ein Boolean geprüft und Freitext unmaskiert an edge-tts
+    # geschickt. Ist der Endpunkt nicht allowlistet, blockiert das Gate
+    # fail-closed (kein stiller Cloud-Dispatch).
+    tts_endpoint = os.environ.get(
+        "ARCHON_VOICE_TTS_ENDPOINT",
+        "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1",
+    )
+    safe = _gate_cloud_voice_dispatch(
+        tts_endpoint, provider="edge-tts", model=voice,
+        metadata={"prompt": clean_text}, data_category="voice_tts",
+    )
+    safe_text = str(safe.get("prompt") or "") if isinstance(safe, dict) else ""
+    if not safe_text:
+        raise RuntimeError("TTS-Payload wurde vom DLP-Gate verworfen — kein Dispatch.")
 
     try:
         import edge_tts
-        communicate = edge_tts.Communicate(clean_text, voice=voice)
+        communicate = edge_tts.Communicate(safe_text, voice=voice)
         await communicate.save(output_path)
         logger.info(f"[Voice] Sprachsynthese erfolgreich gespeichert: {output_path} ({os.path.getsize(output_path)} Bytes)")
         return output_path

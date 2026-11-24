@@ -283,7 +283,7 @@ class ApprovalPolicyEngine:
                 rows = cur.execute("SELECT * FROM approval_policies ORDER BY domain ASC, id ASC").fetchall()
             return [dict(r) for r in rows]
 
-    def update_policy(self, policy_key: str, new_value: str, user_id: str = "admin") -> Dict[str, Any]:
+    def update_policy(self, policy_key: str, new_value: str, user_id: str) -> Dict[str, Any]:
         with self._get_conn() as conn:
             cur = conn.cursor()
             row = cur.execute("SELECT * FROM approval_policies WHERE policy_key = ?", (policy_key,)).fetchone()
@@ -322,11 +322,13 @@ class ApprovalPolicyEngine:
                                 "kleiner als finance_four_eyes_min sein."
                             )
 
-            # d14/HIGH: finance_four_eyes_min ist die Hoheits-Schwelle selbst.
-            # Ein einzelner Admin darf sie nicht direkt aendern — er erzeugt
-            # einen Vorschlag, der von einer zweiten, unabhaengigen Person
-            # freigegeben werden muss (4-Augen).
-            if policy_key == "finance_four_eyes_min":
+            # d14/MED: finance_four_eyes_min ist die Hoheits-Schwelle selbst,
+            # finance_auto_approval_max die korrespondierende Freigabeschwelle.
+            # Ein einzelner Admin darf KEINE von beiden direkt aendern — er
+            # erzeugt einen Vorschlag, der von einer zweiten, unabhaengigen
+            # Person freigegeben werden muss (4-Augen). Vorher konnte ein
+            # Admin die Auto-Freigabe von 50 auf knapp 500 EUR anheben.
+            if policy_key in ("finance_four_eyes_min", "finance_auto_approval_max"):
                 import uuid
                 proposal_id = f"policy-change-{uuid.uuid4().hex}"
                 cur.execute("""
@@ -347,7 +349,7 @@ class ApprovalPolicyEngine:
                     "status": "pending_four_eyes",
                     "proposal_id": proposal_id,
                     "message": (
-                        "Aenderung der 4-Augen-Schwelle erfordert eine zweite, "
+                        f"Aenderung der Finanz-Schwelle '{policy_key}' erfordert eine zweite, "
                         "unabhaengige Freigabe (approve_policy_change_proposal)."
                     ),
                     "audit_hash": audit_hash,
@@ -372,7 +374,7 @@ class ApprovalPolicyEngine:
             }
 
     def approve_policy_change_proposal(
-        self, proposal_id: str, approver_id: str = "admin"
+        self, proposal_id: str, approver_id: str
     ) -> Dict[str, Any]:
         """Vierte-Augen-Freigabe fuer eine Policy-Aenderung (d14/HIGH).
 
@@ -407,7 +409,7 @@ class ApprovalPolicyEngine:
                 )
 
             key = p["policy_key"]
-            if key not in ("finance_four_eyes_min",):
+            if key not in ("finance_four_eyes_min", "finance_auto_approval_max"):
                 raise ValueError(f"Vorschlag fuer {key} ist nicht 4-Augen-pflichtig.")
             try:
                 numeric = float(str(p["proposed_value"]).strip())
@@ -415,6 +417,20 @@ class ApprovalPolicyEngine:
                 raise ValueError("Vorgeschlagener Wert ist nicht numerisch.")
             if not (0.0 <= numeric <= 1_000_000.0):
                 raise ValueError("Vorgeschlagener Wert liegt ausserhalb der erlaubten Spanne.")
+            if key == "finance_auto_approval_max":
+                four_eyes = cur.execute(
+                    "SELECT policy_value FROM approval_policies WHERE policy_key = 'finance_four_eyes_min'"
+                ).fetchone()
+                if four_eyes:
+                    try:
+                        minimum = float(str(four_eyes["policy_value"]).strip())
+                    except (TypeError, ValueError):
+                        minimum = 500.0
+                    if numeric >= minimum:
+                        raise ValueError(
+                            "Invariante verletzt: finance_auto_approval_max muss "
+                            "kleiner als finance_four_eyes_min sein."
+                        )
 
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
             cur.execute("""

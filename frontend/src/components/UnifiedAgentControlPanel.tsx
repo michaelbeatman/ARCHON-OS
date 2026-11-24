@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { tracedFetch } from "@/lib/archon-api";
 import {
   Bot,
   MessageSquare,
@@ -92,7 +93,7 @@ const API_BASE = "/api/archon";
   const loadSession = async (profileId: string, signal?: AbortSignal) => {
     setSessionLoaded(false);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/quickchat/session/${profileId}`, { signal });
+      const res = await tracedFetch(`${API_BASE}/api/v1/quickchat/session/${profileId}`, { signal });
       if (res.ok) {
         const data = await res.json();
         const history = (data.messages || []).map((m: any) => ({
@@ -138,7 +139,7 @@ const API_BASE = "/api/archon";
     const controller = new AbortController();
     sendAbortRef.current = controller;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/quickchat/send`, {
+      const res = await tracedFetch(`${API_BASE}/api/v1/quickchat/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profile_id: selectedAgentId, message: userText }),

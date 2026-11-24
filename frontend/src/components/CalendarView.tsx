@@ -7,6 +7,7 @@ import {
   Trash2, Search, Image as ImageIcon, AlignLeft
 } from 'lucide-react';
 import { pb } from '@/lib/pocketbase';
+import { tracedFetch } from '@/lib/archon-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -986,7 +987,7 @@ export function CalendarView({ themeMode = 'light' }: CalendarViewProps) {
     if (icsUrl.trim()) {
       try {
         const params = new URLSearchParams({ url: icsUrl.trim(), lookAhead, lookBack });
-        const res = await fetch(`/api/calendar/ics?${params}`, { cache: 'no-store' });
+        const res = await tracedFetch(`/api/calendar/ics?${params}`, { cache: 'no-store' });
         const data = await res.json();
         if (res.ok && Array.isArray(data.events)) {
           collected.push(...data.events);

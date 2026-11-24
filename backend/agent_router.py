@@ -1011,8 +1011,13 @@ class AgentRouter:
 
         last_err = None
         client = self._get_shared_client()
+        # D07/S-7.4: 90-s-Deadline für die GESAMTE Fallback-Kette, nicht 90 s
+        # pro Hop. Sonst konnten N Kandidaten × 90 s + Backoff blockieren.
+        chain_deadline = time.monotonic() + 90.0
         if True:
             for idx, m_try in enumerate(candidate_models):
+                if time.monotonic() >= chain_deadline:
+                    raise TimeoutError("FALLBACK_CHAIN_DEADLINE: 90 s der Provider-Kette überschritten")
                 try:
                     from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
                     hop_gate = evaluate_and_gate_llm_dispatch(
@@ -1060,8 +1065,14 @@ class AgentRouter:
                             active_trace_id = current_trace_id()
                     except Exception as tr_exc:
                         logger.warning("[AgentRouter] Trace-Injektion am Provider-Hop fehlgeschlagen: %s", tr_exc)
+                    _remaining = chain_deadline - time.monotonic()
+                    if _remaining <= 0:
+                        raise TimeoutError("FALLBACK_CHAIN_DEADLINE: 90 s der Provider-Kette überschritten")
                     try:
-                        resp = await client.post(target_url, headers=request_headers, json=safe_payload)
+                        resp = await client.post(
+                            target_url, headers=request_headers, json=safe_payload,
+                            timeout=min(90.0, max(1.0, _remaining)),
+                        )
                     except Exception:
                         provider_breaker.record_failure(provider)
                         await _router_provider_backoff()
@@ -1089,7 +1100,17 @@ class AgentRouter:
                     )
                     if resp.status_code in (429, 500, 502, 503, 504, 404) and idx < len(candidate_models) - 1:
                         logger.warning(f"[AgentRouter] Model '{m_try}' returned {resp.status_code}, falling back to '{candidate_models[idx+1]}'...")
-                        await _router_provider_backoff(resp.status_code, dict(resp.headers))
+                        # D07: Backoff darf die Ketten-Deadline nicht sprengen.
+                        _backoff_budget = chain_deadline - time.monotonic()
+                        if _backoff_budget <= 0:
+                            raise TimeoutError("FALLBACK_CHAIN_DEADLINE: 90 s der Provider-Kette überschritten")
+                        try:
+                            await asyncio.wait_for(
+                                _router_provider_backoff(resp.status_code, dict(resp.headers)),
+                                timeout=min(_backoff_budget, 10.0),
+                            )
+                        except asyncio.TimeoutError:
+                            raise TimeoutError("FALLBACK_CHAIN_DEADLINE: Backoff nicht innerhalb der Kette möglich")
                         continue
                     resp.raise_for_status()
                     data = resp.json()
@@ -1126,6 +1147,9 @@ class AgentRouter:
                         est_cost_unverified = False
                     except Exception as cost_exc:
                         logger.error("[AgentRouter] Kostenberechnung fehlgeschlagen: %s", cost_exc)
+                        # D12: nie 0.0 als realen Preis signieren — konservative
+                        # Fallback-Schätzung und Unverifiziert-Marker in der Receipt.
+                        est_cost = round((p_toks * 0.00000015) + (c_toks * 0.00000030), 6)
                     try:
                         from backend.execution_receipt_ledger import execution_receipt_ledger
                         execution_receipt_ledger.issue_receipt(
@@ -1135,7 +1159,9 @@ class AgentRouter:
                             prompt_tokens=p_toks,
                             completion_tokens=c_toks,
                             cost_usd=est_cost,
-                            tools_invoked=["agent_router.chat_completion"],
+                            tools_invoked=["agent_router.chat_completion"] + (
+                                ["cost_unverified"] if est_cost_unverified else []
+                            ),
                         )
                     except Exception as log_exc:
                         logger.warning(f"[AgentRouter] Audit-Logging (chat_completion) fehlgeschlagen: {log_exc}")
@@ -1418,16 +1444,19 @@ class AgentRouter:
                             _p_toks = max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4)
                             _c_toks = max(1, total_chars // 4)
                             # D12: auch im Stream-Pfad echte Kosten schätzen.
+                            _stream_cost_unverified = True
                             _stream_cost = 0.0
                             try:
                                 from backend.llm_kernel import estimate_model_cost_usd
                                 _stream_cost = float(
                                     estimate_model_cost_usd(m_try, _p_toks, _c_toks, provider=provider)
                                 )
+                                _stream_cost_unverified = False
                             except Exception as _cost_exc:
                                 logger.error(
                                     "[AgentRouter] Stream-Kostenberechnung fehlgeschlagen: %s", _cost_exc
                                 )
+                                _stream_cost = round((_p_toks * 0.00000015) + (_c_toks * 0.00000030), 6)
                             try:
                                 from backend.execution_receipt_ledger import execution_receipt_ledger
                                 execution_receipt_ledger.issue_receipt(
@@ -1437,7 +1466,9 @@ class AgentRouter:
                                     prompt_tokens=_p_toks,
                                     completion_tokens=_c_toks,
                                     cost_usd=_stream_cost,
-                                    tools_invoked=["agent_router.stream_chat_completion"],
+                                    tools_invoked=["agent_router.stream_chat_completion"] + (
+                                        ["cost_unverified"] if _stream_cost_unverified else []
+                                    ),
                                 )
                             except Exception as log_exc:
                                 logger.error(f"[AgentRouter] Audit-Logging (stream) fehlgeschlagen: {log_exc}")
@@ -1467,10 +1498,19 @@ class AgentRouter:
         return
 
     def suspend_task(self, task_id: str) -> bool:
-        if task_id in self.active_tasks and self.active_tasks[task_id]["status"] == "in_progress":
-            self.active_tasks[task_id]["status"] = "suspended"
-            return True
-        return False
+        """D01/S-1.6: kein wirkungsloser Stub mehr.
+
+        Ein prozesslokales Dict-Flag pausiert keine Coroutine und persistiert
+        nichts. Die echte Suspension läuft über
+        ``backend.durable_execution_kernel.suspend()`` (CAS + DB-Status
+        ``suspended`` + Worker-Stopp), verdrahtet im ``workflow_dag_runner``.
+        Diese Methode liefert bewusst keinen Fake-Erfolg mehr.
+        """
+        raise NotImplementedError(
+            "suspend_task() ist kein echter Suspend-Pfad. "
+            " Nutze backend.durable_execution_kernel.suspend() "
+            "(CAS-DB-Status 'suspended' + Worker-Cancel)."
+        )
 
 # Global Singleton Router
 router_instance = AgentRouter()
@@ -1570,13 +1610,22 @@ async def chat_with_verification_escalation(
         api_keys=api_keys,
         **kwargs,
     )
-    passed = bool(verifier_fn(first_out)) if callable(verifier_fn) else bool((first_out or "").strip())
-    if passed or first_pick["model"] == frontier_model:
+    # D07/S-7.4: ohne verifier_fn darf nicht "bestanden" behauptet werden;
+    # ein leerer Text war früher ebenfalls ein Pass.
+    has_verifier = callable(verifier_fn)
+    passed = bool(verifier_fn(first_out)) if has_verifier else None
+    _verification = "passed" if passed is True else ("failed" if passed is False else "unverified")
+    if passed is True or first_pick["model"] == frontier_model:
         return {
             "content": first_out,
             "model_used": first_pick["model"],
             "escalated": False,
             "route_reason": first_pick["reason"],
+            "verification": _verification,
+            "status": (
+                "success" if passed is True
+                else ("verification_failed" if passed is False else "unverified")
+            ),
         }
 
     esc_pick = select_quota_and_escalation_route(
@@ -1594,9 +1643,18 @@ async def chat_with_verification_escalation(
         api_keys=api_keys,
         **kwargs,
     )
+    # D07/S-7.4: auch die eskalierte Antwort muss reverifiziert werden. Ein
+    # Fehlschlag ist kein Erfolg und braucht HITL-Kennzeichnung.
+    esc_passed = bool(verifier_fn(esc_out)) if has_verifier else False
     return {
         "content": esc_out,
         "model_used": esc_pick["model"],
         "escalated": True,
         "route_reason": esc_pick["reason"],
+        "verification": "passed" if esc_passed else _verification,
+        "status": (
+            "success" if esc_passed
+            else ("verification_failed" if has_verifier else "unverified")
+        ),
+        "needs_human": not esc_passed,
     }

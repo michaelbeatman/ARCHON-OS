@@ -59,10 +59,28 @@ class DebateStatement(BaseModel):
 
     agent_id: str = Field(..., min_length=1)
     content: str
+    # D11/MED: die Produszenten liefern Event-Metadaten mit. Diese Felder sind
+    # bewusst deklariert (statt sie still zu projizieren), damit `extra="forbid"`
+    # echte Schattenfelder ablehnt, ohne die Boardroom-Events zu brechen.
+    type: Optional[str] = None
+    round: Optional[int] = None
+    agent_name: Optional[str] = None
+    role: Optional[str] = None
+    model: Optional[str] = None
+    # D14/MED: Tier aus der verifizierten Rollen-SSOT des Slots mitfuehren.
+    tier: Optional[str] = None
     trace_id: Optional[str] = None
     session_id: Optional[str] = None
     correlation_id: Optional[str] = None
+    # Fan-in-spezifische Metadaten (orchestration.py) sind deklarierte Felder,
+    # keine still projizierten Schattenfelder.
+    task_id: Optional[str] = None
+    artifact_path: Optional[str] = None
+    truncated: bool = False
+    original_length: int = 0
     policy_violation: bool = False
+    # D14/MED: strukturiertes Guardrail-Ergebnis (nicht nur Freitext-Marker).
+    guardrail_violation: bool = False
     severity: Optional[str] = None
 
 
@@ -90,10 +108,19 @@ _DEFAULT_TIE_BREAK_RULE = "executive>lead>specialist>no_consensus"
 _TIER_WEIGHTS: Dict[str, int] = {"executive": 3, "lead": 2, "specialist": 1}
 
 
-def _infer_tier(agent_id: str, authority: Optional[Dict[str, str]] = None) -> str:
-    """Tier aus expliziter authority-Map oder der Rollen-SSOT ableiten."""
+def _infer_tier(
+    agent_id: str,
+    authority: Optional[Dict[str, str]] = None,
+    declared_tier: Optional[str] = None,
+) -> str:
+    """Tier aus deklariertem Event-Feld, authority-Map oder Rollen-SSOT ableiten."""
     tier = ""
-    if authority:
+    # D14/MED: das im agent_response-Event mitgefuehrte Tier hat Vorrang;
+    # es stammt aus der verifizierten Rollen-SSOT des Slots, nicht aus
+    # frei waehlbaren Profile-IDs.
+    if declared_tier and str(declared_tier).strip().lower() in _TIER_WEIGHTS:
+        tier = str(declared_tier).strip().lower()
+    if not tier and authority:
         tier = str(authority.get(agent_id) or authority.get(str(agent_id).lower()) or "")
     if tier not in _TIER_WEIGHTS:
         try:
@@ -113,14 +140,14 @@ def _infer_tier(agent_id: str, authority: Optional[Dict[str, str]] = None) -> st
 def validate_debate_statements(
     statements: Optional[Sequence[Union[DebateStatement, Dict[str, Any]]]],
 ) -> List[DebateStatement]:
-    """Projiziert Boardroom-Events auf die erlaubten Felder und validiert sie.
+    """Validiert Boardroom-Events strikt gegen ``DebateStatement``.
 
-    Die Event-Dicts der Debatte tragen zusaetzliche Felder (``type``, ``round``,
-    ...). Diese werden hier bewusst entfernt, bevor ``extra="forbid"`` greift:
-    das Modell bleibt strikt, der Adapter nimmt nur deklarierte Felder an.
+    D11/MED (Re-Audit): frueher wurden unbekannte Keys vor ``model_validate()``
+    still entfernt — ``extra="forbid"`` war damit fuer Dict-Eingaben wirkungslos.
+    Jetzt wird das Dict direkt validiert: Event-Metadaten sind deklarierte Felder,
+    echte Schattenfelder fuehren zur ValidationError und damit zum harten Veto.
     """
     validated: List[DebateStatement] = []
-    allowed = set(DebateStatement.model_fields)
     for statement in statements or []:
         if isinstance(statement, DebateStatement):
             validated.append(statement)
@@ -128,9 +155,8 @@ def validate_debate_statements(
         if not isinstance(statement, dict):
             _archon_exc_logger.warning("[consensus_gate] Statement vom Typ %s ignoriert", type(statement).__name__)
             continue
-        payload = {k: v for k, v in statement.items() if k in allowed}
         try:
-            validated.append(DebateStatement.model_validate(payload))
+            validated.append(DebateStatement.model_validate(statement))
         except Exception as exc:
             # Fail-closed: ein ungueltiger Beitrag darf nicht als Zustimmung gelten.
             _archon_exc_logger.warning("[consensus_gate] Statement ungueltig, als Veto behandelt: %s", exc)
@@ -174,12 +200,18 @@ def resolve_debate_consensus(
     for statement in parsed:
         text = str(statement.content or "").upper()
         agent_id = str(statement.agent_id)
-        tier = _infer_tier(agent_id, authority)
+        tier = _infer_tier(agent_id, authority, statement.tier)
         weight = _TIER_WEIGHTS[tier]
 
         # D14: hartes Veto — vor jeder Marker-/Mehrheitszaehlung.
+        # Der strukturierte Kanal (policy_violation/guardrail_violation aus dem
+        # echten Guardrail-Result) hat Vorrang; Marker bleiben nur Rueckfall.
         veto_marker = next((m for m in _POLICY_VETO_MARKERS if m in text), None)
-        if statement.policy_violation or veto_marker is not None:
+        if (
+            statement.policy_violation
+            or statement.guardrail_violation
+            or veto_marker is not None
+        ):
             return {
                 "consensus_reached": False,
                 "yes_votes": yes_votes,
@@ -354,7 +386,14 @@ Regeln:
         approved = bool(parsed.get("approved", False))
         score = int(parsed.get("score", 0))
         verdict = parsed.get("verdict", "REJECTED_REVISION_REQUIRED")
-        critique = parsed.get("critique", "Keine gravierenden Mängel gefunden.")
+        # D12/MED: ein fehlendes Kritik-Feld darf nicht als beruhigende
+        # "keine Maengel"-Behauptung erfunden und als geprueft persistiert werden.
+        _critique_raw = parsed.get("critique")
+        critique = str(_critique_raw).strip() if _critique_raw is not None else ""
+        evaluation_failed = not critique
+        if evaluation_failed:
+            critique = "Nicht bewertet (Feld fehlt)"
+            approved = False
 
         _record_decision(task_id, task_title, "dual_gate", approved, verdict, score, [parsed], critique)
 
@@ -364,6 +403,7 @@ Regeln:
             "score": score,
             "verdict": verdict,
             "critique": critique,
+            "evaluation_failed": evaluation_failed,
             "risks": parsed.get("risks", [])
         }
     except Exception as e:
@@ -375,6 +415,7 @@ Regeln:
             "score": 0,
             "verdict": "REVIEW_FAILED",
             "critique": f"Automatisierte Revisor-Prüfung konnte nicht abgeschlossen werden: {e}",
+            "evaluation_failed": True,
             "risks": ["Manueller Check zwingend erforderlich"]
         }
 

@@ -621,7 +621,7 @@ def _prepare_chat_stream_context(
 
 
 @router.post("/api/chat/stream")
-async def api_chat_stream(req: ChatStreamRequest):
+async def api_chat_stream(req: ChatStreamRequest, request: Request = None):
     """
     Natives Chat-Streaming via Server-Sent Events (SSE).
     Unterstützt Direkt-Dialog und Missions-Modus mit Paperclip-Kopplung.
@@ -765,11 +765,21 @@ async def api_chat_stream(req: ChatStreamRequest):
         try:
             _create_dec = _get_create_decision()
             if _create_dec:
+                # D04/D14 (Vier-Augen): der Ersteller MUSS gesetzt sein, sonst
+                # verweigert /api/decisions/decide die Freigabe fail-closed.
+                # Identitaet ausschliesslich aus der verifizierten Session —
+                # nie aus req/Body. Ohne Request bleibt ein dokumentierter
+                # Service-Principal, damit Hintergrund-Trigger freigebbar sind.
+                from archon.routers._rbac import get_session_actor
+                _mission_creator = (
+                    get_session_actor(request, fallback="chat-service")
+                    if request is not None else "chat-service"
+                )
                 _mdec = await asyncio.to_thread(
                     _create_dec, "mission_freigabe",
                     f"Mission-Freigabe: {str(title)[:80]}",
                     f"Agent: {agent_name} ({agent_id})\nGeschätzte Kosten: ~{est_cost:.2f} €",
-                    task_id, None, "", None)
+                    task_id, None, "", None, None, _mission_creator)
                 if not _mdec:
                     logger.warning(f"[Mission] Entscheidungs-Task für {task_id} nicht angelegt.")
         except Exception as tg_err:

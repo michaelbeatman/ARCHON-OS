@@ -21,7 +21,7 @@ import subprocess
 import time
 import secrets
 import threading
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Literal
 from fastapi import APIRouter, Request, HTTPException, Query, Body, UploadFile, File, Depends
 
 from archon.routers._rbac import require_admin_or_503, forbid_viewer_writes
@@ -2184,17 +2184,25 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
     }
 
 
+class ResetZombieTasksRequest(BaseModel):
+    """D06/MED: typisierter Body statt rohem ``dict`` in einer Admin-Schreibroute."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    assignee: str = ""
+    task_id: str = ""
+    target_status: Literal["todo", "blocked", "review", "done"] = "todo"
+
+
 @router.post("/kanban/reset-zombies")
-def reset_zombie_kanban_tasks(request: Request, payload: dict = Body(default={})):
+def reset_zombie_kanban_tasks(request: Request, payload: ResetZombieTasksRequest = Body(default_factory=ResetZombieTasksRequest)):
     """Setzt hängengebliebene 'in_progress' Tasks (optional gefiltert nach assignee oder Alter) auf 'todo' zurück."""
     require_admin_or_503(request)
     conn = _get_kanban_connection(maintenance=True)
     try:
-        assignee = (payload.get("assignee") or "").strip()
-        task_id = (payload.get("task_id") or "").strip()
-        target_status = (payload.get("target_status") or "todo").strip().lower()
-        if target_status not in ("todo", "blocked", "review", "done"):
-            target_status = "todo"
+        assignee = (payload.assignee or "").strip()
+        task_id = (payload.task_id or "").strip()
+        target_status = payload.target_status
         now_iso = datetime.datetime.now().isoformat()
         cursor = conn.cursor()
 

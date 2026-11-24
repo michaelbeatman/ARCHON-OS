@@ -8,6 +8,7 @@ import {
   Search, ArrowRight, Info
 } from 'lucide-react';
 import { pb, KontaktRecord, getProfilbildUrl } from '@/lib/pocketbase';
+import { tracedFetch } from '@/lib/archon-api';
 import { isContactStagnated } from './PipelineAnalytics';
 import { RollenListePanel } from './RollenListePanel';
 
@@ -316,7 +317,7 @@ const hasMsg = (k: KontaktRecord) => {
       const prompt =
         'Du bist ein diskreter, hochprofessioneller B2B-Assistent. Schreibe ein kurzes, persönliches und unaufdringliches Follow-up (max. 3-4 Sätze) auf Deutsch basierend auf dem folgenden bisherigen Verlauf:\n\n' +
         history;
-      const res = await fetch(`${OMNI_BASE}/chat/completions`, {
+      const res = await tracedFetch(`${OMNI_BASE}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -330,6 +331,10 @@ const hasMsg = (k: KontaktRecord) => {
         }),
       });
       const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.status === 'error') {
+        setAiDraft(`⚠ OmniRoute-Fehler: ${data?.error || data?.message || `HTTP ${res.status}`}`);
+        return;
+      }
       const text: string = data?.choices?.[0]?.message?.content?.trim?.();
       if (text) { setAiDraft(text); return; }
       setAiDraft('⚠ Keine KI-Antwort erhalten. (OmniRoute erreichbar, aber leere Antwort.)');

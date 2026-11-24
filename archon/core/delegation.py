@@ -1115,9 +1115,11 @@ async def _watch_delegated_task(
                     str(prof_id), _current_supervisor, reason=str(status)
                 )
                 _new_supervisor = str(_rollover.get("new_supervisor") or _current_supervisor)
+                _chain_val = _rollover.get("chain")
+                _chain_str = ", ".join(str(x) for x in _chain_val) if isinstance(_chain_val, (list, tuple)) else _new_supervisor
                 supervisor_hint = (
                     f"\n\n**Supervisor-Rollover:** @{_new_supervisor} "
-                    f"(Kette: {', '.join(str(x) for x in (_rollover.get('chain') or [])) if isinstance(_rollover.get('chain'), (list, tuple)) else _new_supervisor})"
+                    f"(Kette: {_chain_str})"
                 )
                 logger.info(
                     f"[Delegation] Rollover fuer {prof_id}: {_current_supervisor} -> {_new_supervisor} ({status})"

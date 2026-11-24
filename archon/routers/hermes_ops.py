@@ -20,12 +20,10 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["
 
 
 def _require_admin(request: Request):
-    import main as app_main
-
-    if hasattr(app_main, "require_admin"):
-        return app_main.require_admin(request)
+    # Zentraler Rollenzaun: eine Pruefung, ein Injectionspunkt, fail-closed.
     from archon.routers._rbac import require_admin_or_503
-    return require_admin_or_503(request)
+
+    require_admin_or_503(request)
 
 
 def _get_hermes_config_path() -> str:

@@ -42,19 +42,17 @@ def _as_payload(value) -> Dict[str, Any]:
 
 
 def _require_admin(request: Request):
-    import main as app_main
-    if hasattr(app_main, "require_admin"):
-        return app_main.require_admin(request)
+    # Zentraler Rollenzaun: eine Pruefung, ein Injectionspunkt, fail-closed.
     from archon.routers._rbac import require_admin_or_503
-    return require_admin_or_503(request)
+
+    require_admin_or_503(request)
 
 
 def _require_admin_or_503(request: Request):
-    import main as app_main
-    if hasattr(app_main, "require_admin_or_503"):
-        return app_main.require_admin_or_503(request)
+    # Zentraler Rollenzaun: eine Pruefung, ein Injectionspunkt, fail-closed.
     from archon.routers._rbac import require_admin_or_503
-    return require_admin_or_503(request)
+
+    require_admin_or_503(request)
 
 
 # --- SNAPSHOTS ---

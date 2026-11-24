@@ -105,20 +105,11 @@ def _as_payload(value) -> Dict[str, Any]:
 
 
 def _require_admin(request: Request) -> None:
-    """Rollenzaun (RBAC-Pilot) — nutzt die aus main.py injizierte Pruefung.
+    # Zentraler Rollenzaun: eine Pruefung, ein Injectionspunkt, fail-closed.
+    from archon.routers._rbac import require_admin_or_503
 
-    Kein eigener Import von `main` (waere ein Zyklus: main importiert diesen Router).
-    Fehlt die Injektion, wird bewusst **laut** abgebrochen (503) statt still
-    durchzulassen: ein Rollenzaun, der bei falscher Verdrahtung oeffnet, ist keiner.
-    """
-    checker = _DEPS.get("require_admin")
-    if checker is None:
-        logger.error("[Router] system: require_admin nicht injiziert — Route sperrt.")
-        raise HTTPException(
-            status_code=503,
-            detail="Rollenzaun nicht verdrahtet (require_admin fehlt); Aktion gesperrt.",
-        )
-    checker(request)
+    require_admin_or_503(request)
+
 
 # --------------------------------------------------
 # Hermes-Core-Diagnose (read-only)

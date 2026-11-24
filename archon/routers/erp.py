@@ -34,6 +34,23 @@ from archon.core.runtime import (  # noqa: F401
 from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+def _authorized_company_id(requested: Optional[str] = None) -> str:
+    """company_id stammt ausschliesslich aus dem aktiven Mandanten-Kontext.
+
+    Ein explizit uebergebener Wert darf NUR der aktive Mandant sein. Jeder
+    andere Wert ist ein Cross-Tenant-Zugriffsversuch und wird mit 403
+    zurueckgewiesen (Audit D03: IDOR ueber Query/Body-Parameter).
+    """
+    from backend.tenant_context import tenant_context
+
+    active = (tenant_context.get_active_tenant_id() or "default").strip()
+    given = (requested or "").strip()
+    if given and given != active:
+        raise HTTPException(
+            status_code=403,
+            detail="Cross-Tenant-Zugriff nicht erlaubt (company_id entspricht nicht dem aktiven Mandanten).",
+        )
+    return active
 
 
 # P0 / API_VALIDATION_ROADMAP Etappe 2d.
@@ -86,6 +103,7 @@ def api_erp_document_print(
     amount_net: Optional[float] = None
 ):
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
+    company_id = _authorized_company_id(company_id)
     from backend.corporate_manager import corporate_manager
     from backend.erp_manager import erp_manager
     doc = erp_manager.get_document(doc_id, company_id=company_id)
@@ -175,6 +193,7 @@ def api_erp_document_print(
 
 @router.get("/api/erp/overview")
 def api_erp_overview(company_id: Optional[str] = None):
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     return erp_manager.get_tenant_overview(company_id=company_id)
 
@@ -188,12 +207,14 @@ def api_erp_list_entities(
     status: str = ""
 ):
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     return erp_manager.list_entities(company_id=company_id, role_filter=role, search=search, status=status)
 
 
 @router.get("/api/erp/entities/{entity_id}")
 def api_erp_get_entity_detail(entity_id: str, company_id: Optional[str] = None):
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     res = erp_manager.get_entity_detail(entity_id=entity_id, company_id=company_id)
     if not res:
@@ -206,7 +227,7 @@ def api_erp_save_entity(request: Request, payload: ErpPayloadRequest = Body(...)
     require_admin_or_503(request)  # RBAC: Rollenzaun
     payload = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
+    company_id = _authorized_company_id(payload.get("company_id"))
     saved = erp_manager.save_entity(payload=payload, company_id=company_id)
     return {"success": True, "data": saved}
 
@@ -216,7 +237,7 @@ def api_erp_save_contact(request: Request, payload: ErpPayloadRequest = Body(...
     require_admin_or_503(request)  # RBAC: Rollenzaun
     payload = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
+    company_id = _authorized_company_id(payload.get("company_id"))
     saved = erp_manager.save_contact(payload=payload, company_id=company_id)
     return {"success": True, "contact": saved}
 
@@ -226,7 +247,7 @@ def api_erp_add_interaction(request: Request, payload: ErpPayloadRequest = Body(
     require_admin_or_503(request)  # RBAC: Rollenzaun
     payload = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
+    company_id = _authorized_company_id(payload.get("company_id"))
     saved = erp_manager.add_interaction(payload=payload, company_id=company_id)
     return {"success": True, "interaction": saved}
 
@@ -237,6 +258,7 @@ def api_erp_list_items(
     item_type: str = "all",
     search: str = ""
 ):
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     return erp_manager.list_items(company_id=company_id, item_type=item_type, search=search)
 
@@ -246,7 +268,7 @@ def api_erp_save_item(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
     payload = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
+    company_id = _authorized_company_id(payload.get("company_id"))
     saved = erp_manager.save_item(payload=payload, company_id=company_id)
     return {"success": True, "item": saved}
 
@@ -260,6 +282,7 @@ def api_erp_list_documents(
     entity_id: Optional[str] = None
 ):
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     return erp_manager.list_documents(
         company_id=company_id, doc_type=doc_type, status=status, entity_id=entity_id
@@ -268,6 +291,7 @@ def api_erp_list_documents(
 
 @router.get("/api/erp/documents/{doc_id}")
 def api_erp_get_document(doc_id: str, company_id: Optional[str] = None):
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     doc = erp_manager.get_document(doc_id=doc_id, company_id=company_id)
     if not doc:
@@ -280,7 +304,7 @@ def api_erp_save_document(request: Request, payload: ErpPayloadRequest = Body(..
     require_admin_or_503(request)  # RBAC: Rollenzaun
     payload = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
+    company_id = _authorized_company_id(payload.get("company_id"))
     saved = erp_manager.save_document(payload=payload, company_id=company_id)
     return {"success": True, "document": saved}
 
@@ -291,7 +315,7 @@ def api_erp_convert_document(request: Request, doc_id: str, payload: ErpConvertD
     payload = payload.model_dump()
     from backend.erp_manager import erp_manager
     target_type = payload.get("target_doc_type", "invoice")
-    company_id = payload.get("company_id")
+    company_id = _authorized_company_id(payload.get("company_id"))
     converted = erp_manager.convert_document(
         source_doc_id=doc_id, target_doc_type=target_type, company_id=company_id
     )
@@ -304,7 +328,7 @@ def api_erp_cancel_document(request: Request, doc_id: str, payload: ErpCancelDoc
     require_admin_or_503(request)
     payload = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
+    company_id = _authorized_company_id(payload.get("company_id"))
     reason = str(payload.get("reason") or "")
     try:
         res = erp_manager.cancel_document(doc_id=doc_id, reason=reason, company_id=company_id)
@@ -317,6 +341,7 @@ def api_erp_cancel_document(request: Request, doc_id: str, payload: ErpCancelDoc
 def api_erp_document_xrechnung_xml(request: Request, doc_id: str, company_id: Optional[str] = None):
     """Exportiert einen ERP-Beleg als EN-16931 / XRechnung-3.0-konforme UBL-XML-Datei."""
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     try:
         doc_num, xml_str = erp_manager.export_xrechnung_xml(doc_id=doc_id, company_id=company_id)
@@ -340,6 +365,7 @@ def api_erp_export_datev_csv(
 ):
     """Exportiert den DATEV-EXTF-Buchungsstapel (SKR03) als Semikolon-CSV mit UTF-8-BOM."""
     require_admin_or_503(request)
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     csv_text = erp_manager.export_datev_extf_csv(
         company_id=company_id,
@@ -364,6 +390,7 @@ def api_erp_export_gobd_z3_zip(
 ):
     """Exportiert eine GoBD-Z3-Datenträgerüberlassung (index.xml + CSV-Tabellen + SHA-256-Manifest)."""
     require_admin_or_503(request)
+    company_id = _authorized_company_id(company_id)
     from backend.gobd_z3_export import build_gobd_z3_archive
     filename, zip_bytes, zip_sha256 = build_gobd_z3_archive(
         company_id=company_id,
@@ -384,6 +411,7 @@ def api_erp_export_gobd_z3_zip(
 def api_erp_document_zugferd_pdf(request: Request, doc_id: str, company_id: Optional[str] = None):
     """Exportiert eine Hybrid-E-Rechnung im ZUGFeRD-2.2-/Factur-X-Format (PDF + `factur-x.xml`)."""
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     try:
         doc_num, pdf_bytes = erp_manager.export_zugferd_pdf(doc_id=doc_id, company_id=company_id)
@@ -401,6 +429,7 @@ def api_erp_document_zugferd_pdf(request: Request, doc_id: str, company_id: Opti
 def api_erp_list_bank_transactions(request: Request, company_id: Optional[str] = None, match_status: Optional[str] = None):
     """Listet importierte Bankumsätze und deren OPOS-Matching-Status."""
     require_admin_or_503(request)
+    company_id = _authorized_company_id(company_id)
     from backend.erp_manager import erp_manager
     return erp_manager.list_bank_transactions(company_id=company_id, match_status=match_status)
 
@@ -419,7 +448,7 @@ def api_erp_import_bank_statement(request: Request, payload: ErpBankImportReques
             raw_content=str(raw_content),
             fmt=str(payload.get("format") or "auto"),
             auto_mark_paid=bool(payload.get("auto_mark_paid", False)),
-            company_id=payload.get("company_id"),
+            company_id=_authorized_company_id(payload.get("company_id")),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -441,7 +470,7 @@ def api_erp_match_bank_transaction(request: Request, tx_id: str, payload: ErpMat
             tx_id=tx_id,
             doc_id=doc_id,
             mark_paid=bool(payload.get("mark_paid", True)),
-            company_id=payload.get("company_id"),
+            company_id=_authorized_company_id(payload.get("company_id")),
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -452,7 +481,7 @@ def api_erp_sync_pocketbase(request: Request, payload: ErpSyncPocketbaseRequest 
     require_admin_or_503(request)  # RBAC: Rollenzaun
     payload = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = payload.get("company_id")
+    company_id = _authorized_company_id(payload.get("company_id"))
     if "pocketbase_url" in payload or "collection_name" in payload:
         erp_manager.update_sync_config(payload, company_id=company_id)
     return erp_manager.sync_with_pocketbase(company_id=company_id)

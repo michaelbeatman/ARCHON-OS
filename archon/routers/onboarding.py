@@ -25,13 +25,10 @@ router = APIRouter(dependencies=[Depends(forbid_viewer_writes)], tags=["onboardi
 
 
 def _require_admin(request: Request) -> None:
-    """Enforces admin role when multi-user auth is enabled or via wired _rbac checker."""
-    if is_configured():
-        require_admin_or_503(request)
-        return
-    from archon.routers.auth import require_admin
+    # Zentraler Rollenzaun: eine Pruefung, ein Injectionspunkt, fail-closed.
+    from archon.routers._rbac import require_admin_or_503
 
-    require_admin(request)
+    require_admin_or_503(request)
 
 
 def _forbid_demo_writes() -> None:

@@ -120,6 +120,22 @@ class ApprovalPolicyEngine:
                 );
             """)
 
+            # d14/HIGH: Aenderung der 4-Augen-Schwelle benötigt einen zweiten,
+            # unabhaengigen Genehmiger. Einzel-Admin erzeugt nur einen Vorschlag.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS approval_policy_change_proposals (
+                    proposal_id TEXT PRIMARY KEY,
+                    policy_key TEXT NOT NULL,
+                    proposed_value TEXT NOT NULL,
+                    old_value TEXT NOT NULL,
+                    proposed_by TEXT NOT NULL,
+                    approved_by TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TEXT NOT NULL,
+                    resolved_at TEXT
+                );
+            """)
+
             # 4. Vacation & Delegation Settings
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS delegation_settings (
@@ -274,6 +290,38 @@ class ApprovalPolicyEngine:
                                 "kleiner als finance_four_eyes_min sein."
                             )
 
+            # d14/HIGH: finance_four_eyes_min ist die Hoheits-Schwelle selbst.
+            # Ein einzelner Admin darf sie nicht direkt aendern — er erzeugt
+            # einen Vorschlag, der von einer zweiten, unabhaengigen Person
+            # freigegeben werden muss (4-Augen).
+            if policy_key == "finance_four_eyes_min":
+                import uuid
+                proposal_id = f"policy-change-{uuid.uuid4().hex}"
+                cur.execute("""
+                    INSERT INTO approval_policy_change_proposals
+                    (proposal_id, policy_key, proposed_value, old_value, proposed_by,
+                     approved_by, status, created_at, resolved_at)
+                    VALUES (?, ?, ?, ?, ?, NULL, 'pending', ?, NULL)
+                """, (proposal_id, policy_key, str(new_value), str(old_val), user_id, now))
+                audit_hash = self._log_audit_change(
+                    user_id, "PROPOSE_POLICY_CHANGE", domain, policy_key,
+                    old_val, new_value, conn=conn,
+                )
+                conn.commit()
+                return {
+                    "policy_key": policy_key,
+                    "old_value": old_val,
+                    "new_value": new_value,
+                    "status": "pending_four_eyes",
+                    "proposal_id": proposal_id,
+                    "message": (
+                        "Aenderung der 4-Augen-Schwelle erfordert eine zweite, "
+                        "unabhaengige Freigabe (approve_policy_change_proposal)."
+                    ),
+                    "audit_hash": audit_hash,
+                    "updated_at": now,
+                }
+
             cur.execute("""
                 UPDATE approval_policies
                 SET policy_value = ?, updated_at = ?, updated_by = ?
@@ -289,6 +337,75 @@ class ApprovalPolicyEngine:
                 "new_value": new_value,
                 "audit_hash": audit_hash,
                 "updated_at": now
+            }
+
+    def approve_policy_change_proposal(
+        self, proposal_id: str, approver_id: str = "admin"
+    ) -> Dict[str, Any]:
+        """Vierte-Augen-Freigabe fuer eine Policy-Aenderung (d14/HIGH).
+
+        Der zweite Genehmiger muss eine andere physische Person sein als der
+        Antragsteller; sonst bleibt der Vorschlag pending.
+        """
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            p = cur.execute(
+                "SELECT * FROM approval_policy_change_proposals WHERE proposal_id = ?",
+                (proposal_id,),
+            ).fetchone()
+            if not p:
+                raise ValueError(f"Policy-Aenderungsvorschlag {proposal_id} nicht gefunden.")
+            if p["status"] != "pending":
+                raise ValueError(f"Vorschlag {proposal_id} ist bereits {p['status']}.")
+
+            def _identity_tokens(actor: str) -> set:
+                s = (actor or "").strip().lower()
+                tokens = {s}
+                if s:
+                    tokens.add(s.split(" ")[0])
+                return {t for t in tokens if t}
+
+            proposer = str(p["proposed_by"] or "")
+            if approver_id == proposer or bool(
+                _identity_tokens(approver_id) & _identity_tokens(proposer)
+            ):
+                raise ValueError(
+                    "Vier-Augen-Prinzip: die zweite Freigabe muss durch eine "
+                    "andere Person erfolgen als den Antragsteller."
+                )
+
+            key = p["policy_key"]
+            if key not in ("finance_four_eyes_min",):
+                raise ValueError(f"Vorschlag fuer {key} ist nicht 4-Augen-pflichtig.")
+            try:
+                numeric = float(str(p["proposed_value"]).strip())
+            except (TypeError, ValueError):
+                raise ValueError("Vorgeschlagener Wert ist nicht numerisch.")
+            if not (0.0 <= numeric <= 1_000_000.0):
+                raise ValueError("Vorgeschlagener Wert liegt ausserhalb der erlaubten Spanne.")
+
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            cur.execute("""
+                UPDATE approval_policies SET policy_value = ?, updated_at = ?, updated_by = ?
+                WHERE policy_key = ?
+            """, (p["proposed_value"], now, approver_id, key))
+            cur.execute("""
+                UPDATE approval_policy_change_proposals
+                SET status = 'approved', approved_by = ?, resolved_at = ?
+                WHERE proposal_id = ?
+            """, (approver_id, now, proposal_id))
+            audit_hash = self._log_audit_change(
+                approver_id, "APPROVE_POLICY_CHANGE", "finance", key,
+                p["old_value"], p["proposed_value"], conn=conn,
+            )
+            conn.commit()
+            return {
+                "policy_key": key,
+                "new_value": p["proposed_value"],
+                "proposal_id": proposal_id,
+                "status": "approved",
+                "approved_by": approver_id,
+                "audit_hash": audit_hash,
             }
 
     # --------------------------------------------------------------------------
@@ -556,6 +673,13 @@ class ApprovalPolicyEngine:
             return [dict(r) for r in rows]
 
     def verify_audit_integrity(self) -> Dict[str, Any]:
+        """d05 F-03: Kette + signierter Head-Anker + Trigger."""
+        from backend.audit_log import finalize_secondary_chain_verification
+        return finalize_secondary_chain_verification(
+            "approval_policy_audit_chain", self._verify_audit_integrity_raw(), db_path=self.db_path
+        )
+
+    def _verify_audit_integrity_raw(self) -> Dict[str, Any]:
         """Validates all SHA-256 / HMAC-SHA256 hashes in sequence from genesis."""
         from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
         with self._get_conn() as conn:

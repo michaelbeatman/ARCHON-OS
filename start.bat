@@ -26,6 +26,11 @@ rem F-073: Alertmanager muss explizit mitgestartet werden — Prometheus hat
 rem kein depends_on darauf, sonst bleiben alle 8 Alarme adressenlos.
 if defined OBS_FLAGS set "SERVICES=!SERVICES! prometheus grafana uptime-kuma loki promtail litestream alertmanager langfuse"
 
+rem Audit D10: der externe Autoheal ist IMMER Teil des Normal-Starts — nur
+rem er erkennt einen Event-Loop-Hang (Docker markiert ihn nur unhealthy,
+rem restart: unless-stopped greift nicht bei unhealthy).
+set "SERVICES=!SERVICES! archon-autoheal"
+
 echo Starte Archon Agentic OS 2026 + Hermes Agent + AnythingLLM (!STACK_PROFILE!)...
 docker compose !OBS_FLAGS! up -d !SERVICES!
 if %errorlevel% neq 0 (

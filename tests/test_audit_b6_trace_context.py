@@ -31,9 +31,20 @@ def test_contextvars_inject_extract():
 
 
 def test_middleware_and_audit_wiring():
+    from backend import trace_context as tc
+
     main_text = (ROOT / "main.py").read_text(encoding="utf-8")
     assert "TraceContextMiddleware" in main_text
-    assert 'response.headers["X-Trace-Id"]' in main_text
+    assert "response_trace_headers" in main_text
+    assert "_response_trace_headers(dict(response.headers))" in main_text
+    assert 'response.headers["X-Trace-Id"]' not in main_text
+
+    tid, sid = tc.start_trace()
+    headers = tc.response_trace_headers({"Content-Type": "application/json"})
+    assert headers["X-Trace-Id"] == tid
+    assert headers["traceparent"].startswith(f"00-{tid}-{sid}-")
+    assert headers["Content-Type"] == "application/json"
+
     audit_text = (ROOT / "backend" / "audit_log.py").read_text(encoding="utf-8")
     assert "current_trace_id" in audit_text
     provider_text = (ROOT / "api_provider.py").read_text(encoding="utf-8")

@@ -144,10 +144,16 @@ def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_ty
     trusted = is_trusted_source(sid)
     normalized_raw = unicodedata.normalize("NFKC", raw_text or "")
 
+    # Audit D04/HIGH: zwingende Dual-LLM-Quarantine. Die bisherige Stufe-1-
+    # Heuristik allein hat den zweiten Klassifikator nie aufgerufen.
+    from local_security_guard import quarantine_external_text
+    q = quarantine_external_text(raw_text or "", source_id=sid or "unknown", source_type=source_type)
+    q_blocked = str(q.get("verdict") or "").lower() == "blocked"
+
     # 1. Heuristische Analyse (auch fuer Trusted Sources gegen Header-Spoofing / Weiterleitungen)
     threats = scan_heuristic_threats(raw_text or "")
 
-    if trusted and not threats:
+    if trusted and not threats and not q_blocked:
         return {
             "is_safe": True,
             "threat_level": "none",
@@ -157,7 +163,9 @@ def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_ty
             "source_type": source_type,
             "clean_summary": (raw_text or "").strip(),
             "extracted_facts": {"trust_status": "VERIFIED_SENDER"},
-            "message": "Quelle ist als vertrauenswürdig [T] verifiziert (ohne Bedrohungssignaturen)."
+            "llm_verdict": q.get("llm_verdict"),
+            "llm_classification_executed": bool(q.get("llm_classification_executed")),
+            "message": "Quelle ist als vertrauenswürdig [T] verifiziert (ohne Bedrohungssignaturen), dual-LLM-klassifiziert."
         }
 
     # 2. Quarantäne-Bereinigung: Aggressives Entfernen von Instruktionsmustern
@@ -173,8 +181,11 @@ def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_ty
         clean_lines.append(line)
 
     threats = sorted(list(set(threats)))
-    is_safe = len(threats) == 0
-    threat_level = "critical" if any(t in ("INSTRUCTION_OVERRIDE", "JAILBREAK_ATTEMPT", "SYSTEM_PROMPT_TARGETING") for t in threats) else ("high" if threats else "none")
+    is_safe = len(threats) == 0 and not q_blocked
+    if q_blocked:
+        threats.append("LLM_CLASSIFIER_BLOCKED")
+        threats = sorted(list(set(threats)))
+    threat_level = "critical" if q_blocked or any(t in ("INSTRUCTION_OVERRIDE", "JAILBREAK_ATTEMPT", "SYSTEM_PROMPT_TARGETING") for t in threats) else ("high" if threats else "none")
 
     clean_summary = "\n".join(clean_lines).strip()
     # Mehrzeilige Injection-Spans (z. B. "ignore all\nprevious instructions") auch gesamt neutralisieren
@@ -186,8 +197,8 @@ def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_ty
                 stripped_instructions.append(f"[MULTILINE:{p_name}]")
                 clean_summary = re.sub(pattern, "[INHALT WEGEN SICHERHEITSRISIKEN GEFILTERT]", clean_summary).strip()
         threats = sorted(list(set(threats)))
-        is_safe = len(threats) == 0
-        threat_level = "critical" if any(t in ("INSTRUCTION_OVERRIDE", "JAILBREAK_ATTEMPT", "SYSTEM_PROMPT_TARGETING") for t in threats) else ("high" if threats else "none")
+        is_safe = len(threats) == 0 and not q_blocked
+        threat_level = "critical" if q_blocked or any(t in ("INSTRUCTION_OVERRIDE", "JAILBREAK_ATTEMPT", "SYSTEM_PROMPT_TARGETING") for t in threats) else ("high" if threats else "none")
     if not clean_summary and stripped_instructions:
         clean_summary = "[INHALT WEGEN SICHERHEITSRISIKEN GEFILTERT]"
 
@@ -225,5 +236,7 @@ def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_ty
             "char_count": len(raw_text),
             "threats_count": len(threats)
         },
+        "llm_verdict": q.get("llm_verdict"),
+        "llm_classification_executed": bool(q.get("llm_classification_executed")),
         "warning": None if is_safe else f"Achtung: {len(threats)} verdächtige Manipulations-Muster isoliert ({', '.join(threats)})!"
     }

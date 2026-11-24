@@ -26,6 +26,8 @@ from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["decisions"])
 
 _FOLGE_OK = "Folgeaktion ausgeführt"
+# Fail-closed 403 muss den Weg zur Erstregistrierung zeigen.
+_PK_REG_HINT = " Passkey-Registrierung erforderlich: /api/auth/passkey/register/options"
 
 # Vorgabe 4: prozessweiter Lock gegen das Decide-Race (zwei parallele Decides auf denselben Task).
 # WICHTIG: Der Lock wird NUR innerhalb eines einzigen sync-to_thread-Blocks gehalten — niemals
@@ -73,9 +75,9 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Passthrough
             return {"status": "already_decided", "decision": gate.get("status"), "gate_id": gate_id}
 
         # C04: HITL-Gate auch bei der Owner-Entscheidung selbst. Die Telegram-
-        # Freigabe bleibt bestehen; ist fuer die Kategorie ein Passkey
-        # konfiguriert, zusaetzlich einen gueltigen Proof verlangen. Ohne
-        # registrierte Credentials ist `is_passkey_required()` False (unveraendert).
+        # Freigabe bleibt bestehen; fuer Hochrisiko-Kategorien ist der Proof
+        # jetzt ZWINGEND — is_passkey_required() liefert auch ohne registrierte
+        # Credentials True (fail-closed), der Endpoint antwortet 403/503.
         if decision == "approve":
             try:
                 from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required
@@ -106,7 +108,7 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Passthrough
                     ):
                         raise HTTPException(
                             status_code=403,
-                            detail="Passkey-Verifizierung erforderlich, um dieses Gate freizugeben.",
+                            detail="Passkey-Verifizierung erforderlich, um dieses Gate freizugeben." + _PK_REG_HINT,
                         )
             except HTTPException:
                 raise
@@ -242,12 +244,12 @@ def register_decision(
             "dossier": dossier or "",
             "status": "offen",
             "kanal": "telegram+kanban",
-            # Audit D14: Ersteller mitführen, damit api_decide_decision das
-            # Vier-Augen-Prinzip hart prüfen kann (leer = nicht zuordenbar).
-            "created_by": (created_by or "").strip(),
         }
         if extra:
             dec.update(extra)
+        # Audit D14: created_by NACH extra setzen, damit ein Produktivaufrufer
+        # den Ersteller nicht über `extra` überschreiben/spoofen kann.
+        dec["created_by"] = (created_by or "").strip()
         _meta_payload = {"kind": "task", "task_id": task_id, "decision": dec}
         if obsidian and str(obsidian).strip():
             _meta_payload["obsidian"] = str(obsidian).strip()
@@ -465,10 +467,10 @@ def _decision_hitl_proof(request: Request, body: dict, typ: str, ref: str) -> tu
         category = "system"
         action = f"Mission-Freigabe {ref}"
 
-    # Kompatibilitaet: der direkte Gate-Endpoint verlangt ebenfalls NUR dann
-    # einen Proof, wenn fuer die Identitaet/Kategorie ein Passkey konfiguriert
-    # ist. Ohne diese Prüfung blockierte der Härtungs-Fix alle UI-Freigaben,
-    # auch in Installationen ohne registrierte Credentials.
+    # Fail-closed (D04): is_passkey_required() ist fuer system /
+    # destructive_actions auch OHNE Credentials True. Der fruehere
+    # Kurzschluss `if not required: return "", uid` ist damit wirkungslos
+    # bzw. wird entfernt: ohne Proof gibt es 403, nie ein stilles Ueberspringen.
     try:
         if not is_passkey_required(uid, category):
             return "", uid
@@ -482,7 +484,7 @@ def _decision_hitl_proof(request: Request, body: dict, typ: str, ref: str) -> tu
     if not proof:
         raise HTTPException(
             status_code=403,
-            detail="Passkey-Verifizierung erforderlich, um diese Entscheidung freizugeben.",
+            detail="Passkey-Verifizierung erforderlich, um diese Entscheidung freizugeben." + _PK_REG_HINT,
         )
 
     try:
@@ -496,7 +498,7 @@ def _decision_hitl_proof(request: Request, body: dict, typ: str, ref: str) -> tu
         logger.warning(f"[Decision] Ungueltiger/abweichend gebundener HITL-Proof fuer {typ} {ref} (uid={uid}).")
         raise HTTPException(
             status_code=403,
-            detail="Ungueltiger oder nicht an diese Entscheidung gebundener Passkey-Proof.",
+            detail="Ungueltiger oder nicht an diese Entscheidung gebundener Passkey-Proof." + _PK_REG_HINT,
         )
     return proof, uid
 
@@ -599,9 +601,9 @@ async def _followup_permission_gate(ref: str, proof_token: str = "", proof_uid: 
     aktion = f"Rechte-Gate {ref or '(ohne ref_id)'}"
     if not ref:
         return _folge_nicht(aktion, "Entscheidungs-Block trägt keine ref_id")
-    # A (HITL-Bypass): Ist fuer die Identitaet ein Passkey konfiguriert, darf der
-    # Service-Token-Aufruf das Gate ohne Proof NEVER freigeben. Ohne konfigurierte
-    # Credentials bleibt das bestehende (dokumentierte) Verhalten erhalten.
+    # A (HITL-Bypass): Hochrisiko-Gates duerfen per Service-Token NIE ohne
+    # verifizierten Passkey-Proof freigegeben werden. Seit dem Fail-Closed-Fix
+    # gilt das auch fuer Identitaeten ohne registrierte Credentials (403/503).
     proof = str(proof_token or "").strip()
     if not proof:
         try:
@@ -706,7 +708,22 @@ async def api_decide_decision(request: Request, body: PassthroughBody = Body(...
             if (dec_local.get("status") or "offen") != "offen":
                 return {"_error": "already_decided", "dec": dec_local}
             creator = str(dec_local.get("created_by") or "").strip()
-            if creator and creator == von:
+            # Audit D04/D14 (HIGH): fail-closed. Der alte Check `if creator and ...`
+            # war toter Code, weil kein Produktivaufrufer created_by setzte. Ein
+            # leerer Ersteller ist jetzt EBENSO eine Vier-Augen-Verletzung.
+            # Handoff: chat.py / workflow_scheduler.py / workflow_dag_runner.py
+            # (andere Agents) müssen created_by=require_session_actor(...) bzw.
+            # den verantwortlichen Service-Principal übergeben.
+            if not creator:
+                logger.error(
+                    "[Decision] Vier-Augen-Fail-Closed: Task %s hat keinen zuordenbaren "
+                    "Ersteller (created_by leer) — Freigabe verweigert.", task_id
+                )
+                return {
+                    "_error": "four_eyes_violation",
+                    "detail": "Ersteller nicht zuordenbar — Freigabe verweigert (Vier-Augen-Prinzip, fail-closed).",
+                }
+            if creator == von:
                 logger.warning(
                     "[Decision] Vier-Augen-Verletzung: Task %s wurde von '%s' erstellt "
                     "und soll von derselben Person freigegeben werden.", task_id, von
@@ -751,7 +768,7 @@ async def api_decide_decision(request: Request, body: PassthroughBody = Body(...
     if claim.get("_error") == "no_decision":
         raise HTTPException(status_code=404, detail={"code": "decisions_no_decision_block", "params": {"task_id": task_id}})
     if claim.get("_error") == "hitl_proof_required":
-        raise HTTPException(status_code=int(claim.get("status") or 403), detail=claim.get("detail") or "Passkey-Verifizierung erforderlich.")
+        raise HTTPException(status_code=int(claim.get("status") or 403), detail=(claim.get("detail") or "Passkey-Verifizierung erforderlich.") + _PK_REG_HINT)
     if claim.get("_error") == "four_eyes_violation":
         raise HTTPException(status_code=403, detail=claim.get("detail") or "Vier-Augen-Prinzip verletzt.")
     if claim.get("_error") == "already_decided":

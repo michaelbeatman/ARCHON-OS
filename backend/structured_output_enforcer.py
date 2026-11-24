@@ -23,22 +23,6 @@ def _get_cfg() -> Dict[str, Any]:
         }
 
 
-TYPE_DEFAULTS = {
-    "string": "",
-    "str": "",
-    "integer": 0,
-    "int": 0,
-    "number": 0.0,
-    "float": 0.0,
-    "boolean": False,
-    "bool": False,
-    "array": [],
-    "list": [],
-    "object": {},
-    "dict": {}
-}
-
-
 class StructuredOutputEnforcer:
     def _repair_raw_json(self, raw_text: str) -> str:
         text = (raw_text or "").strip()
@@ -68,6 +52,17 @@ class StructuredOutputEnforcer:
         raw_output: str,
         schema: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
+        # D12/MED: ohne Schema gibt es keine Pflichtfeld-Pruefung — das darf
+        # nicht als `valid: True` ausgegeben werden.
+        if not schema:
+            return {
+                "valid": False,
+                "bypassed": False,
+                "repaired": False,
+                "error": "schema_required",
+                "data": {},
+            }
+
         cfg = _get_cfg()
         enabled = bool(cfg.get("enabled", True))
         auto_repair = bool(cfg.get("auto_repair_json", True))
@@ -104,6 +99,16 @@ class StructuredOutputEnforcer:
                 "repaired": repaired_used,
                 "error": f"JSON-Parsing fehlgeschlagen: {parse_error}",
                 "data": {}
+            }
+
+        if not strict_schema:
+            # D12/MED: ein Bypass ist kein Erfolg.
+            return {
+                "valid": False,
+                "bypassed": True,
+                "repaired": repaired_used,
+                "error": "strict_schema_validation_disabled",
+                "data": parsed_obj,
             }
 
         missing_filled = []

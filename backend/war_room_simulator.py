@@ -164,7 +164,10 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
                 c = c.split("```json")[1].split("```")[0].strip()
             elif "```" in c:
                 c = c.split("```")[1].split("```")[0].strip()
-            return json.loads(c)
+            parsed = json.loads(c)
+            if not isinstance(parsed, dict):
+                raise ValueError("War-Room-JSON ist kein Objekt")
+            return parsed
         except Exception as e:
             # Audit D01: früher wurde hier ein MEDIUM-Risiko erfunden, das
             # anschließend echte HITL-Blockaden ausgelöst hat. Bewusst UNKNOWN
@@ -180,7 +183,19 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
 
     results = await asyncio.gather(*[_attack(r) for r in roles])
 
-    ratings = [res.get("risk_rating", "MEDIUM") for res in results]
+    # D12/HIGH: ein fehlendes oder ungueltiges risk_rating ist NEVER MEDIUM.
+    # MEDIUM ist eine Bewertung und senkt die HITL-Schwelle — erfunden werden
+    # darf hier nur UNKNOWN, das immer blockiert.
+    _VALID_RATINGS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+    ratings = []
+    for res in results:
+        rating = res.get("risk_rating")
+        if rating not in _VALID_RATINGS:
+            res["risk_rating"] = "UNKNOWN"
+            res["evaluation_failed"] = True
+            ratings.append("UNKNOWN")
+        else:
+            ratings.append(rating)
     if "CRITICAL" in ratings:
         overall_risk = "CRITICAL"
     elif "HIGH" in ratings:
@@ -194,9 +209,6 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
     evaluation_failed = any(bool(res.get("evaluation_failed")) for res in results)
     if evaluation_failed:
         overall_risk = "UNKNOWN"
-    # Fail-closed: eine fehlgeschlagene Bewertung blockiert immer, statt als
-    # MEDIUM durchzuwinken und eine Scheinfreigabe zu erzeugen.
-    should_block = evaluation_failed or (risk_order.get(overall_risk, 4) >= risk_order.get(block_threshold, 3))
 
     mitigations = [res.get("mandatory_fix", "") for res in results if res.get("mandatory_fix")]
     mitigation_text = "\n".join(f"• {m}" for m in mitigations)
@@ -214,12 +226,21 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
         finally:
             conn.close()
 
+    artifact_write_failed = False
     try:
         await asyncio.to_thread(_persist_war_room)
     except Exception as e:
-        print(f"[WarRoomSimulator] Fehler beim Speichern: {e}", file=sys.stderr)
+        # D12/HIGH: Persistenzfehler darf nicht zu `status: success` fuehren.
+        artifact_write_failed = True
+        evaluation_failed = True
+        _archon_exc_logger.error("[WarRoomSimulator] Fehler beim Speichern: %s", e)
+
+    # Fail-closed: eine fehlgeschlagene Bewertung blockiert immer, statt als
+    # MEDIUM durchzuwinken und eine Scheinfreigabe zu erzeugen.
+    should_block = evaluation_failed or (risk_order.get(overall_risk, 4) >= risk_order.get(block_threshold, 3))
 
     hitl = None
+    blocked_effective = False
     if should_block:
         hitl = await _enforce_hitl_block(
             topic=topic,
@@ -227,18 +248,38 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
             mitigation_text=mitigation_text,
             task_id=task_id,
         )
+        # Ohne nachgewiesene HITL-Wirkung ist `blocked: true` eine Luege.
+        blocked_effective = bool(
+            hitl
+            and hitl.get("decision_created")
+            and (not task_id or hitl.get("task_blocked"))
+        )
+
+    if evaluation_failed or (should_block and not blocked_effective):
+        status = "blocked"
+    else:
+        status = "success"
+
+    if should_block and not blocked_effective:
+        recommendation = "FREIGABE GESPERRT — HITL nicht durchgesetzt"
+    elif should_block:
+        recommendation = "STOPP & ÜBERARBEITUNG: Risiko überschreitet Schwellenwert!"
+    else:
+        recommendation = "Freigabe empfohlen mit Auflagen"
 
     return {
-        "status": "incomplete" if evaluation_failed else "success",
+        "status": status,
         "evaluation_failed": evaluation_failed,
+        "artifact_write_failed": artifact_write_failed,
         "topic": topic,
         "overall_risk_level": overall_risk,
         "block_threshold": block_threshold,
         "blocked": should_block,
+        "blocked_effective": blocked_effective,
         "hitl_enforcement": hitl,
         "adversary_evaluations": results,
         "mitigation_plan": mitigations,
-        "recommendation": "STOPP & ÜBERARBEITUNG: Risiko überschreitet Schwellenwert!" if should_block else "Freigabe empfohlen mit Auflagen"
+        "recommendation": recommendation,
     }
 
 def get_war_room_history(limit: int = 20) -> List[Dict[str, Any]]:

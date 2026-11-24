@@ -226,6 +226,129 @@ _DELEGATION_CHAIN_BY_SESSION: Dict[str, tuple] = {}
 _CHAIN_LOCK = threading.Lock()
 _MAX_DELEGATION_DEPTH = 5
 _MAX_TRACKED_CHAINS = 5000
+# D13: ein stabiler trajectory_id-Key fuer Lesen, Schreiben UND Resume. Die
+# alten Session-IDs waren nie der gesuchte Key (D13/BLOCKER).
+MAX_DELEGATIONS_PER_RESPONSE = 5
+_SESSION_TRAJECTORY: Dict[str, str] = {}
+_CHAIN_TASK_BY_TRAJECTORY: Dict[str, str] = {}
+_TRAJECTORY_ACTIVE: set[str] = set()
+
+
+class DelegationReceipt(str):
+    """Text-Quittung mit strukturiertem Status (rueckwaertskompatibel zu chat.py)."""
+
+    def __new__(cls, text: str, **fields: Any):
+        obj = super().__new__(cls, text)
+        obj.status = str(fields.get("status") or "blocked")
+        obj.reason = str(fields.get("reason") or "")
+        obj.block_kind = str(fields.get("block_kind") or "")
+        obj.failure_reason = str(fields.get("failure_reason") or fields.get("reason") or "")
+        obj.trajectory_id = str(fields.get("trajectory_id") or "")
+        return obj
+
+
+def _resolve_trajectory_id(payload: Dict[str, Any], origin_session_id: Optional[str]) -> str:
+    """Ein Key fuer die ganze Kette — root_ticket > payload > Session."""
+    from backend.trajectory_budget import normalize_trajectory_id
+    seed = (
+        payload.get("trajectory_id")
+        or payload.get("root_ticket_id")
+        or payload.get("root_ticket")
+        or origin_session_id
+        or payload.get("parent_project_id")
+    )
+    tid = normalize_trajectory_id(
+        str(seed) if seed else None,
+        str(payload.get("root_ticket_id") or seed) if seed else None,
+        str(origin_session_id or ""),
+    )
+    # Bekannte Sub-Session? Dann IMMER die Wurzel-Trajectory verwenden (A->B->A).
+    if seed and str(seed) in _SESSION_TRAJECTORY:
+        tid = _SESSION_TRAJECTORY[str(seed)]
+    return tid
+
+
+def _get_chain(tid: str) -> list:
+    with _CHAIN_LOCK:
+        return list(_DELEGATION_CHAIN_BY_SESSION.get(tid, ()))
+
+
+def _put_chain(tid: str, chain: tuple, task_id: Optional[str] = None) -> None:
+    with _CHAIN_LOCK:
+        _DELEGATION_CHAIN_BY_SESSION[tid] = tuple(chain)
+        _TRAJECTORY_ACTIVE.add(tid)
+        if task_id:
+            _CHAIN_TASK_BY_TRAJECTORY[tid] = str(task_id)
+        if len(_DELEGATION_CHAIN_BY_SESSION) > _MAX_TRACKED_CHAINS:
+            # Nur TERMINALE Ketten evictieren — laufende Watchers nie verlieren.
+            for old in list(_DELEGATION_CHAIN_BY_SESSION):
+                if len(_DELEGATION_CHAIN_BY_SESSION) <= _MAX_TRACKED_CHAINS // 2:
+                    break
+                linked_task = _CHAIN_TASK_BY_TRAJECTORY.get(old)
+                if linked_task and linked_task in _ACTIVE_WATCHERS:
+                    continue
+                if linked_task:
+                    try:
+                        row = _poll_kanban_row(linked_task)
+                        if row and str(row[0] or "") not in _TERMINAL_TASK_STATUSES:
+                            continue
+                    except Exception:
+                        continue
+                _DELEGATION_CHAIN_BY_SESSION.pop(old, None)
+                _TRAJECTORY_ACTIVE.discard(old)
+                _CHAIN_TASK_BY_TRAJECTORY.pop(old, None)
+
+
+def _finalize_trajectory(tid: str, task_id: Optional[str] = None, status: str = "completed") -> None:
+    with _CHAIN_LOCK:
+        _TRAJECTORY_ACTIVE.discard(tid)
+        if task_id:
+            _CHAIN_TASK_BY_TRAJECTORY.pop(tid, None)
+    try:
+        from backend.trajectory_budget import close_trajectory
+        close_trajectory(tid, "completed" if status in ("done", "review") else "failed")
+    except Exception as exc:
+        logger.debug("[Delegation] Trajectory-Abschluss nicht persistiert: %s", exc)
+
+
+def delegation_chain_metrics() -> Dict[str, int]:
+    with _CHAIN_LOCK:
+        return {"active_chains": len(_TRAJECTORY_ACTIVE),
+                "tracked_chains": len(_DELEGATION_CHAIN_BY_SESSION)}
+
+
+def _block_receipt(tid: str, ziel: str, chain: list, reason: str, detail: str) -> "DelegationReceipt":
+    """Harte Ablehnung: blocked + Audit + HITL-Hinweis statt Freitext-Quittung."""
+    text = (f"❌ DELEGATION BLOCKIERT — Ziel: {ziel} | trajectory={tid} | "
+            f"Kette: {' → '.join(chain + [ziel])} | Grund: {reason}: {detail} | HITL/escalate required.")
+    try:
+        from backend.trajectory_budget import _audit
+        _audit(tid, f"{reason}: {detail} (chain={chain + [ziel]})")
+    except Exception:
+        logger.error("[Delegation] D13-Block: %s %s", reason, detail)
+    try:
+        from archon.core.mission_control import mc_update_task_sqlite
+        root = str(payload_root(tid) or "")
+        if root:
+            mc_update_task_sqlite(root, {
+                "status": "blocked", "block_kind": reason.lower(),
+                "failure_reason": reason, "mc_status": "blocked",
+            })
+    except Exception:
+        pass
+    return DelegationReceipt(text, status="blocked", reason=reason,
+                             block_kind=reason.lower(), failure_reason=reason,
+                             trajectory_id=tid)
+
+
+def payload_root(tid: str) -> str:
+    """Root-Ticket aus der Trajectory-Tabelle (fuer Audit/Meta)."""
+    try:
+        from backend.trajectory_budget import get_trajectory
+        row = get_trajectory(tid)
+        return str((row or {}).get("root_ticket_id") or "")
+    except Exception:
+        return ""
 
 
 def _resolve_handoff_criteria(criteria: Optional[str], prof_id: str, task_id: str) -> str:
@@ -468,9 +591,20 @@ def _get_delegation_prompt_for(agent_id: str):
     return None
 
 
-def _parse_delegation_blocks(text: str):
-    """Findet alle ```delegation```-JSON-Blöcke sowie Fallback-JSON-Zeilen."""
-    valid, invalid = [], []
+class DelegationIssueList(list):
+    """Invalid-Liste mit D13-Fanout-Metadaten (2-Tupel-API bleibt kompatibel)."""
+
+
+def _parse_delegation_blocks(text: str, fanout_cap: Optional[int] = None):
+    """Findet alle ```delegation```-JSON-Blöcke sowie Fallback-JSON-Zeilen.
+
+    D13/HIGH: zentraler Fan-out-Cap (5). Ueberschuss wird NICHT stillschweigend
+    gekuerzt, sondern als `FANOUT_CAP` im Invalid-Kanal quittiert. chat.py
+    (anderer Agent) muss zusaetzlich die Legacy-Regex-Payloads in dieselbe
+    Menge aufnehmen — siehe Handoff in backend/trajectory_budget.py.
+    """
+    cap = MAX_DELEGATIONS_PER_RESPONSE if fanout_cap is None else max(1, int(fanout_cap))
+    valid, invalid = [], DelegationIssueList()
     seen_hashes = set()
     
     # 1. Standard: ```delegation ... ``` Blöcke
@@ -499,7 +633,21 @@ def _parse_delegation_blocks(text: str):
                     seen_hashes.add(h)
         except Exception as exc:
             logger.debug(f"[Delegation] Ungueltiger Delegations-JSON-Block uebersprungen: {exc}")
-            
+
+    invalid.fanout_cap = cap
+    invalid.fanout_blocked = len(valid) > cap
+    invalid.omitted_count = max(0, len(valid) - cap)
+    if invalid.fanout_blocked:
+        omitted = valid[cap:]
+        valid = valid[:cap]
+        invalid.append({
+            "raw": "", "error": "FANOUT_CAP", "blocked": True, "cap": cap,
+            "omitted": len(omitted),
+            "reason": f"MAX_DELEGATIONS_PER_RESPONSE={cap} überschritten",
+            "handoff": "archon/routers/chat.py: Legacy-Payloads in dieselbe Dedup-Menge aufnehmen",
+        })
+        logger.error("[Delegation] FANOUT_CAP: %s von %s Delegationen blockiert.",
+                     invalid.omitted_count, invalid.omitted_count + cap)
     return valid, invalid
 
 
@@ -1052,6 +1200,27 @@ async def _watch_delegated_task(
         msg += supervisor_hint
         _save_message_to_db(s_id, "assistant", msg)
 
+        # D13: Trajectory terminal abschliessen + Flightlog-Event im
+        # Run-Abschluss (Produzent im Tool-Chokepoint kommt von einem anderen
+        # Agenten; hier nur der Abschluss-Aufruf, kein Coroutine-Replay).
+        try:
+            from backend.trajectory_budget import normalize_trajectory_id
+            _w_tid = (
+                _SESSION_TRAJECTORY.get(str(s_id))
+                or _SESSION_TRAJECTORY.get(str(task_id))
+                or normalize_trajectory_id(None, origin_sess_id or task_id)
+            )
+            _finalize_trajectory(_w_tid, task_id, status)
+            from backend.flightlog_backtester import record_flight_event
+            record_flight_event(
+                run_id=str(task_id), agent_id=str(prof_id),
+                tool_name="delegation_run_complete",
+                args={"trajectory_id": _w_tid, "status": status},
+                tool_ok=str(status) in ("done", "review"), tokens_used=0,
+            )
+        except Exception as _w_exc:
+            logger.debug("[Delegation] Run-Abschluss-Telemetrie nicht geschrieben: %s", _w_exc)
+
         if origin_sess_id and origin_sess_id != s_id:
             try:
                 status_badge = "✅ ERLEDIGT" if status in ("done", "review") else "⛔ BLOCKIERT"
@@ -1197,23 +1366,40 @@ async def resume_pending_delegation_watchers() -> int:
             delegator = meta.get("delegator") or "executive_decision_architect"
             tgt_sess = meta.get("tgt_session_id") or f"sub_{delegator}_{assignee}_{tid}"
             origin_sess = meta.get("origin_session_id") or None
+            # D13/BLOCKER: Kette unter demselben stabilen trajectory_id lesen,
+            # schreiben und wiederherstellen — nicht unter tgt_sess.
+            from backend.trajectory_budget import (
+                ensure_trajectory, get_trajectory, normalize_trajectory_id,
+            )
+            _tid = normalize_trajectory_id(
+                meta.get("trajectory_id"), meta.get("root_ticket_id") or origin_sess or tid,
+                tgt_sess,
+            )
+            _SESSION_TRAJECTORY[tgt_sess] = _tid
+            if origin_sess:
+                _SESSION_TRAJECTORY[str(origin_sess)] = _tid
+            ensure_trajectory(_tid, meta.get("root_ticket_id") or origin_sess or tid)
             # I: Kette aus dem persistierten created-Event wiederherstellen —
             # das RAM-Dict ueberlebt keinen Neustart.
             _restored_chain = meta.get("delegation_chain")
             if isinstance(_restored_chain, list) and _restored_chain:
-                with _CHAIN_LOCK:
-                    _DELEGATION_CHAIN_BY_SESSION[tgt_sess] = tuple(
-                        str(x) for x in _restored_chain if x
-                    )[:_MAX_DELEGATION_DEPTH + 1]
+                _put_chain(
+                    _tid,
+                    tuple(str(x) for x in _restored_chain if x)[:_MAX_DELEGATION_DEPTH + 1],
+                    task_id=tid,
+                )
             else:
                 logger.warning(
                     "[Delegation] Keine persistierte Delegationskette fuer %s — "
-                    "Zyklus-/Tiefenschranke nach Resume nur teilweise wiederhergestellt.", tid
+                    "Zyklus-/Tiefenschranke wird aus trajectory_budgets wiederhergestellt.", tid
                 )
-                with _CHAIN_LOCK:
-                    _DELEGATION_CHAIN_BY_SESSION[tgt_sess] = tuple(
-                        str(x) for x in (assignee,) if x
-                    )
+                _row = get_trajectory(_tid)
+                _visited = []
+                try:
+                    _visited = json.loads((_row or {}).get("visited_agents") or "[]")
+                except Exception:
+                    _visited = []
+                _put_chain(_tid, tuple(str(x) for x in (_visited or [assignee]) if x), task_id=tid)
             _spawn_background(
                 _watch_delegated_task(
                     tid, tgt_sess, assignee or "default", origin_sess, delegator, project_id or None,
@@ -1248,22 +1434,31 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     if not ziel:
         return f"❌ DELEGATION ABGELEHNT — Ziel-Agent '{ziel_raw}' existiert nicht im Agenten-Kader."
 
-    # C09: Zyklus- und Tiefenschranke. Die Kette wird beim Anlegen der
-    # Sub-Session (siehe unten) weitergereicht und beim naechsten Delegations-
-    # Aufruf der Sub-Session ueber origin_session_id wiedergefunden.
-    _chain_key = str(origin_session_id or "")
-    with _CHAIN_LOCK:
-        _chain = list(_DELEGATION_CHAIN_BY_SESSION.get(_chain_key, ()))
+    # D13/BLOCKER: EIN stabiler trajectory_id-Key fuer Lesen+Schreiben+Resume.
+    from backend.trajectory_budget import (
+        ensure_trajectory, get_trajectory, reserve_hop,
+    )
+    _tid = _resolve_trajectory_id(payload, origin_session_id)
+    if origin_session_id:
+        _SESSION_TRAJECTORY[str(origin_session_id)] = _tid
+    _root_ticket = str(payload.get("root_ticket_id") or origin_session_id or _tid)
+    _had_parent_budget = get_trajectory(_tid) is not None
+    _traj = ensure_trajectory(_tid, _root_ticket)
+    _chain = _get_chain(_tid)
+    _hard_depth = min(_MAX_DELEGATION_DEPTH, int(_traj.get("max_hops") or _MAX_DELEGATION_DEPTH))
+    if not _had_parent_budget and not payload.get("root_ticket_id") and not origin_session_id:
+        return _block_receipt(_tid, ziel, _chain, "NO_PARENT_BUDGET",
+                              "Kein Root-Budget vorhanden — kein Budget-Minting pro Hop.")
     if ziel in _chain:
-        return (
-            f"❌ DELEGATION ABGELEHNT — Zyklus erkannt: "
-            f"{' → '.join(_chain + [ziel])}. Bitte eskalieren statt zurueckdelegieren."
-        )
-    if len(_chain) >= _MAX_DELEGATION_DEPTH:
-        return (
-            f"❌ DELEGATION ABGELEHNT — maximale Delegationstiefe "
-            f"({_MAX_DELEGATION_DEPTH}) erreicht."
-        )
+        return _block_receipt(_tid, ziel, _chain, "CYCLE_DETECTED",
+                              f"{' → '.join(_chain + [ziel])}. Bitte eskalieren.")
+    if len(_chain) >= _hard_depth:
+        return _block_receipt(_tid, ziel, _chain, "DEPTH_EXCEEDED",
+                              f"maximale Delegationstiefe ({_hard_depth}) erreicht.")
+    _hop = reserve_hop(_tid, ziel, "delegation_switch", root_ticket_id=_root_ticket)
+    if not _hop.get("allowed", False):
+        return _block_receipt(_tid, ziel, _chain, str(_hop.get("reason") or "HOP_CAP_REACHED"),
+                              f"hops_used={_hop.get('hops_used')}/{_hop.get('max_hops')}")
 
     allowed, reason = _check_delegation_permission(delegator_id, ziel)
     if not allowed:
@@ -1325,13 +1520,12 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     )
 
     tgt_sess = f"mc_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{ziel}_{secrets.token_hex(3)}"
-    # I: genau EIN Eintrag pro Hop (frueher zwei => effektive Tiefe 3 statt 5).
-    _persisted_chain = tuple(_chain + [ziel])
-    with _CHAIN_LOCK:
-        _DELEGATION_CHAIN_BY_SESSION[tgt_sess] = _persisted_chain
-        if len(_DELEGATION_CHAIN_BY_SESSION) > _MAX_TRACKED_CHAINS:
-            for _old in list(_DELEGATION_CHAIN_BY_SESSION)[:_MAX_TRACKED_CHAINS // 2]:
-                _DELEGATION_CHAIN_BY_SESSION.pop(_old, None)
+    # I: ein Eintrag pro Hop; Wurzel-Agent zuerst, damit A->B->A als Zyklus
+    # erkannt wird. Geschrieben wird unter EXAKT dem gelesenen trajectory_id-Key.
+    _base_chain = list(_chain) or ([str(delegator_id)] if delegator_id else [])
+    _persisted_chain = tuple(dict.fromkeys(_base_chain + [ziel]))
+    _put_chain(_tid, _persisted_chain)
+    _SESSION_TRAJECTORY[tgt_sess] = _tid
     msg_text = f"{isolation_header}\nMessage from 🤖 {d_name} (@{delegator_id}): {auftrag}"
     with _get_state_db() as conn:
         _ensure_session_exists(conn, tgt_sess, ziel, t_model, auftrag[:50])
@@ -1387,6 +1581,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                     # I: RAM-Kette persistieren, damit resume_pending_delegation_watchers()
                     # Zyklus-/Tiefenschranke nach einem Neustart wiederherstellen kann.
                     "delegation_chain": list(_persisted_chain),
+                    "trajectory_id": _tid,
+                    "root_ticket_id": _root_ticket,
+                    "hops_used": int(_hop.get("hops_used") or 0),
                     "reasoning_level": reasoning_lvl,
                     "isolated": True,
                     "allowed_tools": isolated_scope["allowed_tools"],

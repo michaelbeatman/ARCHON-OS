@@ -314,6 +314,13 @@ class ExecutionReceiptLedger:
         }
 
     def verify_chain_integrity(self) -> Dict[str, Any]:
+        # d05 F-03: Quittungskette + Head-Anker + Trigger.
+        from backend.audit_log import finalize_secondary_chain_verification
+        return finalize_secondary_chain_verification(
+            "execution_receipts_ledger", self._verify_chain_integrity_raw(), db_path=self.db_path
+        )
+
+    def _verify_chain_integrity_raw(self) -> Dict[str, Any]:
         # C3: immer die Instanz-DB pruefen, nicht die globale Standard-DB.
         with sqlite3.connect(self.db_path, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row

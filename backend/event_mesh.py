@@ -7,6 +7,7 @@ Ereignisse direkt einzuspeisen und autonome Workflows zu triggern.
 
 import os
 import sys
+import contextlib
 import json
 import uuid
 import sqlite3
@@ -58,6 +59,63 @@ def _audit_webhook_event(action: str, payload: Dict[str, Any]) -> Dict[str, Any]
     except Exception as exc:
         logger.error("[EventMesh] Audit-Eintrag %s fehlgeschlagen: %s", action, exc)
         return {"audit_status": "error", "audit_error": type(exc).__name__}
+
+
+_TRACE_COLS = ("trace_id", "span_id", "traceparent", "tracestate")
+
+
+@contextlib.contextmanager
+def _outbound_child_span() -> Any:
+    """D16: Outbound-Hook — ein eigener Child-Span pro Systemgrenze."""
+    try:
+        from backend import trace_context as tc
+    except Exception as exc:
+        logger.warning("[EventMesh] trace_context nicht verfügbar: %s", exc)
+        yield {}
+        return
+    with tc.child_span() as (tid, sid, _parent_sid):
+        yield {
+            "trace_id": tid,
+            "span_id": sid,
+            "traceparent": tc.format_traceparent(tid, sid, tc.should_sample()),
+            "tracestate": tc.sanitize_tracestate(tc.current_tracestate()),
+        }
+
+
+def _restored_trace_columns(cols: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Nur gültige, gespeicherte Trace-Werte weiterverwenden (Retry/DLQ)."""
+    out = {k: str((cols or {}).get(k) or "") for k in _TRACE_COLS}
+    if out["traceparent"]:
+        try:
+            from backend.trace_context import parse_traceparent
+            if not parse_traceparent(out["traceparent"]):
+                out["traceparent"] = ""
+        except Exception:
+            out["traceparent"] = ""
+    return out
+
+
+def _row_trace_columns(row: Any) -> Dict[str, Any]:
+    """Liest Trace-Spalten aus sqlite3.Row oder Dict (auch ältere Zeilen)."""
+    data = dict(row) if not isinstance(row, dict) else row
+    return _restored_trace_columns({k: data.get(k) for k in _TRACE_COLS})
+
+
+def _traced_payload_str(payload: Dict[str, Any], trace: Dict[str, Any]) -> str:
+    """Payload mit dem persistierten Trace-Kontext non-destruktiv anreichern."""
+    try:
+        from backend import trace_context as tc
+        with tc.use_trace_context(
+            trace_id=trace.get("trace_id"), span_id=trace.get("span_id"),
+            traceparent=trace.get("traceparent"), tracestate=trace.get("tracestate"),
+        ):
+            data = tc.inject_payload(payload)
+    except Exception as exc:
+        logger.warning("[EventMesh] Payload-Trace fehlgeschlagen: %s", exc)
+        data = dict(payload or {})
+        if trace.get("trace_id") and "trace_id" not in data:
+            data["trace_id"] = trace["trace_id"]
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"), default=str)
 
 
 class EffectLedger:
@@ -265,13 +323,22 @@ class EventMesh:
                         next_try_at REAL NOT NULL DEFAULT 0,
                         last_error TEXT,
                         created_at TEXT NOT NULL,
-                        delivered_at TEXT
+                        delivered_at TEXT,
+                        trace_id TEXT,
+                        span_id TEXT,
+                        traceparent TEXT,
+                        tracestate TEXT
                     )
                 """)
                 # P2: CAS-Claim gegen parallele Worker. Ohne Claim lesen zwei
                 # Prozesse dieselbe Zeile und posten denselben Webhook doppelt.
+                # D16: Trace-Spalten bestandskompatibel per ALTER (keine Migration).
                 cols = {r[1] for r in conn.execute("PRAGMA table_info(event_mesh_outbox)").fetchall()}
-                for col, decl in (("claimed_by", "TEXT"), ("claim_expires", "REAL")):
+                for col, decl in (
+                    ("claimed_by", "TEXT"), ("claim_expires", "REAL"),
+                    ("trace_id", "TEXT"), ("span_id", "TEXT"),
+                    ("traceparent", "TEXT"), ("tracestate", "TEXT"),
+                ):
                     if cols and col not in cols:
                         conn.execute(f"ALTER TABLE event_mesh_outbox ADD COLUMN {col} {decl}")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_event_mesh_outbox_pending ON event_mesh_outbox(status, next_try_at)")
@@ -459,34 +526,55 @@ class EventMesh:
 
     @staticmethod
     def _outbox_key(webhook_url: str, event_type: str, payload: Dict[str, Any]) -> str:
-        explicit = str((payload or {}).get("idempotency_key") or "").strip()
+        clean = {k: v for k, v in (payload or {}).items() if k not in _TRACE_COLS}
+        explicit = str(clean.get("idempotency_key") or "").strip()
         if explicit:
             return explicit
         canonical = json.dumps(
-            {"url": webhook_url, "event_type": event_type, "payload": payload},
+            {"url": webhook_url, "event_type": event_type, "payload": clean},
             sort_keys=True, ensure_ascii=False, default=str,
         )
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    def emit_outbound_event(self, webhook_url: str, event_type: str, payload: Dict[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
-        """Outbox-first: Effekt wird persistiert, dann zugestellt (mit Idempotency-Key)."""
+    def emit_outbound_event(
+        self, webhook_url: str, event_type: str, payload: Dict[str, Any], timeout: float = 5.0,
+        *, trace_columns: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Outbox-first: Effekt wird persistiert, dann zugestellt (mit Idempotency-Key).
+
+        D16: Der Trace-Kontext wird in der Outbox gespeichert und bei Retry/DLQ
+        re-injiziert. ``trace_columns`` wird von DLQ-Replays übergeben.
+        """
+        base_payload = dict(payload or {})
+        # Idempotenz bleibt stabil: Trace-Felder zählen nicht zum Payload-Key.
+        idem = self._outbox_key(webhook_url, event_type, base_payload)
+        if trace_columns is None:
+            with _outbound_child_span() as stored:
+                trace = _restored_trace_columns(stored)
+        else:
+            trace = _restored_trace_columns(trace_columns)
         # H5: kompakte Serialisierung, damit der n8n-Empfaenger mit
         # JSON.stringify() exakt denselben Bytes-String signiert.
-        payload_str = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), default=str)
-        idem = self._outbox_key(webhook_url, event_type, payload)
+        payload_str = _traced_payload_str(base_payload, trace)
         now_iso = datetime.datetime.now().isoformat()
         conn = self._get_conn()
         try:
             with conn:
                 cur = conn.execute(
                     "INSERT OR IGNORE INTO event_mesh_outbox "
-                    "(idempotency_key, target_url, event_type, payload_json, status, created_at) "
-                    "VALUES (?, ?, ?, ?, 'pending', ?)",
-                    (idem, webhook_url, event_type, payload_str, now_iso),
+                    "(idempotency_key, target_url, event_type, payload_json, status, created_at, "
+                    " trace_id, span_id, traceparent, tracestate) "
+                    "VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
+                    (
+                        idem, webhook_url, event_type, payload_str, now_iso,
+                        trace["trace_id"], trace["span_id"], trace["traceparent"], trace["tracestate"],
+                    ),
                 )
                 inserted = int(cur.rowcount or 0)
                 conn.commit()
-            if inserted == 0:
+            # DLQ-Replay (trace_columns gesetzt) deliveries bewusst erneut —
+            # gleicher Idempotency-Key, aber wiederhergestellter Trace-Kontext.
+            if inserted == 0 and trace_columns is None:
                 row = conn.execute(
                     "SELECT status, attempts FROM event_mesh_outbox WHERE idempotency_key = ?", (idem,)
                 ).fetchone()
@@ -514,7 +602,10 @@ class EventMesh:
             target=webhook_url,
             payload_hash=hashlib.sha256(payload_str.encode("utf-8")).hexdigest(),
         )
-        return self._deliver_outbox(idem, webhook_url, event_type, payload_str, float(timeout), attempts=0)
+        return self._deliver_outbox(
+            idem, webhook_url, event_type, payload_str, float(timeout), attempts=0,
+            trace_columns=trace,
+        )
 
     def _deliver_outbox(
         self,
@@ -525,6 +616,7 @@ class EventMesh:
         timeout: float,
         attempts: int,
         update_ledger: bool = True,
+        trace_columns: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         # P0-7b: Bei der UNKNOWN-Reconciliation darf _deliver_outbox den
         # Ledger-Zustand NICHT selbst aendern — sonst trifft reconcile() mit
@@ -535,6 +627,19 @@ class EventMesh:
         try:
             body_bytes = payload_str.encode("utf-8")
             headers = {"Content-Type": "application/json", "X-Idempotency-Key": idem}
+            # D16: Re-Injektion des persistierten Kontexts als Child-Span —
+            # der Drainer läuft ohne Request-Kontext (Retry/DLQ inklusive).
+            trace = _restored_trace_columns(trace_columns)
+            try:
+                from backend import trace_context as tc
+                with tc.use_trace_context(
+                    trace_id=trace["trace_id"], span_id=trace["span_id"],
+                    traceparent=trace["traceparent"], tracestate=trace["tracestate"],
+                ):
+                    with tc.child_span(incoming=trace["traceparent"] or None):
+                        headers = tc.inject_headers(headers)
+            except Exception as exc:
+                logger.warning("[EventMesh] Trace-Header fehlgeschlagen: %s", exc)
             headers.update(webhook_signature_headers(body_bytes))
             _st, _hd, raw_body = safe_http_request(
                 target,
@@ -661,6 +766,7 @@ class EventMesh:
                     idem, str(out["target_url"]), str(out["event_type"]),
                     str(out["payload_json"]), 5.0, int(out["attempts"] or 0),
                     update_ledger=False,  # P0-7b: Ledger bleibt UNKNOWN bis reconcile()
+                    trace_columns=_row_trace_columns(out),
                 )
                 final_state = "COMMITTED" if res.get("status") == "delivered" else "FAILED"
                 if self.effect_ledger.reconcile(
@@ -753,6 +859,7 @@ class EventMesh:
                             "payload": dead_payload,
                             "attempts": attempts,
                             "last_error": str(r["last_error"] or "")[:500],
+                            **_row_trace_columns(r),
                         },
                         priority=2,
                         idempotency_key=str(r["idempotency_key"] or f"outbox-dead-{r['id']}"),
@@ -763,6 +870,7 @@ class EventMesh:
             res = self._deliver_outbox(
                 str(r["idempotency_key"]), str(r["target_url"]), str(r["event_type"]),
                 str(r["payload_json"]), 5.0, attempts,
+                trace_columns=_row_trace_columns(r),
             )
             # Claim nach Zustellung freigeben (Erfolg wie Fehler — der Status
             # in _deliver_outbox entscheidet ueber Retry).

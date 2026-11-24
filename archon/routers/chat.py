@@ -738,6 +738,8 @@ async def api_chat_stream(req: ChatStreamRequest):
             "estimated_tokens": est_tokens,
             "estimated_cost_eur": est_cost,
             "subagents_count": 0,  # F-007: ehrlich — noch keine Subtasks erzeugt
+            "subagents_count_source": "none_yet",  # D01: nach Fan-Out durch echte Zahl ersetzt
+            "subagents_count_estimated": False,
             "status": "approval",  # HITL Gate sperrt Ausführung zwingend
             "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
             "result_summary": "",
@@ -914,8 +916,44 @@ async def api_chat_stream(req: ChatStreamRequest):
     else:
         payload_messages = [{"role": "system", "content": system_prompt}] + recent_messages
 
+    def _sync_subagents_count_from_store(mission_task_id: Optional[str]) -> Optional[int]:
+        """D01/MED: `subagents_count` aus der echten Anzahl erzeugter Subtasks ableiten.
+
+        Der Fan-Out selbst liegt in `archon/core/delegation.py` (anderer Owner).
+        Dieser Chokepoint liest danach den persistierten Task und ersetzt die
+        Prognose durch die tatsaechliche Anzahl — ohne Subtasks bleibt der Wert
+        verifiziert 0 statt einer erfundenen Zahl.
+        """
+        if not mission_task_id:
+            return None
+        try:
+            from archon.core.mission_control import mc_get_task_sqlite, mc_update_task_sqlite
+
+            task = mc_get_task_sqlite(mission_task_id)
+            if not task:
+                return None
+            child_ids = task.get("subtask_ids") or []
+            actual = len(child_ids) if isinstance(child_ids, (list, tuple)) else 0
+            mc_update_task_sqlite(
+                mission_task_id,
+                {
+                    "subagents_count": actual,
+                    "subagents_count_source": "actual",
+                    "subagents_count_estimated": False,
+                },
+            )
+            return actual
+        except Exception as exc:
+            logger.warning(f"[Chat] subagents_count konnte nicht verifiziert werden: {exc}")
+            return None
+
     async def chat_event_stream():
         full_assistant_text = ""
+        # Nur echte Provider-Chunks zaehlen als Antwort. System-Hinweise
+        # (Skill-Pills) duerfen eine leere LLM-Antwort nicht ueberdecken.
+        provider_answer_text = ""
+        synced_subagents: Optional[int] = None
+        mission_task_id = task_id if mode == "mission" else None
         prompt_tokens = len(user_msg.split()) * 2
         completion_tokens = 0
 
@@ -960,12 +998,18 @@ async def api_chat_stream(req: ChatStreamRequest):
                     full_assistant_text += chunk[7:]
                 else:
                     full_assistant_text += chunk
+                    provider_answer_text += chunk
                     completion_tokens += 1
                     yield f"data: {json.dumps({'type': 'delta', 'delta': chunk}, ensure_ascii=False)}\n\n"
 
-            if not full_assistant_text:
-                full_assistant_text = f"Keine Antwort von {provider.capitalize()} erhalten."
-                yield f"data: {json.dumps({'type': 'delta', 'delta': full_assistant_text})}\n\n"
+            if not provider_failed and not provider_answer_text.strip():
+                # BLOCKER (D12/S-12.1): HTTP 200 ohne SSE-Nutzlast ist ein
+                # Provider-Fehler. Kein erfundener Text, kein `done`, keine
+                # DB-Speicherung, kein Transparenztag, keine Usage-Buchung.
+                provider_failed = True
+                err_msg = f"Leere Antwort von {provider.capitalize()} (HTTP 200 ohne SSE-Nutzlast)."
+                logger.error(f"[Chat Stream] {err_msg}")
+                yield f"data: {json.dumps({'type': 'error', 'error': err_msg}, ensure_ascii=False)}\n\n"
 
         except Exception as exc:
             provider_failed = True
@@ -973,7 +1017,13 @@ async def api_chat_stream(req: ChatStreamRequest):
             logger.error(f"[Chat Stream] {err_msg}")
             # Die Fehlermeldung gehoert in den Fehlerkanal, nicht in die
             # Antwort (sonst wird sie als Antwort gespeichert/gebucht).
-            yield f"data: {json.dumps({'type': 'error', 'error': err_msg})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'error': err_msg}, ensure_ascii=False)}\n\n"
+
+        if provider_failed:
+            # Harte Eskalation: der Stream endet mit `error`. Es gibt keine
+            # Antwort zu delegieren, zu speichern, zu bezahlen oder zu
+            # quittieren — insbesondere kein `done`-Event.
+            return
 
         # Kosten-Berechnung und Transparenz-Anzeige (Pillar 3/6)
         cost_str = "0.0000"
@@ -1041,6 +1091,9 @@ async def api_chat_stream(req: ChatStreamRequest):
             logger.error(f"Delegation Engine Fehler: {e}")
             delegation_receipts.append(f"⚠️ DELEGATION-FEHLER — Engine: {e}")
 
+        if mission_task_id:
+            synced_subagents = await asyncio.to_thread(_sync_subagents_count_from_store, mission_task_id)
+
         if delegation_receipts:
             receipt_text = "\n\n" + "\n".join(delegation_receipts)
             payload = json.dumps({"type": "delta", "delta": receipt_text}, ensure_ascii=False)
@@ -1073,7 +1126,10 @@ async def api_chat_stream(req: ChatStreamRequest):
             await asyncio.to_thread(
                 _record_session_model_usage, session_id, model, prompt_tokens, completion_tokens, total_cost_val
             )
-        payload_done = json.dumps({"type": "done", "session_id": session_id, "tokens": completion_tokens})
+        done_payload: Dict[str, Any] = {"type": "done", "session_id": session_id, "tokens": completion_tokens}
+        if synced_subagents is not None:
+            done_payload["subagents_count"] = synced_subagents
+        payload_done = json.dumps(done_payload, ensure_ascii=False)
         yield f"data: {payload_done}\n\n"
 
     return StreamingResponse(chat_event_stream(), media_type="text/event-stream")

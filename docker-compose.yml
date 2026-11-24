@@ -8,6 +8,13 @@ x-logging: &default-logging
     max-size: "20m"
     max-file: "5"
 
+# Audit D10: Beobachter-Profil-Schalter. `ARCHON_OBSERVABILITY=full` wird von
+# den Startpfaden (start.bat/install.sh) auf `docker compose --profile full`
+# abgebildet. Der `full`-Profile-Fan-in aktiviert damit monitoring
+# (Prometheus/Alertmanager/Grafana/Uptime-Kuma), logging (Loki/Promtail),
+# replication (Litestream), tracing (OTel-Collector) und das Dashboard.
+# Langfuse v2 ist EOL und bewusst NICHT im full-Profil (siehe langfuse-Service).
+
 networks:
   agentic_mesh:
     driver: bridge
@@ -103,8 +110,13 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       # Audit D16/P1: Dienstname für OTel-Spans (Collector/ downstream)
       - OTEL_SERVICE_NAME=archon-os
-      # Audit D10: externaler Dead-Man-Switch. Ohne Wert bleibt der
-      # Selbstheilungs-Report bewusst `dead_man_switch_configured: false`.
+      # Audit D16 (Agent I): Sampling. Audit-Spans setzen force_sample_audit()
+      # im Code und umgehen damit die Ratio. Keine echten Keys/Endpunkte hier.
+      - OTEL_TRACES_SAMPLER=${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
+      - OTEL_TRACES_SAMPLER_ARG=${OTEL_TRACES_SAMPLER_ARG:-1.0}
+      # Audit D10: OPTIONALE, vom Betreiber in .env zu setzende Dead-Man-URL.
+      # Kein erfundenes externes Ziel. Ohne Wert bleibt der Selbstheilungs-
+      # Report bewusst `dead_man_switch_configured: false`.
       - ARCHON_HEARTBEAT_WEBHOOK_URL=${ARCHON_HEARTBEAT_WEBHOOK_URL:-}
       # Audit D10 / E2E 24.11.2026: Liveness-Schwellen an den 3-s-Healthcheck-
       # Timeout angleichen (mit 15 s/5000 ms blieb /livez bei 4-s-Haengern 200).
@@ -398,7 +410,7 @@ services:
     logging:
       <<: *default-logging
     restart: unless-stopped
-    profiles: ["dashboard", "observability", "all"]
+    profiles: ["dashboard", "observability", "all", "full"]
     networks:
       - agentic_mesh
     depends_on:
@@ -431,7 +443,7 @@ services:
     logging:
       <<: *default-logging
     restart: unless-stopped
-    profiles: ["dashboard", "observability", "all"]
+    profiles: ["dashboard", "observability", "all", "full"]
     network_mode: "service:hermes-dashboard"
     depends_on:
       - hermes-dashboard
@@ -533,7 +545,7 @@ services:
     logging:
       <<: *default-logging
     restart: unless-stopped
-    profiles: ["backup", "replication", "all"]
+    profiles: ["backup", "replication", "all", "full"]
     networks:
       - agentic_mesh
     volumes:
@@ -555,13 +567,13 @@ services:
   # Audit D16/P1: OTel Collector (gRPC 4317 / HTTP 4318). Nur mit Profil
   # tracing/observability/all aktiv; Konfiguration aus config/otel-collector-config.yml.
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.114.0
+    image: otel/opentelemetry-collector-contrib:0.114.0@sha256:37fa87091cfaaec7234a27e4e395a40c31c2bfaea97a349a4afef6d9e9681197
     container_name: ${ARCHON_OTEL_COLLECTOR_CONTAINER_NAME:-archon-otel-collector}
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     logging:
       <<: *default-logging
     restart: unless-stopped
-    profiles: ["tracing", "observability", "all"]
+    profiles: ["tracing", "observability", "all", "full"]
     networks:
       - agentic_mesh
     ports:
@@ -570,7 +582,14 @@ services:
     volumes:
       - ./config/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
     environment:
-      - OTEL_DOWNSTREAM_OTLP_ENDPOINT=${OTEL_DOWNSTREAM_OTLP_ENDPOINT:-http://langfuse:3000/api/public/otel}
+      # Audit D16: nur aus .env, keine eingebetteten Keys/Endpunkte. Ohne
+      # OTEL_DOWNSTREAM_OTLP_ENDPOINT exportiert der Collector nur debug.
+      - OTEL_DOWNSTREAM_OTLP_ENDPOINT=${OTEL_DOWNSTREAM_OTLP_ENDPOINT:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - OTEL_TRACES_SAMPLER=${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
+      - OTEL_TRACES_SAMPLER_ARG=${OTEL_TRACES_SAMPLER_ARG:-1.0}
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4318/"]
       interval: 30s
@@ -582,13 +601,19 @@ services:
           memory: 512M
           cpus: "0.5"
 
+  # Audit D09: Langfuse v2 ist EOL (Security-Support Ende Q1/2025). Eine
+  # v4-Migration braucht zusaetzlich Worker/ClickHouse/Redis/S3 und darf nicht
+  # durch einen reinen Image-Tag-Wechsel vorgetaeuscht werden. Deshalb ehrlich
+  # `not_configured`: der Container ist digest-gepinnt, aber NUR ueber das
+  # Opt-in-Profil `langfuse-not-configured` erreichbar und nicht Teil von
+  # tracing/observability/all/full. LANGFUSE_* bleibt ohne Defaults (aus .env).
   langfuse:
     image: langfuse/langfuse:2@sha256:85c278dcab96c15db94191a5c1664f85aba2d7fb6771a00e99681c902c4b7015
     container_name: langfuse
     logging:
       <<: *default-logging
     restart: unless-stopped
-    profiles: ["tracing", "observability", "all"]
+    profiles: ["langfuse-not-configured", "not_configured"]
     networks:
       - agentic_mesh
     ports:
@@ -618,7 +643,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    profiles: ["monitoring", "observability", "all"]
+    profiles: ["monitoring", "observability", "all", "full"]
     networks:
       - agentic_mesh
     ports:
@@ -650,7 +675,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    profiles: ["monitoring", "observability", "all"]
+    profiles: ["monitoring", "observability", "all", "full"]
     networks:
       - agentic_mesh
     ports:
@@ -694,7 +719,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    profiles: ["monitoring", "observability", "all"]
+    profiles: ["monitoring", "observability", "all", "full"]
     networks:
       - agentic_mesh
     # Host port 3003 avoids collision with anything-llm on port 3001
@@ -719,7 +744,7 @@ services:
     logging:
       <<: *default-logging
     restart: unless-stopped
-    profiles: ["monitoring", "observability", "all"]
+    profiles: ["monitoring", "observability", "all", "full"]
     networks:
       - agentic_mesh
     ports:
@@ -790,7 +815,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    profiles: ["logging", "observability", "all"]
+    profiles: ["logging", "observability", "all", "full"]
     networks:
       - agentic_mesh
     ports:
@@ -811,7 +836,7 @@ services:
     logging:
       <<: *default-logging
     restart: unless-stopped
-    profiles: ["logging", "observability", "all"]
+    profiles: ["logging", "observability", "all", "full"]
     networks:
       - agentic_mesh
       # Nur über den gehärteten Proxy an die Docker-API, nie mit dem rohen Socket.
@@ -897,9 +922,24 @@ services:
     depends_on:
       docker-socket-proxy:
         condition: service_healthy
+      # Audit D10: der externe Autoheal ist ein echter Default-Stack-Dienst
+      # (kein Profil). Er startet erst, wenn das Ziel /livez wirklich bereit
+      # ist — sonst wertet er den Boot als Haenger und restartet ihn.
+      archon-os:
+        condition: service_healthy
+    healthcheck:
+      # Der Prozess laeuft als PID 1 im Container; /proc ist vorhanden.
+      test: ["CMD-SHELL", "python -c \"import os,sys; sys.exit(0 if any(b'archon_autoheal.py' in open('/proc/'+p+'/cmdline','rb').read() for p in os.listdir('/proc') if p.isdigit()) else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     environment:
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - AUTOHEAL_TARGET_URL=${AUTOHEAL_TARGET_URL:-http://archon-os:8501/livez}
+      # Audit D10: optionaler Dead-Man-Webhook (Betreiber setzt ihn in .env;
+      # ohne Wert bleibt dead_man_switch_configured=false — kein erfundenes Ziel).
+      - ARCHON_HEARTBEAT_WEBHOOK_URL=${ARCHON_HEARTBEAT_WEBHOOK_URL:-}
       - AUTOHEAL_CONTAINER=${ARCHON_CONTAINER_NAME:-ARCHON-OS}
       - AUTOHEAL_INTERVAL_S=${AUTOHEAL_INTERVAL_S:-30}
       - AUTOHEAL_FAILURES=${AUTOHEAL_FAILURES:-5}

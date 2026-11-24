@@ -26,6 +26,27 @@ def _b64u(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
+def _registration_auth_data(rp_id: str, *, flags: int = 0x05,
+                            sign_count: int = 0, aaguid: bytes = b"\x00" * 16) -> bytes:
+    """32 Byte rpIdHash + Flags(UP|UV) + 4 Byte Counter + 16 Byte AAGUID = 53 Byte.
+
+    Seit der Haertung ist authenticatorData bei der Registrierung zwingend und
+    muss mindestens 53 Byte enthalten — alte Fixtures ohne authData sind nicht
+    mehr gueltig.
+    """
+    return (
+        hashlib.sha256(rp_id.encode("utf-8")).digest()
+        + bytes([flags])
+        + int(sign_count).to_bytes(4, "big")
+        + aaguid
+    )
+
+
+# Minimales Attestation-Statement (CBOR 'fmt': 'packed'); verhindert, dass der
+# Registrierungspfad wegen fehlender Attestation fail-closed abbricht.
+_ATTESTATION_OBJECT = _b64u(b"\xa3\x63fmt\x66packed")
+
+
 # ---------------------------------------------------------------------------
 # 1. Passkey-HITL: UV-Enforcement & serverseitiges Einmal-Proof-Token
 # ---------------------------------------------------------------------------
@@ -56,6 +77,8 @@ def test_passkey_hitl_requires_uv_for_payments_and_mints_single_use_token(tmp_pa
         alg=-7,
         label="TestKey",
         expected_origin="http://localhost:8420",
+        authenticator_data_b64=_b64u(_registration_auth_data("localhost")),
+        attestation_object_b64=_ATTESTATION_OBJECT,
     )
     pk.update_user_passkey_config("u1", enabled=True, scope="all")
 
@@ -396,43 +419,66 @@ def test_passkey_hardening_system_category_uv_and_authdata(tmp_path, monkeypatch
     monkeypatch.setattr(pk, "PASSKEY_FILE", str(tmp_path / "passkey.json"))
     assert pk.DEFAULT_CATEGORIES.get("system") is True
 
+    # Ohne Credentials sind Hochrisiko-Kategorien hart fail-closed. Die
+    # ERSTREGISTRIERUNG bleibt davon ausgenommen (kein Lockout).
+    for category in ("system", "destructive_actions", "payments"):
+        assert pk.is_passkey_required("u_ohne_cred", category) is True
+    assert pk.is_additional_passkey_registration_protected("u_ohne_cred") is False
+    with pytest.raises(ValueError, match="Kein Passkey"):
+        pk.create_hitl_assertion_options("u_ohne_cred", "localhost", category="system")
+
     priv = ec.generate_private_key(ec.SECP256R1())
     spki_b64 = base64.urlsafe_b64encode(
         priv.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
     ).decode().rstrip("=")
 
-    reg_opts = pk.create_registration_options("u_hard", "hard", "localhost")
-    cd_b64 = base64.urlsafe_b64encode(
-        json.dumps({"type": "webauthn.create", "challenge": reg_opts["challenge"], "origin": "http://localhost:8501"}).encode()
-    ).decode().rstrip("=")
+    def _client_data():
+        opts = pk.create_registration_options("u_hard", "hard", "localhost")
+        return base64.urlsafe_b64encode(json.dumps({
+            "type": "webauthn.create",
+            "challenge": opts["challenge"],
+            "origin": "http://localhost:8501",
+        }).encode()).decode().rstrip("=")
 
-    # Falsches rpIdHash in authenticatorData muss abgelehnt werden
-    bad_auth = hashlib.sha256(b"evil.example.com").digest() + bytes([0x01]) + (0).to_bytes(4, "big")
-    bad_auth_b64 = base64.urlsafe_b64encode(bad_auth).decode().rstrip("=")
-    with pytest.raises(ValueError):
+    # Falscher rpIdHash bei korrekter Laenge (53 Byte inkl. AAGUID) -> ablehnen.
+    bad_auth = _registration_auth_data("evil.example.com", flags=0x05)
+    assert len(bad_auth) >= 53
+    with pytest.raises(ValueError, match="rpIdHash"):
         pk.verify_and_store_registration(
             user_id="u_hard",
             credential_id="cred_1",
-            client_data_b64=cd_b64,
+            client_data_b64=_client_data(),
             public_key_spki_b64=spki_b64,
-            authenticator_data_b64=bad_auth_b64,
+            authenticator_data_b64=_b64u(bad_auth),
+            attestation_object_b64=_ATTESTATION_OBJECT,
         )
 
-    # Korrektes rpIdHash + UP wird akzeptiert
-    reg_opts2 = pk.create_registration_options("u_hard", "hard", "localhost")
-    cd_b64_2 = base64.urlsafe_b64encode(
-        json.dumps({"type": "webauthn.create", "challenge": reg_opts2["challenge"], "origin": "http://localhost:8501"}).encode()
-    ).decode().rstrip("=")
-    good_auth = hashlib.sha256(b"localhost").digest() + bytes([0x01]) + (0).to_bytes(4, "big")
-    good_auth_b64 = base64.urlsafe_b64encode(good_auth).decode().rstrip("=")
+    # Alte Fixtures OHNE authenticatorData werden heute hart abgelehnt.
+    with pytest.raises(ValueError, match="authenticatorData"):
+        pk.verify_and_store_registration(
+            user_id="u_hard",
+            credential_id="cred_1",
+            client_data_b64=_client_data(),
+            public_key_spki_b64=spki_b64,
+            authenticator_data_b64="",
+            attestation_object_b64=_ATTESTATION_OBJECT,
+        )
+
+    # Korrektes rpIdHash + UP|UV (0x05) + AAGUID -> akzeptiert.
+    good_auth = _registration_auth_data("localhost", flags=0x05)
     cfg = pk.verify_and_store_registration(
         user_id="u_hard",
         credential_id="cred_1",
-        client_data_b64=cd_b64_2,
+        client_data_b64=_client_data(),
         public_key_spki_b64=spki_b64,
-        authenticator_data_b64=good_auth_b64,
+        authenticator_data_b64=_b64u(good_auth),
+        attestation_object_b64=_ATTESTATION_OBJECT,
     )
     assert len(cfg["credentials"]) == 1
+
+    # Auch nach Registrierung bleibt system/destructive_actions hart erforderlich.
+    assert pk.is_passkey_required("u_hard", "system") is True
+    assert pk.is_passkey_required("u_hard", "destructive_actions") is True
 
     # UV-Downgrade-Schutz: Token ohne uv_verified darf nicht fuer payments/system eingelöst werden
     pk._PROOF_TOKENS["tok_no_uv"] = {
@@ -443,29 +489,56 @@ def test_passkey_hardening_system_category_uv_and_authdata(tmp_path, monkeypatch
         "created_ts": 9999999999.0,
     }
     assert pk.consume_hitl_proof_token("tok_no_uv", "u_hard", category="payments") is False
+    assert pk.consume_hitl_proof_token("tok_no_uv", "u_hard", category="system") is False
 
 
 def test_approval_policy_hmac_mixed_chain_and_fail_closed(tmp_path, monkeypatch):
+    import sqlite3
     import backend.approval_policy_engine as ape
     import backend.audit_log as al
 
     db_file = str(tmp_path / "approval.db")
     monkeypatch.delenv("ARCHON_AUDIT_HMAC_KEY", raising=False)
-    monkeypatch.delenv("ARCHON_AUDIT_HMAC_PREVIOUS_KEYS", raising=False)
-    # Fuer das Seeden des historischen Legacy-Blocks (vor HMAC-Aktivierung)
-    # die neue A1-Fail-Closed-Sperre kurzzeitig deaktivieren.
-    monkeypatch.setattr(al, "_dispatch_audit_enforced", lambda: False)
+    monkeypatch.delenv("ARCHON_AUDIT_HMAC_EPOCHS", raising=False)
+    monkeypatch.delenv("ARCHON_AUDIT_LEGACY_MAX_BLOCK", raising=False)
 
+    # Der Abschalter ist restlos entfernt: ohne Key wirft jeder Schreibversuch.
+    with pytest.raises(RuntimeError, match="ARCHON_AUDIT_HMAC_KEY"):
+        al.sign_block("legacy-attempt")
+
+    # Historische Legacy-Bloecke (nacktes SHA-256) als SQLite-Fixture anlegen.
+    # Der Produktionspfad darf sie ohne HMAC-Key nicht mehr erzeugen.
+    conn = sqlite3.connect(db_file)
+    conn.execute("""CREATE TABLE approval_policies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL,
+        policy_key TEXT NOT NULL UNIQUE, policy_value TEXT NOT NULL,
+        label TEXT, description TEXT, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL)""")
+    conn.execute("""CREATE TABLE approval_policy_audit_chain (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, prev_hash TEXT NOT NULL,
+        current_hash TEXT NOT NULL, timestamp TEXT NOT NULL, user_id TEXT NOT NULL,
+        action TEXT NOT NULL, domain TEXT, policy_key TEXT, old_value TEXT,
+        new_value TEXT, signature_valid INTEGER DEFAULT 1)""")
+    conn.execute("""INSERT INTO approval_policies
+        (domain, policy_key, policy_value, label, description, updated_at, updated_by)
+        VALUES ('finance', 'finance_auto_approval_max', '50.00', 'Legacy', 'Legacy', '2026-01-01', 'system')""")
+    genesis, ts = ape.GENESIS_HASH, "2026-01-01T00:00:00+00:00"
+    legacy_payload = f"{genesis}|{ts}|system|INIT|finance|finance_auto_approval_max|50.00"
+    legacy_hash = hashlib.sha256(legacy_payload.encode("utf-8")).hexdigest()
+    conn.execute("""INSERT INTO approval_policy_audit_chain
+        (id, prev_hash, current_hash, timestamp, user_id, action, domain, policy_key, old_value, new_value)
+        VALUES (1, ?, ?, ?, 'system', 'INIT', 'finance', 'finance_auto_approval_max', '', '50.00')""",
+                 (genesis, legacy_hash, ts))
+    conn.commit()
+    conn.close()
+
+    # HMAC-Key setzen und Legacy-Grenze markieren -> gemischte Kette bleibt gueltig.
+    monkeypatch.setenv("ARCHON_AUDIT_LEGACY_MAX_BLOCK", "1")
+    monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "0123456789abcdef0123456789abcdef")
     eng = ape.ApprovalPolicyEngine(db_path=db_file)
-    monkeypatch.setattr(al, "_dispatch_audit_enforced", lambda: True)
     v1 = eng.verify_audit_integrity()
     assert v1["valid"] is True
     assert v1["hmac_blocks"] == 0
 
-    # Jetzt HMAC-Key setzen und Legacy-Grenze markieren -> gemischte Kette bleibt gueltig
-    monkeypatch.setenv("ARCHON_AUDIT_LEGACY_MAX_BLOCK", str(v1.get("count", 1)))
-    monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "0123456789abcdef0123456789abcdef")
-    al._hmac_epochs()  # env check
     h_hmac = eng._log_audit_change("admin", "UPDATE", "finances", "max_auto", "100", "250")
     assert h_hmac.startswith(al.HMAC_PREFIX)
 
@@ -474,7 +547,9 @@ def test_approval_policy_hmac_mixed_chain_and_fail_closed(tmp_path, monkeypatch)
     assert v2["hmac_active"] is True
     assert v2["hmac_blocks"] == 1
 
-    # Fehlt der HMAC-Key spaeter, schlaegt verify_audit_integrity() fail-closed fehl
+    # Fehlt der HMAC-Key spaeter, schlaegt verify_audit_integrity() fail-closed fehl.
     monkeypatch.delenv("ARCHON_AUDIT_HMAC_KEY", raising=False)
     v3 = eng.verify_audit_integrity()
     assert v3["valid"] is False
+    with pytest.raises(RuntimeError, match="ARCHON_AUDIT_HMAC_KEY"):
+        eng._log_audit_change("admin", "UPDATE", "finances", "max_auto", "250", "300")

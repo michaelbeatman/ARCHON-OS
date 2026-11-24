@@ -27,38 +27,52 @@ def configure(**deps: Any) -> None:
 from archon.routers._validated_body import PassthroughBody, as_payload
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["marketplace"])
 
+_MARKETPLACE_IMPORT_ERRORS: Dict[str, str] = {}
+
 try:
     from utils.repo_sync import get_marketplace_sources, list_templates_for_source, get_template_detail
-except Exception:
-    def get_marketplace_sources():
-        return [
-            {"id": "fabric", "name": "Daniel Miessler Fabric (255+ Patterns)"},
-            {"id": "crewai", "name": "CrewAI Business Roles"},
-            {"id": "anthropic", "name": "Anthropic C-Suite Hub"}
-        ]
-    def list_templates_for_source(s, search=None, category=None): return []
-    def get_template_detail(s, t): return None
+except Exception as _exc:
+    # D01/MED: Importfehler nicht verschlucken und durch Fake-Quellen
+    # ersetzen. Endpunkte melden explizit `not_configured` (HTTP 503).
+    _MARKETPLACE_IMPORT_ERRORS["repo_sync"] = str(_exc)
+    get_marketplace_sources = None
+    list_templates_for_source = None
+    get_template_detail = None
 
 try:
     from utils.skill_marketplace import get_skill_marketplace_sources, list_skills_for_source, get_skill_detail
-except Exception:
-    def get_skill_marketplace_sources(): return []
-    def list_skills_for_source(s="realestate", search=None, category=None): return []
-    def get_skill_detail(s, sid): return None
+except Exception as _exc:
+    _MARKETPLACE_IMPORT_ERRORS["skill_marketplace"] = str(_exc)
+    get_skill_marketplace_sources = None
+    list_skills_for_source = None
+    get_skill_detail = None
+
+
+def _require_marketplace_backend(name: str) -> None:
+    if name in _MARKETPLACE_IMPORT_ERRORS:
+        raise HTTPException(status_code=503, detail={
+            "status": "not_configured",
+            "code": "MARKETPLACE_BACKEND_UNAVAILABLE",
+            "module": name,
+            "message": _MARKETPLACE_IMPORT_ERRORS[name],
+        })
 
 
 @router.get("/api/marketplace/sources")
 def api_get_marketplace_sources():
+    _require_marketplace_backend("repo_sync")
     return get_marketplace_sources()
 
 
 @router.get("/api/marketplace/templates")
 def api_get_marketplace_templates(source: str = Query("fabric"), search: str = Query(None), category: str = Query(None)):
+    _require_marketplace_backend("repo_sync")
     return list_templates_for_source(source, search=search, category=category)
 
 
 @router.get("/api/marketplace/template")
 def api_get_marketplace_template_detail(source: str = Query(...), id: str = Query(...)):
+    _require_marketplace_backend("repo_sync")
     detail = get_template_detail(source, id)
     if not detail:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -67,16 +81,19 @@ def api_get_marketplace_template_detail(source: str = Query(...), id: str = Quer
 
 @router.get("/api/marketplace/skills/sources")
 def api_get_skill_sources():
+    _require_marketplace_backend("skill_marketplace")
     return get_skill_marketplace_sources()
 
 
 @router.get("/api/marketplace/skills")
 def api_get_skills_list(source: str = Query("realestate"), search: str = Query(None), category: str = Query(None)):
+    _require_marketplace_backend("skill_marketplace")
     return list_skills_for_source(source, search=search, category=category)
 
 
 @router.get("/api/marketplace/skill")
 def api_get_skill_detail(source: str = Query(...), id: str = Query(...)):
+    _require_marketplace_backend("skill_marketplace")
     detail = get_skill_detail(source, id)
     if not detail:
         raise HTTPException(status_code=404, detail="Skill not found")
@@ -151,7 +168,8 @@ def api_marketplace_recruit(request: Request, data: PassthroughBody = Body(...))
     source = data.get("source", "fabric")
     template_id = data.get("template_id") or data.get("id")
     custom_name = data.get("name")
-    
+
+    _require_marketplace_backend("repo_sync")
     tpl = get_template_detail(source, template_id)
     if not tpl:
         raise HTTPException(status_code=404, detail="Template not found")

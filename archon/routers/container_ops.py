@@ -26,6 +26,22 @@ def _require_admin(request: Request):
     require_admin_or_503(request)
 
 
+class BlockedDispatch(str):
+    """Typisierter Rueckgabewert einer blockierten Dispatch-Entscheidung.
+
+    D12/HIGH: Ein Zero-Egress-Block darf niemals als normaler Agenten-Text
+    (und damit als Erfolg mit exit_code 0) durchgereicht werden. Die Klasse
+    bleibt str-kompatibel fuer vorhandene Aufrufer, traegt aber `status:
+    blocked` und den echten `error_code`, den der Endpunkt auswertet.
+    """
+
+    def __new__(cls, message: str, *, error_code: str = "ZERO_EGRESS_BLOCKED"):
+        obj = super().__new__(cls, message)
+        obj.status = "blocked"
+        obj.error_code = error_code
+        return obj
+
+
 def send_prompt_to_agent(
     agent_name: str,
     agent_config: dict,
@@ -114,7 +130,11 @@ def send_prompt_to_agent(
             role=role_name,
         )
     except ZeroEgressBlockedError as ze_err:
-        return f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}"
+        # Nicht schlucken: typisiert als `status: blocked` mit echtem code.
+        return BlockedDispatch(
+            f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}",
+            error_code=getattr(ze_err, "error_code", "ZERO_EGRESS_BLOCKED"),
+        )
 
     target_model = str(gate.get("model") or model_name)
     _omni_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()
@@ -203,7 +223,12 @@ def send_prompt_to_agent(
         except Exception as e:
             last_err = f"[VERBINDUNGSFEHLER]: {e}"
 
-    final_output = ai_resp if ai_resp else (last_err or f"[FEHLER]: Keine Antwort von Agent '{agent_name}' erhalten.")
+    # D12/HIGH: HTTP 200 ohne Nutzlast ist ein Fehler, kein erfundener
+    # Fehlertext, der als normale Agenten-Antwort mit exit_code 0 zurueckgeht.
+    if ai_resp is None or (isinstance(ai_resp, str) and not ai_resp.strip()):
+        raise RuntimeError(f"Leere Antwort von Agent '{agent_name}' (HTTP 200 ohne Nutzlast). {last_err}")
+
+    final_output = ai_resp
 
     if memory_bridge:
         try:
@@ -226,6 +251,8 @@ class ContainerExecRequest(BaseModel):
 @router.post("/api/v1/container/exec")
 def exec_container_command_api(req: ContainerExecRequest, request: Request):
     _require_admin(request)
+    from backend.llm_egress_guard import ZeroEgressBlockedError
+
     import main as app_main
 
     load_agent_configs_fn = getattr(app_main, "load_agent_configs", None)
@@ -262,13 +289,40 @@ def exec_container_command_api(req: ContainerExecRequest, request: Request):
         logger.warning(f"JEV Fast-Path Fehler (Fallback auf LLM): {e_jev}")
 
     send_prompt_fn = getattr(app_main, "send_prompt_to_agent", send_prompt_to_agent)
-    output = send_prompt_fn(
-        agent_name=req.container_name,
-        agent_config=agent_cfg,
-        user_input=req.command,
-        history=req.history,
-        session_id=req.session_id,
-    )
+    try:
+        output = send_prompt_fn(
+            agent_name=req.container_name,
+            agent_config=agent_cfg,
+            user_input=req.command,
+            history=req.history,
+            session_id=req.session_id,
+        )
+    except ZeroEgressBlockedError as ze_err:
+        raise HTTPException(status_code=403, detail={
+            "status": "blocked",
+            "error_code": getattr(ze_err, "error_code", "ZERO_EGRESS_BLOCKED"),
+            "exit_code": 403,
+            "message": str(ze_err),
+        })
+    except RuntimeError as rt_err:
+        raise HTTPException(status_code=502, detail={
+            "status": "error",
+            "error_code": "EMPTY_RESPONSE",
+            "exit_code": 502,
+            "message": str(rt_err),
+        })
+
+    if getattr(output, "status", None) == "blocked":
+        raise HTTPException(status_code=403, detail={
+            "status": "blocked",
+            "error_code": getattr(output, "error_code", "ZERO_EGRESS_BLOCKED"),
+            "exit_code": 403,
+            "message": str(output),
+        })
+    if not isinstance(output, str) or not output.strip():
+        raise HTTPException(status_code=502, detail={
+            "status": "error", "error_code": "EMPTY_RESPONSE", "exit_code": 502,
+        })
 
     return {
         "exit_code": 0,

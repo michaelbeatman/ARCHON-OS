@@ -622,6 +622,43 @@ def adapt_soul_language(markdown: str, lang: str) -> str:
     )
 
 
+# Audit D15: gemeinsame Basis + eine zwingend rollenspezifische Zeile aus
+# `negative_scope` (agent_profiles.json). Damit ist die Abgrenzung nicht mehr
+# 72/73 identische Boilerplate. Von build_souls_ssot.py und diesem Runtime-Sync
+# gemeinsam genutzt -> bitgleiche SOUL-Artefakte.
+ARCHON_NEGATIVE_SCOPE_MARKER = "<!-- ARCHON_NEGATIVE_SCOPE_v2 -->"
+_NEGATIVE_BASE_DE = (
+    "- Du darfst keine Fakten, Quellen, Zahlen oder Belege erfinden.\n"
+    "- Du darfst HITL-Gates, Zero-Egress-Regeln, Budgets und Freigabeketten nicht umgehen.\n"
+    "- Du darfst keine Secrets preisgeben oder Daten unautorisiert nach aussen tragen.\n"
+)
+_NEGATIVE_BASE_EN = (
+    "- Never fabricate facts, sources, figures or evidence.\n"
+    "- Never bypass HITL gates, zero-egress rules, budgets or approval chains.\n"
+    "- Never disclose secrets or exfiltrate data without authorisation.\n"
+)
+
+
+def append_role_negative_scope(markdown: str, prof: Dict[str, Any], lang: str) -> str:
+    """Haengt die gemeinsame Negativ-Basis + die rollenspezifische Zeile an.
+
+    Ist die Quelle (Prompt/SOUL) bereits mit dem v2-Marker versehen, wird nichts
+    veraendert (Idempotenz). Ohne `negative_scope` bleibt der SOUL-Text unveraendert.
+    """
+    scope = str((prof or {}).get("negative_scope") or "").strip()
+    if not scope or ARCHON_NEGATIVE_SCOPE_MARKER in markdown:
+        return markdown
+    if str(lang).lower().startswith("en"):
+        heading = "## Explicitly Not Allowed / Role-Specific Scope"
+        base = _NEGATIVE_BASE_EN
+        line = f"- {scope}\n"
+    else:
+        heading = "## Explizit nicht erlaubt / Rollen-spezifische Abgrenzung"
+        base = _NEGATIVE_BASE_DE
+        line = f"- {scope}\n"
+    return markdown.rstrip() + "\n\n" + ARCHON_NEGATIVE_SCOPE_MARKER + "\n" + heading + "\n" + base + line
+
+
 def enrich_profile_english_fields(prof: Dict[str, Any]) -> Dict[str, Any]:
     """Ensures name_en, category_en, and description_en exist on prof without losing German fields."""
     pid = prof.get("id", "")
@@ -1523,6 +1560,11 @@ def sync_single_agent_capabilities_to_soul(
         pro_md = adapt_soul_language(pro_md, resolved_lang)
         full_md = adapt_soul_language(full_md, resolved_lang)
 
+    # Audit D15: identische Negativ-Abgrenzung wie in build_souls_ssot.py.
+    compact_md = append_role_negative_scope(compact_md, prof, resolved_lang)
+    pro_md = append_role_negative_scope(pro_md, prof, resolved_lang)
+    full_md = append_role_negative_scope(full_md, prof, resolved_lang)
+
     if active_mode == "full":
         active_md = full_md
     elif active_mode == "pro":
@@ -1535,13 +1577,13 @@ def sync_single_agent_capabilities_to_soul(
         pdir = os.path.join(base_dir, agent_id)
         if os.path.exists(os.path.dirname(pdir)):
             os.makedirs(pdir, exist_ok=True)
-            with open(os.path.join(pdir, "SOUL_COMPACT.md"), "w", encoding="utf-8") as fc:
+            with open(os.path.join(pdir, "SOUL_COMPACT.md"), "w", encoding="utf-8", newline="\n") as fc:
                 fc.write(compact_md)
-            with open(os.path.join(pdir, "SOUL_PRO.md"), "w", encoding="utf-8") as fp:
+            with open(os.path.join(pdir, "SOUL_PRO.md"), "w", encoding="utf-8", newline="\n") as fp:
                 fp.write(pro_md)
-            with open(os.path.join(pdir, "SOUL_FULL.md"), "w", encoding="utf-8") as ff:
+            with open(os.path.join(pdir, "SOUL_FULL.md"), "w", encoding="utf-8", newline="\n") as ff:
                 ff.write(full_md)
-            with open(os.path.join(pdir, "SOUL.md"), "w", encoding="utf-8") as fa:
+            with open(os.path.join(pdir, "SOUL.md"), "w", encoding="utf-8", newline="\n") as fa:
                 fa.write(active_md)
             write_hermes_profile_yaml(pdir, prof, lang=resolved_lang)
 
@@ -1597,6 +1639,14 @@ def apply_soul_mode(mode: str = "compact", target_agent_id: str | None = None, l
         pro_en = adapt_soul_language(build_pro_soul(prof, old_persona_en, lang="en"), "en")
         full_en = adapt_soul_language(build_full_soul(prof, old_map_en, profiles, lang="en"), "en")
 
+        # Audit D15: gemeinsame kanonische Negativ-Abgrenzung (siehe oben).
+        compact_de = append_role_negative_scope(compact_de, prof, "de")
+        pro_de = append_role_negative_scope(pro_de, prof, "de")
+        full_de = append_role_negative_scope(full_de, prof, "de")
+        compact_en = append_role_negative_scope(compact_en, prof, "en")
+        pro_en = append_role_negative_scope(pro_en, prof, "en")
+        full_en = append_role_negative_scope(full_en, prof, "en")
+
         active_de = full_de if mode == "full" else (pro_de if mode == "pro" else compact_de)
         active_en = full_en if mode == "full" else (pro_en if mode == "pro" else compact_en)
         active_primary = active_en if resolved_lang == "en" else active_de
@@ -1620,13 +1670,13 @@ def apply_soul_mode(mode: str = "compact", target_agent_id: str | None = None, l
         for base_dir in prof_dirs:
             pdir = os.path.join(base_dir, pid)
             os.makedirs(pdir, exist_ok=True)
-            with open(os.path.join(pdir, "SOUL_COMPACT.md"), "w", encoding="utf-8") as fc:
+            with open(os.path.join(pdir, "SOUL_COMPACT.md"), "w", encoding="utf-8", newline="\n") as fc:
                 fc.write(disk_compact)
-            with open(os.path.join(pdir, "SOUL_PRO.md"), "w", encoding="utf-8") as fp:
+            with open(os.path.join(pdir, "SOUL_PRO.md"), "w", encoding="utf-8", newline="\n") as fp:
                 fp.write(disk_pro)
-            with open(os.path.join(pdir, "SOUL_FULL.md"), "w", encoding="utf-8") as ff:
+            with open(os.path.join(pdir, "SOUL_FULL.md"), "w", encoding="utf-8", newline="\n") as ff:
                 ff.write(disk_full)
-            with open(os.path.join(pdir, "SOUL.md"), "w", encoding="utf-8") as fa:
+            with open(os.path.join(pdir, "SOUL.md"), "w", encoding="utf-8", newline="\n") as fa:
                 fa.write(disk_active)
             write_hermes_profile_yaml(pdir, prof, lang=resolved_lang)
 

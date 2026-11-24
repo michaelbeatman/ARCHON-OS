@@ -11,6 +11,12 @@ Sicherheitsgrenzen:
 * nur GET/POST ueber den freigegebenen docker-socket-proxy (ALLOW_START/STOP)
 * Eingriff NUR wenn Docker den Container selbst als `unhealthy` markiert
 * Cooldown gegen Restart-Storms, kein Eingriff bei laufendem Draining
+
+Audit D10: zusaetzlich zur Event-Loop-Liveness wird `loops.watchdog` aus
+`/livez` geprueft. Ein toter Watchdog-Thread liess `/livez` frueher gruen —
+jetzt zaehlt ein stale `last_seen` als Fehlschlag und fuehrt zum Neustart.
+Fehlt das Feld (aelteres main.py), gilt der Watchdog als unbekannt und wird
+nicht als stale gewertet (Rueckwaertskompatibilitaet).
 """
 from __future__ import annotations
 
@@ -27,6 +33,7 @@ FAILURES = max(2, int(os.environ.get("AUTOHEAL_FAILURES", "5")))
 COOLDOWN = max(60.0, float(os.environ.get("AUTOHEAL_COOLDOWN_S", "900")))
 PROBE_TIMEOUT = max(1.0, float(os.environ.get("AUTOHEAL_PROBE_TIMEOUT_S", "5")))
 HEALTH_GATE = os.environ.get("AUTOHEAL_HEALTH_GATE", "1").strip() not in ("0", "false", "no")
+WATCHDOG_MAX_AGE = max(30.0, float(os.environ.get("AUTOHEAL_WATCHDOG_MAX_AGE_S", "120")))
 
 _DOCKER_HOST = os.environ.get("DOCKER_HOST", "tcp://docker-socket-proxy:2375")
 _DOCKER_BASE = "http://" + _DOCKER_HOST.replace("tcp://", "").replace("http://", "").rstrip("/")
@@ -36,13 +43,46 @@ def log(message: str) -> None:
     print(f"[archon-autoheal] {message}", flush=True)
 
 
-def probe() -> bool:
+def probe() -> dict:
+    """Prueft /livez inkl. Watchdog-Heartbeat.
+
+    Rueckgabe: ``{"ok": bool, "watchdog_stale": bool, "detail": str}``.
+    503, Timeout, ConnectionRefused und ein stale Watchdog zaehlen als
+    Fehlschlag (`ok=False`) und erhoehen den Zaehler in main().
+    """
     try:
         with urllib.request.urlopen(TARGET, timeout=PROBE_TIMEOUT) as response:
-            return int(response.status) == 200
+            status = int(response.status)
+            raw = response.read(256 * 1024)
     except Exception as exc:  # 503, Timeout, ConnectionRefused zaehlen alle als Fehlschlag
         log(f"probe {TARGET} fehlgeschlagen: {type(exc).__name__}")
-        return False
+        return {"ok": False, "watchdog_stale": False, "detail": type(exc).__name__}
+
+    if status != 200:
+        return {"ok": False, "watchdog_stale": False, "detail": f"HTTP {status}"}
+
+    watchdog_stale = False
+    detail = ""
+    try:
+        payload = json.loads(raw.decode("utf-8", errors="ignore"))
+        loops = payload.get("loops") or {}
+        wd = loops.get("watchdog") or {}
+        if wd:
+            last_seen = float(wd.get("last_seen") or 0.0)
+            age = (time.time() - last_seen) if last_seen > 0 else float("inf")
+            alive = wd.get("alive")
+            if alive is False or age > WATCHDOG_MAX_AGE:
+                watchdog_stale = True
+                detail = f"watchdog last_seen age={age:.1f}s > {WATCHDOG_MAX_AGE}s"
+    except Exception as exc:
+        # Kein loops.watchdog im Payload (aelteres main.py) -> unbekannt, nicht stale.
+        detail = f"watchdog field unavailable ({type(exc).__name__})"
+
+    return {
+        "ok": not watchdog_stale,
+        "watchdog_stale": watchdog_stale,
+        "detail": detail,
+    }
 
 
 def docker_request(method: str, path: str, payload: dict | None = None) -> dict:
@@ -73,13 +113,15 @@ def container_state() -> dict:
 
 def main() -> None:
     log(f"gestartet: target={TARGET} container={CONTAINER} "
-        f"failures={FAILURES} interval={INTERVAL}s cooldown={COOLDOWN}s health_gate={HEALTH_GATE}")
+        f"failures={FAILURES} interval={INTERVAL}s cooldown={COOLDOWN}s health_gate={HEALTH_GATE} "
+        f"watchdog_max_age={WATCHDOG_MAX_AGE}s")
     consecutive = 0
     last_action = 0.0
     time.sleep(15.0)  # Startphase des Ziels nicht als Hang fehlinterpretieren
 
     while True:
-        if probe():
+        result = probe()
+        if result["ok"]:
             if consecutive:
                 log("wieder gesund — Fehlerzaehler zurueckgesetzt")
             consecutive = 0
@@ -87,7 +129,8 @@ def main() -> None:
             continue
 
         consecutive += 1
-        log(f"Fehlschlag {consecutive}/{FAILURES}")
+        detail = f" ({result['detail']})" if result["detail"] else ""
+        log(f"Fehlschlag {consecutive}/{FAILURES}{detail}")
         if consecutive < FAILURES or (time.time() - last_action) < COOLDOWN:
             time.sleep(INTERVAL)
             continue

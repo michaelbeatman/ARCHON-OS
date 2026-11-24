@@ -158,6 +158,10 @@ def test_run_code_blockiert_den_event_loop_nicht(monkeypatch, tmp_path):
     # wird der gemockte Sleep nie erreicht. Host-Pfad explizit injizieren.
     import backend.ephemeral_sandbox as eps
     monkeypatch.setattr(eps, "_resolve_host_path", lambda _p: "/tmp/any")
+    # D04/MED: ohne DOCKER_HOST-Proxy beendet die Sandbox sofort mit
+    # not_configured und der 0.4-s-Sleep wird gar nicht erst erreicht.
+    # Den Proxy hier setzen, damit der to_thread-Pfad wirklich gemessen wird.
+    monkeypatch.setenv("DOCKER_HOST", "tcp://docker-socket-proxy:2375")
 
     async def scenario():
         ticks = {"n": 0}

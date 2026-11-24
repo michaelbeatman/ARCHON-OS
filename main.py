@@ -220,26 +220,28 @@ _APP_START_TS = time.time()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-# Audit D16: W3C Trace Context an der Systemgrenze. Zuletzt registriert =
-# äußerste Middleware = läuft vor Auth/RateLimit/Locale. Der Kontext wird in
-# contextvars gesetzt und damit in alle nachgelagerten Tasks vererbt.
+# Audit D16/HIGH: W3C Trace Context an der Systemgrenze. Die Klasse wird hier
+# definiert, aber ERST nach allen @app.middleware-Definitionen sowie nach
+# _install_rate_limit_middleware()/_install_cors_middleware() registriert
+# (siehe unten) — nur dann ist sie die äußerste Schicht und setzt den Kontext
+# auch bei 401/403/429/503. Starlette wickelt zuletzt registrierte zuerst aus.
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 from backend.trace_context import (  # noqa: E402
     start_trace as _start_trace,
     current_trace_id as _current_trace_id,
     extract_headers as _extract_traceparent,
+    response_trace_headers as _response_trace_headers,
 )
 
 
 class TraceContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        trace_id, _span_id = _start_trace(_extract_traceparent(request.headers))
+        _start_trace(_extract_traceparent(request.headers))
         response = await call_next(request)
-        response.headers["X-Trace-Id"] = trace_id
+        # D16: X-Trace-Id + forkbares traceparent/tracestate (Agent I).
+        for key, value in _response_trace_headers(dict(response.headers)).items():
+            response.headers[key] = value
         return response
-
-
-app.add_middleware(TraceContextMiddleware)
 
 
 def _install_cors_middleware() -> None:
@@ -588,22 +590,39 @@ async def auth_gate(request: Request, call_next):
     return RedirectResponse(url=f"/login?next={path}", status_code=307)
 
 
-# CORS und Rate-Limit zuletzt registrieren => aeusserste Schichten.
-# Beide MUSSES nach allen @app.middleware-Definitionen installiert werden,
-# sonst liegen sie innen und 401/403/429 tragen keine CORS-Header bzw.
-# unauthentifizierte Requests umgehen den Limiter.
-# CORS MUSS zuletzt (aeusserste Schicht) registriert werden: sonst tragen
-# die 429 des Limiters keine Access-Control-Allow-* Header und der Browser
-# kann die Antwort nicht lesen (Audit 23.11.2026).
+# CORS und Rate-Limit MUESSEN nach allen @app.middleware-Definitionen
+# installiert werden, sonst liegen sie innen und 401/403/429 tragen keine
+# CORS-Header bzw. unauthentifizierte Requests umgehen den Limiter.
 _install_rate_limit_middleware()
 _install_cors_middleware()
+
+# D16/HIGH: TraceContext als LETZTE Middleware registrieren => aeusserste
+# Schicht. Damit laeuft sie vor Auth/RateLimit/CORS und setzt X-Trace-Id
+# auch auf 401/403/429/503. (Die Klasse ist oben definiert.)
+app.add_middleware(TraceContextMiddleware)
 
 
 @app.get("/livez")
 async def liveness_check():
-    """Liveness: Event-Loop-Heartbeat & Loop-Lag (liefert 503 bei blockiertem Loop)."""
+    """Liveness: Event-Loop-Heartbeat, Loop-Lag + Watchdog-Thread (503 bei blockiertem Loop)."""
     from backend.loop_liveness import check_loop_liveness
     info = await check_loop_liveness()
+    # D10: Watchdog-Thread wird sonst von niemandem ueberwacht. Quelle ist die
+    # atomare Liveness-Datei des Daemons (watchdog_daemon.watchdog_liveness),
+    # die auch scripts/archon_autoheal.py::probe() liest.
+    try:
+        from watchdog_daemon import watchdog_liveness
+        wd = watchdog_liveness()
+    except Exception as exc:
+        logger.error("[Livez] Watchdog-Liveness nicht lesbar (fail-closed): %s", exc)
+        wd = {"alive": False, "last_seen": 0.0, "age_s": None}
+    info["loops"] = {
+        "watchdog": {
+            "alive": bool(wd.get("alive")),
+            "last_seen": wd.get("last_seen", 0.0),
+            "age_s": wd.get("age_s"),
+        }
+    }
     if not info.get("alive", True):
         return JSONResponse(status_code=503, content=info)
     return info
@@ -1148,6 +1167,12 @@ def _spawn_background(coro, name: str = "", priority: int = 1):
     return task
 
 
+# D08/MED: Audit-Schreibpfade im 30-s-Loop laufen in einem Thread und sind
+# zusaetzlich gelockt, damit keine sync SQLite-Schreiboperation den Event-Loop
+# blockiert und keine parallelen Anker-Schreiber die Kette verdrehen.
+_ANCHOR_WRITE_LOCK = threading.Lock()
+
+
 @_exclusive_loop("deadlock_supervisor")
 async def _deadlock_supervisor_loop():
     """30-Sekunden Watchdog/Deadlock-Loop (Pillar 1): befreit stagnierende Kanban-Tasks."""
@@ -1253,6 +1278,32 @@ async def _deadlock_supervisor_loop():
         except Exception as e:
             # Audit D: Importfehler wuerden alle vier Ketten gleichzeitig blind machen.
             logger.error(f"[Integritaet] Nebenketten-Import fehlgeschlagen: {e}")
+
+        # d05 F-03: signierte Head-Anker fuer alle sechs Nebenketten schreiben.
+        # Audit-Schreibpfad gemaess D08/MED in den Thread verlagern + locken.
+        def _write_chain_anchors() -> Dict[str, Any]:
+            from backend.audit_log import anchor_secondary_chains
+            with _ANCHOR_WRITE_LOCK:
+                return anchor_secondary_chains()
+
+        try:
+            anchors = await asyncio.to_thread(_write_chain_anchors)
+            failed = [k for k, v in anchors.items() if isinstance(v, dict) and v.get("written") is False and "error" in v]
+            if failed:
+                logger.error("[Integritaet] Head-Anker fehlgeschlagen: %s", failed)
+        except Exception as e:
+            logger.error(f"[Integritaet] Head-Anker-Loop fehlgeschlagen: {e}")
+
+        # d14/HIGH: Freigabe-Timeouts muessen periodisch eskaliert werden,
+        # nicht nur wenn ein Benutzer eine Approval-Ansicht oeffnet.
+        try:
+            from backend.approval_policy_engine import approval_engine as _approval_timeout
+            escalated = await asyncio.to_thread(_approval_timeout.check_and_escalate_timeouts)
+            if escalated:
+                logger.warning("[Approval] %s Freigabe(n) automatisch eskaliert.", escalated)
+        except Exception as e:
+            logger.error(f"[Approval] Timeout-Eskalation fehlgeschlagen: {e}")
+
         await asyncio.sleep(30)
 
 

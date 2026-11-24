@@ -257,7 +257,10 @@ echo ""
 
 # 4. Pull & Start Containers
 echo "[4/6] Building & starting Archon OS ($STACK_PROFILE)..."
-SERVICES=(archon-os docker-socket-proxy omniroute hermes)
+# Audit D10: archon-autoheal ist Bestandteil des Normal-Starts — der externe
+# Supervisor erkennt Event-Loop-Haenger, die der Docker-Healthcheck nur als
+# "unhealthy" markiert (restart: unless-stopped greift dann nicht).
+SERVICES=(archon-os docker-socket-proxy omniroute hermes archon-autoheal)
 if [[ "$STACK_PROFILE" == "standard" ]]; then
   SERVICES+=(anything-llm chroma)
 elif [[ "$STACK_PROFILE" == "full" || "$STACK_PROFILE" == "rag" ]]; then

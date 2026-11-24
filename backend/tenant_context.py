@@ -814,12 +814,23 @@ class TenantContextManager:
                 out_prefix = store_prefix
             else:
                 seq, pad = int(row[1]), int(row[2] or 4)
-                target.execute(
-                    "UPDATE document_number_sequences SET next_seq = ? "
-                    "WHERE tenant_id = ? AND doc_type = ? AND year = ?",
-                    (seq + 1, tid, doc_type, year),
+                # D03/HIGH: der gespeicherte Prefix muss dem ausgegebenen
+                # Prefix entsprechen. Vorher wurde beim UPDATE nur next_seq
+                # geschrieben, sodass der ERP-Override (RE-YYYY-) nie
+                # persistiert wurde und der Zaehler dauerhaft vom Belegformat
+                # divergierte (real: RE-DEFAUL-2026- vs. RE-2026-). Ohne
+                # Override bleibt ein bewusst gesetzter gespeicherter Prefix
+                # erhalten; mit Override wird genau dieser persistiert.
+                persisted_prefix = (
+                    override_prefix if override_prefix is not None
+                    else (str(row[0]) or default_prefix)
                 )
-                out_prefix = override_prefix if override_prefix is not None else str(row[0])
+                target.execute(
+                    "UPDATE document_number_sequences SET next_seq = ?, prefix = ? "
+                    "WHERE tenant_id = ? AND doc_type = ? AND year = ?",
+                    (seq + 1, persisted_prefix, tid, doc_type, year),
+                )
+                out_prefix = persisted_prefix
             if own_conn is not None:
                 own_conn.commit()
             return f"{out_prefix}{str(seq).zfill(pad)}"

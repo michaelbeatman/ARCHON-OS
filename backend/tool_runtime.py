@@ -14,6 +14,7 @@ Vereint:
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Dict, Optional
 
@@ -141,7 +142,12 @@ def guard_result(tool_name: str, result: Any) -> Any:
         def _walk(v: Any, depth: int = 0) -> Any:
             nonlocal seen
             if depth > 6 or seen > 200:
-                return v
+                # D12/HIGH: Fail-Open beseitigt. Strings gehen weiterhin durch
+                # die Firewall, alle anderen Strukturen werden durch einen
+                # Platzhalter ersetzt — nie ungefiltert in den LLM-Kontext.
+                if isinstance(v, str):
+                    return _guard_text(tool_name, v)
+                return "[OUTPUT_OMITTED_LIMIT]"
             if isinstance(v, str):
                 if v:
                     seen += 1
@@ -158,6 +164,53 @@ def guard_result(tool_name: str, result: Any) -> Any:
 
 # Rueckwaerts kompatibel zum bisherigen internen Namen.
 _guard_tool_result = guard_result
+
+
+def _result_token_estimate(result: Any) -> int:
+    """Echte, nachvollziehbare Token-Naherung aus dem Tool-Output."""
+    if isinstance(result, dict):
+        for key in ("tokens_used", "completion_tokens", "total_tokens"):
+            value = result.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+                return int(value)
+    try:
+        text = json.dumps(result, ensure_ascii=False, default=str)
+    except Exception:
+        text = str(result)
+    return max(1, len(text) // 4)
+
+
+def _record_tool_flight_event(
+    *,
+    tool_name: str,
+    args: Optional[Dict[str, Any]],
+    agent_id: str,
+    session_id: str,
+    status: str,
+    result: Any,
+) -> None:
+    """D12/BLOCKER: Produzent fuer `flight_events` im echten Tool-Chokepoint.
+
+    Jeder Tool-Call - Erfolg, Fehler oder Blockade - wird mit echtem
+    `tool_ok`, gemessenen `tokens_used` und der aktiven Trace-ID als
+    `run_id` persistiert. Damit hat `detect_silent_failures()` endlich
+    echte Daten aus dem Produktivpfad.
+    """
+    try:
+        from backend.flightlog_backtester import record_flight_event
+        from backend.trace_context import current_trace_id
+
+        record_flight_event(
+            run_id=current_trace_id() or str(session_id or "no-trace"),
+            agent_id=str(agent_id or "unknown"),
+            tool_name=str(tool_name or "unknown"),
+            args=args if isinstance(args, dict) else {},
+            tool_ok=str(status).lower() == "success",
+            tokens_used=_result_token_estimate(result),
+        )
+    except Exception as exc:
+        # Kein stilles Scheitern: der Detektor darf nicht erneut blind werden.
+        logger.error("[ToolRuntime] Flight-Event-Schreibung fehlgeschlagen: %s", exc)
 
 
 def record_tool_read_side_effect(session_id: str, tool_name: str) -> None:
@@ -186,8 +239,20 @@ async def execute_agent_tool(
         approval_id=approval_id,
         warrant=warrant,
     )
+    def _finalize(status: str, payload: Dict[str, Any], result: Any) -> Dict[str, Any]:
+        _record_tool_flight_event(
+            tool_name=tool_name,
+            args=args,
+            agent_id=agent_id,
+            session_id=session_id,
+            status=status,
+            result=result,
+        )
+        return payload
+
     if not gate.get("allowed"):
-        return {"status": "blocked", "error": gate.get("reason", "Tool blockiert"), "gate": gate}
+        call_args = args if isinstance(args, dict) else {}
+        return _finalize("blocked", {"status": "blocked", "error": gate.get("reason", "Tool blockiert"), "gate": gate}, gate)
 
     call_args = args if isinstance(args, dict) else {}
 
@@ -199,22 +264,24 @@ async def execute_agent_tool(
         if tool_name in exported:
             res = await pm.execute_plugin_tool(tool_name, call_args)
             record_tool_read_side_effect(session_id, tool_name)
-            return {"status": "success", "source": "plugin", "result": _guard_tool_result(tool_name, res)}
+            guarded = _guard_tool_result(tool_name, res)
+            return _finalize("success", {"status": "success", "source": "plugin", "result": guarded}, guarded)
     except Exception as exc:
-        return {"status": "error", "source": "plugin", "error": str(exc)}
+        return _finalize("error", {"status": "error", "source": "plugin", "error": str(exc)}, str(exc))
 
     # 2. Danach ArchonMcpServer
     try:
         from scripts.archon_mcp_server import ArchonMcpServer
         res = ArchonMcpServer().execute_tool(tool_name, call_args)
         if isinstance(res, dict) and str(res.get("status") or "").lower() in ("error", "failed", "blocked"):
-            return {
+            return _finalize("error", {
                 "status": "error",
                 "source": "mcp",
                 "error": str(res.get("message") or res.get("error") or "MCP-Tool-Fehler"),
                 "result": res,
-            }
+            }, res)
         record_tool_read_side_effect(session_id, tool_name)
-        return {"status": "success", "source": "mcp", "result": _guard_tool_result(tool_name, res)}
+        guarded = _guard_tool_result(tool_name, res)
+        return _finalize("success", {"status": "success", "source": "mcp", "result": guarded}, guarded)
     except Exception as exc:
-        return {"status": "error", "source": "mcp", "error": str(exc)}
+        return _finalize("error", {"status": "error", "source": "mcp", "error": str(exc)}, str(exc))

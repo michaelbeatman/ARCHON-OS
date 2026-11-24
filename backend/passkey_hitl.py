@@ -31,6 +31,14 @@ _PROOF_TOKENS: Dict[str, Dict[str, Any]] = {}
 _PROOF_TTL_SECONDS = 120
 _HIGH_RISK_CATEGORIES = {"payments", "destructive_actions", "system"}
 
+# Fail-closed 403 muss den Weg zur Erstregistrierung zeigen. Die
+# Registrierungs-Routen selbst duerfen NIE is_passkey_required() aufrufen
+# (sonst Lockout: niemand koennte den ersten Credential anlegen).
+PASSKEY_REGISTRATION_HINT = (
+    "Passkey-Registrierung erforderlich: /api/auth/passkey/register/options "
+    "(danach /api/auth/passkey/register/verify)."
+)
+
 DEFAULT_CATEGORIES = {
     "payments": True,
     "project_start": True,
@@ -146,27 +154,43 @@ def is_passkey_required(user_id: str, category: str = "all") -> bool:
         # C9: bei jeder Unklarheit (inkl. Parse-Fehler) HITL verlangen.
         _archon_exc_logger.error("[passkey_hitl] Passkey-Pruefung fehlgeschlagen (fail-closed): %s", exc)
         return True
+    cat = str(category).strip().lower()
     if not cfg["enabled"] or not cfg["has_credentials"]:
-        # Audit 23.11.2026 (F-02): ohne registrierte Credentials kann gar kein
-        # Proof erzeugt werden. Eine "fail-closed" Pflicht wuerde alle
-        # Freigaben unmoeglich machen (Sackgasse) — daher bewusst FALSE, aber
-        # die inkonsistente Konfiguration (Kategorien=true bei enabled=false)
-        # laut melden. Der echte Bypass-Pfad ist stattdessen in
-        # decisions.py (_decision_hitl_proof / _followup_permission_gate) über
-        # die Session-Identitaet abgesichert.
-        if any(bool(cfg["categories"].get(k)) for k in _HIGH_RISK_CATEGORIES):
+        if cat in _HIGH_RISK_CATEGORIES:
+            # Audit D04/HIGH: fail-closed. Ohne Credentials darf keine
+            # Hochrisiko-Freigabe (system / destructive_actions / payments)
+            # ohne Step-up durchgehen. Der Aufrufer antwortet 403/503 mit
+            # PASSKEY_REGISTRATION_HINT. WICHTIG: gilt NICHT fuer die
+            # Registrierungs-Routen — diese rufen diese Funktion nie auf.
             _archon_exc_logger.warning(
-                "[passkey_hitl] Inkonsistente Konfiguration für '%s': Hochrisiko-Kategorien aktiv, "
-                "aber Passkey deaktiviert oder keine Credentials — HITL kann nicht erzwungen werden.",
-                user_id,
+                "[passkey_hitl] Hochrisiko-Kategorie '%s' fuer '%s' ohne registrierte "
+                "Credentials — HITL hart erforderlich (fail-closed). "
+                "Registrierung: /api/auth/passkey/register/options",
+                cat, user_id,
             )
-        # F-02 (bestätigter Baseline-Test): Zahlungen bleiben IMMER fail-closed.
-        # Die übrigen Kategorien wuerden ohne Credentials eine unmoegliche
-        # Proof-Pflicht erzeugen (Sackgasse) und bleiben daher bei False.
-        return str(category).strip().lower() == "payments"
+            return True
+        return False
     if cfg["scope"] == "all":
         return True
-    return bool(cfg["categories"].get(category, False))
+    # Hochrisiko ist niemals von einer (evtl. fehlenden) Kategorie-Flag
+    # abhaengig — sonst Fail-Open durch Weglassen des Keys.
+    if cat in _HIGH_RISK_CATEGORIES:
+        return True
+    return bool(cfg["categories"].get(cat, False))
+
+
+def is_additional_passkey_registration_protected(user_id: str) -> bool:
+    """Nur fuer die REGISTRIERUNG EINES WEITEREN Passkeys.
+
+    Bewusst KEIN Aufruf von is_passkey_required(): die Erstregistrierung
+    (keine Credentials) bleibt immer moeglich. Ein Step-up wird nur verlangt,
+    wenn bereits ein aktivierter Passkey existiert.
+    """
+    try:
+        cfg = get_user_passkey_config(user_id)
+    except Exception:
+        return True  # unlesbare Config -> kein weiterer Passkey ohne Proof
+    return bool(cfg["enabled"] and cfg["has_credentials"])
 
 
 def _cleanup_challenges() -> None:
@@ -275,13 +299,38 @@ def create_registration_options(user_id: str, username: str, rp_id: str) -> Dict
             {"type": "public-key", "alg": -257},  # RS256
         ],
         "timeout": 60000,
-        "attestation": "none",
+        # Audit D04/MED: Attestation ist zwingend (kein "none"-Default mehr).
+        "attestation": "direct",
         "excludeCredentials": exclude,
         "authenticatorSelection": {
             "residentKey": "preferred",
-            "userVerification": "preferred",
+            "userVerification": "required",
         },
     }
+
+
+def _attestation_format(attestation_object_b64: str) -> str:
+    """Liest das fmt-Feld des CBOR-Attestation-Objects (ohne hartes cbor2-Requirement)."""
+    raw = _b64u_decode(attestation_object_b64)
+    if not raw:
+        return ""
+    try:
+        import cbor2  # type: ignore
+        data = cbor2.loads(raw)
+        if isinstance(data, dict):
+            return str(data.get("fmt") or "").strip().lower()
+    except Exception:
+        pass
+    # Minimal-Fallback: CBOR-Text 'fmt' gefolgt vom Format-String.
+    for candidate in (b"fmt",):
+        idx = raw.find(candidate)
+        if idx >= 0:
+            tail = raw[idx + len(candidate):idx + len(candidate) + 40]
+            for fmt in (b"packed", b"fido-u2f", b"tpm", b"android-key", b"android-safetynet", b"apple", b"none"):
+                pos = tail.find(fmt)
+                if pos >= 0:
+                    return fmt.decode("ascii")
+    return ""
 
 
 def verify_and_store_registration(
@@ -293,7 +342,8 @@ def verify_and_store_registration(
     alg: int = -7,
     label: str = "Passkey",
     expected_origin: Optional[str] = None,
-    authenticator_data_b64: Optional[str] = None,
+    authenticator_data_b64: str = "",
+    attestation_object_b64: str = "",
 ) -> Dict[str, Any]:
     uid = str(user_id or "admin").strip() or "admin"
     client_raw = _b64u_decode(client_data_b64)
@@ -310,16 +360,48 @@ def verify_and_store_registration(
     if expected_origin and client_data.get("origin") != expected_origin:
         raise ValueError("Origin stimmt nicht ueberein.")
 
-    if authenticator_data_b64:
-        auth_data = _b64u_decode(authenticator_data_b64)
-        if len(auth_data) < 37:
-            raise ValueError("Ungueltige authenticatorData bei Registrierung.")
-        rp_id_hash = auth_data[:32]
-        expected_rp_hash = hashlib.sha256(ch["rp_id"].encode("utf-8")).digest()
-        if rp_id_hash != expected_rp_hash:
-            raise ValueError("rpIdHash stimmt bei Registrierung nicht ueberein.")
-        if not (auth_data[32] & 0x01):
-            raise ValueError("User-Presence-Flag fehlt bei Registrierung.")
+    # Audit D04/MED: authenticatorData ist NICHT optional (frueher konnte die
+    # komplette UP/RP-Pruefung per Weglassen umgangen werden).
+    auth_data = _b64u_decode(authenticator_data_b64)
+    if len(auth_data) < 53:
+        raise ValueError(
+            "authenticatorData bei Registrierung zwingend erforderlich "
+            "(mind. 53 Byte inkl. AAGUID)."
+        )
+    rp_id_hash = auth_data[:32]
+    expected_rp_hash = hashlib.sha256(ch["rp_id"].encode("utf-8")).digest()
+    if rp_id_hash != expected_rp_hash:
+        raise ValueError("rpIdHash stimmt bei Registrierung nicht ueberein.")
+    flags = auth_data[32]
+    if not (flags & 0x01):  # UP
+        raise ValueError("User-Presence-Flag fehlt bei Registrierung.")
+    if not (flags & 0x04):  # UV
+        raise ValueError("User-Verification-Flag fehlt bei Registrierung (Attestation).")
+    aaguid = auth_data[37:53].hex()
+    allowlist = {
+        s.strip().lower().replace("-", "")
+        for s in os.environ.get("ARCHON_PASSKEY_AAGUID_ALLOWLIST", "").split(",") if s.strip()
+    }
+    if allowlist and aaguid not in allowlist:
+        raise ValueError("AAGUID des Authenticators ist nicht auf der Allowlist.")
+
+    # Attestation-Statement zwingend. ``none`` nur mit documented break-glass.
+    att_fmt = _attestation_format(attestation_object_b64)
+    legacy_none = os.environ.get("ARCHON_PASSKEY_ALLOW_ATTESTATION_NONE", "").strip().lower() in ("1", "true", "yes")
+    if not att_fmt or att_fmt == "none":
+        if not legacy_none:
+            raise ValueError(
+                "Attestation-Statement zwingend erforderlich (fmt != none). "
+                "Bitte attestationObject des Authenticators uebermitteln."
+            )
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="security", action="passkey_attestation_none_break_glass",
+                agent_id=uid, payload={"user_id": uid, "aaguid": aaguid, "reason": "legacy_break_glass"},
+            )
+        except Exception:
+            _archon_exc_logger.warning("[passkey_hitl] Break-Glass-Audit nicht schreibbar.")
 
     spki_bytes = _b64u_decode(public_key_spki_b64)
     # Validieren, dass es ein gueltiger oeffentlicher Schluessel ist
@@ -335,6 +417,9 @@ def verify_and_store_registration(
             "label": str(label or "Passkey")[:64],
             "public_key_spki_b64": public_key_spki_b64,
             "alg": int(alg),
+            # Audit D04/MED: Attestation-Nachweis mitfuehren.
+            "aaguid": aaguid,
+            "attestation_fmt": att_fmt or ("none_break_glass" if legacy_none else ""),
             "sign_count": 0,
             "created_at": now_iso,
             "last_used_at": None,

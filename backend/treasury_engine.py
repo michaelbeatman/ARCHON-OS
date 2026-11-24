@@ -200,7 +200,15 @@ def _last_hash(conn: sqlite3.Connection) -> str:
 
 
 def verify_treasury_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
-    """Lauf-5 K-01: Verifikation der Finanz-Hashkette (Legacy + HMAC-Bloecke)."""
+    """Lauf-5 K-01 + d05 F-03: Finanzkette, Head-Anker und Trigger."""
+    from backend.audit_log import finalize_secondary_chain_verification
+    return finalize_secondary_chain_verification(
+        "treasury_transactions", _verify_treasury_chain_raw(db_path), db_path=db_path
+    )
+
+
+def _verify_treasury_chain_raw(db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Verifikation der Finanz-Hashkette (Legacy + HMAC-Bloecke)."""
     from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
     conn = sqlite3.connect(db_path, timeout=10.0) if db_path else _get_conn()
     if db_path:
@@ -644,30 +652,37 @@ def approve_payment(tx_id: str, approver_id: str = "admin", passkey_verified: bo
         if cur.rowcount == 0:
             conn.rollback()
             return _row_to_tx(conn.execute("SELECT * FROM treasury_transactions WHERE id = ?", (tx_id,)).fetchone())
-        conn.commit()
         updated = _row_to_tx(conn.execute("SELECT * FROM treasury_transactions WHERE id = ?", (tx_id,)).fetchone())
+        # d05 F-05: GoBD-pflichtiger Audit-Eintrag VOR dem Commit. Schlaegt er
+        # fehl, wird die Freigabe zurueckgerollt (kein "erfolgreich" ohne Beweis).
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="treasury",
+                action="payment_approved",
+                agent_id=approver_id,
+                payload={
+                    "tx_id": tx_id,
+                    "amount": updated["amount"],
+                    "currency": updated["currency"],
+                    "recipient": updated.get("recipient", ""),
+                    "status": updated["status"],
+                    "approved_by": approver_id,
+                    "passkey_verified": passkey_verified,
+                    "entry_hash": updated.get("entry_hash", ""),
+                },
+            )
+        except Exception as _exc:
+            conn.rollback()
+            _archon_exc_logger.error(
+                "[treasury_engine] Audit-Log fuer payment_approved fehlgeschlagen "
+                "(Freigabe verweigert): %s", _exc,
+            )
+            raise RuntimeError(f"audit_write_failed: payment_approved ({type(_exc).__name__})") from _exc
+        conn.commit()
     finally:
         conn.close()
 
-    try:
-        from backend.audit_log import chained_audit_log
-        chained_audit_log.record_event(
-            category="treasury",
-            action="payment_approved",
-            agent_id=approver_id,
-            payload={
-                "tx_id": tx_id,
-                "amount": updated["amount"],
-                "currency": updated["currency"],
-                "recipient": updated.get("recipient", ""),
-                "status": updated["status"],
-                "approved_by": approver_id,
-                "passkey_verified": passkey_verified,
-                "entry_hash": updated.get("entry_hash", ""),
-            },
-        )
-    except Exception as _exc:
-        _archon_exc_logger.debug("[treasury_engine] Audit-Log fuer payment_approved fehlgeschlagen: %s", _exc)
 
     try:
         from backend.workflow_scheduler import dispatch_workflow_event
@@ -700,32 +715,35 @@ def reject_payment(tx_id: str, rejected_by: str = "admin", reason: str = "") -> 
             "UPDATE treasury_transactions SET status = 'rejected', approved_by = ?, policy_note = ? WHERE id = ? AND status = 'pending_approval'",
             (rejected_by, reason or "Abgelehnt durch Benutzer", tx_id),
         )
-        conn.commit()
         updated = _row_to_tx(conn.execute("SELECT * FROM treasury_transactions WHERE id = ?", (tx_id,)).fetchone())
+        # d05 F-05: Audit vor Commit; Fehler -> rollback + Eskalation.
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="treasury",
+                action="payment_rejected",
+                agent_id=rejected_by,
+                payload={
+                    "tx_id": tx_id,
+                    "amount": updated["amount"],
+                    "currency": updated["currency"],
+                    "recipient": updated.get("recipient", ""),
+                    "status": updated["status"],
+                    "approved_by": rejected_by,
+                    "passkey_verified": bool(updated.get("passkey_verified")),
+                    "entry_hash": updated.get("entry_hash", ""),
+                },
+            )
+        except Exception as _exc:
+            conn.rollback()
+            _archon_exc_logger.error(
+                "[treasury_engine] Audit-Log fuer payment_rejected fehlgeschlagen "
+                "(Ablehnung zurueckgerollt): %s", _exc,
+            )
+            raise RuntimeError(f"audit_write_failed: payment_rejected ({type(_exc).__name__})") from _exc
+        conn.commit()
     finally:
         conn.close()
-
-    # A (Audit): Statuswechsel signiert im zentralen append-only Log erfassen
-    # (analog approve_payment), damit reject/approve nicht unbemerkt bleibt.
-    try:
-        from backend.audit_log import chained_audit_log
-        chained_audit_log.record_event(
-            category="treasury",
-            action="payment_rejected",
-            agent_id=rejected_by,
-            payload={
-                "tx_id": tx_id,
-                "amount": updated["amount"],
-                "currency": updated["currency"],
-                "recipient": updated.get("recipient", ""),
-                "status": updated["status"],
-                "approved_by": rejected_by,
-                "passkey_verified": bool(updated.get("passkey_verified")),
-                "entry_hash": updated.get("entry_hash", ""),
-            },
-        )
-    except Exception as _exc:
-        _archon_exc_logger.debug("[treasury_engine] Audit-Log fuer payment_rejected fehlgeschlagen: %s", _exc)
     return updated
 
 

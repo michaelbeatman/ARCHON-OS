@@ -23,10 +23,12 @@ from typing import Optional
 
 logger = logging.getLogger("archon.db_paths")
 
-# F-013: einzige autoritative busy_timeout für ALLE SQLite-Verbindungen (S-3.1).
-# Früher standen 15000/10000/1500/5000 verstreut in den Modulen — Drift und
-# Lock-Contention waren die Folge. Alle Module importieren diese Konstante.
+# F-013 / D03: einzige autoritative busy_timeout für ALLE SQLite-Verbindungen
+# (S-3.1). Früher standen 15000/10000/1500/5000 verstreut in den Modulen —
+# Drift und Lock-Contention waren die Folge. Alle Module importieren diese
+# Konstante; `audit_busy_timeout_ssot()` macht die SSOT-Behauptung prüfbar.
 DB_BUSY_TIMEOUT_MS = 5000
+DB_BUSY_TIMEOUT_S = DB_BUSY_TIMEOUT_MS / 1000.0
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # W6: Test-DB-Isolation. Wenn pytest und der laufende Container gleichzeitig
@@ -184,21 +186,26 @@ class ClosingConnection(sqlite3.Connection):
             self.close()
 
 
-def get_db_connection(db_name_or_path: str, timeout: float = DB_BUSY_TIMEOUT_MS / 1000.0) -> sqlite3.Connection:
+def get_db_connection(db_name_or_path: str, timeout: Optional[float] = None) -> sqlite3.Connection:
     """Erzeugt eine gehärtete ClosingConnection mit busy_timeout und WAL-Modus.
 
-    F-013: Der Default (und der PRAGMA) kommen aus der SSOT `DB_BUSY_TIMEOUT_MS`.
-    Ein explizit übergebener `timeout` steuert nur noch den
-    sqlite3.connect()-Parameter, nicht den PRAGMA — damit bleibt der Wert
-    verbindlich 5000 ms, selbst wenn ein Aufrufer abweichend übergibt.
+    D03: `timeout` wird nur noch aus Kompatibilitätsgründen akzeptiert und
+    ignoriert. Sowohl der sqlite3.connect()-Parameter als auch der PRAGMA
+    kommen ausschließlich aus der SSOT `DB_BUSY_TIMEOUT_MS` (5000 ms). Ein
+    abweichender Aufruferwert wird protokolliert, aber nie wirksam.
     """
+    if timeout is not None and float(timeout) != DB_BUSY_TIMEOUT_S:
+        logger.debug(
+            "[db_paths] Ignoriere abweichenden timeout=%ss; SSOT=%s ms.",
+            timeout, DB_BUSY_TIMEOUT_MS,
+        )
     if os.path.isabs(db_name_or_path) or "/" in db_name_or_path or "\\" in db_name_or_path:
         db_path = os.path.abspath(db_name_or_path)
     else:
         db_path = os.path.abspath(resolve_db(db_name_or_path))
 
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path, timeout=timeout, factory=ClosingConnection)
+    conn = sqlite3.connect(db_path, timeout=DB_BUSY_TIMEOUT_S, factory=ClosingConnection)
     conn.execute(f"PRAGMA busy_timeout = {DB_BUSY_TIMEOUT_MS};")
     # W2: SQLite schaltet foreign_keys standardmässig AUS. Ohne dieses
     # PRAGMA wirkten deklarierte Relations und ON DELETE CASCADE nirgends
@@ -215,3 +222,49 @@ def get_db_connection(db_name_or_path: str, timeout: float = DB_BUSY_TIMEOUT_MS 
         except sqlite3.Error as exc:
             logger.warning(f"[db_paths] WAL-PRAGMA fuer {db_path} fehlgeschlagen: {exc}")
     return conn
+
+
+def audit_busy_timeout_ssot(root_dir: Optional[str] = None) -> list[tuple[str, int, str]]:
+    """Read-only AST-Scan: findet vom SSOT abweichende busy_timeout-Setzer.
+
+    D03: Die SSOT-Behauptung soll nicht nur im Kommentar stehen. Diese
+    Funktion liefert ``[(relative_datei, zeile, literal), ...]``; eine leere
+    Liste bedeutet, dass außerhalb dieser Datei kein *abweichender* Wert
+    gesetzt wird. Literale mit 5000 ms sind zulässig (SSOT-konform), alle
+    anderen (z.B. 10000/15000) sind Drift. Aufgerufen aus der Verifikation /
+    als CI-Gate von außen.
+    """
+    import re as _re
+
+    root = os.path.abspath(root_dir or WORKSPACE_DIR)
+    offenders: list[tuple[str, int, str]] = []
+    # Nur Code-Verzeichnisse; Archive/Vaults/Backups/venvs sind irrelevant
+    # und würden den Scan auf Windows minutenlang blockieren.
+    code_dirs = ("backend", "archon", "scripts", "tests", "utils", "tools",
+                 "views", "plugins", "config")
+    files: list[str] = []
+    for d in code_dirs:
+        base = os.path.join(root, d)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [x for x in dirnames if x != "__pycache__"]
+            files.extend(os.path.join(dirpath, f) for f in filenames if f.endswith(".py"))
+    files.extend(
+        os.path.join(root, f) for f in os.listdir(root)
+        if f.endswith(".py") and os.path.isfile(os.path.join(root, f))
+    )
+    pattern = _re.compile(r"busy_timeout\s*=\s*(\d+)", _re.I)
+    for full in files:
+        rel = os.path.relpath(full, root).replace("\\", "/")
+        if rel == "backend/db_paths.py":
+            continue
+        try:
+            with open(full, "r", encoding="utf-8", errors="ignore") as fh:
+                for lineno, line in enumerate(fh, 1):
+                    match = pattern.search(line)
+                    if match and int(match.group(1)) != DB_BUSY_TIMEOUT_MS:
+                        offenders.append((rel, lineno, match.group(1)))
+        except OSError:
+            continue
+    return sorted(offenders)

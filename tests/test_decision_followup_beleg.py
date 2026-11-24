@@ -33,9 +33,15 @@ SYNTHESE = "synthesis_freigabe"
 OK_MARKER = "Folgeaktion ausgeführt"
 NICHT_MARKER = "nicht ausgeführt"
 
+# Hochrisiko-Gates brauchen inzwischen einen verifizierten Passkey-Proof. Der
+# Followup leitet ihn unverbraucht an den Gate-Endpunkt weiter (consume=False).
+GATE_PROOF = "proof-fuer-g1"
 
-def _folge(typ, dec, decision="approve"):
-    return asyncio.run(main._decision_followup(typ, dec, decision))
+
+def _folge(typ, dec, decision="approve", proof_token="", proof_uid=""):
+    return asyncio.run(
+        main._decision_followup(typ, dec, decision, proof_token, proof_uid)
+    )
 
 
 def _http_fehler(status=500):
@@ -157,13 +163,23 @@ def gate_umgebung(monkeypatch):
 
 
 def test_gate_erfolg_meldet_ausgefuehrt(gate_umgebung):
-    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"})
+    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"}, proof_token=GATE_PROOF)
 
     assert OK_MARKER in text, text
     assert "persistiert als 'approved'" in text, text
     method, path, payload = gate_umgebung["aufrufe"][0]
     assert (method, path) == ("POST", "/api/permission-gates/g1/decide")
-    assert payload == {"decision": "approve"}
+    # Der Proof muss unverbraucht an den Endpunkt weitergeleitet werden.
+    assert payload == {"decision": "approve", "passkey_proof_token": GATE_PROOF}
+
+
+def test_gate_ohne_passkey_proof_bleibt_pending(gate_umgebung):
+    """Hochrisiko-Gates sind fail-closed: ohne Proof kein Followup, kein Aufruf."""
+    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"})
+
+    assert NICHT_MARKER in text, text
+    assert "Passkey-Proof" in text, text
+    assert gate_umgebung["aufrufe"] == []
 
 
 def test_gate_fehlerbody_meldet_nicht_ausgefuehrt(gate_umgebung):
@@ -172,7 +188,7 @@ def test_gate_fehlerbody_meldet_nicht_ausgefuehrt(gate_umgebung):
         "status": "error", "gate_id": "g1", "decision": "approve",
         "ergebnis": "FEHLER bei der Ausfuehrung: boom", "error": "boom"}
 
-    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"})
+    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"}, proof_token=GATE_PROOF)
 
     assert NICHT_MARKER in text, text
     assert OK_MARKER not in text, text
@@ -186,7 +202,7 @@ def test_gate_status_ok_aber_nicht_persistiert(gate_umgebung):
                                 "decision": "approve",
                                 "ergebnis": "Unbekanntes Gate-Kind - nichts ausgeführt"}
 
-    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"})
+    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"}, proof_token=GATE_PROOF)
 
     assert NICHT_MARKER in text, text
     assert "pending" in text, text
@@ -196,7 +212,7 @@ def test_gate_already_decided_meldet_nicht_ausgefuehrt(gate_umgebung):
     gate_umgebung["antwort"] = {"status": "already_decided", "gate_id": "g1",
                                 "decision": "approved"}
 
-    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"})
+    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"}, proof_token=GATE_PROOF)
 
     assert NICHT_MARKER in text, text
     assert "already_decided" in text, text
@@ -205,7 +221,7 @@ def test_gate_already_decided_meldet_nicht_ausgefuehrt(gate_umgebung):
 def test_gate_nicht_2xx_meldet_nicht_ausgefuehrt(gate_umgebung):
     gate_umgebung["antwort"] = _http_fehler(503)
 
-    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"})
+    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"}, proof_token=GATE_PROOF)
 
     assert NICHT_MARKER in text, text
     assert "Aufruf fehlgeschlagen" in text, text
@@ -215,7 +231,7 @@ def test_gate_fremdes_gate_in_der_antwort(gate_umgebung):
     gate_umgebung["antwort"] = {"status": "ok", "gate_id": "g9",
                                 "decision": "approve", "ergebnis": "x"}
 
-    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"})
+    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"}, proof_token=GATE_PROOF)
 
     assert NICHT_MARKER in text, text
     assert "g9" in text, text
@@ -227,7 +243,7 @@ def test_gate_store_nicht_lesbar_meldet_nicht_verifizierbar(gate_umgebung, monke
 
     monkeypatch.setattr(main, "_load_permission_gates", kaputt)
 
-    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"})
+    text = _folge(GATE, {"typ": GATE, "ref_id": "g1"}, proof_token=GATE_PROOF)
 
     assert NICHT_MARKER in text, text
     assert "nicht lesbar" in text, text

@@ -8,6 +8,35 @@ const ARCHON_TARGETS = [
   'http://127.0.0.1:8501',
 ].filter((u): u is string => Boolean(u && u.trim()));
 
+const TRACE_ID_RE = /^[0-9a-f]{32}$/i;
+const FLAGS_RE = /^[0-9a-f]{2}$/i;
+
+// W3C child span: neue 64-Bit-Span-ID, trace-id und Sampled-Flag bleiben erhalten.
+function childTraceparent(incoming: string | null | undefined): string | null {
+  const parts = (incoming || '').trim().split('-');
+  if (parts.length !== 4) return null;
+  const [version, traceId, , flags] = parts;
+  if (version !== '00' || !TRACE_ID_RE.test(traceId) || /^0{32}$/i.test(traceId) || !FLAGS_RE.test(flags)) {
+    return null;
+  }
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  const spanId = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  if (/^0{16}$/i.test(spanId)) return null;
+  return `${version}-${traceId.toLowerCase()}-${spanId}-${flags.toLowerCase()}`;
+}
+
+// W3C tracestate: gueltige Vendor-Eintraege, max. 32 Eintraege / 512 Zeichen.
+function validTracestate(value: string | null | undefined): string | null {
+  const raw = (value || '').trim();
+  if (!raw) return null;
+  const entries = raw.split(',').map((e) => e.trim()).filter((e) =>
+    /^[a-z0-9_*/\-]{1,256}=[\x20-\x2b\x2d-\x3c\x3e-\x7e]{0,256}$/.test(e)
+  ).slice(0, 32);
+  while (entries.length > 0 && entries.join(',').length > 512) entries.pop();
+  return entries.length > 0 ? entries.join(',') : null;
+}
+
 function sanitizePathSegments(segments: string[]): string | null {
   for (const seg of segments) {
     if (!seg || seg === '.' || seg === '..' || seg.includes('..') || seg.includes('\\')) {
@@ -39,6 +68,11 @@ async function proxyToArchon(
   if (contentType) forwardHeaders['Content-Type'] = contentType;
   const apiKey = request.headers.get('x-api-key');
   if (apiKey) forwardHeaders['X-API-Key'] = apiKey;
+  // D16: Trace-Kontext über die Grenze Browser/Next.js → FastAPI (Child-Span).
+  const childTp = childTraceparent(request.headers.get('traceparent'));
+  if (childTp) forwardHeaders['traceparent'] = childTp;
+  const inboundTracestate = validTracestate(request.headers.get('tracestate'));
+  if (inboundTracestate) forwardHeaders['tracestate'] = inboundTracestate;
 
   let lastError: string = 'Archon Backend nicht erreichbar';
   let lastResponse: NextResponse | null = null;
@@ -59,6 +93,14 @@ async function proxyToArchon(
       const respHeaders: Record<string, string> = {};
       const respCt = upstream.headers.get('content-type');
       if (respCt) respHeaders['Content-Type'] = respCt;
+      // D16: Korrelations-ID und forkbarer W3C-Kontext zurück an den Browser.
+      const upstreamTraceId = upstream.headers.get('X-Trace-Id');
+      const fallbackTraceId = childTp ? childTp.split('-')[1] : null;
+      if (upstreamTraceId || fallbackTraceId) {
+        respHeaders['X-Trace-Id'] = upstreamTraceId || fallbackTraceId || '';
+      }
+      if (childTp) respHeaders['traceparent'] = childTp;
+      if (inboundTracestate) respHeaders['tracestate'] = inboundTracestate;
       if (isSseRequest || respCt?.includes('text/event-stream')) {
         for (const h of ['Cache-Control', 'X-Accel-Buffering']) {
           const v = upstream.headers.get(h);

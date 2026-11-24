@@ -622,9 +622,15 @@ def api_write_batcher_stats():
 
 
 @router.get("/api/system/resource-backpressure")
-def api_check_resource_backpressure(simulate_overload: bool = False):
+def api_check_resource_backpressure(request: Request, simulate_overload: bool = False):
+    # D01/MED: simulierte Systemzustände sind keine echten Messwerte und
+    # duerfen nur mit Admin-Recht erzeugt werden.
+    if simulate_overload:
+        require_admin_or_503(request)
     from backend.resource_backpressure import resource_backpressure_protector
-    return resource_backpressure_protector.check_health_and_backpressure(simulate_overload=simulate_overload)
+    result = resource_backpressure_protector.check_health_and_backpressure(simulate_overload=simulate_overload)
+    result["simulated"] = bool(simulate_overload)
+    return result
 
 
 def _load_legal_profile() -> Dict[str, str]:

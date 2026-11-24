@@ -203,12 +203,19 @@ class TestSandboxHardening:
 
     def _run(self, **kwargs):
         from backend import ephemeral_sandbox as es
-        with patch.object(es, "_resolve_host_path", return_value="/mnt/host/path"), \
+        # D04/MED: die Sandbox laesst CLI-Aufrufe nur ueber den geprueften
+        # DOCKER_HOST-Proxy (oder expliziten lokalen Socket) zu. Ohne diesen
+        # Beweis gibt es frueh `not_configured` und keinen docker-Aufruf.
+        # Der Test simuliert den Proxy bewusst, damit die Härtungs-Flags im
+        # docker-run-Kommando geprueft werden koennen.
+        with patch.dict(os.environ, {"DOCKER_HOST": "tcp://docker-socket-proxy:2375"}), \
+             patch.object(es, "_resolve_host_path", return_value="/mnt/host/path"), \
              patch.object(es, "_ensure_sandbox_network", return_value=None), \
              patch.object(es.subprocess, "run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0, stdout="", stderr=""),   # docker info
                 MagicMock(returncode=0, stdout="ok\n", stderr=""),  # docker run
+                MagicMock(returncode=0, stdout="", stderr=""),  # docker ps -a (Cleanup)
             ]
             result = es.ephemeral_sandbox.execute_in_sandbox("print(1)", **kwargs)
             cmd = mock_run.call_args_list[1][0][0]
@@ -223,6 +230,11 @@ class TestSandboxHardening:
         assert "--pids-limit=50" in joined
         assert "no-new-privileges" in joined
         assert "--user=1000:1000" in joined
+        # D04/MED: der Docker-CLI-Host ist explizit an den Proxy gebunden —
+        # kein stiller Fallback auf den rohen Unix-Socket.
+        assert "-H" in cmd
+        assert "tcp://docker-socket-proxy:2375" in cmd
+        assert "unix://" not in joined
         # Temp-Verzeichnis darf aus dem Container nicht beschreibbar sein
         mount = [c for c in cmd if ":/sandbox" in c]
         assert mount and mount[0].endswith(":ro"), mount
@@ -245,7 +257,8 @@ class TestSandboxHardening:
     def test_timeout_kills_container(self):
         from backend import ephemeral_sandbox as es
 
-        with patch.object(es, "_resolve_host_path", return_value="/mnt/host/path"), \
+        with patch.dict(os.environ, {"DOCKER_HOST": "tcp://docker-socket-proxy:2375"}), \
+             patch.object(es, "_resolve_host_path", return_value="/mnt/host/path"), \
              patch.object(es, "_ensure_sandbox_network", return_value=None), \
              patch.object(es.subprocess, "run") as mock_run:
             mock_run.side_effect = [
@@ -253,6 +266,7 @@ class TestSandboxHardening:
                 subprocess.TimeoutExpired(cmd="docker run", timeout=1),
                 MagicMock(returncode=0, stdout="", stderr=""),  # docker kill
                 MagicMock(returncode=0, stdout="", stderr=""),  # docker rm -f
+                MagicMock(returncode=0, stdout="", stderr=""),  # docker ps -a (Cleanup)
             ]
             result = es.ephemeral_sandbox.execute_in_sandbox("while True: pass", timeout_seconds=1)
             calls = [c[0][0] for c in mock_run.call_args_list]

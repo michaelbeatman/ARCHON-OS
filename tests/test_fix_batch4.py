@@ -2,6 +2,7 @@ import os
 import json
 import sqlite3
 import datetime
+import time
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from starlette.requests import Request
@@ -112,8 +113,20 @@ def test_r01_profile_delete_twice_does_not_bypass_gate(tmp_path, monkeypatch):
 
 
 def test_r02_crash_recovery_does_not_reset_recent_tasks(tmp_path, monkeypatch):
-    """R-02: Crash-Recovery darf laufende Tasks mit aktuellem ISO-Timestamp nicht auf todo zuruecksetzen."""
+    """R-02: Crash-Recovery respektiert Alter UND Lease/Liveness.
+
+    Ein 10 h alter Task wird nur bei totem Worker zurueckgesetzt; ein Task mit
+    aktivem Lease bzw. lebendem Worker bleibt unangetastet (keine Doppelausfuehrung).
+    """
     import backend.operations_api as ops_mod
+    from backend.trajectory_budget import zombie_eligible
+
+    # Der Lease-/Liveness-Filter ist zentral und wird vom 6-h-Reset genutzt.
+    now = time.time()
+    assert zombie_eligible({"status": "in_progress", "claim_expires": now + 120,
+                            "claim_lock": "lease-1", "pid": 0}, now=now) is False
+    assert zombie_eligible({"status": "in_progress", "claim_expires": None,
+                            "claim_lock": None, "pid": 0}, now=now) is True
 
     db_path = tmp_path / "kanban_test.db"
     conn = sqlite3.connect(str(db_path))
@@ -123,16 +136,21 @@ def test_r02_crash_recovery_does_not_reset_recent_tasks(tmp_path, monkeypatch):
             title TEXT,
             status TEXT,
             started_at TEXT,
-            created_at TEXT
+            created_at TEXT,
+            claim_lock TEXT,
+            claim_expires REAL,
+            worker_pid INTEGER,
+            pid INTEGER,
+            last_heartbeat_at REAL
         )
     """)
     # Task gestartet vor 10 Minuten
     ten_mins_ago = (datetime.datetime.now() - datetime.timedelta(minutes=10)).isoformat()
-    conn.execute("INSERT INTO tasks (id, title, status, started_at, created_at) VALUES ('t1', 'Recent Task', 'in_progress', ?, ?)",
+    conn.execute("INSERT INTO tasks (id, title, status, started_at, created_at, worker_pid, pid) VALUES ('t1', 'Recent Task', 'in_progress', ?, ?, 0, 0)",
                  (ten_mins_ago, ten_mins_ago))
-    # Task gestartet vor 10 Stunden (sollte recovered werden)
+    # 10 h alter Task, aber KEIN aktiver Worker/Lease -> tot -> darf zurueckgesetzt werden.
     ten_hours_ago = (datetime.datetime.now() - datetime.timedelta(hours=10)).isoformat()
-    conn.execute("INSERT INTO tasks (id, title, status, started_at, created_at) VALUES ('t2', 'Old Task', 'in_progress', ?, ?)",
+    conn.execute("INSERT INTO tasks (id, title, status, started_at, created_at, worker_pid, pid) VALUES ('t2', 'Old Dead Task', 'in_progress', ?, ?, 0, 0)",
                  (ten_hours_ago, ten_hours_ago))
     conn.commit()
     conn.close()
@@ -140,6 +158,7 @@ def test_r02_crash_recovery_does_not_reset_recent_tasks(tmp_path, monkeypatch):
     monkeypatch.setattr(ops_mod, "_resolve_kanban_db_path", lambda: str(db_path))
     monkeypatch.setattr(ops_mod, "_get_active_kanban_db_path", lambda _cid=None: str(db_path))
     monkeypatch.setattr(ops_mod, "_KANBAN_JOURNAL_INIT", set())
+    monkeypatch.setitem(ops_mod._ZOMBIE_RESET_LAST_RUN, "ts", 0.0)
 
     # _get_kanban_connection(maintenance=True) triggert Crash-Recovery
     test_conn = ops_mod._get_kanban_connection(maintenance=True)
@@ -152,5 +171,6 @@ def test_r02_crash_recovery_does_not_reset_recent_tasks(tmp_path, monkeypatch):
     t2_status = cur.fetchone()[0]
     test_conn.close()
 
-    assert t2_status == "todo", "Alte Task (10h) muss auf todo gesetzt werden"
     assert t1_status == "in_progress", f"R-02 BUG: Frische Task (10min) wurde faelschlich auf {t1_status} zurueckgesetzt!"
+    # 10 h alter Task NUR mit totem Worker -> todo (korrektes Crash-Recovery).
+    assert t2_status == "todo", f"Alter Task ohne Worker muss auf todo, ist aber {t2_status}"

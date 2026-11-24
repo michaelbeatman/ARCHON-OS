@@ -65,8 +65,12 @@ class BoardroomRequest(BaseModel):
     # Audit 23.11.2026: ohne Obergrenze waren unbegrenzt kostenpflichtige
     # LLM-Runden moeglich (pro Runde N Agenten + optionales MoA).
     rounds: int = Field(default=2, ge=1, le=6)
-    chairman_id: Optional[str] = "orchestrator"
-    chairman_provider: Optional[str] = "openrouter"
+    # D02/D14: Default muss in der tier-geprueften EXECUTIVE|LEAD-Menge liegen.
+    # "orchestrator" ist in keiner Profilquelle registriert und darf nicht
+    # lngueltig ein erfundenes Profil erzeugen.
+    chairman_id: Optional[str] = "executive_decision_architect"
+    # Deprecated: Body-Overrides sind NICHT autorisiert und werden ignoriert.
+    chairman_provider: Optional[str] = None
     chairman_model: Optional[str] = None
     framework: str = "Steffi Kieffer Boardroom"
     slots: Optional[List[BoardroomSlotItem]] = None
@@ -281,13 +285,15 @@ async def api_boardroom_parse_attachment(file: UploadFile = File(...)):
 
 def _prepare_boardroom_agents(req: BoardroomRequest):
     roles = _DEPS["load_roles"]()
-    roles_map = {r["id"]: r for r in roles}
+    # D14: case-normalisierte Map — Vergleich und Lookup nutzen exakt denselben
+    # Key, damit "Lead" und "lead" nicht auseinanderfallen.
+    roles_map = {str(r["id"]).strip().lower(): r for r in roles}
     try:
         hermes_profiles = _DEPS["api_get_hermes_profiles"]()
         for hp in hermes_profiles:
             pid = hp.get("id")
             if pid:
-                roles_map[pid] = {
+                roles_map[str(pid).strip().lower()] = {
                     "id": pid,
                     "name": hp.get("name", pid),
                     "role": hp.get("role", "Expert"),
@@ -306,34 +312,41 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
             return override_reasoning
         return prof_dict.get("reasoning_level") or "medium"
 
-    # Chairman Profil (d14: nur bekannte/registrierte Chairman-Rollen zulassen)
-    chairman_id = (req.chairman_id or "orchestrator").strip()
-    if req.chairman_id and chairman_id not in roles_map and chairman_id != "orchestrator":
-        try:
-            from backend.role_budget_engine import EXECUTIVE_ROLE_IDS, LEAD_ROLE_IDS
-            allowed_extra = EXECUTIVE_ROLE_IDS | LEAD_ROLE_IDS
-        except Exception:
-            allowed_extra = set()
-        if chairman_id.lower() not in allowed_extra:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unbekannte oder nicht autorisierte Chairman-Rolle: '{chairman_id}'",
-            )
-    chairman_prof = roles_map.get(chairman_id, {
-        "id": chairman_id,
-        "name": "Orchestrator & System-Architekt",
-        "role": "Moderator & Chairman",
-        "prompt": "Du bist der Moderator und Chairman des AI Boardrooms.",
-        "model": "deepseek/deepseek-chat",
-        "provider": "openrouter",
-        "reasoning_level": "medium"
-    })
-    
-    chairman_chosen_model = (req.chairman_model or "").strip() or chairman_prof.get("model") or "deepseek/deepseek-chat"
-    chairman_chosen_provider = (req.chairman_provider or "").strip() or chairman_prof.get("provider") or "openrouter"
+    # Chairman-Hoheit (D02/HIGH + D14/HIGH): NUR tier-gepruefte IDs,
+    # unabhaengig davon, ob die ID in roles_map liegt. Ein Specialist darf
+    # niemals Synthese-Hoheit erhalten — auch nicht als registriertes Profil.
+    # Rueckwaertskompatibilitaet: der historische Default "orchestrator" war
+    # in keiner Profilquelle registriert. Er wird auf die registrierte
+    # EXECUTIVE-Rolle abgebildet und danach normal tier-geprueft — kein
+    # erfundenes Fallback-Profil mehr.
+    _CHAIRMAN_ALIASES = {"orchestrator": "executive_decision_architect"}
+    requested_chairman = (req.chairman_id or "executive_decision_architect").strip().lower()
+    chairman_id = _CHAIRMAN_ALIASES.get(requested_chairman, requested_chairman)
+    try:
+        from backend.role_budget_engine import EXECUTIVE_ROLE_IDS, LEAD_ROLE_IDS
+        allowed_chairmen = {str(x).strip().lower() for x in (EXECUTIVE_ROLE_IDS | LEAD_ROLE_IDS)}
+    except Exception as exc:
+        logger.error("[Boardroom] Tier-SSOT nicht verfuegbar — Chairman abgelehnt: %s", exc)
+        allowed_chairmen = set()
+    if chairman_id not in allowed_chairmen:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Chairman-Rolle '{chairman_id}' ist nicht in EXECUTIVE|LEAD autorisiert.",
+        )
+    chairman_prof = roles_map.get(chairman_id)
+    if not chairman_prof:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Chairman-Rolle '{chairman_id}' ist nicht als Profil registriert.",
+        )
+
+    # D02/D14: Provider/Model ausschliesslich aus dem tier-geprueften Profil —
+    # Body-Overrides (req.chairman_model/-provider) werden bewusst ignoriert.
+    chairman_chosen_model = str(chairman_prof.get("model") or "deepseek/deepseek-chat")
+    chairman_chosen_provider = str(chairman_prof.get("provider") or "openrouter")
 
     chairman_agent = {
-        "id": chairman_prof["id"],
+        "id": chairman_id,
         "name": chairman_prof.get("name", "Chairman"),
         "role": "Moderator & Chairman",
         "prompt": chairman_prof.get("prompt", ""),
@@ -347,7 +360,7 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
     participant_agents = []
     if req.slots and len(req.slots) > 0:
         for idx, s in enumerate(req.slots):
-            p_id = s.profile_id or "senior_coder"
+            p_id = str(s.profile_id or "senior_coder").strip().lower()
             r_name = s.role_name or f"Experte {idx+1}"
             prof = roles_map.get(p_id, {})
             chosen_model = (s.model_id or "").strip() or prof.get("model") or "deepseek/deepseek-chat"
@@ -365,7 +378,7 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
     else:
         # Standard-Fallback aus Rollen
         for r in roles[1:4]:
-            prof = roles_map.get(r["id"], r)
+            prof = roles_map.get(str(r["id"]).strip().lower(), r)
             participant_agents.append({
                 "id": r["id"],
                 "name": prof.get("name", r["name"]),
@@ -379,6 +392,67 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
             
     all_debate_agents = [chairman_agent] + participant_agents
     return chairman_agent, all_debate_agents
+
+
+def _escalate_boardroom_no_consensus(
+    *,
+    task_id: str,
+    task: str,
+    consensus_status: str,
+    res: Dict[str, Any],
+    actor_id: str,
+) -> Optional[Dict[str, Any]]:
+    """D02/D14: NO_CONSENSUS ist ein HITL-Fall, KEINE finale Entscheidung.
+
+    Der bevorzugte Typ ``boardroom_no_consensus`` wird zuerst versucht. Ist er
+    in ``_DECISION_TYPEN`` (archon/core/constants.py — fremdes Territorium)
+    noch nicht registriert, fallbacken wir auf den registrierten HITL-Gate-Typ
+    und behalten den Grund explizit im Payload. Es entsteht auf jeden Fall ein
+    sichtbarer Eskalations-Task — kein stilles return {}.
+    """
+    extra = {
+        "reason_code": "boardroom_no_consensus",
+        "consensus_status": consensus_status,
+        "consensus_verdict": str(res.get("consensus_verdict") or consensus_status),
+        "veto_by": res.get("veto_by"),
+        "critique": str(res.get("critique") or "")[:1500],
+        "synthesis": str(res.get("synthesis") or "")[:1500],
+    }
+    kurzfassung = (
+        f"Boardroom ohne Konsens ({consensus_status}). "
+        f"Keine finale Entscheidung — manuelles Review erforderlich."
+    )
+    try:
+        from archon.routers.decisions import create_decision
+        dec = create_decision(
+            "boardroom_no_consensus",
+            titel=f"[HITL] Boardroom-No-Consensus: {task[:110]}",
+            kurzfassung=kurzfassung,
+            ref_id=str(task_id or ""),
+            extra=extra,
+            created_by=actor_id or "boardroom-service",
+        )
+        if not dec:
+            dec = create_decision(
+                "workflow_hitl_gate",
+                titel=f"[HITL] Boardroom-No-Consensus: {task[:110]}",
+                kurzfassung=kurzfassung,
+                ref_id=str(task_id or ""),
+                extra=extra,
+                created_by=actor_id or "boardroom-service",
+            )
+        if dec:
+            _audit_boardroom("no_consensus_escalated", actor_id, {
+                "consensus_status": consensus_status,
+                "decision_id": dec.get("id"),
+                "reason_code": "boardroom_no_consensus",
+            })
+        else:
+            logger.error("[Boardroom] HITL-Eskalation fehlgeschlagen (kein Decision-Task angelegt).")
+        return dec
+    except Exception as exc:
+        logger.error("[Boardroom] HITL-Eskalation fehlgeschlagen: %s", exc)
+        return None
 
 
 @router.post("/api/boardroom/run")
@@ -425,11 +499,21 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
         try:
             _consensus_status = str(res.get("consensus_status") or "").strip().upper()
             _debate_status = str(res.get("status") or "").strip().lower()
+            # D02/D14/BLOCKER: NUR ein explizites CONSENSUS_REACHED ist eine
+            # finale Entscheidung. NO_CONSENSUS (inkl. Policy-Veto) darf nie
+            # approved werden — auch nicht durch einen leeren Status.
+            _has_consensus = _consensus_status.startswith("CONSENSUS_REACHED")
             _is_final_decision = (
-                _consensus_status != "NO_CONSENSUS"
-                and _debate_status not in ("cancelled", "canceled", "error", "aborted")
+                _has_consensus
+                and _debate_status not in ("cancelled", "canceled", "error", "aborted", "no_consensus")
                 and not bool(res.get("cancelled"))
             )
+            if not _has_consensus:
+                _decision_status = "no_consensus"
+            elif _is_final_decision:
+                _decision_status = "approved"
+            else:
+                _decision_status = _debate_status or "no_consensus"
             hist_entry = {
                 "id": f"deb_{int(time.time())}_{uuid.uuid4().hex[:6]}",
                 "timestamp": datetime.datetime.now().isoformat(),
@@ -439,7 +523,9 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
                 "chairman": chairman_agent.get("name", "Moderator"),
                 "use_moa": req.use_moa,
                 "rounds": req.rounds,
-                "decision_status": "approved" if _is_final_decision else (_consensus_status.lower() or _debate_status or "no_consensus"),
+                "consensus_status": _consensus_status or "NO_CONSENSUS",
+                "consensus_verdict": str(res.get("consensus_verdict") or _consensus_status or "NO_CONSENSUS"),
+                "decision_status": _decision_status,
                 "slots_count": max(0, len(all_debate_agents) - 1),
                 "slots": [
                     {"name": a.get("name", ""), "role": a.get("role", ""), "model": a.get("model", "")}
@@ -467,9 +553,20 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
                 except Exception as wf_err:
                     print(f"[Boardroom] Workflow-Event notice: {wf_err}")
             else:
+                # Kein decision-Event. Stattdessen echte HITL-Eskalation.
                 logger.info(
                     "[Boardroom] Debatte %s ohne finalen Konsens (%s) — kein Decision-Workflow-Event ausgeloest.",
                     hist_entry["id"], hist_entry["decision_status"],
+                )
+                _escalation = _escalate_boardroom_no_consensus(
+                    task_id=hist_entry["id"],
+                    task=req.task,
+                    consensus_status=_consensus_status or "NO_CONSENSUS",
+                    res=res,
+                    actor_id=str(hist_entry.get("_actor_id") or "boardroom-service"),
+                )
+                res["no_consensus_escalation_id"] = (
+                    str(_escalation.get("id")) if isinstance(_escalation, dict) else None
                 )
         except Exception as e:
             print(f"Error saving boardroom history item in run: {e}")
@@ -544,6 +641,10 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
 
                     # Save structured debate entry to boardroom history
                     try:
+                        _stream_verdict = str(
+                            ev.get("consensus_verdict") or ev.get("consensus_status") or "NO_CONSENSUS"
+                        ).upper()
+                        _stream_final = _stream_verdict.startswith("CONSENSUS_REACHED")
                         hist_entry = {
                             "id": f"deb_{int(time.time())}_{uuid.uuid4().hex[:6]}",
                             "timestamp": datetime.datetime.now().isoformat(),
@@ -553,6 +654,9 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                             "chairman": chairman_agent.get("name", "Moderator"),
                             "use_moa": req.use_moa,
                             "rounds": req.rounds,
+                            "consensus_status": _stream_verdict,
+                            "consensus_verdict": _stream_verdict,
+                            "decision_status": "approved" if _stream_final else "no_consensus",
                             "slots_count": max(0, len(all_debate_agents) - 1),
                             "slots": [
                                 {"name": a.get("name", ""), "role": a.get("role", ""), "model": a.get("model", "")}
@@ -566,8 +670,21 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                         hist_entry["_actor_id"] = get_session_actor(request, fallback="boardroom-service")
                         save_boardroom_history_item(hist_entry)
                         ev["history_id"] = hist_entry["id"]
+                        if not _stream_final:
+                            _esc = _escalate_boardroom_no_consensus(
+                                task_id=hist_entry["id"], task=req.task,
+                                consensus_status=_stream_verdict,
+                                res={"consensus_verdict": _stream_verdict,
+                                     "veto_by": ev.get("veto_by"),
+                                     "critique": ev.get("critique", ""),
+                                     "synthesis": synthesis_text},
+                                actor_id=str(hist_entry["_actor_id"]),
+                            )
+                            ev["no_consensus_escalation_id"] = (
+                                str(_esc.get("id")) if isinstance(_esc, dict) else None
+                            )
                     except Exception as e:
-                        print(f"Error saving boardroom history item: {e}")
+                        logger.error("[Boardroom] History-Eintrag fehlgeschlagen: %s", e)
 
                 payload = json.dumps(ev, ensure_ascii=False)
                 yield f"data: {payload}\n\n"

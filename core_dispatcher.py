@@ -6,13 +6,166 @@ import json
 import logging
 import httpx
 import asyncio
+import contextvars
 import functools
+import hashlib
 import random
+import threading
 import weakref
 import sqlite3
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("archon.core_dispatcher")
+
+# D11: Die im Prompt-Registry geloeste Version muss in JEDEM Dispatch-Return
+# landen. Der ContextVar ist task-lokal und damit parallelITAetsicher; der
+# outright-Aufrufer setzt ihn vor jedem Dispatch zurueck (kein Stale-Wert).
+_PROMPT_VERSION_CTX: contextvars.ContextVar[Optional[Dict[str, Any]]] = contextvars.ContextVar(
+    "archon_dispatch_prompt_version", default=None
+)
+# Audit-Schreibpfade sind sync SQLite. Serialisiert ueber einen Thread-Lock und
+# aus dem Event-Loop via asyncio.to_thread ausgelagert (kein Event-Loop-Block).
+_AUDIT_WRITE_LOCK = threading.Lock()
+
+
+def _prompt_version_fallback(agent_id: str, model: str = "") -> Dict[str, Any]:
+    """Minimaler, ehrlicher Ref fuer Pfade vor der Registry-Aufloesung."""
+    return {
+        "agent_id": agent_id,
+        "version": "",
+        "canary": False,
+        "prompt_chars": 0,
+        "model": model or "",
+        "resolved": False,
+    }
+
+
+def _with_prompt_info(res: dict, info: Optional[Dict[str, Any]] = None) -> dict:
+    """Hängt effective_prompt_info/prompt_version_info an JEDEN Return."""
+    if not isinstance(res, dict):
+        return res
+    if info is not None:
+        ref = dict(info)
+        res["effective_prompt_info"] = ref
+        res["prompt_version_info"] = ref
+        return res
+    ref = dict(_PROMPT_VERSION_CTX.get() or {})
+    if not ref:
+        ref = _prompt_version_fallback(str(res.get("agent_id") or ""))
+    res.setdefault("effective_prompt_info", ref)
+    res.setdefault("prompt_version_info", ref)
+    return res
+
+
+def _resolve_prompt_ref(agent_id: str, task_id: str = "", model: str = "") -> Dict[str, Any]:
+    """Prompt-Ref aus der Registry fuer Pfade ohne Provider-Impl (Container)."""
+    try:
+        from backend.prompt_registry import prompt_registry
+        eff = prompt_registry.get_effective_prompt(agent_id, task_id or None)
+        if eff and eff.get("prompt"):
+            return {
+                "agent_id": agent_id,
+                "version": str(eff.get("version_num") or eff.get("version") or eff.get("prompt_version") or ""),
+                "canary": bool(eff.get("is_canary") or eff.get("canary") or False),
+                "canary_percentage": eff.get("canary_percentage"),
+                "prompt_hash": hashlib.sha256(str(eff.get("prompt") or "").encode("utf-8")).hexdigest(),
+                "prompt_chars": len(str(eff.get("prompt") or "")),
+                "model": eff.get("model") or model or "",
+                "resolved": True,
+            }
+    except Exception as pr_exc:
+        logger.debug("[Dispatcher] Prompt-Ref (Container-Pfad) nicht verfuegbar: %s", pr_exc)
+    return _prompt_version_fallback(agent_id, model)
+
+
+async def _audit_log_async(**kwargs: Any) -> Optional[dict]:
+    """Audit-Nachweis aus dem Event-Loop auslagern (D11/D05: kein Sync-SQLite)."""
+    def _write() -> Optional[dict]:
+        from backend.llm_egress_guard import log_completed_llm_dispatch
+        with _AUDIT_WRITE_LOCK:
+            return log_completed_llm_dispatch(**kwargs)
+
+    try:
+        return await asyncio.to_thread(_write)
+    except Exception as exc:
+        logger.warning("[Dispatcher] Audit-Schreibpfad fehlgeschlagen: %s", exc)
+        return None
+
+
+_SILENT_FAILURE_FLAG_PREFIXES = ("tool_loop", "token_spike", "effort_collapse")
+
+
+async def _guard_silent_failures(res: dict, agent_id: str, task_id: str) -> dict:
+    """D12: 'success' trotz versteckter Tool-/Token-Anomalien ist kein Erfolg.
+
+    Der Flightlog-Produzent (tool_runtime.execute_agent_tool) schreibt Events
+    unter ``run_id=current_trace_id()``. Der Detektor laeuft gegen genau diese
+    run_id. Bei Flags wird der Status auf ``needs_human``/``blocked`` gesetzt
+    und ein signiertes Audit-Event geschrieben.
+    """
+    if not isinstance(res, dict) or res.get("status") != "success":
+        return res
+    run_id = ""
+    try:
+        from backend.trace_context import current_trace_id
+        run_id = str(current_trace_id() or "")
+    except Exception as trace_exc:
+        logger.debug("[Dispatcher] Trace-ID fuer Silent-Failure-Check nicht verfuegbar: %s", trace_exc)
+    if not run_id:
+        return res
+    try:
+        from backend.flightlog_backtester import detect_silent_failures
+        finding = await asyncio.to_thread(
+            detect_silent_failures,
+            run_id,
+            res.get("status", "success"),
+            str(res.get("content") or ""),
+        )
+    except Exception as flight_exc:
+        logger.debug("[Dispatcher] Silent-Failure-Detektor nicht verfuegbar: %s", flight_exc)
+        return res
+
+    flags = [str(f) for f in (finding.get("flags") or [])]
+    hits = [f for f in flags if any(f.startswith(p) for p in _SILENT_FAILURE_FLAG_PREFIXES)]
+    if not hits and not finding.get("silent_failure"):
+        return res
+
+    status = "needs_human" if any(f.startswith("effort_collapse") or f.startswith("hidden_tool_errors") for f in flags) else "blocked"
+    logger.error(
+        "[Dispatcher] Silent-Failure-Guard: run=%s agent=%s flags=%s -> %s",
+        run_id, agent_id, flags, status,
+    )
+    res["status"] = status
+    res["error_code"] = "SILENT_FAILURE_DETECTED"
+    res["silent_failure_flags"] = flags
+    res["silent_failure_run_id"] = run_id
+    res["content"] = (
+        f"🛑 [SILENT-FAILURE-BLOCK]: {', '.join(flags)} — "
+        "Erfolgsmeldung unterdrueckt, HITL-Pruefung erforderlich."
+    )
+
+    def _write_audit() -> None:
+        try:
+            from backend.audit_log import chained_audit_log
+            with _AUDIT_WRITE_LOCK:
+                chained_audit_log.record_event(
+                    category="silent_failure",
+                    action="dispatch_blocked_by_silent_failure",
+                    agent_id=agent_id or "system",
+                    payload={
+                        "run_id": run_id,
+                        "task_id": task_id,
+                        "flags": flags,
+                        "status": status,
+                        "event_count": finding.get("event_count"),
+                        "total_tokens": finding.get("total_tokens"),
+                    },
+                )
+        except Exception as audit_exc:
+            logger.warning("[Dispatcher] Silent-Failure-Audit fehlgeschlagen: %s", audit_exc)
+
+    await asyncio.to_thread(_write_audit)
+    return res
 
 
 async def _provider_backoff(response=None, *, provider: str = "") -> None:
@@ -39,14 +192,14 @@ def _dispatch_cache_scope(agent_id: str = "") -> str:
     try:
         from backend import tenant_context as _tc
         tenant = str(_tc._REQUEST_TENANT_VAR.get() or "")
-    except Exception:
-        pass
+    except Exception as tc_exc:
+        logger.debug("[Dispatcher] Tenant-Var nicht verfuegbar: %s", tc_exc)
     if not tenant:
         try:
             from backend.tenant_context import tenant_context
             tenant = str(tenant_context.get_active_tenant_id() or "")
-        except Exception:
-            pass
+        except Exception as tc_exc:
+            logger.debug("[Dispatcher] Tenant-Context nicht verfuegbar: %s", tc_exc)
     return f"{tenant or 'default'}:{agent_id or 'default'}"
 
 # --- External Agent URLs ---
@@ -134,21 +287,44 @@ async def trigger_n8n_execution(
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, content=body, headers=headers)
             if resp.status_code == 200:
+                # D12/MED: HTTP 200 allein ist KEIN Nachweis einer Ausfuehrung.
+                # Ohne executionId/status bleibt der Versand unbestaeigt.
+                ack = {}
+                try:
+                    ack = resp.json() if resp.content else {}
+                except Exception as ack_exc:
+                    logger.debug("[Dispatcher] n8n-Ack nicht parsbar: %s", ack_exc)
+                if not isinstance(ack, dict):
+                    ack = {}
+                execution_id = str(ack.get("executionId") or ack.get("execution_id") or "").strip()
+                confirmed = bool(execution_id) or str(ack.get("status") or "").strip().lower() in ("success", "ok", "running", "queued")
+                if confirmed:
+                    return {
+                        "status": "success",
+                        "code": 200,
+                        "execution_id": execution_id,
+                        "message": "n8n execution acknowledged",
+                    }
+                logger.warning("[Dispatcher] n8n HTTP 200 ohne Execution-Nachweis (action=%s).", target_action)
                 return {
-                    "status": "success",
+                    "status": "unconfirmed",
                     "code": 200,
-                    "message": "n8n execution triggered successfully"
+                    "error_code": "N8N_DELIVERY_UNCONFIRMED",
+                    "message": "n8n HTTP 200 ohne executionId — Ausfuehrung nicht bestaetigt.",
                 }
-            else:
-                return {
-                    "status": "warning",
-                    "code": resp.status_code,
-                    "message": f"n8n returned HTTP {resp.status_code} - stored locally"
-                }
+            logger.warning("[Dispatcher] n8n HTTP %s (action=%s).", resp.status_code, target_action)
+            return {
+                "status": "error",
+                "code": resp.status_code,
+                "error_code": "N8N_DELIVERY_UNCONFIRMED",
+                "message": f"n8n returned HTTP {resp.status_code} — Ausfuehrung nicht bestaetigt.",
+            }
     except Exception as e:
+        logger.error("[Dispatcher] n8n-Webhook nicht erreichbar: %s", e)
         return {
             "status": "error",
-            "message": f"n8n unreachable - stored locally: {str(e)}"
+            "error_code": "N8N_DELIVERY_UNCONFIRMED",
+            "message": f"n8n unreachable: {str(e)}",
         }
 
 def _clean_dispatch_output(text: Any, session_id: Optional[str] = None, is_local: bool = False) -> str:
@@ -156,7 +332,7 @@ def _clean_dispatch_output(text: Any, session_id: Optional[str] = None, is_local
     return finalize_llm_output(text, session_id=session_id, is_local=is_local)
 
 
-def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt: str, url: str) -> dict:
+def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt: str, url: str, *, system_prompt: str = "") -> dict:
     """Einheitliches Pre-Flight-Gate für Container-Dispatches (Compliance + DataClassifier + Zero-Egress)."""
     from backend.llm_egress_guard import (
         ZeroEgressBlockedError,
@@ -166,7 +342,11 @@ def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt:
     aid = agent_name or provider
     try:
         from backend.compliance_engine import compliance_engine
-        chk = compliance_engine.check_activation_allowed(aid)
+        # D04: der SOUL-/System-Prompt MUSS mitgegeben werden, sonst wird der
+        # HIGH_RISK-Hashabgleich in check_activation_allowed() übersprungen.
+        chk = compliance_engine.check_activation_allowed(
+            aid, system_prompt=system_prompt or prompt or ""
+        )
         if not chk.get("allowed", True):
             raise ZeroEgressBlockedError(
                 chk.get("reason") or f"Compliance Guardrail blockiert '{aid}'.",
@@ -213,18 +393,23 @@ async def _dispatch_to_container_endpoint(
     prompt: str,
     extract_fn,
     timeout: int = 30,
+    system_prompt: str = "",
+    task_id: str = "",
 ) -> dict:
-    from backend.llm_egress_guard import ZeroEgressBlockedError, log_completed_llm_dispatch
+    from backend.llm_egress_guard import ZeroEgressBlockedError
     aid = agent_name or provider
     try:
-        gate = _gate_container_dispatch(agent_name, provider, model, prompt, url)
+        gate = _gate_container_dispatch(agent_name, provider, model, prompt, url, system_prompt=system_prompt)
     except ZeroEgressBlockedError as ze:
-        return {"status": "blocked", "error_code": ze.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze}"}
+        return _with_prompt_info({
+            "status": "blocked", "error_code": ze.error_code,
+            "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze}",
+        })
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
-            log_completed_llm_dispatch(
+            await _audit_log_async(
                 agent_id=aid,
                 provider=provider,
                 model=model,
@@ -232,26 +417,64 @@ async def _dispatch_to_container_endpoint(
                 http_status=resp.status_code,
                 data_category=gate["data_category"],
                 zero_egress_active=gate["zero_egress_active"],
+                task_id=task_id,
+                extra={"effective_prompt_info": _PROMPT_VERSION_CTX.get()} if _PROMPT_VERSION_CTX.get() else None,
             )
             if resp.status_code == 200:
-                content = _clean_dispatch_output(extract_fn(resp.json()))
+                data = resp.json()
+                # D12: HTTP 200 ohne Nutzlast darf NIE als Erfolg durchgereicht
+                # werden. extract_fn liefert nur noch echte Inhaltsfelder.
+                if not isinstance(data, dict):
+                    raise RuntimeError("EMPTY_RESPONSE: Container-Antwort ist kein JSON-Objekt")
+                raw = extract_fn(data)
+                content = _clean_dispatch_output(raw) if raw else ""
+                if not isinstance(content, str) or not content.strip():
+                    raise RuntimeError("EMPTY_RESPONSE: Container lieferte HTTP 200 ohne Nutzlast")
+
+                p_toks = max(1, len(prompt or "") // 4)
+                c_toks = max(1, len(content) // 4)
+                cost_unverified = False
+                try:
+                    from backend.llm_kernel import estimate_model_cost_usd
+                    est_cost = float(estimate_model_cost_usd(model, p_toks, c_toks))
+                except Exception as cost_exc:
+                    logger.debug("[Dispatcher] Kosten-Schaetzung nicht verfuegbar: %s", cost_exc)
+                    est_cost = round((p_toks * 0.00000015) + (c_toks * 0.00000030), 6)
+                    cost_unverified = True
                 try:
                     from backend.execution_receipt_ledger import execution_receipt_ledger
-                    execution_receipt_ledger.issue_receipt(
+                    await asyncio.to_thread(
+                        execution_receipt_ledger.issue_receipt,
                         task_id=f"{provider}-{int(time.time())}",
                         agent_role=aid,
                         model_used=model,
-                        prompt_tokens=max(1, len(prompt or "") // 4),
-                        completion_tokens=max(1, len(content) // 4),
-                        cost_usd=0.0,
+                        prompt_tokens=p_toks,
+                        completion_tokens=c_toks,
+                        cost_usd=est_cost,
                         tools_invoked=[f"core_dispatcher.dispatch_to_{provider}"],
                     )
                 except Exception as log_exc:
-                    logger.debug(f"[Dispatcher] Audit-Log fehlgeschlagen ({provider}): {log_exc}")
-                return {"status": "success", "content": content}
-            return {"status": "error", "content": f"{provider.capitalize()} Error (HTTP {resp.status_code}): {resp.text}"}
+                    logger.warning("[Dispatcher] Receipt fehlgeschlagen (%s): %s", provider, log_exc)
+                return _with_prompt_info({
+                    "status": "success", "content": content,
+                    "cost_usd": est_cost, "cost_unverified": cost_unverified,
+                })
+            return _with_prompt_info({
+                "status": "error", "error_code": "CONTAINER_HTTP_ERROR",
+                "content": f"{provider.capitalize()} Error (HTTP {resp.status_code}): {resp.text}",
+            })
+    except RuntimeError as re_exc:
+        logger.error("[Dispatcher] %s: %s", provider, re_exc)
+        return _with_prompt_info({
+            "status": "error", "error_code": "EMPTY_RESPONSE",
+            "error": str(re_exc), "content": "",
+        })
     except Exception as e:
-        return {"status": "error", "content": f"Connection to {provider.capitalize()} failed: {str(e)}"}
+        logger.error("[Dispatcher] Connection to %s failed: %s", provider, e)
+        return _with_prompt_info({
+            "status": "error", "error_code": "CONTAINER_CONNECTION_FAILED",
+            "content": f"Connection to {provider.capitalize()} failed: {str(e)}",
+        })
 
 
 async def dispatch_to_hermes(agent_name: str, prompt: str, timeout: int = 30) -> dict:
@@ -267,7 +490,7 @@ async def dispatch_to_hermes(agent_name: str, prompt: str, timeout: int = 30) ->
         },
         payload={"messages": [{"role": "user", "content": prompt}]},
         prompt=prompt,
-        extract_fn=lambda d: d.get("choices", [{}])[0].get("message", {}).get("content", str(d)),
+        extract_fn=lambda d: (d.get("choices") or [{}])[0].get("message", {}).get("content", ""),
         timeout=timeout,
     )
 
@@ -282,7 +505,7 @@ async def dispatch_to_odysseus(agent_name: str, prompt: str, timeout: int = 30) 
         headers={"Content-Type": "application/json"},
         payload={"prompt": prompt},
         prompt=prompt,
-        extract_fn=lambda d: d.get("result", d.get("response", str(d))),
+        extract_fn=lambda d: d.get("result") or d.get("response") or "",
         timeout=timeout,
     )
 
@@ -297,7 +520,7 @@ async def dispatch_to_openclaw(agent_name: str, prompt: str, timeout: int = 30) 
         headers={"Content-Type": "application/json"},
         payload={"task": prompt},
         prompt=prompt,
-        extract_fn=lambda d: d.get("output", str(d)),
+        extract_fn=lambda d: d.get("output", ""),
         timeout=timeout,
     )
 
@@ -315,10 +538,13 @@ def clean_think_tags(text: str) -> str:
 def parse_omniroute_response(resp_text: str) -> str:
     """
     Parst Antworten von OpenAI-kompatiblen APIs (Groq, OmniRoute).
-    Gibt den bereinigten Textinhalt zurück oder einen leeren String bei Fehlern.
+
+    D12: Eine leere/ungueltige Antwort ist ein FEHLER, keine leere Erfolgs-
+    antwort. Der Parser wirft ``RuntimeError``; die Provider-Hops muessen das
+    mit ``error_code=EMPTY_OR_INVALID_RESPONSE`` eskalieren.
     """
     if not resp_text:
-        return ""
+        raise RuntimeError("EMPTY_OR_INVALID_RESPONSE: leere Provider-Antwort")
     try:
         data = json.loads(resp_text) if isinstance(resp_text, str) else resp_text
         if isinstance(data, dict):
@@ -347,13 +573,14 @@ def parse_omniroute_response(resp_text: str) -> str:
                     content_piece = delta.get("content", "")
                     if content_piece:
                         collected_content.append(content_piece)
-            except Exception:
+            except Exception as sse_exc:
+                logger.debug("[Dispatcher] SSE-Chunk nicht parsbar: %s", sse_exc)
                 continue
 
     if collected_content:
         return clean_think_tags("".join(collected_content))
-        
-    return ""
+
+    raise RuntimeError("EMPTY_OR_INVALID_RESPONSE: keine Nutzlast in Provider-Antwort")
 
 # Globaler Concurrency Throttle (Pillar 2 / Prozessmodell)
 # Drosselt gleichzeitige rechenintensive LLM-Tasks zum Schutz vor 99% CPU-Spitzen / Buffer Overflows
@@ -543,26 +770,28 @@ async def dispatch_to_omniroute_or_container(
     slot_id = task_id or f"{agent_id}-{t_start}"
     has_throttle_slot = False
     budget_reservation_id: str | None = None
+    # Kein Stale-Prompt-Ref aus einer vorherigen Dispatch-Generation.
+    _PROMPT_VERSION_CTX.set(None)
     try:
         from backend.concurrency_throttle import concurrency_throttle
         acquired = await concurrency_throttle.acquire_slot(agent_id, slot_id, priority=2)
         if not acquired:
-            return {
+            return _with_prompt_info({
                 "status": "blocked",
                 "error": "concurrency_throttle_timeout",
                 "content": "🛑 [CONCURRENCY-THROTTLE]: Maximalzahl gleichzeitiger Agenten-Tasks erreicht (Timeout).",
-            }
+            })
         has_throttle_slot = True
     except Exception as th_exc:
         # Fail-CLOSED: wenn das Concurrency-Gate nicht auswertbar ist, darf
         # kein unbegrenzter Dispatch starten (Audit: fail-open war kritisch).
         logger.error(f"[Dispatcher] Concurrency-Gate nicht verfuegbar - Dispatch blockiert: {th_exc}")
-        return {
+        return _with_prompt_info({
             "status": "blocked",
             "error": "concurrency_gate_unavailable",
             "error_code": "CONCURRENCY_GATE_UNAVAILABLE",
             "content": "🛑 [CONCURRENCY-GATE]: Gate nicht verfügbar — Dispatch blockiert (fail-closed).",
-        }
+        })
 
     # d07: try/finally MUSS unmittelbar nach acquire_slot beginnen, damit ein
     # Abbruch (CancelledError) waehrend des Cache-Lookups den Slot niemals leakt.
@@ -589,19 +818,21 @@ async def dispatch_to_omniroute_or_container(
                     session_id=task_id or agent_id,
                     is_local=False,
                 )
-            except Exception:
-                pass
-            return {
+            except Exception as cache_clean_exc:
+                logger.debug("[Dispatcher] Cache-Content-Cleanup fehlgeschlagen: %s", cache_clean_exc)
+            return _with_prompt_info({
                 "status": "success",
                 "content": cached_content,
                 "model": cache_hit.get("cached_model") or model,
                 "input_tokens": 0,
                 "output_tokens": 0,
+                # Kein echter Call: 0 ist korrekt, aber explizit als ungeprüft markieren.
                 "cost_usd": 0.0,
+                "cost_unverified": True,
                 "cached": True,
                 "cache_match_type": cache_hit.get("match_type"),
                 "cache_similarity": cache_hit.get("similarity"),
-            }
+            })
 
         async with _get_task_semaphore():
             # Atomare Budget-Reservierung statt Check-then-Use: parallele
@@ -634,23 +865,23 @@ async def dispatch_to_omniroute_or_container(
                     node_id=slot_id,
                 )
                 if not bg_chk.get("allowed", False):
-                    return {
+                    return _with_prompt_info({
                         "status": "blocked",
                         "error": bg_chk.get("error_code", "ROLE_BUDGET_EXCEEDED"),
                         "error_code": bg_chk.get("error_code", "ROLE_BUDGET_EXCEEDED"),
                         "content": f"🛑 [BUDGET-CAP BLOCK]: {bg_chk.get('reason')}",
-                    }
+                    })
                 budget_reservation_id = bg_chk.get("reservation_id")
             except Exception as bg_exc:
                 # Fail-closed: ein nicht auswertbares Budget-Gate darf niemals
                 # einen unbegrenzten Dispatch freigeben (Audit v3 Welle 6).
                 logger.error(f"[Dispatcher] Pre-Flight Budget-Check fehlgeschlagen - Dispatch blockiert: {bg_exc}")
-                return {
+                return _with_prompt_info({
                     "status": "blocked",
                     "error": "budget_gate_unavailable",
                     "error_code": "BUDGET_GATE_UNAVAILABLE",
                     "content": "🛑 [BUDGET-GATE]: Budget-Prüfung nicht verfügbar — Dispatch blockiert (fail-closed).",
-                }
+                })
 
             tr_id = None
             parent_sp_id = None
@@ -671,6 +902,9 @@ async def dispatch_to_omniroute_or_container(
                 agent_id, agent_name, prompt, role, system_prompt, model, provider, timeout, reasoning_level, task_id,
                 history=history, available_tools=available_tools,
             )
+            # D12 (Agent E): Flightlog-Silent-Failure-Guard vor jeder
+            # Erfolgsverbuchung (Cache, Budget-Settle, OTel-OK).
+            res = await _guard_silent_failures(res, agent_id, task_id)
             duration_ms = (time.time() - t_start) * 1000.0
             in_tok = int(res.get("input_tokens", 0) or 0)
             out_tok = int(res.get("output_tokens", 0) or 0)
@@ -751,7 +985,8 @@ async def dispatch_to_omniroute_or_container(
                     is_local=(str(res.get("provider") or "").lower() == "local"),
                 )
 
-            return res
+            # D11: der im Provider-Pfad geloeste Prompt-Ref gehoert in JEDEN Return.
+            return _with_prompt_info(res)
     finally:
         if budget_reservation_id:
             # Reservierung darf nie hängen bleiben (früher Return, Exception,
@@ -937,17 +1172,30 @@ async def _dispatch_to_omniroute_or_container_impl(
             effective_prompt_info = eff
             # Audit D11: Canary-/Prompt-Version muss im Handoff nachvollziehbar
             # bleiben. Nur Metadaten signieren, nie den kompletten Prompt-Text.
+            # D11: die Registry liefert `version_num`/`is_canary` — nicht
+            # `version`/`canary`. Ohne diese Kette war der signierte Versions-
+            # String dauerhaft leer.
             prompt_version_info = {
                 "agent_id": agent_id,
-                "version": eff.get("version") or eff.get("prompt_version") or "",
-                "canary": eff.get("canary") or eff.get("is_canary") or False,
+                "version": str(
+                    eff.get("version_num") or eff.get("version") or eff.get("prompt_version") or ""
+                ),
+                "canary": bool(eff.get("is_canary") or eff.get("canary") or False),
+                "canary_percentage": eff.get("canary_percentage"),
+                "prompt_hash": hashlib.sha256(
+                    str(eff.get("prompt") or "").encode("utf-8")
+                ).hexdigest(),
                 "prompt_chars": len(str(eff.get("prompt") or "")),
                 "model": eff.get("model") or "",
+                "resolved": True,
             }
             if eff.get("model") and not model:
                 model = eff["model"]
     except Exception as pr_err:
         logger.debug(f"[Dispatcher] Prompt-Registry Lookup uebersprungen: {pr_err}")
+
+    # Task-lokaler Ref fuer den aeusseren Dispatcher (D11: jeder Return).
+    _PROMPT_VERSION_CTX.set(prompt_version_info)
 
     # Core Working Memory Blocks (letzte 2-3 gepinnte Blöcke)
     core_mem_addon = ""
@@ -1077,13 +1325,20 @@ async def _dispatch_to_omniroute_or_container_impl(
                     content=(prompt or "")[:2000],
                     target_action=_action,
                 )
+                # D12: nur bestaetigte Ausfuehrung ist Erfolg. `warning`/
+                # `unconfirmed` darf nie als success mit Fake-Content enden.
+                n8n_ok = _n8n.get("status") == "success"
                 return {
-                    "status": "success" if _n8n.get("status") != "error" else "failed",
+                    "status": "success" if n8n_ok else "blocked",
                     "engine": "n8n",
                     "webhook_action": _action,
                     "tokens": 0,
                     "n8n_result": _n8n,
-                    "content": f"Deterministisch an n8n delegiert ({_action}).",
+                    "error_code": None if n8n_ok else _n8n.get("error_code", "N8N_DELIVERY_UNCONFIRMED"),
+                    "content": (
+                        f"Deterministisch an n8n ausgefuehrt ({_action}, executionId={_n8n.get('execution_id', '')})."
+                        if n8n_ok else f"n8n-Ausfuehrung nicht bestaetigt ({_action}) — HITL/Outbox erforderlich."
+                    ),
                 }
             return {
                 "status": "blocked",
@@ -1181,32 +1436,30 @@ async def _dispatch_to_omniroute_or_container_impl(
         # W3: Fail-Fast für ausgefallene Provider statt Thundering Herd.
         from backend.provider_circuit_breaker import provider_breaker
 
-        def _audit_dispatch_blocked(status: int) -> None:
+        async def _audit_dispatch_blocked(status: int) -> None:
             # SECURITY.md: "Every executed and blocked LLM call is atomically recorded".
             # Circuit-Open und Netzwerkfehler blieben bisher ohne Audit-Block.
-            try:
-                log_completed_llm_dispatch(
-                    agent_id=agent_id,
-                    provider=provider_id,
-                    model=model_id,
-                    target_endpoint=url,
-                    http_status=status,
-                    data_category=hop_gate["data_category"],
-                    zero_egress_active=hop_gate["zero_egress_active"],
-                    task_id=task_id,
-                    trace_id=active_trace_id,
-                )
-            except Exception as audit_exc:
-                logger.warning("[LLM-Dispatch] Audit-Block nicht schreibbar: %s", audit_exc)
+            await _audit_log_async(
+                agent_id=agent_id,
+                provider=provider_id,
+                model=model_id,
+                target_endpoint=url,
+                http_status=status,
+                data_category=hop_gate["data_category"],
+                zero_egress_active=hop_gate["zero_egress_active"],
+                task_id=task_id,
+                trace_id=active_trace_id,
+                extra={"effective_prompt_info": prompt_version_info} if prompt_version_info else None,
+            )
 
         if not provider_breaker.allow(provider_id):
-            _audit_dispatch_blocked(0)
+            await _audit_dispatch_blocked(0)
             raise RuntimeError(f"Provider '{provider_id}' ist circuit-open (Fail-Fast).")
         try:
             r = await http_client.post(url, **post_kwargs)
         except Exception:
             provider_breaker.record_failure(provider_id)
-            _audit_dispatch_blocked(0)
+            await _audit_dispatch_blocked(0)
             await _provider_backoff(provider=provider_id)
             raise
         if r.status_code >= 500 or r.status_code == 429:
@@ -1214,7 +1467,7 @@ async def _dispatch_to_omniroute_or_container_impl(
             await _provider_backoff(r, provider=provider_id)
         else:
             provider_breaker.record_success(provider_id)
-        log_completed_llm_dispatch(
+        await _audit_log_async(
             agent_id=agent_id,
             provider=provider_id,
             model=model_id,
@@ -1268,7 +1521,7 @@ async def _dispatch_to_omniroute_or_container_impl(
             }
         except Exception as loc_err:
             if preflight_gate.get("zero_egress_active") or _local_requested:
-                ev = log_completed_llm_dispatch(
+                ev = await _audit_log_async(
                     agent_id=agent_id,
                     provider="local",
                     model=local_model,
@@ -1277,20 +1530,21 @@ async def _dispatch_to_omniroute_or_container_impl(
                     data_category=preflight_gate["data_category"],
                     zero_egress_active=True,
                     task_id=task_id,
+                    extra={"effective_prompt_info": prompt_version_info} if prompt_version_info else None,
                 )
-                return {
+                return _with_prompt_info({
                     "status": "blocked",
                     "error_code": "LOCAL_LLM_OFFLINE_HARD_BLOCK",
                     "error": str(loc_err),
                     "content": f"🛑 [PRIVACY-ROUTER HARD-BLOCK]: Lokales On-Premise-Modell ({local_ep}) ist nicht erreichbar ({loc_err}) — keine Daten verlassen das Haus.",
                     "audit_event": ev,
-                }
+                })
 
     # Ein explizit lokales Routing darf NIEMALS still in die Cloud-Kette fallen
     # (Groq/OpenRouter/OmniRoute). Vorher war der Fallback nur bei
     # zero_egress_active gesperrt — bei reinem Privacy-Routing ging das durch.
     if _local_requested:
-        ev = log_completed_llm_dispatch(
+        ev = await _audit_log_async(
             agent_id=agent_id,
             provider="local",
             model=local_model if _local_requested else (model or ""),
@@ -1299,14 +1553,15 @@ async def _dispatch_to_omniroute_or_container_impl(
             data_category=preflight_gate.get("data_category", classified_cat),
             zero_egress_active=True,
             task_id=task_id,
+            extra={"effective_prompt_info": prompt_version_info} if prompt_version_info else None,
         )
-        return {
+        return _with_prompt_info({
             "status": "blocked",
             "error": "local_route_cloud_fallback_denied",
             "error_code": "LOCAL_ROUTE_CLOUD_FALLBACK_BLOCKED",
             "content": "🛑 [PRIVACY-ROUTER]: Lokal gerouteter Task darf nicht in die Cloud-Fallback-Kette fallen (fail-closed).",
             "audit_event": ev,
-        }
+        })
 
     # 1. Spezifischer Provider: GROQ
     if prov_lower == "groq" and groq_api_key:
@@ -1331,7 +1586,7 @@ async def _dispatch_to_omniroute_or_container_impl(
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as e:
-            print(f"[DISPATCHER] Groq direct call failed: {e}")
+            logger.warning("[Dispatcher] Groq direct call failed: %s", e)
 
     # 2. Spezifischer Provider: OPENAI
     if prov_lower == "openai" and openai_api_key:
@@ -1356,7 +1611,7 @@ async def _dispatch_to_omniroute_or_container_impl(
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as e:
-            print(f"[DISPATCHER] OpenAI direct call failed: {e}")
+            logger.warning("[Dispatcher] OpenAI direct call failed: %s", e)
 
     # 3. Spezifischer Provider: ANTHROPIC (mit Prompt-Caching für bis zu 90% Kostenreduktion)
     if prov_lower == "anthropic" and anthropic_api_key:
@@ -1407,7 +1662,7 @@ async def _dispatch_to_omniroute_or_container_impl(
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as e:
-            print(f"[DISPATCHER] Anthropic direct call failed: {e}")
+            logger.warning("[Dispatcher] Anthropic direct call failed: %s", e)
 
     # 4. OpenRouter Gateway (Universal für DeepSeek, Claude, Llama, Qwen, Gemini etc.)
     if openrouter_api_key and prov_lower != "omniroute":
@@ -1451,7 +1706,7 @@ async def _dispatch_to_omniroute_or_container_impl(
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as e:
-            print(f"[DISPATCHER] OpenRouter call failed with model {selected_model}: {e}")
+            logger.warning("[Dispatcher] OpenRouter call failed with model %s: %s", selected_model, e)
 
     # 5. Fallback: Groq Ultra-Fast API
     if groq_api_key:
@@ -1612,17 +1867,19 @@ async def _dispatch_to_omniroute_or_container_impl(
                 return {"status": "success", "content": content, "input_tokens": i_tok, "output_tokens": o_tok, "model": selected_model}
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
-        except Exception:
+        except Exception as container_exc:
+            logger.debug("[Dispatcher] Container-Hop %s fehlgeschlagen: %s", url, container_exc)
             continue
 
-        # 5. Robuste Fehlerbehandlung (Keine Dummy-Bereitschaftsmeldung vortaeuschen)
+    # 5. Robuste Fehlerbehandlung (Keine Dummy-Bereitschaftsmeldung vortaeuschen)
     err_msg = f"[FEHLER: Kein Sprachmodell-Provider erreichbar fuer @{agent_id} ({agent_name}) mit Modell '{selected_model}']"
-    print(f"[DISPATCHER-ERROR] {err_msg}")
-    return {
+    logger.error("[DISPATCHER-ERROR] %s", err_msg)
+    return _with_prompt_info({
         "status": "error",
         "content": err_msg,
-        "error": "No LLM provider available"
-    }
+        "error": "No LLM provider available",
+        "error_code": "NO_LLM_PROVIDER_AVAILABLE",
+    })
 
 async def dispatch_to_external_agent(
     agent_id: str, 
@@ -1652,8 +1909,7 @@ async def dispatch_to_external_agent(
                     session_id=task_id or agent_id,
                     is_local=(str(res.get("provider") or "").lower() == "local"),
                 )
-
-            return res
+            return _with_prompt_info(res, _resolve_prompt_ref(agent_id, task_id, model))
     elif agent_id == "odysseus":
         res = await dispatch_to_odysseus(agent_name, prompt, timeout)
         if res.get("status") in ("success", "blocked"):
@@ -1663,8 +1919,7 @@ async def dispatch_to_external_agent(
                     session_id=task_id or agent_id,
                     is_local=(str(res.get("provider") or "").lower() == "local"),
                 )
-
-            return res
+            return _with_prompt_info(res, _resolve_prompt_ref(agent_id, task_id, model))
     elif agent_id == "openclaw" or agent_id == "openclaw-docker":
         res = await dispatch_to_openclaw(agent_name, prompt, timeout)
         if res.get("status") in ("success", "blocked"):
@@ -1674,8 +1929,7 @@ async def dispatch_to_external_agent(
                     session_id=task_id or agent_id,
                     is_local=(str(res.get("provider") or "").lower() == "local"),
                 )
-
-            return res
+            return _with_prompt_info(res, _resolve_prompt_ref(agent_id, task_id, model))
             
     # Falls der spezifische Container-Endpoint fehlschlägt oder ein anderer Agent gewählt wurde, OmniRoute Gateway nutzen!
     return await dispatch_to_omniroute_or_container(
@@ -2115,6 +2369,16 @@ async def _stream_boardroom_debate_inner(
     running_transcript = f"--- MODERATOR INITIALISIERUNG ---\n{init_text}\n\n"
     # Alle Agent-Aussagen dieser Debatte fuer die offline Konsensauswertung sammeln.
     debate_statements: List[Any] = []
+    # D02/D14: Konsens wird in JEDER Runde — auch der letzten — geprueft.
+    consensus: Dict[str, Any] = {
+        "consensus_reached": False,
+        "verdict": "NO_CONSENSUS",
+        "veto_by": None,
+        "evidence": [],
+        "tie_break_rule": "executive>lead>specialist>no_consensus",
+        "authority_weights": {"executive": 3, "lead": 2, "specialist": 1},
+    }
+    critique_text = ""
     
     for round_num in range(1, max_rounds + 1):
         yield {
@@ -2270,23 +2534,95 @@ async def _stream_boardroom_debate_inner(
         
         # 3. CONSENSUS CHECK & WATCHDOG (deterministisch, OFFLINE, kein LLM)
         # M-1: Explizite Negation schlaegt positive Marker; unklar = kein Konsens.
-        if round_num < max_rounds:
-            from backend.consensus_gate import resolve_debate_consensus
-            consensus = resolve_debate_consensus(debate_statements)
-            if consensus.get("consensus_reached"):
-                yield {
-                    "type": "consensus_reached",
-                    "round": round_num,
-                    "content": f"Konsens in Runde {round_num} vorzeitig erzielt!",
-                    "yes_votes": consensus["yes_votes"],
-                    "total_votes": consensus["total_votes"],
-                    "required_votes": consensus["required_votes"],
-                    "verdict": consensus["verdict"],
-                    "evidence": consensus["evidence"],
-                }
-                break
+        # D02/D14/BLOCKER: AUCH in der letzten Runde ausfuehren. Der verdict
+        # wird konsumiert und bestimmt, ob ueberhaupt synthetisiert wird.
+        from backend.consensus_gate import resolve_debate_consensus
+        consensus = resolve_debate_consensus(
+            debate_statements,
+            authority={
+                str(s.get("agent_id") or ""): str(s.get("tier") or "")
+                for s in debate_statements if isinstance(s, dict) and s.get("tier")
+            } or None,
+        )
+        if consensus.get("consensus_reached"):
+            yield {
+                "type": "consensus_reached",
+                "round": round_num,
+                "content": f"Konsens in Runde {round_num} erzielt.",
+                "yes_votes": consensus["yes_votes"],
+                "total_votes": consensus["total_votes"],
+                "required_votes": consensus["required_votes"],
+                "verdict": consensus["verdict"],
+                "evidence": consensus["evidence"],
+            }
+            break
+        if round_num == max_rounds:
+            yield {
+                "type": "no_consensus",
+                "round": round_num,
+                "verdict": consensus["verdict"],
+                "veto_by": consensus.get("veto_by"),
+                "content": "Kein Konsens nach der letzten Debattenrunde — Eskalation an HITL.",
+            }
 
     # 4. FINAL SYNTHESIS (STANDARD ODER MIXTURE OF AGENTS - MoA)
+    final_verdict = str(consensus.get("verdict") or "NO_CONSENSUS").upper()
+    has_final_decision = final_verdict.startswith("CONSENSUS_REACHED")
+
+    # 4a. DEDIZIERTER CRITIQUE-DISPATCH (D02/MED) — vor der Synthese,
+    # eigene Instanz, eigener adversarischer System-Prompt.
+    token.check()
+    try:
+        critique_prompt = (
+            f"Du bist der unabhaengige Boardroom-Critic (Adversarial Review).\n"
+            f"Aufgabe: '{task}' | Framework: '{framework}'\n\n"
+            f"Debattenprotokoll:\n{_prompt_transcript(running_transcript)}\n\n"
+            f"Pruefe schonungslos: logische Brueche, unbelegte Behauptungen, "
+            f"Regel-/Policy-Verstoesse, blinde Flecken und ungeloeste Konflikte. "
+            f"Benenne mindestens ein konkretes Risiko. Formuliere deine Befunde knapp."
+        )
+        res_critique = await dispatch_to_external_agent(
+            agent_id="boardroom-critic",
+            agent_name="Boardroom Critic",
+            prompt=critique_prompt,
+            role="Adversarial Reviewer",
+            system_prompt=(
+                "Du bist ein extrem kritischer, unabhaengiger Revisor. "
+                "Du stimmst keiner Position zu, bevor du sie nicht widerlegt hast. "
+                "Antworte nur mit praezisen Befunden."
+            ),
+            model=chairman.get("model", "deepseek/deepseek-chat"),
+            timeout=timeout,
+        )
+        critique_text = str(res_critique.get("content") or "").strip()
+        critique_ev = {
+            "type": "critique",
+            "agent_id": "boardroom-critic",
+            "agent_name": "Boardroom Critic",
+            "content": critique_text,
+        }
+        debate_statements.append(critique_ev)
+        running_transcript += f"\n--- CRITIQUE (Adversarial Review) ---\n{critique_text}\n\n"
+        yield critique_ev
+    except Exception as critique_exc:
+        logger.warning("[Boardroom] Critique-Dispatch fehlgeschlagen: %s", critique_exc)
+        yield {"type": "critique_error", "content": str(critique_exc)}
+
+    # D02/BLOCKER: Bei NO_CONSENSUS garantiert KEINE finale Entscheidung.
+    no_consensus_mode = not has_final_decision
+    synthesis_directive = (
+        "Erstelle NUR eine Konfliktanalyse im Markdown-Format:\n"
+        "### Konflikte / offene Punkte\n"
+        "### Policy-/Guardrail-Befunde und Eskalationsbedarf\n"
+        "SCHREIBE KEINE finale Entscheidung und KEINEN Aktionsplan."
+        if no_consensus_mode else
+        "Erstelle eine finale, strukturierte Synthese im Markdown-Format mit folgenden 3 Abschnitten:\n"
+        "### 1. Key Consensus Points (Haupt-Konsenspunkte)\n"
+        "### 2. Unresolved Risks / Counterarguments (Offene Risiken & Gegenargumente)\n"
+        "### 3. Final Actionable Decision (Finale Entscheidung & konkreter Aktionsplan)"
+    )
+    if critique_text:
+        synthesis_directive += f"\n\nADVERSARIAL CRITIQUE (zwingend zu beruecksichtigen):\n{critique_text[:2000]}"
     synthesis_text = ""
     if use_moa:
         # Default Referenz-Modelle falls keine übergeben wurden
@@ -2364,10 +2700,7 @@ async def _stream_boardroom_debate_inner(
             f"Synthetisiere als Aggregator alle Perspektiven:\n"
             f"1. Extrahiere die stärksten Konsenspunkte aller Modelle\n"
             f"2. Hebe Kontroversen, blinde Flecken oder Risiken hervor\n"
-            f"3. Formuliere die finale verbindliche Entscheidung & Aktionsplan im Markdown-Format:\n"
-            f"### 1. Key Consensus Points (MoA-Konsens)\n"
-            f"### 2. Evaluierte Risiken & Dissenting Opinions\n"
-            f"### 3. Actionable Decision & Umsetzungsschritte"
+            f"3. {synthesis_directive}"
         )
 
         yield {
@@ -2392,12 +2725,10 @@ async def _stream_boardroom_debate_inner(
         synthesis_prompt = (
             f"Du bist der Chairman ({chairman['name']}).\n"
             f"Die Debatte zu '{task}' unter Anwendung des Frameworks '{framework}' ist beendet.\n"
+            f"Konsens-Status: {final_verdict}\n"
             f"Wende das Framework '{framework}' an (vollstaendige Instruktion im System-Prompt).\n\n"
             f"Gesamter Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
-            f"Erstelle eine finale, strukturierte Synthese im Markdown-Format mit folgenden 3 Abschnitten:\n"
-            f"### 1. Key Consensus Points (Haupt-Konsenspunkte)\n"
-            f"### 2. Unresolved Risks / Counterarguments (Offene Risiken & Gegenargumente)\n"
-            f"### 3. Final Actionable Decision (Finale Entscheidung & konkreter Aktionsplan)"
+            f"{synthesis_directive}"
         )
     
         token.check()  # Abbruch vor dem Synthese-Dispatch beachten
@@ -2421,13 +2752,23 @@ async def _stream_boardroom_debate_inner(
         "agent_name": chairman["name"],
         "role": chairman.get("role", "Orchestrator"),
         "model": chairman.get("model") or "deepseek/deepseek-chat",
-        "content": synthesis_text
+        "content": synthesis_text,
+        "consensus_status": final_verdict,
+        "is_final_decision": has_final_decision,
     }
 
     yield {
         "type": "done",
         "transcript": running_transcript,
-        "synthesis": synthesis_text
+        "synthesis": synthesis_text,
+        "consensus_status": final_verdict,
+        "consensus_verdict": final_verdict,
+        "consensus_reached": bool(consensus.get("consensus_reached")),
+        "veto_by": consensus.get("veto_by"),
+        "veto_marker": "POLICY_VIOLATION" if final_verdict == "NO_CONSENSUS_POLICY_VIOLATION" else None,
+        "critique": critique_text,
+        "is_final_decision": has_final_decision,
+        "evidence": consensus.get("evidence", []),
     }
 
 
@@ -2451,9 +2792,17 @@ async def run_boardroom_debate(
         "max_rounds": max_rounds,
         "events": [],
         "transcript": "",
-        "synthesis": ""
+        "synthesis": "",
+        # D02/D14:默认值 fail-closed — nur ein explizites CONSENSUS_REACHED
+        # darf später als finale Entscheidung archiviert werden.
+        "consensus_status": "NO_CONSENSUS",
+        "consensus_verdict": "NO_CONSENSUS",
+        "consensus_reached": False,
+        "veto_by": None,
+        "critique": "",
+        "is_final_decision": False,
     }
-    
+
     async for ev in stream_boardroom_debate(task, max_rounds, chairman_id, active_agents, framework, timeout, use_moa=use_moa, moa_reference_models=moa_reference_models, moa_aggregator=moa_aggregator):
         ev_type = ev.get("type")
         if ev_type == "start":
@@ -2461,6 +2810,17 @@ async def run_boardroom_debate(
         elif ev_type == "done":
             task_res["transcript"] = ev.get("transcript", "")
             task_res["synthesis"] = ev.get("synthesis", "")
+            verdict = str(ev.get("consensus_verdict") or ev.get("consensus_status") or "NO_CONSENSUS").upper()
+            task_res["consensus_status"] = verdict
+            task_res["consensus_verdict"] = verdict
+            task_res["consensus_reached"] = bool(ev.get("consensus_reached"))
+            task_res["veto_by"] = ev.get("veto_by")
+            task_res["critique"] = ev.get("critique", "")
+            task_res["evidence"] = ev.get("evidence", [])
+            # Nur echter Konsens ist eine finale Entscheidung.
+            task_res["is_final_decision"] = verdict.startswith("CONSENSUS_REACHED")
+            if not task_res["is_final_decision"]:
+                task_res["status"] = "no_consensus"
         elif ev_type == "error":
             return {"status": "error", "content": ev.get("content", "")}
         elif ev_type == "cancelled":
@@ -2473,7 +2833,7 @@ async def run_boardroom_debate(
             continue
         else:
             events.append(ev)
-            
+
     task_res["events"] = events
     return task_res
 

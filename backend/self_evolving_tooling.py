@@ -47,12 +47,33 @@ _FORBIDDEN_CALLS = frozenset({
     "__import__", "eval", "exec", "compile", "open", "getattr", "setattr",
     "delattr", "globals", "locals", "vars", "breakpoint", "input",
     "__build_class__",
+    # Audit D04/HIGH: der Harness importierte frueher os/sys und stellte sie
+    # dem synthetisierten Code zur Verfuegung. os.system(...) war damit ohne
+    # jeden verbotenen Import ausfuehrbar.
+    "system", "popen", "spawn", "Popen",
+})
+
+# Attribute, die ueber den Harness (oder ein anderes Modul) erreichbar waren.
+_FORBIDDEN_ATTRS = frozenset({
+    "system", "popen", "spawn", "Popen", "environ", "modules",
+    "check_output",
 })
 
 _FORBIDDEN_NAMES = frozenset({
     "__builtins__", "__import__", "__loader__", "__spec__", "__subclasses__",
     "__globals__", "__code__", "__closure__", "__class__", "__bases__", "__mro__",
 })
+
+
+def _host_sandbox_allowed() -> bool:
+    """Host-Fallback ist standardmaessig DEAKTIVIERT.
+
+    Nur mit zwei expliziten Opt-ins (und minimaler env, see safe_env) darf
+    generierter Code ohne --network=none-Container auf dem Host laufen.
+    """
+    allow = os.environ.get("ARCHON_ALLOW_HOST_SANDBOX", "").strip().lower() in ("1", "true", "yes")
+    net_none = os.environ.get("ARCHON_SANDBOX_NETWORK_NONE_CONFIRMED", "").strip().lower() in ("1", "true", "yes")
+    return allow and net_none
 
 
 def _validate_synthetic_imports(code: str, label: str = "tool_code") -> None:
@@ -86,9 +107,27 @@ def _validate_synthetic_imports(code: str, label: str = "tool_code") -> None:
                     f"(Zeile {getattr(node, 'lineno', '?')})."
                 )
         elif isinstance(node, ast.Attribute):
+            if node.attr in _FORBIDDEN_ATTRS:
+                raise ValueError(
+                    f"{label}: Attributzugriff '.{node.attr}' ist in synthetisiertem Code verboten "
+                    f"(Zeile {getattr(node, 'lineno', '?')})."
+                )
             if node.attr.startswith("__") and node.attr.endswith("__"):
                 raise ValueError(
                     f"{label}: Dunder-Attributzugriff '.{node.attr}' ist in synthetisiertem Code verboten "
+                    f"(Zeile {getattr(node, 'lineno', '?')})."
+                )
+        elif isinstance(node, ast.Subscript):
+            # sys.modules['os'] / os.environ['KEY'] — auch ohne Import lesbar,
+            # wenn der Harness die Module injiziert. Hart blocken.
+            base = node.value
+            base_name = (
+                base.id if isinstance(base, ast.Name)
+                else base.attr if isinstance(base, ast.Attribute) else ""
+            )
+            if base_name in ("sys", "os", "modules", "environ"):
+                raise ValueError(
+                    f"{label}: Subscript-Zugriff auf '{base_name}' ist in synthetisiertem Code verboten "
                     f"(Zeile {getattr(node, 'lineno', '?')})."
                 )
         elif isinstance(node, ast.Name):
@@ -163,10 +202,12 @@ class SelfEvolvingToolEngine:
         # F-020: AST-Sperre VOR jeder Ausführung (auch im Docker-Pfad).
         _validate_synthetic_imports(tool_code, "tool_code")
         _validate_synthetic_imports(test_code, "test_code")
+        # Audit D04/HIGH: der Harness darf WEDER os noch sys importieren —
+        # sonst sind os.system / sys.modules / os.environ ohne jeden verbotenen
+        # Import im synthetisierten Code erreichbar. Die AST-Sperre laeuft
+        # deshalb ueber den GESAMTEN Script (inkl. Harness).
         combined_script = f"""# -*- coding: utf-8 -*-
-import sys
-import os
-
+# HARNESS: keine Imports von os/sys. Nur explizit erlaubte Builtins.
 # --- TOOL CODE ---
 {tool_code}
 
@@ -175,11 +216,11 @@ if __name__ == "__main__":
     try:
 {self._indent(test_code, 8)}
         print("__VOYAGER_TEST_PASSED__")
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    except BaseException as exc:
+        print("__VOYAGER_TEST_FAILED__:", repr(exc)[:200])
 """
+        # GESAMT-Script validieren (Harness + tool_code + test_code).
+        _validate_synthetic_imports(combined_script, "combined_script")
         # 1. Primär: Gehärtete Ephemeral Docker Sandbox (--network=none, --cap-drop=ALL, --read-only)
         try:
             from backend.ephemeral_sandbox import ephemeral_sandbox
@@ -193,13 +234,15 @@ if __name__ == "__main__":
                 out = f"{sbx_res.get('stdout', '')}\n{sbx_res.get('stderr', '')}".strip()
                 passed = sbx_res.get("status") == "success" and "__VOYAGER_TEST_PASSED__" in out
                 return passed, out
-            # HARTUNG: Host-Fallback nur noch mit explizitem Opt-in. Ohne
-            # Docker-Sandbox darf generierter Code nicht auf dem Host laufen.
-            if os.environ.get("ARCHON_ALLOW_HOST_SANDBOX", "").strip().lower() not in ("1", "true", "yes"):
-                return False, str(sbx_res.get("error") or "Docker-Sandbox erforderlich, aber nicht verfügbar (ARCHON_ALLOW_HOST_SANDBOX=true erlaubt den Host-Fallback explizit).")
+            # HARTUNG: Host-Fallback standardmaessig deaktiviert.
+            if not _host_sandbox_allowed():
+                return False, str(sbx_res.get("error") or "Docker-Sandbox erforderlich, aber nicht verfügbar (Host-Fallback deaktiviert).")
         except Exception as sbx_err:
-            if os.environ.get("ARCHON_ALLOW_HOST_SANDBOX", "").strip().lower() not in ("1", "true", "yes"):
-                return False, f"Docker-Sandbox fehlgeschlagen: {sbx_err} (Host-Fallback nur mit ARCHON_ALLOW_HOST_SANDBOX=true)"
+            if not _host_sandbox_allowed():
+                return False, f"Docker-Sandbox fehlgeschlagen: {sbx_err} (Host-Fallback deaktiviert)"
+
+        if not _host_sandbox_allowed():
+            return False, "Host-Fallback deaktiviert — generierter Code darf nicht auf dem Host ausgefuehrt werden."
 
         import tempfile
         with tempfile.TemporaryDirectory(prefix="archon_voyager_sbx_") as sbx_dir:

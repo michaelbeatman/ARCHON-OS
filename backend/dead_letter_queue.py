@@ -50,6 +50,35 @@ def _get_cfg() -> Dict[str, Any]:
         }
 
 
+_TRACE_COLS = ("trace_id", "span_id", "traceparent", "tracestate")
+
+
+def _trace_fields(
+    trace_id: str = "", span_id: str = "", traceparent: str = "", tracestate: str = "",
+    payload: Optional[Dict[str, Any]] = None,
+) -> Dict[str, str]:
+    """Trace-Kontext aus expliziten Argumenten, Payload oder aktuellem Kontext."""
+    src = payload or {}
+    out = {
+        "trace_id": str(trace_id or src.get("trace_id") or ""),
+        "span_id": str(span_id or src.get("span_id") or ""),
+        "traceparent": str(traceparent or src.get("traceparent") or ""),
+        "tracestate": str(tracestate or src.get("tracestate") or ""),
+    }
+    try:
+        from backend import trace_context as tc
+        if not out["trace_id"]:
+            out["trace_id"] = tc.current_trace_id()
+        if not out["span_id"]:
+            out["span_id"] = tc.current_span_id()
+        if not out["traceparent"] and out["trace_id"] and out["span_id"]:
+            out["traceparent"] = tc.format_traceparent(out["trace_id"], out["span_id"])
+        out["tracestate"] = tc.sanitize_tracestate(out["tracestate"] or tc.current_tracestate())
+    except Exception as exc:
+        logger.warning("[DLQ] Trace-Kontext nicht verfügbar: %s", exc)
+    return out
+
+
 def _init_db() -> None:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
@@ -82,6 +111,11 @@ def _init_db() -> None:
             # Audit 23.11.2026: next_backoff_seconds wurde gespeichert, aber
             # beim Claim nie ausgewertet → Hot-Retry-Loop.
             ("next_try_at", "REAL DEFAULT 0"),
+            # D16: Trace-Kontext für Re-Injektion bei Replay (kein Coroutine-Replay).
+            ("trace_id", "TEXT DEFAULT ''"),
+            ("span_id", "TEXT DEFAULT ''"),
+            ("traceparent", "TEXT DEFAULT ''"),
+            ("tracestate", "TEXT DEFAULT ''"),
         ):
             if col not in cols:
                 conn.execute(f"ALTER TABLE dead_letter_queue ADD COLUMN {col} {decl}")
@@ -132,12 +166,19 @@ def _builtin_executor(job_type: str) -> Optional[Callable[..., Any]]:
     """Lazy Built-ins (vermeidet zyklische Importe beim Modul-Laden)."""
     if job_type == "webhook_delivery":
         def _redeliver(payload: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
+            from backend import trace_context as tc
             from backend.event_mesh import event_mesh
-            return event_mesh.emit_outbound_event(
-                webhook_url=str(payload.get("target_url") or ""),
-                event_type=str(payload.get("event_type") or "webhook_delivery"),
-                payload=payload.get("payload") if isinstance(payload.get("payload"), dict) else payload,
-            )
+            src = {k: (item.get(k) or payload.get(k) or "") for k in _TRACE_COLS}
+            trace = _trace_fields(**src)
+            # Persistierten Kontext wiederherstellen; emit_outbound_event erzeugt
+            # daraus den Child-Span und injiziert traceparent/tracestate erneut.
+            with tc.use_trace_context(**trace):
+                return event_mesh.emit_outbound_event(
+                    webhook_url=str(payload.get("target_url") or ""),
+                    event_type=str(payload.get("event_type") or "webhook_delivery"),
+                    payload=payload.get("payload") if isinstance(payload.get("payload"), dict) else payload,
+                    trace_columns=trace,
+                )
         return _redeliver
     return None
 
@@ -168,7 +209,9 @@ class DeadLetterQueueManager:
         job_type: str,
         source_module: str,
         payload: Dict[str, Any],
-        error_message: str
+        error_message: str,
+        *,
+        trace_id: str = "", span_id: str = "", traceparent: str = "", tracestate: str = "",
     ) -> Dict[str, Any]:
         cfg = _get_cfg()
         if not bool(cfg.get("enabled", True)):
@@ -178,17 +221,20 @@ class DeadLetterQueueManager:
         max_retries = int(cfg.get("max_replay_retries", 3))
         base_backoff = int(cfg.get("backoff_base_seconds", 10))
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        trace = _trace_fields(trace_id, span_id, traceparent, tracestate, payload)
 
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""
                 INSERT INTO dead_letter_queue
                 (dlq_id, job_type, source_module, payload_json, error_message,
-                 retry_count, max_retries, next_backoff_seconds, status, created_at, last_replay_at)
-                VALUES (?, ?, ?, ?, ?, 0, ?, ?, 'queued', ?, NULL)
+                 retry_count, max_retries, next_backoff_seconds, status, created_at, last_replay_at,
+                 trace_id, span_id, traceparent, tracestate)
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?, 'queued', ?, NULL, ?, ?, ?, ?)
             """, (
                 dlq_id, job_type, source_module,
                 json.dumps(payload, ensure_ascii=False),
-                error_message, max_retries, base_backoff, now_iso
+                error_message, max_retries, base_backoff, now_iso,
+                trace["trace_id"], trace["span_id"], trace["traceparent"], trace["tracestate"],
             ))
             conn.commit()
 
@@ -327,6 +373,7 @@ class DeadLetterQueueManager:
         priority: int = 0,
         idempotency_key: str = "",
         max_retries: Optional[int] = None,
+        trace_id: str = "", span_id: str = "", traceparent: str = "", tracestate: str = "",
     ) -> Dict[str, Any]:
         """Legt einen Job in der Shared Queue ab (idempotent pro idempotency_key)."""
         cfg = _get_cfg()
@@ -347,16 +394,18 @@ class DeadLetterQueueManager:
                     }
             dlq_id = f"dlq-{uuid.uuid4().hex[:10]}"
             retries = int(max_retries if max_retries is not None else cfg.get("max_replay_retries", 3))
+            trace = _trace_fields(trace_id, span_id, traceparent, tracestate, payload)
             conn.execute(
                 "INSERT INTO dead_letter_queue "
                 "(dlq_id, job_type, source_module, payload_json, error_message, retry_count, max_retries, "
                 " next_backoff_seconds, status, created_at, last_replay_at, attempt, idempotency_key, priority, "
-                " claimed_by, claim_expires) "
-                "VALUES (?, ?, ?, ?, '', 0, ?, ?, 'queued', ?, NULL, 0, ?, ?, '', 0)",
+                " claimed_by, claim_expires, trace_id, span_id, traceparent, tracestate) "
+                "VALUES (?, ?, ?, ?, '', 0, ?, ?, 'queued', ?, NULL, 0, ?, ?, '', 0, ?, ?, ?, ?)",
                 (
                     dlq_id, job_type, source_module,
                     json.dumps(payload, ensure_ascii=False), retries,
                     int(cfg.get("backoff_base_seconds", 10)), now_iso, key, int(priority),
+                    trace["trace_id"], trace["span_id"], trace["traceparent"], trace["tracestate"],
                 ),
             )
             conn.commit()

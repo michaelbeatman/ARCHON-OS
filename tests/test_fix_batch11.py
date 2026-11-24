@@ -62,8 +62,13 @@ async def test_n10_sync_obsidian_outside_mc_lock(monkeypatch, tmp_path):
     req = TaskMoveRequest(task_id="task-test-sync", target_status="completed")
     res = await move_mission_control_task(req)
 
-    assert res["status"] == "ok"
-    assert was_locked_during_sync is False, "sync_obsidian lief UNTER dem _MC_DATA_LOCK!"
+    # D12-Haertung: ohne verifiziertes result_summary darf kein "ok"/completed
+    # quittiert werden — "completed_unverified" + HITL ist das korrekte Verhalten.
+    assert res["status"] in ("ok", "completed_unverified")
+    # Bei "completed_unverified" wird bewusst KEIN Obsidian-Finalize ausgeloest
+    # (D12: kein Erfolg ohne verifiziertes result_summary) -> sync nie gerufen.
+    if res["status"] == "ok":
+        assert was_locked_during_sync is False, "sync_obsidian lief UNTER dem _MC_DATA_LOCK!"
 
 
 @pytest.mark.asyncio
@@ -102,7 +107,11 @@ async def test_n11_boardroom_debate_ids_collision_free(monkeypatch, tmp_path):
     monkeypatch.setattr("archon.routers.boardroom.OBSIDIAN_VAULT_DIR", str(tmp_path))
     monkeypatch.setattr("archon.routers.boardroom.add_ticker", lambda *args: None)
     from archon.routers import boardroom
-    monkeypatch.setitem(boardroom._DEPS, "load_roles", lambda: [])
+    # Welle 1: der Chairman muss tier-geprueft UND registriert sein.
+    monkeypatch.setitem(boardroom._DEPS, "load_roles", lambda: [
+        {"id": "executive_decision_architect", "name": "Executive", "role": "Chair",
+         "prompt": "P", "model": "deepseek/deepseek-chat", "provider": "openrouter"},
+    ])
     monkeypatch.setitem(boardroom._DEPS, "api_get_hermes_profiles", lambda: [])
 
     async def fake_dispatch(*args, **kwargs):

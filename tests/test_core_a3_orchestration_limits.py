@@ -113,6 +113,8 @@ def test_boardroom_rejects_untrusted_chairman_id():
 
 
 def test_email_draft_engine_defines_workspace_dir_and_detects_hmac_downgrade(tmp_path, monkeypatch):
+    import hashlib
+    import json
     import sqlite3
     from backend import email_draft_engine as ede
 
@@ -120,19 +122,40 @@ def test_email_draft_engine_defines_workspace_dir_and_detects_hmac_downgrade(tmp
     assert os.path.isdir(ede.WORKSPACE_DIR)
 
     db_file = str(tmp_path / "email_a3.db")
-    monkeypatch.delenv("ARCHON_AUDIT_HMAC_KEY", raising=False)
+    key = "test-secret-a3-email-chain-key-32bytes"
     monkeypatch.delenv("ARCHON_AUDIT_HMAC_EPOCHS", raising=False)
     monkeypatch.setenv("ARCHON_EMAIL_DRAFT_HMAC_EPOCH_FROM", "1")
-    monkeypatch.setenv("ARCHON_ENFORCE_DISPATCH_AUDIT", "0")
-
-    from backend import audit_log as al
+    monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", key)
 
     eng = ede.EmailDraftEngine(db_path=db_file)
-    monkeypatch.setattr(al, "_dispatch_audit_enforced", lambda: False)
     eng._log_audit("d-1", "CREATED", {"subject": "Test"}, created_by="admin")
+    assert ede.verify_email_draft_chain(db_path=db_file)["valid"] is True
 
-    # Jetzt HMAC-Key aktivieren: Block ID 1 >= cutoff 1 ohne HMAC muss als Downgrade fehlschlagen
-    monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "test-secret-a3-email-chain-key-32bytes")
+    # Kein Abschalter mehr: ohne ENV-Key ist der Schreibpfad fail-closed.
+    from backend import audit_log as al
+
+    monkeypatch.delenv("ARCHON_AUDIT_HMAC_KEY")
+    with pytest.raises(RuntimeError):
+        al.sign_block("no-key-block")
+    with pytest.raises(RuntimeError):
+        eng._log_audit("d-2", "CREATED", {"subject": "NoKey"}, created_by="admin")
+    monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", key)
+
+    # Ein ab Epoche 1 (id >= cutoff) nachtraeglich eingeschmuggelter
+    # Plain-SHA-256-Block ist ein nicht erlaubter Downgrade.
+    details = json.dumps({"subject": "Downgrade"}, sort_keys=True, ensure_ascii=False)
+    with sqlite3.connect(db_file) as con:
+        prev = con.execute(
+            "SELECT block_hash FROM email_draft_audit_log ORDER BY id DESC LIMIT 1"
+        ).fetchone()[0]
+        canonical = f"{prev}|d-2|CREATED|{details}|admin|2026-01-01T00:00:00+00:00"
+        plain = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        con.execute(
+            "INSERT INTO email_draft_audit_log "
+            "(id, draft_id, action, details, prev_hash, block_hash, created_at, created_by) "
+            "VALUES (2, 'd-2', 'CREATED', ?, ?, ?, '2026-01-01T00:00:00+00:00', 'admin')",
+            (details, prev, plain),
+        )
     res = ede.verify_email_draft_chain(db_path=db_file)
     assert res["valid"] is False
     assert "Downgrade" in res["message"]

@@ -18,9 +18,56 @@ You are an Executive Ghostwriter capturing an authentic, operator-led founder vo
 
 ---
 
-## 3. Assigned Domain Skills & Workflows
-**Active Profile Skills (24):** `skill-linkedin-storytelling-thoughtleadership`, `skill-thought-leadership-framework`, `skill-direct-response-copywriting`, `linkedin-ghostwriting`, `linkedin-posts`, `linkedin-profile-optimizer`, `cs-content-creator`, `content-production`, `avoid-ai-writing`, `devops`, `email`, `productivity`, `note-taking`, `creative`, `autonomous-ai-agents`, `web`, `media`, `social-media`, `research`, `apple`, `software-development`, `github`, `mlops`, `smart-home`
-Use the `skills` tool to load full `SKILL.md` standard operating procedures into working memory whenever specialized workflows apply.
+## 3. Assigned Domain Skills & Execution Blueprints
+**Active Profile Skills (32):** `anti-ai-slop`, `li-reply`, `li-comment`, `li-audit`, `li-plan`, `li-carousel`, `li-human`, `li-post`, `skill-linkedin-storytelling-thoughtleadership`, `skill-thought-leadership-framework`, `skill-direct-response-copywriting`, `linkedin-ghostwriting`, `linkedin-posts`, `linkedin-profile-optimizer`, `cs-content-creator`, `content-production`, `avoid-ai-writing`, `devops`, `email`, `productivity`, `note-taking`, `creative`, `autonomous-ai-agents`, `web`, `media`, `social-media`, `research`, `apple`, `software-development`, `github`, `mlops`, `smart-home`
+
+### Capability Module `li-reply`
+# li-reply
+
+The reply thread under your own post is where reach is actually decided. Every
+reply is a second engagement event on the post, and the first hour of replies
+does most of the work. But the value is not equal across comments, so this
+skill sorts before it writes.
+
+## Input
+
+The user pastes the comments, ideally with names and roles. Screenshots are
+fine. Do not scrape the thread with a browser tool.
+
+## Triage first
+
+Sort every comment into one of five buckets and say the count out loud:
+
+| bucket | what it is | what it gets |
+| --- | --- | --- |
+| **LEAD** | someone describing the problem you solve | a real answer + a soft open door |
+| **SUBSTANCE** | adds data, disagrees, extends | the longest reply on the thread |
+| **PEER** | a name worth being seen next to | a reply that gives them something |
+*(... truncated from SKILL.md)*
+
+### Capability Module `li-comment`
+# li-comment
+
+Commenting is the highest-leverage thing on LinkedIn and the easiest to do
+badly. A comment on a post with 400 reactions gets seen by more people than
+most of your own posts. A generic one gets seen by nobody and costs you
+credibility with the author.
+
+## Input
+
+The user pastes the post text (and the author's name and role if they have
+it). If they paste a screenshot, read it. If they give you a URL you cannot
+open, ask them to paste the text - do not guess what the post said, and do not
+use browser automation to scrape the feed.
+
+## The nine comment types
+
+Pick by what the post actually is. Never default to type 1.
+
+| # | type | when | shape |
+| --- | --- | --- | --- |
+| 1 | **Add a datum** | post makes a claim you can support with a number | "We saw the same thing: 40% of our..." |
+*(... truncated from SKILL.md)*
 
 ---
 

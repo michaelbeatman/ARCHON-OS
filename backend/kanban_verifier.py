@@ -180,16 +180,95 @@ def resolve_card_hitl_decision(
     action: str,
     current_budget: int = 0,
     override_budget: Optional[int] = None,
+    *,
+    actor: str = "",
+    created_by: str = "",
+    result_text: str = "",
+    proof_command: Optional[str] = None,
+    primary_model: str = "",
+    diff_text: str = "",
+    cwd: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Loest eine blockierte Card per HITL-Entscheidung auf (override_budget | retry | abort)."""
+    """HITL-Auflösung (User-Entscheidung 24.11.2026).
+
+    * ``override``/``override_budget``: Budget erhöhen + Reverifikation; nur bei
+      ``verified=True`` -> ``todo`` (registry-gestützter Spawn).
+    * ``retry``: neu dispatchen via ``update_task_status(..., source="hitl")``.
+    * ``abort``: ``failed`` + ``aborted_by_human`` + Audit-Event.
+
+    Actor/Ersteller stammen aus der Session bzw. DB — niemals aus dem Body.
+    """
     act = (action or "").strip().lower()
-    if act == "override_budget":
-        new_budget = int(override_budget) if override_budget and int(override_budget) > 0 else max(current_budget * 2, current_budget + 10000)
-        return {"next_status": "ready", "token_budget": new_budget, "block_kind": "approval_granted", "reset_retries": True}
+    actor = str(actor or "").strip()
+    created_by = str(created_by or "").strip()
+    if actor and created_by and actor == created_by:
+        raise PermissionError("Ersteller darf die eigene HITL-Sperre nicht auflösen (Vier-Augen-Prinzip).")
+
+    old_budget = int(current_budget or 0)
+    new_budget = old_budget
+
+    if act in ("override", "override_budget"):
+        new_budget = int(override_budget) if override_budget and int(override_budget) > 0 else max(old_budget * 2, old_budget + 10000)
+        if new_budget <= old_budget:
+            raise ValueError("Override-Budget muss groesser als das aktuelle Budget sein.")
+        verified = False
+        reason = "Keine Reverifikation durchgefuehrt."
+        if result_text or proof_command:
+            vres = verify_card_completion(
+                "hitl-override", result_text, proof_command=proof_command,
+                token_used=0, token_budget=new_budget, cwd=cwd,
+            )
+            verified = bool(vres.get("verified"))
+            reason = str(vres.get("reason") or "")
+        if primary_model or diff_text:
+            xres = cross_model_verify_card("hitl-override", primary_model or "default", diff_text=diff_text)
+            verified = verified and bool(xres.get("passed"))
+            reason = f"{reason} | {xres.get('reason') or ''}"
+        if not verified and os.environ.get(
+            "ARCHON_KANBAN_HITL_ALLOW_UNVERIFIED_OVERRIDE", ""
+        ).strip().lower() not in ("1", "true", "yes"):
+            return {
+                "resolution": act,
+                "next_status": "blocked",
+                "token_budget": new_budget,
+                "old_budget": old_budget,
+                "block_kind": "override_reverification_failed_hitl",
+                "verified": False,
+                "reset_retries": False,
+                "reason": f"Override ohne erfolgreiche Reverifikation abgelehnt: {reason}",
+            }
+        return {
+            "resolution": act,
+            "next_status": "todo",
+            "token_budget": new_budget,
+            "old_budget": old_budget,
+            "block_kind": "approval_granted",
+            "verified": verified,
+            "reset_retries": True,
+            "reason": reason,
+        }
     if act == "retry":
-        return {"next_status": "ready", "token_budget": current_budget, "block_kind": "approval_granted", "reset_retries": True}
+        return {
+            "resolution": act,
+            "next_status": "todo",
+            "token_budget": old_budget,
+            "old_budget": old_budget,
+            "block_kind": "approval_granted",
+            "verified": True,
+            "reset_retries": True,
+            "reason": "Retry: Re-Dispatch ueber update_task_status(source='hitl').",
+        }
     if act == "abort":
-        return {"next_status": "failed", "token_budget": current_budget, "block_kind": "aborted_by_human", "reset_retries": False}
+        return {
+            "resolution": act,
+            "next_status": "failed",
+            "token_budget": old_budget,
+            "old_budget": old_budget,
+            "block_kind": "aborted_by_human",
+            "verified": True,
+            "reset_retries": False,
+            "reason": "Vom Menschen abgebrochen.",
+        }
     raise ValueError(f"Unbekannte HITL-Aktion: {action}")
 
 

@@ -14,12 +14,16 @@ geparkt und benoetigen eine explizite HITL-Freigabe.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import hmac
+import logging
 import json
 import os
 import secrets
 import sqlite3
 import time
 from typing import Any, Dict, Iterator, List, Optional
+
+logger = logging.getLogger("archon.session_taint_guard")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "taint_guard.db")
@@ -91,11 +95,19 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
                 taint_source TEXT DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'pending',
                 reviewer TEXT DEFAULT '',
+                -- Audit D04/MED: Ersteller/Anforderer der geparkten Aktion.
+                -- Freigabe und Ausfuehrung muessen verschiedene Identitaeten tragen.
+                requested_by TEXT DEFAULT '',
                 created_at REAL NOT NULL,
                 resolved_at REAL,
                 consumed INTEGER NOT NULL DEFAULT 0
             )
         """)
+        # Bestehende DBs: Spalte nachziehen (keine PostgreSQL-Migration, SQLite-ALTER).
+        try:
+            conn.execute("ALTER TABLE taint_hitl_approvals ADD COLUMN requested_by TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # Spalte existiert bereits
         conn.commit()
         yield conn
     finally:
@@ -162,6 +174,7 @@ def check_egress_tool_call(
     args: Optional[Dict[str, Any]] = None,
     approval_id: Optional[str] = None,
     db_path: Optional[str] = None,
+    requested_by: str = "",
 ) -> Dict[str, Any]:
     """
     Prueft, ob ein Tool-Aufruf in `session_id` ausgefuehrt werden darf.
@@ -239,10 +252,13 @@ def check_egress_tool_call(
         conn.execute(
             """
             INSERT INTO taint_hitl_approvals
-                (approval_id, session_id, tool_name, args_json, taint_source, status, created_at)
-            VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                (approval_id, session_id, tool_name, args_json, taint_source, status, requested_by, created_at)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
             """,
-            (new_id, session_id, tool_name, canonical_args, taint["source"], time.time()),
+            (
+                new_id, session_id, tool_name, canonical_args, taint["source"],
+                str(requested_by or "").strip(), time.time(),
+            ),
         )
         conn.commit()
 
@@ -263,10 +279,54 @@ def resolve_taint_approval(
     approved: bool,
     reviewer: str = "admin",
     db_path: Optional[str] = None,
+    passkey_proof: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
+    """HITL-Freigabe mit Vier-Augen und Passkey-Proof (fail-closed)."""
+    reviewer = str(reviewer or "").strip()
+    if not reviewer:
+        raise PermissionError("Kein verifizierter Reviewer fuer die Taint-Freigabe.")
     new_status = "approved" if approved else "rejected"
     now = time.time()
     with _connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM taint_hitl_approvals WHERE approval_id = ? AND status = 'pending'",
+            (approval_id,),
+        ).fetchone()
+        if not row:
+            return None
+        requested_by = str(row["requested_by"] or "").strip() if "requested_by" in row.keys() else ""
+        # Audit D04/MED: identischer Ersteller/Genehmiger -> harte Ablehnung.
+        if requested_by and hmac.compare_digest(requested_by, reviewer):
+            logger.warning(
+                "[TaintGuard] Vier-Augen-Verletzung: %s wurde von '%s' angefordert "
+                "und soll von '%s' freigegeben werden.", approval_id, requested_by, reviewer
+            )
+            raise PermissionError("Ersteller darf die eigene Taint-Freigabe nicht bestaetigen (Vier-Augen-Prinzip).")
+
+        # Audit D04/MED: Passkey-Proof fuer kritische Tools, an Aktion+Ressource gebunden.
+        if approved and is_critical_egress_tool(str(row["tool_name"] or "")):
+            # Der Proof ist zwingend; die env-Variable ist ein dokumentierter,
+            # enger Break-Glass fuer Legacy-Tests/Dev.
+            proof_required = os.environ.get(
+                "ARCHON_TAINT_HITL_ALLOW_NO_PROOF", ""
+            ).strip().lower() not in ("1", "true", "yes")
+            if proof_required:
+                proof = str(passkey_proof or "").strip()
+                if not proof:
+                    raise PermissionError(
+                        "Passkey-Proof erforderlich, um einen kritischen Taint-Egress freizugeben."
+                    )
+                try:
+                    from backend.passkey_hitl import consume_hitl_proof_token
+                    ok = consume_hitl_proof_token(
+                        proof, reviewer, "system",
+                        action=f"Taint-Freigabe {approval_id}", resource=approval_id,
+                    )
+                except Exception as exc:
+                    raise PermissionError(f"Taint-HITL-Proof nicht pruefbar: {exc}")
+                if not ok:
+                    raise PermissionError("Ungueltiger oder nicht an diese Freigabe gebundener Passkey-Proof.")
+
         cur = conn.execute(
             """
             UPDATE taint_hitl_approvals
@@ -278,13 +338,47 @@ def resolve_taint_approval(
         conn.commit()
         if cur.rowcount == 0:
             return None
-        row = conn.execute("SELECT * FROM taint_hitl_approvals WHERE approval_id = ?", (approval_id,)).fetchone()
-        return dict(row) if row else None
+        result = conn.execute("SELECT * FROM taint_hitl_approvals WHERE approval_id = ?", (approval_id,)).fetchone()
+        res = dict(result) if result else None
+
+    # Audit-Event mit BEIDEN Actors (signierte Kette).
+    if res is not None:
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="security",
+                action="taint_hitl_resolved",
+                agent_id=reviewer,
+                payload={
+                    "approval_id": approval_id,
+                    "requested_by": requested_by,
+                    "reviewer": reviewer,
+                    "approved": approved,
+                },
+            )
+        except Exception as exc:
+            logger.warning("[TaintGuard] Audit-Event Freigabe fehlgeschlagen: %s", exc)
+    return res
 
 
-def list_pending_taint_approvals(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_pending_taint_approvals(
+    db_path: Optional[str] = None,
+    session_id: Optional[str] = None,
+    include_args: bool = False,
+) -> List[Dict[str, Any]]:
+    """Nur Verified-Admins duerfen `args_json` sehen (include_args=True)."""
     with _connect(db_path) as conn:
-        rows = conn.execute(
-            "SELECT * FROM taint_hitl_approvals WHERE status = 'pending' ORDER BY created_at DESC"
-        ).fetchall()
-        return [dict(r) for r in rows]
+        query = "SELECT * FROM taint_hitl_approvals WHERE status = 'pending'"
+        params: List[Any] = []
+        if session_id:
+            query += " AND session_id = ?"
+            params.append(session_id)
+        query += " ORDER BY created_at DESC"
+        rows = conn.execute(query, params).fetchall()
+        out: List[Dict[str, Any]] = []
+        for r in rows:
+            item = dict(r)
+            if not include_args and item.get("args_json"):
+                item["args_json"] = "[MASKED: nur fuer Administratoren sichtbar]"
+            out.append(item)
+        return out

@@ -75,6 +75,11 @@ _EXTENDED_TASK_KEYS = (
     "delegation_chain",
     "replan_count",
     "failure_reason",
+    # D13: ticketbezogene Caps + Verbrauchszähler (persistiert, CHECK-validiert).
+    "trajectory_id", "root_ticket_id",
+    "max_hops", "hops_used", "max_tokens", "tokens_used",
+    "max_replans", "replans_used",
+    "block_kind", "needs_human",
 )
 
 
@@ -309,6 +314,38 @@ def _extract_meta_payload(task: Dict[str, Any]) -> Dict[str, Any]:
     return meta
 
 
+def enforce_task_budget_caps(meta: Dict[str, Any]) -> Dict[str, Any]:
+    """D13/MED: CHECK-Constraints auf JSON-Ebene für persistierte Caps.
+
+    SQLite erlaubt keine nachtraeglichen CHECKs auf `meta_json`; die Invariante
+    `used <= cap` wird deshalb beim Upsert atomar erzwungen und ein Ueberlauf
+    als `blocked` markiert (nie still weitergezaehlt).
+    """
+    for used_key, cap_key in (
+        ("hops_used", "max_hops"), ("tokens_used", "max_tokens"),
+        ("replans_used", "max_replans"), ("delegation_depth", "max_hops"),
+    ):
+        if used_key not in meta or cap_key not in meta:
+            continue
+        try:
+            used, cap = int(meta[used_key]), int(meta[cap_key])
+        except (TypeError, ValueError):
+            meta[used_key] = 0
+            meta["block_kind"] = "invalid_budget_meta"
+            meta["needs_human"] = True
+            continue
+        if used > cap:
+            meta[used_key] = cap
+            meta["status"] = "blocked"
+            meta["mc_status"] = "blocked"
+            meta["block_kind"] = "trajectory_cap_exceeded"
+            meta["failure_reason"] = f"CAP_EXCEEDED:{used_key}"
+            meta["needs_human"] = True
+            logger.error("[MissionControl] Cap-Ueberlauf %s=%s > %s=%s -> blocked",
+                         used_key, used, cap_key, cap)
+    return meta
+
+
 def _upsert_task_in_conn(conn: sqlite3.Connection, task: Dict[str, Any], *, overwrite: bool = True) -> None:
     tid = str(task.get("id") or "").strip()
     if not tid:
@@ -390,7 +427,7 @@ def _upsert_task_in_conn(conn: sqlite3.Connection, task: Dict[str, Any], *, over
             ),
         )
 
-    meta = _extract_meta_payload(task)
+    meta = enforce_task_budget_caps(_extract_meta_payload(task))
     meta_json = json.dumps(meta, ensure_ascii=False)
     now_ts = time.time()
     if overwrite:
@@ -576,6 +613,9 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
             "delegation_chain",
             "replan_count",
             "failure_reason",
+            "trajectory_id", "root_ticket_id",
+            "max_hops", "hops_used", "max_tokens", "tokens_used",
+            "max_replans", "replans_used", "block_kind", "needs_human",
         ):
             if opt_k in meta and meta[opt_k] is not None:
                 task_dict[opt_k] = meta[opt_k]
@@ -774,6 +814,9 @@ def _load_single_task_from_conn(conn: sqlite3.Connection, task_id: str) -> Optio
         "delegation_chain",
         "replan_count",
         "failure_reason",
+        "trajectory_id", "root_ticket_id",
+        "max_hops", "hops_used", "max_tokens", "tokens_used",
+        "max_replans", "replans_used", "block_kind", "needs_human",
     ):
         if opt_k in meta and meta[opt_k] is not None:
             task_dict[opt_k] = meta[opt_k]
@@ -910,6 +953,67 @@ def mc_update_task_sqlite(
             conn.close()
 
 
+class TaskLinkCycleError(ValueError):
+    """D13/MED: indirekter Zyklus im Task-Graphen — Schreibpfad abbrechen."""
+
+    def __init__(self, parent_id: str, child_id: str):
+        self.status = "blocked"
+        self.reason = "_TASK_LINK_CYCLE"
+        self.parent_id = parent_id
+        self.child_id = child_id
+        super().__init__(f"_TASK_LINK_CYCLE: {child_id} -> {parent_id}")
+
+
+def _reject_task_link_cycle(parent_id: str, child_id: str) -> None:
+    try:
+        mc_append_audit_sqlite(
+            "mission_control",
+            f"_TASK_LINK_CYCLE blocked: {child_id} -> {parent_id}",
+            child_id or parent_id or "_system",
+        )
+    except Exception:
+        logger.error("[MissionControl] _TASK_LINK_CYCLE Audit fehlgeschlagen")
+    raise TaskLinkCycleError(parent_id, child_id)
+
+
+def _task_link_would_cycle(conn: sqlite3.Connection, parent_id: str, child_id: str) -> bool:
+    """DFS/recursive CTE über task_links: ist `child` bereits Vorfahre von `parent`?"""
+    if not parent_id or not child_id or parent_id == child_id:
+        return bool(parent_id and child_id and parent_id == child_id)
+    row = conn.execute(
+        """
+        WITH RECURSIVE ancestors(id) AS (
+            SELECT child_id FROM task_links WHERE parent_id = ?
+            UNION
+            SELECT l.child_id FROM task_links l JOIN ancestors a ON l.parent_id = a.id
+        )
+        SELECT 1 FROM ancestors WHERE id = ? LIMIT 1
+        """,
+        (parent_id, child_id),
+    ).fetchone()
+    return bool(row)
+
+
+def _file_link_would_cycle(data: Dict[str, Any], parent_id: str, child_id: str) -> bool:
+    if not parent_id or not child_id or parent_id == child_id:
+        return bool(parent_id and child_id and parent_id == child_id)
+    by_id = {str(t.get("id") or ""): t for t in (data.get("tasks") or []) if isinstance(t, dict)}
+    seen, stack = set(), [parent_id]
+    while stack:
+        cur = stack.pop()
+        if cur == child_id:
+            return True
+        if cur in seen:
+            continue
+        seen.add(cur)
+        node = by_id.get(cur) or {}
+        refs = list(node.get("depends_on") or [])
+        if node.get("parent_project_id"):
+            refs.append(node["parent_project_id"])
+        stack.extend(str(x) for x in refs if x)
+    return False
+
+
 def mc_link_subtask_sqlite(
     parent_id: str,
     child_id: str,
@@ -920,6 +1024,8 @@ def mc_link_subtask_sqlite(
     """Verknüpft Parent und Child über task_links + project_id direkt in kanban.db."""
     if _is_file_override():
         def _mut(d: dict) -> str:
+            if _file_link_would_cycle(d, parent_id, child_id):
+                _reject_task_link_cycle(parent_id, child_id)
             tasks = d.setdefault("tasks", [])
             parent = next((x for x in tasks if x.get("id") == parent_id), None)
             if parent is None and parent_defaults:
@@ -948,6 +1054,9 @@ def mc_link_subtask_sqlite(
         try:
             conn.execute("BEGIN IMMEDIATE")
             _ensure_mc_tables(conn)
+            if _task_link_would_cycle(conn, parent_id, child_id):
+                conn.rollback()
+                _reject_task_link_cycle(parent_id, child_id)
             p_row = conn.execute("SELECT id, title FROM tasks WHERE id = ?", (parent_id,)).fetchone()
             if p_row is None:
                 p_doc = dict(parent_defaults or {})
@@ -983,6 +1092,7 @@ def mc_link_subtask_sqlite(
                     for k, v in child_updates.items():
                         if v is not None:
                             c_meta[k] = v
+                enforce_task_budget_caps(c_meta)
                 conn.execute(
                     """
                     INSERT INTO mc_task_meta (task_id, meta_json, updated_at)
@@ -1172,6 +1282,7 @@ __all__ = [
     "mc_update_task_sqlite",
     "mc_link_subtask_sqlite",
     "mc_get_parent_context_sqlite",
+    "TaskLinkCycleError", "enforce_task_budget_caps",
     "mc_append_audit_sqlite",
     "_MC_STATE_CACHE",
 ]

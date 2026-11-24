@@ -1000,12 +1000,30 @@ def test_mcp_gateway_persists_consumed_hitl_and_sandbox_sh(tmp_path, monkeypatch
     assert ok2 is False
     assert "bereits verwendet" in err2["message"]
 
-    with patch("backend.ephemeral_sandbox.subprocess.run") as mock_run:
-        with patch("backend.ephemeral_sandbox._resolve_host_path", return_value="/tmp/run_iso"):
-            mock_run.return_value = MagicMock(returncode=0, stdout="hi\n", stderr="")
-            ephemeral_sandbox.execute_in_sandbox("echo hi", language="bash")
-            cmd = mock_run.call_args_list[1][0][0]
-            assert "sh" in cmd and "python" not in cmd[-2:]
+    # D04/MED (Proof-Pflicht): ohne DOCKER_HOST-Proxy bzw. expliziten lokalen
+    # Socket liefert die Sandbox ehrlich not_configured — kein Fake-Erfolg.
+    with patch.dict(os.environ, {"DOCKER_HOST": ""}):
+        blocked = ephemeral_sandbox.execute_in_sandbox("echo hi", language="bash")
+    assert blocked["status"] == "error"
+    assert "not_configured" in blocked["error"]
+    assert "DOCKER_HOST-Proxy" in blocked["error"]
+
+    # Mit gesetztem Proxy laeuft der gehaertete docker-Pfad.
+    with patch.dict(os.environ, {"DOCKER_HOST": "tcp://docker-socket-proxy:2375"}), \
+         patch("backend.ephemeral_sandbox.subprocess.run") as mock_run, \
+         patch("backend.ephemeral_sandbox._resolve_host_path", return_value="/tmp/run_iso"):
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),  # docker info
+            MagicMock(returncode=0, stdout="hi\n", stderr=""),  # docker run
+            MagicMock(returncode=0, stdout="", stderr=""),  # docker ps -a (Cleanup)
+        ]
+        result = ephemeral_sandbox.execute_in_sandbox("echo hi", language="bash")
+        cmd = mock_run.call_args_list[1][0][0]
+        assert "sh" in cmd and "python" not in cmd[-2:]
+        assert "-H" in cmd and "tcp://docker-socket-proxy:2375" in cmd
+        assert "unix://" not in " ".join(cmd)
+        assert result["engine"] == "docker_micro_container"
+        assert result["status"] == "success"
 
 
 def test_yaml_restore_masked_values_section_aware():

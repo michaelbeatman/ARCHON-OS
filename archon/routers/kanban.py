@@ -185,36 +185,93 @@ async def api_kanban_graph():
 # --- M76: Kanban Card HITL Decision (override_budget | retry | abort) ---
 @router.post("/api/operations/kanban/tasks/{task_id}/hitl")
 async def api_kanban_task_hitl(request: Request, task_id: str):
+    """HITL-Auflösung: override (mit Reverifikation) / retry (Re-Dispatch) / abort."""
     from archon.routers._rbac import require_admin_or_503
     require_admin_or_503(request)
+    actor = require_session_actor(request)  # Actor NIE aus dem Body
     payload = await request.json()
     action = str(payload.get("action") or "").strip()
-    override_budget = payload.get("token_budget")
+    old_budget = int(payload.get("current_budget") or 0)
+
+    # Ersteller aus der DB — nie aus dem Body.
+    created_by = ""
+    try:
+        kanban_db = _resolve_active_kanban_db()
+        if os.path.exists(kanban_db):
+            kconn = get_db_connection(kanban_db, timeout=5.0)
+            try:
+                row = kconn.execute("SELECT created_by FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                if row:
+                    created_by = str(row["created_by"] or "")
+            finally:
+                kconn.close()
+    except Exception as exc:
+        logger.warning("[Kanban] HITL-Ersteller nicht lesbar: %s", exc)
 
     from backend.kanban_verifier import resolve_card_hitl_decision
     try:
-        decision = resolve_card_hitl_decision(action, override_budget=override_budget)
+        decision = resolve_card_hitl_decision(
+            action,
+            current_budget=old_budget,
+            override_budget=payload.get("token_budget"),
+            actor=actor,
+            created_by=created_by,
+            result_text=str(payload.get("result_text") or ""),
+            proof_command=payload.get("proof_command"),
+            primary_model=str(payload.get("primary_model") or ""),
+            diff_text=str(payload.get("diff_text") or ""),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
 
-    def _apply_hitl():
-        kanban_db = _resolve_active_kanban_db()
-        if not os.path.exists(kanban_db):
-            return False
-        kconn = get_db_connection(kanban_db, timeout=5.0)
+    # Signiertes Audit-Event mit Resolution, Actor und alter/neuer Budgetwert.
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="security",
+            action="kanban_hitl_resolution",
+            agent_id=actor,
+            payload={
+                "task_id": task_id,
+                "resolution": decision.get("resolution") or action,
+                "actor": actor,
+                "created_by": created_by,
+                "old_budget": decision.get("old_budget", old_budget),
+                "new_budget": decision.get("token_budget", old_budget),
+                "verified": bool(decision.get("verified")),
+            },
+        )
+    except Exception as exc:
+        logger.warning("[Kanban] HITL-Audit-Event fehlgeschlagen: %s", exc)
+
+    if decision.get("next_status") == "blocked":
+        raise HTTPException(status_code=403, detail=decision.get("reason") or "Reverifikation fehlgeschlagen.")
+
+    # Re-Dispatch ueber die registry-gestuetzte update_task_status (kein
+    # direktes UPDATE tasks auf 'ready' mehr — 'ready' ist keine gueltiger Status).
+    from backend.operations_api import TaskStatusUpdateRequest, update_task_status
+    await update_task_status(
+        request, task_id,
+        TaskStatusUpdateRequest(
+            status=decision["next_status"],
+            source="hitl",
+            result=str(decision.get("reason") or "")[:1000],
+        ),
+    )
+
+    # Neues Budget im Task-Meta persistieren (nur bei override).
+    if action in ("override", "override_budget"):
         try:
-            kconn.execute(
-                "UPDATE tasks SET status = ?, block_kind = ? WHERE id = ?",
-                (decision["next_status"], decision["block_kind"], task_id),
+            from archon.routers.decisions import _decision_self_api
+            await run_io_bound(
+                _decision_self_api, "POST", "/api/operations/kanban/meta",
+                {"kind": "task", "task_id": task_id, "token_budget": int(decision["token_budget"])},
             )
-            kconn.commit()
-            return True
-        finally:
-            kconn.close()
+        except Exception as exc:
+            logger.warning("[Kanban] HITL-Budget-Meta nicht persistiert: %s", exc)
 
-    ok = await run_io_bound(_apply_hitl)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Kanban DB or task not found")
     return {"status": "success", "task_id": task_id, **decision}
 
 
@@ -261,9 +318,35 @@ async def api_revoke_precedent(request: Request, precedent_id: str):
 
 # --- M89: Session Taint Guard HITL Approvals ---
 @router.get("/api/v1/guardian/taint/approvals")
-async def api_list_taint_approvals():
+async def api_list_taint_approvals(request: Request):
+    # Audit D04/HIGH: der lesende Endpoint war der einzige ungeschuetzte
+    # Zugriff auf Session-IDs, Tool-Namen und args_json der HITL-Queue.
+    from archon.routers._rbac import require_admin_or_503
+    require_admin_or_503(request)
+    actor = require_session_actor(request)
+
     from backend.session_taint_guard import list_pending_taint_approvals
-    return {"status": "success", "approvals": list_pending_taint_approvals()}
+
+    # Admin-Dashboard: args_json nur hier (Verified-Admin) ausliefern.
+    approvals = list_pending_taint_approvals(include_args=True)
+
+    # Audit-Event fuer jeden Lesezugriff auf die Freigabe-Queue (signierte Kette).
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="security",
+            action="taint_approval_queue_read",
+            agent_id=actor,
+            payload={
+                "endpoint": "/api/v1/guardian/taint/approvals",
+                "approval_count": len(approvals),
+                "include_args": True,
+            },
+        )
+    except Exception as exc:
+        logger.warning("[Kanban] Audit-Event Taint-Queue-Lesezugriff fehlgeschlagen: %s", exc)
+
+    return {"status": "success", "approvals": approvals}
 
 
 @router.post("/api/v1/guardian/taint/approvals/{approval_id}")
@@ -273,8 +356,14 @@ async def api_resolve_taint_approval(request: Request, approval_id: str):
     payload = await request.json()
     approved = bool(payload.get("approved", False))
     reviewer = require_session_actor(request)
+    passkey_proof = str(payload.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
     from backend.session_taint_guard import resolve_taint_approval
-    res = resolve_taint_approval(approval_id, approved=approved, reviewer=reviewer)
+    try:
+        res = resolve_taint_approval(
+            approval_id, approved=approved, reviewer=reviewer, passkey_proof=passkey_proof
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     if not res:
         raise HTTPException(status_code=404, detail="Pending taint approval not found")
     return {"status": "success", "approval": res}

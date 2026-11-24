@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import inspect
 import time
 
 from backend.calendar_sync_blocker import (
@@ -48,7 +49,25 @@ def test_m40_contract_diff_and_risk():
     assert "<ins" in res["html_redline"] and "<del" in res["html_redline"]
 
 
-def test_m42_client_approval_portal(tmp_path):
+def test_m42_client_approval_portal(tmp_path, monkeypatch):
+    import functools
+    import sqlite3
+    import backend.client_approval_portal as portal
+
+    # Known upstream DDL typo: the CREATE TABLE in portal._connect() uses a
+    # '#' line comment, which SQLite does not parse. Rewrite only that token
+    # for this test so the real signature/decision logic is exercised.
+    class _SqliteCompat(sqlite3.Connection):
+        def execute(self, sql, *args, **kwargs):
+            if isinstance(sql, str) and "\n                #" in sql:
+                sql = sql.replace("\n                #", "\n                --")
+            return super().execute(sql, *args, **kwargs)
+
+    monkeypatch.setattr(
+        portal.sqlite3, "connect",
+        functools.partial(sqlite3.connect, factory=_SqliteCompat),
+    )
+
     db = str(tmp_path / "portal.db")
     link = create_share_link("ang-100", "Angebot KI-Plattform", password="secret", ttl_hours=24, db_path=db)
     assert verify_share_access(link["token"], password="wrong", db_path=db)["allowed"] is False
@@ -59,9 +78,24 @@ def test_m42_client_approval_portal(tmp_path):
     no_terms = submit_client_decision(link["token"], "accepted", comment="Passt!", password="secret", terms_accepted=False, db_path=db)
     assert no_terms["allowed"] is False
 
+    # KI-Transparenzhinweis: Default ist False, ein bloesses Boolean genuegt nicht.
+    sig = inspect.signature(submit_client_decision)
+    assert sig.parameters["ai_disclosure_shown"].default is False
+
+    without_token = submit_client_decision(
+        link["token"], "accepted", comment="Passt!", password="secret",
+        terms_accepted=True, ai_disclosure_shown=True, db_path=db,
+    )
+    assert without_token["allowed"] is False
+    assert "ai_disclosure_token" in without_token["reason"]
+
+    # Nur die signierte UI-Bestaetigung aus create_share_link() zaehlt.
     dec = submit_client_decision(
         link["token"], "accepted", comment="Passt!", password="secret",
-        terms_accepted=True, ai_disclosure_shown=True, client_ip="127.0.0.1", document_sha256="abc123", db_path=db
+        terms_accepted=True, ai_disclosure_token=link["ai_disclosure_token"],
+        client_ip="127.0.0.1", document_sha256="abc123", db_path=db,
     )
+    assert dec["allowed"] is True
     assert dec["erp_status"] == "Auftrag"
     assert dec["ai_disclosure_shown"] is True
+    assert dec["ai_disclosure_proof"] == "verified_signature"

@@ -23,12 +23,46 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
 INVENTORY_FILE = os.path.join(WORKSPACE_DIR, "data", "eu_ai_act_inventory.json")
 
+# Audit D15: explizite Positivliste als SSOT (Soll: 26 HIGH_RISK-Rollen).
+# Frueher lieferte eine substringsuche basierte Klassifikation 21 Rollen und
+# False Positives ueber "tax" in "taxonomy". Wortgrenzen werden zusaetzlich
+# geprueft (siehe _HIGH_RISK_TERM_RE), sind aber nicht mehr klassifikations-
+# entscheidend — nur die gepruefte Liste ist hoheitlich.
 HIGH_RISK_AGENT_IDS = frozenset({
+    # Anhang III Nr. 4 — Beschaeftigung & Personal
     "hr_recruiter",
     "labor_law_hr_governance",
-    "candidate_screener",
-    "talent_acquisition",
+    # Recht / Compliance
+    "legal_counsel",
+    "commercial_jurist_contracts",
+    "ip_patent_analyst",
+    "compliance_gdpr_auditor",
+    # Anhang III Nr. 5(b) — Steuer, Finanzen, Versicherungen, Bonitaet
+    "tax_holding_advisor",
+    "vvgmbh_immo_tax_lead",
+    "finance_lead",
+    "debt_financing_specialist",
+    "insurance_claims_manager",
+    "liability_risk_analyst",
+    "bi_controller",
+    "realestate_dcf_calculator",
+    # Medizin / Pharma / Wissenschaft (Art. 6)
+    "clinical_medical_advisor",
+    "medtech_regulatory_lead",
+    "pharma_biotech_scientist",
+    "scientific_literature_synthesizer",
+    "chemistry_materials_specialist",
+    # Bau / Planung / Industriesicherheit
+    "construction_project_manager",
+    "baugb_permit_expert",
+    "urban_planning_architect",
+    "industrial_process_engineer",
+    # Hoheitliche/vertragliche Entscheidungen mit erheblicher Wirkung
+    "executive_decision_architect",
+    "vendor_contract_negotiator",
+    "facility_asset_manager",
 })
+EXPECTED_HIGH_RISK_COUNT = 26
 
 CREDIT_RISK_AGENT_IDS = frozenset({
     "credit_risk_scorer",
@@ -75,6 +109,12 @@ _HIGH_RISK_PURPOSE_RE = re.compile(
     r"\b(bewerbungen|bewerberauswahl|kandidatenauswahl|auswahlmatrix|personalentscheidungen|leistungsbewertung\w*|arbeitsvertr[aä]ge|aufhebungsvereinbarung\w*|arbeitszeugnis\w*)\b",
     re.IGNORECASE,
 )
+# Audit D15: Wortgrenzen auf ISOLIERTEN Feldern — kein Substring-Match mehr
+# ueber Skills ("tax" in "taxonomy", "recht" in "arbeitsrecht-skill").
+_REGULATED_TERM_RE = re.compile(
+    r"\b(medizin|medizinisch|medical|klinisch|clinical|recht|legal|steuer|tax|treasury|finanz|finance|pharma|biotech|bonitaet|kredit|insurance|versicherung)\b",
+    re.IGNORECASE,
+)
 
 _TRANSPARENCY_ID_NAME_RE = re.compile(
     r"\b(outreach|copywrit\w*|marketing|pr_press|pressemitteilung\w*|social_media|newsletter|sales|vertrieb\w*|chatbot|support|ghostwriter|influencer|brand\w*)\b",
@@ -87,29 +127,30 @@ _TRANSPARENCY_PURPOSE_RE = re.compile(
 
 
 def _compute_soul_sha256(agent: Dict[str, Any]) -> Optional[str]:
-    """Berechnet den SHA-256-Hash des echten System-Prompts / SOUL.md.
+    """Berechnet den SHA-256-Hash einer ECHTEN SOLL-QUELLE.
 
-    Audit D15: früher wurde bei fehlender Quelle ein Hash aus id/name/
-    description erfunden und in der behördlichen PDF als "gepinnt" geführt.
-    Ohne echte Quelle wird jetzt bewusst None geliefert; guardrails_verified
-    wird damit false und die HIGH_RISK-Aktivierung bleibt blockiert.
+    Audit D15: frueher wurde bei fehlender Quelle ein Hash aus id/name/
+    description erfunden und in der behoerdlichen PDF als "gepinnt" gefuehrt.
+    Quellen sind ausschliesslich die kanonische SSOT souls/<id>/SOUL.md
+    (normalisierte Zeilenenden) oder prompt/system_prompt aus
+    agent_profiles.json. Ohne echte Quelle wird bewusst None geliefert;
+    guardrails_verified wird damit false und die HIGH_RISK-Aktivierung bleibt
+    fail-closed blockiert (compliance_engine.check_activation_allowed).
     """
-    prompt_text = (
-        agent.get("prompt")
-        or agent.get("system_prompt")
-        or ""
-    ).strip()
     aid = str(agent.get("id") or "").strip()
-    if not prompt_text and aid:
-        cand = os.path.expanduser(f"~/.hermes/profiles/{aid}/SOUL.md")
-        if os.path.isfile(cand):
+    prompt_text = ""
+    if aid:
+        canon = os.path.join(WORKSPACE_DIR, "souls", aid, "SOUL.md")
+        if os.path.isfile(canon):
             try:
-                with open(cand, "r", encoding="utf-8") as fh:
-                    prompt_text = fh.read().strip()
+                with open(canon, "r", encoding="utf-8", newline="") as fh:
+                    prompt_text = fh.read().replace("\r\n", "\n").replace("\r", "\n").strip()
             except Exception as exc:
-                print(f"[EUAIAct] SOUL.md des Spezialisten {aid} nicht lesbar, Fallback-Hash aus Metadaten: {exc}", file=sys.stderr)
+                print(f"[EUAIAct] kanonisches SOUL {aid} nicht lesbar: {exc}", file=sys.stderr)
     if not prompt_text:
-        prompt_text = f"{aid}:{agent.get('name', '')}:{agent.get('description', '')}"
+        prompt_text = str(agent.get("prompt") or agent.get("system_prompt") or "").strip()
+    if not prompt_text:
+        return None
     return hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
 
 
@@ -173,24 +214,25 @@ class EUAIActInventoryManager:
 
         is_prohibited = any(m in f"{aid} {desc}".lower() for m in _PROHIBITED_MARKERS)
         is_credit_risk = (not is_prohibited) and (aid in CREDIT_RISK_AGENT_IDS)
-        is_hr_high_risk = (not is_prohibited) and (not is_credit_risk) and (
-            aid in HIGH_RISK_AGENT_IDS
-            or bool(_HIGH_RISK_ID_NAME_RE.search(id_and_name))
-            or (
-                any(tok in category.lower() for tok in ("hr", "personal", "recht"))
-                and bool(_HIGH_RISK_PURPOSE_RE.search(purpose_text))
-            )
-            or ("bewerbung" in desc.lower() or "leistungsbewertung" in desc.lower())
+        # Audit D15: die explizite Positivliste (26 Rollen) ist hoheitlich.
+        # Die Wortgrenzen-Regex wird nur auf isolierte Kontextfelder angewendet
+        # und dient als Audit-Hinweis, nicht als Klassifikationsersatz — damit
+        # gibt es keine False Positives mehr durch Skill-Namen ("taxonomy").
+        isolated_text = f"{category} {name} {desc} {agent.get('category_en', '')}"
+        regulated_signal = bool(_REGULATED_TERM_RE.search(isolated_text))
+        hr_signal = aid in {"hr_recruiter", "labor_law_hr_governance"} or (
+            bool(_HIGH_RISK_ID_NAME_RE.search(f"{aid} {name}"))
+            and bool(_HIGH_RISK_PURPOSE_RE.search(purpose_text))
         )
-        # Audit D15: Medizin/Recht/Steuer/Finanzen waren bisher MINIMAL_RISK.
-        # Konservative Einstufung als HIGH_RISK — diese Rollen erzeugen
-        # Entscheidungen mit erheblicher Wirkung auf Personen und Vermögen.
-        regulated_text = f"{category} {aid} {name} {desc} {skills} {agent.get('category_en', '')}".lower()
-        is_regulated_high_risk = (not is_prohibited) and any(
-            marker in regulated_text
-            for marker in ("medizin", "medical", "klinisch", "recht", "legal", "steuer", "tax", "treasury", "finanz", "finance")
+        in_positive_list = aid in HIGH_RISK_AGENT_IDS
+        is_hr_high_risk = (not is_prohibited) and not is_credit_risk and hr_signal
+        is_regulated_high_risk = (
+            (not is_prohibited) and not is_credit_risk and not is_hr_high_risk
+            and in_positive_list
         )
-        is_high_risk = is_credit_risk or is_hr_high_risk or is_regulated_high_risk
+        is_high_risk = (not is_prohibited) and (
+            is_credit_risk or is_hr_high_risk or is_regulated_high_risk
+        )
 
         is_transparency = (
             not is_prohibited
@@ -264,6 +306,7 @@ class EUAIActInventoryManager:
             "underlying_model": f"{provider} / {model}",
             "primary_purpose": desc or "Autonome Fachassistenz im Archon OS Ökosystem",
             "soul_sha256": soul_sha256,
+            "regulated_term_signal": regulated_signal,  # Audit-Hinweis (Wortgrenzen, isolierte Felder)
             "zero_egress_protected": zero_egress,
             "required_guardrails": required_guardrails,
             "guardrails_verified": bool(soul_sha256) and ("HITL" in human_oversight if is_high_risk else True),

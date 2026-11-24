@@ -143,9 +143,23 @@ async def api_quickchat_send(req: QuickchatSendRequest):
             model=model,
             provider=provider,
         )
-        reply_text = res.get("content", "Keine Antwort erhalten.")
     except Exception as e:
-        reply_text = f"⚠ Fehler: {str(e)}"
+        raise HTTPException(status_code=502, detail={
+            "status": "error", "code": "DISPATCH_FAILED", "message": str(e)
+        })
+
+    # D12/HIGH: nur echte Erfolge werden als Assistant-Nachricht persistiert.
+    st = str(res.get("status") or "").lower()
+    if st != "success":
+        raise HTTPException(status_code=403 if st == "blocked" else 502, detail={
+            "status": st or "error",
+            "code": res.get("error_code") or "DISPATCH_NOT_SUCCESS",
+        })
+    reply_text = res.get("content", "")
+    if not isinstance(reply_text, str) or not reply_text.strip():
+        raise HTTPException(status_code=502, detail={
+            "status": "error", "code": "EMPTY_RESPONSE"
+        })
 
     duration = round(time.time() - start_t, 2)
 

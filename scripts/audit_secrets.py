@@ -4,6 +4,10 @@ scripts/audit_secrets.py
 Zentraler Pre-Commit- und CI-Audit-Scanner fuer Archon OS.
 Verhindert das versehentliche Committen oder Pushen von sensiblen Zugangsdaten,
 API-Keys, Token-Dateien und Passwoertern in das Git-Repository.
+
+Rotation (D04/MED):GitHub 90 d, Telegram 180 d, Provider 90 d. Das Register
+enthält NUR Env-Key-Namen und ISO-Datumsangaben — niemals echte Secret-Werte;
+Ausgaben zeigen ausschliesslich Key-Name, Klasse, Alter und Frist.
 """
 
 import sys
@@ -11,7 +15,16 @@ import os
 import re
 import subprocess
 import argparse
+import datetime
+import json
 from typing import List, Tuple
+
+_WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROTATION_REGISTER_FILE = os.environ.get(
+    "ARCHON_SECRETS_ROTATION_REGISTER",
+    os.path.join(_WORKSPACE_DIR, "config", "secrets_rotation.json"),
+)
+ROTATION_LIMITS_DAYS = {"github": 90, "telegram": 180, "provider": 90}
 
 # Dateinamen und Pfade, die NIEMALS im Git landen duerfen
 FORBIDDEN_FILE_PATTERNS = [
@@ -126,11 +139,56 @@ def get_tracked_files() -> List[str]:
     except Exception as exc:
         raise RuntimeError(f"[Audit-Secrets] Git-Tracking nicht lesbar: {exc}") from exc
 
+def check_rotation(register_path: str = ROTATION_REGISTER_FILE, now: datetime.datetime = None) -> List[str]:
+    """Prueft Alter/Rotationsfristen. Gibt nur Key-Namen und Alter zurueck."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    if not os.path.isfile(register_path):
+        return [
+            f"ROTATION REGISTER FEHLT: {register_path} — "
+            "GitHub 90 / Telegram 180 / Provider 90 Tage nicht nachweisbar."
+        ]
+    try:
+        with open(register_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception as exc:
+        return [f"ROTATION REGISTER UNLESBAR: {type(exc).__name__} — Fristen nicht nachweisbar."]
+    entries = data.get("credentials") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        return ["ROTATION REGISTER UNGUELTIG: 'credentials' fehlt."]
+    findings: List[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            findings.append("ROTATION REGISTER UNGUELTIG: Eintrag kein Objekt.")
+            continue
+        key_name = str(entry.get("env_key") or entry.get("key") or "UNKNOWN")
+        cls = str(entry.get("class") or "").strip().lower()
+        if cls not in ROTATION_LIMITS_DAYS:
+            findings.append(f"ROTATION KLASSE UNBEKANNT: {key_name} ({cls})")
+            continue
+        raw_date = str(entry.get("last_rotated_at") or "").strip()
+        try:
+            rotated = datetime.datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+            if rotated.tzinfo is None:
+                rotated = rotated.replace(tzinfo=datetime.timezone.utc)
+        except ValueError:
+            findings.append(f"ROTATION DATUM UNGUELTIG: {key_name} ({cls})")
+            continue
+        age_days = (now - rotated).days
+        limit = ROTATION_LIMITS_DAYS[cls]
+        if age_days > limit:
+            findings.append(
+                f"ROTATION UEBERFAELLIG: {key_name} ({cls}) — {age_days} Tage, "
+                f"Frist {limit} Tage."
+            )
+    return findings
+
+
 def main():
     parser = argparse.ArgumentParser(description="Archon OS Secrets & Credentials Audit Scanner")
     parser.add_argument("--staged", action="store_true", help="Nur aktuell im Git gestagte Dateien pruefen (Pre-Commit)")
     parser.add_argument("--all", action="store_true", help="Alle getrackten Dateien im gesamten Repository pruefen")
     parser.add_argument("--file", type=str, help="Eine einzelne Datei pruefen")
+    parser.add_argument("--rotation", action="store_true", help="Rotationsregister/Alter pruefen (GitHub 90/Telegram 180/Provider 90 Tage)")
     args = parser.parse_args()
 
     files_to_check = []
@@ -142,11 +200,16 @@ def main():
         # Default: staged files (Pre-Commit)
         files_to_check = get_staged_files()
 
-    if not files_to_check:
+    # Rotation wird bei --rotation und --all (Full-Audit) geprueft.
+    rotation_findings = (
+        check_rotation() if (args.rotation or args.all) else []
+    )
+
+    if not files_to_check and not (args.rotation or rotation_findings):
         print("[Audit-Secrets] Keine relevanten Dateien zur Pruefung ausgewaehlt.")
         sys.exit(0)
 
-    violations = []
+    violations = list(rotation_findings)
 
     for fpath in files_to_check:
         # 1. Dateinamen-Check

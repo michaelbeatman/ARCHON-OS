@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,21 @@ def main() -> int:
         agent = path.parent.name
         canon_hashes.setdefault(agent, set()).add(_sha(path.read_text(encoding="utf-8").strip()))
 
+    # Audit D15: verwaisste Cache-Verzeichnisse (z. B. agility_story,
+    # hermes_default, ruediger_cheng in data/hermes_profiles) stammen von
+    # anderen Tools und sind keine Profile der SSOT. Sie duerfen den Gate
+    # nicht rot machen; echte Profile ohne kanonisches SOUL bleiben hart.
+    known_agents: set[str] = set()
+    profiles_path = ROOT / "agent_profiles.json"
+    if profiles_path.is_file():
+        try:
+            known_agents = {
+                str(p.get("id")) for p in json.loads(profiles_path.read_text(encoding="utf-8"))
+                if isinstance(p, dict) and p.get("id")
+            }
+        except Exception as exc:
+            print(f"[DRIFT] agent_profiles.json nicht lesbar ({exc}) — alle Cache-Profile werden geprueft.")
+
     problems: list[str] = []
     checked = 0
     for runtime in RUNTIMES:
@@ -54,6 +70,9 @@ def main() -> int:
             agent = agent_dir.name
             known = canon_hashes.get(agent)
             if not known:
+                if known_agents and agent not in known_agents:
+                    # Fremd-Cache, kein Archon-Profil — informativ, nicht hart.
+                    continue
                 problems.append(f"{agent_dir.relative_to(ROOT)}: kein kanonisches Profil")
                 continue
             for soul in agent_dir.glob("SOUL*.md"):

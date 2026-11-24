@@ -17,6 +17,7 @@ import logging
 _archon_exc_logger = logging.getLogger("mcp_gateway")
 
 import asyncio
+import contextlib
 import json
 from typing import Any, Dict, List, Optional
 
@@ -26,6 +27,19 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from backend.mcp_gateway import mcp_gateway
 
 router = APIRouter(tags=["MCP Gateway"])
+
+
+@contextlib.contextmanager
+def _mcp_trace_headers() -> Any:
+    """D16: MCP-Antworten tragen X-Trace-Id + forkbares traceparent (Child-Span)."""
+    try:
+        from backend.trace_context import child_span, response_trace_headers
+    except Exception as exc:
+        _archon_exc_logger.warning("[mcp_gateway] Trace-Kontext nicht verfügbar: %s", exc)
+        yield {}
+        return
+    with child_span():
+        yield response_trace_headers()
 
 
 def _has_valid_service_token(request: Request) -> bool:
@@ -82,13 +96,19 @@ async def mcp_streamable_http_post(request: Request):
             resp_obj, active_sid = mcp_gateway.handle_jsonrpc(item, key_info, active_sid)
             if resp_obj is not None:
                 responses.append(resp_obj)
-        headers = {"Mcp-Session-Id": active_sid} if active_sid else {}
+        with _mcp_trace_headers() as trace_headers:
+            headers = dict(trace_headers)
+            if active_sid:
+                headers["Mcp-Session-Id"] = active_sid
         if not responses:
             return Response(status_code=202, headers=headers)
         return JSONResponse(status_code=200, content=responses, headers=headers)
 
     resp_obj, active_sid = mcp_gateway.handle_jsonrpc(body, key_info, session_id)
-    headers = {"Mcp-Session-Id": active_sid} if active_sid else {}
+    with _mcp_trace_headers() as trace_headers:
+        headers = dict(trace_headers)
+        if active_sid:
+            headers["Mcp-Session-Id"] = active_sid
     if resp_obj is None:
         return Response(status_code=202, headers=headers)
     return JSONResponse(status_code=200, content=resp_obj, headers=headers)
@@ -115,15 +135,17 @@ async def mcp_sse_stream(request: Request):
         except asyncio.CancelledError as _exc:
             _archon_exc_logger.debug("[mcp_gateway] Ignorierte Ausnahme (Z.113): %s", _exc)
 
-    return StreamingResponse(
-        _event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Mcp-Session-Id": session_id,
-        },
-    )
+    with _mcp_trace_headers() as trace_headers:
+        return StreamingResponse(
+            _event_generator(),
+            media_type="text/event-stream",
+            headers={
+                **trace_headers,
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Mcp-Session-Id": session_id,
+            },
+        )
 
 
 @router.delete("/mcp")

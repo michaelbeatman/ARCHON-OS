@@ -154,24 +154,27 @@ class TestEphemeralSandboxFailClosed:
     """Tests für den Fail-Closed-Pfad (kein Docker verfügbar)."""
 
     def test_no_docker_returns_error_not_subprocess_fallback(self):
-        """Ohne Docker CLI muss die Sandbox error zurückgeben, NICHT subprocess-Fallback."""
-        with patch("backend.ephemeral_sandbox.subprocess.run") as mock_run:
-            # _resolve_host_path gibt gültigen Pfad zurück
-            with patch("backend.ephemeral_sandbox._resolve_host_path", return_value="/mnt/host/path"):
-                # docker info schlägt fehl
-                mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
-                
+        """Ohne DOCKER_HOST-Proxy/Socket: ehrliches not_configured, kein Subprocess-Fallback."""
+        with patch.dict(os.environ, {"DOCKER_HOST": ""}), \
+             patch("backend.ephemeral_sandbox.subprocess.run") as mock_run, \
+             patch("backend.ephemeral_sandbox._resolve_host_path", return_value="/mnt/host/path"):
+                # kein DOCKER_HOST/kein expliziter lokaler Socket -> harter Fail-Closed-Pfad
                 result = ephemeral_sandbox.execute_in_sandbox("print('hello')")
-                
+
                 assert result["status"] == "error"
                 assert result["engine"] == "unavailable"
                 assert result["exit_code"] == -1
-                assert "S6-Hardening" in result["error"]
+                assert result["error"] == (
+                    "not_configured: DOCKER_HOST-Proxy oder expliziter lokaler Socket erforderlich."
+                )
+                assert "S6-Hardening" not in result["error"]
                 assert result["limits_enforced"] is False
-                # WICHTIG: subprocess.run mit sys.executable darf NICHT aufgerufen worden sein
-                # Nur docker info wurde geprüft
-                assert mock_run.call_count == 1
-                assert "docker" in str(mock_run.call_args) and "info" in str(mock_run.call_args)
+                # Ehrlich: kein Container existierte, kein Fake-"destroyed: True".
+                assert result["destroyed"] is None
+                assert result["container_created"] is False
+                # WICHTIG: überhaupt kein subprocess-Aufruf (auch kein docker info
+                # und erst recht kein sys.executable-Host-Fallback).
+                assert mock_run.call_count == 0
 
     def test_docker_info_exception_returns_error(self):
         """Exception bei docker info → error, kein Fallback."""
@@ -186,12 +189,16 @@ class TestEphemeralSandboxFailClosed:
                 assert result["limits_enforced"] is False
 
     def test_host_path_unresolvable_returns_error_no_docker_call(self):
-        """Nicht auflösbarer Host-Pfad → error, KEIN docker info/run Aufruf."""
-        with patch("backend.ephemeral_sandbox.subprocess.run") as mock_run:
-            # _resolve_host_path gibt None zurück (via Mock) - passiert VOR docker info
-            with patch("backend.ephemeral_sandbox._resolve_host_path", return_value=None):
+        """Nicht auflösbarer Host-Pfad → error, KEIN docker info/run Aufruf.
+
+        Der DOCKER_HOST-Proxy muss gesetzt sein, sonst endet der Lauf bereits am
+        not_configured-Gate und die Host-Pfad-Prüfung wird nie erreicht.
+        """
+        with patch.dict(os.environ, {"DOCKER_HOST": "tcp://docker-socket-proxy:2375"}), \
+             patch("backend.ephemeral_sandbox.subprocess.run") as mock_run, \
+             patch("backend.ephemeral_sandbox._resolve_host_path", return_value=None):
                 result = ephemeral_sandbox.execute_in_sandbox("print('hello')")
-                
+
                 assert result["status"] == "error"
                 assert result["engine"] == "unavailable"
                 assert result["limits_enforced"] is False
@@ -200,9 +207,10 @@ class TestEphemeralSandboxFailClosed:
                 assert mock_run.call_count == 0
 
     def test_docker_available_uses_docker_path(self):
-        """Mit Docker und auflösbarem Host-Pfad wird docker_micro_container engine genutzt."""
-        with patch("backend.ephemeral_sandbox.subprocess.run") as mock_run:
-            with patch("backend.ephemeral_sandbox._resolve_host_path", return_value="/mnt/host/path"):
+        """Mit DOCKER_HOST-Proxy und auflösbarem Host-Pfad läuft docker_micro_container."""
+        with patch.dict(os.environ, {"DOCKER_HOST": "tcp://docker-socket-proxy:2375"}), \
+             patch("backend.ephemeral_sandbox.subprocess.run") as mock_run, \
+             patch("backend.ephemeral_sandbox._resolve_host_path", return_value="/mnt/host/path"):
                 # docker info OK, docker run OK
                 mock_run.side_effect = [
                     MagicMock(returncode=0, stdout="", stderr=""),  # docker info
@@ -218,6 +226,14 @@ class TestEphemeralSandboxFailClosed:
                 call_args = mock_run.call_args_list[1][0][0]
                 assert call_args[0] == "docker"
                 assert "run" in call_args
+                # D04/MED: alle CLI-Aufrufe sind an den Proxy gebunden, nicht
+                # an einen stillen lokalen Unix-Socket.
+                info_args = mock_run.call_args_list[0][0][0]
+                assert "-H" in info_args
+                assert "tcp://docker-socket-proxy:2375" in info_args
+                assert "unix://" not in " ".join(info_args)
+                assert result["engine"] == "docker_micro_container"
+                assert result["status"] == "success"
 
 
 class TestEphemeralSandboxStructure:

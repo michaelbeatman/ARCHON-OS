@@ -232,9 +232,24 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
             provider=provider_to_use,
             history=req.history,
         )
-        reply_text = res.get("content", "Keine Antwort erhalten.")
     except Exception as e:
-        reply_text = f"Fehler bei der Kommunikation mit {agent_name}: {str(e)}"
+        raise HTTPException(status_code=502, detail={
+            "status": "error", "code": "DISPATCH_FAILED", "message": str(e)
+        })
+
+    # D12/HIGH: `blocked`/`error` ist keine Agenten-Antwort. Fehlertexte
+    # duerfen nie als Assistant-Reply ausgegeben werden.
+    st = str(res.get("status") or "").lower()
+    if st != "success":
+        raise HTTPException(status_code=403 if st == "blocked" else 502, detail={
+            "status": st or "error",
+            "code": res.get("error_code") or "DISPATCH_NOT_SUCCESS",
+        })
+    reply_text = res.get("content", "")
+    if not isinstance(reply_text, str) or not reply_text.strip():
+        raise HTTPException(status_code=502, detail={
+            "status": "error", "code": "EMPTY_RESPONSE"
+        })
 
     duration = round(time.time() - start_t, 2)
     add_ticker("Direct Chat", f"Nachricht an {agent_name} beantwortet ({duration}s)")

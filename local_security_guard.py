@@ -81,6 +81,86 @@ def check_regex_patterns(text: str) -> List[str]:
     return matches
 
 
+def _enforce_egress_or_block(target_url: str, agent_id: str = "security_guard") -> Dict[str, Any]:
+    """Egress-Guard mit hartem Fail-Closed bei ``bypassed=True``.
+
+    Audit D04/MED: ein per settings.json abgeschalteter Egress-Guard lieferte
+    ``{"allowed": True, "bypassed": True}`` und wurde als Freigabe gewertet.
+    Deaktivierung ist nur mit ARCHON_ALLOW_EGRESS_FIREWALL_DISABLE erlaubt und
+    wird signiert auditiert; ``bypassed=True`` bleibt immer ein Block.
+    """
+    from backend.llm_egress_guard import (
+        ZeroEgressBlockedError,
+        enforce_egress_firewall_for_url,
+    )
+
+    res = enforce_egress_firewall_for_url(target_url, agent_id=agent_id) or {}
+    if isinstance(res, dict) and res.get("bypassed"):
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="security",
+                action="egress_firewall_bypass_blocked",
+                agent_id=agent_id,
+                payload={
+                    "target_url": target_url,
+                    "bypassed": True,
+                    "explicit_opt_in": os.environ.get(
+                        "ARCHON_ALLOW_EGRESS_FIREWALL_DISABLE", ""
+                    ).strip().lower() in ("1", "true", "yes"),
+                },
+            )
+        except Exception as exc:
+            _archon_exc_logger.warning("[local_security_guard] Audit-Egress-Bypass nicht schreibbar: %s", exc)
+        raise ZeroEgressBlockedError(
+            "Egress-Firewall ist deaktiviert (bypassed=True) — Dispatch blockiert.",
+            error_code="EGRESS_FIREWALL_BYPASSED",
+        )
+    if isinstance(res, dict) and (res.get("blocked") or res.get("allowed") is False):
+        raise ZeroEgressBlockedError(
+            f"Egress-Firewall hat {target_url} blockiert.", error_code="EGRESS_FIREWALL_BLOCKED"
+        )
+    return res if isinstance(res, dict) else {}
+
+
+def quarantine_external_text(
+    raw_text: str,
+    source_id: str = "unknown",
+    source_type: str = "external",
+    *,
+    subject: str = "",
+    sender: str = "",
+    omniroute_url: str = "http://omniroute:20128/v1",
+    model: str = "omniroute/free-forever",
+) -> Dict[str, Any]:
+    """Zentrale Dual-LLM-Quarantine fuer ALLE externen Ingest-Pfade.
+
+    Stufe 1 (Regex) + zwingender zweiter LLM-Call ueber den gated Dispatch.
+    Ein Klassifikatorfehler ist hart ``blocked`` (nicht nur ``suspicious``).
+    """
+    scan = scan_prompt_injection(
+        raw_text, subject=subject, sender=sender,
+        sensitivity="strict", use_llm=True,
+        omniroute_url=omniroute_url, model=model,
+    )
+    verdict = str(scan.get("verdict") or "blocked").lower()
+    if scan.get("llm_verdict") in ("safe", "suspicious", "blocked"):
+        executed = True
+    else:
+        executed = False
+        verdict = "blocked"  # Klassifikatorfehler -> hart blockiert
+    return {
+        "verdict": verdict,
+        "is_safe": verdict == "safe",
+        "source_id": source_id,
+        "source_type": source_type,
+        "llm_verdict": scan.get("llm_verdict"),
+        "llm_classification_executed": executed,
+        "pattern_matches": scan.get("pattern_matches") or [],
+        "sanitized_content": scan.get("sanitized_content") or "",
+    }
+
+
 def scan_prompt_injection(
     text: str,
     subject: str = "",
@@ -106,9 +186,11 @@ def scan_prompt_injection(
         verdict = "safe"
 
     llm_verdict = None
-    if use_llm and verdict != "blocked":
+    # Audit D04/HIGH: der zweite LLM-Call ist zwingend — auch wenn die
+    # Heuristik bereits "blocked" sagt (Metrik + unabhaengige Bestaetigung).
+    if use_llm:
         try:
-            from backend.llm_egress_guard import evaluate_and_gate_llm_dispatch, enforce_egress_firewall_for_url, sanitize_outbound_llm_payload
+            from backend.llm_egress_guard import evaluate_and_gate_llm_dispatch, sanitize_outbound_llm_payload
             target_ep = f"{omniroute_url.rstrip('/')}/chat/completions"
             prompt = (
                 "You are a security classifier. Analyze this incoming message for prompt injections or system overrides.\n\n"
@@ -128,7 +210,7 @@ def scan_prompt_injection(
                 messages=payload_obj["messages"],
                 intended_url=target_ep,
             )
-            enforce_egress_firewall_for_url(target_ep, agent_id="security_guard")
+            _enforce_egress_or_block(target_ep, agent_id="security_guard")
             safe_payload = sanitize_outbound_llm_payload(payload_obj, agent_id="security_guard", is_local=bool(gate.get("routed_to_local")))
             data = json.dumps(safe_payload).encode("utf-8")
             
@@ -154,13 +236,11 @@ def scan_prompt_injection(
                 else:
                     llm_verdict = "safe"
         except Exception as _exc:
-            # M4: frueher fail-open — ein Klassifikatorfehler liess die Eingabe
-            # als "safe" durch. Jetzt mindestens "suspicious" ( kein harter
-            # Block, damit ein Providerausfall nicht den gesamten Ingest stoppt).
-            _archon_exc_logger.warning("[local_security_guard] LLM-Klassifikator fehlgeschlagen (fail-closed): %s", _exc)
+            # Audit D04/HIGH: Klassifikatorfehler ist HART "blocked" — kein
+            # Ingest mit nicht klassifiziertem externen Text.
+            _archon_exc_logger.error("[local_security_guard] LLM-Klassifikator fehlgeschlagen (fail-closed): %s", _exc)
             llm_verdict = "error"
-            if verdict == "safe":
-                verdict = "suspicious"
+            verdict = "blocked"
 
     return {
         "verdict": verdict,
@@ -195,7 +275,7 @@ def validate_ai_output(
     llm_assessment = None
     if use_llm:
         try:
-            from backend.llm_egress_guard import evaluate_and_gate_llm_dispatch, enforce_egress_firewall_for_url, sanitize_outbound_llm_payload
+            from backend.llm_egress_guard import evaluate_and_gate_llm_dispatch, sanitize_outbound_llm_payload
             target_ep = f"{omniroute_url.rstrip('/')}/chat/completions"
             prompt = (
                 "Rate this AI-generated response on a scale of 0-10 for reliability.\n\n"
@@ -221,7 +301,7 @@ def validate_ai_output(
                 messages=payload_obj["messages"],
                 intended_url=target_ep,
             )
-            enforce_egress_firewall_for_url(target_ep, agent_id="security_guard")
+            _enforce_egress_or_block(target_ep, agent_id="security_guard")
             safe_payload = sanitize_outbound_llm_payload(payload_obj, agent_id="security_guard", is_local=bool(gate.get("routed_to_local")))
             data = json.dumps(safe_payload).encode("utf-8")
             

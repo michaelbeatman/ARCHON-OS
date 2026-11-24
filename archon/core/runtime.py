@@ -120,12 +120,41 @@ def _put_sse_nowait_safe(q: asyncio.Queue, payload: str) -> None:
                 logger.debug(f"[Runtime] SSE-Abonnent bereits entfernt: {exc}")
 
 
+def _sse_trace_context() -> Dict[str, str]:
+    """D16: Trace-Kontext in das SSE-Payload (Systemgrenze SSE → Browser/Telegram)."""
+    try:
+        from backend.trace_context import (
+            current_span_id, current_trace_id, current_tracestate,
+            format_traceparent, should_sample,
+        )
+        tid, sid = current_trace_id(), current_span_id()
+        if not tid or not sid:
+            return {}
+        ctx = {
+            "trace_id": tid,
+            "span_id": sid,
+            "traceparent": format_traceparent(tid, sid, should_sample()),
+        }
+        ts = current_tracestate()
+        if ts:
+            ctx["tracestate"] = ts
+        return ctx
+    except Exception as exc:
+        logger.debug("[Runtime] SSE-Trace-Kontext nicht verfügbar: %s", exc)
+        return {}
+
+
 def broadcast_event(event_type: str, data: Optional[Dict[str, Any]] = None) -> None:
     """Typisiertes Server-Sent Event an alle verbundenen Web-Clients.
 
     F-08: Ein voller Client-Puffer (QueueFull) trennt den Client NICHT mehr ab.
     """
-    payload = json.dumps({"type": event_type, "timestamp": time.time(), "data": data or {}})
+    payload = json.dumps({
+        "type": event_type,
+        "timestamp": time.time(),
+        **_sse_trace_context(),
+        "data": data or {},
+    })
     try:
         running_loop = asyncio.get_running_loop()
     except RuntimeError:

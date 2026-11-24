@@ -34,25 +34,31 @@ def _get_cfg() -> Dict[str, Any]:
         }
 
 
-def _read_host_metrics() -> Dict[str, float]:
-    cpu_pct = 15.0
-    ram_pct = 35.0
+def _read_host_metrics() -> Dict[str, Any]:
+    # D10/HIGH (Disk-Fail-Closed): ein Messfehler ist KEIN Grund zur
+    # Entwarnung. Defaults sind die schlechtesten plausiblen Werte, damit
+    # Backpressure und Disk-Alarm zuverlaessig ausloesen.
+    cpu_pct = 100.0
+    ram_pct = 100.0
+    measurement_failed: list = []
     try:
         import psutil
         cpu_pct = float(psutil.cpu_percent(interval=0.05))
         ram_pct = float(psutil.virtual_memory().percent)
-    except Exception:
+    except Exception as exc:
+        measurement_failed.append("cpu_ram")
+        _archon_exc_logger.error("[resource_backpressure] CPU/RAM-Messung fehlgeschlagen: %s", exc)
         try:
             if hasattr(os, "getloadavg"):
                 load1, _, _ = os.getloadavg()
                 cores = os.cpu_count() or 1
                 cpu_pct = round(min(100.0, (load1 / cores) * 100.0), 1)
-        except Exception as _exc:
-            _archon_exc_logger.debug("[resource_backpressure] Ignorierte Ausnahme (Z.43): %s", _exc)
+        except Exception as load_exc:
+            _archon_exc_logger.error("[resource_backpressure] Loadavg-Fallback fehlgeschlagen: %s", load_exc)
 
-    free_disk_gb = 25.0
-    free_disk_bytes = 25 * 1024 ** 3
-    disk_used_percent = 0.0
+    free_disk_gb = 0.0
+    free_disk_bytes = 0
+    disk_used_percent = 100.0
     try:
         usage = shutil.disk_usage(WORKSPACE_DIR)
         # F-077: Roh-Bytes fuer die exakte 2-GiB-Schwelle behalten (das auf
@@ -61,16 +67,18 @@ def _read_host_metrics() -> Dict[str, float]:
         free_disk_bytes = int(usage.free)
         free_disk_gb = round(free_disk_bytes / (1024 ** 3), 2)
         # shutil.disk_usage liefert kein .percent — selbst berechnen.
-        disk_used_percent = round(float(usage.used) / float(usage.total) * 100.0, 1) if usage.total else 0.0
-    except Exception:
-        pass
+        disk_used_percent = round(float(usage.used) / float(usage.total) * 100.0, 1) if usage.total else 100.0
+    except Exception as exc:
+        measurement_failed.append("disk")
+        _archon_exc_logger.error("[resource_backpressure] Disk-Messung fehlgeschlagen: %s", exc)
 
     return {
         "cpu_pct": round(cpu_pct, 1),
         "ram_pct": round(ram_pct, 1),
         "free_disk_gb": free_disk_gb,
         "free_disk_bytes": free_disk_bytes,
-        "disk_used_percent": disk_used_percent
+        "disk_used_percent": disk_used_percent,
+        "measurement_failed": measurement_failed,
     }
 
 
@@ -152,6 +160,8 @@ class ResourceBackpressureProtector:
 
         return {
             "enabled": enabled,
+            "simulated": bool(simulate_overload),
+            "measurement_failed": list(metrics.get("measurement_failed") or []),
             "disk_critical": disk_critical,
             "backpressure_active": backpressure_active,
             "recommended_action": action if backpressure_active else "normal_operation",

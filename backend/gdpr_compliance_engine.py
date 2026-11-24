@@ -1114,6 +1114,14 @@ class GDPRComplianceEngine:
 
 
 def verify_gdpr_audit_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
+    """d05 F-03: DSGVO-Kette + Head-Anker + Trigger."""
+    from backend.audit_log import finalize_secondary_chain_verification
+    return finalize_secondary_chain_verification(
+        "gdpr_audit_log", _verify_gdpr_audit_chain_raw(db_path), db_path=db_path
+    )
+
+
+def _verify_gdpr_audit_chain_raw(db_path: Optional[str] = None) -> Dict[str, Any]:
     """Prueft die gdpr_audit_log-Kette inkl. Epochen-Migration.
 
     Strategie pro Block:

@@ -37,6 +37,24 @@ def get_client_language(request: Request) -> str:
 SUPPORTED_LANGUAGES = {"de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"}
 
 
+def _trace_context() -> tuple:
+    """D16/MED: trace_id aus dem aktiven W3C-Kontext (fail-safe leer)."""
+    try:
+        from backend.trace_context import current_trace_id
+        return str(current_trace_id() or "")
+    except Exception:
+        return ""
+
+
+def _trace_headers(trace_id: str, base: dict = None) -> dict:
+    """Antwort-Header ueber den zentralen Helper (X-Trace-Id + traceparent/tracestate).
+
+    Vorhandene Header (z. B. WWW-Authenticate) bleiben erhalten.
+    """
+    from backend.trace_context import response_trace_headers
+    return response_trace_headers(base or {})
+
+
 # Mapping: HTTP status_code -> Standard-Code falls nicht angegeben
 DEFAULT_CODES = {
     400: "bad_request",
@@ -69,18 +87,21 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     
     # Sprache für Server-seitiges Logging (optional)
     lang = get_client_language(request)
-    
+    trace_id = _trace_context()
+    content = {
+        "error": True,
+        "code": code,
+        "params": params,
+        "status_code": status_code,
+        # Optional: lokalisierter Text für Clients ohne i18n (curl, logs)
+        "detail": f"[{code}] " + legacy_detail,
+    }
+    if trace_id:
+        content["trace_id"] = trace_id
     return JSONResponse(
         status_code=status_code,
-        content={
-            "error": True,
-            "code": code,
-            "params": params,
-            "status_code": status_code,
-            # Optional: lokalisierter Text für Clients ohne i18n (curl, logs)
-            "detail": f"[{code}] " + legacy_detail
-        },
-        headers=exc.headers if hasattr(exc, "headers") else None
+        content=content,
+        headers=_trace_headers(trace_id, getattr(exc, "headers", None)),
     )
 
 
@@ -91,31 +112,40 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     for err in exc.errors():
         loc = " -> ".join(str(x) for x in err["loc"])
         errors.append(f"{loc}: {err['msg']}")
-    
+    trace_id = _trace_context()
+    content = {
+        "error": True,
+        "code": "validation_error",
+        "params": {"errors": errors},
+        "status_code": 422,
+        "detail": "Validierungsfehler: " + "; ".join(errors),
+    }
+    if trace_id:
+        content["trace_id"] = trace_id
     return JSONResponse(
         status_code=422,
-        content={
-            "error": True,
-            "code": "validation_error",
-            "params": {"errors": errors},
-            "status_code": 422,
-            "detail": "Validierungsfehler: " + "; ".join(errors)
-        }
+        content=content,
+        headers=_trace_headers(trace_id),
     )
 
 
 async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """Starlette HTTPException (z.B. 404 vom Router)."""
     code = DEFAULT_CODES.get(exc.status_code, "error")
+    trace_id = _trace_context()
+    content = {
+        "error": True,
+        "code": code,
+        "params": {"detail": exc.detail} if exc.detail else {},
+        "status_code": exc.status_code,
+        "detail": exc.detail,
+    }
+    if trace_id:
+        content["trace_id"] = trace_id
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "error": True,
-            "code": code,
-            "params": {"detail": exc.detail} if exc.detail else {},
-            "status_code": exc.status_code,
-            "detail": exc.detail
-        }
+        content=content,
+        headers=_trace_headers(trace_id, getattr(exc, "headers", None)),
     )
 
 
@@ -140,7 +170,11 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     }
     if trace_id:
         payload["trace_id"] = trace_id
-    return JSONResponse(status_code=500, content=payload)
+    return JSONResponse(
+        status_code=500,
+        content=payload,
+        headers=_trace_headers(trace_id),
+    )
 
 
 def register_exception_handlers(app):

@@ -1155,6 +1155,8 @@ _DAG_NODE_PASSTHROUGH_KEYS = (
     "tool_preset", "model", "channel", "save_to_showroom",
     "max_revisions", "min_quality_score", "quality_gate",
     "max_turns", "output_schema", "media_config", "plugin_id", "plugin_params",
+    # D13/HIGH: Run-Cap und Trajectory-Identitaet MUESSEN in den DAG.
+    "max_budget_eur", "cost_limit_eur", "trajectory_id", "root_ticket_id",
 )
 
 
@@ -1194,12 +1196,18 @@ def _build_dag_def_from_template(
             if node.get("quorum_min") is not None:
                 d["quorum_min"] = node["quorum_min"]
         dag_nodes.append(d)
-    return {
+    dag_def: Dict[str, Any] = {
         "id": str(tpl.get("id") or "workflow"),
         "title": tpl.get("title") or "",
         "nodes": dag_nodes,
         "edges": [e for e in (tpl.get("edges") or []) if isinstance(e, dict)],
     }
+    # D13: expliziter Run-Cap aus dem Template — fehlt er, lehnt der Validator
+    # den Run ab (kein stilles Minting eines Default-Caps).
+    for key in ("max_budget_eur", "trajectory_id", "root_ticket_id"):
+        if tpl.get(key) is not None:
+            dag_def[key] = tpl[key]
+    return dag_def
 
 
 def _run_dag_in_background_thread(dag_def: Dict[str, Any], run_id: str) -> None:

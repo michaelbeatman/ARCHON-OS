@@ -25,10 +25,24 @@ Callback-Daten (vom telegram_bot-Gateway verarbeitet, siehe Skill
 
 import os
 import json
+import contextlib
 import logging
 import httpx
 
 logger = logging.getLogger("archon_os")
+
+
+@contextlib.contextmanager
+def _telegram_trace_headers():
+    """D16: Telegram-Notify ist eine Systemgrenze — Child-Span + W3C-Header."""
+    try:
+        from backend.trace_context import child_span, inject_headers
+    except Exception as exc:
+        logger.warning("[Telegram] Trace-Kontext nicht verfügbar: %s", exc)
+        yield {}
+        return
+    with child_span():
+        yield inject_headers()
 
 _TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 _TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
@@ -141,8 +155,8 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
     if reply_markup:
         payload["reply_markup"] = reply_markup
     try:
-        with httpx.Client(timeout=_TELEGRAM_TIMEOUT) as client:
-            resp = client.post(_api_url("sendMessage"), json=payload)
+        with httpx.Client(timeout=_TELEGRAM_TIMEOUT) as client, _telegram_trace_headers() as trace_headers:
+            resp = client.post(_api_url("sendMessage"), json=payload, headers=trace_headers)
             data = resp.json()
             if resp.status_code == 200 and data.get("ok"):
                 return True
@@ -154,7 +168,7 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
             if resp.status_code == 400 and "parse" in str(data.get("description", "")):
                 clean = {k: v for k, v in payload.items() if k != "parse_mode"}
                 try:
-                    resp2 = client.post(_api_url("sendMessage"), json=clean)
+                    resp2 = client.post(_api_url("sendMessage"), json=clean, headers=trace_headers)
                     data2 = resp2.json()
                     if resp2.status_code == 200 and data2.get("ok"):
                         logger.info("[Telegram] Nachricht ohne Markdown-Rendern zugestellt (Parse-Fallback).")
@@ -212,8 +226,8 @@ def send_telegram_document(file_path: str, caption: str = "", filename: str = No
                     data["parse_mode"] = parse_mode
             if reply_markup:
                 data["reply_markup"] = json.dumps(reply_markup)
-            with httpx.Client(timeout=45.0) as client:
-                resp = client.post(_api_url("sendDocument"), data=data, files=files)
+            with httpx.Client(timeout=45.0) as client, _telegram_trace_headers() as trace_headers:
+                resp = client.post(_api_url("sendDocument"), data=data, files=files, headers=trace_headers)
                 j = resp.json()
                 if resp.status_code == 200 and j.get("ok"):
                     logger.info(f"[Telegram] Dokument zugestellt: {name} ({size} B)")

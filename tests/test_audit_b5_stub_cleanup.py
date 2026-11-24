@@ -13,8 +13,10 @@ def test_war_room_uses_unknown_on_provider_failure():
     ast.parse(text)
     assert '"risk_rating": "UNKNOWN"' in text
     assert "evaluation_failed" in text
-    assert 'evaluation_failed or (risk_order' in text
-    assert '"status": "incomplete" if evaluation_failed' in text
+    assert 'should_block = evaluation_failed or (risk_order' in text
+    assert 'overall_risk = "UNKNOWN"' in text
+    assert "if evaluation_failed or (should_block and not blocked_effective):" in text
+    assert '"blocked_effective": blocked_effective' in text
 
 
 def test_eval_suite_endpoint_requires_admin():

@@ -336,6 +336,10 @@ class MetricsCollector:
             "# TYPE archon_uptime_seconds gauge",
             f"archon_uptime_seconds {uptime}",
             "",
+            "# HELP archon_heartbeat_timestamp_seconds Letztes Lebenszeichen des aktiven Prozesses als Unix-Timestamp.",
+            "# TYPE archon_heartbeat_timestamp_seconds gauge",
+            f"archon_heartbeat_timestamp_seconds {float(_LAST_HEARTBEAT_TS):.6f}",
+            "",
             "# HELP archon_tasks_total Gesamtzahl der Aufgaben im Kanban-Board nach Status.",
             "# TYPE archon_tasks_total gauge",
         ]
@@ -412,6 +416,7 @@ class MetricsCollector:
         system = self._get_system_resources()
         return {
             "uptime_seconds": round(time.time() - START_TIME, 2),
+            "heartbeat_timestamp_seconds": float(_LAST_HEARTBEAT_TS),
             "kanban": kanban,
             "telemetry": telemetry,
             "storage_bytes": storage,

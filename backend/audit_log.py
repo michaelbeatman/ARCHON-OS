@@ -134,19 +134,19 @@ def sign_block(raw_str: str, block_id=None, *, allow_legacy: bool = False) -> st
     """Zentrale Signier-API fuer Haupt- und alle Nebenketten (d05 F-01).
 
     Fail-closed: Ohne konfigurierten HMAC-Key wird KEIN ungesalzener SHA-256-Block
-    geschrieben, solange ``sha256_dispatch_audit_enforced`` aktiv ist (Default True),
-    es sei denn der Aufrufer fordert explizit ``allow_legacy=True`` (nur fuer
-    Leseverifikation / Diagnose).
+    geschrieben. Es gibt keinen Abschalter mehr — die fruehere Invariante
+    ``sha256_dispatch_audit_enforced`` war ueber settings.json umgehbar.
+    Nacktes SHA-256 ist ausschliesslich ueber explizites ``allow_legacy=True``
+    im Lese-/Verify-Pfad zulaessig.
     """
     key = _key_for_block(block_id)
     if key:
         digest = hmac.new(key, raw_str.encode("utf-8"), hashlib.sha256).hexdigest()
         return f"{HMAC_PREFIX}{digest}"
-    if not allow_legacy and _dispatch_audit_enforced():
+    if not allow_legacy:
         raise RuntimeError(
             "[Audit] ARCHON_AUDIT_HMAC_KEY fehlt: neue Audit-Bloecke duerfen "
-            "nicht mit nacktem SHA-256 geschrieben werden "
-            "(sha256_dispatch_audit_enforced=True)."
+            "nicht mit nacktem SHA-256 geschrieben werden (HMAC-Pflicht, kein Abschalter)."
         )
     return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
@@ -166,30 +166,12 @@ def _verify_hash(raw_str: str, stored: str, block_id=None) -> bool:
     return hmac.compare_digest(hashlib.sha256(raw_str.encode("utf-8")).hexdigest(), stored)
 
 
-# F-027: Die GoBD-Invariante sha256_dispatch_audit_enforced wird im Kryptopfad
-# tatsächlich ausgewertet (nicht nur als Statusanzeige in settings.json).
-# Default True = fail-closed: ohne HMAC-Key werden keine neuen Blöcke mehr mit
-# nacktem SHA-256 geschrieben. Legacy-SHA256 bleibt ausschließlich LESEND ueber
-# legacy_max / _verify_hash zulaessig. Cache mit kurzem TTL vermeidet einen
-# settings.json-Read pro Audit-Event.
-_FAUDIT_ENFORCE_CACHE_TTL_SEC = 30.0
-_faudit_enforce_cache = None
-
-
+# d05 F-01: Der Abschalter ``sha256_dispatch_audit_enforced`` wurde aus dem
+# Schreibpfad entfernt. Diese Funktion bleibt nur als kompatible Konstante
+# erhalten; der Kryptopfad liest keine settings.json mehr (ein direkter
+# Datei-Editorwert `false` durfte nie zu ungeschuetzten Bloecken fuehren).
 def _dispatch_audit_enforced() -> bool:
-    global _faudit_enforce_cache
-    now = time.monotonic()
-    if _faudit_enforce_cache and (now - _faudit_enforce_cache[0]) < _FAUDIT_ENFORCE_CACHE_TTL_SEC:
-        return _faudit_enforce_cache[1]
-    enforced = True
-    try:
-        from backend.autonomy_settings import is_sha256_dispatch_audit_enforced
-        enforced = bool(is_sha256_dispatch_audit_enforced())
-    except Exception as exc:
-        logger.error("[Audit] sha256_dispatch_audit_enforced nicht lesbar: %s — fail-closed (True)", exc)
-        enforced = True
-    _faudit_enforce_cache = (now, enforced)
-    return enforced
+    return True
 
 
 # F-029: substring-basierte Erkennung statt exakter Matchliste. Die alte
@@ -353,7 +335,8 @@ class ChainedAuditLog:
             try:
                 self._write_anchor(path)
             except Exception as exc:
-                logger.warning("Audit-Log: Anker-Schreibfehler: %s", exc)
+                # d05 F-05: Audit-Schreibfehler nie auf WARNING verschlucken.
+                logger.error("Audit-Log: Anker-Schreibfehler: %s", exc)
             # Event.wait statt time.sleep: sofortiger, kontrollierter Stopp.
             if self._anchor_stop.wait(ANCHOR_INTERVAL_SEC):
                 break
@@ -550,21 +533,14 @@ class ChainedAuditLog:
             except Exception as exc:
                 logger.debug("Audit-Log: sanitize_tenant_id nicht verfuegbar: %s", exc)
 
-        # F-027: Neue Bloecke NEVER mit nacktem SHA-256 schreiben. Die
-        # GoBD-Invariante sha256_dispatch_audit_enforced erzwingt den HMAC-Key
-        # im Schreibpfad; nacktes SHA-256 bleibt lesend auf den explizit
-        # markierten legacy_max-Bereich beschraenkt (siehe verify_integrity).
+        # d05 F-01: Neue Bloecke NEVER mit nacktem SHA-256 schreiben — ohne
+        # HMAC-Key gilt immer fail-closed. Nacktes SHA-256 bleibt lesend auf den
+        # explizit markierten legacy_max-Bereich beschraenkt (verify_integrity).
+        # Ein OPT-OUT existiert nicht mehr.
         if not _hmac_epochs():
-            if _dispatch_audit_enforced():
-                raise RuntimeError(
-                    "[Audit] ARCHON_AUDIT_HMAC_KEY fehlt: neue Audit-Bloecke duerfen "
-                    "nicht mit nacktem SHA-256 geschrieben werden "
-                    "(sha256_dispatch_audit_enforced=True)."
-                )
-            logger.error(
-                "[Audit] OPT-OUT sha256_dispatch_audit_enforced=False: neuer Block "
-                "%s/%s wird UNGESCHUETZT mit nacktem SHA-256 geschrieben.",
-                category, action,
+            raise RuntimeError(
+                "[Audit] ARCHON_AUDIT_HMAC_KEY fehlt: neue Audit-Bloecke duerfen "
+                "nicht mit nacktem SHA-256 geschrieben werden (HMAC-Pflicht, kein Abschalter)."
             )
 
         with self._lock:
@@ -625,7 +601,7 @@ class ChainedAuditLog:
                 try:
                     conn.rollback()
                 except Exception as exc:
-                    logger.debug("Audit-Log: Rollback fehlgeschlagen: %s", exc)
+                    logger.error("Audit-Log: Rollback fehlgeschlagen: %s", exc)
                 raise
             finally:
                 conn.close()
@@ -661,6 +637,8 @@ class ChainedAuditLog:
         http_status: int = 200,
         zero_egress_active: bool = False,
         extra: Optional[Dict[str, Any]] = None,
+        prompt_version: str = "",
+        canary_version: str = "",
         cost_usd: Optional[float] = None,
         prompt_tokens: Optional[int] = None,
         completion_tokens: Optional[int] = None,
@@ -676,6 +654,42 @@ class ChainedAuditLog:
         norm_provider = (str(provider or "").strip() or "unknown").lower()
         norm_model = str(model or "").strip() or "unknown"
 
+        # d05 F-04: Prompt-/Canary-Version sind Pflichtfelder des signierten
+        # Beweises. Der Dispatcher liefert sie teils unter `version_num`
+        # statt `version` (D11-Key-Mismatch) — hier im Audit-Pfad normalisieren.
+        info = {}
+        if isinstance(extra, dict) and isinstance(extra.get("effective_prompt_info"), dict):
+            info = extra["effective_prompt_info"]
+        pv_raw = str(prompt_version or "").strip()
+        cv_raw = str(canary_version or "").strip()
+        if not pv_raw:
+            pv_raw = str(info.get("version") or info.get("version_num") or "").strip()
+        if not cv_raw:
+            cv_raw = str(info.get("canary") or info.get("canary_version") or "").strip()
+        # Zentraler Fallback: viele Aufrufer (v. a. geblockte Dispatches) haben
+        # keinen Prompt-Kontext im extra-Dict — dann die aktive Registry-Version
+        # nachschlagen, statt still "unknown" zu signieren.
+        if not pv_raw or not cv_raw:
+            try:
+                from backend.prompt_registry import prompt_registry
+                for v in prompt_registry.list_versions(str(agent_id or "default")):
+                    if v.get("is_active"):
+                        if not pv_raw:
+                            pv_raw = str(v.get("version") or v.get("version_num") or "").strip()
+                        if not cv_raw:
+                            cv_raw = str(v.get("canary") or v.get("canary_version") or v.get("canary_percentage") or "").strip()
+                        break
+            except Exception:
+                pass
+        pv = pv_raw or "unknown"
+        cv = cv_raw or "unknown"
+        if pv_raw == "" or cv_raw == "":
+            logger.error(
+                "[Audit] LLM-Dispatch-Proof ohne vollstaendige Prompt-/Canary-Version "
+                "(agent=%s, action=%s) — 'unknown' gesetzt; Aufrufer pruefen.",
+                agent_id, action,
+            )
+
         payload: Dict[str, Any] = {
             "provider": norm_provider,
             "model": norm_model,
@@ -685,6 +699,8 @@ class ChainedAuditLog:
             "data_category": str(data_category or "general"),
             "http_status": int(http_status),
             "zero_egress_active": bool(zero_egress_active),
+            "prompt_version": pv,
+            "canary_version": cv,
         }
         # H (Audit): Kosten und Token-Verbrauch sind revisionsrelevant und
         # gehoeren in den signierten Payload, sofern der Aufrufer sie liefert.
@@ -889,6 +905,19 @@ class ChainedAuditLog:
                                     "valid": False,
                                     "corrupted_id": r["id"],
                                     "reason": f"Unvollständiger LLM-Dispatch-Nachweis bei Block #{r['id']}: Feld '{req_key}' fehlt.",
+                                }
+                        # d05 F-04: Prompt-/Canary-Version sind seit diesem Fix
+                        # Pflichtfelder. Alt-Bloecke bis legacy_max bleiben
+                        # verifizierbar (default 0 = alle neuen Bloecke streng).
+                        for req_key in ("prompt_version", "canary_version"):
+                            if not str(parsed_payload.get(req_key, "")).strip() and int(r["id"]) > legacy_max:
+                                return {
+                                    "valid": False,
+                                    "corrupted_id": r["id"],
+                                    "reason": (
+                                        f"Unvollständiger LLM-Dispatch-Nachweis bei Block #{r['id']}: "
+                                        f"Pflichtfeld '{req_key}' fehlt."
+                                    ),
                                 }
                         # F-028: zusaetzlich auf eine der drei definierten
                         # Zonen validieren — beliebiger/manipulierter Wert
@@ -1229,6 +1258,231 @@ class ChainedAuditLog:
                 "content": json.dumps(export_doc, indent=2, ensure_ascii=False),
                 "metadata": meta,
             }
+
+
+# ---------------------------------------------------------------------------
+# d05 F-03: signierte Head-Anker + Append-only-Trigger-Pruefung fuer die
+# sechs Nebenketten. Anker liegen in der ZENTRALEN (HMAC-geschuetzten,
+# append-only) audit_log — damit kann jemand mit Schreibzugriff auf eine
+# Nebenkette den Tail nicht unbemerkt loeschen.
+# ---------------------------------------------------------------------------
+CHAIN_ANCHOR_CATEGORY = "chain_anchor"
+
+# chain -> (Tabelle, Hash-Spalte, Sortierspalte)
+SECONDARY_CHAIN_HEADS = {
+    "api_key_audit_log": ("api_key_audit_log", "block_hash", "id"),
+    "approval_policy_audit_chain": ("approval_policy_audit_chain", "current_hash", "id"),
+    "treasury_transactions": ("treasury_transactions", "entry_hash", "rowid"),
+    "email_draft_audit_log": ("email_draft_audit_log", "block_hash", "id"),
+    "gdpr_audit_log": ("gdpr_audit_log", "hash", "id"),
+    "execution_receipts_ledger": ("execution_receipts_ledger", "receipt_hash", "id"),
+}
+
+# chain -> zwingend vorhandene Append-only-Trigger
+SECONDARY_CHAIN_TRIGGERS = {
+    "api_key_audit_log": ("api_key_audit_no_update", "api_key_audit_no_delete"),
+    "approval_policy_audit_chain": ("approval_chain_no_hash_update", "approval_chain_no_delete"),
+    "treasury_transactions": ("treasury_tx_no_tamper", "treasury_tx_no_delete"),
+    "email_draft_audit_log": ("email_draft_audit_no_update", "email_draft_audit_no_delete"),
+    "gdpr_audit_log": ("gdpr_audit_no_update", "gdpr_audit_no_delete"),
+    "execution_receipts_ledger": (
+        "execution_receipts_no_update", "execution_receipts_no_delete",
+        "execution_receipt_bypass_no_update", "execution_receipt_bypass_no_delete",
+    ),
+}
+
+
+def _is_production() -> bool:
+    return str(os.environ.get("ENVIRONMENT") or "").strip().lower() in ("production", "prod", "live")
+
+
+def _secondary_db_path(chain: str, db_path: Optional[str] = None) -> str:
+    """Nebenketten liegen meist in agentic_memory.db — Treasury in treasury.db."""
+    if db_path:
+        return db_path
+    if chain == "treasury_transactions":
+        try:
+            from backend.db_paths import resolve_db
+            return resolve_db("treasury.db")
+        except Exception:
+            return os.path.join(WORKSPACE_DIR, "data", "treasury.db")
+    return DB_PATH
+
+
+def get_chain_anchors(chain: str, limit: int = 20) -> List[Dict[str, Any]]:
+    """Liefert die letzten gespeicherten Head-Anker (neueste zuerst) aus der Zentralkette."""
+    anchors: List[Dict[str, Any]] = []
+    conn = sqlite3.connect(DB_PATH, timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT id, payload_json FROM audit_log WHERE category=? ORDER BY id DESC LIMIT ?",
+            (CHAIN_ANCHOR_CATEGORY, max(1, int(limit) * 20)),
+        ).fetchall()
+        for r in rows:
+            try:
+                p = json.loads(r["payload_json"])
+            except Exception:
+                continue
+            if str(p.get("chain", "")) == chain:
+                anchors.append({
+                    "id": int(r["id"]),
+                    "head": str(p.get("head", "") or ""),
+                    "count": int(p.get("count", 0) or 0),
+                })
+                if len(anchors) >= int(limit):
+                    break
+    except Exception as exc:
+        logger.error("[Audit] Head-Anker fuer %s nicht lesbar (fail-closed): %s", chain, exc)
+    finally:
+        conn.close()
+    return anchors
+
+
+def get_chain_anchor(chain: str) -> Optional[Dict[str, Any]]:
+    anchors = get_chain_anchors(chain, limit=1)
+    return anchors[0] if anchors else None
+
+
+def record_chain_anchor(chain: str, head: str, count: int) -> Dict[str, Any]:
+    """Schreibt einen signierten Head-Anker in die Zentralkette (idempotent bei unveraendertem Head)."""
+    existing = get_chain_anchor(chain)
+    if existing and existing["head"] == str(head or "") and existing["count"] == int(count):
+        return {"chain": chain, "written": False, "head": existing["head"], "count": existing["count"]}
+    ev = chained_audit_log.record_event(
+        category=CHAIN_ANCHOR_CATEGORY,
+        action="chain_head_anchor",
+        agent_id="system",
+        payload={"chain": chain, "head": str(head or ""), "count": int(count)},
+    )
+    return {"chain": chain, "written": True, "head": str(head or ""), "count": int(count), "event_id": ev.get("event_id")}
+
+
+def _secondary_chain_hashes(chain: str, db_path: Optional[str] = None) -> List[str]:
+    spec = SECONDARY_CHAIN_HEADS.get(chain)
+    if not spec:
+        return []
+    table, hash_col, order_col = spec
+    conn = sqlite3.connect(_secondary_db_path(chain, db_path), timeout=10.0)
+    try:
+        has_tbl = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        if not has_tbl:
+            return []
+        rows = conn.execute(
+            f"SELECT {hash_col} FROM {table} ORDER BY {order_col} ASC"
+        ).fetchall()
+        return [str(r[0] or "") for r in rows]
+    finally:
+        conn.close()
+
+
+def get_secondary_chain_head(chain: str, db_path: Optional[str] = None) -> Dict[str, Any]:
+    hashes = _secondary_chain_hashes(chain, db_path=db_path)
+    return {"chain": chain, "head": hashes[-1] if hashes else "", "count": len(hashes)}
+
+
+def anchor_secondary_chains(db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Wird aus dem 30-s-Loop aufgerufen: verankert alle sechs Nebenketten-Heads."""
+    result: Dict[str, Any] = {}
+    for chain in SECONDARY_CHAIN_HEADS:
+        try:
+            head_info = get_secondary_chain_head(chain, db_path=db_path)
+            result[chain] = record_chain_anchor(chain, head_info["head"], head_info["count"])
+        except Exception as exc:
+            # Audit-Schreibfehler niemals verschlucken (d05 F-05).
+            logger.error("[Audit] Head-Anker %s fehlgeschlagen: %s", chain, exc)
+            result[chain] = {"chain": chain, "written": False, "error": type(exc).__name__}
+    return result
+
+
+def finalize_secondary_chain_verification(
+    chain: str,
+    result: Dict[str, Any],
+    *,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Ergänzt ein verify-Result um Head-Anker- und Trigger-Pruefung (fail-closed in Produktion)."""
+    if not isinstance(result, dict):
+        return result
+    # Receipt-Ledger liefert `chain_valid` statt `valid` — auf einen gemeinsamen
+    # Schluessel normalisieren und am Ende beide zurueckschreiben.
+    if "valid" not in result and "chain_valid" in result:
+        result["valid"] = bool(result["chain_valid"])
+    hashes = _secondary_chain_hashes(chain, db_path=db_path)
+    count = len(hashes)
+    head = hashes[-1] if hashes else ""
+
+    anchors = get_chain_anchors(chain, limit=1)
+    anchor_verified: Optional[bool] = None
+    anchor_reason: Optional[str] = None
+    if anchors:
+        stored = anchors[0]
+        stored_count = int(stored["count"])
+        stored_head = str(stored["head"])
+        if stored_count > count:
+            anchor_verified = False
+            anchor_reason = (
+                f"Head-Anker von {chain} meldet {stored_count} Bloecke, Kette hat aber nur "
+                f"{count} — Tail-Loeschung."
+            )
+        elif stored_count > 0 and hashes[stored_count - 1] != stored_head:
+            anchor_verified = False
+            anchor_reason = (
+                f"Head-Anker von {chain} stimmt nicht mit Block {stored_count} der Kette "
+                "ueberein — Rollback oder nachtraegliche Neu-Signatur."
+            )
+        else:
+            anchor_verified = True
+
+    # Append-only-Trigger muessen physisch existieren (sqlite_master).
+    triggers_intact: Optional[bool] = None
+    missing: List[str] = []
+    try:
+        conn = sqlite3.connect(_secondary_db_path(chain, db_path), timeout=10.0)
+        try:
+            spec = SECONDARY_CHAIN_HEADS.get(chain)
+            table_exists = bool(conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (spec[0],)
+            ).fetchone()) if spec else False
+            existing = {
+                str(tr[0]) for tr in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='trigger'"
+                ).fetchall()
+            }
+        finally:
+            conn.close()
+        if table_exists:
+            missing = [t for t in SECONDARY_CHAIN_TRIGGERS.get(chain, ()) if t not in existing]
+            triggers_intact = not missing
+        else:
+            # Tabelle (noch) nicht vorhanden: kein Trigger-Check moeglich, aber
+            # auch kein Manipulationsrisiko. Prod-Anker-Regel greift weiterhin.
+            triggers_intact = None
+    except Exception as exc:
+        logger.error("[Audit] Trigger-Pruefung %s fehlgeschlagen (fail-closed): %s", chain, exc)
+        triggers_intact = False
+        missing = ["<unlesbar>"]
+
+    result["count"] = count
+    result["latest_hash"] = head
+    result["anchor_verified"] = anchor_verified
+    result["triggers_intact"] = triggers_intact
+    result["missing_triggers"] = missing
+    if result.get("valid") is True:
+        if triggers_intact is False:
+            result["valid"] = False
+            result["reason"] = f"Append-only-Trigger fehlen bei {chain}: {missing}"
+        elif anchor_verified is False:
+            result["valid"] = False
+            result["reason"] = anchor_reason or f"Head-Anker von {chain} weicht ab."
+        elif _is_production() and count > 0 and anchor_verified is not True:
+            result["valid"] = False
+            result["reason"] = f"Kein verifizierbarer Head-Anker fuer {chain} in Produktion."
+    if "chain_valid" in result:
+        result["chain_valid"] = result["valid"]
+    return result
 
 
 # Singleton Instanz

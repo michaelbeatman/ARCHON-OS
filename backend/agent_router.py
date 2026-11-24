@@ -40,6 +40,59 @@ class BudgetExceededError(RuntimeError):
     """Wird geworfen, wenn das Tagesbudget zu 100% ausgeschöpft ist und kein Override aktiv ist."""
 
 
+class SilentFailureBlockedError(BudgetExceededError):
+    """Agent E: Flightlog-Flags -> status=blocked, needs_human, kein Erfolg."""
+
+    def __init__(self, run_id: str, flags: List[str]):
+        self.status = "blocked"
+        self.needs_human = True
+        self.failure_reason = "SILENT_FAILURE"
+        self.run_id = run_id
+        self.flags = list(flags or [])
+        super().__init__(
+            f"[SILENT_FAILURE] run={run_id} flags={','.join(self.flags)} — HITL erforderlich"
+        )
+
+
+def _audit_silent_failure(run_id: str, flags: List[str]) -> None:
+    msg = f"SILENT_FAILURE im Agent-Router: run={run_id} flags={','.join(flags)}"
+    logger.error("[AgentRouter] %s", msg)
+    try:
+        from archon.core.mission_control import mc_append_audit_sqlite
+        mc_append_audit_sqlite("agent_router", msg, run_id or "_system")
+    except Exception as exc:
+        logger.debug("[AgentRouter] Silent-Failure-Audit fehlgeschlagen: %s", exc)
+    try:
+        from archon.core.runtime import broadcast_event
+        broadcast_event("hitl_required", {
+            "run_id": run_id, "status": "blocked",
+            "failure_reason": "SILENT_FAILURE", "flags": list(flags or []),
+        })
+    except Exception:
+        pass
+
+
+def _detect_chat_silent_failure(run_id: str, final_output: str) -> List[str]:
+    """Agent E: detect_silent_failures() im Chat-/Stream-Abschluss."""
+    if not run_id:
+        return []
+    try:
+        from backend.flightlog_backtester import detect_silent_failures
+        report = detect_silent_failures(
+            run_id, final_status="success", final_output=str(final_output or "")
+        )
+        flags = [str(x) for x in (report.get("flags") or [])]
+        if flags:
+            _audit_silent_failure(run_id, flags)
+        return flags
+    except Exception as exc:
+        # Fail-closed: Detektor nicht auswertbar -> kein Erfolg quittieren.
+        logger.error("[AgentRouter] Silent-Failure-Detektor nicht verfuegbar: %s", exc)
+        flags = ["detector_unavailable"]
+        _audit_silent_failure(run_id, flags)
+        return flags
+
+
 class RoutePolicy:
     def __init__(self, requires_high_reasoning: bool = False, max_cost_per_1k: float = 1.0, data_residency_local_only: bool = False):
         self.requires_high_reasoning = requires_high_reasoning
@@ -65,9 +118,18 @@ class AgentRouter:
         self._http_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = weakref.WeakKeyDictionary()
 
     def _enforce_token_guard(self, messages: List[Dict], provider: str, model: str, reasoning_level: str) -> tuple:
-        """F-056: gesperrter Einstieg — kein paralleler Cache-Rebuild."""
+        """F-056: gesperrter Einstieg — kein paralleler Cache-Rebuild.
+
+        D13/HIGH: Guard-Ausfall ist fail-closed `blocked`, nie Debug-Log.
+        """
         with self._guard_cache_lock:
-            return self._enforce_token_guard_unlocked(messages, provider, model, reasoning_level)
+            try:
+                return self._enforce_token_guard_unlocked(messages, provider, model, reasoning_level)
+            except BudgetExceededError:
+                raise
+            except Exception as exc:
+                logger.error("[AgentRouter] Token-Guard nicht auswertbar — fail-closed: %s", exc)
+                raise BudgetExceededError(f"[GUARD_UNAVAILABLE]: {exc}") from exc
 
     # --- Token Guard: Verbrauchsmessung -------------------------------------
     # Bewusst NICHT über /api/guardian/stats: dieser Endpunkt blockiert bei
@@ -213,20 +275,66 @@ class AgentRouter:
         except Exception as exc:
             logger.debug(f"[AgentRouter] Circuit-Breaker-Config Fallback auf Defaults: {exc}")
 
+        # D13/HIGH: harte Code-Invarianten — Config darf den Guard nicht
+        # abschalten oder die Schwellen ueber/clampen.
+        def _clamp_int(value: Any, low: int, high: int, default: int) -> int:
+            try:
+                return max(low, min(high, int(value)))
+            except (TypeError, ValueError):
+                return default
+
+        def _clamp_float(value: Any, low: float, high: float, default: float) -> float:
+            try:
+                return max(low, min(high, float(value)))
+            except (TypeError, ValueError):
+                return default
+
+        _disable_requested = not bool(cb_cfg.get("loop_detection_enabled", True))
+        _disable_allowed = os.environ.get("ARCHON_ALLOW_LOOP_DETECTION_OFF", "").strip() == "1"
+        _loop_enabled = True
+        if _disable_requested:
+            if _disable_allowed:
+                _loop_enabled = False
+                logger.error(
+                    "[AgentRouter] LOOP_DETECTION_OFF explizit erlaubt via "
+                    "ARCHON_ALLOW_LOOP_DETECTION_OFF — Audit-Event."
+                )
+                try:
+                    from archon.core.mission_control import mc_append_audit_sqlite
+                    mc_append_audit_sqlite(
+                        "agent_router", "LOOP_DETECTION_OFF via ENV-Override erlaubt",
+                        "_system",
+                    )
+                except Exception:
+                    pass
+            else:
+                logger.error(
+                    "[AgentRouter] loop_detection_enabled=False ohne ARCHON_ALLOW_LOOP_DETECTION_OFF "
+                    "ignoriert — Guard bleibt fail-closed aktiv."
+                )
+
         self._guardian_cache = {
             "ts": now,
             "daily_budget": daily_budget,
             "current_spend": current_spend,
             "spend_ok": spend_ok,
             "max_context_tokens": max_context_tokens,
-            "loop_detection_enabled": bool(cb_cfg.get("loop_detection_enabled", True)),
-            "max_identical_turns": int(cb_cfg.get("max_identical_turns", 3)),
-            "jaccard_similarity_threshold": float(cb_cfg.get("jaccard_similarity_threshold", 0.90)),
-            "max_steps_per_task": int(cb_cfg.get("max_steps_per_task", 15)),
-            "budget_downgrade_threshold_pct": int(cb_cfg.get("budget_downgrade_threshold_pct", 80)),
+            "loop_detection_enabled": _loop_enabled,
+            "max_identical_turns": _clamp_int(cb_cfg.get("max_identical_turns"), 2, 10, 3),
+            "jaccard_similarity_threshold": _clamp_float(
+                cb_cfg.get("jaccard_similarity_threshold"), 0.5, 0.99, 0.90),
+            "max_steps_per_task": _clamp_int(cb_cfg.get("max_steps_per_task"), 5, 30, 15),
+            "budget_downgrade_threshold_pct": _clamp_int(
+                cb_cfg.get("budget_downgrade_threshold_pct"), 50, 95, 80),
             "token_clipper_enabled": bool(cb_cfg.get("token_clipper_enabled", True))
         }
         return self._guardian_cache
+
+    @staticmethod
+    def guard_window_size(policy: Optional[Dict[str, Any]] = None) -> int:
+        """HANDOFF an core_dispatcher.py: Boardroom-Slice >= max_steps+1."""
+        from backend.trajectory_budget import guard_window_size as _gws
+        return _gws(policy or None)
 
     def _compress_conversation_window(self, messages: List[Dict], max_ctx_chars: int) -> List[Dict]:
         """
@@ -707,6 +815,80 @@ class AgentRouter:
             logger.warning(f"[AgentRouter] Output-Policy-Linter fehlgeschlagen: {exc}")
         return text
 
+    async def _reserve_task_budget(
+        self, agent_id: str, task_id: str, messages: List[Dict], model: str,
+        provider: str, max_tokens: int = 4096,
+    ) -> tuple:
+        """D13/HIGH: taskbezogenes Budget-Gate auch im Chat-/Stream-Pfad."""
+        est_in = max(100, sum(
+            max(1, len(str(m.get("content") or "")) // 4) for m in (messages or [])
+        ))
+        est_out = max(64, min(2048, int(max_tokens or 1024) // 2))
+        est_eur = 0.0
+        try:
+            from backend.role_budget_engine import USD_TO_EUR_RATE, budget_bank
+            from backend.llm_kernel import estimate_model_cost_usd
+            est_eur = round(
+                float(estimate_model_cost_usd(model, est_in, est_out, provider=provider))
+                * USD_TO_EUR_RATE, 6,
+            )
+            check = await asyncio.to_thread(
+                budget_bank.reserve,
+                agent_id=agent_id or "default",
+                task_id=task_id or None,
+                estimated_tokens=est_in + est_out,
+                estimated_cost_eur=est_eur,
+                node_id=f"agent-router:{agent_id}",
+            )
+        except Exception as exc:
+            logger.error("[AgentRouter] Budget-Bank nicht verfuegbar — fail-closed: %s", exc)
+            raise BudgetExceededError(f"[BUDGET_GATE_UNAVAILABLE]: {exc}") from exc
+        if not check.get("allowed", False):
+            raise BudgetExceededError(
+                f"[TASK_BUDGET]: {check.get('error_code') or check.get('reason') or 'blocked'}"
+            )
+        # Trajectory-Hop zhlen, wenn der Aufrufer eine echte trajectory_id liefert.
+        if str(task_id or "").startswith("traj-"):
+            try:
+                from backend.trajectory_budget import reserve_hop
+                hop = await asyncio.to_thread(
+                    reserve_hop, task_id, agent_id or "default", "llm_call"
+                )
+                if not hop.get("allowed", False):
+                    await asyncio.to_thread(
+                        budget_bank.release, check.get("reservation_id"), "trajectory_hop_blocked"
+                    )
+                    raise BudgetExceededError(f"[{hop.get('reason')}]: Trajectory-Cap erreicht")
+            except BudgetExceededError:
+                raise
+            except Exception as exc:
+                logger.error("[AgentRouter] Trajectory-Hop nicht reservierbar — fail-closed: %s", exc)
+                raise BudgetExceededError(f"[TRAJECTORY_GATE_UNAVAILABLE]: {exc}") from exc
+        return str(check.get("reservation_id") or ""), est_in + est_out, est_eur
+
+    async def _settle_task_budget(
+        self, reservation_id: str, tokens: int, eur: float,
+    ) -> None:
+        if not reservation_id:
+            return
+        try:
+            from backend.role_budget_engine import budget_bank
+            await asyncio.to_thread(
+                budget_bank.settle, reservation_id,
+                actual_tokens=int(tokens or 0), cost_eur=float(eur or 0.0),
+            )
+        except Exception as exc:
+            logger.warning("[AgentRouter] Budget-Settle fehlgeschlagen: %s", exc)
+
+    async def _release_task_budget(self, reservation_id: str) -> None:
+        if not reservation_id:
+            return
+        try:
+            from backend.role_budget_engine import budget_bank
+            await asyncio.to_thread(budget_bank.release, reservation_id, "agent_router_final")
+        except Exception as exc:
+            logger.warning("[AgentRouter] Budget-Release fehlgeschlagen: %s", exc)
+
     async def chat_completion(
         self,
         messages: List[Dict],
@@ -718,6 +900,40 @@ class AgentRouter:
         agent_id: str = "master_chat",
         role: str = "",
         category: str = "",
+        task_id: str = "",
+    ) -> str:
+        """D13: Budget-Gate + Flightlog-Guard + finally-release."""
+        tid = str(task_id or f"agent-router:{agent_id}")
+        reservation, tokens, eur = await self._reserve_task_budget(
+            agent_id, tid, messages, model, provider, max_tokens
+        )
+        try:
+            text = await self._chat_completion_unreserved(
+                messages, provider, model, api_keys,
+                max_tokens=max_tokens, reasoning_level=reasoning_level,
+                agent_id=agent_id, role=role, category=category,
+                flightlog_run_id=tid,
+            )
+            flags = _detect_chat_silent_failure(tid, text)
+            if flags:
+                raise SilentFailureBlockedError(tid, flags)
+            await self._settle_task_budget(reservation, tokens, eur)
+            return text
+        finally:
+            await self._release_task_budget(reservation)
+
+    async def _chat_completion_unreserved(
+        self,
+        messages: List[Dict],
+        provider: str,
+        model: str,
+        api_keys: Dict[str, str],
+        max_tokens: int = 4096,
+        reasoning_level: str = "medium",
+        agent_id: str = "master_chat",
+        role: str = "",
+        category: str = "",
+        flightlog_run_id: str = "",
     ) -> str:
         """
         Synchronous-style asynchronous chat completion via the HAL with Token Guard,
@@ -784,7 +1000,7 @@ class AgentRouter:
                         or ep_zone == "LOCAL_ON_PREM"
                         or (eff_provider or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
                     )
-                    hop_sid = f"router-{agent_id}-{uuid.uuid4().hex[:8]}"
+                    hop_sid = str(flightlog_run_id or f"router-{agent_id}-{uuid.uuid4().hex[:8]}")
                     safe_payload = sanitize_outbound_llm_payload(
                         client_payload,
                         agent_id=agent_id,
@@ -904,6 +1120,45 @@ class AgentRouter:
         agent_id: str = "master_chat",
         role: str = "",
         category: str = "",
+        task_id: str = "",
+    ) -> AsyncGenerator[str, None]:
+        """D13: Budget-Gate + Flightlog-Guard + finally-release (Stream)."""
+        tid = str(task_id or f"agent-router:{agent_id}")
+        try:
+            reservation, tokens, eur = await self._reserve_task_budget(
+                agent_id, tid, messages, model, provider, 4096
+            )
+        except BudgetExceededError as budget_err:
+            yield f"ERROR: [Task Budget] {budget_err}"
+            return
+        stream_buf: List[str] = []
+        try:
+            async for piece in self._stream_chat_completion_unreserved(
+                messages, provider, model, api_keys,
+                reasoning_level=reasoning_level, agent_id=agent_id,
+                role=role, category=category, flightlog_run_id=tid,
+            ):
+                stream_buf.append(piece)
+                yield piece
+            flags = _detect_chat_silent_failure(tid, "".join(stream_buf))
+            if flags:
+                yield f"ERROR: [SILENT_FAILURE] status=blocked needs_human=true flags={','.join(flags)}"
+                return
+            await self._settle_task_budget(reservation, tokens, eur)
+        finally:
+            await self._release_task_budget(reservation)
+
+    async def _stream_chat_completion_unreserved(
+        self,
+        messages: List[Dict],
+        provider: str,
+        model: str,
+        api_keys: Dict[str, str],
+        reasoning_level: str = "medium",
+        agent_id: str = "master_chat",
+        role: str = "",
+        category: str = "",
+        flightlog_run_id: str = "",
     ) -> AsyncGenerator[str, None]:
         """
         Stream chat completion via the HAL with Token Guard,
@@ -977,7 +1232,7 @@ class AgentRouter:
                     or ep_zone == "LOCAL_ON_PREM"
                     or (eff_provider or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
                 )
-                hop_sid = f"router-stream-{agent_id}-{uuid.uuid4().hex[:8]}"
+                hop_sid = str(flightlog_run_id or f"router-stream-{agent_id}-{uuid.uuid4().hex[:8]}")
                 safe_payload = sanitize_outbound_llm_payload(
                     client_payload,
                     agent_id=agent_id,

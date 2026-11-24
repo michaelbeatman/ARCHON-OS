@@ -94,13 +94,46 @@
     - "{{ archon_install_root }}/static"
   ignore_errors: yes
 
+- name: Warn when production DR target is still local (Audit D10)
+  debug:
+    msg: >-
+      ARCHON_LITESTREAM_REPLICA_DIR ist nicht gesetzt: das Replikat liegt auf
+      demselben Host wie die Primaer-DB. RTO-Ziel <= 30 min ist so nicht
+      erreichbar. Bitte archon_litestream_replica_dir auf ein externes
+      Volume/NAS setzen und scripts/automated_restore_test.py periodisch
+      ausfuehren.
+  when:
+    - archon_observability == "full"
+    - archon_litestream_replica_dir | default('') | length == 0
+
 - name: Launch Docker Compose stack
   command:
     cmd: "docker compose -f {{ archon_compose_file }} up -d --build --remove-orphans"
     chdir: "{{ archon_install_root }}"
+  environment:
+    # Audit D10: Profile muessen im Produktiv-Deploy aktiviert werden —
+    # ohne COMPOSE_PROFILES bleiben Prometheus/Alertmanager/Grafana/Loki/
+    # Promtail/Litestream/OTel trotz "full" aus (kein Adressat fuer Alarme).
+    COMPOSE_PROFILES: "{{ 'monitoring,logging,replication,tracing' if archon_observability == 'full' else '' }}"
+    ARCHON_OBSERVABILITY: "{{ archon_observability }}"
+    # Audit D10/DR: nur der vom Betreiber gesetzte Pfad wird weitergereicht;
+    # leer laesst Compose seinen (lokalen) Default.
+    ARCHON_LITESTREAM_REPLICA_DIR: "{{ archon_litestream_replica_dir | default('') }}"
   become_user: "{{ archon_user_name }}"
   register: docker_compose_output
   changed_when: "'Started' in docker_compose_output.stdout or 'Created' in docker_compose_output.stdout"
+
+- name: Verify Observability services incl. alertmanager are up (Audit D10)
+  command:
+    cmd: "docker compose -f {{ archon_compose_file }} ps --status running --services"
+    chdir: "{{ archon_install_root }}"
+  become_user: "{{ archon_user_name }}"
+  register: running_observability_services
+  changed_when: false
+  # alertmanager traegt den monitoring-Profile und muss bei "full" laufen;
+  # Prometheus haengt ohne ihn advisenlos in der Luft (D10 F-073).
+  failed_when: "'alertmanager' not in running_observability_services.stdout_lines"
+  when: archon_observability == "full"
 
 - name: Verify Mission Control readiness (dependency probes)
   uri:

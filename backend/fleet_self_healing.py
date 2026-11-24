@@ -39,7 +39,6 @@ _EXTRA_ALLOWLIST_ENV = "ARCHON_FLEET_EXTRA_CONTAINERS"
 # --- E/F: Dead-Man-Switch + Selbst-Check des Hauptprozesses ---------------
 _HEARTBEAT_WEBHOOK_LAST_TS = 0.0
 _HEARTBEAT_WEBHOOK_MIN_INTERVAL = 120.0
-_ALERTMANAGER_LAST_TS = 0.0
 _SELF_HEARTBEAT_MAX_AGE = 300.0
 
 
@@ -117,58 +116,6 @@ def _post_heartbeat_webhook(status: str, *, force: bool = False, **extra: Any) -
     return True
 
 
-def _get_alertmanager_url() -> str:
-    """Audit D10/E2E: Alertmanager-v2-Endpunkt (existierender Telegram-Receiver)."""
-    return (os.environ.get("ARCHON_HEARTBEAT_ALERTMANAGER_URL") or "").strip()
-
-
-def _post_alertmanager_heartbeat(status: str, *, force: bool = False, **extra: Any) -> bool:
-    """Dead-Man-Switch ueber Alertmanager.
-
-    Jeder Ping erzeugt einen Alert mit ``endsAt`` in der Zukunft. Bleiben die
-    Pings aus, laeuft der Alert automatisch ab bzw. feuert — genau das ist die
-    gewuenschte Dead-Man-Switch-Semantik. Status ``stale`` wird sofort gemeldet.
-    """
-    url = _get_alertmanager_url()
-    if not url:
-        return False
-    global _ALERTMANAGER_LAST_TS
-    now_ts = time.time()
-    if not force and (now_ts - _ALERTMANAGER_LAST_TS) < _HEARTBEAT_WEBHOOK_MIN_INTERVAL:
-        return False
-
-    now = datetime.datetime.now(datetime.timezone.utc)
-    ttl_s = max(60.0, float(os.environ.get("ARCHON_HEARTBEAT_ALERT_TTL_S", "180")))
-    ends = now + datetime.timedelta(seconds=ttl_s)
-    alert = {
-        "labels": {
-            "alertname": "ArchonHeartbeat",
-            "service": "archon-os",
-            "severity": "critical" if status == "stale" else "info",
-            "status": status,
-        },
-        "annotations": {
-            "summary": f"Archon OS heartbeat: {status}",
-            "description": json.dumps(extra, ensure_ascii=False, default=str)[:500],
-        },
-        "startsAt": now.isoformat(),
-        "endsAt": ends.isoformat(),
-    }
-    body = json.dumps([alert], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    try:
-        from utils.safe_http import safe_http_request
-
-        safe_http_request(
-            url, method="POST", headers={"Content-Type": "application/json"},
-            data=body, timeout=5.0,
-        )
-    except Exception as exc:
-        logger.warning("[DeadManSwitch] Alertmanager-Heartbeat nicht erreichbar: %s", type(exc).__name__)
-        return False
-    _ALERTMANAGER_LAST_TS = now_ts
-    return True
-
-
 def _check_main_process_heartbeat() -> Dict[str, Any]:
     """F: die 5 Aliasse healden die archon-os selbst nie — jetzt mit Selbst-Check."""
     try:
@@ -189,16 +136,13 @@ def _check_main_process_heartbeat() -> Dict[str, Any]:
             active=True, title="Archon-Hauptprozess stale",
         )
         sent = _post_heartbeat_webhook("stale", force=True, heartbeat_age_seconds=age)
-        alert_sent = _post_alertmanager_heartbeat("stale", force=True, heartbeat_age_seconds=age)
     else:
         report_external_alert("main_process_stale", "CRITICAL", "archon-os", "", active=False)
         sent = False
-        alert_sent = False
     return {
         "status": "stale" if stale else "ok",
         "age_seconds": age,
         "webhook_sent": sent,
-        "alertmanager_sent": alert_sent,
     }
 
 
@@ -359,25 +303,29 @@ def check_fleet_and_heal(services: Optional[List[str]] = None) -> Dict[str, Any]
 
         # F: Selbst-Check + E: Dead-Man-Switch. Der 120-s-Loop in main.py
         # ruft diese Funktion; der Webhook wird zusaetzlich auf 120 s gedrosselt.
+        # Audit D10: der echte Dead-Man-Switch ist die Prometheus-Metrik
+        # `archon_heartbeat_timestamp_seconds` (metrics_collector.py, Agent I)
+        # mit der Regel time() - ... > 300 -> critical. Die alten expiring
+        # Alertmanager-POSTs sind entfernt: sie erzeugten bei Ausfall ein
+        # "resolved/info" statt eines "firing/critical" (semantisch invertiert).
         self_heartbeat = _check_main_process_heartbeat()
         webhook_sent = (
             bool(self_heartbeat.get("webhook_sent"))
             if self_heartbeat.get("status") == "stale"
             else _post_heartbeat_webhook("ok")
         )
-        alertmanager_sent = (
-            bool(self_heartbeat.get("alertmanager_sent"))
-            if self_heartbeat.get("status") == "stale"
-            else _post_alertmanager_heartbeat("ok")
-        )
 
-        # Audit D10/E2E: beide Empfangswege zaehlen als konfigurierter Dead-Man-Switch.
-        dead_man_configured = bool(_get_heartbeat_webhook_url() or _get_alertmanager_url())
+        # Audit D10: "konfiguriert" NUR bei einem echten, erreichbaren
+        # Empfaenger. Der Compose-Default `ARCHON_HEARTBEAT_ALERTMANAGER_URL`
+        # zaehlt nicht mehr — er war immer gesetzt, auch ohne Container.
+        dead_man_configured = bool(_get_heartbeat_webhook_url()) and (
+            bool(webhook_sent) or _HEARTBEAT_WEBHOOK_LAST_TS > 0
+        )
         if not dead_man_configured:
             logger.warning(
-                "[DeadManSwitch] Kein externer Empfaenger konfiguriert "
-                "(ARCHON_HEARTBEAT_WEBHOOK_URL, ARCHON_HEARTBEAT_ALERTMANAGER_URL "
-                "oder evey-status.json). 24/7-Alerting ist damit nicht aktiv."
+                "[DeadManSwitch] Kein erreichbarer externer Empfaenger konfiguriert "
+                "(ARCHON_HEARTBEAT_WEBHOOK_URL oder evey-status.json). Der "
+                "Prometheus-Heartbeat läuft weiter, aber ohne Alert-Route."
             )
         return {
             "status": "ok",
@@ -390,7 +338,6 @@ def check_fleet_and_heal(services: Optional[List[str]] = None) -> Dict[str, Any]
             "healed_services": healed,
             "self_heartbeat": self_heartbeat,
             "heartbeat_webhook_sent": webhook_sent,
-            "alertmanager_sent": alertmanager_sent,
         }
     except Exception as e:
         return {"status": "error", "error": str(e), "healed_count": 0}

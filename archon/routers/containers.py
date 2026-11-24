@@ -496,6 +496,10 @@ async def inject_container_config(request: Request, container_name: str, config:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(config_url, json=payload)
+            # D12/HIGH: ein HTTP-500-Body ist kein Erfolg — vor dem Parsen
+            # pruefen, sonst wird der Fehlerbody als `status: success`
+            # zurueckgegeben.
+            resp.raise_for_status()
             try:
                 resp_data = resp.json()
             except Exception:
@@ -508,8 +512,12 @@ async def inject_container_config(request: Request, container_name: str, config:
     except Exception as e:
         # Audit 23.11.2026: Fehler duerfen nicht mit HTTP 200 zurueckgehen.
         # Body-Shape bleibt unverändert (Kompatibilitaetsregel der Roadmap).
-        return JSONResponse(status_code=502, content={
+        content: Dict[str, Any] = {
             "status": "error",
             "target_url": config_url,
-            "message": f"Could not inject config to {config_url}: {e}"
-        })
+            "message": f"Could not inject config to {config_url}: {e}",
+        }
+        upstream_status = getattr(getattr(e, "response", None), "status_code", None)
+        if upstream_status is not None:
+            content["http_status"] = upstream_status
+        return JSONResponse(status_code=502, content=content)

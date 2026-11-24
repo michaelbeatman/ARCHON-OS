@@ -335,15 +335,31 @@ async def move_mission_control_task(req: TaskMoveRequest):
             if req.result_summary:
                 task["result_summary"] = req.result_summary
             elif not task.get("result_summary"):
-                task["result_summary"] = f"Erfolgreich von {task['agent_name']} abgeschlossen. Alle Kriterien erfüllt."
+                # D12/HIGH: keine Erfolgsbehauptung erfinden. Ohne
+                # Ergebnisnachweis wird der Task als unverified markiert und
+                # braucht eine echte HITL-Freigabe.
+                task["status"] = "completed_unverified"
+                task["verification_required"] = True
+                task["hitl_required"] = True
+                # `failure_reason` ist ein persistierter Extended-Key und
+                # ueberlebt den SQLite-Reload (im Gegensatz zu neuen Feldern).
+                task["failure_reason"] = "completed_unverified: kein Ergebnisnachweis"
+                plan["unverified_completion"] = True
+                plan["ticker"] = ("HITL", f"Task #{task['id']} ohne Ergebnisnachweis — Freigabe erforderlich")
+                data.setdefault("audit_logs", []).insert(0, {
+                    "time": time.strftime("%H:%M:%S"),
+                    "source": "HITL",
+                    "msg": f"Task #{task['id']} ohne result_summary: completed_unverified",
+                })
 
             # N-10: sync_obsidian darf nicht unter _MC_DATA_LOCK ausgefuehrt werden (I/O-Blockade).
             # Plan markieren und Ausfuehrung in Phase 2 ausserhalb des Locks verlagern.
-            plan["needs_sync_obsidian"] = True
+            plan["needs_sync_obsidian"] = not plan.get("unverified_completion")
 
             # FAN-IN (12.10.2026): Diese Task IST Lisas Entwurf-Freigabe
             # (synthesis_draft_path) -> beim Approved-Move finalisieren.
-            if task.get("synthesis_draft_path") and not task.get("synthesis_finalized"):
+            if (task.get("synthesis_draft_path") and not task.get("synthesis_finalized")
+                    and not plan.get("unverified_completion")):
                 parent_pid_fin = task.get("parent_project_id") or req.task_id
                 # Nur vorab markieren, wenn Gate-Task != Parent-Projekt; bei Selbst-Referenz
                 # markiert Phase 2 nach _finalize_synthesis_after_approval, sonst Short-Circuit.
@@ -426,10 +442,14 @@ async def move_mission_control_task(req: TaskMoveRequest):
         _spawn_tracked(_DEPS["fan_in"](plan["fan_in"]), name=f"mc_fan_in:{plan['fan_in']}")
 
     _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
-    broadcast_event("kanban_updated", {"action": "move", "task_id": req.task_id, "status": req.target_status})
+    broadcast_event("kanban_updated", {
+        "action": "move", "task_id": req.task_id, "status": task.get("status", req.target_status)
+    })
 
     if plan.get("dismissed"):
         return {"status": "ok", "message": "Task verworfen."}
+    if plan.get("unverified_completion"):
+        return {"status": "completed_unverified", "hitl_required": True, "task": task}
     return {"status": "ok", "task": task}
 
 

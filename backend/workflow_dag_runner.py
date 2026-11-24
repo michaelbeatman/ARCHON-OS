@@ -33,13 +33,24 @@ from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional, Tup
 
 logger = logging.getLogger("archon.workflow_dag")
 
+# Agent I (Tracing): zentrale Fehler-Zaehlung statt stiller logger.debug().
+try:
+    from backend.trace_context import note_local_trace_error
+except (ImportError, AttributeError):  # Fallback, bis trace_context ausgerollt ist
+    def note_local_trace_error(msg: str, exc: BaseException) -> None:
+        try:
+            from backend.otel_tracer import tracer
+            tracer.note_local_trace_error(msg, exc)
+        except Exception:
+            logger.warning("[WorkflowDAG] OTel-Fehler %s: %s", msg, exc)
+
 
 async def _otel_start(name: str, run_id: str) -> Optional[str]:
     try:
         from backend.otel_tracer import tracer
         return await asyncio.to_thread(tracer.start_trace, name, run_id, "workflow_engine")
     except Exception as exc:
-        logger.debug("[WorkflowDAG] OTel-Trace-Start fehlgeschlagen: %s", exc)
+        note_local_trace_error("OTel-Trace-Start fehlgeschlagen", exc)
         return None
 
 
@@ -48,7 +59,7 @@ async def _otel_span(trace_id: str, **kwargs: Any) -> None:
         from backend.otel_tracer import tracer
         await asyncio.to_thread(tracer.record_span, trace_id, **kwargs)
     except Exception as exc:
-        logger.debug("[WorkflowDAG] OTel-Span fehlgeschlagen: %s", exc)
+        note_local_trace_error("OTel-Span fehlgeschlagen", exc)
 
 
 async def _otel_end(trace_id: str, status: str) -> None:
@@ -56,7 +67,7 @@ async def _otel_end(trace_id: str, status: str) -> None:
         from backend.otel_tracer import tracer
         await asyncio.to_thread(tracer.end_trace, trace_id, status)
     except Exception as exc:
-        logger.debug("[WorkflowDAG] OTel-Trace-Ende fehlgeschlagen: %s", exc)
+        note_local_trace_error("OTel-Trace-Ende fehlgeschlagen", exc)
 
 
 # M110: harter Deckel für Replans — ein Agent darf nicht unbegrenzt neu
@@ -186,6 +197,7 @@ def validate_dag_def(
     *,
     now: Optional[float] = None,
     max_nodes: int = 100,
+    require_cap: bool = True,
 ) -> Dict[str, Any]:
     """M110 Pre-Execution Plan Validator.
 
@@ -247,16 +259,25 @@ def validate_dag_def(
             if ref not in deps.get(nid, set()):
                 errors.append(f"Node '{nid}' referenziert '{ref}', das keine deklarierte Abhängigkeit ist.")
 
-    # Budget: Summe der Node-Caps gegen den Run-Cap.
+    # D13/HIGH: harte Cash-Obergrenze, keine 15 % Toleranz. Fehlender Run-Cap
+    # ist `valid=False` (kein stilles Ueberspringen der Budgetpruefung).
     cap = dag_def.get("max_budget_eur")
-    if cap is not None:
+    if cap is None:
+        if require_cap:
+            errors.append("max_budget_eur fehlt — Run-Cap ist Pflicht (fail-closed).")
+    else:
         try:
+            run_cap = float(cap)
+            if run_cap <= 0.0:
+                errors.append("max_budget_eur muss > 0 sein.")
             total = sum(
                 float(n.get("max_budget_eur") or 0.0)
                 for n in node_map.values()
             )
-            if total > float(cap) * 1.15:
-                errors.append(f"Node-Budgets ({total:.2f} EUR) überschreiten Run-Cap ({float(cap):.2f} EUR).")
+            if total > run_cap + 1e-6:
+                errors.append(
+                    f"Node-Budgets ({total:.2f} EUR) überschreiten Run-Cap ({run_cap:.2f} EUR)."
+                )
         except (TypeError, ValueError):
             errors.append("Ungültiger max_budget_eur-Wert.")
 
@@ -294,27 +315,62 @@ def request_dag_replan(
     new_dag_def: Dict[str, Any],
     reason: str,
     db_path: Optional[str] = None,
+    trajectory_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Kontrollierter Replan-Pfad — nur bis MAX_REPLAN_COUNT."""
+    """Kontrollierter Replan-Pfad — Cap pro TRAJECTORY, nicht pro run_id.
+
+    D13/HIGH: jeder Replan geht durch `trajectory_budget.reserve_replan()`;
+    ein neuer run_id erbt den Zaehler ueber-root_ticket_id. Replan #3 liefert
+    `replan_cap_reached` + `blocked` + Audit-Event.
+    """
     existing = get_workflow_run(run_id, db_path=db_path)
     if not existing:
         return {"allowed": False, "reason": "run_not_found"}
-    count = int((existing.get("dag") or {}).get("_replan_count") or 0)
-    if count >= MAX_REPLAN_COUNT:
-        return {"allowed": False, "reason": "replan_cap_reached", "replan_count": count}
-    candidate = dict(new_dag_def or {})
-    candidate["_replan_count"] = count + 1
+    from backend.trajectory_budget import (
+        normalize_trajectory_id, reserve_replan,
+    )
+    old_dag = existing.get("dag") or {}
+    tid = normalize_trajectory_id(
+        trajectory_id or old_dag.get("trajectory_id"),
+        old_dag.get("root_ticket_id") or run_id,
+    )
+    reservation = reserve_replan(
+        tid, run_id=run_id, dag_def=old_dag, reason=reason, db_path=db_path,
+    )
+    if not reservation.get("allowed", False):
+        with _connect(db_path) as conn:
+            conn.execute(
+                "UPDATE workflow_runs SET status = 'blocked', updated_at = ? WHERE run_id = ?",
+                (time.time(), run_id),
+            )
+            conn.commit()
+        try:
+            from backend.trajectory_budget import _audit
+            _audit(tid, f"replan_cap_reached via {run_id}: {reason[:120]}", run_id)
+        except Exception:
+            logger.error("[WorkflowDAG] replan_cap_reached Audit fehlgeschlagen für %s", run_id)
+        return {
+            "allowed": False, "reason": "replan_cap_reached",
+            "replan_count": int(reservation.get("replan_count") or MAX_REPLAN_COUNT),
+            "status": "blocked", "needs_human": True, "trajectory_id": tid,
+        }
+    candidate = dict(new_dag_def or old_dag or {})
+    candidate["_replan_count"] = int(reservation["replan_count"])
     candidate["_replan_reason"] = str(reason or "")[:500]
+    candidate["trajectory_id"] = tid
+    candidate.setdefault("root_ticket_id", old_dag.get("root_ticket_id") or run_id)
     validation = validate_dag_def(candidate)
     if not validation["valid"]:
-        return {"allowed": False, "reason": "invalid_plan", "errors": validation["errors"]}
+        return {"allowed": False, "reason": "invalid_plan",
+                "errors": validation["errors"], "trajectory_id": tid}
     with _connect(db_path) as conn:
         conn.execute(
             "UPDATE workflow_runs SET dag_json = ?, updated_at = ? WHERE run_id = ?",
             (json.dumps(candidate, ensure_ascii=False), time.time(), run_id),
         )
         conn.commit()
-    return {"allowed": True, "replan_count": count + 1, "dag_def": candidate}
+    return {"allowed": True, "replan_count": int(reservation["replan_count"]),
+            "dag_def": candidate, "trajectory_id": tid}
 
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -697,6 +753,63 @@ async def _execute_research_dag_node(node: Dict[str, Any], upstream: Dict[str, A
     }
 
 
+def _node_budget_ok(node: Dict[str, Any], res: Dict[str, Any], model: str, phase: str) -> bool:
+    """D13/MED: kumulierter Node-Verbrauch vor JEDEM Folge-Dispatch pruefen."""
+    used = max(0, int(res.get("input_tokens") or 0) + int(res.get("output_tokens") or 0))
+    tok_cap = int(float(node.get("token_budget") or 0))
+    if tok_cap > 0 and used > tok_cap:
+        logger.error("[WorkflowDAG] Node-Budget %s: %s/%s Tokens (%s)", phase, used, tok_cap, node.get("id"))
+        return False
+    cap = node.get("max_budget_eur") or node.get("_dag_max_budget_eur")
+    if cap:
+        try:
+            from backend.llm_kernel import estimate_model_cost_usd
+            from backend.role_budget_engine import USD_TO_EUR_RATE
+            cost_eur = float(estimate_model_cost_usd(
+                model or "deepseek/deepseek-chat",
+                max(0, int(res.get("input_tokens") or 0)),
+                max(0, int(res.get("output_tokens") or 0)),
+            )) * USD_TO_EUR_RATE
+            if cost_eur > float(cap) + 1e-6:
+                logger.error("[WorkflowDAG] Node-EUR-Cap %s: %.4f/%.4f (%s)", phase, cost_eur, float(cap), node.get("id"))
+                return False
+        except Exception:
+            return False
+    tid = str(node.get("_trajectory_id") or "")
+    if tid.startswith("traj-"):
+        try:
+            from backend.trajectory_budget import get_trajectory
+            row = get_trajectory(tid)
+            if row and str(row.get("state") or "") == "blocked":
+                return False
+            if row and used + int(row.get("tokens_used") or 0) > int(row.get("max_tokens") or 0):
+                return False
+        except Exception:
+            return False
+    return True
+
+
+def _blocked_node_result(node: Dict[str, Any], reason: str) -> Dict[str, Any]:
+    return {
+        "status": "error", "error": reason, "block_kind": "node_budget",
+        "needs_human": True, "failure_reason": reason,
+        "node_id": node.get("id"),
+        "agent_id": str(node.get("agent_id") or ""),
+        "content": "", "cost_usd": 0.0,
+    }
+
+
+async def _dispatch_with_node_budget(
+    node: Dict[str, Any], res: Dict[str, Any], base_model: str, **kwargs: Any
+) -> tuple:
+    phase = str(kwargs.pop("_phase", "dispatch"))
+    if not _node_budget_ok(node, res, str(kwargs.get("model") or base_model), phase):
+        return _blocked_node_result(node, "NODE_TOKEN_BUDGET_EXCEEDED"), True
+    import core_dispatcher
+    out = await core_dispatcher.dispatch_to_omniroute_or_container(**kwargs)
+    return out, False
+
+
 async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, Any]) -> Dict[str, Any]:
     """Echter Standard-Executor fuer DAG-Knoten: loest Agenten-Profil auf, reicht
     Upstream-Outputs weiter, ruft core_dispatcher auf und synchronisiert Kanban."""
@@ -901,7 +1014,8 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         event_payload={"node_id": node.get("id"), "agent_id": agent_id, "model": model},
     )
 
-    res = await core_dispatcher.dispatch_to_omniroute_or_container(
+    res, _dispatch_blocked = await _dispatch_with_node_budget(
+        node, {"input_tokens": 0, "output_tokens": 0}, model,
         agent_id=agent_id,
         agent_name=agent_name,
         prompt=full_prompt,
@@ -910,7 +1024,15 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         model=model,
         reasoning_level=reasoning_level,
         task_id=str(kanban_task_id or node.get("id") or ""),
+        _phase="initial_dispatch",
     )
+    if _dispatch_blocked:
+        await asyncio.to_thread(
+            _update_kanban_task_status, kanban_task_id, "blocked",
+            result=str(res.get("error")), block_kind="node_budget",
+            event_kind="workflow_node_failed",
+        )
+        return res
 
     status_raw = str(res.get("status") or "success").lower()
     content = str(res.get("content") or "").strip()
@@ -936,7 +1058,21 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                 break
             _tname = str(_tc.get("name") or "").strip()
             _targs = _tc.get("args") if isinstance(_tc.get("args"), dict) else {}
-            if _tname not in allowed_tool_set:
+            _tid_node = str(node.get("_trajectory_id") or "")
+            _hop_ok = True
+            if _tid_node.startswith("traj-"):
+                try:
+                    from backend.trajectory_budget import reserve_hop
+                    _hop = await asyncio.to_thread(
+                        reserve_hop, _tid_node, str(node.get("agent_id") or agent_id),
+                        f"tool:{_tname}",
+                    )
+                    _hop_ok = bool(_hop.get("allowed", False))
+                except Exception:
+                    _hop_ok = False
+            if not _hop_ok:
+                _tres = {"status": "blocked", "error": "TRAJECTORY_HOP_CAP (tool call)"}
+            elif _tname not in allowed_tool_set:
                 _tres = {"status": "blocked", "error": f"Tool '{_tname}' ist in diesem DAG-Node nicht unter allowed_tools freigegeben."}
             else:
                 from backend.tool_runtime import execute_agent_tool
@@ -975,7 +1111,8 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                 f"Ergebnis:\n{json.dumps(_tres, ensure_ascii=False)[:3500]}\n\n"
                 "Nutze dieses Ergebnis. Wenn kein weiterer Tool-Aufruf noetig ist, liefere jetzt deine finale Antwort ohne tool_call-Wrapper."
             )
-            _next_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+            _next_res, _next_blocked = await _dispatch_with_node_budget(
+                node, res, model,
                 agent_id=agent_id,
                 agent_name=agent_name,
                 prompt=turn_prompt,
@@ -984,7 +1121,12 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                 model=model,
                 reasoning_level=reasoning_level,
                 task_id=str(kanban_task_id or node.get("id") or ""),
+                _phase="tool_loop_followup",
             )
+            if _next_blocked:
+                is_error = True
+                res["error"] = str(_next_res.get("error") or "NODE_TOKEN_BUDGET_EXCEEDED")
+                break
             res["input_tokens"] = int(res.get("input_tokens") or 0) + int(_next_res.get("input_tokens") or 0)
             res["output_tokens"] = int(res.get("output_tokens") or 0) + int(_next_res.get("output_tokens") or 0)
             _next_status = str(_next_res.get("status") or "success").lower()
@@ -1023,7 +1165,8 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                 "Gib ausschliesslich ein valides JSON-Objekt zurueck, das alle Pflichtfelder erfuellt."
             )
             _repair_model_used = _esc_model or model
-            _rep_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+            _rep_res, _rep_blocked = await _dispatch_with_node_budget(
+                node, res, model,
                 agent_id=agent_id,
                 agent_name=agent_name,
                 prompt=_repair_prompt,
@@ -1032,7 +1175,11 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                 model=_repair_model_used,
                 reasoning_level=reasoning_level,
                 task_id=str(kanban_task_id or node.get("id") or ""),
+                _phase="schema_repair",
             )
+            if _rep_blocked:
+                is_error = True
+                res["error"] = str(_rep_res.get("error") or "NODE_TOKEN_BUDGET_EXCEEDED")
             _repair_in = int(_rep_res.get("input_tokens") or 0)
             _repair_out = int(_rep_res.get("output_tokens") or 0)
             res["input_tokens"] = int(res.get("input_tokens") or 0) + _repair_in
@@ -1044,7 +1191,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         # Punkt 3.2.6: Frontier-Eskalation, wenn der Repair-Retry am billigen Modell scheitert
         _esc_in = 0
         _esc_out = 0
-        if not _ok_schema and _esc_model and _esc_model != model:
+        if not _ok_schema and not is_error and _esc_model and _esc_model != model:
             _esc_prompt = (
                 f"{full_prompt}\n\n"
                 f"[SCHEMA-VALIDIERUNG FEHLGESCHLAGEN — FRONTIER-ESKALATION]\n"
@@ -1053,7 +1200,8 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                 f"Vorheriger Versuch:\n{content[:3000]}\n\n"
                 "Liefere ausschliesslich das korrekte JSON-Objekt."
             )
-            _esc_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+            _esc_res, _esc_blocked = await _dispatch_with_node_budget(
+                node, res, model,
                 agent_id=agent_id,
                 agent_name=agent_name,
                 prompt=_esc_prompt,
@@ -1062,7 +1210,11 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                 model=_esc_model,
                 reasoning_level="high",
                 task_id=str(kanban_task_id or node.get("id") or ""),
+                _phase="frontier_escalation",
             )
+            if _esc_blocked:
+                is_error = True
+                res["error"] = str(_esc_res.get("error") or "NODE_TOKEN_BUDGET_EXCEEDED")
             _esc_in = int(_esc_res.get("input_tokens") or 0)
             _esc_out = int(_esc_res.get("output_tokens") or 0)
             res["input_tokens"] = int(res.get("input_tokens") or 0) + _esc_in
@@ -1104,7 +1256,8 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                     "body": content,
                     "cta": lines_c[-1] if len(lines_c) > 1 else "",
                 })
-                while revisions_used < max_rev and (not quality_report.get("passed") or int(quality_report.get("score", 0)) < min_q):
+                while (revisions_used < max_rev and not is_error
+                       and (not quality_report.get("passed") or int(quality_report.get("score", 0)) < min_q)):
                     revisions_used += 1
                     rev_issues = "; ".join(quality_report.get("issues") or [])
                     rev_sugg = "; ".join(quality_report.get("suggestions") or [])
@@ -1117,7 +1270,8 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                         f"BISHERIGER ENTWURF:\n{content[:4500]}\n\n"
                         "Ueberarbeite den Text direkt, konkret, faktenbasiert (mit Zahlen-Anker & klarem CTA) und komplett ohne KI-Floskeln."
                     )
-                    rev_res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                    rev_res, _rev_blocked = await _dispatch_with_node_budget(
+                        node, res, model,
                         agent_id=agent_id,
                         agent_name=agent_name,
                         prompt=rev_prompt,
@@ -1126,7 +1280,12 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                         model=model,
                         reasoning_level=reasoning_level,
                         task_id=str(kanban_task_id or node.get("id") or ""),
+                        _phase="anti_slop_revision",
                     )
+                    if _rev_blocked:
+                        is_error = True
+                        res["error"] = str(rev_res.get("error") or "NODE_TOKEN_BUDGET_EXCEEDED")
+                        break
                     rev_content = str(rev_res.get("content") or "").strip()
                     if rev_content and str(rev_res.get("status") or "success").lower() not in ("error", "failed", "blocked"):
                         content = rev_content
@@ -1270,6 +1429,17 @@ async def _exec_with_retry_and_timeout(
     last_err = ""
     for attempt in range(max_retries + 1):
         try:
+            # D13: Retry zhlt als Hop — kein endloser Re-Dispatch ohne Cap.
+            _tid_node = str(node.get("_trajectory_id") or "")
+            if _tid_node.startswith("traj-"):
+                from backend.trajectory_budget import reserve_hop
+                _hop = await asyncio.to_thread(
+                    reserve_hop, _tid_node,
+                    str(node.get("agent_id") or "dag_node"),
+                    f"retry:{node.get('id')}:{attempt}",
+                )
+                if not _hop.get("allowed", False):
+                    return _blocked_node_result(node, str(_hop.get("reason") or "HOP_CAP_REACHED"))
             if idempotency_key:
                 try:
                     from backend.idempotency_guard import idempotency_guard
@@ -1421,6 +1591,45 @@ async def _run_workflow_dag_locked(
     edge_map = _extract_edge_map(dag_def)
     now = time.time()
 
+    # D13: Trajectory ueber run_id hinweg vererben — der Replan-Zaehler lebt
+    # am Root-Ticket, nicht am (bei jedem Resume neuen) run_id.
+    from backend.trajectory_budget import (
+        ensure_trajectory, inherit_replan_count, normalize_trajectory_id,
+    )
+    dag_def = dict(dag_def or {})
+    _root_ticket = str(dag_def.get("root_ticket_id") or dag_def.get("id") or wf_id)
+    _tid = normalize_trajectory_id(dag_def.get("trajectory_id"), _root_ticket)
+    dag_def["trajectory_id"] = _tid
+    dag_def["root_ticket_id"] = _root_ticket
+    _node_token_cap = sum(
+        int(float(n.get("token_budget") or 0)) for n in nodes if isinstance(n, dict)
+    )
+    _traj_row = ensure_trajectory(
+        _tid, _root_ticket,
+        max_tokens=(int(_node_token_cap) if _node_token_cap > 0 else None),
+    )
+    _inherited = inherit_replan_count(_tid, rid, dag_def, db_path=db_path)
+    dag_def["_replan_count"] = max(
+        int(dag_def.get("_replan_count") or 0), int(_inherited.get("replan_count") or 0)
+    )
+    if str(_traj_row.get("state") or "") == "blocked" or dag_def["_replan_count"] > MAX_REPLAN_COUNT:
+        logger.error("[WorkflowDAG] Run '%s' blockiert: Trajectory %s state=%s replan=%s",
+                     rid, _tid, _traj_row.get("state"), dag_def["_replan_count"])
+        with _connect(db_path) as conn:
+            conn.execute(
+                "INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at) "
+                "VALUES (?, ?, 'blocked', ?, ?, ?) "
+                "ON CONFLICT(run_id) DO UPDATE SET status='blocked', updated_at=excluded.updated_at",
+                (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), now, now),
+            )
+            conn.commit()
+        return {
+            "run_id": rid, "workflow_id": wf_id, "status": "blocked",
+            "needs_human": True, "failure_reason": "TRAJECTORY_BLOCKED",
+            "node_statuses": {}, "outputs": {}, "trajectory_id": _tid,
+            "error": "Trajectory-Cap erreicht — Replan/Resume blockiert.",
+        }
+
     # M110 Pre-Execution Validator: Zyklen/Schema/Mapping/Budget/Deadline/
     # RBAC/HITL/Replan-Count werden VOR jedem Node geprüft (kein halber Start).
     validation = validate_dag_def(dag_def, now=now)
@@ -1523,10 +1732,30 @@ async def _run_workflow_dag_locked(
     sem = asyncio.Semaphore(max_conc)
     pending = set(node_map.keys())
     running_tasks: Dict[str, "asyncio.Task[None]"] = {}
+    budget_blocked = False
 
     async def _run_one(nid: str) -> None:
+        nonlocal budget_blocked
         node_started = time.perf_counter()
         node = node_map[nid]
+        # D13/HIGH: harte Laufzeit-Obergrenze VOR jedem Node-Dispatch.
+        _run_cap = float(dag_def.get("max_budget_eur") or 0.0)
+        if _run_cap > 0.0:
+            _spent = sum(
+                float((v or {}).get("cost_usd") or 0.0)
+                for v in outputs.values() if isinstance(v, dict)
+            )
+            _node_est = float(node.get("max_budget_eur") or 0.0)
+            if _spent + _node_est > _run_cap + 1e-6:
+                budget_blocked = True
+                statuses[nid] = "blocked"
+                outputs[nid] = {
+                    "status": "blocked", "block_kind": "budget_exhausted",
+                    "needs_human": True, "failure_reason": "BUDGET_EXHAUSTED",
+                    "error": f"Run-Cap {_run_cap:.2f} EUR erreicht (verbraucht {_spent:.2f}).",
+                }
+                logger.error("[WorkflowDAG] '%s': Budget-Cap vor Node '%s' erreicht.", rid, nid)
+                return
         if cancel_token is not None:
             cancel_token.check()
         if lease_guard is not None and lease_guard.lost.is_set():
@@ -1571,7 +1800,11 @@ async def _run_workflow_dag_locked(
 
         ntype = str(node.get("type") or "agent").lower()
         requires_gate = ntype == "gate" or bool(node.get("require_hitl"))
-        node_ctx = {**node, "workflow_id": wf_id, "_dag_run_id": rid, "_dag_db_path": db_path}
+        node_ctx = {
+            **node, "workflow_id": wf_id, "_dag_run_id": rid, "_dag_db_path": db_path,
+            "_trajectory_id": _tid, "_dag_max_budget_eur": dag_def.get("max_budget_eur"),
+            "_root_ticket_id": _root_ticket,
+        }
 
         if ntype == "gate":
             if approvals.get(nid) is True:
@@ -1663,7 +1896,9 @@ async def _run_workflow_dag_locked(
                         break
 
             max_items = max(1, min(50, int(node.get("max_items") or 10)))
-            max_budget_eur = float(node.get("max_budget_eur") or 1.0)
+            max_budget_eur = float(
+                node.get("max_budget_eur") or node.get("_dag_max_budget_eur") or 0.0
+            )
             items_to_process = items[:max_items]
 
             if not items_to_process:
@@ -1702,7 +1937,7 @@ async def _run_workflow_dag_locked(
                     elif not isinstance(r, Exception):
                         ok_results.append({"result": r, "status": "success"})
 
-                budget_exceeded = total_cost > (max_budget_eur * 1.15)
+                budget_exceeded = bool(max_budget_eur > 0.0 and total_cost > max_budget_eur + 1e-6)
                 quorum = int(node.get("quorum_min") or max(1, len(items_to_process) // 2 or 1))
                 st = "completed" if (len(ok_results) >= quorum and not budget_exceeded) else "failed"
                 out = {
@@ -1865,6 +2100,16 @@ async def _run_workflow_dag_locked(
                 )
                 conn.commit()
 
+        if budget_blocked:
+            for _nid in list(pending):
+                statuses[_nid] = "blocked"
+                outputs[_nid] = {
+                    "status": "blocked", "block_kind": "budget_exhausted",
+                    "needs_human": True, "failure_reason": "BUDGET_EXHAUSTED",
+                }
+            pending.clear()
+            break
+
         for nid in ready:
             running_tasks[nid] = asyncio.create_task(_run_guarded(nid))
 
@@ -1921,6 +2166,9 @@ async def _run_workflow_dag_locked(
         final_status = "failed"
     elif has_awaiting_gate:
         final_status = "paused"
+    elif budget_blocked:
+        final_status = "blocked"
+        cycle_error = "BUDGET_EXHAUSTED — Run-Cap erreicht (HITL erforderlich)"
     elif pending:
         # Kein Fortschritt moeglich und kein wartendes Gate: Zyklus / unresolvable dependency
         final_status = "failed"
@@ -1941,6 +2189,55 @@ async def _run_workflow_dag_locked(
                     pass
         except sqlite3.OperationalError:
             pass
+        _total_tokens = 0
+        for _r in conn.execute(
+            "SELECT output_json FROM workflow_node_states WHERE run_id = ?", (rid,)
+        ).fetchall():
+            try:
+                _o = json.loads(_r[0] or "{}")
+                _total_tokens += int(_o.get("input_tokens") or 0) + int(_o.get("output_tokens") or 0)
+            except Exception:
+                pass
+        # D13/BLOCKER: Flightlog-Abschluss-Event (Produzent im Tool-Chokepoint
+        # kommt von einem anderen Agenten) + Silent-Failure-Detektion.
+        _flight_flags: List[str] = []
+        try:
+            from backend.flightlog_backtester import (
+                detect_silent_failures, record_flight_event,
+            )
+            record_flight_event(
+                run_id=rid, agent_id=str(dag_def.get("id") or "workflow_engine"),
+                tool_name="dag_run_complete",
+                args={"workflow_id": wf_id, "trajectory_id": _tid, "status": final_status},
+                tool_ok=final_status in ("completed", "paused"),
+                tokens_used=_total_tokens,
+            )
+            _detected = detect_silent_failures(
+                rid, final_status=final_status,
+                final_output="\n".join(
+                    str((v or {}).get("content") or "")[:400]
+                    for v in outputs.values() if isinstance(v, dict)
+                ),
+            )
+            _flight_flags = list(_detected.get("flags") or [])
+            if _flight_flags and final_status in ("completed", "paused"):
+                final_status = "blocked"
+                cycle_error = f"SILENT_FAILURE: {', '.join(_flight_flags)}"
+                logger.error("[WorkflowDAG] '%s' blockiert durch Flightlog: %s", rid, _flight_flags)
+                try:
+                    from backend.trajectory_budget import _audit
+                    _audit(_tid, f"flightlog_flags:{_flight_flags}", rid)
+                except Exception:
+                    pass
+        except Exception as _flight_exc:
+            logger.debug("[WorkflowDAG] Flightlog-Abschluss nicht verfuegbar: %s", _flight_exc)
+        try:
+            from backend.trajectory_budget import close_trajectory, record_tokens
+            if _total_tokens > 0:
+                record_tokens(_tid, _total_tokens, reason=f"dag_run:{rid}")
+            close_trajectory(_tid, "completed" if final_status == "completed" else "failed")
+        except Exception as _traj_exc:
+            logger.debug("[WorkflowDAG] Trajectory-Abschluss nicht persistiert: %s", _traj_exc)
         conn.execute(
             "UPDATE workflow_runs SET status = ?, updated_at = ?, total_cost_usd = ? WHERE run_id = ?",
             (final_status, time.time(), round(_total_cost, 6), rid),
@@ -1956,6 +2253,12 @@ async def _run_workflow_dag_locked(
     }
     if cycle_error:
         result["error"] = cycle_error
+    if final_status == "blocked":
+        result["needs_human"] = True
+        result["failure_reason"] = str(cycle_error or "BUDGET_EXHAUSTED")
+    result["trajectory_id"] = _tid
+    if _flight_flags:
+        result["flightlog_flags"] = _flight_flags
     if trace_id:
         await _otel_end(trace_id, "ERROR" if final_status in FAILURE_NODE_STATES or cycle_error else "OK")
     return result

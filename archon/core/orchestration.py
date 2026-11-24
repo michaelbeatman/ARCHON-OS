@@ -15,6 +15,10 @@ import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from backend.handoff_desk import mark_truncated
+
 # Lokale Imports (keine main.py, kein core_dispatcher)
 from archon.core.mission_control import (
     _MC_ASYNC_LOCK,
@@ -50,6 +54,56 @@ DEFAULT_WORKSPACE_DIR = APP_ROOT
 
 def _task_by_id(data: dict, task_id: str):
     return next((t for t in data.get("tasks", []) if t.get("id") == task_id), None)
+
+
+def _evidence_marker(evidence: Any) -> str:
+    """Liest den Marker aus ConsensusEvidence (Tuple, Dict oder Pydantic-Modell)."""
+    if isinstance(evidence, dict):
+        return str(evidence.get("marker") or "")
+    if isinstance(evidence, (list, tuple)):
+        return str(evidence[1]) if len(evidence) >= 2 else ""
+    return str(getattr(evidence, "marker", "") or "")
+
+
+def _evidence_agent(evidence: Any) -> str:
+    """Liest die echte Agent-ID aus ConsensusEvidence (Tuple/Dict/Modell)."""
+    if isinstance(evidence, dict):
+        return str(evidence.get("agent_id") or "")
+    if isinstance(evidence, (list, tuple)):
+        return str(evidence[0]) if evidence else ""
+    return str(getattr(evidence, "agent_id", "") or "")
+
+
+class NominationItem(BaseModel):
+    """D11/S-11.1: Schema einer einzelnen Agenten-Nominierung."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    agent_id: str = Field(..., min_length=1)
+    role: str = "Spezialist"
+    mandate: str = ""
+    trace_id: str = ""
+    session_id: str = ""
+    correlation_id: str = ""
+
+
+class NominationBatch(BaseModel):
+    """D11/S-11.1: Validierte Nominierungsmatrix statt json.loads + .get()."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    project_title: str = ""
+    nominated_agents: List[NominationItem] = Field(default_factory=list)
+
+
+def _parse_nomination_batch(raw_json: str) -> Optional[NominationBatch]:
+    """Parst einen Nominierungsblock schema-validiert; fehlerhaft -> None."""
+    try:
+        data = json.loads(raw_json)
+        return NominationBatch.model_validate(data)
+    except (ValidationError, TypeError, ValueError) as exc:
+        logger.warning("[Orchestration] Nominierungsblock ungueltig: %s", exc)
+        return None
 
 
 def _extract_nominated_json_blocks(reply: str) -> List[str]:
@@ -268,7 +322,8 @@ async def _execute_mission_control_task(
             from backend.idempotency_guard import idempotency_guard
             idem = idempotency_guard.check_or_register(
                 "mission_control_task",
-                {"task_id": str(task_id), "prompt": str(prompt_text)[:2000]},
+                {"task_id": str(task_id),
+                 "prompt": mark_truncated(prompt_text, 2000, artifact=f"tasks.capture_input/{task_id}")},
                 explicit_key=f"mct-{task_id}",
             )
             if idem.get("blocked"):
@@ -324,7 +379,9 @@ async def _execute_mission_control_task(
         if res.get("status") in ("error", "blocked") or not reply or reply.startswith(("Fehler:", "Fehler ", "[Fehler")):
             # Dispatcher meldet Fehler -> Task als failed markieren
             task["status"] = "failed"
-            task["result_summary"] = f"Dispatcher-Fehler: {reply[:200] if reply else 'leere Antwort'}"
+            task["result_summary"] = "Dispatcher-Fehler: " + (
+                mark_truncated(reply, 200, artifact=f"dispatcher/{task_id}") if reply else "leere Antwort"
+            )
             ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {reply[:100]}")
             return
 
@@ -344,12 +401,11 @@ async def _execute_mission_control_task(
         try:
             candidate_blocks = _extract_nominated_json_blocks(reply)
             for jm in candidate_blocks:
-                try:
-                    parsed_dispatch = json.loads(jm)
-                except Exception:
+                parsed_dispatch = _parse_nomination_batch(jm)
+                if parsed_dispatch is None:
                     continue
-                nominated = parsed_dispatch.get("nominated_agents", [])
-                if isinstance(nominated, list) and len(nominated) > 0:
+                nominated = parsed_dispatch.nominated_agents
+                if len(nominated) > 0:
                     # KRITISCH (Audit 23.11.2026): Delegations-Rekursion und
                     # Fan-out hart begrenzen — sonst kann ein LLM, das sich
                     # selbst nominiert, unbegrenzt kostenpflichtige Calls
@@ -365,12 +421,12 @@ async def _execute_mission_control_task(
                         ticker("Delegation", f"Task #{task_id}: maximale Delegationstiefe erreicht — keine weiteren Sub-Tasks.")
                         continue
                     nominated = nominated[:max_fanout]
-                    proj_title = parsed_dispatch.get("project_title", task_title)
+                    proj_title = parsed_dispatch.project_title or task_title
                     batch_subtasks = []
                     for idx, nom in enumerate(nominated):
-                        sub_agent_id = nom.get("agent_id", "").strip()
-                        sub_role = nom.get("role", "Spezialist")
-                        sub_mandate = nom.get("mandate", "").strip()
+                        sub_agent_id = nom.agent_id.strip()
+                        sub_role = nom.role or "Spezialist"
+                        sub_mandate = nom.mandate.strip()
                         if not sub_agent_id or sub_agent_id.startswith("<"):
                             continue
 
@@ -395,6 +451,9 @@ async def _execute_mission_control_task(
                             ],
                             "agent_id": sub_agent_id,
                             "agent_name": sub_name,
+                            "trace_id": nom.trace_id or str(task.get("trace_id") or ""),
+                            "session_id": nom.session_id or str(task.get("session_id") or ""),
+                            "correlation_id": nom.correlation_id or f"task:{task_id}",
                             "model": (sub_prof.get("model") if sub_prof else None) or "auto/best-free",
                             "estimated_tokens": 60000,
                             "estimated_cost_eur": 0.08,
@@ -483,7 +542,10 @@ async def _execute_mission_control_task(
                         idem_key,
                         {
                             "status": "completed",
-                            "result_summary": str(task.get("result_summary", ""))[:300],
+                            "result_summary": mark_truncated(
+                                task.get("result_summary", ""), 300,
+                                artifact=f"tasks.result/{task_id}",
+                            ),
                         },
                     )
                 else:
@@ -622,11 +684,16 @@ def _merge_sandy_delta(fresh: dict, local_data: dict, parent_id: str, created_su
             break
 
 
-def _merge_synthesis_draft_delta(fresh: dict, parent_id: str, draft_path: str) -> None:
-    """Aktualisiert nur synthesis_draft_path im Parent-Task (atomar via update_mc)."""
+def _merge_synthesis_draft_delta(
+    fresh: dict, parent_id: str, draft_path: str, fan_in: Optional[Dict[str, Any]] = None
+) -> None:
+    """Aktualisiert synthesis_draft_path und die Fan-in-Herkunft im Parent-Task."""
     for t in fresh.get("tasks", []):
         if t.get("id") == parent_id:
             t["synthesis_draft_path"] = draft_path
+            if fan_in is not None:
+                t["fan_in_child_ids"] = fan_in.get("child_ids", [])
+                t["fan_in_statements"] = fan_in.get("statements", [])
             break
 
 
@@ -635,7 +702,7 @@ def _merge_synthesis_audit_delta(fresh: dict, parent_id: str, time_str: str, rob
     fresh.setdefault("audit_logs", []).insert(0, {
         "time": time_str, "source": "Synthese-Loop",
         "msg": (f"Lisa-Entwurf für #{parent_id} braucht Freigabe "
-                f"(Robert: {robert_reply[:60] or 'ohne Antwort'}) — "
+                f"(Robert: {mark_truncated(robert_reply, 60, artifact=draft_name) or 'ohne Antwort'}) — "
                 f"Kanban-Entscheidung {deci.get('task_id') if deci else 'NICHT angelegt'}")})
 
 
@@ -736,12 +803,11 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
         created_sub_ids = []
         created_subtasks = []
         for jm in candidate_blocks:
-            try:
-                parsed = json.loads(jm)
-            except Exception:
+            parsed = _parse_nomination_batch(jm)
+            if parsed is None:
                 continue
-            nominated = parsed.get("nominated_agents", [])
-            if isinstance(nominated, list) and len(nominated) > 0:
+            nominated = parsed.nominated_agents
+            if len(nominated) > 0:
                 # H7 (Audit 23.11.2026): dieser Sandy-Staffing-Pfad hatte —
                 # anders als der Parallelpfad (Zeile 357+) — KEINE Tiefen- oder
                 # Fanout-Begrenzung und schrieb kein delegation_depth, sodass
@@ -758,9 +824,9 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                     continue
                 nominated = nominated[:max_fanout]
                 for idx, nom in enumerate(nominated):
-                    sub_agent_id = nom.get("agent_id", "").strip()
-                    sub_role = nom.get("role", "Spezialist")
-                    sub_mandate = nom.get("mandate", "").strip()
+                    sub_agent_id = nom.agent_id.strip()
+                    sub_role = nom.role or "Spezialist"
+                    sub_mandate = nom.mandate.strip()
                     if not sub_agent_id or sub_agent_id.startswith("<"):
                         continue
                     sub_prof = next((p for p in profiles if p.get("id") == sub_agent_id), None)
@@ -779,6 +845,9 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                         ],
                         "agent_id": sub_agent_id,
                         "agent_name": sub_name,
+                        "trace_id": nom.trace_id or str(parent_task.get("trace_id") or ""),
+                        "session_id": nom.session_id or str(parent_task.get("session_id") or ""),
+                        "correlation_id": nom.correlation_id or f"task:{parent_id}",
                         "model": (sub_prof.get("model") if sub_prof else None) or "auto/best-free",
                         "estimated_tokens": 60000,
                         "estimated_cost_eur": 0.08,
@@ -952,7 +1021,9 @@ async def _finalize_synthesis_after_approval(
         parent_task["status"] = "completed"
         parent_task["phase"] = "completed"
         parent_task["artifact_path"] = final_obs_path
-        parent_task["result_summary"] = (synthese_text[:500] + "...") if len(synthese_text) > 500 else synthese_text
+        parent_task["result_summary"] = mark_truncated(
+            synthese_text, 500, artifact=final_obs_path or f"tasks.result/{parent_pid}"
+        )
         parent_task["synthesis_finalized"] = True
         parent_task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         now_t = datetime.datetime.now().strftime("%H:%M:%S")
@@ -960,7 +1031,7 @@ async def _finalize_synthesis_after_approval(
         # Audit-Log-Eintrag lokal vorbereiten
         audit_entry = {
             "time": now_t, "source": "Synthese-Loop",
-            "msg": f"Finale Beschlussvorlage fuer #{parent_pid} freigegeben und abgelegt ({approver_note[:60]})"
+            "msg": f"Finale Beschlussvorlage fuer #{parent_pid} freigegeben und abgelegt ({mark_truncated(approver_note, 60, artifact=final_obs_path)})"
         }
 
         # Atomares Commit: Parent-Task-Felder + audit_logs mergen
@@ -1121,7 +1192,10 @@ def _tg_ping_synthesis(
                     ref_id=parent_project_id, quelle="Lisa (aggregation_lisa)")
             except Exception as _e:
                 logger.warning(f"[Synthese] Dossier-Aufbau fehlgeschlagen: {_e}")
-        _kurz = re.sub(r"\s+", " ", (synthese_text or "")).strip()[:300]
+        _kurz = mark_truncated(
+            re.sub(r"\s+", " ", (synthese_text or "")).strip(), 300,
+            artifact=dpath or f"tasks.result/{parent_project_id}",
+        )
         caption = ("🔐 ENTSCHEIDUNG NÖTIG — Synthese\n"
                    f"Projekt: {parent_title}\n\n{_kurz}"
                    + ("\n\nDer vollständige Entwurf liegt als Anhang bei." if dpath else ""))
@@ -1215,10 +1289,13 @@ async def _run_synthesis_cascade(
     ]
 
     # Berichte auslesen (Artifact bevorzugt, sonst result_summary) - synchron, kein await
+    # D11/S-11.3+S-11.4: jede Kuerzung ist markiert, jede Aussage traegt die
+    # echte Kind-Identitaet sowie trace_id/session_id/correlation_id.
     reports = []
+    fan_statements: List[Dict[str, Any]] = []
     for s in siblings:
         sub_title = s.get("title", "Teilaufgabe")
-        sub_agent = s.get("agent_name", "Fachagent")
+        sub_agent = s.get("agent_name") or s.get("agent_id") or "Fachagent"
         art_path = s.get("artifact_path", "")
         content = ""
         if art_path and os.path.exists(art_path):
@@ -1228,8 +1305,24 @@ async def _run_synthesis_cascade(
             except Exception as read_exc:
                 logger.warning(f"[Orchestration] Artefakt {art_path} konnte nicht gelesen werden: {read_exc}")
         if not content:
-            content = s.get("result_summary", "")
-        reports.append(f"### Arbeitspaket von {sub_agent} ({sub_title})\n\n{content}\n")
+            content = str(s.get("result_summary") or "")
+        original_length = len(content)
+        child_id = str(s.get("id") or "")
+        child_agent = str(s.get("agent_id") or s.get("assignee") or s.get("agent_name") or "unknown")
+        artifact_ref = art_path or f"tasks.result/{child_id}"
+        display_content = mark_truncated(content, 4000, artifact=artifact_ref)
+        reports.append(f"### Arbeitspaket von {sub_agent} ({sub_title})\n\n{display_content}\n")
+        fan_statements.append({
+            "agent_id": child_agent,
+            "content": display_content,
+            "trace_id": str(s.get("trace_id") or parent_task.get("trace_id") or ""),
+            "session_id": str(s.get("session_id") or parent_task.get("session_id") or ""),
+            "correlation_id": str(s.get("correlation_id") or (f"task:{child_id}" if child_id else "")),
+            "task_id": child_id,
+            "artifact_path": artifact_ref,
+            "truncated": original_length > 4000,
+            "original_length": original_length,
+        })
     combined_reports = f"\n---\n\n".join(reports)
     parent_title = parent_task.get("title", "Gesamtprojekt")
 
@@ -1237,7 +1330,7 @@ async def _run_synthesis_cascade(
     # Die alte "aggregation_lisa" war ein LLM-Prompt inkl. Marker-Repair-Retry.
     # Jetzt: votes-/evidence-basierte Auswertung + deterministische Struktur.
     # Kein neues LLM, keine erfundenen Fakten, Widersprüche bleiben sichtbar.
-    from backend.consensus_gate import resolve_debate_consensus
+    from backend.consensus_gate import resolve_debate_consensus, validate_debate_statements
 
     profiles = get_profiles() if get_profiles else []
     _MARKER = "SYNTHESE-BEREIT"
@@ -1246,20 +1339,19 @@ async def _run_synthesis_cascade(
         f"Fuegt {len(reports)} Teilergebnisse deterministisch zu '{parent_title[:30]}...' zusammen",
     )
 
-    fan_statements = [
-        {"agent_id": f"work_package_{idx + 1}", "content": str(rep or "")[:4000]}
-        for idx, rep in enumerate(reports)
-    ]
-    fan_consensus = resolve_debate_consensus(fan_statements)
+    # Pydantic-Validierung (DebateStatement, extra=forbid) vor der Konsensauswertung.
+    fan_consensus = resolve_debate_consensus(validate_debate_statements(fan_statements))
     _negative_markers = {
         "KEIN KONSENS", "KEIN CONSENSUS", "NICHT ERREICHT", "NO CONSENSUS",
         "WIDERSPRUCH", "DISAGREE", "DEBATTE_FORTSETZEN",
     }
     _negative_evidence = [
         e for e in (fan_consensus.get("evidence") or [])
-        if isinstance(e, (list, tuple)) and len(e) >= 2
-        and str(e[1]).upper() in _negative_markers
+        if _evidence_marker(e).upper() in _negative_markers
     ]
+    # D11/S-11.4: Herkunft der Kind-Ergebnisse am Parent wiederauffindbar.
+    parent_task["fan_in_child_ids"] = [s["agent_id"] for s in fan_statements]
+    parent_task["fan_in_statements"] = fan_statements
 
     _parts = [
         f"# Synthese: {parent_title}",
@@ -1273,7 +1365,9 @@ async def _run_synthesis_cascade(
         "## Widersprueche & offene Punkte",
     ]
     if _negative_evidence:
-        _parts.extend(f"- {e[0]}: {e[1]}" for e in _negative_evidence[:10])
+        _parts.extend(
+            f"- {_evidence_agent(e)}: {_evidence_marker(e)}" for e in _negative_evidence[:10]
+        )
     else:
         _parts.append(
             "- Keine expliziten Widerspruchs-Marker in den Teilergebnissen; "
@@ -1414,7 +1508,11 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     # Wir nutzen update_mc für atomares Merge (nur Parent-Task Update, keine Tasks-Listen-Änderung)
     def _commit_draft():
         if update_mc is not None:
-            update_mc(lambda fresh: _merge_synthesis_draft_delta(fresh, parent_project_id, draft_path))
+            update_mc(lambda fresh: _merge_synthesis_draft_delta(
+                fresh, parent_project_id, draft_path,
+                {"child_ids": parent_task.get("fan_in_child_ids", []),
+                 "statements": parent_task.get("fan_in_statements", [])},
+            ))
         else:
             raise RuntimeError(
                 "_run_synthesis_cascade: Parameter 'update_mc' fehlt. "
@@ -1424,7 +1522,10 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     _commit_draft()
 
     if freigegeben:
-        await finalize_approval(parent_project_id, draft_path, synthesis_reply, f"Robert: {robert_reply[:200]}")
+        await finalize_approval(
+            parent_project_id, draft_path, synthesis_reply,
+            "Robert: " + mark_truncated(robert_reply, 200, artifact=draft_path),
+        )
         # 2a: Owner informieren - kein Handlungsbedarf, aber Bericht mitliefern.
         tg_ping(parent_title, parent_project_id, synthesis_reply, draft_path, app_id=None, dossier_dir=_tg_doss_dir)
         return

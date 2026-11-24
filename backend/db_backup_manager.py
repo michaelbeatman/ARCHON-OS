@@ -56,6 +56,67 @@ _SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+\.secret\.gz$")
 _RESTORE_LOCK = threading.RLock()
 
 
+def _verify_snapshot(conn: sqlite3.Connection, label: str) -> None:
+    """Fail-closed Integritäts-Gate: integrity + quick + foreign_key (D03).
+
+    Wirft bei jeder Abweichung; der Aufrufer lässt die Live-DB unberührt.
+    """
+    integrity = conn.execute("PRAGMA integrity_check").fetchone()
+    quick = conn.execute("PRAGMA quick_check").fetchone()
+    fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if not integrity or str(integrity[0]).lower() != "ok":
+        raise RuntimeError(f"{label}: Integritätsprüfung fehlgeschlagen: {integrity}")
+    if not quick or str(quick[0]).lower() != "ok":
+        raise RuntimeError(f"{label}: Quick-Check fehlgeschlagen: {quick}")
+    if fk_violations:
+        raise RuntimeError(
+            f"{label}: {len(fk_violations)} FK-Verletzung(en) — Restore abgelehnt."
+        )
+
+
+def cleanup_orphaned_sidecars(root_dir: Optional[str] = None) -> Dict[str, Any]:
+    """Entfernt WAL/SHM/Journal-Sidecars ohne existierende Basis-DB (D03/MED).
+
+    Nur eindeutig verwäiste Artefakte werden gelöscht (Basis fehlt). Sidecars
+    aktiver Datenbanken werden nie angefasst. Historische Restore-Artefakte
+    wie `.memory.db.restore.<stamp>.tmp-wal` werden damit erfasst.
+    """
+    root = os.path.abspath(root_dir or WORKSPACE_DIR)
+    removed: list[str] = []
+    errors: list[str] = []
+    suffixes = ("-wal", "-shm", "-journal")
+    # Rekursiv: Mandanten-DBs liegen unter data/tenants/<tid>/, historische
+    # Restore-Artefakte direkt unter data/.
+    for dirpath, dirnames, _filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in ("node_modules", "__pycache__")]
+        try:
+            entries = os.listdir(dirpath)
+        except OSError:
+            continue
+        for name in entries:
+            matched = next((s for s in suffixes if name.endswith(s)), None)
+            if not matched:
+                continue
+            base = name[: -len(matched)]
+            if not base or os.path.exists(os.path.join(dirpath, base)):
+                continue
+            victim = os.path.join(dirpath, name)
+            try:
+                os.unlink(victim)
+                removed.append(os.path.relpath(victim, root))
+            except OSError as exc:
+                errors.append(f"{victim}: {exc}")
+    # Lock-DB-Journals haben eine existierende Basis und brauchen einen
+    # EXCLUSIVE-Probe (eigener Helper in process_lock).
+    try:
+        from backend.process_lock import cleanup_stale_lock_journals
+        for j in cleanup_stale_lock_journals():
+            removed.append(os.path.basename(j))
+    except Exception as exc:
+        errors.append(f"lock_journals: {exc}")
+    return {"removed": removed, "errors": errors, "count": len(removed)}
+
+
 def _audit_backup_restore(metadata: Dict[str, Any]) -> Dict[str, Any]:
     """D5/F-08: Restore signiert in die Zentralkette (append-only).
 
@@ -188,6 +249,13 @@ class DBBackupManager:
 
         now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         backed_up = []
+
+        # D03/MED: verwaisste Restore-/Lock-Sidecars vor jedem Backup-Sweep
+        # aufräumen (auch aus anderen Schreibpfaden stammende Artefakte).
+        sweep = cleanup_orphaned_sidecars()
+        if sweep["count"]:
+            logger.info("[DBBackup] %d verwaisste Sidecars entfernt: %s",
+                        sweep["count"], sweep["removed"])
 
         # Statische Kern-DBs (respektiert Test-Monkeypatches auf DB_TARGETS) + dynamische Mandanten-DBs
         base_targets = list(DB_TARGETS) if DB_TARGETS != _INITIAL_DB_TARGETS else _collect_db_targets()
@@ -436,31 +504,33 @@ class DBBackupManager:
             "dry_run": bool(dry_run),
             "rollback_ok": None,
         }
-        with tempfile.NamedTemporaryFile(dir=self.backup_dir, suffix=".restore.db", delete=False) as tmp:
+        # D03/MED: auch im Restore-Pfad verwaisste Sidecars einsammeln.
+        sweep = cleanup_orphaned_sidecars()
+        if sweep["count"]:
+            logger.info("[DBBackup] %d verwaisste Sidecars entfernt: %s",
+                        sweep["count"], sweep["removed"])
+
+        target_dir = os.path.dirname(target)
+        if not dry_run:
+            os.makedirs(target_dir, exist_ok=True)
+        # D03/MED: `os.replace()` ist nur innerhalb desselben Dateisystems
+        # atomar. Für echte Restores liegt das Tempfile deshalb NEBEN dem Ziel
+        # und nicht im (eventuell anders gemounteten) Backup-Verzeichnis.
+        tmp_dir = target_dir if not dry_run else self.backup_dir
+        with tempfile.NamedTemporaryFile(
+            dir=tmp_dir, prefix=".restore_", suffix=".tmp.db", delete=False
+        ) as tmp:
             tmp_path = tmp.name
         try:
             with gzip.open(src, "rb") as fin, open(tmp_path, "wb") as fout:
                 shutil.copyfileobj(fin, fout)
-            # C (dieses Audits): VOR dem Austausch der Produktionsdatei
-            # prüfen. Schlägt die Prüfung fehl, bleibt die Live-DB unberührt.
+            # C / F-015: Fail-closed VOR dem Austausch der Produktionsdatei.
+            # integrity_check + quick_check + foreign_key_check (eine SSOT).
             conn = sqlite3.connect(tmp_path)
             try:
-                integrity = conn.execute("PRAGMA integrity_check").fetchone()
-                quick = conn.execute("PRAGMA quick_check").fetchone()
-                # F-015: FK-Check gehoert zwingend VOR den Austausch. Ein
-                # FK-inkonsistentes Backup wurde bisher still in den Produktions-
-                # pfad gespielt (genau die Korruption, die P1-24 bereinigte).
-                fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+                _verify_snapshot(conn, "Backup-Snapshot")
             finally:
                 conn.close()
-            if not integrity or str(integrity[0]).lower() != "ok":
-                raise RuntimeError(f"Integritätsprüfung fehlgeschlagen: {integrity}")
-            if not quick or str(quick[0]).lower() != "ok":
-                raise RuntimeError(f"Quick-Check des Backup-Snapshots fehlgeschlagen: {quick}")
-            if fk_violations:
-                raise RuntimeError(
-                    f"Restore abgelehnt: {len(fk_violations)} FK-Verletzung(en) im Backup-Snapshot."
-                )
             result = {
                 "restored": not dry_run,
                 "backup": name,
@@ -471,7 +541,6 @@ class DBBackupManager:
             if dry_run:
                 audit_status = "dry_run"
                 return result
-            os.makedirs(os.path.dirname(target), exist_ok=True)
             with _RESTORE_LOCK, _restore_gate(target):
                 # K1: Fail-Closed statt Split-Brain. Ein EXCLUSIVE-Lock bricht
                 # ab, wenn gerade andere Schreiber auf der Zieldatenbank aktiv
@@ -517,6 +586,15 @@ class DBBackupManager:
                 # Phase gehalten. Restrisiko: ein Writer, der genau in diesem
                 # winzigen Fenster die alte Inode öffnet, schreibt danach in
                 # die verworfene Datei. Deshalb im Anschluss verifizieren.
+                # Letzte, fail-closed Kontrolle des Snapshots unmittelbar vor
+                # dem Austausch (D03): kein FK-inkonsistentes oder beschädigtes
+                # Backup darf den Produktionspfad erreichen.
+                recheck = sqlite3.connect(f"file:{tmp_path}?mode=ro", uri=True, timeout=5.0)
+                try:
+                    _verify_snapshot(recheck, "Restore-Snapshot (pre-replace)")
+                finally:
+                    recheck.close()
+
                 for suffix in ("-wal", "-shm", "-journal"):
                     sidecar = target + suffix
                     if os.path.exists(sidecar):
@@ -534,12 +612,13 @@ class DBBackupManager:
                 try:
                     verify = sqlite3.connect(f"file:{target}?mode=ro", uri=True, timeout=5.0)
                     try:
-                        check = verify.execute("PRAGMA quick_check").fetchone()
+                        # D03: die Post-Condition umfasst ausdrücklich den
+                        # FK-Check — quick_check allein erkennt relationale
+                        # Korruption nicht.
+                        _verify_snapshot(verify, "Restore-Ziel (post-replace)")
                     finally:
                         verify.close()
-                    result["verified"] = bool(check and str(check[0]).lower() == "ok")
-                    if not result["verified"]:
-                        raise RuntimeError(f"Restore-Verifikation fehlgeschlagen: {check}")
+                    result["verified"] = True
                 except (sqlite3.Error, RuntimeError) as exc:
                     verify_error = exc
                     result["verified"] = False

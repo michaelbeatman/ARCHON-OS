@@ -13,16 +13,49 @@
 #
 # BEWUSST NICHT VERWENDET (würden erfundene Namen darstellen):
 #   archon_dispatch_total / archon_dispatch_errors_total ->
-#     existieren nicht; korrekt ist archon_agent_dispatches_total
+#     existieren nicht; korrekt ist archon_agent_dispatches_total.
 #   node_filesystem_* / node_disk_* ->
-#     kein node_exporter im compose; Archon exportiert Disk selbst.
+#     kein node_exporter noetig: Archon exportiert archon_free_disk_bytes
+#     und archon_disk_used_percent selbst (siehe Gruppe `archon-disk`).
 #
 # Zustellung: Alertmanager -> Telegram-Bot (config/alertmanager/alertmanager.yml).
 # Die In-App-Alarmierung (metrics_collector.py: Dedup + Auto-Resolve) bleibt
-# zusätzlich aktiv; historische 30d-Retention-Notiz unten ist obsolet (compose
-# nutzt jetzt --storage.tsdb.retention.time=30d).
+# zusaetzlich aktiv. Prometheus-Retention: 30d (--storage.tsdb.retention.time=30d).
 
 groups:
+  - name: archon-heartbeat
+    interval: 30s
+    rules:
+      # D10: harter Dead-Man-Switch. Die Metrik wird von Agent I in
+      # backend/metrics_collector.py exportiert (touch_heartbeat/get_last_heartbeat_ts).
+      # > 300 s ohne heartbeat = kritisch, unabhaengig vom In-App-Alerting.
+      - alert: ArchonHeartbeatStale
+        expr: time() - archon_heartbeat_timestamp_seconds > 300
+        for: 0s
+        labels:
+          severity: critical
+          service: archon-os
+          slo: dead_man_switch
+        annotations:
+          summary: "Dead-Man-Switch: Heartbeat > 300 s alt"
+          description: >-
+            time() - archon_heartbeat_timestamp_seconds beträgt {{ $value | humanizeDuration }}.
+            Der externe Selbstheilungs-Loop meldet keinen frischen Lebenszeichen mehr.
+
+      # Metrik verschwunden (Prozess/Exporter ausgefallen oder nie gestartet).
+      - alert: ArchonHeartbeatMetricAbsent
+        expr: absent(archon_heartbeat_timestamp_seconds)
+        for: 0s
+        labels:
+          severity: critical
+          service: archon-os
+          slo: dead_man_switch
+        annotations:
+          summary: "Dead-Man-Switch: Heartbeat-Metrik fehlt"
+          description: >-
+            archon_heartbeat_timestamp_seconds wird nicht mehr exportiert.
+            Bitte metrics_collector.py und den Scrape-Target archon-os pruefen.
+
   - name: archon-slo
     interval: 30s
     rules:
@@ -93,10 +126,9 @@ groups:
     interval: 30s
     rules:
       # Queue-Stau: deckt sich bewusst mit dem In-App-Schwellenwert (> 50).
-      # F-078: frueher hiess es hier, Alertmanager habe "nur einen
-      # null-Receiver" — tatsächlich ist der `archon-telegram`-Receiver
-      # (config/alertmanager/alertmanager.yml, telegram_configs) aktiv.
-      # Prometheus liefert hier zusaetzlich Sichtbarkeit/Historie.
+      # Zustellung ueber den aktiven `archon-telegram`-Receiver
+      # (config/alertmanager/alertmanager.yml, telegram_configs); Prometheus
+      # liefert zusaetzlich Sichtbarkeit und Historie.
       - alert: ArchonTaskQueueBacklog
         expr: archon_queue_depth > 50
         for: 15m

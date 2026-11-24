@@ -32,6 +32,8 @@ from backend.workflow_dag_runner import (  # noqa: E402
 TPL = {
     "id": "tpl-e2e",
     "title": "E2E-Regression",
+    # D13-Haertung: fehlendes Run-Cap ist fail-closed (Plan-Validator).
+    "max_budget_eur": 10.0,
     "inputs": [{"key": "thema", "label": "Thema", "default": "Test"}],
     "nodes": [
         {"id": "n1", "type": "agent", "title": "Schritt {{thema}}", "prompt": "Mach {{thema}}",
@@ -98,9 +100,12 @@ def test_full_dag_gate_pause_resume_and_mirror(tmp_path):
         assert r2["status"] == "failed"
         assert r2["node_statuses"]["n4"] == "skipped_condition"
 
-        # 3) Freigabe auf frischem Run: Gate completed, Nachlauf laeuft, Run completed
+        # 3) Freigabe auf frischem Run: Gate completed, Nachlauf laeuft, Run completed.
+        # D13: eine neue Trajectory braucht ein eigenes root_ticket_id (sonst
+        # erbt der Lauf Replan-Count/State des vorherigen Runs).
+        dag_fresh = {**dag, "root_ticket_id": "ticket-e2etest2", "trajectory_id": "", "_replan_count": 0}
         r3 = await run_workflow_dag(
-            dag_def=dag, executor_fn=mock_exec, run_id="e2etest2", db_path=db, gate_approvals={"g1": True}
+            dag_def=dag_fresh, executor_fn=mock_exec, run_id="e2etest2", db_path=db, gate_approvals={"g1": True}
         )
         assert r3["status"] == "completed"
         assert r3["node_statuses"]["g1"] == "completed"
@@ -118,6 +123,7 @@ def test_edge_condition_on_failure_skips_downstream(tmp_path):
     db = str(tmp_path / "wf_edge.db")
     dag = {
         "id": "edge-test",
+        "max_budget_eur": 10.0,
         "nodes": [
             {"id": "a", "type": "agent", "depends_on": []},
             {"id": "b", "type": "agent", "depends_on": ["a"]},
@@ -145,6 +151,7 @@ def test_fanout_without_branches_runs_as_single_node(tmp_path):
     db = str(tmp_path / "wf_fanout.db")
     dag = {
         "id": "fanout-test",
+        "max_budget_eur": 10.0,
         "nodes": [
             {"id": "f", "type": "fanout", "agent_id": "lisa", "depends_on": []},  # keine branches!
         ],
@@ -255,7 +262,7 @@ def test_parallel_resume_deduplicated_by_per_run_lock(tmp_path):
     """Fix-Sprint-Test 5: Zwei parallele Läufe auf dieselbe run_id — der zweite
     bekommt already_running statt doppeltem Loop."""
     db = str(tmp_path / "wf_lock.db")
-    dag = {"id": "lock-test", "nodes": [{"id": "a", "type": "agent", "depends_on": []}], "edges": []}
+    dag = {"id": "lock-test", "max_budget_eur": 10.0, "nodes": [{"id": "a", "type": "agent", "depends_on": []}], "edges": []}
 
     async def slow_exec(node, upstream):
         await asyncio.sleep(0.4)
@@ -289,6 +296,7 @@ def test_omnichannel_content_workflow_quality_gate_and_template(tmp_path):
     db = str(tmp_path / "wf_qgate.db")
     dag_ok = {
         "id": "qgate-ok",
+        "max_budget_eur": 10.0,
         "nodes": [
             {"id": "draft", "type": "agent", "depends_on": []},
             {"id": "qgate", "type": "quality_gate", "channel": "linkedin", "min_quality_score": 70, "depends_on": ["draft"]},
@@ -331,6 +339,7 @@ def test_map_dynamic_fanout_node(tmp_path):
     db = str(tmp_path / "wf_map.db")
     dag_map = {
         "id": "wf-map-test",
+        "max_budget_eur": 10.0,
         "nodes": [
             {
                 "id": "news_fetch",
@@ -383,6 +392,7 @@ def test_cheap_first_cost_telemetry_persisted(tmp_path):
     db = str(tmp_path / "wf_cost.db")
     dag_cost = {
         "id": "wf-cost-test",
+        "max_budget_eur": 10.0,
         "nodes": [
             {"id": "node_a", "type": "agent", "depends_on": []},
             {"id": "node_b", "type": "agent", "depends_on": ["node_a"]},

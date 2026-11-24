@@ -82,6 +82,65 @@ class ZeroEgressBlockedError(RuntimeError):
         self.audit_event = audit_event or {}
 
 
+def _proof_prompt_versions(agent_id: str = "") -> Tuple[str, str]:
+    """Prompt-/Canary-Version des aktiven Prompts fuer den signierten Block-Proof (d05 F-04)."""
+    try:
+        from backend.prompt_registry import prompt_registry
+        for v in prompt_registry.list_versions(agent_id or "default"):
+            if v.get("is_active"):
+                return (
+                    str(v.get("version") or v.get("version_num") or "unknown"),
+                    str(v.get("canary") or v.get("canary_version") or v.get("canary_percentage") or "unknown"),
+                )
+    except Exception as exc:
+        logger.error("[EgressGuard] Prompt-Version nicht lesbar (Proof 'unknown'): %s", exc)
+    return "unknown", "unknown"
+
+
+def _record_blocked_proof(
+    *,
+    alog: Any,
+    agent_id: str,
+    provider: str,
+    model: str,
+    target_endpoint: str,
+    action: str,
+    error_code: str,
+    reason: str,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Schreibt einen lueckenlosen, signierten Proof fuer einen geblockten Dispatch.
+
+    d05 F-02: auch Fail-Closed-Blockpfade ohne Netzwerk-Byte brauchen einen
+    Beweis. d05 F-05: ein Schreibfehler wird nie verschluckt (ERROR + Eskalation).
+    """
+    pv, cv = _proof_prompt_versions(agent_id)
+    proof_extra: Dict[str, Any] = {
+        "error_code": error_code,
+        "reason": str(reason),
+        "effective_prompt_info": {"version": pv, "canary": cv, "agent_id": agent_id},
+    }
+    if extra:
+        proof_extra.update(extra)
+    try:
+        return alog.record_llm_dispatch(
+            agent_id=agent_id or "system",
+            provider=provider or "unknown",
+            model=model or "unknown",
+            target_endpoint=target_endpoint,
+            action=action,
+            data_category="egress_firewall",
+            http_status=0,
+            zero_egress_active=True,
+            prompt_version=pv,
+            canary_version=cv,
+            extra=proof_extra,
+        )
+    except Exception as exc:
+        logger.error("[EgressGuard] Audit-Proof %s nicht schreibbar: %s", action, exc)
+        raise RuntimeError(f"audit_write_failed: {action} ({type(exc).__name__})") from exc
+
+
 def infer_data_category(
     agent_id: str = "",
     role: str = "",
@@ -561,9 +620,22 @@ def enforce_egress_firewall_for_url(
         from backend.egress_firewall import egress_firewall
         fw_res = egress_firewall.check_url(url, agent_id=agent_id or "agent-worker")
     except Exception as exc:
-        logger.warning("[EgressGuard] Firewall-Check fehlgeschlagen (%s): %s", clean_ep, exc)
+        # d05 F-02: auch dieser Fail-Closed-Block braucht einen signierten Proof.
+        logger.error("[EgressGuard] Firewall-Check fehlgeschlagen (%s): %s", clean_ep, exc)
+        ev = _record_blocked_proof(
+            alog=audit_logger or chained_audit_log,
+            agent_id=agent_id or "agent-worker",
+            provider=host_low or "external",
+            model="egress-firewall",
+            target_endpoint=clean_ep,
+            action="llm_dispatch_blocked_firewall_error",
+            error_code="EGRESS_FIREWALL_ERROR",
+            reason=f"{exc}",
+            extra={"url": clean_ep},
+        )
         raise ZeroEgressBlockedError(
             f"Egress-Firewall-Prüfung fehlgeschlagen (Fail-Closed) für '{clean_ep}': {exc}",
+            audit_event=ev,
             error_code="EGRESS_FIREWALL_ERROR",
         )
 
@@ -590,12 +662,15 @@ def enforce_egress_firewall_for_url(
     return {"allowed": True, "blocked": False, "zone": zone, "reason": str(fw_res.get("reason", "allowed"))}
 
 
-def _sanitize_text_for_egress(text: str, session_id: str = "") -> Tuple[str, bool]:
+def _sanitize_text_for_egress(
+    text: str, session_id: str = "", agent_id: str = ""
+) -> Tuple[str, bool]:
     """Wendet Secret-Masking und PII-Scrubbing nacheinander auf einen Textblock an (Fail-Closed)."""
     if not isinstance(text, str) or not text:
         return text, False
     current = text
     changed = False
+    actor = agent_id or "system"
     try:
         from backend.secret_masker import mask_sensitive_text
         masked, count = mask_sensitive_text(current)
@@ -604,8 +679,20 @@ def _sanitize_text_for_egress(text: str, session_id: str = "") -> Tuple[str, boo
             changed = True
     except Exception as exc:
         logger.error("[EgressGuard] Secret-Masking fehlgeschlagen (Fail-Closed): %s", exc)
+        ev = _record_blocked_proof(
+            alog=chained_audit_log,
+            agent_id=actor,
+            provider="egress-sanitizer",
+            model="secret-masker",
+            target_endpoint="(outbound-payload)",
+            action="llm_dispatch_blocked_sanitization_error",
+            error_code="EGRESS_SANITIZATION_ERROR",
+            reason=f"secret_masking: {exc}",
+            extra={"stage": "secret_masking", "session_id": session_id},
+        )
         raise ZeroEgressBlockedError(
             f"Secret-Masking für ausgehenden Cloud-Call fehlgeschlagen (Fail-Closed): {exc}",
+            audit_event=ev,
             error_code="EGRESS_SANITIZATION_ERROR",
         )
     try:
@@ -618,8 +705,20 @@ def _sanitize_text_for_egress(text: str, session_id: str = "") -> Tuple[str, boo
                 changed = True
     except Exception as exc:
         logger.error("[EgressGuard] PII-Scrubbing fehlgeschlagen (Fail-Closed): %s", exc)
+        ev = _record_blocked_proof(
+            alog=chained_audit_log,
+            agent_id=actor,
+            provider="egress-sanitizer",
+            model="pii-scrubber",
+            target_endpoint="(outbound-payload)",
+            action="llm_dispatch_blocked_pii_scrub_error",
+            error_code="EGRESS_SANITIZATION_ERROR",
+            reason=f"pii_scrubbing: {exc}",
+            extra={"stage": "pii_scrubbing", "session_id": session_id},
+        )
         raise ZeroEgressBlockedError(
             f"PII-Scrubbing für ausgehenden Cloud-Call fehlgeschlagen (Fail-Closed): {exc}",
+            audit_event=ev,
             error_code="EGRESS_SANITIZATION_ERROR",
         )
     return current, changed
@@ -644,7 +743,7 @@ def sanitize_outbound_llm_payload(
 
     for key in ("system", "prompt", "input"):
         if isinstance(out.get(key), str):
-            sanitized, _ = _sanitize_text_for_egress(out[key], session_id=sid)
+            sanitized, _ = _sanitize_text_for_egress(out[key], session_id=sid, agent_id=agent_id)
             out[key] = sanitized
 
     if isinstance(out.get("messages"), list):
@@ -656,14 +755,14 @@ def sanitize_outbound_llm_payload(
             m_copy = dict(msg)
             content = m_copy.get("content")
             if isinstance(content, str):
-                sanitized, _ = _sanitize_text_for_egress(content, session_id=sid)
+                sanitized, _ = _sanitize_text_for_egress(content, session_id=sid, agent_id=agent_id)
                 m_copy["content"] = sanitized
             elif isinstance(content, list):
                 clean_blocks: List[Any] = []
                 for blk in content:
                     if isinstance(blk, dict) and isinstance(blk.get("text"), str):
                         b_copy = dict(blk)
-                        sanitized, _ = _sanitize_text_for_egress(b_copy["text"], session_id=sid)
+                        sanitized, _ = _sanitize_text_for_egress(b_copy["text"], session_id=sid, agent_id=agent_id)
                         b_copy["text"] = sanitized
                         clean_blocks.append(b_copy)
                     else:
@@ -676,7 +775,7 @@ def sanitize_outbound_llm_payload(
                         tc_copy = dict(tc)
                         fn_copy = dict(tc_copy["function"])
                         if isinstance(fn_copy.get("arguments"), str):
-                            sanitized_args, _ = _sanitize_text_for_egress(fn_copy["arguments"], session_id=sid)
+                            sanitized_args, _ = _sanitize_text_for_egress(fn_copy["arguments"], session_id=sid, agent_id=agent_id)
                             fn_copy["arguments"] = sanitized_args
                         tc_copy["function"] = fn_copy
                         clean_tcs.append(tc_copy)
@@ -697,7 +796,7 @@ def sanitize_outbound_llm_payload(
             for part in item_copy["parts"]:
                 if isinstance(part, dict) and isinstance(part.get("text"), str):
                     p_copy = dict(part)
-                    sanitized, _ = _sanitize_text_for_egress(p_copy["text"], session_id=sid)
+                    sanitized, _ = _sanitize_text_for_egress(p_copy["text"], session_id=sid, agent_id=agent_id)
                     p_copy["text"] = sanitized
                     clean_parts.append(p_copy)
                 else:

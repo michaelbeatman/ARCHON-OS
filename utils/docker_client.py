@@ -142,18 +142,36 @@ _ACTION_OK_STATUS = frozenset({200, 204, 304})
 
 
 def docker_cli_host_args() -> list[str]:
-    """`-H`-Argumente fuer docker-CLI-Aufrufe, die den Unix-Socket brauchen.
+    """`-H`-Argumente fuer docker-CLI-Aufrufe — Proxy zuerst, kein stiller Socket.
 
-    Manche Pfade sind strukturell Klasse C und bleiben am Socket: ``docker run --rm``
-    in der Sandbox braucht ``attach``/``wait``, der Proxy gibt beides absichtlich nicht
-    frei (gemessen: 403). Die docker-CLI folgt aber **global** ``DOCKER_HOST`` — ohne
-    diese Bindung wuerden solche Aufrufe nach dem Setzen der Variable still ueber den
-    Proxy laufen und erst mitten in der Ausfuehrung abbrechen. Deshalb pinnt jeder
-    CLI-Aufruf hier explizit seinen Endpunkt; das ist keine Migration, sondern der
-    Erhalt des bisherigen Verhaltens.
+    Audit D04/MED: die alte Version pinzte jeden CLI-Aufruf hart auf
+    ``unix://<DOCKER_SOCKET>`` und umging damit die Proxy-Allowlist (Klasse C)
+    vollstaendig. Jetzt gilt:
+
+      * ``DOCKER_HOST`` (tcp://docker-socket-proxy:2375) hat Vorrang;
+      * ein expliziter Unix-Socket nur mit ``ARCHON_DOCKER_ALLOW_LOCAL_SOCKET``;
+      * sonst ehrlicher Fehler ``not_configured`` — KEIN Fallback auf den rohen
+        Socket, solange der Proxy aktiv ist.
+
+    Die docker-CLI folgt global ``DOCKER_HOST``; wir binden deshalb explizit.
     """
-    sock = config.docker_socket
-    return ["-H", f"unix://{sock}"]
+    host = (os.environ.get("DOCKER_HOST") or config.docker_host or "").strip()
+    if host and not host.startswith("unix://"):
+        return ["-H", host]
+    if host.startswith("unix://"):
+        explicit = os.environ.get("ARCHON_DOCKER_ALLOW_LOCAL_SOCKET", "").strip().lower()
+        if explicit in ("1", "true", "yes"):
+            return ["-H", host]
+        raise DockerError(
+            "docker_cli_host_args: DOCKER_HOST zeigt auf einen Unix-Socket; "
+            "lokaler Socket ohne ARCHON_DOCKER_ALLOW_LOCAL_SOCKET nicht erlaubt "
+            "(Proxy bevorzugt)."
+        )
+    raise DockerError(
+        "not_configured: DOCKER_HOST ist nicht gesetzt. Docker-CLI-Pfade sind "
+        "nur ueber den Proxy (tcp://...) oder mit explizitem lokalen Socket "
+        "verfuegbar — kein stiller Fallback auf /var/run/docker.sock."
+    )
 
 
 def validate_container_name(name: str) -> str:

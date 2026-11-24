@@ -17,8 +17,10 @@ Zielordner zeigen auf ``tmp_path``.
 
 import os
 import sys
+import time
 
 import pytest
+from fastapi import HTTPException
 from starlette.requests import Request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -107,7 +109,29 @@ def _setze_gate(umgebung, kind, payload, gate_id):
     }]
 
 
-def _entscheide(umgebung, gate_id, decision="approve"):
+def _gate_proof(gate_id, category):
+    """Ein an Gate+Aktion gebundener Einmal-Proof fuer den Service-User 'owner'.
+
+    Der Decide-Endpoint liest die UID aus der Session; der Request hier hat
+    keine Session, daher gilt 'owner' (siehe decisions.py).category richtet
+    sich nach der Gate-Art: profil_loeschen = destructive_actions, sonst system.
+    """
+    import backend.passkey_hitl as pk
+
+    token = "gate-proof-%s-%s-%d" % (gate_id, category, time.time_ns())
+    with pk._LOCK:
+        pk._PROOF_TOKENS[token] = {
+            "user_id": "owner",
+            "category": category,
+            "uv_verified": True,
+            "created_ts": time.time(),
+            "action": "Gate-Freigabe %s" % gate_id,
+            "resource": gate_id,
+        }
+    return token
+
+
+def _entscheide(umgebung, gate_id, decision="approve", proof=None):
     main = umgebung["main"]
     pfad = "/api/permission-gates/%s/decide" % gate_id
     request = Request({
@@ -117,14 +141,27 @@ def _entscheide(umgebung, gate_id, decision="approve"):
         "client": ("127.0.0.1", 1234), "server": ("testserver", 80),
         "app": main.app,
     })
-    return main.api_decide_permission_gate(request, gate_id, {"decision": decision})
+    body = {"decision": decision}
+    if proof:
+        body["passkey_proof_token"] = proof
+    return main.api_decide_permission_gate(request, gate_id, body)
 
 
 def test_tools_erweiterung_schreibt_profil(gate_umgebung):
-    """Freigabe muss das Profil mit den neuen Tools schreiben."""
+    """Freigabe muss das Profil mit den neuen Tools schreiben — mit Passkey-Proof."""
     _setze_gate(gate_umgebung, GATE_TOOLS, VALID_PAYLOAD, "g_tools")
 
-    antwort = _entscheide(gate_umgebung, "g_tools")
+    # Ohne registrierte Credentials / Proof: hart fail-closed mit Registrierungshinweis.
+    with pytest.raises(HTTPException) as exc:
+        _entscheide(gate_umgebung, "g_tools")
+    assert exc.value.status_code == 403
+    assert "/api/auth/passkey/register/options" in str(exc.value.detail)
+    assert gate_umgebung["zustand"]["gates"][0]["status"] == "pending"
+
+    antwort = _entscheide(
+        gate_umgebung, "g_tools",
+        proof=_gate_proof("g_tools", "system"),
+    )
 
     ergebnis = str(antwort.get("ergebnis", ""))
     assert "FEHLER" not in ergebnis, ergebnis
@@ -143,7 +180,10 @@ def test_profil_loeschen_entfernt_profilordner(gate_umgebung):
     (ziel / "skills").mkdir(parents=True)
     _setze_gate(gate_umgebung, GATE_DELETE, {"profile_id": "probe_agent"}, "g_del")
 
-    antwort = _entscheide(gate_umgebung, "g_del")
+    antwort = _entscheide(
+        gate_umgebung, "g_del",
+        proof=_gate_proof("g_del", "destructive_actions"),
+    )
 
     ergebnis = str(antwort.get("ergebnis", ""))
     assert "FEHLER" not in ergebnis, ergebnis
@@ -159,7 +199,10 @@ def test_fehlgeschlagene_ausfuehrung_laesst_gate_pending(gate_umgebung):
     kaputt["category"] = ""  # Schema-Validierung schlaegt fehl (echter Fehlerpfad)
     _setze_gate(gate_umgebung, GATE_TOOLS, kaputt, "g_kaputt")
 
-    antwort = _entscheide(gate_umgebung, "g_kaputt")
+    antwort = _entscheide(
+        gate_umgebung, "g_kaputt",
+        proof=_gate_proof("g_kaputt", "system"),
+    )
 
     assert "FEHLER" in str(antwort.get("ergebnis", "")), antwort
     assert antwort.get("error"), "Antwort traegt keinen Fehler-Marker"
@@ -168,8 +211,12 @@ def test_fehlgeschlagene_ausfuehrung_laesst_gate_pending(gate_umgebung):
         "Gate wurde trotz Fehlschlag verbraucht: %s"
         % gate_umgebung["zustand"]["gates"][0]["status"])
 
-    # Wiederholbar: derselbe Gate-Record ist noch entscheidbar.
-    antwort2 = _entscheide(gate_umgebung, "g_kaputt")
+    # Wiederholbar: derselbe Gate-Record ist noch entscheidbar (neuer Proof,
+    # da der erste Einmal-Proof beim fehlgeschlagenen Versuch verbraucht wurde).
+    antwort2 = _entscheide(
+        gate_umgebung, "g_kaputt",
+        proof=_gate_proof("g_kaputt", "system"),
+    )
     assert antwort2.get("status") != "already_decided", antwort2
 
 

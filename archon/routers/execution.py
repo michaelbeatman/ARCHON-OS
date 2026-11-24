@@ -111,15 +111,26 @@ class QueueFailRequest(_ExecRequest):
 
 @router.post("/api/execution/map-reduce")
 async def api_execute_map_reduce(request: Request, payload: MapReduceRequest = Body(...)):
+    """Demo-Endpoint (D01/D12): es wird kein echter `worker_fn` injiziert.
+
+    Deshalb ist jedes Ergebnis dieses Endpoints explizit als Simulation
+    gekennzeichnet. Produktivaufrufer muessen `execute_map_reduce(worker_fn=...)`
+    direkt mit einer echten Worker-Funktion nutzen.
+    """
     require_admin_or_503(request)
     payload = _as_payload(payload)
     from backend.map_reduce_executor import map_reduce_executor
-    return await map_reduce_executor.execute_map_reduce(
+    result = await map_reduce_executor.execute_map_reduce(
         task_title=payload.get("task_title", "Map-Reduce Batch"),
         items=payload.get("items", []),
         instruction=payload.get("instruction", "Analysiere und extrahiere Kernergebnisse"),
         max_workers_override=payload.get("max_parallel_workers")
     )
+    result["simulated"] = True
+    result["mode"] = "demo_only"
+    result["demo_only"] = True
+    result["status"] = "simulation"
+    return result
 
 
 @router.get("/api/execution/map-reduce/history")
@@ -131,6 +142,8 @@ def api_map_reduce_history(limit: int = 20):
 @router.post("/api/execution/structured-output")
 def api_structured_output_validate(payload: StructuredOutputRequest = Body(...)):
     payload = _as_payload(payload)
+    if not payload.get("schema"):
+        raise HTTPException(status_code=400, detail={"code": "schema_required"})
     from backend.structured_output_enforcer import structured_output_enforcer
     return structured_output_enforcer.validate_and_enforce(
         raw_output=payload.get("raw_output", ""),

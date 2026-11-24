@@ -262,8 +262,11 @@ def test_bank_statement_import_camt053_mt940_csv_and_opos_reconciliation(
     )
     assert r_xxe.status_code == 400
 
-    # 2. CAMT.053 XML import auto-matches RE-2026-0101 (1190.00 EUR) and marks invoice paid
-    camt_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    # 2. CAMT.053 XML import auto-matches the first invoice (1190.00 EUR) and marks it paid.
+    # GoBD: a client-supplied doc_number is ignored in favour of the authoritative
+    # counter, so the remittance note must use the number actually assigned.
+    inv_no = inv_auto["doc_number"]
+    camt_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
   <BkToCstmrStmt>
     <Stmt>
@@ -279,7 +282,7 @@ def test_bank_statement_import_camt053_mt940_csv_and_opos_reconciliation(
               <Dbtr><Nm>Nordstern Digital AG</Nm></Dbtr>
               <DbtrAcct><Id><IBAN>DE89370400440532013000</IBAN></Id></DbtrAcct>
             </RltdPties>
-            <RmtInf><Ustrd>Zahlung Rechnung RE-2026-0101</Ustrd></RmtInf>
+            <RmtInf><Ustrd>Zahlung Rechnung {inv_no}</Ustrd></RmtInf>
           </TxDtls>
         </NtryDtls>
       </Ntry>

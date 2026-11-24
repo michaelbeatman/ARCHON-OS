@@ -21,6 +21,15 @@ from utils.docker_client import docker_client, DockerError, docker_cli_host_args
 
 logger = logging.getLogger("archon.ephemeral_sandbox")
 
+
+def _cli_host_args_or_none() -> Optional[list[str]]:
+    """Docker-CLI-Host nur ueber Proxy / expliziten Socket (kein roher Fallback)."""
+    try:
+        return docker_cli_host_args()
+    except DockerError as exc:
+        logger.info("[Sandbox] Docker-CLI nicht konfiguriert: %s", exc)
+        return None
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SANDBOX_TEMP_DIR = "/opt/data/archon_sandbox_runs"
 
@@ -64,9 +73,15 @@ def _ensure_sandbox_network(net_name: Optional[str] = None) -> None:
         raise ZeroEgressNetworkIsolationError(
             f"Zero-Egress Verletzung: Docker-Netzwerk '{target_net}' besitzt eine Internet-Route und ist für Worker verboten."
         )
+    host_args = _cli_host_args_or_none()
+    if host_args is None:
+        raise ZeroEgressNetworkIsolationError(
+            "Zero-Egress-Verifikation nicht moeglich: Docker-CLI-Host not_configured "
+            "(kein Proxy und kein expliziter lokaler Socket)."
+        )
     try:
         subprocess.run(
-            ["docker", *docker_cli_host_args(), "network", "create",
+            ["docker", *host_args, "network", "create",
              "--internal", target_net],
             capture_output=True, text=True, timeout=10,
         )
@@ -76,7 +91,7 @@ def _ensure_sandbox_network(net_name: Optional[str] = None) -> None:
     # Fail-Closed Verifikation: Existierendes Netzwerk MUSS Internal=true sein (keine Internet-Route!)
     try:
         insp = subprocess.run(
-            ["docker", *docker_cli_host_args(), "network", "inspect", target_net],
+            ["docker", *host_args, "network", "inspect", target_net],
             capture_output=True, text=True, timeout=5,
         )
         if insp.returncode == 0 and insp.stdout.strip():
@@ -205,9 +220,12 @@ def _container_present(name: str) -> Optional[bool]:
     werden — sonst würde ein Down-Docker-Daemon ein falsches `destroyed: True`
     erzeugen (Audit C12).
     """
+    host_args = _cli_host_args_or_none()
+    if host_args is None:
+        return None
     try:
         res = subprocess.run(
-            ["docker", *docker_cli_host_args(), "ps", "-a",
+            ["docker", *host_args, "ps", "-a",
              "--filter", f"name={name}", "--format", "{{.Names}}"],
             capture_output=True, text=True, timeout=10,
         )
@@ -226,12 +244,18 @@ def _terminate_container(name: str) -> Dict[str, Any]:
     ist). Bisher wurde `destroyed: True` unbedingt zurückgegeben, auch wenn
     kill und rm scheitern — der Container lief dann als Zombie weiter (C12).
     """
+    host_args = _cli_host_args_or_none()
+    if host_args is None:
+        return {
+            "killed": False, "removed": False, "destroyed": False,
+            "cleanup_verified": False, "not_configured": True,
+        }
     killed = False
     removed = False
     for action in (["kill", name], ["rm", "-f", name]):
         try:
             res = subprocess.run(
-                ["docker", *docker_cli_host_args(), *action],
+                ["docker", *host_args, *action],
                 capture_output=True, text=True, timeout=10,
             )
             if action[0] == "kill" and res.returncode == 0:
@@ -293,6 +317,25 @@ class EphemeralSandbox:
             network_enabled = bool(network_enabled)
             zero_egress_worker_net = bool(zero_egress_worker_net)
 
+        # Audit D04/MED: kein Docker-Host (Proxy) -> ehrlich not_configured,
+        # kein Fallback auf den rohen Unix-Socket und kein Fake-"destroyed".
+        host_args = _cli_host_args_or_none()
+        if host_args is None:
+            return {
+                "status": "error",
+                "error": "not_configured: DOCKER_HOST-Proxy oder expliziter lokaler Socket erforderlich.",
+                "engine": "unavailable",
+                "exit_code": -1,
+                "stdout": "", "stderr": "",
+                "duration_seconds": 0,
+                "memory_limit_mb": memory_limit_mb,
+                "network_enabled": network_enabled,
+                "limits_enforced": False,
+                "destroyed": None,
+                "cleanup_verified": False,
+                "container_created": False,
+            }
+
         run_id = f"sandbox-{uuid.uuid4().hex[:8]}"
         run_dir = os.path.join(self.temp_dir, run_id)
         os.makedirs(run_dir, exist_ok=True)
@@ -335,12 +378,10 @@ class EphemeralSandbox:
 
             # Docker-Kommando als Liste bauen (kein shell=True, daher sicheres Quoting)
             # shlex.quote ist bei Liste nicht nötig, aber Host-Pfad kann Leerzeichen enthalten
-            # `-H <Socket>` ist Pflicht, nicht Kosmetik: `docker run --rm` braucht
-            # attach/wait, die der Proxy absichtlich sperrt (Klasse C, siehe
-            # utils.docker_client.docker_cli_host_args). Ohne die Bindung folgt die CLI
-            # dem globalen DOCKER_HOST und bricht erst mitten in der Ausführung ab.
+            # `-H <Host>` ist Pflicht, nicht Kosmetik: die CLI folgt sonst global
+            # DOCKER_HOST. Hier wird der gepruefte Proxy-/Socket-Endpunkt gebunden.
             docker_cmd = [
-                "docker", *docker_cli_host_args(), "run", "--rm",
+                "docker", *host_args, "run", "--rm",
                 "--name", run_id,
             ]
             docker_cmd.extend(net_flag)
@@ -366,7 +407,7 @@ class EphemeralSandbox:
             # Prüfe, ob Docker verfügbar ist; andernfalls fail-closed
             use_docker = True
             try:
-                chk = subprocess.run(["docker", *docker_cli_host_args(), "info"],
+                chk = subprocess.run(["docker", *host_args, "info"],
                                      capture_output=True, text=True, timeout=3)
                 if chk.returncode != 0:
                     use_docker = False

@@ -19,6 +19,72 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("archon.llm_kernel")
 
+
+class _TracedStream:
+    """Async-Iterator-Wrapper mit strukturierten Metadaten (Generatoren
+    erlauben keine eigenen Attribute)."""
+
+    def __init__(
+        self,
+        agen: Any,
+        *,
+        effective_prompt_info: Dict[str, Any],
+        trace_id: str,
+        session_id: str,
+        correlation_id: str,
+    ) -> None:
+        self._agen = agen
+        self.effective_prompt_info = effective_prompt_info
+        self.prompt_version_info = effective_prompt_info
+        self.trace_id = trace_id
+        self.session_id = session_id
+        self.correlation_id = correlation_id
+
+    def __aiter__(self) -> Any:
+        return self._agen
+
+
+def _prompt_ref(agent_id: str, model: str = "") -> Dict[str, Any]:
+    """Fallback-Referenz, damit auch geblockte/erfolglose Dispatches ein
+    ``effective_prompt_info`` im Ergebnis tragen (D11/S-11.2)."""
+    return {
+        "agent_id": agent_id,
+        "version": "",
+        "version_num": 0,
+        "prompt_version": "",
+        "prompt_hash": "",
+        "canary": False,
+        "is_canary": False,
+        "canary_percentage": 0,
+        "model": model or "",
+        "prompt_chars": 0,
+        "source": "llm_kernel.fallback",
+    }
+
+
+def _with_dispatch_context(
+    res: Any,
+    *,
+    agent_id: str,
+    model: str,
+    trace_id: str,
+    session_id: str,
+    correlation_id: str,
+) -> Dict[str, Any]:
+    """Jeder Dispatch-Return enthaelt Prompt-Referenz und Korrelationsfelder."""
+    out = dict(res) if isinstance(res, dict) else {"status": "error", "content": str(res or "")}
+    info = out.get("effective_prompt_info")
+    if not isinstance(info, dict) or not info:
+        info = _prompt_ref(agent_id, model)
+        info["model"] = str(out.get("model") or model or "")
+    out["effective_prompt_info"] = info
+    out.setdefault("prompt_version_info", info)
+    out.setdefault("trace_id", trace_id)
+    out.setdefault("session_id", session_id)
+    out.setdefault("correlation_id", correlation_id)
+    return out
+
+
 AUTO_MODEL_MAP: Dict[str, str] = {
     "auto/best-coding": "deepseek/deepseek-chat",
     "auto/best-reasoning": "deepseek/deepseek-r1",
@@ -123,12 +189,34 @@ def finalize_llm_output(
     return s
 
 
+def _note_trace_error(message: str, exc: BaseException) -> None:
+    """D16: lokale Trace-Fehler sichtbar machen (WARNING + record_stats-Zaehler).
+
+    Agent I stellt ``note_local_trace_error`` bereit; je nach Deploy-Stand
+    liegt sie als Modul-Funktion in ``trace_context`` oder als Methode auf dem
+    ``tracer``. Beide Varianten werden unterstuetzt, ohne still zu verschwinden.
+    """
+    try:
+        from backend import trace_context as _tc
+        note = getattr(_tc, "note_local_trace_error", None)
+        if note is not None:
+            note(message, exc)
+            return
+    except Exception:
+        pass
+    try:
+        from backend.otel_tracer import tracer
+        tracer.note_local_trace_error(message, exc)
+    except Exception:
+        logger.warning("[LLMKernel] %s: %s", message, exc)
+
+
 async def _otel_start(name: str, task_id: Optional[str], agent_id: str) -> Optional[str]:
     try:
         from backend.otel_tracer import tracer
         return await asyncio.to_thread(tracer.start_trace, name, task_id, agent_id)
     except Exception as exc:
-        logger.debug("[LLMKernel] OTel-Trace-Start fehlgeschlagen: %s", exc)
+        _note_trace_error("[LLMKernel] OTel-Trace-Start fehlgeschlagen", exc)
         return None
 
 
@@ -137,7 +225,7 @@ async def _otel_span(trace_id: str, **kwargs: Any) -> None:
         from backend.otel_tracer import tracer
         await asyncio.to_thread(tracer.record_span, trace_id, **kwargs)
     except Exception as exc:
-        logger.debug("[LLMKernel] OTel-Span fehlgeschlagen: %s", exc)
+        _note_trace_error("[LLMKernel] OTel-Span fehlgeschlagen", exc)
 
 
 async def _otel_end(trace_id: str, status: str) -> None:
@@ -145,7 +233,7 @@ async def _otel_end(trace_id: str, status: str) -> None:
         from backend.otel_tracer import tracer
         await asyncio.to_thread(tracer.end_trace, trace_id, status)
     except Exception as exc:
-        logger.debug("[LLMKernel] OTel-Trace-Ende fehlgeschlagen: %s", exc)
+        _note_trace_error("[LLMKernel] OTel-Trace-Ende fehlgeschlagen", exc)
 
 
 async def dispatch_llm(
@@ -164,10 +252,25 @@ async def dispatch_llm(
     stream: bool = False,
 ) -> Any:
     """Einheitlicher LLM-Einstiegspunkt fuer Agenten- & Chat-Calls."""
+    try:
+        from backend import trace_context as _tctx
+    except Exception:
+        _tctx = None
+
+    active_trace = ""
+    if _tctx is not None:
+        active_trace = str(_tctx.current_trace_id() or "")
+        if not active_trace:
+            try:
+                active_trace, _ = _tctx.ensure_trace()
+            except Exception:
+                active_trace = ""
+    correlation_id = str(task_id or session_id or active_trace or "")
+
     if stream:
         # Der Router erwartet provider UND api_keys als Pflichtargumente und
-        # kennt kein session_id. Der alte Aufruf erzeugte guarantee einen
-        # TypeError — der gesamte Streaming-Pfad des Kernels war damit tot.
+        # kennt kein session_id. Das Session-/Trace-Feld wird daher ueber den
+        # Trace-Kontext und die Ergebnis-Metadaten mitgefuehrt.
         from backend.agent_router import router_instance
         import api_provider
         msgs = list(messages or [])
@@ -180,25 +283,46 @@ async def dispatch_llm(
             "openrouter" if all_keys.get("OPENROUTER_API_KEY") else "omniroute"
         )
         eff_model = resolve_auto_model(model)
-        gen = router_instance.stream_chat_completion(
-            messages=msgs,
-            provider=eff_provider,
-            model=eff_model,
-            api_keys=all_keys,
-            reasoning_level=reasoning_level,
-            agent_id=agent_id,
-            role=role,
-        )
         trace_id = await _otel_start("llm.stream", task_id or session_id, agent_id)
+        ref = _prompt_ref(agent_id, eff_model)
 
         async def _traced_stream():
             started = time.perf_counter()
             chunks: List[str] = []
             status = "OK"
             try:
-                async for chunk in gen:
-                    chunks.append(str(chunk))
-                    yield chunk
+                # Kind-Span im selben Trace-Kontext (D11/S-11.4).
+                span_cm = (
+                    _tctx.child_span()
+                    if _tctx is not None and trace_id else None
+                )
+                if span_cm is not None:
+                    with span_cm:
+                        gen = router_instance.stream_chat_completion(
+                            messages=msgs,
+                            provider=eff_provider,
+                            model=eff_model,
+                            api_keys=all_keys,
+                            reasoning_level=reasoning_level,
+                            agent_id=agent_id,
+                            role=role,
+                        )
+                        async for chunk in gen:
+                            chunks.append(str(chunk))
+                            yield chunk
+                else:
+                    gen = router_instance.stream_chat_completion(
+                        messages=msgs,
+                        provider=eff_provider,
+                        model=eff_model,
+                        api_keys=all_keys,
+                        reasoning_level=reasoning_level,
+                        agent_id=agent_id,
+                        role=role,
+                    )
+                    async for chunk in gen:
+                        chunks.append(str(chunk))
+                        yield chunk
             except Exception:
                 status = "ERROR"
                 raise
@@ -213,11 +337,19 @@ async def dispatch_llm(
                         output_data="".join(chunks)[-2000:],
                         status=status,
                         duration_ms=round((time.perf_counter() - started) * 1000.0, 2),
-                        attributes={"provider": eff_provider, "stream": True},
+                        attributes={"provider": eff_provider, "stream": True,
+                                    "session_id": session_id or "", "correlation_id": correlation_id},
                     )
                     await _otel_end(trace_id, status)
 
-        return _traced_stream()
+        # Auch der Streaming-Pfad traegt die strukturierte Referenz (kein Dict-Return).
+        return _TracedStream(
+            _traced_stream(),
+            effective_prompt_info=ref,
+            trace_id=str(trace_id or active_trace or ""),
+            session_id=session_id or "",
+            correlation_id=correlation_id,
+        )
 
     import core_dispatcher
     eff_prompt = prompt
@@ -225,20 +357,48 @@ async def dispatch_llm(
         eff_prompt = "\n".join(str(m.get("content") or "") for m in messages if m.get("role") == "user")
     started = time.perf_counter()
     trace_id = await _otel_start("llm.dispatch", task_id or session_id, agent_id)
+    # session_id/correlation_id reisen ueber den Trace-Kontext ueber Systemgrenzen.
+    if _tctx is not None and (active_trace or trace_id):
+        active_trace = str(trace_id or active_trace)
+    ctx_cm = (
+        _tctx.use_trace_context(trace_id=active_trace)
+        if _tctx is not None and active_trace else None
+    )
     res: Any = None
     try:
-        res = await core_dispatcher.dispatch_to_omniroute_or_container(
+        if ctx_cm is not None:
+            with ctx_cm:
+                res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                    prompt=eff_prompt,
+                    role=role,
+                    system_prompt=system_prompt,
+                    model=model,
+                    provider=provider,
+                    reasoning_level=reasoning_level,
+                    task_id=task_id,
+                )
+        else:
+            res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=agent_id,
+                agent_name=agent_name,
+                prompt=eff_prompt,
+                role=role,
+                system_prompt=system_prompt,
+                model=model,
+                provider=provider,
+                reasoning_level=reasoning_level,
+                task_id=task_id,
+            )
+        return _with_dispatch_context(
+            res,
             agent_id=agent_id,
-            agent_name=agent_name,
-            prompt=eff_prompt,
-            role=role,
-            system_prompt=system_prompt,
-            model=model,
-            provider=provider,
-            reasoning_level=reasoning_level,
-            task_id=task_id,
+            model=str(res.get("model") or model) if isinstance(res, dict) else model,
+            trace_id=str(trace_id or active_trace or ""),
+            session_id=session_id or "",
+            correlation_id=correlation_id,
         )
-        return res
     finally:
         if trace_id:
             status = "OK"

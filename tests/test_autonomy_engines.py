@@ -11,6 +11,8 @@ Validiert die Implementierung von:
 import os
 import sys
 
+import pytest
+
 # Pfad vorbereiten
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, WORKSPACE_DIR)
@@ -23,10 +25,19 @@ from backend.jit_persona_engine import get_jit_persona_engine
 
 def test_self_evolving_tooling(monkeypatch):
     print("--- [TEST 1] Feature 6: Self-Evolving Tooling (Voyager) ---")
-    # Härtung: der Host-Fallback ist nur mit explizitem Opt-in erlaubt.
+    # Härtung: der Host-Fallback ist nur mit ZWEI expliziten Opt-ins erlaubt.
     # Dieser Test läuft bewusst ohne Docker und nutzt daher den Opt-in-Pfad.
     monkeypatch.setenv("ARCHON_ALLOW_HOST_SANDBOX", "true")
+    monkeypatch.setenv("ARCHON_SANDBOX_NETWORK_NONE_CONFIRMED", "true")
     engine = get_evolving_tool_engine()
+
+    # Neue Invariante: der Harness importiert kein os/sys mehr, und die
+    # AST-Sperre wehrt __import__/eval/exec sowie gefährliche Importe ab.
+    from backend.self_evolving_tooling import _validate_synthetic_imports
+    for dangerous in ("import os", "import sys", "__import__('os')",
+                      "eval('1 + 1')", "exec('1 + 1')"):
+        with pytest.raises(ValueError):
+            _validate_synthetic_imports(dangerous, "tool_code")
     
     tool_code = """
 def calculate_vat_split(gross_amount: float, tax_rate: float = 0.19):

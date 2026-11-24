@@ -158,6 +158,7 @@ class PromptRegistry:
             "status": "success",
             "agent_id": agent_id,
             "version_num": next_v,
+            "version": str(next_v),
             "is_active": make_active,
             "canary_percentage": canary_percentage
         }
@@ -289,6 +290,38 @@ class PromptRegistry:
             "active_version": version_num
         }
 
+    @staticmethod
+    def _effective_ref(
+        agent_id: str,
+        prompt: str,
+        version_num: int,
+        model: Optional[str],
+        is_canary: bool,
+        canary_percentage: int,
+    ) -> Dict[str, Any]:
+        """Einheitliche, normalisierte Prompt-Referenz fuer Dispatcher/Proof.
+
+        D11/S-11.2: Die Registry liefert ``version_num``, der Dispatcher liest
+        ``version``/``prompt_version``. Beide Schreibweisen werden hier
+        erzeugt, damit die Version im signierten Proof nicht mehr leer bleibt.
+        ``prompt_hash`` macht den tatsaechlich ausgelieferten Text nachweisbar.
+        """
+        version = str(version_num)
+        return {
+            "prompt": prompt,
+            # Rueckwaertskompatible Schreibweise (DB-Spalte).
+            "version_num": version_num,
+            # Kanonische Schreibweise fuer Dispatch-Ergebnisse und Audit-Proof.
+            "version": version,
+            "prompt_version": version,
+            "prompt_hash": hashlib.sha256(str(prompt or "").encode("utf-8")).hexdigest(),
+            "model": model,
+            "is_canary": bool(is_canary),
+            "canary": bool(is_canary),
+            "canary_percentage": int(canary_percentage),
+            "agent_id": agent_id,
+        }
+
     def get_effective_prompt(self, agent_id: str, task_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Ermittelt den aktuell anzuwendenden Prompt.
@@ -314,14 +347,10 @@ class PromptRegistry:
                     hashlib.md5(routing_key.encode("utf-8"), usedforsecurity=False).hexdigest(), 16
                 ) % 100
                 if hash_val < canary_pct:
-                    return {
-                        "prompt": canary["prompt"],
-                        "version_num": canary["version_num"],
-                        "model": canary["model"],
-                        "is_canary": True,
-                        "canary_percentage": canary_pct,
-                        "agent_id": agent_id
-                    }
+                    return self._effective_ref(
+                        agent_id, canary["prompt"], canary["version_num"],
+                        canary["model"], True, canary_pct,
+                    )
 
             # 2. Standardmäßig aktive Version zurückgeben
             cur.execute("""
@@ -331,24 +360,13 @@ class PromptRegistry:
             """, (agent_id,))
             active = cur.fetchone()
             if active:
-                return {
-                    "prompt": active["prompt"],
-                    "version_num": active["version_num"],
-                    "model": active["model"],
-                    "is_canary": False,
-                    "canary_percentage": 0,
-                    "agent_id": agent_id
-                }
+                return self._effective_ref(
+                    agent_id, active["prompt"], active["version_num"],
+                    active["model"], False, 0,
+                )
 
         # Fallback: Direkt aus agent_profiles.json
-        return {
-            "prompt": "",
-            "version_num": 0,
-            "model": None,
-            "is_canary": False,
-            "canary_percentage": 0,
-            "agent_id": agent_id
-        }
+        return self._effective_ref(agent_id, "", 0, None, False, 0)
 
 
 # Globales Singleton

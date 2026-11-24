@@ -87,6 +87,10 @@ def test_n8n_execution_injects_trace_id_and_traceparent(monkeypatch):
 
     class _FakeResp:
         status_code = 200
+        content = b"{}"
+
+        def json(self):
+            return {}
 
     class _FakeClient:
         async def __aenter__(self):
@@ -110,9 +114,13 @@ def test_n8n_execution_injects_trace_id_and_traceparent(monkeypatch):
             content="hello",
         )
     )
-    assert res["status"] == "success"
+    # HTTP 200 ohne executionId ist keine bestaetigte Ausfuehrung mehr — kein
+    # Fake-'warning'/success, sondern explizit 'unconfirmed'.
+    assert res["status"] == "unconfirmed"
+    assert res["error_code"] == "N8N_DELIVERY_UNCONFIRMED"
     assert captured["body"]["trace_id"] == tid
-    assert captured["headers"]["traceparent"] == tc.format_traceparent(tid, sid)
+    assert captured["body"]["span_id"] == sid
+    assert captured["headers"]["traceparent"].startswith(f"00-{tid}-{sid}-")
 
 
 def test_agent_router_injects_traceparent_and_records_audit_trace_id(tmp_path, monkeypatch):

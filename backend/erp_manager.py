@@ -1710,7 +1710,21 @@ class ERPManager:
                     if existing_num and not existing_num.startswith("ENTWURF-"):
                         doc_number = existing_num
                     else:
-                        doc_number = payload.get("doc_number") or self._format_doc_number(conn, doc_type, cid)
+                        # D03/HIGH: EINE Authority. Ein clientgelieferter
+                        # `doc_number` wurde bisher ungeprüft übernommen
+                        # (Router erlaubt extra="allow") und umging den Zähler
+                        # -> Kollisionen/Lücken (GoBD). Die Nummer entsteht
+                        # ausschließlich hier, in derselben BEGIN-IMMEDIATE-
+                        # Transaktion. Eine bereits vergebene Nummer oben bleibt
+                        # unverändert (keine Umnummerierung festgeschriebener
+                        # Belege).
+                        if payload.get("doc_number"):
+                            logger.warning(
+                                "[GoBD] Ignoriere clientgelieferte doc_number '%s' "
+                                "(tenant=%s, type=%s) — Zähler ist autoritativ.",
+                                payload.get("doc_number"), cid, doc_type,
+                            )
+                        doc_number = self._format_doc_number(conn, doc_type, cid)
 
                 conn.execute("""
                     INSERT INTO erp_documents (
@@ -1857,6 +1871,19 @@ class ERPManager:
         if not src:
             raise ValueError(f"Quellbeleg {source_doc_id} nicht gefunden.")
 
+        # D03/HIGH (GoBD): die Konvertierung setzte den Quellbeleg bisher
+        # unabhängig von seinem Status auf 'accepted' und umging damit die
+        # Guards in save_document(). Festgeschriebene Belege (booked/paid/
+        # cancelled) dürfen nicht regredieren. Fail-closed VOR dem Anlegen
+        # des Zielbelegs, damit nie ein halb konvertierter Zustand entsteht.
+        src_status = str(src.get("status") or "")
+        if src_status not in ("draft", "sent", "offer_accepted"):
+            raise ValueError(
+                f"GoBD: Konvertierung aus festgeschriebenem Beleg "
+                f"('{src_status}', id={source_doc_id}) nicht erlaubt. "
+                "Erlaubt: draft, sent, offer_accepted."
+            )
+
         copied_lines = []
         for l in src.get("lines", []):
             cl = dict(l)
@@ -1879,16 +1906,44 @@ class ERPManager:
         }
         created = self.save_document(new_payload, company_id=company_id)
 
-        # Quellbeleg auf 'accepted' setzen
+        # Quellbeleg auf 'accepted' setzen — nur noch aus freigegebenen
+        # Statuswerten, mit rowcount-Prüfung (D03/HIGH).
         conn, cid = self._get_conn(company_id)
         try:
             with conn:
-                conn.execute(
-                    "UPDATE erp_documents SET status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (source_doc_id,)
+                cur = conn.execute(
+                    "UPDATE erp_documents SET status = 'accepted', updated_at = CURRENT_TIMESTAMP "
+                    "WHERE id = ? AND status IN ('draft', 'sent', 'offer_accepted')",
+                    (source_doc_id,),
                 )
+                if cur.rowcount != 1:
+                    raise RuntimeError(
+                        f"GoBD: Quellbeleg {source_doc_id} konnte nicht auf 'accepted' "
+                        f"gesetzt werden (rowcount={cur.rowcount}, Status '{src_status}')."
+                    )
         finally:
             conn.close()
+
+        # GoBD-Revisionsnachweis der Belegumwandlung (Statuswechsel + IDs,
+        # keine Beträge/Inhalte). Ein Audit-Fehler darf die bereits
+        # erfolgreiche Konvertierung nicht zerstören, muss aber sichtbar sein.
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="erp",
+                action="document_converted",
+                agent_id="system",
+                payload={
+                    "tenant_id": cid,
+                    "source_doc_id": source_doc_id,
+                    "source_status": src_status,
+                    "target_doc_id": created.get("id"),
+                    "target_doc_number": created.get("doc_number"),
+                    "target_doc_type": target_doc_type,
+                },
+            )
+        except Exception as exc:
+            logger.error("[GoBD-Audit] document_converted fehlgeschlagen: %s", exc)
 
         return created
 

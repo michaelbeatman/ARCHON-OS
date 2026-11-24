@@ -13,7 +13,9 @@ import json
 import math
 import sqlite3
 import asyncio
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, NamedTuple, Optional, Sequence, Tuple, Union
+
+from pydantic import BaseModel, ConfigDict, Field
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -47,6 +49,28 @@ _init_consensus_db()
 
 
 # --- Deterministische, OFFLINE-Konsensauswertung fuer Boardroom-Debatten ---
+# D11: schema-validierte Handoffs statt roher, unvalidierter Dicts.
+class DebateStatement(BaseModel):
+    """Ein validierter Debatten-Beitrag (extra="forbid" = keine Schattenfelder)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str = Field(..., min_length=1)
+    content: str
+    trace_id: Optional[str] = None
+    session_id: Optional[str] = None
+    correlation_id: Optional[str] = None
+    policy_violation: bool = False
+    severity: Optional[str] = None
+
+
+class ConsensusEvidence(NamedTuple):
+    """Typisiertes Beweistuples. Bleibt == (agent_id, marker) fuer Alt-Consumer."""
+
+    agent_id: str
+    marker: str
+
+
 # M-1: Eine explizite Negation schlaegt immer einen positiven Marker.
 # "KEIN CONSENSUS ERREICHT" darf niemals als Zustimmung gewertet werden.
 _POSITIVE_DEBATE_MARKERS = (
@@ -56,34 +80,116 @@ _NEGATIVE_DEBATE_MARKERS = (
     "KEIN KONSENS", "KEIN CONSENSUS", "NICHT ERREICHT", "NO CONSENSUS",
     "WIDERSPRUCH", "DISAGREE", "DEBATTE_FORTSETZEN",
 )
+# D14: Policy-Verstoesse sind ein hartes Veto, keine zaehlbare Gegenstimme.
+_POLICY_VETO_MARKERS = (
+    "POLICY_VIOLATION", "GUARDRAIL_BLOCKED", "POLICY_VERSTOSS", "REGELVERSTOSS",
+)
+_DEFAULT_TIE_BREAK_RULE = "executive>lead>specialist>no_consensus"
+_TIER_WEIGHTS: Dict[str, int] = {"executive": 3, "lead": 2, "specialist": 1}
+
+
+def _infer_tier(agent_id: str, authority: Optional[Dict[str, str]] = None) -> str:
+    """Tier aus expliziter authority-Map oder der Rollen-SSOT ableiten."""
+    tier = ""
+    if authority:
+        tier = str(authority.get(agent_id) or authority.get(str(agent_id).lower()) or "")
+    if tier not in _TIER_WEIGHTS:
+        try:
+            from backend.role_budget_engine import EXECUTIVE_ROLE_IDS, LEAD_ROLE_IDS
+            aid = str(agent_id or "").strip().lower()
+            exec_ids = {str(x).lower() for x in EXECUTIVE_ROLE_IDS}
+            lead_ids = {str(x).lower() for x in LEAD_ROLE_IDS}
+            if aid in exec_ids:
+                tier = "executive"
+            elif aid in lead_ids:
+                tier = "lead"
+        except Exception as exc:
+            _archon_exc_logger.debug("[consensus_gate] Tier-SSOT nicht verfuegbar: %s", exc)
+    return tier if tier in _TIER_WEIGHTS else "specialist"
+
+
+def validate_debate_statements(
+    statements: Optional[Sequence[Union[DebateStatement, Dict[str, Any]]]],
+) -> List[DebateStatement]:
+    """Projiziert Boardroom-Events auf die erlaubten Felder und validiert sie.
+
+    Die Event-Dicts der Debatte tragen zusaetzliche Felder (``type``, ``round``,
+    ...). Diese werden hier bewusst entfernt, bevor ``extra="forbid"`` greift:
+    das Modell bleibt strikt, der Adapter nimmt nur deklarierte Felder an.
+    """
+    validated: List[DebateStatement] = []
+    allowed = set(DebateStatement.model_fields)
+    for statement in statements or []:
+        if isinstance(statement, DebateStatement):
+            validated.append(statement)
+            continue
+        if not isinstance(statement, dict):
+            _archon_exc_logger.warning("[consensus_gate] Statement vom Typ %s ignoriert", type(statement).__name__)
+            continue
+        payload = {k: v for k, v in statement.items() if k in allowed}
+        try:
+            validated.append(DebateStatement.model_validate(payload))
+        except Exception as exc:
+            # Fail-closed: ein ungueltiger Beitrag darf nicht als Zustimmung gelten.
+            _archon_exc_logger.warning("[consensus_gate] Statement ungueltig, als Veto behandelt: %s", exc)
+            validated.append(DebateStatement(
+                agent_id=str(statement.get("agent_id") or "unknown"),
+                content="POLICY_VIOLATION: ungueltiger Debatten-Statement (schema)",
+                policy_violation=True,
+                severity="high",
+            ))
+    return validated
 
 
 def resolve_debate_consensus(
-    statements: List[Dict[str, Any]],
+    statements: Sequence[Union[DebateStatement, Dict[str, Any]]],
     *,
     majority_rule: str = "two_thirds",
+    authority: Optional[Dict[str, str]] = None,
+    tie_break: str = _DEFAULT_TIE_BREAK_RULE,
 ) -> Dict[str, Any]:
     """
     Wertet explizite Konsens-Marker einer Boardroom-Debatte deterministisch und
     OFFLINE aus (kein LLM-Aufruf, keine externe Abhaengigkeit).
 
-    Jeder Statement-Dict muss ``agent_id`` und ``content`` enthalten. Marker
-    werden case-insensitive erkannt; eine explizite Negation gewinnt immer
-    (M-1-Fix). Statements ohne Marker zaehlen weder als Ja-Stimme noch in
-    ``total_votes``.
-
-    Fail-closed: Weniger als zwei explizite Statements oder keine Ja-Stimmen
-    bedeuten immer ``consensus_reached=False``.
+    Statements werden ueber ``DebateStatement`` (Pydantic v2, extra="forbid")
+    validiert. Marker werden case-insensitive erkannt; eine explizite Negation
+    gewinnt immer (M-1-Fix). Ein ``policy_violation``-Flag bzw. ein Veto-Marker
+    fuehrt sofort zu ``NO_CONSENSUS_POLICY_VIOLATION`` (D14: kein Mehrheitsgewinn).
+    Bei Gleichstand entscheidet die Autoritaet executive > lead > specialist;
+    Gleichstand innerhalb der hoechsten Tier -> NO_CONSENSUS + HITL.
     """
+    parsed = validate_debate_statements(statements)
     yes_votes = 0
     total_votes = 0
-    evidence: List[Any] = []
+    evidence: List[ConsensusEvidence] = []
+    weighted_yes = 0
+    weighted_no = 0
+    tier_tallies: Dict[str, Dict[str, int]] = {
+        tier: {"yes": 0, "no": 0} for tier in _TIER_WEIGHTS
+    }
 
-    for statement in statements or []:
-        if not isinstance(statement, dict):
-            continue
-        text = str(statement.get("content", "") or "").upper()
-        agent_id = statement.get("agent_id", "")
+    for statement in parsed:
+        text = str(statement.content or "").upper()
+        agent_id = str(statement.agent_id)
+        tier = _infer_tier(agent_id, authority)
+        weight = _TIER_WEIGHTS[tier]
+
+        # D14: hartes Veto — vor jeder Marker-/Mehrheitszaehlung.
+        veto_marker = next((m for m in _POLICY_VETO_MARKERS if m in text), None)
+        if statement.policy_violation or veto_marker is not None:
+            return {
+                "consensus_reached": False,
+                "yes_votes": yes_votes,
+                "total_votes": total_votes,
+                "required_votes": 0,
+                "verdict": "NO_CONSENSUS_POLICY_VIOLATION",
+                "veto_by": agent_id,
+                "evidence": evidence + [ConsensusEvidence(agent_id, veto_marker or "POLICY_VIOLATION")],
+                "tie_break_rule": tie_break,
+                "authority_weights": dict(_TIER_WEIGHTS),
+                "severity": statement.severity or "high",
+            }
 
         neg = next((m for m in _NEGATIVE_DEBATE_MARKERS if m in text), None)
         pos = next((m for m in _POSITIVE_DEBATE_MARKERS if m in text), None)
@@ -91,11 +197,15 @@ def resolve_debate_consensus(
         if neg is not None:
             # Negation gewinnt, auch wenn zusaetzlich ein Ja-Marker steht.
             total_votes += 1
-            evidence.append((agent_id, neg))
+            weighted_no += weight
+            tier_tallies[tier]["no"] += 1
+            evidence.append(ConsensusEvidence(agent_id, neg))
         elif pos is not None:
             total_votes += 1
             yes_votes += 1
-            evidence.append((agent_id, pos))
+            weighted_yes += weight
+            tier_tallies[tier]["yes"] += 1
+            evidence.append(ConsensusEvidence(agent_id, pos))
 
     if majority_rule == "unanimous":
         required_votes = total_votes
@@ -107,6 +217,33 @@ def resolve_debate_consensus(
         total_votes >= 2 and yes_votes > 0 and yes_votes >= required_votes
     )
     verdict = "CONSENSUS_REACHED" if consensus_reached else "NO_CONSENSUS"
+    applied_tie_break = ""
+
+    if not consensus_reached and total_votes >= 2 and majority_rule != "unanimous":
+        # Autoritaets-Hierarchie: gewichtete 2/3-Mehrheit bricht den Raw-Tie.
+        # "unanimous" bleibt bewusst hart — dort gibt es keine Ueberstimmung.
+        weighted_total = weighted_yes + weighted_no
+        weighted_required = max(2, math.ceil(2 * weighted_total / 3))
+        if weighted_yes > weighted_no and weighted_yes >= weighted_required:
+            consensus_reached = True
+            verdict = "CONSENSUS_REACHED_BY_AUTHORITY"
+            applied_tie_break = "authority_weight_majority"
+        elif weighted_yes == weighted_no and weighted_total > 0:
+            # Exakter Gleichstand: hoechstes anwesendes Tier entscheidet,
+            # aber nur wenn es dort intern einstimmig ist. Sonst HITL.
+            for tier in ("executive", "lead", "specialist"):
+                tally = tier_tallies[tier]
+                if tally["yes"] + tally["no"] == 0:
+                    continue
+                if tally["yes"] == 0 and tally["no"] > 0:
+                    verdict = "NO_CONSENSUS_BY_AUTHORITY"
+                    applied_tie_break = f"highest_tier:{tier}:no"
+                elif tally["no"] == 0 and tally["yes"] > 0:
+                    consensus_reached = True
+                    verdict = "CONSENSUS_REACHED_BY_AUTHORITY"
+                    applied_tie_break = f"highest_tier:{tier}:yes"
+                # geteiltes hoechstes Tier -> NO_CONSENSUS (HITL), kein Flip.
+                break
 
     return {
         "consensus_reached": consensus_reached,
@@ -114,7 +251,11 @@ def resolve_debate_consensus(
         "total_votes": total_votes,
         "required_votes": required_votes,
         "verdict": verdict,
+        "veto_by": None,
         "evidence": evidence,
+        "tie_break_rule": tie_break,
+        "applied_tie_break": applied_tie_break,
+        "authority_weights": dict(_TIER_WEIGHTS),
     }
 
 

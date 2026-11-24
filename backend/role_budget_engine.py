@@ -490,6 +490,53 @@ def score_subtask_complexity(
     return round(max(0.7, min(2.0, weight)), 2)
 
 
+def _resolve_parent_budget(
+    parent_task_id: str,
+    trajectory_id: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Elternbudget NUR aus Root-Intake/Trajectory — niemals neu erfinden."""
+    try:
+        if trajectory_id:
+            from backend.trajectory_budget import get_trajectory
+            row = get_trajectory(trajectory_id, db_path=db_path) if db_path else get_trajectory(trajectory_id)
+            if row and int(row.get("max_tokens") or 0) > 0:
+                return {"token_budget": int(row["max_tokens"]), "cost_limit_eur": None,
+                        "source": "trajectory_budgets"}
+    except Exception:
+        pass
+    try:
+        with _get_conn(db_path) as conn:
+            row = conn.execute(
+                "SELECT token_budget, cost_limit_eur FROM task_budget_allocations WHERE task_id = ?",
+                (parent_task_id,),
+            ).fetchone()
+            if row and int(row["token_budget"] or 0) > 0:
+                return {"token_budget": int(row["token_budget"]),
+                        "cost_limit_eur": float(row["cost_limit_eur"] or 0.0) or None,
+                        "source": "task_budget_allocations"}
+    except Exception:
+        pass
+    return {}
+
+
+def _no_parent_budget_result(parent_task_id: str) -> Dict[str, Any]:
+    result = {
+        "status": "blocked", "block_kind": "no_parent_budget",
+        "failure_reason": "NO_PARENT_BUDGET", "parent_task_id": parent_task_id,
+        "reason": "Kein Elternbudget vorhanden — Budget-Minting pro Hop ist untersagt.",
+        "total_token_budget": 0, "total_cost_limit_eur": 0.0,
+        "orchestrator_reserve_tokens": 0, "orchestrator_reserve_eur": 0.0,
+        "allocations": [],
+    }
+    try:
+        from backend.trajectory_budget import _audit
+        _audit(str(parent_task_id), "NO_PARENT_BUDGET — Subagent-Allokation blockiert", str(parent_task_id))
+    except Exception:
+        pass
+    return result
+
+
 def allocate_task_budget_to_subagents(
     parent_task_id: str,
     total_token_budget: int,
@@ -497,23 +544,33 @@ def allocate_task_budget_to_subagents(
     total_cost_limit_eur: Optional[float] = None,
     orchestrator_reserve_pct: float = 0.15,
     db_path: Optional[str] = None,
+    trajectory_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Splits a parent task's token & EUR budget across its subagents weighted by
     task complexity. Reserves `orchestrator_reserve_pct` (default 15%) for the
     Orchestrator triage & Lisa synthesis loop.
+
+    D13/HIGH: fehlendes Elternbudget ist `blocked/NO_PARENT_BUDGET`, kein
+    Fallback-Minting. Nur der Root-Intake darf ein Budget setzen.
     """
     init_budget_tables(db_path)
     tot_tokens = max(0, int(total_token_budget or 0))
+    tot_eur_given = float(total_cost_limit_eur or 0.0)
     if tot_tokens <= 0:
-        # Default fallback: 60k tokens per subtask + 20k orchestrator buffer
-        tot_tokens = max(60_000, len(subtasks) * 45_000 + 15_000)
+        parent = _resolve_parent_budget(parent_task_id, trajectory_id, db_path)
+        if not parent:
+            return _no_parent_budget_result(parent_task_id)
+        tot_tokens = int(parent["token_budget"])
+        if tot_eur_given <= 0 and parent.get("cost_limit_eur"):
+            tot_eur_given = float(parent["cost_limit_eur"])
 
-    if total_cost_limit_eur is None or total_cost_limit_eur <= 0:
-        # Approximate EUR from token budget (~1.25 EUR per 100k tokens blended)
+    if tot_eur_given <= 0:
+        # EUR-Wert ist eine Umrechnung des BESTEHENDEN Root-Budgets, kein neues
+        # Budget: 1.25 EUR pro 100k Tokens (blended).
         tot_eur = round((tot_tokens / 100_000.0) * 1.25, 2)
     else:
-        tot_eur = round(float(total_cost_limit_eur), 2)
+        tot_eur = round(tot_eur_given, 2)
 
     if not subtasks:
         now_iso = datetime.datetime.now().isoformat()
@@ -800,6 +857,7 @@ def plan_and_decompose_task_with_budgets(
     total_cost_limit_eur: Optional[float] = None,
     allow_autonomous_hiring: bool = False,
     db_path: Optional[str] = None,
+    trajectory_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Analyzes a task, selects the optimal 2-3 existing roster specialists,
@@ -871,14 +929,21 @@ def plan_and_decompose_task_with_budgets(
             "is_autonomously_hired": True,
         })
 
-    eff_tokens = int(total_token_budget) if (total_token_budget and total_token_budget > 0) else (len(nominated) * 45_000 + 15_000)
+    eff_tokens = int(total_token_budget) if (total_token_budget and total_token_budget > 0) else 0
     budget_plan = allocate_task_budget_to_subagents(
         parent_task_id=parent_task_id,
         total_token_budget=eff_tokens,
         subtasks=nominated,
         total_cost_limit_eur=total_cost_limit_eur,
         db_path=db_path,
+        trajectory_id=trajectory_id,
     )
+    if str(budget_plan.get("status") or "") == "blocked":
+        return {
+            "status": "blocked", "block_kind": "no_parent_budget",
+            "failure_reason": "NO_PARENT_BUDGET", "parent_task_id": parent_task_id,
+            "subtasks": [], "hired_specialist": None, "budget_plan": budget_plan,
+        }
 
     # Update hired specialist's budget policy to match its exact complexity-weighted share
     if hired_specialist:
@@ -974,7 +1039,9 @@ class BudgetBank:
     DAG-Nodes können damit das harte Cap nicht überschreiten.
     """
 
-    RESERVATION_TTL_SECONDS = 1800
+    # D13/MED: 30 min waren kuerzer als Delegations-Watcher (1200 s) + DAG
+    # (900 s). Verlaengerter TTL + Heartbeat verhindert unterzählten Verbrauch.
+    RESERVATION_TTL_SECONDS = 7200
 
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = db_path or BUDGET_DB_PATH
@@ -1236,12 +1303,14 @@ class BudgetBank:
                 conn.execute("BEGIN IMMEDIATE")
                 if reservation_id:
                     row = conn.execute(
-                        "SELECT * FROM budget_reservations WHERE reservation_id = ? AND status = 'reserved'",
+                        "SELECT * FROM budget_reservations WHERE reservation_id = ? "
+                        "AND status IN ('reserved', 'expired')",
                         (reservation_id,),
                     ).fetchone()
                     if not row:
                         conn.rollback()
                         return {"status": "not_found", "reservation_id": reservation_id}
+                    late_settlement = str(row["status"]) == "expired"
                     aid = str(row["agent_id"] or "default")
                     tid = row["task_id"] or None
                 else:
@@ -1290,8 +1359,51 @@ class BudgetBank:
                         (now, reservation_id),
                     )
                 conn.commit()
+                if late_settlement:
+                    # D13/MED: trotz Ablauf REAL gebuchten Verbrauch melden.
+                    logger.warning("[BudgetBank] late_settlement %s agent=%s task=%s tokens=%s",
+                                   reservation_id, aid, tid, tok)
                 return {"status": "settled", "reservation_id": reservation_id,
-                        "agent_id": aid, "task_id": tid, "tokens_used": tok, "cost_eur": eur}
+                        "agent_id": aid, "task_id": tid, "tokens_used": tok, "cost_eur": eur,
+                        "late_settlement": late_settlement}
+            except Exception as exc:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                return {"status": "error", "reservation_id": reservation_id, "reason": str(exc)}
+            finally:
+                conn.close()
+
+    def extend_reservation(
+        self, reservation_id: str, extra_seconds: int = 600
+    ) -> Dict[str, Any]:
+        """Heartbeat: verlaengert eine noch aktive Reservierung (D13/MED)."""
+        init_budget_tables(self.db_path)
+        with _BUDGET_LOCK:
+            conn = _get_conn(self.db_path)
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT expires_at FROM budget_reservations WHERE reservation_id = ? "
+                    "AND status = 'reserved'", (reservation_id,),
+                ).fetchone()
+                if not row:
+                    conn.rollback()
+                    return {"status": "not_found", "reservation_id": reservation_id}
+                extra = max(0, int(extra_seconds or 0))
+                if extra:
+                    from datetime import timedelta
+                    new_exp = (
+                        datetime.datetime.fromisoformat(str(row["expires_at"]))
+                        + timedelta(seconds=extra)
+                    ).isoformat()
+                    conn.execute(
+                        "UPDATE budget_reservations SET expires_at = ? WHERE reservation_id = ?",
+                        (new_exp, reservation_id),
+                    )
+                conn.commit()
+                return {"status": "extended", "reservation_id": reservation_id}
             except Exception as exc:
                 try:
                     conn.rollback()

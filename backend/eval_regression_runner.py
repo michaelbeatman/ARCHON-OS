@@ -94,6 +94,10 @@ class EvalRegressionRunner:
         candidate_label: str = "v2026.10-release",
         simulated_outputs: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
+        # D01/D12: simulierte Outputs sind clientseitig erfundene Antworten.
+        # Sie duerfen niemals eine echte, persistierte Release-Freigabe
+        # erzeugen und müssen im Ergebnis und in der DB klar gekennzeichnet sein.
+        simulated = simulated_outputs is not None
         cfg = _get_cfg()
         enabled = bool(cfg.get("enabled", True))
         min_pass_rate = float(cfg.get("min_pass_rate_pct", 90))
@@ -133,7 +137,10 @@ class EvalRegressionRunner:
 
         pass_rate = round((passed_count / max(1, len(cases))) * 100, 1)
         all_evaluated = bool(results) and all(r["evaluated"] for r in results)
-        if not all_evaluated:
+        if simulated:
+            # Hartes Gate: Simulation ist niemals eine Freigabe.
+            approved = False
+        elif not all_evaluated:
             approved = False
         elif not (enabled and block_on_reg):
             approved = True
@@ -141,6 +148,12 @@ class EvalRegressionRunner:
             approved = pass_rate >= min_pass_rate
         run_id = f"eval-{uuid.uuid4().hex[:10]}"
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        status = "simulation" if simulated else "no_executor"
+        details = {
+            "simulated": simulated,
+            "status": status,
+            "cases": results,
+        }
 
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""
@@ -149,13 +162,15 @@ class EvalRegressionRunner:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 run_id, candidate_label, len(cases), passed_count,
-                pass_rate, int(approved), json.dumps(results, ensure_ascii=False), now_iso
+                pass_rate, int(approved), json.dumps(details, ensure_ascii=False), now_iso
             ))
             conn.commit()
 
         return {
             "run_id": run_id,
             "candidate_label": candidate_label,
+            "status": status,
+            "simulated": simulated,
             "enabled": enabled,
             "total_cases": len(cases),
             "passed_cases": passed_count,

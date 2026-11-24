@@ -5,6 +5,11 @@ Quelle: agent_profiles.json (SSOT). Ziel: souls/<id>/SOUL_{COMPACT,PRO,FULL}.md
 sowie die englischen Varianten *_EN.md und SOUL.md (aktive Stufe = compact).
 Runtime-Verzeichnisse (.hermes/profiles, data/hermes_profiles) sind Caches.
 
+SOLL-SPEC-ZAHL (Welle 0, vom User freigegeben): 511 Artefakte = 73 Profile x 7
+(je 3 Tier-Dateien DE + 3 Tier-Dateien EN + SOUL.md). Die alten 490 kamen aus
+70 Profilen und liessen alpha, micha und linkedin_social_media_specialist
+weg; das Manifest wird hier aus denselben 511 normalisierten Bytes gebaut.
+
 Usage: python scripts/build_souls_ssot.py [--check]
 """
 from __future__ import annotations
@@ -23,6 +28,7 @@ import sync_soul_modes as ssm  # noqa: E402
 OUT = ROOT / "souls"
 MANIFEST = OUT / "manifest.json"
 TIERS = (("COMPACT", ssm.build_compact_soul), ("PRO", ssm.build_pro_soul), ("FULL", ssm.build_full_soul))
+EXPECTED_ARTIFACT_COUNT = 511  # 73 Profile x 7 — siehe Modul-Docstring.
 
 
 def _build(profiles: list[dict]) -> dict[str, str]:
@@ -39,6 +45,11 @@ def _build(profiles: list[dict]) -> dict[str, str]:
                     text = fn(p, old_map, profiles, lang=lang)
                 else:
                     text = fn(p, "", lang=lang)
+                # Einziger kanonischer EN-Pfad: identisch mit dem Runtime-Sync
+                # in sync_soul_modes.py (aktuell ein No-op, aber future-proof).
+                if lang == "en":
+                    text = ssm.adapt_soul_language(text, lang)
+                text = ssm.append_role_negative_scope(text, p, lang)
                 suffix = "" if lang == "de" else "_EN"
                 files[f"{pid}/SOUL_{name}{suffix}.md"] = text.strip() + "\n"
             if lang == "de":
@@ -59,6 +70,9 @@ def main() -> int:
         print(f"CHECK: {len(files)} SOUL-Artefakte, abweichend/fehlend: {len(missing)}")
         for rel in missing[:10]:
             print("  ", rel)
+        if len(files) != EXPECTED_ARTIFACT_COUNT:
+            print(f"CHECK: Soll-Zahl {EXPECTED_ARTIFACT_COUNT}, generiert {len(files)}")
+            return 1
         return 1 if missing else 0
 
     manifest: dict[str, str] = {}
@@ -69,7 +83,7 @@ def main() -> int:
         manifest[rel] = hashlib.sha256(text.encode("utf-8")).hexdigest()
     MANIFEST.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"OK: {len(files)} SOUL-Artefakte in souls/ geschrieben, Manifest mit {len(manifest)} Hashes.")
-    return 0
+    return 0 if len(files) == EXPECTED_ARTIFACT_COUNT else 1
 
 
 if __name__ == "__main__":

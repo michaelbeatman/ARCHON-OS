@@ -23,7 +23,15 @@ import time
 from typing import Any, Dict, Iterator, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "flightlog.db")
+try:
+    # D12/BLOCKER: kein getrenntes flightlog.db mehr — der konsolidierte
+    # ops.db-Pfad ist die einzige Autoritaet (db_paths.resolve_db mapped
+    # flightlog.db -> ops.db, sobald Konsolidierung aktiv ist).
+    from backend.db_paths import resolve_db as _resolve_db
+
+    DEFAULT_DB_PATH = _resolve_db("flightlog.db")
+except Exception:
+    DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "flightlog.db")
 
 
 @contextmanager

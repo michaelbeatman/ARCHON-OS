@@ -29,7 +29,10 @@ logger = logging.getLogger("watchdog_daemon")
 # 1. Harte Konfigurations-Schwellenwerte (Config-Dict)
 CONFIG = {
     "MAX_TOKENS_PER_MIN": 10000,          # Verhindert Kostenexplosion
-    "MAX_API_REQUESTS_PER_MIN": 50,       # Verhindert Rate-Limits
+    # Audit D10: MAX_API_REQUESTS_PER_MIN war toter Code (nur Definition,
+    # kein Konsument) und wurde entfernt. Harte API-/Rate-Limits erzwingt
+    # role_budget_engine.check_budget_gate() im Dispatch-Hotpath — nicht
+    # dieser Datei-Scan.
     "MAX_LOG_SIZE_MB": 5,                 # Indikator für schnelle Endlosschleifen
     "CHECK_INTERVAL_SEC": 30,             # Prüf-Intervall 30 Sekunden (Pillar 1)
     "N8N_WEBHOOK_URL": os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/archon-alarm"),
@@ -66,6 +69,81 @@ ALARM_FILE_CANDIDATES = [
 ALARMS_FILE = ALARM_FILE_CANDIDATES[0] if os.path.exists("/app/data") else ALARM_FILE_CANDIDATES[1]
 os.makedirs(os.path.dirname(ALARMS_FILE), exist_ok=True)
 
+# Audit D10: gemeinsamer Liveness-Punkt. Der Watchdog schreibt am
+# Schleifenanfang einen Timestamp; main.py liest ihn fuer /livez
+# (`loops.watchdog`), der externe Supervisor (archon_autoheal.py) wertet die
+# Staleness. Atomar schreiben — ein Abbruch mitten in json.dump darf die
+# Datei nicht korumpieren.
+WATCHDOG_LIVENESS_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(ALARMS_FILE)), "watchdog_liveness.json"
+)
+WATCHDOG_MAX_LAST_SEEN_AGE_S = max(
+    60.0, float(os.environ.get("ARCHON_WATCHDOG_MAX_LAST_SEEN_AGE_S", "120"))
+)
+
+
+def _write_watchdog_liveness(loop_count: int, *, dead: bool = False) -> None:
+    payload = {
+        "last_seen": 0.0 if dead else time.time(),
+        "loop_count": int(loop_count),
+        "pid": os.getpid(),
+        "alive": not dead,
+    }
+    try:
+        import tempfile
+
+        directory = os.path.dirname(os.path.abspath(WATCHDOG_LIVENESS_FILE))
+        os.makedirs(directory, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=directory, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, WATCHDOG_LIVENESS_FILE)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+    except Exception as exc:
+        logger.warning("[Watchdog] Liveness-Datei nicht schreibbar: %s", exc)
+
+
+def watchdog_liveness() -> Dict[str, Any]:
+    """Von main.py (/livez -> loops.watchdog) und Tests gelesen.
+
+    `last_seen=0.0` bzw. `alive=False` heisst: der Supervisor-Thread laeuft
+    nicht (mehr). Fehlt die Datei vollstaendig, gilt der Watchdog als unbekannt
+    (`last_seen=0.0`, `alive=False`) — fail-closed statt still gruen.
+    """
+    try:
+        with open(WATCHDOG_LIVENESS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError("no dict")
+        last_seen = float(data.get("last_seen", 0.0))
+    except Exception:
+        last_seen = 0.0
+        data = {}
+    age_s = round(max(0.0, time.time() - last_seen), 3) if last_seen > 0 else None
+    alive = bool(last_seen > 0 and (age_s or 0) <= WATCHDOG_MAX_LAST_SEEN_AGE_S
+                 and bool(data.get("alive", True)))
+    return {
+        "alive": alive,
+        "last_seen": last_seen,
+        "age_s": age_s,
+        "loop_count": int(data.get("loop_count", 0)),
+        "max_age_s": WATCHDOG_MAX_LAST_SEEN_AGE_S,
+        "timestamp": time.time(),
+    }
+
+
+def watchdog_last_seen() -> float:
+    """Schlanke Variante fuer /livez: epoch-Sekunden des letzten Ticks (0 = tot)."""
+    return float(watchdog_liveness()["last_seen"])
+
 
 class WatchdogDaemon:
     def __init__(self):
@@ -74,6 +152,7 @@ class WatchdogDaemon:
         self.token_tracker: Dict[str, int] = {}
         self.last_oracle_run = 0
         self.is_running = True
+        self._shutdown_requested = False
         import threading as _threading
         self._stop_event = _threading.Event()
         self._thread = None
@@ -293,22 +372,25 @@ class WatchdogDaemon:
                 f.seek(max(0, os.path.getsize(file_path) - read_bytes))
                 chunk = f.read()
 
-                # Suche nach Token-Counts in Outputs
+                # Audit D10: SUMME ueber alle Treffer des 60-s-Fensters —
+                # der alte Blick auf [-1] liess 50 Calls a 9000 Tokens unerkannt.
                 import re
                 token_matches = re.findall(r'\"?total_tokens\"?:\s*(\d+)', chunk)
                 if token_matches:
-                    last_tokens = int(token_matches[-1])
-                    if last_tokens >= CONFIG["MAX_TOKENS_PER_MIN"]:
+                    total_tokens = sum(int(x) for x in token_matches)
+                    if total_tokens >= CONFIG["MAX_TOKENS_PER_MIN"]:
                         self.abort_agent_thread(
                             profile_handle=profile_handle,
-                            reason=f"Token Usage Limit Exceeded ({last_tokens} tokens/turn >= {CONFIG['MAX_TOKENS_PER_MIN']})",
-                            details={"tokens": last_tokens, "file": file_path}
+                            reason=(f"Token Usage Limit Exceeded ({total_tokens} tokens "
+                                    f"im Fenster >= {CONFIG['MAX_TOKENS_PER_MIN']})"),
+                            details={"tokens": total_tokens, "file": file_path}
                         )
         except Exception as _exc:
             logger.debug("[watchdog_daemon] Ignorierte Ausnahme (Z.255): %s", _exc)
 
     def stop(self, timeout: float = 5.0) -> None:
         """Sofortiger, joinbarer Stopp (statt Flag + 30 s sleep)."""
+        self._shutdown_requested = True
         self.is_running = False
         self._stop_event.set()
         t = self._thread
@@ -323,32 +405,56 @@ class WatchdogDaemon:
 
     def run_forever(self):
         logger.info("Watchdog supervisor loop started.")
-        while self.is_running:
-            try:
-                self.scan_logs_and_metrics()
-            except Exception as e:
-                logger.error(f"Exception during watchdog scan: {e}")
+        loop_count = 0
+        try:
+            while self.is_running:
+                loop_count += 1
+                # Audit D10: Heartbeat AM ANFANG der Schleife — auch wenn ein
+                # Scan laenger dauert, bleibt der Thread als lebend sichtbar.
+                _write_watchdog_liveness(loop_count)
+                try:
+                    self.scan_logs_and_metrics()
+                except Exception as e:
+                    logger.error(f"Exception during watchdog scan: {e}")
 
-            # Oracle News Radar alle 4 Stunden autonom im separaten Daemon-Thread ausführen,
-            # damit Netzwerk-I/O niemals den 30s-Watchdog-Loop blockiert (Pillar 1)
-            if time.time() - self.last_oracle_run > 14400:
-                self.last_oracle_run = time.time()
-                import threading
+                # Oracle News Radar alle 4 Stunden autonom im separaten Daemon-Thread ausführen,
+                # damit Netzwerk-I/O niemals den 30s-Watchdog-Loop blockiert (Pillar 1)
+                if time.time() - self.last_oracle_run > 14400:
+                    self.last_oracle_run = time.time()
+                    import threading
 
-                def _run_oracle_bg():
-                    try:
-                        import oracle_news_radar
-                        radar = oracle_news_radar.OracleNewsRadar()
-                        radar.run_radar_cycle()
-                        logger.info("Autonomous Oracle News Radar cycle executed.")
-                    except Exception as oe:
-                        logger.warning(f"Oracle News Radar background run failed: {oe}")
+                    def _run_oracle_bg():
+                        try:
+                            import oracle_news_radar
+                            radar = oracle_news_radar.OracleNewsRadar()
+                            radar.run_radar_cycle()
+                            logger.info("Autonomous Oracle News Radar cycle executed.")
+                        except Exception as oe:
+                            logger.warning(f"Oracle News Radar background run failed: {oe}")
 
-                threading.Thread(target=_run_oracle_bg, daemon=True, name="OracleRadarBg").start()
+                    threading.Thread(target=_run_oracle_bg, daemon=True, name="OracleRadarBg").start()
 
-            # Event.wait statt sleep: der Stopp wirkt sofort, nicht erst nach 30 s.
-            if self._stop_event.wait(CONFIG["CHECK_INTERVAL_SEC"]):
-                break
+                # Event.wait statt sleep: der Stopp wirkt sofort, nicht erst nach 30 s.
+                if self._stop_event.wait(CONFIG["CHECK_INTERVAL_SEC"]):
+                    break
+        finally:
+            # Audit D10: der Tod des Supervisors darf nicht still passieren.
+            # last_seen auf 0 setzen -> /livez (loops.watchdog) und der externe
+            # Autoheal sehen den Ausfall sofort als stale.
+            _write_watchdog_liveness(loop_count, dead=True)
+            if not self._shutdown_requested:
+                logger.critical("Watchdog supervisor loop EXITED unerwartet — Supervision ist nicht mehr aktiv.")
+                try:
+                    from backend.metrics_collector import report_external_alert
+
+                    report_external_alert(
+                        "watchdog_thread_dead", "CRITICAL", "archon-os",
+                        "Der Watchdog-Supervisor-Thread hat die Schleife unerwartet verlassen; "
+                        "Loop-/Hang-Ueberwachung ist nicht mehr aktiv.",
+                        active=True, title="Watchdog-Thread tot",
+                    )
+                except Exception as exc:
+                    logger.error("[Watchdog] Alarm 'watchdog_thread_dead' konnte nicht gemeldet werden: %s", exc)
 
 
 def start_background_watchdog():

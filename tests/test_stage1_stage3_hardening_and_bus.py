@@ -10,6 +10,7 @@ import json
 import os
 import sqlite3
 import tempfile
+import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -90,13 +91,17 @@ def test_lease_exclusivity_and_liveness(tmp_path):
 def test_plan_validator_detects_cycle_before_execution():
     from backend.workflow_dag_runner import validate_dag_def
 
+    # D13-Haertung: der Plan-Validator verlangt einen Run-Cap (fail-closed),
+    # sonst ist jedes DAG ungueltig und der Zyklus-Fehler wird verdeckt.
     good = {
         "id": "good",
+        "max_budget_eur": 10.0,
         "nodes": [{"id": "a", "type": "agent"}, {"id": "b", "type": "agent", "depends_on": ["a"]}],
         "edges": [{"from": "a", "to": "b", "condition": "on_success"}],
     }
     cyclic = {
         "id": "bad",
+        "max_budget_eur": 10.0,
         "nodes": [{"id": "a", "depends_on": ["b"]}, {"id": "b", "depends_on": ["a"]}],
         "edges": [],
     }
@@ -784,6 +789,10 @@ def test_dag_runner_schema_preserved_and_event_driven_recovery(tmp_path):
 
     dag = {
         "id": "wf_event_test",
+        # D13-Haertung: Run-Cap ist Pflicht (fail-closed).
+        "max_budget_eur": 10.0,
+        # D13: eigene Trajectory pro Testlauf (globaler Hop-Cap in ops.db).
+        "root_ticket_id": f"wf-event-{uuid.uuid4().hex[:12]}",
         "nodes": [
             {"id": "slow", "type": "agent"},
             {"id": "fast", "type": "agent"},

@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import datetime
 import sys
+import time
+
+import pytest
 
 from backend.delegation_isolation import (
     is_tool_allowed_for_agent,
@@ -44,6 +47,8 @@ def test_m75_delegation_isolation():
 
 
 def test_m89_session_taint_guard_hitl_flow(tmp_path):
+    import backend.passkey_hitl as pk
+
     db = str(tmp_path / "taint.db")
     sess = "sess_test_1"
 
@@ -57,15 +62,42 @@ def test_m89_session_taint_guard_hitl_flow(tmp_path):
     # Read-only tool still allowed
     assert check_egress_tool_call(sess, "web_search", {}, db_path=db)["allowed"] is True
 
-    # Critical egress requires HITL
-    blocked = check_egress_tool_call(sess, "pay", {"amount": 10}, db_path=db)
+    # Critical egress requires HITL. requested_by wird mitgespeichert, damit
+    # Vier-Augen (requested_by != reviewer) geprueft werden kann.
+    blocked = check_egress_tool_call(
+        sess, "pay", {"amount": 10}, db_path=db, requested_by="agent:probe",
+    )
     assert blocked["allowed"] is False
     assert blocked["requires_hitl"] is True
     aid = blocked["approval_id"]
 
+    # Ohne Passkey-Proof bleibt die Freigabe hart blockiert (PermissionError).
+    with pytest.raises(PermissionError, match="Passkey-Proof"):
+        resolve_taint_approval(aid, approved=True, reviewer="micha", db_path=db)
+
+    # Der Anforderer darf die eigene Freigabe nicht bestaetigen.
+    with pytest.raises(PermissionError, match="Vier-Augen"):
+        resolve_taint_approval(aid, approved=True, reviewer="agent:probe", db_path=db)
+
+    # Gueltiger, an genau diese Freigabe gebundener Einmal-Proof (system/UV).
+    proof = "taint-proof-" + aid
+    with pk._LOCK:
+        pk._PROOF_TOKENS[proof] = {
+            "user_id": "micha",
+            "category": "system",
+            "uv_verified": True,
+            "created_ts": time.time(),
+            "action": "Taint-Freigabe %s" % aid,
+            "resource": aid,
+        }
+
     # Human approves once
-    resolved = resolve_taint_approval(aid, approved=True, reviewer="micha", db_path=db)
+    resolved = resolve_taint_approval(
+        aid, approved=True, reviewer="micha", db_path=db, passkey_proof=proof,
+    )
     assert resolved["status"] == "approved"
+    assert resolved["reviewer"] == "micha"
+    assert resolved["requested_by"] == "agent:probe"
 
     # One-shot execution succeeds
     allowed_once = check_egress_tool_call(sess, "pay", {"amount": 10}, approval_id=aid, db_path=db)
@@ -100,10 +132,27 @@ def test_m76_kanban_verifier_budget_and_proof():
     assert p_ok["status"] == "done"
     assert p_ok["verified"] is True
 
-    # HITL decision helper
+    # HITL decision helper: ohne verifiziertes Ergebnis bleibt der Override
+    # blockiert (frueher wurde er unberechtigt freigegeben).
     d_ovr = resolve_card_hitl_decision("override_budget", current_budget=10000, override_budget=25000)
-    assert d_ovr["next_status"] == "ready"
+    assert d_ovr["next_status"] == "blocked"
+    assert d_ovr["block_kind"] == "override_reverification_failed_hitl"
+    assert d_ovr["verified"] is False
     assert d_ovr["token_budget"] == 25000
+
+    # Mit erfolgreicher Reverifikation darf die Sperre aufgehoben werden.
+    ok_cmd = f'"{sys.executable}" -c "print(123)"'
+    d_ok = resolve_card_hitl_decision(
+        "override_budget", current_budget=10000, override_budget=25000,
+        result_text="Fertig", proof_command=ok_cmd,
+    )
+    assert d_ok["verified"] is True
+    assert d_ok["block_kind"] == "approval_granted"
+    assert d_ok["next_status"] in ("todo", "ready")
+
+    # Vier-Augen: der Ersteller darf die eigene HITL-Sperre nicht loesen.
+    with pytest.raises(PermissionError, match="Vier-Augen"):
+        resolve_card_hitl_decision("retry", actor="micha", created_by="micha")
 
 
 def test_m91_precedent_log_strict_tenant_isolation(tmp_path):

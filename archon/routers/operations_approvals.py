@@ -4,6 +4,7 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 Ausgelagert aus backend/operations_api.py.
 """
+import json
 import logging
 logger = logging.getLogger("archon.routers.operations_approvals")
 
@@ -97,17 +98,36 @@ def api_create_approval_request(request: Request, req: ApprovalRequestCreate):
     title = req.title.strip()
     amount = req.amount
     reference_id = req.reference_id
-    payload = req.payload
+    # Audit D04/D14: der Antragsteller kommt AUSSCHLIESSLICH aus der
+    # verifizierten Session und wird mit dem Request persistiert.
+    requester_id = require_session_actor(request)
+    payload = dict(req.payload or {})
+    payload.setdefault("_requester_id", requester_id)
 
     try:
         from backend.approval_policy_engine import approval_engine
-        res = approval_engine.evaluate_and_enqueue(
-            domain=domain,
-            title=title,
-            amount=amount,
-            reference_id=reference_id,
-            payload=payload,
-        )
+        try:
+            # Handoff: backend/approval_policy_engine.py (anderer Agent) muss
+            # requester_id akzeptieren und in `approval_requests` persistieren.
+            res = approval_engine.evaluate_and_enqueue(
+                domain=domain,
+                title=title,
+                amount=amount,
+                reference_id=reference_id,
+                payload=payload,
+                requester_id=requester_id,
+            )
+        except TypeError:
+            # Rueckwaertskompatibel bis Handoff: der Antragsteller steht dann
+            # wenigstens im signierten Payload und wird von approve_request()
+            # ueber die defense-in-depth-Pruefung unten beruecksichtigt.
+            res = approval_engine.evaluate_and_enqueue(
+                domain=domain,
+                title=title,
+                amount=amount,
+                reference_id=reference_id,
+                payload=payload,
+            )
         return {"status": "success", "result": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -120,6 +140,36 @@ def api_approve_request(request: Request, request_id: str):
     approver_id = require_session_actor(request)
     try:
         from backend.approval_policy_engine import approval_engine
+        # Audit D04/D14: Vier-Augen auch hier. Der Engine-Check in
+        # approve_request() gehoert einem anderen Agenten (Handoff); dieser
+        # Router suedert zusaetzlich gegen identischen Ersteller/Genehmiger.
+        requester_id = ""
+        try:
+            row = next(
+                (r for r in approval_engine.get_requests() if str(r.get("id")) == str(request_id)),
+                None,
+            )
+            if row:
+                requester_id = str(row.get("requester_id") or row.get("created_by") or "")
+                if not requester_id:
+                    pl = row.get("payload_json") or row.get("payload") or {}
+                    if isinstance(pl, str):
+                        try:
+                            pl = json.loads(pl)
+                        except (TypeError, ValueError):
+                            pl = {}
+                    requester_id = str((pl or {}).get("_requester_id") or "")
+        except Exception as lookup_exc:
+            logger.warning("Antragsteller fuer %s nicht lesbar: %s", request_id, lookup_exc)
+        if requester_id and requester_id == approver_id:
+            logger.warning(
+                "Vier-Augen-Verletzung: Antragsteller '%s' will eigenen Antrag %s freigeben.",
+                approver_id, request_id,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Ersteller darf die eigene Freigabeanfrage nicht genehmigen (Vier-Augen-Prinzip).",
+            )
         res = approval_engine.approve_request(request_id, approver_id=approver_id)
         try:
             from backend.workflow_scheduler import dispatch_workflow_event
@@ -134,6 +184,8 @@ def api_approve_request(request: Request, request_id: str):
         except Exception as exc:
             logger.debug(f"Event-Bus-Event fuer Freigabe {request_id} konnte nicht gesendet werden: {exc}")
         return {"status": "success", "result": res}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -26,7 +26,89 @@ from fastapi import APIRouter, Request, HTTPException, Query, Body, UploadFile, 
 
 from archon.routers._rbac import require_admin_or_503, forbid_viewer_writes
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from backend.handoff_desk import mark_truncated
+
+# ---------------------------------------------------------------------------
+# D11: schema-validierte Payloads an der Kanban→Agent-Kante und im Review-Gate.
+# ---------------------------------------------------------------------------
+class KanbanDelegationPayload(BaseModel):
+    """Die aus ``task_events.payload`` (kind='created') gelesene Delegation.
+
+    Deckt sowohl das Producer-Format (delegation.py) als auch die Felder des
+    Delegationsprotokolls ab. Unbekannte Felder werden verworfen, Pflichtfelder
+    des Handoffs bleiben erhalten.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    task_id: str = ""
+    title: str = ""
+    assignee: str = ""
+    via: str = ""
+    delegator: str = ""
+    ziel_agent: str = ""
+    auftrag: str = ""
+    modell: str = ""
+    prioritaet: str = ""
+    tgt_session_id: str = ""
+    origin_session_id: str = ""
+    session_id: str = ""
+    trace_id: str = ""
+    correlation_id: str = ""
+    delegation_chain: List[str] = Field(default_factory=list)
+    reasoning_level: str = ""
+    isolated: bool = False
+    allowed_tools: List[str] = Field(default_factory=list)
+    allowed_skills: List[str] = Field(default_factory=list)
+    memory_scope: str = ""
+    memory_acl: List[str] = Field(default_factory=list)
+    memory_ttl_seconds: int = 0
+    acceptance_criteria: str = ""
+    reply_to: str = ""
+    parent_project_id: str = ""
+
+
+class QualityReviewVerdict(BaseModel):
+    """Fail-closed-Schema der Reviewer-Antwort (R-16)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    verdict: str = "changes_requested"
+    score: int = 0
+    summary: str = ""
+    critique_points: List[str] = Field(default_factory=list)
+    actionable_next_steps: List[str] = Field(default_factory=list)
+
+
+def _load_kanban_delegation_payload(raw_payload: Any) -> Optional[KanbanDelegationPayload]:
+    """Parst ein task_events-Payload ueber Pydantic statt roher Dict-Zugriffe."""
+    if raw_payload is None:
+        return None
+    try:
+        data = json.loads(raw_payload) if isinstance(raw_payload, str) else dict(raw_payload)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    try:
+        from archon.core.delegation import DelegationPayload
+    except Exception:
+        DelegationPayload = None  # Parallelarbeit: Schema liegt in delegation.py
+    if DelegationPayload is not None:
+        try:
+            validated = DelegationPayload.model_validate(data)
+            data = dict(validated.model_dump())
+        except (ValidationError, TypeError, ValueError):
+            # Produzenten-Payload und Protokoll-Payload haben leicht
+            # unterschiedliche Feldnamen -> lokal normalisieren, nie roh .get().
+            pass
+    try:
+        return KanbanDelegationPayload.model_validate(data)
+    except (ValidationError, TypeError, ValueError) as exc:
+        logger.warning("[KanbanWorker] Delegations-Payloadschema ungueltig: %s", exc)
+        return None
+
 
 router = APIRouter(
     prefix="/api/operations",
@@ -840,12 +922,33 @@ def _ensure_consecutive_failures_column(conn: sqlite3.Connection) -> None:
 
 
 def _kanban_load_task_sync(task_id: str):
-    """F-055: SQLite-Punktabfrage im Worker-Thread statt im Event-Loop."""
+    """F-055: SQLite-Punktabfrage im Worker-Thread statt im Event-Loop.
+
+    D11/S-11.1: Das strukturierte ``created``-Event ist SSOT der Delegation;
+    die ``tasks``-Zeile bleibt nur Anzeige-Kopie. Das validierte Modell wird
+    unter ``_delegation_payload`` (dict) und ``_delegation_payload_model``
+    mitgefuehrt und vom Worker als strukturierter Kontext an den Dispatch
+    uebergeben.
+    """
     conn = _get_kanban_connection(maintenance=True)
     try:
         _ensure_consecutive_failures_column(conn)
         row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        task = dict(row)
+        ev = conn.execute(
+            "SELECT payload FROM task_events WHERE task_id = ? AND kind = 'created' "
+            "ORDER BY rowid DESC LIMIT 1",
+            (task_id,),
+        ).fetchone()
+        if ev is not None:
+            raw_payload = ev["payload"] if hasattr(ev, "keys") else ev[0]
+            model = _load_kanban_delegation_payload(raw_payload)
+            if model is not None:
+                task["_delegation_payload"] = model.model_dump()
+                task["_delegation_payload_model"] = model
+        return task
     finally:
         conn.close()
 
@@ -1113,6 +1216,23 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
     role = prof.get("category") or prof.get("role") or "Fach-Spezialist"
     system_prompt = prof.get("prompt") or prof.get("system_prompt") or f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
 
+    # D11/S-11.1: strukturierte Delegation (SSOT task_events.created) statt
+    # f-String-Prosa. Der Block ist JSON und damit maschinell auswertbar.
+    _delegation_model = t_dict.get("_delegation_payload_model")
+    _dispatch_reasoning = "medium"
+    if _delegation_model is not None:
+        structured = _delegation_model.model_dump(exclude_defaults=True)
+        structured.setdefault("task_id", task_id)
+        structured.setdefault(
+            "correlation_id", str(structured.get("correlation_id") or f"task:{task_id}")
+        )
+        _dispatch_reasoning = str(_delegation_model.reasoning_level or "medium")
+        system_prompt = (
+            f"{system_prompt}\n\n[STRUKTURIERTE_DELEGATION_JSON]\n"
+            + json.dumps(structured, sort_keys=True, ensure_ascii=False)
+            + "\n[/STRUKTURIERTE_DELEGATION_JSON]"
+        )
+
     try:
         # G: Registrierung NUN innerhalb des try/finally-Blocks, der unten
         # immer unregister_task() aufruft (auch bei CancelledError/Exception).
@@ -1177,6 +1297,7 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
             system_prompt=system_prompt,
             model=model,
             provider=provider_override,
+            reasoning_level=_dispatch_reasoning,
             task_id=task_id
         )
         # M76: Verifizierte Kanban-Cards mit Token-Budget & Proof-Gate
@@ -1222,6 +1343,7 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
                 system_prompt=system_prompt,
                 model=model,
                 provider=provider_override,
+                reasoning_level=_dispatch_reasoning,
                 task_id=task_id,
             )
             raw_reply = (res.get("content") or "").strip()
@@ -1269,15 +1391,27 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
                 )
                 c.execute(
                     "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'failed', ?, ?)",
-                    (task_id, json.dumps({"status": "failed", "summary": reply[:200], "verified": False}), now_iso),
+                    (task_id, json.dumps({
+                        "status": "failed",
+                        "summary": mark_truncated(reply, 200, artifact=f"tasks.result/{task_id}"),
+                        "truncated": len(reply) > 200,
+                        "original_length": len(reply),
+                        "verified": False,
+                    }), now_iso),
                 )
             else:
                 c.execute(
                     "UPDATE tasks SET status = ?, completed_at = ?, result = ?, consecutive_failures = 0 WHERE id = ?",
                     (target_status, now_iso, reply, task_id),
                 )
-                c.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)", 
-                          (task_id, json.dumps({"status": target_status, "summary": reply[:200], "verified": is_success}), now_iso))
+                c.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)",
+                          (task_id, json.dumps({
+                              "status": target_status,
+                              "summary": mark_truncated(reply, 200, artifact=f"tasks.result/{task_id}"),
+                              "truncated": len(reply) > 200,
+                              "original_length": len(reply),
+                              "verified": is_success,
+                          }), now_iso))
             c.commit()
             _sync_to_memory_bridge(task_id, title, assignee, target_status, reply)
         finally:
@@ -1928,30 +2062,30 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
             content = res.get("content", "").strip()
             json_match = re.search(r"\{.*\}", content, re.DOTALL)
             if json_match:
-                parsed = json.loads(json_match.group(0))
+                parsed = QualityReviewVerdict.model_validate(json.loads(json_match.group(0)))
             else:
                 # Fail-closed (R-16): liefert der Reviewer kein JSON, darf das Gate
                 # NICHT freigeben — sonst gilt ein Timeout/Prosa-Antwort als Quality-Pass.
-                parsed = {
-                    "verdict": "changes_requested",
-                    "score": 0,
-                    "summary": "Reviewer-Antwort enthielt kein auswertbares JSON — Review gilt als nicht bestanden, Nachfassung erforderlich.",
-                    "critique_points": ["Reviewer-Lauf lieferte keine strukturierte Bewertung."],
-                    "actionable_next_steps": ["Review erneut anstoßen."]
-                }
+                parsed = QualityReviewVerdict(
+                    verdict="changes_requested",
+                    score=0,
+                    summary="Reviewer-Antwort enthielt kein auswertbares JSON — Review gilt als nicht bestanden, Nachfassung erforderlich.",
+                    critique_points=["Reviewer-Lauf lieferte keine strukturierte Bewertung."],
+                    actionable_next_steps=["Review erneut anstoßen."],
+                )
         except Exception as e:
             # Fail-closed (R-16): Fehler im Review-Dispatch darf die Freigabe nicht
             # erfinden — der Task bleibt in 'review', damit kein ungeprüftes Ergebnis
             # als done verbucht wird.
-            parsed = {
-                "verdict": "changes_requested",
-                "score": 0,
-                "summary": f"Reviewer-Prüfung konnte nicht abgeschlossen werden ({e}).",
-                "critique_points": ["Reviewer-Lauf fehlgeschlagen."],
-                "actionable_next_steps": ["Review erneut anstoßen."]
-            }
+            parsed = QualityReviewVerdict(
+                verdict="changes_requested",
+                score=0,
+                summary=f"Reviewer-Prüfung konnte nicht abgeschlossen werden ({e}).",
+                critique_points=["Reviewer-Lauf fehlgeschlagen."],
+                actionable_next_steps=["Review erneut anstoßen."],
+            )
 
-        verdict = parsed.get("verdict", "changes_requested")
+        verdict = parsed.verdict
         if verdict not in ("approved", "changes_requested"):
             verdict = "changes_requested"
 
@@ -1959,10 +2093,10 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
             "status": verdict,
             "reviewer": reviewer_name,
             "reviewer_id": reviewer_id,
-            "score": parsed.get("score", 80),
-            "summary": parsed.get("summary", ""),
-            "critique_points": parsed.get("critique_points", []),
-            "actionable_next_steps": parsed.get("actionable_next_steps", []),
+            "score": parsed.score,
+            "summary": parsed.summary,
+            "critique_points": parsed.critique_points,
+            "actionable_next_steps": parsed.actionable_next_steps,
             "reviewed_at": now_iso
         }
 

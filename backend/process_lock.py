@@ -11,6 +11,7 @@ Connection für seine gesamte Laufzeit.
 """
 
 import functools
+import glob
 import hashlib
 import logging
 import os
@@ -28,6 +29,44 @@ except Exception:
     )
 
 
+def cleanup_stale_lock_journals() -> list[str]:
+    """Entfernt verwaiste `.loop_lock_*.db-journal`-Dateien (D03/MED).
+
+    Ein Lock-Journal darf NUR entfernt werden, wenn niemand den Lock hält.
+    Dazu wird mit timeout=0 ein EXCLUSIVE-Lock versucht: gelingt er, ist der
+    vorherige Inhaber weg und das 512-Byte-Journal ist wirklich verwaist.
+    """
+    removed: list[str] = []
+    try:
+        journals = [
+            p for p in glob.glob(os.path.join(_LOCK_DIR, ".loop_lock_*.db-journal"))
+            if os.path.isfile(p)
+        ]
+    except Exception:
+        return removed
+    for journal in journals:
+        lock_db = journal[: -len("-journal")]
+        probe = None
+        try:
+            probe = sqlite3.connect(lock_db, timeout=0.0, isolation_level=None)
+            probe.execute("BEGIN EXCLUSIVE")
+            probe.execute("ROLLBACK")
+            os.unlink(journal)
+            removed.append(journal)
+        except (sqlite3.OperationalError, OSError):
+            # Anderer Prozess hält den Lock oder Datei bereits weg — nicht antasten.
+            pass
+        except Exception as exc:
+            logger.debug("[LoopLock] Journal-Cleanup %s übersprungen: %s", journal, exc)
+        finally:
+            if probe is not None:
+                try:
+                    probe.close()
+                except Exception:
+                    pass
+    return removed
+
+
 class LoopLock:
     def __init__(self, conn: sqlite3.Connection, path: str):
         self._conn = conn
@@ -42,6 +81,9 @@ class LoopLock:
             self._conn.close()
         except Exception:
             pass
+        # D03/MED: nach Release das eigene Journal aufräumen, sofern es
+        # existiert und kein anderer Prozess inzwischen den Lock hält.
+        cleanup_stale_lock_journals()
 
 
 def try_acquire_loop_lock(name: str, timeout: float = 0.3) -> Optional[LoopLock]:

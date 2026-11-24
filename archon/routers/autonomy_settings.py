@@ -186,14 +186,24 @@ def api_optimize_role_prompt(request: Request, payload: PassthroughBody = Body(.
 
 
 @router.post("/api/evolution/eval-suite/run")
-def api_run_eval_regression_suite(request: Request, payload: PassthroughBody = Body(default={})):
-    # Audit D01: dieser Endpoint konnte clientseitige simulated_outputs als
+def api_run_eval_regression_suite(
+    request: Request,
+    payload: PassthroughBody = Body(default={}),
+    simulation: bool = Query(False),
+):
+    # Audit D01/D12: dieser Endpoint konnte clientseitige simulated_outputs als
     # echten Kandidatenlauf ausgeben und release_approved=true schreiben.
-    require_admin_or_503(request)
+    require_admin_or_503(request)  # Admin-Gate (auch fuer Simulationspfad)
     payload = as_payload(payload)
+    simulated_outputs = payload.get("simulated_outputs")
+    if simulated_outputs is not None and not simulation:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "simulation_opt_in_required", "message": "simulated_outputs erfordert ?simulation=true"},
+        )
     from backend.eval_regression_runner import eval_regression_runner
 
     return eval_regression_runner.run_suite(
         candidate_label=payload.get("candidate_label", "v2026.10-release"),
-        simulated_outputs=payload.get("simulated_outputs"),
+        simulated_outputs=simulated_outputs,
     )

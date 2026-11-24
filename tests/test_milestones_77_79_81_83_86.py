@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import uuid
 
 from backend.agent_router import (
     chat_with_verification_escalation,
@@ -27,6 +28,9 @@ from backend.workflow_dag_runner import run_workflow_dag
 
 def test_m77_workflow_dag_fanout_gate_and_resume(tmp_path):
     db = str(tmp_path / "wf.db")
+    # Eindeutige IDs pro Testlauf: Flightlog/Trajectory-Caps sind global
+    # (ops.db) und wuerden bei wiederholten Laeufen einen Tool-Loop melden.
+    run_id = f"run-1-{uuid.uuid4().hex[:12]}"
     calls = []
 
     async def fake_exec(node, upstream):
@@ -35,6 +39,11 @@ def test_m77_workflow_dag_fanout_gate_and_resume(tmp_path):
 
     dag = {
         "id": "wf-release",
+        # D13-Haertung: der Plan-Validator verlangt einen Run-Cap (fail-closed).
+        "max_budget_eur": 10.0,
+        # D13: eigene Trajectory pro Testlauf, sonst erbt der Lauf den
+        # Hop-Cap-Zaehler einer frueheren Ausfuehrung aus der globalen ops.db.
+        "root_ticket_id": f"wf-release-{uuid.uuid4().hex[:12]}",
         "nodes": [
             {"id": "fan", "type": "fanout", "branches": ["a", "b"], "quorum_min": 2},
             {"id": "approval", "type": "gate", "depends_on": ["fan"]},
@@ -43,15 +52,26 @@ def test_m77_workflow_dag_fanout_gate_and_resume(tmp_path):
     }
 
     # 1. Run until gate pauses
-    r1 = asyncio.run(run_workflow_dag(dag, fake_exec, run_id="run-1", db_path=db))
+    r1 = asyncio.run(run_workflow_dag(dag, fake_exec, run_id=run_id, db_path=db))
     assert r1["status"] == "paused"
     assert r1["node_statuses"]["fan"] == "completed"
     assert r1["node_statuses"]["approval"] == "awaiting_gate"
     assert calls == ["a", "b"]
 
     # 2. Resume with gate approved -> fan MUST be skipped_cached!
+    # D13: der pausierte Lauf schliesst seine Trajectory als "failed"; der
+    # Resume-Lauf braucht daher eine eigene Trajectory, sonst blockiert
+    # reserve_hop den Nachlauf mit TRAJECTORY_FAILED.
+    dag_resume = {
+        **dag,
+        "root_ticket_id": f"wf-release-{uuid.uuid4().hex[:12]}",
+        "trajectory_id": "",
+    }
     calls.clear()
-    r2 = asyncio.run(run_workflow_dag(dag, fake_exec, run_id="run-1", gate_approvals={"approval": True}, db_path=db))
+    r2 = asyncio.run(
+        run_workflow_dag(dag_resume, fake_exec, run_id=run_id,
+                         gate_approvals={"approval": True}, db_path=db)
+    )
     assert r2["status"] == "completed"
     assert r2["node_statuses"]["fan"] == "skipped_cached"
     assert r2["node_statuses"]["ship"] == "completed"

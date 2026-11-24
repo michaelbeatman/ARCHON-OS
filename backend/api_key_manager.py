@@ -196,12 +196,14 @@ class ApiKeyManager:
         return audit_result
 
     def verify_integrity(self) -> Dict[str, Any]:
-        """Lauf-5 H-02: kryptografische Pruefung der API-Key-Audit-Kette.
+        """Lauf-5 H-02 + d05 F-03: Kette, Head-Anker und Trigger pruefen."""
+        from backend.audit_log import finalize_secondary_chain_verification
+        return finalize_secondary_chain_verification(
+            "api_key_audit_log", self._verify_integrity_raw(), db_path=self.db_path
+        )
 
-        Die Kette hatte Append-only-Trigger und HMAC-Signatur, aber keine
-        Verifikationsfunktion — Manipulationen waren nur bei manueller
-        Pruefung erkennbar.
-        """
+    def _verify_integrity_raw(self) -> Dict[str, Any]:
+        """Kryptografische Pruefung der API-Key-Audit-Kette."""
         from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
         with self._get_conn() as conn:
             rows = conn.execute(

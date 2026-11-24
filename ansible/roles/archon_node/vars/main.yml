@@ -44,3 +44,18 @@ archon_directories:
 archon_compose_file: "docker-compose.yml"
 archon_healthcheck_url: "http://localhost:8501/health"
 archon_readycheck_url: "http://localhost:8501/readyz"
+
+# Audit D10: Produktiv-Observability im Ansible-Deploy. "full" aktiviert die
+# Compose-Profile monitoring,logging,replication,tracing — damit starten
+# Prometheus, Alertmanager, Grafana, Loki, Promtail, Litestream, OTel/Langfuse
+# und der Dead-Man-Heartbeat bekommen endlich Adressaten. Default "off" =
+# Normal-Start (identisch zu start.bat / install.sh).
+archon_observability: "off"
+
+# Audit D10/DR: Das Litestream-Replikat muss auf einem vom Host GETRENNTEN
+# Volume/NAS liegen. Der Betreiber setzt diesen Pfad — bewusst wird KEIN Pfad
+# erfunden. Leer = Compose-Default ./data/litestream_replicas (gleicher Host
+# wie die Primaer-DB = nur Entwicklung, kein echtes DR-Ziel).
+# RPO ~5-10 s (sync-interval), RTO-Ziel <= 30 min inkl. periodischem
+# Restore-Test (scripts/automated_restore_test.py, z. B. alle 6 h).
+archon_litestream_replica_dir: ""

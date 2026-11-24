@@ -155,11 +155,18 @@ class MapReduceExecutor:
         completed = sum(1 for r in chunk_results if r["status"] == "completed")
         failed = len(chunk_results) - completed
 
+        # D01/D12: ohne injizierten worker_fn ist der Output Platzhaltertext.
+        # Das muss top-level und in der Synthese stehen, nicht nur pro Chunk.
+        simulated = all(bool(c.get("simulated")) for c in chunk_results)
+        mode = "demo_only" if simulated else "live_worker"
+        status = "simulation" if simulated else "success"
+
         # Reduce-Phase: Synthese aller erfolgreichen Worker-Outputs
         bullet_points = [f"- {r['output']}" for r in chunk_results if r["status"] == "completed"]
         reduced_summary = (
             f"### Map-Reduce Synthese: {task_title}\n"
             f"- **Modus:** `{execution_mode}` ({effective_workers} Worker parallel)\n"
+            f"- **Kennzeichnung:** `{'SIMULATION — keine echte Analyse' if simulated else 'echte Worker-Ausführung'}`\n"
             f"- **Erfolgsquote:** {completed}/{len(items)} Teilaufgaben abgeschlossen\n\n"
             + "\n".join(bullet_points)
         )
@@ -186,6 +193,9 @@ class MapReduceExecutor:
         return {
             "job_id": job_id,
             "task_title": task_title,
+            "status": status,
+            "simulated": simulated,
+            "mode": mode,
             "enabled": enabled,
             "execution_mode": execution_mode,
             "max_parallel_workers": effective_workers,

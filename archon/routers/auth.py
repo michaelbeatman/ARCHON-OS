@@ -87,6 +87,7 @@ class PasskeyRegisterVerifyRequest(_AuthRequestBase):
     alg: int = -7
     label: str = "Passkey"
     authenticatorData: Optional[str] = None
+    attestationObject: Optional[str] = None
     passkey_proof_token: Optional[str] = None
 
 
@@ -485,7 +486,7 @@ def api_update_passkey_config(request: Request, payload: PasskeyConfigRequest = 
             proof, target_id, "system",
             action="Passkey-HITL deaktivieren", resource=target_id,
         ):
-            raise HTTPException(status_code=403, detail="Passkey-Verifizierung erforderlich, um Passkey-HITL zu deaktivieren.")
+            raise HTTPException(status_code=403, detail="Passkey-Verifizierung erforderlich, um Passkey-HITL zu deaktivieren. Passkey-Registrierung erforderlich: /api/auth/passkey/register/options")
     cfg = update_user_passkey_config(
         target_id,
         enabled=payload.get("enabled"),
@@ -497,6 +498,11 @@ def api_update_passkey_config(request: Request, payload: PasskeyConfigRequest = 
 
 @router.post("/api/auth/passkey/register/options")
 def api_passkey_register_options(request: Request, payload: PasskeyRegisterOptionsRequest = Body(default=PasskeyRegisterOptionsRequest())):
+    """PUBLIC-ALLOWED Registrierungs-Route (nur normale Session-Auth, KEIN Step-up).
+
+    is_passkey_required() darf hier niemals angewendet werden — sonst Lockout
+    bei der Erstregistrierung.
+    """
     payload = payload.model_dump()
     from backend.passkey_hitl import create_registration_options
     target_id, curr_name = _resolve_target_passkey_user(request, payload.get("user_id"))
@@ -512,12 +518,14 @@ def api_passkey_register_verify(request: Request, payload: PasskeyRegisterVerify
     from backend.passkey_hitl import (
         consume_hitl_proof_token,
         get_user_passkey_config,
-        is_passkey_required,
+        is_additional_passkey_registration_protected,
         verify_and_store_registration,
     )
     target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
     existing_cfg = get_user_passkey_config(target_id)
-    if (existing_cfg.get("credentials") or []) and is_passkey_required(target_id, "system"):
+    # Registrierungs-Route: bewusst NICHT is_passkey_required() — die
+    # Erstregistrierung (keine Credentials) bleibt immer moeglich.
+    if (existing_cfg.get("credentials") or []) and is_additional_passkey_registration_protected(target_id):
         proof = str(payload.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
         if not proof or not consume_hitl_proof_token(
             proof, target_id, "system",
@@ -525,7 +533,7 @@ def api_passkey_register_verify(request: Request, payload: PasskeyRegisterVerify
         ):
             raise HTTPException(
                 status_code=403,
-                detail="Passkey-Verifizierung erforderlich, um einen weiteren Passkey zu registrieren.",
+                detail="Passkey-Verifizierung erforderlich, um einen weiteren Passkey zu registrieren. Passkey-Registrierung erforderlich: /api/auth/passkey/register/options",
             )
     _, origin = _request_rp_id_and_origin(request)
     try:
@@ -537,7 +545,8 @@ def api_passkey_register_verify(request: Request, payload: PasskeyRegisterVerify
             alg=int(payload.get("alg", -7)),
             label=str(payload.get("label") or "Passkey"),
             expected_origin=origin,
-            authenticator_data_b64=str(payload.get("authenticatorData") or "") or None,
+            authenticator_data_b64=str(payload.get("authenticatorData") or ""),
+            attestation_object_b64=str(payload.get("attestationObject") or ""),
         )
         return {"status": "success", **cfg}
     except Exception as exc:
@@ -554,7 +563,7 @@ def api_passkey_delete_credential(cred_id: str, request: Request, user_id: Optio
             proof, target_id, "system",
             action="Passkey entfernen", resource=f"{target_id}:{cred_id}",
         ):
-            raise HTTPException(status_code=403, detail="Passkey-Verifizierung erforderlich, um Passkey-Zugangsdaten zu loeschen.")
+            raise HTTPException(status_code=403, detail="Passkey-Verifizierung erforderlich, um Passkey-Zugangsdaten zu loeschen. Passkey-Registrierung erforderlich: /api/auth/passkey/register/options")
     cfg = delete_user_credential(target_id, cred_id)
     return {"status": "success", **cfg}
 

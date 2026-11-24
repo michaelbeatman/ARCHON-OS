@@ -35,7 +35,18 @@ class OpenTelemetryTracer:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self._export_stats = {"success": 0, "failures": 0, "last_error": ""}
+        self._record_stats = {"success": 0, "failures": 0, "last_error": ""}
         self._init_db()
+
+    def note_local_trace_error(self, stage: str, exc: BaseException) -> None:
+        """Sichtbar machen statt still verschlucken (D16/MED).
+
+        Aufrufer (z. B. llm_kernel/workflow_dag_runner) können damit Start-,
+        Span- und End-Fehler auf WARNING heben und im Status zählen.
+        """
+        self._record_stats["failures"] += 1
+        self._record_stats["last_error"] = f"{stage}: {exc}"
+        _archon_exc_logger.warning("[otel_tracer] %s fehlgeschlagen: %s", stage, exc)
 
     def _get_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=15.0)
@@ -178,36 +189,56 @@ class OpenTelemetryTracer:
         status_message: Optional[str] = None,
         attributes: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Erstellt und speichert einen abgeschlossenen Span (W3C 64-Bit-Span-ID, F02)."""
-        span_id = secrets.token_hex(8)
-        if not parent_span_id:
-            try:
-                from backend.trace_context import current_span_id
-                cur_sid = current_span_id()
-                if cur_sid and cur_sid != span_id:
-                    parent_span_id = cur_sid
-            except Exception:
-                pass
+        """Speichert einen Span mit der EINEN ID-Quelle aus ``trace_context``.
+
+        Der Aufrufer erzeugt den Kind-Span via ``child_span()`` und übergibt
+        dessen ``span_id`` als aktiven Kontext; ``record_span`` liest genau
+        diese ID. Ohne expliziten Parent wird hier selbst ein Child erzeugt —
+        es gibt keine zweite ``secrets.token_hex(8)``-Generation im Tracer.
+        """
+        attrs = dict(attributes or {})
+        try:
+            from backend.trace_context import (
+                child_span, current_sampled, current_span_id, current_tracestate, new_ids,
+            )
+            cur_sid = current_span_id()
+            if parent_span_id:
+                span_id = cur_sid or new_ids()[1]
+            else:
+                with child_span() as (_tid, sid, parent_sid):
+                    span_id, parent_span_id = sid, parent_sid or None
+            attrs.setdefault("archon.sampled", bool(current_sampled()))
+            ts = current_tracestate()
+            if ts:
+                attrs.setdefault("tracestate", ts)
+        except Exception as exc:
+            self.note_local_trace_error("span-context", exc)
+            span_id = secrets.token_hex(8)  # letzte Notation, wenn trace_context fehlt
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         total_tokens = input_tokens + output_tokens
 
         inp_str = json.dumps(input_data, ensure_ascii=False) if isinstance(input_data, (dict, list)) else str(input_data or "")
         out_str = json.dumps(output_data, ensure_ascii=False) if isinstance(output_data, (dict, list)) else str(output_data or "")
 
-        with _LOCAL_LOCK:
-            with self._get_conn() as conn:
-                conn.execute("""
-                    INSERT INTO otel_spans (
+        try:
+            with _LOCAL_LOCK:
+                with self._get_conn() as conn:
+                    conn.execute("""
+                        INSERT INTO otel_spans (
+                            span_id, trace_id, parent_span_id, span_type, name, agent_id, model,
+                            input_data, output_data, status, status_message, input_tokens, output_tokens,
+                            total_tokens, cost_usd, duration_ms, start_time, end_time, attributes_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
                         span_id, trace_id, parent_span_id, span_type, name, agent_id, model,
-                        input_data, output_data, status, status_message, input_tokens, output_tokens,
-                        total_tokens, cost_usd, duration_ms, start_time, end_time, attributes_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    span_id, trace_id, parent_span_id, span_type, name, agent_id, model,
-                    inp_str, out_str, status, status_message, input_tokens, output_tokens,
-                    total_tokens, cost_usd, duration_ms, now_iso, now_iso, json.dumps(attributes or {})
-                ))
-                conn.commit()
+                        inp_str, out_str, status, status_message, input_tokens, output_tokens,
+                        total_tokens, cost_usd, duration_ms, now_iso, now_iso, json.dumps(attrs)
+                    ))
+                    conn.commit()
+            self._record_stats["success"] += 1
+        except Exception as exc:
+            self.note_local_trace_error("record_span", exc)
+            raise
 
         return span_id
 
@@ -273,10 +304,16 @@ class OpenTelemetryTracer:
         service_name = os.getenv("OTEL_SERVICE_NAME", "archon-os").strip() or "archon-os"
         tid_hex = self._to_otlp_hex(tree.get("trace_id", ""), 32)
         spans_out: List[Dict[str, Any]] = []
+        from backend.trace_context import should_sample
         for sp in tree.get("spans") or []:
             end_ns = int(self._iso_to_unix_ns(sp.get("end_time") or sp.get("start_time")))
             dur_ns = int(max(0.0, float(sp.get("duration_ms") or 0.0)) * 1_000_000)
             start_ns = max(0, end_ns - dur_ns)
+            span_attrs: Dict[str, Any] = {}
+            try:
+                span_attrs = json.loads(str(sp.get("attributes_json") or "{}")) or {}
+            except (ValueError, TypeError):
+                span_attrs = {}
             item: Dict[str, Any] = {
                 "traceId": tid_hex,
                 "spanId": self._to_otlp_hex(sp.get("span_id", ""), 16),
@@ -289,16 +326,22 @@ class OpenTelemetryTracer:
                     {"key": "archon.agent_id", "value": {"stringValue": str(sp.get("agent_id") or "")}},
                     {"key": "gen_ai.request.model", "value": {"stringValue": str(sp.get("model") or "")}},
                     {"key": "gen_ai.usage.total_tokens", "value": {"intValue": str(int(sp.get("total_tokens") or 0))}},
+                    {"key": "archon.sampled", "value": {"boolValue": bool(span_attrs.get("archon.sampled", should_sample()))}},
                 ],
                 "status": {"code": 1 if str(sp.get("status", "OK")).upper() == "OK" else 2},
             }
+            if span_attrs.get("tracestate"):
+                item["attributes"].append({
+                    "key": "tracestate", "value": {"stringValue": str(span_attrs["tracestate"])[:512]},
+                })
             if sp.get("parent_span_id"):
                 item["parentSpanId"] = self._to_otlp_hex(str(sp["parent_span_id"]), 16)
             spans_out.append(item)
         if not spans_out:
+            from backend.trace_context import new_ids
             spans_out.append({
                 "traceId": tid_hex,
-                "spanId": secrets.token_hex(8),
+                "spanId": new_ids()[1],
                 "name": str(tree.get("name") or "trace"),
                 "kind": 1,
                 "startTimeUnixNano": self._iso_to_unix_ns(tree.get("start_time")),
@@ -430,6 +473,9 @@ def get_tracing_status() -> dict:
         "service_name": os.getenv("OTEL_SERVICE_NAME", "archon-os").strip() or "archon-os",
         "local_trace_db": True,
         "export_stats": dict(getattr(tracer, "_export_stats", {})),
+        "record_stats": dict(getattr(tracer, "_record_stats", {})),
+        "sampler": (os.getenv("OTEL_TRACES_SAMPLER") or "parentbased_always_on").strip(),
+        "sampler_arg": (os.getenv("OTEL_TRACES_SAMPLER_ARG") or "").strip(),
     }
 
 

@@ -80,6 +80,10 @@ _EXTENDED_TASK_KEYS = (
     "max_hops", "hops_used", "max_tokens", "tokens_used",
     "max_replans", "replans_used",
     "block_kind", "needs_human",
+    # D11 (Re-Audit): Fan-in-Korrelation darf nicht am SQLite-Whitelist-Filter
+    # verloren gehen — Kind-IDs und Trace-Kontext nach Reload wiederfindbar.
+    "fan_in_child_ids", "fan_in_statements",
+    "trace_id", "session_id", "correlation_id",
 )
 
 

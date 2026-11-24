@@ -2456,7 +2456,11 @@ async def _stream_boardroom_debate_inner(
                     f"Bisheriger Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
                     f"Instruktion: Reagiere auf die Initialisierung des Moderators. "
                     f"Behalte strikt deine Rolle ({ag.get('role', 'Expert')}) bei und wende das Framework '{framework}' an. "
-                    f"Formuliere deine klare Fachperspektive."
+                    f"Formuliere deine klare Fachperspektive. "
+                    f"Beende deine Aussage mit EINER eigenen Zeile, die genau einen der "
+                    f"Marker enthält: `KONSENS_ERREICHT` (du stimmst zu) oder `KEIN KONSENS` "
+                    f"(du widersprichst oder hast Vorbehalte). Ohne Marker zählt deine "
+                    f"Aussage nicht als Konsens."
                 )
                 sys_prompt = build_final_system_prompt(framework, ag.get("prompt", ""))
                 token.check()  # Abbruch vor jedem Agent-Dispatch beachten
@@ -2533,7 +2537,11 @@ async def _stream_boardroom_debate_inner(
                     f"Bisheriger Diskussionsverlauf:\n{_prompt_transcript(running_transcript)}\n\n"
                     f"Instruktion: Reagiere auf die Aussagen der anderen Agenten. "
                     f"Behalte strikt deine Rolle ({agent.get('role', 'Expert')}) bei und wende das Framework '{framework}' an. "
-                    f"Hinterfrage, validiere oder erweitere die Argumente deiner Vorredner explizit."
+                    f"Hinterfrage, validiere oder erweitere die Argumente deiner Vorredner explizit. "
+                    f"Beende deine Aussage mit EINER eigenen Zeile, die genau einen der "
+                    f"Marker enthält: `KONSENS_ERREICHT` (du stimmst zu) oder `KEIN KONSENS` "
+                    f"(du widersprichst oder hast Vorbehalte). Ohne Marker zählt deine "
+                    f"Aussage nicht als Konsens."
                 )
                 
                 agent_sys_prompt = build_final_system_prompt(framework, agent.get("prompt", ""))

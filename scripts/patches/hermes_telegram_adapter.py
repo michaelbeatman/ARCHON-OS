@@ -7247,6 +7247,7 @@ class TelegramAdapter(BasePlatformAdapter):
                         # Nur wenn das NICHT greift, laufen die alten Pfade als Fallback.
                         done = False
                         _dec_ergebnis = ""
+                        _rd = None
                         try:
                             _rd = await _archon_req(
                                 "POST", f"{_archon}/api/decisions/decide",
@@ -7262,43 +7263,17 @@ class TelegramAdapter(BasePlatformAdapter):
                             else:
                                 reply_text = f"⛔ `{ref_id}` abgelehnt. {_dec_ergebnis}"[:900]
                         else:
-                            # --- Fallback: alte Pfade (Kanban, bei Nichterfolg Mission Control)
-                            kanban_status = "todo" if action == "approve" else "backlog"
-                            mission_status = "in_progress" if action == "approve" else "dismissed"
-                            # Synthese-Approval-Tasks (synthesis_draft_path) werden mit
-                            # 'completed' finalisiert, NICHT mit 'in_progress' - sonst wuerde der
-                            # Task ausgefuehrt statt die Freigabe abgeschlossen. Status vorab pruefen.
-                            if action == "approve":
-                                try:
-                                    _r0 = await _archon_req("GET", f"{_archon}/api/mission-control/state")
-                                    if _r0.status_code == 200:
-                                        for _t0 in (_r0.json() or {}).get("tasks", []):
-                                            if _t0.get("id") == ref_id and _t0.get("synthesis_draft_path"):
-                                                mission_status = "completed"
-                                                break
-                                except Exception:
-                                    pass
-                            try:
-                                r = await _archon_req(
-                                    "PATCH",
-                                    f"{_archon}/api/operations/kanban/tasks/{ref_id}/status",
-                                    json={"status": kanban_status},
-                                )
-                                if r.status_code == 200:
-                                    done = True
-                            except Exception:
-                                pass
-                            if not done:
-                                try:
-                                    r = await _archon_req(
-                                        "POST",
-                                        f"{_archon}/api/mission-control/tasks/move",
-                                        json={"task_id": ref_id, "target_status": mission_status},
-                                    )
-                                    if r.status_code == 200:
-                                        done = True
-                                except Exception:
-                                    pass
+                            # D14 (Re-Audit): kein direkter Kanban-/Mission-Status aus
+                            # Telegram-Callbacks. Bei Nicht-200 (403 Vier-Augen,
+                            # 503 HITL-Proof, 401) wird NICHT freigegeben; die
+                            # nachfolgende Antwort meldet ehrlich "fehlgeschlagen".
+                            # Actor, Ersteller-Abgleich, CAS und Audit bleiben
+                            # ausschliesslich im zentralen Decision-Service.
+                            logger.warning(
+                                "[Telegram] Freigabe %s fuer %s vom Decision-Service abgelehnt "
+                                "(Status %s) — kein Fallback-Status-Set.",
+                                action, ref_id, getattr(_rd, "status_code", "n/a"),
+                            )
                             _e_ref = _html.escape(str(ref_id))
                             if action == "approve":
                                 reply_text = f"✅ Task <code>{_e_ref}</code> freigegeben — Ausführung startet." if done else f"⚠️ Freigabe für <code>{_e_ref}</code> fehlgeschlagen."

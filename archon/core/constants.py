@@ -50,7 +50,10 @@ _AUTH_PROTECTED_PREFIXES = (
 
 # Erlaubte Entscheidungs-Typen fuer den Kanban-Entscheidungspfad.
 _DECISION_TYPEN = ("delegation_review", "synthesis_freigabe",
-                   "mission_freigabe", "permission_gate", "workflow_hitl_gate")
+                   "mission_freigabe", "permission_gate", "workflow_hitl_gate",
+                   # D14 (Re-Audit): NO_CONSENSUS muss einen echten Eskalations-
+                   # Task erzeugen statt still {} zurueckzugeben.
+                   "boardroom_no_consensus")
 
 # Delegations-Protokoll, das jedem Agenten-Prompt vorangestellt wird.
 DELEGATION_PROTOCOL_PROMPT = """

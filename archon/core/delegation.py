@@ -797,7 +797,7 @@ _ACTIVE_WATCHERS: set[str] = set()
 _DELEGATED_WORKER_TASKS: dict[str, Any] = {}
 
 # Terminale Kanban-Status (auf die ein Delegations-Watcher wartet).
-_TERMINAL_TASK_STATUSES = ("done", "blocked", "review", "failed")
+_TERMINAL_TASK_STATUSES = ("done", "blocked", "review", "failed", "cancelled")
 
 
 def _poll_kanban_row(task_id: str):
@@ -877,16 +877,17 @@ def _mark_delegation_task_timed_out(task_id: str, reason: str) -> bool:
     changed = False
     try:
         cur = conn.execute(
-            "UPDATE tasks SET status = 'failed', result = ?, completed_at = ? "
+            "UPDATE tasks SET status = 'cancelled', result = ?, completed_at = ? "
             "WHERE id = ? AND status NOT IN ('done', 'blocked', 'review', 'failed', 'cancelled')",
             (f"DELEGATION-TIMEOUT: {reason}"[:2000], now_iso, str(task_id)),
         )
         changed = bool(getattr(cur, "rowcount", 0))
         if changed:
             conn.execute(
-                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'failed', ?, ?)",
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'cancelled', ?, ?)",
                 (str(task_id), json.dumps({
-                    "status": "failed",
+                    "status": "cancelled",
+                    "block_kind": "worker_timeout",
                     "reason": "delegation_timeout",
                     "summary": reason[:200],
                 }), now_iso),
@@ -900,7 +901,7 @@ def _mark_delegation_task_timed_out(task_id: str, reason: str) -> bool:
                 "action": "status_changed",
                 "task_id": str(task_id),
                 "from": "in_progress",
-                "to": "failed",
+                "to": "cancelled",
             })
         except Exception as exc:
             logger.debug(f"[Delegation] Timeout-Broadcast fehlgeschlagen: {exc}")
@@ -1038,7 +1039,7 @@ async def _watch_delegated_task(
             # Worker abbrechen. Der Worker koennte in einem blockierenden Call
             # stecken und die CancelledError-Statusmeldung nie ausfuehren.
             timed_out = _mark_delegation_task_timed_out(task_id, timeout_reason)
-            _enqueue_delegation_failure(task_id, prof_id, "failed", timeout_reason)
+            _enqueue_delegation_failure(task_id, prof_id, "cancelled", timeout_reason)
             logger.warning(
                 "[Delegation] Timeout %s — Task terminal markiert: %s", task_id, timed_out
             )
@@ -1321,7 +1322,11 @@ async def _watch_delegated_task(
         if status in ("done", "review", "blocked", "failed"):
             try:
                 fan_parent, _ = await asyncio.to_thread(mc_get_parent_context_sqlite, task_id)
-                mc_status = "completed" if status in ("done", "review") else ("blocked" if status == "blocked" else "failed")
+                mc_status = (
+                    "completed" if status in ("done", "review")
+                    else ("blocked" if status == "blocked"
+                          else ("cancelled" if status == "cancelled" else "failed"))
+                )
                 await asyncio.to_thread(
                     mc_update_task_sqlite,
                     task_id,

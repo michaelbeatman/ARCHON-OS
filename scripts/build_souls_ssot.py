@@ -28,7 +28,7 @@ import sync_soul_modes as ssm  # noqa: E402
 OUT = ROOT / "souls"
 MANIFEST = OUT / "manifest.json"
 TIERS = (("COMPACT", ssm.build_compact_soul), ("PRO", ssm.build_pro_soul), ("FULL", ssm.build_full_soul))
-EXPECTED_ARTIFACT_COUNT = 511  # 73 Profile x 7 — siehe Modul-Docstring.
+EXPECTED_ARTIFACT_COUNT = 497  # 71 Profile x 7 (ohne micha/alpha) — siehe Modul-Docstring.
 
 
 def _build(profiles: list[dict]) -> dict[str, str]:

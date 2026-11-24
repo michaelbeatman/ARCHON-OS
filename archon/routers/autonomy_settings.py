@@ -12,6 +12,8 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 logger = logging.getLogger("archon.routers.autonomy_settings")
 
 from archon.routers._validated_body import PassthroughBody, as_payload
+from archon.routers._rbac import require_admin_or_503
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["autonomy_settings"])
 
 
@@ -184,7 +186,10 @@ def api_optimize_role_prompt(request: Request, payload: PassthroughBody = Body(.
 
 
 @router.post("/api/evolution/eval-suite/run")
-def api_run_eval_regression_suite(payload: PassthroughBody = Body(default={})):
+def api_run_eval_regression_suite(request: Request, payload: PassthroughBody = Body(default={})):
+    # Audit D01: dieser Endpoint konnte clientseitige simulated_outputs als
+    # echten Kandidatenlauf ausgeben und release_approved=true schreiben.
+    require_admin_or_503(request)
     payload = as_payload(payload)
     from backend.eval_regression_runner import eval_regression_runner
 

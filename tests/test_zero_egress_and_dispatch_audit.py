@@ -241,6 +241,7 @@ def test_core_dispatcher_hard_blocks_crm_finance_contracts_without_cloud_leak(tm
     with patch("backend.privacy_router.get_privacy_config", return_value=cfg), \
          patch("backend.llm_egress_guard.get_privacy_config", return_value=cfg), \
          patch("backend.privacy_router.check_local_llm_status", return_value={"available": False}), \
+         patch("backend.compliance_engine.compliance_engine.check_activation_allowed", return_value={"allowed": True}), \
          patch.object(core_dispatcher, "_get_dispatcher_http_client", return_value=mock_client):
         res = asyncio.run(
             core_dispatcher._dispatch_to_omniroute_or_container_exec(

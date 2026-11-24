@@ -165,8 +165,8 @@ docker-compose.override.yml
 !static/michael_beatman_logo.png
 !static/icons/
 !static/icons/**
-!static/hermes-webui/
-!static/hermes-webui/**
+!static/hermes-webui/*.png
+static/hermes-webui/static/
 !static/quartz-garden/static/*.png
 !templates/
 !templates/**

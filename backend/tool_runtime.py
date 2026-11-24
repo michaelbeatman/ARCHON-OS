@@ -188,20 +188,28 @@ def _record_tool_flight_event(
     session_id: str,
     status: str,
     result: Any,
+    flightlog_run_id: Optional[str] = None,
 ) -> None:
     """D12/BLOCKER: Produzent fuer `flight_events` im echten Tool-Chokepoint.
 
-    Jeder Tool-Call - Erfolg, Fehler oder Blockade - wird mit echtem
-    `tool_ok`, gemessenen `tokens_used` und der aktiven Trace-ID als
-    `run_id` persistiert. Damit hat `detect_silent_failures()` endlich
-    echte Daten aus dem Produktivpfad.
+    R-B4 (Re-Audit D13): Der Gruppierungsschluessel muss der sein, mit dem
+    `detect_silent_failures()` abfragt. Frueher wurde die HTTP-Trace-ID
+    verwendet (`current_trace_id()`), die pro Request wechselt und mit der
+    `rid`/`tid` der Detektoren nichts zu tun hat. Explizite ID > session_id >
+    Trace-ID als Fallback.
     """
     try:
         from backend.flightlog_backtester import record_flight_event
         from backend.trace_context import current_trace_id
 
+        run_id = (
+            str(flightlog_run_id or "").strip()
+            or str(session_id or "").strip()
+            or str(current_trace_id() or "").strip()
+            or "no-trace"
+        )
         record_flight_event(
-            run_id=current_trace_id() or str(session_id or "no-trace"),
+            run_id=run_id,
             agent_id=str(agent_id or "unknown"),
             tool_name=str(tool_name or "unknown"),
             args=args if isinstance(args, dict) else {},
@@ -229,6 +237,7 @@ async def execute_agent_tool(
     session_id: str = "default_session",
     approval_id: Optional[str] = None,
     warrant: Optional[Dict[str, Any]] = None,
+    flightlog_run_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Einheitlicher Ausfuehrungspfad fuer Agent- und DAG-Node-Tool-Calls."""
     gate = enforce_tool_execution(
@@ -247,6 +256,7 @@ async def execute_agent_tool(
             session_id=session_id,
             status=status,
             result=result,
+            flightlog_run_id=flightlog_run_id,
         )
         return payload
 

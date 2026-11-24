@@ -327,9 +327,9 @@ jobs:
     name: 6. Quality Gates (scharf)
     # Audit D09 / Register C24 aufgelöst: der Job darf wieder rot werden.
     # Scharf: kritischer Ruff-Subset (E9,F63,F7,F82), Coverage/Pytest, Install/Setup.
-    # Die vollständigen Style-Läufe (ruff/mypy/eslint) bleiben vorerst als
-    # explizit gekennzeichnete BASELINE sichtbar (nov. 2026: ~11k Funde) und
-    # werden in einem eigenen Ratchet-Schritt schrittweise geschärft.
+    # Re-Audit D09/R-B: keine continue-on-error-Baselines mehr. Die vollständigen
+    # Läufe (ruff/mypy/eslint) laufen als HARTES Changed-Files-Ratchet: alter
+    # Code bleibt unangetastet, aber jede geänderte Datei muss sauber sein.
     needs: validate-and-audit
     runs-on: ubuntu-latest
     env:
@@ -337,6 +337,9 @@ jobs:
     steps:
       - name: Quellcode auschecken
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (gepinnt)
+        with:
+          # Changed-Files-Ratchet braucht den Base-Commit (S-9.3).
+          fetch-depth: 0
 
       - name: Python 3.13 einrichten
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 (gepinnt)
@@ -367,14 +370,39 @@ jobs:
         # Diese Klassen bedeuten kaputten Code, nicht Style – null Toleranz.
         run: ruff check --select E9,F63,F7,F82 --output-format=concise archon backend scripts tools utils core_dispatcher.py main.py
 
-      - name: Ruff – vollständiger Style-Lauf (BASELINE, nicht blockierend)
-        # Bewusst als Baseline markiert: ~11k historische Funde. Ratchet folgt.
-        continue-on-error: true
-        run: ruff check archon backend scripts tools utils core_dispatcher.py main.py --output-format=concise
+      - name: Changed-Files-Ratchet – Diff-Bereich bestimmen
+        id: changed
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="origin/${{ github.base_ref }}...HEAD"
+          else
+            RANGE="HEAD^ HEAD"
+          fi
+          echo "py=$(git diff --name-only --diff-filter=ACMR $RANGE -- '*.py' '*.pyi' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          echo "js=$(git diff --name-only --diff-filter=ACMR $RANGE -- 'frontend/src/**/*.ts' 'frontend/src/**/*.tsx' 'frontend/src/**/*.js' 'frontend/src/**/*.mjs' | sed 's|^frontend/||' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
 
-      - name: mypy (BASELINE, nicht blockierend)
-        continue-on-error: true
-        run: mypy --ignore-missing-imports archon backend scripts tools utils core_dispatcher.py main.py
+      - name: Ruff – geänderte Dateien (HARTES RATCHET-GATE)
+        shell: bash
+        run: |
+          FILES="${{ steps.changed.outputs.py }}"
+          if [ -n "$FILES" ]; then
+            echo "Ruff prüft geänderte Dateien: $FILES"
+            ruff check $FILES --output-format=concise
+          else
+            echo "Keine geänderten Python-Dateien — Ratchet nichts zu prüfen."
+          fi
+
+      - name: mypy – geänderte Dateien (HARTES RATCHET-GATE)
+        shell: bash
+        run: |
+          FILES="${{ steps.changed.outputs.py }}"
+          if [ -n "$FILES" ]; then
+            echo "mypy prüft geänderte Dateien: $FILES"
+            mypy --ignore-missing-imports $FILES
+          else
+            echo "Keine geänderten Python-Dateien — Ratchet nichts zu prüfen."
+          fi
 
       - name: Coverage (HARTES GATE – pytest muss laufen)
         run: |
@@ -384,6 +412,13 @@ jobs:
       - name: Frontend-Abhängigkeiten für ESLint installieren
         run: npm ci --prefix frontend
 
-      - name: ESLint (BASELINE, nicht blockierend)
-        continue-on-error: true
-        run: npm --prefix frontend run lint
+      - name: ESLint – geänderte Dateien (HARTES RATCHET-GATE)
+        shell: bash
+        run: |
+          FILES="${{ steps.changed.outputs.js }}"
+          if [ -n "$FILES" ]; then
+            echo "ESLint prüft geänderte Dateien: $FILES"
+            cd frontend && npx eslint $FILES
+          else
+            echo "Keine geänderten Frontend-Dateien — Ratchet nichts zu prüfen."
+          fi

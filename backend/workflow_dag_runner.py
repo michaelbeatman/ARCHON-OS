@@ -1081,6 +1081,9 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                     args=_targs,
                     agent_id=agent_id,
                     session_id=str(kanban_task_id or node.get("id") or "dag_session"),
+                    # R-B4: identischer Schluessel wie detect_silent_failures() am
+                    # Run-Abschluss (dort `rid`, hier ueber den Node mitgefuehrt).
+                    flightlog_run_id=str(node.get("_dag_run_id") or ""),
                 )
             tool_trace.append({"turn": _turn + 1, "tool": _tname, "args": _targs, "result": _tres})
             _ckpt_rid = str(node.get("_dag_run_id") or "")
@@ -2234,10 +2237,21 @@ async def _run_workflow_dag_locked(
         try:
             from backend.trajectory_budget import close_trajectory, record_tokens
             if _total_tokens > 0:
-                record_tokens(_tid, _total_tokens, reason=f"dag_run:{rid}")
-            close_trajectory(_tid, "completed" if final_status == "completed" else "failed")
+                # R-B3 (Re-Audit D13): Das Ergebnis der Budgetbuchung auswerten.
+                # Vorher wurde `blocked` ignoriert und vom Abschluss auf
+                # `completed`/`failed` ueberschrieben.
+                _token_res = record_tokens(_tid, _total_tokens, reason=f"dag_run:{rid}")
+                if isinstance(_token_res, dict) and not _token_res.get("allowed", True):
+                    final_status = "blocked"
+                    cycle_error = cycle_error or f"TRAJECTORY_TOKEN_CAP: {_token_res.get('reason')}"
+                    logger.error("[WorkflowDAG] '%s' blockiert durch Trajectory-Token-Cap", rid)
+            close_trajectory(
+                _tid,
+                "blocked" if final_status == "blocked"
+                else ("completed" if final_status == "completed" else "failed"),
+            )
         except Exception as _traj_exc:
-            logger.debug("[WorkflowDAG] Trajectory-Abschluss nicht persistiert: %s", _traj_exc)
+            logger.error("[WorkflowDAG] Trajectory-Abschluss nicht persistiert: %s", _traj_exc)
         conn.execute(
             "UPDATE workflow_runs SET status = ?, updated_at = ?, total_cost_usd = ? WHERE run_id = ?",
             (final_status, time.time(), round(_total_cost, 6), rid),

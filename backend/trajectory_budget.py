@@ -415,8 +415,18 @@ def close_trajectory(
     final = state if state in ("completed", "failed", "released", "blocked") else "completed"
     tid = normalize_trajectory_id(trajectory_id)
     with _WRITE_LOCK, _connect(db_path) as conn:
+        # R-B3 (Re-Audit D13): Ein bereits geblocktes Trajectory darf beim
+        # Abschluss NICHT auf completed/failed gehoben werden. Sonst wird die
+        # Cap-Invariante (HOP/REPLAN/TOKEN) durch den Run-Abschluss zerstoert.
+        row = conn.execute(
+            "SELECT state FROM trajectory_budgets WHERE trajectory_id = ?", (tid,)
+        ).fetchone()
+        current = str(row["state"]) if row else ""
+        if current == "blocked" and final != "blocked":
+            return {"trajectory_id": tid, "state": "blocked", "preserved": True, "requested": final}
         conn.execute(
-            "UPDATE trajectory_budgets SET state = ?, updated_at = ? WHERE trajectory_id = ?",
+            "UPDATE trajectory_budgets SET state = ?, updated_at = ? "
+            "WHERE trajectory_id = ? AND state != 'blocked'",
             (final, time.time(), tid),
         )
         conn.commit()

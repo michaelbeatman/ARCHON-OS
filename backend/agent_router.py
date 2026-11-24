@@ -1077,12 +1077,16 @@ class AgentRouter:
                     usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
                     p_toks = int(usage.get("prompt_tokens") or usage.get("input_tokens") or max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4))
                     c_toks = int(usage.get("completion_tokens") or usage.get("output_tokens") or max(1, len(raw_text) // 4))
+                    est_cost_unverified = True
                     est_cost = 0.0
                     try:
-                        from backend.llm_kernel import estimate_cost_usd
-                        est_cost = float(estimate_cost_usd(m_try, p_toks, c_toks))
-                    except Exception:
-                        est_cost = 0.0
+                        # R-B2 (Re-Audit D12): `estimate_cost_usd` existiert nicht —
+                        # der Import schlug fehl und die Receipt enthielt dauerhaft 0.0.
+                        from backend.llm_kernel import estimate_model_cost_usd
+                        est_cost = float(estimate_model_cost_usd(m_try, p_toks, c_toks, provider=eff_provider))
+                        est_cost_unverified = False
+                    except Exception as cost_exc:
+                        logger.error("[AgentRouter] Kostenberechnung fehlgeschlagen: %s", cost_exc)
                     try:
                         from backend.execution_receipt_ledger import execution_receipt_ledger
                         execution_receipt_ledger.issue_receipt(

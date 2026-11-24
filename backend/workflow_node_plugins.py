@@ -720,6 +720,7 @@ async def execute_workflow_node_plugin(
             args=resolved_params,
             agent_id=str(node.get("agent_id") or "default"),
             session_id=str(node.get("kanban_task_id") or node.get("id") or "dag_plugin"),
+            flightlog_run_id=str(node.get("_dag_run_id") or node.get("kanban_task_id") or ""),
         )
     if adapter == "http" and spec.get("http_endpoint"):
         from utils.safe_http import safe_http_request

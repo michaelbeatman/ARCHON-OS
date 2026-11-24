@@ -205,7 +205,11 @@ def _dispatch_cache_scope(agent_id: str = "") -> str:
             tenant = str(tenant_context.get_active_tenant_id() or "")
         except Exception as tc_exc:
             logger.debug("[Dispatcher] Tenant-Context nicht verfuegbar: %s", tc_exc)
-    return f"{tenant or 'default'}:{agent_id or 'default'}"
+    # D02: Policy-/Egress-Kontext in den Scope aufnehmen — eine zwischenzeitlich
+    # geänderte Policy darf keine alte gecachte Antwort als "success" ausgeben.
+    policy_version = str(os.environ.get("ARCHON_POLICY_VERSION") or "")
+    zero_egress = str(os.environ.get("ARCHON_ZERO_EGRESS_STRICT") or "").strip().lower()
+    return f"{tenant or 'default'}:{agent_id or 'default'}:{policy_version}:{zero_egress}"
 
 # --- External Agent URLs ---
 # Defaulting to docker network hostnames, but can be overridden by env vars
@@ -837,6 +841,16 @@ async def dispatch_to_omniroute_or_container(
             )
         except Exception as cache_exc:
             logger.debug(f"[Dispatcher] Semantischer Cache-Lookup nicht verfuegbar: {cache_exc}")
+        # D02: bei aktivem Zero-Egress nie einen Cache-Hit ohne erneutes Gate
+        # ausliefern — sonst umgeht der Cache Compliance-/Egress-Entscheidungen.
+        if cache_hit and cache_hit.get("hit"):
+            try:
+                from backend.privacy_router import get_privacy_config
+                if bool((get_privacy_config() or {}).get("zero_egress_strict")):
+                    cache_hit = None
+            except Exception as _pol_exc:
+                logger.error("[Dispatcher] Policy-Revalidierung beim Cache-Hit fehlgeschlagen: %s", _pol_exc)
+                cache_hit = None
         if cache_hit and cache_hit.get("hit"):
             cached_content = str(cache_hit.get("response") or "")
             try:

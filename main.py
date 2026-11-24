@@ -623,7 +623,9 @@ async def liveness_check():
             "age_s": wd.get("age_s"),
         }
     }
-    if not info.get("alive", True):
+    # D10/HIGH: ein toter Watchdog-Thread muss `/livez` auf 503 setzen,
+    # sonst greift der externe Autoheal wegen des Docker-Health-Gates nicht.
+    if not info.get("alive", True) or not info["loops"]["watchdog"]["alive"]:
         return JSONResponse(status_code=503, content=info)
     return info
 

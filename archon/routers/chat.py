@@ -1163,6 +1163,7 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
     if provider == "openrouter":
         from backend.llm_egress_guard import (
             ZeroEgressBlockedError,
+            audit_dispatch_async,
             enforce_egress_firewall_for_url,
             evaluate_and_gate_llm_dispatch,
             log_completed_llm_dispatch,
@@ -1215,7 +1216,7 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(eff_url, headers=headers, json=payload)
-                log_completed_llm_dispatch(
+                await audit_dispatch_async(
                     agent_id="image_generate",
                     provider=str(gate.get("provider") or provider),
                     model=str(gate.get("model") or model),

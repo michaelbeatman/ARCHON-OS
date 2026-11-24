@@ -466,6 +466,7 @@ async def generate_grounded_llm_response(prompt: str, context_chunks: List[dict]
     if httpx:
         from backend.llm_egress_guard import (
             ZeroEgressBlockedError,
+            audit_dispatch_async,
             enforce_egress_firewall_for_url,
             evaluate_and_gate_llm_dispatch,
             log_completed_llm_dispatch,
@@ -504,7 +505,7 @@ async def generate_grounded_llm_response(prompt: str, context_chunks: List[dict]
                 )
                 async with httpx.AsyncClient(timeout=25.0) as client:
                     resp = await client.post(eff_url, json=payload)
-                    log_completed_llm_dispatch(
+                    await audit_dispatch_async(
                         agent_id="notebook_engine",
                         provider=eff_prov,
                         model=eff_mod,

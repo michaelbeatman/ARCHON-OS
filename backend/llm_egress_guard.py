@@ -17,10 +17,12 @@ Aufgaben:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import subprocess
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -357,6 +359,20 @@ def log_completed_llm_dispatch(
         trace_id=resolved_tid,
         extra=merged_extra,
     )
+
+
+# D08/HIGH: synchrone SQLite-Schreibtransaktionen (BEGIN IMMEDIATE, timeout=30)
+# duerfen nicht direkt im Event-Loop laufen. Ein eigener Lock erhaelt die
+# Reihenfolge der HMAC-Hashkette (threading.Lock, kein Coroutine-Replay).
+_AUDIT_DISPATCH_LOCK = threading.Lock()
+
+
+async def audit_dispatch_async(**kwargs: Any) -> Dict[str, Any]:
+    """Async Variante von `log_completed_llm_dispatch` fuer alle async Caller."""
+    def _write() -> Dict[str, Any]:
+        with _AUDIT_DISPATCH_LOCK:
+            return log_completed_llm_dispatch(**kwargs)
+    return await asyncio.to_thread(_write)
 
 
 def inspect_worker_network_isolation(network_name: str = ZERO_EGRESS_WORKER_NET) -> Dict[str, Any]:

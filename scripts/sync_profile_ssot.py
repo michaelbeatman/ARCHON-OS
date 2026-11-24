@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -69,6 +70,19 @@ def _role_ids() -> List[str]:
     return [str(r.get("id") or "").strip() for r in data if isinstance(r, dict) and r.get("id")]
 
 
+def _prompt_hashes(path: str) -> Dict[str, str]:
+    """D15: Prompt-Hash je ID — ID-Mengen allein erkennen keine Namens-Divergenz."""
+    data = _load_json(path)
+    if isinstance(data, dict):
+        data = data.get("roles", [])
+    if not isinstance(data, list):
+        return {}
+    return {
+        str(r.get("id")): hashlib.sha256(str(r.get("prompt") or "").encode("utf-8")).hexdigest()
+        for r in data if isinstance(r, dict) and r.get("id")
+    }
+
+
 def detect_drift(allow_missing_hermes: bool = False) -> Dict[str, Any]:
     """Liefert einen maschinenlesbaren Drift-Report (SSOT = agent_profiles.json).
 
@@ -85,9 +99,15 @@ def detect_drift(allow_missing_hermes: bool = False) -> Dict[str, Any]:
     orphan_dirs = sorted(disk - src)
     missing_roles = sorted(src - roles)
     stale_roles = sorted(roles - src)
+    src_prompts = _prompt_hashes(PROFILES_JSON)
+    role_prompts = _prompt_hashes(ROLES_JSON)
+    prompt_mismatch = sorted(
+        k for k in src_prompts
+        if k in role_prompts and src_prompts[k] != role_prompts[k]
+    )
     disk_skipped = (not hermes_present) and allow_missing_hermes
     effective_missing_dirs: List[str] = [] if disk_skipped else missing_dirs
-    drift = bool(effective_missing_dirs or orphan_dirs or missing_roles or stale_roles)
+    drift = bool(effective_missing_dirs or orphan_dirs or missing_roles or stale_roles or prompt_mismatch)
     return {
         "ssot": "agent_profiles.json",
         "counts": {"ssot": len(src), "disk": len(disk), "roles": len(roles)},
@@ -95,6 +115,7 @@ def detect_drift(allow_missing_hermes: bool = False) -> Dict[str, Any]:
         "orphan_dirs": orphan_dirs,
         "missing_roles": missing_roles,
         "stale_roles": stale_roles,
+        "prompt_mismatch": prompt_mismatch,
         "disk_skipped": disk_skipped,
         "drift": drift,
     }

@@ -138,10 +138,13 @@ def main() -> None:
         state = container_state()
         if state.get("status") != "running":
             log(f"kein Eingriff: Container-Status={state.get('status')!r}")
-        elif HEALTH_GATE and state.get("health") != "unhealthy":
+        elif HEALTH_GATE and state.get("health") != "unhealthy" and not result.get("watchdog_stale"):
             log(f"kein Eingriff: Docker-Health={state.get('health')!r} (noch nicht unhealthy)")
         else:
-            log("eskaliere: stop + start (Healthcheck und /livez beide rot)")
+            log(
+                "eskaliere: stop + start (watchdog_stale)" if result.get("watchdog_stale")
+                else "eskaliere: stop + start (Healthcheck und /livez beide rot)"
+            )
             try:
                 docker_request("POST", f"/containers/{CONTAINER}/stop")
                 docker_request("POST", f"/containers/{CONTAINER}/start")

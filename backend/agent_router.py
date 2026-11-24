@@ -975,6 +975,7 @@ class AgentRouter:
         """
         from backend.llm_egress_guard import (
             ZeroEgressBlockedError,
+            audit_dispatch_async,
             evaluate_and_gate_llm_dispatch,
             log_completed_llm_dispatch,
         )
@@ -1076,7 +1077,7 @@ class AgentRouter:
                         provider_breaker.record_failure(eff_provider)
                     elif 200 <= resp.status_code < 300:
                         provider_breaker.record_success(eff_provider)
-                    log_completed_llm_dispatch(
+                    await audit_dispatch_async(
                         agent_id=agent_id,
                         provider=eff_provider,
                         model=m_try,
@@ -1208,6 +1209,7 @@ class AgentRouter:
         """
         from backend.llm_egress_guard import (
             ZeroEgressBlockedError,
+            audit_dispatch_async,
             evaluate_and_gate_llm_dispatch,
             log_completed_llm_dispatch,
         )
@@ -1297,7 +1299,7 @@ class AgentRouter:
                         logger.warning(f"[AgentRouter Stream] Provider '{provider}' circuit-open — Fallback")
                         continue
                     async with client.stream("POST", target_url, headers=request_headers, json=safe_payload) as response:
-                        log_completed_llm_dispatch(
+                        await audit_dispatch_async(
                             agent_id=agent_id,
                             provider=provider,
                             model=m_try,

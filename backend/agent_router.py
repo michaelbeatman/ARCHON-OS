@@ -255,12 +255,15 @@ class AgentRouter:
             lines = [l.strip() for l in content.splitlines() if l.strip()]
             preview = lines[0] if lines else content[:120]
             if len(preview) > 160:
-                preview = preview[:160] + "..."
+                # Audit D11: Kürzung explizit markieren — sonst verschwinden
+                # Safety-/Negativ-Regeln unerkannt aus dem Kontext.
+                preview = preview[:160] + f" … [GEKÜRZT: {len(preview) - 160} Zeichen]"
             summary_lines.append(f"- [{role}]: {preview}")
 
         # Kopf (Aufgabenstellung, frühe Regeln) + Schwanz (letzte Entscheidungen)
         if len(summary_lines) > 18:
-            kept_lines = summary_lines[:3] + ["- [...]"] + summary_lines[-12:]
+            omitted = len(summary_lines) - 15
+            kept_lines = summary_lines[:3] + [f"- [... {omitted} weitere Einträge ausgelassen ...]"] + summary_lines[-12:]
         else:
             kept_lines = summary_lines
         compact_text = (
@@ -277,7 +280,11 @@ class AgentRouter:
         anchor = None
         for m in older_msgs:
             if m.get("role") == "user":
-                anchor = {"role": "user", "content": str(m.get("content", ""))[:1500]}
+                original = str(m.get("content", ""))
+                anchor_text = original[:1500]
+                if len(original) > 1500:
+                    anchor_text += f"\n[GEKÜRZT: {len(original) - 1500} Zeichen des ursprünglichen Aufgabenankers]"
+                anchor = {"role": "user", "content": anchor_text}
                 break
         if anchor and recent_msgs and recent_msgs[0].get("role") == "user":
             compact_msg["content"] = f"{compact_text}\n\n### [URSPRÜNGLICHER AUFGABENANKER]:\n{anchor['content']}"

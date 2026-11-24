@@ -923,6 +923,7 @@ async def _dispatch_to_omniroute_or_container_impl(
 
     # Prompt-Registry & Canary-Routing
     effective_prompt_info = None
+    prompt_version_info = None
     try:
         from backend.prompt_registry import prompt_registry
         eff = prompt_registry.get_effective_prompt(agent_id, task_id)
@@ -934,6 +935,15 @@ async def _dispatch_to_omniroute_or_container_impl(
             if registry_prompt not in system_prompt:
                 system_prompt = f"{registry_prompt}\n\n{system_prompt}"
             effective_prompt_info = eff
+            # Audit D11: Canary-/Prompt-Version muss im Handoff nachvollziehbar
+            # bleiben. Nur Metadaten signieren, nie den kompletten Prompt-Text.
+            prompt_version_info = {
+                "agent_id": agent_id,
+                "version": eff.get("version") or eff.get("prompt_version") or "",
+                "canary": eff.get("canary") or eff.get("is_canary") or False,
+                "prompt_chars": len(str(eff.get("prompt") or "")),
+                "model": eff.get("model") or "",
+            }
             if eff.get("model") and not model:
                 model = eff["model"]
     except Exception as pr_err:
@@ -1214,6 +1224,7 @@ async def _dispatch_to_omniroute_or_container_impl(
             zero_egress_active=hop_gate["zero_egress_active"],
             task_id=task_id,
             trace_id=active_trace_id,
+            extra={"effective_prompt_info": prompt_version_info} if prompt_version_info else None,
         )
         return r
 

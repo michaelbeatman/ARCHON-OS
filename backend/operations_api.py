@@ -1930,11 +1930,27 @@ def _approve_kanban_task_db(task_id: str) -> dict:
         row = conn.execute("SELECT id, status, block_kind FROM tasks WHERE id = ?", (task_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Task nicht gefunden.")
+        _status = row["status"] if hasattr(row, "keys") else row[1]
+        _block_kind = row["block_kind"] if hasattr(row, "keys") else row[2]
+        # D07: fail-closed — nur Tasks, die wirklich auf Freigabe warten.
+        # Ein wegen Budget/Zero-Egress/Lease/Taint blockierter Task darf nicht
+        # durch die Approval-Route freigesetzt werden.
+        if str(_status) not in ("awaiting_approval", "blocked") or str(_block_kind or "") != "approval":
+            raise HTTPException(status_code=409, detail={
+                "reason": "NOT_APPROVABLE", "status": str(_status), "block_kind": str(_block_kind or "")
+            })
         now_iso = datetime.datetime.now().isoformat()
-        conn.execute("UPDATE tasks SET status = 'todo', block_kind = 'approval_granted' WHERE id = ?", (task_id,))
+        cur = conn.execute(
+            "UPDATE tasks SET status = 'todo', block_kind = 'approval_granted' "
+            "WHERE id = ? AND status IN ('awaiting_approval','blocked') AND block_kind = 'approval'",
+            (task_id,),
+        )
+        if not getattr(cur, "rowcount", 0):
+            raise HTTPException(status_code=409, detail={"reason": "APPROVAL_RACE"})
+        _previous_status = str(_status)
         conn.execute(
             "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'approved', ?, ?)",
-            (task_id, json.dumps({"by": "owner", "previous_status": row["status"] if hasattr(row, "keys") else row[1]}), now_iso),
+            (task_id, json.dumps({"by": "owner", "previous_status": _previous_status}), now_iso),
         )
         # Sticky-Sperre aufheben (Hermes-Protokoll: 'unblocked' muss das letzte Block-Event sein)
         conn.execute(

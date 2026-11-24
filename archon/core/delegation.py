@@ -1627,9 +1627,21 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             try:
                 from backend.autonomy_settings import get_module_config
                 _del_cfg = get_module_config("delegation") or {}
-                _del_autonomy = str(_del_cfg.get("autonomy", "autonomous")).lower()
-            except Exception:
-                _del_autonomy = "autonomous"
+                _del_autonomy = str(_del_cfg.get("autonomy", "manual")).lower()
+            except Exception as _aut_exc:
+                # D07: fail-closed — ohne verifizierte Config KEIN HITL-Bypass.
+                logger.error(
+                    "[Delegation] Autonomie-Config nicht lesbar — fail-closed manual: %s", _aut_exc
+                )
+                try:
+                    from backend.audit_log import chained_audit_log
+                    chained_audit_log.record_event(
+                        category="delegation", action="autonomy_config_unavailable",
+                        agent_id="system", payload={"error": str(_aut_exc)[:300]},
+                    )
+                except Exception:
+                    logger.error("[Delegation] Audit AUTONOMY_CONFIG_UNAVAILABLE fehlgeschlagen")
+                _del_autonomy = "manual"
             _block_kind = "approval_granted" if _del_autonomy == "autonomous" else None
             try:
                 _task_cols = {r[1] for r in kconn.execute("PRAGMA table_info(tasks)").fetchall()}

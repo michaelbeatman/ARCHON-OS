@@ -71,8 +71,13 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
             from backend.tenant_db_registry import resolve_tenant_db_path
             from backend.tenant_context import tenant_context
             path = resolve_tenant_db_path("taint_guard.db", tenant_context.get_active_tenant_id())
-        except Exception:
-            path = DEFAULT_DB_PATH
+        except Exception as exc:
+            # D07: fail-closed — kein stillen Fallback auf die globale DB.
+            # Sonst landen Taint-Marker/Freigaben mandantenübergreifend und ein
+            # kritischer Egress wird allowed=True.
+            raise RuntimeError(
+                f"TaintStoreUnavailable: mandantenisolierte DB nicht auflösbar: {exc}"
+            ) from exc
     os.makedirs(os.path.dirname(path), exist_ok=True)
     conn = sqlite3.connect(path, timeout=10.0)
     try:
@@ -305,27 +310,24 @@ def resolve_taint_approval(
 
         # Audit D04/MED: Passkey-Proof fuer kritische Tools, an Aktion+Ressource gebunden.
         if approved and is_critical_egress_tool(str(row["tool_name"] or "")):
-            # Der Proof ist zwingend; die env-Variable ist ein dokumentierter,
-            # enger Break-Glass fuer Legacy-Tests/Dev.
-            proof_required = os.environ.get(
-                "ARCHON_TAINT_HITL_ALLOW_NO_PROOF", ""
-            ).strip().lower() not in ("1", "true", "yes")
-            if proof_required:
-                proof = str(passkey_proof or "").strip()
-                if not proof:
-                    raise PermissionError(
-                        "Passkey-Proof erforderlich, um einen kritischen Taint-Egress freizugeben."
-                    )
-                try:
-                    from backend.passkey_hitl import consume_hitl_proof_token
-                    ok = consume_hitl_proof_token(
-                        proof, reviewer, "system",
-                        action=f"Taint-Freigabe {approval_id}", resource=approval_id,
-                    )
-                except Exception as exc:
-                    raise PermissionError(f"Taint-HITL-Proof nicht pruefbar: {exc}")
-                if not ok:
-                    raise PermissionError("Ungueltiger oder nicht an diese Freigabe gebundener Passkey-Proof.")
+            # D07: der Passkey-Proof ist ZWINGEND. Der frühere Env-Schalter
+            # `ARCHON_TAINT_HITL_ALLOW_NO_PROOF` war undokumentiert und
+            # deaktivierte den Proof für kritische Egress-Freigaben.
+            proof = str(passkey_proof or "").strip()
+            if not proof:
+                raise PermissionError(
+                    "Passkey-Proof erforderlich, um einen kritischen Taint-Egress freizugeben."
+                )
+            try:
+                from backend.passkey_hitl import consume_hitl_proof_token
+                ok = consume_hitl_proof_token(
+                    proof, reviewer, "system",
+                    action=f"Taint-Freigabe {approval_id}", resource=approval_id,
+                )
+            except Exception as exc:
+                raise PermissionError(f"Taint-HITL-Proof nicht pruefbar: {exc}")
+            if not ok:
+                raise PermissionError("Ungueltiger oder nicht an diese Freigabe gebundener Passkey-Proof.")
 
         cur = conn.execute(
             """

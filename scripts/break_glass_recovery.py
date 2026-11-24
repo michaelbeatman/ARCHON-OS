@@ -259,7 +259,13 @@ Sollte die Web-Oberflaeche nicht erreichbar sein oder der Server neu aufgesetzt 
             }
         )
     except Exception as e:
-        pass
+        # D07: kein Erfolg ohne signierten GoBD-Audit-Beweis.
+        return {
+            "status": "blocked",
+            "audit_status": "failed",
+            "error_code": "AUDIT_WRITE_FAILED",
+            "message": f"Break-Glass: Audit-Beweis nicht geschrieben: {e}",
+        }
 
     return {
         "status": "success",
@@ -323,7 +329,14 @@ def restore_break_glass_vault(recovery_key: str, operator: str = "emergency_oper
             }
         )
     except Exception as e:
-        pass
+        # D07: forensic zwingender Beweis fehlt — kein "ERFOLGREICH".
+        return {
+            "status": "blocked",
+            "audit_status": "failed",
+            "error_code": "AUDIT_WRITE_FAILED",
+            "restored_files": restored_files,
+            "message": f"Notfallwiederherstellung nicht auditiert: {e}",
+        }
 
     return {
         "status": "success",

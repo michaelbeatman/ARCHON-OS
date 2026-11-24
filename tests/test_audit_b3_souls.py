@@ -26,7 +26,8 @@ def test_canonical_souls_manifest_is_complete():
     for rel, expected in manifest.items():
         path = ROOT / "souls" / rel
         assert path.is_file(), f"fehlt: {rel}"
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected, f"Hash abweichend: {rel}"
+        raw = path.read_bytes().replace(b"\r\n", b"\n")
+        assert hashlib.sha256(raw).hexdigest() == expected, f"Hash abweichend: {rel}"
 
 
 def test_regulated_domains_are_high_risk():

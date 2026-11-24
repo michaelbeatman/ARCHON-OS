@@ -78,14 +78,17 @@ class TestM49EUAIActCompliance(unittest.TestCase):
         self.assertEqual(by_id["hr_recruiter"]["risk_tier"], "HIGH_RISK")
         # B2B Outreach muss SPECIFIC_TRANSPARENCY (Art. 50) sein
         self.assertEqual(by_id["b2b_outreach_specialist"]["risk_tier"], "SPECIFIC_TRANSPARENCY")
-        # Interne Rollen (Founder / Research Scout / Wirtschaftsjurist) dürfen NICHT fälschlich als HR-High-Risk landen
-        for internal_id in ("founder", "research_scout", "commercial_jurist_contracts"):
+        # Interne nicht-regulierte Rollen (Research Scout / DevOps / Agile Scrum) dürfen NICHT als High-Risk landen
+        # (Regulierte Rechts-/Steuer-/Medizin-/Executive-Rollen sind seit D15 bewusst HIGH_RISK.)
+        for internal_id in ("research_scout", "agile_scrum_master"):
             if internal_id in by_id:
                 self.assertNotEqual(by_id[internal_id]["risk_tier"], "HIGH_RISK")
 
-        # Jeder Spezialist hat einen echten 64-stelligen SHA-256-Hash seines SOUL-Prompts
+        # Jeder Spezialist hat entweder einen echten 64-stelligen SHA-256-Hash seines SOUL-Prompts oder None (kein erfundener Fallback)
         for item in inv:
-            self.assertEqual(len(item.get("soul_sha256", "")), 64)
+            h = item.get("soul_sha256")
+            if h is not None:
+                self.assertEqual(len(h), 64)
 
     def test_02_art4_literacy_register_and_gobd_audit_chain(self):
         initial = self.engine.list_literacy_entries()

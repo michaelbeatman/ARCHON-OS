@@ -27,7 +27,7 @@ class _ArchonClosingConn(sqlite3.Connection):
             self.close()
 import hashlib
 import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import urllib.request
 import urllib.parse
 

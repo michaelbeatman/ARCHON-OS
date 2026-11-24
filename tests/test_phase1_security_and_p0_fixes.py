@@ -452,13 +452,18 @@ def test_approval_policy_hmac_mixed_chain_and_fail_closed(tmp_path, monkeypatch)
     db_file = str(tmp_path / "approval.db")
     monkeypatch.delenv("ARCHON_AUDIT_HMAC_KEY", raising=False)
     monkeypatch.delenv("ARCHON_AUDIT_HMAC_PREVIOUS_KEYS", raising=False)
+    # Fuer das Seeden des historischen Legacy-Blocks (vor HMAC-Aktivierung)
+    # die neue A1-Fail-Closed-Sperre kurzzeitig deaktivieren.
+    monkeypatch.setattr(al, "_dispatch_audit_enforced", lambda: False)
 
     eng = ape.ApprovalPolicyEngine(db_path=db_file)
+    monkeypatch.setattr(al, "_dispatch_audit_enforced", lambda: True)
     v1 = eng.verify_audit_integrity()
     assert v1["valid"] is True
     assert v1["hmac_blocks"] == 0
 
-    # Jetzt HMAC-Key setzen und neuen Eintrag schreiben -> gemischte Kette bleibt gueltig
+    # Jetzt HMAC-Key setzen und Legacy-Grenze markieren -> gemischte Kette bleibt gueltig
+    monkeypatch.setenv("ARCHON_AUDIT_LEGACY_MAX_BLOCK", str(v1.get("count", 1)))
     monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "0123456789abcdef0123456789abcdef")
     al._hmac_epochs()  # env check
     h_hmac = eng._log_audit_change("admin", "UPDATE", "finances", "max_auto", "100", "250")

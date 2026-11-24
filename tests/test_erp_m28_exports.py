@@ -127,8 +127,11 @@ def test_inventory_stock_deducted_once_on_booking_and_restored_on_cancel(
 def test_xrechnung_ubl_xml_and_datev_extf_export_endpoints(
     isolated_erp: erp_mod.ERPManager,
     erp_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from backend.tenant_context import tenant_context as _tc
     cid = "m28-export-test"
+    monkeypatch.setattr(_tc, "get_active_tenant_id", lambda: cid)
     ent = isolated_erp.save_entity(
         {
             "display_name": "=HYPERLINK(\"http://evil\") Amt & Partner GmbH",
@@ -217,8 +220,11 @@ def test_xrechnung_ubl_xml_and_datev_extf_export_endpoints(
 def test_bank_statement_import_camt053_mt940_csv_and_opos_reconciliation(
     isolated_erp: erp_mod.ERPManager,
     erp_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from backend.tenant_context import tenant_context as _tc
     cid = "m28-bank-test"
+    monkeypatch.setattr(_tc, "get_active_tenant_id", lambda: cid)
     ent = isolated_erp.save_entity(
         {
             "display_name": "Nordstern Digital AG",

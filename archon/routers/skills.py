@@ -542,7 +542,7 @@ async def api_save_single_hermes_skill(skill_id: str, request: Request):
     return {
         "status": "ok", 
         "id": skill_id, 
-        "file_path": file_path, 
+        "file_path": str(saved_path), 
         "has_original_backup": os.path.exists(backup_path)
     }
 

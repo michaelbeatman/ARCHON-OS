@@ -10,7 +10,7 @@ import logging
 import os
 import re
 import sqlite3
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Request, Response
 

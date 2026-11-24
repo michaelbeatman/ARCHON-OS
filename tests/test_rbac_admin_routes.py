@@ -187,12 +187,14 @@ def test_wrong_service_token_grants_nothing(client, fakes):
 
 # ------------------------------------------------------- Router fail-closed
 
-def test_system_router_fails_closed_without_injected_checker(client, fakes):
-    """Ohne injizierte Prüfung muss der Router sperren (503), nicht durchlassen."""
+def test_system_router_fails_closed_without_injected_checker(client, fakes, monkeypatch):
+    """Ohne aktiven Admin-Checker muss der Router sperren (503), nicht durchlassen."""
+    from archon.routers import _rbac as rbac_mod
     from archon.routers import system as system_router
 
     saved = system_router._DEPS.pop("require_admin", None)
     assert saved is not None, "Vorbedingung: require_admin ist normalerweise injiziert"
+    monkeypatch.setattr(rbac_mod, "_checker", None)
     try:
         r = _call(client, "POST", "/api/v1/system/update/apply",
                   {"backup": False}, user=ADMIN)

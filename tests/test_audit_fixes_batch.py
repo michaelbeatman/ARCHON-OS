@@ -1291,6 +1291,8 @@ def test_gobd_z3_export_archive_and_rbac(tmp_path, monkeypatch):
                 assert hashlib.sha256(zf.read(fname)).hexdigest() == digest
 
     # RBAC check on endpoints (operator forbidden, admin allowed)
+    from backend.tenant_context import tenant_context as _tc
+    monkeypatch.setattr(_tc, "get_active_tenant_id", lambda: cid)
     monkeypatch.setattr(app_main.auth_service, "is_auth_enabled", lambda: True)
     monkeypatch.setattr(app_main.auth_service, "verify_session", lambda _tok: dict(OPERATOR_USER))
     client = TestClient(app_main.app)

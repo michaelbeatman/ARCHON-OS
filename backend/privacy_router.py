@@ -356,7 +356,6 @@ def test_endpoint_sync(provider: str, url: str, api_key: Optional[str] = None, m
             # KRITISCH: client-definierte URL bekam den API-Key und urllib
             # folgte Redirects -> Key-Exfiltration. Nur die feste Mistral-Host-
             # Freigabe erlauben; der Key geht ausschliesslich dorthin.
-            from urllib.parse import urlparse
             host = (urlparse(url).hostname or "").lower()
             if host not in ("api.mistral.ai",):
                 return {

@@ -9,6 +9,7 @@ import os
 import json
 import uuid
 import hashlib
+import hmac
 import sqlite3
 import threading
 import logging

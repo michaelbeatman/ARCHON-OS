@@ -163,6 +163,13 @@ def _assert_auth_on_nonloopback_bind() -> None:
 
 
 async def _archon_lifespan(_app_instance):
+    try:
+        from backend.loop_liveness import start_loop_heartbeat, stop_loop_heartbeat
+        await start_loop_heartbeat()
+    except Exception as _ll_start_err:
+        stop_loop_heartbeat = None  # type: ignore[assignment]
+        logger.warning(f"[Lifespan] Loop-Liveness-Start fehlgeschlagen: {_ll_start_err}")
+
     for hook in list(_STARTUP_HOOKS):
         name = getattr(hook, "__name__", repr(hook))
         try:
@@ -193,6 +200,11 @@ async def _archon_lifespan(_app_instance):
                         await result
             except Exception as e:
                 logger.warning(f"[Lifespan] Shutdown-Hook '{name}' fehlgeschlagen: {e}")
+        if stop_loop_heartbeat is not None:
+            try:
+                await stop_loop_heartbeat()
+            except Exception as _ll_stop_err:
+                logger.warning(f"[Lifespan] Loop-Liveness-Stop fehlgeschlagen: {_ll_stop_err}")
 
 # Begrenzter Graceful-Shutdown: sonst blockiert uvicorn --reload bei jeder
 # Code-Änderung unbegrenzt auf offene Streams und der Server friert ein.
@@ -589,8 +601,12 @@ _install_cors_middleware()
 
 @app.get("/livez")
 async def liveness_check():
-    """Liveness: nur Prozess/Event-Loop — niemals Dependencies pruefen."""
-    return {"status": "alive", "timestamp": time.time()}
+    """Liveness: Event-Loop-Heartbeat & Loop-Lag (liefert 503 bei blockiertem Loop)."""
+    from backend.loop_liveness import check_loop_liveness
+    info = await check_loop_liveness()
+    if not info.get("alive", True):
+        return JSONResponse(status_code=503, content=info)
+    return info
 
 
 # H10: Dependency-Probes gecacht, damit /readyz nicht bei jedem Scrape

@@ -205,7 +205,7 @@ def test_d3_gate_default_off_then_fail_closed(monkeypatch):
 def test_d4_rollover_calls_are_wired_in_delegation():
     src = DELEGATION_SRC.read_text(encoding="utf-8")
     assert (
-        "from backend.supervisor_rollover import resolve_supervisor, on_supervisor_failure"
+        "from backend.supervisor_rollover import on_supervisor_failure, resolve_supervisor"
         in src
     )
     assert "resolve_supervisor(ziel)" in src

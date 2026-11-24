@@ -88,8 +88,10 @@ async def _audit_log_async(**kwargs: Any) -> Optional[dict]:
     try:
         return await asyncio.to_thread(_write)
     except Exception as exc:
-        logger.warning("[Dispatcher] Audit-Schreibpfad fehlgeschlagen: %s", exc)
-        return None
+        # R-B/D05 (Re-Audit): kein erfolgreicher Dispatch ohne signierten
+        # Proof. Vorher wurde der Fehler nur gewarnt und None zurueckgegeben.
+        logger.error("[Dispatcher] Audit-Schreibpfad fehlgeschlagen (fail-closed): %s", exc)
+        raise RuntimeError(f"audit_write_failed: {exc}") from exc
 
 
 _SILENT_FAILURE_FLAG_PREFIXES = ("tool_loop", "token_spike", "effort_collapse")

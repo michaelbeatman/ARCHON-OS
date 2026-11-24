@@ -1395,6 +1395,40 @@ def record_chain_anchor(chain: str, head: str, count: int) -> Dict[str, Any]:
     existing = get_chain_anchor(chain)
     if existing and existing["head"] == str(head or "") and existing["count"] == int(count):
         return {"chain": chain, "written": False, "head": existing["head"], "count": existing["count"]}
+    # R-B/D05 (Re-Audit): frueher wurde jeder abweichende Head bedingungslos
+    # neu verankert. Eine Tail-Loeschung war damit nach einem 30-s-Loop
+    # "gewaschen" und fuer den Verify-Endpoint unsichtbar. Jetzt fail-closed:
+    # kein kuerzerer Count, kein Head-Wechsel bei gleichem Count.
+    if existing:
+        old_count = int(existing.get("count") or 0)
+        old_head = str(existing.get("head") or "")
+        new_count = int(count)
+        new_head = str(head or "")
+        if new_count < old_count or (new_count == old_count and new_head != old_head):
+            logger.error(
+                "[Audit] Chain-Head-Anker-Verletzung fuer %s: count %s -> %s, head %s -> %s",
+                chain, old_count, new_count, old_head[:16], new_head[:16],
+            )
+            try:
+                chained_audit_log.record_event(
+                    category=CHAIN_ANCHOR_CATEGORY,
+                    action="chain_anchor_violation",
+                    agent_id="system",
+                    payload={
+                        "chain": chain,
+                        "expected_count": old_count,
+                        "expected_head": old_head,
+                        "observed_count": new_count,
+                        "observed_head": new_head,
+                    },
+                )
+            except Exception as exc:
+                logger.error("[Audit] Signiertes Anker-Verletzungs-Event fehlgeschlagen: %s", exc)
+            return {
+                "chain": chain, "written": False, "violation": True,
+                "head": new_head, "count": new_count,
+                "expected_head": old_head, "expected_count": old_count,
+            }
     ev = chained_audit_log.record_event(
         category=CHAIN_ANCHOR_CATEGORY,
         action="chain_head_anchor",

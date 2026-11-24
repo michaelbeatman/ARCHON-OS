@@ -259,11 +259,26 @@ class N8nMcpDriver:
         if self.api_key:
             headers["X-N8N-API-KEY"] = self.api_key
 
-        body_bytes = json.dumps(payload).encode("utf-8")
+        # D06 (Re-Audit): exakt derselbe kompakte Body wie der n8n-Empfaenger
+        # signiert (JSON.stringify(body)) — sonst lehnt die Signaturpruefung ab.
+        body_bytes = json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":"), default=str
+        ).encode("utf-8")
+
+        # Fail-closed: ohne Secret wird gar nicht erst gesendet (der Empfaenger
+        # wuerde ohnehin ablehnen). Kein Default-Secret, kein Repo-Secret.
+        if not (os.environ.get("ARCHON_WEBHOOK_HMAC_SECRET") or "").strip():
+            raise RuntimeError(
+                "ARCHON_WEBHOOK_HMAC_SECRET fehlt — n8n-Webhook nicht gesendet (fail-closed)."
+            )
+        from utils.safe_http import webhook_signature_headers, _RejectAllRedirectsHandler
+        headers.update(webhook_signature_headers(body_bytes))
+
         req = urllib.request.Request(url, data=body_bytes, headers=headers, method="POST")
+        opener = urllib.request.build_opener(_RejectAllRedirectsHandler())
 
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with opener.open(req, timeout=timeout) as resp:
                 status_code = resp.status
                 raw = resp.read().decode("utf-8", errors="replace")
                 try:

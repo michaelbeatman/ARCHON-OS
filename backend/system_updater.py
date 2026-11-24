@@ -860,6 +860,8 @@ def rollback_snapshot(snapshot_id: str) -> Dict[str, Any]:
 
     restored = []
     verified = []
+    pre_restores: list[str] = []
+    rollbacks: list[str] = []
     errors = []
     for fname in sorted(os.listdir(source_dir)):
         if fname == "snapshot_meta.json":
@@ -878,6 +880,7 @@ def rollback_snapshot(snapshot_id: str) -> Dict[str, Any]:
             target_path = os.path.join(WORKSPACE_DIR, fname)
 
         tmp_path = None
+        pre_path = None
         try:
             if fname.endswith(".db"):
                 parent = os.path.dirname(target_path) or WORKSPACE_DIR
@@ -888,6 +891,27 @@ def rollback_snapshot(snapshot_id: str) -> Dict[str, Any]:
 
                 # Lock über die gesamte Austausch- und verify-Phase halten.
                 with _dbbm._RESTORE_LOCK, _dbbm._restore_gate(target_path):
+                    # R-B1 (Re-Audit D03): derselbe fail-closed Pfad wie
+                    # db_backup_manager.restore_backup(): pre_restore-Kopie der
+                    # Live-DB, Snapshot-Verifikation VOR os.replace() (inkl.
+                    # FK-Check), Post-Condition und echter Rollback bei Fehler.
+                    if os.path.exists(target_path):
+                        _stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        pre_path = target_path + f".pre_restore.{_stamp}"
+                        src_ro = sqlite3.connect(f"file:{target_path}?mode=ro", uri=True, timeout=5.0)
+                        try:
+                            with sqlite3.connect(pre_path, timeout=10.0) as pre_conn:
+                                src_ro.backup(pre_conn)
+                        finally:
+                            src_ro.close()
+                        pre_restores.append(pre_path)
+
+                    recheck = sqlite3.connect(f"file:{tmp_path}?mode=ro", uri=True, timeout=5.0)
+                    try:
+                        _dbbm._verify_snapshot(recheck, f"Rollback-Snapshot {fname} (pre-replace)")
+                    finally:
+                        recheck.close()
+
                     for suffix in ("-wal", "-shm", "-journal"):
                         sidecar = target_path + suffix
                         if os.path.exists(sidecar):
@@ -900,13 +924,26 @@ def rollback_snapshot(snapshot_id: str) -> Dict[str, Any]:
                     try:
                         verify = sqlite3.connect(f"file:{target_path}?mode=ro", uri=True, timeout=5.0)
                         try:
-                            check = verify.execute("PRAGMA quick_check").fetchone()
+                            _dbbm._verify_snapshot(verify, f"Rollback-Ziel {fname} (post-replace)")
                         finally:
                             verify.close()
-                    except sqlite3.Error as exc:
-                        raise RuntimeError(f"quick_check nicht moeglich: {exc}") from exc
-                    if not check or str(check[0]).lower() != "ok":
-                        raise RuntimeError(f"quick_check fehlgeschlagen: {check}")
+                    except (sqlite3.Error, RuntimeError) as exc:
+                        rollback_ok = False
+                        if pre_path and os.path.isfile(pre_path):
+                            try:
+                                for suffix in ("-wal", "-shm", "-journal"):
+                                    sidecar = target_path + suffix
+                                    if os.path.exists(sidecar):
+                                        os.remove(sidecar)
+                                os.replace(pre_path, target_path)
+                                rollback_ok = True
+                                rollbacks.append(fname)
+                            except OSError as rb_exc:
+                                logger.error("[SystemUpdater] Rollback von %s fehlgeschlagen: %s", pre_path, rb_exc)
+                        raise RuntimeError(
+                            f"Rollback-Verifikation fehlgeschlagen: {exc}. "
+                            f"Rollback {'erfolgreich' if rollback_ok else 'FEHLGESCHLAGEN'}."
+                        ) from exc
                     verified.append(fname)
             else:
                 shutil.copy2(src, target_path)
@@ -926,6 +963,8 @@ def rollback_snapshot(snapshot_id: str) -> Dict[str, Any]:
         "snapshot_id": snapshot_id,
         "restored_files": restored,
         "verified_databases": verified,
+        "pre_restore_copies": pre_restores,
+        "rollbacks": rollbacks,
         "message": (
             f"{len(restored)} Dateien wiederhergestellt, {len(errors)} Fehler: " + "; ".join(errors[:10])
             if errors else

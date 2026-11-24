@@ -17,6 +17,8 @@ from typing import Dict, Any, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.handoff_desk import mark_truncated  # D11: explizite Kürzungs-Marker
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
     from backend.db_paths import resolve_db as _resolve_db
@@ -317,7 +319,7 @@ TITEL DER AUFGABE: {task_title}
 AUSFÜHRENDER AGENT: {worker_agent}
 
 ARBEITSERGEBNIS / CODE / ENTWURF:
-{task_output[:4000]}
+{mark_truncated(task_output, 4000, artifact="task_output")}
 
 Regeln:
 - Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
@@ -416,7 +418,7 @@ async def run_tri_agent_council(
 Fokus: {j['focus']}
 
 Bewerte folgendes Arbeitsergebnis für Task '{task_title}':
-{task_output[:3500]}
+{mark_truncated(task_output, 3500, artifact="task_output")}
 
 Antworte NUR mit JSON:
 {{

@@ -201,7 +201,13 @@ def resolve_card_hitl_decision(
     act = (action or "").strip().lower()
     actor = str(actor or "").strip()
     created_by = str(created_by or "").strip()
-    if actor and created_by and actor == created_by:
+    # D14: kein Platzhalter-Ersteller mehr. Unbekannter Ersteller muss den
+    # Override fail-closed blockieren statt ihn zuzulassen.
+    if not created_by:
+        raise PermissionError(
+            "HITL-Override verweigert: Ersteller nicht verifizierbar (Vier-Augen-Prinzip)."
+        )
+    if actor and actor == created_by:
         raise PermissionError("Ersteller darf die eigene HITL-Sperre nicht auflösen (Vier-Augen-Prinzip).")
 
     old_budget = int(current_budget or 0)

@@ -723,6 +723,47 @@ async def _decision_followup(typ: str, dec: dict, decision: str, proof_token: st
     if typ == "permission_gate":
         fn_fp = getattr(app_main, "_followup_permission_gate", _followup_permission_gate)
         return await fn_fp(ref, proof_token, proof_uid)
+    if typ == "boardroom_no_consensus":
+        # D14 (Re-Audit): HITL-Auflösung darf kein Theater sein. Die manuelle
+        # Auflösung wird als echter Decision-Eintrag archiviert und signiert
+        # auditiert — damit gibt es einen nachweislichen Effekt ausserhalb
+        # der reinen Kanban-Statusänderung.
+        extra = dec.get("extra") or {}
+        synthesis = str(extra.get("synthesis") or "")
+        verdict = str(extra.get("consensus_verdict") or extra.get("consensus_status") or "NO_CONSENSUS")
+        archived = create_decision(
+            "synthesis_freigabe",
+            titel=f"[HITL-Auflösung] Boardroom: {str(ref or task_id)[:100]}",
+            kurzfassung=f"Manuell aufgelöst trotz {verdict}. Synthese: {synthesis[:400]}",
+            ref_id=str(ref or ""),
+            body=synthesis,
+            extra={
+                "boardroom_resolution": "human_override",
+                "original_verdict": verdict,
+                "veto_by": extra.get("veto_by"),
+            },
+            created_by=proof_uid or "hitl-approver",
+        )
+        if not archived:
+            return _folge_nicht("Archivierung der Boardroom-Auflösung", "kein Decision-Eintrag angelegt")
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="boardroom_hitl_resolution",
+                action="no_consensus_resolved_by_human",
+                agent_id=proof_uid or "hitl-approver",
+                payload={
+                    "original_verdict": verdict,
+                    "archived_decision_id": archived.get("id"),
+                    "ref_id": str(ref or ""),
+                },
+            )
+        except Exception as exc:
+            return _folge_nicht("Audit der Boardroom-Auflösung", str(exc))
+        return (
+            f"{_FOLGE_OK}: Boardroom-{verdict} durch HITL aufgelöst und als "
+            f"Decision {archived.get('id')} archiviert."
+        )
     return "Keine Folgeaktion nötig (Statusänderung genügt)."
 
 

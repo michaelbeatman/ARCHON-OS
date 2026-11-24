@@ -27,6 +27,9 @@ _PROMPT_VERSION_CTX: contextvars.ContextVar[Optional[Dict[str, Any]]] = contextv
 # aus dem Event-Loop via asyncio.to_thread ausgelagert (kein Event-Loop-Block).
 _AUDIT_WRITE_LOCK = threading.Lock()
 
+# D11: explizite Kürzungs-Marker statt stiller Slices in OTel-Spans.
+from backend.handoff_desk import mark_truncated as _mark_truncated  # noqa: E402
+
 
 def _prompt_version_fallback(agent_id: str, model: str = "") -> Dict[str, Any]:
     """Minimaler, ehrlicher Ref fuer Pfade vor der Registry-Aufloesung."""
@@ -979,8 +982,9 @@ async def dispatch_to_omniroute_or_container(
                         parent_span_id=parent_sp_id,
                         agent_id=agent_id,
                         model=used_model,
-                        input_data=prompt[:500],
-                        output_data=(res.get("content") or "")[:500],
+                        # D11: Kürzungen in OTel-Spans explizit markieren.
+                        input_data=_mark_truncated(prompt, 500, artifact="dispatch prompt"),
+                        output_data=_mark_truncated(res.get("content") or "", 500, artifact="dispatch response"),
                         input_tokens=in_tok,
                         output_tokens=out_tok,
                         cost_usd=est_cost,

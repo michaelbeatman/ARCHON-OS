@@ -405,13 +405,26 @@ class AgentRouter:
             acc = len(str(sys_msg.get("content", ""))) + len(compact_text)
             if anchor:
                 acc += len(str(anchor.get("content", "")))
+            dropped = 0
+            stopped = False
             for m in reversed(recent_msgs):
                 m_len = len(str(m.get("content", "")))
-                if acc + m_len <= max_ctx_chars or len(trimmed) < 3:
+                if not stopped and (acc + m_len <= max_ctx_chars or len(trimmed) < 3):
                     trimmed.insert(insert_idx, m)
                     acc += m_len
                 else:
-                    break
+                    # D11: keine stille Kompression — verworfene Nachrichten
+                    # werden als System-Streifen sichtbar gemacht.
+                    stopped = True
+                    dropped += 1
+            if dropped:
+                trimmed.insert(insert_idx, {
+                    "role": "system",
+                    "content": (
+                        f"[KONTEXT GEKÜRZT: {dropped} ältere Nachricht(en) entfernt — "
+                        f"Vollversion bleibt im Session-Store]"
+                    ),
+                })
             compressed = trimmed
 
         return compressed

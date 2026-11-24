@@ -697,6 +697,27 @@ def get_kanban_tasks(archived: bool = Query(False)):
         conn.close()
 
 
+def _task_creator_actor(request: Request) -> str:
+    """D14: verifizierter Ersteller aus der Session — nie Body, nie Konstante.
+
+    Bei Service-/Self-API-Aufrufen ist keine Person zuordenbar: dann leer
+    zurückgeben, damit der HITL-Override fail-closed blockiert (statt gegen
+    einen Platzhalter zu prüfen).
+    """
+    try:
+        from archon.routers.auth import get_current_user_from_request
+        user = get_current_user_from_request(request)
+    except Exception:
+        return ""
+    if not isinstance(user, dict):
+        return ""
+    for key in ("username", "user_id", "sub", "email"):
+        val = user.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
 @router.post("/kanban/tasks")
 def create_kanban_task(request: Request, req: TaskCreateRequest):
     """Erstellt eine neue Aufgabe im Hermes Kanban über CLI-Execution oder direkten Insert."""
@@ -737,7 +758,7 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
             target_assignee,
             target_status,
             req.priority or 0,
-            "Archon-User",
+            _task_creator_actor(request),
             now_iso,
             req.model_override,
             req.provider_override,

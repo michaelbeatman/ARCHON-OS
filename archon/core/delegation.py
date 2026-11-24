@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from backend.handoff_desk import mark_truncated
 from archon.core.constants import DELEGATION_PROTOCOL_PROMPT
 
 
@@ -887,7 +888,7 @@ def _enqueue_delegation_failure(task_id: str, prof_id: str, status: str, result:
                 "task_id": str(task_id),
                 "agent_id": str(prof_id or ""),
                 "status": str(status),
-                "result": str(result or "")[:2000],
+                "result": mark_truncated(result, 2000, artifact="original result"),
             },
             priority=2,
             idempotency_key=f"delegation-result:{task_id}:{status}",
@@ -1123,7 +1124,7 @@ async def _watch_delegated_task(
                         parsed_ev = json.loads(ev[0])
                         result = parsed_ev.get("summary") or parsed_ev.get("reason") or ""
                     except Exception:
-                        result = ev[0][:500]
+                        result = mark_truncated(ev[0], 500, artifact="task_events.summary")
             except Exception as ev_exc:
                 logger.debug(f"[Delegation] Fallback-Event-Lesen fuer {task_id} fehlgeschlagen: {ev_exc}")
         attach_note = ""

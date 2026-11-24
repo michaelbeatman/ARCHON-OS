@@ -60,10 +60,15 @@ if os.path.isdir(_TENANTS_ROOT):
         _tdir = os.path.join(_TENANTS_ROOT, _tid)
         if not os.path.isdir(_tdir) or _tid.startswith("."):
             continue
-        for _db in ("ops.db", "business.db", "memory.db"):
-            _path = os.path.join(_tdir, _db)
+        # D03/HIGH: alle produktiven Mandanten-DBs sichern, nicht nur drei
+        # konsolidierte Namen (erp/kanban/crm/contracts/deals fehlten).
+        for _name in sorted(os.listdir(_tdir)):
+            if not _name.endswith(".db"):
+                continue
+            _path = os.path.join(_tdir, _name)
             if os.path.isfile(_path):
-                DATABASES.append((f"tenant_{_tid}_{_db}", _path, False))
+                _stem = _name[:-3]
+                DATABASES.append((f"tenant_{_tid}_{_stem}", _path, False))
 
 LOCAL_BACKUP_DIR = os.path.join(PROJECT, "data", "backups")
 NAS_BACKUP_DIR = r"Y:\_ARCHON Backups"

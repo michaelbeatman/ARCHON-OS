@@ -30,7 +30,19 @@ except Exception:
 # D03/MED: der Sidecar-Scan bleibt auf produktive Datenverzeichnisse begrenzt.
 _CLEANUP_ROOTS = (_APP_DATA_DIR, os.path.join(WORKSPACE_DIR, ".hermes", "backups"))
 BACKUP_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "backups", "db")
-TENANTS_DIR = os.path.join(WORKSPACE_DIR, "data", "tenants")
+# D03/HIGH: Tenant-DBs liegen unter APP_DATA_DIR (ARCHON_DATA_DIR), nicht
+# zwingend im Workspace — sonst sichert/restore't der Manager ins Leere.
+TENANTS_DIR = os.path.join(_APP_DATA_DIR, "tenants")
+
+
+def _tenant_roots() -> list:
+    """D03: APP_DATA_DIR ist kanonisch, WORKSPACE_DIR/data/tenants bleiben
+    Legacy-Standorte (Tests/älter Deployments) — beide werden gesichert."""
+    roots = [TENANTS_DIR]
+    legacy = os.path.join(WORKSPACE_DIR, "data", "tenants")
+    if os.path.abspath(legacy) != os.path.abspath(TENANTS_DIR):
+        roots.append(legacy)
+    return roots
 # K2 (Audit 23.11.2026): PocketBase-CRM war in keinem wiederkehrenden Backup.
 # Fester Pfad statt resolve_db("data.db") — letzteres würde eine leere DB
 # neu anlegen, weil "data.db" nicht in der db_paths-Registry steht.
@@ -309,7 +321,10 @@ class DBBackupManager:
 
         # Statische Kern-DBs (respektiert Test-Monkeypatches auf DB_TARGETS) + dynamische Mandanten-DBs
         base_targets = list(DB_TARGETS) if DB_TARGETS != _INITIAL_DB_TARGETS else _collect_db_targets()
-        tenant_dbs = sorted(glob.glob(os.path.join(WORKSPACE_DIR, "data", "tenants", "*", "*.db")))
+        tenant_dbs = sorted(
+            path for root in _tenant_roots()
+            for path in glob.glob(os.path.join(root, "*", "*.db"))
+        )
         seen_paths = set()
         all_targets = []
         for candidate in base_targets + tenant_dbs:
@@ -318,15 +333,16 @@ class DBBackupManager:
                 seen_paths.add(norm)
                 all_targets.append(norm)
 
-        tenants_prefix = os.path.abspath(os.path.join(WORKSPACE_DIR, "data", "tenants")) + os.sep
+        tenant_prefixes = [os.path.abspath(root) + os.sep for root in _tenant_roots()]
         for db_path in all_targets:
             if db_path == POCKETBASE_DB_PATH:
                 # Eindeutiger Backup-Name, sonst kollidiert er mit anderen data.db.
                 db_name = "pb_data.db"
             elif db_path == POCKETBASE_AUX_DB_PATH:
                 db_name = "pb_auxiliary.db"
-            elif db_path.startswith(tenants_prefix):
-                rel = db_path[len(tenants_prefix):].replace(os.sep, "__")
+            elif any(db_path.startswith(pref) for pref in tenant_prefixes):
+                _pref = next(pref for pref in tenant_prefixes if db_path.startswith(pref))
+                rel = db_path[len(_pref):].replace(os.sep, "__")
                 db_name = f"tenant_{rel}"
             else:
                 db_name = os.path.basename(db_path)

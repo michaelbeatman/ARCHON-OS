@@ -95,6 +95,34 @@ DOCUMENT_NUMBER_SEQUENCES_DDL = """
 """
 
 
+def _upsert_number_sequence(conn, tenant_id: str, doc_type: str, year: int,
+                            prefix: str, next_seq: int, padding: int = 4) -> None:
+    """D03/HIGH: niemals einen niedrigeren Zählerstand still gewinnen lassen.
+
+    Früher `INSERT OR IGNORE`: eine bereits vorhandene, niedrigere `next_seq`
+    blieb stehen und erzeugte doppelte Belegnummern (GoBD). Jetzt MAX-UPSERT
+    und harter Abbruch bei abweichendem Prefix.
+    """
+    existing = conn.execute(
+        "SELECT prefix, next_seq FROM document_number_sequences "
+        "WHERE tenant_id = ? AND doc_type = ? AND year = ?",
+        (tenant_id, doc_type, year),
+    ).fetchone()
+    if existing is not None and str(existing[0] or "") != str(prefix or ""):
+        raise ValueError(
+            f"Nummernkreis-Divergenz: {tenant_id}/{doc_type}/{year} prefix "
+            f"{existing[0]!r} != {prefix!r} — Migration abgebrochen (DATENVERLUST)."
+        )
+    conn.execute(
+        """INSERT INTO document_number_sequences
+           (tenant_id, doc_type, year, prefix, next_seq, padding)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(tenant_id, doc_type, year) DO UPDATE SET
+             next_seq = MAX(document_number_sequences.next_seq, excluded.next_seq)""",
+        (tenant_id, doc_type, year, str(prefix or ""), int(next_seq), int(padding)),
+    )
+
+
 def sanitize_tenant_id(company_id: Optional[str]) -> str:
     raw = str(company_id or "default").strip()
     cleaned = re.sub(r"[^a-zA-Z0-9_-]", "_", raw).strip("_")
@@ -639,12 +667,7 @@ class TenantContextManager:
             if not row:
                 continue
             next_seq = max(1, int(row[0]) + 1)
-            conn.execute(
-                """INSERT OR IGNORE INTO document_number_sequences
-                   (tenant_id, doc_type, year, prefix, next_seq, padding)
-                   VALUES (?, ?, ?, ?, ?, 4)""",
-                (tid, doc_type, year, prefix, next_seq),
-            )
+            _upsert_number_sequence(conn, tid, doc_type, year, prefix, next_seq, 4)
 
     def _ensure_number_sequences_table(self, company_id: str) -> str:
         path = self._numbers_db_path(company_id)
@@ -671,13 +694,10 @@ class TenantContextManager:
                             prefix = str(entry.get("prefix") or "")
                             year_match = re.search(r"(20\d{2})", prefix)
                             year = int(year_match.group(1)) if year_match else datetime.datetime.now().year
-                            conn.execute(
-                                """INSERT OR IGNORE INTO document_number_sequences
-                                   (tenant_id, doc_type, year, prefix, next_seq, padding)
-                                   VALUES (?, ?, ?, ?, ?, ?)""",
-                                (company_id, doc_type, year, prefix,
-                                 int(entry.get("next_seq") or 1),
-                                 int(entry.get("padding") or 4)),
+                            _upsert_number_sequence(
+                                conn, company_id, doc_type, year, prefix,
+                                int(entry.get("next_seq") or 1),
+                                int(entry.get("padding") or 4),
                             )
                     legacy_migrated = True
                 except Exception as exc:

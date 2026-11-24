@@ -1495,9 +1495,11 @@ def test_block3_db_backup_manager_integrity_check(tmp_path, monkeypatch):
     # Der Backup-Manager sichert inzwischen auch Vault-/HITL-Secrets (Audit-Fix).
     # Gezählt wird hier nur die Datenbank selbst.
     db_backups = [b for b in out["backups"] if b.get("kind") != "secret"]
-    assert len(db_backups) == 1
-    assert db_backups[0]["db_name"] == "sample.db"
-    assert db_backups[0]["integrity"] == "ok"
+    # D03: der Manager sichert inzwischen auch Mandanten-DBs — nur die
+    # monkeypatchte sample.db ist hier Gegenstand des Tests.
+    sample = [b for b in db_backups if b.get("db_name") == "sample.db"]
+    assert len(sample) == 1
+    assert sample[0]["integrity"] == "ok"
 
 
 def test_block3_docuseal_list_contracts_company_filter(tmp_path):

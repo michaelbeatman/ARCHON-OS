@@ -77,9 +77,17 @@ def api_save_corporate_company(request: Request, payload: CorporateCompanyBody =
 @router.post("/api/corporate/companies/{company_id}/set-active")
 def api_set_active_corporate_company(request: Request, company_id: str):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    from backend.corporate_manager import corporate_manager
-    success = corporate_manager.set_active_company(company_id)
-    if not success:
+    # D03/HIGH: kein zweiter, unauditierter Umschalter. Der zentrale
+    # TenantContextManager.switch_tenant() macht GoBD-Audit, Rollback,
+    # ensure_tenant_databases() und SSE-Event.
+    from archon.routers._rbac import require_session_actor
+    from backend.tenant_context import tenant_context
+    actor = require_session_actor(request)
+    try:
+        result = tenant_context.switch_tenant(company_id, actor=actor)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"tenant_switch_failed: {exc}")
+    if not result or not result.get("success", True):
         raise HTTPException(status_code=404, detail="Company not found")
     return {"success": True, "active_company_id": company_id}
 

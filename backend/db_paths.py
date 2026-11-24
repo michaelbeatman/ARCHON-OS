@@ -121,6 +121,9 @@ def resolve_db(filename: str) -> str:
     # mandantenfaehigen DBs. System-DBs ausserhalb ISOLATED/CONSOLIDATED
     # laufen deterministisch ueber den Konsolidierungs-/Heimat-Resolver
     # (kein stilles ValueError-Catch-and-Fallthrough mehr, d03).
+    # D03/HIGH: bei FULL_TENANT_ISOLATION darf ein Resolverfehler NIE auf
+    # einen nicht-Mandanten-Pfad zurückfallen (still Vermischung).
+    _full_isolation = os.environ.get("ARCHON_TENANT_FULL_ISOLATION", "1").strip().lower() not in ("0", "false", "no", "off")
     try:
         from backend.tenant_context import (
             CONSOLIDATED_TENANT_DBS,
@@ -131,6 +134,11 @@ def resolve_db(filename: str) -> str:
         if FULL_TENANT_ISOLATION and (base in ISOLATED_TENANT_DBS or base in CONSOLIDATED_TENANT_DBS):
             return tenant_context.resolve_active_db(base)
     except Exception as exc:
+        if _full_isolation:
+            raise RuntimeError(
+                f"[db_paths] Tenant-Resolver fehlgeschlagen bei FULL_TENANT_ISOLATION "
+                f"für {filename}: {exc}"
+            ) from exc
         logger.debug(f"[db_paths] Tenant-Resolver nicht verfuegbar: {exc}")
     try:
         from backend.db_consolidation import is_consolidation_active, resolve_consolidated_domain

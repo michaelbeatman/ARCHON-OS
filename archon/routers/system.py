@@ -566,6 +566,26 @@ def api_restore_db_backup(request: Request, body: DbRestoreRequest):
         raise HTTPException(status_code=500, detail="Restore fehlgeschlagen")
 
 
+class SecretRestoreRequest(BaseModel):
+    """D03: Secrets-Restore nur mit explizitem confirm (HITL/Admin)."""
+    model_config = ConfigDict(extra="ignore")
+    backup_file: str = Field(min_length=1, max_length=255)
+    confirmed: bool = False
+
+
+@router.post("/api/system/restore-secrets")
+def api_restore_secret_files(request: Request, body: SecretRestoreRequest):
+    _require_admin(request)
+    from backend.db_backup_manager import db_backup_manager
+    if not body.confirmed:
+        result = db_backup_manager.restore_secret_files(body.backup_file, dry_run=True)
+        return {"status": "dry_run", **result}
+    result = db_backup_manager.restore_secret_files(
+        body.backup_file, dry_run=False, confirm=True
+    )
+    return {"status": "success", **result}
+
+
 @router.post("/api/system/optimize-db")
 def api_optimize_db(request: Request):
     _require_admin(request)  # RBAC: Admin-Sache

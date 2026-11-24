@@ -11,6 +11,7 @@ Verbindet den Entwicklungsrechner und den Homeserver:
 - Bietet Rollback-Fähigkeit bei Fehlern
 """
 
+import glob
 import os
 import sys
 import json
@@ -46,6 +47,24 @@ DB_TARGETS = [
     _resolve_updater_db("kanban.db", "~/.hermes/kanban.db"),
     _resolve_updater_db("state.db", "~/.hermes/state.db"),
 ]
+
+
+def all_db_targets() -> list:
+    """D03/HIGH: Snapshot MUSS alle produktiven DBs enthalten — konsolidierte
+    DBs und jede `data/tenants/<id>/*.db` (früher fehlten beide)."""
+    targets = list(DB_TARGETS)
+    try:
+        from backend.db_paths import APP_DATA_DIR, CONSOLIDATED_DB_FILENAMES
+        for name in CONSOLIDATED_DB_FILENAMES:
+            path = os.path.join(APP_DATA_DIR, name)
+            if os.path.isfile(path) and path not in targets:
+                targets.append(path)
+        for path in sorted(glob.glob(os.path.join(APP_DATA_DIR, "tenants", "*", "*.db"))):
+            if path not in targets:
+                targets.append(path)
+    except Exception as exc:
+        logger.warning("[SystemUpdater] DB-Ziel-Aufzaehlung unvollstaendig: %s", exc)
+    return targets
 
 # Zu sichernde Konfigurationsdateien
 CONFIG_TARGETS = [
@@ -576,7 +595,7 @@ def create_snapshot(tag: str = "pre_update") -> Dict[str, Any]:
     backed_configs = []
 
     # 1. Datenbanken sichern
-    for db_path in DB_TARGETS:
+    for db_path in all_db_targets():
         if not os.path.exists(db_path):
             continue
         db_name = os.path.basename(db_path)

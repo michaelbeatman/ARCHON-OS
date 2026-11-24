@@ -166,6 +166,16 @@ class AutomatedRestoreTester:
             {"name": "pb_data.db", "source": resolve_db_path("pb_data.db"),
              "required_table": ("kontakte",), "optional": True},
         ]
+        # D03/HIGH: echte Mandanten-DBs nicht nur konfigurationsseitig
+        # prüfen, sondern im Sandbox-Restore mit integrity/FK/Smoke testen.
+        for _path in _tenant_dbs_present():
+            _tid = os.path.basename(os.path.dirname(_path))
+            self.dbs_to_test.append({
+                "name": f"tenant:{_tid}/{os.path.basename(_path)}",
+                "source": _path,
+                "required_table": (),  # kein festes Schema — erste Tabelle als Smoke
+                "optional": True,
+            })
 
     def run_restore_test(self, notify: bool = True) -> Dict[str, Any]:
         """Führt den vollständigen Testlauf durch."""
@@ -268,7 +278,11 @@ class AutomatedRestoreTester:
                     db_report["tables_found"] = len(tables)
 
                     candidates = req_table if isinstance(req_table, (tuple, list)) else (req_table,)
-                    smoke_table = next((t for t in candidates if t in tables), None)
+                    candidates = [c for c in candidates if c]
+                    # Tenant-DBs haben kein festes Pflicht-Schema: erste Tabelle.
+                    smoke_table = (
+                        tables[0] if tables else None
+                    ) if not candidates else next((t for t in candidates if t in tables), None)
                     if smoke_table:
                         cur.execute(f'SELECT COUNT(*) FROM "{smoke_table}";')
                         cnt = cur.fetchone()[0]

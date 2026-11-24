@@ -1129,9 +1129,30 @@ class ERPManager:
             entity_id = payload.get("entity_id")
             contact_id = payload.get("contact_id")
 
+            # D03/HIGH: INSERT OR IGNORE verwarf eine neue Interaktion bei
+            # Kollision von external_msg_id still und gab die ALTE Zeile als
+            # Erfolg zurück — abweichender Betreff/Text ging verloren.
+            existing = conn.execute(
+                "SELECT * FROM crm_interactions WHERE external_msg_id = ?", (ext_id,)
+            ).fetchone()
+            if existing is not None:
+                old = dict(existing)
+                new_fields = {
+                    "subject": payload.get("subject", "Notiz / Interaktion"),
+                    "body_text": payload.get("body_text", ""),
+                    "sender_name": payload.get("sender_name", "Archon User"),
+                    "channel": payload.get("channel", "note"),
+                }
+                if all(str(old.get(k) or "") == str(v or "") for k, v in new_fields.items()):
+                    return old  # idempotent
+                raise ValueError(
+                    f"Abweichender Inhalt bei vorhandener external_msg_id {ext_id} — "
+                    "Interaktion nicht überschrieben (DATENVERLUST verhindert)."
+                )
+
             with conn:
                 conn.execute("""
-                    INSERT OR IGNORE INTO crm_interactions (
+                    INSERT INTO crm_interactions (
                         id, entity_id, contact_id, channel, direction, external_msg_id,
                         sender_name, sender_email, subject, body_text, security_status, occurred_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

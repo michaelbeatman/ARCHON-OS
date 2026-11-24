@@ -131,7 +131,16 @@ class DirectAgentChatRequest(BaseModel):
     history: Optional[List[Dict[str, Any]]] = []
 
 
+_PROFILES_LIST_CACHE: Dict[str, Any] = {"sig": None, "data": []}
+
+
 def load_profiles_list() -> List[Dict]:
+    """Profile-Liste mit mtime-basierter Invalidierung (Audit D08).
+
+    Vorher wurde die ~1 MB große agent_profiles.json bei jeder Chat-Anfrage
+    neu geparst. Die Signatur aus Pfad/mtime/size erkennt Änderungen ohne
+    Neustart, bleibt aber bei unveränderter Datei ein Cache-Hit.
+    """
     import main as app_main
 
     _app_root = (
@@ -149,12 +158,21 @@ def load_profiles_list() -> List[Dict]:
     ]:
         if os.path.exists(path):
             try:
+                stat = os.stat(path)
+                signature = (path, stat.st_mtime_ns, stat.st_size)
+                if _PROFILES_LIST_CACHE["sig"] == signature:
+                    return _PROFILES_LIST_CACHE["data"]
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    if isinstance(data, list):
-                        return data
-                    elif isinstance(data, dict) and "profiles" in data:
-                        return data["profiles"]
+                if isinstance(data, list):
+                    result = data
+                elif isinstance(data, dict) and "profiles" in data:
+                    result = data["profiles"]
+                else:
+                    result = []
+                _PROFILES_LIST_CACHE["sig"] = signature
+                _PROFILES_LIST_CACHE["data"] = result
+                return result
             except Exception as _exc:
                 logger.debug("[agent_chat] Ignorierte Ausnahme (Z.158): %s", _exc)
     return []

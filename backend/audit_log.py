@@ -1138,7 +1138,10 @@ class ChainedAuditLog:
         return out
 
     def generate_compliance_export(
-        self, format_type: str = "json", company_id: Optional[str] = None
+        self,
+        format_type: str = "json",
+        company_id: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Generiert einen revisionssicheren Prüfbericht für GoBD / ISO 27001 Auditoren.
@@ -1156,9 +1159,15 @@ class ChainedAuditLog:
                     cid = sanitize_tenant_id(str(company_id).strip())
                 except Exception:
                     cid = str(company_id).strip()
-                cur.execute("SELECT * FROM audit_log WHERE company_id = ? ORDER BY id ASC", (cid,))
+                sql = "SELECT * FROM audit_log WHERE company_id = ? ORDER BY id ASC"
+                params: tuple = (cid,)
             else:
-                cur.execute("SELECT * FROM audit_log ORDER BY id ASC")
+                sql = "SELECT * FROM audit_log ORDER BY id ASC"
+                params = ()
+            if limit and limit > 0:
+                sql += " LIMIT ?"
+                params = params + (int(limit),)
+            cur.execute(sql, params)
             rows = [dict(r) for r in cur.fetchall()]
         finally:
             conn.close()

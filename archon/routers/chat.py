@@ -1057,7 +1057,11 @@ async def api_chat_stream(req: ChatStreamRequest):
         # F-05: Bei Provider-Fehler wird die Fehlermeldung NICHT als
         # Assistenten-Antwort gespeichert und es wird keine Nutzung gebucht.
         if not provider_failed:
-            _save_message_to_db(session_id, "assistant", full_assistant_text, completion_tokens)
+            # Audit D08: SQLite-Writes im async SSE-Generator blockieren den
+            # Event-Loop bei jedem Chatabschluss -> in den Thread-Pool.
+            await asyncio.to_thread(
+                _save_message_to_db, session_id, "assistant", full_assistant_text, completion_tokens
+            )
 
         # Parse total_cost if possible
         try:
@@ -1066,7 +1070,9 @@ async def api_chat_stream(req: ChatStreamRequest):
             total_cost_val = 0.0
 
         if not provider_failed:
-            _record_session_model_usage(session_id, model, prompt_tokens, completion_tokens, total_cost_val)
+            await asyncio.to_thread(
+                _record_session_model_usage, session_id, model, prompt_tokens, completion_tokens, total_cost_val
+            )
         payload_done = json.dumps({"type": "done", "session_id": session_id, "tokens": completion_tokens})
         yield f"data: {payload_done}\n\n"
 

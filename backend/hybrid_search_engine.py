@@ -133,7 +133,12 @@ class HybridSearchEngine:
             conn.row_factory = sqlite3.Row
             all_docs = {
                 r["doc_id"]: dict(r)
-                for r in conn.execute("SELECT * FROM hybrid_knowledge_docs").fetchall()
+                # Audit D08: bounded Scan statt fetchall() über die gesamte
+                # Wissensbasis. Für die Relevanzbewertung genügt ein
+                # deterministischer, begrenzter Kandidatenpool.
+                for r in conn.execute(
+                    "SELECT * FROM hybrid_knowledge_docs ORDER BY doc_id LIMIT 5000"
+                ).fetchall()
             }
 
             # 1. BM25 Ranking via SQLite FTS5

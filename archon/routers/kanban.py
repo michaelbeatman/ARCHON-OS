@@ -150,11 +150,16 @@ def _load_tasks_and_links_sync():
         kconn.row_factory = sqlite3.Row
         tasks = [
             dict(r)
-            for r in kconn.execute("SELECT * FROM tasks WHERE status != 'archived'").fetchall()
+            for r in kconn.execute(
+                "SELECT * FROM tasks WHERE status != 'archived' ORDER BY id DESC LIMIT 5000"
+            ).fetchall()
         ]
         links = []
         try:
-            links = [dict(r) for r in kconn.execute("SELECT * FROM task_links").fetchall()]
+            links = [
+                dict(r)
+                for r in kconn.execute("SELECT * FROM task_links ORDER BY id DESC LIMIT 5000").fetchall()
+            ]
         except Exception:
             links = []
         return tasks, links

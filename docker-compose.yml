@@ -522,7 +522,10 @@ services:
       - ${ARCHON_HERMES_DIR:-./.hermes}:/opt/data
       # P0-11: nur der Datenordner statt ./:/app (keine .env im Container).
       - ./data:/app/data
-      - ./data/litestream_replicas:/opt/litestream_replicas
+      # Audit D10: Replikat darf auf einem externen/anderen Datenträger liegen.
+      # Default bleibt lokal (Dev); Produktion muss ARCHON_LITESTREAM_REPLICA_DIR
+      # auf ein externes Ziel zeigen (RPO ~5-10 s, RTO = Restore-Zeit).
+      - ${ARCHON_LITESTREAM_REPLICA_DIR:-./data/litestream_replicas}:/opt/litestream_replicas
     command: ["replicate", "--config", "/etc/litestream.yml"]
     deploy:
       resources:

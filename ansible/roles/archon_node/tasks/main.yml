@@ -96,11 +96,22 @@
 
 - name: Launch Docker Compose stack
   command:
-    cmd: "docker compose -f {{ archon_compose_file }} up -d --build"
+    cmd: "docker compose -f {{ archon_compose_file }} up -d --build --remove-orphans"
     chdir: "{{ archon_install_root }}"
   become_user: "{{ archon_user_name }}"
   register: docker_compose_output
   changed_when: "'Started' in docker_compose_output.stdout or 'Created' in docker_compose_output.stdout"
+
+- name: Verify Mission Control readiness (dependency probes)
+  uri:
+    url: "{{ archon_readycheck_url }}"
+    method: GET
+    status_code: 200
+  register: ready_result
+  until: ready_result.status == 200
+  retries: 12
+  delay: 5
+  # Kein ignore_errors: Readiness ist der Produktiv-Gate, nicht "Container läuft".
 
 - name: Verify Mission Control health endpoint
   uri:

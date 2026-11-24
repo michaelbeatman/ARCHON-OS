@@ -58,7 +58,15 @@ def _status_config_paths() -> List[str]:
 
 
 def _get_heartbeat_webhook_url() -> str:
-    """Liest die bestehende evey-status-Plugin-Config (guardian.py)."""
+    """Liest Env-Override oder die bestehende evey-status-Plugin-Config.
+
+    Audit D10: ohne externen Dead-Man-Switch ist der Selbstheilungsloop
+    blind — ein haengender Watchdog wird nicht gemeldet. Die URL kann
+    deshalb explizit ueber ARCHON_HEARTBEAT_WEBHOOK_URL gesetzt werden.
+    """
+    env_url = os.environ.get("ARCHON_HEARTBEAT_WEBHOOK_URL", "").strip()
+    if env_url:
+        return env_url
     for path in _status_config_paths():
         try:
             with open(path, "r", encoding="utf-8") as fh:
@@ -298,8 +306,15 @@ def check_fleet_and_heal(services: Optional[List[str]] = None) -> Dict[str, Any]
             else _post_heartbeat_webhook("ok")
         )
 
+        dead_man_configured = bool(_get_heartbeat_webhook_url())
+        if not dead_man_configured:
+            logger.warning(
+                "[DeadManSwitch] Kein externer Webhook konfiguriert (ARCHON_HEARTBEAT_WEBHOOK_URL "
+                "oder evey-status.json). 24/7-Alerting ist damit nicht aktiv."
+            )
         return {
             "status": "ok",
+            "dead_man_switch_configured": dead_man_configured,
             "auto_restart_enabled": auto_restart,
             "checked_services_count": len(aliases),
             "skipped_not_deployed": skipped_not_deployed,

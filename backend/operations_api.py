@@ -146,28 +146,58 @@ _ZOMBIE_RESET_INTERVAL_S = 60.0
 
 def _maybe_auto_reset_zombie_tasks(conn: sqlite3.Connection) -> int:
     """Auto-Crash-Recovery (Pillar 2): Tasks, die > 6 h in 'in_progress' hängen,
-    auf 'todo' zurücksetzen. Nur in Schreib-/Maintenance-Pfaden aufgerufen und
-    durch ein Modul-Global auf max. 1 Ausführung pro 60 s gedrosselt."""
+    auf 'todo' zurücksetzen — aber nur bei abgelaufener Lease / totem Worker
+    (`trajectory_budget.zombie_eligible`). Gedrosselt auf max. 1x pro 60 s."""
     now = time.time()
     if now - _ZOMBIE_RESET_LAST_RUN["ts"] < _ZOMBIE_RESET_INTERVAL_S:
         return 0
     _ZOMBIE_RESET_LAST_RUN["ts"] = now
     cutoff_ts = now - 21600
     cutoff_iso = datetime.datetime.fromtimestamp(cutoff_ts).isoformat()
-    cur = conn.execute("""
-        UPDATE tasks
-        SET status = 'todo', started_at = NULL
+
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+    extra_cols = [c for c in ("claim_expires", "claim_lock", "pid") if c in cols]
+    select_cols = ", ".join(["id", "status"] + extra_cols)
+    candidates = conn.execute(f"""
+        SELECT {select_cols}
+        FROM tasks
         WHERE status = 'in_progress'
           AND (
             (CAST(started_at AS REAL) >= 1000000000 AND CAST(started_at AS REAL) < ?)
             OR (started_at IS NOT NULL AND started_at LIKE '____-__-__%' AND started_at < ?)
             OR (started_at IS NULL AND created_at IS NOT NULL AND created_at < ?)
           )
-    """, (cutoff_ts, cutoff_iso, cutoff_iso))
-    if cur.rowcount:
-        print(f"[OperationsAPI] Auto-Zombie-Reset: {cur.rowcount} Tasks zurueckgesetzt (Maintenance-Pfad).", file=sys.stderr)
+    """, (cutoff_ts, cutoff_iso, cutoff_iso)).fetchall()
+    if not candidates:
+        return 0
+
+    try:
+        from backend.trajectory_budget import zombie_eligible
+    except Exception:
+        zombie_eligible = None
+
+    eligible_ids = []
+    for row in candidates:
+        row_dict = {"id": row[0], "status": row[1]}
+        for idx, col_name in enumerate(extra_cols, start=2):
+            row_dict[col_name] = row[idx]
+        if zombie_eligible is None or zombie_eligible(row_dict, now=now):
+            eligible_ids.append(row[0])
+
+    if not eligible_ids:
+        return 0
+
+    reset_count = 0
+    for tid in eligible_ids:
+        cur = conn.execute(
+            "UPDATE tasks SET status = 'todo', started_at = NULL WHERE id = ? AND status = 'in_progress'",
+            (tid,),
+        )
+        reset_count += cur.rowcount
+    if reset_count:
+        print(f"[OperationsAPI] Auto-Zombie-Reset: {reset_count} Tasks zurueckgesetzt (Maintenance-Pfad).", file=sys.stderr)
     conn.commit()
-    return cur.rowcount
+    return reset_count
 
 
 _KANBAN_JOURNAL_INIT = False

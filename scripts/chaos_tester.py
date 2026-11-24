@@ -92,21 +92,19 @@ class ArchonChaosTester:
         }
 
     def test_container_discovery_and_health(self) -> Dict[str, Any]:
-        """Prüft die Erreichbarkeit und Status der Kern-Container."""
+        """Prüft die Erreichbarkeit und Status der Kern-Container über den Docker-Proxy."""
         try:
-            res = subprocess.run(
-                ["docker", "ps", "--format", "{{.Names}}\t{{.Status}}\t{{.Ports}}"],
-                capture_output=True, text=True, check=True, timeout=10
-            )
-            lines = [l.strip() for l in res.stdout.strip().split("\n") if l.strip()]
+            from utils.docker_client import DockerAdminClient
+            client = DockerAdminClient()
+            raw = client.request("GET", "/containers/json")
+            items = json.loads(raw.decode("utf-8"))
             containers = {}
-            for line in lines:
-                parts = line.split("\t")
-                if len(parts) >= 2:
-                    name = parts[0]
-                    status = parts[1]
-                    ports = parts[2] if len(parts) > 2 else ""
-                    containers[name] = {"status": status, "ports": ports}
+            for item in items:
+                names = item.get("Names") or []
+                name = str(names[0]).lstrip("/") if names else str(item.get("Id", ""))[:12]
+                status = str(item.get("Status") or item.get("State") or "")
+                ports = item.get("Ports") or []
+                containers[name] = {"status": status, "ports": ports}
 
             essential = ["ARCHON-OS", "hermes", "docker-socket-proxy"]
             missing = [e for e in essential if e not in containers]
@@ -121,7 +119,7 @@ class ArchonChaosTester:
             return {"status": "failed", "error": str(e)}
 
     def test_simulated_container_restart(self, container_name: str = "hermes-dashboard-proxy") -> Dict[str, Any]:
-        """Simuliert den Ausfall und automatischen Neustart eines Proxy-/Hilfsdienstes."""
+        """Simuliert den Ausfall und automatischen Neustart eines Proxy-/Hilfsdienstes über DockerAdminClient."""
         if self.dry_run:
             return {
                 "status": "passed",
@@ -131,14 +129,14 @@ class ArchonChaosTester:
             }
 
         try:
-            # 1. Stoppen
+            from utils.docker_client import DockerAdminClient
+            client = DockerAdminClient()
             t0 = time.time()
-            subprocess.run(["docker", "restart", container_name], capture_output=True, check=True, timeout=15)
+            client.restart_container(container_name)
             restart_time = time.time() - t0
 
-            # 2. Status abfragen
-            res = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", container_name], capture_output=True, text=True, check=True)
-            current_status = res.stdout.strip()
+            info = json.loads(client.container_json(container_name).decode("utf-8"))
+            current_status = str((info.get("State") or {}).get("Status") or "")
 
             passed = current_status == "running"
             return {

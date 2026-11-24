@@ -7,7 +7,7 @@
 **Self-Hosted Multi-Agent Operating System for Founders, Teams & Domain Specialists**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release: v0.5.7.7](https://img.shields.io/badge/Release-v0.5.7.7-6366f1.svg)](CHANGELOG.md)
+[![Release: v0.5.7.8](https://img.shields.io/badge/Release-v0.5.7.8-6366f1.svg)](CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
@@ -36,7 +36,7 @@ What that means in practice:
 
 **Pre-1.0, and we say that up front:** interfaces and config keys change between releases, the ERP/CRM module is alpha, and multi-user role enforcement is still being hardened. If that works for you, issues and PRs are welcome.
 
-### Current Release State (`v0.5.7.7`, 2026-11-24)
+### Current Release State (`v0.5.7.8`, 2026-11-24)
 
 The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions since `v0.5.6.0`:
 
@@ -47,9 +47,9 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 - **Observability & tooling:** OTel traces in the LLM kernel and DAG, trace-to-eval replay fixtures, Python 3.13, split test requirements.
 - **Workspace:** 4-step onboarding wizard v2, operations calendar and 11 LinkedIn skills.
 
-> **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.7**; the PDF manual still targets v0.5.2.1.
+> **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.8**; the PDF manual still targets v0.5.2.1.
 
-> **Counts measured in this checkout:** 71 entries in `agent_profiles.json`, 71 roles in `roles.json`, 71 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7.7`.
+> **Counts measured in this checkout:** 71 entries in `agent_profiles.json`, 71 roles in `roles.json`, 71 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7.8`.
 
 ### Product Tour
 

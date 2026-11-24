@@ -197,7 +197,7 @@ def api_get_vault_list(request: Request):
 
 
 @router.get("/api/vault/file")
-def api_read_vault_file_direct(path: str = Query(...), request: Request = None):
+def api_read_vault_file_direct(path: str = Query(...), request: Request = None):  # type: ignore[assignment]
     if request is not None:
         require_admin_or_503(request)
     vault_dir = _get_vault_dir()
@@ -230,7 +230,7 @@ def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body
         raise HTTPException(status_code=403, detail=str(e))
     # C20: Turnier-Konflikterkennung — wenn der Client eine erwartete mtime
     # mitschickt und Obsidian inzwischen gespeichert hat, nicht ueberschreiben.
-    expected_mtime = payload.get("expected_mtime")
+    expected_mtime = data.get("expected_mtime")
     if expected_mtime is not None and os.path.exists(real_path):
         try:
             if abs(float(os.path.getmtime(real_path)) - float(expected_mtime)) > 0.001:
@@ -239,7 +239,7 @@ def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body
             pass
     # H (dieses Audits): mtime allein ist kein ETag — eine Aenderung gleicher
     # Länge innerhalb derselben Sekunde blieb unbemerkt.
-    expected_size = payload.get("expected_size")
+    expected_size = data.get("expected_size")
     if expected_size is not None and os.path.exists(real_path):
         try:
             if int(os.path.getsize(real_path)) != int(expected_size):

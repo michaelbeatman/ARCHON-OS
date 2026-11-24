@@ -627,7 +627,7 @@ def _prepare_chat_stream_context(
 
 
 @router.post("/api/chat/stream")
-async def api_chat_stream(req: ChatStreamRequest, request: Request = None):
+async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # type: ignore[assignment]
     """
     Natives Chat-Streaming via Server-Sent Events (SSE).
     Unterstützt Direkt-Dialog und Missions-Modus mit Paperclip-Kopplung.

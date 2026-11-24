@@ -170,3 +170,8 @@ docker-compose.override.yml
 !static/quartz-garden/static/*.png
 !templates/
 !templates/**
+
+# Audit-Dokumentation (Fix-Status + 16 Domänenberichte) versionieren,
+# obwohl die breite **/*report*-Regel sie sonst verschluckt.
+!audit_reports/
+!audit_reports/2026-11-24_*.md

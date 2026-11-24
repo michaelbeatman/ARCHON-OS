@@ -502,32 +502,11 @@ services:
           memory: 2048M
           cpus: "2.0"
 
-  archon-worker:
-    image: python:3.11-alpine@sha256:bb1d70c1df30d8ee1e05214dbe82d6cdfd29833c1f47ce917f20991aca93acaa
-    container_name: ${ARCHON_WORKER_CONTAINER_NAME:-archon-worker-zero-egress}
-    logging:
-      <<: *default-logging
-    restart: unless-stopped
-    profiles: ["workers"]
-    user: "${ARCHON_UID:-1000}:${ARCHON_GID:-1000}"
-    networks:
-      - archon-worker-zero-egress_net
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=64m
-    cap_drop:
-      - ALL
-    security_opt:
-      - "no-new-privileges:true"
-    mem_limit: 512m
-    memswap_limit: 512m
-    command: ["python", "-c", "import time; time.sleep(86400)"]
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: "1.0"
-          pids: 50
+  # Audit D10/D01: der frühere `archon-worker` war nur
+  # `python -c "time.sleep(86400)"` — ein Platzhalter ohne Queue-Consumer.
+  # Entfernt statt Scheinbetrieb. Reale Isolierung erfolgt on-demand ueber
+  # backend/ephemeral_sandbox.py im Netz `archon-worker-zero-egress_net`
+  # (internal: true, cap_drop ALL, read_only, kein Internet-Route).
 
   litestream:
     image: litestream/litestream:0.5.1@sha256:b6b174e740f00e624fe15053f65348ab7e42daa3cc3ce1fa4cf6b89db5e3788d

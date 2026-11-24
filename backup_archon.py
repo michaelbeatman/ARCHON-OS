@@ -50,6 +50,21 @@ DATABASES = [
     ("pb_data.db", os.path.join(PROJECT, "pocketbase", "pb_data", "data.db"), True),
 ]
 
+# Audit D03/D10: bei FULL_TENANT_ISOLATION liegen die echten Mandanten-DBs
+# unter data/tenants/<tid>/. Der regelmäßige Backup-Job kannte sie nicht und
+# sicherte nur stale Root-Dateien. Dynamisch ergänzen (optional: ein leerer
+# oder gelöschter Mandant darf den Lauf nicht scheitern lassen).
+_TENANTS_ROOT = os.path.join(PROJECT, "data", "tenants")
+if os.path.isdir(_TENANTS_ROOT):
+    for _tid in sorted(os.listdir(_TENANTS_ROOT)):
+        _tdir = os.path.join(_TENANTS_ROOT, _tid)
+        if not os.path.isdir(_tdir) or _tid.startswith("."):
+            continue
+        for _db in ("ops.db", "business.db", "memory.db"):
+            _path = os.path.join(_tdir, _db)
+            if os.path.isfile(_path):
+                DATABASES.append((f"tenant_{_tid}_{_db}", _path, False))
+
 LOCAL_BACKUP_DIR = os.path.join(PROJECT, "data", "backups")
 NAS_BACKUP_DIR = r"Y:\_ARCHON Backups"
 

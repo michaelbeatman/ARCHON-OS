@@ -1320,7 +1320,8 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
             logger.debug("[WorkflowDAG] Showroom-Deliverable nicht geschrieben: %s", _dexc)
 
     # Punkt 3.2.6: exakte Kosten pro Node (Basis-/Repair-/Eskalations-Modell getrennt)
-    _cost_usd = 0.0
+    _cost_usd = None
+    _cost_unverified = True
     try:
         from backend.llm_kernel import estimate_model_cost_usd as _est_cost
         _rep_in_tok = int(locals().get("_repair_in", 0) or 0)
@@ -1336,8 +1337,12 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         if _esc_in_tok or _esc_out_tok:
             _cost_usd += _est_cost(_esc_model or model, _esc_in_tok, _esc_out_tok)
         _cost_usd = round(_cost_usd, 6)
+        _cost_unverified = False
     except Exception as _cost_exc:
-        logger.debug("[WorkflowDAG] Kostenberechnung uebersprungen: %s", _cost_exc)
+        # D12: kein 0.0 als realer Wert bei fehlgeschlagener Berechnung.
+        logger.error("[WorkflowDAG] Kostenberechnung fehlgeschlagen: %s", _cost_exc)
+        _cost_usd = None
+        _cost_unverified = True
     out = {
         "status": "error" if is_error else "success",
         "node_id": node.get("id"),
@@ -1349,6 +1354,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         "output_tokens": int(res.get("output_tokens") or 0),
         "kanban_task_id": kanban_task_id,
         "cost_usd": _cost_usd,
+        "cost_unverified": _cost_unverified,
     }
     if quality_report is not None:
         out["quality_score"] = int(quality_report.get("score", 0))

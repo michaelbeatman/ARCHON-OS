@@ -205,20 +205,12 @@ class ReceiptOCREngine:
             except Exception as e:
                 continue
 
-        # Fallback Heuristik, falls kein LLM erreichbar
-        return {
-            "merchant": "Unbekannter Händler",
-            "date": datetime.date.today().isoformat(),
-            "amount_gross": 0.0,
-            "currency": "EUR",
-            "tax_amount": 0.0,
-            "tax_rate_pct": 19.0,
-            "category": "Sonstiges",
-            "payment_method": "Unbekannt",
-            "line_items": [],
-            "confidence": 0.3,
-            "note": "Automatische Vision-Extraktion nicht verfügbar, manuell erfassen."
-        }
+        # D12: keine erfundenen Finanzfakten. Frueher landeten hier
+        # `amount_gross=0.0`, `tax_rate_pct=19.0` und das heutige Datum als
+        # angebliche Belegdaten in SQLite und Kanban.
+        raise RuntimeError(
+            "VISION_EXTRACTION_FAILED: keine echte Vision-Extraktion; manuelle Pruefung erforderlich."
+        )
 
     def process_receipt(
         self,
@@ -237,8 +229,24 @@ class ReceiptOCREngine:
         with open(img_path, "wb") as fh:
             fh.write(image_bytes)
 
-        # 2. Vision OCR Extraktion
-        meta = self.extract_metadata_from_vision(image_bytes, filename=filename)
+        # 2. Vision OCR Extraktion — D12: bei Fehlschlag KEINE erfundenen
+        # Beträge/Daten in DB und Kanban schreiben, sondern ehrlich quittieren.
+        try:
+            meta = self.extract_metadata_from_vision(image_bytes, filename=filename)
+        except RuntimeError as exc:
+            return {
+                "receipt_id": receipt_id,
+                "status": "needs_manual_review",
+                "error_code": "VISION_EXTRACTION_FAILED",
+                "merchant": None,
+                "date": None,
+                "amount_gross": None,
+                "currency": None,
+                "tax_amount": None,
+                "tax_rate_pct": None,
+                "image_path": img_path,
+                "note": f"{exc} — kein Betrag/Datum erfunden, HITL-Pruefung erforderlich.",
+            }
 
         merchant = meta.get("merchant") or "Unbekannter Händler"
         receipt_date = meta.get("date") or datetime.date.today().isoformat()

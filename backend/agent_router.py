@@ -82,6 +82,20 @@ def _detect_chat_silent_failure(run_id: str, final_output: str) -> List[str]:
             run_id, final_status="success", final_output=str(final_output or "")
         )
         flags = [str(x) for x in (report.get("flags") or [])]
+        # D12: der Tool-Chokepoint schreibt unter der aktiven Trace-ID, der
+        # Chat-Konsument fragte bisher nur die Router-TID ab -> 0 Events,
+        # Silent-Failure-Guard wirkungslos. Zweiten Namespace mitpruefen.
+        if not flags:
+            try:
+                from backend.trace_context import current_trace_id
+                trace_run = str(current_trace_id() or "").strip()
+                if trace_run and trace_run != run_id:
+                    alt = detect_silent_failures(
+                        trace_run, final_status="success", final_output=str(final_output or "")
+                    )
+                    flags = [str(x) for x in (alt.get("flags") or [])]
+            except Exception as alt_exc:
+                logger.debug("[AgentRouter] Trace-ID-Flightlog-Fallback nicht verfuegbar: %s", alt_exc)
         if flags:
             _audit_silent_failure(run_id, flags)
         return flags
@@ -1308,6 +1322,7 @@ class AgentRouter:
                         else:
                             stream_buf = ""
                             total_chars = 0
+                            received_payload_chunks = 0
                             async for line in response.aiter_lines():
                                 if not line:
                                     continue
@@ -1331,6 +1346,7 @@ class AgentRouter:
                                             delta = choice.get("delta") or {}
                                             piece = delta.get("content", "")
                                         if piece:
+                                            received_payload_chunks += 1
                                             stream_buf += piece
                                             total_chars += len(piece)
                                             # Unvollständigen [EMAIL_N] / [GESCHÜTZT...]-Tag am Pufferende zurückhalten
@@ -1347,23 +1363,41 @@ class AgentRouter:
                                                     yield cleaned
                                     except json.JSONDecodeError as dec_err:
                                         logger.debug(f"[AgentRouter] Ungueltiger SSE-Chunk uebersprungen: {dec_err}")
+                            # D12: HTTP 200 ohne Nutzlast ist ein Fehler, kein Erfolg.
+                            if received_payload_chunks == 0 and not stream_buf.strip():
+                                logger.error("[AgentRouter] Leere LLM-Antwort (HTTP 200 ohne Nutzlast)")
+                                yield "ERROR: Leere LLM-Antwort (HTTP 200 ohne Nutzlast)"
+                                return
                             if stream_buf:
                                 cleaned_tail = self._finalize_output_guard(stream_buf, hop_sid, is_local_hop)
                                 if cleaned_tail:
                                     yield cleaned_tail
+                            _p_toks = max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4)
+                            _c_toks = max(1, total_chars // 4)
+                            # D12: auch im Stream-Pfad echte Kosten schätzen.
+                            _stream_cost = 0.0
+                            try:
+                                from backend.llm_kernel import estimate_model_cost_usd
+                                _stream_cost = float(
+                                    estimate_model_cost_usd(m_try, _p_toks, _c_toks, provider=provider)
+                                )
+                            except Exception as _cost_exc:
+                                logger.error(
+                                    "[AgentRouter] Stream-Kostenberechnung fehlgeschlagen: %s", _cost_exc
+                                )
                             try:
                                 from backend.execution_receipt_ledger import execution_receipt_ledger
                                 execution_receipt_ledger.issue_receipt(
                                     task_id=hop_sid,
                                     agent_role=agent_id or "router",
                                     model_used=m_try,
-                                    prompt_tokens=max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4),
-                                    completion_tokens=max(1, total_chars // 4),
-                                    cost_usd=0.0,
+                                    prompt_tokens=_p_toks,
+                                    completion_tokens=_c_toks,
+                                    cost_usd=_stream_cost,
                                     tools_invoked=["agent_router.stream_chat_completion"],
                                 )
                             except Exception as log_exc:
-                                logger.debug(f"[AgentRouter] Audit-Logging (stream) fehlgeschlagen: {log_exc}")
+                                logger.error(f"[AgentRouter] Audit-Logging (stream) fehlgeschlagen: {log_exc}")
                             return
             except Exception as e:
                 last_err = e

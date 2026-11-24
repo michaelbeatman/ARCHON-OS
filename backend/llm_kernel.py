@@ -346,6 +346,9 @@ async def dispatch_llm(
                 status = "ERROR"
                 raise
             finally:
+                # D12: leerer Stream oder ERROR-Chunk darf nicht als OK gemeldet werden.
+                if not chunks or any(str(c).startswith("ERROR:") for c in chunks):
+                    status = "ERROR"
                 if trace_id:
                     await _otel_span(
                         trace_id,

@@ -519,25 +519,17 @@ async def generate_grounded_llm_response(prompt: str, context_chunks: List[dict]
                         if content:
                             return content
             except ZeroEgressBlockedError:
-                break
+                # D12: Zero-Egress darf NIE durch eine lokal erfundene
+                # „Fundierte Analyse" ersetzt werden.
+                raise
             except Exception:
                 continue
 
-    # Fallback: Lokale, fundierte Text-Synthese
-    synthesis = f"### 📊 Fundierte Analyse & Antwort:\n\n"
-    synthesis += f"Basierend auf den **{len(context_chunks)} ausgewerteten Belegstellen** aus den hinterlegten Quellen:\n\n"
-    
-    for idx, chunk in enumerate(context_chunks[:3], start=1):
-        clean_snip = chunk['text'].strip().replace("\n", " ")
-        if len(clean_snip) > 300:
-            clean_snip = clean_snip[:295] + "..."
-        synthesis += f"**{idx}. Befund ({chunk['source_title']}, S. {chunk['page']}):**\n"
-        synthesis += f"> „{clean_snip}“\n\n"
-
-    synthesis += f"**Zusammenfassende Schlussfolgerung:**\n"
-    synthesis += f"Die hinterlegten Dokumente bestaetigen die Kernparameter zu deiner Anfrage. Fuer detaillierte Normen und Einzelparagraphen siehe die extrahierten Abschnitte oben.\n"
-
-    return synthesis
+    # D12: keine echte LLM-Antwort -> harter Fehler, keine erfundenen Fakten.
+    raise RuntimeError(
+        "LLM_NOT_AVAILABLE: kein Provider lieferte eine echte Antwort; "
+        "keine lokale Synthese ohne LLM-Ausfuehrung."
+    )
 
 
 async def query_notebook(notebook_id: str, prompt: str) -> dict:
@@ -557,9 +549,25 @@ async def query_notebook(notebook_id: str, prompt: str) -> dict:
     # Retrieval
     chunks, citations = perform_grounded_retrieval(nb, prompt)
     
-    # KI-Synthese
-    response_text = await generate_grounded_llm_response(prompt, chunks, citations)
-    
+    # KI-Synthese — D12: bei Blockade/Fehler KEINE erfundene Antwort und
+    # KEINE Assistant-History schreiben.
+    try:
+        response_text = await generate_grounded_llm_response(prompt, chunks, citations)
+    except ZeroEgressBlockedError as ze:
+        return {
+            "status": "blocked",
+            "error_code": getattr(ze, "error_code", "ZERO_EGRESS_BLOCKED"),
+            "response": "⚠️ Externe KI-Synthese durch Zero-Egress blockiert. Keine lokale Ersatzanalyse.",
+            "citations": [],
+        }
+    except RuntimeError as exc:
+        return {
+            "status": "blocked",
+            "error_code": "LLM_NOT_AVAILABLE",
+            "response": f"⚠️ Keine echte KI-Antwort verfügbar: {exc}",
+            "citations": [],
+        }
+
     # D-19: Der Verlauf wird NICHT aus dem Snapshot vor dem LLM-Aufruf
     # gespeichert. Zwischen ``load_notebooks_data()`` und dem ``await`` der
     # Synthese koennen Quellen hinzugefuegt oder weitere Chat-Turns

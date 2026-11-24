@@ -799,17 +799,20 @@ def parse_personalakte_sections(agent_id: str, lang: str = "de") -> Dict[str, st
         os.path.join(APP_ROOT, "quartz_app", "content", "00_HR_Agenten", "Personalakten", f"{agent_id}.md"),
         os.path.join(APP_ROOT, "agent_workspace", "Personalakten", f"{agent_id}.md"),
     ]
+    supervisor = _supervisor_from_org_chart(agent_id)
+    collaborators_default = f"`@default`, `@{supervisor}`"
+    if os.environ.get("ARCHON_SSOT_REPO_ONLY") == "1":
+        return {
+            "lessons": "",
+            "supervisor": supervisor,
+            "collaborators": collaborators_default,
+        }
     raw = ""
     for c in candidates:
         if os.path.exists(c):
             with open(c, "r", encoding="utf-8", errors="ignore") as f:
                 raw = f.read()
             break
-    # H-4: Supervisor aus dem Org-Chart ableiten (source of truth), NICHT aus
-    # der Personalakte — dort stand nur ein Wikilink-Anzeigename ("@CEO Robert")
-    # oder gar nichts, woraufhin ALLE Agenten denselben Supervisor bekamen.
-    supervisor = _supervisor_from_org_chart(agent_id)
-    collaborators_default = f"`@default`, `@{supervisor}`"
     if not raw:
         return {
             "lessons": "",

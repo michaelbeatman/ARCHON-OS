@@ -13,6 +13,7 @@ Vereinheitlichter LLM-Kernel fuer Archon OS (Punkt 3.1.1):
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -276,6 +277,33 @@ async def dispatch_llm(
         eff_model = resolve_auto_model(model)
         trace_id = await _otel_start("llm.stream", task_id or session_id, agent_id)
         ref = _prompt_ref(agent_id, eff_model)
+        # D11/S-11.2: auch der Stream-Pfad muss die echte Registry-Referenz
+        # (Version/Canary/Hash) im Result zurueckgeben, nicht den leeren Fallback.
+        try:
+            from backend.prompt_registry import prompt_registry
+            _eff = prompt_registry.get_effective_prompt(agent_id, task_id or None)
+            if _eff and _eff.get("prompt"):
+                _prompt_text = str(_eff.get("prompt") or "")
+                _is_canary = bool(_eff.get("is_canary") or _eff.get("canary") or False)
+                _version = str(
+                    _eff.get("version_num") or _eff.get("version") or _eff.get("prompt_version") or ""
+                )
+                ref = {
+                    **ref,
+                    "version": _version,
+                    "version_num": _eff.get("version_num") or 0,
+                    "prompt_version": _version,
+                    "prompt_hash": hashlib.sha256(_prompt_text.encode("utf-8")).hexdigest(),
+                    "prompt_chars": len(_prompt_text),
+                    "canary": _is_canary,
+                    "is_canary": _is_canary,
+                    "canary_percentage": _eff.get("canary_percentage") or 0,
+                    "model": _eff.get("model") or eff_model,
+                    "source": "prompt_registry",
+                    "resolved": True,
+                }
+        except Exception as _pref_exc:
+            logger.debug("[LLM-Kernel] Prompt-Ref im Stream-Pfad nicht aufloesbar: %s", _pref_exc)
 
         async def _traced_stream():
             started = time.perf_counter()

@@ -22,7 +22,42 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
 from archon.core.constants import DELEGATION_PROTOCOL_PROMPT
+
+
+class DelegationPayload(BaseModel):
+    """D11 (Re-Audit): schema-validierte Übergabe Orchestrator → Subagent.
+
+    Vorher existierte diese Klasse nur als Behauptung in Doku/Reports; der
+    Import in `backend/operations_api.py` schlug fehl und wurde still
+    verschluckt. Pflichtfelder sind `ziel_agent` und `auftrag`; alle
+    Konsumenten erhalten `model_dump()`-Dicts und damit dieselben Keys wie
+    zuvor (kein Bruch mit `payload.get(...)`).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    ziel_agent: str = Field(min_length=1)
+    auftrag: str = Field(min_length=1)
+    modell: str = ""
+    model: str = ""
+    prioritaet: str = "normal"
+    reasoning_level: str = "medium"
+    reasoning: str = ""
+    acceptance_criteria: str = ""
+    reply_to: str = ""
+    root_ticket_id: str = ""
+    root_ticket: str = ""
+    trajectory_id: str = ""
+    parent_project_id: str = ""
+    projekt: str = ""
+    projekt_titel: str = ""
+    titel: str = ""
+    memory_scope: str = ""
+    delegation_chain: List[str] = Field(default_factory=list)
+    handed_off_via: str = ""
 from archon.core.mission_control import (
     mc_get_parent_context_sqlite,
     mc_link_subtask_sqlite,
@@ -610,29 +645,30 @@ def _parse_delegation_blocks(text: str, fanout_cap: Optional[int] = None):
     # 1. Standard: ```delegation ... ``` Blöcke
     for m in re.finditer(r"```(?:delegation|json)?\s*\n(.*?)```", text, re.DOTALL):
         raw = m.group(1).strip()
-        if '"ziel_agent"' in raw and '"auftrag"' in raw:
+        if '"ziel_agent"' in raw:
+            # D11: auch unvollständige Payloads (z. B. ohne `auftrag`) müssen
+            # als Schemafehler sichtbar werden, nicht still verschwinden.
             try:
-                payload = json.loads(raw)
-                if isinstance(payload, dict) and payload.get("ziel_agent") and payload.get("auftrag"):
-                    h = f"{payload.get('ziel_agent')}:{payload.get('auftrag')[:40]}"
-                    if h not in seen_hashes:
-                        valid.append(payload)
-                        seen_hashes.add(h)
-            except Exception as e:
-                invalid.append({"raw": raw[:200], "error": str(e)})
+                # D11: Schema-Validierung VOR dem Dispatch (kein Freitext mehr).
+                payload = DelegationPayload.model_validate_json(raw).model_dump()
+                h = f"{payload['ziel_agent']}:{payload['auftrag'][:40]}"
+                if h not in seen_hashes:
+                    valid.append(payload)
+                    seen_hashes.add(h)
+            except (ValidationError, ValueError) as e:
+                invalid.append({"raw": raw[:200], "error": f"DelegationPayload: {e}"})
 
     # 2. Fallback: Ungefenced JSON-Objekte mit "ziel_agent" und "auftrag"
     for m in re.finditer(r'\{[^{}]*"ziel_agent"\s*:\s*"[^"]+"[^{}]*"auftrag"\s*:\s*"[^"]+"[^{}]*\}', text, re.DOTALL):
         raw = m.group(0).strip()
         try:
-            payload = json.loads(raw)
-            if isinstance(payload, dict) and payload.get("ziel_agent") and payload.get("auftrag"):
-                h = f"{payload.get('ziel_agent')}:{payload.get('auftrag')[:40]}"
-                if h not in seen_hashes:
-                    valid.append(payload)
-                    seen_hashes.add(h)
-        except Exception as exc:
-            logger.debug(f"[Delegation] Ungueltiger Delegations-JSON-Block uebersprungen: {exc}")
+            payload = DelegationPayload.model_validate_json(raw).model_dump()
+            h = f"{payload['ziel_agent']}:{payload['auftrag'][:40]}"
+            if h not in seen_hashes:
+                valid.append(payload)
+                seen_hashes.add(h)
+        except (ValidationError, ValueError) as exc:
+            logger.warning("[Delegation] Schema-ungueltiger Legacy-Payload verworfen: %s", exc)
 
     invalid.fanout_cap = cap
     invalid.fanout_blocked = len(valid) > cap
@@ -1230,7 +1266,7 @@ async def _watch_delegated_task(
                 # Dispatcher-Pfad genutzt.
                 handoff_id = ""
                 try:
-                    from backend.handoff_desk import handoff_desk
+                    from backend.handoff_desk import handoff_desk, mark_truncated
                     # Batch D/1: vollständiges, typisiertes A2A-Envelope.
                     _status_key = str(status).strip().lower()
                     _confidence = 1.0 if _status_key == "done" else (0.6 if _status_key == "review" else 0.0)
@@ -1245,7 +1281,9 @@ async def _watch_delegated_task(
                         from_agent=str(prof_id or "unknown"),
                         to_agent=str(orig_delegator or "default"),
                         deliverables={
-                            "result": str(result or "")[:4000],
+                            # D11: vollständiges Ergebnis in der Datenbank,
+                            # Kürzung nur explizit markiert in der Anzeige.
+                            "result": str(result or ""),
                             "status": str(status),
                             "artifact_path": str(obsidian_rel or ""),
                         },
@@ -1259,6 +1297,15 @@ async def _watch_delegated_task(
                         attachments=_attachments,
                     )
                     handoff_id = str(envelope.get("handoff_id") or "")
+                    # D11: HMAC wird nicht nur erzeugt, sondern im automatischen
+                    # Delegationspfad auch konsumiert (verify_payload_hash liest
+                    # den gespeicherten Envelope und vergleicht constant-time).
+                    if handoff_id and not handoff_desk.verify_payload_hash(handoff_id):
+                        logger.error(
+                            "[Delegation] Handoff-HMAC ungueltig — %s wird nicht weitergegeben",
+                            handoff_id,
+                        )
+                        handoff_id = ""
                     _HANDOFF_IDS_BY_TASK[str(task_id)] = handoff_id
                 except Exception as he:
                     logger.debug(f"[Delegation] Handoff-Envelope nicht angelegt: {he}")
@@ -1266,7 +1313,7 @@ async def _watch_delegated_task(
                 delegator_feedback = (
                     f"{status_badge}: Der Sub-Agent `@{prof_id}` hat Task `{task_id}` ({final_title}) abgeschlossen.\n\n"
                     f"**A2A-Handoff:** `{handoff_id or 'nicht protokolliert'}`\n"
-                    f"**Ergebnis:**\n{result or '(Ergebnis liegt im Projektordner/Kanban)'}\n"
+                    f"**Ergebnis:**\n{mark_truncated(result, 4000, artifact='deliverables_json') if result else '(Ergebnis liegt im Projektordner/Kanban)'}\n"
                     f"{attach_note}\n\n"
                     f"*(Status im Kanban: `{status}`)*"
                     f"{supervisor_hint}"
@@ -1531,7 +1578,29 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     _persisted_chain = tuple(dict.fromkeys(_base_chain + [ziel]))
     _put_chain(_tid, _persisted_chain)
     _SESSION_TRAJECTORY[tgt_sess] = _tid
-    msg_text = f"{isolation_header}\nMessage from 🤖 {d_name} (@{delegator_id}): {auftrag}"
+    # D11: schema-validierte, strukturierte Übergabe statt Freitext. Damit
+    # acceptance_criteria / reply_to / delegation_chain / memory_scope nicht
+    # an der Übergabekante verloren gehen.
+    _handoff_payload = {
+        **payload,
+        "ziel_agent": ziel,
+        "auftrag": auftrag,
+        "acceptance_criteria": acceptance_criteria,
+        "reply_to": reply_to,
+        "delegation_chain": list(_persisted_chain),
+        "memory_scope": memory_scope,
+    }
+    try:
+        _handoff_json = DelegationPayload.model_validate(_handoff_payload).model_dump_json(
+            ensure_ascii=False
+        )
+    except (ValidationError, ValueError):
+        _handoff_json = json.dumps(_handoff_payload, ensure_ascii=False, default=str)
+    msg_text = (
+        f"{isolation_header}\n"
+        f"STRUKTURIERTE ÜBERGABE (DelegationPayload v1) — JSON, kein Freitext:\n"
+        f"{_handoff_json}"
+    )
     with _get_state_db() as conn:
         _ensure_session_exists(conn, tgt_sess, ziel, t_model, auftrag[:50])
     _save_message_to_db(tgt_sess, "user", msg_text)

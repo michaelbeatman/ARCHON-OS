@@ -91,18 +91,16 @@ def _load_kanban_delegation_payload(raw_payload: Any) -> Optional[KanbanDelegati
         return None
     if not isinstance(data, dict):
         return None
+    # D11 (Re-Audit): kein stiller Import-Fallback mehr — DelegationPayload
+    # existiert jetzt real in archon.core.delegation.
+    from archon.core.delegation import DelegationPayload
     try:
-        from archon.core.delegation import DelegationPayload
-    except Exception:
-        DelegationPayload = None  # Parallelarbeit: Schema liegt in delegation.py
-    if DelegationPayload is not None:
-        try:
-            validated = DelegationPayload.model_validate(data)
-            data = dict(validated.model_dump())
-        except (ValidationError, TypeError, ValueError):
-            # Produzenten-Payload und Protokoll-Payload haben leicht
-            # unterschiedliche Feldnamen -> lokal normalisieren, nie roh .get().
-            pass
+        validated = DelegationPayload.model_validate(data)
+        data = dict(validated.model_dump())
+    except (ValidationError, TypeError, ValueError):
+        # Produzenten-Payload und Protokoll-Payload haben leicht
+        # unterschiedliche Feldnamen -> lokal normalisieren, nie roh .get().
+        pass
     try:
         return KanbanDelegationPayload.model_validate(data)
     except (ValidationError, TypeError, ValueError) as exc:

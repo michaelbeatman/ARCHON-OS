@@ -163,9 +163,9 @@ def test_d3_eval_gate_is_wired_in_dispatch_and_profile_activation():
 
 
 def test_d3_gate_default_off_then_fail_closed(monkeypatch):
-    from archon.core import delegation
     import backend.agent_scorecard_engine as scorecard_mod
     import backend.eval_gates as eval_mod
+    from archon.core import delegation
 
     # Ohne Flag unveraendertes Verhalten — auch ohne jede Eval-Datenlage.
     monkeypatch.setattr(delegation, "_delegation_eval_gate_config", lambda: {})

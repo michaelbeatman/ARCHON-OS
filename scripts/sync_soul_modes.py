@@ -870,7 +870,7 @@ def build_tools_directive_block(tools_list: List[str], detailed: bool = False, l
 def load_assigned_german_skills_details(skills_list: List[str], max_skills: int = 3, max_chars_per_skill: int = 1600) -> str:
     index_path = os.path.join(APP_ROOT, "data", "hermes_skills_index.json")
     skill_index = {}
-    if os.path.exists(index_path):
+    if os.path.exists(index_path) and os.environ.get("ARCHON_SSOT_REPO_ONLY") != "1":
         try:
             with open(index_path, "r", encoding="utf-8") as f:
                 skill_index = json.load(f)
@@ -923,7 +923,7 @@ def load_assigned_english_skills_details(skills_list: List[str], max_skills: int
     """Loads pure-English SKILL.md specifications when available, skipping German skill files."""
     index_path = os.path.join(APP_ROOT, "data", "hermes_skills_index.json")
     skill_index = {}
-    if os.path.exists(index_path):
+    if os.path.exists(index_path) and os.environ.get("ARCHON_SSOT_REPO_ONLY") != "1":
         try:
             with open(index_path, "r", encoding="utf-8") as f:
                 skill_index = json.load(f)

@@ -40,7 +40,7 @@ B wurde auf A und anschließend auf `origin/main` (9947e098) rebase't; beide Str
 
 ## Offene Punkte (ausdrücklich noch NICHT behoben)
 1. **D16:** Trace-Propagation über alle 18 Systemgrenzen (n8n, Hermes, PocketBase, MCP, SSE, Outbox, `to_thread`) und echter OTel-Collector/Langfuse-Export mit Sampling.
-2. **D08 (Rest):** Performance-Hotpaths (`chat.py` SQLite-Writes via `to_thread`, `SELECT *`/`fetchall()` ohne `LIMIT`, Frontend-Virtualisierung der 832 Templates). Der `api_provider.py`-Key-Cache ist behoben.
+2. **D08 (Rest):** Backend-Hotpaths behoben (Chat-SSE-Writes via `to_thread`, bounded Kanban-/Hybrid-Search-Queries, mtime-Cache für `agent_chat`-Profile, optionaler `limit` im Compliance-Export). **Offen:** Frontend-Virtualisierung der 832 Prompt-Templates (DOM-Größe).
 3. **D11/D14 (Rest):** P1 Governance: Prompt-Version im signierten Dispatch-Proof, Kürzungen explizit markiert, Approver-Identität aus Session statt Body, Vier-Augen-Ersteller-Abgleich (Greifer muss `created_by` übergeben). Vollständiges `NO_CONSENSUS`-Tie-Breaking und durchgängige Pydantic-Handoff-Schemata bleiben offen.
 4. **D10 (Rest):** Ansible deployt jetzt `docker-compose.yml` + `/readyz`-Gate (P0 erledigt); externe `ARCHON_HEARTBEAT_WEBHOOK_URL` und `ARCHON_LITESTREAM_REPLICA_DIR` sind konfigurierbar und dokumentiert — **die tatsächlichen Ziel-URLs müssen vom Betreiber gesetzt werden**; RPO ~5–10 s / RTO = Restore-Zeit dokumentiert. Ein echter Watchdog-Supervisor außerhalb des überwachten 30-s-Loops fehlt weiterhin.
 5. **Laufzeit-Caches:** `.hermes/profiles/` und `data/hermes_profiles/` müssen im Haupt-Repo einmalig mit `python scripts/sync_soul_modes.py --mode compact` aus der neuen SSOT regeneriert werden (gitignorierte Caches, nicht im Worktree sichtbar).

@@ -95,11 +95,10 @@ If a message in YOUR chat starts with `"Message from 🤖 <name>"`, it is a team
 
 When the user writes `@<agent-name>` or says `"ask <name> to ..."` / `"tell <name> ..."`, that is a handoff: message that agent, wait for the reply, and report back.
 
-The roster grows over time — run `hermes profile list` for the LIVE teammate list before a handoff. Complete Archon OS Specialist Roster (73 Profiles):
+The roster grows over time — run `hermes profile list` for the LIVE teammate list before a handoff. Complete Archon OS Specialist Roster (71 Profiles):
 - `affiliate_partner_manager` (Svenja Lorenzen (Strategic Partnerships & Channel Ecosystem Lead)) — Builds B2B channel partnerships, affiliate commission structures, co-selling playbooks, and partner enablement kits.
 - `aggregation_lisa` (Lisa (Executive Synthesis & Fan-In Curator)) — Consolidates multi-agent specialist outputs into unified boardroom dossiers, surfaces cross-domain trade-offs, and prepares executive decision memos.
 - `agile_scrum_master` (Sarah Lindemann (Agile Scrum Master & Task Triage)) — Decomposes complex initiatives into INVEST-compliant user stories, sprint backlogs, WBS milestones, and measurable acceptance criteria.
-- `alpha` (Alpha) — Du bist Alpha (Alpha)....
 - `arbitrage_market_analyst` (Felix Sommer (Arbitrage & Market Spread Analyst)) — Identifies cross-market price spreads, distressed inventory opportunities, and net-margin arbitrage across B2B/B2C channels.
 - `b2b_outreach_specialist` (Patrick Jensen (B2B Outbound & Account-Based Outreach Lead)) — Designs signal-driven cold email and LinkedIn outbound sequences tailored to buyer triggers, role pain points, and low-friction CTAs.
 - `baugb_permit_expert` (Dipl.-Ing. Stefan Lindner (Zoning, Building Code & Permitting Specialist)) — Evaluates zoning bylaws, land-use entitlements, International Building Code (IBC) / Eurocode / BauGB compliance, fire life-safety, and permit strategies.
@@ -142,7 +141,6 @@ The roster grows over time — run `hermes profile list` for the LIVE teammate l
 - `linkedin_social_media_specialist` (Maya Lin (LinkedIn & Social Media Growth Specialist)) — Manages full-funnel LinkedIn & Social Media execution using the 11 modular Claude LinkedIn skills (li-post, li-human, li-carousel, li-comment, li-reply, li-profile, li-plan, li-repurpose, li-dm, li-inbox, li-audit), voice.md personal brand profiles, and the 5-check Human-Score quality gate.
 - `logistics_supply_chain_manager` (Dirk Hagemann (Global Logistics & Supply Chain Manager)) — Orchestrates global freight routing, Incoterms 2020, HS customs classification (US CBP / EU TARIC), and 3PL fulfillment networks.
 - `medtech_regulatory_lead` (Dr.-Ing. Valerie Lindqvist (MedTech Regulatory Affairs & Quality Lead (FDA / EU-MDR / ISO 13485))) — Guides medical devices, IVDs, and SaMD through FDA 510(k)/De Novo/PMA, EU-MDR 2017/745, ISO 13485 QMS, IEC 62304, and ISO 14971 risk management.
-- `micha` (Michael Keller (Strategic Founder & System Architect)) — Master-Profil für Michael Keller: Strategische Gesamtführung, Zieldefinition und Koordination aller Agenten.
 - `negotiation_master` (Prof. Dr. Christian Berg (Principal Negotiation Strategist (Harvard & Voss))) — Engineers high-stakes negotiation playbooks, BATNA/ZOPA models, concession matrices, and calibrated tactical scripts.
 - `paid_ads_manager` (Chiara Bellini (Performance Media Buying & Paid Acquisition Lead)) — Manages and scales Google Ads, Meta, LinkedIn B2B, and Amazon PPC campaigns governed by POAS, contribution margin, server-side CAPI, and MER.
 - `personal_life_strategist` (Dr. Elena Weber (Executive Performance & Life Architect)) — Optimizes executive energy management, deep-work calendars, cognitive load, habit architecture, and quarterly goal alignment.

@@ -715,13 +715,13 @@ def _read_flat_env(path: str) -> Dict[str, str]:
 # Cache mit Lock; Invalidierung nach Schreibvorgängen über invalidate_key_cache().
 _KEY_CACHE_TTL_SEC = 30.0
 _key_cache_lock = threading.Lock()
-_key_cache: Dict[str, Any] = {"at": 0.0, "keys": {}}
+_key_cache: Dict[str, Any] = {"at": 0.0, "keys": None}
 
 
 def invalidate_key_cache() -> None:
     with _key_cache_lock:
         _key_cache["at"] = 0.0
-        _key_cache["keys"] = {}
+        _key_cache["keys"] = None
 
 
 def collect_keys() -> Dict[str, str]:
@@ -729,7 +729,7 @@ def collect_keys() -> Dict[str, str]:
     now = time.monotonic()
     with _key_cache_lock:
         cached = _key_cache["keys"]
-        if cached and (now - float(_key_cache["at"])) < _KEY_CACHE_TTL_SEC:
+        if cached is not None and (now - float(_key_cache["at"])) < _KEY_CACHE_TTL_SEC:
             return dict(cached)
 
     found: Dict[str, str] = {}

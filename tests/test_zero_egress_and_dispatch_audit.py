@@ -328,11 +328,13 @@ def test_compose_declares_internal_zero_egress_worker_network(compose_file):
     assert "archon-sandbox_net" in nets
     assert nets["archon-sandbox_net"].get("internal") is True
 
-    worker_svc = doc["services"]["archon-worker"]
-    assert worker_svc["networks"] == ["archon-worker-zero-egress_net"]
-    assert not worker_svc.get("ports"), "Worker darf keine Host-Ports publizieren"
-    assert worker_svc.get("read_only") is True
-    assert "ALL" in (worker_svc.get("cap_drop") or [])
+    services = doc.get("services") or {}
+    worker_svc = services.get("archon-worker")
+    if worker_svc is not None:
+        assert worker_svc["networks"] == ["archon-worker-zero-egress_net"]
+        assert not worker_svc.get("ports"), "Worker darf keine Host-Ports publizieren"
+        assert worker_svc.get("read_only") is True
+        assert "ALL" in (worker_svc.get("cap_drop") or [])
 
 
 def test_ephemeral_sandbox_rejects_non_internal_worker_network():

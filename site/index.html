@@ -119,6 +119,8 @@ footer .wrap{display:flex;gap:1.3rem;flex-wrap:wrap}
 <figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/kader.png" alt="Agent fleet overview"><figcaption>The 70-specialist fleet with 3-tier SOUL prompts</figcaption></figure>
 <figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/boardroom_debate.png" alt="AI Boardroom debate"><figcaption>AI Boardroom — multi-agent debate with critic stage</figcaption></figure>
 <figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/org.png" alt="Org chart and teams"><figcaption>Org hierarchy — what agents may decide alone, what needs approval</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/omniroute.png" alt="OmniRoute model router and cost control"><figcaption>OmniRoute — local/cloud routing with per-model budget caps</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/logstream_audit.png" alt="Tamper-evident SHA-256 audit log"><figcaption>Audit log — hash-chained record of every model dispatch</figcaption></figure>
 </div>
 
 <h3 class="sec">What it does</h3>
@@ -131,6 +133,7 @@ footer .wrap{display:flex;gap:1.3rem;flex-wrap:wrap}
 <div class="feat"><h4>Kanban with approval gates</h4><p>Tasks move through a four-eyes gate: approve, reject with a reason, or escalate on expiry. Email triage, CRM and an ERP suite (alpha) sit on top.</p></div>
 <div class="feat"><h4>24/7 liveness &amp; self-healing</h4><p>An async event-loop heartbeat feeds <code>/livez</code> (503 on stall) and Docker auto-restart, backed by an optional external dead-man-switch webhook.</p></div>
 <div class="feat"><h4>Hardened &amp; traced</h4><p>SSRF and prompt-injection guards, distributed trace IDs across agent calls, and batched UI rendering for large prompt catalogs.</p></div>
+<div class="feat"><h4>Telegram, Email &amp; CRM</h4><p>Triage incoming emails and Telegram messages into Kanban tasks, sync contacts, and manage quotes and contracts in one workspace.</p></div>
 </div>
 
 <h3 class="sec">The 70-specialist fleet — 8 domains</h3>

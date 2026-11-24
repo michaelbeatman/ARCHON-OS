@@ -593,18 +593,16 @@ class ApprovalPolicyEngine:
                 prev_hash = r["current_hash"]
 
             key_active = bool(_hmac_epochs())
-            if key_active and hmac_blocks:
-                # Audit 23.11.2026: ein Plain-SHA-Block NACH dem ersten
-                # HMAC-Block ist ein Downgrade. Ein Legacy-Praefix davor bleibt
-                # zulaessig (Key wurde erst spaeter eingefuehrt).
-                first_hmac_id = min(
-                    int(r["id"]) for r in rows
-                    if str(r["current_hash"] or "").startswith(HMAC_PREFIX)
-                )
+            if key_active:
+                try:
+                    legacy_max = int(os.environ.get("ARCHON_AUDIT_LEGACY_MAX_BLOCK", "0") or 0)
+                except ValueError:
+                    legacy_max = 0
+                # d05 F-01: Voller HMAC-Downgrade (auch wenn hmac_blocks == 0) muss erkannt werden.
                 downgraded_ids = [
                     int(r["id"]) for r in rows
                     if not str(r["current_hash"] or "").startswith(HMAC_PREFIX)
-                    and int(r["id"]) > first_hmac_id
+                    and int(r["id"]) > legacy_max
                 ]
                 if downgraded_ids:
                     return {
@@ -614,8 +612,8 @@ class ApprovalPolicyEngine:
                         "hmac_blocks": hmac_blocks,
                         "downgraded_ids": downgraded_ids[:10],
                         "message": (
-                            "HMAC-Signatur auf nacktes SHA-256 zurueckgesetzt "
-                            "(Block nach erstem HMAC-Block)."
+                            "HMAC-Key ist aktiv, aber Approval-Policy-Audit-Block(e) ohne HMAC-Signatur "
+                            "vorhanden (moeglicher Downgrade auf nacktes SHA-256)."
                         ),
                     }
             if hmac_blocks and not key_active:

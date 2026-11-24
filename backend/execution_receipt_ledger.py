@@ -171,20 +171,27 @@ def _init_db(db_path: str = None) -> None:
                 created_at TEXT
             )
         """)
-        # Append-only: UPDATE/DELETE an Quittungen muss fehlschlagen.
-        try:
-            conn.execute("""
-                CREATE TRIGGER IF NOT EXISTS execution_receipts_no_update
-                BEFORE UPDATE ON execution_receipts_ledger
-                BEGIN SELECT RAISE(ABORT, 'execution receipts are append-only'); END
-            """)
-            conn.execute("""
-                CREATE TRIGGER IF NOT EXISTS execution_receipts_no_delete
-                BEFORE DELETE ON execution_receipts_ledger
-                BEGIN SELECT RAISE(ABORT, 'execution receipts are append-only'); END
-            """)
-        except Exception:
-            pass
+        # Append-only: UPDATE/DELETE an Quittungen und Bypass-Markern muss fehlschlagen (d05 F-09).
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS execution_receipts_no_update
+            BEFORE UPDATE ON execution_receipts_ledger
+            BEGIN SELECT RAISE(ABORT, 'execution receipts are append-only'); END
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS execution_receipts_no_delete
+            BEFORE DELETE ON execution_receipts_ledger
+            BEGIN SELECT RAISE(ABORT, 'execution receipts are append-only'); END
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS execution_receipt_bypass_no_update
+            BEFORE UPDATE ON execution_receipt_bypass_markers
+            BEGIN SELECT RAISE(ABORT, 'bypass markers are append-only'); END
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS execution_receipt_bypass_no_delete
+            BEFORE DELETE ON execution_receipt_bypass_markers
+            BEGIN SELECT RAISE(ABORT, 'bypass markers are append-only'); END
+        """)
         conn.commit()
 
 
@@ -310,20 +317,26 @@ class ExecutionReceiptLedger:
         with sqlite3.connect(self.db_path, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("SELECT * FROM execution_receipts_ledger ORDER BY id ASC").fetchall()
-            # F-032: persistente Bypass-Marker sind ein Integritaetsvorfall.
+            # F-032 / d05 F-09: persistente Bypass-Marker sind ein Integritaetsvorfall.
             bypass_markers: List[Dict[str, Any]] = []
-            try:
-                for m in conn.execute(
-                    "SELECT id, task_id, agent_role, reason, audit_event_id, created_at "
-                    "FROM execution_receipt_bypass_markers ORDER BY id ASC"
-                ).fetchall():
-                    bypass_markers.append({
-                        "id": m["id"], "task_id": m["task_id"], "agent_role": m["agent_role"],
-                        "reason": m["reason"], "audit_event_id": m["audit_event_id"],
-                        "created_at": m["created_at"],
-                    })
-            except sqlite3.Error:
-                pass  # alte DB ohne Marker-Tabelle
+            bypass_markers_unreadable = False
+            has_marker_tbl = bool(conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='execution_receipt_bypass_markers'"
+            ).fetchone())
+            if has_marker_tbl:
+                try:
+                    for m in conn.execute(
+                        "SELECT id, task_id, agent_role, reason, audit_event_id, created_at "
+                        "FROM execution_receipt_bypass_markers ORDER BY id ASC"
+                    ).fetchall():
+                        bypass_markers.append({
+                            "id": m["id"], "task_id": m["task_id"], "agent_role": m["agent_role"],
+                            "reason": m["reason"], "audit_event_id": m["audit_event_id"],
+                            "created_at": m["created_at"],
+                        })
+                except sqlite3.Error as exc:
+                    logger.error("[ReceiptLedger] bypass_markers nicht lesbar (fail-closed): %s", exc)
+                    bypass_markers_unreadable = True
 
         expected_prev = "GENESIS_BLOCK_00000000"
         broken_links = []
@@ -361,7 +374,7 @@ class ExecutionReceiptLedger:
             else:
                 # Legacy-Quittungen (vor HMAC-Einfuehrung) weiterhin pruefbar
                 recomputed = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
-            if stored != recomputed:
+            if not hmac.compare_digest(stored, recomputed):
                 tampered_hashes.append(rid)
             expected_prev = r["receipt_hash"]
 
@@ -369,7 +382,9 @@ class ExecutionReceiptLedger:
             "chain_valid": (
                 len(broken_links) == 0 and len(tampered_hashes) == 0
                 and len(sequence_gaps) == 0 and len(bypass_markers) == 0
+                and not bypass_markers_unreadable
             ),
+            "bypass_markers_unreadable": bypass_markers_unreadable,
             "hmac_protected": bool(_receipt_key()),
             "total_receipts": len(rows),
             "broken_links": broken_links,

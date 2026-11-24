@@ -191,10 +191,10 @@ def _compute_entry_hash(prev_hash: str, row_dict: Dict[str, Any], block_id=None)
 
 
 def _last_hash(conn: sqlite3.Connection) -> str:
-    # id statt created_at: manipulierte Zeitstempel duerfen nicht bestimmen,
-    # an welchem Block die Kette fortgesetzt wird (K-01).
+    # rowid statt Zufalls-UUID id: lexikografische Sortierung nach 'tx-<uuid>'
+    # brach die Kette bei ca. 50 % der Folge-Transaktionen (d05).
     row = conn.execute(
-        "SELECT entry_hash FROM treasury_transactions ORDER BY id DESC LIMIT 1"
+        "SELECT entry_hash FROM treasury_transactions ORDER BY rowid DESC LIMIT 1"
     ).fetchone()
     return str(row["entry_hash"]) if row and row["entry_hash"] else "GENESIS"
 
@@ -211,7 +211,7 @@ def verify_treasury_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
         ).fetchone()
         if not has_tbl:
             return {"valid": True, "count": 0, "message": "Treasury-Kette ist leer."}
-        rows = conn.execute("SELECT * FROM treasury_transactions ORDER BY id ASC").fetchall()
+        rows = conn.execute("SELECT * FROM treasury_transactions ORDER BY rowid ASC").fetchall()
         if not rows:
             return {"valid": True, "count": 0, "message": "Treasury-Kette ist leer."}
         prev_hash = "GENESIS"
@@ -262,23 +262,24 @@ def verify_treasury_chain(db_path: Optional[str] = None) -> Dict[str, Any]:
                 }
             prev_hash = stored
         key_active = bool(_hmac_epochs())
-        if key_active and hmac_positions:
-            # B (Audit): Ein Plain-SHA-Block NACH dem ersten HMAC-Block ist ein
-            # Downgrade (K-1-Angriff): der Angreifer setzt entry_hash eines
-            # HMAC-Blocks auf _legacy_entry_hash() und wuerde sonst akzeptiert.
-            # Treasury-IDs sind Texte, darum die Position in der Kette statt
-            # einer numerischen ID (analog api_key_manager.first_hmac_id).
-            first_hmac_pos = hmac_positions[0]
-            if any(
-                not str(r["entry_hash"] or "").startswith(HMAC_PREFIX)
-                for r in rows[first_hmac_pos + 1:]
-            ):
+        if key_active:
+            try:
+                legacy_max = int(os.environ.get("ARCHON_AUDIT_LEGACY_MAX_BLOCK", "0") or 0)
+            except ValueError:
+                legacy_max = 0
+            # d05 F-01: Voller HMAC-Downgrade (auch wenn hmac_blocks == 0) muss erkannt werden.
+            plain_positions = [
+                idx + 1 for idx, r in enumerate(rows)
+                if not str(r["entry_hash"] or "").startswith(HMAC_PREFIX)
+                and (idx + 1) > legacy_max
+            ]
+            if plain_positions:
                 return {
                     "valid": False, "count": len(rows), "hmac_active": True,
                     "hmac_blocks": hmac_blocks,
                     "message": (
-                        "HMAC-Signatur auf nacktes SHA-256 zurueckgesetzt "
-                        "(Block nach erstem HMAC-Block)."
+                        "HMAC-Key ist aktiv, aber Treasury-Block(e) ohne HMAC-Signatur "
+                        "vorhanden (moeglicher Downgrade auf nacktes SHA-256)."
                     ),
                 }
         if hmac_blocks and not key_active:

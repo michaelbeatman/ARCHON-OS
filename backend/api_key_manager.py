@@ -231,24 +231,25 @@ class ApiKeyManager:
                     }
                 prev_hash = r["block_hash"]
             key_active = bool(_hmac_epochs())
-            if key_active and hmac_blocks:
-                # Audit 23.11.2026: Plain-SHA nach dem ersten HMAC-Block ist ein
-                # Downgrade; ein Legacy-Praefix davor bleibt zulaessig.
-                first_hmac_id = min(
+            if key_active:
+                try:
+                    legacy_max = int(os.environ.get("ARCHON_AUDIT_LEGACY_MAX_BLOCK", "0") or 0)
+                except ValueError:
+                    legacy_max = 0
+                # d05 F-01: Voller HMAC-Downgrade (auch wenn hmac_blocks == 0) muss erkannt werden.
+                plain_ids = [
                     int(r["id"]) for r in rows
-                    if str(r["block_hash"] or "").startswith(HMAC_PREFIX)
-                )
-                if any(
-                    int(r["id"]) > first_hmac_id
-                    for r in rows
                     if not str(r["block_hash"] or "").startswith(HMAC_PREFIX)
-                ):
+                    and int(r["id"]) > legacy_max
+                ]
+                if plain_ids:
                     return {
                         "valid": False, "count": len(rows), "hmac_active": True,
                         "hmac_blocks": hmac_blocks,
+                        "broken_at_id": plain_ids[0],
                         "message": (
-                            "HMAC-Signatur auf nacktes SHA-256 zurueckgesetzt "
-                            "(Block nach erstem HMAC-Block)."
+                            "HMAC-Key ist aktiv, aber API-Key-Audit-Block(e) ohne HMAC-Signatur "
+                            "vorhanden (moeglicher Downgrade auf nacktes SHA-256)."
                         ),
                     }
             if hmac_blocks and not key_active:

@@ -229,8 +229,10 @@ def consume_hitl_proof_token(
         if not want_action or not bound_action or not hmac.compare_digest(want_action, bound_action):
             _archon_exc_logger.warning("[passkey_hitl] Proof-Action fehlt oder stimmt nicht — abgelehnt.")
             return False
-        if bound_resource and (
-            not want_resource or not hmac.compare_digest(want_resource, bound_resource)
+        # Fail-closed: wenn entweder der Verbrauchs-Pfad oder der Proof eine
+        # Ressource verlangt/bindet, muessen BEIDE vorhanden und identisch sein.
+        if (bound_resource or want_resource) and (
+            not bound_resource or not want_resource or not hmac.compare_digest(want_resource, bound_resource)
         ):
             _archon_exc_logger.warning("[passkey_hitl] Proof-Resource fehlt oder stimmt nicht — abgelehnt.")
             return False

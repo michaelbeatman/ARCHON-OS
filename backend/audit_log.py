@@ -88,16 +88,29 @@ def _hmac_epochs() -> list:
     current = os.environ.get("ARCHON_AUDIT_HMAC_KEY", "").strip().encode("utf-8")
     if current:
         epochs.append((int(os.environ.get("ARCHON_AUDIT_HMAC_EPOCH_FROM", "0") or 0), current))
-    try:
-        return sorted(set(epochs))
-    except Exception:
-        return epochs
+    # F-18: deterministische Sortierung nur nach from_block (nie lexikografisch nach Key-Bytes).
+    # Bei doppeltem from_block gewinnt der zuletzt konfigurierte Key (mit Fehler-Log).
+    by_block: Dict[int, bytes] = {}
+    for start, key in epochs:
+        if start in by_block and by_block[start] != key:
+            logger.error(
+                "[Audit] Doppelte HMAC-Epoche fuer from_block=%s erkannt — letzter Key ueberschreibt.",
+                start,
+            )
+        by_block[start] = key
+    return sorted(by_block.items(), key=lambda item: item[0])
 
 
 def _hmac_key() -> bytes:
     """Aktueller (juengster) Key — rueckwaerts kompatibel mit alten Aufrufern."""
     epochs = _hmac_epochs()
     return epochs[-1][1] if epochs else b""
+
+
+def _anchor_key() -> bytes:
+    """Dedizierter Anker-Key (ARCHON_AUDIT_ANCHOR_KEY), Fallback auf Audit-HMAC-Key."""
+    dedicated = os.environ.get("ARCHON_AUDIT_ANCHOR_KEY", "").strip().encode("utf-8")
+    return dedicated or _hmac_key()
 
 
 def _key_for_block(block_id) -> bytes:
@@ -117,14 +130,29 @@ def _key_for_block(block_id) -> bytes:
     return usable[-1] if usable else b""
 
 
-def _chain_hash(raw_str: str, block_id=None) -> str:
+def sign_block(raw_str: str, block_id=None, *, allow_legacy: bool = False) -> str:
+    """Zentrale Signier-API fuer Haupt- und alle Nebenketten (d05 F-01).
+
+    Fail-closed: Ohne konfigurierten HMAC-Key wird KEIN ungesalzener SHA-256-Block
+    geschrieben, solange ``sha256_dispatch_audit_enforced`` aktiv ist (Default True),
+    es sei denn der Aufrufer fordert explizit ``allow_legacy=True`` (nur fuer
+    Leseverifikation / Diagnose).
+    """
     key = _key_for_block(block_id)
     if key:
         digest = hmac.new(key, raw_str.encode("utf-8"), hashlib.sha256).hexdigest()
         return f"{HMAC_PREFIX}{digest}"
-    # Rückwärtskompatibel: bestehende SHA-256-Ketten bleiben verifizierbar,
-    # solange kein Key gesetzt ist.
+    if not allow_legacy and _dispatch_audit_enforced():
+        raise RuntimeError(
+            "[Audit] ARCHON_AUDIT_HMAC_KEY fehlt: neue Audit-Bloecke duerfen "
+            "nicht mit nacktem SHA-256 geschrieben werden "
+            "(sha256_dispatch_audit_enforced=True)."
+        )
     return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
+
+
+def _chain_hash(raw_str: str, block_id=None, *, allow_legacy: bool = False) -> str:
+    return sign_block(raw_str, block_id=block_id, allow_legacy=allow_legacy)
 
 
 def _verify_hash(raw_str: str, stored: str, block_id=None) -> bool:
@@ -333,6 +361,10 @@ class ChainedAuditLog:
     def stop_anchor_worker(self) -> None:
         """Wird vom Graceful-Shutdown-Coordinator aufgerufen."""
         self._anchor_stop.set()
+        try:
+            self._write_anchor()
+        except Exception as exc:
+            logger.error("Audit-Log: Finaler Shutdown-Anker fehlgeschlagen: %s", exc)
 
     def _write_anchor(self, path: Optional[str] = None) -> Optional[str]:
         anchor = (path or os.environ.get("ARCHON_AUDIT_ANCHOR_PATH", "")).strip()
@@ -340,15 +372,23 @@ class ChainedAuditLog:
             return None
         conn = self._get_conn()
         try:
-            row = conn.execute("SELECT current_hash FROM audit_log ORDER BY id DESC LIMIT 1").fetchone()
+            row = conn.execute("SELECT id, current_hash FROM audit_log ORDER BY id DESC LIMIT 1").fetchone()
         finally:
             conn.close()
         if not row:
             return None
+        block_id = int(row["id"])
         latest = str(row["current_hash"] or "")
+        ts = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+        akey = _anchor_key()
+        sig = (
+            hmac.new(akey, f"{ts}|{block_id}|{latest}".encode("utf-8"), hashlib.sha256).hexdigest()
+            if akey
+            else ""
+        )
         os.makedirs(os.path.dirname(os.path.abspath(anchor)), exist_ok=True)
         with open(anchor, "a", encoding="utf-8") as fh:
-            fh.write(f"{datetime.datetime.now(datetime.timezone.utc).isoformat()}\t{latest}\n")
+            fh.write(f"{ts}\t{block_id}\t{latest}\t{sig}\n")
         return latest
 
     def _get_conn(self):
@@ -381,6 +421,9 @@ class ChainedAuditLog:
                         target_host TEXT DEFAULT '',
                         target_endpoint TEXT DEFAULT '',
                         egress_zone TEXT DEFAULT '',
+                        trace_id TEXT DEFAULT '',
+                        session_id TEXT DEFAULT '',
+                        correlation_id TEXT DEFAULT '',
                         payload_json TEXT NOT NULL,
                         prev_hash TEXT NOT NULL,
                         current_hash TEXT NOT NULL
@@ -411,13 +454,18 @@ class ChainedAuditLog:
                 if "company_id" not in existing_cols:
                     conn.execute("ALTER TABLE audit_log ADD COLUMN company_id TEXT DEFAULT 'default'")
 
-                for dispatch_col in ("provider", "model", "target_host", "target_endpoint", "egress_zone"):
+                for dispatch_col in (
+                    "provider", "model", "target_host", "target_endpoint", "egress_zone",
+                    "trace_id", "session_id", "correlation_id",
+                ):
                     if dispatch_col not in existing_cols:
                         conn.execute(f"ALTER TABLE audit_log ADD COLUMN {dispatch_col} TEXT DEFAULT ''")
 
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_category ON audit_log(category)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_target_host ON audit_log(target_host)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_company_id ON audit_log(company_id)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_trace_id ON audit_log(trace_id)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_session_id ON audit_log(session_id)")
 
                 # P1: Append-only. Ohne Trigger konnte jemand mit DB-Schreibzugriff
                 # die letzten N Bloecke loeschen — verify_integrity() prueft nur
@@ -444,21 +492,42 @@ class ChainedAuditLog:
         finally:
             conn.close()
 
-    def record_event(self, category: str, action: str, agent_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def record_event(
+        self,
+        category: str,
+        action: str,
+        agent_id: str,
+        payload: Dict[str, Any],
+        *,
+        trace_id: str = "",
+        session_id: str = "",
+        correlation_id: str = "",
+    ) -> Dict[str, Any]:
         """
         Fügt ein neues manipulationssicheres Ereignis an die SHA-256 Hashkette an.
-        Hash = SHA256(prev_hash + '|' + timestamp + '|' + category + '|' + action + '|' + agent_id + '|' + payload_json)
+        Hash = HMAC-SHA256(prev_hash + '|' + timestamp + '|' + category + '|' + action + '|' + agent_id + '|' + company_id + '|' + payload_json)
         Bei `category == 'llm_dispatch'` werden `provider`, `model`, `target_host`,
         `target_endpoint` und `egress_zone` sowohl kryptografisch in `payload_json` signiert
         als auch in dedizierten Index-Spalten abgelegt.
         """
         safe_payload = dict(payload or {})
+        trace_id_val = str(trace_id or safe_payload.get("trace_id") or "").strip()
+        session_id_val = str(session_id or safe_payload.get("session_id") or "").strip()
+        correlation_id_val = str(correlation_id or safe_payload.get("correlation_id") or "").strip()
+        if trace_id_val and "trace_id" not in safe_payload:
+            safe_payload["trace_id"] = trace_id_val
+        if session_id_val and "session_id" not in safe_payload:
+            safe_payload["session_id"] = session_id_val
+        if correlation_id_val and "correlation_id" not in safe_payload:
+            safe_payload["correlation_id"] = correlation_id_val
+
         payload_str = json.dumps(safe_payload, sort_keys=True, ensure_ascii=False)
         # GoBD: eindeutige Zeitreferenz mit UTC-Offset (frueher naive Lokalzeit).
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
 
-        provider_val = str(safe_payload.get("provider", "") or "") if category == "llm_dispatch" else str(safe_payload.get("provider", "") or "")
-        model_val = str(safe_payload.get("model", "") or "") if category == "llm_dispatch" else str(safe_payload.get("model", "") or "")
+        # F-19: tote Bedingung entfernt — Dispatch-Spalten klar aus Payload extrahieren.
+        provider_val = str(safe_payload.get("provider", "") or "")
+        model_val = str(safe_payload.get("model", "") or "")
         target_host_val = str(safe_payload.get("target_host", "") or "")
         target_ep_val = str(safe_payload.get("target_endpoint", "") or "")
         egress_zone_val = str(safe_payload.get("egress_zone", "") or "")
@@ -528,6 +597,9 @@ class ChainedAuditLog:
                     "target_host": target_host_val,
                     "target_endpoint": target_ep_val,
                     "egress_zone": egress_zone_val,
+                    "trace_id": trace_id_val,
+                    "session_id": session_id_val,
+                    "correlation_id": correlation_id_val,
                     "payload_json": payload_str,
                     "prev_hash": prev_hash,
                     "current_hash": current_hash,
@@ -587,6 +659,9 @@ class ChainedAuditLog:
         cost_usd: Optional[float] = None,
         prompt_tokens: Optional[int] = None,
         completion_tokens: Optional[int] = None,
+        trace_id: str = "",
+        session_id: str = "",
+        correlation_id: str = "",
     ) -> Dict[str, Any]:
         """
         Protokolliert einen einzelnen LLM-Dispatch (oder geblockten Versuch) revisionssicher
@@ -625,6 +700,9 @@ class ChainedAuditLog:
             action=action,
             agent_id=str(agent_id or "system"),
             payload=payload,
+            trace_id=trace_id,
+            session_id=session_id,
+            correlation_id=correlation_id,
         )
 
     def verify_integrity(self) -> Dict[str, Any]:
@@ -644,12 +722,24 @@ class ChainedAuditLog:
                 ]
                 if "company_id" not in getattr(self, "cols", set()):
                     select_cols.remove("company_id")
+                has_event_type_col = "event_type" in getattr(self, "cols", set())
+                if has_event_type_col:
+                    select_cols.append("event_type")
                 has_dispatch_cols = all(
                     c in getattr(self, "cols", set())
                     for c in ("provider", "model", "target_host", "target_endpoint", "egress_zone")
                 )
                 if has_dispatch_cols:
                     select_cols.extend(["provider", "model", "target_host", "target_endpoint", "egress_zone"])
+
+                # F-08: Append-only Trigger-Existenz pruefen.
+                existing_triggers = {
+                    str(tr[0])
+                    for tr in cur.execute(
+                        "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='audit_log'"
+                    ).fetchall()
+                }
+                triggers_intact = {"audit_log_no_update", "audit_log_no_delete"}.issubset(existing_triggers)
 
                 cur.execute(f"SELECT {', '.join(select_cols)} FROM audit_log ORDER BY id ASC")
                 rows = cur.fetchall()
@@ -759,9 +849,21 @@ class ChainedAuditLog:
                             "hmac_blocks": hmac_blocks,
                             "corrupted_id": r["id"],
                             "reason": f"Manipulationsalarm bei Block #{r['id']}: Inhalt oder Zeitstempel weicht vom signierten Hash ab.",
-                            "expected_hash": _chain_hash(raw_new, r["id"]),
+                            "expected_hash": _chain_hash(raw_new, r["id"], allow_legacy=True),
                             "actual_hash": stored_hash,
                         }
+
+                    # F-23: event_type-Spalte gegen signierte action pruefen
+                    if has_event_type_col:
+                        ev_type_val = str(r["event_type"] or "").strip()
+                        if ev_type_val and ev_type_val != str(r["action"] or "").strip():
+                            return {
+                                "valid": False,
+                                "hmac_active": key_active,
+                                "hmac_blocks": hmac_blocks,
+                                "corrupted_id": r["id"],
+                                "reason": f"Spaltenmanipulation bei Block #{r['id']}: event_type ('{ev_type_val}') weicht von action ('{r['action']}') ab.",
+                            }
 
                     # 3. LLM-Dispatch Nachweis- & Spaltenkonsistenz-Prüfung
                     if r["category"] == "llm_dispatch":
@@ -810,47 +912,99 @@ class ChainedAuditLog:
                     chain_hashes.append(str(r["current_hash"] or ""))
                     expected_prev = r["current_hash"]
 
-                # Externer Anker: der verankerte Head muss in der Kette
-                # vorhanden sein (Praefix-Pruefung, s. u.). Ohne diesen Abgleich
-                # ist der Anker ein reiner Schreibvorgang ohne Beweiswert
-                # (Tail-Loeschung bleibt unentdeckt).
+                # F-02: Signierter externer Anker + Tail-Loeschungs- & Rollback-Pruefung.
+                # Format v2 (4 Spalten): ts \t block_id \t current_hash \t hmac_sig
+                # Format v1 (Legacy, 2 Spalten): ts \t current_hash
                 anchor_path = os.environ.get("ARCHON_AUDIT_ANCHOR_PATH", "").strip()
                 anchor_ok: Optional[bool] = None
+                id_to_hash = {int(r["id"]): str(r["current_hash"] or "") for r in rows}
+                max_id = int(rows[-1]["id"]) if rows else 0
+                prod_env = str(os.environ.get("ENVIRONMENT") or "").strip().lower()
+                is_prod = prod_env in ("production", "prod", "live")
+                akey = _anchor_key()
                 if anchor_path and os.path.isfile(anchor_path):
                     try:
                         with open(anchor_path, "r", encoding="utf-8") as fh:
                             lines = [ln for ln in fh.read().splitlines() if ln.strip()]
                         if lines:
-                            last_anchor = lines[-1].split("\t")[-1].strip()
-                            # G (Audit): Der Anker wird asynchron/non-blocking
-                            # geschrieben und kann daher einen aelteren Head
-                            # enthalten. Er muss als frueherer Head in der Kette
-                            # vorkommen (Praefix), nicht zwingend deren Head sein.
-                            # Tail-Loeschung bleibt erkennbar: der Anker-Hash
-                            # verschwindet dann aus der Kette.
-                            anchor_ok = last_anchor in chain_hashes
+                            anchor_ok = True
+                            prev_anchor_id = -1
+                            prev_legacy_idx = -1
+                            for ln in lines:
+                                parts = ln.split("\t")
+                                if len(parts) >= 4:
+                                    ts_val, bid_str, a_hash, a_sig = parts[0], parts[1], parts[2].strip(), parts[3].strip()
+                                    try:
+                                        bid = int(bid_str)
+                                    except ValueError:
+                                        anchor_ok = False
+                                        break
+                                    # Signaturpruefung (fail-closed wenn Key aktiv)
+                                    if akey:
+                                        exp_sig = hmac.new(
+                                            akey,
+                                            f"{ts_val}|{bid}|{a_hash}".encode("utf-8"),
+                                            hashlib.sha256,
+                                        ).hexdigest()
+                                        if not a_sig or not hmac.compare_digest(exp_sig, a_sig):
+                                            anchor_ok = False
+                                            break
+                                    elif is_prod:
+                                        anchor_ok = False
+                                        break
+                                    # Monotonie (kein Rollback-Anhang) & Tail-Loeschung (bid > max_id)
+                                    if bid < prev_anchor_id or bid > max_id:
+                                        anchor_ok = False
+                                        break
+                                    if id_to_hash.get(bid) != a_hash:
+                                        anchor_ok = False
+                                        break
+                                    prev_anchor_id = bid
+                                else:
+                                    # Legacy 2-Spalten-Anker: in Produktion unsigniert ablehnen
+                                    if is_prod and key_active:
+                                        anchor_ok = False
+                                        break
+                                    a_hash = parts[-1].strip()
+                                    if a_hash not in chain_hashes:
+                                        anchor_ok = False
+                                        break
+                                    idx = chain_hashes.index(a_hash)
+                                    if idx < prev_legacy_idx:
+                                        anchor_ok = False
+                                        break
+                                    prev_legacy_idx = idx
                     except Exception as exc:
                         logger.error("Audit-Log: Anker nicht lesbar: %s", exc)
                         anchor_ok = False
                 if anchor_ok is False:
                     return {
                         "valid": False,
+                        "triggers_intact": triggers_intact,
                         "corrupted_id": "audit_anchor",
-                        "reason": "Externer Audit-Anker weicht vom Ketten-Head ab (Tail-Loeschung oder Manipulation).",
+                        "reason": "Externer Audit-Anker ungueltig oder weicht von der Kette ab (Tail-Loeschung, Rollback oder Signaturbruch).",
+                    }
+                if is_prod and not triggers_intact:
+                    return {
+                        "valid": False,
+                        "triggers_intact": False,
+                        "corrupted_id": "audit_triggers",
+                        "reason": "Append-only SQLite-Trigger auf audit_log fehlen (moegliche Manipulation).",
                     }
                 # Audit 23.11.2026: in Produktion ist ein fehlender/nicht
                 # verifizierbarer Anker KEIN Erfolg (sonst bleibt Tail-
                 # Löschung unentdeckt). Development bleibt privilegiert.
-                prod_env = str(os.environ.get("ENVIRONMENT") or "").strip().lower()
-                if prod_env in ("production", "prod", "live") and anchor_ok is not True:
+                if is_prod and anchor_ok is not True:
                     return {
                         "valid": False,
+                        "triggers_intact": triggers_intact,
                         "corrupted_id": "audit_anchor",
                         "reason": "Kein verifizierbarer externer Audit-Anker in Produktion — Revisionssicherheit nicht nachweisbar.",
                     }
 
                 return {
                     "valid": True,
+                    "triggers_intact": triggers_intact,
                     "anchor_verified": anchor_ok,
                     "hmac_active": key_active,
                     "hmac_blocks": hmac_blocks,

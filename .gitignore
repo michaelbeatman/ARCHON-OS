@@ -157,3 +157,16 @@ scripts/generate_notebooklm_package.py
 
 # Lokale Master-Dev Docker-Compose-Overrides (nicht auf Produktivservern)
 docker-compose.override.yml
+
+
+# Explizite Freigaben fuer UI-Logos/Icons und Templates (ueberschreiben *.png / **/*report* / **/*protocol*)
+!site/*.png
+!static/favicon.png
+!static/michael_beatman_logo.png
+!static/icons/
+!static/icons/**
+!static/hermes-webui/
+!static/hermes-webui/**
+!static/quartz-garden/static/*.png
+!templates/
+!templates/**

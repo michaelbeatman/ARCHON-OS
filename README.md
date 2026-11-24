@@ -7,7 +7,7 @@
 **Self-Hosted Multi-Agent Operating System for Founders, Teams & Domain Specialists**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release: v0.5.7.4](https://img.shields.io/badge/Release-v0.5.7.4-6366f1.svg)](CHANGELOG.md)
+[![Release: v0.5.7.7](https://img.shields.io/badge/Release-v0.5.7.7-6366f1.svg)](CHANGELOG.md)
 [![Agents: 70 Specialists](https://img.shields.io/badge/Specialists-70%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
@@ -15,17 +15,9 @@
 
 **🇬🇧 English** · [🇩🇪 Deutsch](README.de.md) · [🇪🇸 Español](docs/readme/README.es.md) · [🇫🇷 Français](docs/readme/README.fr.md) · [🇵🇹 Português](docs/readme/README.pt.md) · [🇷🇺 Русский](docs/readme/README.ru.md) · [🇯🇵 日本語](docs/readme/README.ja.md) · [🇰🇷 한국어](docs/readme/README.ko.md) · [🇨🇳 中文](docs/readme/README.zh.md) · [🇮🇹 Italiano](docs/readme/README.it.md) · [🇳🇱 Nederlands](docs/readme/README.nl.md)
 
-[🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [⚡ Zero-Key Live Demo](#option-c-instant-zero-key-read-only-demo-archon_demo_modetrue) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap (M0–M113)](docs/system/ROADMAP_2026.md)
+[🌐 Live Landing Page](https://michaelbeatman.github.io/ARCHON-OS/) | [🤖 AI Agent Install Protocol](INSTALL_AGENT.md) | [⚡ Zero-Key Live Demo](#option-c-instant-zero-key-read-only-demo-archon_demo_modetrue) | [📘 Manuals & PDFs](#documentation--manuals-pdf) | [🗺️ Roadmap (M0–M113)](docs/system/ROADMAP_2026.md)
 
 </div>
-
----
-
-> **Foundation first:** Archon OS is an extension built on **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** by **[Nous Research](https://nousresearch.com)** — the autonomous multi-agent runtime. Hermes is the engine; Archon OS turns it into a complete self-hosted business operating system.
-
-Archon OS replaces isolated single-prompt chatbots with a persistent, self-hosted **Agentic Operating System**. It orchestrates **70 domain specialists across 8 specialized domains**, runs structured **55-framework AI Boardroom debates**, pairs **Zero-Egress local AI routing** with a tamper-evident **GoBD/ISO-27001 HMAC-SHA256 audit log (Env-Key)**, and connects directly to your **Obsidian Second Brain**, **n8n automations**, **Telegram**, and an integrated **CRM & ERP suite *(Alpha)***.
-
-> **Localization & Global Edition (`v0.5.2.1`):** Full bilingual (`en` & `de`) parity across all **70 specialist `SOUL.md` profiles**, **832 parametric Prompt Studio templates**, **55 AI Boardroom frameworks**, and the **First-Run Web Setup Wizard**; core UI localized in 11 languages (`en`, `de`, `es`, `fr`, `it`, `ja`, `ko`, `nl`, `pt`, `ru`, `zh`). The **User Manual**, **Complete Feature List (`v0.5.2.1`)**, and **55 Boardroom Frameworks Reference** are available immediately below as indexed **English & German PDFs**.
 
 ---
 
@@ -44,19 +36,20 @@ What that means in practice:
 
 **Pre-1.0, and we say that up front:** interfaces and config keys change between releases, the ERP/CRM module is alpha, and multi-user role enforcement is still being hardened. If that works for you, issues and PRs are welcome.
 
-### Current Release State (`v0.5.7.4`, 2026-11-24)
+### Current Release State (`v0.5.7.7`, 2026-11-24)
 
 The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions since `v0.5.6.0`:
 
 - **M110 Execution Hardening:** effect ledger with `UNKNOWN` + mandatory reconciliation, worker leases/heartbeats with a liveness check, pre-execution DAG validator and a `replan_count` cap.
+- **24/7 Liveness & UI Performance:** real async event-loop heartbeat in `/livez` (returns `503` on stall) wired into the Docker healthcheck, external dead-man-switch webhook support (`ARCHON_HEARTBEAT_WEBHOOK_URL`), and 180 ms debounced search + 60-item batch rendering in Prompt Studio.
 - **Governance:** one central PolicyEngine and an atomic BudgetBank (`reserve → settle/release`); signed warrants are now mandatory for privileged tools such as `pay` / `mcp__*`.
 - **Reliability:** idempotency keys and an outbox with retry/DLQ for events, webhooks and the scheduler; the audit log now uses HMAC with an env key and a non-blocking background anchor.
 - **Observability & tooling:** OTel traces in the LLM kernel and DAG, trace-to-eval replay fixtures, Python 3.13, split test requirements.
 - **Workspace:** 4-step onboarding wizard v2, operations calendar and 11 LinkedIn skills.
 
-> **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.4** (released 2026-11-24 00:24, commit `v0.5.7`), matching the badge; the PDF manual still targets v0.5.2.1.
+> **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.7**; the PDF manual still targets v0.5.2.1.
 
-> **Counts measured in this checkout:** 73 entries in `agent_profiles.json` (70 specialists + 3 system/meta profiles), 73 roles in `roles.json`, 73 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7.4`.
+> **Counts measured in this checkout:** 73 entries in `agent_profiles.json` (70 specialists + 3 system/meta profiles), 73 roles in `roles.json`, 73 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7.7`.
 
 ### Product Tour
 

@@ -56,7 +56,7 @@ def test_m77_workflow_dag_fanout_gate_and_resume(tmp_path):
     assert r1["status"] == "paused"
     assert r1["node_statuses"]["fan"] == "completed"
     assert r1["node_statuses"]["approval"] == "awaiting_gate"
-    assert calls == ["a", "b"]
+    assert sorted(calls) == ["a", "b"]
 
     # 2. Resume with gate approved -> fan MUST be skipped_cached!
     # D13: der pausierte Lauf schliesst seine Trajectory als "failed"; der

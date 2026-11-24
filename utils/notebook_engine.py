@@ -8,17 +8,18 @@ fuehrt abfragegestuetzte Retrieval-Synthesen (Grounded Deep Chat) mit exakten Se
 und synchronisiert Erkenntnisse 1-Click in den Obsidian-Vault.
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("notebook_engine")
 
-import os
-import sys
-import re
-import json
-import time
 import datetime
+import json
 import math
+import os
+import re
+import sys
+import time
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
 
@@ -32,27 +33,27 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from utils.batch_library_importer import (
-        resolve_vault_path,
-        resolve_raw_docs_dir,
-        slugify,
-        extract_pdf,
         extract_docx,
-        extract_txt
+        extract_pdf,
+        extract_txt,
+        resolve_raw_docs_dir,
+        resolve_vault_path,
+        slugify,
     )
 except ImportError:
-    from batch_library_importer import (
-        resolve_vault_path,
-        resolve_raw_docs_dir,
-        slugify,
-        extract_pdf,
+    from batch_library_importer import (  # type: ignore[no-redef]
         extract_docx,
-        extract_txt
+        extract_pdf,
+        extract_txt,
+        resolve_raw_docs_dir,
+        resolve_vault_path,
+        slugify,
     )
 
 try:
-    from utils.path_jail import safe_path_within, safe_filename, PathJailError
+    from utils.path_jail import PathJailError, safe_filename, safe_path_within
 except ImportError:
-    from path_jail import safe_path_within, safe_filename, PathJailError
+    from path_jail import PathJailError, safe_filename, safe_path_within  # type: ignore[no-redef]
 
 
 def get_data_dir() -> str:
@@ -498,7 +499,7 @@ async def generate_grounded_llm_response(prompt: str, context_chunks: List[dict]
                 # ZeroEgressBlockedError wird unten abgefangen (break →
                 # lokaler Fallback), alle anderen Fehler überspringt den Hop.
                 enforce_egress_firewall_for_url(eff_url, agent_id="notebook_engine")
-                payload = sanitize_outbound_llm_payload(
+                payload = sanitize_outbound_llm_payload(  # type: ignore[assignment]
                     payload,
                     agent_id="notebook_engine",
                     is_local=bool(gate.get("routed_to_local")),

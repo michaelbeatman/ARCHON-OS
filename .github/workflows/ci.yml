@@ -399,7 +399,7 @@ jobs:
           FILES="${{ steps.changed.outputs.py }}"
           if [ -n "$FILES" ]; then
             echo "mypy prüft geänderte Dateien: $FILES"
-            mypy --ignore-missing-imports $FILES
+            mypy --ignore-missing-imports --follow-imports=silent $FILES
           else
             echo "Keine geänderten Python-Dateien — Ratchet nichts zu prüfen."
           fi

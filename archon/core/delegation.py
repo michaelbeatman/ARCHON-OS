@@ -24,8 +24,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from backend.handoff_desk import mark_truncated
 from archon.core.constants import DELEGATION_PROTOCOL_PROMPT
+from backend.handoff_desk import mark_truncated
 
 
 class DelegationPayload(BaseModel):
@@ -66,19 +66,20 @@ from archon.core.mission_control import (
     update_mission_control_data,
 )
 from archon.core.orchestration import _fan_in_maybe_start_synthesis, _run_synthesis_cascade
-from archon.core.profiles import api_get_hermes_profiles
 from archon.core.paths import OPT_DATA_DIR
+from archon.core.profiles import api_get_hermes_profiles
 from archon.core.runtime import (
     WORKSPACE_DIR,
     broadcast_event,
+    logger,
     subscribe_events,
     unsubscribe_events,
-    logger,
 )
 from archon.core.state_db import _get_state_db
 from backend.platform_paths import OBSIDIAN_VAULT, PROJEKTE_DIR
+
 # Batch D/4: Supervisor-Rollover aus der Org-Hierarchie (links bleiben SSOT).
-from backend.supervisor_rollover import resolve_supervisor, on_supervisor_failure
+from backend.supervisor_rollover import on_supervisor_failure, resolve_supervisor
 
 _DEPS: Dict[str, Any] = {}
 
@@ -274,6 +275,12 @@ _TRAJECTORY_ACTIVE: set[str] = set()
 
 class DelegationReceipt(str):
     """Text-Quittung mit strukturiertem Status (rueckwaertskompatibel zu chat.py)."""
+
+    status: str
+    reason: str
+    block_kind: str
+    failure_reason: str
+    trajectory_id: str
 
     def __new__(cls, text: str, **fields: Any):
         obj = super().__new__(cls, text)
@@ -632,6 +639,10 @@ def _get_delegation_prompt_for(agent_id: str):
 
 class DelegationIssueList(list):
     """Invalid-Liste mit D13-Fanout-Metadaten (2-Tupel-API bleibt kompatibel)."""
+
+    fanout_cap: int = 0
+    fanout_blocked: bool = False
+    omitted_count: int = 0
 
 
 def _parse_delegation_blocks(text: str, fanout_cap: Optional[int] = None):
@@ -1106,7 +1117,7 @@ async def _watch_delegated_task(
                 _new_supervisor = str(_rollover.get("new_supervisor") or _current_supervisor)
                 supervisor_hint = (
                     f"\n\n**Supervisor-Rollover:** @{_new_supervisor} "
-                    f"(Kette: {', '.join(_rollover.get('chain') or []) or _new_supervisor})"
+                    f"(Kette: {', '.join(str(x) for x in (_rollover.get('chain') or [])) if isinstance(_rollover.get('chain'), (list, tuple)) else _new_supervisor})"
                 )
                 logger.info(
                     f"[Delegation] Rollover fuer {prof_id}: {_current_supervisor} -> {_new_supervisor} ({status})"
@@ -1190,17 +1201,17 @@ async def _watch_delegated_task(
                     logger.warning(f"[Delegation] Medien-Kopie fuer {task_id} fehlgeschlagen: {cp_exc}")
                 result_fn = safe_filename(f"{clean_tid}-{slug}.md")
                 result_path = safe_path_within(os.path.join(dest_dir, result_fn), [dest_dir], allow_write=True, allow_dirs=False)
-                with open(result_path, "w", encoding="utf-8") as f:
-                    f.write(f"# {title}\n\n"
-                            f"**Task:** `{task_id}` | **Ziel-Agent:** `@{prof_id}` | **Status:** {status.upper()}\n\n"
-                            f"{result or '(Ergebnis siehe Kanban-Task-Events und Anhänge in 02_Medien/.)'}\n")
+                with open(result_path, "w", encoding="utf-8") as fh:
+                    fh.write(f"# {title}\n\n"
+                             f"**Task:** `{task_id}` | **Ziel-Agent:** `@{prof_id}` | **Status:** {status.upper()}\n\n"
+                             f"{result or '(Ergebnis siehe Kanban-Task-Events und Anhänge in 02_Medien/.)'}\n")
                 proj_title = fan_parent_title if (fan_parent and fan_parent_title) else title
                 p_herkunft = (f"Teilauftrag von Projekt `{fan_parent}`" if fan_parent
                               else f"Delegation über Archon OS (Task `{task_id}`)")
                 p_parent_line = f'parent_project: "{fan_parent}"\n' if fan_parent else ""
                 try:
-                    with open(os.path.join(proj_folder, "PROJEKT.md"), "x", encoding="utf-8") as f:
-                        f.write("---\nproject_folder: \"" + os.path.basename(proj_folder) + "\"\ncreated_at: \""
+                    with open(os.path.join(proj_folder, "PROJEKT.md"), "x", encoding="utf-8") as fh:
+                        fh.write("---\nproject_folder: \"" + os.path.basename(proj_folder) + "\"\ncreated_at: \""
                                 + str(datetime.datetime.now().timestamp()) + "\"\n"
                                 "title: \"" + proj_title + "\"\nstatus: \"" + str(status)
                                 + "\"\nsource_task: \"" + task_id + "\"\n"
@@ -1378,8 +1389,8 @@ async def _watch_delegated_task(
                     f"01_PROJEKTE/{obsidian_rel}" if obsidian_rel else None)
             else:
                 from telegram_notify import notify_task_status
-                notify_task_status(task_id, status, final_title, result, obsidian_rel,
-                                   dossier_dir=_doss_dir)
+                notify_task_status(task_id, status, final_title, result, obsidian_rel or "",
+                                   dossier_dir=_doss_dir or "")
         except Exception as tg_err:
             logger.warning(f"[Telegram] Delegations-Ping für Task {task_id} fehlgeschlagen: {tg_err}")
 
@@ -1438,7 +1449,9 @@ async def resume_pending_delegation_watchers() -> int:
             # D13/BLOCKER: Kette unter demselben stabilen trajectory_id lesen,
             # schreiben und wiederherstellen — nicht unter tgt_sess.
             from backend.trajectory_budget import (
-                ensure_trajectory, get_trajectory, normalize_trajectory_id,
+                ensure_trajectory,
+                get_trajectory,
+                normalize_trajectory_id,
             )
             _tid = normalize_trajectory_id(
                 meta.get("trajectory_id"), meta.get("root_ticket_id") or origin_sess or tid,
@@ -1505,7 +1518,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
 
     # D13/BLOCKER: EIN stabiler trajectory_id-Key fuer Lesen+Schreiben+Resume.
     from backend.trajectory_budget import (
-        ensure_trajectory, get_trajectory, reserve_hop,
+        ensure_trajectory,
+        get_trajectory,
+        reserve_hop,
     )
     _tid = _resolve_trajectory_id(payload, origin_session_id)
     if origin_session_id:

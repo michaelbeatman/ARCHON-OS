@@ -67,18 +67,20 @@ jobs:
       - name: Compose-Image-Digest-Gate (D09)
         run: |
           python - <<'PY'
-          import glob, re, sys
+          import glob, sys, yaml
           bad = []
           for path in sorted(glob.glob("docker-compose*.yml") + glob.glob("CRM/docker-compose.yml") + glob.glob("pocketbase/docker-compose.yml")):
-              text = open(path, encoding="utf-8").read()
-              for m in re.finditer(r"^\s*image:\s*(\S+)", text, re.MULTILINE):
-                  image = m.group(1).strip().strip("'\"")
-                  if image.startswith("${") or "@sha256:" in image:
+              data = yaml.safe_load(open(path, encoding="utf-8")) or {}
+              for svc, cfg in (data.get("services") or {}).items():
+                  if not isinstance(cfg, dict) or "build" in cfg:
                       continue
-                  bad.append(f"{path}: {image}")
+                  image = str(cfg.get("image") or "").strip()
+                  if not image or image.startswith("${") or "@sha256:" in image:
+                      continue
+                  bad.append(f"{path} ({svc}): {image}")
           if bad:
-              sys.exit("Images ohne @sha256:\n  " + "\n  ".join(bad))
-          print("Alle Compose-Images mit @sha256: gepinnt (oder env-override)")
+              sys.exit("Externe Images ohne @sha256:\n  " + "\n  ".join(bad))
+          print("Alle externen Compose-Images mit @sha256: gepinnt (oder env-override)")
           PY
 
       - name: Audit-HMAC-Key vorhanden (GoBD-Startup-Gate)

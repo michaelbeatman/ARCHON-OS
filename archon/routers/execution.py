@@ -281,3 +281,27 @@ def api_queue_fail(request: Request, dlq_id: str, payload: QueueFailRequest = Bo
     return dead_letter_queue_manager.fail(
         dlq_id, str(payload.get("error_message") or "Worker-Fehler")
     )
+
+
+class _ReplanRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    run_id: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    new_dag_def: Dict[str, Any] = Field(default_factory=dict)
+    trajectory_id: str = ""
+
+
+@router.post("/api/execution/dag/replan")
+def api_request_dag_replan(request: Request, body: _ReplanRequest):
+    """D13: Produktivaufrufer für `request_dag_replan()` — Cap pro Trajectory."""
+    require_admin_or_503(request)
+    from backend.workflow_dag_runner import request_dag_replan
+    res = request_dag_replan(
+        run_id=body.run_id,
+        new_dag_def=body.new_dag_def or {},
+        reason=body.reason,
+        trajectory_id=body.trajectory_id or None,
+    )
+    if not res.get("allowed", False):
+        raise HTTPException(status_code=409, detail=res)
+    return res

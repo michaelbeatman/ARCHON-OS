@@ -223,6 +223,7 @@ def reserve_hop(
     *,
     root_ticket_id: Optional[str] = None,
     db_path: Optional[str] = None,
+    allow_repeat: bool = False,
 ) -> Dict[str, Any]:
     """Vor JEDEM Agentwechsel/Tool-Call/Retry/Replan atomar aufrufen.
 
@@ -260,7 +261,7 @@ def reserve_hop(
         aid = str(agent_id or "").strip()
         # D13: Ein Retry/Replan desselben Knotens ist KEIN Delegationszyklus.
         # Zyklen sind A->B->A (Agentwechsel); Wiederholungen zaehlen nur als Hop.
-        _is_repeat = str(reason or "").startswith(("retry:", "replan:", "repair:"))
+        _is_repeat = allow_repeat or str(reason or "").startswith(("retry:", "replan:", "repair:"))
         if aid and aid in visited and not _is_repeat:
             blocked = _block(conn, tid, f"CYCLE_DETECTED:{aid}")
             _audit(tid, f"CYCLE_DETECTED via {aid} ({reason})", str(root_ticket_id or ""))

@@ -473,8 +473,11 @@ async def _execute_mission_control_task(
                     # Komplexitätsgewichteter Budget-Split (Paperclip Governance)
                     try:
                         from backend.role_budget_engine import allocate_task_budget_to_subagents
-                        parent_tok_budget = int(task.get("token_budget") or task.get("estimated_tokens") or (len(batch_subtasks) * 60000))
-                        parent_eur_budget = float(task.get("cost_limit_eur") or task.get("estimated_cost_eur") or (len(batch_subtasks) * 0.08))
+                        # D13: kein Budget-Minting aus der Subtask-Anzahl.
+                        # Fehlt das Elternbudget, muss die Engine fail-closed
+                        # `NO_PARENT_BUDGET` liefern.
+                        parent_tok_budget = int(task.get("token_budget") or 0)
+                        parent_eur_budget = float(task.get("cost_limit_eur") or 0.0)
                         allocate_task_budget_to_subagents(
                             parent_task_id=task_id,
                             total_token_budget=parent_tok_budget,
@@ -886,8 +889,9 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
         if created_subtasks:
             try:
                 from backend.role_budget_engine import allocate_task_budget_to_subagents
-                p_tok = int(parent_task.get("token_budget") or parent_task.get("estimated_tokens") or (len(created_subtasks) * 60000))
-                p_eur = float(parent_task.get("cost_limit_eur") or parent_task.get("estimated_cost_eur") or (len(created_subtasks) * 0.08))
+                # D13: kein Budget-Minting — fehlendes Elternbudget blockiert.
+                p_tok = int(parent_task.get("token_budget") or 0)
+                p_eur = float(parent_task.get("cost_limit_eur") or 0.0)
                 allocate_task_budget_to_subagents(
                     parent_task_id=parent_id,
                     total_token_budget=p_tok,

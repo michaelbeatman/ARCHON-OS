@@ -1606,10 +1606,25 @@ async def _run_workflow_dag_locked(
     _node_token_cap = sum(
         int(float(n.get("token_budget") or 0)) for n in nodes if isinstance(n, dict)
     )
+    # D13: max_hops aus den Ticket-/DAG-Metadaten (hart geclamppt auf 50),
+    # statt immer DEFAULT_MAX_HOPS=5 zu verwenden.
+    _max_hops_cfg = dag_def.get("max_hops") or dag_def.get("trajectory_max_hops") or 0
+    try:
+        _max_hops_cfg = max(1, min(50, int(_max_hops_cfg))) if _max_hops_cfg else 0
+    except (TypeError, ValueError):
+        _max_hops_cfg = 0
     _traj_row = ensure_trajectory(
         _tid, _root_ticket,
         max_tokens=(int(_node_token_cap) if _node_token_cap > 0 else None),
+        max_hops=(_max_hops_cfg or None),
     )
+    if _max_hops_cfg:
+        with _connect(db_path) as conn:
+            conn.execute(
+                "UPDATE trajectory_budgets SET max_hops = ? WHERE trajectory_id = ? AND max_hops < ?",
+                (_max_hops_cfg, _tid, _max_hops_cfg),
+            )
+            conn.commit()
     _inherited = inherit_replan_count(_tid, rid, dag_def, db_path=db_path)
     dag_def["_replan_count"] = max(
         int(dag_def.get("_replan_count") or 0), int(_inherited.get("replan_count") or 0)

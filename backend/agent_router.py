@@ -874,12 +874,19 @@ class AgentRouter:
             raise BudgetExceededError(
                 f"[TASK_BUDGET]: {check.get('error_code') or check.get('reason') or 'blocked'}"
             )
-        # Trajectory-Hop zhlen, wenn der Aufrufer eine echte trajectory_id liefert.
-        if str(task_id or "").startswith("traj-"):
+        # D13: kein `traj-`-Praefix als Voraussetzung — aus dem echten
+        # task_id/session-Kontext wird eine stabile Trajectory abgeleitet.
+        if str(task_id or "").strip():
             try:
-                from backend.trajectory_budget import reserve_hop
+                from backend.trajectory_budget import normalize_trajectory_id, reserve_hop
+                _hop_tid = normalize_trajectory_id(
+                    task_id if str(task_id).startswith("traj-") else None,
+                    root_ticket_id=str(task_id),
+                )
                 hop = await asyncio.to_thread(
-                    reserve_hop, task_id, agent_id or "default", "llm_call"
+                    reserve_hop, _hop_tid, agent_id or "default",
+                    f"llm_call:{agent_id or 'default'}",
+                    allow_repeat=True,  # erneuter Call desselben Agenten ist kein Zyklus
                 )
                 if not hop.get("allowed", False):
                     await asyncio.to_thread(

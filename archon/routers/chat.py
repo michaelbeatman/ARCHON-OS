@@ -991,6 +991,8 @@ async def api_chat_stream(req: ChatStreamRequest):
                 reasoning_level=reasoning_level,
                 agent_id=agent_id,
                 role=str((prof or {}).get("name") or ""),
+                # D13: Task-/Session-Kontext für den Trajectory-Hop-Gate.
+                task_id=session_id,
             ):
                 if chunk.startswith("ERROR: "):
                     provider_failed = True
@@ -1067,7 +1069,12 @@ async def api_chat_stream(req: ChatStreamRequest):
         # Quittungen werden in die Delegator-Session geschrieben -> der Agent "erinnert" sich.
         delegation_receipts = []
         try:
-            payloads, invalid_blocks = _parse_delegation_blocks(full_assistant_text)
+            # D13: zentraler Fan-out-Cap im Produktivpfad (vorher nur Default
+            # im Modul, chat.py rief ohne Cap -> beliebig viele Delegationen).
+            from backend.trajectory_budget import DEFAULT_MAX_DELEGATIONS_PER_RESPONSE
+            payloads, invalid_blocks = _parse_delegation_blocks(
+                full_assistant_text, fanout_cap=DEFAULT_MAX_DELEGATIONS_PER_RESPONSE
+            )
             # Legacy-Fallback: alte `hermes -p ...`-CLI-Befehle weiterhin abfangen
             for m in re.finditer(r'hermes\s+-p\s+([a-zA-Z0-9_-]+)\s+chat\s+.*?-q\s+["\'](.*?)["\']', full_assistant_text, re.DOTALL):
                 mm = re.search(r'-m\s+([a-zA-Z0-9_/.:-]+)', m.group(0))

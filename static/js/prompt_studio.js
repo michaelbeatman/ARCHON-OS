@@ -576,12 +576,34 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
       });
       renderSurePromptsCards(document.getElementById("sp-search-input")?.value || "");
     }
+    // Audit D08: der Katalog hat ~1.087 Karten. Früher wurde bei JEDEM
+    // Tastendruck der komplette DOM neu aufgebaut. Jetzt 180-ms-Debounce
+    // und 60er-Batches mit "Mehr laden".
+    let spVisibleCount = 60;
+    let spLastRenderKey = null;
+    let spDebounceTimer = null;
+
     function searchSurePrompts(query) {
-      renderSurePromptsCards(query.trim().toLowerCase());
+      if (spDebounceTimer) clearTimeout(spDebounceTimer);
+      spDebounceTimer = setTimeout(() => {
+        renderSurePromptsCards((query || "").trim().toLowerCase());
+      }, 180);
     }
+
+    function spLoadMore() {
+      spVisibleCount += 60;
+      const search = (document.getElementById("sp-search-input")?.value || "").trim().toLowerCase();
+      renderSurePromptsCards(search);
+    }
+
     function renderSurePromptsCards(search = "") {
       const wrapper = document.getElementById("sp-cards-wrapper");
       if (!wrapper) return;
+      const renderKey = `${currentSurePromptsFilter}::${search}`;
+      if (spLastRenderKey !== renderKey) {
+        spVisibleCount = 60;
+        spLastRenderKey = renderKey;
+      }
       wrapper.innerHTML = "";
       const favIds = getFavoriteSurePromptIds();
       const filtered = currentSurePromptsCatalog.filter(t => {
@@ -615,7 +637,8 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
         `;
         return;
       }
-      filtered.forEach(t => {
+      const visible = filtered.slice(0, spVisibleCount);
+      visible.forEach(t => {
         const isSel = t.id === selectedSurePromptId;
         const isFav = favIds.includes(t.id);
         const fCount = t.form_fields ? t.form_fields.length : (t.field_count || 0);
@@ -646,6 +669,12 @@ Erstelle die Auswertung vollständig auf Deutsch, präzise gegliedert in Markdow
         `;
         wrapper.appendChild(card);
       });
+      if (filtered.length > visible.length) {
+        const more = document.createElement("div");
+        more.className = "p-3 text-center";
+        more.innerHTML = `<button type="button" onclick="spLoadMore()" class="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-600 hover:border-red-400 hover:text-red-600 transition">${psT('ui.prompt_studio.load_more', 'Mehr laden')} (${visible.length}/${filtered.length})</button>`;
+        wrapper.appendChild(more);
+      }
       if (window.lucide) window.lucide.createIcons();
     }
     async function selectSurePrompt(id) {

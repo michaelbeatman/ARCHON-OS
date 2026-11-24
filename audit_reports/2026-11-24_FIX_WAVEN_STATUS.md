@@ -30,11 +30,14 @@ B wurde auf A und anschließend auf `origin/main` (9947e098) rebase't; beide Str
 | `e97f0bc6` | D10 | P0: Ansible Produktiv-Compose + `/readyz`-Gate, Dead-Man-Switch-Env, DR-Ziel, Guides |
 | `6c031c89` (Antigravity) | D16 | P1: End-to-end W3C-Propagation, OTLP/Langfuse-Export, Collector-Config |
 | `P0-Followup` | D16 | OTel-Collector in `docker-compose.yml` eingebunden (P1-Handoff), `.env.example`, 4. Test |
+| `bea8504a` (Antigravity) | D10 | Loop-Liveness: `backend/loop_liveness.py`, `/livez` → 503 bei Event-Loop-Hang |
+| `P0-UI` | D10/D08 | Docker-Healthcheck auf `/livez`, `ARCHON_HEARTBEAT_WEBHOOK_URL` in den Container injiziert; Prompt-Studio: 180-ms-Debounce + 60er-Batches statt 1.087 DOM-Karten |
 
 *(Die Commit-Hashes können nach dem Rebase abweichen — maßgeblich ist `git log audit-fixes-mass`.)*
 
 ## Verifikation
-- **55 kombinierte Regressionstests grün** (A1–A4, B2–B8, P0, P1), `.ci_venv`, `ARCHON_TEST_DB_ISOLATION=1`.
+- **66 kombinierte Regressionstests grün** (A1–A4, B2–B8, P0, P1, P2, Loop-Liveness, UI), `.ci_venv`, `ARCHON_TEST_DB_ISOLATION=1`.
+- `node --check static/js/prompt_studio.js` OK; Docker-Healthcheck zielt auf `/livez`.
 - `py_compile` über alle geänderten Module, YAML-Parse von `ci.yml`/`litestream.yml`/beiden Compose-Dateien.
 - `souls/build_souls_ssot.py --check`: 490/490 Artefakte hash-konsistent.
 

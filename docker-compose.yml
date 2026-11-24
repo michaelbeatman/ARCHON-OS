@@ -103,6 +103,9 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       # Audit D16/P1: Dienstname für OTel-Spans (Collector/ downstream)
       - OTEL_SERVICE_NAME=archon-os
+      # Audit D10: externaler Dead-Man-Switch. Ohne Wert bleibt der
+      # Selbstheilungs-Report bewusst `dead_man_switch_configured: false`.
+      - ARCHON_HEARTBEAT_WEBHOOK_URL=${ARCHON_HEARTBEAT_WEBHOOK_URL:-}
     volumes:
       # P0-11: KEIN `./:/app` mehr. Der alte Bind-Mount legte die .env mit dem
       # Audit-HMAC-Key als /app/.env lesbar in den Container. Der Anwendungscode
@@ -126,7 +129,9 @@ services:
       - ${ARCHON_HERMES_DIR:-./.hermes}:/opt/data
       - ${ARCHON_OBSIDIAN_DIR:-./obsidian_vault}:/opt/data/obsidian
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/health', timeout=3)"]
+      # Audit D10 + P0-Followup: /livez statt /health — Antigravitys
+      # Loop-Liveness meldet bei Event-Loop-Hang 503, Docker restartet dann.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/livez', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3

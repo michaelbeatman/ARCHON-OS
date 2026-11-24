@@ -41,6 +41,11 @@ def _env(key: str, default: str = "") -> str:
     return default
 
 
+def _env_first(key: str, default: str = "") -> str:
+    """Umgebung hat Vorrang, .env ist Fallback (S-6.1: Allowlist/Key gleich lesen)."""
+    return os.environ.get(key, "").strip() or _env(key, default)
+
+
 def combo_models(name: str = COMBO):
     con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     try:
@@ -91,10 +96,17 @@ def notify(text: str):
         print(f"[warn] Telegram-Fehler: {e}")
 
 
-def candidates(key: str, exclude):
-    """Freie OpenRouter-Modelle, die laut /models keine Kosten haben."""
+def candidates(extern_key: str, exclude):
+    """Freie OpenRouter-Modelle, die laut /models keine Kosten haben.
+
+    R-B/D06 (Re-Audit): der OmniRoute-Gateway-Key darf NIEMALS an die externe
+    Domain openrouter.ai gesendet werden. Hier wird ausschliesslich ein
+    separater OPENROUTER_API_KEY verwendet.
+    """
+    if not extern_key:
+        raise RuntimeError("OPENROUTER_API_KEY fehlt — keine externe Kandidatensuche ohne Separatkey.")
     req = urllib.request.Request("https://openrouter.ai/api/v1/models",
-                                 headers={"Authorization": f"Bearer {key}"})
+                                 headers={"Authorization": f"Bearer {extern_key}"})
     data = json.loads(urllib.request.urlopen(req, timeout=30).read().decode()).get("data", [])
     free = []
     for m in data:
@@ -145,7 +157,7 @@ def main() -> int:
 
     if args.fix and dead:
         allowed = {
-            m.strip() for m in os.environ.get(MODEL_ALLOWLIST_ENV, "").split(",")
+            m.strip() for m in _env_first(MODEL_ALLOWLIST_ENV).split(",")
             if m.strip()
         }
         if not allowed:
@@ -154,9 +166,13 @@ def main() -> int:
                 "(keine externen Modelle ohne Review)."
             )
             return 2
+        extern_key = _env_first("OPENROUTER_API_KEY")
+        if not extern_key:
+            print("FEHLER: OPENROUTER_API_KEY fehlt — externe Kandidatensuche verweigert.")
+            return 2
         print("\n--fix: suche lebende freie Modelle (nur Allowlist) ...")
         pool = [
-            m for m in candidates(key, set(models))
+            m for m in candidates(extern_key, set(models))
             if m in allowed and model_alive(m, key)
         ]
         print("Kandidaten:", pool[:5])

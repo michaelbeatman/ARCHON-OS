@@ -86,8 +86,14 @@ _TRANSPARENCY_PURPOSE_RE = re.compile(
 )
 
 
-def _compute_soul_sha256(agent: Dict[str, Any]) -> str:
-    """Berechnet den SHA-256-Hash des aktiven System-Prompts / SOUL.md eines Spezialisten."""
+def _compute_soul_sha256(agent: Dict[str, Any]) -> Optional[str]:
+    """Berechnet den SHA-256-Hash des echten System-Prompts / SOUL.md.
+
+    Audit D15: früher wurde bei fehlender Quelle ein Hash aus id/name/
+    description erfunden und in der behördlichen PDF als "gepinnt" geführt.
+    Ohne echte Quelle wird jetzt bewusst None geliefert; guardrails_verified
+    wird damit false und die HIGH_RISK-Aktivierung bleibt blockiert.
+    """
     prompt_text = (
         agent.get("prompt")
         or agent.get("system_prompt")
@@ -173,11 +179,18 @@ class EUAIActInventoryManager:
             or (
                 any(tok in category.lower() for tok in ("hr", "personal", "recht"))
                 and bool(_HIGH_RISK_PURPOSE_RE.search(purpose_text))
-                and aid not in ("commercial_jurist_contracts", "tax_holding_advisor", "compliance_gdpr_auditor")
             )
             or ("bewerbung" in desc.lower() or "leistungsbewertung" in desc.lower())
         )
-        is_high_risk = is_credit_risk or is_hr_high_risk
+        # Audit D15: Medizin/Recht/Steuer/Finanzen waren bisher MINIMAL_RISK.
+        # Konservative Einstufung als HIGH_RISK — diese Rollen erzeugen
+        # Entscheidungen mit erheblicher Wirkung auf Personen und Vermögen.
+        regulated_text = f"{category} {aid} {name} {desc} {skills} {agent.get('category_en', '')}".lower()
+        is_regulated_high_risk = (not is_prohibited) and any(
+            marker in regulated_text
+            for marker in ("medizin", "medical", "klinisch", "recht", "legal", "steuer", "tax", "treasury", "finanz", "finance")
+        )
+        is_high_risk = is_credit_risk or is_hr_high_risk or is_regulated_high_risk
 
         is_transparency = (
             not is_prohibited
@@ -213,6 +226,14 @@ class EUAIActInventoryManager:
             compliance_status = "COMPLIANT_WITH_OVERSIGHT"
             audit_interval_months = 6
             required_guardrails = ["MANDATORY_4_EYES_HITL", "WORKS_COUNCIL_NOTICE_ART26_7", "PII_MASKING", "GOBD_MERKLE_AUDIT", "SOUL_HASH_PINNING"]
+        elif is_regulated_high_risk:
+            risk_tier = "HIGH_RISK"
+            legal_basis = "Art. 6 VO (EU) 2024/1689 — konservative Einstufung regulierter Fachdomänen (Medizin/Recht/Steuer/Finanzen); FRIA Art. 27 empfohlen"
+            human_oversight = "MANDATORY_HITL (4-Augen-Freigabe vor bindenden Aussagen oder Entscheidungen)"
+            data_protection = "PII-Maskierung aktiv, lokale Datenhaltung, revisionssicheres GoBD-Audit-Log"
+            compliance_status = "COMPLIANT_WITH_OVERSIGHT"
+            audit_interval_months = 6
+            required_guardrails = ["MANDATORY_4_EYES_HITL", "NEGATIVE_SCOPE_GUARDRAILS", "PII_MASKING", "GOBD_MERKLE_AUDIT", "SOUL_HASH_PINNING"]
         elif is_transparency:
             risk_tier = "SPECIFIC_TRANSPARENCY"
             legal_basis = "Art. 50 EU AI Act (Transparenzpflicht für KI-Interaktion & synthetische Inhalte)"

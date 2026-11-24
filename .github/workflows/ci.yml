@@ -32,6 +32,12 @@ jobs:
       - name: Profil-SSOT Drift-Check
         run: python scripts/sync_profile_ssot.py --check --allow-missing-hermes --json
 
+      - name: Kanonische souls/ gegen SSOT prüfen (D15)
+        run: python scripts/build_souls_ssot.py --check
+
+      - name: Runtime-SOUL-Cache Drift (D15)
+        run: python scripts/check_soul_ssot_drift.py --allow-missing
+
       - name: Audit-HMAC-Key vorhanden (GoBD-Startup-Gate)
         env:
           ARCHON_AUDIT_HMAC_KEY: ci-test-key-not-for-production

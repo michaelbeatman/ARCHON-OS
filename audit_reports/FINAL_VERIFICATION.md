@@ -1,8 +1,10 @@
 # Archon OS — FINALE VERIFIKATION (Phase 3 abgeschlossen)
 
-**Datum:** 24.11.2026 · **Basis:** HEAD `9631405c` · **Nicht committet** (User-Entscheidung)
+**Datum:** 24.11.2026 · **Basis:** HEAD `9631405c` + E2E-Härtung vom 24.11. (siehe `2026-11-24_E2E_REGRESSION_RESULT.md`)
 **Ergebnis:** ✅ **Alle 1 BLOCKER- und 22 HIGH-Befunde behoben und verifiziert.**
 **Neuer Reifegrad: 9 / 10** (vorher 7/10 — siehe Begründung am Ende).
+**E2E-Nachtrag:** 24.11.2026 — Guardrails-SSOT, Liveness-Defaults, Alertmanager-Heartbeat
+und externer Autoheal nachgezogen; Zahlen unten entsprechend aktualisiert.
 
 ---
 
@@ -10,7 +12,7 @@
 
 | Gate | Kommando | Ergebnis |
 |---|---|---|
-| Vollständige Testsuite | `.ci_venv\Scripts\python.exe -m pytest tests/ -q` | **1775 passed, 16 skipped** (127,57 s, Exit 0) |
+| Vollständige Testsuite | `.ci_venv\Scripts\python.exe -m pytest tests -q` (`ARCHON_TEST_DB_ISOLATION=1`) | **1846 passed, 16 skipped** (E2E-Stand 24.11., Exit 0; alter Stand: 1775 passed) |
 | Python-Kompilierung | `python -m compileall -q archon backend scripts tests main.py core_dispatcher.py …` | **Exit 0** |
 | Frontend-Typen | `cd frontend && npx tsc --noEmit` | **Exit 0** |
 | JavaScript-Syntax | `node --check` auf 56 Dateien (`static/js/*.js`, `scripts/*.js`) | **0 Fehler** |

@@ -311,7 +311,10 @@ class TestSocketProxy:
         members = [n for n, s in doc["services"].items()
                    if n != "docker-socket-proxy"
                    and "archon-admin_net" in (s.get("networks") or {})]
-        assert sorted(members) == ["archon-os", "hermes", "promtail"], members
+        # Audit D10/E2E 24.11.2026: der externe Autoheal braucht denselben
+        # Admin-Net-Zugang zum Socket-Proxy (nur ALLOW_START/ALLOW_STOP).
+        # Die Invariante bleibt: explizite Allowlist, kein weiterer Dienst.
+        assert sorted(members) == ["archon-autoheal", "archon-os", "hermes", "promtail"], members
 
     def test_high_privilege_flags_disabled_by_default(self):
         _, env = self._proxy_env(_yaml("docker-compose.dev.yml"))

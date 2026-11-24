@@ -25,8 +25,14 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger("archon.loop_liveness")
 
 DEFAULT_INTERVAL_S = 2.0
-DEFAULT_MAX_HEARTBEAT_AGE_S = 15.0
-DEFAULT_MAX_LOOP_LAG_MS = 5000.0
+# Audit 24.11.2026 (E2E): die Defaults muessen zum Docker-Healthcheck passen.
+# Dessen urlopen-Timeout betraegt 3 s; ein 3-5 s langer Event-Loop-Hang muss
+# daher noch vor dem Healthcheck-Timeout als 503 sichtbar werden. 8 s/2000 ms
+# lassen dem 2-s-Heartbeat vier Ticks Toleranz, schlagen aber bei kurzen
+# Blockaden zuverlaessig an (alt: 15 s/5000 ms — dort blieb /livez bei einem
+# 4-s-Hang auf 200, vgl. audit_reports/2026-11-24_E2E_REGRESSION_RESULT.md).
+DEFAULT_MAX_HEARTBEAT_AGE_S = 8.0
+DEFAULT_MAX_LOOP_LAG_MS = 2000.0
 
 
 def _env_float(name: str, default: float) -> float:

@@ -33,16 +33,9 @@ from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional, Tup
 
 logger = logging.getLogger("archon.workflow_dag")
 
-# Agent I (Tracing): zentrale Fehler-Zaehlung statt stiller logger.debug().
-try:
-    from backend.trace_context import note_local_trace_error
-except (ImportError, AttributeError):  # Fallback, bis trace_context ausgerollt ist
-    def note_local_trace_error(msg: str, exc: BaseException) -> None:
-        try:
-            from backend.otel_tracer import tracer
-            tracer.note_local_trace_error(msg, exc)
-        except Exception:
-            logger.warning("[WorkflowDAG] OTel-Fehler %s: %s", msg, exc)
+# D16/M4: zentrale Fehler-Zaehlung ueber die echte API in trace_context
+# (delegiert an tracer.note_local_trace_error). Kein lokaler Fallback mehr.
+from backend.trace_context import note_local_trace_error
 
 
 async def _otel_start(name: str, run_id: str) -> Optional[str]:

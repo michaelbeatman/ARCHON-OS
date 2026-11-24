@@ -20,6 +20,7 @@ import asyncio
 import contextlib
 import json
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -40,6 +41,23 @@ def _mcp_trace_headers() -> Any:
         return
     with child_span():
         yield response_trace_headers()
+
+
+def _sse_frame_trace() -> Dict[str, str]:
+    """D16/M5: eigener Child-Span pro SSE-Frame (gleiche trace_id, neue span_id)."""
+    try:
+        from backend.trace_context import child_span, inject_headers
+    except Exception as exc:
+        _archon_exc_logger.warning("[mcp_gateway] Frame-Trace-Kontext nicht verfügbar: %s", exc)
+        return {}
+    with child_span() as (tid, sid, parent_sid):
+        injected = inject_headers()
+    frame: Dict[str, str] = {}
+    if injected.get("traceparent"):
+        frame["traceparent"] = injected["traceparent"]
+    if injected.get("tracestate"):
+        frame["tracestate"] = injected["tracestate"]
+    return frame
 
 
 def _has_valid_service_token(request: Request) -> bool:
@@ -66,6 +84,19 @@ async def mcp_streamable_http_post(request: Request):
     """Streamable HTTP (JSON-RPC 2.0) Endpunkt für Claude Desktop, Cursor & VS Code."""
     key_info = _authenticate_mcp_request(request)
     session_id = request.headers.get("mcp-session-id") or request.query_params.get("sessionId")
+    # Der SSE-Endpoint-Frame uebergibt traceparent/tracestate als Query-Parameter
+    # (EventSource kann keine Header senden) — hier als inbound Kontext uebernehmen.
+    sse_tp = request.query_params.get("traceparent")
+    if sse_tp:
+        try:
+            from backend.mcp_gateway import bind_incoming_trace_context
+            sse_headers = {"traceparent": sse_tp}
+            sse_ts = request.query_params.get("tracestate")
+            if sse_ts:
+                sse_headers["tracestate"] = sse_ts
+            bind_incoming_trace_context(sse_headers)
+        except Exception as exc:
+            _archon_exc_logger.warning("[mcp_gateway] SSE-Trace-Query nicht lesbar: %s", exc)
 
     try:
         body = await request.json()
@@ -120,22 +151,47 @@ async def mcp_sse_stream(request: Request):
     """Server-Sent Events (SSE) Stream für MCP-Server-Benachrichtigungen."""
     _authenticate_mcp_request(request)
     session_id = request.headers.get("mcp-session-id") or mcp_gateway.sessions.create()
+    initial_tp = ""
+    trace_headers: Dict[str, str] = {}
 
     async def _event_generator():
-        yield f"event: endpoint\ndata: /mcp/messages?sessionId={session_id}\n\n"
-        # In Test/Kurz-Requests einen initialen Keepalive liefern und sauber prüfen
-        if request.query_params.get("once") == "1":
-            return
+        # M5: Trace-Kontext IM Generator oeffnen — der Kontext der
+        # StreamingResponse-Header ist beim Generator-Lauf bereits zurückgesetzt.
         try:
-            for _ in range(120):
-                if await request.is_disconnected():
-                    break
-                await asyncio.sleep(15)
-                yield ": keepalive\n\n"
+            from backend.trace_context import use_trace_context
+        except Exception as exc:
+            _archon_exc_logger.warning("[mcp_gateway] Trace-Kontext nicht verfügbar: %s", exc)
+            use_trace_context = None
+        ctx = use_trace_context(
+            traceparent=initial_tp, tracestate=trace_headers.get("tracestate")
+        ) if (use_trace_context and initial_tp) else contextlib.nullcontext()
+        try:
+            with ctx:
+                frame = _sse_frame_trace()
+                query = f"sessionId={session_id}"
+                if frame.get("traceparent"):
+                    query += f"&traceparent={quote(frame['traceparent'], safe='')}"
+                if frame.get("tracestate"):
+                    query += f"&tracestate={quote(frame['tracestate'], safe='')}"
+                yield f"event: endpoint\ndata: /mcp/messages?{query}\n\n"
+                # In Test/Kurz-Requests einen initialen Keepalive liefern und sauber prüfen
+                if request.query_params.get("once") == "1":
+                    return
+                for _ in range(120):
+                    if await request.is_disconnected():
+                        break
+                    await asyncio.sleep(15)
+                    frame = _sse_frame_trace()
+                    yield f"event: keepalive\ndata: {json.dumps(frame)}\n\n"
         except asyncio.CancelledError as _exc:
-            _archon_exc_logger.debug("[mcp_gateway] Ignorierte Ausnahme (Z.113): %s", _exc)
+            _archon_exc_logger.warning(
+                "[mcp_gateway] SSE-Stream abgebrochen (trace_id=%s): %s",
+                trace_headers.get("X-Trace-Id") or "", _exc,
+            )
+            raise
 
     with _mcp_trace_headers() as trace_headers:
+        initial_tp = str(trace_headers.get("traceparent") or "")
         return StreamingResponse(
             _event_generator(),
             media_type="text/event-stream",

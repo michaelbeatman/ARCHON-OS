@@ -303,6 +303,45 @@ def sanitize_llm_endpoint(endpoint: str) -> Tuple[str, str, str]:
     return clean_endpoint, target_host, zone
 
 
+# D16/H4: Schluessel, unter denen ein Receipt-/Event-Kontext in Audit-Payloads
+# verschachtelt geliefert wird (Background-Audits ohne Request-Kontext).
+_TRACE_CONTEXT_KEYS = (
+    "receipt", "event", "context", "trace_context", "trace",
+    "extra", "meta", "metadata",
+)
+
+
+def _trace_id_from_event_context(payload: Any, _depth: int = 0) -> str:
+    """Trace-ID aus einem uebergebenen Receipt/Event ziehen — nie neu erfinden.
+
+    Background-Audits laufen ohne Request-Kontext; die W3C-ID steht dann bereits
+    im Payload (direkt oder in einem verschachtelten Kontext-Dict), ggf. nur als
+    ``traceparent``. Ohne Treffer bleibt der Rueckgabewert leer, damit kein
+    kuenstlicher zweiter Root entsteht.
+    """
+    if not isinstance(payload, dict) or _depth > 2:
+        return ""
+    direct = str(payload.get("trace_id") or "").strip()
+    if direct:
+        return direct
+    tp = str(payload.get("traceparent") or "").strip()
+    if tp:
+        try:
+            from backend.trace_context import parse_traceparent
+            parsed = parse_traceparent(tp)
+            if parsed:
+                return parsed[0]
+        except Exception:
+            pass
+    for key in _TRACE_CONTEXT_KEYS:
+        nested = payload.get(key)
+        if isinstance(nested, dict):
+            found = _trace_id_from_event_context(nested, _depth + 1)
+            if found:
+                return found
+    return ""
+
+
 class ChainedAuditLog:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
@@ -499,7 +538,14 @@ class ChainedAuditLog:
         # dieselbe Korrelations-ID tragen.
         from backend.trace_context import current_trace_id as _current_trace_id
 
-        trace_id_val = str(trace_id or safe_payload.get("trace_id") or _current_trace_id() or "").strip()
+        # D16: Reihenfolge — expliziter Parameter > Receipt-/Event-Kontext >
+        # aktiver Request-Kontext. Kein Fallback auf neu generierte IDs.
+        trace_id_val = str(
+            trace_id
+            or _trace_id_from_event_context(safe_payload)
+            or _current_trace_id()
+            or ""
+        ).strip()
         session_id_val = str(session_id or safe_payload.get("session_id") or "").strip()
         correlation_id_val = str(correlation_id or safe_payload.get("correlation_id") or "").strip()
         if trace_id_val and "trace_id" not in safe_payload:

@@ -1,5 +1,12 @@
-# Archon OS — OpenTelemetry Collector Configuration (D16 / P1)
-# Einbindung in docker-compose.yml erfolgt durch P0 (Hy4) via HANDOFF_NOTES.md.
+# Archon OS — OpenTelemetry Collector Configuration (D16 / P1, Re-Audit R-B6)
+#
+# Kein toter Default-Endpunkt mehr: ohne explizit gesetzten Downstream bleiben
+# die Spans in einem lokalen file-Exporter (immer erreichbar). Langfuse v2 ist
+# EOL und Opt-in (Profil `langfuse`, NICHT in tracing/observability/all/full);
+# der App-Export dorthin laeuft direkt ueber LANGFUSE_* und meldet ehrlich
+# `not_configured` (S-1.5), wenn die Keys fehlen.
+# Ein echter OTLP-Consumer (Tempo/Langfuse v4) muss von P0 aktiv verdrahtet
+# werden — kein Default auf einen nicht gestarteten Container.
 
 receivers:
   otlp:
@@ -14,6 +21,13 @@ processors:
     check_interval: 5s
     limit_mib: 256
     spike_limit_mib: 64
+  # Sampling hart auch im Collector (zusaetzlich zum Tracer). Spans mit
+  # archon.sampled=false werden verworfen, nicht nur markiert.
+  filter/unsampled:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["archon.sampled"] == false'
   batch:
     send_batch_size: 256
     timeout: 5s
@@ -21,15 +35,13 @@ processors:
 exporters:
   debug:
     verbosity: basic
-  # Optional: Langfuse / Tempo OTLP-Ziel via Env-Variablen im Collector-Service
-  otlphttp/downstream:
-    endpoint: ${OTEL_DOWNSTREAM_OTLP_ENDPOINT:-http://langfuse:3000/api/public/otel}
-    tls:
-      insecure: true
+  # Immer erreichbarer Default-Sink; kein Verweis auf einen nicht gestarteten Container.
+  file/traces-local:
+    path: /tmp/archon-otel-traces.json
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [debug, otlphttp/downstream]
+      processors: [memory_limiter, filter/unsampled, batch]
+      exporters: [debug, file/traces-local]

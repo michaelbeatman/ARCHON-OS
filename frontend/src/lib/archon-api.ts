@@ -54,16 +54,65 @@ export interface DbConsolidationPlan {
   >;
 }
 
+const ZERO_TRACE_ID = /^0{32}$/;
+const ZERO_SPAN_ID = /^0{16}$/;
+
+function randomHex(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * D16 / R-B6: W3C-Root-Kontext im Browser erzeugen.
+ * 128-Bit trace_id + 64-Bit span_id via crypto.getRandomValues, lowercase Hex,
+ * niemals die Null-ID. Format: 00-<32hex>-<16hex>-01 (sampled).
+ */
+export function createTraceparent(): string {
+  let traceId = randomHex(16);
+  while (ZERO_TRACE_ID.test(traceId)) traceId = randomHex(16);
+  let spanId = randomHex(8);
+  while (ZERO_SPAN_ID.test(spanId)) spanId = randomHex(8);
+  return `00-${traceId}-${spanId}-01`;
+}
+
+let activeTracestate: string | null = null;
+
+/** Tracestate aus einer Antwort uebernehmen, damit Folge-Requests sie fortfuehren. */
+export function setArchonTracestate(value: string | null | undefined): void {
+  const raw = (value || '').trim();
+  activeTracestate = raw || null;
+}
+
+export function getArchonTracestate(): string | null {
+  return activeTracestate;
+}
+
+/**
+ * Zentraler Fetch-Wrapper: injiziert traceparent (+ tracestate, falls vorhanden),
+ * ohne bereits gesetzte Header zu ueberschreiben. Ein vom Aufrufer mitgegebener
+ * traceparent gewinnt immer (existierender Kontext darf nicht gekappt werden).
+ */
+export function withTraceHeaders(init?: RequestInit): RequestInit {
+  const headers = new Headers(init?.headers);
+  if (!headers.has('traceparent')) headers.set('traceparent', createTraceparent());
+  const tracestate = getArchonTracestate();
+  if (tracestate && !headers.has('tracestate')) headers.set('tracestate', tracestate);
+  return { ...init, headers };
+}
+
 export async function archonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const cleanPath = path.replace(/^\/+/, '');
+  const traced = withTraceHeaders(init);
+  const headers = new Headers(traced.headers);
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
   const res = await fetch(`/api/archon/${cleanPath}`, {
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
-    ...init,
+    ...traced,
+    credentials: traced.credentials || 'same-origin',
+    headers,
   });
+  // Der Proxy gibt den fortgefuehrten Kontext zurueck -> naechster Hop erbt ihn.
+  setArchonTracestate(res.headers.get('tracestate'));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data.detail || data.error || `HTTP ${res.status}`);

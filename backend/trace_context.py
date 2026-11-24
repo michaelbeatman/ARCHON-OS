@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import logging
 import os
 import random
 import re
@@ -127,6 +128,23 @@ def force_sample_audit() -> bool:
     """Audit/HITL: Sampling hart auf 1.0 setzen (auch bei ratio-/off-Konfiguration)."""
     _current_sampled.set(True)
     return True
+
+
+logger = logging.getLogger(__name__)
+
+
+def note_local_trace_error(stage: str, exc: BaseException) -> None:
+    """M4 (Re-Audit D16): zentrale Fehlerzaehlung fuer Trace-/Exportfehler.
+
+    Vorher importierten `llm_kernel` und `workflow_dag_runner` diese Funktion
+    aus diesem Modul, existierte aber nicht — beide fielen auf divergierende
+    lokale Fallbacks zurueck.
+    """
+    try:
+        from backend.otel_tracer import tracer
+        tracer.note_local_trace_error(str(stage), exc)
+    except Exception as count_exc:  # pragma: no cover - nur bei Import-/Tracer-Fehler
+        logger.warning("[Trace] Fehlerzaehlung fuer %s nicht verfuegbar: %s", stage, count_exc)
 
 
 def current_tracestate() -> str:

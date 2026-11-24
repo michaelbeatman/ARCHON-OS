@@ -9,6 +9,7 @@
  * `/api/v1/events/stream` wird über den Archon-Proxy erreicht.
  */
 import { useEffect, useRef, useState } from 'react';
+import { createTraceparent, getArchonTracestate } from './archon-api';
 
 export type ArchonEvent = {
   type: string;
@@ -26,10 +27,22 @@ let generation = 0;
 
 const EVENTS_URL = '/api/archon/api/v1/events/stream';
 
+/**
+ * D16: EventSource kann keine custom Header senden. Der W3C-Root wird daher
+ * als Query-Param übergeben und vom Archon-Proxy validiert/geforkt (echo).
+ */
+function tracedEventsUrl(): string {
+  const url = new URL(EVENTS_URL, window.location.origin);
+  url.searchParams.set('traceparent', createTraceparent());
+  const tracestate = getArchonTracestate();
+  if (tracestate) url.searchParams.set('tracestate', tracestate);
+  return `${url.pathname}${url.search}`;
+}
+
 function connect(gen: number) {
   if (typeof window === 'undefined' || source) return;
   try {
-    source = new EventSource(EVENTS_URL);
+    source = new EventSource(tracedEventsUrl());
     source.onopen = () => {
       attempts = 0;
     };

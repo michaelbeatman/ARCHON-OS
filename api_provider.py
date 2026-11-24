@@ -224,10 +224,13 @@ def _list_provider_models_uncached(norm_pid: str) -> List[str]:
                 _omni_key = os.environ.get("OMNIROUTE_API_KEY", "").strip()
                 if _omni_key:
                     headers["Authorization"] = f"Bearer {_omni_key}"
-                # Audit D16: traceparent an die Systemgrenze zu OmniRoute mitführen.
-                from backend.trace_context import inject_headers as _inject_traceparent
-
-                headers = _inject_traceparent(headers)
+                # Audit D16/H2: Child-Span an der Systemgrenze zu OmniRoute.
+                # inject_headers() im Block -> die NEUE Span-ID steht im
+                # traceparent (kein Self-Parenting). Der aktive Kontext wird
+                # beim Verlassen wiederhergestellt (kein zweiter Root).
+                from backend.trace_context import child_span, inject_headers
+                with child_span():
+                    headers = inject_headers(headers)
                 req = urllib.request.Request(url, headers=headers)
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
                     if resp.status == 200:

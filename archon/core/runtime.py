@@ -124,21 +124,24 @@ def _sse_trace_context() -> Dict[str, str]:
     """D16: Trace-Kontext in das SSE-Payload (Systemgrenze SSE → Browser/Telegram)."""
     try:
         from backend.trace_context import (
-            current_span_id, current_trace_id, current_tracestate,
+            child_span, current_trace_id, current_tracestate,
             format_traceparent, should_sample,
         )
-        tid, sid = current_trace_id(), current_span_id()
-        if not tid or not sid:
+        if not current_trace_id():
             return {}
-        ctx = {
-            "trace_id": tid,
-            "span_id": sid,
-            "traceparent": format_traceparent(tid, sid, should_sample()),
-        }
-        ts = current_tracestate()
-        if ts:
-            ctx["tracestate"] = ts
-        return ctx
+        # Jedes Broadcast-Event ist eine eigene Systemgrenze: neuer Child-Span
+        # bei gleicher trace_id, sonst wuerden alle SSE-Frames die Span-ID des
+        # Senders wiederholen (Self-Parenting).
+        with child_span() as (tid, sid, parent_sid):
+            ctx = {
+                "trace_id": tid,
+                "span_id": sid,
+                "traceparent": format_traceparent(tid, sid, should_sample()),
+            }
+            ts = current_tracestate()
+            if ts:
+                ctx["tracestate"] = ts
+            return ctx
     except Exception as exc:
         logger.debug("[Runtime] SSE-Trace-Kontext nicht verfügbar: %s", exc)
         return {}

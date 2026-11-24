@@ -1,4 +1,20 @@
 import PocketBase from 'pocketbase';
+import { createTraceparent, getArchonTracestate } from './archon-api';
+
+/**
+ * D16: Das PocketBase-SDK nutzt intern selbst fetch. Ueber beforeSend injizieren
+ * wir den W3C-Kontext in jeden SDK-Request, ohne vorhandene Header zu ueberschreiben.
+ */
+function installTraceHook(client: PocketBase): void {
+  client.beforeSend = (url, options) => {
+    const headers: Record<string, string> = { ...(options.headers || {}) };
+    const has = (name: string) => Object.keys(headers).some((key) => key.toLowerCase() === name);
+    if (!has('traceparent')) headers['traceparent'] = createTraceparent();
+    const tracestate = getArchonTracestate();
+    if (tracestate && !has('tracestate')) headers['tracestate'] = tracestate;
+    return { url, options: { ...options, headers } };
+  };
+}
 
 export const POCKETBASE_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || '/api/media';
 
@@ -6,6 +22,7 @@ export const pb = new PocketBase(POCKETBASE_URL);
 
 // Auto cancellation of duplicate requests disabled for smooth UI transitions
 pb.autoCancellation(false);
+installTraceHook(pb);
 
 export interface KontaktRecord {
   id: string;
@@ -73,6 +90,7 @@ export const POCKETBASE_MEDIA_URL =
 
 export const pbMedia = new PocketBase(POCKETBASE_MEDIA_URL);
 pbMedia.autoCancellation(false);
+installTraceHook(pbMedia);
 
 export interface VideoBatchRecord {
   id: string;

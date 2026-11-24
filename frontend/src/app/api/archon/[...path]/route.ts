@@ -26,6 +26,29 @@ function childTraceparent(incoming: string | null | undefined): string | null {
   return `${version}-${traceId.toLowerCase()}-${spanId}-${flags.toLowerCase()}`;
 }
 
+function randomHex(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// D16: Fehlt ein incoming Kontext, erzeugt der Proxy selbst einen gueltigen
+// W3C-Root statt null an FastAPI zu liefern (dort würde sonst ein zweiter,
+// unkorrelierter Root entstehen). 128/64 Bit, lowercase, keine Null-ID.
+function rootTraceparent(): string {
+  let traceId = randomHex(16);
+  while (/^0{32}$/i.test(traceId)) traceId = randomHex(16);
+  let spanId = randomHex(8);
+  while (/^0{16}$/i.test(spanId)) spanId = randomHex(8);
+  return `00-${traceId}-${spanId}-01`;
+}
+
+// EventSource kann keine Header setzen: der Browser uebergibt traceparent
+// als Query-Param. Headers haben Vorrang, der Query-Param ist der Fallback.
+function incomingTraceparent(request: NextRequest): string | null {
+  return request.headers.get('traceparent') || request.nextUrl.searchParams.get('traceparent');
+}
+
 // W3C tracestate: gueltige Vendor-Eintraege, max. 32 Eintraege / 512 Zeichen.
 function validTracestate(value: string | null | undefined): string | null {
   const raw = (value || '').trim();
@@ -56,7 +79,17 @@ async function proxyToArchon(
     return NextResponse.json({ error: 'Invalid API path' }, { status: 400 });
   }
 
-  const search = request.nextUrl.search || '';
+  let search = request.nextUrl.search || '';
+  // Trace-Query-Parameter gehoeren nur in den Header, nicht an das Backend.
+  if (search) {
+    const searchParams = new URLSearchParams(search);
+    if (searchParams.has('traceparent') || searchParams.has('tracestate')) {
+      searchParams.delete('traceparent');
+      searchParams.delete('tracestate');
+      const rest = searchParams.toString();
+      search = rest ? `?${rest}` : '';
+    }
+  }
   const bodyBuffer = method !== 'GET' && method !== 'HEAD' ? await request.arrayBuffer() : undefined;
 
   const forwardHeaders: Record<string, string> = {};
@@ -68,10 +101,22 @@ async function proxyToArchon(
   if (contentType) forwardHeaders['Content-Type'] = contentType;
   const apiKey = request.headers.get('x-api-key');
   if (apiKey) forwardHeaders['X-API-Key'] = apiKey;
-  // D16: Trace-Kontext über die Grenze Browser/Next.js → FastAPI (Child-Span).
-  const childTp = childTraceparent(request.headers.get('traceparent'));
-  if (childTp) forwardHeaders['traceparent'] = childTp;
-  const inboundTracestate = validTracestate(request.headers.get('tracestate'));
+  // D16: Trace-Kontext über die Grenze Browser/Next.js → FastAPI.
+  // Incoming Header (oder SSE-Query-Param) wird geforkt; fehlt er bzw. ist er
+  // ungueltig, erzeugt der Proxy einen eigenen gueltigen Root. Nie null.
+  const rawTp = incomingTraceparent(request);
+  const forkedTp = childTraceparent(rawTp);
+  let outgoingTp: string;
+  if (forkedTp) {
+    outgoingTp = forkedTp;
+  } else {
+    if (rawTp) console.warn('[archon-proxy] Ungueltiger traceparent verworfen — neuer Root erzeugt');
+    outgoingTp = rootTraceparent();
+  }
+  forwardHeaders['traceparent'] = outgoingTp;
+  const inboundTracestate = validTracestate(
+    request.headers.get('tracestate') || request.nextUrl.searchParams.get('tracestate')
+  );
   if (inboundTracestate) forwardHeaders['tracestate'] = inboundTracestate;
 
   let lastError: string = 'Archon Backend nicht erreichbar';
@@ -95,11 +140,11 @@ async function proxyToArchon(
       if (respCt) respHeaders['Content-Type'] = respCt;
       // D16: Korrelations-ID und forkbarer W3C-Kontext zurück an den Browser.
       const upstreamTraceId = upstream.headers.get('X-Trace-Id');
-      const fallbackTraceId = childTp ? childTp.split('-')[1] : null;
+      const fallbackTraceId = outgoingTp.split('-')[1];
       if (upstreamTraceId || fallbackTraceId) {
         respHeaders['X-Trace-Id'] = upstreamTraceId || fallbackTraceId || '';
       }
-      if (childTp) respHeaders['traceparent'] = childTp;
+      respHeaders['traceparent'] = outgoingTp;
       if (inboundTracestate) respHeaders['tracestate'] = inboundTracestate;
       if (isSseRequest || respCt?.includes('text/event-stream')) {
         for (const h of ['Cache-Control', 'X-Accel-Buffering']) {

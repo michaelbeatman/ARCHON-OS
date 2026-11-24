@@ -16,6 +16,7 @@ import secrets
 import sqlite3
 import datetime
 import threading
+import contextvars
 from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,7 +36,7 @@ class OpenTelemetryTracer:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self._export_stats = {"success": 0, "failures": 0, "last_error": ""}
-        self._record_stats = {"success": 0, "failures": 0, "last_error": ""}
+        self._record_stats = {"success": 0, "failures": 0, "sampled_out": 0, "last_error": ""}
         self._init_db()
 
     def note_local_trace_error(self, stage: str, exc: BaseException) -> None:
@@ -207,13 +208,26 @@ class OpenTelemetryTracer:
             else:
                 with child_span() as (_tid, sid, parent_sid):
                     span_id, parent_span_id = sid, parent_sid or None
-            attrs.setdefault("archon.sampled", bool(current_sampled()))
+            # Re-Audit H6/M2: die Sampling-Entscheidung wird als persistiertes
+            # Flag gespeichert und ist damit im Export-Thread lesbar — nicht
+            # nur ein Kosmetik-Attribut. Ein explizit uebergebenes Flag hat
+            # Vorrang vor dem Kontext (z. B. bei Re-Injektion aus dem Drainer).
+            sampled = self._span_sampled(attrs, default=bool(current_sampled()))
+            attrs["archon.sampled"] = sampled
             ts = current_tracestate()
             if ts:
                 attrs.setdefault("tracestate", ts)
         except Exception as exc:
             self.note_local_trace_error("span-context", exc)
             span_id = secrets.token_hex(8)  # letzte Notation, wenn trace_context fehlt
+            sampled = self._span_sampled(attrs, default=True)
+
+        # Hartes Sampling: "00-...-00" erzeugt gar keinen lokalen Span und
+        # damit auch nichts, was spaeter exportiert werden koennte.
+        if not sampled:
+            self._record_stats["sampled_out"] += 1
+            return ""
+
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         total_tokens = input_tokens + output_tokens
 
@@ -282,6 +296,24 @@ class OpenTelemetryTracer:
             return [dict(r) for r in cur.fetchall()]
 
     @staticmethod
+    def _span_sampled(attrs: Dict[str, Any], *, default: bool = True) -> bool:
+        """Liest das persistierte Sampling-Flag (kein ContextVar-Zugriff im Export-Thread)."""
+        raw = attrs.get("archon.sampled")
+        if raw is None:
+            return bool(default)
+        if isinstance(raw, str):
+            return raw.strip().lower() in ("1", "true", "yes", "on")
+        return bool(raw)
+
+    @staticmethod
+    def _span_attributes(sp: Dict[str, Any]) -> Dict[str, Any]:
+        """Attribute eines gespeicherten Spans als Dict (robust gegen Altbestände)."""
+        try:
+            return json.loads(str(sp.get("attributes_json") or "{}")) or {}
+        except (ValueError, TypeError):
+            return {}
+
+    @staticmethod
     def _to_otlp_hex(raw: str, length: int) -> str:
         clean = "".join(ch for ch in (raw or "").lower() if ch in "0123456789abcdef")
         if len(clean) >= length:
@@ -304,16 +336,15 @@ class OpenTelemetryTracer:
         service_name = os.getenv("OTEL_SERVICE_NAME", "archon-os").strip() or "archon-os"
         tid_hex = self._to_otlp_hex(tree.get("trace_id", ""), 32)
         spans_out: List[Dict[str, Any]] = []
-        from backend.trace_context import should_sample
         for sp in tree.get("spans") or []:
+            span_attrs = self._span_attributes(sp)
+            # Sampling hart auch im Payload: nur das persistierte Flag zaehlt.
+            # Ein fehlendes Flag in Altbeständen gilt als gesampelt.
+            if not self._span_sampled(span_attrs, default=True):
+                continue
             end_ns = int(self._iso_to_unix_ns(sp.get("end_time") or sp.get("start_time")))
             dur_ns = int(max(0.0, float(sp.get("duration_ms") or 0.0)) * 1_000_000)
             start_ns = max(0, end_ns - dur_ns)
-            span_attrs: Dict[str, Any] = {}
-            try:
-                span_attrs = json.loads(str(sp.get("attributes_json") or "{}")) or {}
-            except (ValueError, TypeError):
-                span_attrs = {}
             item: Dict[str, Any] = {
                 "traceId": tid_hex,
                 "spanId": self._to_otlp_hex(sp.get("span_id", ""), 16),
@@ -326,7 +357,7 @@ class OpenTelemetryTracer:
                     {"key": "archon.agent_id", "value": {"stringValue": str(sp.get("agent_id") or "")}},
                     {"key": "gen_ai.request.model", "value": {"stringValue": str(sp.get("model") or "")}},
                     {"key": "gen_ai.usage.total_tokens", "value": {"intValue": str(int(sp.get("total_tokens") or 0))}},
-                    {"key": "archon.sampled", "value": {"boolValue": bool(span_attrs.get("archon.sampled", should_sample()))}},
+                    {"key": "archon.sampled", "value": {"boolValue": self._span_sampled(span_attrs)}},
                 ],
                 "status": {"code": 1 if str(sp.get("status", "OK")).upper() == "OK" else 2},
             }
@@ -338,16 +369,20 @@ class OpenTelemetryTracer:
                 item["parentSpanId"] = self._to_otlp_hex(str(sp["parent_span_id"]), 16)
             spans_out.append(item)
         if not spans_out:
-            from backend.trace_context import new_ids
-            spans_out.append({
-                "traceId": tid_hex,
-                "spanId": new_ids()[1],
-                "name": str(tree.get("name") or "trace"),
-                "kind": 1,
-                "startTimeUnixNano": self._iso_to_unix_ns(tree.get("start_time")),
-                "endTimeUnixNano": self._iso_to_unix_ns(tree.get("end_time") or tree.get("start_time")),
-                "status": {"code": 1 if str(tree.get("status", "OK")).upper() == "OK" else 2},
-            })
+            # Re-Audit M3: kein zufaelliger zweiter Root. Nur eine vom Aufrufer
+            # persistierte Root-Span-ID darf hier verwendet werden; sonst bleibt
+            # der Trace bewusst leer (gueltiges OTLP ohne Spans).
+            root_sid = str(tree.get("span_id") or "").strip()
+            if root_sid:
+                spans_out.append({
+                    "traceId": tid_hex,
+                    "spanId": self._to_otlp_hex(root_sid, 16),
+                    "name": str(tree.get("name") or "trace"),
+                    "kind": 1,
+                    "startTimeUnixNano": self._iso_to_unix_ns(tree.get("start_time")),
+                    "endTimeUnixNano": self._iso_to_unix_ns(tree.get("end_time") or tree.get("start_time")),
+                    "status": {"code": 1 if str(tree.get("status", "OK")).upper() == "OK" else 2},
+                })
         return {
             "resourceSpans": [{
                 "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": service_name}}]},
@@ -373,8 +408,12 @@ class OpenTelemetryTracer:
                 return
             if otlp_ep:
                 try:
+                    payload_obj = self._build_otlp_payload(tree)
+                    # Nichts gesampelt -> kein Export (H6: kein OTLP-Payload).
+                    if not payload_obj["resourceSpans"][0]["scopeSpans"][0]["spans"]:
+                        return
                     otlp_url = otlp_ep if otlp_ep.rstrip("/").endswith("/v1/traces") else f"{otlp_ep.rstrip('/')}/v1/traces"
-                    payload = json.dumps(self._build_otlp_payload(tree)).encode("utf-8")
+                    payload = json.dumps(payload_obj).encode("utf-8")
                     req = urllib.request.Request(
                         otlp_url,
                         data=payload,
@@ -403,6 +442,8 @@ class OpenTelemetryTracer:
                         },
                     }]
                     for sp in tree.get("spans") or []:
+                        if not self._span_sampled(self._span_attributes(sp)):
+                            continue
                         batch.append({
                             "id": str(uuid.uuid4()),
                             "timestamp": sp.get("start_time") or now_ts,
@@ -417,6 +458,8 @@ class OpenTelemetryTracer:
                                 "metadata": {"model": sp.get("model"), "tokens": sp.get("total_tokens")},
                             },
                         })
+                    if len(batch) <= 1:
+                        return  # nur unsampled Spans -> kein Langfuse-Export
                     payload = json.dumps({"batch": batch}).encode("utf-8")
                     req = urllib.request.Request(
                         f"{lf_host.rstrip('/')}/api/public/ingestion",
@@ -438,7 +481,10 @@ class OpenTelemetryTracer:
         if not hasattr(self, "_export_pool"):
             from concurrent.futures import ThreadPoolExecutor
             self._export_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="otel_export")
-        self._export_pool.submit(_do_export)
+        # Re-Audit M2: ContextVars (trace_id/span_id/sampled/tracestate) gehen
+        # nicht mit submit() in den Worker-Thread ueber. Explizit kopieren.
+        ctx = contextvars.copy_context()
+        self._export_pool.submit(ctx.run, _do_export)
 
     def _export_to_langfuse_async(self, trace_id: str) -> None:
         self._export_async(trace_id)
@@ -470,6 +516,14 @@ def get_tracing_status() -> dict:
         "target": "+".join(targets) if targets else None,
         "otlp_configured": otlp_configured,
         "langfuse_configured": lf_configured,
+        # S-1.5: Langfuse v2 bleibt Opt-in (`langfuse`-Profil, nicht in
+        # tracing/observability/all/full). Ohne Keys die Meldung "not_configured"
+        # statt auf einen toten Default-Endpunkt zu zeigen.
+        "langfuse_status": "configured" if lf_configured else "not_configured",
+        "langfuse_note": (
+            "" if lf_configured else
+            "Langfuse v2 (EOL) ist Opt-in-Profil 'langfuse-not-configured'; LANGFUSE_HOST/PUBLIC_KEY/SECRET_KEY erforderlich"
+        ),
         "service_name": os.getenv("OTEL_SERVICE_NAME", "archon-os").strip() or "archon-os",
         "local_trace_db": True,
         "export_stats": dict(getattr(tracer, "_export_stats", {})),
@@ -481,3 +535,11 @@ def get_tracing_status() -> dict:
 
 # Globales Singleton
 tracer = OpenTelemetryTracer()
+
+# Re-Audit H7: Log-Bruecke zu Loki. Der Filter wird auf die Root-Handler
+# installiert (main.py registriert dort den Datei-Handler fuer Promtail).
+try:
+    from backend.trace_log_filter import install_trace_log_filter
+    install_trace_log_filter()
+except Exception as _log_filter_exc:  # pragma: no cover - defensive
+    _archon_exc_logger.debug("[otel_tracer] Trace-Log-Filter nicht installiert: %s", _log_filter_exc)

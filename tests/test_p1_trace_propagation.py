@@ -12,6 +12,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+def _span_id_of(traceparent: str) -> str:
+    """Child-Span aus einem W3C-traceparent lesen (P1: eigene Kausalkante)."""
+    parts = str(traceparent or "").split("-")
+    assert len(parts) == 4, f"ungueltiges traceparent: {traceparent!r}"
+    return parts[2]
+
+
 def test_trace_context_child_span_and_inject_payload():
     from backend import trace_context as tc
 
@@ -118,9 +125,12 @@ def test_n8n_execution_injects_trace_id_and_traceparent(monkeypatch):
     # Fake-'warning'/success, sondern explizit 'unconfirmed'.
     assert res["status"] == "unconfirmed"
     assert res["error_code"] == "N8N_DELIVERY_UNCONFIRMED"
+    # P1: der Hop erzeugt jetzt einen eigenen Child-Span (kein Self-Parenting).
+    child_sid = _span_id_of(captured["headers"]["traceparent"])
+    assert child_sid != sid
     assert captured["body"]["trace_id"] == tid
-    assert captured["body"]["span_id"] == sid
-    assert captured["headers"]["traceparent"].startswith(f"00-{tid}-{sid}-")
+    assert captured["body"]["span_id"] == child_sid
+    assert captured["headers"]["traceparent"].startswith(f"00-{tid}-{child_sid}-")
 
 
 def test_agent_router_injects_traceparent_and_records_audit_trace_id(tmp_path, monkeypatch):
@@ -164,7 +174,9 @@ def test_agent_router_injects_traceparent_and_records_audit_trace_id(tmp_path, m
         )
     assert out == "OK"
     sent_headers = fake_client.post.call_args.kwargs["headers"]
-    assert sent_headers["traceparent"] == tc.format_traceparent(tid, sid)
+    child_sid = _span_id_of(sent_headers["traceparent"])
+    assert child_sid != sid
+    assert sent_headers["traceparent"].startswith(f"00-{tid}-{child_sid}-")
     import sqlite3
     with sqlite3.connect(alog.db_path) as con:
         rows = con.execute("SELECT trace_id FROM audit_log WHERE category = 'llm_dispatch'").fetchall()
@@ -208,8 +220,10 @@ def test_hermes_proxy_propagates_traceparent(monkeypatch):
     tc._current_span.set("")
     resp = asyncio.run(hp.forward_to_hermes(req))
     assert resp.status_code == 200
-    assert captured["headers"].get("traceparent") == incoming_tp
-    assert resp.headers.get("traceparent") == incoming_tp
+    child_sid = _span_id_of(captured["headers"].get("traceparent", ""))
+    assert child_sid != "d" * 16
+    assert captured["headers"]["traceparent"].startswith(f"00-{'c' * 32}-{child_sid}-")
+    assert resp.headers.get("traceparent") == captured["headers"]["traceparent"]
 
 
 def test_operations_dag_tracing_status_endpoint():

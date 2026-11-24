@@ -137,6 +137,39 @@ def _get_cfg() -> Dict[str, Any]:
         }
 
 
+def _receipt_trace_fields(
+    trace_id: str = "",
+    span_id: str = "",
+    traceparent: str = "",
+) -> tuple:
+    """D16/H4: W3C-Kontext einer Quittung zuordnen (nie eine neue Root-ID erfinden).
+
+    Explizite Werte (z. B. aus einem Drainer-Kontext) haben Vorrang. Fehlen sie,
+    wird der aktive Kontext aus ``trace_context`` uebernommen. Ohne Kontext
+    bleiben alle Felder leer — die Kette wird dadurch nicht neu gerootet.
+    """
+    tid = str(trace_id or "").strip()
+    sid = str(span_id or "").strip()
+    tp = str(traceparent or "").strip()
+    try:
+        from backend import trace_context as _tc
+
+        if tp and not (tid and sid):
+            parsed = _tc.parse_traceparent(tp)
+            if parsed:
+                tid = tid or parsed[0]
+                sid = sid or parsed[1]
+        if not tid:
+            tid = str(_tc.current_trace_id() or "").strip()
+        if not sid:
+            sid = str(_tc.current_span_id() or "").strip()
+        if not tp and tid and sid:
+            tp = _tc.format_traceparent(tid, sid, bool(_tc.current_sampled()))
+    except Exception as exc:  # pragma: no cover - Trace-Kontext optional
+        logger.debug("[Receipt] Trace-Kontext nicht verfuegbar: %s", exc)
+    return tid, sid, tp
+
+
 def _init_db(db_path: str = None) -> None:
     target = db_path or DB_PATH
     os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -159,6 +192,20 @@ def _init_db(db_path: str = None) -> None:
                 created_at TEXT
             )
         """)
+        # D16/H4: bestandskompatible Trace-Spalten. ALTER TABLE ADD COLUMN mit
+        # DEFAULT '' veraendert keine bestehenden Zeilen und damit auch keine
+        # signierungsrelevante Spalte — alte Quittungen bleiben verifizierbar.
+        ledger_cols = {
+            row[1] for row in conn.execute(
+                "PRAGMA table_info(execution_receipts_ledger)"
+            ).fetchall()
+        }
+        for trace_col in ("trace_id", "span_id", "traceparent"):
+            if trace_col not in ledger_cols:
+                conn.execute(
+                    f"ALTER TABLE execution_receipts_ledger ADD COLUMN {trace_col} TEXT DEFAULT ''"
+                )
+
         # F-032: persistente Marker fuer explizite Bypass-Ereignisse. Ohne
         # diese Tabelle war ARCHON_ALLOW_RECEIPT_BYPASS eine unsichtbare
         # Luecke in der ansonsten unveraenderbaren Quittungskette.
@@ -172,6 +219,17 @@ def _init_db(db_path: str = None) -> None:
                 created_at TEXT
             )
         """)
+        marker_cols = {
+            row[1] for row in conn.execute(
+                "PRAGMA table_info(execution_receipt_bypass_markers)"
+            ).fetchall()
+        }
+        for trace_col in ("trace_id", "span_id", "traceparent"):
+            if trace_col not in marker_cols:
+                conn.execute(
+                    f"ALTER TABLE execution_receipt_bypass_markers ADD COLUMN {trace_col} TEXT DEFAULT ''"
+                )
+
         # Append-only: UPDATE/DELETE an Quittungen und Bypass-Markern muss fehlschlagen (d05 F-09).
         conn.execute("""
             CREATE TRIGGER IF NOT EXISTS execution_receipts_no_update
@@ -210,8 +268,14 @@ class ExecutionReceiptLedger:
         prompt_tokens: int,
         completion_tokens: int,
         cost_usd: float,
-        tools_invoked: List[str]
+        tools_invoked: List[str],
+        trace_id: str = "",
+        span_id: str = "",
+        traceparent: str = "",
     ) -> Dict[str, Any]:
+        trace_id, span_id, traceparent = _receipt_trace_fields(
+            trace_id, span_id, traceparent
+        )
         cfg = _get_cfg()
         if not bool(cfg.get("enabled", True)):
             # I (Audit): Die Modul-Config allein darf die Quittungskette nicht
@@ -229,6 +293,7 @@ class ExecutionReceiptLedger:
                         category="receipt_bypass",
                         action="receipt_issuance_bypassed",
                         agent_id=agent_role or "system",
+                        trace_id=trace_id,
                         payload={
                             "task_id": task_id,
                             "agent_role": agent_role,
@@ -243,10 +308,12 @@ class ExecutionReceiptLedger:
                     with sqlite3.connect(self.db_path, timeout=15.0, factory=_ArchonClosingConn) as mconn:
                         mconn.execute(
                             "INSERT INTO execution_receipt_bypass_markers "
-                            "(task_id, agent_role, reason, audit_event_id, created_at) "
-                            "VALUES (?, ?, ?, ?, ?)",
+                            "(task_id, agent_role, reason, audit_event_id, created_at, "
+                            "trace_id, span_id, traceparent) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                             (task_id, agent_role, reason, audit_event_id,
-                             datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")),
+                             datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ"),
+                             trace_id, span_id, traceparent),
                         )
                         mconn.commit()
                 except Exception as exc:
@@ -259,6 +326,9 @@ class ExecutionReceiptLedger:
                     "audit_status": "ok" if audit_ev else "error",
                     "audit_event_id": audit_event_id,
                     "reason": reason,
+                    "trace_id": trace_id,
+                    "span_id": span_id,
+                    "traceparent": traceparent,
                 }
 
         receipt_id = f"rcpt-{uuid.uuid4().hex[:12]}"
@@ -291,12 +361,14 @@ class ExecutionReceiptLedger:
                 conn.execute("""
                     INSERT INTO execution_receipts_ledger
                     (id, receipt_id, task_id, agent_role, model_used, prompt_tokens, completion_tokens,
-                     cost_usd, tools_invoked_json, prev_hash, receipt_hash, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     cost_usd, tools_invoked_json, prev_hash, receipt_hash, created_at,
+                     trace_id, span_id, traceparent)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     next_id, receipt_id, task_id, agent_role, model_used,
                     prompt_tokens, completion_tokens, rounded_cost,
-                    tools_json, prev_hash, receipt_hash, now_iso
+                    tools_json, prev_hash, receipt_hash, now_iso,
+                    trace_id, span_id, traceparent
                 ))
                 conn.commit()
 
@@ -310,7 +382,10 @@ class ExecutionReceiptLedger:
             "cost_usd": rounded_cost,
             "prev_hash": prev_hash,
             "receipt_hash": receipt_hash,
-            "created_at": now_iso
+            "created_at": now_iso,
+            "trace_id": trace_id,
+            "span_id": span_id,
+            "traceparent": traceparent,
         }
 
     def verify_chain_integrity(self) -> Dict[str, Any]:
@@ -334,13 +409,17 @@ class ExecutionReceiptLedger:
             if has_marker_tbl:
                 try:
                     for m in conn.execute(
-                        "SELECT id, task_id, agent_role, reason, audit_event_id, created_at "
+                        "SELECT id, task_id, agent_role, reason, audit_event_id, created_at, "
+                        "trace_id, span_id, traceparent "
                         "FROM execution_receipt_bypass_markers ORDER BY id ASC"
                     ).fetchall():
                         bypass_markers.append({
                             "id": m["id"], "task_id": m["task_id"], "agent_role": m["agent_role"],
                             "reason": m["reason"], "audit_event_id": m["audit_event_id"],
                             "created_at": m["created_at"],
+                            "trace_id": m["trace_id"] if "trace_id" in m.keys() else "",
+                            "span_id": m["span_id"] if "span_id" in m.keys() else "",
+                            "traceparent": m["traceparent"] if "traceparent" in m.keys() else "",
                         })
                 except sqlite3.Error as exc:
                     logger.error("[ReceiptLedger] bypass_markers nicht lesbar (fail-closed): %s", exc)
@@ -399,6 +478,17 @@ class ExecutionReceiptLedger:
             "tampered_hashes": tampered_hashes,
             "sequence_gaps": sequence_gaps,
             "bypass_markers": bypass_markers,
+            # D16/H4: Verify-/Export-Pfad traegt dieselben W3C-Felder wie der
+            # Schreibpfad. r.keys() schuetzt vor Bestands-DBs ohne neue Spalten.
+            "trace_context": [
+                {
+                    "receipt_id": r["receipt_id"],
+                    "trace_id": r["trace_id"] if "trace_id" in r.keys() else "",
+                    "span_id": r["span_id"] if "span_id" in r.keys() else "",
+                    "traceparent": r["traceparent"] if "traceparent" in r.keys() else "",
+                }
+                for r in rows
+            ],
             "latest_hash": expected_prev if rows else None
         }
 

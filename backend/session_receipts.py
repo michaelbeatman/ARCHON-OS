@@ -13,7 +13,40 @@ from __future__ import annotations
 
 import datetime
 import html
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+
+def _receipt_trace_fields(
+    trace_id: str = "",
+    span_id: str = "",
+    traceparent: str = "",
+) -> Tuple[str, str, str]:
+    """D16/H4: W3C-Kontext in Session-/Delegations-Receipts uebernehmen.
+
+    Explizite Werte haben Vorrang; sonst wird der aktive Kontext gelesen. Ohne
+    Kontext bleibt alles leer (kein neues Root), damit der Beleg nicht vorgaukelt,
+    zu einem Trace zu gehoeren, den es nie gab.
+    """
+    tid = str(trace_id or "").strip()
+    sid = str(span_id or "").strip()
+    tp = str(traceparent or "").strip()
+    try:
+        from backend import trace_context as _tc
+
+        if tp and not (tid and sid):
+            parsed = _tc.parse_traceparent(tp)
+            if parsed:
+                tid = tid or parsed[0]
+                sid = sid or parsed[1]
+        if not tid:
+            tid = str(_tc.current_trace_id() or "").strip()
+        if not sid:
+            sid = str(_tc.current_span_id() or "").strip()
+        if not tp and tid and sid:
+            tp = _tc.format_traceparent(tid, sid, bool(_tc.current_sampled()))
+    except Exception:  # pragma: no cover - Trace-Kontext optional
+        pass
+    return tid, sid, tp
 
 
 def build_delegation_receipt(
@@ -24,7 +57,11 @@ def build_delegation_receipt(
     proof_command: str = "",
     proof_exit_code: int = 0,
     summary: str = "",
+    trace_id: str = "",
+    span_id: str = "",
+    traceparent: str = "",
 ) -> Dict[str, Any]:
+    tid, sid, tp = _receipt_trace_fields(trace_id, span_id, traceparent)
     return {
         "task_id": task_id,
         "agent_id": agent_id,
@@ -34,6 +71,9 @@ def build_delegation_receipt(
         "proof_exit_code": int(proof_exit_code),
         "summary": summary,
         "issued_at": datetime.datetime.now().isoformat(),
+        "trace_id": tid,
+        "span_id": sid,
+        "traceparent": tp,
     }
 
 
@@ -42,9 +82,22 @@ def render_offline_html_receipt(
     title: str,
     original_ask: str,
     events: List[Dict[str, Any]],
+    trace_id: str = "",
+    span_id: str = "",
+    traceparent: str = "",
 ) -> str:
     """Erzeugt ein eigenstaendiges Offline-HTML-Belegdokument (GoBD-/Audit-tauglich)."""
     esc = html.escape
+    tid, sid, tp = _receipt_trace_fields(trace_id, span_id, traceparent)
+    # D16/H4: Export-Stelle traegt dieselben W3C-Felder wie der Schreibpfad.
+    # Alles eskapiert — die Felder koennen aus einem Request kommen.
+    trace_block = ""
+    if tid:
+        trace_block = (
+            f"<p><strong>Trace-ID:</strong> <code>{esc(tid)}</code> "
+            f"| <strong>Span-ID:</strong> <code>{esc(sid)}</code> "
+            f"| <strong>Traceparent:</strong> <code>{esc(tp)}</code></p>"
+        )
     rows = []
     for idx, ev in enumerate(events, start=1):
         kind = esc(str(ev.get("kind") or "event"))
@@ -76,6 +129,7 @@ def render_offline_html_receipt(
   <div class="card">
     <h1>Archon OS Session Receipt: {esc(title)}</h1>
     <p><strong>Task-ID:</strong> <code>{esc(task_id)}</code> | <strong>Schritte/Events:</strong> {len(events)}</p>
+    {trace_block}
     <p><strong>Urspruenglicher Auftrag:</strong></p>
     <pre>{esc(original_ask)}</pre>
   </div>

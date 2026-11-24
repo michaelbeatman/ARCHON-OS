@@ -1016,11 +1016,15 @@ class AgentRouter:
                         continue
                     active_trace_id = ""
                     try:
-                        from backend.trace_context import current_trace_id, inject_headers as _inject_trace_headers
-                        request_headers = _inject_trace_headers(request_headers)
-                        active_trace_id = current_trace_id()
-                    except Exception:
-                        pass
+                        from backend.trace_context import child_span, current_trace_id, inject_headers
+                        with child_span():
+                            # D16/H2: NEUE Span-ID im traceparent — kein
+                            # Self-Parenting. active_trace_id bleibt dieselbe
+                            # Trace-ID (child_span() aendert nur die Span-ID).
+                            request_headers = inject_headers(request_headers)
+                            active_trace_id = current_trace_id()
+                    except Exception as tr_exc:
+                        logger.warning("[AgentRouter] Trace-Injektion am Provider-Hop fehlgeschlagen: %s", tr_exc)
                     try:
                         resp = await client.post(target_url, headers=request_headers, json=safe_payload)
                     except Exception:

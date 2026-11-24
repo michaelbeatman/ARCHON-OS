@@ -4,6 +4,7 @@ from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import asyncio
+import contextlib
 import datetime
 import json
 import logging
@@ -33,6 +34,60 @@ _PK_REG_HINT = " Passkey-Registrierung erforderlich: /api/auth/passkey/register/
 # WICHTIG: Der Lock wird NUR innerhalb eines einzigen sync-to_thread-Blocks gehalten — niemals
 # ueber await-Hinweg, sonst wuerde er die Event-Loop blockieren.
 _DECIDE_RACE_LOCK = threading.RLock()
+
+
+def _sse_trace_values(source: Any) -> tuple:
+    """traceparent/tracestate aus einer SSE-Payload lesen (flach oder verschachtelt)."""
+    if not isinstance(source, dict):
+        return "", ""
+    candidates = [source]
+    for key in ("data", "sse", "event", "trace", "trace_context", "meta"):
+        nested = source.get(key)
+        if isinstance(nested, dict):
+            candidates.append(nested)
+    tp, ts = "", ""
+    for candidate in candidates:
+        lowered = {str(k).lower(): v for k, v in candidate.items()}
+        if not tp:
+            raw_tp = lowered.get("traceparent") or lowered.get("trace_parent") or ""
+            tp = str(raw_tp) if raw_tp else ""
+        if not ts:
+            raw_ts = lowered.get("tracestate") or ""
+            ts = str(raw_ts) if raw_ts else ""
+        if tp:
+            break
+    return tp, ts
+
+
+@contextlib.contextmanager
+def _consume_sse_trace(source: Any) -> Any:
+    """D16/Grenze 11: SSE-traceparent validieren und als aktiven Kontext setzen.
+
+    Der Telegram-Adapter oeffnet in ``_telegram_trace_headers()`` bereits einen
+    Child-Span; er braucht dazu nur einen gueltigen Elternkontext. Ungueltige
+    oder fehlende Header fuehren bewusst zu keinem Kontextwechsel.
+    """
+    tp, ts = _sse_trace_values(source)
+    cm = None
+    if tp:
+        try:
+            from backend.trace_context import parse_traceparent, use_trace_context
+            if parse_traceparent(tp):
+                cm = use_trace_context(traceparent=tp, tracestate=ts or None)
+            else:
+                logger.debug("[Decision] Ungueltiger SSE-traceparent verworfen: %s", tp[:80])
+        except Exception as exc:
+            logger.warning("[Decision] SSE-Trace-Kontext nicht uebernommen: %s", exc)
+            try:
+                from backend.trace_context import note_local_trace_error as _note
+                _note("decision-sse-trace", exc)
+            except Exception:
+                pass
+    if cm is None:
+        yield
+        return
+    with cm:
+        yield
 
 
 def _require_admin(request: Request):
@@ -156,12 +211,13 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Passthrough
             fn_save_gates(gates)
             ergebnis = "Abgelehnt - NICHTS wurde geaendert."
 
-    try:
-        from telegram_notify import send_telegram_message as _stg
+    with _consume_sse_trace(body):
+        try:
+            from telegram_notify import send_telegram_message as _stg
 
-        _stg(f"{'✅' if decision == 'approve' else '❌'} Rechte-Gate {gate_id}\n{ergebnis[:800]}")
-    except Exception as tg2:
-        logger.warning(f"[Gate] Bestaetigungs-Ping fehlgeschlagen: {tg2}")
+            _stg(f"{'✅' if decision == 'approve' else '❌'} Rechte-Gate {gate_id}\n{ergebnis[:800]}")
+        except Exception as tg2:
+            logger.warning(f"[Gate] Bestaetigungs-Ping fehlgeschlagen: {tg2}")
 
     fn_ticker = getattr(app_main, "add_ticker", None)
     if fn_ticker:
@@ -280,27 +336,30 @@ def register_decision(
             _anhang = _bn + (f" · HTML · {_kb} KB" if _kb else "")
         _projekt = _ex.get("projekt") or (str(obsidian).split("/")[-1] if obsidian else "")
         sent = False
-        try:
-            from telegram_notify import decision_message, send_telegram_document, send_telegram_message
+        # D16/Grenze 11: SSE-traceparent aus dem Decision-Payload uebernehmen,
+        # damit der Telegram-Child-Span im selben Trace landet.
+        with _consume_sse_trace(extra):
+            try:
+                from telegram_notify import decision_message, send_telegram_document, send_telegram_message
 
-            caption = decision_message(
-                typ=typ,
-                titel=titel,
-                projekt=_projekt,
-                von=_ex.get("von", ""),
-                ref=ref_id,
-                kurzfassung=(kurzfassung or "")[:600],
-                zahlen=_zahlen or None,
-                anhang=_anhang,
-                fallback_ref=task_id,
-                zeit=datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
-            )
-            if dossier:
-                sent = send_telegram_document(dossier, caption=caption, reply_markup=markup, parse_mode="HTML")
-            if not sent:
-                sent = send_telegram_message(caption, reply_markup=markup)
-        except Exception as tg_err:
-            logger.warning(f"[Decision] Telegram-Ping fehlgeschlagen: {tg_err}")
+                caption = decision_message(
+                    typ=typ,
+                    titel=titel,
+                    projekt=_projekt,
+                    von=_ex.get("von", ""),
+                    ref=ref_id,
+                    kurzfassung=(kurzfassung or "")[:600],
+                    zahlen=_zahlen or None,
+                    anhang=_anhang,
+                    fallback_ref=task_id,
+                    zeit=datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
+                )
+                if dossier:
+                    sent = send_telegram_document(dossier, caption=caption, reply_markup=markup, parse_mode="HTML")
+                if not sent:
+                    sent = send_telegram_message(caption, reply_markup=markup)
+            except Exception as tg_err:
+                logger.warning(f"[Decision] Telegram-Ping fehlgeschlagen: {tg_err}")
         logger.info(f"[Decision] {typ} registriert: Kanban {task_id} (ref={ref_id}), Ping={sent}")
         return {"task_id": task_id, "decision": dec}
     except Exception as e:

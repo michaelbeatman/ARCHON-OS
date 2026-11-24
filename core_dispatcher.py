@@ -273,17 +273,30 @@ async def trigger_n8n_execution(
         "executed_at": datetime.datetime.now().isoformat()
     }
     try:
-        from backend.trace_context import inject_headers as _inject_trace_headers, inject_payload as _inject_trace_payload
-        payload = _inject_trace_payload(payload)
-    except Exception:
-        _inject_trace_headers = None
+        from backend.trace_context import child_span, inject_headers, inject_payload
+    except Exception as exc:
+        logger.warning("[Dispatcher] Trace-Kontext am n8n-Hop nicht verfuegbar: %s", exc)
+        child_span = None
+        inject_headers = None
+        inject_payload = None
     try:
         from utils.safe_http import webhook_signature_headers
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         headers.update(webhook_signature_headers(body))
-        if _inject_trace_headers is not None:
-            headers = _inject_trace_headers(headers)
+        if child_span is not None and inject_headers is not None:
+            # D16/H2: genau EIN Child-Span fuer diesen Hop. inject_headers()/
+            # inject_payload() MUESSEN im Block laufen, damit die NEUE Span-ID
+            # in traceparent und Payload steht (sonst Self-Parenting ohne
+            # Kausalkante). child_span() forkt den aktiven Kontext; ohne
+            # Kontext entsteht genau ein Root, und beim Verlassen wird der
+            # umgebende Kontext wiederhergestellt.
+            with child_span():
+                if inject_payload is not None:
+                    payload = inject_payload(payload)
+                    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                    headers.update(webhook_signature_headers(body))
+                headers = inject_headers(headers)
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, content=body, headers=headers)
             if resp.status_code == 200:
@@ -407,6 +420,15 @@ async def _dispatch_to_container_endpoint(
         })
 
     try:
+        # D16/H3: Trace-Kontext ueber die Grenze Dispatcher -> Provider/n8n.
+        # Alle drei Wrapper (Hermes :9119, Odysseus :7000, OpenClaw) rufen
+        # diese Funktion; ein Child-Span hier deckt alle drei Hops ab.
+        try:
+            from backend.trace_context import child_span, inject_headers
+            with child_span():
+                headers = inject_headers(headers)
+        except Exception as tr_exc:
+            logger.warning("[Dispatcher] Trace-Injektion am Container-Hop (%s) fehlgeschlagen: %s", provider, tr_exc)
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
             await _audit_log_async(
@@ -965,7 +987,14 @@ async def dispatch_to_omniroute_or_container(
                     )
                     tracer.end_trace(tr_id, status="OK" if is_ok else "ERROR")
                 except Exception as tr_exc:
-                    logger.debug(f"[Dispatcher] Trace-Abschluss fehlgeschlagen: {tr_exc}")
+                    # D16/H5: Export-/Abschlussfehler duerfen nicht auf DEBUG
+                    # verschluckt werden — sichtbar loggen und zentral zaehlen.
+                    logger.warning("[Dispatcher] Trace-Abschluss fehlgeschlagen: %s", tr_exc)
+                    try:
+                        from backend.trace_context import note_local_trace_error
+                        note_local_trace_error("dispatch-trace-close", tr_exc)
+                    except Exception as count_exc:  # pragma: no cover - nur bei Import-/Zaehlfehler
+                        logger.warning("[Dispatcher] Trace-Fehlerzaehlung nicht verfuegbar: %s", count_exc)
 
             if res.get("status") in ("success", "error") and used_model:
                 try:
@@ -1425,11 +1454,13 @@ async def _dispatch_to_omniroute_or_container_impl(
         )
         active_trace_id = ""
         try:
-            from backend.trace_context import current_trace_id, inject_headers as _inject_trace_headers
-            headers = _inject_trace_headers(headers)
-            active_trace_id = current_trace_id()
-        except Exception:
-            pass
+            from backend.trace_context import child_span, current_trace_id, inject_headers
+            with child_span():
+                # D16/H2: NEUE Span-ID im traceparent, keine Self-Parent-Kante.
+                headers = inject_headers(headers)
+                active_trace_id = current_trace_id()
+        except Exception as tr_exc:
+            logger.warning("[Dispatcher] Trace-Injektion am LLM-Hop (%s) fehlgeschlagen: %s", provider_id, tr_exc)
         post_kwargs: dict[str, Any] = {"headers": headers, "json": safe_body}
         if timeout is not None:
             post_kwargs["timeout"] = timeout

@@ -190,25 +190,16 @@ def finalize_llm_output(
 
 
 def _note_trace_error(message: str, exc: BaseException) -> None:
-    """D16: lokale Trace-Fehler sichtbar machen (WARNING + record_stats-Zaehler).
+    """D16/M4: Trace-Fehler ueber die eine zentrale API melden.
 
-    Agent I stellt ``note_local_trace_error`` bereit; je nach Deploy-Stand
-    liegt sie als Modul-Funktion in ``trace_context`` oder als Methode auf dem
-    ``tracer``. Beide Varianten werden unterstuetzt, ohne still zu verschwinden.
+    ``backend.trace_context.note_local_trace_error`` ist die einzige
+    Meldekette (delegiert an ``tracer.note_local_trace_error`` und zaehlt dort
+    in ``record_stats``). Lokale Fallbacks wurden entfernt, damit die
+    Zaehlwege nicht divergieren.
     """
-    try:
-        from backend import trace_context as _tc
-        note = getattr(_tc, "note_local_trace_error", None)
-        if note is not None:
-            note(message, exc)
-            return
-    except Exception:
-        pass
-    try:
-        from backend.otel_tracer import tracer
-        tracer.note_local_trace_error(message, exc)
-    except Exception:
-        logger.warning("[LLMKernel] %s: %s", message, exc)
+    from backend.trace_context import note_local_trace_error
+
+    note_local_trace_error(message, exc)
 
 
 async def _otel_start(name: str, task_id: Optional[str], agent_id: str) -> Optional[str]:
@@ -360,10 +351,23 @@ async def dispatch_llm(
     # session_id/correlation_id reisen ueber den Trace-Kontext ueber Systemgrenzen.
     if _tctx is not None and (active_trace or trace_id):
         active_trace = str(trace_id or active_trace)
-    ctx_cm = (
-        _tctx.use_trace_context(trace_id=active_trace)
-        if _tctx is not None and active_trace else None
-    )
+    # D16/M1: Den Kontext explizit mit traceparent + sampled wiederherstellen.
+    # Ohne diese Werte wuerfelt use_trace_context() bei parsed is None die
+    # Sampling-Entscheidung neu (ignore_parent=True) — ein incoming `…-01`
+    # koennte bei parentbased_traceidratio auf `00` kippen.
+    ctx_cm = None
+    if _tctx is not None and active_trace:
+        ctx_span = str(_tctx.current_span_id() or "")
+        ctx_sampled = bool(_tctx.current_sampled())
+        ctx_cm = _tctx.use_trace_context(
+            trace_id=active_trace,
+            span_id=ctx_span,
+            traceparent=(
+                _tctx.format_traceparent(active_trace, ctx_span, ctx_sampled)
+                if ctx_span else None
+            ),
+            sampled=ctx_sampled,
+        )
     res: Any = None
     try:
         if ctx_cm is not None:

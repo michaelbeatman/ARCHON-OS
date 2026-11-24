@@ -50,6 +50,33 @@ TOOL_SECURITY_POLICY: Dict[str, Dict[str, Any]] = {
 }
 
 
+def bind_incoming_trace_context(headers: Dict[str, str]) -> None:
+    """D16/Grenze 9: inbound traceparent/tracestate in den Verarbeitungskontext.
+
+    Die Antwort-Header (``X-Trace-Id``, ``traceparent``) bleiben unverändert
+    ueber ``_mcp_trace_headers()`` verdrahtet; hier wird nur die eingehende
+    Kante zum MCP-Client wiederhergestellt. Ungueltige Header werden verworfen,
+    ohne eine bereits aktive Kette zu überschreiben.
+    """
+    try:
+        from backend.trace_context import (
+            current_trace_id, current_tracestate, extract_headers,
+            parse_traceparent, start_trace,
+        )
+
+        tp = extract_headers(headers)  # setzt tracestate + sampled-Flag
+        parsed = parse_traceparent(tp)
+        if parsed:
+            if current_trace_id() != parsed[0]:
+                start_trace(tp, tracestate=current_tracestate())
+        elif not current_trace_id():
+            # Auch ohne gueltigen traceparent darf ein inbound tracestate
+            # nicht verworfen werden (start_trace() wuerde ihn sonst leeren).
+            start_trace(tracestate=current_tracestate())
+    except Exception as exc:
+        logger.warning("[mcp_gateway] Inbound-Trace-Kontext nicht setzbar: %s", exc)
+
+
 def _scope_allows(granted_scopes: List[str], required_scope: str) -> bool:
     if not required_scope:
         return True
@@ -187,6 +214,7 @@ class ArchonMcpGateway:
 
     def authenticate_headers(self, headers: Dict[str, str], service_token_valid: bool = False) -> Tuple[bool, Optional[Dict[str, Any]], str]:
         """Prüft Authorization: Bearer archon_live_..., X-Archon-API-Key oder Service-Token."""
+        bind_incoming_trace_context(headers)
         if service_token_valid:
             return True, {"key_id": "service_token", "name": "internal_service", "scopes": ["admin_full"]}, "OK"
 

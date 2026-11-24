@@ -125,12 +125,21 @@ async def forward_to_hermes(request: Request) -> Response:
     fwd_headers["X-Hermes-Session-Token"] = hermes_token
     fwd_headers["Authorization"] = f"Bearer {hermes_token}"
     try:
-        from backend.trace_context import current_trace_id, extract_headers, inject_headers, start_trace
+        from backend.trace_context import (
+            child_span, current_trace_id, extract_headers, inject_headers, start_trace,
+        )
+        incoming_tp = extract_headers(request.headers)
         if not current_trace_id():
-            start_trace(extract_headers(request.headers))
-        fwd_headers = inject_headers(fwd_headers)
-    except Exception:
-        pass
+            start_trace(incoming_tp)
+        # Grenze 7: eigene Kausalkante zum Hermes-Upstream. inject_headers()
+        # ohne child_span() wuerde die Span-ID des Senders selbst als
+        # traceparent tragen (Self-Parenting). child_span() uebernimmt
+        # tracestate und Sampled-Flag unverändert und erzeugt eine neue
+        # 64-Bit-Span-ID; nur innerhalb dieses Blocks injizieren.
+        with child_span(incoming=incoming_tp):
+            fwd_headers = inject_headers(fwd_headers)
+    except Exception as exc:
+        logger.warning("[Hermes-Proxy] Trace-Kontext konnte nicht injiziert werden: %s", exc)
 
     body = await request.body()
     client = _get_hermes_client()

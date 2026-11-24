@@ -582,9 +582,10 @@ services:
     volumes:
       - ./config/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
     environment:
-      # Audit D16: nur aus .env, keine eingebetteten Keys/Endpunkte. Ohne
-      # OTEL_DOWNSTREAM_OTLP_ENDPOINT exportiert der Collector nur debug.
-      - OTEL_DOWNSTREAM_OTLP_ENDPOINT=${OTEL_DOWNSTREAM_OTLP_ENDPOINT:-}
+      # Re-Audit R-B6: kein Default auf einen nicht gestarteten Langfuse-
+      # Container. Der Collector schreibt standardmaessig in den lokalen
+      # file-Exporter (config/otel-collector-config.yml). Externer OTLP-
+      # Downstream nur nach expliziter Verdrahtung durch P0.
       - LANGFUSE_HOST=${LANGFUSE_HOST:-}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
@@ -601,12 +602,14 @@ services:
           memory: 512M
           cpus: "0.5"
 
-  # Audit D09: Langfuse v2 ist EOL (Security-Support Ende Q1/2025). Eine
-  # v4-Migration braucht zusaetzlich Worker/ClickHouse/Redis/S3 und darf nicht
-  # durch einen reinen Image-Tag-Wechsel vorgetaeuscht werden. Deshalb ehrlich
-  # `not_configured`: der Container ist digest-gepinnt, aber NUR ueber das
-  # Opt-in-Profil `langfuse-not-configured` erreichbar und nicht Teil von
-  # tracing/observability/all/full. LANGFUSE_* bleibt ohne Defaults (aus .env).
+  # Audit D09 / Re-Audit H6 (S-1.5): Langfuse v2 ist EOL (Security-Support Ende
+  # Q1/2025). Eine v4-Migration braucht zusaetzlich Worker/ClickHouse/Redis/S3
+  # und darf nicht durch einen reinen Image-Tag-Wechsel vorgetaeuscht werden.
+  # Deshalb ehrlich `not_configured`: der Container ist digest-gepinnt, aber
+  # NUR ueber das Opt-in-Profil `langfuse-not-configured` erreichbar und nicht
+  # Teil von tracing/observability/all/full. Kein toter Default-Endpunkt;
+  # get_tracing_status() meldet `langfuse_status: not_configured`, solange die
+  # LANGFUSE_* Keys fehlen. Keys bleiben ohne Defaults (aus .env).
   langfuse:
     image: langfuse/langfuse:2@sha256:85c278dcab96c15db94191a5c1664f85aba2d7fb6771a00e99681c902c4b7015
     container_name: langfuse
@@ -657,6 +660,9 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=30d"
       - "--web.enable-lifecycle"
+      # Re-Audit H7: ohne Flag verwirft Prometheus Exemplare (trace_id/span_id)
+      # bereits beim Scrape; storage.exemplars in prometheus.yml allein reicht nicht.
+      - "--enable-feature=exemplar-storage"
     deploy:
       resources:
         limits:

@@ -5,6 +5,14 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Re-Audit H7: Exemplare (trace_id/span_id) muessen explizit aktiviert werden
+# (`--enable-feature=exemplar-storage` im Prometheus-Container, see
+# docker-compose.yml). Der Ringpuffer ist pro Serie begrenzt; der App-Scrape
+# muss Exemplare im OpenMetrics-Format liefern, sonst bleiben sie leer.
+storage:
+  exemplars:
+    max_exemplars: 100000
+
 # SLO-/Burn-Rate-Regeln (reine Konfiguration, kein neuer Python-Service).
 # ACHTUNG (compose): Die Datei muss zusätzlich nach /etc/prometheus/alerts.yml
 # gemountet werden, sonst startet Prometheus nicht ("no such file").

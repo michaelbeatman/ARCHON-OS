@@ -16,7 +16,61 @@ function getCorsHeaders(req: NextRequest): Record<string, string> {
   };
 }
 
+// D16: Auch der Media-Proxy muss einen gueltigen W3C-Kontext weitergeben.
+// Kommt keiner vom Browser (PocketBase beforeSend), erzeugt er selbst einen Root.
+const TRACE_ID_RE = /^[0-9a-f]{32}$/i;
+const FLAGS_RE = /^[0-9a-f]{2}$/i;
+
+function randomHex(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function childTraceparent(incoming: string | null | undefined): string | null {
+  const parts = (incoming || '').trim().split('-');
+  if (parts.length !== 4) return null;
+  const [version, traceId, , flags] = parts;
+  if (version !== '00' || !TRACE_ID_RE.test(traceId) || /^0{32}$/i.test(traceId) || !FLAGS_RE.test(flags)) {
+    return null;
+  }
+  const spanId = randomHex(8);
+  if (/^0{16}$/i.test(spanId)) return null;
+  return `${version}-${traceId.toLowerCase()}-${spanId}-${flags.toLowerCase()}`;
+}
+
+function rootTraceparent(): string {
+  let traceId = randomHex(16);
+  while (/^0{32}$/i.test(traceId)) traceId = randomHex(16);
+  let spanId = randomHex(8);
+  while (/^0{16}$/i.test(spanId)) spanId = randomHex(8);
+  return `00-${traceId}-${spanId}-01`;
+}
+
+function validTracestate(value: string | null | undefined): string | null {
+  const raw = (value || '').trim();
+  if (!raw) return null;
+  const entries = raw.split(',').map((e) => e.trim()).filter((e) =>
+    /^[a-z0-9_*/\-]{1,256}=[\x20-\x2b\x2d-\x3c\x3e-\x7e]{0,256}$/.test(e)
+  ).slice(0, 32);
+  while (entries.length > 0 && entries.join(',').length > 512) entries.pop();
+  return entries.length > 0 ? entries.join(',') : null;
+}
+
+function traceHeaders(req: NextRequest): Record<string, string> {
+  const incoming = req.headers.get('traceparent');
+  const forked = childTraceparent(incoming);
+  if (incoming && !forked) {
+    console.warn('[media-proxy] Ungueltiger traceparent verworfen — neuer Root erzeugt');
+  }
+  const headers: Record<string, string> = { traceparent: forked || rootTraceparent() };
+  const tracestate = validTracestate(req.headers.get('tracestate'));
+  if (tracestate) headers['tracestate'] = tracestate;
+  return headers;
+}
+
 async function hasAuthorizedSession(req: NextRequest): Promise<boolean> {
+  const trace = traceHeaders(req);
   // Vorher genügte ein beliebiger nicht-leerer Authorization-Header oder
   // blosses Vorhandensein eines Cookies/sec-fetch-site -> wirkungsloses Gate.
   // Jetzt echte Verifikation gegen den Archon-Backend (verify_session).
@@ -28,7 +82,7 @@ async function hasAuthorizedSession(req: NextRequest): Promise<boolean> {
   if (pbToken) {
     try {
       const pbRes = await fetch(`${MEDIA_PB_URL}/api/auth/refresh`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...trace }, body: '{}',
         cache: 'no-store', signal: AbortSignal.timeout(3000),
       });
       if (pbRes.ok) return true;
@@ -39,7 +93,7 @@ async function hasAuthorizedSession(req: NextRequest): Promise<boolean> {
       .filter((u): u is string => Boolean(u && u.trim()));
     for (const base of targets) {
       const res = await fetch(`${base.replace(/\/+$/, '')}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, ...trace },
         cache: 'no-store', signal: AbortSignal.timeout(3000),
       });
       if (res.ok) return true;
@@ -73,6 +127,8 @@ async function forwardRequest(method: string, url: string, req: NextRequest, bod
     headers['Range'] = rangeHeader;
   }
 
+  Object.assign(headers, traceHeaders(req));
+
   return fetch(url, {
     method,
     headers,
@@ -103,7 +159,7 @@ export async function GET(
 
   let lastError: any = null;
 
-  const fetchHeaders: Record<string, string> = {};
+  const fetchHeaders: Record<string, string> = { ...traceHeaders(request) };
   const rangeHeader = request.headers.get('range');
   if (rangeHeader) {
     fetchHeaders['Range'] = rangeHeader;

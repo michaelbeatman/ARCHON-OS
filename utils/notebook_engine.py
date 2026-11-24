@@ -552,6 +552,7 @@ async def query_notebook(notebook_id: str, prompt: str) -> dict:
     
     # KI-Synthese — D12: bei Blockade/Fehler KEINE erfundene Antwort und
     # KEINE Assistant-History schreiben.
+    from backend.llm_egress_guard import ZeroEgressBlockedError
     try:
         response_text = await generate_grounded_llm_response(prompt, chunks, citations)
     except ZeroEgressBlockedError as ze:

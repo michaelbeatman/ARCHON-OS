@@ -1270,7 +1270,7 @@ async def _watch_delegated_task(
                 # Dispatcher-Pfad genutzt.
                 handoff_id = ""
                 try:
-                    from backend.handoff_desk import handoff_desk, mark_truncated
+                    from backend.handoff_desk import handoff_desk
                     try:
                         from backend.trace_context import current_trace_id
                         _handoff_trace = str(current_trace_id() or "")

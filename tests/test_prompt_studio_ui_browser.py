@@ -21,7 +21,7 @@ def test_prompt_studio_batches_and_debounce_in_chromium():
         )
     except FileNotFoundError:
         pytest.skip("node nicht verfuegbar")
-    if "SKIP: Chromium nicht installiert" in proc.stdout:
-        pytest.skip("Chromium nicht installiert")
+    if "SKIP: Chromium nicht installiert" in proc.stdout or "Cannot find module 'playwright'" in proc.stderr:
+        pytest.skip("Playwright/Chromium nicht installiert")
     assert proc.returncode == 0, (proc.stdout + "\n" + proc.stderr)
     assert "OK:" in proc.stdout, proc.stdout

@@ -25,7 +25,7 @@
 | G-05 | **WIEDERHERGESTELLT (User-Entscheidung 24.11.2026).** Für pre-1.0 bewusst akzeptiert und **nicht als Finding zu bewerten**: (1) `main.py` God-Object, (2) 11k-Zeilen-Telegram-Adapter, (3) lokaler Single-User-Default auf `127.0.0.1`, (4) prozess-lokale Provider-Breaker. Diese Punkte bleiben dokumentiert, werden aber nicht mit Kritikalität gewichtet und gehen nicht in die Reifegrad-Bewertung ein. | REGISTER §6 — vom User am 24.11.2026 erneut bestätigt; Auswirkung siehe MASTER_PLAN §5 |
 | G-05a | **Nicht Teil der Wiederherstellung:** n8n-Stubs (deaktiviert statt implementiert) standen nicht in der User-Liste vom 24.11.2026 und bleiben daher **regulär bewertet** (siehe D06). | Bewusste Abweichung zur Ursprungsfassung von G-05 |
 | G-06 | Doku-Behauptungen sind **Behauptungen**, keine Beweise. Jede Aussage ist gegen Code zu verifizieren. | REGISTER §5 / TRACING §0 |
-| G-07 | Zweisprachigkeit DE/EN: 70 Spezialisten + 3 Meta-Profile (73 Einträge), 3-Tier `SOUL.md` (Compact/Pro/Full), 832 Prompts, 55 Frameworks, 11 UI-Lokale. | README / Architektur |
+| G-07 | Zweisprachigkeit DE/EN: **71 Profile** (verbindliche User-Entscheidung 2026-11-24; `micha`/`alpha` entfernt, `linkedin_social_media_specialist` nicht in der SSOT), 3-Tier `SOUL.md` (Compact/Pro/Full), **497 versionierte SOUL-Artefakte** (71 × 7: je 3 Tier-Dateien DE + 3 EN + `SOUL.md`), 832 Prompts, 55 Frameworks, 11 UI-Lokale. | README / Architektur |
 
 ## 1. Verdrahteter Schein & Stub-Detection
 
@@ -164,10 +164,10 @@
 
 ## 15. Semantische Rollen- & Prompt-Trennschärfe
 
-- S-15.1 Rollen mit klarer Positiv- und **Negativ-Abgrenzung** („was darf diese Rolle explizit NICHT?") — alle 70 Profile.
+- S-15.1 Rollen mit klarer Positiv- und **Negativ-Abgrenzung** („was darf diese Rolle explizit NICHT?") — alle 71 Profile; CI-Gate auf **Semantik** (≥ 60 distinct Bodies, EN-Übersetzung, HITL für alle 26 HIGH_RISK), nicht nur Präsenz.
 - S-15.2 Keine überlappenden Zuständigkeiten / widersprüchlichen System-Prompts zwischen Profilen.
 - S-15.3 Medizin/Recht/Steuer/Finanzen mit HITL-Pflicht und 26 EU-AI-Act-HIGH_RISK korrekt klassifiziert.
-- S-15.4 SOUL-SSOT: `souls/` versioniert (490 Artefakte DE+EN), SHA-256-Manifest über normalisierte Zeilenenden, CI-Drift-Gates, keine erfundenen SOUL-Hashes.
+- S-15.4 SOUL-SSOT: `souls/` versioniert (**497 Artefakte** DE+EN = 71 Profile × 7; User-Entscheidung 2026-11-24, ältere Zahlen 490/511 sind überholt), SHA-256-Manifest über normalisierte Zeilenenden, CI-Drift-Gates, keine erfundenen SOUL-Hashes.
 - S-15.5 `.hermes/profiles/` und `data/hermes_profiles/` aus SSOT regeneriert, keine Divergenz.
 
 ## 16. Distributed Tracing & Observability

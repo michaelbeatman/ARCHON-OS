@@ -15,9 +15,11 @@ if str(REPO_ROOT) not in sys.path:
 
 
 # ---------------------------------------------------------------- Audit
-def test_p1_audit_log_is_append_only(tmp_path):
+def test_p1_audit_log_is_append_only(tmp_path, monkeypatch):
     from backend.audit_log import ChainedAuditLog
 
+    # A2: kein externer Anker in diesem Test -> expliziter Dev-Opt-out.
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")
     db = str(tmp_path / "audit.db")
     alog = ChainedAuditLog(db_path=db)
     alog.record_event("system", "test", "agent-1", {"x": 1})
@@ -34,6 +36,7 @@ def test_p1_hmac_chain_without_key_fails_closed(tmp_path, monkeypatch):
     from backend.audit_log import ChainedAuditLog
 
     monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "regression-test-key")
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")  # A2: kein Anker im Test
     db = str(tmp_path / "hmac.db")
     alog = ChainedAuditLog(db_path=db)
     alog.record_event("system", "test", "agent-1", {"x": 1})
@@ -123,6 +126,7 @@ def test_p1_hmac_epoch_rotation_keeps_old_blocks_verifiable(tmp_path, monkeypatc
 
     monkeypatch.delenv("ARCHON_AUDIT_HMAC_EPOCHS", raising=False)
     monkeypatch.delenv("ARCHON_AUDIT_HMAC_EPOCH_FROM", raising=False)
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")  # A2: kein Anker im Test
     monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "old-key")
     db = str(tmp_path / "rotation.db")
     alog = ChainedAuditLog(db_path=db)
@@ -215,6 +219,7 @@ def test_p1_audit_timestamps_are_utc(tmp_path, monkeypatch):
     from backend.audit_log import ChainedAuditLog
 
     monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "utc-key")
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")  # A2: kein Anker im Test
     db = str(tmp_path / "utc.db")
     alog = ChainedAuditLog(db_path=db)
     alog.record_event("system", "utc", "agent-1", {"x": 1})

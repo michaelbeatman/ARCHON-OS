@@ -25,13 +25,29 @@ function getBildUrl(rec: MediaRecord): string | null {
   if (!rec || !rec.bild) return null;
   const val = rec.bild.trim();
   if (!val) return null;
-  if (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:')) {
-    return val;
+  // D09/HIGH (A1): nur explizit sichere Schemata. `data:` ist ein XSS-Vektor
+  // im Druck-Pfad, `javascript:` ohnehin; `http:`/protokoll-relative Werte
+  // werden ebenfalls abgewiesen. `new URL()` verhindert Scheme-Confusion.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(val)) {
+    try {
+      const parsed = new URL(val);
+      return parsed.protocol === 'https:' ? parsed.href : null;
+    } catch (_) {
+      return null;
+    }
   }
+  // Relativer Wert = PocketBase-Dateiname. Nur ueber den vertrauenswuerdigen
+  // Helper aufloesen; kein User-kontrolliertes Markup in Attributen.
   if (rec.id) {
-    return pb.files.getURL(rec as any, val);
+    try {
+      const pbUrl = pb.files.getURL(rec as any, val);
+      const parsed = new URL(pbUrl, 'https://pb.invalid');
+      return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? pbUrl : null;
+    } catch (_) {
+      return null;
+    }
   }
-  return val;
+  return null;
 }
 
 function formatDate(ts?: string): string {
@@ -39,6 +55,62 @@ function formatDate(ts?: string): string {
   const d = new Date(ts);
   if (isNaN(d.getTime())) return ts;
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/**
+ * D09/MED (A1): Dialog-Semantik fuer Formular und Lightbox — Initialfokus,
+ * Tab-Falle, Escape und Fokus-Restore. Direkt aus AuthModal.tsx kopiert,
+ * damit der dortige, getestete Vertrag unverändert bleibt (kein God-Refactor).
+ */
+function useFocusTrap(
+  isOpen: boolean,
+  dialogRef: React.RefObject<HTMLElement | null>,
+  onClose: () => void
+) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const dialog = dialogRef.current;
+    const focusableItems = () => Array.from(
+      dialog?.querySelectorAll<HTMLElement>(
+        'input:not([disabled]), button:not([disabled]), a[href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) ?? []
+    );
+    focusableItems()[0]?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = focusableItems();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (!dialog?.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previousFocus?.focus();
+    };
+  }, [isOpen, dialogRef]);
 }
 
 interface MediaBoardViewProps {
@@ -61,6 +133,9 @@ export function MediaBoardView({ themeMode = 'light' }: MediaBoardViewProps) {
   const [formImagePreview, setFormImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // D09/MED (A1): Fokusfaelle fuer Formular und Lightbox.
+  const formDialogRef = useRef<HTMLDivElement>(null);
+  const lightboxDialogRef = useRef<HTMLDivElement>(null);
 
   // Diktat (Notiz per Mikrofon - wie bei den Kontakten)
   const [isDikting, setIsDikting] = useState(false);
@@ -84,6 +159,10 @@ export function MediaBoardView({ themeMode = 'light' }: MediaBoardViewProps) {
 
   // Lightbox (große Ansicht)
   const [lightbox, setLightbox] = useState<MediaRecord | null>(null);
+
+  // D09/MED (A1): Dialog-Fokusfallen (siehe useFocusTrap oben).
+  useFocusTrap(isFormOpen, formDialogRef, () => setIsFormOpen(false));
+  useFocusTrap(!!lightbox, lightboxDialogRef, () => setLightbox(null));
 
   // Suche
   const [searchTerm, setSearchTerm] = useState('');
@@ -238,29 +317,46 @@ export function MediaBoardView({ themeMode = 'light' }: MediaBoardViewProps) {
     setIsDikting(false);
   };
 
-  // Drucken: Grafik in ein Popup-Fenster laden und Druckdialog öffnen
-  const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
+  // Drucken: Grafik in ein Popup-Fenster laden und Druckdialog öffnen.
+  // D09/HIGH (A1): kein String-basiertes Schreiben mit interpolierten Werten
+  // mehr — DOM-Knoten + textContent/setAttribute. getBildUrl() liefert nur noch
+  // https:/PB-Datei-URLs, damit keine javascript:/data:-Quelle in src landet.
   const handlePrint = (rec: MediaRecord) => {
     const imgUrl = getBildUrl(rec);
     if (!imgUrl) return;
-    const win = window.open('', '_blank', 'width=900,height=700');
+    const win = window.open('', '_blank', 'width=900,height:700');
     if (!win) { setError('Popup-Blocker verhindert den Druckdialog.'); return; }
-    const titel = escHtml(rec.titel || '');
-    const notiz = escHtml(rec.notiz || '').replace(/\n/g, '<br/>');
-    const datum = new Date(rec.created).toLocaleDateString('de-DE');
-    win.document.write(
-      '<!DOCTYPE html><html><head><title>Media Board</title>' +
-      '<style>body{font-family:system-ui;margin:20px;text-align:center}' +
+    const doc = win.document;
+    doc.title = 'Media Board';
+
+    const style = doc.createElement('style');
+    style.textContent =
+      'body{font-family:system-ui;margin:20px;text-align:center}' +
       'img{max-width:100%;max-height:85vh} h2{font-size:16px} p{color:#555;font-size:12px}' +
-      '@media print{body{margin:0}}</style></head><body>' +
-      '<h2>' + titel + '</h2>' +
-      '<img src="' + imgUrl + '" onload="setTimeout(function(){window.print()},300)" />' +
-      '<p>' + notiz + '</p>' +
-      '<p style="color:#999;font-size:10px">' + datum + '</p>' +
-      '</body></html>'
-    );
-    win.document.close();
+      '@media print{body{margin:0}}';
+    doc.head.appendChild(style);
+
+    const h2 = doc.createElement('h2');
+    h2.textContent = rec.titel || '';
+    doc.body.appendChild(h2);
+
+    const img = doc.createElement('img');
+    img.setAttribute('src', imgUrl);
+    img.setAttribute('alt', rec.titel || 'Media Board Bild');
+    img.onload = () => win.setTimeout(() => win.print(), 300);
+    doc.body.appendChild(img);
+
+    if (rec.notiz) {
+      const p = doc.createElement('p');
+      p.textContent = rec.notiz;
+      p.style.whiteSpace = 'pre-line';
+      doc.body.appendChild(p);
+    }
+    const dateP = doc.createElement('p');
+    dateP.textContent = new Date(rec.created).toLocaleDateString('de-DE');
+    dateP.style.color = '#999';
+    dateP.style.fontSize = '10px';
+    doc.body.appendChild(dateP);
   };
 
   // Lightbox-Notiz: Bearbeiten starten (Notiz-Text laden)
@@ -465,13 +561,19 @@ export function MediaBoardView({ themeMode = 'light' }: MediaBoardViewProps) {
       {/* HINZUFÜGEN-FORMULAR */}
       {isFormOpen && (
         <div className="fixed inset-0 z-[1050] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-          <div className={`w-full max-w-lg rounded-2xl border p-5 shadow-2xl space-y-4 flex flex-col max-h-[90vh] overflow-y-auto ${
+          <div
+            ref={formDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="media-form-title"
+            tabIndex={-1}
+            className={`w-full max-w-lg rounded-2xl border p-5 shadow-2xl space-y-4 flex flex-col max-h-[90vh] overflow-y-auto ${
             isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
           }`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-accent-main" />
-                <h3 className="font-bold text-sm">Bild zum Media Board hinzufügen</h3>
+                <h3 id="media-form-title" className="font-bold text-sm">Bild zum Media Board hinzufügen</h3>
               </div>
               <button
                 type="button"
@@ -643,6 +745,11 @@ export function MediaBoardView({ themeMode = 'light' }: MediaBoardViewProps) {
           onClick={() => setLightbox(null)}
         >
           <div
+            ref={lightboxDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="media-lightbox-title"
+            tabIndex={-1}
             className={`max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border shadow-2xl ${
               isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-700'
             }`}
@@ -652,7 +759,7 @@ export function MediaBoardView({ themeMode = 'light' }: MediaBoardViewProps) {
             <div className={`flex items-center justify-between p-3 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
               <div className="flex items-center gap-2 min-w-0">
                 <ImageIcon className="w-4 h-4 text-accent-main shrink-0" />
-                <h3 className="text-sm font-bold truncate">{lightbox.titel || 'Media Board Bild'}</h3>
+                <h3 id="media-lightbox-title" className="text-sm font-bold truncate">{lightbox.titel || 'Media Board Bild'}</h3>
                 <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${
                   isLight ? 'bg-slate-100 text-slate-500' : 'bg-slate-800 text-slate-300'
                 }`}>

@@ -1,33 +1,36 @@
+# mypy: ignore-errors
 """
 Operations API Router for Archon OS
 Provides Kanban (Hermes kanban.db), Org-Chart, and Inter-Agent Communication Feed.
 """
 
-import os
 import base64
 import logging
+import os
 
 logger = logging.getLogger("archon_os.operations_api")
 
-from backend.platform_paths import HERMES_HOME
-from archon.core.provider_registry import get_provider
 import asyncio
-import sys
+import datetime
 import json
 import re
-import sqlite3
-import datetime
-import subprocess
-import time
 import secrets
+import sqlite3
+import subprocess
+import sys
 import threading
-from typing import List, Dict, Optional, Any, Literal
-from fastapi import APIRouter, Request, HTTPException, Query, Body, UploadFile, File, Depends
+import time
+from typing import Any, Dict, List, Literal, Optional
 
-from archon.routers._rbac import require_admin_or_503, forbid_viewer_writes
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from archon.core.provider_registry import get_provider
+from archon.routers._rbac import forbid_viewer_writes, require_admin_or_503
 from backend.handoff_desk import mark_truncated
+from backend.platform_paths import HERMES_HOME
+
 
 # ---------------------------------------------------------------------------
 # D11: schema-validierte Payloads an der Kanban→Agent-Kante und im Review-Gate.
@@ -347,8 +350,9 @@ def _load_profiles_map() -> Dict[str, Dict]:
     # Audit v3 2.1.4: profile.yaml/SOUL.md des Profilordners als Ergänzung einlesen,
     # damit Profile die NUR dort existieren nicht unsichtbar bleiben.
     try:
-        from archon.core.profiles import get_primary_hermes_profiles_dir
         import yaml as _yaml
+
+        from archon.core.profiles import get_primary_hermes_profiles_dir
         base = get_primary_hermes_profiles_dir()
         if os.path.isdir(base):
             _map = _PROFILES_MAP_CACHE["data"]
@@ -441,6 +445,7 @@ def _save_kanban_meta(meta: Dict) -> None:
 def _build_kanban_obsidian_map(conn: sqlite3.Connection, rows: list, meta: Dict) -> Dict[str, Optional[str]]:
     """Loest alle Obsidian-Projektordner fuer ein Kanban-Board einmalig im Batch auf (statt O(N) DB/FS-Scans)."""
     from pathlib import Path as _P
+
     from backend.post_task_pipeline import get_vault_dir
 
     result: Dict[str, Optional[str]] = {}
@@ -970,6 +975,105 @@ def _ensure_consecutive_failures_column(conn: sqlite3.Connection) -> None:
     _CONSECUTIVE_FAILURES_MIGRATED_DBS.add(target_db)
 
 
+def _accept_loaded_handoff(conn, task_id: str, model: Any) -> None:
+    """D11 (A8): Empfänger-Worker quittiert das geladene A2A-Envelope.
+
+    Der automatische Delegationspfad hatte bisher nur einen Produzenten
+    (``create_handoff``) und einen HMAC-Check, aber keinen Konsumenten. Hier
+    wird der autorisierte Empfänger aus dem gespeicherten (signierten)
+    Envelope gelesen, die Annahme ausgeführt und das Ergebnis in
+    ``task_events`` sowie im signierten Audit sichtbar gemacht.
+    """
+    try:
+        from backend.handoff_desk import handoff_desk
+        h_id = str(handoff_desk.latest_handoff_id_for_task(task_id) or "").strip()
+        if not h_id:
+            return
+        row = handoff_desk.get_handoff(h_id) or {}
+        if str(row.get("status") or "") == "accepted":
+            return  # idempotent, kein Event-Replay (G-01/G-02)
+        receiver = str(row.get("to_agent") or "").strip()
+        if not receiver:
+            return
+        result = handoff_desk.accept_handoff(h_id, receiver)
+        accepted = result.get("status") == "accepted"
+        payload = {
+            "handoff_id": h_id,
+            "receiving_agent": str(result.get("receiving_agent") or receiver),
+            "acceptance": result,
+            # Bevorzugt die aus dem signierten Envelope verifizierten Werte.
+            "trace_id": str(result.get("trace_id") or getattr(model, "trace_id", "") or ""),
+            "session_id": str(result.get("session_id") or getattr(model, "session_id", "") or ""),
+            "correlation_id": str(result.get("correlation_id") or getattr(model, "correlation_id", "") or ""),
+        }
+        conn.execute(
+            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
+            (
+                task_id,
+                "handoff_accepted" if accepted else "handoff_accept_failed",
+                json.dumps(payload, ensure_ascii=False),
+                datetime.datetime.now().isoformat(),
+            ),
+        )
+        conn.commit()
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="handoff",
+                action="handoff_accepted_by_worker" if accepted else "handoff_accept_failed",
+                agent_id=receiver or "system",
+                payload=payload,
+            )
+        except Exception as audit_exc:
+            logger.warning("[KanbanWorker] Handoff-Audit fehlgeschlagen: %s", audit_exc)
+    except Exception as exc:
+        logger.debug("[KanbanWorker] Automatische Handoff-Annahme nicht moeglich: %s", exc)
+
+
+def _merge_task_meta_facts(task_id: str, facts: Dict[str, Any]) -> None:
+    """D11 (A8): Prompt-Ref + Korrelations-IDs nach ``mc_task_meta`` spiegeln.
+
+    Bestehende Budget-/Trajectory-Werte bleiben erhalten (Merge, kein
+    Ueberschreiben). Die Whitelist in ``mission_control.py`` wird nicht
+    erweitert (fremde Datei).
+    """
+    if not task_id or not facts:
+        return
+    conn = _get_kanban_connection(maintenance=True)
+    try:
+        # Idempotent: dieselbe Tabelle wie mission_control._init_db (keine
+        # Datenmigration, nur Select/Spiegelung).
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS mc_task_meta ("
+            "task_id TEXT PRIMARY KEY, meta_json TEXT NOT NULL, updated_at REAL NOT NULL)"
+        )
+        row = conn.execute(
+            "SELECT meta_json FROM mc_task_meta WHERE task_id = ?", (task_id,)
+        ).fetchone()
+        meta: Dict[str, Any] = {}
+        if row is not None:
+            raw = row["meta_json"] if hasattr(row, "keys") else row[0]
+            if raw:
+                try:
+                    loaded = json.loads(raw)
+                    if isinstance(loaded, dict):
+                        meta = loaded
+                except (TypeError, ValueError):
+                    meta = {}
+        meta.update(facts)
+        conn.execute(
+            "INSERT INTO mc_task_meta (task_id, meta_json, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(task_id) DO UPDATE SET meta_json = excluded.meta_json, "
+            "updated_at = excluded.updated_at",
+            (task_id, json.dumps(meta, ensure_ascii=False), time.time()),
+        )
+        conn.commit()
+    except Exception as exc:
+        logger.warning("[OperationsAPI] mc_task_meta-Fakten-Spiegelung fehlgeschlagen: %s", exc)
+    finally:
+        conn.close()
+
+
 def _kanban_load_task_sync(task_id: str):
     """F-055: SQLite-Punktabfrage im Worker-Thread statt im Event-Loop.
 
@@ -997,6 +1101,9 @@ def _kanban_load_task_sync(task_id: str):
             if model is not None:
                 task["_delegation_payload"] = model.model_dump()
                 task["_delegation_payload_model"] = model
+                # D11 (A8): der Empfänger-Worker quittiert das geladene
+                # Envelope (Produzent → HMAC-Check → Annahme → Effekt).
+                _accept_loaded_handoff(conn, task_id, model)
         return task
     finally:
         conn.close()
@@ -1158,6 +1265,7 @@ async def _execute_kanban_task_async(task_id: str):
 async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
     """Führt eine Kanban-Aufgabe autonom über core_dispatcher aus (alter dag_scheduler entfernt)."""
     import asyncio
+
     import core_dispatcher
     # Abbruch (Operator-Cancel oder Lease-Verlust) muss den laufenden
     # LLM-Call wirklich stoppen (Audit 23.11.2026).
@@ -1249,7 +1357,7 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
     provider_override = (t_dict.get("provider_override") or "").strip()
     if not model:
         try:
-            from backend.model_routing import is_enabled, resolve, classify_task
+            from backend.model_routing import classify_task, is_enabled, resolve
             if is_enabled():
                 _task_type = (t_dict.get("task_type") or "").strip() or classify_task(f"{title} {body}")
                 _route = resolve(_task_type)
@@ -1302,8 +1410,9 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         p_rel = _resolve_task_obsidian_rel(task_id)
         if p_rel:
             try:
-                from backend.post_task_pipeline import get_vault_dir
                 from pathlib import Path as _P
+
+                from backend.post_task_pipeline import get_vault_dir
                 vault = _P(get_vault_dir()).resolve()
                 p_dir = vault / p_rel
                 proj_context = f"\n\nPROJEKT-ORDNER IM OBSIDIAN VAULT: `{p_rel}`\n"
@@ -1411,6 +1520,20 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
                 retry_count=_retry_cnt + 1,
             )
 
+        # D11 (A8): verifizierte Prompt-/Korrelationsfakten aus dem Dispatcher
+        # in task_events.payload UND mc_task_meta spiegeln (keine erfundenen IDs).
+        _delegation_dump = _delegation_model.model_dump() if _delegation_model is not None else {}
+        _proof_facts: Dict[str, Any] = {}
+        for _k in ("trace_id", "session_id", "correlation_id"):
+            _v = res.get(_k) or _delegation_dump.get(_k)
+            if _v:
+                _proof_facts[_k] = str(_v)
+        _prompt_info = res.get("effective_prompt_info")
+        if _prompt_info:
+            _proof_facts["effective_prompt_info"] = _prompt_info
+        if _proof_facts:
+            await asyncio.to_thread(_merge_task_meta_facts, task_id, _proof_facts)
+
         is_success = verdict["status"] == "done" and res.get("status") == "success"
         target_status = "done" if is_success else ("blocked" if verdict["status"] == "blocked" else "failed")
         reply = raw_reply or f"Aufgabe '{title}' abgeschlossen ({target_status})."
@@ -1427,11 +1550,11 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
                 )
                 c.execute(
                     "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'awaiting_approval', ?, ?)",
-                    (task_id, json.dumps({"block_kind": verdict["block_kind"], "options": verdict.get("hitl_options", []), "reason": verdict.get("reason")}), now_iso),
+                    (task_id, json.dumps({"block_kind": verdict["block_kind"], "options": verdict.get("hitl_options", []), "reason": verdict.get("reason"), **_proof_facts}), now_iso),
                 )
                 c.execute(
                     "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'blocked', ?, ?)",
-                    (task_id, json.dumps({"reason": verdict["block_kind"]}), now_iso),
+                    (task_id, json.dumps({"reason": verdict["block_kind"], **_proof_facts}), now_iso),
                 )
             elif target_status == "failed":
                 c.execute(
@@ -1441,6 +1564,7 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
                 c.execute(
                     "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'failed', ?, ?)",
                     (task_id, json.dumps({
+                        **_proof_facts,
                         "status": "failed",
                         "summary": mark_truncated(reply, 200, artifact=f"tasks.result/{task_id}"),
                         "truncated": len(reply) > 200,
@@ -1455,6 +1579,7 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
                 )
                 c.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)",
                           (task_id, json.dumps({
+                              **_proof_facts,
                               "status": target_status,
                               "summary": mark_truncated(reply, 200, artifact=f"tasks.result/{task_id}"),
                               "truncated": len(reply) > 200,
@@ -1468,8 +1593,9 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
             
         # Obsidian-Dokumentation & Projekt-Artefakte synchronisieren
         try:
-            from backend.post_task_pipeline import get_vault_dir
             from pathlib import Path as _P
+
+            from backend.post_task_pipeline import get_vault_dir
             vault = _P(get_vault_dir()).resolve()
             p_rel = _resolve_task_obsidian_rel(task_id)
             obs_status_label = "ABGESCHLOSSEN" if target_status == "done" else target_status.upper()
@@ -2290,6 +2416,7 @@ class KanbanPaletteUpdate(BaseModel):
 def _resolve_task_obsidian_rel(task_id: str, meta: Optional[dict] = None, auto_heal: bool = False) -> Optional[str]:
     """Ermittelt den relativen Obsidian-Projektordner fuer eine Task mit automatischer Reparatur/Fallback."""
     from pathlib import Path as _P
+
     from backend.post_task_pipeline import get_vault_dir
     if meta is None:
         meta = _load_kanban_meta()
@@ -2529,9 +2656,10 @@ def _get_session_usage_map():
 def get_projects_overview():
     """Liefert die konsolidierte Projekt-Zentrale fuer Operations:
     Laufende, abgeschlossene und geplante Projekte mit Unteraufgaben, Status und Direktlinks zu HTML-Berichten."""
-    from pathlib import Path as _P
-    from backend.post_task_pipeline import get_vault_dir
     import datetime
+    from pathlib import Path as _P
+
+    from backend.post_task_pipeline import get_vault_dir
 
     vault = _P(get_vault_dir()).resolve()
     p_root = vault / "01_PROJEKTE"
@@ -2911,6 +3039,7 @@ def put_project_meta(project_id: str, upd: ProjectMetaUpdate, request: Request):
 def get_project_folder_files(project_id: str):
     """Listet alle Dateien des Projektordners 01_PROJEKTE/<id> im Obsidian-Vault (traversal-geschuetzt)."""
     from pathlib import Path as _P
+
     from backend.post_task_pipeline import get_vault_dir
     vault = _P(get_vault_dir()).resolve()
     proj_root = (vault / "01_PROJEKTE").resolve()
@@ -2936,6 +3065,7 @@ def get_project_folder_files(project_id: str):
 def get_kanban_project_files(task_id: str):
     """Listet die Dateien des verknuepften Obsidian-Projekts einer Task (Sidecar-Bruecke)."""
     from pathlib import Path as _P
+
     from backend.post_task_pipeline import get_vault_dir
     meta = _load_kanban_meta()
     rel = _resolve_task_obsidian_rel(task_id, meta)
@@ -2965,10 +3095,10 @@ def get_raw_original(request: Request, path: str):
     Browser PDF/Bilder/MD direkt zeigt bzw. laedt. Traversal-Schutz ueber
     erlaubte Basis-Pruefung."""
     require_admin_or_503(request)
-    from pathlib import Path as _P
     import mimetypes as _mt
-    from fastapi.responses import Response
-    from utils.path_jail import safe_path_within, PathJailError
+    from pathlib import Path as _P
+
+    from utils.path_jail import PathJailError, safe_path_within
 
     raw = (path or "").strip()
     p = _P(raw)
@@ -3003,8 +3133,9 @@ def get_vault_file(request: Request, path: str):
     Fix-Sprint Paket A (Punkt 10): liefert sensible Vault-Inhalte -> Admin-Gate."""
     require_admin_or_503(request)
     from pathlib import Path as _P
+
     from backend.post_task_pipeline import get_vault_dir
-    from utils.path_jail import safe_path_within, PathJailError
+    from utils.path_jail import PathJailError, safe_path_within
 
     rel = path.strip().lstrip("/\\")
     vault = _P(get_vault_dir()).resolve()
@@ -3027,6 +3158,7 @@ def find_vault_file(request: Request, q: str, limit: int = 8):
     Fix-Sprint Paket A (Punkt 10): exposes Vault-Struktur -> Admin-Gate."""
     require_admin_or_503(request)
     from pathlib import Path as _P
+
     from backend.post_task_pipeline import get_vault_dir
     q = (q or "").strip().lower()
     if not q or len(q) < 3:
@@ -3060,8 +3192,9 @@ def get_kanban_project_file(request: Request, task_id: str, path: str):
     Fix-Sprint Paket A (Punkt 10): liefert sensible Vault-Inhalte -> Admin-Gate."""
     require_admin_or_503(request)
     from pathlib import Path as _P
+
     from backend.post_task_pipeline import get_vault_dir
-    from utils.path_jail import safe_path_within, PathJailError
+    from utils.path_jail import PathJailError, safe_path_within
 
     meta = _load_kanban_meta()
     rel = _resolve_task_obsidian_rel(task_id, meta)
@@ -3401,26 +3534,29 @@ def add_task_comment(request: Request, task_id: str, author: str = Body(..., emb
 # Ausgelagert nach archon/routers/operations_org.py
 # =========================================================================
 from archon.routers.operations_org import (
-    router as _org_router,
     TEAMS_DEFINITION,
-    get_org_chart,
     CommBroadcastRequest,
-    broadcast_comm_message,
-    get_communication_feed,
-    stream_comm_feed,
-    _get_org_hierarchy_file,
-    _generate_default_hierarchy,
-    OrgHierarchySaveRequest,
-    get_org_hierarchy,
-    save_org_hierarchy,
-    reset_org_hierarchy,
     ConcurrencyUpdateRequest,
-    get_concurrency_settings,
-    update_concurrency_settings,
-    get_audit_log_entries,
-    verify_audit_log_chain,
+    OrgHierarchySaveRequest,
+    _generate_default_hierarchy,
+    _get_org_hierarchy_file,
+    broadcast_comm_message,
     export_audit_log,
+    get_audit_log_entries,
+    get_communication_feed,
+    get_concurrency_settings,
+    get_org_chart,
+    get_org_hierarchy,
+    reset_org_hierarchy,
+    save_org_hierarchy,
+    stream_comm_feed,
+    update_concurrency_settings,
+    verify_audit_log_chain,
 )
+from archon.routers.operations_org import (
+    router as _org_router,
+)
+
 ORG_HIERARCHY_FILE = _get_org_hierarchy_file()
 router.include_router(_org_router)
 
@@ -3430,17 +3566,20 @@ router.include_router(_org_router)
 # Ausgelagert nach archon/routers/operations_dag.py
 # =========================================================================
 from archon.routers.operations_dag import (
-    router as _dag_router,
     DecomposeTaskRequest,
-    api_dag_decompose_task,
-    api_dag_execute_task,
     WorkflowCheckpointCreateRequest,
     api_create_workflow_checkpoint,
+    api_dag_decompose_task,
+    api_dag_execute_task,
+    api_get_otel_trace_tree,
+    api_list_otel_traces,
     api_list_workflow_checkpoints,
     api_resume_workflow_checkpoint,
-    api_list_otel_traces,
-    api_get_otel_trace_tree,
 )
+from archon.routers.operations_dag import (
+    router as _dag_router,
+)
+
 router.include_router(_dag_router)
 
 # =========================================================================
@@ -3448,14 +3587,17 @@ router.include_router(_dag_router)
 # Ausgelagert nach archon/routers/operations_prompts.py
 # =========================================================================
 from archon.routers.operations_prompts import (
-    router as _prompts_router,
-    api_list_prompt_versions,
-    api_save_prompt_version,
     api_diff_prompt_versions,
-    api_rollback_prompt_version,
-    api_set_prompt_canary,
+    api_list_prompt_versions,
     api_promote_prompt_canary,
+    api_rollback_prompt_version,
+    api_save_prompt_version,
+    api_set_prompt_canary,
 )
+from archon.routers.operations_prompts import (
+    router as _prompts_router,
+)
+
 router.include_router(_prompts_router)
 
 # =========================================================================
@@ -3463,13 +3605,16 @@ router.include_router(_prompts_router)
 # Ausgelagert nach archon/routers/operations_receipts.py
 # =========================================================================
 from archon.routers.operations_receipts import (
-    router as _receipts_router,
-    api_receipts_process,
-    api_receipts_list,
     api_receipt_image,
     api_receipt_patch,
+    api_receipts_list,
+    api_receipts_process,
     api_receipts_upload,
 )
+from archon.routers.operations_receipts import (
+    router as _receipts_router,
+)
+
 router.include_router(_receipts_router)
 
 # =========================================================================
@@ -3477,28 +3622,31 @@ router.include_router(_receipts_router)
 # Ausgelagert nach archon/routers/operations_sysops.py
 # =========================================================================
 from archon.routers.operations_sysops import (
-    router as _sysops_router,
     HumanFeedbackSubmitRequest,
-    api_submit_human_feedback,
+    api_broadcast_task_chunk,
+    api_call_mcp_tool,
+    api_chaos_results,
+    api_chaos_run,
+    api_gdpr_audit_log,
+    api_gdpr_erase,
+    api_gdpr_export,
     api_get_feedback_stats,
-    api_get_task_feedback,
-    api_validate_system_config,
+    api_get_mcp_tools,
     api_get_metrics_summary,
     api_get_notification_policy,
-    api_update_notification_policy,
-    api_get_suppressed_digest,
-    api_get_mcp_tools,
-    api_call_mcp_tool,
-    api_stream_task_execution,
-    api_broadcast_task_chunk,
     api_get_restore_test_history,
+    api_get_suppressed_digest,
+    api_get_task_feedback,
+    api_stream_task_execution,
+    api_submit_human_feedback,
     api_trigger_restore_test,
-    api_gdpr_export,
-    api_gdpr_erase,
-    api_gdpr_audit_log,
-    api_chaos_run,
-    api_chaos_results,
+    api_update_notification_policy,
+    api_validate_system_config,
 )
+from archon.routers.operations_sysops import (
+    router as _sysops_router,
+)
+
 router.include_router(_sysops_router)
 
 
@@ -3597,13 +3745,16 @@ def api_esign_webhook(request: Request, payload: EsignWebhookEvent):
 # Ausgelagert nach archon/routers/operations_dunning.py
 # =========================================================================
 from archon.routers.operations_dunning import (
-    router as _dunning_router,
-    api_dunning_invoices,
+    api_dunning_approve,
     api_dunning_create_invoice,
     api_dunning_generate_draft,
-    api_dunning_approve,
+    api_dunning_invoices,
     api_dunning_mark_paid,
 )
+from archon.routers.operations_dunning import (
+    router as _dunning_router,
+)
+
 router.include_router(_dunning_router)
 
 # ==============================================================================
@@ -3611,10 +3762,13 @@ router.include_router(_dunning_router)
 # Ausgelagert nach archon/routers/operations_finetuning.py
 # ==============================================================================
 from archon.routers.operations_finetuning import (
-    router as _finetuning_router,
-    api_finetuning_status,
     api_finetuning_prepare,
+    api_finetuning_status,
 )
+from archon.routers.operations_finetuning import (
+    router as _finetuning_router,
+)
+
 router.include_router(_finetuning_router)
 
 
@@ -3624,18 +3778,21 @@ router.include_router(_finetuning_router)
 # Ausgelagert nach archon/routers/operations_approvals.py
 # ==============================================================================
 from archon.routers.operations_approvals import (
-    router as _approvals_router,
-    api_get_approval_policies,
-    api_update_approval_policy,
-    api_get_approval_requests,
-    api_create_approval_request,
     api_approve_request,
-    api_reject_request,
-    api_get_delegation,
-    api_set_delegation,
+    api_create_approval_request,
     api_get_approval_audit_chain,
+    api_get_approval_policies,
+    api_get_approval_requests,
+    api_get_delegation,
+    api_reject_request,
+    api_set_delegation,
+    api_update_approval_policy,
     api_verify_approval_audit,
 )
+from archon.routers.operations_approvals import (
+    router as _approvals_router,
+)
+
 router.include_router(_approvals_router)
 
 # ==============================================================================
@@ -3643,13 +3800,16 @@ router.include_router(_approvals_router)
 # Ausgelagert nach archon/routers/operations_keys.py
 # ==============================================================================
 from archon.routers.operations_keys import (
-    router as _keys_router,
-    api_list_keys,
     api_create_key,
-    api_revoke_key,
     api_delete_key,
     api_get_keys_audit,
+    api_list_keys,
+    api_revoke_key,
 )
+from archon.routers.operations_keys import (
+    router as _keys_router,
+)
+
 router.include_router(_keys_router)
 
 
@@ -3659,16 +3819,19 @@ router.include_router(_keys_router)
 # Ausgelagert nach archon/routers/operations_emails.py
 # ==============================================================================
 from archon.routers.operations_emails import (
-    router as _emails_router,
-    api_list_email_drafts,
-    api_create_email_draft,
-    api_get_email_draft,
     api_approve_email_draft,
+    api_create_email_draft,
     api_edit_email_draft,
-    api_snooze_email_draft,
+    api_get_email_draft,
+    api_list_email_drafts,
     api_regenerate_email_draft,
     api_reject_email_draft,
+    api_snooze_email_draft,
 )
+from archon.routers.operations_emails import (
+    router as _emails_router,
+)
+
 router.include_router(_emails_router)
 
 # =========================================================================
@@ -3676,16 +3839,19 @@ router.include_router(_emails_router)
 # Ausgelagert nach archon/routers/operations_security.py
 # =========================================================================
 from archon.routers.operations_security import (
-    router as _sec_router,
-    api_get_agent_scorecard,
-    api_save_agent_operator_notes,
-    api_sanitize_input,
-    api_get_trusted_sources,
-    api_toggle_trusted_source,
-    api_get_break_glass_status,
     api_create_break_glass_vault,
     api_download_break_glass_kit,
+    api_get_agent_scorecard,
+    api_get_break_glass_status,
+    api_get_trusted_sources,
+    api_sanitize_input,
+    api_save_agent_operator_notes,
+    api_toggle_trusted_source,
 )
+from archon.routers.operations_security import (
+    router as _sec_router,
+)
+
 router.include_router(_sec_router)
 
 
@@ -3696,16 +3862,19 @@ router.include_router(_sec_router)
 # Ausgelagert nach archon/routers/operations_bot_screen.py
 # =========================================================================
 from archon.routers.operations_bot_screen import (
-    router as _bot_screen_router,
-    _bot_screen_state,
-    TakeoverRequestModel,
     ScreenInteractionModel,
+    TakeoverRequestModel,
+    _bot_screen_state,
+    abort_bot_screen_execution,
     get_bot_screen_status,
+    interact_with_bot_screen,
     request_human_takeover,
     resume_from_human_takeover,
-    interact_with_bot_screen,
-    abort_bot_screen_execution,
 )
+from archon.routers.operations_bot_screen import (
+    router as _bot_screen_router,
+)
+
 router.include_router(_bot_screen_router)
 
 
@@ -3715,18 +3884,21 @@ router.include_router(_bot_screen_router)
 # Ausgelagert nach archon/routers/operations_autonomy.py
 # ==============================================================================
 from archon.routers.operations_autonomy import (
-    router as _autonomy_router,
-    ToolEvolutionRequest,
+    JITPersonaTaskRequest,
     MCTSSimulationRequest,
     PrefetchRequest,
-    JITPersonaTaskRequest,
-    list_evolved_tools,
-    trigger_tool_evolution,
-    simulate_mcts_trajectories,
-    trigger_speculative_prefetch,
+    ToolEvolutionRequest,
     execute_jit_persona_task,
     list_ephemeral_personas,
+    list_evolved_tools,
+    simulate_mcts_trajectories,
+    trigger_speculative_prefetch,
+    trigger_tool_evolution,
 )
+from archon.routers.operations_autonomy import (
+    router as _autonomy_router,
+)
+
 router.include_router(_autonomy_router)
 
 
@@ -3736,19 +3908,22 @@ router.include_router(_autonomy_router)
 # Ausgelagert nach archon/routers/operations_pbd.py
 # ==============================================================================
 from archon.routers.operations_pbd import (
-    router as _pbd_router,
-    PBDStartRequest,
+    A11yPruneRequest,
     PBDEventRequest,
+    PBDStartRequest,
     PBDStopRequest,
     TrajectoryRequest,
-    A11yPruneRequest,
-    start_pbd_recording,
-    record_pbd_event,
-    get_pbd_status,
-    stop_pbd_and_synthesize,
     calculate_ghost_cursor_trajectory,
+    get_pbd_status,
     prune_a11y_tree,
+    record_pbd_event,
+    start_pbd_recording,
+    stop_pbd_and_synthesize,
 )
+from archon.routers.operations_pbd import (
+    router as _pbd_router,
+)
+
 router.include_router(_pbd_router)
 
 

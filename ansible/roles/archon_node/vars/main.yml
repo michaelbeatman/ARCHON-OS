@@ -45,17 +45,35 @@ archon_compose_file: "docker-compose.yml"
 archon_healthcheck_url: "http://localhost:8501/health"
 archon_readycheck_url: "http://localhost:8501/readyz"
 
+# Audit D05/D10 (F-01, D-D9): Produktionsmodus und erzwungene externe
+# /readyz-Probes als Default-Deploy-Pfad. Nur bewusst isolierte Entwicklung
+# darf diese Werte ueberschreiben.
+archon_environment: "production"
+archon_readiness_probes: "1"
+
+# Audit D10: Alertmanager-Nachweis. Der Betreiber setzt
+# archon_alert_secrets_configured auf true, wenn TELEGRAM_BOT_TOKEN und
+# TELEGRAM_CHAT_ID in der .env hinterlegt sind; erst dann greift der
+# Testalarm-Gate und alertmanager ist im ps-Check erforderlich.
+archon_alert_secrets_configured: false
+archon_alertmanager_test_alarm: true
+
+# Audit D10: Watchdog-Altersschwellen im Container konsistent verdrahten.
+archon_autoheal_watchdog_max_age_s: "120"
+archon_watchdog_max_last_seen_age_s: "120"
+
 # Audit D10: Produktiv-Observability im Ansible-Deploy. "full" aktiviert die
 # Compose-Profile monitoring,logging,replication,tracing — damit starten
-# Prometheus, Alertmanager, Grafana, Loki, Promtail, Litestream, OTel/Langfuse
-# und der Dead-Man-Heartbeat bekommen endlich Adressaten. Default "off" =
+# Prometheus, Grafana, Loki, Promtail, Litestream und der OTel-Collector; der
+# Alertmanager nur bei gesetzten Telegram-Secrets. Langfuse v2 ist EOL und
+# aus Compose/Startern entfernt (Audit D09/D10, D-D8). Default "off" =
 # Normal-Start (identisch zu start.bat / install.sh).
 archon_observability: "off"
 
-# Audit D10/DR: Das Litestream-Replikat muss auf einem vom Host GETRENNTEN
-# Volume/NAS liegen. Der Betreiber setzt diesen Pfad — bewusst wird KEIN Pfad
-# erfunden. Leer = Compose-Default ./data/litestream_replicas (gleicher Host
-# wie die Primaer-DB = nur Entwicklung, kein echtes DR-Ziel).
-# RPO ~5-10 s (sync-interval), RTO-Ziel <= 30 min inkl. periodischem
-# Restore-Test (scripts/automated_restore_test.py, z. B. alle 6 h).
-archon_litestream_replica_dir: ""
+# Audit D10/DR: Das Litestream-Replikat liegt auf einem vom DB-Volumen
+# GETRENNTEN Ziel. Der Betreiber mountet /mnt/archon-dr (NAS/externes Volume)
+# und passt den Pfad an; der Deploy bricht ab, wenn das Ziel nicht existiert.
+# Leer = Compose-Default ./dr_replicas (nur Entwicklung, kein echtes DR-Ziel).
+# RPO ~5-10 s (sync-interval), RTO-Ziel <= 30 min, messbar durch den
+# periodischen Restore-Test (scripts/automated_restore_test.py, alle 6 h).
+archon_litestream_replica_dir: "/mnt/archon-dr/litestream_replicas"

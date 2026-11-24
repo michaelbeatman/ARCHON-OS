@@ -6239,7 +6239,7 @@ print('Ausführung erfolgreich!')</textarea>
         console.error("Log-Stream poll error:", err);
         const container = document.getElementById("logstream-terminal-lines");
         if (container && (!rawLogStreamBuffer || rawLogStreamBuffer.length === 0)) {
-          container.innerHTML = `<div class="text-rose-500 font-mono text-xs py-2">Verbindungsfehler zum Log-Stream (${err.message || err}). Neuer Versuch in 3s...</div>`;
+          container.innerHTML = `<div class="text-rose-500 font-mono text-xs py-2">Verbindungsfehler zum Log-Stream (${escapeHtml(err.message || err)}). Neuer Versuch in 3s...</div>`;
         }
       } finally {
         if (isFirstLogStreamConnection) {
@@ -7291,7 +7291,7 @@ ${logExcerpt}
             const data = await res.json();
             if (statusBox) {
               statusBox.className = "p-2 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-mono";
-              statusBox.innerHTML = `✓ '${data.title}' erfolgreich indiziert (${data.pages_count} Seiten, ${data.chunks_indexed} Chunks).`;
+              statusBox.innerHTML = `✓ '${escapeHtml(data.title)}' erfolgreich indiziert (${escapeHtml(data.pages_count)} Seiten, ${escapeHtml(data.chunks_indexed)} Chunks).`;
             }
           }
         } catch (e) {
@@ -7339,7 +7339,7 @@ ${logExcerpt}
           `).join("");
         }
       } catch (e) {
-        list.innerHTML = `<div class="p-3 text-center text-rose-400">Fehler beim Laden: ${e.message}</div>`;
+        list.innerHTML = `<div class="p-3 text-center text-rose-400">Fehler beim Laden: ${escapeHtml(e.message)}</div>`;
       }
     }
     function closeAttachVaultModal() {

@@ -5,19 +5,19 @@ Führt Agenten-Code in isolierten, flüchtigen Umgebungen mit harten Limits
 (RAM, CPU, Timeout, optional Netzwerk-Sperre) aus und zerstört den Container sofort danach (Pillar 2 & 6).
 """
 
+import json
+import logging
 import os
+import shlex
+import shutil
+import socket
+import subprocess
 import sys
 import time
 import uuid
-import shutil
-import subprocess
-import json
-import shlex
-import socket
-import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
-from utils.docker_client import docker_client, DockerError, docker_cli_host_args
+from utils.docker_client import DockerError, docker_cli_host_args, docker_client
 
 logger = logging.getLogger("archon.ephemeral_sandbox")
 
@@ -240,15 +240,21 @@ def _terminate_container(name: str) -> Dict[str, Any]:
     """Killt und entfernt einen Sandbox-Container und verifiziert das Ergebnis.
 
     `destroyed` wird nur gemeldet, wenn der Container nachweislich nicht mehr
-    existiert (oder `rm -f` erfolgreich war, falls Docker nicht mehr erreichbar
-    ist). Bisher wurde `destroyed: True` unbedingt zurückgegeben, auch wenn
-    kill und rm scheitern — der Container lief dann als Zombie weiter (C12).
+    existiert. Ist Docker nicht mehr erreichbar, bleibt `destroyed: None` und
+    `cleanup_unverified: True` (D07/C12) — ein successful `rm -f`-Returncode
+    allein ist kein verifizierter Beleg. Bisher wurde `destroyed: True`
+    unbedingt zurückgegeben, auch wenn kill und rm scheitern — der Container
+    lief dann als Zombie weiter.
     """
     host_args = _cli_host_args_or_none()
     if host_args is None:
+        # C12/D07: Docker nicht erreichbar → kein verifizierbarer Beleg.
+        # 'destroyed: False' wuerde behaupten, der Container lebe noch;
+        # 'destroyed: True' waere ein Fake-Erfolg. Beides ist unzulaessig.
         return {
-            "killed": False, "removed": False, "destroyed": False,
-            "cleanup_verified": False, "not_configured": True,
+            "killed": False, "removed": False, "destroyed": None,
+            "cleanup_verified": False, "cleanup_unverified": True,
+            "not_configured": True, "error_code": "CLEANUP_UNVERIFIED",
         }
     killed = False
     removed = False
@@ -265,12 +271,21 @@ def _terminate_container(name: str) -> Dict[str, Any]:
         except Exception:
             continue
     present = _container_present(name)
-    destroyed = removed if present is None else not present
+    if present is None:
+        # D07: rm -f mag Erfolg gemeldet haben, ohne Docker ist das Ergebnis
+        # nicht verifizierbar — kein 'destroyed: True' aus einem Erfolgs-Returncode.
+        destroyed = None
+        cleanup_verified = False
+    else:
+        destroyed = not present
+        cleanup_verified = True
     return {
         "killed": killed,
         "removed": removed,
         "destroyed": destroyed,
-        "cleanup_verified": present is not None,
+        "cleanup_verified": cleanup_verified,
+        "cleanup_unverified": present is None,
+        "error_code": "CLEANUP_UNVERIFIED" if present is None else None,
     }
 
 
@@ -297,7 +312,16 @@ class EphemeralSandbox:
             from backend.autonomy_settings import get_module_config
             cfg = get_module_config("ephemeral_sandbox")
             if not cfg.get("enabled", True):
-                return {"status": "disabled", "error": "Ephemeral Sandbox ist in den Einstellungen deaktiviert.", "destroyed": True}
+                # D07: Modul deaktiviert → es wurde KEIN Container erzeugt.
+                # 'destroyed: True' war ein Fake-Erfolg ohne jeden Beleg.
+                return {
+                    "status": "disabled",
+                    "error": "Ephemeral Sandbox ist in den Einstellungen deaktiviert.",
+                    "destroyed": None,
+                    "cleanup_verified": False,
+                    "cleanup_unverified": False,
+                    "container_created": False,
+                }
             if memory_limit_mb is None:
                 memory_limit_mb = int(cfg.get("memory_limit_mb", 512))
             if cpu_limit is None:
@@ -333,6 +357,8 @@ class EphemeralSandbox:
                 "limits_enforced": False,
                 "destroyed": None,
                 "cleanup_verified": False,
+                "cleanup_unverified": True,
+                "error_code": "CLEANUP_UNVERIFIED",
                 "container_created": False,
             }
 
@@ -373,7 +399,12 @@ class EphemeralSandbox:
                     "memory_limit_mb": memory_limit_mb,
                     "network_enabled": network_enabled,
                     "limits_enforced": False,
-                    "destroyed": True
+                    # D07: kein Container erzeugt → kein Fake-"destroyed: True".
+                    "destroyed": None,
+                    "cleanup_verified": False,
+                    "cleanup_unverified": True,
+                    "error_code": "CLEANUP_UNVERIFIED",
+                    "container_created": False,
                 }
 
             # Docker-Kommando als Liste bauen (kein shell=True, daher sicheres Quoting)
@@ -438,6 +469,8 @@ class EphemeralSandbox:
                     # ein Fake-Erfolg. Ehrlich 'nicht anwendbar' melden.
                     "destroyed": None,
                     "cleanup_verified": False,
+                    "cleanup_unverified": True,
+                    "error_code": "CLEANUP_UNVERIFIED",
                     "container_created": False,
                 }
 
@@ -447,22 +480,30 @@ class EphemeralSandbox:
             # `destroyed: True` jedoch ohne jeden Beleg zurueckgegeben. Jetzt
             # verifizieren und bei Bedarf nachtraeumlich aufraeumen.
             present = _container_present(run_id)
+            execution_status = "success" if exit_code == 0 else "failed"
+            error_code: Optional[str] = None
             if present is None:
-                # Docker nicht mehr erreichbar: --rm ist die einzige Garantie,
-                # aber nicht verifizierbar — ehrlich als solches melden.
-                destroyed = True
+                # D07/C12: Docker nicht mehr erreichbar. `--rm` ist die einzige
+                # Garantie, aber NICHT verifizierbar — kein Fake-"destroyed: True".
+                destroyed = None
                 cleanup_verified = False
+                error_code = "CLEANUP_UNVERIFIED"
+                status = "orphan_suspected"
             elif present:
                 # --rm hat nicht gegriffen: explizit killen und entfernen.
                 cleanup = _terminate_container(run_id)
                 destroyed = cleanup["destroyed"]
                 cleanup_verified = cleanup["cleanup_verified"]
+                error_code = cleanup.get("error_code")
+                status = execution_status
             else:
                 destroyed = True
                 cleanup_verified = True
+                status = execution_status
 
             return {
-                "status": "success" if exit_code == 0 else "failed",
+                "status": status,
+                "execution_status": execution_status,
                 "run_id": run_id,
                 "engine": "docker_micro_container",
                 "language": language,
@@ -474,8 +515,11 @@ class EphemeralSandbox:
                 "network_enabled": network_enabled,
                 "limits_enforced": limits_enforced,
                 "destroyed": destroyed,
-                "destroyed_via_rm": True,
+                # Nur behaupten, wenn die Abwesenheit verifiziert wurde.
+                "destroyed_via_rm": present is False,
                 "cleanup_verified": cleanup_verified,
+                "cleanup_unverified": present is None,
+                "error_code": error_code,
             }
 
         except subprocess.TimeoutExpired:
@@ -491,6 +535,8 @@ class EphemeralSandbox:
                 "killed": cleanup["killed"],
                 "destroyed": cleanup["destroyed"],
                 "cleanup_verified": cleanup["cleanup_verified"],
+                "cleanup_unverified": cleanup.get("cleanup_unverified", True),
+                "error_code": cleanup.get("error_code"),
             }
         except Exception as e:
             # Auch im generischen Fehlerpfad muss aufgeräumt werden; bisher
@@ -503,6 +549,8 @@ class EphemeralSandbox:
                 "killed": cleanup["killed"],
                 "destroyed": cleanup["destroyed"],
                 "cleanup_verified": cleanup["cleanup_verified"],
+                "cleanup_unverified": cleanup.get("cleanup_unverified", True),
+                "error_code": cleanup.get("error_code"),
             }
         finally:
             if os.path.exists(run_dir):

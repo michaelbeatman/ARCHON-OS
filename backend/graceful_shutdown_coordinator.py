@@ -9,12 +9,40 @@ Sauberes Herunterfahren mit Task-Draining & Durable Checkpointing (t-12113b, Pil
 - Stellt unterbrochene Tasks beim Systemstart automatisch wieder her.
 """
 
-import os
-import sys
-import time
 import json
+import logging
+import os
 import signal
 import sqlite3
+import sys
+import time
+
+logger = logging.getLogger(__name__)
+
+
+def _audit_recovery(action: str, payload: "Dict[str, Any]") -> None:
+    """Audit-Event best effort — ein Write-Fehler darf nicht erneut verschluckt werden."""
+    try:
+        from backend.audit_log import chained_audit_log
+
+        chained_audit_log.record_event(
+            category="recovery",
+            action=action,
+            agent_id="system",
+            payload=payload,
+        )
+    except Exception as exc:
+        logger.error("[GracefulShutdown] Audit '%s' fehlgeschlagen: %s", action, exc)
+
+
+def _hitl_escalate(title: str, detail: str) -> None:
+    try:
+        from backend.event_mesh import event_mesh
+
+        event_mesh.ingest_inbound_event("system", "hitl_required", {"title": title, "detail": detail, "source": "recovery"})
+    except Exception as exc:
+        logger.error("[GracefulShutdown] HITL-Eskalation fehlgeschlagen: %s", exc)
+
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -27,7 +55,7 @@ class _ArchonClosingConn(sqlite3.Connection):
             self.close()
 import asyncio
 import datetime
-from typing import Dict, Any, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -40,6 +68,9 @@ class GracefulShutdownCoordinator:
         self._default_grace_seconds = 15.0
         self._active_tasks: Dict[str, Dict[str, Any]] = {}
         self._lock = asyncio.Lock() if sys.version_info >= (3, 7) else None
+        # D07/MED: gescheiterte Checkpoints/Resumes bleiben nachvollziehbar.
+        self.failed_checkpoints: List[str] = []
+        self.failed_resumes: List[Dict[str, Any]] = []
 
     @property
     def is_draining(self) -> bool:
@@ -202,8 +233,12 @@ class GracefulShutdownCoordinator:
             # 1. In durable_checkpoint_manager eintragen. Nur bei Erfolg darf
             # der Task als 'checkpointed' gelten (Audit C12: vorher wurde ein
             # Checkpoint-Fehler nur gedruckt und die Registry trotzdem geleert).
+            # D07/MED: save_checkpoint() liefert bei deaktiviertem Modul
+            # {"saved": False, "bypassed": True} OHNE Exception — der
+            # Rueckgabewert muss ausgewertet werden, sonst entsteht ein
+            # 'checkpointed'-Task ohne Resume-Payload.
             try:
-                durable_checkpoint_manager.save_checkpoint(
+                cp_res = durable_checkpoint_manager.save_checkpoint(
                     workflow_id=tid,
                     task_title=title,
                     current_step_index=cur_step,
@@ -212,8 +247,21 @@ class GracefulShutdownCoordinator:
                     status="checkpointed"
                 )
             except Exception as e:
-                print(f"[GracefulShutdown] Fehler beim Checkpointing von {tid}: {e}", file=sys.stderr)
+                logger.error("[GracefulShutdown] Fehler beim Checkpointing von %s: %s", tid, e)
                 failed.append(tid)
+                _audit_recovery("checkpoint_write_failed", {"task_id": tid, "error": str(e)})
+                continue
+            if not isinstance(cp_res, dict) or cp_res.get("saved") is not True:
+                reason = "checkpoint_bypassed" if (cp_res or {}).get("bypassed") else "checkpoint_not_saved"
+                logger.error(
+                    "[GracefulShutdown] Task %s NICHT checkpointed (%s): %s",
+                    tid, reason, cp_res,
+                )
+                failed.append(tid)
+                _audit_recovery("checkpoint_bypassed", {
+                    "task_id": tid, "reason": reason, "result": cp_res,
+                })
+                _hitl_escalate("Checkpoint nicht gespeichert", f"Task {tid}: {reason}")
                 continue
 
             # 2. In kanban.db oder agent_os.db Status von 'in_progress' auf 'checkpointed' setzen
@@ -230,7 +278,12 @@ class GracefulShutdownCoordinator:
         # Nur tatsaechlich gesicherte Tasks aus der Registry entfernen.
         for cp in checkpoints:
             self._active_tasks.pop(cp["task_id"], None)
+        self.failed_checkpoints = list(failed)
         if failed:
+            logger.error(
+                "[GracefulShutdown] %s Aufgaben konnten NICHT gesichert werden "
+                "und bleiben in der Registry: %s", len(failed), failed,
+            )
             print(
                 f"[GracefulShutdown] {len(failed)} Aufgaben konnten NICHT gesichert werden "
                 f"und bleiben in der Registry: {failed}",
@@ -424,6 +477,25 @@ class GracefulShutdownCoordinator:
                         ))
                     except Exception as enqueue_exc:
                         restart = {"queued": False, "reason": f"enqueue_failed: {enqueue_exc}"}
+                # D07/MED: ein gescheiterter Enqueue war frueher nur im
+                # Rueckgabe-Dict sichtbar. Der Checkpoint bleibt 'checkpointed'
+                # und wird vom Idempotency-Key am erneuten Enqueue gehindert —
+                # daher hart eskalieren, statt ihn als wiederhergestellt zu melden.
+                if restart.get("queued") is not True and restart.get("duplicate") is not True:
+                    failure = {
+                        "task_id": workflow_id,
+                        "reason": restart.get("reason", "unknown"),
+                    }
+                    self.failed_resumes.append(failure)
+                    logger.error(
+                        "[GracefulShutdown] Resume von %s nicht enqueued: %s",
+                        workflow_id, failure["reason"],
+                    )
+                    _audit_recovery("checkpoint_resume_enqueue_failed", failure)
+                    _hitl_escalate(
+                        "Resume-Enqueue fehlgeschlagen",
+                        f"Workflow {workflow_id}: {failure['reason']}",
+                    )
                 recovered.append({
                     "task_id": workflow_id,
                     "title": cp.get("task_title"),
@@ -443,7 +515,9 @@ class GracefulShutdownCoordinator:
 
         return {
             "recovered_checkpoints": recovered,
-            "recovered_orphans_count": recovered_orphans
+            "recovered_orphans_count": recovered_orphans,
+            "resume_failures": list(self.failed_resumes),
+            "checkpoint_failures": list(self.failed_checkpoints),
         }
 
     def _heal_orphan_tasks(self, db_path: Optional[str] = None) -> int:

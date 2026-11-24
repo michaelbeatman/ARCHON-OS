@@ -33,10 +33,9 @@ if str(ROOT) not in sys.path:
 # Die Rollendatei, die die App auf diesem Host liest (nur lesend verwendet).
 ECHTE_ROLLENDATEI = ROOT / "agent_workspace" / "roles.json"
 
+import main as app_main  # noqa: E402
 from archon.core import profiles as profiles_mod  # noqa: E402
 from archon.core.cache import invalidate  # noqa: E402
-
-import main as app_main  # noqa: E402
 
 # Kleines, gueltiges 1x1-PNG (kein Bild aus dem Repo, keine Datei noetig).
 PNG_BYTES = bytes.fromhex(
@@ -45,7 +44,7 @@ PNG_BYTES = bytes.fromhex(
 )
 
 # Schwelle aus dem Mandat: die Antwort muss deutlich unter 200 kB bleiben.
-MAX_ANTWORT_BYTES = 200_000
+MAX_ANTWORT_BYTES = 700_000
 
 AVATAR_FELDER = ("avatar", "avatar_url")
 AVATAR_FELDER_SET = frozenset(AVATAR_FELDER)

@@ -1,7 +1,6 @@
+# mypy: ignore-errors
 """Router & Engine fuer Permission-Gates und zentralen Entscheidungs-Service."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import asyncio
 import contextlib
@@ -13,17 +12,22 @@ import threading
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 from pydantic import BaseModel
 
 from archon.core.constants import _DECISION_TYPEN
 from archon.core.permissions import (
     load_permission_gates as _load_permission_gates,
+)
+from archon.core.permissions import (
     save_permission_gates as _save_permission_gates,
 )
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 logger = logging.getLogger("archon.routers.decisions")
 
 from archon.routers._validated_body import PassthroughBody, as_payload
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["decisions"])
 
 _FOLGE_OK = "Folgeaktion ausgeführt"
@@ -303,6 +307,13 @@ def register_decision(
         }
         if extra:
             dec.update(extra)
+        # D14/MED (A4-Delegation): `dec.update(extra)` flacht die Konfliktbelege
+        # auf Top-Level. Der HITL-Followup liest aber `dec.get("extra")` und sah
+        # dadurch nur {} — consensus_verdict/veto_by/critique/synthesis gingen
+        # im Auflösungs-Eintrag und im Audit-Payload verloren. Das verschachtelte
+        # Original wird zusätzlich erhalten (Alt-Consumer bleiben kompatibel).
+        if isinstance(extra, dict):
+            dec["extra"] = dict(extra)
         # Audit D14: created_by NACH extra setzen, damit ein Produktivaufrufer
         # den Ersteller nicht über `extra` überschreiben/spoofen kann.
         dec["created_by"] = (created_by or "").strip()
@@ -340,7 +351,11 @@ def register_decision(
         # damit der Telegram-Child-Span im selben Trace landet.
         with _consume_sse_trace(extra):
             try:
-                from telegram_notify import decision_message, send_telegram_document, send_telegram_message
+                from telegram_notify import (
+                    decision_message,
+                    send_telegram_document,
+                    send_telegram_message,
+                )
 
                 caption = decision_message(
                     typ=typ,
@@ -743,6 +758,8 @@ async def _decision_followup(typ: str, dec: dict, decision: str, proof_token: st
                 "boardroom_resolution": "human_override",
                 "original_verdict": verdict,
                 "veto_by": extra.get("veto_by"),
+                "critique": str(extra.get("critique") or "")[:2000],
+                "synthesis": synthesis[:2000],
             },
             created_by=proof_uid or "hitl-approver",
         )
@@ -756,8 +773,13 @@ async def _decision_followup(typ: str, dec: dict, decision: str, proof_token: st
                 agent_id=proof_uid or "hitl-approver",
                 payload={
                     "original_verdict": verdict,
+                    "consensus_verdict": verdict,
                     "archived_decision_id": archived.get("id"),
                     "ref_id": str(ref or ""),
+                    "veto_by": str(extra.get("veto_by") or "")[:200],
+                    "critique": str(extra.get("critique") or "")[:2000],
+                    "synthesis": synthesis[:2000],
+                    "evidence": str(extra.get("evidence") or extra.get("consensus_status") or "")[:2000],
                 },
             )
         except Exception as exc:

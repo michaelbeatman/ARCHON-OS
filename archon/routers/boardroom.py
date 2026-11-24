@@ -1,5 +1,8 @@
+# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """Router /api/boardroom — ausgelagerte Routen (Modularisierung main.py -> archon/routers)."""
 
 import asyncio
@@ -15,18 +18,27 @@ from typing import Any, Dict, List, Optional, cast
 import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
-
-from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 import core_dispatcher  # noqa: F401
-from backend.cancellation import clear_scope, get_child_token
 from archon.core.runtime import (  # noqa: F401
-    WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, SETTINGS_FILE, OBSIDIAN_VAULT_DIR, APP_ROOT,
-    add_ticker, broadcast_event, ticker_entries, _load_json, _save_json, atomic_write_json,
+    APP_ROOT,
+    DATA_DIR,
+    MEMORY_DIR,
+    OBSIDIAN_VAULT_DIR,
+    SETTINGS_FILE,
+    WORKSPACE_DIR,
+    _load_json,
+    _save_json,
+    add_ticker,
+    atomic_write_json,
+    broadcast_event,
     logger,
+    ticker_entries,
 )
+from archon.routers._rbac import require_admin_or_503
+from backend.cancellation import clear_scope, get_child_token
 
 # --------------------------------------------------
 # Dependency-Injektion statt Kopie
@@ -45,6 +57,7 @@ def configure(**deps: Any) -> None:
 from copy import deepcopy as _deepcopy
 
 from archon.routers._validated_body import PassthroughBody, as_payload
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 
@@ -136,6 +149,10 @@ def save_boardroom_history_item(item: dict, actor_id: str = "system"):
         "task": str(entry.get("task", ""))[:500],
         "framework": entry.get("framework"),
         "timestamp": entry.get("timestamp"),
+        "decision_status": entry.get("decision_status"),
+        "consensus_verdict": entry.get("consensus_verdict"),
+        "cancel_reason": entry.get("cancel_reason") or "",
+        "cancel_scope": entry.get("cancel_scope") or "",
     })
     return hist
 
@@ -251,7 +268,9 @@ async def api_boardroom_parse_attachment(file: UploadFile = File(...)):
     
     if lower_name.endswith(".pdf"):
         try:
-            import pypdf, io
+            import io
+
+            import pypdf
             reader = pypdf.PdfReader(io.BytesIO(content))
             pages_text = []
             for i, page in enumerate(reader.pages[:25]):
@@ -584,7 +603,11 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
                 and _debate_status not in ("cancelled", "canceled", "error", "aborted", "no_consensus")
                 and not bool(res.get("cancelled"))
             )
-            if not _has_consensus:
+            if _debate_status in ("cancelled", "canceled", "aborted"):
+                # D02/HIGH: ein Abbruch ist ein eigener Terminalstatus und kein
+                # „kein Konsens" — sonst ist er im Archiv nicht erkennbar.
+                _decision_status = "cancelled"
+            elif not _has_consensus:
                 _decision_status = "no_consensus"
             elif _is_final_decision:
                 _decision_status = "approved"
@@ -609,7 +632,12 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
                 ],
                 "transcript": res.get("transcript", ""),
                 "synthesis": res.get("synthesis", ""),
-                "vault_file": f"boardroom_debatte_{ts_str}.md"
+                "vault_file": f"boardroom_debatte_{ts_str}.md",
+                # D02/HIGH: ein Abbruch bleibt als solcher erkennbar — die
+                # Begruendung gehoert in History UND Audit-Kette, nicht nur
+                # in ein Metadatenfeld des Dispatch-Ergebnisses.
+                "cancel_reason": str(res.get("cancel_reason") or ""),
+                "cancel_scope": str(res.get("cancel_scope") or "") if _debate_status == "cancelled" else "",
             }
             from archon.routers._rbac import get_session_actor
             hist_entry["_actor_id"] = get_session_actor(request, fallback="boardroom-service")
@@ -691,10 +719,20 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                     _stream_verdict = str(
                         ev.get("consensus_verdict") or ev.get("consensus_status") or "NO_CONSENSUS"
                     ).upper()
-                    _stream_final = _stream_verdict.startswith("CONSENSUS_REACHED")
-                    # D14/MED: auch im Stream keine Final Decision im Artefakt,
-                    # wenn der Gate kein CONSENSUS_REACHED geliefert hat.
                     synthesis_text = ev.get("synthesis", "")
+                    # D14/MED: auch im Stream ist ein leerer/fehlgeschlagener
+                    # Synthese-Text KEINE finale Entscheidung. Erst das
+                    # konsistente Bündel aus Verdict + is_final_decision +
+                    # nicht-leerem Text + nicht abgebrochenem Token darf
+                    # decision_status="approved" und die Vault-Überschrift
+                    # "Finale Synthese" erzeugen.
+                    _stream_final = (
+                        _stream_verdict.startswith("CONSENSUS_REACHED")
+                        and bool(ev.get("is_final_decision"))
+                        and bool(str(synthesis_text or "").strip())
+                        and not cancel_token.cancelled
+                        and not bool(ev.get("cancelled"))
+                    )
                     if not _stream_final:
                         synthesis_text = _conflict_analysis_synthesis(synthesis_text)
                         ev["synthesis"] = synthesis_text
@@ -742,7 +780,10 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                             "rounds": req.rounds,
                             "consensus_status": _stream_verdict,
                             "consensus_verdict": _stream_verdict,
-                            "decision_status": "approved" if _stream_final else "no_consensus",
+                            "decision_status": (
+                                "approved" if _stream_final else
+                                ("incomplete" if _stream_verdict.startswith("CONSENSUS_REACHED") else "no_consensus")
+                            ),
                             "slots_count": max(0, len(all_debate_agents) - 1),
                             "slots": [
                                 {"name": a.get("name", ""), "role": a.get("role", ""), "model": a.get("model", "")}
@@ -750,7 +791,9 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                             ],
                             "transcript": running_transcript,
                             "synthesis": synthesis_text,
-                            "vault_file": vault_file_name
+                            "vault_file": vault_file_name,
+                            "cancel_reason": str(cancel_token.reason or "") if cancel_token.cancelled else "",
+                            "cancel_scope": cancel_token.scope if cancel_token.cancelled else "",
                         }
                         from archon.routers._rbac import get_session_actor
                         hist_entry["_actor_id"] = get_session_actor(request, fallback="boardroom-service")

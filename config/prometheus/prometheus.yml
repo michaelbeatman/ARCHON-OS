@@ -8,7 +8,9 @@ global:
 # Re-Audit H7: Exemplare (trace_id/span_id) muessen explizit aktiviert werden
 # (`--enable-feature=exemplar-storage` im Prometheus-Container, see
 # docker-compose.yml). Der Ringpuffer ist pro Serie begrenzt; der App-Scrape
-# muss Exemplare im OpenMetrics-Format liefern, sonst bleiben sie leer.
+# liefert jetzt Exemplare im OpenMetrics-Format: backend/metrics_collector.py
+# fuettert `record_trace_exemplar()` am Chokepoint mit trace_id/span_id aus
+# backend.trace_context; /metrics endet mit `# EOF`.
 storage:
   exemplars:
     max_exemplars: 100000

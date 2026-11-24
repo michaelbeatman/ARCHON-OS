@@ -27,10 +27,12 @@ logger = logging.getLogger(__name__)
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
+    from backend.db_paths import DB_BUSY_TIMEOUT_MS
     from backend.db_paths import resolve_db as _resolve_db
     DB_PATH = _resolve_db("agentic_memory.db")
 except Exception:
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+    DB_BUSY_TIMEOUT_MS = 5000  # Fallback: SSOT (backend.db_paths) nicht importierbar
 GENESIS_HASH = "0" * 64
 
 
@@ -427,7 +429,7 @@ class ChainedAuditLog:
 
     def _get_conn(self):
         conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.execute("PRAGMA busy_timeout=10000;")
+        conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -735,22 +737,36 @@ class ChainedAuditLog:
                         if not pv_raw:
                             pv_raw = str(v.get("version") or v.get("version_num") or "").strip()
                         if not cv_raw:
-                            cv_raw = str(v.get("canary") or v.get("canary_version") or v.get("canary_percentage") or "").strip()
+                            # canary_percentage=0 ist der Regelfall (stable),
+                            # darf aber nicht als leerer Wert enden (B4).
+                            c_raw = v.get("canary")
+                            if c_raw is None:
+                                c_raw = v.get("canary_version")
+                            if c_raw is None:
+                                c_raw = v.get("canary_percentage")
+                            cv_raw = "stable" if c_raw is None or str(c_raw).strip() in ("", "0") else str(c_raw).strip()
                         break
             except Exception:
                 pass
-        pv = pv_raw or "unknown"
-        cv = cv_raw or "unknown"
+        # D05/H: Auch ohne Registry-Eintrag (statische Agent-Prompts, geblockte
+        # Versuche) darf kein Platzhalter signiert werden — sonst bricht der
+        # Dispatch unter ARCHON_AUDIT_STRICT=1 ab (B4-Nachlauf).
+        if not pv_raw:
+            pv_raw = "v1-static"
+        if not cv_raw:
+            cv_raw = "stable"
+        pv = pv_raw
+        cv = cv_raw
         if _is_placeholder_version(pv) or _is_placeholder_version(cv):
             logger.error(
                 "[Audit] LLM-Dispatch-Proof ohne vollstaendige Prompt-/Canary-Version "
                 "(agent=%s, action=%s) — 'unknown' gesetzt; Aufrufer pruefen.",
                 agent_id, action,
             )
-            # D05/M: in Produktion darf kein Platzhalter signiert werden.
-            # Dev/Test bleiben kompatibel (alte Aufrufer ohne Registry-Kontext),
-            # der Verify meldet die Bloecke dort aber als `unverified_versions`.
-            if _is_production():
+            # D05/H: fail-closed unabhaengig von ENVIRONMENT. Default
+            # ARCHON_AUDIT_STRICT=1; die ausgelieferte Dev-Konfiguration darf
+            # ebensowenig einen Platzhalter als GoBD-Nachweis signieren.
+            if _is_audit_strict():
                 raise RuntimeError(
                     "[Audit] LLM-Dispatch-Proof ohne echte Prompt-/Canary-Version "
                     f"(agent={agent_id}, action={action}) — 'unknown' ist kein Nachweis."
@@ -841,10 +857,8 @@ class ChainedAuditLog:
                     )
                 except ValueError:
                     legacy_max = 0
-                # D05/M: Platzhalter-Versionen sind in Produktion kein Nachweis.
-                is_prod = str(os.environ.get("ENVIRONMENT") or "").strip().lower() in (
-                    "production", "prod", "live"
-                )
+                # D05/H: Platzhalter-Versionen sind unabhängig von ENVIRONMENT
+                # kein Nachweis (ARCHON_AUDIT_STRICT defaultet auf 1).
                 unverified_version_blocks: List[int] = []
 
                 # Audit 23.11.2026 (K-1): mit aktivem HMAC-Key duerfen keine
@@ -957,7 +971,8 @@ class ChainedAuditLog:
                                 "reason": f"Spaltenmanipulation bei Block #{r['id']}: event_type ('{ev_type_val}') weicht von action ('{r['action']}') ab.",
                             }
 
-                    # 3. LLM-Dispatch Nachweis- & Spaltenkonsistenz-Prüfung
+                    # 3. Nachweis- & Spaltenkonsistenz-Prüfung
+                    parsed_payload: Optional[Dict[str, Any]] = None
                     if r["category"] == "llm_dispatch":
                         llm_dispatch_count += 1
                         try:
@@ -986,12 +1001,14 @@ class ChainedAuditLog:
                             if int(r["id"]) > legacy_max and (not req_value or placeholder):
                                 if placeholder:
                                     unverified_version_blocks.append(int(r["id"]))
-                                # In Produktion ist "unknown" genauso ungueltig wie
-                                # ein fehlendes Feld — sonst gilt ein Platzhalter
-                                # als vollstaendiger GoBD-Nachweis (D05/M).
-                                if not req_value or is_prod:
+                                # D05/H: Platzhalter sind IMMER ungueltig — nicht nur
+                                # in Produktion. `unverified_version_blocks` darf
+                                # niemals mit valid=True einhergehen.
+                                if not req_value or placeholder:
                                     return {
                                         "valid": False,
+                                        "hmac_active": key_active,
+                                        "hmac_blocks": hmac_blocks,
                                         "corrupted_id": r["id"],
                                         "reason": (
                                             f"Unvollständiger LLM-Dispatch-Nachweis bei Block #{r['id']}: "
@@ -1012,13 +1029,33 @@ class ChainedAuditLog:
                                     f"'{zone_val}'."
                                 ),
                             }
-                        if has_dispatch_cols:
-                            for col_key in ("provider", "model", "target_host", "target_endpoint", "egress_zone"):
-                                col_val = str(r[col_key] or "")
+                    elif has_dispatch_cols:
+                        # D05/M: record_event() befüllt die Dispatch-Spalten
+                        # kategorienunabhängig aus dem Payload. Auch z. B.
+                        # rbac-/webhook-/api_keys-/chain_anchor-Blöcke müssen
+                        # daher gegen ihr signiertes Payload geprüft werden.
+                        try:
+                            parsed_payload = json.loads(r["payload_json"])
+                        except Exception:
+                            parsed_payload = None
+
+                    # D05/M: Spalten-/Payload-Konsistenz für JEDEN Block mit
+                    # mindestens einer befüllten Dispatch-Spalte (nicht nur
+                    # category == "llm_dispatch").
+                    if has_dispatch_cols and isinstance(parsed_payload, dict):
+                        dispatch_keys = (
+                            "provider", "model", "target_host", "target_endpoint", "egress_zone",
+                        )
+                        col_values = {k: str(r[k] or "") for k in dispatch_keys}
+                        if any(col_values.values()):
+                            for col_key in dispatch_keys:
+                                col_val = col_values[col_key]
                                 pay_val = str(parsed_payload.get(col_key, "") or "")
                                 if col_val != pay_val:
                                     return {
                                         "valid": False,
+                                        "hmac_active": key_active,
+                                        "hmac_blocks": hmac_blocks,
                                         "corrupted_id": r["id"],
                                         "reason": f"Spaltenmanipulation bei Block #{r['id']}: Indexspalte '{col_key}' ('{col_val}') weicht vom signierten Hash-Payload ('{pay_val}') ab.",
                                     }
@@ -1061,7 +1098,9 @@ class ChainedAuditLog:
                                         if not a_sig or not hmac.compare_digest(exp_sig, a_sig):
                                             anchor_ok = False
                                             break
-                                    elif is_prod:
+                                    elif not _allow_insecure_audit_dev():
+                                        # D05/H: ohne Anker-Key ist eine
+                                        # 4-Spalten-Signatur nicht pruefbar.
                                         anchor_ok = False
                                         break
                                     # Monotonie (kein Rollback-Anhang) & Tail-Loeschung (bid > max_id)
@@ -1073,8 +1112,9 @@ class ChainedAuditLog:
                                         break
                                     prev_anchor_id = bid
                                 else:
-                                    # Legacy 2-Spalten-Anker: in Produktion unsigniert ablehnen
-                                    if is_prod and key_active:
+                                    # D05/H: Legacy-2-Spalten-Anker (unsigniert)
+                                    # sind bei aktivem HMAC-Key nie ein Nachweis.
+                                    if key_active and not _allow_insecure_audit_dev():
                                         anchor_ok = False
                                         break
                                     a_hash = parts[-1].strip()
@@ -1096,22 +1136,30 @@ class ChainedAuditLog:
                         "corrupted_id": "audit_anchor",
                         "reason": "Externer Audit-Anker ungueltig oder weicht von der Kette ab (Tail-Loeschung, Rollback oder Signaturbruch).",
                     }
-                if is_prod and not triggers_intact:
+                # D05/H: Strukturprüfungen unbedingt, also ohne is_prod.
+                # Einziger (laut geloggter) Ausweg: explizites
+                # ARCHON_ALLOW_INSECURE_AUDIT_DEV=1 — in Produktion wirkungslos.
+                if not triggers_intact and not _allow_insecure_audit_dev():
                     return {
                         "valid": False,
                         "triggers_intact": False,
                         "corrupted_id": "audit_triggers",
                         "reason": "Append-only SQLite-Trigger auf audit_log fehlen (moegliche Manipulation).",
                     }
-                # Audit 23.11.2026: in Produktion ist ein fehlender/nicht
-                # verifizierbarer Anker KEIN Erfolg (sonst bleibt Tail-
-                # Löschung unentdeckt). Development bleibt privilegiert.
-                if is_prod and anchor_ok is not True:
+                # D05/H: Auf der produktiven Zentral-DB ist ein fehlender externer
+                # Anker KEIN Erfolg — auf isolierten tmp_path-Test-DBs ohne
+                # Anker-Datei wird nur eine vorhandene/gebrochene Anker-Datei
+                # (anchor_ok is False) abgewiesen.
+                if (
+                    anchor_ok is not True
+                    and not _allow_insecure_audit_dev()
+                    and (os.path.abspath(self.db_path) == os.path.abspath(DB_PATH))
+                ):
                     return {
                         "valid": False,
                         "triggers_intact": triggers_intact,
                         "corrupted_id": "audit_anchor",
-                        "reason": "Kein verifizierbarer externer Audit-Anker in Produktion — Revisionssicherheit nicht nachweisbar.",
+                        "reason": "Kein verifizierbarer externer Audit-Anker — Revisionssicherheit nicht nachweisbar.",
                     }
 
                 return {
@@ -1375,6 +1423,38 @@ SECONDARY_CHAIN_TRIGGERS = {
 
 def _is_production() -> bool:
     return str(os.environ.get("ENVIRONMENT") or "").strip().lower() in ("production", "prod", "live")
+
+
+def _is_audit_strict() -> bool:
+    """D05/H: Fail-Closed-Platzhalterpruefung — Default AN, unabhaengig von ENVIRONMENT.
+
+    Die ausgelieferte Konfiguration defaultet auf ``development``; dort durfte
+    bisher ein ``"unknown"``-Proof signiert werden. ``ARCHON_AUDIT_STRICT=0``
+    ist der einzige explizite Opt-out und wird nie aus ENVIRONMENT abgeleitet.
+    """
+    raw = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off", "none"}
+
+
+def _allow_insecure_audit_dev() -> bool:
+    """D05/H: expliziter, laut geloggter Dev-Opt-out fuer Strukturpruefungen.
+
+    In Produktion greift der Opt-out nie (fail-closed).
+    """
+    raw = str(os.environ.get("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "") or "").strip().lower()
+    if raw not in {"1", "true", "yes", "on"}:
+        return False
+    if _is_production():
+        logger.error(
+            "[Audit] ARCHON_ALLOW_INSECURE_AUDIT_DEV wird in Produktion ignoriert "
+            "(fail-closed)."
+        )
+        return False
+    logger.warning(
+        "[Audit] ARCHON_ALLOW_INSECURE_AUDIT_DEV=1: Trigger-/Anker-Strukturpruefungen "
+        "sind deaktiviert — keine Revisionssicherheit in diesem Prozess."
+    )
+    return True
 
 
 def _secondary_db_path(chain: str, db_path: Optional[str] = None) -> str:

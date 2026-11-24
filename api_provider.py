@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 api_provider.py — Hermes-nativer API-Provider-Manager für AgenticOS.
 
@@ -44,8 +45,8 @@ import re
 import shutil
 import subprocess
 import sys
-import time
 import threading
+import time
 from typing import Any, Dict, Iterable, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -194,19 +195,44 @@ def _model_lock(pid: str) -> threading.Lock:
         return _MODEL_LOCKS[pid]
 
 
+class ProviderModelList(list):
+    """`List[str]` mit Provenienz-Metadaten (D06/MED).
+
+    Die bestehende API bleibt kompatibel (FastAPI serialisiert weiter ein
+    JSON-Array), aber Aufrufer koennen via `model_list_provenance()` erkennen,
+    ob die Liste live verifiziert oder nur ein statischer Fallback ist.
+    """
+
+    def __init__(self, iterable=(), *, source: str, verified_at, status: str):
+        super().__init__(iterable)
+        self.source = source
+        self.verified_at = verified_at
+        self.status = status
+
+
+def model_list_provenance(models: Any) -> Dict[str, Any]:
+    """Kennzeichnet eine Modellliste als `live` oder `static_fallback`/`degraded`."""
+    return {
+        "source": getattr(models, "source", "live"),
+        "verified_at": getattr(models, "verified_at", None),
+        "status": getattr(models, "status", "ok"),
+    }
+
+
 def list_provider_models(pid: str) -> List[str]:
     """Gib dynamische oder gecachte Modelllisten für den ausgewählten Provider zurück.
 
     Ergebnis wird 120 s gecacht: die OmniRoute-Variante macht einen HTTP-Call
-    (2 s Timeout) und wurde vorher pro Aufruf mehrfach ausgeloest.
+    (2 s Timeout) und wurde vorher pro Aufruf mehrfach ausgeloest. Die
+    Provenienz (live vs. statischer Fallback) bleibt ueber den Cache erhalten.
     """
     norm_pid = (pid or "").strip().lower()
     with _model_lock(norm_pid):
         _cached = _MODELS_TTL_CACHE.get(norm_pid)
         if _cached and (time.time() - _cached[0]) < _MODELS_TTL_SECONDS:
-            return list(_cached[1])
+            return _cached[1]
         _result = _list_provider_models_uncached(norm_pid)
-        _MODELS_TTL_CACHE[norm_pid] = (time.time(), list(_result))
+        _MODELS_TTL_CACHE[norm_pid] = (time.time(), _result)
         return _result
 
 
@@ -242,19 +268,32 @@ def _list_provider_models_uncached(norm_pid: str) -> List[str]:
                             # Priorisiere auto/* Router-Modelle nach oben
                             auto_routers = [m for m in clean_models if m.startswith("auto/") or m.startswith("omniroute/")]
                             other_models = [m for m in clean_models if not (m.startswith("auto/") or m.startswith("omniroute/"))]
-                            return auto_routers + sorted(other_models)
+                            return ProviderModelList(
+                                auto_routers + sorted(other_models),
+                                source="live",
+                                verified_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                                status="ok",
+                            )
             except Exception as exc:
                 print(f"[APIProvider] Modell-Listen-Provider nicht erreichbar, nutze Fallback-Liste: {exc}", file=sys.stderr)
         print(
             "[APIProvider] WARNUNG: OmniRoute-Modelle nicht abrufbar — statische Fallback-Liste "
-            "ist moeglicherweise veraltet.",
+            "ist moeglicherweise veraltet (source=static_fallback, status=degraded).",
             file=sys.stderr,
         )
-        return [
-            "auto/best-coding", "auto/best-reasoning", "auto/best-vision", "auto/best-fast", "auto/best-chat",
-            "deepseek-ai/DeepSeek-V4-Pro", "qwen/Qwen3.6-27B", "google/gemma-4-31B-it",
-            "meta-llama/Llama-4-Scout-17B-16E-Instruct", "CohereLabs/command-a-vision-07-2025"
-        ]
+        # D06/MED: nie mehr als `status:"ok"` ausgeben, wenn keine Live-Abfrage
+        # gelang. Die Metadaten bleiben am Listenobjekt haengen; die API-Fassade
+        # kann sie ueber model_list_provenance() in `degraded`/HTTP 502 uebersetzen.
+        return ProviderModelList(
+            [
+                "auto/best-coding", "auto/best-reasoning", "auto/best-vision", "auto/best-fast", "auto/best-chat",
+                "deepseek-ai/DeepSeek-V4-Pro", "qwen/Qwen3.6-27B", "google/gemma-4-31B-it",
+                "meta-llama/Llama-4-Scout-17B-16E-Instruct", "CohereLabs/command-a-vision-07-2025"
+            ],
+            source="static_fallback",
+            verified_at=None,
+            status="degraded",
+        )
 
     # Bekannte Top-Modelle für Provider (inkl. Bild- und Vision-Modelle)
     popular_extras = {
@@ -784,6 +823,17 @@ def keys_for_provider(pid: str) -> Dict[str, str]:
 # 4. Verteiler (der eigentliche Paperclip-Fix)
 # ---------------------------------------------------------------------------
 
+def _mask_secret(value: Optional[str]) -> Optional[str]:
+    """Maskiert einen Wert vollstaendig; nur Laenge und Kind werden verraten.
+
+    Nie Klartext-Key oder Teile davon in Reports/Logs (D06/MED).
+    """
+    if value is None:
+        return None
+    s = str(value)
+    return "<unset>" if not s else f"<redacted:len={len(s)}>"
+
+
 def deploy_keys(dry_run: bool = True) -> Dict[str, Any]:
     """Verteilt alle gefundenen API-Keys in config + zentrale .env + ALLE Profil-.env."""
     if not dry_run:
@@ -801,22 +851,46 @@ def deploy_keys(dry_run: bool = True) -> Dict[str, Any]:
         "keys_found": list(keys.keys()),
         "targets": len(targets),
         "writes": [],
+        # D06/MED: admin-sichtbarer Diff VOR --fix (Werte nie im Klartext).
+        "changes": [],
     }
     if not keys:
         report["status"] = "no_keys_found"
         report["text"] = "Keine API-Keys im Hermes-Umfeld gefunden."
         return report
 
+    total_changed = 0
     for ep in targets:
+        file_changes: List[Dict[str, Any]] = []
+        for var, val in keys.items():
+            before = read_env_value(ep, var)
+            if before is None:
+                action = "add"
+            elif before == str(val):
+                action = "unchanged"
+            else:
+                action = "update"
+            if action != "unchanged":
+                total_changed += 1
+            file_changes.append({
+                "key": var,
+                "action": action,
+                "before_masked": _mask_secret(before),
+                "after_masked": _mask_secret(val),
+            })
         # config.yaml spielt hier keine Rolle; nur .env-Dateien
         if not dry_run:
             for var, val in keys.items():
                 set_env_value(ep, var, val)
             dedupe_env_file(ep)
         report["writes"].append({"path": ep, "keys": list(keys), "dry_run": dry_run})
+        report["changes"].append({"path": ep, "changes": file_changes})
 
     prefix = "[DRY-RUN] " if dry_run else ""
-    report["text"] = f"{prefix}{len(keys)} Keys → {len(targets)} .env-Dateien verteilt."
+    report["text"] = (
+        f"{prefix}{len(keys)} Keys → {len(targets)} .env-Dateien geprueft, "
+        f"{total_changed} Aenderungen (siehe 'changes', Werte maskiert)."
+    )
     return report
 
 

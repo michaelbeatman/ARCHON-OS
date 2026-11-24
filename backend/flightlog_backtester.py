@@ -13,13 +13,13 @@ Meilenstein 83: Agenten-Flugschreiber & Guardrail-Backtester
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 import hashlib
 import json
 import os
 import re
 import sqlite3
 import time
+from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -84,6 +84,65 @@ def record_flight_event(
         conn.commit()
 
 
+def mirrored_run_ids(run_id: str, session_id: str = "") -> List[str]:
+    """D13/HIGH: alle Namensräume, unter denen ein Flight-Event auffindbar sein muss.
+
+    Der Tool-Chokepoint schreibt unter ``flightlog_run_id`` (trajectory/task ID),
+    der Dispatcher frägt historisch ``current_trace_id()`` ab. Solange beide
+    Keys auseinanderfallen, findet der Konsument keine Events. Diese Funktion
+    liefert primäre ID + Session-ID + Trace-ID in stabiler Reihenfolge — ohne
+    DB-Migration und ohne Event-Replay.
+    """
+    ids: List[str] = []
+    for candidate in (run_id, session_id):
+        value = str(candidate or "").strip()
+        if value and value not in ids:
+            ids.append(value)
+    try:
+        from backend.trace_context import current_trace_id
+        trace = str(current_trace_id() or "").strip()
+        if trace and trace not in ids:
+            ids.append(trace)
+    except Exception as exc:
+        # Kein Trace-Kontext (z. B. Hintergrundjob) -> nur primärer Namensraum.
+        import logging
+        logging.getLogger("archon.flightlog").debug(
+            "[Flightlog] Trace-ID für Mirror nicht verfügbar: %s", exc
+        )
+    return ids or ["no-trace"]
+
+
+def mirror_flight_event_to_trace(
+    run_id: str,
+    agent_id: str,
+    tool_name: str,
+    args: Optional[Dict[str, Any]] = None,
+    tool_ok: bool = True,
+    tokens_used: int = 0,
+    session_id: str = "",
+    db_path: Optional[str] = None,
+) -> List[str]:
+    """Spiegelt ein bereits geschriebenes Flight-Event unter der Trace-ID.
+
+    Der Produzent (`tool_runtime._record_tool_flight_event`) schreibt nur unter
+    dem primären `flightlog_run_id`. Diese Funktion schreibt ZUSÄTZLICH unter
+    `current_trace_id()`, damit `_guard_silent_failures()` (core_dispatcher.py,
+    A4) auch ohne Parameterweiterreichung die Events sieht. Es wird nie ein
+    Event gelöscht oder überschrieben; die Spiegelung ist idempotent pro Call.
+    """
+    primary = str(run_id or "").strip() or "no-trace"
+    written: List[str] = []
+    for rid in mirrored_run_ids(primary, session_id):
+        if rid == primary:
+            continue  # primärer Event wurde bereits vom Chokepoint geschrieben
+        record_flight_event(
+            run_id=rid, agent_id=agent_id, tool_name=tool_name, args=args,
+            tool_ok=tool_ok, tokens_used=tokens_used, db_path=db_path,
+        )
+        written.append(rid)
+    return written
+
+
 def detect_silent_failures(
     run_id: str,
     final_status: str = "success",
@@ -120,7 +179,14 @@ def detect_silent_failures(
     if baseline_tokens > 0 and total_tokens > baseline_tokens * 3:
         flags.append(f"token_spike:{total_tokens}")
 
-    if final_status == "success" and len((final_output or "").strip()) < 20 and len(events) > 0:
+    # D13/HIGH: `llm_dispatch`-Mirror-Events sind Korrelationsmarker, keine
+    # echten Tool-Calls. Ein kurzer LLM-Text darf dadurch nicht falsch als
+    # "effort_collapse" gelten (G-03: Effekt muss zum Produzenten passen).
+    real_tool_events = [
+        e for e in events
+        if str(e.get("tool_name") or "") != "llm_dispatch"
+    ]
+    if final_status == "success" and len((final_output or "").strip()) < 20 and len(real_tool_events) > 0:
         flags.append("effort_collapse")
 
     return {

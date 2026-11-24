@@ -437,6 +437,55 @@ def reserve_tokens(
     )
 
 
+def task_budget_meta_projection(
+    trajectory_id: str,
+    *,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """D13/MED: echter Produzent für die `mc_task_meta`-Budget-Spiegelung.
+
+    `enforce_task_budget_caps()` in mission_control.py prüft nur Paare, bei
+    denen Cap UND Zähler im Meta liegen. Diese Projektion liefert beide aus
+    der SSOT `trajectory_budgets` — inklusive des `replan_count`-Aliases.
+    Damit ist der Alias kein Totcode mehr, sondern eine lesbare Kopie.
+    """
+    tid = normalize_trajectory_id(trajectory_id)
+    row = get_trajectory(tid, db_path=db_path)
+    if not row:
+        return {}
+    replans = int(row.get("replans_used") or 0)
+    return {
+        "trajectory_id": tid,
+        "root_ticket_id": str(row.get("root_ticket_id") or ""),
+        "max_hops": int(row.get("max_hops") or DEFAULT_MAX_HOPS),
+        "hops_used": int(row.get("hops_used") or 0),
+        "max_tokens": int(row.get("max_tokens") or DEFAULT_MAX_TOKENS),
+        "tokens_used": int(row.get("tokens_used") or 0),
+        "max_replans": int(row.get("max_replans") or DEFAULT_MAX_REPLANS),
+        "replans_used": replans,
+        "replan_count": replans,
+        "trajectory_state": str(row.get("state") or "active"),
+    }
+
+
+def sync_task_budget_meta(
+    trajectory_id: str,
+    task_id: str = "",
+    *,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Schreibt die Budget-Projektion in `mc_task_meta` des Root-Tickets."""
+    meta = task_budget_meta_projection(trajectory_id, db_path=db_path)
+    target = str(task_id or meta.get("root_ticket_id") or "").strip()
+    if meta and target and not target.startswith("traj-"):
+        try:
+            from archon.core.mission_control import mc_update_task_sqlite
+            mc_update_task_sqlite(target, meta)
+        except Exception as exc:
+            logger.debug("[TrajectoryBudget] Task-Meta-Spiegelung fehlgeschlagen: %s", exc)
+    return meta
+
+
 def close_trajectory(
     trajectory_id: str,
     state: str = "completed",
@@ -542,5 +591,6 @@ __all__ = [
     "resolve_trajectory_db_path", "stable_trajectory_id", "normalize_trajectory_id",
     "ensure_trajectory", "get_trajectory", "reserve_hop", "reserve_replan",
     "inherit_replan_count", "record_tokens", "reserve_tokens", "close_trajectory",
+    "task_budget_meta_projection", "sync_task_budget_meta",
     "guard_window_size", "zombie_eligible", "init_trajectory_tables",
 ]

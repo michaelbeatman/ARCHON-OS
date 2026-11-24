@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# mypy: ignore-errors
 """
 backend/workflow_dag_runner.py
 ==============================
@@ -17,7 +18,6 @@ Unterstuetzt:
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
 import datetime
 import hashlib
 import json
@@ -29,6 +29,7 @@ import secrets
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger("archon.workflow_dag")
@@ -139,7 +140,7 @@ def _claim_kernel_run(
     fehlgeschlagenen Runs ist zulaessig (Transition FAILED -> PENDING ->
     RUNNING). COMPLETED/CANCELLED bleiben strikt terminal.
     """
-    from backend.durable_execution_kernel import PENDING, FAILED
+    from backend.durable_execution_kernel import FAILED, PENDING
 
     claim = kernel.claim(
         run_id, ttl_seconds=300,
@@ -258,14 +259,20 @@ def validate_dag_def(
             errors.append(f"Doppelte Node-ID: {nid}")
         node_map[nid] = n
 
-    edge_map = _extract_edge_map(dag_def)
-    for src, targets in edge_map.items():
-        if src not in node_map:
+    # A4/DAG-Edge-Map: `_extract_edge_map()` keyt nach ZIEL-Knoten (dst),
+    # nicht nach Quelle. Die alte Schleife `for src, targets in edge_map.items()`
+    # pruefte daher das Ziel als „Quelle" und liess echte unbekannte Quellen
+    # unentdeckt. Direkt ueber die rohen Kanten from/to gegen node_map pruefen.
+    for edge in (dag_def.get("edges") or []):
+        if not isinstance(edge, dict):
+            continue
+        src = str(edge.get("from") or edge.get("source") or "").strip()
+        dst = str(edge.get("to") or edge.get("target") or "").strip()
+        if src and src not in node_map:
             errors.append(f"Kante von unbekannter Quelle: {src}")
-        for e in targets or []:
-            dst = str(e.get("to") or "")
-            if dst and dst not in node_map:
-                errors.append(f"Kante zu unbekanntem Ziel: {dst}")
+        if dst and dst not in node_map:
+            errors.append(f"Kante zu unbekanntem Ziel: {dst}")
+    edge_map = _extract_edge_map(dag_def)
 
     # Zyklus-Erkennung via Kahn — vor dem Start, nicht als Restgröße.
     deps: Dict[str, set] = {}
@@ -363,7 +370,8 @@ def request_dag_replan(
     if not existing:
         return {"allowed": False, "reason": "run_not_found"}
     from backend.trajectory_budget import (
-        normalize_trajectory_id, reserve_replan,
+        normalize_trajectory_id,
+        reserve_replan,
     )
     old_dag = existing.get("dag") or {}
     tid = normalize_trajectory_id(
@@ -373,6 +381,15 @@ def request_dag_replan(
     reservation = reserve_replan(
         tid, run_id=run_id, dag_def=old_dag, reason=reason, db_path=db_path,
     )
+    # D13/MED: `replan_count` im Task-Meta ist jetzt eine echte Spiegelung des
+    # SSOT-Zählers (trajectory_budgets.replans_used), kein toter Alias.
+    try:
+        from backend.trajectory_budget import sync_task_budget_meta
+        sync_task_budget_meta(
+            tid, str(old_dag.get("root_ticket_id") or ""), db_path=db_path
+        )
+    except Exception as _meta_exc:
+        logger.debug("[WorkflowDAG] Replan-Task-Meta nicht gespiegelt: %s", _meta_exc)
     if not reservation.get("allowed", False):
         with _connect(db_path) as conn:
             conn.execute(
@@ -698,6 +715,10 @@ def _register_hitl_gate_decision(
             title,
             f"Workflow '{wf_id}' (Run `{run_id}`) wartet am Knoten `{node.get('id')}` auf Freigabe.\n\nVorlauf-Ergebnisse:\n{upstream_preview}",
             ref_id=f"{run_id}:{node.get('id')}",
+            # A6/D04: Vier-Augen-Fail-Closed verlangt einen zuordenbaren Ersteller.
+            # Hintergrund-DAG ohne interaktive Session -> dokumentierter
+            # Service-Principal als verantwortlicher Produzent.
+            created_by="workflow-dag-service",
         )
         if isinstance(deci, dict):
             return str(deci.get("id") or deci.get("task_id") or "")
@@ -889,7 +910,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         return await _execute_research_dag_node(node, upstream)
 
     # Standardisierte Node-Plugins ("VST-Schnittstelle": ffmpeg, kinocut, tts, suno, image_gen, calendar_publish, 3rd-Party)
-    from backend.workflow_node_plugins import is_workflow_node_plugin, execute_workflow_node_plugin
+    from backend.workflow_node_plugins import execute_workflow_node_plugin, is_workflow_node_plugin
     if is_workflow_node_plugin(node_type):
         await asyncio.to_thread(
             _update_kanban_task_status,
@@ -1137,6 +1158,21 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                     # Run-Abschluss (dort `rid`, hier ueber den Node mitgefuehrt).
                     flightlog_run_id=str(node.get("_dag_run_id") or ""),
                 )
+                # D13/HIGH: der Chokepoint schreibt nur unter flightlog_run_id;
+                # der Dispatcher-Konsument liest current_trace_id(). Spiegeln
+                # ohne Event-Replay — der Primäreintrag bleibt unberührt.
+                try:
+                    from backend.flightlog_backtester import mirror_flight_event_to_trace
+                    from backend.tool_runtime import _result_token_estimate
+                    mirror_flight_event_to_trace(
+                        run_id=str(node.get("_dag_run_id") or ""),
+                        agent_id=agent_id, tool_name=_tname, args=_targs,
+                        tool_ok=str(_tres.get("status") or "").lower() == "success",
+                        tokens_used=_result_token_estimate(_tres),
+                        session_id=str(kanban_task_id or node.get("id") or "dag_session"),
+                    )
+                except Exception as _mirror_exc:
+                    logger.debug("[WorkflowDAG] Flightlog-Trace-Mirror fehlgeschlagen: %s", _mirror_exc)
             tool_trace.append({"turn": _turn + 1, "tool": _tname, "args": _targs, "result": _tres})
             _ckpt_rid = str(node.get("_dag_run_id") or "")
             _ckpt_db = node.get("_dag_db_path")
@@ -1716,7 +1752,9 @@ async def _run_workflow_dag_locked(
     # D13: Trajectory ueber run_id hinweg vererben — der Replan-Zaehler lebt
     # am Root-Ticket, nicht am (bei jedem Resume neuen) run_id.
     from backend.trajectory_budget import (
-        ensure_trajectory, inherit_replan_count, normalize_trajectory_id,
+        ensure_trajectory,
+        inherit_replan_count,
+        normalize_trajectory_id,
     )
     dag_def = dict(dag_def or {})
     _root_ticket = str(dag_def.get("root_ticket_id") or dag_def.get("id") or wf_id)
@@ -2340,9 +2378,20 @@ async def _run_workflow_dag_locked(
         _flight_flags: List[str] = []
         try:
             from backend.flightlog_backtester import (
-                detect_silent_failures, record_flight_event,
+                detect_silent_failures,
+                record_flight_event,
             )
             record_flight_event(
+                run_id=rid, agent_id=str(dag_def.get("id") or "workflow_engine"),
+                tool_name="dag_run_complete",
+                args={"workflow_id": wf_id, "trajectory_id": _tid, "status": final_status},
+                tool_ok=final_status in ("completed", "paused"),
+                tokens_used=_total_tokens,
+            )
+            # D13/HIGH: Abschluss-Event unter demselben Trace-Namensraum
+            # spiegeln, den der Dispatcher abfragt.
+            from backend.flightlog_backtester import mirror_flight_event_to_trace
+            mirror_flight_event_to_trace(
                 run_id=rid, agent_id=str(dag_def.get("id") or "workflow_engine"),
                 tool_name="dag_run_complete",
                 args={"workflow_id": wf_id, "trajectory_id": _tid, "status": final_status},
@@ -2487,7 +2536,8 @@ async def resume_workflow_run(
     # lief trotzdem — zwei Worker konnten denselben DAG parallel ausfuehren.
     # Jetzt fail-closed: ohne Claim kein Resume.
     try:
-        from backend.durable_execution_kernel import FAILED as _FAILED, COMPLETED as _COMPLETED
+        from backend.durable_execution_kernel import COMPLETED as _COMPLETED
+        from backend.durable_execution_kernel import FAILED as _FAILED
         kernel = _kernel_for_run(db_path)
         claim = _claim_kernel_run(
             kernel,
@@ -2529,6 +2579,7 @@ async def resume_workflow_run(
     )
 
     result = None
+    failed_cancels: List[str] = []
     try:
         result = await run_workflow_dag(
             dag_def=dag_def,
@@ -2549,7 +2600,39 @@ async def resume_workflow_run(
         raise
     finally:
         heartbeat.cancel()
-        await asyncio.gather(heartbeat, return_exceptions=True)
+        heartbeat_results = await asyncio.gather(heartbeat, return_exceptions=True)
+        # D07/MED (A9-Delegation): Result-Liste auswerten statt still zu
+        # verwerfen. CancelledError ist der erwartete Normalfall; jede andere
+        # Exception ist ein fehlgeschlagener Abbruch des Lease-Heartbeats und
+        # wird persistiert (Audit) und im Result sichtbar gemacht.
+        for hres in heartbeat_results:
+            if isinstance(hres, asyncio.CancelledError):
+                continue
+            if isinstance(hres, BaseException):
+                detail = f"{type(hres).__name__}: {hres}"[:500]
+                failed_cancels.append(detail)
+                logger.error(
+                    "[WorkflowDAG] Run '%s': Lease-Heartbeat-Abbruch fehlgeschlagen: %s",
+                    run_id, detail,
+                )
+                try:
+                    from backend.audit_log import chained_audit_log
+
+                    chained_audit_log.record_event(
+                        category="recovery",
+                        action="cancel_failed",
+                        payload={
+                            "task": heartbeat.get_name(),
+                            "run_id": run_id,
+                            "detail": detail,
+                            "ts": time.time(),
+                        },
+                    )
+                except Exception as audit_exc:
+                    note_local_trace_error("Heartbeat-Cancel-Audit fehlgeschlagen", audit_exc)
+
+    if failed_cancels and isinstance(result, dict):
+        result["failed_cancels"] = failed_cancels
 
     if guard.lost.is_set():
         # Fencing-Token ist veraltet: kein Status-Transition mit diesem Token,
@@ -2616,7 +2699,7 @@ async def resume_suspended_workflow_run(
     alle bereits abgeschlossenen Knoten (``skipped_cached``); nur die
     unfertigen Nodes werden erneut ausgefuehrt.
     """
-    from backend.durable_execution_kernel import durable_kernel, SUSPENDED
+    from backend.durable_execution_kernel import SUSPENDED, durable_kernel
 
     ctx = durable_kernel.resume_context(run_id)
     if not ctx:

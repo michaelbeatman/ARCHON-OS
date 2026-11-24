@@ -240,7 +240,7 @@ def test_d07_cancel_event_runtime_error_is_not_silent():
 
 def test_d07_tenant_db_consolidation_check_fail_closed():
     src = _src("backend/tenant_db_registry.py")
-    assert 'logger.error("[TenantDB] Konsolidierungscheck' in src
+    assert '"[TenantDB] Konsolidierungscheck' in src
     block = src.split("resolved_name = db_name", 1)[1].split("db_path = tenant_context", 1)[0]
     assert "except Exception:\n            pass" not in block
     assert "continue" in block

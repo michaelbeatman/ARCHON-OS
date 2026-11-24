@@ -1,10 +1,11 @@
 #
-# Lockfile for the Python 3.13 runtime (Archon OS SSOT, F-065).
-# Originally produced by pip-compile with Python 3.12; the pinned wheel/sdist
-# hashes are runtime-independent and verified on Python 3.13 in the CI jobs
-# that install with `--require-hashes --no-deps -r requirements.lock.txt`
-# (no hard-coded line numbers: D09 audit showed those references drifting).
-# For a from-scratch 3.13 resolution, re-run in a Python 3.13 environment:
+# Lockfile for the Python 3.13 runtime (Archon OS SSOT, F-065 / Audit D09).
+# The pinned wheel/sdist hashes are interpreter-version independent; the
+# Python 3.13 resolution is the SSOT and is enforced by every CI job that
+# installs with `--require-hashes --no-deps -r requirements.lock.txt` on
+# python-version "3.13" (no hard-coded line numbers: D09 audit showed those
+# references drifting). For a from-scratch 3.13 resolution, re-run in a
+# Python 3.13 environment:
 #
 #    pip-compile --generate-hashes --output-file=requirements.lock.txt requirements.txt
 #

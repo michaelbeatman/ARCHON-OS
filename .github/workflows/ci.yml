@@ -32,56 +32,119 @@ jobs:
       - name: Pre-Flight Konfigurationsprüfung
         run: python scripts/validate_config.py --strict
 
-      - name: Profil-SSOT Drift-Check
-        run: python scripts/sync_profile_ssot.py --check --allow-missing-hermes --json
+      - name: Profil-SSOT Drift-Check (inkl. field_mismatch)
+        run: |
+          python - <<'PY'
+          import json, subprocess, sys
+          result = subprocess.run(
+              [sys.executable, "scripts/sync_profile_ssot.py", "--check",
+               "--allow-missing-hermes", "--json"],
+              capture_output=True, text=True,
+          )
+          print(result.stdout)
+          if result.returncode != 0:
+              sys.exit(result.stderr or "sync_profile_ssot.py --check fehlgeschlagen")
+          report = json.loads(result.stdout)
+          # A8: detect_drift() meldet field_mismatch hart — explizit im Gate auswerten.
+          fm = report.get("field_mismatch") or []
+          if fm:
+              sys.exit(f"Profil-SSOT field_mismatch: {fm[:10]}")
+          print(f"Profil-SSOT: field_mismatch leer (drift={report.get('drift')})")
+          PY
 
       - name: Kanonische souls/ gegen SSOT prüfen (D15)
         run: python scripts/build_souls_ssot.py --check
 
-      - name: Runtime-SOUL-Cache Drift (D15)
-        run: python scripts/check_soul_ssot_drift.py --allow-missing
+      - name: Runtime-SOUL-Caches aus souls/ regenerieren (D15)
+        # Caches sind gitignored und fehlen im frischen CI-Checkout. Ohne diesen
+        # Schritt wuerde der Drift-Gate 0 Dateien pruefen und trotzdem gruen sein.
+        run: python scripts/sync_soul_runtime_cache.py
 
-      - name: Rollen-SSOT — rollenspezifische Negativ-Abgrenzung (D15)
+      - name: Runtime-SOUL-Cache Drift (D15)
+        run: python scripts/check_soul_ssot_drift.py --allow-missing --min-checked 568
+
+      - name: Rollen-SSOT — semantische Negativ-Abgrenzung (D15)
         run: |
           python - <<'PY'
           import json, sys
+          sys.path.insert(0, "scripts")
+          from build_souls_ssot import semantic_scope_report, MIN_DISTINCT_NEGATIVE_SCOPES
           profiles = json.load(open("agent_profiles.json", encoding="utf-8"))
-          missing = [p.get("id") for p in profiles if not str(p.get("negative_scope") or "").strip()]
-          if missing:
-              sys.exit(f"negative_scope fehlt: {missing}")
-          print(f"negative_scope: {len(profiles)}/{len(profiles)} rollenspezifisch")
+          sem = semantic_scope_report(profiles)
+          # D15: Praesenz allein ist kein "rollenspezifisch" — nur echte Semantik zaehlt.
+          print(
+              f"negative_scope: {len(profiles)}/{len(profiles)} vorhanden, "
+              f"{sem['distinct_bodies']} distinct (Minimum {MIN_DISTINCT_NEGATIVE_SCOPES})"
+          )
+          errors = []
+          if sem["distinct_bodies"] < MIN_DISTINCT_NEGATIVE_SCOPES:
+              errors.append(f"nur {sem['distinct_bodies']} distinct bodies")
+          if sem["missing_en"]:
+              errors.append(f"EN-Scope fehlt: {sem['missing_en'][:10]}")
+          if sem["identical_en"]:
+              errors.append(f"EN-Scope unuebersetzt: {sem['identical_en'][:10]}")
+          if sem["high_risk_without_hitl"]:
+              errors.append(f"HIGH_RISK ohne HITL: {sem['high_risk_without_hitl'][:10]}")
+          if errors:
+              sys.exit("D15-Semantik-Gate: " + "; ".join(errors))
           PY
 
-      - name: EU-AI-Act HIGH_RISK == 26 (D15, harter Test)
+      - name: EU-AI-Act HIGH_RISK == EXPECTED_HIGH_RISK_COUNT (D15, harter Test)
         run: |
           python - <<'PY'
           import sys
-          from backend.eu_ai_act_inventory import EUAIActInventoryManager
+          from backend.eu_ai_act_inventory import EUAIActInventoryManager, EXPECTED_HIGH_RISK_COUNT
           stats = EUAIActInventoryManager().get_stats()
           n = stats["high_risk_count"]
-          print(f"high_risk_count={n} (Soll 26)")
-          if n != 26:
-              sys.exit(f"high_risk_count {n} != 26")
+          print(f"high_risk_count={n} (Soll {EXPECTED_HIGH_RISK_COUNT})")
+          if n != EXPECTED_HIGH_RISK_COUNT:
+              sys.exit(f"high_risk_count {n} != {EXPECTED_HIGH_RISK_COUNT}")
           PY
 
-      - name: Compose-Image-Digest-Gate (D09)
+      - name: Compose-Image-Digest-Gate (D09, aufgelöster Wert)
+        # Der Gate prueft nicht den Roh-String, sondern den von `docker compose
+        # config` aufgeloesten Wert. Ein Env-Override wie N8N_IMAGE=...:latest
+        # darf nicht gruen bleiben, nur weil der Quelltext ein ${...:-...@sha256}
+        # enthaelt (Negativprobe am Ende dieses Schritts).
         run: |
-          python - <<'PY'
-          import glob, sys, yaml
-          bad = []
-          for path in sorted(glob.glob("docker-compose*.yml") + glob.glob("CRM/docker-compose.yml") + glob.glob("pocketbase/docker-compose.yml")):
-              data = yaml.safe_load(open(path, encoding="utf-8")) or {}
-              for svc, cfg in (data.get("services") or {}).items():
-                  if not isinstance(cfg, dict) or "build" in cfg:
-                      continue
-                  image = str(cfg.get("image") or "").strip()
-                  if not image or image.startswith("${") or "@sha256:" in image:
-                      continue
-                  bad.append(f"{path} ({svc}): {image}")
-          if bad:
-              sys.exit("Externe Images ohne @sha256:\n  " + "\n  ".join(bad))
-          print("Alle externen Compose-Images mit @sha256: gepinnt (oder env-override)")
+          set -e
+          [ -f .env ] || cp .env.example .env
+          PROFILES="$(python - <<'PY'
+          import yaml
+          data = yaml.safe_load(open('docker-compose.yml', encoding='utf-8')) or {}
+          names = sorted({p for c in (data.get('services') or {}).values() for p in (c.get('profiles') or [])})
+          print(','.join(names))
           PY
+          )"
+          check_digest() {
+            python - "$1" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding='utf-8'))
+          bad = []
+          for svc, cfg in (data.get('services') or {}).items():
+              if 'build' in cfg:
+                  continue
+              image = str(cfg.get('image') or '').strip()
+              if image and '@sha256:' not in image:
+                  bad.append(f'{svc}: {image}')
+          if bad:
+              sys.exit('Externe Images ohne @sha256: (aufgelöst):\n  ' + '\n  '.join(bad))
+          print('OK: alle externen Images @sha256:-gepinnt')
+          PY
+          }
+          for f in docker-compose.yml CRM/docker-compose.yml pocketbase/docker-compose.yml; do
+            echo "Digest-Gate: $f"
+            COMPOSE_PROFILES="$PROFILES" docker compose -f "$f" config --format json > /tmp/compose-resolved.json
+            check_digest /tmp/compose-resolved.json
+          done
+          # Negativprobe: ein bewusst ungepinnter Env-Override muss den Gate rot machen.
+          COMPOSE_PROFILES="$PROFILES" N8N_IMAGE=n8nio/n8n:latest \
+            docker compose -f docker-compose.yml config --format json > /tmp/compose-negative.json
+          if check_digest /tmp/compose-negative.json; then
+            echo "Negativprobe fehlgeschlagen: ungepinnter Env-Override blieb unentdeckt"
+            exit 1
+          fi
+          echo "Negativprobe bestanden: Gate lehnt ungepinnten Env-Override ab"
 
       - name: Audit-HMAC-Key vorhanden (GoBD-Startup-Gate)
         env:
@@ -230,8 +293,9 @@ jobs:
           # Audit D09: Hash-Lock ist zwingend — kein stiller Fallback auf Bereiche.
           test -f requirements.lock.txt
           pip install --require-hashes --no-deps -r requirements.lock.txt
-          pip install -r requirements-test.txt
-          pip install pyyaml requests psutil
+          test -f requirements-test.lock.txt
+          pip install --require-hashes --no-deps -r requirements-test.lock.txt
+          # pyyaml/requests/psutil kommen bereits hash-geprueft aus requirements.lock.txt.
           mkdir -p data inbox
 
       - name: Gesamte Pytest-Suite ausführen
@@ -358,8 +422,9 @@ jobs:
           python -m pip install --upgrade pip
           test -f requirements.lock.txt
           pip install --require-hashes --no-deps -r requirements.lock.txt
-          pip install -r requirements-test.txt
-          pip install pyyaml requests psutil
+          test -f requirements-test.lock.txt
+          pip install --require-hashes --no-deps -r requirements-test.lock.txt
+          # pyyaml/requests/psutil kommen bereits hash-geprueft aus requirements.lock.txt.
           mkdir -p data inbox
 
       - name: Qualitäts-Tools installieren (gepinnt, isolierter Schritt)
@@ -388,7 +453,9 @@ jobs:
           FILES="${{ steps.changed.outputs.py }}"
           if [ -n "$FILES" ]; then
             echo "Ruff prüft geänderte Dateien: $FILES"
-            ruff check $FILES --output-format=concise
+            # Audit D09: der Legacy-Ignore aus ruff.toml gilt nicht fuer den
+            # Ratchet — F401/F841 muessen bei geaenderten Dateien wieder greifen.
+            ruff check --select E,F,I --ignore E501 $FILES --output-format=concise
           else
             echo "Keine geänderten Python-Dateien — Ratchet nichts zu prüfen."
           fi

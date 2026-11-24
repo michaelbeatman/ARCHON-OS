@@ -1,6 +1,8 @@
-# Ruff-Konfiguration für den WARN-ONLY-Qualitätscheck (Register C24).
-# Funde aus `ruff check ... --output-format=concise` blockieren aktuell nichts;
-# die CI-Stufe ist bewusst als `continue-on-error` ausgelegt.
+# Ruff-Konfiguration für den HARTEN Qualitätscheck (Audit D09 / Register C24).
+# Die CI-Stufe schaltet rot: kritische Klassen (E9,F63,F7,F82) laufen global,
+# der Changed-Files-Ratchet prueft E,F,I ohne die Legacy-Ignore-Liste.
+# Die `ignore`-Liste unten gilt nur fuer den Legacy-Bestand, nicht fuer
+# geaenderte Dateien (siehe .github/workflows/ci.yml Ratchet-Schritt).
 line-length = 100
 target-version = "py313"
 

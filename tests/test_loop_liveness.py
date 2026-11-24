@@ -45,6 +45,7 @@ def test_loop_liveness_monitor_healthy_stale_lag_and_crashed_task():
 
 def test_livez_endpoint_returns_200_with_lifespan_and_503_when_unhealthy(monkeypatch):
     from fastapi.testclient import TestClient
+
     import main as app_main
     from backend import loop_liveness as ll
 
@@ -80,7 +81,9 @@ def test_livez_endpoint_returns_200_with_lifespan_and_503_when_unhealthy(monkeyp
 def test_default_thresholds_match_docker_healthcheck():
     """Audit E2E: /livez muss vor dem 3-s-Healthcheck-Timeout auf 503 gehen."""
     from backend.loop_liveness import (
-        DEFAULT_MAX_HEARTBEAT_AGE_S, DEFAULT_MAX_LOOP_LAG_MS, DEFAULT_INTERVAL_S,
+        DEFAULT_INTERVAL_S,
+        DEFAULT_MAX_HEARTBEAT_AGE_S,
+        DEFAULT_MAX_LOOP_LAG_MS,
     )
 
     assert 0 < DEFAULT_MAX_HEARTBEAT_AGE_S <= 8.0
@@ -97,13 +100,14 @@ def test_compose_wires_livez_healthcheck_and_external_autoheal():
     assert "ALLOW_START=1" in compose and "ALLOW_STOP=1" in compose
     assert "ARCHON_LIVEZ_MAX_HEARTBEAT_AGE_S" in compose
     assert "ARCHON_LIVEZ_MAX_LOOP_LAG_MS" in compose
-    assert "ARCHON_HEARTBEAT_ALERTMANAGER_URL" in compose
+    assert "ARCHON_HEARTBEAT_WEBHOOK_URL" in compose
     assert (root / "scripts" / "archon_autoheal.py").is_file()
 
 
 def test_livez_returns_503_during_real_event_loop_blockade(monkeypatch):
     """Kontrollierte echte Blockade (kein Fake) im separaten Test-Event-Loop."""
     from fastapi.testclient import TestClient
+
     import main as app_main
     from backend import loop_liveness as ll
 

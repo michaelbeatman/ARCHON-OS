@@ -1,7 +1,6 @@
+# mypy: ignore-errors
 """Router fuer HUD-Telemetrie, Agent-Aktivitaeten, Projekte und Metriken."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import asyncio
 import datetime
@@ -13,8 +12,15 @@ import sqlite3
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import Depends as _ArchonDepends
 
 from archon.core.paths import KANBAN_DB_PATH
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
+try:
+    from backend.db_paths import DB_BUSY_TIMEOUT_MS
+except Exception:  # pragma: no cover - SSOT nicht importierbar
+    DB_BUSY_TIMEOUT_MS = 5000
 
 logger = logging.getLogger("archon.routers.telemetry")
 
@@ -59,7 +65,7 @@ def _open_activity_db(filename: str):
             continue
         try:
             conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3.0)
-            conn.execute("PRAGMA busy_timeout=3000;")
+            conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
             return conn, path
         except sqlite3.Error as exc:
             logger.debug(f"[Telemetry] {path} nicht lesbar: {exc}")
@@ -410,7 +416,7 @@ def _read_recent_turns(agent_id: str) -> list[str]:
         conn = None
         try:
             conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=3.0)
-            conn.execute("PRAGMA busy_timeout=3000;")
+            conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
             if not _table_columns(conn, "conversations"):
                 continue
             rows = conn.execute(
@@ -434,8 +440,7 @@ def _read_recent_turns(agent_id: str) -> list[str]:
 def api_get_agent_activity(agent_id: str):
     """Liefert echte Aktivitaetsdaten aus ops.db + memory.db statt Standby-Platzhalter."""
     import main as app_main
-    from fastapi import HTTPException
-    from utils.path_jail import safe_identifier, PathJailError
+    from utils.path_jail import PathJailError, safe_identifier
 
     try:
         clean_id = safe_identifier(agent_id, "agent_id")
@@ -763,13 +768,17 @@ def _collect_hud_telemetry_sync(app_main: Any):
     return v_notes, mem_records, tot_inp, tot_out, tot_cache, tot_cost, skills_active
 
 
+def _load_hud_configs(app_main: Any) -> tuple:
+    """D08/MED: agents.json/services.json im Worker-Thread lesen."""
+    return app_main.load_agents(), app_main.load_services()
+
+
 @router.get("/api/v1/hud/telemetry")
 async def get_hud_telemetry():
     """Real-time Hermes HUD-UI consciousness and system telemetry stream."""
     import main as app_main
 
-    agents = app_main.load_agents()
-    services = app_main.load_services()
+    agents, services = await asyncio.to_thread(_load_hud_configs, app_main)
 
     async def _probe_service(s: dict) -> dict:
         port = s.get("port")

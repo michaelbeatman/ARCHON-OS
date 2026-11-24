@@ -1,5 +1,5 @@
 import PocketBase from 'pocketbase';
-import { createTraceparent, getArchonTracestate } from './archon-api';
+import { createTraceparent, forkActiveTraceparent, getArchonTracestate } from './archon-api';
 
 /**
  * D16: Das PocketBase-SDK nutzt intern selbst fetch. Ueber beforeSend injizieren
@@ -9,7 +9,7 @@ function installTraceHook(client: PocketBase): void {
   client.beforeSend = (url, options) => {
     const headers: Record<string, string> = { ...(options.headers || {}) };
     const has = (name: string) => Object.keys(headers).some((key) => key.toLowerCase() === name);
-    if (!has('traceparent')) headers['traceparent'] = createTraceparent();
+    if (!has('traceparent')) headers['traceparent'] = forkActiveTraceparent() || createTraceparent();
     const tracestate = getArchonTracestate();
     if (tracestate && !has('tracestate')) headers['tracestate'] = tracestate;
     return { url, options: { ...options, headers } };

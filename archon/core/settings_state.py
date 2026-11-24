@@ -6,7 +6,8 @@ import logging
 import os
 from typing import Any, Dict, List
 
-from archon.core.cache import invalidate as invalidate_ttl_cache, ttl_cache
+from archon.core.cache import invalidate as invalidate_ttl_cache
+from archon.core.cache import ttl_cache
 from archon.core.paths import (
     AGENTS_FILE,
     COUPLED_AGENTS_FILE,
@@ -17,7 +18,8 @@ from archon.core.paths import (
     WORKSPACE_DIR,
 )
 from archon.core.profiles import restore_data_uri_avatars
-from archon.core.roles_data import DEFAULT_ROLES
+from archon.core.roles_data import DEFAULT_ROLES as DEFAULT_ROLES  # Import-Kompatibilitaet
+from archon.core.roles_data import load_default_roles
 from archon.core.runtime import _load_json, _save_json
 
 logger = logging.getLogger("archon.core.settings_state")
@@ -179,7 +181,9 @@ def save_agents(agents: List[Dict]):
 
 @ttl_cache(seconds=60)
 def load_roles() -> List[Dict]:
-    return _load_json(ROLES_FILE, DEFAULT_ROLES)
+    # A8-DELEGATED: SSOT-Projektion statt statischem Import-Snapshot.
+    # DEFAULT_ROLES bleibt als Import-Kompatibilitaet erhalten.
+    return _load_json(ROLES_FILE, load_default_roles())
 
 
 def save_roles(roles: List[Dict]):

@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 # Autoritative Basis ist der Repo-Root (identisch mit backend.db_paths).
 # Vorher kam WORKSPACE_DIR aus archon.core.runtime ("./agent_workspace") und
 # erzeugte ein zweites, leeres data/tenants-Verzeichnis -> Split-Brain.
-from backend.db_paths import WORKSPACE_DIR, APP_DATA_DIR, DB_BUSY_TIMEOUT_MS  # F-013: SSOT
+from backend.db_paths import APP_DATA_DIR, DB_BUSY_TIMEOUT_MS, WORKSPACE_DIR  # F-013: SSOT
 
 logger = logging.getLogger("archon.tenant_context")
 
@@ -148,8 +148,10 @@ def _atomic_sqlite_backup(src_path: str, dst_path: str) -> bool:
     if not _db_has_tables(src_path):
         return False
     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
-    src = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True, timeout=10.0)
-    dst = sqlite3.connect(dst_path, timeout=10.0)
+    src = sqlite3.connect(
+        f"file:{src_path}?mode=ro", uri=True, timeout=DB_BUSY_TIMEOUT_MS / 1000.0
+    )
+    dst = sqlite3.connect(dst_path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
     try:
         src.backup(dst)
         return True
@@ -165,9 +167,11 @@ def init_tenant_db_schema(db_filename: str, db_path: str) -> None:
 
     if fname == "erp.db":
         # ERPManager initialisiert das vollständige Schema inkl. Nummernkreise
-        conn = sqlite3.connect(db_path, timeout=10.0)
+        conn = sqlite3.connect(db_path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
         try:
             conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+            conn.execute("PRAGMA foreign_keys = ON;")  # D03/HIGH
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS erp_sequences (seq_key TEXT PRIMARY KEY, current_val INTEGER NOT NULL)"
             )
@@ -176,11 +180,14 @@ def init_tenant_db_schema(db_filename: str, db_path: str) -> None:
             conn.close()
         return
 
-    conn = sqlite3.connect(db_path, timeout=10.0)
+    conn = sqlite3.connect(db_path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
     try:
         conn.execute("PRAGMA journal_mode=WAL;")
+        # D03/MED: synchron/guard — synchronous ist verbindungsbezogen, hier
+        # bewusst JEDER Connection (diese Funktion baut eine neue auf).
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+        conn.execute("PRAGMA foreign_keys = ON;")  # D03/HIGH: FK ueberall
         with conn:
             if fname == "deals.db":
                 conn.execute(
@@ -253,6 +260,13 @@ def init_tenant_db_schema(db_filename: str, db_path: str) -> None:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts(status);")
 
             elif fname == "crm.db":
+                # D03/MED: versioniertes Kompatibilitaetsmodell. Das autoritative
+                # ERP-Schema ist `crm_contacts`/`crm_entities`/`crm_interactions`
+                # (erp_manager.py, mit gdpr_opt_in_status + external_msg_id
+                # UNIQUE). Diese Legacy-Tabellen bleiben bewusst erhalten, weil
+                # crm_service.py sie liest/schreibt; DSGVO Art.17 muss BEIDE
+                # Modelle erfassen (siehe gdpr_compliance_engine._TENANT_TARGETS
+                # mit 'kontakte' und 'crm_*').
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS kontakte (
@@ -472,7 +486,10 @@ class TenantContextManager:
                 # erreichbar — pro Mandant unter data/tenants/<tid>/{ops,business,memory}.db,
                 # damit Voll-Isolation und 3-DB-Konsolidierung keinen Split-Brain bilden.
                 try:
-                    from backend.db_consolidation import is_consolidation_active, resolve_consolidated_domain
+                    from backend.db_consolidation import (
+                        is_consolidation_active,
+                        resolve_consolidated_domain,
+                    )
                     if is_consolidation_active(self._data_root):
                         dom_name = fname if fname in CONSOLIDATED_TENANT_DBS else resolve_consolidated_domain(fname)
                         cons_tenant = os.path.join(self.get_tenant_dir(tid), dom_name)
@@ -488,8 +505,11 @@ class TenantContextManager:
                 if (not os.path.isfile(isolated_path)) and (tid in PRIMARY_TENANT_IDS):
                     legacy_candidates = [
                         os.path.join(self._data_root, fname),
-                        os.path.join(os.path.expanduser("~"), ".hermes", fname),
                     ]
+                    if not os.environ.get("ARCHON_TEST_DB_ISOLATION"):
+                        legacy_candidates.append(
+                            os.path.join(os.path.expanduser("~"), ".hermes", fname)
+                        )
                     if fname in ("crm.db",):
                         legacy_candidates.append(
                             os.path.join(self._data_root, "business.db")
@@ -513,7 +533,10 @@ class TenantContextManager:
             is_primary_prod = self._is_default_workspace and (tid in PRIMARY_TENANT_IDS)
 
             try:
-                from backend.db_consolidation import is_consolidation_active, resolve_consolidated_domain
+                from backend.db_consolidation import (
+                    is_consolidation_active,
+                    resolve_consolidated_domain,
+                )
                 data_dir = self._data_root
                 if is_consolidation_active(data_dir):
                     dom_name = fname if fname in CONSOLIDATED_TENANT_DBS else resolve_consolidated_domain(fname)
@@ -674,6 +697,7 @@ class TenantContextManager:
         with sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0) as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+            conn.execute("PRAGMA foreign_keys = ON;")  # D03/HIGH: FK ueberall
             conn.execute(DOCUMENT_NUMBER_SEQUENCES_DDL)
             # F-018: Legacy-Zaehler aus der ERP-Tabelle erp_sequences in die
             # eine Authority ueberfuehren (Zaehlerstaende erhalten).
@@ -732,6 +756,7 @@ class TenantContextManager:
         result: Dict[str, Any] = {}
         with sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0) as conn:
             conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+            conn.execute("PRAGMA foreign_keys = ON;")  # D03/HIGH: FK ueberall
             rows = conn.execute(
                 "SELECT doc_type, prefix, next_seq, padding FROM document_number_sequences "
                 "WHERE tenant_id = ? AND year = ?",
@@ -754,27 +779,11 @@ class TenantContextManager:
             })
         return result
 
-    def _save_number_ranges(self, company_id: str, data: Dict[str, Any]) -> None:
-        """Kompatibilitätswrapper: schreibt in SQLite statt in eine JSON-Datei."""
-        path = self._ensure_number_sequences_table(company_id)
-        year = datetime.datetime.now().year
-        with sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0) as conn:
-            conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
-            conn.execute("BEGIN IMMEDIATE")
-            for doc_type, entry in (data or {}).items():
-                if not isinstance(entry, dict):
-                    continue
-                conn.execute("""
-                    INSERT INTO document_number_sequences
-                        (tenant_id, doc_type, year, prefix, next_seq, padding)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(tenant_id, doc_type, year) DO UPDATE SET
-                        prefix = excluded.prefix,
-                        next_seq = excluded.next_seq,
-                        padding = excluded.padding
-                """, (company_id, doc_type, year, str(entry.get("prefix") or ""),
-                      int(entry.get("next_seq") or 1), int(entry.get("padding") or 4)))
-            conn.commit()
+    # D03/MED: `_save_number_ranges()` wurde entfernt. Der zweite, unguarded
+    # Schreiber setzte `next_seq = excluded.next_seq` und konnte einen Zaehler
+    # zuruecksetzen (doppelte Belegnummern / GoBD-Bruch). Einzige Authority
+    # ist `_upsert_number_sequence()` (MAX-Semantik + Prefix-Guard) bzw.
+    # `next_document_number()`.
 
     def next_document_number(
         self,
@@ -806,20 +815,30 @@ class TenantContextManager:
         override_prefix = str(prefix) if prefix is not None else None
 
         own_conn: Optional[sqlite3.Connection] = None
+        savepoint_active = False
         target: sqlite3.Connection
         if conn is not None:
             target = conn
             target.execute(DOCUMENT_NUMBER_SEQUENCES_DDL)
             # D03/MED: der Docstring versprach BEGIN IMMEDIATE, der Conn-Pfad
             # lief aber implizit als DEFERRED-Transaktion (SQLITE_BUSY_SNAPSHOT
-            # bei Nebenläufigkeit im WAL). Nur wenn der Aufrufer noch keine
-            # Transaktion geöffnet hat, hier die Schreibsperre nehmen.
+            # bei Nebenläufigkeit im WAL). Ohne eigene Transaktion die
+            # Schreibsperre nehmen; mit bereits offener Transaktion innerhalb
+            # eines SAVEPOINTs durch eine No-op-Schreiboperation eskalieren,
+            # BEVOR der SELECT den Read-Snapshot festlegt.
             if not target.in_transaction:
                 target.execute("BEGIN IMMEDIATE")
+            else:
+                target.execute("SAVEPOINT archon_numseq")
+                target.execute(
+                    "UPDATE document_number_sequences SET next_seq = next_seq WHERE 0"
+                )
+                savepoint_active = True
         else:
             path = self._ensure_number_sequences_table(tid)
             own_conn = sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
             own_conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+            own_conn.execute("PRAGMA foreign_keys = ON;")  # D03/HIGH: FK ueberall
             own_conn.execute("BEGIN IMMEDIATE")
             target = own_conn
 
@@ -857,10 +876,19 @@ class TenantContextManager:
                     (seq + 1, persisted_prefix, tid, doc_type, year),
                 )
                 out_prefix = persisted_prefix
+            if savepoint_active:
+                target.execute("RELEASE SAVEPOINT archon_numseq")
+                savepoint_active = False
             if own_conn is not None:
                 own_conn.commit()
             return f"{out_prefix}{str(seq).zfill(pad)}"
         finally:
+            if savepoint_active:
+                try:
+                    target.execute("ROLLBACK TO SAVEPOINT archon_numseq")
+                    target.execute("RELEASE SAVEPOINT archon_numseq")
+                except sqlite3.Error:
+                    pass
             if own_conn is not None:
                 own_conn.close()
 

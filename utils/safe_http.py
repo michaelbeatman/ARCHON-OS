@@ -16,7 +16,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 
 def webhook_signature_headers(body: bytes, secret_env: str = "ARCHON_WEBHOOK_HMAC_SECRET") -> Dict[str, str]:
@@ -56,11 +56,17 @@ def safe_http_request(
     timeout: float = 15.0,
     max_bytes: int = 8 * 1024 * 1024,
     public_only: bool = False,
+    allowed: Optional[Iterable[str]] = None,
 ) -> Tuple[int, Dict[str, str], bytes]:
-    """Fuehrt einen SSRF-sicheren HTTP-Request ohne Redirect-Following und mit Groessenlimit aus."""
+    """Fuehrt einen SSRF-sicheren HTTP-Request ohne Redirect-Following und mit Groessenlimit aus.
+
+    `allowed` erlaubt es internen Callern (z. B. dem OmniRoute-Gateway-Client),
+    eine explizite Ziel-Allowlist zu uebergeben, statt der globalen Env-Liste.
+    Der Redirect-Block und das Groessenlimit bleiben unbedingt aktiv.
+    """
     from utils.egress_guard import check_public_url, check_target_url
 
-    safe_url = check_public_url(url) if public_only else check_target_url(url)
+    safe_url = check_public_url(url) if public_only else check_target_url(url, allowed=allowed)
     req = urllib.request.Request(
         safe_url,
         data=data,
@@ -85,6 +91,7 @@ def safe_http_json(
     timeout: float = 15.0,
     max_bytes: int = 4 * 1024 * 1024,
     public_only: bool = False,
+    allowed: Optional[Iterable[str]] = None,
 ) -> Any:
     """Fuehrt einen SSRF-sicheren HTTP-Request aus und parst JSON."""
     hdrs = {"Accept": "application/json", **dict(headers or {})}
@@ -100,5 +107,6 @@ def safe_http_json(
         timeout=timeout,
         max_bytes=max_bytes,
         public_only=public_only,
+        allowed=allowed,
     )
     return json.loads(raw.decode("utf-8"))

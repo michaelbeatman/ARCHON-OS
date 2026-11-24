@@ -23,7 +23,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
-__all__ = ["ReverseProxy", "get_shared_client"]
+__all__ = ["ReverseProxy", "get_shared_client", "close_proxy_clients"]
 
 # H12: Loop-Objekt als schwacher Schlüssel (kein id()-Recycling, kein Leak).
 _PROXY_CLIENTS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = weakref.WeakKeyDictionary()
@@ -41,6 +41,27 @@ def get_shared_client() -> httpx.AsyncClient:
         )
         _PROXY_CLIENTS[loop] = client
     return client
+
+
+async def close_proxy_clients() -> int:
+    """A5/D08: alle loop-keyed Proxy-Clients zentral am Shutdown schliessen.
+
+    Snapshot der Dict-Values (WeakKeyDictionary kann während aclose() Items
+    verlieren), ``await client.aclose()`` und explizites ``clear()`` gegen
+    Cross-Loop-Reuse. Fehler bleiben fail-safe (Shutdown nicht blockieren).
+    """
+    closed = 0
+    for client in list(_PROXY_CLIENTS.values()):
+        try:
+            if not client.is_closed:
+                await client.aclose()
+                closed += 1
+        except Exception:
+            # Ein bereits an einem beendeten Loop haengender Client darf den
+            # Gesamt-Shutdown nicht verhindern.
+            pass
+    _PROXY_CLIENTS.clear()
+    return closed
 
 
 _DROP_HEADERS = {

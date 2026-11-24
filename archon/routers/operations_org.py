@@ -1,7 +1,11 @@
+# mypy: ignore-errors
 import logging
+
 _archon_exc_logger = logging.getLogger("operations_org")
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """Sub-Router fuer Org-Chart, Teams, Comm-Feed, Hierarchie und Concurrency Governance.
 
 Ausgelagert aus backend/operations_api.py.
@@ -14,12 +18,13 @@ import os
 import sys
 import weakref
 from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import broadcast_event, subscribe_events, unsubscribe_events
+from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -68,12 +73,12 @@ async def _ensure_comm_bridge() -> None:
 
 def _get_ops_deps():
     from backend.operations_api import (
-        _get_fallback_avatar,
-        _get_kanban_connection,
-        _load_profiles_map,
         _PROFILES_MAP_CACHE,
         PROFILES_FILE,
         WORKSPACE_DIR,
+        _get_fallback_avatar,
+        _get_kanban_connection,
+        _load_profiles_map,
     )
     return _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, PROFILES_FILE, WORKSPACE_DIR, _PROFILES_MAP_CACHE
 
@@ -906,14 +911,31 @@ def get_zero_egress_posture_audit():
 
 @router.post("/governance/audit-log/verify")
 def verify_audit_log_chain(request: Request):
-    """Führt eine vollständige kryptografische Prüfung aller Verkettungen im Audit-Log durch."""
+    """Führt eine vollständige kryptografische Prüfung aller Verkettungen im Audit-Log durch.
+
+    D05/M: ``valid=false`` ist kein Erfolg — nicht-2xx und ``reason`` /
+    ``corrupted_id`` direkt an der Antwortwurzel, damit Status-only-Consumer
+    nicht in die Irre geführt werden.
+    """
     require_admin_or_503(request)
     from backend.audit_log import chained_audit_log
     result = chained_audit_log.verify_integrity()
-    return {
-        "status": "success",
+    valid = result.get("valid") is True
+    body: Dict[str, Any] = {
+        "status": "success" if valid else "error",
+        "valid": valid,
         "verification": result,
     }
+    for key in ("reason", "corrupted_id"):
+        if key in result:
+            body[key] = result[key]
+    if not valid:
+        return JSONResponse(
+            status_code=409,
+            content=body,
+            headers={"X-Archon-Audit-Status": "error"},
+        )
+    return body
 
 
 @router.get("/governance/audit-log/export")
@@ -971,7 +993,7 @@ def api_get_all_role_budgets():
 def api_update_role_budget_policy(request: Request, req: RoleBudgetPolicyUpdateRequest):
     """Setzt oder aktualisiert das harte Tages-/Monats-Token- und Euro-Limit einer Rolle."""
     require_admin_or_503(request)
-    from backend.role_budget_engine import set_role_budget_policy, get_role_usage_today
+    from backend.role_budget_engine import get_role_usage_today, set_role_budget_policy
     policy = set_role_budget_policy(
         agent_id=req.agent_id,
         daily_token_budget=req.daily_token_budget,

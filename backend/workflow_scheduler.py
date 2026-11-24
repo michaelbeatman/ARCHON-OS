@@ -569,8 +569,8 @@ def _run_content_publish_sweep(now: datetime) -> None:
     _CONTENT_PUBLISH_LAST_TS = now
     try:
         from backend.content_machine import (
-            publish_scheduled_due_assets,
             get_default_publish_webhook_url,
+            publish_scheduled_due_assets,
         )
         # Ohne Ziel-URL markierte der Sweep das Asset nur als 'published',
         # ohne es tatsaechlich auszuliefern. Die URL kommt zentral aus ENV
@@ -733,6 +733,10 @@ def _create_hitl_decision(
             kurzfassung=(summary or f"Event-Bus require_hitl: {src}/{event_type} (Ziel-Domain: {target_dom})")[:600],
             ref_id=event_id,
             extra={"event_bus": {"event_id": event_id, "source": src, "event_type": event_type, "correlation_id": corr, "target_domain": target_dom}},
+            # A6/D04: Vier-Augen-Fail-Closed verlangt einen zuordenbaren Ersteller.
+            # Dieser Hintergrund-Workflow hat keine interaktive Session; der
+            # dokumentierte Service-Principal ist der verantwortliche Produzent.
+            created_by="workflow-scheduler-service",
         )
         if res:
             logger.info(f"[WorkflowScheduler] HITL-Decision angelegt fuer Event {event_id} ({src}/{event_type})")

@@ -144,6 +144,18 @@
       }));
       return [...fabric, ...standard];
     }
+    // Audit D08/MED: das Fabric-/Standard-Raster hatte keine Begrenzung und
+    // baute bei JEDEM Tastendruck alle Karten neu. Gleiche Strategie wie der
+    // 832er-Katalog: 60er-Batches, 180-ms-Debounce, "Mehr laden".
+    let tplVisibleCount = 60;
+    let tplLastRenderKey = null;
+    let tplDebounceTimer = null;
+
+    function tplLoadMore() {
+      tplVisibleCount += 60;
+      renderPromptTemplateCards(document.getElementById("tpl-search-input")?.value?.trim().toLowerCase() || "");
+    }
+
     function filterPromptTemplates(cat) {
       currentCategoryFilter = cat;
       const btns = document.querySelectorAll(".tpl-cat-btn");
@@ -159,7 +171,10 @@
       renderPromptTemplateCards();
     }
     function searchPromptTemplates(query) {
-      renderPromptTemplateCards(query.trim().toLowerCase());
+      if (tplDebounceTimer) clearTimeout(tplDebounceTimer);
+      tplDebounceTimer = setTimeout(() => {
+        renderPromptTemplateCards((query || "").trim().toLowerCase());
+      }, 180);
     }
     function renderPromptTemplateCards(search = "") {
       const wrapper = document.getElementById("tpl-cards-wrapper");
@@ -189,7 +204,13 @@
         `;
         return;
       }
-      filtered.forEach(t => {
+      const renderKey = `${currentCategoryFilter}::${search}`;
+      if (tplLastRenderKey !== renderKey) {
+        tplVisibleCount = 60;
+        tplLastRenderKey = renderKey;
+      }
+      const visible = filtered.slice(0, tplVisibleCount);
+      visible.forEach(t => {
         const isSel = t.id === selectedPromptTemplateId;
         const isFav = favIds.includes(t.id);
         const card = document.createElement("div");
@@ -220,6 +241,12 @@
         `;
         wrapper.appendChild(card);
       });
+      if (filtered.length > visible.length) {
+        const more = document.createElement("div");
+        more.className = "p-3 text-center";
+        more.innerHTML = `<button type="button" onclick="tplLoadMore()" class="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-600 hover:border-indigo-400 hover:text-indigo-600 transition">${psT('ui.prompt_studio.load_more', 'Mehr laden')} (${visible.length}/${filtered.length})</button>`;
+        wrapper.appendChild(more);
+      }
       if (window.lucide) window.lucide.createIcons();
     }
     async function selectPromptTemplate(tplId) {

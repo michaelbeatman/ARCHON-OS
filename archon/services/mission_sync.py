@@ -1,14 +1,16 @@
+# mypy: ignore-errors
 """Hilfs- und Sync-Funktionen fuer Mission Control, Obsidian-Spiegelung und Live-Telemetrie."""
 from __future__ import annotations
 
 import datetime
 import glob
+import json
 import logging
 import os
 import re
 import sqlite3
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from archon.core.paths import (
     HERMES_PROFILES_BASE,
@@ -16,9 +18,21 @@ from archon.core.paths import (
     PROJEKTE_DIR,
     STATE_DB_PATH,
 )
-from archon.core.runtime import OBSIDIAN_VAULT_DIR, WORKSPACE_DIR
+from archon.core.runtime import WORKSPACE_DIR, resolve_obsidian_vault_path
+from utils.path_jail import safe_filename
 
 logger = logging.getLogger("archon.services.mission_sync")
+
+
+class _SyncPath(str):
+    """Pfad + ehrlicher Sync-Status (str-Kompatibilitaet fuer bestehende Aufrufer)."""
+
+    def __new__(cls, value: str, status: str, replicas: list, hashes: dict):
+        obj = super().__new__(cls, value)
+        obj.status = status
+        obj.replicas = replicas
+        obj.hashes = hashes
+        return obj
 
 
 def _slugify(text: str) -> str:
@@ -52,7 +66,9 @@ def _sync_task_to_obsidian(task: dict) -> str:
     """
     import main as app_main
 
-    obs_vault_dir = getattr(app_main, "OBSIDIAN_VAULT_DIR", OBSIDIAN_VAULT_DIR)
+    # D03/MED: kanonischer Vault-Pfad ueber den Resolver (kein hartcodierter
+    # Fallback), wenn main.py keinen expliziten Override bereitstellt.
+    obs_vault_dir = getattr(app_main, "OBSIDIAN_VAULT_DIR", None) or resolve_obsidian_vault_path()
     workspace_dir = getattr(app_main, "WORKSPACE_DIR", WORKSPACE_DIR)
 
     try:
@@ -108,25 +124,63 @@ status: completed
 ## Generierte Artefakte
 - Pfad: {os.path.join(PROJEKTE_DIR, file_name)}
 """
-    for d in target_dirs:
+    # D03/MED: autoritativer Zielpfad = PROJEKTE_DIR; alle weiteren Ziele sind
+    # explizite Replikate und werden mit einem Hash-Manifest ausgewiesen.
+    import hashlib as _hashlib
+    content_hash = _hashlib.sha256(content.encode("utf-8")).hexdigest()
+    replica_errors: List[str] = []
+
+    for idx, d in enumerate(target_dirs):
+        # Pfad-Jail: Dateiname darf nie Pfadanteile enthalten.
+        f_name = safe_filename(file_name)
         try:
             os.makedirs(d, exist_ok=True)
-            f_path = os.path.join(d, file_name)
-            tmp_path = os.path.join(d, f".{file_name}.tmp_{os.getpid()}_{int(time.time()*1000)}")
+            f_path = os.path.join(d, f_name)
+            if os.path.commonpath([os.path.abspath(f_path), os.path.abspath(d)]) != os.path.abspath(d):
+                raise ValueError(f"Ziel ausserhalb des erlaubten Verzeichnisses: {f_path}")
+            tmp_path = os.path.join(d, f".{f_name}.tmp_{os.getpid()}_{int(time.time()*1000)}")
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write(content)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp_path, f_path)
-            if os.path.exists(f_path):
-                written_paths.append(f_path)
-                logger.info(f"[Obsidian Sync] Atomar und verifiziert gespeichert: {f_path}")
+            written_paths.append(f_path)
+            logger.info(f"[Obsidian Sync] Atomar gespeichert: {'AUTHORITATIVE' if idx == 0 else 'REPLICA'} {f_path}")
         except Exception as err:
-            logger.warning(f"[Obsidian Sync] Fehler beim Schreiben in {d}: {err}")
+            if idx == 0:
+                raise RuntimeError(
+                    f"[Obsidian Sync] Autoritativer Zielpfad {d} nicht schreibbar: {err}"
+                ) from err
+            replica_errors.append(f"{d}: {err}")
+            logger.warning(f"[Obsidian Sync] Replikat {d} fehlgeschlagen: {err}")
 
-    final_path = written_paths[0] if written_paths else os.path.join(PROJEKTE_DIR, file_name)
-    print(f"[Obsidian Sync] Speicherpfad verifiziert: {final_path}")
-    return final_path
+    final_path = written_paths[0]
+    hashes = {p: content_hash for p in written_paths}
+    manifest = {
+        "task_id": task_id,
+        "authoritative": final_path,
+        "content_sha256": content_hash,
+        "replicas": written_paths[1:],
+        "hashes": hashes,
+        "status": "partial" if replica_errors else "ok",
+        "errors": replica_errors,
+    }
+    # Hash-Manifest atomar NEBEN das autoritative Ziel (mount-übergreifend sicher).
+    m_path = final_path + ".sync_manifest.json"
+    m_tmp = m_path + f".tmp_{os.getpid()}"
+    try:
+        with open(m_tmp, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(m_tmp, m_path)
+    except Exception as err:
+        replica_errors.append(f"manifest: {err}")
+    status = "partial" if replica_errors else "ok"
+    if replica_errors:
+        logger.warning(f"[Obsidian Sync] Teilfehler — Status=partial: {replica_errors}")
+    print(f"[Obsidian Sync] Speicherpfad verifiziert ({status}): {final_path}")
+    return _SyncPath(final_path, status, written_paths[1:], hashes)
 
 
 _LIVE_TELEMETRY_CACHE = {"ts": 0.0, "data": None, "tenant": ""}

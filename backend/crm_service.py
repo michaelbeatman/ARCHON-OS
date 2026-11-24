@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 backend/crm_service.py
 Archon OS 2026 — Native SQLite CRM Engine for Säule 3 (WIRTSCHAFT & ERP).
@@ -13,15 +14,15 @@ to the contacts SQLite database (2,331 contacts, 2,229 messages) and powers:
 7. "KontaktDrawer" (Single record full modal/drawer with bilateral message history)
 """
 
+import datetime
+import json
 import os
 import re
-import json
 import sqlite3
 import sys
-import datetime
 import threading
 import uuid
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DEFAULT_CRM_SQLITE_PATH = os.path.join(WORKSPACE_DIR, "data", "business.db")
@@ -31,17 +32,23 @@ _CRM_SCHEMA_READY: set[str] = set()
 
 
 def _resolve_active_crm_db_path(company_id: Optional[str] = None) -> str:
+    # D03/HIGH: Test-Override nur bei explizit gesetztem, vom Default
+    # abweichendem Pfad zulassen. Ein Resolverfehler darf NIE auf die globale
+    # <workspace>/data/business.db zurueckfallen — das vermischt Mandanten.
     if CRM_SQLITE_PATH != _DEFAULT_CRM_SQLITE_PATH:
         return CRM_SQLITE_PATH
+    from backend.tenant_context import tenant_context
     try:
-        from backend.tenant_context import tenant_context
         return tenant_context.resolve_active_db("crm.db", company_id)
-    except Exception:
-        return CRM_SQLITE_PATH
+    except Exception as exc:
+        raise RuntimeError(
+            f"[CRM] Tenant-Resolver für crm.db fehlgeschlagen — kein globaler "
+            f"Fallback erlaubt: {exc}"
+        ) from exc
 
 
 def _get_sqlite_conn(company_id: Optional[str] = None) -> sqlite3.Connection:
-    target_db = _resolve_active_crm_db_path(company_id)
+    target_db = os.path.abspath(_resolve_active_crm_db_path(company_id))
     os.makedirs(os.path.dirname(target_db) or ".", exist_ok=True)
     if target_db not in _CRM_SCHEMA_READY:
         try:
@@ -50,8 +57,10 @@ def _get_sqlite_conn(company_id: Optional[str] = None) -> sqlite3.Connection:
         except Exception:
             pass
         _CRM_SCHEMA_READY.add(target_db)
-    conn = sqlite3.connect(target_db, timeout=10.0)
-    conn.execute("PRAGMA busy_timeout=5000;")
+    # D03/HIGH: einziger Connection-Einstieg — setzt busy_timeout=5000 (SSOT)
+    # UND PRAGMA foreign_keys=ON. Die CRM-Connection lief vorher mit FK=AUS.
+    from backend.db_paths import get_db_connection
+    conn = get_db_connection(target_db)
     conn.row_factory = sqlite3.Row
     return conn
 

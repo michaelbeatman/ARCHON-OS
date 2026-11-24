@@ -1,0 +1,11 @@
+{
+  "active": true,
+  "version": 1,
+  "migrated_at": "2026-11-22T15:20:05.889709+00:00",
+  "note": "Versionierter Aktivierungszustand der 28->3-Konsolidierung. Frueher lag das Manifest als data/.db_consolidated.json im gitignored data/-Verzeichnis, wodurch ein frischer Clone/Container inaktiv war (D03/HIGH). Pfade sind bewusst relativ zur APP_DATA_DIR.",
+  "domains": {
+    "ops.db": "ops.db",
+    "business.db": "business.db",
+    "memory.db": "memory.db"
+  }
+}

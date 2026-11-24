@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 backend/gdpr_compliance_engine.py
 DSGVO- / GDPR-Compliance Engine für Archon OS 2026.
@@ -7,14 +8,17 @@ Implementiert Betroffenenrechte nach:
 - Art. 30 DSGVO: Manipulationssicheres Verzeichnis von Verarbeitungstätigkeiten & Löschquittungen
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("gdpr_compliance_engine")
 
+import glob
+import json
 import os
 import re
-import sys
-import json
-import time
 import sqlite3
+import sys
+import time
+
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -25,11 +29,11 @@ class _ArchonClosingConn(sqlite3.Connection):
             super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
-import hashlib
 import datetime
-from typing import Dict, Any, List, Optional, Tuple
-import urllib.request
+import hashlib
 import urllib.parse
+import urllib.request
+from typing import Any, Dict, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -81,6 +85,28 @@ def _resolve_obsidian_dir() -> str:
     return candidates[1]
 
 
+def _pocketbase_db_files() -> List[str]:
+    """D03/HIGH: ALLE physisch vorhandenen PocketBase-DBs, unabhängig vom
+    `POCKETBASE_ENABLED`-Sync-Flag. Das Flag steuert nur den HTTP-Sync —
+    personenbezogene Daten in pb_data/*.db bleiben auch bei deaktiviertem
+    PocketBase Art.15/17-pflichtig (und werden regulär gesichert).
+    """
+    pb_dir = (
+        os.getenv("ARCHON_POCKETBASE_DATA_DIR", "").strip()
+        or os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "pocketbase",
+            "pb_data",
+        )
+    )
+    if not os.path.isdir(pb_dir):
+        return []
+    return sorted(
+        p for p in glob.glob(os.path.join(pb_dir, "*.db"))
+        if os.path.isfile(p) and os.path.getsize(p) > 0
+    )
+
+
 _TENANT_TARGETS: Dict[str, List[str]] = {
     "crm_contacts": [
         "first_name", "last_name", "full_name", "email",
@@ -95,9 +121,13 @@ _TENANT_TARGETS: Dict[str, List[str]] = {
     "contracts": ["contract_name", "partner_name", "notes"],
     "deals": ["title", "partner_name", "contact_email", "notes"],
     "kontakte": [
-        "name", "email", "telefon_1", "telefon_2", "unternehmen",
+        "name", "email", "telefon_1", "telefon_2", "unternehmen", "firma",
         "kommentar", "nachrichtenverlauf", "linkedin_url", "adresse", "naechster_schritt",
     ],
+    # D03/HIGH: PocketBase-Auth-Tabellen enthalten ebenfalls personenbezogene
+    # Daten (v. a. email) und liegen im gleichen physischen Bestand.
+    "users": ["email", "username", "name"],
+    "_superusers": ["email", "username", "name"],
     "erp_bank_transactions": ["counterparty_name", "counterparty_iban", "remittance_info"],
     "bank_transactions": ["counterparty_name", "counterparty_iban", "remittance_info", "purpose"],
 }
@@ -208,10 +238,19 @@ class GDPRComplianceEngine:
         self._init_audit_table()
 
     def _get_conn(self, db_path: str, readonly: bool = False) -> sqlite3.Connection:
+        # D03/HIGH: FK-Integritaet und busy_timeout-SSOT auf JEDER Verbindung.
+        # Bewusst KEIN journal_mode-Write-PRAGMA: PocketBase besitzt die WAL
+        # seiner DBs; Art.17 darf dort nur die Zeilen aendern.
+        from backend.db_paths import DB_BUSY_TIMEOUT_MS
+        timeout = DB_BUSY_TIMEOUT_MS / 1000.0
         if readonly and os.path.exists(db_path):
             uri = f"file:{db_path}?mode=ro"
-            return sqlite3.connect(uri, uri=True, timeout=10.0)
-        return sqlite3.connect(db_path, timeout=10.0)
+            conn = sqlite3.connect(uri, uri=True, timeout=timeout)
+        else:
+            conn = sqlite3.connect(db_path, timeout=timeout)
+        conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+        conn.execute("PRAGMA foreign_keys = ON;")
+        return conn
 
     def _init_audit_table(self):
         """Erstellt die manipulationssichere Tabelle für DSGVO-Löschquittungen sowie Art. 30 VVT."""
@@ -468,6 +507,10 @@ class GDPRComplianceEngine:
         import glob
         tenants_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "tenants")
         tenant_db_files = sorted(glob.glob(os.path.join(tenants_root, "*", "*.db")))
+        # D03/HIGH: PocketBase-Bestand unabhaengig vom POCKETBASE_ENABLED-Flag
+        # in Art.15/17 einbeziehen (die DBs liegen physisch im Repo und werden
+        # auch gesichert — "deaktiviert" darf nicht "unloeschbar" bedeuten).
+        tenant_db_files += _pocketbase_db_files()
         like_pat = f"%{term}%"
         for tdb in tenant_db_files:
             tenant_name = os.path.basename(os.path.dirname(tdb))
@@ -758,6 +801,10 @@ class GDPRComplianceEngine:
         import glob
         tenants_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "tenants")
         tenant_db_files = sorted(glob.glob(os.path.join(tenants_root, "*", "*.db")))
+        # D03/HIGH: PocketBase-Bestand unabhaengig vom POCKETBASE_ENABLED-Flag
+        # in Art.15/17 einbeziehen (die DBs liegen physisch im Repo und werden
+        # auch gesichert — "deaktiviert" darf nicht "unloeschbar" bedeuten).
+        tenant_db_files += _pocketbase_db_files()
         like_pat = f"%{term}%"
         for tdb in tenant_db_files:
             try:
@@ -1023,7 +1070,7 @@ class GDPRComplianceEngine:
             out["csv"] = buf.getvalue()
         elif fmt_low in ("md", "markdown"):
             lines = [
-                f"# Verzeichnis von Verarbeitungstätigkeiten (Art. 30 DSGVO)",
+                "# Verzeichnis von Verarbeitungstätigkeiten (Art. 30 DSGVO)",
                 f"Verantwortlicher: {controller.get('name', '')} ({controller.get('address', '')})",
                 "",
             ]
@@ -1135,7 +1182,7 @@ def _verify_gdpr_audit_chain_raw(db_path: Optional[str] = None) -> Dict[str, Any
     einer neuen Quittung haengt vom gespeicherten prev_hash ab, nicht davon,
     wie der Vorgaenger signiert wurde — der Uebergang ist daher bruchfrei.
     """
-    from backend.audit_log import HMAC_PREFIX, _verify_hash, _hmac_epochs
+    from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
 
     conn = sqlite3.connect(db_path or _resolve_db("agentic_memory.db"), timeout=10.0)
     conn.row_factory = sqlite3.Row

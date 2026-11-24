@@ -44,9 +44,11 @@ def test_sanitize_llm_endpoint_zones_and_redaction():
     assert zone_gw == "INTERNAL_GATEWAY"
 
 
-def test_sha256_hash_chain_records_and_verifies_every_llm_dispatch(tmp_path):
-    from backend.audit_log import ChainedAuditLog, GENESIS_HASH
+def test_sha256_hash_chain_records_and_verifies_every_llm_dispatch(tmp_path, monkeypatch):
+    from backend.audit_log import GENESIS_HASH, ChainedAuditLog
 
+    # A2: kein externer Anker in diesem Test -> expliziter Dev-Opt-out.
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")
     db_file = str(tmp_path / "audit_test.db")
     alog = ChainedAuditLog(db_path=db_file)
 
@@ -96,9 +98,11 @@ def test_sha256_hash_chain_records_and_verifies_every_llm_dispatch(tmp_path):
     assert "127.0.0.1:11434" in csv_exp["content"]
 
 
-def test_sha256_chain_detects_column_or_payload_tampering(tmp_path):
+def test_sha256_chain_detects_column_or_payload_tampering(tmp_path, monkeypatch):
     from backend.audit_log import ChainedAuditLog
 
+    # A2: kein externer Anker in diesem Test -> expliziter Dev-Opt-out.
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")
     db_file = str(tmp_path / "tamper_test.db")
     alog = ChainedAuditLog(db_path=db_file)
     alog.record_llm_dispatch(
@@ -160,9 +164,9 @@ def test_privacy_router_enforces_hard_block_for_sensitive_categories_when_local_
 
 
 def test_zero_egress_blocks_cloud_models_and_omniroute_cloud_proxy(tmp_path):
+    from backend import privacy_router as pr
     from backend.audit_log import ChainedAuditLog
     from backend.llm_egress_guard import ZeroEgressBlockedError, evaluate_and_gate_llm_dispatch
-    from backend import privacy_router as pr
 
     alog = ChainedAuditLog(db_path=str(tmp_path / "ze_gate.db"))
     cfg = dict(pr.DEFAULT_PRIVACY_CONFIG)
@@ -221,10 +225,13 @@ def test_verify_zero_egress_config_detects_misconfigured_cloud_local_url():
 
 def test_core_dispatcher_hard_blocks_crm_finance_contracts_without_cloud_leak(tmp_path, monkeypatch):
     import asyncio
-    import core_dispatcher
-    from backend.audit_log import ChainedAuditLog
-    from backend import privacy_router as pr
 
+    import core_dispatcher
+    from backend import privacy_router as pr
+    from backend.audit_log import ChainedAuditLog
+
+    # A2: kein externer Anker in diesem Test -> expliziter Dev-Opt-out.
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")
     alog = ChainedAuditLog(db_path=str(tmp_path / "disp_block.db"))
     monkeypatch.setattr("backend.llm_egress_guard.chained_audit_log", alog)
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-should-never-be-called")
@@ -264,10 +271,13 @@ def test_core_dispatcher_hard_blocks_crm_finance_contracts_without_cloud_leak(tm
 
 def test_agent_router_logs_provider_model_and_target_host_in_sha256_chain(tmp_path, monkeypatch):
     import asyncio
+
+    from backend import privacy_router as pr
     from backend.agent_router import AgentRouter
     from backend.audit_log import ChainedAuditLog
-    from backend import privacy_router as pr
 
+    # A2: kein externer Anker in diesem Test -> expliziter Dev-Opt-out.
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")
     alog = ChainedAuditLog(db_path=str(tmp_path / "router_audit.db"))
     monkeypatch.setattr("backend.llm_egress_guard.chained_audit_log", alog)
 
@@ -291,7 +301,8 @@ def test_agent_router_logs_provider_model_and_target_host_in_sha256_chain(tmp_pa
          patch.object(router, "_get_shared_client", return_value=fake_client), \
          patch.object(router, "_daily_spend_usd", return_value=(0.0, True)), \
          patch("backend.compliance_engine.compliance_engine.check_activation_allowed",
-               return_value={"allowed": True}):
+               return_value={"allowed": True}), \
+         patch("backend.agent_router._detect_chat_silent_failure", return_value=[]):
         reply = asyncio.run(
             router.chat_completion(
                 messages=[{"role": "user", "content": "Hallo Welt"}],
@@ -300,6 +311,7 @@ def test_agent_router_logs_provider_model_and_target_host_in_sha256_chain(tmp_pa
                 api_keys={"OPENROUTER_API_KEY": "sk-test-dummy"},
                 agent_id="software_architect",
                 role="Engineering",
+                task_id=f"test-audit-{tmp_path.name}",
             )
         )
 

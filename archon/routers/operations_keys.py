@@ -1,15 +1,18 @@
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """Sub-Router fuer API-Keys & Scopes Access Management (t-6fad7a).
 
 Ausgelagert aus backend/operations_api.py.
 """
 
 from typing import Any, Dict, List
+
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from archon.routers._rbac import require_admin_or_503, get_session_actor, require_session_actor
+from archon.routers._rbac import get_session_actor, require_admin_or_503, require_session_actor
 
 
 class ApiKeyCreateRequest(BaseModel):
@@ -51,7 +54,7 @@ def api_create_key(request: Request, req: ApiKeyCreateRequest):
         raise HTTPException(status_code=400, detail="Name/Zweck des API-Keys ist erforderlich.")
 
     try:
-        from backend.api_key_manager import api_key_manager
+        from backend.api_key_manager import AuditWriteFailedError, api_key_manager
         res = api_key_manager.create_key(
             name=name,
             scopes=scopes,
@@ -60,6 +63,14 @@ def api_create_key(request: Request, req: ApiKeyCreateRequest):
             created_by=created_by,
         )
         return {"status": "success", "result": res}
+    except AuditWriteFailedError as exc:
+        # A2: AuditWriteFailedError erbt von RuntimeError, nicht von
+        # HTTPException. Ohne explizites Mapping wuerde die nachfolgende
+        # blanket-except die neue 503 in eine 500 umwandeln und den
+        # Audit-Ausfall als generischen Fehler tarnen.
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

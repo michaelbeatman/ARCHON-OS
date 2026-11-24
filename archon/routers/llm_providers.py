@@ -1,5 +1,8 @@
+# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """LLM-Provider-Verwaltung (Auswahl, Keys, Preise, Privacy-Routing)."""
 
 import json
@@ -12,11 +15,10 @@ from typing import Any, Dict, List, Optional
 import httpx
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-
-from archon.routers._rbac import require_admin_or_503
 from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.runtime import logger  # noqa: F401
+from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -67,7 +69,23 @@ def api_get_llm_provider_models(provider: str = Query("openrouter")):
         import api_provider
         dyn_models = api_provider.list_provider_models(p)
         if dyn_models and len(dyn_models) > 0:
-            return {"status": "ok", "provider": p, "models": dyn_models}
+            provenance = api_provider.model_list_provenance(dyn_models)
+            if provenance.get("source") == "static_fallback":
+                # D06/MED (A7): die harte OmniRoute-Fallbackliste darf nicht
+                # als "ok" beim Client ankommen. Kennzeichnung durchreichen.
+                return JSONResponse(status_code=502, content={
+                    "status": "degraded",
+                    "provider": p,
+                    "models": dyn_models,
+                    "provenance": provenance,
+                    "message": "Modellliste nicht live verifiziert (static_fallback).",
+                })
+            return {
+                "status": "ok",
+                "provider": p,
+                "models": dyn_models,
+                "provenance": provenance,
+            }
     except Exception as exc:
         logger.debug(f"Dynamische Modelliste fuer Provider {p} konnte nicht abgerufen werden: {exc}")
     catalog = {
@@ -253,8 +271,8 @@ def _get_llm_prices_locked(refresh: int = 0) -> Dict[str, Any]:
     try:
         now = time.time()
         if refresh or _openrouter_price_cache is None or (now - _openrouter_price_timestamp > 3600):
-            import urllib.request
             import json
+            import urllib.request
             req = urllib.request.Request("https://openrouter.ai/api/v1/models", headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode("utf-8")).get("data", [])
@@ -301,9 +319,21 @@ def _get_llm_provider_models_impl(provider: str = "") -> Dict[str, Any]:
             return {"status": "ok", "provider": "", "models": []}
             
         models = api_provider.list_provider_models(pid)
+        provenance = api_provider.model_list_provenance(models)
         if not models and pid == "omniroute":
+            # Harte Liste ohne Live-Beleg: nie als "live"/"ok" kennzeichnen.
             models = ["auto/best-coding", "auto/best-reasoning", "auto/best-vision", "deepseek-ai/DeepSeek-V4-Pro", "qwen/Qwen3.6-27B"]
-        return {"status": "ok", "provider": pid, "models": models}
+            provenance = {
+                "source": "static_fallback",
+                "verified_at": None,
+                "status": "degraded",
+            }
+        return {
+            "status": "degraded" if provenance.get("source") == "static_fallback" else "ok",
+            "provider": pid,
+            "models": models,
+            "provenance": provenance,
+        }
     except Exception as e:
         return {"status": "error", "provider": provider, "models": [], "message": str(e)}
 

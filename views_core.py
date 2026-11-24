@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 views_core.py - Zentraler Code-Contract & API-Provider für Archon OS Frontend Views
 
@@ -7,35 +8,37 @@ Stellt Backend-Endpunkte und Datenstrukturen für:
 - View 3: Showroom (view_showroom) - Berichte (.md/.txt) & Web-Artefakte (.html)
 """
 
-import os
-
-from backend.platform_paths import OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT
-import sys
+import asyncio
+import datetime
+import glob
 import html
+import json
+import logging
+import os
 import re
 import shutil
-import glob
+import sys
 import tempfile
 import threading
 import time
-import json
-import logging
-import datetime
-import asyncio
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, HTTPException, Query, Request
+
+from backend.platform_paths import OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT
 
 logger = logging.getLogger("archon.views_core")
 
-from archon.routers._rbac import require_admin_or_503
 from pydantic import BaseModel
 
+from archon.routers._rbac import require_admin_or_503
+
 try:
-    from utils.path_jail import safe_path_within, safe_filename, PathJailError
+    from utils.path_jail import PathJailError, safe_filename, safe_path_within
 except ImportError:  # pragma: no cover - direkter Aufruf ausserhalb des Repo-Roots
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from utils.path_jail import safe_path_within, safe_filename, PathJailError
+    from utils.path_jail import PathJailError, safe_filename, safe_path_within
 
 router = APIRouter(prefix="/api/views", tags=["views_core"])
 
@@ -114,7 +117,12 @@ async def get_inbox_items():
     Sortiert: Neueste oben.
     """
     try:
-        from views.view_inbox import load_internal_events, load_email_messages, load_telegram_messages, load_webhook_events
+        from views.view_inbox import (
+            load_email_messages,
+            load_internal_events,
+            load_telegram_messages,
+            load_webhook_events,
+        )
         wh = load_webhook_events()
         intern = load_internal_events()
         emails = load_email_messages()
@@ -599,7 +607,6 @@ async def export_showroom_to_desktop(request: Request, payload: DesktopExportPay
     behoben — Quelle nur noch innerhalb der Vault-Wurzel.
     """
     require_admin_or_503(request)  # RBAC: Export ist Admin-Sache
-    import shutil
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
     try:
         source = Path(safe_path_within(
@@ -658,7 +665,6 @@ def _resolve_showroom_projects_dir(vault_dir: Path, filepath: str = "") -> Path:
 async def delete_showroom_file(request: Request, payload: FileActionPayload):
     """Verschiebt eine Datei oder einen gesamten Projektordner in den Papierkorb."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    import shutil
 
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
     allowed_roots = [str((vault_dir / "01_PROJEKTE").resolve()), str((vault_dir / "Projects").resolve())]
@@ -697,7 +703,6 @@ async def delete_showroom_file(request: Request, payload: FileActionPayload):
 async def restore_showroom_file(request: Request, payload: FileActionPayload):
     """Stellt eine Datei oder einen Ordner aus dem Papierkorb wieder her."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    import shutil
 
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
     projects_dir = _resolve_showroom_projects_dir(vault_dir, payload.filepath)
@@ -745,7 +750,6 @@ async def restore_showroom_file(request: Request, payload: FileActionPayload):
 async def purge_showroom_file(request: Request, payload: FileActionPayload):
     """Löscht eine Datei oder einen Ordner endgültig aus dem Papierkorb."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    import shutil
 
     vault_dir = Path(resolve_obsidian_vault_dir()).resolve()
     projects_dir = _resolve_showroom_projects_dir(vault_dir, payload.filepath)
@@ -780,52 +784,85 @@ async def purge_showroom_file(request: Request, payload: FileActionPayload):
         raise HTTPException(status_code=500, detail=f"Fehler beim endgültigen Löschen: {e}")
 
 
-@router.get("/showroom/reports")
-async def get_showroom_reports():
-    """Liefert alle Berichte aus Projects/ und builds/reports/."""
-    vault_dir = resolve_obsidian_vault_dir()
+_SHOWROOM_MAX_ENTRIES = 1000
+
+
+def _scan_showroom_reports(vault_dir: str, reports_dir: str) -> list:
+    """D08/MED: kompletter Showroom-FS-Scan in einem Worker-Thread."""
     projects_dir = Path(vault_dir) / "01_PROJEKTE"
-    reports_dir = Path(get_reports_dir())
+    reports_root = Path(reports_dir)
     reports = []
     seen = set()
 
-    # 1. Scanne Obsidian Projects Endprodukte
+    # 1. Scanne Obsidian Projects Endprodukte (begrenzt, kein Full-Read)
     if projects_dir.exists():
         for ep in projects_dir.glob("*/03_Endprodukte/*.md"):
+            if len(reports) >= _SHOWROOM_MAX_ENTRIES:
+                break
             if ep.name in seen:
                 continue
             seen.add(ep.name)
             try:
-                content = ep.read_text(encoding="utf-8", errors="ignore")
-            except Exception:
-                content = ""
+                stat = ep.stat()
+            except OSError:
+                continue
             reports.append({
                 "filename": ep.name,
                 "title": ep.stem.replace("-", " ").replace("_", " ").title(),
-                "mtime": ep.stat().st_mtime,
-                "date": datetime.datetime.fromtimestamp(ep.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
-                "size": ep.stat().st_size,
+                "mtime": stat.st_mtime,
+                "date": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                "size": stat.st_size,
                 "path": str(ep)
             })
 
-    # 2. Scanne builds/reports
-    if reports_dir.exists():
-        for fname in os.listdir(reports_dir):
+    # 2. Scanne builds/reports (begrenzt)
+    if reports_root.exists():
+        for fname in os.listdir(reports_root):
+            if len(reports) >= _SHOWROOM_MAX_ENTRIES:
+                break
             if fname.lower().endswith((".md", ".txt")) and fname not in seen:
                 seen.add(fname)
-                fpath = reports_dir / fname
-                mtime = fpath.stat().st_mtime
+                fpath = reports_root / fname
+                try:
+                    stat = fpath.stat()
+                except OSError:
+                    continue
                 reports.append({
                     "filename": fname,
                     "title": fname.replace(".md", "").replace(".txt", "").replace("_", " ").title(),
-                    "mtime": mtime,
-                    "date": datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M"),
-                    "size": fpath.stat().st_size,
+                    "mtime": stat.st_mtime,
+                    "date": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                    "size": stat.st_size,
                     "path": str(fpath)
                 })
 
     reports.sort(key=lambda x: x["mtime"], reverse=True)
+    return reports
+
+
+@router.get("/showroom/reports")
+async def get_showroom_reports():
+    """Liefert alle Berichte aus Projects/ und builds/reports/."""
+    reports = await asyncio.to_thread(
+        _scan_showroom_reports,
+        resolve_obsidian_vault_dir(), get_reports_dir(),
+    )
     return {"reports": reports}
+
+
+def _load_showroom_report_content(vault_dir: str, reports_dir: str, clean_name: str):
+    """D08/MED: Datei-Lesen und Glob aus dem Event-Loop auslagern."""
+    projects_dir = Path(vault_dir) / "01_PROJEKTE"
+    if projects_dir.exists():
+        for cand in projects_dir.glob(f"*/03_Endprodukte/{clean_name}"):
+            if cand.exists() and cand.is_file():
+                return {"filename": clean_name,
+                        "content": cand.read_text(encoding="utf-8", errors="ignore")}
+    safe_path = Path(reports_dir) / clean_name
+    if safe_path.exists() and safe_path.is_file():
+        return {"filename": safe_path.name,
+                "content": safe_path.read_text(encoding="utf-8", errors="ignore")}
+    return None
 
 
 @router.get("/showroom/report-content")
@@ -836,28 +873,48 @@ async def get_showroom_report_content(filename: str = Query(...)):
     except PathJailError as exc:
         raise HTTPException(status_code=403, detail=f"Unzulässiger Dateiname: {exc}")
 
-    vault_dir = resolve_obsidian_vault_dir()
-    projects_dir = Path(vault_dir) / "01_PROJEKTE"
-    reports_dir = Path(get_reports_dir())
+    result = await asyncio.to_thread(
+        _load_showroom_report_content,
+        resolve_obsidian_vault_dir(), get_reports_dir(), clean_name,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Bericht nicht gefunden.")
+    return result
 
-    # 1. Prüfe in Projects/*/03_Endprodukte
-    if projects_dir.exists():
-        for cand in projects_dir.glob(f"*/03_Endprodukte/{clean_name}"):
-            if cand.exists() and cand.is_file():
-                try:
-                    return {"filename": clean_name, "content": cand.read_text(encoding="utf-8", errors="ignore")}
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=str(e))
 
-    # 2. Prüfe in builds/reports
-    safe_path = reports_dir / clean_name
-    if safe_path.exists() and safe_path.is_file():
-        try:
-            return {"filename": safe_path.name, "content": safe_path.read_text(encoding="utf-8", errors="ignore")}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-
-    raise HTTPException(status_code=404, detail="Bericht nicht gefunden.")
+def _scan_showroom_apps(apps_dir: str) -> list:
+    """D08/MED: os.listdir/stat im Worker-Thread, begrenzt auf 1000 Einträge."""
+    apps = []
+    if not os.path.exists(apps_dir):
+        return apps
+    for item in os.listdir(apps_dir):
+        if len(apps) >= _SHOWROOM_MAX_ENTRIES:
+            break
+        full_item_path = os.path.join(apps_dir, item)
+        if os.path.isdir(full_item_path):
+            index_path = os.path.join(full_item_path, "index.html")
+            if os.path.exists(index_path):
+                mtime = os.path.getmtime(index_path)
+                apps.append({
+                    "id": item,
+                    "name": item.replace("-", " ").replace("_", " ").title(),
+                    "url": f"/builds/apps/{item}/index.html",
+                    "folder": item,
+                    "mtime": mtime,
+                    "date": datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+                })
+        elif item.lower().endswith(".html"):
+            mtime = os.path.getmtime(full_item_path)
+            apps.append({
+                "id": item,
+                "name": item.replace(".html", "").replace("-", " ").replace("_", " ").title(),
+                "url": f"/builds/apps/{item}",
+                "folder": None,
+                "mtime": mtime,
+                "date": datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+            })
+    apps.sort(key=lambda x: x["mtime"], reverse=True)
+    return apps
 
 
 @router.get("/showroom/apps")
@@ -866,34 +923,7 @@ async def get_showroom_apps():
     Liefert alle HTML-Apps aus agent_workspace/builds/apps/.
     Erkennt Ordner mit einer index.html oder direkte .html Dateien.
     """
-    apps_dir = get_apps_dir()
-    apps = []
-    if os.path.exists(apps_dir):
-        for item in os.listdir(apps_dir):
-            full_item_path = os.path.join(apps_dir, item)
-            if os.path.isdir(full_item_path):
-                index_path = os.path.join(full_item_path, "index.html")
-                if os.path.exists(index_path):
-                    mtime = os.path.getmtime(index_path)
-                    apps.append({
-                        "id": item,
-                        "name": item.replace("-", " ").replace("_", " ").title(),
-                        "url": f"/builds/apps/{item}/index.html",
-                        "folder": item,
-                        "mtime": mtime,
-                        "date": datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-                    })
-            elif item.lower().endswith(".html"):
-                mtime = os.path.getmtime(full_item_path)
-                apps.append({
-                    "id": item,
-                    "name": item.replace(".html", "").replace("-", " ").replace("_", " ").title(),
-                    "url": f"/builds/apps/{item}",
-                    "folder": None,
-                    "mtime": mtime,
-                    "date": datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-                })
-    apps.sort(key=lambda x: x["mtime"], reverse=True)
+    apps = await asyncio.to_thread(_scan_showroom_apps, get_apps_dir())
     return {"apps": apps}
 
 
@@ -904,6 +934,7 @@ async def get_showroom_app_preview_frame(app_name: str):
     (Desktop, Tablet, Mobile) für die angegebene lokale Webanwendung.
     """
     from urllib.parse import quote
+
     from fastapi.responses import HTMLResponse
     try:
         clean_app = safe_filename(app_name)
@@ -1007,10 +1038,10 @@ async def run_showroom_code(request: Request, payload: CodeRunPayload):
     Gibt stdout, stderr, Exit-Code und Laufzeit zurueck.
     """
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    import tempfile
-    import time
     import subprocess
     import sys
+    import tempfile
+    import time
 
     code_to_run = payload.code or ""
     lang = (payload.language or "python").lower()

@@ -280,6 +280,7 @@ def validate_ai_output(
     base_score = max(1, min(10, base_score))
 
     llm_assessment = None
+    evaluation_failed = False
     if use_llm:
         try:
             from backend.llm_egress_guard import (
@@ -329,6 +330,10 @@ def validate_ai_output(
                 res = json.loads(resp.read().decode("utf-8"))
                 reply = res.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
                 llm_assessment = reply
+                if not reply:
+                    # D15/HIGH (A8): eine leere Judge-Antwort ist ein
+                    # Bewertungsfehler, keine stillschweigende Freigabe.
+                    raise RuntimeError("EMPTY_JUDGE_RESPONSE")
                 m = re.search(r"SCORE:\s*(\d+)", reply, re.IGNORECASE)
                 if m:
                     # M4: `SCORE: 999` hob den Wert auf 504 und bestand jedes
@@ -337,10 +342,17 @@ def validate_ai_output(
                     base_score = round((base_score + llm_score) / 2)
         except Exception as _exc:
             # M4: Klassifikatorfehler darf nicht automatisch "TRUST" bedeuten.
+            # D15/HIGH (A8): ein fehlgeschlagener oder leerer Judge-Aufruf
+            # fuehrt zu evaluation_failed + NEEDS_HUMAN_REVIEW, nie zu TRUST.
             _archon_exc_logger.warning("[local_security_guard] Output-Klassifikator fehlgeschlagen: %s", _exc)
+            evaluation_failed = True
             base_score = min(base_score, 3)
 
-    if base_score >= min_score:
+    if evaluation_failed:
+        # Ein fehlgeschlagener Judge darf niemals als TRUST enden — auch nicht
+        # bei niedrigem min_score.
+        recommendation = "NEEDS_HUMAN_REVIEW"
+    elif base_score >= min_score:
         recommendation = "TRUST"
     elif base_score >= 4:
         recommendation = "CAUTION"
@@ -350,8 +362,10 @@ def validate_ai_output(
     return {
         "score": base_score,
         "recommendation": recommendation,
-        "passed": base_score >= min_score,
+        "passed": base_score >= min_score and not evaluation_failed,
         "pattern_flags": flags,
         "llm_assessment": llm_assessment,
+        "evaluation_failed": evaluation_failed,
+        "evaluation_marker": "JUDGE_EVALUATION_FAILED" if evaluation_failed else "ok",
         "model_used": model_used
     }

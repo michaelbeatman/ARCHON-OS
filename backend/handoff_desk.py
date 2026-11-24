@@ -10,18 +10,18 @@ deterministischer Ergebnis-Kompression. Das *vollständige* Ergebnis bleibt
 immer in ``deliverables_json`` — die Kompression betrifft nur die Ansicht.
 """
 
-import os
-import sys
-import json
-import hmac
-import sqlite3
-import datetime
-import hashlib
-import secrets
-import logging
 import contextlib
 import contextvars
-from typing import Dict, Any, List, Optional, Iterator
+import datetime
+import hashlib
+import hmac
+import json
+import logging
+import os
+import secrets
+import sqlite3
+import sys
+from typing import Any, Dict, Iterator, List, Optional
 
 logger = logging.getLogger("archon.handoff_desk")
 
@@ -414,6 +414,13 @@ class HandoffDesk:
             return {
                 "status": "accepted",
                 "handoff_id": handoff_id,
+                # D11 (A8): verifizierte Korrelationsfakten aus dem signierten
+                # Envelope an den automatischen Konsumenten durchreichen
+                # (task_events.payload / mc_task_meta).Nie erfunden.
+                "receiving_agent": str(item.get("to_agent") or receiving_agent),
+                "trace_id": str(item.get("trace_id") or ""),
+                "session_id": str(item.get("session_id") or ""),
+                "correlation_id": str(item.get("correlation_id") or ""),
                 "message": f"Übergabe von '{receiving_agent}' quittiert. Bearbeitung freigegeben."
             }
 

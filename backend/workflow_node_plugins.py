@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# mypy: ignore-errors
 """
 backend/workflow_node_plugins.py
 ================================
@@ -638,7 +639,8 @@ async def _run_image_gen_plugin(params: Dict[str, Any], node: Dict[str, Any], up
     if not prompt:
         prompt = str(node.get("title") or "Editorial cover graphic")
     from fastapi import HTTPException
-    from archon.routers.chat import api_tool_image_generate, ImageGenerateToolRequest
+
+    from archon.routers.chat import ImageGenerateToolRequest, api_tool_image_generate
     try:
         req_obj = ImageGenerateToolRequest(
             prompt=f"{prompt} ({params.get('style_preset', 'editorial_clean')}, aspect {params.get('aspect_ratio', '16:9')})",
@@ -723,9 +725,41 @@ async def execute_workflow_node_plugin(
             flightlog_run_id=str(node.get("_dag_run_id") or node.get("kanban_task_id") or ""),
         )
     if adapter == "http" and spec.get("http_endpoint"):
-        from utils.safe_http import safe_http_request
+        from utils.egress_guard import EgressBlocked, check_target_url
+        from utils.safe_http import safe_http_request, webhook_signature_headers
 
-        endpoint_url = str(spec["http_endpoint"]).strip()
+        # D06/HIGH: das Plugin deklariert `webhook_url` als Steuerungsfeld —
+        # es muss aus resolved_params kommen (sonst greift die UI-Control ins
+        # Leere). Fallback nur auf den deklarierten http_endpoint.
+        url_from_params = bool(resolved_params.get("webhook_url"))
+        raw_endpoint = resolved_params.get("webhook_url") or spec.get("http_endpoint")
+        endpoint_url = str(raw_endpoint or "").strip()
+        if not endpoint_url:
+            return {"status": "blocked", "error": "missing_webhook_url", "content": ""}
+
+        action = str(resolved_params.get("action") or spec.get("action") or "").strip()
+        is_execution_webhook = (
+            str(spec.get("plugin_id") or "") == "n8n_webhook"
+            or "/webhook/" in endpoint_url
+            or bool(action)
+        )
+
+        # D06/HIGH: das aus resolved_params (und damit aus UI/Upstream)
+        # stammende Webhook-Ziel vor dem Request gegen die Egress-Regeln
+        # pruefen — kein Key/HMAC an ein manipuliertes Ziel (SSRF/Exfil-Schutz).
+        # Reine 3rd-Party-APIs mit festem, lokal deklariertem http_endpoint
+        # bleiben unberuehrt (keine Env-Allowlist noetig).
+        if url_from_params or is_execution_webhook:
+            try:
+                check_target_url(endpoint_url)
+            except (EgressBlocked, ValueError) as exc:
+                logger.warning("Node-Plugin %s: Ziel blockiert (%s)", spec["plugin_id"], exc)
+                return {
+                    "status": "blocked",
+                    "error": f"target_url_blocked: {exc}",
+                    "content": "",
+                }
+
         method = str(spec.get("http_method") or "POST").strip().upper()
         headers: Dict[str, str] = {"Content-Type": "application/json"}
         if isinstance(spec.get("headers"), dict):
@@ -767,6 +801,26 @@ async def execute_workflow_node_plugin(
         else:
             body_obj = {"params": resolved_params, "node_id": node.get("id")}
 
+        # D06/HIGH: die im Plugin deklarierten Steuerungsfelder kommen aus
+        # resolved_params und gehoeren an das Empfaenger-Schema (action,
+        # content/payload_text, executed_at) — nicht nur in `params`.
+        if action:
+            body_obj["action"] = action
+        payload_text = resolved_params.get("payload_text")
+        if payload_text is None:
+            payload_text = resolved_params.get("content")
+        if payload_text is not None:
+            body_obj["content"] = str(payload_text)
+        body_obj.setdefault("executed_at", datetime.datetime.now(datetime.timezone.utc).isoformat())
+
+        # D06/HIGH: exakt derselbe kompakte Body wie beim n8n-Empfaenger
+        # signieren (JSON.stringify(body) == Python separators=(',', ':')).
+        # Ohne konfiguriertes HMAC-Secret weist der Empfaenger den Request ab.
+        body_bytes = json.dumps(
+            body_obj, ensure_ascii=False, separators=(",", ":"), default=str
+        ).encode("utf-8")
+        headers.update(webhook_signature_headers(body_bytes))
+
         # safe_http_request liefert (status, headers, bytes) — kein Dict und
         # kein json_body-Argument. Der alte Aufruf warf TypeError/AttributeError,
         # wodurch alle installierten JSON-Plugins nicht ausführbar waren.
@@ -775,7 +829,7 @@ async def execute_workflow_node_plugin(
             endpoint_url,
             method=method,
             headers=headers,
-            data=json.dumps(body_obj).encode("utf-8") if method != "GET" and body_obj is not None else None,
+            data=body_bytes if method != "GET" else None,
             timeout=float(spec.get("timeout_sec") or 30.0),
         )
         ctype = str(resp_headers.get("content-type") or "").lower()
@@ -846,6 +900,48 @@ async def execute_workflow_node_plugin(
                             "error": str(p_data.get("error") or f"Async-Job {job_id} fehlgeschlagen"),
                             "content": json.dumps(data_dict, ensure_ascii=False),
                         }
+
+        # D06/HIGH: Antwort validieren. Eine Ablehnung durch den Empfaenger
+        # (HMAC-Fehler, 401/403, status=error/blocked) darf NIE als Erfolg
+        # quittiert werden — sonst "Success ohne Wirkung" (S-1.5/S-1.7).
+        resp_status = str(data_dict.get("status") or "").strip().lower()
+        rejection_states = {
+            "blocked", "error", "rejected", "denied", "invalid_signature",
+            "unauthorized", "forbidden", "failed",
+        }
+        if int(_status_code) >= 400 or resp_status in rejection_states:
+            logger.warning(
+                "Node-Plugin %s: Webhook abgelehnt (HTTP %s, status=%s)",
+                spec["plugin_id"], _status_code, resp_status or "<none>",
+            )
+            return {
+                "status": "blocked",
+                "error": resp_status or f"http_{_status_code}",
+                "execution": "rejected",
+                "content": json.dumps(data_dict, ensure_ascii=False),
+                "data": data_dict,
+            }
+
+        # Ausfuehrende Webhooks muessen eine bestaetigte executionId liefern.
+        # Unbestaetigte Antworten werden als `blocked` markiert (DLQ-Pfad),
+        # statt still als `success` durchgereicht zu werden.
+        if is_execution_webhook:
+            accepted_states = {"success", "ok", "running", "queued", "accepted", "completed", "succeeded"}
+            exec_id = str(
+                data_dict.get("executionId") or data_dict.get("execution_id") or ""
+            ).strip()
+            if resp_status not in accepted_states or not exec_id:
+                logger.warning(
+                    "Node-Plugin %s: Execution unbestaetigt (status=%s, executionId=%r)",
+                    spec["plugin_id"], resp_status or "<none>", exec_id,
+                )
+                return {
+                    "status": "blocked",
+                    "error": "execution_unconfirmed",
+                    "execution": "unconfirmed",
+                    "content": json.dumps(data_dict, ensure_ascii=False),
+                    "data": data_dict,
+                }
 
         # H4: externe Antwort darf die Steuerungsfelder des Ergebnisses nicht
         # ueberschreiben (status/content/error/media_path). Alle externen

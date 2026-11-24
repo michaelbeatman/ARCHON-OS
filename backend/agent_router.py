@@ -1,16 +1,18 @@
+# mypy: ignore-errors
+import asyncio
+import json
+import logging
 import os
+import random
 import re
+import threading
 import time
 import uuid
-import logging
-import asyncio
-import threading
-import random
 import weakref
-import json
-import httpx
-from typing import Dict, Any, List, Optional, AsyncGenerator
 from datetime import datetime
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
+import httpx
 
 logger = logging.getLogger("agent_router")
 
@@ -251,6 +253,28 @@ class AgentRouter:
             )
             self._http_clients[loop] = client
         return client
+
+    async def close_http_clients(self) -> None:
+        """D08/MED: zentrale Schliesskette für die loop-keyed Client-Pools.
+
+        `main.py` registriert den Hook (DELEGATED an A9); diese Methode ist der
+        konsumentenseitige Teil und darf mehrfach/parallel gerufen werden.
+        """
+        clients = []
+        try:
+            clients = list(self._http_clients.values())
+        except Exception as exc:
+            logger.debug("[AgentRouter] HTTP-Client-Snapshot fehlgeschlagen: %s", exc)
+        for client in clients:
+            try:
+                if not client.is_closed:
+                    await client.aclose()
+            except Exception as exc:
+                logger.debug("[AgentRouter] HTTP-Client-Close fehlgeschlagen: %s", exc)
+        try:
+            self._http_clients.clear()
+        except Exception as exc:
+            logger.debug("[AgentRouter] HTTP-Client-Dict-Clear fehlgeschlagen: %s", exc)
 
     def _get_guardian_policy(self) -> Dict[str, Any]:
         now = time.time()
@@ -853,8 +877,8 @@ class AgentRouter:
         est_out = max(64, min(2048, int(max_tokens or 1024) // 2))
         est_eur = 0.0
         try:
-            from backend.role_budget_engine import USD_TO_EUR_RATE, budget_bank
             from backend.llm_kernel import estimate_model_cost_usd
+            from backend.role_budget_engine import USD_TO_EUR_RATE, budget_bank
             est_eur = round(
                 float(estimate_model_cost_usd(model, est_in, est_out, provider=provider))
                 * USD_TO_EUR_RATE, 6,
@@ -876,6 +900,7 @@ class AgentRouter:
             )
         # D13: kein `traj-`-Praefix als Voraussetzung — aus dem echten
         # task_id/session-Kontext wird eine stabile Trajectory abgeleitet.
+        _hop_tid = ""
         if str(task_id or "").strip():
             try:
                 from backend.trajectory_budget import normalize_trajectory_id, reserve_hop
@@ -898,10 +923,37 @@ class AgentRouter:
             except Exception as exc:
                 logger.error("[AgentRouter] Trajectory-Hop nicht reservierbar — fail-closed: %s", exc)
                 raise BudgetExceededError(f"[TRAJECTORY_GATE_UNAVAILABLE]: {exc}") from exc
-        return str(check.get("reservation_id") or ""), est_in + est_out, est_eur
+
+        # D13/HIGH: ticketweites Token-Cap auch im Chat-/Stream-Pfad. Die
+        # Reservierung läuft atomar VOR dem Provider-Call; `record_tokens`
+        # rechnet danach mit `set_total=True` ab (keine Doppelbuchung).
+        if _hop_tid:
+            try:
+                from backend.trajectory_budget import reserve_tokens
+                token_res = await asyncio.to_thread(
+                    reserve_tokens, _hop_tid, est_in + est_out,
+                    reason=f"llm_call:{agent_id or 'default'}",
+                )
+                if not token_res.get("allowed", False):
+                    await asyncio.to_thread(
+                        budget_bank.release, check.get("reservation_id"), "token_cap_reached"
+                    )
+                    raise BudgetExceededError(
+                        f"[{token_res.get('reason')}]: Ticket-Token-Cap erreicht"
+                    )
+            except BudgetExceededError:
+                raise
+            except Exception as exc:
+                logger.error("[AgentRouter] Token-Reservierung nicht verfuegbar — fail-closed: %s", exc)
+                await asyncio.to_thread(
+                    budget_bank.release, check.get("reservation_id"), "token_gate_unavailable"
+                )
+                raise BudgetExceededError(f"[TOKEN_GATE_UNAVAILABLE]: {exc}") from exc
+        return str(check.get("reservation_id") or ""), est_in + est_out, est_eur, _hop_tid
 
     async def _settle_task_budget(
         self, reservation_id: str, tokens: int, eur: float,
+        trajectory_id: str = "",
     ) -> None:
         if not reservation_id:
             return
@@ -913,6 +965,26 @@ class AgentRouter:
             )
         except Exception as exc:
             logger.warning("[AgentRouter] Budget-Settle fehlgeschlagen: %s", exc)
+        # D13/HIGH: Abschlussbuchung auf der ticketweiten Trajectory. Die
+        # Reservierung ist bereits gezählt; set_total=True verhindert die
+        # Doppelbuchung und lässt den groesseren Wert gewinnen.
+        if trajectory_id:
+            try:
+                from backend.trajectory_budget import record_tokens
+                booked = await asyncio.to_thread(
+                    record_tokens, trajectory_id, int(tokens or 0),
+                    reason="llm_call_settle",
+                    set_total=True,
+                )
+                if not booked.get("allowed", False):
+                    raise BudgetExceededError(
+                        f"[{booked.get('reason')}]: Ticket-Token-Cap am Abschluss erreicht"
+                    )
+            except BudgetExceededError:
+                raise
+            except Exception as exc:
+                logger.error("[AgentRouter] Token-Abschlussbuchung fehlgeschlagen: %s", exc)
+                raise BudgetExceededError(f"[TOKEN_SETTLE_UNAVAILABLE]: {exc}") from exc
 
     async def _release_task_budget(self, reservation_id: str) -> None:
         if not reservation_id:
@@ -938,7 +1010,7 @@ class AgentRouter:
     ) -> str:
         """D13: Budget-Gate + Flightlog-Guard + finally-release."""
         tid = str(task_id or f"agent-router:{agent_id}")
-        reservation, tokens, eur = await self._reserve_task_budget(
+        reservation, tokens, eur, hop_tid = await self._reserve_task_budget(
             agent_id, tid, messages, model, provider, max_tokens
         )
         try:
@@ -951,7 +1023,7 @@ class AgentRouter:
             flags = _detect_chat_silent_failure(tid, text)
             if flags:
                 raise SilentFailureBlockedError(tid, flags)
-            await self._settle_task_budget(reservation, tokens, eur)
+            await self._settle_task_budget(reservation, tokens, eur, hop_tid)
             return text
         finally:
             await self._release_task_budget(reservation)
@@ -1019,7 +1091,11 @@ class AgentRouter:
                 if time.monotonic() >= chain_deadline:
                     raise TimeoutError("FALLBACK_CHAIN_DEADLINE: 90 s der Provider-Kette überschritten")
                 try:
-                    from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
+                    from backend.llm_egress_guard import (
+                        enforce_egress_firewall_for_url,
+                        sanitize_llm_endpoint,
+                        sanitize_outbound_llm_payload,
+                    )
                     hop_gate = evaluate_and_gate_llm_dispatch(
                         agent_id=agent_id,
                         provider=provider,
@@ -1056,7 +1132,11 @@ class AgentRouter:
                         continue
                     active_trace_id = ""
                     try:
-                        from backend.trace_context import child_span, current_trace_id, inject_headers
+                        from backend.trace_context import (
+                            child_span,
+                            current_trace_id,
+                            inject_headers,
+                        )
                         with child_span():
                             # D16/H2: NEUE Span-ID im traceparent — kein
                             # Self-Parenting. active_trace_id bleibt dieselbe
@@ -1088,6 +1168,21 @@ class AgentRouter:
                         provider_breaker.record_failure(eff_provider)
                     elif 200 <= resp.status_code < 300:
                         provider_breaker.record_success(eff_provider)
+                        # D13/HIGH: Flightlog-Namensraum vereinheitlichen. Der
+                        # Dispatcher (A4) liest current_trace_id(); der Router
+                        # schreibt unter `flightlog_run_id`. Das Event wird
+                        # zusätzlich unter der Trace-ID gespiegelt.
+                        try:
+                            from backend.flightlog_backtester import mirror_flight_event_to_trace
+                            mirror_flight_event_to_trace(
+                                run_id=hop_sid, agent_id=agent_id,
+                                tool_name="llm_dispatch",
+                                args={"model": m_try, "provider": eff_provider,
+                                      "flightlog_run_id": hop_sid},
+                                tool_ok=True, tokens_used=0,
+                            )
+                        except Exception as fm_exc:
+                            logger.debug("[AgentRouter] Flightlog-Trace-Mirror fehlgeschlagen: %s", fm_exc)
                     await audit_dispatch_async(
                         agent_id=agent_id,
                         provider=eff_provider,
@@ -1228,7 +1323,7 @@ class AgentRouter:
             yield "ERROR: EXECUTION_ROUTING_GUARD_UNAVAILABLE"
             return
         try:
-            reservation, tokens, eur = await self._reserve_task_budget(
+            reservation, tokens, eur, hop_tid = await self._reserve_task_budget(
                 agent_id, tid, messages, model, provider, 4096
             )
         except BudgetExceededError as budget_err:
@@ -1247,7 +1342,11 @@ class AgentRouter:
             if flags:
                 yield f"ERROR: [SILENT_FAILURE] status=blocked needs_human=true flags={','.join(flags)}"
                 return
-            await self._settle_task_budget(reservation, tokens, eur)
+            try:
+                await self._settle_task_budget(reservation, tokens, eur, hop_tid)
+            except BudgetExceededError as cap_err:
+                yield f"ERROR: [{cap_err}]"
+                return
         finally:
             await self._release_task_budget(reservation)
 
@@ -1313,9 +1412,19 @@ class AgentRouter:
                     candidate_models.append(fb)
 
         last_err = None
+        # D07/S-7.4: 90-s-Kettendeadline auch im Stream-Pfad. Vorher konnte
+        # jeder Fallback-Hop erneut 90 s plus Backoff verbrauchen.
+        chain_deadline = time.monotonic() + 90.0
         for idx, m_try in enumerate(candidate_models):
+            if time.monotonic() >= chain_deadline:
+                yield "ERROR: FALLBACK_CHAIN_DEADLINE: 90 s der Provider-Kette überschritten"
+                return
             try:
-                from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
+                from backend.llm_egress_guard import (
+                    enforce_egress_firewall_for_url,
+                    sanitize_llm_endpoint,
+                    sanitize_outbound_llm_payload,
+                )
                 hop_gate = evaluate_and_gate_llm_dispatch(
                     agent_id=agent_id,
                     provider=provider,
@@ -1358,7 +1467,13 @@ class AgentRouter:
                         last_err = RuntimeError(f"Provider '{provider}' circuit-open")
                         logger.warning(f"[AgentRouter Stream] Provider '{provider}' circuit-open — Fallback")
                         continue
-                    async with client.stream("POST", target_url, headers=request_headers, json=safe_payload) as response:
+                    _remaining = chain_deadline - time.monotonic()
+                    if _remaining <= 0:
+                        raise TimeoutError("FALLBACK_CHAIN_DEADLINE: 90 s der Provider-Kette überschritten")
+                    async with client.stream(
+                        "POST", target_url, headers=request_headers, json=safe_payload,
+                        timeout=min(90.0, max(1.0, _remaining)),
+                    ) as response:
                         await audit_dispatch_async(
                             agent_id=agent_id,
                             provider=provider,
@@ -1380,11 +1495,35 @@ class AgentRouter:
                             provider_breaker.record_failure(provider)
                         else:
                             provider_breaker.record_success(provider)
+                            # D13/HIGH: Flight-Event zusätzlich unter der
+                            # Trace-ID spiegeln (Konsument: core_dispatcher).
+                            try:
+                                from backend.flightlog_backtester import (
+                                    mirror_flight_event_to_trace,
+                                )
+                                mirror_flight_event_to_trace(
+                                    run_id=hop_sid, agent_id=agent_id,
+                                    tool_name="llm_dispatch",
+                                    args={"model": m_try, "provider": provider,
+                                          "flightlog_run_id": hop_sid},
+                                    tool_ok=True, tokens_used=0,
+                                )
+                            except Exception as fm_exc:
+                                logger.debug("[AgentRouter Stream] Flightlog-Trace-Mirror fehlgeschlagen: %s", fm_exc)
                         if response.status_code != 200:
                             err_body = await response.aread()
                             if response.status_code in (429, 500, 502, 503, 504, 404) and idx < len(candidate_models) - 1:
                                 logger.warning(f"[AgentRouter Stream] Model '{m_try}' returned {response.status_code}, falling back to '{candidate_models[idx+1]}'...")
-                                await _router_provider_backoff(response.status_code, dict(response.headers))
+                                _backoff_budget = chain_deadline - time.monotonic()
+                                if _backoff_budget <= 0:
+                                    raise TimeoutError("FALLBACK_CHAIN_DEADLINE: Backoff nicht innerhalb der Kette möglich")
+                                try:
+                                    await asyncio.wait_for(
+                                        _router_provider_backoff(response.status_code, dict(response.headers)),
+                                        timeout=min(_backoff_budget, 10.0),
+                                    )
+                                except asyncio.TimeoutError:
+                                    raise TimeoutError("FALLBACK_CHAIN_DEADLINE: Backoff nicht innerhalb der Kette möglich")
                                 continue
                             yield f"ERROR: {provider.capitalize()} Fehler (Status {response.status_code}): {err_body.decode('utf-8', errors='ignore')[:300]}"
                             return
@@ -1393,6 +1532,8 @@ class AgentRouter:
                             total_chars = 0
                             received_payload_chunks = 0
                             async for line in response.aiter_lines():
+                                if time.monotonic() >= chain_deadline:
+                                    raise TimeoutError("FALLBACK_CHAIN_DEADLINE: Stream nicht innerhalb von 90 s beendet")
                                 if not line:
                                     continue
                                 if line.startswith("data: "):
@@ -1458,7 +1599,9 @@ class AgentRouter:
                                 )
                                 _stream_cost = round((_p_toks * 0.00000015) + (_c_toks * 0.00000030), 6)
                             try:
-                                from backend.execution_receipt_ledger import execution_receipt_ledger
+                                from backend.execution_receipt_ledger import (
+                                    execution_receipt_ledger,
+                                )
                                 execution_receipt_ledger.issue_receipt(
                                     task_id=hop_sid,
                                     agent_role=agent_id or "router",
@@ -1473,6 +1616,13 @@ class AgentRouter:
                             except Exception as log_exc:
                                 logger.error(f"[AgentRouter] Audit-Logging (stream) fehlgeschlagen: {log_exc}")
                             return
+            except TimeoutError as timeout_err:
+                # D07: Ketten-Deadline ist erreichte Obergrenze, kein Provider-
+                # Ausfall — kein weiterer Fallback-Hop, kein false-healthy-Breaker.
+                last_err = timeout_err
+                logger.error("[AgentRouter Stream] %s", timeout_err)
+                yield f"ERROR: {timeout_err}"
+                return
             except Exception as e:
                 last_err = e
                 # B: der Half-Open-Probe muss bei Verbindungsfehlern als Failure

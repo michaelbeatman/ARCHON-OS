@@ -20,6 +20,9 @@ def test_hmac_chain_downgrade_to_plain_sha_is_detected(tmp_path, monkeypatch):
     monkeypatch.delenv("ARCHON_AUDIT_LEGACY_MAX_BLOCK", raising=False)
     monkeypatch.delenv("ARCHON_AUDIT_ANCHOR_PATH", raising=False)
     monkeypatch.delenv("ENVIRONMENT", raising=False)
+    # A2: Anker-Strukturpruefung ist jetzt unbedingt; dieser Test nutzt bewusst
+    # keine externe Ankerdatei -> expliziter, geloggter Dev-Opt-out.
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")
 
     from backend.audit_log import ChainedAuditLog
 

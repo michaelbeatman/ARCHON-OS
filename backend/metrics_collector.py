@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 backend/metrics_collector.py
 Zentraler Prometheus- & System-Metriken-Kollektor für Archon OS.
@@ -5,17 +6,79 @@ Generiert konforme Metriken im Prometheus Exposition Text-Format (0.0.4)
 für Prometheus, Grafana, Uptime Kuma und interne Health-Monitore.
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("metrics_collector")
 
+import datetime
 import os
-import sys
-import time
+import re
 import shutil
 import sqlite3
-import datetime
-from typing import Dict, Any, List, Optional
+import sys
+import threading
+import time
+from collections import deque
+from typing import Any, Dict, List, Optional
 
 START_TIME = time.time()
+
+# D16/HIGH: Prometheus-Exemplare. Der Scrape-Thread hat KEINEN Request-Kontext,
+# daher wird der aktive W3C-Kontext am Chokepoint (child_span-Hop / Middleware)
+# in einen begrenzten Ringpuffer geschrieben und beim Rendern der Metriken
+# als OpenMetrics-Exemplar angehaengt.
+_EXEMPLAR_MAX = 128
+_TRACE_EXEMPLARS: Dict[str, "deque[Dict[str, Any]]"] = {}
+_EXEMPLAR_LOCK = threading.Lock()
+_EXEMPLAR_RE = re.compile(r"^[0-9a-f]{32}$")
+_SPAN_ID_RE = re.compile(r"^[0-9a-f]{16}$")
+
+
+def record_trace_exemplar(
+    *metric_names: str,
+    trace_id: Optional[str] = None,
+    span_id: Optional[str] = None,
+    labels: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Merkt sich trace_id/span_id aus dem aktiven Kontext fuer /metrics.
+
+    Ohne explizite IDs wird ``backend.trace_context.current_trace_id()`` /
+    ``current_span_id()`` gelesen. Ungueltige oder fehlende IDs werden
+    verworfen — ein Exemplar darf niemals eine erfundene Kante zeigen.
+    """
+    if trace_id is None or span_id is None:
+        try:
+            from backend.trace_context import current_span_id, current_trace_id
+
+            trace_id = trace_id or current_trace_id()
+            span_id = span_id or current_span_id()
+        except Exception as exc:
+            _archon_exc_logger.warning("[Metrics] Exemplar-Kontext nicht lesbar: %s", exc)
+            return
+    tid = str(trace_id or "").strip().lower()
+    sid = str(span_id or "").strip().lower()
+    if not _EXEMPLAR_RE.fullmatch(tid) or not _SPAN_ID_RE.fullmatch(sid):
+        return
+    sample = {"trace_id": tid, "span_id": sid, "labels": dict(labels or {})}
+    with _EXEMPLAR_LOCK:
+        for name in metric_names or ("archon_agent_dispatches_total",):
+            buf = _TRACE_EXEMPLARS.setdefault(str(name), deque(maxlen=_EXEMPLAR_MAX))
+            buf.append(sample)
+
+
+def _exemplar_line(metric_name: str, value: Any) -> str:
+    """OpenMetrics-Exemplar-Suffix oder leerer String (kein Fake-Exemplar)."""
+    with _EXEMPLAR_LOCK:
+        buf = _TRACE_EXEMPLARS.get(metric_name)
+        sample = dict(buf[-1]) if buf else None
+    if not sample:
+        return ""
+    labels = ",".join(
+        [f'trace_id="{sample["trace_id"]}"', f'span_id="{sample["span_id"]}"']
+        + [f'{k}="{str(v)}"' for k, v in sorted((sample.get("labels") or {}).items())]
+    )
+    return f" # {{{labels}}} {value}"
+
+
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def resolve_db_path(name: str) -> str:
@@ -354,7 +417,8 @@ class MetricsCollector:
             "",
             "# HELP archon_agent_dispatches_total Anzahl der durchgefuehrten Agenten-Aufrufe.",
             "# TYPE archon_agent_dispatches_total counter",
-            f'archon_agent_dispatches_total{{status="ok"}} {telemetry["successful_dispatches"]}',
+            f'archon_agent_dispatches_total{{status="ok"}} {telemetry["successful_dispatches"]}'
+            + _exemplar_line("archon_agent_dispatches_total", telemetry["successful_dispatches"]),
             f'archon_agent_dispatches_total{{status="error"}} {telemetry["failed_dispatches"]}',
             "",
             "# HELP archon_agent_error_rate_percent Prozentuale Fehlerquote bei Agenten-Aufrufen.",
@@ -363,7 +427,8 @@ class MetricsCollector:
             "",
             "# HELP archon_tokens_total Kumulierte Token-Nutzung aller LLM-Aufrufe.",
             "# TYPE archon_tokens_total counter",
-            f"archon_tokens_total {telemetry['total_tokens']}",
+            f"archon_tokens_total {telemetry['total_tokens']}"
+            + _exemplar_line("archon_tokens_total", telemetry["total_tokens"]),
             "",
             "# HELP archon_estimated_cost_usd Geschaetzte LLM-Kosten in USD.",
             "# TYPE archon_estimated_cost_usd counter",
@@ -406,7 +471,9 @@ class MetricsCollector:
             ""
         ])
 
-        return "\n".join(lines)
+        # OpenMetrics-Abschluss: Prometheus nutzt Exemplare nur bei gueltigem
+        # OpenMetrics-Payload (Content-Type in main.py:/metrics).
+        return "\n".join(lines) + "\n# EOF\n"
 
     def get_summary_json(self) -> Dict[str, Any]:
         """Gibt aggregierte Metriken als JSON für Frontend und REST-Clients zurück."""

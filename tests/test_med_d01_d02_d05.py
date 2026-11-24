@@ -153,7 +153,7 @@ def test_d01_d02_capture_uses_honest_subagents_and_registered_agent(monkeypatch)
     audit = asyncio.run(
         mc.capture_mission_control_task(mc.NewTaskCaptureRequest(title="Audit durchführen"))
     )
-    assert audit["task"]["agent_id"] == "sandy"
+    assert audit["task"]["agent_id"] == "labor_law_hr_governance"
 
 
 def test_d02_no_hardcoded_removed_profile_id_in_owned_files():

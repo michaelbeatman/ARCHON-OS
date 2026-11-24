@@ -1,5 +1,7 @@
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """
 Mission Control Router — Mission-Control-Endpunkte (State, Capture, Move, Artifact).
 
@@ -17,13 +19,19 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+# Externe Dependencies (wie in main.py)
+import core_dispatcher
+
 # Core-Module (kein main.py Import!)
 from archon.core.mission_control import (
+    _MC_CACHE_LOCK,
+    _MC_STATE_CACHE,
     _load_mission_control_data,
     _save_mission_control_data,
+    invalidate,
     update_mission_control_data,
-    _MC_STATE_CACHE,
 )
+from archon.core.profiles import api_get_hermes_profiles
 from archon.core.runtime import (
     OBSIDIAN_VAULT_DIR,
     WORKSPACE_DIR,
@@ -31,12 +39,7 @@ from archon.core.runtime import (
     broadcast_event,
     logger,
 )
-from archon.core.profiles import api_get_hermes_profiles
 from backend.cancellation import cancel_scope, get_child_token, get_token, reset_scope
-
-# Externe Dependencies (wie in main.py)
-import core_dispatcher
-
 
 # --------------------------------------------------
 # Dependency-Injektion statt Kopie
@@ -93,12 +96,15 @@ async def get_mission_control_state():
     except Exception:
         _tenant_id = "default"
     # Audit 23.11.2026: Cache nur innerhalb desselben Mandanten trefferfähig.
-    if (
-        _MC_STATE_CACHE.get("tenant") == _tenant_id
-        and _MC_STATE_CACHE["data"] is not None
-        and (now_mc - _MC_STATE_CACHE["ts"]) < 3.0
-    ):
-        return _MC_STATE_CACHE["data"]
+    # D08/MED: ts/data/tenant unter Lock lesen, kein torn read mehr.
+    with _MC_CACHE_LOCK:
+        _cached = (
+            _MC_STATE_CACHE.get("tenant") == _tenant_id
+            and _MC_STATE_CACHE["data"] is not None
+            and (now_mc - _MC_STATE_CACHE["ts"]) < 3.0
+        )
+        if _cached:
+            return _MC_STATE_CACHE["data"]
     # SYNC-CALLS IM ASYNC-LOOP = BLOCKIERT BEI LANGSAMKEIT ALLES (gemessen:
     # health parallel 47ms -> 24.571ms). Deshalb aus dem Event-Loop auslagern.
     data = await asyncio.to_thread(_load_mission_control_data)
@@ -202,9 +208,10 @@ async def get_mission_control_state():
         },
         "audit_logs": live_logs[:25]
     }
-    _MC_STATE_CACHE["ts"] = now_mc
-    _MC_STATE_CACHE["data"] = res_payload
-    _MC_STATE_CACHE["tenant"] = _tenant_id
+    with _MC_CACHE_LOCK:
+        _MC_STATE_CACHE["ts"] = now_mc
+        _MC_STATE_CACHE["data"] = res_payload
+        _MC_STATE_CACHE["tenant"] = _tenant_id
     return res_payload
 
 
@@ -226,10 +233,22 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
     # echte Subtask-Anzahl. Die Triageschaetzung bleibt als `estimated_subagents`
     # erhalten, wird aber nicht als gemessenes Ergebnis ausgegeben.
     estimated_subagents = 3 if (is_large or req.allow_autonomous_hiring) else 1
-    # D02/MED: 'micha' ist bewusst aus der SSOT entfernt — nie wieder als
-    # Ziel-ID verwenden. Default ist ein registriertes Profil (roles.json:3).
-    agent_id = "sandy" if "audit" in title.lower() or "hr" in title.lower() else "default"
-    agent_name = "Sandy Hooks" if agent_id == "sandy" else "Default Agent"
+    # D02/MED (A4-Delegation): 'micha' UND 'sandy' sind bewusst aus der SSOT
+    # entfernt — nie wieder als Ziel-ID verwenden. Die registrierte HR/CHRO-
+    # Rolle ist 'labor_law_hr_governance' (agent_profiles.json + roles.json).
+    # agent_name kommt aus dem aufgeloesten Profil, nicht aus einem Literal.
+    is_hr_audit = "audit" in title.lower() or "hr" in title.lower()
+    agent_id = "labor_law_hr_governance" if is_hr_audit else "default"
+    agent_name = "Default Agent"
+    if is_hr_audit:
+        agent_name = agent_id  # ehrlicher Fallback: registrierte ID statt erfundenem Namen
+        try:
+            _profiles = await asyncio.to_thread(api_get_hermes_profiles) or []
+            _prof = next((p for p in _profiles if p.get("id") == agent_id), None)
+            if _prof:
+                agent_name = str(_prof.get("person_name") or _prof.get("name") or agent_name)
+        except Exception as exc:
+            logger.debug("[MissionControl] Profil %s nicht aufloesbar: %s", agent_id, exc)
     model = "anthropic/claude-3.7-sonnet" if is_large else "deepseek/deepseek-v4-flash-0731"
 
     new_task = {
@@ -279,7 +298,7 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
         return new_task
 
     await asyncio.to_thread(update_mission_control_data, _mutate)
-    _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
+    invalidate()  # Cache invalidieren (D08/MED: zentral, unter Lock)
     # Cancel-Kette: Root-Token pro Task, damit Boardroom/Dispatch/DAG später
     # als Kinder daran hängen und zentral abgebrochen werden können.
     get_token(f"task:{task_id}")
@@ -451,7 +470,7 @@ async def move_mission_control_task(req: TaskMoveRequest):
         from archon.core.task_registry import spawn as _spawn_tracked
         _spawn_tracked(_DEPS["fan_in"](plan["fan_in"]), name=f"mc_fan_in:{plan['fan_in']}")
 
-    _MC_STATE_CACHE["ts"] = 0.0  # Cache invalidieren
+    invalidate()  # Cache invalidieren (D08/MED: zentral, unter Lock)
     broadcast_event("kanban_updated", {
         "action": "move", "task_id": req.task_id, "status": task.get("status", req.target_status)
     })

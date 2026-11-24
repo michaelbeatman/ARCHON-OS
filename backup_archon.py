@@ -11,17 +11,23 @@ Einbindung: Der Nutzer legt selbst einen Windows-Aufgabenplaner-Job an (stündli
 Optionale Parameter: --local-days N (Standard 7), --nas-days N (Standard 180), --no-nas
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("backup_archon")
+import argparse
+import datetime
 import os
-import sys
 import shutil
 import sqlite3
-import datetime
-import argparse
+import sys
 
 HOME = os.path.expanduser("~")
 # Audit 23.11.2026: relativ zum CWD bedeutete "falsche Datei je nach Aufrufort".
 PROJECT = os.path.dirname(os.path.abspath(__file__))
+try:
+    from backend.db_paths import APP_DATA_DIR, DB_BUSY_TIMEOUT_MS
+except Exception:  # pragma: no cover - Standalone-Aufruf ohne Package-Kontext
+    APP_DATA_DIR = os.path.join(PROJECT, "data")
+    DB_BUSY_TIMEOUT_MS = 5000
 
 # (Anzeigename, vollständiger Pfad, Pflicht?)
 # Pfade decken sich mit config/litestream.yml (Hermes-Home, Konsolidierungs-DBs)
@@ -31,18 +37,21 @@ PROJECT = os.path.dirname(os.path.abspath(__file__))
 DATABASES = [
     ("hermes_state.db", os.path.join(HOME, ".hermes", "state.db"), True),
     ("hermes_kanban.db", os.path.join(HOME, ".hermes", "kanban.db"), True),
-    ("agent_os.db", os.path.join(PROJECT, "agent_os.db"), True),
-    ("agentic_memory.db", os.path.join(PROJECT, "agentic_memory.db"), True),
-    ("ops.db", os.path.join(PROJECT, "data", "ops.db"), False),
-    ("business.db", os.path.join(PROJECT, "data", "business.db"), True),
-    ("memory.db", os.path.join(PROJECT, "data", "memory.db"), False),
+    # D03/MED: veraltete Root-Pfade sind OPTIONAL — die produktiven Daten
+    # liegen unter APP_DATA_DIR/tenants/<tid>/. Als required=True erzeugten sie
+    # routinemaessig Exit 1, obwohl nichts fehlte.
+    ("agent_os.db", os.path.join(PROJECT, "agent_os.db"), False),
+    ("agentic_memory.db", os.path.join(PROJECT, "agentic_memory.db"), False),
+    ("ops.db", os.path.join(APP_DATA_DIR, "ops.db"), False),
+    ("business.db", os.path.join(APP_DATA_DIR, "business.db"), True),
+    ("memory.db", os.path.join(APP_DATA_DIR, "memory.db"), False),
     # W2: die echte Kanban-DB liegt laut backend/db_paths.py in ~/.hermes
     # (siehe hermes_kanban.db oben). data/kanban.db ist ein Legacy-Leerpfad
     # und löste此前 Fehlalarme mit Exit-Code 1 aus — nicht mehr Pflicht.
     ("kanban.db", os.path.join(PROJECT, "data", "kanban.db"), False),
-    ("contracts.db", os.path.join(PROJECT, "data", "contracts.db"), True),
-    ("deals.db", os.path.join(PROJECT, "data", "deals.db"), True),
-    ("workflow_schedules.db", os.path.join(PROJECT, "data", "workflow_schedules.db"), True),
+    ("contracts.db", os.path.join(APP_DATA_DIR, "contracts.db"), False),
+    ("deals.db", os.path.join(APP_DATA_DIR, "deals.db"), False),
+    ("workflow_schedules.db", os.path.join(PROJECT, "data", "workflow_schedules.db"), False),
     # KRITISCH (Audit 23.11.2026, K2): die CRM-Hauptdatenbank war in KEINEM
     # wiederkehrenden Backup enthalten. Kontakte, nachrichtenverlauf und
     # DSGVO-Felder wären bei Datenverlust dauerhaft weg. Online-Backup über
@@ -54,10 +63,16 @@ DATABASES = [
 # unter data/tenants/<tid>/. Der regelmäßige Backup-Job kannte sie nicht und
 # sicherte nur stale Root-Dateien. Dynamisch ergänzen (optional: ein leerer
 # oder gelöschter Mandant darf den Lauf nicht scheitern lassen).
-_TENANTS_ROOT = os.path.join(PROJECT, "data", "tenants")
-if os.path.isdir(_TENANTS_ROOT):
-    for _tid in sorted(os.listdir(_TENANTS_ROOT)):
-        _tdir = os.path.join(_TENANTS_ROOT, _tid)
+_TENANT_ROOTS = [
+    os.path.join(APP_DATA_DIR, "tenants"),
+    os.path.join(PROJECT, "data", "tenants"),  # Workspace-Legacy
+]
+_seen_tenant_paths = set()
+for _root in _TENANT_ROOTS:
+    if not os.path.isdir(_root):
+        continue
+    for _tid in sorted(os.listdir(_root)):
+        _tdir = os.path.join(_root, _tid)
         if not os.path.isdir(_tdir) or _tid.startswith("."):
             continue
         # D03/HIGH: alle produktiven Mandanten-DBs sichern, nicht nur drei
@@ -65,8 +80,9 @@ if os.path.isdir(_TENANTS_ROOT):
         for _name in sorted(os.listdir(_tdir)):
             if not _name.endswith(".db"):
                 continue
-            _path = os.path.join(_tdir, _name)
-            if os.path.isfile(_path):
+            _path = os.path.abspath(os.path.join(_tdir, _name))
+            if os.path.isfile(_path) and _path not in _seen_tenant_paths:
+                _seen_tenant_paths.add(_path)
                 _stem = _name[:-3]
                 DATABASES.append((f"tenant_{_tid}_{_stem}", _path, False))
 
@@ -78,7 +94,9 @@ def backup_sqlite_safe(src_path: str, dst_path: str) -> bool:
     """Sichert eine SQLite-DB über die Backup-API (konsistent auch bei laufenden Containern)."""
     src = dst = None
     try:
-        src = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True, timeout=15.0)
+        src = sqlite3.connect(
+            f"file:{src_path}?mode=ro", uri=True, timeout=DB_BUSY_TIMEOUT_MS / 1000.0
+        )
         dst = sqlite3.connect(dst_path)
         src.backup(dst)
         return True
@@ -166,9 +184,14 @@ def main():
         try:
             check = sqlite3.connect(f"file:{dst_local}?mode=ro", uri=True)
             integrity = check.execute("PRAGMA integrity_check").fetchone()[0]
+            # D03/MED: relationale Konsistenz gehoert in die Backup-Verifikation.
+            fk_violations = check.execute("PRAGMA foreign_key_check").fetchall()
             check.close()
-            if integrity != "ok":
-                print(f"  ! {name}: Integritätsprüfung fehlgeschlagen ({integrity})")
+            if integrity != "ok" or fk_violations:
+                print(
+                    f"  ! {name}: Verifikation fehlgeschlagen "
+                    f"(integrity={integrity}, fk_violations={len(fk_violations)})"
+                )
                 fail += 1
                 continue
         except Exception as e:

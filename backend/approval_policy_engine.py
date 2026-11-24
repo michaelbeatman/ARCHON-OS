@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 ==============================================================================
 Archon OS 2026 - GoBD/ISO 27001 Compliant Approval Policy Engine (t-5596bd)
@@ -9,13 +10,13 @@ Revisionssicheres Freigabesystem mit:
 - Append-Only SHA-256 Hash-Kette für GoBD- und ISO-27001-Nachweisführung
 """
 
-import os
-import json
-import sqlite3
-import hashlib
 import datetime
+import hashlib
+import json
+import os
+import sqlite3
 import threading
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -25,6 +26,14 @@ try:
 except Exception:
     DB_FILE = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# D04/HIGH (A4-Handoff): harter Mindestabstand zwischen der Auto-Freigabe- und
+# der Vier-Augen-Schwelle. Die blosse Ungleichung `auto_max < four_eyes_min`
+# liess Werte wie 499.99 / 500.00 zu und machte die 50-EUR-Regel wirkungslos.
+# Die Invariante wird ab jetzt SYMMETRISCH geprueft — egal welche der beiden
+# Schwellen geaendert wird.
+FINANCE_THRESHOLD_MIN_GAP = 0.01  # ein Cent — kleinste harte, geldbetragsrelevante Distanz
+_GAP_EPSILON = 1e-9  # Float-Rundung (500.0 - 499.99 == 0.009999999999990905)
 
 
 def _actor_identity_tokens(actor: str) -> set:
@@ -283,6 +292,62 @@ class ApprovalPolicyEngine:
                 rows = cur.execute("SELECT * FROM approval_policies ORDER BY domain ASC, id ASC").fetchall()
             return [dict(r) for r in rows]
 
+    @staticmethod
+    def _parse_finance_threshold(value: Any, policy_key: str) -> float:
+        """Numerische Schwelle mit spanne — bei Parse-Fehler fail-closed."""
+        try:
+            numeric = float(str(value).strip())
+        except (TypeError, ValueError):
+            raise ValueError(f"Policy '{policy_key}' muss ein numerischer Betrag sein.")
+        if not (0.0 <= numeric <= 1_000_000.0):
+            raise ValueError(
+                f"Policy '{policy_key}' liegt ausserhalb der erlaubten Spanne (0..1_000_000)."
+            )
+        return numeric
+
+    def _assert_finance_threshold_invariant(
+        self, cur: sqlite3.Cursor, policy_key: str, candidate_value: Any
+    ) -> None:
+        """D04/HIGH: `auto_max < four_eyes_min` mit Mindestabstand, SYMMETRISCH.
+
+        Frueher wurde die Invariante nur beim Aendern von
+        `finance_auto_approval_max` gegen `finance_four_eyes_min` geprueft.
+        Ein einzelner Admin konnte daher `finance_four_eyes_min` unter die
+        Auto-Freigabeschwelle senken und damit alle Betraege automatisch
+        freigeben. Jetzt wird bei jeder Aenderung einer der beiden Schwellen
+        das jeweilige Gegenstück aus der DB gelesen und die Invariante mit
+        hartem Mindestabstand geprueft (fail-closed bei fehlender/Nicht-Zahl).
+        """
+        keys = ("finance_auto_approval_max", "finance_four_eyes_min")
+        if policy_key not in keys:
+            return
+        values = {
+            key: (
+                self._parse_finance_threshold(candidate_value, policy_key)
+                if key == policy_key
+                else None
+            )
+            for key in keys
+        }
+        for key in keys:
+            if values[key] is None:
+                row = cur.execute(
+                    "SELECT policy_value FROM approval_policies WHERE policy_key = ?", (key,)
+                ).fetchone()
+                if not row:
+                    raise ValueError(
+                        f"Policy '{key}' fehlt — Schwellen-Invariante nicht pruefbar (fail-closed)."
+                    )
+                values[key] = self._parse_finance_threshold(row["policy_value"], key)
+        gap = values["finance_four_eyes_min"] - values["finance_auto_approval_max"]
+        if gap + _GAP_EPSILON < FINANCE_THRESHOLD_MIN_GAP:
+            raise ValueError(
+                "Invariante verletzt: finance_auto_approval_max muss mindestens "
+                f"{FINANCE_THRESHOLD_MIN_GAP:.2f} EUR unter finance_four_eyes_min liegen "
+                f"(auto_max={values['finance_auto_approval_max']:.2f}, "
+                f"four_eyes_min={values['finance_four_eyes_min']:.2f})."
+            )
+
     def update_policy(self, policy_key: str, new_value: str, user_id: str) -> Dict[str, Any]:
         with self._get_conn() as conn:
             cur = conn.cursor()
@@ -294,33 +359,12 @@ class ApprovalPolicyEngine:
             domain = row["domain"]
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-            # P1: Vorher konnte ein Admin finance_auto_approval_max auf 1_000_000
-            # setzen und damit alle Finanzanfragen ohne Vier-Augen-Prinzip
-            # automatisch freigeben. Typ, Bereich und die Invariante werden
-            # jetzt zentral (fuer ALLE Aufrufer) geprueft.
-            if policy_key in ("finance_auto_approval_max", "finance_four_eyes_min"):
-                try:
-                    numeric = float(str(new_value).strip())
-                except (TypeError, ValueError):
-                    raise ValueError(f"Policy '{policy_key}' muss ein numerischer Betrag sein.")
-                if not (0.0 <= numeric <= 1_000_000.0):
-                    raise ValueError(
-                        f"Policy '{policy_key}' liegt ausserhalb der erlaubten Spanne (0..1_000_000)."
-                    )
-                if policy_key == "finance_auto_approval_max":
-                    four_eyes = cur.execute(
-                        "SELECT policy_value FROM approval_policies WHERE policy_key = 'finance_four_eyes_min'"
-                    ).fetchone()
-                    if four_eyes:
-                        try:
-                            minimum = float(str(four_eyes["policy_value"]).strip())
-                        except (TypeError, ValueError):
-                            minimum = 500.0
-                        if numeric >= minimum:
-                            raise ValueError(
-                                "Invariante verletzt: finance_auto_approval_max muss "
-                                "kleiner als finance_four_eyes_min sein."
-                            )
+            # P1/D04/HIGH: Vorher konnte ein Admin finance_auto_approval_max auf
+            # 1_000_000 setzen und damit alle Finanzanfragen ohne Vier-Augen-Prinzip
+            # automatisch freigeben. Typ, Bereich und die SYMMETRISCHE Invariante
+            # (auch bei Aenderung von finance_four_eyes_min) werden jetzt zentral
+            # fuer ALLE Aufrufer geprueft.
+            self._assert_finance_threshold_invariant(cur, policy_key, new_value)
 
             # d14/MED: finance_four_eyes_min ist die Hoheits-Schwelle selbst,
             # finance_auto_approval_max die korrespondierende Freigabeschwelle.
@@ -411,26 +455,10 @@ class ApprovalPolicyEngine:
             key = p["policy_key"]
             if key not in ("finance_four_eyes_min", "finance_auto_approval_max"):
                 raise ValueError(f"Vorschlag fuer {key} ist nicht 4-Augen-pflichtig.")
-            try:
-                numeric = float(str(p["proposed_value"]).strip())
-            except (TypeError, ValueError):
-                raise ValueError("Vorgeschlagener Wert ist nicht numerisch.")
-            if not (0.0 <= numeric <= 1_000_000.0):
-                raise ValueError("Vorgeschlagener Wert liegt ausserhalb der erlaubten Spanne.")
-            if key == "finance_auto_approval_max":
-                four_eyes = cur.execute(
-                    "SELECT policy_value FROM approval_policies WHERE policy_key = 'finance_four_eyes_min'"
-                ).fetchone()
-                if four_eyes:
-                    try:
-                        minimum = float(str(four_eyes["policy_value"]).strip())
-                    except (TypeError, ValueError):
-                        minimum = 500.0
-                    if numeric >= minimum:
-                        raise ValueError(
-                            "Invariante verletzt: finance_auto_approval_max muss "
-                            "kleiner als finance_four_eyes_min sein."
-                        )
+            # D04/HIGH: gleiche symmetrische Invariante wie im Einzel-Admin-Pfad.
+            # Vorher wurde auch hier nur `auto_max` gegen `four_eyes_min` geprueft;
+            # ein Vorschlag, der `four_eyes_min` unter `auto_max` senkte, ging durch.
+            self._assert_finance_threshold_invariant(cur, key, p["proposed_value"])
 
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
             cur.execute("""
@@ -531,7 +559,11 @@ class ApprovalPolicyEngine:
         requires_four_eyes = 1 if amount >= four_eyes_min else 0
         expires_at = (now + datetime.timedelta(hours=timeout_hours)).isoformat()
 
-        if amount <= auto_max and domain == "finance":
+        # D04/HIGH: Auto-Freigabe NUR wenn die Invariante auch tatsaechlich
+        # greift. Ein Betrag, der die Vier-Augen-Schwelle erreicht/ueberschreitet,
+        # darf niemals automatisch freigegeben werden — selbst dann nicht, wenn
+        # eine (manipulierte/veraltete) Policy die Schwellen falsch setzt.
+        if amount <= auto_max and not requires_four_eyes and domain == "finance":
             status = "auto_approved"
             first_approver = "System-Rule (Auto-Approval <= 50 EUR)"
             first_approved_at = now_iso

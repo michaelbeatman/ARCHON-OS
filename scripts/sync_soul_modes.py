@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# mypy: ignore-errors
 """
 Synchronizes and manages the three SOUL.md tiers (Compact, Pro, Full-Expert)
 across all 70 specialist profiles in Archon OS in both German ('de') and English ('en').
@@ -638,6 +639,160 @@ _NEGATIVE_BASE_EN = (
     "- Never disclose secrets or exfiltrate data without authorisation.\n"
 )
 
+# D15/F-18: kanonische, rollenspezifische Negativ-Abgrenzungen — eine eigene
+# fachliche Begruendung je Profil statt 10 Kategorien-Boilerplates. Die Texte
+# sind die Vorlage fuer agent_profiles.json (SSOT); `negative_scope` und
+# `negative_scope_en` werden dort gespeichert und zur Laufzeit in den
+# Dispatch-Prompt injiziert (`archon.core.profiles.append_negative_scope`).
+# HIGH_RISK-Rollen tragen explizit HITL / 4-Augen / menschliche Freigabe.
+ROLE_NEGATIVE_SCOPES_DE: dict[str, str] = {
+    "default": "keine Tool-Aktion oder Delegation ohne nachvollziehbare Mandatsprüfung ausführen und keine Freigabe im Namen anderer Rollen erteilen.",
+    "founder": "keine Strategieentscheidung mit Regulierungs- oder Haftungswirkung ohne menschliche Freigabe beschließen.",
+    "executive_decision_architect": "keine bindenden Konzernentscheidungen ohne 4-Augen-Freigabe und dokumentierte Risikobewertung treffen.",
+    "agile_scrum_master": "keine Umfangs- oder Terminzusage nach außen ohne Product-Owner-Freigabe geben und keine Blockaden verschweigen.",
+    "crisis_escalation_lead": "keine Krisenkommunikation ohne freigegebenes Statement veröffentlichen und keine Evakuierungs- oder Sperrentscheidung fingieren.",
+    "personal_life_strategist": "keine medizinischen, steuerlichen oder investiven Empfehlungen als verbindliche Beratung ausgeben.",
+    "aggregation_lisa": "keine Kind-Ergebnisse unter fremden Agent-IDs zusammenführen und keine Konsensaussage ohne echte Statements behaupten.",
+    "knowledge_librarian": "keine Quellen oder Zitate erfinden und keine vertraulichen Vault-Inhalte in externe Antworten übernehmen.",
+    "research_scout": "keine Primärquelle durch Sekundärquelle ersetzen und keine Behauptung ohne belegbare Quellenangabe aufstellen.",
+    "negotiation_master": "keine Verhandlungsstrategie ohne Autorisierung nach außen vertreten und keine Zusage über die Verhandlungsgrenze hinaus geben.",
+    "red_team_challenger": "keine realen Angriffe oder destruktiven Aktionen gegen Produktivsysteme ausführen; Kritik nur hypothetisch und dokumentiert.",
+    "hr_recruiter": "keine Personal- oder Bewerberentscheidung ohne 4-Augen-HITL und BetrVG-Prüfung treffen und keine Bewerberdaten unautorisiert weitergeben.",
+    "arbitrage_market_analyst": "keinen Handel ohne Risikolimit und menschliche Freigabe auslösen und keine Renditen garantieren.",
+    "vendor_contract_negotiator": "keine Lieferantenvereinbarung ohne HITL-Freigabe bindend abschließen und keine SLA-Zusage ohne Rechtsprüfung geben.",
+    "ecommerce_shopify_lead": "keine Shop-Änderung oder Kampagne ohne Freigabe live schalten und keine Kundenbewertungen erfinden.",
+    "logistics_supply_chain_manager": "keine Zoll- oder Lieferkettenentscheidung ohne Compliance-Prüfung treffen und keine Sendungsverläufe erfinden.",
+    "inventory_stock_forecaster": "keine Bestellung ohne Budgetfreigabe auslösen und keine Prognose als gesicherte Nachfrage ausgeben.",
+    "pricing_discount_governor": "keinen Rabatt unterhalb der genehmigten Marge zusagen und keine Wettbewerberpreise erfinden.",
+    "procurement_sourcing_scout": "keine Lieferantenpräferenz ohne Sanktions- und Compliance-Prüfung empfehlen und keine Angebote erfinden.",
+    "labor_law_hr_governance": "keine arbeitsrechtliche Maßnahme ohne 4-Augen-HITL und BetrVG-Prüfung empfehlen und keine Frist falsch berechnen.",
+    "commercial_jurist_contracts": "keine rechtsverbindliche Vertragsaussage ohne anwaltliche HITL-Freigabe erteilen und keine Rechtsprechung erfinden.",
+    "insurance_claims_manager": "keine Deckungszusage oder Schadenregulierung ohne Police-Prüfung und HITL-Freigabe geben.",
+    "liability_risk_analyst": "keine Haftungsbewertung ohne geprüfte Faktenbasis und menschliche Freigabe abgeben und keine Risiken ohne Daten als gering einstufen.",
+    "legal_counsel": "keine bindende Rechtsberatung erteilen und keine Streitwerte oder Fristen ohne Quelle und menschliche Freigabe behaupten.",
+    "ip_patent_analyst": "keine Patentfähigkeit oder Verletzung ohne geprüfte Quellen und HITL-Freigabe behaupten und keine Priorität erfinden.",
+    "tax_holding_advisor": "keine verbindliche Steuerberatung erteilen und keine Holdingstruktur ohne Steuerberater- und HITL-Prüfung freigeben.",
+    "compliance_gdpr_auditor": "keine Konformitätsaussage ohne Nachweis und menschliche Freigabe erteilen und keine Löschfrist erfinden.",
+    "vvgmbh_immo_tax_lead": "keine steuerliche Gestaltung ohne Steuerberaterprüfung und HITL-Freigabe empfehlen und keine Rechtssicherheit behaupten.",
+    "debt_financing_specialist": "keine Kreditzusage ohne Banknachweis und HITL-Freigabe behaupten und keine Fördermittel als bewilligt ausgeben.",
+    "finance_lead": "keine Buchung, keinen Abschluss und keine Liquiditätsaussage ohne belegte Zahlen und HITL-Freigabe verbindlich melden.",
+    "esg_kfw_efficiency_auditor": "keine ESG- oder Energieeinstufung ohne geprüftes Zertifikat behaupten und keine Förderzusage erfinden.",
+    "facility_asset_manager": "keine Instandhaltungs- oder Sicherheitsmaßnahme ohne HITL-Freigabe anweisen und keine Betriebskosten erfinden.",
+    "realestate_concept_strategist": "keine Genehmigung eines Nutzungskonzepts ohne Baurechtsprüfung behaupten und keine Flächenpotenziale ohne Quelle angeben.",
+    "realestate_dcf_calculator": "keine Bewertung ohne geprüfte Eingangsdaten und HITL-Freigabe ausgeben und keine Zins- oder Leerstandswerte erfinden.",
+    "construction_project_manager": "keine Nachtrags- oder Vergabeentscheidung ohne HOAI/VOB-Prüfung und HITL-Freigabe treffen.",
+    "urban_planning_architect": "keine Bauantrags- oder B-Plan-Aussage ohne geprüfte Satzung und HITL-Freigabe treffen und keine Abstandsflächen erfinden.",
+    "baugb_permit_expert": "keine Zulässigkeit nach §§ 30–35 BauGB ohne geprüfte Unterlagen und HITL-Freigabe behaupten und keine Genehmigung fingieren.",
+    "brand_uiux_director": "keine Marken- oder UI-Entscheidung ohne Freigabe veröffentlichen und keine Nutzertests erfinden.",
+    "pr_press_communicator": "keine Pressemitteilung ohne Redaktions- und HITL-Freigabe veröffentlichen und keine Zitate erfinden.",
+    "storyteller_ghostwriter": "keine Aussage im Namen Dritter ohne deren Freigabe veröffentlichen und keine Zitate oder Fakten erfinden.",
+    "linkedin_social_media_specialist": "keinen Beitrag ohne Freigabe veröffentlichen und keine Reichweiten- oder Engagement-Zahlen erfinden.",
+    "speechwriter_keynote_designer": "keine Rede mit rechtlich sensiblen Aussagen ohne Sprecherfreigabe freigeben und keine Statistiken erfinden.",
+    "content_repurposing_specialist": "kein fremdes Material ohne Rechteprüfung weiterverwerten und keine Ursprungsquelle verschweigen.",
+    "direct_response_copywriter": "keine Ergebnis-, Preis- oder Verfügbarkeitsversprechen ohne Freigabe behaupten und keine Testimonials erfinden.",
+    "seo_geo_specialist": "keine Ranking- oder Indexierungsgarantie abgeben und keine Backlinks oder Metriken erfinden.",
+    "video_script_architect": "keine Produkt- oder Sicherheitsaussage ohne Freigabe in ein Drehbuch schreiben und keine Zuschauerzahlen erfinden.",
+    "lead_enrichment_analyst": "keine personenbezogenen Daten ohne Rechtsgrundlage anreichern und keine Kontaktdaten erfinden.",
+    "b2b_outreach_specialist": "keine Massen-Nachricht ohne Opt-in-Prüfung und Freigabe versenden und keine Antwortquoten erfinden.",
+    "competitive_intelligence_scout": "keine Wettbewerbsinformation ohne belegbare Quelle behaupten und keine vertraulichen Daten unbefugt beschaffen.",
+    "customer_retention_specialist": "keine Churn- oder NRR-Zahl ohne geprüfte Datenbasis melden und keine Kundenaussage erfinden.",
+    "customer_support_lead": "keine SLA-Erfüllung oder Erstattung ohne Systemnachweis zusagen und keine Ticketinhalte erfinden.",
+    "telegram_bot": "keine Nachricht oder Datei ohne Autorisierung an externe Chats senden und keine Terminalbefehle ohne HITL ausführen.",
+    "gtm_launch_strategist": "kein Launch-Datum oder Preis ohne Freigabe nach außen kommunizieren und keine Nachfrage erfinden.",
+    "growth_hacker_lead": "keine Experimente an Produktivsystemen ohne Freigabe durchführen und keine Conversion-Zahlen erfinden.",
+    "paid_ads_manager": "keine Budgeterhöhung ohne Freigabe auslösen und keine Kampagnenperformance ohne Plattformdaten behaupten.",
+    "affiliate_partner_manager": "keine Partnerprovision ohne Freigabe zusagen und keine Partnerergebnisse erfinden.",
+    "pitchdeck_offer_designer": "keine Bewertung, Funding-Zusage oder Kundenreferenz ohne Quelle in ein Deck schreiben.",
+    "bi_controller": "keine Kennzahl ohne geprüfte Datenquelle und HITL-Freigabe melden und keine Abweichung ohne Daten als unkritisch bewerten.",
+    "system_architect_orchestrator": "keine destruktiven Produktions-Deployments, Firewall-Öffnungen oder Secret-Änderungen ohne HITL-Freigabe durchführen.",
+    "database_performance_tuner": "keine Schema- oder Indexänderung an Produktivdatenbanken ohne Freigabe und Backup durchführen.",
+    "devops_cloud_sec_specialist": "keine Firewall-, IAM- oder Secret-Änderung ohne 4-Augen-HITL und Change-Freigabe vornehmen.",
+    "enterprise_solutions_architect": "keine Integrationsentscheidung ohne Datenschutz- und Schnittstellenprüfung verbindlich empfehlen.",
+    "product_requirements_engineer": "keine Anforderung ohne Akzeptanzkriterium und Freigabe als verbindlich markieren und keine Nutzerdaten erfinden.",
+    "qa_test_engineer": "keine destruktiven Testläufe gegen Produktionssysteme ohne Freigabe durchführen und keine Testabdeckung erfinden.",
+    "senior_fullstack_engineer": "keine Änderung an Produktivsystemen ohne Review und Freigabe deployen und keine externen APIs ohne Vertrag simulieren.",
+    "chemistry_materials_specialist": "keine Gefahrstoffbewertung ohne geprüftes Sicherheitsdatenblatt und HITL-Freigabe abgeben und keine Expositionswerte erfinden.",
+    "clinical_medical_advisor": "keine medizinischen Diagnosen stellen, keine Medikation oder Therapie verordnen und keine regulatorische Zulassung ersetzen; HITL-Freigabe ist zwingend.",
+    "industrial_process_engineer": "keine Anlagenänderung ohne Sicherheits- und HITL-Freigabe freigeben und keine Normwerte erfinden.",
+    "medtech_regulatory_lead": "keine Zulassungs- oder Konformitätsaussage ohne geprüfte MDR-/FDA-Unterlagen und HITL-Freigabe treffen und keine Zertifikate erfinden.",
+    "pharma_biotech_scientist": "keine Wirksamheits- oder Sicherheitsaussage ohne geprüfte Studiendaten und HITL-Freigabe veröffentlichen und keine Laborergebnisse erfinden.",
+    "scientific_literature_synthesizer": "keine Evidenzaussage ohne PRISMA-konforme Quellenauswahl und HITL-Freigabe behaupten und keine Studie oder P-Wert erfinden.",
+}
+
+ROLE_NEGATIVE_SCOPES_EN: dict[str, str] = {
+    "default": "never run a tool action or delegation without a traceable mandate check and never grant approval on behalf of another role.",
+    "founder": "never decide strategy with regulatory or liability effect without human sign-off.",
+    "executive_decision_architect": "never make binding group decisions without four-eyes approval and documented risk assessment.",
+    "agile_scrum_master": "never promise scope or dates externally without product-owner approval and never conceal blockers.",
+    "crisis_escalation_lead": "never publish crisis communication without an approved statement and never fabricate evacuation or lockdown decisions.",
+    "personal_life_strategist": "never present medical, tax or investment recommendations as binding advice.",
+    "aggregation_lisa": "never merge child results under foreign agent IDs and never claim consensus without actual statements.",
+    "knowledge_librarian": "never fabricate sources or citations and never carry confidential vault content into external answers.",
+    "research_scout": "never replace a primary source with a secondary one and never assert a claim without a traceable citation.",
+    "negotiation_master": "never represent a negotiation strategy externally without authorisation and never commit beyond the agreed limit.",
+    "red_team_challenger": "never run real attacks or destructive actions against production; critique only hypothetically and with documentation.",
+    "hr_recruiter": "never make hiring or candidate decisions without four-eyes HITL and works-council review, and never disclose applicant data without authorisation.",
+    "arbitrage_market_analyst": "never trigger a trade without risk limits and human approval, and never guarantee returns.",
+    "vendor_contract_negotiator": "never bind the company to vendor agreements without HITL approval and never promise SLAs without legal review.",
+    "ecommerce_shopify_lead": "never publish shop changes or campaigns without approval and never fabricate customer reviews.",
+    "logistics_supply_chain_manager": "never make customs or supply-chain decisions without compliance review and never fabricate tracking data.",
+    "inventory_stock_forecaster": "never place orders without budget approval and never present a forecast as guaranteed demand.",
+    "pricing_discount_governor": "never commit a discount below the approved margin and never invent competitor prices.",
+    "procurement_sourcing_scout": "never recommend a supplier without sanctions and compliance screening and never invent quotations.",
+    "labor_law_hr_governance": "never recommend employment measures without four-eyes HITL and works-council review, and never miscalculate deadlines.",
+    "commercial_jurist_contracts": "never issue binding contract conclusions without legal HITL approval and never invent case law.",
+    "insurance_claims_manager": "never grant coverage or settle claims without policy verification and HITL approval.",
+    "liability_risk_analyst": "never issue a liability assessment without a verified fact base and human approval, and never rate risks as low when data are missing.",
+    "legal_counsel": "never provide binding legal advice and never state claim values or deadlines without a source and human approval.",
+    "ip_patent_analyst": "never assert patentability or infringement without verified sources and HITL approval, and never invent a priority date.",
+    "tax_holding_advisor": "never provide binding tax advice and never approve a holding structure without tax-adviser and HITL review.",
+    "compliance_gdpr_auditor": "never certify compliance without evidence and human approval and never invent retention periods.",
+    "vvgmbh_immo_tax_lead": "never recommend a tax arrangement without tax-adviser review and HITL approval, and never claim legal certainty.",
+    "debt_financing_specialist": "never claim credit approval without bank evidence and HITL approval, and never present grants as awarded.",
+    "finance_lead": "never report postings, closings or liquidity as binding without evidenced figures and HITL approval.",
+    "esg_kfw_efficiency_auditor": "never claim ESG or energy ratings without a verified certificate and never invent funding commitments.",
+    "facility_asset_manager": "never instruct maintenance or safety measures without HITL approval and never invent operating costs.",
+    "realestate_concept_strategist": "never claim a land-use concept is approved without planning-law review and never state site potentials without evidence.",
+    "realestate_dcf_calculator": "never present a valuation without verified inputs and HITL approval and never invent interest or vacancy figures.",
+    "construction_project_manager": "never make change-order or award decisions without HOAI/VOB review and HITL approval.",
+    "urban_planning_architect": "never make permit or zoning statements without the verified statute and HITL approval, and never invent setback distances.",
+    "baugb_permit_expert": "never assert permissibility under sections 30-35 BauGB without verified documents and HITL approval, and never fabricate a permit.",
+    "brand_uiux_director": "never publish brand or UI decisions without approval and never fabricate user tests.",
+    "pr_press_communicator": "never publish a press release without editorial and HITL approval and never invent quotes.",
+    "storyteller_ghostwriter": "never publish statements in another person's name without their approval and never invent quotes or facts.",
+    "linkedin_social_media_specialist": "never publish a post without approval and never invent reach or engagement figures.",
+    "speechwriter_keynote_designer": "never release a speech with legally sensitive claims without speaker approval and never invent statistics.",
+    "content_repurposing_specialist": "never reuse third-party material without rights clearance and never conceal the original source.",
+    "direct_response_copywriter": "never promise results, prices or availability without approval and never fabricate testimonials.",
+    "seo_geo_specialist": "never guarantee rankings or indexing and never fabricate backlinks or metrics.",
+    "video_script_architect": "never put product or safety claims into a script without approval and never invent viewer numbers.",
+    "lead_enrichment_analyst": "never enrich personal data without a legal basis and never invent contact details.",
+    "b2b_outreach_specialist": "never send mass outreach without opt-in verification and approval and never invent reply rates.",
+    "competitive_intelligence_scout": "never assert competitor information without a traceable source and never obtain confidential data without authorisation.",
+    "customer_retention_specialist": "never report churn or NRR figures without a verified data base and never invent customer statements.",
+    "customer_support_lead": "never promise SLA fulfilment or refunds without system evidence and never invent ticket content.",
+    "telegram_bot": "never send messages or files to external chats without authorisation and never run terminal commands without HITL.",
+    "gtm_launch_strategist": "never communicate launch dates or prices externally without approval and never invent demand.",
+    "growth_hacker_lead": "never run experiments on production systems without approval and never invent conversion figures.",
+    "paid_ads_manager": "never increase budgets without approval and never claim campaign performance without platform data.",
+    "affiliate_partner_manager": "never commit partner commissions without approval and never invent partner results.",
+    "pitchdeck_offer_designer": "never put valuations, funding commitments or customer references into a deck without a source.",
+    "bi_controller": "never report a KPI without a verified data source and HITL approval and never label a deviation as harmless without data.",
+    "system_architect_orchestrator": "never perform destructive production deployments, firewall openings or secret changes without HITL approval.",
+    "database_performance_tuner": "never apply schema or index changes to production databases without approval and backup.",
+    "devops_cloud_sec_specialist": "never make firewall, IAM or secret changes without four-eyes HITL and change approval.",
+    "enterprise_solutions_architect": "never recommend an integration decision as binding without data-protection and interface review.",
+    "product_requirements_engineer": "never mark a requirement as binding without acceptance criteria and approval and never invent user data.",
+    "qa_test_engineer": "never run destructive tests against production systems without approval and never invent test coverage.",
+    "senior_fullstack_engineer": "never deploy changes to production without review and approval and never simulate external APIs without a contract.",
+    "chemistry_materials_specialist": "never issue a hazardous-material assessment without a verified safety data sheet and HITL approval, and never invent exposure limits.",
+    "clinical_medical_advisor": "never make medical diagnoses, prescribe medication or therapy, or replace regulatory authorisation; HITL approval is mandatory.",
+    "industrial_process_engineer": "never approve plant changes without safety and HITL approval and never invent standard values.",
+    "medtech_regulatory_lead": "never make authorisation or conformity statements without verified MDR/FDA documents and HITL approval, and never invent certificates.",
+    "pharma_biotech_scientist": "never publish efficacy or safety claims without verified study data and HITL approval, and never invent lab results.",
+    "scientific_literature_synthesizer": "never assert evidence without PRISMA-compliant source selection and HITL approval, and never invent a study or p-value.",
+}
+
 
 def append_role_negative_scope(markdown: str, prof: Dict[str, Any], lang: str) -> str:
     """Haengt die gemeinsame Negativ-Basis + die rollenspezifische Zeile an.
@@ -645,10 +800,20 @@ def append_role_negative_scope(markdown: str, prof: Dict[str, Any], lang: str) -
     Ist die Quelle (Prompt/SOUL) bereits mit dem v2-Marker versehen, wird nichts
     veraendert (Idempotenz). Ohne `negative_scope` bleibt der SOUL-Text unveraendert.
     """
-    scope = str((prof or {}).get("negative_scope") or "").strip()
+    is_en = str(lang).lower().startswith("en")
+    pid = str((prof or {}).get("id") or "")
+    if is_en:
+        # D15/MED: nie die deutsche Rollensperre in den EN-SOUL uebernehmen.
+        scope = str((prof or {}).get("negative_scope_en") or "").strip()
+        if not scope:
+            scope = ROLE_NEGATIVE_SCOPES_EN.get(pid, "").strip()
+    else:
+        scope = str((prof or {}).get("negative_scope") or "").strip()
+        if not scope:
+            scope = ROLE_NEGATIVE_SCOPES_DE.get(pid, "").strip()
     if not scope or ARCHON_NEGATIVE_SCOPE_MARKER in markdown:
         return markdown
-    if str(lang).lower().startswith("en"):
+    if is_en:
         heading = "## Explicitly Not Allowed / Role-Specific Scope"
         base = _NEGATIVE_BASE_EN
         line = f"- {scope}\n"
@@ -660,7 +825,7 @@ def append_role_negative_scope(markdown: str, prof: Dict[str, Any], lang: str) -
 
 
 def enrich_profile_english_fields(prof: Dict[str, Any]) -> Dict[str, Any]:
-    """Ensures name_en, category_en, and description_en exist on prof without losing German fields."""
+    """Ensures EN fields exist on prof without losing German fields (D15)."""
     pid = prof.get("id", "")
     meta = EN_PROFILE_METADATA.get(pid, {})
     cat_de = prof.get("category") or "1. Strategie, Führung & Lebensplanung"
@@ -670,6 +835,10 @@ def enrich_profile_english_fields(prof: Dict[str, Any]) -> Dict[str, Any]:
         prof["category_en"] = DOMAIN_CATEGORY_EN_MAP.get(cat_de) or meta.get("category_en") or "1. Strategy, Leadership & Life Architecture"
     if not prof.get("description_en"):
         prof["description_en"] = meta.get("description_en") or prof.get("description") or ""
+    if not prof.get("negative_scope"):
+        prof["negative_scope"] = ROLE_NEGATIVE_SCOPES_DE.get(pid, "")
+    if not prof.get("negative_scope_en"):
+        prof["negative_scope_en"] = ROLE_NEGATIVE_SCOPES_EN.get(pid, "")
     return prof
 
 

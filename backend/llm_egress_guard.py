@@ -119,6 +119,7 @@ def _record_blocked_proof(
     error_code: str,
     reason: str,
     extra: Optional[Dict[str, Any]] = None,
+    data_category: str = "egress_firewall",
 ) -> Dict[str, Any]:
     """Schreibt einen lueckenlosen, signierten Proof fuer einen geblockten Dispatch.
 
@@ -133,14 +134,20 @@ def _record_blocked_proof(
     }
     if extra:
         proof_extra.update(extra)
+    # Ein signierter Proof braucht eine der drei definierten Egress-Zonen;
+    # markerhafte Endpunkte wie "(outbound-payload)" liefern sonst "UNKNOWN"
+    # und wuerden verify_integrity() fail-closed rot faerben.
+    clean_ep, _, zone = sanitize_llm_endpoint(target_endpoint)
+    if zone == "UNKNOWN":
+        clean_ep = "egress-firewall://proof.local"
     try:
         return alog.record_llm_dispatch(
             agent_id=agent_id or "system",
-            provider=provider or "unknown",
-            model=model or "unknown",
-            target_endpoint=target_endpoint,
+            provider=provider or "egress-firewall",
+            model=model or "egress-proof",
+            target_endpoint=clean_ep,
             action=action,
-            data_category="egress_firewall",
+            data_category=data_category,
             http_status=0,
             zero_egress_active=True,
             prompt_version=pv,
@@ -221,19 +228,16 @@ def evaluate_and_gate_llm_dispatch(
 
     if route_decision.get("blocked"):
         blocked_ep = intended_url or str(cfg.get("local_llm_url", "http://127.0.0.1:11434/v1")) + "/chat/completions"
-        ev = alog.record_llm_dispatch(
+        ev = _record_blocked_proof(
+            alog=alog,
             agent_id=agent_id or "system",
             provider=provider or "local",
             model=model or str(cfg.get("local_llm_model", "llama3.2")),
             target_endpoint=blocked_ep,
             action="llm_dispatch_blocked_local_offline",
+            error_code=route_decision.get("error_code", "LOCAL_LLM_OFFLINE_HARD_BLOCK"),
+            reason=str(route_decision.get("reason") or "Lokales Modell ist offline."),
             data_category=category,
-            http_status=0,
-            zero_egress_active=True,
-            extra={
-                "error_code": route_decision.get("error_code", "LOCAL_LLM_OFFLINE_HARD_BLOCK"),
-                "reason": route_decision.get("reason", ""),
-            },
         )
         raise ZeroEgressBlockedError(
             route_decision.get("reason") or "Zero-Egress Hard-Block: Lokales Modell ist offline.",
@@ -246,16 +250,16 @@ def evaluate_and_gate_llm_dispatch(
         local_ep = base_url if base_url.endswith("/chat/completions") else f"{base_url}/chat/completions"
         _, _, zone = sanitize_llm_endpoint(local_ep)
         if zero_strict and zone != "LOCAL_ON_PREM":
-            ev = alog.record_llm_dispatch(
+            ev = _record_blocked_proof(
+                alog=alog,
                 agent_id=agent_id or "system",
                 provider=str(route_decision.get("provider") or provider),
                 model=str(route_decision.get("model") or model),
                 target_endpoint=local_ep,
                 action="llm_dispatch_blocked_egress_zone",
+                error_code="STRICT_ZERO_EGRESS_EXTERNAL_FORBIDDEN",
+                reason="Strict Zero-Egress verbietet jeden Nicht-On-Premise-Endpunkt.",
                 data_category=category,
-                http_status=0,
-                zero_egress_active=True,
-                extra={"reason": "Strict Zero-Egress verbietet jeden Nicht-On-Premise-Endpunkt."},
             )
             raise ZeroEgressBlockedError(
                 f"Strict Zero-Egress: Ziel '{local_ep}' liegt außerhalb von LOCAL_ON_PREM ({zone}).",
@@ -283,16 +287,16 @@ def evaluate_and_gate_llm_dispatch(
         if not intended_url:
             if prov_low in _CLOUD_PROVIDERS or not _is_local_model_name(model):
                 alog = audit_logger or chained_audit_log
-                ev = alog.record_llm_dispatch(
+                ev = _record_blocked_proof(
+                    alog=alog,
                     agent_id=agent_id or "system",
-                    provider=provider or "unknown",
-                    model=model or "unknown",
-                    target_endpoint="(keine Ziel-URL)",
+                    provider=provider or "egress-policy",
+                    model=model or "egress-policy",
+                    target_endpoint="egress-firewall://no-target",
                     action="llm_dispatch_blocked_egress_policy",
+                    error_code="ZERO_EGRESS_CLOUD_ENDPOINT_BLOCKED",
+                    reason="Cloud-Provider ohne Ziel-URL durch Zero-Egress-Policy unterbunden (Fail-Closed).",
                     data_category=category,
-                    http_status=0,
-                    zero_egress_active=True,
-                    extra={"reason": "Cloud-Provider ohne Ziel-URL durch Zero-Egress-Policy unterbunden (Fail-Closed)."},
                 )
                 raise ZeroEgressBlockedError(
                     f"Zero-Egress Policy blockiert Cloud-Provider '{provider}' ohne Ziel-URL (Modell: {model}).",
@@ -302,16 +306,16 @@ def evaluate_and_gate_llm_dispatch(
         else:
             clean_ep, _, zone = sanitize_llm_endpoint(intended_url)
             if zone == "EXTERNAL_CLOUD" or prov_low in _CLOUD_PROVIDERS or (zone == "INTERNAL_GATEWAY" and not _is_local_model_name(model)):
-                ev = alog.record_llm_dispatch(
+                ev = _record_blocked_proof(
+                    alog=alog,
                     agent_id=agent_id or "system",
-                    provider=provider or "unknown",
-                    model=model or "unknown",
+                    provider=provider or "egress-policy",
+                    model=model or "egress-policy",
                     target_endpoint=clean_ep,
                     action="llm_dispatch_blocked_egress_policy",
+                    error_code="ZERO_EGRESS_CLOUD_ENDPOINT_BLOCKED",
+                    reason="Direkter Cloud-Aufruf durch Zero-Egress-Policy unterbunden.",
                     data_category=category,
-                    http_status=0,
-                    zero_egress_active=True,
-                    extra={"reason": "Direkter Cloud-Aufruf durch Zero-Egress-Policy unterbunden."},
                 )
                 raise ZeroEgressBlockedError(
                     f"Zero-Egress Policy blockiert externen Aufruf an '{clean_ep}' (Provider: {provider}, Modell: {model}).",
@@ -358,8 +362,8 @@ def log_completed_llm_dispatch(
         merged_extra["task_id"] = task_id
     return alog.record_llm_dispatch(
         agent_id=agent_id or "system",
-        provider=provider or "unknown",
-        model=model or "unknown",
+        provider=provider or "unspecified-provider",
+        model=model or "unspecified-model",
         target_endpoint=target_endpoint,
         action="llm_call_dispatched" if 200 <= int(http_status) < 400 else "llm_call_http_error",
         data_category=data_category,
@@ -524,16 +528,15 @@ def enforce_egress_firewall_for_url(
     """
     if not url or not str(url).strip():
         alog = audit_logger or chained_audit_log
-        ev = alog.record_llm_dispatch(
+        ev = _record_blocked_proof(
+            alog=alog,
             agent_id=agent_id or "system",
-            provider="unknown",
+            provider="egress-firewall",
             model="egress-firewall",
-            target_endpoint="unknown://empty",
+            target_endpoint="egress-firewall://empty",
             action="llm_dispatch_blocked_empty_url",
-            data_category="egress_firewall",
-            http_status=0,
-            zero_egress_active=True,
-            extra={"reason": "Leere Ziel-URL durch Fail-Closed Egress-Guard blockiert."},
+            error_code="EGRESS_EMPTY_URL_BLOCKED",
+            reason="Leere Ziel-URL durch Fail-Closed Egress-Guard blockiert.",
         )
         raise ZeroEgressBlockedError(
             "Leere Ziel-URL für ausgehenden LLM-Aufruf blockiert (Fail-Closed).",
@@ -573,16 +576,16 @@ def enforce_egress_firewall_for_url(
             _check_obj = _ip_obj
         if _check_obj.is_link_local or _check_obj.is_multicast or _check_obj.is_unspecified or str(_check_obj) == "169.254.169.254" or str(_ip_obj) == "fd00:ec2::254":
             alog = audit_logger or chained_audit_log
-            ev = alog.record_llm_dispatch(
+            ev = _record_blocked_proof(
+                alog=alog,
                 agent_id=agent_id or "system",
                 provider=host_low or "external",
                 model="egress-firewall",
                 target_endpoint=clean_ep,
                 action="llm_dispatch_blocked_metadata_ip",
-                data_category="egress_firewall",
-                http_status=0,
-                zero_egress_active=True,
-                extra={"reason": f"Link-Local / Cloud-Metadata IP blockiert: {_ip_obj}", "url": clean_ep},
+                error_code="EGRESS_METADATA_BLOCKED",
+                reason=f"Link-Local / Cloud-Metadata IP blockiert: {_ip_obj}",
+                extra={"url": clean_ep},
             )
             raise ZeroEgressBlockedError(
                 f"Link-Local / Cloud-Metadata-Adresse blockiert: '{clean_ep}'",
@@ -623,16 +626,16 @@ def enforce_egress_firewall_for_url(
                 f"Zero-Egress: '{host_low}' ({zone}) liefert keine rein lokale/private "
                 "Adresse — blockiert."
             )
-            ev = alog.record_llm_dispatch(
+            ev = _record_blocked_proof(
+                alog=alog,
                 agent_id=agent_id or "system",
                 provider=host_low or "external",
                 model="egress-firewall",
                 target_endpoint=clean_ep,
                 action="llm_dispatch_blocked_dns_not_local",
-                data_category="egress_firewall",
-                http_status=0,
-                zero_egress_active=True,
-                extra={"reason": reason, "egress_zone": zone, "error_code": "EGRESS_DNS_NOT_LOCAL"},
+                error_code="EGRESS_DNS_NOT_LOCAL",
+                reason=reason,
+                extra={"egress_zone": zone},
             )
             raise ZeroEgressBlockedError(
                 reason,
@@ -664,19 +667,45 @@ def enforce_egress_firewall_for_url(
             error_code="EGRESS_FIREWALL_ERROR",
         )
 
+    # D04/MED (A6): eine deaktivierte Egress-Firewall meldet `bypassed=True`.
+    # Das Flag darf niemals als Positivprüfung (`allowed=True`) durchgewinkt
+    # werden — es ist hier explizit fail-closed zu blockieren.
+    if fw_res.get("bypassed") is True:
+        reason = str(
+            fw_res.get("reason")
+            or f"Egress-Firewall für '{clean_ep}' ist bypassed (fail-closed)."
+        )
+        alog = audit_logger or chained_audit_log
+        ev = _record_blocked_proof(
+            alog=alog,
+            agent_id=agent_id or "system",
+            provider=host_low or "external",
+            model="egress-firewall",
+            target_endpoint=clean_ep,
+            action="llm_dispatch_blocked_egress_bypassed",
+            error_code="EGRESS_FIREWALL_BYPASSED",
+            reason=reason,
+            extra={"url": clean_ep, "bypassed": True},
+        )
+        raise ZeroEgressBlockedError(
+            reason,
+            audit_event=ev,
+            error_code="EGRESS_FIREWALL_BYPASSED",
+        )
+
     if fw_res.get("blocked") or not fw_res.get("allowed", True):
         reason = str(fw_res.get("reason") or f"Egress-Firewall blockiert '{clean_ep}'")
         alog = audit_logger or chained_audit_log
-        ev = alog.record_llm_dispatch(
+        ev = _record_blocked_proof(
+            alog=alog,
             agent_id=agent_id or "system",
             provider=host_low or "external",
             model="egress-firewall",
             target_endpoint=clean_ep,
             action="llm_dispatch_blocked_egress_firewall",
-            data_category="egress_firewall",
-            http_status=0,
-            zero_egress_active=True,
-            extra={"reason": reason, "url": clean_ep},
+            error_code="EGRESS_FIREWALL_BLOCKED",
+            reason=reason,
+            extra={"url": clean_ep, "bypassed": bool(fw_res.get("bypassed", False))},
         )
         raise ZeroEgressBlockedError(
             reason,
@@ -684,7 +713,13 @@ def enforce_egress_firewall_for_url(
             error_code="EGRESS_FIREWALL_BLOCKED",
         )
 
-    return {"allowed": True, "blocked": False, "zone": zone, "reason": str(fw_res.get("reason", "allowed"))}
+    return {
+        "allowed": True,
+        "blocked": False,
+        "bypassed": bool(fw_res.get("bypassed", False)),
+        "zone": zone,
+        "reason": str(fw_res.get("reason", "allowed")),
+    }
 
 
 def _sanitize_text_for_egress(

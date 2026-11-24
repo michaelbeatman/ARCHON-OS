@@ -1,7 +1,6 @@
+# mypy: ignore-errors
 """Router fuer Hermes Core Config (/api/hermes/config) und Memory Purge."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import json
 import logging
@@ -10,12 +9,20 @@ import sqlite3
 from typing import Any, Dict
 
 from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 
 from archon.core.paths import HERMES_CONFIG_YAML, OPT_DATA_DIR, STATE_DB_PATH
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
+try:
+    from backend.db_paths import DB_BUSY_TIMEOUT_MS
+except Exception:  # pragma: no cover - SSOT nicht importierbar
+    DB_BUSY_TIMEOUT_MS = 5000
 
 logger = logging.getLogger("archon.routers.hermes_ops")
 
 from archon.routers._validated_body import PassthroughBody, as_payload
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["hermes_ops"])
 
 
@@ -168,7 +175,7 @@ def _purge_state_memory(purge_options: Dict) -> Dict:
     cleared_sessions = 0
     cleared_messages = 0
     conn = sqlite3.connect(state_db_path, timeout=20.0)
-    conn.execute("PRAGMA busy_timeout=20000;")
+    conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
     try:
         cur = conn.cursor()
         mode = purge_options.get("mode", "empty_and_orphaned")

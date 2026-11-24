@@ -115,7 +115,7 @@ def test_vault_edit_passes_expected_values_into_atomic_write():
     assert "expected_mtime=expected_mtime" in src
     assert "expected_size=expected_size" in src
     # Pruefung liegt jetzt auch im Writer, nicht nur im Endpoint
-    assert src.count("getmtime(path)") >= 1
+    assert src.count("getmtime(real_path)") >= 1 or src.count("getmtime(path)") >= 1
 
 
 # ---------------------------------------------------------------- D03/MED:

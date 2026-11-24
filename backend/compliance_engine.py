@@ -289,8 +289,40 @@ class ComplianceEngine:
             "violations": violations,
         }
 
+    @staticmethod
+    def _canonical_soul_sha256(agent_id: str) -> Optional[str]:
+        """Kanonischer Live-Hash AUSSCHLIESSLICH aus ``souls/<id>/SOUL.md``.
+
+        A15/F-05 (D6): Der an ``check_activation_allowed()`` uebergebene
+        ``system_prompt`` stammt aus ``agent_profiles.json`` und ist nicht die
+        SSOT — ein Abgleich gegen ihn wuerde den echten SOUL-Pin falsch
+        blockieren oder eine manipulierte Prompt-Variante zulassen. Die
+        Zeilenenden-Normalisierung ist identisch zu
+        ``backend.eu_ai_act_inventory._compute_soul_sha256()``, damit der im
+        Inventar gepinnte Hash direkt vergleichbar ist. Fehlt die Datei, ist
+        sie nicht lesbar oder leer, wird ``None`` geliefert (fail-closed).
+        """
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        canon = os.path.join(repo_root, "souls", agent_id, "SOUL.md")
+        if not os.path.isfile(canon):
+            return None
+        try:
+            with open(canon, "r", encoding="utf-8", newline="") as fh:
+                text = fh.read().replace("\r\n", "\n").replace("\r", "\n").strip()
+        except Exception as exc:
+            print(
+                f"[Compliance] kanonisches SOUL {agent_id} nicht verifizierbar: {exc}",
+                file=sys.stderr,
+            )
+            return None
+        return hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None
+
     def check_activation_allowed(self, agent_id: str, system_prompt: str = "") -> Dict[str, Any]:
-        """Prüft vor Aktivierung/Dispatch eines Spezialisten, ob alle EU-AI-Act-Pflicht-Guardrails erfüllt sind."""
+        """Prüft vor Aktivierung/Dispatch eines Spezialisten, ob alle EU-AI-Act-Pflicht-Guardrails erfüllt sind.
+
+        ``system_prompt`` bleibt nur aus Kompatibilitätsgründen im Signaturen-
+        Vertrag und wird bewusst NICHT gehasht (siehe ``_canonical_soul_sha256``).
+        """
         inv = self._get_inventory_mgr().get_inventory()
         # Historische Handles (z. B. 'hermes-orchestrator') auf echte
         # Kader-IDs übersetzen — sonst würden legitime Spezialisten als
@@ -329,16 +361,30 @@ class ComplianceEngine:
             }
 
         pinned_hash = str(item.get("soul_sha256") or "").strip()
-        if system_prompt and system_prompt.strip() and pinned_hash:
-            live_hash = hashlib.sha256(system_prompt.strip().encode("utf-8")).hexdigest()
-            if live_hash != pinned_hash and item.get("risk_tier") == "HIGH_RISK":
+        if item.get("risk_tier") == "HIGH_RISK":
+            # A15/F-05: ein uebergebener Prompt darf die Pruefung weder
+            # ausloesen noch umgehen. Autoritativ ist immer die SSOT-Datei.
+            live_hash = self._canonical_soul_sha256(lookup_id)
+            if not pinned_hash or not live_hash:
+                return {
+                    "allowed": False,
+                    "agent_id": agent_id,
+                    "risk_tier": item.get("risk_tier"),
+                    "error_code": "SOUL_SHA256_NOT_VERIFIABLE",
+                    "reason": (
+                        "Aktivierung gesperrt: kanonischer SOUL-Hash aus "
+                        f"souls/{lookup_id}/SOUL.md nicht verifizierbar "
+                        "(Datei fehlt, nicht lesbar oder leer)."
+                    ),
+                }
+            if live_hash != pinned_hash:
                 return {
                     "allowed": False,
                     "agent_id": agent_id,
                     "risk_tier": item.get("risk_tier"),
                     "error_code": "SOUL_SHA256_MISMATCH",
                     "reason": (
-                        f"Aktivierung gesperrt: System-Prompt-Hash weicht vom gepinnten "
+                        f"Aktivierung gesperrt: SOUL-Hash weicht vom gepinnten "
                         f"SOUL-SHA-256 ({pinned_hash[:12]}) ab."
                     ),
                 }
@@ -413,8 +459,8 @@ class ComplianceEngine:
         number_ranges = tenant_mgr.get_number_ranges(tid)
 
         try:
-            from backend.privacy_router import get_privacy_config
             from backend.llm_egress_guard import inspect_worker_network_isolation
+            from backend.privacy_router import get_privacy_config
             privacy_cfg = get_privacy_config()
             worker_net = inspect_worker_network_isolation(
                 privacy_cfg.get("worker_isolation_network", "archon-worker-zero-egress_net")

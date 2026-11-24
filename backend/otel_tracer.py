@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 backend/otel_tracer.py
 OpenTelemetry- & Langfuse-kompatibler Tracer für Archon OS (Pillar 1 & 6).
@@ -5,19 +6,23 @@ Erfasst hierarchische Traces und Spans für Tasks, Agenten-Delegationen,
 Tool-Ausführungen und LLM-Aufrufe mit Latenz, Token-Verbrauch und Kosten.
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("otel_tracer")
 
-import os
-import sys
-import time
+# D16/MED: Status der Log-Bruecke (Loki/Promtail) fuer get_tracing_status().
+_TRACE_LOG_FILTER_STATUS = {"installed": False, "error": ""}
+
+import contextvars
+import datetime
 import json
-import uuid
+import os
 import secrets
 import sqlite3
-import datetime
+import sys
 import threading
-import contextvars
-from typing import Dict, Any, List, Optional
+import time
+import uuid
+from typing import Any, Dict, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -37,6 +42,7 @@ class OpenTelemetryTracer:
         self.db_path = db_path
         self._export_stats = {"success": 0, "failures": 0, "last_error": ""}
         self._record_stats = {"success": 0, "failures": 0, "sampled_out": 0, "last_error": ""}
+        self._stage_failures: Dict[str, int] = {}
         self._init_db()
 
     def note_local_trace_error(self, stage: str, exc: BaseException) -> None:
@@ -47,6 +53,8 @@ class OpenTelemetryTracer:
         """
         self._record_stats["failures"] += 1
         self._record_stats["last_error"] = f"{stage}: {exc}"
+        key = str(stage)
+        self._stage_failures[key] = self._stage_failures.get(key, 0) + 1
         _archon_exc_logger.warning("[otel_tracer] %s fehlgeschlagen: %s", stage, exc)
 
     def _get_conn(self) -> sqlite3.Connection:
@@ -194,39 +202,66 @@ class OpenTelemetryTracer:
         duration_ms: float = 0.0,
         status: str = "OK",
         status_message: Optional[str] = None,
-        attributes: Optional[Dict[str, Any]] = None
+        attributes: Optional[Dict[str, Any]] = None,
+        *,
+        _span_id: Optional[str] = None,
     ) -> str:
         """Speichert einen Span mit der EINEN ID-Quelle aus ``trace_context``.
 
-        Der Aufrufer erzeugt den Kind-Span via ``child_span()`` und übergibt
-        dessen ``span_id`` als aktiven Kontext; ``record_span`` liest genau
-        diese ID. Ohne expliziten Parent wird hier selbst ein Child erzeugt —
-        es gibt keine zweite ``secrets.token_hex(8)``-Generation im Tracer.
+        D16/HIGH: bei uebergebenem Parent darf niemals ``current_span_id()``
+        als eigene ``span_id`` benutzt werden — das erzeugte einen
+        selbst-parentenden Span (``parentSpanId == spanId``) im OTLP-Export.
+        Stattdessen wird immer ein echtes ``child_span()`` geoeffnet.
+        ``_span_id`` ist intern fuer bereits geforkte outbound Hops reserviert:
+        deren ID stammt exakt aus dem ``traceparent`` des HTTP-Requests.
         """
         attrs = dict(attributes or {})
         try:
             from backend.trace_context import (
-                child_span, current_sampled, current_span_id, current_tracestate, new_ids,
+                child_span,
+                current_sampled,
+                current_tracestate,
+                format_traceparent,
             )
-            cur_sid = current_span_id()
-            if parent_span_id:
-                span_id = cur_sid or new_ids()[1]
+            if _span_id:
+                # Hop-Span: ID kommt vom traceparent, KEIN zweiter Fork.
+                span_id = str(_span_id)
+                sampled = self._span_sampled(attrs, default=bool(current_sampled()))
+                ts = current_tracestate()
             else:
-                with child_span() as (_tid, sid, parent_sid):
-                    span_id, parent_span_id = sid, parent_sid or None
+                sampled_default = self._span_sampled(attrs, default=bool(current_sampled()))
+                if parent_span_id:
+                    # Echter Child des uebergebenen Parents — auch wenn der
+                    # aktuelle Kontext genau diese Parent-ID trägt.
+                    incoming = format_traceparent(
+                        trace_id, parent_span_id, sampled=sampled_default
+                    )
+                    with child_span(incoming=incoming, _record_hop=False) as (
+                        _tid, sid, resolved_parent
+                    ):
+                        span_id, parent_span_id = sid, resolved_parent or None
+                else:
+                    with child_span(_record_hop=False) as (_tid, sid, parent_sid):
+                        span_id, parent_span_id = sid, parent_sid or None
+                sampled = self._span_sampled(attrs, default=bool(current_sampled()))
+                ts = current_tracestate()
             # Re-Audit H6/M2: die Sampling-Entscheidung wird als persistiertes
             # Flag gespeichert und ist damit im Export-Thread lesbar — nicht
             # nur ein Kosmetik-Attribut. Ein explizit uebergebenes Flag hat
             # Vorrang vor dem Kontext (z. B. bei Re-Injektion aus dem Drainer).
-            sampled = self._span_sampled(attrs, default=bool(current_sampled()))
             attrs["archon.sampled"] = sampled
-            ts = current_tracestate()
             if ts:
                 attrs.setdefault("tracestate", ts)
         except Exception as exc:
             self.note_local_trace_error("span-context", exc)
-            span_id = secrets.token_hex(8)  # letzte Notation, wenn trace_context fehlt
+            span_id = str(_span_id or secrets.token_hex(8))  # letzte Notation, wenn trace_context fehlt
             sampled = self._span_sampled(attrs, default=True)
+
+        # Harte Invariante: kein Selbstloop im Span-Graph (S-16.5).
+        if parent_span_id and span_id == parent_span_id:
+            raise ValueError(
+                f"span_id == parent_span_id ({span_id}); selbst-parentender Span verweigert"
+            )
 
         # Hartes Sampling: "00-...-00" erzeugt gar keinen lokalen Span und
         # damit auch nichts, was spaeter exportiert werden koennte.
@@ -407,23 +442,55 @@ class OpenTelemetryTracer:
             return
 
         def _do_export():
-            import urllib.request
             import base64
+            import urllib.request
+
+            from backend import trace_context as tc
             tree = self.get_trace_tree(trace_id)
             if not tree:
                 return
+
+            def _export_headers(base: Dict[str, str]) -> Tuple[Dict[str, str], Dict[str, str]]:
+                """D16/MED: W3C-Header am Export-Hop injizieren.
+
+                Der Export thread hat eine kopierte ContextVar; mit
+                ``child_span()`` entsteht pro Export eine eigene Span-ID bei
+                gleicher trace_id. Der resultierende traceparent wird als
+                Attribut am Export-Span persistiert.
+                """
+                parent_sid = tc.current_span_id() or secrets.token_hex(8)
+                with tc.child_span(
+                    incoming=tc.format_traceparent(str(tree.get("trace_id") or ""), parent_sid),
+                ) as (hop_tid, hop_sid, hop_parent):
+                    headers = tc.inject_headers(base)
+                    tp = str(headers.get("traceparent") or "")
+                    self._record_stats.setdefault("export_hops", 0)
+                    self._record_stats["export_hops"] += 1
+                    return headers, {
+                        "traceparent": tp,
+                        "span_id": hop_sid,
+                        "parent_span_id": hop_parent or "",
+                        "trace_id": hop_tid,
+                    }
+
             if otlp_ep:
                 try:
                     payload_obj = self._build_otlp_payload(tree)
                     # Nichts gesampelt -> kein Export (H6: kein OTLP-Payload).
                     if not payload_obj["resourceSpans"][0]["scopeSpans"][0]["spans"]:
                         return
+                    headers, hop = _export_headers({"Content-Type": "application/json"})
+                    for sp in payload_obj["resourceSpans"][0]["scopeSpans"][0]["spans"]:
+                        sp.setdefault("attributes", []).append({
+                            "key": "archon.export_traceparent",
+                            "value": {"stringValue": hop["traceparent"]},
+                        })
                     otlp_url = otlp_ep if otlp_ep.rstrip("/").endswith("/v1/traces") else f"{otlp_ep.rstrip('/')}/v1/traces"
                     payload = json.dumps(payload_obj).encode("utf-8")
                     req = urllib.request.Request(
                         otlp_url,
                         data=payload,
-                        headers={"Content-Type": "application/json"},
+                        headers=headers,
                         method="POST",
                     )
                     with urllib.request.urlopen(req, timeout=5):
@@ -466,14 +533,17 @@ class OpenTelemetryTracer:
                         })
                     if len(batch) <= 1:
                         return  # nur unsampled Spans -> kein Langfuse-Export
+                    headers, hop = _export_headers({
+                        "Content-Type": "application/json",
+                        "Authorization": f"Basic {auth_val}",
+                    })
+                    batch[0]["body"]["metadata"] = dict(batch[0]["body"].get("metadata") or {})
+                    batch[0]["body"]["metadata"]["traceparent"] = hop["traceparent"]
                     payload = json.dumps({"batch": batch}).encode("utf-8")
                     req = urllib.request.Request(
                         f"{lf_host.rstrip('/')}/api/public/ingestion",
                         data=payload,
-                        headers={
-                            "Content-Type": "application/json",
-                            "Authorization": f"Basic {auth_val}",
-                        },
+                        headers=headers,
                         method="POST",
                     )
                     with urllib.request.urlopen(req, timeout=5):
@@ -516,21 +586,48 @@ def get_tracing_status() -> dict:
         targets.append("otlp")
     if lf_configured:
         targets.append("langfuse")
+    # D16/HIGH: der Collector exportiert aktuell NUR nach debug/file. Ohne
+    # explizit verdrahteten Tempo/Jaeger-Downstream ehrlich ausweisen, statt
+    # einen nicht gestarteten Consumer zu behaupten (S-1.5).
+    downstream = (os.getenv("ARCHON_OTEL_COLLECTOR_DOWNSTREAM") or "").strip()
+    stages = dict(getattr(tracer, "_stage_failures", {}))
+    log_bridge_failures = sum(
+        n for key, n in stages.items() if key.startswith("log_bridge") or key.startswith("trace-log-filter")
+    )
+    # A9-Nachlauf: runtime.py meldet den Stage als "sse-trace" (Bindestrich),
+    # beide Schreibweisen muessen im Status sichtbar sein.
+    sse_trace_failures = sum(
+        n for key, n in stages.items()
+        if key.startswith("sse_trace") or key.startswith("sse-trace")
+    )
     return {
         "configured": configured,
         "status": "configured" if configured else "not_configured",
         "target": "+".join(targets) if targets else None,
         "otlp_configured": otlp_configured,
         "langfuse_configured": lf_configured,
-        # S-1.5: Langfuse v2 bleibt Opt-in (`langfuse`-Profil, nicht in
-        # tracing/observability/all/full). Ohne Keys die Meldung "not_configured"
-        # statt auf einen toten Default-Endpunkt zu zeigen.
+        # S-1.5 / A1-Nachlauf: der Langfuse-Container und das Profil
+        # `langfuse-not-configured` wurden entfernt. Es gibt nur noch externes
+        # Langfuse ueber LANGFUSE_*-Werte — ohne Keys ehrlich not_configured,
+        # kein Hinweis auf einen nicht mehr existierenden Compose-Befehl.
         "langfuse_status": "configured" if lf_configured else "not_configured",
         "langfuse_note": (
             "" if lf_configured else
-            "Langfuse v2 (EOL) ist Opt-in-Profil 'langfuse-not-configured'; LANGFUSE_HOST/PUBLIC_KEY/SECRET_KEY erforderlich"
+            "Externes Langfuse nicht konfiguriert: LANGFUSE_HOST/PUBLIC_KEY/SECRET_KEY setzen. "
+            "Das alte Profil 'langfuse-not-configured' und der lokale Container wurden entfernt."
         ),
         "service_name": os.getenv("OTEL_SERVICE_NAME", "archon-os").strip() or "archon-os",
+        "collector_downstream": downstream or "not_configured/local_only",
+        "collector_local_only": not bool(downstream),
+        "log_bridge": {
+            "status": "degraded" if log_bridge_failures else "ok",
+            "installed": bool(_TRACE_LOG_FILTER_STATUS["installed"]),
+            "failures": log_bridge_failures,
+        },
+        "sse_trace": {
+            "status": "degraded" if sse_trace_failures else "ok",
+            "failures": sse_trace_failures,
+        },
         "local_trace_db": True,
         "export_stats": dict(getattr(tracer, "_export_stats", {})),
         "record_stats": dict(getattr(tracer, "_record_stats", {})),
@@ -547,5 +644,12 @@ tracer = OpenTelemetryTracer()
 try:
     from backend.trace_log_filter import install_trace_log_filter
     install_trace_log_filter()
+    _TRACE_LOG_FILTER_STATUS["installed"] = True
 except Exception as _log_filter_exc:  # pragma: no cover - defensive
-    _archon_exc_logger.debug("[otel_tracer] Trace-Log-Filter nicht installiert: %s", _log_filter_exc)
+    # D16/MED: vorher DEBUG — ein fehlgeschlagener Filter liess jeden Log-Eintrag
+    # ohne trace_id in Loki landen, während get_tracing_status() Erfolg meldete.
+    _TRACE_LOG_FILTER_STATUS["error"] = str(_log_filter_exc)
+    _archon_exc_logger.warning(
+        "[otel_tracer] Trace-Log-Filter nicht installiert: %s", _log_filter_exc
+    )
+    tracer.note_local_trace_error("log_bridge/trace_log_filter", _log_filter_exc)

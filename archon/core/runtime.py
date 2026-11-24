@@ -11,6 +11,11 @@ from __future__ import annotations
 import asyncio
 import datetime
 import json
+
+# --------------------------------------------------------------------------
+# Pfade
+# --------------------------------------------------------------------------
+import logging
 import os
 import sys
 import tempfile
@@ -18,13 +23,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from backend.platform_paths import OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT
 from archon.core.config import config
-
-# --------------------------------------------------------------------------
-# Pfade
-# --------------------------------------------------------------------------
-import logging
+from backend.platform_paths import OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT
 
 logger = logging.getLogger("archon_os")
 
@@ -124,8 +124,11 @@ def _sse_trace_context() -> Dict[str, str]:
     """D16: Trace-Kontext in das SSE-Payload (Systemgrenze SSE → Browser/Telegram)."""
     try:
         from backend.trace_context import (
-            child_span, current_trace_id, current_tracestate,
-            format_traceparent, should_sample,
+            child_span,
+            current_trace_id,
+            current_tracestate,
+            format_traceparent,
+            should_sample,
         )
         if not current_trace_id():
             return {}
@@ -143,7 +146,14 @@ def _sse_trace_context() -> Dict[str, str]:
                 ctx["tracestate"] = ts
             return ctx
     except Exception as exc:
-        logger.debug("[Runtime] SSE-Trace-Kontext nicht verfügbar: %s", exc)
+        # A9-DELEGATED (D16/MED): kein stiller DEBUG-Swallower mehr. Der
+        # Fehlerzaehler ist in get_tracing_status() als sse_trace sichtbar.
+        logger.warning("[Runtime] SSE-Trace-Kontext nicht verfügbar: %s", exc)
+        try:
+            from backend.trace_context import note_local_trace_error
+            note_local_trace_error("sse-trace", exc)
+        except Exception as _count_exc:
+            logger.debug("[Runtime] SSE-Trace-Fehlerzaehler nicht erreichbar: %s", _count_exc)
         return {}
 
 
@@ -258,6 +268,16 @@ def atomic_write_json(filepath: str, data: Any, indent: int = 2) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, filepath)
+        # A3-DELEGATED (M16/M17): ohne dir-fsync kann der Rename nach
+        # Stromausfall im FS-Journal verloren gehen (Muster vault.py:94-104).
+        try:
+            dir_fd = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError as exc:
+            logger.debug("[Runtime] Dir-fsync fuer %s nicht moeglich: %s", filepath, exc)
     except BaseException:
         try:
             os.unlink(tmp)

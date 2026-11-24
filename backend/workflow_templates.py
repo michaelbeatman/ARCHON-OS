@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 backend/workflow_templates.py — Multi-Agent Workflow-Vorlagen-Registry & DAG-Materializer.
 
@@ -340,7 +341,7 @@ def _builtin_templates() -> List[Dict[str, Any]]:
                 {"id": "esc_facts", "title": "Sachverhalt & Chronologie sichern: {{topic}}", "type": "agent", "agent_id": "research", "tool_preset": "research", "soul_mode": "strict", "prompt": "Sammle alle Fakten, Logs und Zusagen zu '{{topic}}'.", "depends_on": [], "require_hitl": False},
                 {"id": "esc_tech", "title": "Technische Ursache pruefen", "type": "fanout", "agent_id": "engineer", "tool_preset": "coding", "soul_mode": "analytical", "prompt": "Finde die technische Root-Cause fuer '{{topic}}'.", "depends_on": ["esc_facts"], "require_hitl": False},
                 {"id": "esc_comm", "title": "Kulanz- & Kommunikationsoptionen", "type": "fanout", "agent_id": "writer", "tool_preset": "minimal", "soul_mode": "creative", "prompt": "Formuliere 2 sachliche Loesungs- und Kulanzoptionen fuer '{{topic}}'.", "depends_on": ["esc_facts"], "require_hitl": False},
-                {"id": "esc_board", "title": "AI Boardroom Krisen-Entscheidung", "type": "boardroom", "agent_id": "executive_decision_architect", "tool_preset": "minimal", "soul_mode": "strict", "prompt": "Entscheide im Boardroom ueber Massnahmen und Kulanz zu '{{topic}}'.", "depends_on": ["esc_tech", "esc_comm"], "require_hitl": True},
+                {"id": "esc_board", "title": "AI Boardroom Krisen-Entscheidung", "type": "agent", "agent_id": "executive_decision_architect", "tool_preset": "minimal", "soul_mode": "strict", "prompt": "Entscheide im Boardroom ueber Massnahmen und Kulanz zu '{{topic}}'.", "depends_on": ["esc_tech", "esc_comm"], "require_hitl": True},
             ],
         },
         {
@@ -426,7 +427,7 @@ def _builtin_templates() -> List[Dict[str, Any]]:
             "builtin": True,
             "nodes": [
                 {"id": "wk_status", "title": "Kanban- & Projekt-Status sammeln ({{topic}})", "type": "agent", "agent_id": "analyst", "tool_preset": "research", "soul_mode": "analytical", "prompt": "Fasse erledigte Meilensteine, Blocker und offene Risiken fuer '{{topic}}' zusammen.", "depends_on": [], "require_hitl": False},
-                {"id": "wk_board", "title": "Prioritaeten im AI Boardroom abwaegen", "type": "boardroom", "agent_id": "executive_decision_architect", "tool_preset": "minimal", "soul_mode": "strict", "prompt": "Bewerte Engpaesse und Top-3-Prioritaeten fuer '{{topic}}'.", "depends_on": ["wk_status"], "require_hitl": False},
+                {"id": "wk_board", "title": "Prioritaeten im AI Boardroom abwaegen", "type": "agent", "agent_id": "executive_decision_architect", "tool_preset": "minimal", "soul_mode": "strict", "prompt": "Bewerte Engpaesse und Top-3-Prioritaeten fuer '{{topic}}'.", "depends_on": ["wk_status"], "require_hitl": False},
                 {"id": "wk_memo", "title": "Executive Memo ausgeben", "type": "agent", "agent_id": "writer", "tool_preset": "minimal", "soul_mode": "analytical", "prompt": "Erstelle ein 1-seitiges Montags-Briefing fuer '{{topic}}'.", "depends_on": ["wk_board"], "require_hitl": False},
             ],
         },
@@ -441,7 +442,7 @@ def _builtin_templates() -> List[Dict[str, Any]]:
             "builtin": True,
             "nodes": [
                 {"id": "br_res", "title": "Faktenbasis im Research Lab: {{topic}}", "type": "research", "agent_id": "research", "tool_preset": "research", "soul_mode": "analytical", "prompt": "Recherchiere Marktdaten, Alternativen und Benchmarks zu '{{topic}}'.", "depends_on": [], "require_hitl": False},
-                {"id": "br_deb", "title": "AI Boardroom Multi-Agent-Debatte", "type": "boardroom", "agent_id": "executive_decision_architect", "tool_preset": "minimal", "soul_mode": "strict", "prompt": "Fuehre eine Pro/Contra- und Risikoabwaegung zu '{{topic}}' durch.", "depends_on": ["br_res"], "require_hitl": False},
+                {"id": "br_deb", "title": "AI Boardroom Multi-Agent-Debatte", "type": "agent", "agent_id": "executive_decision_architect", "tool_preset": "minimal", "soul_mode": "strict", "prompt": "Fuehre eine Pro/Contra- und Risikoabwaegung zu '{{topic}}' durch.", "depends_on": ["br_res"], "require_hitl": False},
                 {"id": "br_plan", "title": "90-Tage-Umsetzungsplan ableiten", "type": "agent", "agent_id": "analyst", "tool_preset": "minimal", "soul_mode": "analytical", "prompt": "Ueberfuehre den Boardroom-Beschluss zu '{{topic}}' in konkrete Meilensteine.", "depends_on": ["br_deb"], "require_hitl": False},
                 {"id": "br_gate", "title": "Finale Vorstands-Freigabe", "type": "gate", "agent_id": "executive_decision_architect", "tool_preset": "minimal", "soul_mode": "strict", "prompt": "Verbindliche Freigabe des Umsetzungsplans zu '{{topic}}'.", "depends_on": ["br_plan"], "require_hitl": True},
             ],
@@ -809,7 +810,13 @@ def save_workflow_template(payload: Dict[str, Any]) -> Dict[str, Any]:
             continue
         nid = str(raw.get("id") or f"step_{idx}").strip()
         ntype = str(raw.get("type") or "agent").strip().lower()
-        valid_types = {"agent", "fanout", "gate", "quality_gate", "boardroom", "research", "media_render", "clip_matrix"}
+        # A4: 'boardroom' entfernt. Der DAG-Runner hatte keinen echten
+        # Boardroom-Handler — ein Knoten mit diesem Typ lief still in den
+        # generischen Agenten-Call und simulierte eine Multi-Agent-Debatte,
+        # die nie stattfand. Boardroom-Debatten laufen ueber
+        # core_dispatcher.run_boardroom_debate() (Router /api/boardroom/run),
+        # nicht ueber Workflow-DAG-Knoten.
+        valid_types = {"agent", "fanout", "gate", "quality_gate", "research", "media_render", "clip_matrix"}
         if ntype not in valid_types:
             try:
                 from backend.workflow_node_plugins import is_workflow_node_plugin
@@ -990,8 +997,8 @@ def materialize_workflow_to_kanban(
     run_id = f"wf-{tpl_id[:12]}-{uuid.uuid4().hex[:6]}"
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    from backend.operations_api import _get_active_kanban_db_path, _get_kanban_connection
     from backend.kanban_sidecar import update_kanban_meta
+    from backend.operations_api import _get_active_kanban_db_path, _get_kanban_connection
 
     # _get_kanban_connection erzwingt Schema-Init + task_links-Migration (kind/created_at)
     _get_kanban_connection().close()

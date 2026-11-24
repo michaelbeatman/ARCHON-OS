@@ -1,8 +1,10 @@
 # Litestream Continuous SQLite Replication Configuration for Archon OS
 # Docs: https://litestream.io/reference/config/
 #
-# Die 28->3-Konsolidierung ist AKTIV (data/.db_consolidated.json). Die drei
-# konsolidierten DBs sind die primären Replikationsziele. Die Hermes-Runtime
+# Die 28->3-Konsolidierung ist AKTIV über das VERSIONIERTE Manifest
+# config/db_consolidated.json (alternativ ARCHON_DB_CONSOLIDATED=1). Das alte
+# data/.db_consolidated.json war gitignored und machte frische Clones inaktiv.
+# Die drei konsolidierten DBs sind die primären Replikationsziele. Die Hermes-Runtime
 # (/opt/data = ./.hermes) schreibt weiterhin kanban.db / state.db — diese
 # bleiben zusaetzlich gesichert.
 #

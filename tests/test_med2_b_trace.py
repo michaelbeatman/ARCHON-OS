@@ -12,7 +12,6 @@ import os
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # D16/M1 — use_trace_context darf eine aktive Sampling-Entscheidung nicht
 # neu wuerfeln (parentbased_traceidratio: -01 darf nicht auf -00 kippen).
@@ -164,11 +163,15 @@ def test_unknown_versions_never_accepted_in_production(monkeypatch, tmp_path):
         )
 
 
-def test_verify_rejects_placeholder_version_in_production(monkeypatch, tmp_path):
-    monkeypatch.delenv("ENVIRONMENT", raising=False)
+def test_verify_rejects_placeholder_version_via_audit_strict(monkeypatch, tmp_path):
+    # A2/D05: Die Platzhalter-Pruefung haengt an ARCHON_AUDIT_STRICT (Default 1),
+    # nicht an ENVIRONMENT. Der Schreiber lehnt "unknown" unter Default-Strict
+    # bereits ab; der Block wird daher bewusst mit Opt-out geschrieben. Danach
+    # wird der Default wiederhergestellt und verify muss ihn ablehnen — auch
+    # in ENVIRONMENT=development.
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("ARCHON_AUDIT_STRICT", "0")
     alog = _make_proof(tmp_path, prompt_version="v1", canary_version="0")
-    # Nach dem Wechsel in Produktion muss verify wegen des Platzhalters
-    # scheitern (nicht nur wegen des fehlenden externen Ankers).
     alog.record_llm_dispatch(
         agent_id="probe_agent",
         provider="local",
@@ -177,7 +180,7 @@ def test_verify_rejects_placeholder_version_in_production(monkeypatch, tmp_path)
         prompt_version="unknown",
         canary_version="0",
     )
-    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("ARCHON_AUDIT_STRICT", raising=False)
 
     result = alog.verify_integrity()
     assert result["valid"] is False
@@ -186,11 +189,16 @@ def test_verify_rejects_placeholder_version_in_production(monkeypatch, tmp_path)
 
 
 def test_verify_reports_unverified_versions_outside_production(monkeypatch, tmp_path):
-    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    # A2/D05: Ein Platzhalter ist kein GoBD-Nachweis — unabhaengig von
+    # ENVIRONMENT. Frueher galt hier valid=True (Dev-Rueckwaerts-Kompatibilitaet);
+    # der Default ARCHON_AUDIT_STRICT=1 macht das jetzt fail-closed.
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("ARCHON_AUDIT_STRICT", "0")
     monkeypatch.setenv("ARCHON_AUDIT_LEGACY_MAX_BLOCK", "0")
     alog = _make_proof(tmp_path, prompt_version="unknown", canary_version="0")
+    monkeypatch.delenv("ARCHON_AUDIT_STRICT", raising=False)
 
     result = alog.verify_integrity()
-    assert result["valid"] is True  # Rueckwaerts-Kompatibilitaet (Dev/Test)
-    assert result["llm_dispatch_records"] == 1
-    assert result["unverified_version_blocks"] == [1]
+    assert result["valid"] is False
+    assert "Platzhalter" in result["reason"]
+    assert "unknown" in result["reason"]

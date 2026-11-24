@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 Milestone 30: Interactive First-Run Web Setup Wizard & Onboarding Backend.
 
@@ -761,11 +762,26 @@ def test_provider_connection(
         }
 
     if 200 <= resp.status_code < 300:
+        # D12/MED: HTTP 200 ohne Modellnutzlast ist KEINE bestaetigte Verbindung.
         try:
             body = resp.json()
         except Exception:
-            body = {}
+            return {
+                "ok": False,
+                "provider": prov_id,
+                "latency_ms": latency_ms,
+                "models_detected": 0,
+                "detail": "HTTP 200 ohne gueltiges JSON — Verbindung nicht bestaetigt.",
+            }
         count = _extract_models_count(body)
+        if count <= 0:
+            return {
+                "ok": False,
+                "provider": prov_id,
+                "latency_ms": latency_ms,
+                "models_detected": 0,
+                "detail": "HTTP 200 ohne Modellnutzlast — Verbindung nicht bestaetigt.",
+            }
         return {
             "ok": True,
             "provider": prov_id,

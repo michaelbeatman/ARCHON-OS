@@ -9,7 +9,13 @@
  * `/api/v1/events/stream` wird über den Archon-Proxy erreicht.
  */
 import { useEffect, useRef, useState } from 'react';
-import { createTraceparent, getArchonTracestate } from './archon-api';
+import {
+  createTraceparent,
+  forkActiveTraceparent,
+  getArchonTracestate,
+  setArchonTraceparent,
+  setArchonTracestate,
+} from './archon-api';
 
 export type ArchonEvent = {
   type: string;
@@ -33,7 +39,11 @@ const EVENTS_URL = '/api/archon/api/v1/events/stream';
  */
 function tracedEventsUrl(): string {
   const url = new URL(EVENTS_URL, window.location.origin);
-  url.searchParams.set('traceparent', createTraceparent());
+  // SSE-Reconnects forken den letzten empfangenen Kontext statt einen
+  // zweiten Root zu erzeugen (S-16.5: ein Root pro Systemeintritt).
+  const forked = forkActiveTraceparent();
+  if (forked) url.searchParams.set('traceparent', forked);
+  else url.searchParams.set('traceparent', createTraceparent());
   const tracestate = getArchonTracestate();
   if (tracestate) url.searchParams.set('tracestate', tracestate);
   return `${url.pathname}${url.search}`;
@@ -51,6 +61,22 @@ function connect(gen: number) {
       try {
         const parsed = JSON.parse(msg.data) as ArchonEvent;
         if (!parsed?.type) return;
+        // D16/HIGH: SSE-Frames tragen traceparent/tracestate (archon/core/runtime.py).
+        // Der Browser uebernimmt ihn als aktiven Kontext; alle Folge-Requests
+        // forken daraus statt einen neuen Root zu starten.
+        const data = parsed.data || {};
+        const frameTp =
+          (typeof data.traceparent === 'string' ? data.traceparent : null) ||
+          (typeof (parsed as Record<string, unknown>).traceparent === 'string'
+            ? (parsed as Record<string, unknown>).traceparent as string
+            : null);
+        if (frameTp) setArchonTraceparent(frameTp);
+        const frameTs =
+          (typeof data.tracestate === 'string' ? data.tracestate : null) ||
+          (typeof (parsed as Record<string, unknown>).tracestate === 'string'
+            ? (parsed as Record<string, unknown>).tracestate as string
+            : null);
+        if (frameTs) setArchonTracestate(frameTs);
         for (const fn of listeners) {
           try { fn(parsed); } catch { /* listener failure must not kill the bus */ }
         }

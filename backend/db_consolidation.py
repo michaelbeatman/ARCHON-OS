@@ -15,7 +15,9 @@ Eigenschaften:
 - Konsistentes Online-Backup (sqlite3.backup) vor jeder Migration
 - Idempotente Tabellen- & Daten-Migration (INSERT OR IGNORE, wiederholbar)
 - Automatische Kollisionsvermeidung bei gleichnamigen Tabellen unterschiedlicher Herkunft
-- Abwaertskompatible Aktivierung ueber Manifest `data/.db_consolidated.json`
+- Aktivierung ueber VERSIONIERTES Manifest `config/db_consolidated.json`
+  (oder ENV `ARCHON_DB_CONSOLIDATED=1`), niemals mehr ueber das gitignored
+  `data/.db_consolidated.json` (D03/HIGH: frischer Clone war inaktiv).
 """
 
 from __future__ import annotations
@@ -29,14 +31,17 @@ import shutil
 import sqlite3
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from backend.db_paths import DB_BUSY_TIMEOUT_MS  # F-013: SSOT busy_timeout
+from backend.db_paths import APP_DATA_DIR, DB_BUSY_TIMEOUT_MS  # F-013: SSOT busy_timeout
 
 logger = logging.getLogger("archon.db_consolidation")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
 CONSOLIDATED_DOMAINS = ("ops.db", "business.db", "memory.db")
-MANIFEST_FILENAME = ".db_consolidated.json"
+MANIFEST_FILENAME = "db_consolidated.json"
+# Versioniertes Artefakt ausserhalb des gitignored data/-Verzeichnisses.
+VERSIONED_MANIFEST_PATH = os.path.join(WORKSPACE_DIR, "config", MANIFEST_FILENAME)
+LEGACY_MANIFEST_FILENAME = ".db_consolidated.json"
 
 # Verbindliche Zuordnung aller Legacy-SQLite-Dateien auf die 3 Zieldomaenen
 CONSOLIDATION_DOMAIN_MAP: Dict[str, str] = {
@@ -132,27 +137,50 @@ def get_schema_versions(target_dir: Optional[str] = None) -> Dict[str, int]:
 
 
 def get_manifest_path(target_dir: Optional[str] = None) -> str:
-    base = os.path.abspath(target_dir or DEFAULT_DATA_DIR)
-    return os.path.join(base, MANIFEST_FILENAME)
+    """D03/HIGH: versioniertes Manifest unter config/, nicht im gitignored data/.
+
+    Explizite target_dirs (Tests/Container-Isolation) behalten ihr lokales
+    Manifest; der Produktionsdefault zeigt auf ``config/db_consolidated.json``.
+    """
+    if target_dir is None or os.path.abspath(target_dir) == os.path.abspath(DEFAULT_DATA_DIR):
+        return VERSIONED_MANIFEST_PATH
+    return os.path.join(os.path.abspath(target_dir), MANIFEST_FILENAME)
+
+
+def _manifest_active(path: str) -> Optional[bool]:
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return bool(isinstance(data, dict) and data.get("active"))
+    except (OSError, ValueError) as exc:
+        logger.warning(f"[DBConsolidation] Manifest nicht lesbar ({path}): {exc}")
+        return None
 
 
 def is_consolidation_active(target_dir: Optional[str] = None) -> bool:
-    """True, wenn die konsolidierte 3-DB-Architektur per Env oder Manifest aktiviert ist."""
+    """True, wenn die 3-DB-Architektur per Env oder VERSIONIERTEM Manifest aktiv ist."""
     env_flag = os.environ.get("ARCHON_DB_CONSOLIDATED", "").strip().lower()
     if env_flag in ("1", "true", "yes"):
         return True
     if env_flag in ("0", "false", "no"):
         return False
-    manifest = get_manifest_path(target_dir)
-    if not os.path.isfile(manifest):
-        return False
-    try:
-        with open(manifest, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-        return bool(isinstance(data, dict) and data.get("active"))
-    except (OSError, ValueError) as exc:
-        logger.warning(f"[DBConsolidation] Manifest nicht lesbar ({manifest}): {exc}")
-        return False
+    active = _manifest_active(get_manifest_path(target_dir))
+    if active is not None:
+        return active
+    # Rueckwaertskompatibilitaet: das alte, gitignored Manifest darf gelesen
+    # werden, ist aber NIE mehr Schreibziel (sonst erneut nicht reproduzierbar).
+    if target_dir is None or os.path.abspath(target_dir) == os.path.abspath(DEFAULT_DATA_DIR):
+        legacy = os.path.join(DEFAULT_DATA_DIR, LEGACY_MANIFEST_FILENAME)
+        legacy_active = _manifest_active(legacy)
+        if legacy_active:
+            logger.warning(
+                "[DBConsolidation] Altes Manifest %s ist aktiv — bitte nach config/ migrieren.",
+                legacy,
+            )
+            return True
+    return False
 
 
 def _sanitize_ident(name: str) -> str:
@@ -229,6 +257,10 @@ def discover_legacy_databases(
 ) -> List[str]:
     """Findet alle aktiven .db-Dateien (ohne Backups/Snapshots/Browser-NSS-DBs/fremde Hermes-state.db)."""
     dirs = list(source_dirs) if source_dirs is not None else [
+        # D03/HIGH: ARCHON_DATA_DIR ist bei Test-/Container-Isolation die
+        # kanonische Quelle — vorher wurden 0 Quellen gefunden und "success"
+        # gemeldet. APP_DATA_DIR zuerst, DEFAULT_DATA_DIR als Legacy-Ziel.
+        APP_DATA_DIR,
         DEFAULT_DATA_DIR,
         os.path.join(WORKSPACE_DIR, "memory"),
         *(["/opt/data"] if os.path.isdir("/opt/data") else []),
@@ -344,6 +376,7 @@ def _missing_source_rows(
     src_table: str,
     dst_table: str,
     columns: List[str],
+    alias: str = "legacy_src",
 ) -> int:
     """Anzahl Quellzeilen, die im Ziel wirklich fehlen.
 
@@ -361,7 +394,7 @@ def _missing_source_rows(
     # bei divergierender PK-Kollision -> > 0 -> harter Abbruch (DATENVERLUST).
     cond = " AND ".join(f'd."{c}" IS s."{c}"' for c in columns)
     sql = (
-        f'SELECT COUNT(*) FROM legacy_src."{src_table}" s '
+        f'SELECT COUNT(*) FROM "{alias}"."{src_table}" s '
         f'WHERE NOT EXISTS (SELECT 1 FROM main."{dst_table}" d WHERE {cond})'
     )
     try:
@@ -518,11 +551,18 @@ def run_consolidation(
         warnings: List[str] = []
 
         conn = sqlite3.connect(dom_path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
+        integrity = "not_run"
         try:
-            if os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes"):
+            wal_enabled = os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes")
+            if wal_enabled:
                 conn.execute("PRAGMA journal_mode=WAL;")
+            # synchronous ist verbindungsbezogen (D03/MED) — IMMER setzen.
+            if wal_enabled:
                 conn.execute("PRAGMA synchronous=NORMAL;")
             conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+            # D03/HIGH: deklarierte FK (ON DELETE CASCADE) muessen auch beim
+            # Migrieren wirksam sein, sonst entstehen verwaiste Zeilen.
+            conn.execute("PRAGMA foreign_keys=ON;")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS _archon_consolidation_meta (
@@ -536,121 +576,154 @@ def run_consolidation(
                 """
             )
 
-            # Indizes und Schemas pro Quell-DB uebertragen
+            # Indizes und Schemas pro Quell-DB uebertragen.
             grouped_by_src: Dict[str, List[Dict[str, Any]]] = {}
             for m in dom_plan["table_mappings"]:
                 grouped_by_src.setdefault(m["source_path"], []).append(m)
 
-            for src_path, mappings in grouped_by_src.items():
-                src_info = next((s for s in plan["sources"] if s["path"] == src_path), None)
-                if not src_info:
-                    continue
-                conn.execute("ATTACH DATABASE ? AS legacy_src", (src_path,))
-                try:
-                    with conn:
-                        for m in mappings:
-                            src_tbl = m["source_table"]
-                            dst_tbl = m["target_table"]
-                            # Plan-Zahl kann -1 sein (fast_count bei DBs > 25 MB).
-                            # Nach dem ATTACH wird sie durch eine exakte Zählung
-                            # ersetzt — nie als gültige Zahl verwenden (Audit
-                            # 23.11.2026: stiller Datenverlust).
-                            src_count = int(m["row_count"])
-                            tmeta = src_info["tables"].get(src_tbl) or {}
-                            raw_create = str(tmeta.get("create_sql") or "").strip()
-                            # Interne FTS5-Schattentabellen (*_data, *_idx, *_docsize, *_config, *_content)
-                            # werden automatisch durch die CREATE VIRTUAL TABLE erzeugt -> nicht manuell anlegen
-                            if any(
-                                src_tbl.endswith(suf)
-                                and src_tbl[:-len(suf)] in src_info["tables"]
-                                and "VIRTUAL TABLE" in str(src_info["tables"][src_tbl[:-len(suf)]].get("create_sql") or "").upper()
-                                for suf in ("_data", "_idx", "_docsize", "_config", "_content")
-                            ):
-                                continue
-                            create_sql = _rewrite_create_table_sql(raw_create, src_tbl, dst_tbl)
-                            if not create_sql:
-                                continue
-                            try:
-                                conn.execute(create_sql)
-                            except sqlite3.Error as tbl_err:
-                                warnings.append(f"Tabelle {src_tbl}->{dst_tbl} uebersprungen: {tbl_err}")
-                                continue
+            # D03/HIGH: EINE Transaktion pro Domaene ueber ALLE Quellen.
+            # ATTACH ist innerhalb einer Transaktion in SQLite verboten —
+            # deshalb werden alle Quellen VOR BEGIN IMMEDIATE angehaengt.
+            aliases: Dict[str, str] = {}
+            for idx, src_path in enumerate(grouped_by_src):
+                alias = f"legacy_src_{idx}"
+                aliases[src_path] = alias
+                conn.execute(f"ATTACH DATABASE ? AS {alias}", (src_path,))
 
-                            # Gemeinsame Spalten ermitteln (sicher bei Schema-Evolution)
-                            dst_cols = [c[1] for c in conn.execute(f'PRAGMA main.table_info("{dst_tbl}")').fetchall()]
-                            src_cols = [c[1] for c in conn.execute(f'PRAGMA legacy_src.table_info("{src_tbl}")').fetchall()]
-                            common_cols = [c for c in src_cols if c in dst_cols]
-                            if common_cols:
-                                cols_quoted = ", ".join(f'"{c}"' for c in common_cols)
-                                try:
-                                    cur = conn.execute(
-                                        f'INSERT OR IGNORE INTO main."{dst_tbl}" ({cols_quoted}) '
-                                        f'SELECT {cols_quoted} FROM legacy_src."{src_tbl}"'
-                                    )
-                                    # INSERT OR IGNORE verwirft Zeilen still bei PK/UNIQUE/
-                                    # NOT NULL-Konflikten. rowcount=0 ist beim idempotenten
-                                    # Zweitlauf jedoch ERWARTET (Zeilen sind schon da) —
-                                    # deshalb gegen die tatsaechlich fehlenden Quellzeilen
-                                    # pruefen, nicht gegen rowcount allein.
-                                    inserted = int(cur.rowcount or 0)
-                                    exact = conn.execute(
-                                        f'SELECT COUNT(*) FROM legacy_src."{src_tbl}"'
-                                    ).fetchone()[0]
-                                    src_count = int(exact)
-                                    if inserted < src_count:
-                                        missing = _missing_source_rows(conn, src_tbl, dst_tbl, common_cols)
-                                        if missing > 0:
-                                            warnings.append(
-                                                f"DATENVERLUST {src_tbl}->{dst_tbl}: "
-                                                f"{missing}/{src_count} Zeilen fehlen im Ziel "
-                                                "(PK/UNIQUE/NOT NULL-Konflikt)"
-                                            )
-                                except sqlite3.Error as ins_err:
-                                    warnings.append(f"Datenkopie {src_tbl}->{dst_tbl} uebersprungen: {ins_err}")
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                for src_path, mappings in grouped_by_src.items():
+                    alias = aliases[src_path]
+                    src_info = next((s for s in plan["sources"] if s["path"] == src_path), None)
+                    if not src_info:
+                        continue
+                    for m in mappings:
+                        src_tbl = m["source_table"]
+                        dst_tbl = m["target_table"]
+                        # Plan-Zahl kann -1 sein (fast_count bei DBs > 25 MB).
+                        # Nach dem ATTACH wird sie durch eine exakte Zaehlung
+                        # ersetzt — nie als gueltige Zahl verwenden.
+                        src_count = int(m["row_count"])
+                        tmeta = src_info["tables"].get(src_tbl) or {}
+                        raw_create = str(tmeta.get("create_sql") or "").strip()
+                        # Interne FTS5-Schattentabellen werden automatisch
+                        # durch die CREATE VIRTUAL TABLE erzeugt.
+                        if any(
+                            src_tbl.endswith(suf)
+                            and src_tbl[:-len(suf)] in src_info["tables"]
+                            and "VIRTUAL TABLE" in str(src_info["tables"][src_tbl[:-len(suf)]].get("create_sql") or "").upper()
+                            for suf in ("_data", "_idx", "_docsize", "_config", "_content")
+                        ):
+                            continue
+                        create_sql = _rewrite_create_table_sql(raw_create, src_tbl, dst_tbl)
+                        if not create_sql:
+                            continue
+                        try:
+                            conn.execute(create_sql)
+                        except sqlite3.Error as tbl_err:
+                            # D03/HIGH: kein "uebersprungen" mehr — jede
+                            # Ausnahme ist DATENVERLUST und bricht ab.
+                            raise RuntimeError(
+                                f"DATENVERLUST {src_tbl}->{dst_tbl}: CREATE fehlgeschlagen: {tbl_err}"
+                            ) from tbl_err
 
-                            # Indizes der Original-Tabelle mitnehmen (nur wenn nicht umbenannt)
-                            if src_tbl == dst_tbl:
-                                idx_rows = conn.execute(
-                                    "SELECT sql FROM legacy_src.sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
-                                    (src_tbl,),
-                                ).fetchall()
-                                for (idx_sql,) in idx_rows:
-                                    safe_idx = re.sub(
-                                        r"^CREATE\s+(UNIQUE\s+)?INDEX\s+(?!IF\s+NOT\s+EXISTS\b)",
-                                        r"CREATE \1INDEX IF NOT EXISTS ",
-                                        idx_sql.strip(),
-                                        count=1,
-                                        flags=re.IGNORECASE,
-                                    )
-                                    try:
-                                        conn.execute(safe_idx)
-                                    except sqlite3.Error as idx_err:
-                                        warnings.append(f"Index fuer {dst_tbl} uebersprungen: {idx_err}")
-
-                            cnt_after = conn.execute(f'SELECT COUNT(*) FROM main."{dst_tbl}"').fetchone()[0]
-                            migrated_tables += 1
-                            migrated_rows += src_count
-                            conn.execute(
-                                """
-                                INSERT OR REPLACE INTO _archon_consolidation_meta
-                                    (source_file, source_table, target_table, source_rows, migrated_at)
-                                VALUES (?, ?, ?, ?, ?)
-                                """,
-                                (m["source_file"], src_tbl, dst_tbl, src_count, datetime.datetime.now(datetime.timezone.utc).isoformat()),
+                        # Gemeinsame Spalten ermitteln (sicher bei Schema-Evolution)
+                        dst_cols = [c[1] for c in conn.execute(f'PRAGMA main.table_info("{dst_tbl}")').fetchall()]
+                        src_cols = [c[1] for c in conn.execute(f'PRAGMA {alias}.table_info("{src_tbl}")').fetchall()]
+                        common_cols = [c for c in src_cols if c in dst_cols]
+                        # D03/HIGH: nur in der Quelle vorhandene Spalten wurden
+                        # frueher still verworfen — explizit diagnostizieren.
+                        source_only = [c for c in src_cols if c not in dst_cols]
+                        if source_only:
+                            warnings.append(
+                                f"DATENVERLUST {src_tbl}->{dst_tbl}: Quellspalten ohne Ziel: "
+                                + ", ".join(source_only)
                             )
-                            # cnt_after ist der kumulative Zielstand mehrerer Quellen —
-                            # ein Vergleich mit m['row_count'] war irreführend und hat
-                            # verworfene Zeilen verdeckt. Die belastbare Prüfung steht
-                            # direkt am INSERT (rowcount gegen Quellzeilen).
-                            _ = cnt_after
-                finally:
-                    conn.execute("DETACH DATABASE legacy_src")
+                        if common_cols:
+                            cols_quoted = ", ".join(f'"{c}"' for c in common_cols)
+                            try:
+                                cur = conn.execute(
+                                    f'INSERT OR IGNORE INTO main."{dst_tbl}" ({cols_quoted}) '
+                                    f'SELECT {cols_quoted} FROM "{alias}"."{src_tbl}"'
+                                )
+                                inserted = int(cur.rowcount or 0)
+                                exact = conn.execute(
+                                    f'SELECT COUNT(*) FROM "{alias}"."{src_tbl}"'
+                                ).fetchone()[0]
+                                src_count = int(exact)
+                                if inserted < src_count:
+                                    missing = _missing_source_rows(
+                                        conn, src_tbl, dst_tbl, common_cols, alias=alias
+                                    )
+                                    if missing > 0:
+                                        warnings.append(
+                                            f"DATENVERLUST {src_tbl}->{dst_tbl}: "
+                                            f"{missing}/{src_count} Zeilen fehlen im Ziel "
+                                            "(PK/UNIQUE/NOT NULL-Konflikt)"
+                                        )
+                            except sqlite3.Error as ins_err:
+                                raise RuntimeError(
+                                    f"DATENVERLUST {src_tbl}->{dst_tbl}: Datenkopie fehlgeschlagen: {ins_err}"
+                                ) from ins_err
 
-            integrity = conn.execute("PRAGMA integrity_check;").fetchone()[0]
-            # P2: Schema-Versionierung. Ohne user_version gibt es keine
-            # moeglichkeit, spaetere Migrationen versionsgesteuert anzuwenden.
-            if integrity == "ok":
-                conn.execute("PRAGMA user_version = 1;")
+                        # Indizes der Original-Tabelle mitnehmen (nur wenn nicht umbenannt)
+                        if src_tbl == dst_tbl:
+                            idx_rows = conn.execute(
+                                f"SELECT sql FROM {alias}.sqlite_master "
+                                "WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+                                (src_tbl,),
+                            ).fetchall()
+                            for (idx_sql,) in idx_rows:
+                                safe_idx = re.sub(
+                                    r"^CREATE\s+(UNIQUE\s+)?INDEX\s+(?!IF\s+NOT\s+EXISTS\b)",
+                                    r"CREATE \1INDEX IF NOT EXISTS ",
+                                    idx_sql.strip(),
+                                    count=1,
+                                    flags=re.IGNORECASE,
+                                )
+                                try:
+                                    conn.execute(safe_idx)
+                                except sqlite3.Error as idx_err:
+                                    warnings.append(
+                                        f"DATENVERLUST Index {dst_tbl} nicht migriert: {idx_err}"
+                                    )
+
+                        migrated_tables += 1
+                        migrated_rows += src_count
+                        conn.execute(
+                            """
+                            INSERT OR REPLACE INTO _archon_consolidation_meta
+                                (source_file, source_table, target_table, source_rows, migrated_at)
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (m["source_file"], src_tbl, dst_tbl, src_count, datetime.datetime.now(datetime.timezone.utc).isoformat()),
+                        )
+
+                # D03/HIGH: relationale Konsistenz der Zieldomäne fail-closed pruefen.
+                fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+                if fk_violations:
+                    warnings.append(
+                        f"DATENVERLUST {dom}: {len(fk_violations)} FK-Verletzung(en) nach Migration"
+                    )
+                integrity = str(conn.execute("PRAGMA integrity_check;").fetchone()[0])
+                if integrity.lower() != "ok":
+                    warnings.append(f"DATENVERLUST {dom}: integrity_check={integrity}")
+                if not warnings:
+                    # P2: Schema-Versionierung nur bei sauberer Migration.
+                    conn.execute("PRAGMA user_version = 1;")
+                conn.commit()
+            except BaseException as exc:
+                try:
+                    conn.rollback()
+                except sqlite3.Error:
+                    pass
+                warnings.append(f"DATENVERLUST {dom}: Migration abgebrochen: {exc}")
+            finally:
+                for alias in aliases.values():
+                    try:
+                        conn.execute(f"DETACH DATABASE {alias}")
+                    except sqlite3.Error:
+                        pass
         finally:
             conn.close()
 
@@ -666,12 +739,23 @@ def run_consolidation(
     # DATENVERLUST ist kein Hinweis, sondern ein Abbruchgrund: INSERT OR IGNORE
     # hat Zeilen still verworfen. Kein Manifest, keine Aktivierung, kein
     # "success" — sonst waere die Konsolidierung ein Datenverlust-Versprechen.
+    # D03/HIGH: JEDER Warning ist DATENVERLUST (CREATE-/INSERT-/Indexfehler,
+    # Quellspalten ohne Ziel, FK-/Integritätsverletzung). Kein Filtern nach
+    # Schluesselwort mehr — ein "uebersprungen" durfte frueher durchgewinkt
+    # werden. Manifest wird NUR bei leerer warnings + integrity ok geschrieben.
     data_loss = [
         f"{dom}: {w}"
         for dom, report in migration_report.items()
         for w in report.get("warnings", [])
-        if "DATENVERLUST" in str(w)
     ]
+    integrity_failures = [
+        f"{dom}: integrity_check={report.get('integrity_check')}"
+        for dom, report in migration_report.items()
+        if str(report.get("integrity_check", "")).lower() != "ok"
+    ]
+    # Integritaetsfehler sind ebenfalls DATENVERLUST und laufen ueber denselben
+    # Abbruchpfad (eine Branch, ein Rollback).
+    data_loss.extend(integrity_failures)
     if data_loss:
         # D03/MED: zuerst alle Ziel-DBs aus den Snapshots zuruecks-spielen,
         # DANN abbrechen. Es bleibt kein committeter Teilstand zurueck.

@@ -5,14 +5,16 @@ Processes receipt photos from Telegram or Web UI, extracts accounting metadata v
 and creates finance tasks in kanban.db and agentic_memory.db.
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("receipt_ocr_engine")
 
+import base64
+import json
 import os
+import sqlite3
 import sys
 import time
-import json
-import base64
-import sqlite3
+
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -24,9 +26,9 @@ class _ArchonClosingConn(sqlite3.Connection):
         finally:
             self.close()
 import datetime
-import urllib.request
 import urllib.parse
-from typing import Dict, Any, Optional, List
+import urllib.request
+from typing import Any, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.getenv("DATA_DIR", "/opt/data" if os.path.exists("/opt/data") else os.path.join(os.path.expanduser("~"), ".hermes"))
@@ -245,17 +247,57 @@ class ReceiptOCREngine:
                 "tax_amount": None,
                 "tax_rate_pct": None,
                 "image_path": img_path,
+                "kanban_task_id": None,
                 "note": f"{exc} — kein Betrag/Datum erfunden, HITL-Pruefung erforderlich.",
             }
 
-        merchant = meta.get("merchant") or "Unbekannter Händler"
-        receipt_date = meta.get("date") or datetime.date.today().isoformat()
-        amount_gross = float(meta.get("amount_gross") or 0.0)
-        currency = meta.get("currency") or "EUR"
-        tax_amount = float(meta.get("tax_amount") or 0.0)
-        tax_rate_pct = float(meta.get("tax_rate_pct") or 19.0)
-        category = meta.get("category") or "Sonstiges"
-        payment_method = meta.get("payment_method") or "Unbekannt"
+        if not isinstance(meta, dict):
+            meta = {}
+
+        # D12/HIGH: Pflichtfelder einer Vision-Extraktion muessen VOLLSTAENDIG
+        # und echt sein. Fehlende Werte werden NICHT durch 0.0/19.0/heute/EUR
+        # ersetzt — das waeren erfundene Finanzfakten in SQLite und Kanban.
+        required_text = ("merchant", "date", "currency")
+        required_numeric = ("amount_gross", "tax_amount", "tax_rate_pct")
+        missing: list[str] = [k for k in required_text if not str(meta.get(k) or "").strip()]
+        for key in required_numeric:
+            raw = meta.get(key)
+            if raw is None or isinstance(raw, bool) or str(raw).strip() == "":
+                missing.append(key)
+                continue
+            try:
+                meta[key] = float(raw)
+            except (TypeError, ValueError):
+                missing.append(key)
+        gross = meta.get("amount_gross")
+        if isinstance(gross, (int, float)) and float(gross) <= 0.0 and "amount_gross" not in missing:
+            missing.append("amount_gross")
+
+        if missing:
+            return {
+                "receipt_id": receipt_id,
+                "status": "needs_manual_review",
+                "error_code": "INCOMPLETE_VISION_EXTRACTION",
+                "missing_fields": sorted(set(missing)),
+                "merchant": None,
+                "date": None,
+                "amount_gross": None,
+                "currency": None,
+                "tax_amount": None,
+                "tax_rate_pct": None,
+                "image_path": img_path,
+                "kanban_task_id": None,
+                "note": "Unvollstaendige Vision-Extraktion — keine Finanzfakten erfunden, HITL-Pruefung erforderlich.",
+            }
+
+        merchant = str(meta["merchant"]).strip()
+        receipt_date = str(meta["date"]).strip()
+        amount_gross = float(meta["amount_gross"])
+        currency = str(meta["currency"]).strip()
+        tax_amount = float(meta["tax_amount"])
+        tax_rate_pct = float(meta["tax_rate_pct"])
+        category = str(meta.get("category") or "Sonstiges").strip()
+        payment_method = str(meta.get("payment_method") or "Unbekannt").strip()
 
         # 3. In SQLite registrieren
         if os.path.exists(self.memory_db):

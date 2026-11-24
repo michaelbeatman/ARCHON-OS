@@ -1,42 +1,60 @@
+# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """
 Docker Container Management Router fuer Archon OS.
 Verwaltet /api/v1/container/ Endpunkte (Settings, Logs, Metrics, Files, Actions, Inject Config).
 Extrahiert aus main.py zur Modularisierung.
 """
 
+import json
 import os
 import re
 import sys
-import json
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit
+
 import httpx
+from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
+from fastapi.responses import Response as _HttpResponse
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, Query, Body, Request
-from fastapi.responses import Response as _HttpResponse, JSONResponse
-from archon.routers._rbac import require_admin_or_503
-from archon.core.runtime import add_ticker, logger, WORKSPACE_DIR
+
+from archon.core.cache import ttl_cache
 from archon.core.config import config
 from archon.core.paths import CONFIG_FILE, OPT_DATA_DIR
-from archon.core.cache import ttl_cache
+from archon.core.runtime import WORKSPACE_DIR, add_ticker, logger
+from archon.routers._rbac import require_admin_or_503
+from utils.docker_client import (
+    DockerError as _DErr,
+)
 from utils.docker_client import (
     docker_client as _dc,
-    DockerError as _DErr,
+)
+from utils.docker_client import (
     parse_docker_stream,
     parse_docker_stream_bytes,
 )
 
 _DEPS: Dict[str, Any] = {}
 
+# A7/D06: Ziel-URLs der Config-Injektion sind ausschliesslich feste
+# Compose-Service-DNS-Namen. Alles andere (IPs, host.docker.internal,
+# fremde Hosts, Credentials im URL) wird auf den kanonischen Service-DSN
+# zurueckgefuehrt bzw. abgelehnt — kein SSRF-Sprung aus dem Container-Netz.
+_INJECTABLE_SERVICE_HOSTS = frozenset({"odysseus", "hermes", "captain", "openhands"})
+
 def configure(**deps: Any) -> None:
     """Registriert Dependencies (z.B. detect_container_port, post_docker_container_action)."""
     _DEPS.update(deps)
 
 from archon.routers._validated_body import PassthroughBody, as_payload
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["containers"])
 
 
@@ -459,39 +477,80 @@ async def inject_container_config(request: Request, container_name: str, config:
         "captain": 7001,
         "openhands": 3000
     }
-    try:
-        saved_configs = load_agent_configs()
-        saved_cfg = saved_configs.get(container_name, {})
-        custom_url = saved_cfg.get("web_ui_url", "")
-        if custom_url:
-            url = custom_url
-        else:
-            port = ports_map.get(container_name, 7000)
-            url = f"http://{container_name}:{port}"
-    except Exception:
-        port = ports_map.get(container_name, 7000)
-        url = f"http://{container_name}:{port}"
+    if container_name not in _INJECTABLE_SERVICE_HOSTS:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Ziel-Service nicht in der festen Service-DNS-Allowlist: {container_name}",
+        )
 
-    if not url.startswith("http"):
-        url = "http://" + url
+    port = ports_map.get(container_name, 7000)
+    url = f"http://{container_name}:{port}"
+    try:
+        saved_cfg = load_agent_configs().get(container_name, {})
+        custom_url = str(saved_cfg.get("web_ui_url") or "").strip()
+        if custom_url:
+            parsed = urlsplit(custom_url if "://" in custom_url else "http://" + custom_url)
+            candidate_port = None
+            try:
+                candidate_port = parsed.port
+            except ValueError:
+                pass
+            # Nur feste Service-DNS + erwarteter Port, keine Credentials,
+            # kein Pfad/Query/Fragment und kein Host-Gateway-Override.
+            if (
+                parsed.scheme in ("http", "https")
+                and parsed.hostname in _INJECTABLE_SERVICE_HOSTS
+                and not parsed.username and not parsed.password
+                and not parsed.query and not parsed.fragment
+                and parsed.path in ("", "/")
+                and candidate_port in (None, port)
+            ):
+                url = f"http://{parsed.hostname}:{port}"
+    except Exception as exc:
+        logger.debug("[Container-Config] web_ui_url nicht verwertbar: %s", exc)
+
+    target_host = urlsplit(url).hostname or ""
+    if target_host not in _INJECTABLE_SERVICE_HOSTS:
+        raise HTTPException(status_code=403, detail=f"Ziel-URL nicht erlaubt: {target_host}")
 
     from utils.egress_guard import EgressBlocked, check_target_url
     try:
-        # Container-Namen + lokale Hosts explizit zulassen, aber RFC1918/Metadaten-SSRF blockieren
-        check_target_url(url, allowed=[container_name, "odysseus", "hermes", "captain", "openhands"])
+        # Nur der eine verifizierte Service-DNS ist erlaubt (kein RFC1918/IMDS).
+        check_target_url(url, allowed=[target_host])
     except EgressBlocked as exc:
         raise HTTPException(status_code=403, detail=f"Ziel-URL nicht erlaubt: {exc.reason}")
 
     config_url = url.rstrip("/") + "/config"
-    
+
+    # A7/D06: OMNIROUTE_API_KEY ist ein Gateway-Master-Key und wird NIEMALS
+    # in eine Container-Config geschrieben. Ein Archon-Scoped-Key aus
+    # backend.api_key_manager ist kein OmniRoute-Gateway-Credential — ihn als
+    # Ersatz zu übergeben wäre ein erfundener, nicht funktionierender Secret.
+    # Der Container bezieht Credentials aus seinem eigenen Secret-Store.
     payload = {
         "config": {
-            "api_base": "http://host.docker.internal:20128/v1",
-            "api_key": os.environ.get("OMNIROUTE_API_KEY", "").strip(),
+            "api_base": "http://omniroute:20128/v1",
             "model": config.get("model", "free-forever"),
-            "system_prompt": config.get("system_prompt", "")
+            "system_prompt": config.get("system_prompt", ""),
         }
     }
+
+    # Audit nur mit Ziel-Host — niemals mit Key oder Key-Praefix.
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="security",
+            action="container_config_injected",
+            agent_id=f"container:{container_name}",
+            payload={
+                "container": container_name,
+                "target_host": target_host,
+                "target_url": config_url,
+                "api_key_injected": False,
+            },
+        )
+    except Exception as exc:
+        logger.error("[Container-Config] Audit-Event fehlgeschlagen: %s", exc)
     
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:

@@ -43,26 +43,8 @@ def log(message: str) -> None:
     print(f"[archon-autoheal] {message}", flush=True)
 
 
-def probe() -> dict:
-    """Prueft /livez inkl. Watchdog-Heartbeat.
-
-    Rueckgabe: ``{"ok": bool, "watchdog_stale": bool, "detail": str}``.
-    503, Timeout, ConnectionRefused und ein stale Watchdog zaehlen als
-    Fehlschlag (`ok=False`) und erhoehen den Zaehler in main().
-    """
-    try:
-        with urllib.request.urlopen(TARGET, timeout=PROBE_TIMEOUT) as response:
-            status = int(response.status)
-            raw = response.read(256 * 1024)
-    except Exception as exc:  # 503, Timeout, ConnectionRefused zaehlen alle als Fehlschlag
-        log(f"probe {TARGET} fehlgeschlagen: {type(exc).__name__}")
-        return {"ok": False, "watchdog_stale": False, "detail": type(exc).__name__}
-
-    if status != 200:
-        return {"ok": False, "watchdog_stale": False, "detail": f"HTTP {status}"}
-
-    watchdog_stale = False
-    detail = ""
+def _watchdog_stale_from_body(raw: bytes) -> tuple[bool, str]:
+    """Liest ``loops.watchdog`` aus JEDEM /livez-Body (auch bei HTTP 503)."""
     try:
         payload = json.loads(raw.decode("utf-8", errors="ignore"))
         loops = payload.get("loops") or {}
@@ -72,14 +54,49 @@ def probe() -> dict:
             age = (time.time() - last_seen) if last_seen > 0 else float("inf")
             alive = wd.get("alive")
             if alive is False or age > WATCHDOG_MAX_AGE:
-                watchdog_stale = True
-                detail = f"watchdog last_seen age={age:.1f}s > {WATCHDOG_MAX_AGE}s"
+                return True, f"watchdog last_seen age={age:.1f}s > {WATCHDOG_MAX_AGE}s"
+            return False, f"watchdog age={age:.1f}s OK"
     except Exception as exc:
-        # Kein loops.watchdog im Payload (aelteres main.py) -> unbekannt, nicht stale.
-        detail = f"watchdog field unavailable ({type(exc).__name__})"
+        return False, f"watchdog field unavailable ({type(exc).__name__})"
+    return False, ""
+
+
+def probe() -> dict:
+    """Prueft /livez inkl. Watchdog-Heartbeat.
+
+    Rueckgabe: ``{"ok": bool, "watchdog_stale": bool, "detail": str}``.
+    503, Timeout, ConnectionRefused und ein stale Watchdog zaehlen als
+    Fehlschlag (`ok=False`) und erhoehen den Zaehler in main().
+
+    D10/MED: frueher branchte die Funktion bei HTTP 503 sofort ab, ohne den
+    JSON-Body zu lesen. /livez liefert bei totem Watchdog genau dann 503 mit
+    ``loops.watchdog.alive=False`` — der spezielle ``watchdog_stale``-Pfad war
+    damit unerreichbar. Jetzt wird der Body auch aus HTTPError gelesen.
+    """
+    status = 0
+    raw = b""
+    try:
+        with urllib.request.urlopen(TARGET, timeout=PROBE_TIMEOUT) as response:
+            status = int(response.status)
+            raw = response.read(256 * 1024)
+    except urllib.error.HTTPError as exc:
+        # urlopen wirft bei 503; der Body enthaelt die Watchdog-Diagnose.
+        status = int(exc.code)
+        try:
+            raw = exc.read(256 * 1024) or b""
+        except Exception:
+            raw = b""
+    except Exception as exc:  # Timeout, ConnectionRefused zaehlen als Fehlschlag
+        log(f"probe {TARGET} fehlgeschlagen: {type(exc).__name__}")
+        return {"ok": False, "watchdog_stale": False, "detail": type(exc).__name__}
+
+    watchdog_stale, wd_detail = _watchdog_stale_from_body(raw)
+    detail = wd_detail or f"HTTP {status}"
+    if status != 200 and not watchdog_stale:
+        detail = f"HTTP {status}" + (f" ({wd_detail})" if wd_detail else "")
 
     return {
-        "ok": not watchdog_stale,
+        "ok": status == 200 and not watchdog_stale,
         "watchdog_stale": watchdog_stale,
         "detail": detail,
     }
@@ -111,6 +128,18 @@ def container_state() -> dict:
         return {}
 
 
+def _do_restart() -> bool:
+    """stop+start ueber den Proxy; nur bei Erfolg Cooldown/Zaehler zuruecksetzen."""
+    try:
+        docker_request("POST", f"/containers/{CONTAINER}/stop")
+        docker_request("POST", f"/containers/{CONTAINER}/start")
+        log("Neustart ausgeloest; Cooldown aktiv")
+        return True
+    except Exception as exc:
+        log(f"Neustart fehlgeschlagen: {type(exc).__name__}")
+        return False
+
+
 def main() -> None:
     log(f"gestartet: target={TARGET} container={CONTAINER} "
         f"failures={FAILURES} interval={INTERVAL}s cooldown={COOLDOWN}s health_gate={HEALTH_GATE} "
@@ -138,21 +167,21 @@ def main() -> None:
         state = container_state()
         if state.get("status") != "running":
             log(f"kein Eingriff: Container-Status={state.get('status')!r}")
+        elif result.get("watchdog_stale"):
+            # D10/MED: eigener Eingriffspfad — der Watchdog ist tot, auch wenn
+            # Docker den Container noch als healthy markiert (Healthcheck
+            # deaktiviert oder spaeter Greift-Zeitfenster).
+            log("eskaliere: stop + start (watchdog_stale)")
+            if _do_restart():
+                last_action = time.time()
+                consecutive = 0
         elif HEALTH_GATE and state.get("health") != "unhealthy" and not result.get("watchdog_stale"):
             log(f"kein Eingriff: Docker-Health={state.get('health')!r} (noch nicht unhealthy)")
         else:
-            log(
-                "eskaliere: stop + start (watchdog_stale)" if result.get("watchdog_stale")
-                else "eskaliere: stop + start (Healthcheck und /livez beide rot)"
-            )
-            try:
-                docker_request("POST", f"/containers/{CONTAINER}/stop")
-                docker_request("POST", f"/containers/{CONTAINER}/start")
+            log("eskaliere: stop + start (Healthcheck und /livez beide rot)")
+            if _do_restart():
                 last_action = time.time()
                 consecutive = 0
-                log("Neustart ausgeloest; Cooldown aktiv")
-            except Exception as exc:
-                log(f"Neustart fehlgeschlagen: {type(exc).__name__}")
         time.sleep(INTERVAL)
 
 

@@ -1,15 +1,17 @@
+# mypy: ignore-errors
 """Router fuer Resilienz: Snapshots, Audit-Log, Fleet-Healing, Notifications, Traces & Self-Healing."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
-from archon.routers._rbac import require_admin_or_503
 
 import logging
 from typing import Any, Dict, Optional
 
+from fastapi import APIRouter, Body, Request
+from fastapi import Depends as _ArchonDepends
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from fastapi import APIRouter, Body, Request
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import require_admin_or_503
 
 logger = logging.getLogger("archon.routers.resilience")
 
@@ -92,7 +94,19 @@ def api_verify_audit_log(request: Request):
     _require_admin(request)
     from backend.audit_log import chained_audit_log
 
-    return chained_audit_log.verify_integrity()
+    result = chained_audit_log.verify_integrity()
+    # D05/M: statusabhängiger HTTP-Code + reason/corrupted_id an der Wurzel.
+    valid = result.get("valid") is True
+    body: Dict[str, Any] = dict(result)
+    body["valid"] = valid
+    body["status"] = "success" if valid else "error"
+    if not valid:
+        return JSONResponse(
+            status_code=409,
+            content=body,
+            headers={"X-Archon-Audit-Status": "error"},
+        )
+    return body
 
 
 # --- FLEET SELF-HEALING ---

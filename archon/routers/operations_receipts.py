@@ -1,23 +1,48 @@
 import logging
+
 _archon_exc_logger = logging.getLogger("operations_receipts")
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """Sub-Router fuer Beleg-Verarbeitung, OCR und Archivierung (Receipts Engine).
 
 Ausgelagert aus backend/operations_api.py.
 """
 
+import asyncio
 import base64
 import os
+import threading
 from typing import Any, Dict, Optional
+
 from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from archon.core.runtime import APP_ROOT
 from archon.routers._rbac import require_admin_or_503
 from utils.path_jail import PathJailError, safe_path_within
-from archon.core.runtime import APP_ROOT
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+# D08/HIGH: Die komplette OCR-Kette (zwei Vision-Hops à 12 s + mehrere
+# SQLite-Schreiben) darf nie im Event-Loop laufen. Sie läuft in `to_thread`;
+# dieser Lock hält die Reihenfolge der Beleg-IDs/Hashkette bei parallelen
+# Uploads deterministisch. Kein Event-Replay, keine DB-Migration.
+_OCR_CHAIN_LOCK = threading.RLock()
+
+
+def _process_receipt_sync(**kwargs: Any) -> Dict[str, Any]:
+    from backend.receipt_ocr_engine import receipt_ocr_engine
+    with _OCR_CHAIN_LOCK:
+        return receipt_ocr_engine.process_receipt(**kwargs)
+
+
+def _update_receipt_sync(receipt_id: str, updates: Dict[str, Any]) -> Any:
+    from backend.receipt_ocr_engine import receipt_ocr_engine
+    with _OCR_CHAIN_LOCK:
+        return receipt_ocr_engine.update_receipt(receipt_id, updates)
 
 
 class ReceiptProcessRequest(BaseModel):
@@ -161,16 +186,18 @@ async def api_receipts_upload(file: UploadFile = File(...), sender: str = "WebUI
     if not contents:
         raise HTTPException(status_code=400, detail="Datei ist leer.")
     try:
-        from backend.receipt_ocr_engine import receipt_ocr_engine
-        result = receipt_ocr_engine.process_receipt(
+        result = await asyncio.to_thread(
+            _process_receipt_sync,
             image_bytes=contents,
             filename=file.filename or "receipt.jpg",
             source="web_upload",
             sender=sender,
-            create_kanban_task=True
+            create_kanban_task=True,
         )
         if category and result.get("receipt_id"):
-            receipt_ocr_engine.update_receipt(result["receipt_id"], {"category": category})
+            await asyncio.to_thread(
+                _update_receipt_sync, result["receipt_id"], {"category": category}
+            )
             result["category"] = category
         return {"status": "success", "receipt": result}
     except Exception as e:

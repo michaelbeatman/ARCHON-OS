@@ -4,19 +4,45 @@ Verwaltung sicherer API-Tokens fuer n8n, Telegram und MCP-Clients mit Einmalanze
 gehashter Speicherung (SHA-256) und Sliding-Window Drosselung.
 """
 
-import os
-import sqlite3
+import datetime
 import hashlib
 import hmac
-import secrets
 import json
-import time
-import datetime
-import threading
-from typing import Dict, Any, List, Optional, Tuple
 import logging
+import os
+import secrets
+import sqlite3
+import threading
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+class AuditWriteFailedError(RuntimeError):
+    """D05/M: Zentralketten-Eintrag fehlt — Operation NICHT als Erfolg quittieren.
+
+    ``status_code`` ist die vom Router zu mappende HTTP-Antwort (503): der
+    Schreibfehler ist ein serverseitiger, nicht wiederholbarer Audit-Ausfall.
+    """
+
+    status_code = 503
+
+    def __init__(self, operation: str, audit_error: str = ""):
+        detail = f" ({audit_error})" if audit_error else ""
+        super().__init__(f"audit_write_failed: {operation}{detail}")
+        self.operation = operation
+        self.audit_status = "error"
+        self.audit_error = audit_error
+
+
+def _raise_if_audit_failed(audit_result: Dict[str, Any], operation: str) -> None:
+    """D05/M: audit_status=='error' aus _emit_global_audit() eskalieren."""
+    if isinstance(audit_result, dict) and audit_result.get("audit_status") == "error":
+        raise AuditWriteFailedError(
+            operation, str(audit_result.get("audit_error") or "")
+        )
+
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -338,6 +364,8 @@ class ApiKeyManager:
             self._log_audit(key_id, "KEY_CREATED", audit_details, created_by=created_by, conn=conn, emit_global=False)
             conn.commit()
         global_audit = self._emit_global_audit(key_id, "KEY_CREATED", audit_details, created_by)
+        # D05/M: kein `raw_token` ohne signierten Zentralketten-Eintrag.
+        _raise_if_audit_failed(global_audit, "api_key_create")
 
         return {
             "key_id": key_id,
@@ -403,7 +431,9 @@ class ApiKeyManager:
             rev_details = {"revoked_at": now_iso, "revoked_by": revoked_by}
             self._log_audit(key_id, "KEY_REVOKED", rev_details, created_by=revoked_by, conn=conn, emit_global=False)
             conn.commit()
-        self._emit_global_audit(key_id, "KEY_REVOKED", rev_details, revoked_by)
+        global_audit = self._emit_global_audit(key_id, "KEY_REVOKED", rev_details, revoked_by)
+        # D05/M: kein Erfolg ohne signierten Zentralketten-Eintrag.
+        _raise_if_audit_failed(global_audit, "api_key_revoke")
         return True
 
     def delete_key(self, key_id: str, deleted_by: str = "admin") -> bool:
@@ -416,7 +446,9 @@ class ApiKeyManager:
             del_details = {"deleted_by": deleted_by}
             self._log_audit(key_id, "KEY_DELETED", del_details, created_by=deleted_by, conn=conn, emit_global=False)
             conn.commit()
-        self._emit_global_audit(key_id, "KEY_DELETED", del_details, deleted_by)
+        global_audit = self._emit_global_audit(key_id, "KEY_DELETED", del_details, deleted_by)
+        # D05/M: kein Erfolg ohne signierten Zentralketten-Eintrag.
+        _raise_if_audit_failed(global_audit, "api_key_delete")
         return True
 
     def validate_and_consume(self, raw_token: str, required_scope: Optional[str] = None) -> Tuple[bool, Optional[Dict[str, Any]], str]:

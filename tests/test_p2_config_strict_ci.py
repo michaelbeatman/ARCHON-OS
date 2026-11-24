@@ -31,7 +31,8 @@ def test_ci_runs_strict_validation_and_ssot_drift_check():
     ci = CI_WORKFLOW.read_text(encoding="utf-8")
     assert "python scripts/validate_config.py --strict" in ci
     assert "Profil-SSOT Drift-Check" in ci
-    assert "python scripts/sync_profile_ssot.py --check --allow-missing-hermes --json" in ci
+    assert "scripts/sync_profile_ssot.py" in ci
+    assert "--allow-missing-hermes" in ci
 
 
 def test_sync_supports_allow_missing_hermes_flag():

@@ -1,62 +1,105 @@
-import os
-import secrets
-import uuid
-import sys
-import time
-import json
+# mypy: ignore-errors
+import asyncio
+import base64
 import csv
 import datetime
-import asyncio
-import socket
+import json
+import logging
+import os
 import re
-import threading
+import secrets
+import shutil
+import socket
+import sqlite3
+import sys
 import tempfile
-from typing import List, Dict, Optional, Any
-from fastapi import FastAPI, HTTPException, Query, Request, Body, File, UploadFile, Form, BackgroundTasks
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response, StreamingResponse, RedirectResponse
-from pydantic import BaseModel
+import threading
+import time
+import uuid
+from typing import Any, Dict, List, Optional
+
+import httpx
+import yaml
+from fastapi import (
+    BackgroundTasks,
+    Body,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-import shutil
-import sqlite3
-import base64
-import yaml
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict, Field
+
 import core_dispatcher
-import httpx
-import logging
-from utils.docker_client import (
-    docker_client, DockerError, parse_docker_stream, parse_docker_stream_bytes,
-)
-
-from backend.platform_paths import (
-    OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT, HERMES_HOME,
-    PERSONALAKTEN_DIR, PROJEKTE_DIR, soul_path, profile_dir, agent_log_path,
-)
-
-# Orchestration functions (extracted to archon.core.orchestration)
-from archon.core.orchestration import (
-    _execute_mission_control_task as _orch_execute_mission_control_task,
-    _paperclip_hire_profile_by_id as _orch_paperclip_hire_profile_by_id,
-    _set_agent_profile_status as _orch_set_agent_profile_status,
-    _trigger_sandy_staffing_nomination as _orch_trigger_sandy_staffing_nomination,
-    _finalize_synthesis_after_approval as _orch_finalize_synthesis_after_approval,
-    _fan_in_maybe_start_synthesis as _orch_fan_in_maybe_start_synthesis,
-    _tg_ping_synthesis as _orch_tg_ping_synthesis,
-    _run_synthesis_cascade as _orch_run_synthesis_cascade,
-)
 
 # --- A5-Etappe 1: unveraenderliche Modul-Konstanten ausgelagert ------------
 # Quelle ist jetzt archon/core/constants.py (ein Ort, keine Kopie). Mutabler
 # State und Pfad-Konstanten bleiben bewusst in dieser Datei (Fallstrick 24 / B10).
 from archon.core.constants import (
-    _AUTH_PUBLIC_PREFIXES,
-    _AUTH_PROTECTED_PREFIXES,
     _AUTH_API_PREFIXES,
+    _AUTH_PROTECTED_PREFIXES,
+    _AUTH_PUBLIC_PREFIXES,
     _DECISION_TYPEN,
     DELEGATION_PROTOCOL_PROMPT,
     STUDIO_BG_UPLOAD_DIR,
 )
+
+# Orchestration functions (extracted to archon.core.orchestration)
+from archon.core.orchestration import (
+    _execute_mission_control_task as _orch_execute_mission_control_task,
+)
+from archon.core.orchestration import (
+    _fan_in_maybe_start_synthesis as _orch_fan_in_maybe_start_synthesis,
+)
+from archon.core.orchestration import (
+    _finalize_synthesis_after_approval as _orch_finalize_synthesis_after_approval,
+)
+from archon.core.orchestration import (
+    _paperclip_hire_profile_by_id as _orch_paperclip_hire_profile_by_id,
+)
+from archon.core.orchestration import (
+    _run_synthesis_cascade as _orch_run_synthesis_cascade,
+)
+from archon.core.orchestration import (
+    _set_agent_profile_status as _orch_set_agent_profile_status,
+)
+from archon.core.orchestration import (
+    _tg_ping_synthesis as _orch_tg_ping_synthesis,
+)
+from archon.core.orchestration import (
+    _trigger_sandy_staffing_nomination as _orch_trigger_sandy_staffing_nomination,
+)
+from backend.platform_paths import (
+    HERMES_HOME,
+    OBSIDIAN_VAULT,
+    OBSIDIAN_VAULT_ALT,
+    PERSONALAKTEN_DIR,
+    PROJEKTE_DIR,
+    agent_log_path,
+    profile_dir,
+    soul_path,
+)
+from utils.docker_client import (
+    DockerError,
+    docker_client,
+    parse_docker_stream,
+    parse_docker_stream_bytes,
+)
+
 # W3: Log-Level zur Laufzeit konfigurierbar (Incidents brauchen DEBUG ohne
 # Code-Änderung/Neustart).
 _LOG_LEVEL_NAME = os.getenv("ARCHON_LOG_LEVEL", os.getenv("LOG_LEVEL", "INFO")).strip().upper()
@@ -95,6 +138,13 @@ _ROUTER_LOAD_ERRORS: List[str] = []
 # ---------------------------------------------------------------------------
 _STARTUP_HOOKS: List[Any] = []
 _SHUTDOWN_HOOKS: List[Any] = []
+
+# D06-Nachlauf (A7): ehrlicher Status fuer den optionalen n8n-Import beim
+# Startup. Default `not_configured` — der Import ist opt-in, weil die Scripts
+# `docker exec`/`docker cp` ausfuehren und ein Service-Token in Temp-Dateien
+# schreiben. Ein automatisches `deploy_n8n_routines.run()` (restartet n8n und
+# beschreibt das versionierte Bundle) bleibt bewusst DELEGATED.
+_N8N_STARTUP_STATUS: Dict[str, Any] = {"status": "not_configured", "detail": "opt-in via ARCHON_N8N_STARTUP_IMPORT=1"}
 
 # KRITISCH (Audit 23.11.2026): Sicherheits-Hooks duerfen niemals nur geloggt
 # werden. Ein fehlgeschlagener Router-Health- oder Audit-HMAC-Check muss den
@@ -226,11 +276,18 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # (siehe unten) — nur dann ist sie die äußerste Schicht und setzt den Kontext
 # auch bei 401/403/429/503. Starlette wickelt zuletzt registrierte zuerst aus.
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+
+from backend.trace_context import (
+    current_trace_id as _current_trace_id,
+)
+from backend.trace_context import (
+    extract_headers as _extract_traceparent,
+)
+from backend.trace_context import (
+    response_trace_headers as _response_trace_headers,
+)
 from backend.trace_context import (  # noqa: E402
     start_trace as _start_trace,
-    current_trace_id as _current_trace_id,
-    extract_headers as _extract_traceparent,
-    response_trace_headers as _response_trace_headers,
 )
 
 
@@ -238,6 +295,18 @@ class TraceContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         _start_trace(_extract_traceparent(request.headers))
         response = await call_next(request)
+        # D16/HIGH: Prometheus-Exemplare am Request-Chokepoint fuettern.
+        # Der Scrape-Thread selbst hat keinen Kontext; der Ringpuffer in
+        # backend/metrics_collector liefert die letzte echte Kausalkante.
+        try:
+            from backend.metrics_collector import record_trace_exemplar
+
+            record_trace_exemplar(
+                "archon_agent_dispatches_total",
+                labels={"route": request.url.path, "status": response.status_code},
+            )
+        except Exception as _exemplar_exc:
+            logger.debug("[Trace] Exemplar nicht aufgezeichnet: %s", _exemplar_exc)
         # D16: X-Trace-Id + forkbares traceparent/tracestate (Agent I).
         for key, value in _response_trace_headers(dict(response.headers)).items():
             response.headers[key] = value
@@ -281,7 +350,8 @@ def _install_rate_limit_middleware() -> None:
     _install_cors_middleware() nach allen @app.middleware-Definitionen.
     """
     try:
-        from utils.rate_limit import RateLimitMiddleware, _env_int as _rl_env_int
+        from utils.rate_limit import RateLimitMiddleware
+        from utils.rate_limit import _env_int as _rl_env_int
         app.add_middleware(RateLimitMiddleware)
         logger.info("[RateLimit] aktiv (Standard %s/min, strikt %s/min)",
                     _rl_env_int("ARCHON_RATE_LIMIT_DEFAULT", 600),
@@ -449,7 +519,8 @@ async def tenant_context_middleware(request: Request, call_next):
         # Immer einen Mandanten-Kontext setzen — auch ohne Header. Sonst
         # faellt archon/core/cache._tenant_prefix() auf 'default' zurueck und
         # gecachte Requests landen im falschen Namespace.
-        from backend.tenant_context import tenant_context as _tc, set_request_tenant, reset_request_tenant
+        from backend.tenant_context import reset_request_tenant, set_request_tenant
+        from backend.tenant_context import tenant_context as _tc
         _tok = set_request_tenant(_tc.get_active_tenant_id())
         try:
             response = await call_next(request)
@@ -479,7 +550,11 @@ async def tenant_context_middleware(request: Request, call_next):
                 },
             )
         try:
-            from backend.tenant_context import tenant_context, set_request_tenant, reset_request_tenant
+            from backend.tenant_context import (
+                reset_request_tenant,
+                set_request_tenant,
+                tenant_context,
+            )
             known = False
             try:
                 mgr = tenant_context._get_corporate_manager()
@@ -636,6 +711,23 @@ _DEPENDENCY_PROBE_CACHE: dict = {"ts": 0.0, "problems": []}
 _DEPENDENCY_PROBE_TTL = 10.0
 
 
+def _probe_external_dependency(name: str, url: str) -> str:
+    """Synchrone URL-Probe — ausschliesslich aus asyncio.to_thread gerufen.
+
+    D10/HIGH: vorher blockierte urlopen(timeout=1.5) direkt im Event-Loop und
+    konnte bei zwei ausgefallenen Dependencies den Loop spürbar festhalten.
+    """
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(url, timeout=1.5) as resp:
+            if resp.status >= 400:
+                return f"{name}: HTTP {resp.status}"
+    except Exception as exc:
+        return f"{name}: {exc}"
+    return ""
+
+
 @app.get("/readyz")
 async def readiness_check():
     """Readiness: echte Dependency-Pruefung. Liefert 503, solange nicht bereit."""
@@ -666,23 +758,42 @@ async def readiness_check():
         or os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod", "live")
     )
     if _probe_enabled:
-        import urllib.request
         now = time.time()
         if now - _DEPENDENCY_PROBE_CACHE["ts"] > _DEPENDENCY_PROBE_TTL:
-            dep_problems = []
             probes = (
                 ("omniroute", os.getenv("OMNIROUTE_URL", "http://omniroute:20128/v1").rstrip("/") + "/models"),
                 ("n8n", os.getenv("N8N_URL", "http://n8n:5678").rstrip("/") + "/healthz"),
             )
-            for name, url in probes:
-                try:
-                    with urllib.request.urlopen(url, timeout=1.5) as resp:
-                        if resp.status >= 400:
-                            dep_problems.append(f"{name}: HTTP {resp.status}")
-                except Exception as exc:
-                    dep_problems.append(f"{name}: {exc}")
+            # Blockierendes I/O in den Threadpool, nicht in den Event-Loop.
+            dep_problems = await asyncio.gather(
+                *(
+                    asyncio.to_thread(_probe_external_dependency, name, url)
+                    for name, url in probes
+                )
+            )
+            dep_problems = [p for p in dep_problems if p]
             _DEPENDENCY_PROBE_CACHE.update(ts=now, problems=dep_problems)
         problems.extend(_DEPENDENCY_PROBE_CACHE["problems"])
+    # D07/MED: verifizierte Shutdown-/Recovery-Fehler duerfen nicht gruen gemeldet werden.
+    if _FAILED_CANCELS:
+        problems.append(f"failed_cancels: {len(_FAILED_CANCELS)}")
+    if _WATCHDOG_STOP_FAILED:
+        problems.append(f"watchdog_stop: {len(_WATCHDOG_STOP_FAILED)}")
+    if _STARTUP_RECOVERY_FAILED:
+        problems.append(f"startup_recovery: {len(_STARTUP_RECOVERY_FAILED)}")
+    # D07/D06-Nachlauf: ein fehlgeschlagener Startup-Import und eine nicht
+    # verfuegbare Prozess-Lock-Sackgasse duerfen nicht gruen gemeldet werden.
+    if _N8N_STARTUP_STATUS.get("status") == "error":
+        problems.append(f"n8n_startup_import: {_N8N_STARTUP_STATUS.get('detail')}")
+    if _DB_MAINTENANCE_STATUS.get("status") == "error":
+        problems.append(f"db_maintenance: {_DB_MAINTENANCE_STATUS.get('error')}")
+    try:
+        from backend.process_lock import get_loop_lock_failures
+        _lock_failures = get_loop_lock_failures()
+        if _lock_failures:
+            problems.append(f"loop_lock_unavailable: {len(_lock_failures)}")
+    except Exception as exc:
+        problems.append(f"loop_lock_check: {exc}")
     if problems:
         return JSONResponse(
             status_code=503,
@@ -706,58 +817,35 @@ def prometheus_metrics():
         from backend.metrics_collector import metrics_collector
         return Response(
             content=metrics_collector.generate_prometheus_metrics(),
-            media_type="text/plain; version=0.0.4; charset=utf-8"
+            # OpenMetrics erlaubt Exemplare (`# {trace_id=...,span_id=...}`);
+            # Prometheus ist mit exemplar-storage konfiguriert.
+            media_type="application/openmetrics-text; version=1.0.0; charset=utf-8"
         )
     except Exception as e:
         return Response(content=f"# Error collecting metrics: {e}\n", status_code=500, media_type="text/plain")
 
 from archon.routers.telemetry import (
-    router as _telemetry_router,
+    _count_running_containers,
     api_get_agent_activity,
     api_get_agent_projects,
-    get_hud_telemetry,
-    _count_running_containers,
     api_telemetry_dashboard,
+    get_hud_telemetry,
 )
+from archon.routers.telemetry import (
+    router as _telemetry_router,
+)
+
 app.include_router(_telemetry_router)
 
 
 
 # Pfade + Laufzeit-Helfer kommen aus app.core.runtime (gemeinsame Basis für
 # main.py und die ausgelagerten Router; dort zyklenfrei definiert).
-from archon.core.runtime import (  # noqa: E402
-    WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, OBSIDIAN_VAULT_DIR,
-    resolve_obsidian_vault_path, ticker_entries, add_ticker, broadcast_event,
-    subscribe_events, unsubscribe_events,
-    _load_json, _save_json, atomic_write_json, _SSE_SUBSCRIBERS, _SSE_SUB_LOCK,
-)
-
-# --- A5-Etappe 4b: Pfad-Konstanten ausgelagert -----------------------------
-# Quelle ist archon/core/paths.py; alle Pfade leiten sich aus den Basis-
-# Verzeichnissen oben ab (keine zweite __file__-Wahrheit). main.py importiert
-# nur noch — die Werte sind per scripts/path_constants_snapshot.py belegt.
-from archon.core.paths import (
-    MEMORY_FILE, AGENTS_FILE, KANBAN_FILE, THEME_FILE, THEME_LIVE_FILE,
-    GATEWAY_CONFIG_FILE, QUICKCHAT_SESSIONS_DIR, COUPLED_AGENTS_FILE,
-    THEMES_DIR, FRAMEWORKS_FILE, BOARDROOM_HISTORY_FILE, ROLES_FILE,
-    SERVICES_FILE, HERMES_PROFILES_DIR, _SKILL_INDEX_DISK_PATH,
-    SETTINGS_FILE, KANBAN_CARDS_FILE, CONFIG_FILE,
-)
-
-from archon.core.permissions import (  # noqa: E402
-    PERMISSION_GATES_FILE, load_permission_gates as _load_permission_gates,
-    save_permission_gates as _save_permission_gates, create_permission_gate as _create_permission_gate,
-    set_decision_factory as _set_decision_factory,
-)
-from archon.core.cache import invalidate as invalidate_ttl_cache, ttl_cache  # noqa: E402
-from archon.core.state_db import (  # noqa: E402
-    ClosingConnection, STATE_DB_PATH, _get_state_db, _get_profile_state_db,
-)
-
+from archon.core.cache import invalidate as invalidate_ttl_cache  # noqa: E402
+from archon.core.cache import ttl_cache
 from archon.core.mission_control import (  # noqa: E402
-    MISSION_CONTROL_FILE, _MC_DATA_LOCK, _MC_ASYNC_LOCK,
-    _write_mc_atomic, _load_mission_control_data, _save_mission_control_data,
-    update_mission_control_data,
+    _MC_ASYNC_LOCK,
+    _MC_DATA_LOCK,
     # F-12/Z-12: Der Leser von /api/mission-control/state ist
     # ``archon/routers/mission_control.py``; er benutzt DEN Cache aus
     # ``archon.core.mission_control``. ``main.py`` hatte einen zweiten,
@@ -765,26 +853,110 @@ from archon.core.mission_control import (  # noqa: E402
     # die Invalidierung lief ins Leere. Jetzt wird der echte Cache
     # importiert und invalidiert.
     _MC_STATE_CACHE,
+    MISSION_CONTROL_FILE,
+    _load_mission_control_data,
+    _save_mission_control_data,
+    _write_mc_atomic,
+    update_mission_control_data,
 )
 
-from archon.core.profiles import (  # noqa: E402
-    DEFAULT_HERMES_TOOLS, ALL_HERMES_TOOLS, AgentProfileValidationSchema, save_all_agent_profiles,
-    get_hermes_profiles_base_dirs, get_primary_hermes_profiles_dir,
-    invalidate_hermes_profiles_cache, api_get_hermes_profiles, create_rolling_backup,
-    materialize_role_avatars, restore_data_uri_avatars, resolve_avatar_file,
+# --- A5-Etappe 4b: Pfad-Konstanten ausgelagert -----------------------------
+# Quelle ist archon/core/paths.py; alle Pfade leiten sich aus den Basis-
+# Verzeichnissen oben ab (keine zweite __file__-Wahrheit). main.py importiert
+# nur noch — die Werte sind per scripts/path_constants_snapshot.py belegt.
+from archon.core.paths import (
+    _SKILL_INDEX_DISK_PATH,
+    AGENTS_FILE,
+    BOARDROOM_HISTORY_FILE,
+    CONFIG_FILE,
+    COUPLED_AGENTS_FILE,
+    FRAMEWORKS_FILE,
+    GATEWAY_CONFIG_FILE,
+    HERMES_PROFILES_DIR,
+    KANBAN_CARDS_FILE,
+    KANBAN_FILE,
+    MEMORY_FILE,
+    QUICKCHAT_SESSIONS_DIR,
+    ROLES_FILE,
+    SERVICES_FILE,
+    SETTINGS_FILE,
+    THEME_FILE,
+    THEME_LIVE_FILE,
+    THEMES_DIR,
 )
+from archon.core.permissions import (  # noqa: E402
+    PERMISSION_GATES_FILE,
+)
+from archon.core.permissions import (
+    create_permission_gate as _create_permission_gate,
+)
+from archon.core.permissions import (
+    load_permission_gates as _load_permission_gates,
+)
+from archon.core.permissions import (
+    save_permission_gates as _save_permission_gates,
+)
+from archon.core.permissions import (
+    set_decision_factory as _set_decision_factory,
+)
+from archon.core.profiles import (  # noqa: E402
+    ALL_HERMES_TOOLS,
+    DEFAULT_HERMES_TOOLS,
+    AgentProfileValidationSchema,
+    api_get_hermes_profiles,
+    create_rolling_backup,
+    get_hermes_profiles_base_dirs,
+    get_primary_hermes_profiles_dir,
+    invalidate_hermes_profiles_cache,
+    materialize_role_avatars,
+    resolve_avatar_file,
+    restore_data_uri_avatars,
+    save_all_agent_profiles,
+)
+from archon.core.runtime import (  # noqa: E402
+    _SSE_SUB_LOCK,
+    _SSE_SUBSCRIBERS,
+    DATA_DIR,
+    MEMORY_DIR,
+    OBSIDIAN_VAULT_DIR,
+    WORKSPACE_DIR,
+    _load_json,
+    _save_json,
+    add_ticker,
+    atomic_write_json,
+    broadcast_event,
+    resolve_obsidian_vault_path,
+    subscribe_events,
+    ticker_entries,
+    unsubscribe_events,
+)
+from archon.core.state_db import (  # noqa: E402
+    STATE_DB_PATH,
+    ClosingConnection,
+    _get_profile_state_db,
+    _get_state_db,
+)
+
+# Kostenanzeige im Chat-Stream braucht die Preisliste des Providers-Routers.
+from archon.routers.llm_providers import get_llm_prices  # noqa: E402
+
 # Gate-Ausfuehrung ruft den Service, nicht die HTTP-Endpunkte: die Endpunkte
 # brauchen einen Request (require_admin_or_503) und waren hier nie importiert.
 from archon.services import profiles_service  # noqa: E402
 from archon.services.profiles_service import (  # noqa: E402
-    delete_profile, save_profile,
+    delete_profile,
+    save_profile,
 )
-# Kostenanzeige im Chat-Stream braucht die Preisliste des Providers-Routers.
-from archon.routers.llm_providers import get_llm_prices  # noqa: E402
 
 # --- Pfad-Jail: jeder dateibasierte Endpunkt bleibt in erlaubten Wurzeln ---
 try:
-    from utils.path_jail import safe_path, safe_path_within, safe_filename, PathJailError, allowed_roots
+    from utils.path_jail import (
+        PathJailError,
+        allowed_roots,
+        safe_filename,
+        safe_path,
+        safe_path_within,
+    )
 except Exception as _pj_err:  # pragma: no cover - darf den Start nie blockieren
     print(f"[PathJail] Konnte utils.path_jail nicht laden: {_pj_err}", file=sys.stderr)
 
@@ -828,8 +1000,8 @@ except Exception as e:
     skills_engine = None
 
 try:
-    from local_memory_bridge import LocalMemoryBridge
     from backend.db_paths import resolve_db as _resolve_db_path
+    from local_memory_bridge import LocalMemoryBridge
     memory_bridge = LocalMemoryBridge(
         db_path=_resolve_db_path("agentic_memory.db"),
         vault_path=OBSIDIAN_VAULT_DIR
@@ -868,13 +1040,15 @@ os.makedirs(QUICKCHAT_SESSIONS_DIR, exist_ok=True)
 # =====================================================================
 # PERSISTENZ-HELFER (Basic UI Configuration State)
 # =====================================================================
+from archon.core.roles_data import DEFAULT_ROLES as DEFAULT_ROLES  # Re-Export fuer container_ops.py
+from archon.core.roles_data import load_default_roles
 from archon.core.settings_state import (
     DEFAULT_AGENTS,
     DEFAULT_SERVICES,
     GHOST_AGENT_IDS,
     SYSTEM_INTERNAL_IDS,
 )
-from archon.core.roles_data import DEFAULT_ROLES
+
 
 def load_agents() -> List[Dict]:
     agents_root = os.path.join(WORKSPACE_DIR, "agents.json")
@@ -903,8 +1077,8 @@ def save_agents(agents: List[Dict]):
     _save_json(AGENTS_FILE, cleaned)
 
     try:
-        from archon.core.runtime import APP_ROOT, atomic_write_json
         from archon.core.profiles import invalidate_hermes_profiles_cache
+        from archon.core.runtime import APP_ROOT, atomic_write_json
         ssot_file = os.path.join(APP_ROOT, "agent_profiles.json")
         if os.path.exists(ssot_file):
             with open(ssot_file, "r", encoding="utf-8") as f:
@@ -928,7 +1102,10 @@ def save_agents(agents: List[Dict]):
 
 @ttl_cache(seconds=60)
 def load_roles() -> List[Dict]:
-    return _load_json(ROLES_FILE, DEFAULT_ROLES)
+    # A8-DELEGATED: SSOT-Projektion aus agent_profiles.json statt statischem
+    # Import-Snapshot. DEFAULT_ROLES bleibt nur als Import-Kompatibilitaet
+    # (container_ops.py liest app_main.DEFAULT_ROLES) erhalten.
+    return _load_json(ROLES_FILE, load_default_roles())
 
 def save_roles(roles: List[Dict]):
     vorher = _load_json(ROLES_FILE, [])
@@ -955,88 +1132,101 @@ def save_theme(theme_data: Dict): _save_json(THEME_FILE, theme_data)
 # REST ENDPOINTS
 # =====================================================================
 
+from archon.routers.core_settings import (
+    api_get_agents,
+    api_get_roles,
+    api_save_agents,
+    api_save_roles,
+    api_save_settings,
+    api_test_jev,
+    clear_ticker,
+    get_settings,
+    get_ticker,
+)
+from archon.routers.core_settings import (
+    router as _core_settings_router,
+)
 from archon.routers.hermes_proxy import (
-    router as _hermes_proxy_router,
+    _PROXY_WRITE_METHODS,
+    _hermes_proxy_token,
     forward_to_hermes,
     proxy_hermes_api_endpoints,
     proxy_web_ui,
-    _PROXY_WRITE_METHODS,
-    _hermes_proxy_token,
+)
+from archon.routers.hermes_proxy import (
+    router as _hermes_proxy_router,
 )
 
-
-from archon.routers.core_settings import (
-    router as _core_settings_router,
-    get_settings,
-    api_save_settings,
-    get_ticker,
-    clear_ticker,
-    api_get_agents,
-    api_save_agents,
-    api_get_roles,
-    api_save_roles,
-    api_test_jev,
-)
 app.include_router(_core_settings_router)
 
 from archon.routers.oracle_seo import (
-    router as _oracle_seo_router,
     api_get_oracle_feed,
     api_run_oracle_cycle,
-    api_triage_oracle_signal,
-    api_seo_generate,
     api_seo_articles,
+    api_seo_generate,
+    api_triage_oracle_signal,
 )
+from archon.routers.oracle_seo import (
+    router as _oracle_seo_router,
+)
+
 app.include_router(_oracle_seo_router)
 
 # --- THEME & DESIGN ROUTER (ausgelagert nach archon.routers.theme) ---
 from archon.routers.theme import (
-    router as _theme_router,
-    load_theme,
-    save_theme,
-    api_get_themes,
-    api_get_theme_by_name,
-    api_save_theme_by_name,
-    api_delete_theme_by_name,
-    api_get_design_themes,
-    api_save_design_themes,
-    api_delete_design_theme,
-    api_get_theme,
-    api_save_theme,
-    api_get_theme_live_overrides,
-    api_save_theme_live_overrides,
-    api_bake_theme_into_main_design,
-    api_delete_theme_live_overrides,
-    api_upload_theme_background,
     DESIGN_THEMES_TARGETS,
+    api_bake_theme_into_main_design,
+    api_delete_design_theme,
+    api_delete_theme_by_name,
+    api_delete_theme_live_overrides,
+    api_get_design_themes,
+    api_get_theme,
+    api_get_theme_by_name,
+    api_get_theme_live_overrides,
+    api_get_themes,
+    api_save_design_themes,
+    api_save_theme,
+    api_save_theme_by_name,
+    api_save_theme_live_overrides,
+    api_upload_theme_background,
 )
+from archon.routers.theme import (
+    router as _theme_router,
+)
+
 app.include_router(_theme_router)
 
 
 from archon.routers.docker_services import (
-    router as _docker_services_router,
-    detect_container_port,
     _services_config_fallback,
-    get_docker_containers_from_socket,
-    post_docker_container_action,
-    api_get_services,
     api_docker_start,
     api_docker_stop,
-    api_save_services,
     api_get_models,
     api_get_models_v1,
+    api_get_services,
+    api_save_services,
+    detect_container_port,
+    get_docker_containers_from_socket,
+    post_docker_container_action,
 )
+from archon.routers.docker_services import (
+    router as _docker_services_router,
+)
+
 app.include_router(_docker_services_router)
 
 from archon.routers.agent_chat import (
-    router as _agent_chat_router,
-    RunRequest,
-    fetch_agent_response_api,
-    api_run_parallel,
     DirectAgentChatRequest,
-    load_profiles_list,
+    RunRequest,
     api_direct_agent_chat,
+    api_run_parallel,
+    fetch_agent_response_api,
+    load_profiles_list,
 )
+from archon.routers.agent_chat import (
+    router as _agent_chat_router,
+)
+
 app.include_router(_agent_chat_router)
 
 
@@ -1053,25 +1243,26 @@ def load_boardroom_frameworks():
 # =====================================================================
 
 import subprocess
-import threading
 
 from archon.routers.gateway import (
-    router as _gateway_router,
-    _load_gateway_config,
-    _save_gateway_config,
     _get_all_installed_profiles,
+    _load_gateway_config,
+    _parse_gateway_list,
+    _run_docker_exec,
+    _save_gateway_config,
     _update_profile_status,
+    api_gateway_autostart,
     api_gateway_list,
     api_gateway_start,
     api_gateway_stop,
+    api_gateway_stop_all,
     api_get_gateway_config,
     api_save_gateway_config_endpoint,
-    api_gateway_autostart,
-    api_gateway_stop_all,
-    _run_docker_exec,
-    _parse_gateway_list,
-    _gateway_idle_stop_loop,
 )
+from archon.routers.gateway import (
+    router as _gateway_router,
+)
+
 app.include_router(_gateway_router)
 
 
@@ -1080,15 +1271,18 @@ app.include_router(_gateway_router)
 # =====================================================================
 
 from archon.routers.watchdog import (
-    router as _watchdog_router,
+    acknowledge_watchdog_alarm_endpoint,
     api_get_watchdog_config,
     api_save_watchdog_config,
-    api_watchdog_dispatch_action,
     api_trigger_watchdog_run,
+    api_watchdog_dispatch_action,
     get_watchdog_alarms_endpoint,
     trigger_test_watchdog_alarm_endpoint,
-    acknowledge_watchdog_alarm_endpoint,
 )
+from archon.routers.watchdog import (
+    router as _watchdog_router,
+)
+
 app.include_router(_watchdog_router)
 
 
@@ -1127,6 +1321,31 @@ async def _email_imap_background_loop():
 _BACKGROUND_TASKS: list = []
 _RAG_SYNC_LOCK = asyncio.Lock()
 _RAG_SYNC_PROCESS = None
+
+# D07/MED: fehlgeschlagene Abbrueche duerfen nicht als Erfolg quittiert werden.
+# Die Liste bleibt im Prozess erhalten und geht in /readyz ein, damit ein
+# Zombie-Task nicht still weiterlaeuft, waehrend alles "gruen" meldet.
+_FAILED_CANCELS: list = []
+_WATCHDOG_STOP_FAILED: list = []
+_STARTUP_RECOVERY_FAILED: list = []
+
+
+def _record_failed_cancel(task_name: str, detail: str) -> None:
+    """Persistiert einen gescheiterten cancel() inkl. Audit (best effort)."""
+    entry = {"task": str(task_name), "detail": str(detail), "ts": time.time()}
+    _FAILED_CANCELS.append(entry)
+    logger.error("[Shutdown] Cancel fehlgeschlagen: %s — %s", task_name, detail)
+    try:
+        from backend.audit_log import chained_audit_log
+
+        chained_audit_log.record_event(
+            category="recovery",
+            action="cancel_failed",
+            agent_id="system",
+            payload=entry,
+        )
+    except Exception as audit_exc:
+        logger.warning("[Shutdown] Cancel-Fehler nicht auditierbar: %s", audit_exc)
 
 
 def _is_rag_sync_running() -> bool:
@@ -1254,14 +1473,15 @@ async def _deadlock_supervisor_loop():
         # Vorher liefen diese Nur-On-Demand — Manipulationen blieben unbemerkt,
         # solange kein Prüfer aktiv eine Route aufrief.
         try:
-            from backend.audit_log import chained_audit_log as _audit_chain
-            from backend.approval_policy_engine import approval_engine as _approval_chain
             from backend.api_key_manager import api_key_manager as _api_key_chain
-            from backend.treasury_engine import verify_treasury_chain
+            from backend.approval_policy_engine import approval_engine as _approval_chain
+            from backend.audit_log import chained_audit_log as _audit_chain
+
             # F-033: Email-Draft- und DSGVO-Verifikatoren hatten bisher keinen
             # Produktivkonsumenten — jetzt ebenfalls im 30-s-Loop (G-03).
             from backend.email_draft_engine import verify_email_draft_chain
             from backend.gdpr_compliance_engine import verify_gdpr_audit_chain
+            from backend.treasury_engine import verify_treasury_chain
             for label, verify_fn in (
                 ("Zentrale Audit-Kette", _audit_chain.verify_integrity),
                 ("Approval-Kette", _approval_chain.verify_audit_integrity),
@@ -1290,7 +1510,15 @@ async def _deadlock_supervisor_loop():
 
         try:
             anchors = await asyncio.to_thread(_write_chain_anchors)
-            failed = [k for k, v in anchors.items() if isinstance(v, dict) and v.get("written") is False and "error" in v]
+            # D05/HIGH (A2-DELEGATED): ein erkannter Tail-Loeschungs-Versuch
+            # (`violation: True`) ist mindestens so kritisch wie ein Schreibfehler
+            # und darf nicht still durchgewinkt werden.
+            failed = [
+                k for k, v in anchors.items()
+                if isinstance(v, dict)
+                and v.get("written") is False
+                and ("error" in v or v.get("violation") is True)
+            ]
             if failed:
                 logger.error("[Integritaet] Head-Anker fehlgeschlagen: %s", failed)
         except Exception as e:
@@ -1309,6 +1537,11 @@ async def _deadlock_supervisor_loop():
         await asyncio.sleep(30)
 
 
+# A3-DELEGATED: DB-Wartung darf nicht still im DEBUG verschwinden. Der
+# Status wird zusaetzlich in /readyz gespiegelt (siehe readiness_check).
+_DB_MAINTENANCE_STATUS: Dict[str, Any] = {"status": "not_started", "error": None, "ts": 0.0}
+
+
 @_exclusive_loop("db_maintenance")
 async def _db_maintenance_loop():
     """Periodische DB-Sicherung & Optimierung (WAL-Truncate, Backup, VACUUM alle 6h)."""
@@ -1318,9 +1551,17 @@ async def _db_maintenance_loop():
             from backend.db_backup_manager import db_backup_manager
             from backend.db_optimizer import optimize_all_databases
             await asyncio.to_thread(db_backup_manager.checkpoint_and_backup)
-            await asyncio.to_thread(optimize_all_databases)
+            result = await asyncio.to_thread(optimize_all_databases)
+            _DB_MAINTENANCE_STATUS.update(
+                status="error" if isinstance(result, dict) and result.get("status") == "error" else "ok",
+                error=(result or {}).get("error") if isinstance(result, dict) else None,
+                ts=time.time(),
+            )
+            if _DB_MAINTENANCE_STATUS["status"] == "error":
+                logger.error("[DBMaintenance] Optimierung fehlgeschlagen: %s", _DB_MAINTENANCE_STATUS["error"])
         except Exception as e:
-            logger.debug(f"[DBMaintenance] Loop-Hinweis: {e}")
+            _DB_MAINTENANCE_STATUS.update(status="error", error=str(e), ts=time.time())
+            logger.error("[DBMaintenance] Loop fehlgeschlagen: %s", e)
         await asyncio.sleep(21600)
 
 
@@ -1441,42 +1682,70 @@ async def _cancel_background_tasks():
     for task in pending:
         task.cancel()
     if pending:
+        results = None
         try:
             # Timeout: ein Task, der Cancellation in einem blockierenden
             # finally ignoriert, darf den Shutdown nicht ewig festhalten.
-            await asyncio.wait_for(
+            results = await asyncio.wait_for(
                 asyncio.gather(*pending, return_exceptions=True), timeout=10.0
             )
         except asyncio.TimeoutError:
+            # D07/MED: nicht als Erfolg quittieren. Nicht beendete Tasks
+            # bleiben in der Registry und werden als failed_cancels
+            # persistiert, statt still aus dem Register geloescht zu werden.
             logger.warning("[Shutdown] %s Task(s) reagierten nicht binnen 10s.", len(pending))
-        print(f"[Shutdown] {len(pending)} Hintergrund-Task(s) abgebrochen.")
-    _BACKGROUND_TASKS.clear()
+            for task in pending:
+                if not task.done():
+                    _record_failed_cancel(
+                        task.get_name(), "timeout_after_cancel(10s): task_possibly_alive"
+                    )
+        if results is not None:
+            for task, result in zip(pending, results):
+                # Erwartetes CancelledError ist der Normalfall; alles andere
+                # (inkl. blockierender finally) ist ein fehlgeschlagener Abbruch.
+                if isinstance(result, asyncio.CancelledError):
+                    continue
+                if isinstance(result, BaseException):
+                    _record_failed_cancel(task.get_name(), f"{type(result).__name__}: {result}")
+        confirmed = sum(1 for t in pending if t.cancelled())
+        print(
+            f"[Shutdown] {confirmed}/{len(pending)} Hintergrund-Task(s) verifiziert abgebrochen; "
+            f"{len(_FAILED_CANCELS)} fehlgeschlagene Abbruch(e) insgesamt."
+        )
+    # Nur tatsaechlich beendete Tasks entfernen; Zombies bleiben sichtbar.
+    _BACKGROUND_TASKS[:] = [t for t in _BACKGROUND_TASKS if not t.done()]
 
 from archon.routers.quickchat import (
-    router as _quickchat_router,
-    _quickchat_session_path,
-    _load_quickchat_session,
-    _save_quickchat_session,
     QuickchatSendRequest,
+    _load_quickchat_session,
+    _quickchat_session_path,
+    _save_quickchat_session,
+    api_delete_quickchat_session,
     api_get_quickchat_session,
     api_quickchat_send,
-    api_delete_quickchat_session,
+)
+from archon.routers.quickchat import (
+    router as _quickchat_router,
+)
+from archon.routers.ui import (
+    FullHtmlSaveRequest,
+    TextReplacementItem,
+    TextReplacementsRequest,
+    _full_html_target_files,
+    api_save_full_html,
+    api_save_text_replacements,
+    api_studio_upload_bg,
 )
 from archon.routers.ui import (
     router as _ui_router,
-    TextReplacementItem,
-    TextReplacementsRequest,
-    api_save_text_replacements,
-    FullHtmlSaveRequest,
-    _full_html_target_files,
-    api_save_full_html,
-    api_studio_upload_bg,
 )
+
 app.include_router(_quickchat_router)
 app.include_router(_ui_router)
 
 # Kontext-Meter & Session-Compaction (M73, Teil 1+2)
 from archon.routers.context_meter import router as _context_meter_router  # noqa: E402
+
 app.include_router(_context_meter_router)
 
 
@@ -1484,17 +1753,22 @@ app.include_router(_context_meter_router)
 # BRAIN & ARCHIV ROUTER (ausgelagert nach archon.routers.brain)
 # ============================================================================
 from archon.routers.brain import (
-    router as _brain_router,
-    configure as _brain_configure,
     api_brain_galaxy_data,
     api_brain_vault_file,
-    api_library_upload,
-    api_library_ingest,
-    api_library_books,
-    api_library_book_content,
     api_get_quartz_config,
+    api_library_book_content,
+    api_library_books,
+    api_library_ingest,
+    api_library_upload,
     api_save_quartz_config,
 )
+from archon.routers.brain import (
+    configure as _brain_configure,
+)
+from archon.routers.brain import (
+    router as _brain_router,
+)
+
 _brain_configure(
     _spawn_background=_spawn_background,
     _get_rag_api_key=_get_rag_api_key,
@@ -1506,18 +1780,21 @@ app.include_router(_brain_router)
 
 # --- NOTEBOOKLM STUDIO & GROUNDED RETRIEVAL API (ausgelagert nach archon.routers.notebooks) ---
 from archon.routers.notebooks import (
-    router as _notebooks_router,
-    api_get_notebooks,
+    api_attach_vault_source,
     api_create_notebook,
     api_delete_notebook,
-    api_get_notebook_sources,
-    api_upload_notebook_source,
-    api_attach_vault_source,
     api_delete_notebook_source,
     api_get_notebook_chat,
+    api_get_notebook_sources,
+    api_get_notebooks,
     api_query_notebook,
     api_sync_notebook_obsidian,
+    api_upload_notebook_source,
 )
+from archon.routers.notebooks import (
+    router as _notebooks_router,
+)
+
 app.include_router(_notebooks_router)
 
 
@@ -1540,7 +1817,7 @@ async def _warm_hermes_skill_caches():
     def _warm():
         t0 = time.time()
         try:
-            from archon.routers.skills import build_skills_file_index, api_get_hermes_skills
+            from archon.routers.skills import api_get_hermes_skills, build_skills_file_index
             build_skills_file_index()
             api_get_hermes_skills()
             print(f"[Skills-Warmup] caches warm after {time.time() - t0:.1f}s")
@@ -1550,13 +1827,16 @@ async def _warm_hermes_skill_caches():
 
 
 from archon.routers.telegram import (
-    router as _telegram_router,
-    api_telegram_relay,
-    api_telegram_voice_relay,
-    api_telegram_send,
-    _redact_telegram_secrets,
     TelegramSendPayload,
+    _redact_telegram_secrets,
+    api_telegram_relay,
+    api_telegram_send,
+    api_telegram_voice_relay,
 )
+from archon.routers.telegram import (
+    router as _telegram_router,
+)
+
 app.include_router(_telegram_router)
 
 
@@ -1565,26 +1845,35 @@ app.include_router(_telegram_router)
 # ZENTRALER ENTSCHEIDUNGS-SERVICE (ausgelagert nach archon.routers.decisions)
 # =========================================================================
 from archon.routers.decisions import (
-    router as _decisions_router,
-    api_decide_permission_gate,
+    _antwort_grund,
+    _decision_followup,
     _decision_kanban_status,
     _decision_self_api,
-    register_decision,
-    create_decision,
     _folge_nicht,
-    _antwort_grund,
-    _pruefe_move_antwort,
-    _pruefe_gate_persistiert,
     _pruefe_gate_antwort,
+    _pruefe_gate_persistiert,
+    _pruefe_move_antwort,
     _pruefe_synthese_beleg,
-    _synthese_parent,
-    _followup_synthesis as _impl_followup_synthesis,
-    _followup_mission_start as _impl_followup_mission_start,
-    _followup_permission_gate as _impl_followup_permission_gate,
-    _decision_followup,
-    api_decide_decision,
     _sync_org_hierarchy_node,
+    _synthese_parent,
+    api_decide_decision,
+    api_decide_permission_gate,
+    create_decision,
+    register_decision,
 )
+from archon.routers.decisions import (
+    _followup_mission_start as _impl_followup_mission_start,
+)
+from archon.routers.decisions import (
+    _followup_permission_gate as _impl_followup_permission_gate,
+)
+from archon.routers.decisions import (
+    _followup_synthesis as _impl_followup_synthesis,
+)
+from archon.routers.decisions import (
+    router as _decisions_router,
+)
+
 app.include_router(_decisions_router)
 _set_decision_factory(create_decision)
 
@@ -1612,12 +1901,15 @@ class ProfileStatusUpdate(BaseModel):
 
 
 from archon.routers.hermes_ops import (
-    router as _hermes_ops_router,
     _get_hermes_config_path,
     api_get_hermes_config,
-    api_save_hermes_config,
     api_hermes_memory_purge,
+    api_save_hermes_config,
 )
+from archon.routers.hermes_ops import (
+    router as _hermes_ops_router,
+)
+
 app.include_router(_hermes_ops_router)
 
 # ============================================================================
@@ -1626,27 +1918,32 @@ app.include_router(_hermes_ops_router)
 # D-12: Default Fallback Modell für OmniRoute / Chat Stream
 model = "auto/best-coding"
 from archon.routers.chat import (
-    router as _chat_router,
-    configure as _chat_configure,
-    _quickchat_state_session_id,
+    ChatStreamRequest,
+    ImageGenerateToolRequest,
+    RenameSessionRequest,
+    SetProfileModelRequest,
+    _ensure_session_exists,
     _ensure_state_session,
     _load_state_history,
-    _ensure_session_exists,
-    _save_message_to_db,
+    _quickchat_state_session_id,
     _record_session_model_usage,
-    record_task_tokens,
-    ChatStreamRequest,
-    SetProfileModelRequest,
-    RenameSessionRequest,
-    ImageGenerateToolRequest,
-    api_get_chat_sessions,
-    api_get_chat_session_messages,
-    api_rename_chat_session,
-    api_chat_upload,
+    _save_message_to_db,
     _warn_price_lookup_once,
     api_chat_stream,
+    api_chat_upload,
+    api_get_chat_session_messages,
+    api_get_chat_sessions,
+    api_rename_chat_session,
     api_tool_image_generate,
+    record_task_tokens,
 )
+from archon.routers.chat import (
+    configure as _chat_configure,
+)
+from archon.routers.chat import (
+    router as _chat_router,
+)
+
 _chat_configure(create_decision=create_decision)
 app.include_router(_chat_router)
 
@@ -1654,17 +1951,20 @@ app.include_router(_chat_router)
 # DELEGATION ENGINE v2 (ausgelagert nach archon.core.delegation)
 # ============================================================================
 from archon.core.delegation import (
-    configure as _delegation_configure,
-    _load_org_hierarchy_map,
-    _check_delegation_permission,
     DELEGATION_ALIAS_MAP,
-    _resolve_target_agent_id,
     _build_kader_roster_summary,
-    _get_delegation_prompt_for,
-    _parse_delegation_blocks,
-    _trigger_autonomous_orchestrator_followup,
+    _check_delegation_permission,
     _execute_delegation,
+    _get_delegation_prompt_for,
+    _load_org_hierarchy_map,
+    _parse_delegation_blocks,
+    _resolve_target_agent_id,
+    _trigger_autonomous_orchestrator_followup,
 )
+from archon.core.delegation import (
+    configure as _delegation_configure,
+)
+
 _delegation_configure(
     api_get_hermes_profiles=api_get_hermes_profiles,
     _get_state_db=_get_state_db,
@@ -1678,56 +1978,71 @@ _delegation_configure(
 _GUARDIAN_STATS_CACHE = {}
 # --- GUARDIAN ROUTER (ausgelagert nach archon.routers.guardian, 1157 Zeilen) ---
 from archon.routers.guardian import (
-    router as _guardian_router,
-    api_get_guardian_stats,
-    api_get_guardian_config,
-    api_save_guardian_config,
-    api_toggle_guardian_plugin,
-    api_get_plugin_config,
-    api_save_plugin_config,
-    api_clear_guardian_cache,
     _GUARDIAN_ALLOWED_TIMEFRAMES,
-    _GUARDIAN_CACHE_TTL,
     _GUARDIAN_CACHE_MAX_ENTRIES,
+    _GUARDIAN_CACHE_TTL,
+    api_clear_guardian_cache,
+    api_get_guardian_config,
+    api_get_guardian_stats,
+    api_get_plugin_config,
+    api_save_guardian_config,
+    api_save_plugin_config,
+    api_toggle_guardian_plugin,
 )
+from archon.routers.guardian import (
+    router as _guardian_router,
+)
+
 app.include_router(_guardian_router)
 
 # --- HERMES RAW CONFIG & LIVE EDITOR ENDPOINTS ---
 # --- HERMES CONFIG ROUTER (ausgelagert nach archon.routers.hermes_config, 792 Zeilen) ---
 from archon.routers.hermes_config import (
-    router as _hermes_config_router,
-    configure as _hermes_config_configure,
-    api_get_hermes_form_config,
-    api_save_hermes_form_config,
-    api_get_hermes_raw_config,
-    api_save_hermes_raw_config,
     _get_hermes_config_paths,
+    api_get_hermes_form_config,
+    api_get_hermes_raw_config,
+    api_save_hermes_form_config,
+    api_save_hermes_raw_config,
 )
+from archon.routers.hermes_config import (
+    configure as _hermes_config_configure,
+)
+from archon.routers.hermes_config import (
+    router as _hermes_config_router,
+)
+
 _hermes_config_configure(_sync_org_hierarchy_node=_sync_org_hierarchy_node)
 app.include_router(_hermes_config_router)
 
 # --- KONTEXT-HILFE (ausgelagert nach archon.routers.context_help) ---
-from archon.routers.context_help import router as _context_help_router, HELP_CONTEXT_DATA
+from archon.routers.context_help import HELP_CONTEXT_DATA
+from archon.routers.context_help import router as _context_help_router
+
 app.include_router(_context_help_router)
 
 # --- MEILENSTEIN 4: MULTI-USER & RBAC ENDPOINTS (ausgelagert nach archon.routers.auth) ---
-from backend.auth_service import auth_service
 from archon.routers.auth import (
-    router as _auth_router,
-    configure as _auth_configure,
-    get_current_user_from_request,
-    require_admin,
-    api_auth_status,
-    api_auth_toggle,
-    api_auth_me,
+    api_auth_change_password,
+    api_auth_create_user,
+    api_auth_delete_user,
+    api_auth_list_users,
     api_auth_login,
     api_auth_logout,
-    api_auth_list_users,
-    api_auth_create_user,
+    api_auth_me,
+    api_auth_status,
+    api_auth_toggle,
     api_auth_update_user,
-    api_auth_change_password,
-    api_auth_delete_user,
+    get_current_user_from_request,
+    require_admin,
 )
+from archon.routers.auth import (
+    configure as _auth_configure,
+)
+from archon.routers.auth import (
+    router as _auth_router,
+)
+from backend.auth_service import auth_service
+
 _auth_configure(
     _load_json=_load_json,
     _save_json=_save_json,
@@ -1757,61 +2072,78 @@ def api_get_paperclip_agents():
 
 # --- TALENT- & SKILL-MARKTPLATZ ENDPOINTS (ausgelagert nach archon.routers.marketplace) ---
 from archon.routers.marketplace import (
-    router as _marketplace_router,
-    configure as _marketplace_configure,
     api_assign_skill_to_profile,
-    api_marketplace_recruit,
     api_get_marketplace_sources,
-    api_get_marketplace_templates,
     api_get_marketplace_template_detail,
+    api_get_marketplace_templates,
+    api_get_skill_detail,
     api_get_skill_sources,
     api_get_skills_list,
-    api_get_skill_detail,
+    api_marketplace_recruit,
 )
+from archon.routers.marketplace import (
+    configure as _marketplace_configure,
+)
+from archon.routers.marketplace import (
+    router as _marketplace_router,
+)
+
 _marketplace_configure(save_all_agent_profiles=save_all_agent_profiles)
 app.include_router(_marketplace_router)
 
 from archon.routers.memory_ops import (
-    router as _memory_ops_router,
-    api_get_memory_stats,
-    api_get_agent_real_stats,
     api_consolidate_memory,
     api_evict_stale_memory,
-    get_chat_history_api,
-    clear_chat_history_api,
+    api_get_agent_real_stats,
+    api_get_memory_stats,
     api_memory_context,
-    api_memory_profile,
     api_memory_learning,
+    api_memory_profile,
     api_memory_vault_summary,
+    clear_chat_history_api,
+    get_chat_history_api,
 )
+from archon.routers.memory_ops import (
+    router as _memory_ops_router,
+)
+
 app.include_router(_memory_ops_router)
 
 from archon.routers.email_settings import (
-    router as _email_settings_router,
     SmtpConfigPayload,
     api_get_smtp_settings,
     api_save_smtp_settings,
-    api_test_smtp_settings,
     api_sync_emails_endpoint,
+    api_test_smtp_settings,
 )
+from archon.routers.email_settings import (
+    router as _email_settings_router,
+)
+
 app.include_router(_email_settings_router)
 
 from archon.routers.security_scanner import (
-    router as _security_scanner_router,
+    api_get_security_stats,
     api_scan_email_security,
     api_validate_output_security,
-    api_get_security_stats,
 )
+from archon.routers.security_scanner import (
+    router as _security_scanner_router,
+)
+
 app.include_router(_security_scanner_router)
 
 from archon.routers.research import (
-    router as _research_router,
-    api_get_research_providers,
-    api_run_research_mission,
-    api_get_research_history,
     api_get_research_dossier,
+    api_get_research_history,
+    api_get_research_providers,
     api_get_research_sources,
+    api_run_research_mission,
 )
+from archon.routers.research import (
+    router as _research_router,
+)
+
 app.include_router(_research_router)
 
 
@@ -1821,10 +2153,13 @@ app.include_router(_research_router)
 
 # --- HERMES AGENT CORE UPDATE (NousResearch/hermes-agent) ---
 from archon.routers.updater import (
-    router as _updater_router,
-    api_hermes_update_check,
     api_hermes_update_apply,
+    api_hermes_update_check,
 )
+from archon.routers.updater import (
+    router as _updater_router,
+)
+
 app.include_router(_updater_router)
 
 # --- VERTRAGS- & FRISTENMANAGEMENT (t-0a2171) ---
@@ -1836,7 +2171,28 @@ def on_startup_drain_recovery():
         from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
         res = graceful_shutdown_coordinator.auto_resume_on_startup()
         print(f"[Archon] Startup Recovery: {res}")
+        # D07/MED: ein fehlgeschlagener Resume-Enqueue ist kein Erfolg. Der
+        # Coordinator auditiert/eskaliert bereits; /readyz spiegelt den Fehler.
+        failures = [
+            cp for cp in (res.get("recovered_checkpoints") or [])
+            if not (cp.get("restart") or {}).get("queued")
+            and not (cp.get("restart") or {}).get("duplicate")
+        ]
+        if failures:
+            for cp in failures:
+                _STARTUP_RECOVERY_FAILED.append({
+                    "task_id": cp.get("task_id"),
+                    "reason": (cp.get("restart") or {}).get("reason", "unknown"),
+                    "ts": time.time(),
+                })
+            logger.error(
+                "[Startup] %s Re(sume)-Checkpoint(s) konnten nicht enqueued werden: %s",
+                len(failures), [cp.get("task_id") for cp in failures],
+            )
     except Exception as e:
+        # Nicht nur stderr: Otherwise bleibt /readyz gruen trotz fehlgeschlagener Recovery.
+        _STARTUP_RECOVERY_FAILED.append({"reason": str(e), "ts": time.time()})
+        logger.error("[Startup] Startup Recovery Fehler: %s", e)
         print(f"[Archon] Startup Recovery Fehler: {e}", file=sys.stderr)
 
 
@@ -1863,24 +2219,30 @@ async def on_shutdown_graceful():
 
 # --- DOKUMENTEN-PARSING & TABELLENEXTRAKTION (t-539b65) ---
 from archon.routers.documents import (
-    router as _documents_router,
     _resolve_parser_input,
-    api_parse_document,
     api_extract_tables,
+    api_parse_document,
 )
+from archon.routers.documents import (
+    router as _documents_router,
+)
+
 app.include_router(_documents_router)
 
 
 # --- DEAL-PIPELINE & FORECAST-ENGINE (ausgelagert nach archon.routers.deals) ---
 from archon.routers.deals import (
-    router as _deals_router,
-    api_list_deals,
     api_deal_forecast,
-    api_get_deal,
-    api_save_deal,
-    api_move_deal_stage,
     api_delete_deal,
+    api_get_deal,
+    api_list_deals,
+    api_move_deal_stage,
+    api_save_deal,
 )
+from archon.routers.deals import (
+    router as _deals_router,
+)
+
 app.include_router(_deals_router)
 
 
@@ -1895,15 +2257,18 @@ _VAULT_FILES_CACHE = {"ts": 0.0, "data": []}
 
 # --- OBSIDIAN VAULT ROUTER (ausgelagert nach archon.routers.vault) ---
 from archon.routers.vault import (
-    router as _vault_router,
+    _VAULT_FILES_CACHE,
+    api_delete_vault_file_direct,
+    api_edit_vault_file_direct,
+    api_generate_vault_index,
+    api_get_vault_files,
     api_get_vault_list,
     api_read_vault_file_direct,
-    api_edit_vault_file_direct,
-    api_delete_vault_file_direct,
-    api_get_vault_files,
-    api_generate_vault_index,
-    _VAULT_FILES_CACHE,
 )
+from archon.routers.vault import (
+    router as _vault_router,
+)
+
 app.include_router(_vault_router)
 
 @app.post("/api/sandbox")
@@ -1919,39 +2284,49 @@ def api_run_python_sandbox(request: Request, payload: Dict = Body(...)):
 
 # --- KANBAN PERSISTENZ ROUTER (ausgelagert nach archon.routers.kanban) ---
 from archon.routers.kanban import (
-    router as _kanban_router,
     api_get_kanban,
     api_save_kanban,
 )
+from archon.routers.kanban import (
+    router as _kanban_router,
+)
+
 app.include_router(_kanban_router)
 
 # --- ARCHON V2 CAPABILITIES ROUTER (M32-M94) ---
 from archon.routers.v2_capabilities import router as _v2_capabilities_router
+
 app.include_router(_v2_capabilities_router)
 from archon.routers.content_machine import router as _content_machine_router
+
 app.include_router(_content_machine_router)
 
 # --- DOCKER CONTAINER MANAGEMENT ROUTER (ausgelagert nach archon.routers.containers) ---
 from archon.routers.containers import (
-    router as _containers_router,
-    configure as _containers_configure,
-    load_agent_configs,
-    save_agent_config,
-    docker_socket_request,
-    get_container_settings,
-    save_container_settings,
-    get_container_logs_api,
-    get_all_container_logs_api,
-    get_hermes_profile_logs_api,
-    _docker_container_stats,
-    _container_stats_payload,
-    get_container_metrics_api,
-    get_container_files_api,
-    get_container_file_content,
     ContainerActionRequest,
-    run_container_action,
+    _container_stats_payload,
+    _docker_container_stats,
+    docker_socket_request,
+    get_all_container_logs_api,
+    get_container_file_content,
+    get_container_files_api,
+    get_container_logs_api,
+    get_container_metrics_api,
+    get_container_settings,
+    get_hermes_profile_logs_api,
     inject_container_config,
+    load_agent_configs,
+    run_container_action,
+    save_agent_config,
+    save_container_settings,
 )
+from archon.routers.containers import (
+    configure as _containers_configure,
+)
+from archon.routers.containers import (
+    router as _containers_router,
+)
+
 _containers_configure(
     detect_container_port=detect_container_port,
     post_docker_container_action=post_docker_container_action,
@@ -1959,12 +2334,15 @@ _containers_configure(
 app.include_router(_containers_router)
 
 from archon.routers.container_ops import (
-    router as _container_ops_router,
-    send_prompt_to_agent,
     ContainerExecRequest,
-    exec_container_command_api,
     abort_agent_endpoint,
+    exec_container_command_api,
+    send_prompt_to_agent,
 )
+from archon.routers.container_ops import (
+    router as _container_ops_router,
+)
+
 app.include_router(_container_ops_router)
 
 
@@ -1978,16 +2356,19 @@ app.include_router(_hermes_proxy_router)
 
 
 from archon.routers.hr import (
-    router as _hr_router,
+    LogActivityReq,
     SavePersonalakteReq,
     SaveSoulReq,
-    LogActivityReq,
-    api_get_personalakte,
-    api_save_personalakte,
     api_get_hermes_soul,
-    api_save_hermes_soul,
+    api_get_personalakte,
     api_log_personalakte_activity,
+    api_save_hermes_soul,
+    api_save_personalakte,
 )
+from archon.routers.hr import (
+    router as _hr_router,
+)
+
 app.include_router(_hr_router)
 
 
@@ -1998,17 +2379,20 @@ app.include_router(_hr_router)
 
 
 from pydantic import BaseModel
+
+
 class OSKanbanTaskStatusUpdate(BaseModel):
     status: str
 
 # Mission-Control-Store -> archon.core.mission_control (Import oben)
 
 from archon.services.mission_sync import (
+    _LIVE_TELEMETRY_CACHE,
+    _get_live_telemetry_metrics,
     _slugify,
     _sync_task_to_obsidian,
-    _get_live_telemetry_metrics,
-    _LIVE_TELEMETRY_CACHE,
 )
+
 
 @app.get("/api/v1/events/stream")
 async def sse_events_stream():
@@ -2034,7 +2418,7 @@ async def sse_events_stream():
                     yield f"data: {payload}\n\n"
                 except asyncio.TimeoutError:
                     # Keepalive Heartbeat alle 20s
-                    yield f": keepalive\n\n"
+                    yield ": keepalive\n\n"
         except asyncio.CancelledError as cancel_exc:
             logger.debug(f"[SSE] Event-Stream vom Client geschlossen: {cancel_exc}")
         finally:
@@ -2182,41 +2566,48 @@ async def _run_synthesis_cascade(parent_project_id: str):
 
 
 from archon.routers.prompts import (
-    router as _prompts_router,
-    upload_prompt_studio_context,
-    TemplateSaveRequest,
     PromptOptimizeRequest,
+    TemplateSaveRequest,
     optimize_prompt_endpoint,
+    upload_prompt_studio_context,
 )
+from archon.routers.prompts import (
+    router as _prompts_router,
+)
+
 app.include_router(_prompts_router)
 
 
 from archon.routers.proxies import (
-    router as _proxies_router,
-    _get_shared_proxy_client,
-    _get_omniroute_proxy,
-    forward_to_omniroute,
-    omniroute_proxy,
-    omniroute_next_assets,
     _get_n8n_proxy,
+    _get_omniroute_proxy,
+    _get_shared_proxy_client,
     forward_to_n8n,
-    n8n_proxy,
+    forward_to_omniroute,
     n8n_assets_proxy,
+    n8n_proxy,
     n8n_rest_proxy,
+    omniroute_next_assets,
+    omniroute_proxy,
 )
+from archon.routers.proxies import (
+    router as _proxies_router,
+)
+
 app.include_router(_proxies_router)
 
 
 from archon.routers.ui import (
     get_hud_page,
-    get_mobile_cockpit,
-    get_manifest,
-    get_index_v2,
     get_index,
+    get_index_v2,
+    get_manifest,
+    get_mobile_cockpit,
 )
 
 try:
-    from views_core import router as views_core_router, get_apps_dir
+    from views_core import get_apps_dir
+    from views_core import router as views_core_router
     app.include_router(views_core_router)
     apps_static_dir = get_apps_dir()
     if os.path.exists(apps_static_dir):
@@ -2270,93 +2661,128 @@ def debug_db(request: Request):
 
 
 from archon.routers.inbox_tools import (
-    router as _inbox_tools_router,
+    api_create_tool_proposal,
     api_get_inbox_watcher_config,
+    api_list_tool_proposals,
+    api_resolve_tool_proposal,
     api_save_inbox_watcher_config,
     api_scan_inbox_watcher_now,
-    api_list_tool_proposals,
-    api_create_tool_proposal,
-    api_resolve_tool_proposal,
 )
+from archon.routers.inbox_tools import (
+    router as _inbox_tools_router,
+)
+
 app.include_router(_inbox_tools_router)
 
 
-from archon.routers.resilience import (
-    router as _resilience_router,
-    api_list_snapshots,
-    api_restore_snapshot,
-    api_list_audit_logs,
-    api_verify_audit_log,
-    api_heal_service,
-    api_fleet_health_check,
-    api_dispatch_notification,
-    api_list_recent_notifications,
-    api_get_task_trace,
-    api_fork_task_trace,
-    api_rollback_task_trace,
-    api_get_healing_logs,
-)
-from archon.routers.mesh import (
-    router as _mesh_router,
-    api_query_rag,
-    api_diff_preview,
-    api_list_skill_proposals,
-    api_approve_skill_proposal,
-    api_ingest_inbound_event,
-    api_list_event_history,
-    api_scan_inbox_directory,
-    api_get_concurrency_status,
-    api_save_concurrency_config,
-    api_analyze_vision,
-    api_create_handoff,
-    api_accept_handoff,
-    api_review_task_consensus,
-    api_check_task_budget,
-    api_run_council_vote,
-    api_get_consensus_history,
-    api_execute_sandbox,
-    api_get_memory_consolidation_settings,
-    api_save_memory_consolidation_settings,
-    api_browse_and_capture,
-    api_run_war_room,
-    api_get_war_room_history,
+from archon.routers.autonomy_settings import (
+    api_get_autonomy_modules_settings,
+    api_get_model_routing,
+    api_optimize_role_prompt,
+    api_resolve_model_routing,
+    api_run_eval_regression_suite,
+    api_save_autonomy_modules_settings,
+    api_save_model_routing,
+    api_semantic_cache_clear,
+    api_semantic_cache_lookup,
+    api_semantic_cache_stats,
+    api_semantic_cache_store,
 )
 from archon.routers.autonomy_settings import (
     router as _autonomy_settings_router,
-    api_get_model_routing,
-    api_save_model_routing,
-    api_resolve_model_routing,
-    api_get_autonomy_modules_settings,
-    api_save_autonomy_modules_settings,
-    api_semantic_cache_lookup,
-    api_semantic_cache_store,
-    api_semantic_cache_stats,
-    api_semantic_cache_clear,
-    api_optimize_role_prompt,
-    api_run_eval_regression_suite,
 )
+from archon.routers.mesh import (
+    api_accept_handoff,
+    api_analyze_vision,
+    api_approve_skill_proposal,
+    api_browse_and_capture,
+    api_check_task_budget,
+    api_create_handoff,
+    api_diff_preview,
+    api_execute_sandbox,
+    api_get_concurrency_status,
+    api_get_consensus_history,
+    api_get_memory_consolidation_settings,
+    api_get_war_room_history,
+    api_ingest_inbound_event,
+    api_list_event_history,
+    api_list_skill_proposals,
+    api_query_rag,
+    api_review_task_consensus,
+    api_run_council_vote,
+    api_run_war_room,
+    api_save_concurrency_config,
+    api_save_memory_consolidation_settings,
+    api_scan_inbox_directory,
+)
+from archon.routers.mesh import (
+    router as _mesh_router,
+)
+from archon.routers.resilience import (
+    api_dispatch_notification,
+    api_fleet_health_check,
+    api_fork_task_trace,
+    api_get_healing_logs,
+    api_get_task_trace,
+    api_heal_service,
+    api_list_audit_logs,
+    api_list_recent_notifications,
+    api_list_snapshots,
+    api_restore_snapshot,
+    api_rollback_task_trace,
+    api_verify_audit_log,
+)
+from archon.routers.resilience import (
+    router as _resilience_router,
+)
+
 app.include_router(_resilience_router)
 app.include_router(_mesh_router)
 app.include_router(_autonomy_settings_router)
 
 
+class HealingAttemptPayload(BaseModel):
+    """D-D7 (A1/A7-DELEGATED): getippter Body statt rohem Dict.
+
+    `apply_patch` ist bewusst KEIN Feld: eine Code-S-Schreibaktion ist eine
+    HITL-Entscheidung und darf nicht vom Client ueber den Body erzwungen
+    werden. `extra="ignore"` verwirft einen mitgelieferten apply_patch-Wert
+    still, ohne die Route zu kippen.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    task_id: str = "heal-task"
+    title: str = "Autonome Fehlerbehebung"
+    failed_code: str = ""
+    error_output: str = ""
+    worker_agent: str = "hermes-coder"
+    affected_file: Optional[str] = None
+    attempt: int = Field(default=1, ge=1)
+    max_attempts: Optional[int] = Field(default=None, ge=1)
+    model: Optional[str] = None
+
+
 @app.post("/api/healing/attempt")
-async def api_attempt_task_healing(request: Request, payload: Dict = Body(...)):
+async def api_attempt_task_healing(request: Request, payload: HealingAttemptPayload):
     require_admin_or_503(request)
     from backend.task_self_healer import task_self_healer
 
+    # P0-5 / D-D7: Patch-Anwendung nur aus der HITL-Session. Es gibt keinen
+    # repo-weiten HITL-Session-Helper fuer diesen Pfad — daher fail-closed:
+    # ohne explizit gesetztes Flag am Request-State wird nie geschrieben.
+    apply_patch = bool(getattr(request.state, "hitl_apply_patch", False))
     return await task_self_healer.attempt_self_healing(
-        task_id=payload.get("task_id", "heal-task"),
-        task_title=payload.get("title", "Autonome Fehlerbehebung"),
-        failed_code=payload.get("failed_code", ""),
-        error_output=payload.get("error_output", ""),
-        worker_agent=payload.get("worker_agent", "hermes-coder"),
-        affected_file=payload.get("affected_file"),
-        attempt=int(payload.get("attempt", 1)),
-        max_attempts=int(payload["max_attempts"]) if "max_attempts" in payload else None,
-        model=payload.get("model"),
-        # P0-5: Code-S rewrite nur bei explizitem Opt-in; sonst 'proposed'.
-        apply_patch=bool(payload.get("apply_patch", False)),
+        task_id=payload.task_id,
+        task_title=payload.title,
+        failed_code=payload.failed_code,
+        error_output=payload.error_output,
+        worker_agent=payload.worker_agent,
+        affected_file=payload.affected_file,
+        attempt=payload.attempt,
+        max_attempts=payload.max_attempts,
+        model=payload.model,
+        apply_patch=apply_patch,
     )
 
 
@@ -2400,28 +2826,68 @@ def _ensure_zero_egress_worker_networks():
         logger.warning(f"[ZeroEgress] Worker-Netzwerk-Init fehlgeschlagen: {e}")
 
 
+async def _import_n8n_workflows_on_startup() -> None:
+    """D06-Nachlauf (A7): opt-in n8n-Import/Aktivierung im Lifespan.
+
+    Default `not_configured`: die Scripts nutzen `docker exec`/`docker cp` und
+    schreiben einen Service-Token in 0600-Tempdateien. Nur mit
+    `ARCHON_N8N_STARTUP_IMPORT=1` laeuft der Importer (inkl. Webhook-
+    Aktivierung via activate_n8n_workflows.js) in einem Worker-Thread.
+    `deploy_n8n_routines.run()` wird bewusst NICHT automatisch gerufen: es
+    restarted den n8n-Container und beschreibt das versionierte Bundle
+    (siehe Fix-Log — DELEGATED).
+    """
+    enabled = os.getenv("ARCHON_N8N_STARTUP_IMPORT", "").strip().lower() in ("1", "true", "yes")
+    if not enabled:
+        _N8N_STARTUP_STATUS.update(status="not_configured", detail="opt-in via ARCHON_N8N_STARTUP_IMPORT=1")
+        return
+    try:
+        from scripts.import_n8n_workflows import main as _n8n_import_main
+        rc = await asyncio.to_thread(_n8n_import_main)
+        _N8N_STARTUP_STATUS.update(
+            status="ok" if rc == 0 else "error",
+            detail="import+activation ok" if rc == 0 else f"exit_code={rc}",
+            ts=time.time(),
+        )
+        if rc != 0:
+            logger.error("[Startup] n8n-Import/Aktivierung fehlgeschlagen (exit=%s).", rc)
+        else:
+            logger.info("[Startup] n8n-Import/Aktivierung erfolgreich.")
+    except Exception as exc:
+        _N8N_STARTUP_STATUS.update(
+            status="error", detail=f"{type(exc).__name__}: {exc}", ts=time.time()
+        )
+        logger.error("[Startup] n8n-Import/Aktivierung fehlgeschlagen: %s", exc)
+
+
 _STARTUP_HOOKS.extend([
     _start_watchdog_daemon,      # 1. Watchdog/Supervisor
     on_startup_drain_recovery,   # 2. Task-Recovery nach Absturz
     _harden_secret_permissions,  # 3. Secret-Dateien auf 600 setzen
     _ensure_zero_egress_worker_networks,  # 3b. Isolierte Docker-Worker-Netze (--internal, keine Internet-Route)
+    _import_n8n_workflows_on_startup,  # 3c. D06: opt-in n8n-Import/Aktivierung (default not_configured)
     _start_gateway_idle_loop,    # 4. IMAP/Inbox/Internet-Watchdog-Loops
     _warm_hermes_skill_caches,   # 4. Skills-Cache vorwärmen (Thread)
     _check_rag_api_key_config,   # 5. RAG-Key vorhanden? Fehlt er -> ERROR-Zeile
 ])
 
 def _stop_watchdog_daemon():
-    """Watchdog-Thread beim Shutdown beenden (frueher lief er ewig weiter)."""
+    """Watchdog-Supervisor (Prozess ODER Thread) beim Shutdown verifiziert stoppen."""
     global watchdog_runner
     if watchdog_runner is None:
         return
+    runner = watchdog_runner
+    watchdog_runner = None
     try:
-        watchdog_runner.stop()  # Event setzen + join (statt Flag + 30 s Wartezeit)
+        stopped = runner.stop()  # Event setzen + join + terminate/kill-Fallback
+        if stopped is False:
+            _WATCHDOG_STOP_FAILED.append({"reason": "stop() returned False", "ts": time.time()})
+            logger.error("[Shutdown] Watchdog-Supervisor konnte nicht verifiziert gestoppt werden.")
     except Exception as exc:
         # F-042: frueher nur DEBUG -> der NameError im stop() war im Produktivlog
         # unsichtbar und der Thread lief beim Reload weiter.
+        _WATCHDOG_STOP_FAILED.append({"reason": str(exc), "ts": time.time()})
         logger.error(f"[Shutdown] Watchdog-Stop fehlgeschlagen: {type(exc).__name__}: {exc}")
-    watchdog_runner = None
 
 
 async def _cancel_tracked_tasks() -> None:
@@ -2449,6 +2915,65 @@ async def _close_dispatcher_clients() -> None:
         logger.debug(f"[Shutdown] Dispatcher-Client-Hinweis: {exc}")
 
 
+async def _close_all_http_clients() -> None:
+    """D08/S-8.2 (A5/A9-DELEGATED): alle langlebigen Client-Pools schliessen.
+
+    `agent_router.router_instance.close_http_clients()` existiert bereits.
+    Die drei anderen Module haben (Stand Audit) KEINE close_all*-Funktion —
+    deshalb werden ihre echten Modul-Attribute direkt geschlossen. Es wird
+    bewusst kein nicht existierender Helfer aufgerufen.
+    """
+    closed = 0
+    # 1. AgentRouter: vorhandener Helfer, idempotent.
+    try:
+        from backend import agent_router
+        await agent_router.router_instance.close_http_clients()
+    except Exception as exc:
+        logger.debug("[Shutdown] AgentRouter-Client-Close-Hinweis: %s", exc)
+
+    # 2./4. Loop-keyed Pools (echte Modulattribute, Snapshot vor clear()).
+    for module_path, pool_name in (
+        ("archon.routers.hermes_proxy", "_HERMES_CLIENTS_BY_LOOP"),
+        ("utils.reverse_proxy", "_PROXY_CLIENTS"),
+    ):
+        try:
+            if module_path.startswith("archon"):
+                from archon.routers import hermes_proxy as _pool_module
+            else:
+                from utils import reverse_proxy as _pool_module
+            pool = getattr(_pool_module, pool_name, None)
+            clients = list(pool.values()) if pool is not None else []
+            for client in clients:
+                try:
+                    if not client.is_closed:
+                        await client.aclose()
+                        closed += 1
+                except Exception as exc:
+                    logger.debug("[Shutdown] %s Client-Close-Hinweis: %s", pool_name, exc)
+            if pool is not None:
+                try:
+                    pool.clear()
+                except Exception as exc:
+                    logger.debug("[Shutdown] %s Dict-Clear-Hinweis: %s", pool_name, exc)
+        except Exception as exc:
+            logger.debug("[Shutdown] %s Pool-Close-Hinweis: %s", pool_name, exc)
+
+    # 3. system.py: einzelner globaler Client (kein Loop-Key).
+    try:
+        from archon.routers import system as _system_module
+        client = getattr(_system_module, "_SYSTEM_HTTP_CLIENT", None)
+        if client is not None:
+            if not client.is_closed:
+                await client.aclose()
+                closed += 1
+            setattr(_system_module, "_SYSTEM_HTTP_CLIENT", None)
+    except Exception as exc:
+        logger.debug("[Shutdown] System-Client-Close-Hinweis: %s", exc)
+
+    if closed:
+        logger.info("[Shutdown] %s HTTP-Client(s) zentral geschlossen.", closed)
+
+
 async def _close_proxy_clients() -> None:
     """F-054: id(loop)-HTTP-Clients der Proxy-Router sauber schliessen."""
     try:
@@ -2470,6 +2995,7 @@ _SHUTDOWN_HOOKS.extend([
     _cancel_tracked_tasks,       # TaskRegistry-Cascades abbrechen
     _stop_watchdog_daemon,       # Watchdog-Thread stoppen
     _cancel_background_tasks,    # Hintergrund-Loops stoppen
+    _close_all_http_clients,     # reversed: frueh — alle HTTP-Pools vor Cancel schliessen
     on_shutdown_graceful,        # reversed: ZUERST — Drain & Checkpoint vor Cancel
 ])
 
@@ -2576,8 +3102,10 @@ except Exception as _e2_plugins:
     _ROUTER_LOAD_ERRORS.append("plugins: " + str(_e2_plugins))
 try:
     from archon.routers.governance import (
-        router as _governance_router2,
         configure as _governance_configure,
+    )
+    from archon.routers.governance import (
+        router as _governance_router2,
     )
     _governance_configure(
         _load_mission_control_data=_load_mission_control_data,
@@ -2598,8 +3126,10 @@ except Exception as _e2_templates:
     _ROUTER_LOAD_ERRORS.append("templates: " + str(_e2_templates))
 try:
     from archon.routers.boardroom import (
-        router as _boardroom_router2,
         configure as _boardroom_configure,
+    )
+    from archon.routers.boardroom import (
+        router as _boardroom_router2,
     )
     _boardroom_configure(
         load_boardroom_frameworks=load_boardroom_frameworks,
@@ -2622,8 +3152,10 @@ except Exception as _err_llmp:
 
 try:
     from archon.routers.hermes_profiles import (
-        router as _hermes_profiles_r,
         configure as _hp_configure,
+    )
+    from archon.routers.hermes_profiles import (
+        router as _hermes_profiles_r,
     )
     _hp_configure(
         save_all_agent_profiles=save_all_agent_profiles,
@@ -2645,8 +3177,10 @@ except Exception as _err_ps:
 
 try:
     from archon.routers.system import (
-        router as _system_r,
         configure as _system_configure,
+    )
+    from archon.routers.system import (
+        router as _system_r,
     )
     _system_configure(
         _load_json=_load_json,
@@ -2662,8 +3196,10 @@ except Exception as _err_sys:
 
 try:
     from archon.routers.skills import (
-        router as _skills_r,
         configure as _skills_configure,
+    )
+    from archon.routers.skills import (
+        router as _skills_r,
     )
     _skills_configure(
         skills_engine=skills_engine,
@@ -2677,8 +3213,10 @@ except Exception as _err_sk:
 
 try:
     from archon.routers.mission_control import (
-        router as _mc_router,
         configure as _mc_configure,
+    )
+    from archon.routers.mission_control import (
+        router as _mc_router,
     )
     # Nur die Original-Funktionen aus main.py injizieren: die Kopien in
     # archon/core/runtime.py sind NICHT verhaltensgleich (Telemetrie filtert
@@ -2762,7 +3300,8 @@ except Exception as _err_hyg:
     _ROUTER_LOAD_ERRORS.append("epistemic_hygiene: " + str(_err_hyg))
 
 try:
-    from archon.routers.operations_calendar import router as _cal_r, ws_router as _cal_ws_r
+    from archon.routers.operations_calendar import router as _cal_r
+    from archon.routers.operations_calendar import ws_router as _cal_ws_r
     app.include_router(_cal_r)
     app.include_router(_cal_ws_r)
 except Exception as _err_cal:
@@ -2827,8 +3366,9 @@ def _assert_audit_hmac() -> None:
         prod = True  # fail-closed: keine Konfiguration lesbar → kein Start ohne Key
     has_hmac_blocks = False
     try:
-        from backend.db_paths import resolve_db
         import sqlite3
+
+        from backend.db_paths import resolve_db
         with sqlite3.connect(f"file:{resolve_db('agentic_memory.db')}?mode=ro", uri=True, timeout=3) as conn:
             has_hmac_blocks = conn.execute(
                 "SELECT 1 FROM audit_log WHERE current_hash LIKE 'hmac-sha256:%' LIMIT 1"

@@ -5,20 +5,21 @@ Führt periodisch PRAGMA wal_checkpoint(TRUNCATE) durch und sichert
 die Datenbanken komprimiert im Ringpuffer (.hermes/backups/db/) mit konfigurierbarer Rotation.
 """
 
-import os
-import sys
-import re
-from contextlib import contextmanager
+import datetime
 import glob
 import gzip
+import hashlib
 import logging
-import sqlite3
-import datetime
+import os
+import re
 import shutil
+import sqlite3
+import sys
 import tarfile
 import tempfile
 import threading
-from typing import Dict, Any, List, Optional
+from contextlib import contextmanager
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("archon.db_backup_manager")
 
@@ -28,7 +29,13 @@ try:
 except Exception:
     _APP_DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
 # D03/MED: der Sidecar-Scan bleibt auf produktive Datenverzeichnisse begrenzt.
-_CLEANUP_ROOTS = (_APP_DATA_DIR, os.path.join(WORKSPACE_DIR, ".hermes", "backups"))
+# D03/HIGH: pb_data/.wal|.shm verwaister Snapshots (data_corrupted/data_temp)
+# liegen ausserhalb von APP_DATA_DIR und muessen ebenfalls erfasst werden.
+_CLEANUP_ROOTS = (
+    _APP_DATA_DIR,
+    os.path.join(WORKSPACE_DIR, ".hermes", "backups"),
+    os.path.join(WORKSPACE_DIR, "pocketbase", "pb_data"),
+)
 BACKUP_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "backups", "db")
 # D03/HIGH: Tenant-DBs liegen unter APP_DATA_DIR (ARCHON_DATA_DIR), nicht
 # zwingend im Workspace — sonst sichert/restore't der Manager ins Leere.
@@ -106,6 +113,80 @@ def _verify_snapshot(conn: sqlite3.Connection, label: str) -> None:
         raise RuntimeError(
             f"{label}: {len(fk_violations)} FK-Verletzung(en) — Restore abgelehnt."
         )
+
+
+def cleanup_orphaned_pocketbase_dbs() -> Dict[str, Any]:
+    """D03/HIGH: Forensik-basierte Bereinigung verwaister PocketBase-DBs.
+
+    Nur namentlich bekannte, nachweislich MALFORMED Kopien (``data_corrupted``,
+    ``data_temp``) werden entfernt — die produktiven ``data.db``/``auxiliary.db``
+    werden nie angefasst, und eine gueltige DB wird nie geloescht (kein stiller
+    Datenverlust). Vor dem Entfernen werden Hash und Groesse protokolliert.
+    """
+    removed: list[str] = []
+    kept: list[str] = []
+    pb_dir = POCKETBASE_DATA_DIR
+    for name in ("data_corrupted.db", "data_temp.db"):
+        path = os.path.join(pb_dir, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "rb") as fh:
+                digest = hashlib.sha256(fh.read()).hexdigest()
+            probe = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=1.0)
+            try:
+                integrity = str(probe.execute("PRAGMA integrity_check").fetchone()[0]).lower()
+            finally:
+                probe.close()
+        except Exception as exc:
+            integrity, digest = f"error:{exc}", "unknown"
+        if integrity != "ok":
+            for victim in [path] + [path + s for s in ("-wal", "-shm", "-journal")]:
+                if os.path.isfile(victim):
+                    try:
+                        os.unlink(victim)
+                        removed.append(os.path.basename(victim))
+                    except OSError:
+                        pass
+            logger.info("[DBBackup] Verwaiste PB-Kopie %s entfernt (sha256=%s, integrity=%s)",
+                        name, digest[:16], integrity)
+        else:
+            kept.append(name)
+    return {"removed": removed, "kept_valid": kept}
+
+
+def _gzip_atomic(src_path: str, dst_path: str) -> None:
+    """D03/MED: gzip in eine Temp-Datei im Zielverzeichnis, fsync, os.replace.
+
+    Ein Abbruch mitten im Komprimieren hinterliess frueher eine unvollstaendige
+    `<name>.db.gz`, die der Restore-Test als gueltiges Backup-Artefakt sah.
+    """
+    dst_dir = os.path.dirname(dst_path) or "."
+    os.makedirs(dst_dir, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=".gzip_", suffix=".tmp", dir=dst_dir)
+    os.close(fd)
+    try:
+        with open(tmp_path, "wb") as raw:
+            with gzip.GzipFile(fileobj=raw, mode="wb") as f_out:
+                with open(src_path, "rb") as f_in:
+                    shutil.copyfileobj(f_in, f_out)
+            raw.flush()
+            os.fsync(raw.fileno())
+        os.replace(tmp_path, dst_path)
+        try:
+            dir_fd = os.open(dst_dir, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def cleanup_orphaned_sidecars(root_dir: Optional[str] = None) -> Dict[str, Any]:
@@ -312,6 +393,10 @@ class DBBackupManager:
         now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         backed_up = []
 
+        # D03/HIGH: verwaiste, nachweislich defekte PocketBase-Kopien entfernen.
+        pb_cleanup = cleanup_orphaned_pocketbase_dbs()
+        if pb_cleanup["removed"]:
+            logger.info("[DBBackup] PB-Orphans entfernt: %s", pb_cleanup["removed"])
         # D03/MED: verwaisste Restore-/Lock-Sidecars vor jedem Backup-Sweep
         # aufräumen (auch aus anderen Schreibpfaden stammende Artefakte).
         sweep = cleanup_orphaned_sidecars()
@@ -378,9 +463,7 @@ class DBBackupManager:
                 finally:
                     src_conn.close()
 
-                with open(tmp_snapshot, "rb") as f_in:
-                    with gzip.open(backup_file, "wb") as f_out:
-                        shutil.copyfileobj(f_in, f_out)
+                _gzip_atomic(tmp_snapshot, backup_file)
                 backed_up.append({
                     "db_name": db_name,
                     "backup_file": backup_file,
@@ -467,9 +550,7 @@ class DBBackupManager:
                 continue
             backup_file = os.path.join(self.backup_dir, f"{logical_name}_{now_str}.secret.gz")
             try:
-                with open(src_path, "rb") as f_in:
-                    with gzip.open(backup_file, "wb") as f_out:
-                        shutil.copyfileobj(f_in, f_out)
+                _gzip_atomic(src_path, backup_file)
                 secured.append({
                     "db_name": logical_name,
                     "kind": "secret",
@@ -554,8 +635,13 @@ class DBBackupManager:
                 if target_path is None:
                     target_path = os.path.join(WORKSPACE_DIR, "data", db_name)
         target = os.path.abspath(target_path)
-        if not _within(target, WORKSPACE_DIR):
-            raise ValueError(f"Restore-Ziel ausserhalb des Workspace: {target}")
+        # D03/MED: bei ARCHON_DATA_DIR ausserhalb des Workspace liegen die
+        # korrekten Tenant-Ziele unter APP_DATA_DIR — vorher fail-closed, aber
+        # funktional gebrochen. Jail = APP_DATA_DIR ∪ WORKSPACE_DIR.
+        if not (_within(target, WORKSPACE_DIR) or _within(target, _APP_DATA_DIR)):
+            raise ValueError(
+                f"Restore-Ziel weder unter APP_DATA_DIR noch im Workspace: {target}"
+            )
 
         # D5/F-08: genau ein signiertes Event pro Restore-Versuch. `result`
         # bleibt None, wenn vor der Integritätsprüfung abgebrochen wurde.
@@ -761,6 +847,14 @@ class DBBackupManager:
                             wal_init.discard(os.path.abspath(cfg_path))
                 except Exception:
                     pass
+                # D03/MED: Mission Control haelt zwei SQLite-Caches pro Datei
+                # (_MC_TABLES_INITIALIZED, _KANBAN_PRAGMA_INITIALIZED). Ohne
+                # Invalidierung folgt "no such table" bis zum Prozessneustart.
+                try:
+                    from archon.core.mission_control import invalidate_caches_after_restore
+                    invalidate_caches_after_restore(target)
+                except Exception:
+                    pass
             audit_status = "success"
             return result
         finally:
@@ -819,16 +913,23 @@ class DBBackupManager:
         if not target_checked:
             raise ValueError(f"Unbekannte Secret-Datei: {logical}")
         target = os.path.abspath(target_checked)
-        if not _within(target, WORKSPACE_DIR):
-            raise ValueError(f"Secret-Restore-Ziel ausserhalb des Workspace: {target}")
+        if not (_within(target, WORKSPACE_DIR) or _within(target, _APP_DATA_DIR)):
+            raise ValueError(
+                f"Secret-Restore-Ziel weder unter APP_DATA_DIR noch im Workspace: {target}"
+            )
 
         src = os.path.join(self.backup_dir, name)
         if not os.path.isfile(src):
             raise FileNotFoundError(f"Secret-Backup '{name}' nicht gefunden.")
 
         result: Optional[Dict[str, Any]] = None
-        with tempfile.NamedTemporaryFile(dir=self.backup_dir, suffix=".restore.secret", delete=False) as tmp:
+        # D03/MED: Tempfile NEBEN das Ziel — das Backup-Verzeichnis kann auf
+        # einem anderen Volume liegen (EXDEV bei os.replace).
+        target_dir = os.path.dirname(target)
+        os.makedirs(target_dir, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=target_dir, suffix=".restore.secret", delete=False) as tmp:
             tmp_path = tmp.name
+        pre_path: Optional[str] = None
         try:
             with gzip.open(src, "rb") as fin, open(tmp_path, "wb") as fout:
                 shutil.copyfileobj(fin, fout)
@@ -842,10 +943,27 @@ class DBBackupManager:
             }
             if dry_run or not confirm:
                 return result
-            os.makedirs(os.path.dirname(target), exist_ok=True)
             if os.path.exists(target):
-                shutil.copy2(target, target + ".pre_restore")
-            os.replace(tmp_path, target)
+                pre_path = target + ".pre_restore"
+                shutil.copy2(target, pre_path)
+            try:
+                os.replace(tmp_path, target)
+            except OSError as exc:
+                # Rollback bei Replace-Fehler: alte Datei wiederherstellen.
+                if pre_path and os.path.isfile(pre_path):
+                    try:
+                        os.replace(pre_path, target)
+                    except OSError:
+                        pass
+                raise RuntimeError(f"Secret-Restore fehlgeschlagen: {exc}") from exc
+            try:
+                dir_fd = os.open(target_dir, os.O_RDONLY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
+            except OSError:
+                pass
             return result
         finally:
             # D5/F-08: auch abgelehnte (unbestaetigte) Secret-Restores sind

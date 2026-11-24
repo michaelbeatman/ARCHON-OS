@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 backend/ephemeral_team_spawner.py
 Paket 5 (Feature 24): Dynamisches Ephemeral-Team-Spawning (Ad-hoc Task-Force).
@@ -7,11 +8,11 @@ das Team nach Projektabschluss (`auto_dissolve_on_complete`) wieder sauber auf.
 """
 
 import asyncio
-import os
 import json
 import logging
-import uuid
+import os
 import sqlite3
+import uuid
 
 logger = logging.getLogger("archon.ephemeral_team_spawner")
 
@@ -25,7 +26,7 @@ class _ArchonClosingConn(sqlite3.Connection):
         finally:
             self.close()
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -62,6 +63,28 @@ def _init_db() -> None:
                 dissolved_at TEXT
             )
         """)
+        conn.commit()
+
+
+def _persist_task_force(
+    team_id: str,
+    mission_title: str,
+    selected_members: List[Dict[str, str]],
+    final_status: str,
+    now_iso: str,
+    dissolved_at: Optional[str],
+) -> None:
+    """D08/MED: SQLite-INSERT (timeout=15) aus dem Event-Loop auslagern."""
+    with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+        conn.execute("""
+            INSERT INTO ephemeral_task_forces
+            (team_id, mission_title, members_json, status, created_at, dissolved_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            team_id, mission_title,
+            json.dumps(selected_members, ensure_ascii=False),
+            final_status, now_iso, dissolved_at
+        ))
         conn.commit()
 
 
@@ -173,17 +196,10 @@ class EphemeralTeamSpawner:
             )
         dissolved_at = now_iso if final_status == "completed_and_dissolved" else None
 
-        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
-            conn.execute("""
-                INSERT INTO ephemeral_task_forces
-                (team_id, mission_title, members_json, status, created_at, dissolved_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                team_id, mission_title,
-                json.dumps(selected_members, ensure_ascii=False),
-                final_status, now_iso, dissolved_at
-            ))
-            conn.commit()
+        await asyncio.to_thread(
+            _persist_task_force, team_id, mission_title, selected_members,
+            final_status, now_iso, dissolved_at,
+        )
 
         res: Dict[str, Any] = {
             "team_id": team_id,

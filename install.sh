@@ -93,6 +93,26 @@ ensure_env_default() {
   fi
 }
 
+# Audit D10: verpflichtender Testalarm nach dem Start. Beweist, dass der
+# Alertmanager erreichbar ist und die Alert-API den Alarm angenommen hat
+# (HTTP 200). Die tatsaechliche Telegram-Zustellung muss der Betreiber im
+# Chat gegenpruefen (aus der Shell nicht verifizierbar).
+send_alertmanager_test_alarm() {
+  local payload code
+  payload='[{"labels":{"alertname":"ArchonAlertmanagerSmokeTest","severity":"critical","service":"archon-deploy"},"annotations":{"summary":"Archon OS Alertmanager smoke test","description":"Testalarm nach dem Deploy"}}]'
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "[WARN] curl fehlt - Testalarm konnte nicht gesendet werden." >&2
+    return 1
+  fi
+  code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+    -d "$payload" http://localhost:9093/api/v2/alerts || true)"
+  if [[ "$code" != "200" ]]; then
+    echo "[FEHLER] Alertmanager-Testalarm nicht zugestellt (HTTP ${code:-kein Status})." >&2
+    return 1
+  fi
+  echo "[OK] Alertmanager-Testalarm angenommen (HTTP 200); Telegram-Empfang bitte pruefen."
+}
+
 echo "=================================================================="
 echo "     ARCHON AGENTIC OS 2026 - FULL STACK INSTALLER (UNIX)"
 echo "  Foundations: Docker | Hermes Agent | OmniRoute | RAG | Obsidian"
@@ -232,8 +252,8 @@ fi
 upsert_env "ARCHON_BIND_IP" "$BIND_IP"
 upsert_env "ARCHON_LANGUAGE" "$ARCHON_LANG"
 upsert_env "ARCHON_STACK_PROFILE" "$STACK_PROFILE"
-# C23: Observability-Key dokumentieren. "full" aktiviert die bereits in
-# docker-compose.yml vorhandenen Profile monitoring/logging/replication.
+# C23: Observability-Key dokumentieren. "full" aktiviert die vier Einzelprofile
+# monitoring/logging/replication/tracing (kein --profile full).
 ensure_env_default "ARCHON_OBSERVABILITY" "off"
 upsert_env "ARCHON_HERMES_DIR" "./.hermes"
 upsert_env "ARCHON_OBSIDIAN_DIR" "$OBSIDIAN_DIR"
@@ -260,11 +280,26 @@ echo "[4/6] Building & starting Archon OS ($STACK_PROFILE)..."
 # Audit D10: archon-autoheal ist Bestandteil des Normal-Starts — der externe
 # Supervisor erkennt Event-Loop-Haenger, die der Docker-Healthcheck nur als
 # "unhealthy" markiert (restart: unless-stopped greift dann nicht).
+# Alertmanager nur mit Secrets mitstarten (sonst ehrlich alerts_not_configured).
+ALERTS_CONFIGURED=false
+TG_TOKEN_VALUE="$(grep -E '^TELEGRAM_BOT_TOKEN=' .env 2>/dev/null | head -n1 | cut -d= -f2- || true)"
+TG_CHAT_VALUE="$(grep -E '^TELEGRAM_CHAT_ID=' .env 2>/dev/null | head -n1 | cut -d= -f2- || true)"
+if [[ -n "${TG_TOKEN_VALUE// }" && -n "${TG_CHAT_VALUE// }" ]]; then
+  ALERTS_CONFIGURED=true
+fi
 SERVICES=(archon-os docker-socket-proxy omniroute hermes archon-autoheal)
 if [[ "$STACK_PROFILE" == "standard" ]]; then
   SERVICES+=(anything-llm chroma)
 elif [[ "$STACK_PROFILE" == "full" || "$STACK_PROFILE" == "rag" ]]; then
   SERVICES+=(anything-llm chroma n8n ollama-embed)
+fi
+
+# Audit D10: immer die produktive Compose-Datei — eine lokal vorhandene
+# docker-compose.override.yml wuerde sonst /app bind-mounen und die .env mit
+# dem Audit-HMAC-Key im Container exposen.
+if ! docker compose -f docker-compose.yml config --quiet; then
+  echo "[FEHLER] docker-compose.yml ist ungueltig."
+  exit 1
 fi
 
 # C23: explizite Service-Listen schliessen Profil-Container aus. Deshalb die
@@ -274,13 +309,19 @@ OBSERVABILITY="$(grep -E '^ARCHON_OBSERVABILITY=' .env 2>/dev/null | head -n1 | 
 if [[ "${OBSERVABILITY,,}" == "full" ]]; then
   COMPOSE_ARGS+=(--profile monitoring --profile logging --profile replication --profile tracing)
   # F-073: Alertmanager explizit aufnehmen (Prometheus hat kein depends_on).
-  SERVICES+=(prometheus grafana uptime-kuma loki promtail litestream alertmanager langfuse)
+  # Audit D09/D10 (D-D8): langfuse (v2, EOL) ist entfernt.
+  SERVICES+=(prometheus grafana uptime-kuma loki promtail litestream)
+  if [[ "$ALERTS_CONFIGURED" == "true" ]]; then
+    SERVICES+=(alertmanager)
+  else
+    echo "[INFO] alerts_not_configured: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID fehlen - Alertmanager wird nicht gestartet."
+  fi
 fi
-docker compose "${COMPOSE_ARGS[@]}" "${SERVICES[@]}"
+docker compose -f docker-compose.yml "${COMPOSE_ARGS[@]}" "${SERVICES[@]}"
 
 # 5. Sync 70 SOUL.md + profile.yaml Specialist Profiles
 echo "[5/6] Generating 70 Specialist SOUL.md & Hermes profile.yaml configurations ($ARCHON_LANG)..."
-if ! docker compose exec -T archon-os python scripts/sync_soul_modes.py --mode compact --lang "$ARCHON_LANG"; then
+if ! docker compose -f docker-compose.yml exec -T archon-os python scripts/sync_soul_modes.py --mode compact --lang "$ARCHON_LANG"; then
   echo "[WARN] Profile sync inside container reported an issue; retrying locally if python3 is available..."
   if command -v python3 >/dev/null 2>&1; then
     ARCHON_LANGUAGE="$ARCHON_LANG" python3 scripts/sync_soul_modes.py --mode compact --lang "$ARCHON_LANG" || true
@@ -297,6 +338,16 @@ for _ in $(seq 1 35); do
   fi
   sleep 2
 done
+
+# Audit D10: verpflichtender Testalarm als Deploy-Gate, sobald Alertmanager
+# mit Secrets mitgestartet wurde. Kein stilles "success" ohne Zustellungsweg.
+if [[ "${OBSERVABILITY,,}" == "full" && "$ALERTS_CONFIGURED" == "true" ]]; then
+  echo "[6b/6] Sending Alertmanager test alarm..."
+  if ! send_alertmanager_test_alarm; then
+    echo "[FEHLER] Deployment fehlgeschlagen: Alertmanager-Testalarm nicht zugestellt."
+    exit 1
+  fi
+fi
 
 echo ""
 echo "=================================================================="

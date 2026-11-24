@@ -20,6 +20,10 @@ from pypdf import PdfReader
 class TestM49EUAIActCompliance(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # A2: Anker-Strukturpruefung unbedingt — dieser Test nutzt keine externe
+        # Ankerdatei, daher expliziter Dev-Opt-out (in Produktion wirkungslos).
+        cls._prev_insecure_audit_dev = os.environ.get("ARCHON_ALLOW_INSECURE_AUDIT_DEV")
+        os.environ["ARCHON_ALLOW_INSECURE_AUDIT_DEV"] = "1"
         cls.tmpdir = tempfile.TemporaryDirectory()
         cls.inv_file = os.path.join(cls.tmpdir.name, "eu_ai_act_inventory.json")
         cls.lit_file = os.path.join(cls.tmpdir.name, "ai_act_literacy_register.json")
@@ -68,6 +72,10 @@ class TestM49EUAIActCompliance(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.tmpdir.cleanup()
+        if cls._prev_insecure_audit_dev is None:
+            os.environ.pop("ARCHON_ALLOW_INSECURE_AUDIT_DEV", None)
+        else:
+            os.environ["ARCHON_ALLOW_INSECURE_AUDIT_DEV"] = cls._prev_insecure_audit_dev
 
     def test_01_precise_specialist_classification_and_soul_hashes(self):
         inv = self.inv_mgr.generate_inventory(save=True)

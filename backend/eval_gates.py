@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# mypy: ignore-errors
 """backend/eval_gates.py
 ======================
 Automatische Eval- & Regression-Gates für Archon OS (Punkt 3.2.4).
@@ -12,6 +13,7 @@ oder Workflow-Templates automatische Eval-Läufe gegen 5-10 Gold-Beispiele durch
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -233,6 +235,42 @@ def _evaluate_text_item(
     }
 
 
+def _persist_eval_run(
+    p: str,
+    eval_id: str,
+    target_type: str,
+    target_id: str,
+    avg_score: float,
+    overall_passed: bool,
+    avg_slop: float,
+    schema_fidelity: float,
+    total_cost: float,
+    avg_lat: float,
+    count: int,
+    passed_items: int,
+    results: List[Dict[str, Any]],
+    judge_model: str,
+    now: float,
+) -> None:
+    """D08/MED: SQLite-Schreibtransaktion aus dem Event-Loop auslagern."""
+    with sqlite3.connect(p, timeout=10.0) as conn:
+        conn.execute(
+            """
+            INSERT INTO eval_runs (
+                id, target_type, target_id, overall_score, passed, anti_slop_score,
+                schema_fidelity, total_cost_usd, avg_latency_ms, items_count, passed_items,
+                results_json, judge_model, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                eval_id, target_type, target_id, avg_score, 1 if overall_passed else 0,
+                avg_slop, schema_fidelity, round(total_cost, 6), avg_lat, count, passed_items,
+                json.dumps(results, ensure_ascii=False), judge_model, now,
+            ),
+        )
+        conn.commit()
+
+
 async def run_evaluation(
     target_type: str,
     target_id: str,
@@ -246,7 +284,7 @@ async def run_evaluation(
     Gibt detaillierte Metriken, Pass/Fail und Gesamtkosten zurück und speichert
     den Run auditierbar in eval_runs ab.
     """
-    init_eval_db(db_path)
+    await asyncio.to_thread(init_eval_db, db_path)
     target_type = str(target_type or "profile").strip().lower()
     target_id = str(target_id or "default").strip()
 
@@ -260,8 +298,8 @@ async def run_evaluation(
 
     if target_type in ("profile", "agent"):
         from archon.core.profiles import get_hermes_profiles_base_dirs
-        from core_dispatcher import dispatch_to_omniroute_or_container
         from backend.llm_kernel import estimate_model_cost_usd
+        from core_dispatcher import dispatch_to_omniroute_or_container
 
         # Profil laden
         base = get_hermes_profiles_base_dirs()[0]
@@ -304,7 +342,7 @@ async def run_evaluation(
 
     elif target_type in ("workflow", "template", "dag"):
         from backend.workflow_dag_runner import run_workflow_dag
-        from backend.workflow_templates import get_workflow_template, _build_dag_def_from_template
+        from backend.workflow_templates import _build_dag_def_from_template, get_workflow_template
 
         tpl = get_workflow_template(target_id)
         if not tpl:
@@ -360,22 +398,11 @@ async def run_evaluation(
     now = time.time()
 
     p = _resolve_eval_db(db_path)
-    with sqlite3.connect(p, timeout=10.0) as conn:
-        conn.execute(
-            """
-            INSERT INTO eval_runs (
-                id, target_type, target_id, overall_score, passed, anti_slop_score,
-                schema_fidelity, total_cost_usd, avg_latency_ms, items_count, passed_items,
-                results_json, judge_model, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                eval_id, target_type, target_id, avg_score, 1 if overall_passed else 0,
-                avg_slop, schema_fidelity, round(total_cost, 6), avg_lat, count, passed_items,
-                json.dumps(results, ensure_ascii=False), judge_model, now,
-            ),
-        )
-        conn.commit()
+    await asyncio.to_thread(
+        _persist_eval_run, p, eval_id, target_type, target_id, avg_score,
+        overall_passed, avg_slop, schema_fidelity, total_cost, avg_lat, count,
+        passed_items, results, judge_model, now,
+    )
 
     return {
         "status": "success",

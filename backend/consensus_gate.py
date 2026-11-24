@@ -5,15 +5,16 @@ Erzwingt ein Mehr-Augen-Prinzip und Debatten-Protokoll bei risikobehafteten Aufg
 Drei unabhängige Rollen (Architekt, Security, QA) stimmen ab und fällen ein verbindliches Urteil.
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("consensus_gate")
 
-import os
-import sys
+import asyncio
 import json
 import math
+import os
 import sqlite3
-import asyncio
-from typing import Dict, Any, List, NamedTuple, Optional, Sequence, Tuple, Union
+import sys
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -82,6 +83,8 @@ class DebateStatement(BaseModel):
     # D14/MED: strukturiertes Guardrail-Ergebnis (nicht nur Freitext-Marker).
     guardrail_violation: bool = False
     severity: Optional[str] = None
+    # D14/HIGH: Herkunft des verifizierten Guardrail-Result (Trace-ID).
+    source_trace_id: Optional[str] = None
 
 
 class ConsensusEvidence(NamedTuple):
@@ -184,8 +187,10 @@ def resolve_debate_consensus(
     validiert. Marker werden case-insensitive erkannt; eine explizite Negation
     gewinnt immer (M-1-Fix). Ein ``policy_violation``-Flag bzw. ein Veto-Marker
     fuehrt sofort zu ``NO_CONSENSUS_POLICY_VIOLATION`` (D14: kein Mehrheitsgewinn).
-    Bei Gleichstand entscheidet die Autoritaet executive > lead > specialist;
-    Gleichstand innerhalb der hoechsten Tier -> NO_CONSENSUS + HITL.
+    Die Autoritaet executive > lead > specialist gewichtet ALLE Stimmen (D14/HIGH):
+    eine gewichtete 2/3-Mehrheit ist primär, und das hoechste anwesende Tier
+    vetoet bei Gegenmehrheit hart (``NO_CONSENSUS_BY_AUTHORITY``). Ein geteiltes
+    hoechstes Tier bleibt ohne Flip -> NO_CONSENSUS + HITL.
     """
     parsed = validate_debate_statements(statements)
     yes_votes = 0
@@ -252,32 +257,63 @@ def resolve_debate_consensus(
     )
     verdict = "CONSENSUS_REACHED" if consensus_reached else "NO_CONSENSUS"
     applied_tie_break = ""
+    veto_by: Optional[str] = None
 
-    if not consensus_reached and total_votes >= 2 and majority_rule != "unanimous":
-        # Autoritaets-Hierarchie: gewichtete 2/3-Mehrheit bricht den Raw-Tie.
-        # "unanimous" bleibt bewusst hart — dort gibt es keine Ueberstimmung.
-        weighted_total = weighted_yes + weighted_no
-        weighted_required = max(2, math.ceil(2 * weighted_total / 3))
-        if weighted_yes > weighted_no and weighted_yes >= weighted_required:
-            consensus_reached = True
+    # D14/HIGH: Autoritaet wirkt auf ALLE Stimmen, nicht nur als Nachrangregel
+    # bei gescheiterter Raw-Mehrheit. Eine gewichtete 2/3-Mehrheit ist das
+    # primäre Kriterium; ein Executive-Ja darf nicht von zwei Specialist-
+    # Gegenstimmen "ueberstimmt" werden. "unanimous" bleibt bewusst hart.
+    weighted_total = weighted_yes + weighted_no
+    weighted_tie = weighted_yes == weighted_no and weighted_total > 0
+    weighted_required = max(2, math.ceil(2 * weighted_total / 3))
+    if (
+        majority_rule != "unanimous"
+        and total_votes >= 2
+        and weighted_total > 0
+        and weighted_yes > weighted_no
+        and weighted_yes >= weighted_required
+    ):
+        if not consensus_reached:
             verdict = "CONSENSUS_REACHED_BY_AUTHORITY"
-            applied_tie_break = "authority_weight_majority"
-        elif weighted_yes == weighted_no and weighted_total > 0:
+        applied_tie_break = "authority_weight_majority"
+        consensus_reached = True
+
+    # D14/HIGH: hartes Veto des hoechsten ANWESENDEN Tiers bei Gegenmehrheit —
+    # auch wenn die rohe/gewichtete Stimmenzahl sonst Konsens ergaebe. Ein
+    # untergeordnetes Tier darf keine hoehere Instanz ueberstimmen.
+    for tier in ("executive", "lead", "specialist"):
+        tally = tier_tallies[tier]
+        if tally["yes"] + tally["no"] == 0:
+            continue
+        if tally["no"] > tally["yes"]:
+            consensus_reached = False
+            verdict = "NO_CONSENSUS_BY_AUTHORITY"
+            applied_tie_break = f"highest_tier:{tier}:no"
+            veto_by = next(
+                (
+                    str(s.agent_id)
+                    for s in parsed
+                    if _infer_tier(str(s.agent_id), authority, s.tier) == tier
+                    and any(
+                        marker in str(s.content or "").upper()
+                        for marker in _NEGATIVE_DEBATE_MARKERS
+                    )
+                ),
+                None,
+            )
+        elif (
+            weighted_tie
+            and not consensus_reached
+            and tally["no"] == 0
+            and tally["yes"] > 0
+        ):
             # Exakter Gleichstand: hoechstes anwesendes Tier entscheidet,
             # aber nur wenn es dort intern einstimmig ist. Sonst HITL.
-            for tier in ("executive", "lead", "specialist"):
-                tally = tier_tallies[tier]
-                if tally["yes"] + tally["no"] == 0:
-                    continue
-                if tally["yes"] == 0 and tally["no"] > 0:
-                    verdict = "NO_CONSENSUS_BY_AUTHORITY"
-                    applied_tie_break = f"highest_tier:{tier}:no"
-                elif tally["no"] == 0 and tally["yes"] > 0:
-                    consensus_reached = True
-                    verdict = "CONSENSUS_REACHED_BY_AUTHORITY"
-                    applied_tie_break = f"highest_tier:{tier}:yes"
-                # geteiltes hoechstes Tier -> NO_CONSENSUS (HITL), kein Flip.
-                break
+            consensus_reached = True
+            verdict = "CONSENSUS_REACHED_BY_AUTHORITY"
+            applied_tie_break = f"highest_tier:{tier}:yes"
+        # geteiltes hoechstes Tier -> kein Flip, NO_CONSENSUS bleibt (HITL).
+        break
 
     return {
         "consensus_reached": consensus_reached,
@@ -285,7 +321,7 @@ def resolve_debate_consensus(
         "total_votes": total_votes,
         "required_votes": required_votes,
         "verdict": verdict,
-        "veto_by": None,
+        "veto_by": veto_by,
         "evidence": evidence,
         "tie_break_rule": tie_break,
         "applied_tie_break": applied_tie_break,

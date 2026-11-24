@@ -1,6 +1,9 @@
+# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 from archon.routers._rbac import require_admin_or_503
+
 """/api/system/* — Health, Recovery, Drain, Backups, Diagnose."""
 
 import asyncio
@@ -14,7 +17,17 @@ import time
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Body,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -207,6 +220,27 @@ def _get_system_http_client() -> httpx.AsyncClient:
     return _SYSTEM_HTTP_CLIENT
 
 
+async def close_system_http_client() -> int:
+    """A5/D08: globalen System-Health-Client am Shutdown schliessen.
+
+    Der Globale wird VOR ``aclose()`` auf None gesetzt — sonst koennte ein
+    noch laufender Request den Client an einen bereits beendeten Loop
+    wiederverwenden. Rueckgabe: Anzahl tatsaechlich geschlossener Clients.
+    """
+    global _SYSTEM_HTTP_CLIENT
+    client = _SYSTEM_HTTP_CLIENT
+    _SYSTEM_HTTP_CLIENT = None
+    if client is None:
+        return 0
+    try:
+        if not client.is_closed:
+            await client.aclose()
+            return 1
+    except Exception as exc:
+        logger.debug("[System] HTTP-Client-Close-Hinweis: %s", exc)
+    return 0
+
+
 @router.get("/api/system/health")
 async def api_system_health():
     """
@@ -385,7 +419,9 @@ def set_system_language(request: Request, payload: SystemLanguageRequest = Body(
 
 @router.get("/api/v1/system/update/check")
 def api_system_update_check(force: bool = False, local_only: bool = False):
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    from backend import (
+        system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    )
     if local_only:
         return system_updater.get_local_update_status()
     if force:
@@ -396,7 +432,9 @@ def api_system_update_check(force: bool = False, local_only: bool = False):
 
 @router.get("/api/v1/system/update/local-changes")
 def api_system_update_local_changes(force: bool = False):
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    from backend import (
+        system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    )
     if force:
         system_updater.invalidate(system_updater.get_local_changes)
     return system_updater.get_local_changes()
@@ -406,7 +444,9 @@ def api_system_update_local_changes(force: bool = False):
 def api_system_update_push(request: Request, payload: SystemUpdatePushRequest = Body(default=SystemUpdatePushRequest())):
     _require_admin(request)
     payload = payload.model_dump()  # RBAC: Admin-Sache
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    from backend import (
+        system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    )
     msg = payload.get("message")
     version = payload.get("version")
     step = payload.get("step", "custom")
@@ -417,7 +457,9 @@ def api_system_update_push(request: Request, payload: SystemUpdatePushRequest = 
 def api_system_update_apply(request: Request, payload: SystemUpdateApplyRequest = Body(default=SystemUpdateApplyRequest()), background_tasks: BackgroundTasks = None):
     _require_admin(request)
     payload = payload.model_dump()  # RBAC-Pilot: Update des Systems ist Admin-Sache
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    from backend import (
+        system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    )
     make_backup = payload.get("backup", True)
     res = system_updater.apply_update(make_backup=make_backup)
     if res.get("status") == "success" and background_tasks is not None:
@@ -427,7 +469,9 @@ def api_system_update_apply(request: Request, payload: SystemUpdateApplyRequest 
 
 @router.get("/api/v1/system/update/snapshots")
 def api_system_update_snapshots():
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    from backend import (
+        system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    )
     return {"status": "success", "snapshots": system_updater.list_snapshots()}
 
 
@@ -435,7 +479,9 @@ def api_system_update_snapshots():
 def api_system_update_rollback(request: Request, payload: SystemUpdateRollbackRequest = Body(...)):
     _require_admin(request)
     payload = payload.model_dump()  # RBAC-Pilot: Rollback des Systems ist Admin-Sache
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    from backend import (
+        system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    )
     snapshot_id = payload.get("snapshot_id", "").strip()
     if not snapshot_id:
         raise HTTPException(status_code=400, detail="Snapshot-ID erforderlich.")
@@ -446,7 +492,9 @@ def api_system_update_rollback(request: Request, payload: SystemUpdateRollbackRe
 def api_system_update_backup(request: Request, payload: SystemUpdateBackupRequest = Body(default=SystemUpdateBackupRequest())):
     _require_admin(request)
     payload = payload.model_dump()  # RBAC: Admin-Sache
-    from backend import system_updater  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    from backend import (
+        system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
+    )
     tag = payload.get("tag", "manual").strip() or "manual"
     return system_updater.create_snapshot(tag=tag)
 

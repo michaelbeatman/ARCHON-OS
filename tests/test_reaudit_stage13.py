@@ -42,7 +42,13 @@ def test_d10_livez_fails_with_dead_watchdog():
     block = src.split('async def liveness_check()', 1)[1].split('\n@app.', 1)[0]
     assert 'or not info["loops"]["watchdog"]["alive"]' in block
     heal = (ROOT / "scripts" / "archon_autoheal.py").read_text(encoding="utf-8")
+    # A9-Nachlauf: probe() liest den /livez-Body auch bei HTTP 503, damit der
+    # watchdog_stale-Pfad erreichbar bleibt. Die statische Zeichenkette
+    # `not result.get("watchdog_stale")` ist weiterhin der Bergungszweig.
     assert 'not result.get("watchdog_stale")' in heal
+    assert 'except urllib.error.HTTPError as exc' in heal
+    assert 'exc.read(' in heal
+    assert '_watchdog_stale_from_body(raw)' in heal
 
 
 def test_d08_audit_dispatch_is_async():
@@ -57,5 +63,5 @@ def test_d08_audit_dispatch_is_async():
 def test_d02_cache_respects_policy():
     src = (ROOT / "core_dispatcher.py").read_text(encoding="utf-8")
     assert "ARCHON_POLICY_VERSION" in src
-    assert "Policy-Revalidierung beim Cache-Hit" in src
-    assert "get_privacy_config()" in src.split("Policy-Revalidierung beim Cache-Hit", 1)[0][-400:]
+    assert "def _validate_cache_hit_gate(" in src
+    assert "get_privacy_config()" in src.split("def _validate_cache_hit_gate(", 1)[0][-800:]

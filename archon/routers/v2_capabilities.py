@@ -14,14 +14,17 @@ import datetime
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends as _ArchonDepends, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from archon.routers._rbac import (
     forbid_viewer_writes as _forbid_viewer_writes,
-    require_admin_or_503,
+)
+from archon.routers._rbac import (
     get_session_actor,
+    require_admin_or_503,
 )
 
 logger = logging.getLogger("archon.routers.v2_capabilities")
@@ -232,9 +235,61 @@ def api_v2_compartment_recall(request: Request, namespace: str = "default", quer
 
 # --- M83: Flightlog & Policy Backtester ---
 @router.get("/api/v2/observability/flightlog/{run_id}")
-def api_v2_flightlog_check(run_id: str, final_status: str = "success"):
+def api_v2_flightlog_check(request: Request, run_id: str):
+    require_admin_or_503(request)
     from backend.flightlog_backtester import detect_silent_failures
-    return {"status": "success", **detect_silent_failures(run_id, final_status=final_status)}
+
+    # A8/D12: `final_status` darf nicht vom Client kommen — mit
+    # `?final_status=failed` liesse sich die Silent-Failure-Erkennung
+    # abschalten. Quelle ist der persistierte Run (workflow_runs) bzw. dessen
+    # Abschluss-Flight-Event (`dag_run_complete.args_json.status`).
+    persisted_status = ""
+    final_output = ""
+    try:
+        from backend.workflow_dag_runner import get_workflow_run
+        run = get_workflow_run(run_id)
+        if run:
+            persisted_status = str(run.get("status") or "")
+            final_output = "\n".join(
+                str(((v or {}).get("output") or {}).get("content") or "")[:400]
+                for v in (run.get("nodes") or {}).values()
+                if isinstance(v, dict)
+            )
+    except Exception as exc:
+        logger.debug("[flightlog] persistierter Run nicht lesbar: %s", exc)
+    if not persisted_status:
+        try:
+            import json as _json
+            import sqlite3 as _sqlite3
+
+            from backend.db_paths import resolve_db as _resolve_db
+            with _sqlite3.connect(
+                f"file:{_resolve_db('flightlog.db')}?mode=ro", uri=True, timeout=3
+            ) as conn:
+                row = conn.execute(
+                    "SELECT args_json FROM flight_events WHERE run_id = ? "
+                    "AND tool_name = 'dag_run_complete' ORDER BY id DESC LIMIT 1",
+                    (run_id,),
+                ).fetchone()
+            if row:
+                persisted_status = str(_json.loads(row[0] or "{}").get("status") or "")
+        except Exception as exc:
+            logger.debug("[flightlog] Flight-Event-Status nicht lesbar: %s", exc)
+
+    # Der Detektor flaggt "gruen fehlgeschlagene" Runs nur aus der Annahme
+    # heraus, dass der Run erfolgreich war. DAG-Status `completed`/`paused`
+    # und fehlende Persistenz werden deshalb konservativ auf `success`
+    # abgebildet; bereits sichtbare Fehlerzustaende bleiben stehen.
+    final_status = (
+        "success"
+        if persisted_status in ("", "completed", "paused", "success")
+        else persisted_status
+    )
+    diag = detect_silent_failures(
+        run_id, final_status=final_status, final_output=final_output
+    )
+    status = "blocked" if diag.get("silent_failure") else "success"
+    return {"status": status, **diag}
 
 
 @router.post("/api/v2/observability/policy-backtest")
@@ -300,8 +355,9 @@ async def api_v2_workflow_dag_resume(request: Request, run_id: str, payload: Wor
     except ImportError:
         # FALLBACK (Helper noch nicht gemerged): direkter Hintergrund-Task via resume_workflow_run.
         try:
-            from backend.workflow_dag_runner import resume_workflow_run
             import asyncio as _asyncio
+
+            from backend.workflow_dag_runner import resume_workflow_run
             _asyncio.create_task(resume_workflow_run(run_id=run_id))
         except Exception as e:
             logger.error(f"[v2 dag resume] Fallback-Resume fuer {run_id} fehlgeschlagen: {e}")
@@ -628,6 +684,9 @@ class ClientDecisionSubmitRequest(BaseModel):
     terms_accepted: bool = False
     ai_disclosure_shown: bool = False
     ai_disclosure_token: str = Field(default="", max_length=200)
+    # D04/MED: Nonce/Session-Bindung der Art.-50-Bestaetigung (Einmal-Token).
+    ai_disclosure_nonce: str = Field(default="", max_length=128)
+    ai_disclosure_session: str = Field(default="", max_length=128)
     client_ip: str = Field(default="", max_length=64)
     document_sha256: str = Field(default="", max_length=64)
 
@@ -927,6 +986,8 @@ def api_v2_submit_client_decision(req: ClientDecisionSubmitRequest):
             terms_accepted=req.terms_accepted,
             ai_disclosure_shown=True,
             ai_disclosure_token=req.ai_disclosure_token,
+            ai_disclosure_nonce=req.ai_disclosure_nonce,
+            ai_disclosure_session=req.ai_disclosure_session,
             client_ip=req.client_ip,
             document_sha256=req.document_sha256,
         )

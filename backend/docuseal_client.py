@@ -1,18 +1,21 @@
+# mypy: ignore-errors
 """
 backend/docuseal_client.py
 Archon OS DocuSeal E-Signature Integration Client.
 Handles contract signing workflows, templates, submission creation, and status synchronisation with Kanban and CRM.
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("docuseal_client")
 
+import hashlib
+import json
 import os
 import re
+import sqlite3
 import sys
 import time
-import json
-import hashlib
-import sqlite3
+
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -24,10 +27,10 @@ class _ArchonClosingConn(sqlite3.Connection):
         finally:
             self.close()
 import datetime
-import urllib.request
 import urllib.error
 import urllib.parse
-from typing import Dict, Any, Optional, List
+import urllib.request
+from typing import Any, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.getenv("DATA_DIR", "/opt/data" if os.path.exists("/opt/data") else os.path.join(os.path.expanduser("~"), ".hermes"))
@@ -103,7 +106,9 @@ class DocuSealClient:
         """Erstellt eine neue Signaturanfrage (Submission) via DocuSeal API."""
         cid = self._resolve_cid(company_id)
         submission_id = f"sub_{int(time.time())}_{os.urandom(3).hex()}"
-        sign_url = f"{self.base_url}/s/{submission_id}"
+        # D12/HIGH: keine lokal erfundene Signatur-URL. Ein Link wird NUR aus
+        # der echten API-Antwort (`submitters[0].embed_url`) uebernommen.
+        sign_url: Optional[str] = None
 
         # Versuche DocuSeal REST API aufzurufen
         payload = {
@@ -119,6 +124,8 @@ class DocuSealClient:
         }
 
         api_called = False
+        embed_verified = False
+        embed_error: Optional[str] = None
         for ep in [self.base_url, self.internal_url]:
             try:
                 req = urllib.request.Request(
@@ -133,11 +140,27 @@ class DocuSealClient:
                     if resp.status in (200, 201):
                         data = json.loads(resp.read().decode("utf-8"))
                         submission_id = str(data.get("id") or submission_id)
-                        sign_url = data.get("submitters", [{}])[0].get("embed_url") or sign_url
                         api_called = True
+                        submitters = data.get("submitters")
+                        embed = None
+                        if isinstance(submitters, list) and submitters and isinstance(submitters[0], dict):
+                            embed = submitters[0].get("embed_url")
+                        if isinstance(embed, str) and embed.strip():
+                            sign_url = embed.strip()
+                            embed_verified = True
+                        else:
+                            embed_error = "DOCUSEAL_EMBED_URL_MISSING"
                         break
             except Exception:
                 continue
+
+        # D12/HIGH: Status folgt der Nachweisbarkeit, nicht dem HTTP-Code allein.
+        if not api_called:
+            db_status = "draft_offline"
+        elif not embed_verified:
+            db_status = "sent_unverified"
+        else:
+            db_status = "sent"
 
         # In SQLite persistieren
         if os.path.exists(self.memory_db):
@@ -150,8 +173,7 @@ class DocuSealClient:
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         submission_id, cid, str(template_id or "default"), title,
-                        signer_email, signer_name, "sent" if api_called else "draft_offline",
-                        sign_url, kanban_task_id
+                        signer_email, signer_name, db_status, sign_url, kanban_task_id
                     ))
                     conn.commit()
             except Exception as e:
@@ -162,12 +184,17 @@ class DocuSealClient:
             try:
                 task_id = f"task-esign-{submission_id}"
                 t_title = f"[E-Signatur] {title} ({signer_name})"
+                link_line = (
+                    f"- Signatur-Link: {sign_url}\n"
+                    if sign_url
+                    else "- Signatur-Link: NICHT VERIFIZIERT — HITL-Pruefung erforderlich.\n"
+                )
                 t_body = (
-                    f"Vertrag zur elektronischen Signatur versandt.\n\n"
+                    f"Vertrag zur elektronischen Signatur {'versandt' if embed_verified else 'nicht verifiziert'}.\n\n"
                     f"- Unterzeichner: {signer_name} <{signer_email}>\n"
                     f"- Submission ID: {submission_id}\n"
-                    f"- Signatur-Link: {sign_url}\n"
-                    f"- Status: Ausstehend\n"
+                    f"{link_line}"
+                    f"- Status: {db_status}\n"
                 )
                 with sqlite3.connect(self.kanban_db, timeout=5.0, factory=_ArchonClosingConn) as conn:
                     conn.execute("""
@@ -192,9 +219,25 @@ class DocuSealClient:
                 "title": title,
                 "signer_name": signer_name,
                 "signer_email": signer_email,
-                "sign_url": sign_url,
+                "sign_url": None,
                 "kanban_task_id": kanban_task_id,
                 "api_dispatched": False,
+            }
+
+        if not embed_verified:
+            return {
+                "status": "sent_unverified",
+                "error": f"DocuSeal HTTP-Erfolg ohne embed_url ({embed_error}) — kein versandter Vertrag quittiert.",
+                "error_code": embed_error,
+                "submission_id": submission_id,
+                "company_id": cid,
+                "title": title,
+                "signer_name": signer_name,
+                "signer_email": signer_email,
+                "sign_url": None,
+                "kanban_task_id": kanban_task_id,
+                "api_dispatched": False,
+                "requires_human_review": True,
             }
 
         return {

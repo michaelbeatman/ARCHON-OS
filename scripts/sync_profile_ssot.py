@@ -32,11 +32,15 @@ PROFILES_JSON = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
 ROLES_JSON = os.path.join(WORKSPACE_DIR, "roles.json")
 HERMES_PROFILES = os.path.join(WORKSPACE_DIR, ".hermes", "profiles")
 
-# Felder, die roles.json historisch fuehrt (Projektion aus agent_profiles.json).
+# Felder, die roles.json als Projektion aus agent_profiles.json fuehrt.
+# D15: Negativ-Abgrenzung und EN-Felder gehoeren zwingend dazu — sonst verliert
+# jeder Konsument, der auf roles.json zurueckfaellt, die Rollensperren.
 ROLE_FIELDS = (
-    "id", "name", "person_name", "callsign", "category", "description",
-    "prompt", "skills", "status", "tools", "avatar", "avatar_url",
-    "model", "provider", "reasoning_level", "is_favorite",
+    "id", "name", "name_en", "person_name", "callsign", "category", "category_en",
+    "description", "description_en", "prompt", "prompt_en", "system_prompt",
+    "system_prompt_en", "negative_scope", "negative_scope_en", "soul_mode",
+    "skills", "status", "tools", "avatar", "avatar_url", "model", "provider",
+    "reasoning_level", "is_favorite",
 )
 
 
@@ -70,17 +74,31 @@ def _role_ids() -> List[str]:
     return [str(r.get("id") or "").strip() for r in data if isinstance(r, dict) and r.get("id")]
 
 
-def _prompt_hashes(path: str) -> Dict[str, str]:
-    """D15: Prompt-Hash je ID — ID-Mengen allein erkennen keine Namens-Divergenz."""
+def _projection_hashes(path: str, fields: tuple[str, ...] = ROLE_FIELDS) -> Dict[str, str]:
+    """D15: Feld-Hash je ID — ID-Mengen allein erkennen keine Divergenz.
+
+    Der Hash deckt die komplette Rollen-Projektion ab (inkl. negative_scope,
+    system_prompt und EN-Felder), nicht nur den Prompt.
+    """
     data = _load_json(path)
     if isinstance(data, dict):
         data = data.get("roles", [])
     if not isinstance(data, list):
         return {}
     return {
-        str(r.get("id")): hashlib.sha256(str(r.get("prompt") or "").encode("utf-8")).hexdigest()
+        str(r.get("id")): hashlib.sha256(
+            json.dumps(
+                {field: r.get(field) for field in fields},
+                ensure_ascii=False, sort_keys=True, default=str,
+            ).encode("utf-8")
+        ).hexdigest()
         for r in data if isinstance(r, dict) and r.get("id")
     }
+
+
+def _prompt_hashes(path: str) -> Dict[str, str]:
+    """Rueckwaertskompatible Prompt-Hashes (prompt_mismatch im Report)."""
+    return _projection_hashes(path, ("prompt",))
 
 
 def detect_drift(allow_missing_hermes: bool = False) -> Dict[str, Any]:
@@ -105,9 +123,18 @@ def detect_drift(allow_missing_hermes: bool = False) -> Dict[str, Any]:
         k for k in src_prompts
         if k in role_prompts and src_prompts[k] != role_prompts[k]
     )
+    src_fields = _projection_hashes(PROFILES_JSON)
+    role_fields = _projection_hashes(ROLES_JSON)
+    field_mismatch = sorted(
+        k for k in src_fields
+        if k in role_fields and src_fields[k] != role_fields[k]
+    )
     disk_skipped = (not hermes_present) and allow_missing_hermes
     effective_missing_dirs: List[str] = [] if disk_skipped else missing_dirs
-    drift = bool(effective_missing_dirs or orphan_dirs or missing_roles or stale_roles or prompt_mismatch)
+    drift = bool(
+        effective_missing_dirs or orphan_dirs or missing_roles or stale_roles
+        or prompt_mismatch or field_mismatch
+    )
     return {
         "ssot": "agent_profiles.json",
         "counts": {"ssot": len(src), "disk": len(disk), "roles": len(roles)},
@@ -116,6 +143,7 @@ def detect_drift(allow_missing_hermes: bool = False) -> Dict[str, Any]:
         "missing_roles": missing_roles,
         "stale_roles": stale_roles,
         "prompt_mismatch": prompt_mismatch,
+        "field_mismatch": field_mismatch,
         "disk_skipped": disk_skipped,
         "drift": drift,
     }
@@ -214,7 +242,7 @@ def main() -> int:
         print(f"  Hermes-Profile:          {c.get('disk')}")
         print(f"  roles.json:              {c.get('roles')}")
         if report.get("drift"):
-            for key in ("missing_dirs", "orphan_dirs", "missing_roles", "stale_roles"):
+            for key in ("missing_dirs", "orphan_dirs", "missing_roles", "stale_roles", "prompt_mismatch", "field_mismatch"):
                 vals = report.get(key) or []
                 if vals:
                     print(f"  [!] {key}: {', '.join(vals[:10])}" + (" ..." if len(vals) > 10 else ""))

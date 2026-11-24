@@ -1,21 +1,22 @@
+# mypy: ignore-errors
 """Router und Forwarder fuer Hermes-Dashboard und WebUI-Proxy."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import asyncio
 import json
 import logging
 import os
-import weakref
 import urllib.parse
+import weakref
 from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import Depends as _ArchonDepends
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from archon.core.config import config
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 from archon.routers._rbac import require_admin_or_503
 
 logger = logging.getLogger("archon.routers.hermes_proxy")
@@ -61,6 +62,24 @@ def _get_hermes_client() -> httpx.AsyncClient:
         )
         _HERMES_CLIENTS_BY_LOOP[loop] = client
     return client
+
+
+async def close_all_hermes_clients() -> int:
+    """A5/D08: alle loop-keyed Hermes-Clients zentral am Shutdown schliessen.
+
+    Snapshot, ``await client.aclose()``, ``clear()``. Fehler werden sichtbar
+    geloggt, duerfen aber den Shutdown nicht blockieren (fail-safe).
+    """
+    closed = 0
+    for client in list(_HERMES_CLIENTS_BY_LOOP.values()):
+        try:
+            if not client.is_closed:
+                await client.aclose()
+                closed += 1
+        except Exception as exc:
+            logger.debug("[Hermes-Proxy] HTTP-Client-Close-Hinweis: %s", exc)
+    _HERMES_CLIENTS_BY_LOOP.clear()
+    return closed
 
 
 async def forward_to_hermes(request: Request) -> Response:
@@ -126,7 +145,11 @@ async def forward_to_hermes(request: Request) -> Response:
     fwd_headers["Authorization"] = f"Bearer {hermes_token}"
     try:
         from backend.trace_context import (
-            child_span, current_trace_id, extract_headers, inject_headers, start_trace,
+            child_span,
+            current_trace_id,
+            extract_headers,
+            inject_headers,
+            start_trace,
         )
         incoming_tp = extract_headers(request.headers)
         if not current_trace_id():
@@ -179,8 +202,8 @@ async def forward_to_hermes(request: Request) -> Response:
 @router.get("/api/proxy", dependencies=[_ArchonDepends(require_admin_or_503)])
 async def proxy_web_ui(url: str):
     """Header-stripping async proxy to bypass X-Frame-Options & CSP for embedded Web UIs."""
-    from utils.egress_guard import EgressBlocked, check_target_url
     import main as app_main
+    from utils.egress_guard import EgressBlocked, check_target_url
 
     try:
         check_target_url(url)

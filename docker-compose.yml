@@ -9,11 +9,11 @@ x-logging: &default-logging
     max-file: "5"
 
 # Audit D10: Beobachter-Profil-Schalter. `ARCHON_OBSERVABILITY=full` wird von
-# den Startpfaden (start.bat/install.sh) auf `docker compose --profile full`
-# abgebildet. Der `full`-Profile-Fan-in aktiviert damit monitoring
-# (Prometheus/Alertmanager/Grafana/Uptime-Kuma), logging (Loki/Promtail),
-# replication (Litestream), tracing (OTel-Collector) und das Dashboard.
-# Langfuse v2 ist EOL und bewusst NICHT im full-Profil (siehe langfuse-Service).
+# den Startpfaden (start.bat/install.sh/Ansible) auf die vier Einzelprofile
+# monitoring, logging, replication und tracing abgebildet — nicht auf einen
+# `--profile full`-Fan-in. Alertmanager startet zusaetzlich nur mit gesetzten
+# Telegram-Secrets; ohne Secrets bleibt der Status ehrlich `alerts_not_configured`.
+# Das EOL-Langfuse-v2-Artefakt wurde entfernt (Audit D09/D10, D-D8).
 
 networks:
   agentic_mesh:
@@ -65,7 +65,12 @@ services:
       # Ohne Durchreichung glaubt die App im Container trotz 0.0.0.0-Bind
       # sie laufe lokal und bleibt unauthentifiziert offen.
       - ARCHON_BIND_IP=${ARCHON_BIND_IP:-127.0.0.1}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
+      # Audit D05/D10 (F-01): Produktion ist der Default-Deploy-Modus. Er
+      # aktiviert die Audit-Fail-Closed-Pruefungen und den echten /readyz-Gate.
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      # Erzwingt die externen Dependency-Probes auch bei bewusst gesetztem
+      # ENVIRONMENT=development (isolierte Lokalentwicklung).
+      - ARCHON_READINESS_PROBES=${ARCHON_READINESS_PROBES:-1}
       # K2/C01: auf `true` setzen, sobald ARCHON_SERVICE_TOKEN hinterlegt und
       # die n8n-Workflows damit deployt sind. Production erzwingt Auth bereits
       # ueber ENVIRONMENT; dieser Schalter deckt zusaetzlich Mesh-Deployments
@@ -122,11 +127,13 @@ services:
       # Timeout angleichen (mit 15 s/5000 ms blieb /livez bei 4-s-Haengern 200).
       - ARCHON_LIVEZ_MAX_HEARTBEAT_AGE_S=${ARCHON_LIVEZ_MAX_HEARTBEAT_AGE_S:-8}
       - ARCHON_LIVEZ_MAX_LOOP_LAG_MS=${ARCHON_LIVEZ_MAX_LOOP_LAG_MS:-2000}
-      # Dead-Man-Switch: Alertmanager v2 Alert-API. Der Telegram-Receiver ist
-      # bereits verdrahtet; der Heartbeat setzt endsAt in die Zukunft, damit
-      # ein Ausbleiben der Pings automatisch einen Alert ausloest.
-      - ARCHON_HEARTBEAT_ALERTMANAGER_URL=${ARCHON_HEARTBEAT_ALERTMANAGER_URL:-http://alertmanager:9093/api/v2/alerts}
-      - ARCHON_HEARTBEAT_ALERT_TTL_S=${ARCHON_HEARTBEAT_ALERT_TTL_S:-180}
+      # Audit D10: tote Heartbeat-Variablen entfernt. Der echte Dead-Man-
+      # Switch ist die Prometheus-Metrik archon_heartbeat_timestamp_seconds
+      # (Regel time() - ... > 300 → critical); der optionale externe Webhook
+      # laeuft ueber ARCHON_HEARTBEAT_WEBHOOK_URL (siehe oben).
+      # Watchdog-Altersschwelle im Daemon — mit AUTOHEAL_WATCHDOG_MAX_AGE_S
+      # im externen Autoheal abzustimmen (Audit D10).
+      - ARCHON_WATCHDOG_MAX_LAST_SEEN_AGE_S=${ARCHON_WATCHDOG_MAX_LAST_SEEN_AGE_S:-120}
       # Egress-Guard: der Alertmanager ist ein interner Zielhost und muss
       # explizit freigegeben werden (safe_http_request / check_target_url).
       - ARCHON_PROXY_ALLOWED_TARGETS=${ARCHON_PROXY_ALLOWED_TARGETS:-alertmanager:9093}
@@ -553,10 +560,12 @@ services:
       - ${ARCHON_HERMES_DIR:-./.hermes}:/opt/data
       # P0-11: nur der Datenordner statt ./:/app (keine .env im Container).
       - ./data:/app/data
-      # Audit D10: Replikat darf auf einem externen/anderen Datenträger liegen.
-      # Default bleibt lokal (Dev); Produktion muss ARCHON_LITESTREAM_REPLICA_DIR
-      # auf ein externes Ziel zeigen (RPO ~5-10 s, RTO = Restore-Zeit).
-      - ${ARCHON_LITESTREAM_REPLICA_DIR:-./data/litestream_replicas}:/opt/litestream_replicas
+      # Audit D10: Replikat liegt bewusst NICHT mehr unter ./data — ein
+      # Volume-Verlust der Primaer-DB darf das Replikat nicht mitnehmen.
+      # Produktion: ARCHON_LITESTREAM_REPLICA_DIR auf ein gemountetes
+      # externes Volume/NAS setzen (RPO ~5-10 s, RTO-Ziel <= 30 min,
+      # Restore-Test scripts/automated_restore_test.py alle 6 h).
+      - ${ARCHON_LITESTREAM_REPLICA_DIR:-./dr_replicas}:/opt/litestream_replicas
     command: ["replicate", "--config", "/etc/litestream.yml"]
     deploy:
       resources:
@@ -602,36 +611,11 @@ services:
           memory: 512M
           cpus: "0.5"
 
-  # Audit D09 / Re-Audit H6 (S-1.5): Langfuse v2 ist EOL (Security-Support Ende
-  # Q1/2025). Eine v4-Migration braucht zusaetzlich Worker/ClickHouse/Redis/S3
-  # und darf nicht durch einen reinen Image-Tag-Wechsel vorgetaeuscht werden.
-  # Deshalb ehrlich `not_configured`: der Container ist digest-gepinnt, aber
-  # NUR ueber das Opt-in-Profil `langfuse-not-configured` erreichbar und nicht
-  # Teil von tracing/observability/all/full. Kein toter Default-Endpunkt;
-  # get_tracing_status() meldet `langfuse_status: not_configured`, solange die
-  # LANGFUSE_* Keys fehlen. Keys bleiben ohne Defaults (aus .env).
-  langfuse:
-    image: langfuse/langfuse:2@sha256:85c278dcab96c15db94191a5c1664f85aba2d7fb6771a00e99681c902c4b7015
-    container_name: langfuse
-    logging:
-      <<: *default-logging
-    restart: unless-stopped
-    profiles: ["langfuse-not-configured", "not_configured"]
-    networks:
-      - agentic_mesh
-    ports:
-      - "${ARCHON_BIND_IP:-127.0.0.1}:3000:3000"
-    environment:
-      - DATABASE_URL=${LANGFUSE_DATABASE_URL:-}
-      - NEXTAUTH_URL=http://localhost:3000
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
-      - SALT=${LANGFUSE_SALT:-}
-      - TELEMETRY_ENABLED=false
-    deploy:
-      resources:
-        limits:
-          memory: 1536M
-          cpus: "1.5"
+  # Audit D09/D10 (D-D8): das EOL-Langfuse-v2-Artefakt ist entfernt. Eine
+  # v4-Migration braucht Worker/ClickHouse/Redis/S3 und wird nicht durch einen
+  # Image-Tag-Wechsel vorgetaeuscht. Ein extern betriebenes, aktuelles Langfuse
+  # wird ausschliesslich ueber die LANGFUSE_*-Werte in .env als OTLP-Ziel
+  # angebunden; ohne Keys bleibt get_tracing_status() ehrlich `not_configured`.
 
   prometheus:
     image: prom/prometheus:v2.54.1@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
@@ -690,7 +674,10 @@ services:
       - ./config/alertmanager/alertmanager.yml:/etc/alertmanager-template/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
     environment:
-      # Keine Defaults: ohne Werte ist die gerenderte Config ungueltig (fail-closed).
+      # Keine Defaults: ohne Telegram-Secrets bleibt der Status ehrlich
+      # `alerts_not_configured`. Der Entrypoint rendert dann eine gueltige
+      # no-op-Config statt einer leeren chat_id — kein Crashloop (Audit D10).
+      # Die Starter nehmen alertmanager nur bei gesetzten Secrets mit.
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     entrypoint:
@@ -699,10 +686,15 @@ services:
       - |
         set -e
         mkdir -p /etc/alertmanager/secrets
-        printf '%s' "$$TELEGRAM_BOT_TOKEN" > /etc/alertmanager/secrets/telegram_bot_token
-        chmod 600 /etc/alertmanager/secrets/telegram_bot_token
-        sed "s/__TELEGRAM_CHAT_ID__/$$TELEGRAM_CHAT_ID/" \
-          /etc/alertmanager-template/alertmanager.yml > /etc/alertmanager/alertmanager.yml
+        if [ -z "$$TELEGRAM_BOT_TOKEN" ] || [ -z "$$TELEGRAM_CHAT_ID" ]; then
+          echo "alerts_not_configured: Telegram-Secrets fehlen; no-op-Receiver aktiv (keine Zustellung)." >&2
+          printf 'route:\n  receiver: noop\nreceivers:\n  - name: noop\n' > /etc/alertmanager/alertmanager.yml
+        else
+          printf '%s' "$$TELEGRAM_BOT_TOKEN" > /etc/alertmanager/secrets/telegram_bot_token
+          chmod 600 /etc/alertmanager/secrets/telegram_bot_token
+          sed "s/__TELEGRAM_CHAT_ID__/$$TELEGRAM_CHAT_ID/" \
+            /etc/alertmanager-template/alertmanager.yml > /etc/alertmanager/alertmanager.yml
+        fi
         exec /bin/alertmanager \
           --config.file=/etc/alertmanager/alertmanager.yml \
           --storage.path=/alertmanager
@@ -952,6 +944,10 @@ services:
       - AUTOHEAL_COOLDOWN_S=${AUTOHEAL_COOLDOWN_S:-900}
       - AUTOHEAL_PROBE_TIMEOUT_S=${AUTOHEAL_PROBE_TIMEOUT_S:-5}
       - AUTOHEAL_HEALTH_GATE=${AUTOHEAL_HEALTH_GATE:-1}
+      # Audit D10: Altersschwelle des Watchdog-Heartbeats im externen Probe.
+      # Muss mit ARCHON_WATCHDOG_MAX_LAST_SEEN_AGE_S im Daemon abstimmen, sonst
+      # meldet /livez frueher als dieser Probe greift.
+      - AUTOHEAL_WATCHDOG_MAX_AGE_S=${AUTOHEAL_WATCHDOG_MAX_AGE_S:-120}
     volumes:
       - ./scripts/archon_autoheal.py:/app/archon_autoheal.py:ro
     tmpfs:

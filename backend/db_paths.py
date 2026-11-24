@@ -221,26 +221,44 @@ def get_db_connection(db_name_or_path: str, timeout: Optional[float] = None) -> 
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA cache_size = -32000;")
     conn.execute("PRAGMA temp_store = MEMORY;")
+    wal_enabled = os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes")
     if db_path not in _DB_PRAGMA_INITIALIZED:
         try:
-            if os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes"):
+            if wal_enabled:
                 conn.execute("PRAGMA journal_mode = WAL;")
-                conn.execute("PRAGMA synchronous = NORMAL;")
             _DB_PRAGMA_INITIALIZED.add(db_path)
         except sqlite3.Error as exc:
             logger.warning(f"[db_paths] WAL-PRAGMA fuer {db_path} fehlgeschlagen: {exc}")
+    # D03/MED: `synchronous` ist verbindungsbezogen und GEHOERT AN JEDE
+    # Connection — der Pfad-Cache darf ihn nicht ueberspringen (Folge-
+    # Connections liefen sonst mit SQLite-Default FULL, erst recht nach einem
+    # Restore-Cache-Reset). Nur journal_mode bleibt pfadbezogen gecached.
+    if wal_enabled:
+        try:
+            conn.execute("PRAGMA synchronous = NORMAL;")
+        except sqlite3.Error as exc:
+            logger.warning(f"[db_paths] synchronous-PRAGMA fuer {db_path} fehlgeschlagen: {exc}")
     return conn
 
 
-def audit_busy_timeout_ssot(root_dir: Optional[str] = None) -> list[tuple[str, int, str]]:
-    """Read-only AST-Scan: findet vom SSOT abweichende busy_timeout-Setzer.
+def audit_busy_timeout_ssot(
+    root_dir: Optional[str] = None,
+    *,
+    include_connect_timeout: bool = False,
+) -> list[tuple[str, int, str]]:
+    """Read-only Scan: findet vom SSOT abweichende busy_timeout-Setzer.
 
     D03: Die SSOT-Behauptung soll nicht nur im Kommentar stehen. Diese
     Funktion liefert ``[(relative_datei, zeile, literal), ...]``; eine leere
     Liste bedeutet, dass außerhalb dieser Datei kein *abweichender* Wert
     gesetzt wird. Literale mit 5000 ms sind zulässig (SSOT-konform), alle
-    anderen (z.B. 10000/15000) sind Drift. Aufgerufen aus der Verifikation /
-    als CI-Gate von außen.
+    anderen (z.B. 10000/15000) sind Drift.
+
+    D03/HIGH: mit ``include_connect_timeout=True`` werden zusätzlich
+    abweichende ``sqlite3.connect(..., timeout=<literal>)``-Werte erkannt —
+    der connect()-Parameter ist der zweite, bisher unsichtbare Setzer. Das
+    Flag ist Default-AUS, damit der bestehende Gate bis zur Migration aller
+    Fremdmodule (DELEGATED an A1) nicht rot wird.
     """
     import re as _re
 
@@ -263,6 +281,9 @@ def audit_busy_timeout_ssot(root_dir: Optional[str] = None) -> list[tuple[str, i
         if f.endswith(".py") and os.path.isfile(os.path.join(root, f))
     )
     pattern = _re.compile(r"busy_timeout\s*=\s*(\d+)", _re.I)
+    connect_pattern = _re.compile(
+        r"sqlite3\.connect\s*\([^)]*?\btimeout\s*=\s*(\d+(?:\.\d+)?)", _re.I
+    )
     for full in files:
         rel = os.path.relpath(full, root).replace("\\", "/")
         if rel == "backend/db_paths.py":
@@ -273,6 +294,10 @@ def audit_busy_timeout_ssot(root_dir: Optional[str] = None) -> list[tuple[str, i
                     match = pattern.search(line)
                     if match and int(match.group(1)) != DB_BUSY_TIMEOUT_MS:
                         offenders.append((rel, lineno, match.group(1)))
+                    if include_connect_timeout:
+                        c_match = connect_pattern.search(line)
+                        if c_match and abs(float(c_match.group(1)) - DB_BUSY_TIMEOUT_S) > 1e-9:
+                            offenders.append((rel, lineno, f"connect_timeout={c_match.group(1)}"))
         except OSError:
             continue
     return sorted(offenders)
@@ -295,11 +320,17 @@ def audit_busy_timeout_cli(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--audit-busy-timeout", action="store_true", help="Detektor ausfuehren")
     parser.add_argument("--root", default=None, help="Repo-Wurzel (Default: Workspace)")
     parser.add_argument(
+        "--include-connect-timeout", action="store_true",
+        help="Auch abweichende sqlite3.connect(timeout=...)Literal melden (D03/HIGH)",
+    )
+    parser.add_argument(
         "--allow-drift", action="append", default=[],
         help="Bekannte Altlast als '<relative_datei>[:<zeile>]' tolerieren (mehrfach)",
     )
     args = parser.parse_args(argv)
-    offenders = audit_busy_timeout_ssot(args.root)
+    offenders = audit_busy_timeout_ssot(
+        args.root, include_connect_timeout=bool(args.include_connect_timeout)
+    )
     allowed = set(args.allow_drift or ())
     unexpected = [
         (path, line, value)

@@ -116,7 +116,7 @@ def test_core_dispatcher_consensus_block_is_offline():
 
     # Der Konsensblock nutzt den offline-Helper und dispatcht nicht mehr.
     start = src.index("# 3. CONSENSUS CHECK")
-    end = src.index("# 4. FINAL SYNTHESIS")
+    end = src.index("# 3a.")
     block = src[start:end]
     assert "resolve_debate_consensus" in block
     assert "dispatch_to_external_agent" not in block

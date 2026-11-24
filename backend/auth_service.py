@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 backend/auth_service.py
 Meilenstein 4: Multi-User-Architektur & Rollenbasierte Zugriffskontrolle (RBAC).
@@ -5,27 +6,29 @@ Verwaltet Benutzer, Rollen (admin, operator, viewer), PBKDF2-verschlüsselte Ken
 und sichere Session-Tokens mit Zero-Disruption für lokale Entwicklungs-Workflows.
 """
 
-import os
-import sys
-import time
-import threading
-import uuid
-import hmac
-import hashlib
-import sqlite3
 import datetime
-import logging
-import re
+import hashlib
+import hmac
 import html
+import logging
+import os
+import re
 import secrets
-from typing import Dict, Any, List, Optional
+import sqlite3
+import sys
+import threading
+import time
+import uuid
+from typing import Any, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
-    from backend.db_paths import resolve_db
+    from backend.db_paths import DB_BUSY_TIMEOUT_MS, DB_BUSY_TIMEOUT_S, resolve_db
     DB_PATH = resolve_db("agentic_memory.db")
 except Exception:
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+    DB_BUSY_TIMEOUT_MS = 5000  # Fallback: SSOT (backend.db_paths) nicht importierbar
+    DB_BUSY_TIMEOUT_S = DB_BUSY_TIMEOUT_MS / 1000.0
 
 _PBKDF2_ITERATIONS = 600000
 _LEGACY_PBKDF2_ITERATIONS = 100000
@@ -71,12 +74,14 @@ class _ClosingAuthConn(sqlite3.Connection):
 
 def _get_db() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10.0, factory=_ClosingAuthConn)
+    # A3-Delegation: connect-timeout aus der SSOT (5000 ms), kein harter
+    # 10-s-Wert mehr, der von DB_BUSY_TIMEOUT_MS abweicht.
+    conn = sqlite3.connect(DB_PATH, timeout=DB_BUSY_TIMEOUT_S, factory=_ClosingAuthConn)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
-        conn.execute("PRAGMA busy_timeout=10000;")
+        conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
     except Exception as exc:
         logger.warning(f"SQLite-PRAGMA-Init fehlgeschlagen, Standard-Verhalten bleibt aktiv: {exc}")
     return conn
@@ -316,7 +321,6 @@ class AuthService:
         if role not in ("admin", "operator", "viewer"):
             role = "operator"
 
-        import html
         raw_display = (display_name or "").strip() or username.capitalize()
         display_name = html.escape(raw_display)
         email = (email or "").strip().lower()

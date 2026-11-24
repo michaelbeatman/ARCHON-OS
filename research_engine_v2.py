@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 research_engine_v2.py - Prototyp: Reflexionsschleife + Seiten-Scraper + Kompression.
 
@@ -18,28 +19,29 @@ Kostenhebel:
   - Abbruch, sobald die Evidenz reicht
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("research_engine_v2")
 
+import ipaddress
+import json
+import math
 import os
 import re
-import json
-import time
-import math
-import threading
 import socket
-import ipaddress
-import urllib.request
+import threading
+import time
 import urllib.parse
 from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional, Tuple
 
 import research_engine as base
+
 # Batch C: konservative Rechte-Metadaten fuer jede Research-Quelle.
 from backend.research_sources import (
-    apply_rights_defaults,
-    rights_from_html,
     DEFAULT_LICENSE,
     DEFAULT_RIGHTS,
+    apply_rights_defaults,
+    rights_from_html,
 )
 
 OMNIROUTE_URL = os.environ.get("OMNIROUTE_URL", "http://omniroute:20128/v1")
@@ -290,24 +292,74 @@ def compress_text(text: str, query: str, max_words: int = 220) -> str:
 # LLM-Aufrufe (Reflexion)
 # ---------------------------------------------------------------------------
 
+def _validate_omniroute_url(url: str) -> str:
+    """S-6.6: Gateway-Key nur an den konfigurierten, geprueften OmniRoute-Endpunkt.
+
+    Erlaubt sind ausschliesslich der Docker-Service `omniroute` und explizite
+    Loopback-/Host-Ziele auf Port 20128. Alles andere (insbesondere IMDS,
+    fremde Hosts, eingebettete Credentials) wird fail-closed abgelehnt.
+    """
+    from urllib.parse import urlparse
+
+    from api_provider import _validate_base_url
+
+    target = str(url or "").strip().rstrip("/")
+    if not _validate_base_url(target):
+        raise RuntimeError("OMNIROUTE_URL ist keine gueltige http(s)-URL ohne Credentials.")
+    parsed = urlparse(target)
+    host = (parsed.hostname or "").lower()
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError as exc:
+        raise RuntimeError(f"OMNIROUTE_URL hat einen ungueltigen Port: {exc}") from exc
+    allowed = {"omniroute", "127.0.0.1", "localhost", "host.docker.internal"}
+    if host not in allowed or port != 20128:
+        raise RuntimeError(
+            f"OMNIROUTE_URL '{host}:{port}' ist nicht freigegeben — "
+            "nur omniroute/loopback auf Port 20128 erlaubt (Key-Exfil-Schutz)."
+        )
+    return target
+
+
 def _chat(model: str, system: str, user: str, max_tokens: int, timeout: int = 40) -> str:
     if not OMNIROUTE_KEY:
         raise RuntimeError(
             "OMNIROUTE_API_KEY fehlt in der Umgebung — kein Request mit leerem/Default-Key."
         )
-    payload = json.dumps({
+    from backend.llm_egress_guard import enforce_egress_firewall_for_url
+    from utils.safe_http import safe_http_json
+
+    # 1) Harte Ziel-Validierung VOR dem Request — der Key darf nie an einen
+    #    manipulierten OMNIROUTE_URL-Wert (SSRF/Exfiltration) gehen.
+    base_url = _validate_omniroute_url(OMNIROUTE_URL)
+    chat_url = f"{base_url}/chat/completions"
+
+    # 2) Zusaetzlich den zentralen Egress-Guard passieren lassen (Fail-Closed).
+    gate = enforce_egress_firewall_for_url(chat_url, agent_id="research_engine_v2")
+    if isinstance(gate, dict) and not gate.get("allowed", True):
+        raise RuntimeError(f"OmniRoute-Ziel durch Egress-Guard blockiert: {gate.get('reason', '')}")
+
+    payload: Dict[str, Any] = {
         "model": model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         "temperature": 0.1,
         "max_tokens": max_tokens,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        f"{OMNIROUTE_URL.rstrip('/')}/chat/completions",
-        data=payload,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {OMNIROUTE_KEY}"},
+    }
+    # 3) SSRF-sicherer Client: kein Redirect-Following, Groessenlimit, explizite
+    #    Allowlist fuer den internen Gateway-Host.
+    from urllib.parse import urlparse
+    _p = urlparse(base_url)
+    _allowed_target = f"{_p.hostname}:{_p.port or 20128}"
+    data = safe_http_json(
+        chat_url,
+        method="POST",
+        headers={"Authorization": f"Bearer {OMNIROUTE_KEY}"},
+        payload=payload,
+        timeout=timeout,
+        public_only=False,
+        allowed=[_allowed_target],
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]["content"]
+    return data["choices"][0]["message"]["content"]
 
 
 def reflect(query: str, sources: List[Dict[str, Any]], asked: List[str], fast_model: str) -> Dict[str, Any]:

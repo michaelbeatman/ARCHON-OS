@@ -8,6 +8,7 @@ Verwaltet /api/vault/ Endpunkte (Dateiliste, Lesen, Bearbeiten, Loeschen, Index)
 Extrahiert aus main.py zur Modularisierung.
 """
 
+import hashlib
 import os
 import sys
 import tempfile
@@ -32,6 +33,7 @@ def _atomic_write_text(
     *,
     expected_mtime: Optional[float] = None,
     expected_size: Optional[int] = None,
+    expected_hash: Optional[str] = None,
 ) -> None:
     """C20 + D03/MED: Temp+fsync+os.replace mit atomarer Konfliktprüfung.
 
@@ -60,21 +62,32 @@ def _atomic_write_text(
                 os.fsync(f.fileno())
 
             # D03/MED: Wiederholung der Konfliktprüfung direkt vor dem
-            # Austausch — unter demselben Lock wie der Replace.
-            if expected_mtime is not None and os.path.exists(path):
+            # Austausch — unter demselben Lock wie der Replace. Der Hash ist
+            # das dritte Merkmal: mtime+size allein erkennen eine Aenderung
+            # gleicher Laenge innerhalb derselben Zeiteinheit nicht. Ein
+            # zwischenzeitlich geloeschtes File ist ebenfalls ein Konflikt.
+            if any(v is not None for v in (expected_mtime, expected_size, expected_hash)):
                 try:
-                    if abs(float(os.path.getmtime(path)) - float(expected_mtime)) > 0.001:
+                    st = os.stat(path)
+                    if expected_mtime is not None and abs(st.st_mtime - float(expected_mtime)) > 0.001:
                         raise HTTPException(
                             status_code=409, detail="Vault-Datei wurde inzwischen geaendert."
                         )
-                except (TypeError, ValueError):
-                    pass
-            if expected_size is not None and os.path.exists(path):
-                try:
-                    if int(os.path.getsize(path)) != int(expected_size):
+                    if expected_size is not None and st.st_size != int(expected_size):
                         raise HTTPException(
                             status_code=409, detail="Vault-Datei wurde inzwischen geaendert (Groesse)."
                         )
+                    if expected_hash is not None:
+                        with open(path, "rb") as fh:
+                            actual = hashlib.sha256(fh.read()).hexdigest()
+                        if actual != str(expected_hash).strip().lower():
+                            raise HTTPException(
+                                status_code=409, detail="Vault-Datei wurde inzwischen geaendert (Hash)."
+                            )
+                except FileNotFoundError:
+                    raise HTTPException(
+                        status_code=409, detail="Vault-Datei wurde inzwischen geloescht."
+                    )
                 except (TypeError, ValueError):
                     pass
 
@@ -246,6 +259,16 @@ def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body
                 raise HTTPException(status_code=409, detail="Vault-Datei wurde inzwischen geaendert (Groesse).")
         except (TypeError, ValueError):
             pass
+    # D03/MED: SHA-256 als drittes Konfliktmerkmal (TOCTOU).
+    expected_hash = data.get("expected_hash")
+    if expected_hash is not None and os.path.exists(real_path):
+        try:
+            with open(real_path, "rb") as fh:
+                actual_hash = hashlib.sha256(fh.read()).hexdigest()
+            if actual_hash != str(expected_hash).strip().lower():
+                raise HTTPException(status_code=409, detail="Vault-Datei wurde inzwischen geaendert (Hash).")
+        except (OSError, TypeError, ValueError):
+            pass
     # G: Audit vor der Mutation; ohne Auditnachweis wird abgelehnt.
     try:
         _audit_vault_mutation("vault_file_edited", real_path, _active_tenant_id())
@@ -257,6 +280,7 @@ def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body
         real_path, content,
         expected_mtime=expected_mtime,
         expected_size=expected_size,
+        expected_hash=expected_hash,
     )
     cache = _get_vault_cache()
     cache["ts"] = 0.0

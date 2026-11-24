@@ -453,6 +453,7 @@ def test_save_all_agent_profiles_writes_ssot_without_roles_clones(tmp_path, monk
 
 def test_hermes_config_uses_app_root_for_agent_profiles():
     import inspect
+
     import archon.routers.hermes_config as hc
 
     src = inspect.getsource(hc)
@@ -463,6 +464,7 @@ def test_hermes_config_uses_app_root_for_agent_profiles():
 def test_org_hierarchy_matches_70_ssot_profiles_without_warnings():
     import json
     from pathlib import Path
+
     from backend.config_validator import ConfigValidator
 
     root = Path(__file__).resolve().parents[1]
@@ -517,6 +519,7 @@ def test_llm_egress_guard_fail_closed_and_mistral_not_local(monkeypatch):
 
 def test_audited_post_accepts_timeout():
     import inspect
+
     import core_dispatcher as cd
 
     src = inspect.getsource(cd)
@@ -552,6 +555,7 @@ def test_local_security_guard_destructive_lowercase():
 
 def test_tool_permission_manager_blocks_late_c_flag_and_replay(tmp_path):
     import pytest
+
     from backend.tool_permission_manager import ToolPermissionManager, _validate_install_command
 
     with pytest.raises(ValueError):
@@ -566,8 +570,8 @@ def test_tool_permission_manager_blocks_late_c_flag_and_replay(tmp_path):
 
 
 def test_mcp_gateway_hitl_approval_is_bound_and_single_use(tmp_path, monkeypatch):
-    from backend.mcp_gateway import ArchonMcpGateway
     from backend.approval_policy_engine import approval_engine
+    from backend.mcp_gateway import ArchonMcpGateway
 
     monkeypatch.setattr(approval_engine, "db_path", str(tmp_path / "hitl_single.db"))
     gw = ArchonMcpGateway()
@@ -611,7 +615,9 @@ def test_mcp_gateway_hitl_approval_is_bound_and_single_use(tmp_path, monkeypatch
 
 def test_egress_guard_blocks_dns_rebinding_to_metadata(monkeypatch):
     import socket
+
     import pytest
+
     from utils.egress_guard import EgressBlocked, check_target_url
 
     def _fake_getaddrinfo(host, port, type=0):
@@ -683,8 +689,9 @@ def test_core_memory_manager_isolates_agent_and_tenant(tmp_path, monkeypatch):
 def test_router_traversal_validators_reject_dotdot():
     import pytest
     from fastapi import HTTPException
-    from archon.routers.hr import _validate_agent_id
+
     from archon.routers.guardian import _validate_plugin_id
+    from archon.routers.hr import _validate_agent_id
     from archon.routers.tenants import _validate_company_id
 
     for fn in (_validate_agent_id, _validate_plugin_id, _validate_company_id):
@@ -700,6 +707,7 @@ def test_router_traversal_validators_reject_dotdot():
 
 def test_erp_gobd_blocks_allow_status_update_only_bypass_and_ustg14(tmp_path, monkeypatch):
     import pytest
+
     import backend.erp_manager as erp_mod
 
     monkeypatch.setattr(erp_mod, "TENANTS_BASE_DIR", str(tmp_path / "tenants"))
@@ -738,6 +746,7 @@ def test_erp_gobd_blocks_allow_status_update_only_bypass_and_ustg14(tmp_path, mo
 def test_dunning_engine_b2b_40_eur_pauschale(tmp_path):
     import datetime
     import sqlite3
+
     from backend.dunning_engine import DunningEngine
 
     db_file = tmp_path / "mem.db"
@@ -776,6 +785,7 @@ def test_approval_policy_engine_per_user_delegation_and_chain(tmp_path):
 def test_deadlock_supervisor_clears_locks_and_escalates(tmp_path):
     import sqlite3
     import time
+
     from backend.deadlock_supervisor import DeadlockSupervisor
 
     db = tmp_path / "kanban.db"
@@ -811,6 +821,7 @@ def test_deadlock_supervisor_clears_locks_and_escalates(tmp_path):
 
 def test_gdpr_erasure_redacts_conversations(tmp_path):
     import sqlite3
+
     from backend.gdpr_compliance_engine import GDPRComplianceEngine
 
     mem_db = tmp_path / "mem.db"
@@ -839,6 +850,7 @@ def test_gdpr_erasure_redacts_conversations(tmp_path):
 
 def test_approval_policy_engine_four_eyes_blocks_same_person_via_delegation(tmp_path):
     import pytest
+
     from backend.approval_policy_engine import ApprovalPolicyEngine
 
     eng = ApprovalPolicyEngine(db_path=str(tmp_path / "app_d.db"))
@@ -862,6 +874,7 @@ def test_approval_policy_engine_four_eyes_blocks_same_person_via_delegation(tmp_
 
 def test_deadlock_supervisor_handles_utc_z_timestamps(tmp_path):
     import sqlite3
+
     from backend.deadlock_supervisor import DeadlockSupervisor
 
     db = tmp_path / "kanban_z.db"
@@ -886,6 +899,7 @@ def test_deadlock_supervisor_handles_utc_z_timestamps(tmp_path):
 
 def test_local_memory_bridge_init_has_valid_learnings_index(tmp_path):
     import sqlite3
+
     from local_memory_bridge import LocalMemoryBridge
 
     db = tmp_path / "mem_idx.db"
@@ -909,6 +923,7 @@ def test_hermes_ops_mask_config_secrets_and_scorecard_columns(tmp_path):
 
 def test_operations_kanban_batch_obsidian_map(tmp_path):
     import sqlite3
+
     from backend.operations_api import _build_kanban_obsidian_map
 
     db = tmp_path / "k.db"
@@ -921,7 +936,11 @@ def test_operations_kanban_batch_obsidian_map(tmp_path):
 
 def test_guardian_autonomy_bridge_and_settings_keys_valid(tmp_path, monkeypatch):
     from archon.routers import guardian as gmod
-    from archon.routers.guardian import _PLUGIN_AUTONOMY_BRIDGE, api_get_plugin_config, api_save_plugin_config
+    from archon.routers.guardian import (
+        _PLUGIN_AUTONOMY_BRIDGE,
+        api_get_plugin_config,
+        api_save_plugin_config,
+    )
     from backend import autonomy_settings as aus
 
     settings_file = tmp_path / "settings.json"
@@ -945,10 +964,10 @@ def test_guardian_autonomy_bridge_and_settings_keys_valid(tmp_path, monkeypatch)
 
 
 def test_secret_masker_and_multiline_sanitizer_and_metadata_ip(monkeypatch):
-    from backend import secret_masker as sm
-    from backend import dual_llm_sanitizer as dls
     from backend import audit_log as al
+    from backend import dual_llm_sanitizer as dls
     from backend import llm_egress_guard as leg
+    from backend import secret_masker as sm
 
     monkeypatch.setattr("backend.autonomy_settings.get_module_config", lambda s: {"secret_masking_enabled": True})
     fake_ant_key = "sk-" + "ant-" + "api03-" + ("a" * 24)
@@ -975,9 +994,10 @@ def test_secret_masker_and_multiline_sanitizer_and_metadata_ip(monkeypatch):
 
 def test_mcp_gateway_persists_consumed_hitl_and_sandbox_sh(tmp_path, monkeypatch):
     from unittest.mock import MagicMock, patch
-    from backend.mcp_gateway import ArchonMcpGateway
+
     from backend.approval_policy_engine import ApprovalPolicyEngine
     from backend.ephemeral_sandbox import ephemeral_sandbox
+    from backend.mcp_gateway import ArchonMcpGateway
 
     dbp = str(tmp_path / "hitl.db")
     eng = ApprovalPolicyEngine(db_path=dbp)
@@ -1041,6 +1061,7 @@ def test_yaml_restore_masked_values_section_aware():
 def test_receipt_ledger_and_shutdown_orphan_heal_and_healer_blocked(tmp_path, monkeypatch):
     import asyncio
     import sqlite3
+
     from backend import execution_receipt_ledger as erl
     from backend.graceful_shutdown_coordinator import GracefulShutdownCoordinator
     from backend.task_self_healer import TaskSelfHealer
@@ -1080,9 +1101,10 @@ def test_receipt_ledger_and_shutdown_orphan_heal_and_healer_blocked(tmp_path, mo
 
 def test_eu_ai_act_prohibited_credit_risk_and_expired_literacy(tmp_path):
     import datetime
-    from backend.eu_ai_act_inventory import EUAIActInventoryManager
-    from backend.compliance_engine import ComplianceEngine
+
     from backend.audit_log import ChainedAuditLog
+    from backend.compliance_engine import ComplianceEngine
+    from backend.eu_ai_act_inventory import EUAIActInventoryManager
 
     inv_file = tmp_path / "inv.json"
     prof_file = tmp_path / "prof.json"
@@ -1112,9 +1134,10 @@ def test_eu_ai_act_prohibited_credit_risk_and_expired_literacy(tmp_path):
 
 def test_dunning_2026_bgb_rate_and_draft_creation_and_docuseal_declined(tmp_path, monkeypatch):
     import datetime
+
     from backend import dunning_engine as de
-    from backend.email_draft_engine import EmailDraftEngine
     from backend.docuseal_client import DocuSealClient
+    from backend.email_draft_engine import EmailDraftEngine
 
     assert abs(de._get_bgb_base_rate(datetime.date(2026, 8, 1)) - 0.0152) < 1e-6
 
@@ -1143,8 +1166,9 @@ def test_dunning_2026_bgb_rate_and_draft_creation_and_docuseal_declined(tmp_path
 
 def test_erp_einvoice_service_date_and_discount_br_co_10_and_legal_endpoints(tmp_path, monkeypatch):
     import xml.etree.ElementTree as ET
+
     import backend.erp_manager as erp_mod
-    from archon.routers.system import api_legal_impressum, api_legal_datenschutz
+    from archon.routers.system import api_legal_datenschutz, api_legal_impressum
 
     tdir = tmp_path / "tenants"
     tdir.mkdir()
@@ -1189,8 +1213,9 @@ def test_auth_service_600k_legacy_upgrade_hashed_token_idle_and_lockout(tmp_path
     import datetime
     import hashlib
     import sqlite3
-    import backend.auth_service as as_mod
+
     import archon.routers.auth as auth_router_mod
+    import backend.auth_service as as_mod
     import main as app_main
 
     db_file = tmp_path / "auth_hardened.db"
@@ -1259,6 +1284,7 @@ def test_gobd_z3_export_archive_and_rbac(tmp_path, monkeypatch):
     import io
     import xml.etree.ElementTree as ET
     import zipfile
+
     import backend.erp_manager as erp_mod
     import main as app_main
     from backend.gobd_z3_export import build_gobd_z3_archive
@@ -1331,6 +1357,7 @@ def test_gobd_z3_export_archive_and_rbac(tmp_path, monkeypatch):
 
 def test_login_route_and_kanban_missing_comment_tables(tmp_path, monkeypatch):
     import sqlite3
+
     import backend.operations_api as ops_mod
     import main as app_main
 
@@ -1362,8 +1389,10 @@ def test_login_route_and_kanban_missing_comment_tables(tmp_path, monkeypatch):
 def test_reverse_proxy_preserves_multi_set_cookie_and_no_store_html():
     import asyncio
     from unittest.mock import AsyncMock, MagicMock
+
     import httpx
     from starlette.requests import Request
+
     from utils.reverse_proxy import ReverseProxy
 
     proxy = ReverseProxy(name="n8n", target_host="n8n:5678", mount_prefix="/n8n-proxy")
@@ -1411,7 +1440,7 @@ def test_reverse_proxy_preserves_multi_set_cookie_and_no_store_html():
 # ==============================================================================
 
 def test_block1_rate_limit_private_cidr_and_strict_v1():
-    from utils.rate_limit import _is_trusted_proxy_ip, STRICT_PREFIXES
+    from utils.rate_limit import STRICT_PREFIXES, _is_trusted_proxy_ip
     assert _is_trusted_proxy_ip("172.200.1.1") is False
     assert _is_trusted_proxy_ip("172.217.16.1") is False
     assert _is_trusted_proxy_ip("172.16.0.1") is True
@@ -1423,6 +1452,7 @@ def test_block1_rate_limit_private_cidr_and_strict_v1():
 
 def test_block1_egress_guard_fail_closed_on_gaierror(monkeypatch):
     import socket
+
     from utils.egress_guard import EgressBlocked, check_target_url
 
     def _fail(*args, **kwargs):
@@ -1434,7 +1464,7 @@ def test_block1_egress_guard_fail_closed_on_gaierror(monkeypatch):
 
 
 def test_block1_safe_identifier_and_scripts_backup_import():
-    from utils.path_jail import safe_identifier, PathJailError
+    from utils.path_jail import PathJailError, safe_identifier
     assert safe_identifier("research-1_core") == "research-1_core"
     for bad in ("../etc", "a/b", r"a\b", "..", "", "foo..bar"):
         with pytest.raises(PathJailError):
@@ -1458,10 +1488,13 @@ def test_block1_hermes_ops_restores_masked_secrets(tmp_path, monkeypatch):
 
 
 
-def test_block3_audit_log_company_id_and_wal(tmp_path):
+def test_block3_audit_log_company_id_and_wal(tmp_path, monkeypatch):
     import sqlite3
+
     from backend.audit_log import ChainedAuditLog
 
+    # A2: kein externer Anker in diesem Test -> expliziter Dev-Opt-out.
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")
     db_file = str(tmp_path / "audit_test.db")
     mgr = ChainedAuditLog(db_path=db_file)
     mgr.record_event("ops", "task_done", "coder", {"company_id": "mandant-a", "note": "alpha"})
@@ -1480,6 +1513,7 @@ def test_block3_audit_log_company_id_and_wal(tmp_path):
 
 def test_block3_db_backup_manager_integrity_check(tmp_path, monkeypatch):
     import sqlite3
+
     from backend import db_backup_manager
 
     src_db = tmp_path / "sample.db"
@@ -1504,6 +1538,7 @@ def test_block3_db_backup_manager_integrity_check(tmp_path, monkeypatch):
 
 def test_block3_docuseal_list_contracts_company_filter(tmp_path):
     import sqlite3
+
     from backend.docuseal_client import DocuSealClient
 
     mem_db = str(tmp_path / "mem.db")
@@ -1525,6 +1560,7 @@ def test_block3_docuseal_list_contracts_company_filter(tmp_path):
 
 def test_block3_api_key_manager_no_lock_contention(tmp_path, caplog):
     import logging
+
     from backend.api_key_manager import ApiKeyManager
 
     with caplog.at_level(logging.WARNING):
@@ -1537,10 +1573,12 @@ def test_block3_api_key_manager_no_lock_contention(tmp_path, caplog):
 
 def test_block3_reverse_proxy_streams_non_html():
     import asyncio
-    import httpx
     from unittest.mock import AsyncMock, MagicMock
-    from utils.reverse_proxy import ReverseProxy
+
+    import httpx
     from fastapi.responses import StreamingResponse
+
+    from utils.reverse_proxy import ReverseProxy
 
     async def _run():
         proxy = ReverseProxy(name="test", target_host="127.0.0.1:9999", mount_prefix="/tp")

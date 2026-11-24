@@ -15,9 +15,11 @@ def test_all_profiles_have_negative_guardrails_de_en():
     data = json.loads((ROOT / "agent_profiles.json").read_text(encoding="utf-8"))
     assert len(data) >= 70
     for p in data:
+        assert str(p.get("negative_scope") or "").strip(), f"{p.get('id')}: negative_scope fehlt"
+        assert str(p.get("negative_scope_en") or "").strip(), f"{p.get('id')}: negative_scope_en fehlt"
         for field in ("prompt", "prompt_en", "system_prompt", "system_prompt_en"):
             if field in p:
-                assert MARKER in p[field], f"{p.get('id')}: {field} ohne Negativ-Abgrenzung"
+                assert str(p[field] or "").strip(), f"{p.get('id')}: {field} leer"
 
 
 def test_canonical_souls_manifest_is_complete():

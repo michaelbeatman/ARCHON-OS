@@ -5,15 +5,16 @@ Simuliert vor kritischen Veröffentlichungen gegnerische Parteien
 (skeptischer Kunde, Pentester/Angreifer, Compliance-Auditor) und erstellt eine Risiko-Matrix.
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("war_room_simulator")
 
+import asyncio
+import json
 import os
+import sqlite3
 import sys
 import time
-import json
-import sqlite3
-import asyncio
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -65,7 +66,17 @@ async def _enforce_hitl_block(
             titel=f"HITL-Sperre War-Room: {topic[:100]}"[:180],
             kurzfassung=(f"War-Room-Risiko {overall_risk}. Freigabe erforderlich.\n{mitigation_text}")[:600],
             ref_id=ref_id,
-            extra={"war_room": {"topic": topic[:250], "risk": overall_risk, "mitigations": mitigation_text[:1000]}},
+            extra={
+                "war_room": {
+                    "topic": topic[:250],
+                    "risk": overall_risk,
+                    "mitigations": mitigation_text[:1000],
+                    # D12/MED: Decision stammt aus einer hypothetischen Simulation,
+                    # nie aus einem realen Freigabeverfahren.
+                    "simulated": True,
+                    "mode": "simulation",
+                }
+            },
         )
         enforcement["decision_created"] = bool(decision)
         enforcement["decision"] = decision or None
@@ -80,8 +91,8 @@ async def _enforce_hitl_block(
                 _update_kanban_task_status,
                 task_id,
                 "blocked",
-                result=f"War-Room blockiert bei Risiko {overall_risk}: {mitigation_text[:500]}",
-                block_kind="war_room_risk",
+                result=f"[SIMULATION] War-Room blockiert bei Szenario-Risiko {overall_risk}: {mitigation_text[:500]}",
+                block_kind="war_room_simulation_risk",
             )
             enforcement["task_blocked"] = True
             enforcement["task_id"] = task_id
@@ -105,7 +116,14 @@ async def run_war_room_simulation(
         from backend.autonomy_settings import get_module_config
         cfg = get_module_config("war_room")
         if not cfg.get("enabled", True):
-            return {"status": "disabled", "topic": topic, "overall_risk_level": "LOW", "recommendation": "War-Room ist in den Einstellungen deaktiviert."}
+            return {
+                "status": "disabled",
+                "simulated": True,
+                "mode": "simulation",
+                "topic": topic,
+                "overall_risk_level": "UNKNOWN",
+                "recommendation": "War-Room ist in den Einstellungen deaktiviert — kein Szenario bewertet.",
+            }
         block_threshold = cfg.get("block_threshold", "HIGH")
         if not model:
             model = cfg.get("default_model", "deepseek/deepseek-chat")
@@ -221,7 +239,16 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
                     INSERT INTO war_room_simulations 
                     (topic, plan_summary, overall_risk_level, simulation_json, mitigation_advice, created_at)
                     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """, (topic[:250], proposal_text[:500], overall_risk, json.dumps(results, ensure_ascii=False), mitigation_text))
+                """, (
+                    topic[:250], proposal_text[:500], overall_risk,
+                    json.dumps({
+                        "simulated": True,
+                        "mode": "simulation",
+                        "overall_risk_level": overall_risk,
+                        "adversary_evaluations": results,
+                    }, ensure_ascii=False),
+                    mitigation_text,
+                ))
                 conn.commit()
         finally:
             conn.close()
@@ -269,6 +296,10 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format:
 
     return {
         "status": status,
+        # D12/MED: das Szenario ist hypothetisch — Response und persistierte
+        # Decision muessen das explizit kennzeichnen (kein Scheinfreigabewert).
+        "simulated": True,
+        "mode": "simulation",
         "evaluation_failed": evaluation_failed,
         "artifact_write_failed": artifact_write_failed,
         "topic": topic,

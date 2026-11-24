@@ -78,6 +78,34 @@ export function createTraceparent(): string {
 
 let activeTracestate: string | null = null;
 
+/**
+ * D16/HIGH: aktiver Browser-Kontext aus SSE-Frames. Der Browser darf nicht
+ * bei jeder UI-Aktion einen neuen Root würfeln — er forkt die trace_id des
+ * auslösenden SSE-Events in eine neue span_id (Kind = client/fork).
+ */
+const TRACEPARENT_RE = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/i;
+let activeTraceparent: string | null = null;
+
+export function setArchonTraceparent(value: string | null | undefined): void {
+  const match = typeof value === 'string' ? TRACEPARENT_RE.exec(value.trim()) : null;
+  if (!match || /^0{32}$/.test(match[1]) || /^0{16}$/.test(match[2])) return;
+  activeTraceparent = `00-${match[1].toLowerCase()}-${match[2].toLowerCase()}-${match[3].toLowerCase()}`;
+}
+
+export function getArchonTraceparent(): string | null {
+  return activeTraceparent;
+}
+
+/** Kind-Span des aktiven Browser-Kontexts (gleiche trace_id, neue span_id). */
+export function forkActiveTraceparent(): string | null {
+  if (!activeTraceparent) return null;
+  const match = TRACEPARENT_RE.exec(activeTraceparent);
+  if (!match) return null;
+  let spanId = randomHex(8);
+  while (ZERO_SPAN_ID.test(spanId)) spanId = randomHex(8);
+  return `00-${match[1]}-${spanId}-${match[3]}`;
+}
+
 /** Tracestate aus einer Antwort uebernehmen, damit Folge-Requests sie fortfuehren. */
 export function setArchonTracestate(value: string | null | undefined): void {
   const raw = (value || '').trim();
@@ -95,7 +123,12 @@ export function getArchonTracestate(): string | null {
  */
 export function withTraceHeaders(init?: RequestInit): RequestInit {
   const headers = new Headers(init?.headers);
-  if (!headers.has('traceparent')) headers.set('traceparent', createTraceparent());
+  if (!headers.has('traceparent')) {
+    // Fortsetzung vor Root: existiert ein SSE-Kontext, wird er geforkt.
+    const forked = forkActiveTraceparent();
+    if (forked) headers.set('traceparent', forked);
+    else headers.set('traceparent', createTraceparent());
+  }
   const tracestate = getArchonTracestate();
   if (tracestate && !headers.has('tracestate')) headers.set('tracestate', tracestate);
   return { ...init, headers };
@@ -115,6 +148,7 @@ function withSignal(init: RequestInit | undefined, signal?: AbortSignal): Reques
 export async function tracedFetch(url: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(url, withTraceHeaders(init));
   // Der Proxy gibt den fortgefuehrten Kontext zurueck -> naechster Hop erbt ihn.
+  setArchonTraceparent(res.headers.get('traceparent'));
   setArchonTracestate(res.headers.get('tracestate'));
   return res;
 }
@@ -151,12 +185,27 @@ export const archonApi = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
-  decideHitl: (decisionId: string, decision: 'approve' | 'reject', note = '') =>
-    archonFetch<Record<string, unknown>>('api/decisions/decide', {
+  decideHitl: (decisionId: string, decision: 'approve' | 'reject', note = '') => {
+    // D16/HIGH: /api/decisions/decide liest traceparent aus dem Body
+    // (_consume_sse_trace). Header UND Body muessen dieselbe Kind-Kante tragen.
+    const traceparent = forkActiveTraceparent() || createTraceparent();
+    const tracestate = getArchonTracestate();
+    const body: Record<string, unknown> = {
+      task_id: decisionId,
+      decision,
+      note,
+      traceparent,
+      ...(tracestate ? { tracestate } : {}),
+    };
+    return archonFetch<Record<string, unknown>>('api/decisions/decide', {
       method: 'POST',
-      // Der Endpoint erwartet task_id (nicht decision_id) — sonst 400.
-      body: JSON.stringify({ task_id: decisionId, decision, note }),
-    }),
+      headers: {
+        traceparent,
+        ...(tracestate ? { tracestate } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  },
   listCrmContacts: (limit = 25) =>
     archonFetch<{ contacts?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> }>(
       `api/crm/contacts?limit=${limit}`

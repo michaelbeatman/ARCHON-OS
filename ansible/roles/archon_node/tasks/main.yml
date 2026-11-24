@@ -106,6 +106,25 @@
     - archon_observability == "full"
     - archon_litestream_replica_dir | default('') | length == 0
 
+- name: Check external Litestream DR target exists (Audit D10)
+  stat:
+    path: "{{ archon_litestream_replica_dir }}"
+  register: dr_target_stat
+  when:
+    - archon_observability == "full"
+    - archon_litestream_replica_dir | default('') | length > 0
+
+- name: Abort deploy when the external DR target is not mounted
+  fail:
+    msg: >-
+      archon_litestream_replica_dir zeigt auf ein nicht vorhandenes Ziel.
+      Bitte das externe Volume/NAS mounten oder den Pfad bewusst leeren
+      (dann nur lokales Entwicklungs-Replikat, kein echtes DR-Ziel).
+  when:
+    - archon_observability == "full"
+    - archon_litestream_replica_dir | default('') | length > 0
+    - not dr_target_stat.stat.exists
+
 - name: Launch Docker Compose stack
   command:
     cmd: "docker compose -f {{ archon_compose_file }} up -d --build --remove-orphans"
@@ -116,6 +135,14 @@
     # Promtail/Litestream/OTel trotz "full" aus (kein Adressat fuer Alarme).
     COMPOSE_PROFILES: "{{ 'monitoring,logging,replication,tracing' if archon_observability == 'full' else '' }}"
     ARCHON_OBSERVABILITY: "{{ archon_observability }}"
+    # Audit D05/D10 (F-01): Produktion + erzwungene /readyz-Probes im
+    # Produktiv-Deploy — sonst bleibt der Gate fail-open.
+    ENVIRONMENT: "{{ archon_environment }}"
+    ARCHON_READINESS_PROBES: "{{ archon_readiness_probes }}"
+    # Audit D10: Watchdog-Altersschwellen an den externen Autoheal und den
+    # Daemon durchreichen (beide Default 120 s).
+    AUTOHEAL_WATCHDOG_MAX_AGE_S: "{{ archon_autoheal_watchdog_max_age_s }}"
+    ARCHON_WATCHDOG_MAX_LAST_SEEN_AGE_S: "{{ archon_watchdog_max_last_seen_age_s }}"
     # Audit D10/DR: nur der vom Betreiber gesetzte Pfad wird weitergereicht;
     # leer laesst Compose seinen (lokalen) Default.
     ARCHON_LITESTREAM_REPLICA_DIR: "{{ archon_litestream_replica_dir | default('') }}"
@@ -123,16 +150,18 @@
   register: docker_compose_output
   changed_when: "'Started' in docker_compose_output.stdout or 'Created' in docker_compose_output.stdout"
 
-- name: Verify Observability services incl. alertmanager are up (Audit D10)
+- name: Verify Observability services are up (Audit D10)
   command:
     cmd: "docker compose -f {{ archon_compose_file }} ps --status running --services"
     chdir: "{{ archon_install_root }}"
   become_user: "{{ archon_user_name }}"
   register: running_observability_services
   changed_when: false
-  # alertmanager traegt den monitoring-Profile und muss bei "full" laufen;
-  # Prometheus haengt ohne ihn advisenlos in der Luft (D10 F-073).
-  failed_when: "'alertmanager' not in running_observability_services.stdout_lines"
+  # alertmanager ist nur bei gesetzten Secrets erforderlich; ohne Secrets
+  # bleibt der Status ehrlich `alerts_not_configured` (kein Crashloop).
+  failed_when:
+    - "'alertmanager' not in running_observability_services.stdout_lines"
+    - archon_alert_secrets_configured | bool
   when: archon_observability == "full"
 
 - name: Verify Mission Control readiness (dependency probes)
@@ -157,6 +186,51 @@
   delay: 5
   # Kein ignore_errors: ein nicht erreichbarer Health-Endpoint muss das
   # Deployment scheitern lassen, statt "complete" zu melden.
+
+- name: Send Alertmanager test alarm (Audit D10)
+  uri:
+    url: "http://localhost:9093/api/v2/alerts"
+    method: POST
+    body_format: json
+    body:
+      - labels:
+          alertname: ArchonAlertmanagerSmokeTest
+          severity: critical
+          service: archon-deploy
+        annotations:
+          summary: "Archon OS Alertmanager smoke test"
+          description: "Testalarm nach dem Ansible-Deploy; Telegram-Empfang gegenpruefen"
+    status_code: 200
+  register: alert_test_result
+  when:
+    - archon_observability == "full"
+    - archon_alert_secrets_configured | bool
+    - archon_alertmanager_test_alarm | bool
+
+- name: Report alerts_not_configured (Audit D10)
+  debug:
+    msg: >-
+      alerts_not_configured: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID sind nicht
+      hinterlegt. Alertmanager wurde nicht als Adressat verdrahtet; die
+      Prometheus-Regeln bleiben ohne Zustellungsweg. Für echte Alarme
+      archon_alert_secrets_configured: true setzen und Secrets in .env
+      eintragen.
+  when:
+    - archon_observability == "full"
+    - not (archon_alert_secrets_configured | bool)
+
+- name: Schedule periodic Litestream restore test (Audit D10)
+  # RTO-Ziel <= 30 min wird durch einen echten, periodischen Restore-Test
+  # messbar — nicht nur durch einen Kommentar im Replikat-Pfad.
+  cron:
+    name: "archon-litestream-restore-test"
+    minute: "0"
+    hour: "*/6"
+    job: "cd {{ archon_install_root }} && docker compose -f docker-compose.yml exec -T archon-os python scripts/automated_restore_test.py >> {{ archon_install_root }}/logs/restore_test.log 2>&1"
+    user: "{{ archon_user_name }}"
+  when:
+    - archon_observability == "full"
+    - archon_litestream_replica_dir | default('') | length > 0
 
 - name: Display deployment completion status
   debug:

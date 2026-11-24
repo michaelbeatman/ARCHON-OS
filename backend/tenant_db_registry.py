@@ -8,10 +8,9 @@ inkl. DSGVO Art. 17 Loeschroutine ueber alle registrierten Tabellen.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
-import sqlite3
-import logging
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("archon_os.tenant_db_registry")
@@ -85,52 +84,54 @@ def gdpr_erase_subject_data(
         "treasury_transactions", "gdpr_audit_log", "receipts", "invoices", "learnings",
     }
 
-    # Sowohl v2-DBs als auch Kern-/konsolidierte Domänen-DBs nach DSGVO Art. 17 bereinigen
-    scan_dbs = list(
-        dict.fromkeys(
-            list(REGISTERED_V2_DBS)
-            + [
-                "business.db",
-                "ops.db",
-                "memory.db",
-                "crm.db",
-                "erp.db",
-                "contracts.db",
-                "deals.db",
-                "agentic_memory.db",
-            ]
-        )
-    )
+    # D03/HIGH: alle 11 REGISTERED_V2_DBS ueber den physischen
+    # Mandanten-Resolver erreichen. `tenant_context.resolve_active_db()` lehnt
+    # diese Namen ab (nur ISOLATED/CONSOLIDATED) — ein stilles `continue` liess
+    # Art.17 bisher genau dort ins Leere laufen.
+    # Resolve-Fehler werden gesammelt und am Ende als HARTER Fehler geworfen:
+    # eine Art.17-Quittung darf niemals vorgetaeuscht werden (HTTP 500).
+    from backend.db_paths import APP_DATA_DIR, get_db_connection
+
+    v2_dbs = list(REGISTERED_V2_DBS)
+    core_dbs = [
+        "business.db", "ops.db", "memory.db", "crm.db", "erp.db",
+        "contracts.db", "deals.db", "agentic_memory.db",
+    ]
+    scan_dbs = list(dict.fromkeys(v2_dbs + core_dbs))
+    resolver_errors: List[str] = []
 
     for db_name in scan_dbs:
-        # Immer ueber tenant_context auflösen: dort liegt die Migrationslogik
-        # fuer Legacy-DBs und die autoritative Isolationsentscheidung.
-        # KRITISCH (Audit 23.11.2026): 'agentic_memory.db' wird vom autoritativen
-        # Resolver abgelehnt; der fruehere Fallback schrieb die Art.-17-
-        # Anonymisierung in eine Datei, die die Anwendung nicht nutzt.
-        resolved_name = db_name
         try:
-            from backend.db_consolidation import is_consolidation_active
-            from backend.db_paths import APP_DATA_DIR
-            if db_name == "agentic_memory.db" and is_consolidation_active(APP_DATA_DIR):
-                resolved_name = "memory.db"
+            if db_name in v2_dbs:
+                db_path = resolve_tenant_db_path(db_name, tenant_id, base_dir=APP_DATA_DIR)
+            else:
+                # Kern-/konsolidierte DBs: autoritativer Resolver (mit
+                # Legacy-Migrationslogik). Kein Fallback auf eine falsche Datei.
+                resolved_name = db_name
+                try:
+                    from backend.db_consolidation import is_consolidation_active
+                    if db_name == "agentic_memory.db" and is_consolidation_active(APP_DATA_DIR):
+                        resolved_name = "memory.db"
+                except Exception as exc:
+                    logger.error(
+                        "[TenantDB] Konsolidierungscheck für %s fehlgeschlagen: %s",
+                        db_name, exc,
+                    )
+                    resolver_errors.append(f"{db_name}: Konsolidierungscheck: {exc}")
+                    # Weitere DBs pruefen, um ALLE Fehler zu sammeln — am Ende
+                    # folgt der HARTE Abbruch (keine success-Quittung).
+                    continue
+                from backend.tenant_context import tenant_context
+                db_path = tenant_context.resolve_active_db(resolved_name, tenant_id)
         except Exception as exc:
-            # D07/MED: kein stiller Fallback auf 'agentic_memory.db' — das ist
-            # exakt die Datei, die der autoritative Resolver ablehnt. Art. 17
-            # würde nur vorgetäuscht. Fail-closed: DB überspringen.
-            logger.error("[TenantDB] Konsolidierungscheck für %s fehlgeschlagen: %s", db_name, exc)
-            continue
-        try:
-            from backend.tenant_context import tenant_context
-            db_path = tenant_context.resolve_active_db(resolved_name, tenant_id)
-        except Exception as exc:
-            # Kein stiller Fallback auf eine falsche Datei: das wuerde Art. 17
-            # nur vortaeuschen, statt personenbezogene Daten zu loeschen.
             logger.error("[TenantDB] Art.17-Resolver %s fehlgeschlagen: %s", db_name, exc)
+            resolver_errors.append(f"{db_name}: {exc}")
             continue
         if not os.path.exists(db_path):
             continue
-        conn = sqlite3.connect(db_path, timeout=10.0)
+        # D03/HIGH: zentrale Verbindung — setzt busy_timeout=5000 (SSOT) und
+        # PRAGMA foreign_keys=ON (kein stiller Bruch von ON DELETE CASCADE).
+        conn = get_db_connection(db_path)
         try:
             tables = [
                 r[0]
@@ -178,6 +179,11 @@ def gdpr_erase_subject_data(
                 deleted_summary[db_name] = total_del
         finally:
             conn.close()
+
+    if resolver_errors:
+        raise RuntimeError(
+            "DSGVO Art.17 unvollständig — Resolverfehler: " + "; ".join(resolver_errors)
+        )
 
     return {
         "tenant_id": sanitize_tenant_id(tenant_id),

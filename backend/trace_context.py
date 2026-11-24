@@ -266,17 +266,77 @@ def ensure_trace() -> tuple[str, str]:
     return start_trace()
 
 
+def _record_child_hop(
+    trace_id: str,
+    span_id: str,
+    parent_span_id: Optional[str],
+    *,
+    sampled: bool,
+    tracestate: str,
+) -> None:
+    """D16/HIGH: jede outbound Child-Span-ID als echten Hop persistieren.
+
+    Vorher existierte die Kausalkante nur im HTTP-Header; im exportierten
+    OTel-Baum fehlte der Hop. Die ID wird 1:1 aus dem ``traceparent``
+    uebernommen (``_span_id``), damit Header und DB auf dieselbe Kante zeigen.
+    Fehler duerfen den Hotpath nicht brechen, werden aber gezaehlt und
+    sichtbar gemacht (kein stiller Swallower).
+    """
+    if not trace_id or not span_id or span_id == parent_span_id:
+        return
+    try:
+        from backend.otel_tracer import tracer
+
+        # FK-sicher: der Hop kann in einem Trace landen, der lokal noch nicht
+        # registriert wurde (z. B. inbound traceparent ohne start_trace()).
+        tracer.start_trace(name="trace.hops", trace_id=trace_id)
+        tracer.record_span(
+            trace_id=trace_id,
+            name="hop",
+            span_type="hop",
+            parent_span_id=parent_span_id,
+            _span_id=span_id,
+            attributes={
+                "archon.sampled": bool(sampled),
+                "archon.hop": True,
+                "outbound_span_id": span_id,
+                "tracestate": sanitize_tracestate(tracestate),
+            },
+        )
+        # Exemplare: der Scrape-Thread hat keinen Request-Kontext, daher wird
+        # hier am Chokepoint ein Ringpuffer mit der echten Span-ID gefuettert.
+        try:
+            from backend.metrics_collector import record_trace_exemplar
+
+            record_trace_exemplar(
+                "archon_agent_dispatches_total", "archon_tokens_total",
+                trace_id=trace_id,
+                span_id=span_id,
+                labels={"span_type": "hop"},
+            )
+        except Exception:
+            # Exemplare sind gute Ergaenzung, aber kein kritischer Pfad.
+            pass
+    except Exception as exc:
+        note_local_trace_error("child-span-hop", exc)
+
+
 @contextlib.contextmanager
 def child_span(
     incoming: Optional[str] = None,
     tracestate: Optional[str] = None,
     sampled: Optional[bool] = None,
+    *,
+    _record_hop: bool = True,
 ) -> Iterator[tuple[str, str, Optional[str]]]:
     """Kind-Span im aktiven Trace (neue 64-Bit-ID, Eltern-Kante erhalten).
 
     Liefert ``(trace_id, span_id, parent_span_id)`` und stellt alle vier
     ContextVars beim Verlassen deterministisch wieder her. tracestate und
     Sampled-Flag werden an den Child weitergegeben.
+
+    ``_record_hop=False`` ist intern: ``record_span()`` oeffnet selbst einen
+    Child-Span und wuerde sonst rekursiv einen Doppel-Hop schreiben.
     """
     parent_tid = current_trace_id()
     parent_sid = current_span_id() or None
@@ -300,6 +360,12 @@ def child_span(
     try:
         yield parent_tid, new_sid, parent_sid
     finally:
+        if _record_hop:
+            _record_child_hop(
+                parent_tid, new_sid, parent_sid,
+                sampled=bool(sampled_decision),
+                tracestate=str(next_ts or ""),
+            )
         _current_sampled.reset(tok_sampled)
         _current_tracestate.reset(tok_ts)
         _current_span.reset(tok_s)

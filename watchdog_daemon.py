@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
+# mypy: ignore-errors
 """
 Archon OS Watchdog Daemon
 Autonomous background supervisor for profile-level loop prevention and resource governance.
 """
 
-import os
-import sys
-import time
 import json
 import logging
+import os
+import sys
 import threading
+import time
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 try:
     import requests
 except ImportError:
-    import urllib.request
     import urllib.error
+    import urllib.request
     requests = None
 
 logging.basicConfig(
@@ -156,6 +157,11 @@ class WatchdogDaemon:
         import threading as _threading
         self._stop_event = _threading.Event()
         self._thread = None
+        # D10/HIGH: gemeinsames Stop-Signal fuer den spawn-Prozess. Der Child
+        # bekommt dieselbe multiprocessing.Event-Instanz uebergeben; ein
+        # threading.Event oder ein Flag im Parentobjekt wirkt dort NICHT.
+        self._process = None
+        self._mp_stop_event = None
         logger.info(f"Initialized Watchdog Daemon. Monitoring logs at: {LOG_DIR}")
         logger.info(f"Alarms file: {ALARMS_FILE}")
 
@@ -388,20 +394,69 @@ class WatchdogDaemon:
         except Exception as _exc:
             logger.debug("[watchdog_daemon] Ignorierte Ausnahme (Z.255): %s", _exc)
 
-    def stop(self, timeout: float = 5.0) -> None:
-        """Sofortiger, joinbarer Stopp (statt Flag + 30 s sleep)."""
+    def stop(self, timeout: float = 5.0) -> bool:
+        """Sofortiger, joinbarer Stopp des Threads ODER des Supervisor-Prozesses.
+
+        D10/HIGH: frueher wurden nur Flag/Event im Parent gesetzt. Der per
+        ``spawn`` gestartete Supervisor lief mit einer eigenen Event-Kopie
+        weiter, schrieb Liveness und konnte Alarme ausloesen. Jetzt wird das
+        gemeinsame ``multiprocessing.Event`` gesetzt, gejoint und bei Bedarf
+        terminate()/kill() angewendet. Rueckgabe = verifizierter Erfolg.
+        """
         self._shutdown_requested = True
         self.is_running = False
         self._stop_event.set()
+        if self._mp_stop_event is not None:
+            try:
+                self._mp_stop_event.set()
+            except Exception as exc:
+                logger.error("[Shutdown] Watchdog-Stop-Event nicht setzbar: %s", exc)
+        ok = True
+
         t = self._thread
         if t is not None and t.is_alive() and t is not threading.current_thread():
             t.join(timeout=timeout)
             if t.is_alive():
+                ok = False
                 logger.error(
                     "[Shutdown] Watchdog-Thread %s konnte nach %.1f s nicht beendet werden.",
                     t.name, timeout,
                 )
-        logger.info("[Shutdown] Watchdog-Daemon gestoppt.")
+
+        proc = self._process
+        if proc is not None:
+            try:
+                proc.join(timeout=timeout)
+                if proc.is_alive():
+                    logger.warning("[Shutdown] Watchdog-Prozess reagiert nicht — terminate().")
+                    proc.terminate()
+                    proc.join(timeout=max(1.0, timeout / 2.0))
+                if proc.is_alive():
+                    logger.error("[Shutdown] Watchdog-Prozess bleibt nach terminate() aktiv — kill().")
+                    proc.kill()
+                    proc.join(timeout=max(1.0, timeout / 2.0))
+                ok = ok and not proc.is_alive()
+                if proc.is_alive():
+                    logger.error(
+                        "[Shutdown] Watchdog-Prozess (pid=%s) konnte NICHT beendet werden.",
+                        getattr(proc, "pid", "?"),
+                    )
+            except Exception as exc:
+                ok = False
+                logger.error("[Shutdown] Watchdog-Prozess-Stopp fehlgeschlagen: %s", exc)
+
+        # Liveness im Parent auf dead setzen, damit /livez und der externe
+        # Autoheal den Supervisor sofort als beendet sehen (auch wenn der
+        # Child sein eigenes finally nicht mehr ausfuehren konnte).
+        try:
+            loop_count = int(watchdog_liveness().get("loop_count", 0))
+        except Exception:
+            loop_count = 0
+        _write_watchdog_liveness(loop_count, dead=True)
+
+        if ok:
+            logger.info("[Shutdown] Watchdog-Daemon gestoppt (Prozess/Thread verifiziert).")
+        return ok
 
     def run_forever(self):
         logger.info("Watchdog supervisor loop started.")
@@ -457,10 +512,19 @@ class WatchdogDaemon:
                     logger.error("[Watchdog] Alarm 'watchdog_thread_dead' konnte nicht gemeldet werden: %s", exc)
 
 
-def _watchdog_process_main() -> None:
-    """Entry-Point für den externen Supervisor-Prozess (spawn-fähig)."""
+def _watchdog_process_main(stop_event=None) -> None:
+    """Entry-Point für den externen Supervisor-Prozess (spawn-fähig).
+
+    ``stop_event`` ist die vom Parent geteilte ``multiprocessing.Event``; sie
+    ersetzt das lokale ``threading.Event`` des Childs, damit stop() sofort
+    wirkt statt erst nach 30 Sekunden.
+    """
     try:
-        WatchdogDaemon().run_forever()
+        daemon = WatchdogDaemon()
+        if stop_event is not None:
+            daemon._mp_stop_event = stop_event
+            daemon._stop_event = stop_event
+        daemon.run_forever()
     except Exception as exc:  # pragma: no cover
         logger.error("[Watchdog] Supervisor-Prozess beendet: %s", exc)
 
@@ -478,11 +542,16 @@ def start_background_watchdog():
     daemon = WatchdogDaemon()
     try:
         ctx = multiprocessing.get_context("spawn")
+        # Gemeinsames Stop-Signal: beim spawn bekommt der Child eine eigene
+        # Kopie aller Objekte — nur eine multiprocessing.Event uebersteht das.
+        stop_event = ctx.Event()
         proc = ctx.Process(
             target=_watchdog_process_main,
+            args=(stop_event,),
             name="ArchonWatchdogProcess",
             daemon=True,
         )
+        daemon._mp_stop_event = stop_event
         daemon._process = proc
         proc.start()
         logger.info("[Watchdog] Supervisor-Prozess gestartet (pid=%s)", getattr(proc, "pid", "?"))

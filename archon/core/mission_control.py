@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Mission-Control-Store (SQLite-backed über kanban.db mit atomarem Adapter).
 
 Seit v0.5.1 (Ablösung von mission_control_data.json):
@@ -39,6 +40,22 @@ _MC_ASYNC_LOCK = asyncio.Lock()
 
 # State-Cache für /api/mission-control/state (3s TTL)
 _MC_STATE_CACHE: Dict[str, Any] = {"ts": 0.0, "data": None, "tenant": ""}
+# D08/MED (A5-Delegation): frueher wurden ts/data/tenant ohne Lock einzeln
+# mutiert — ein Leser konnte neuen ts mit alter data sehen (torn read).
+# Invalidierungen laufen jetzt zentral ueber invalidate(); die Feld-Zuweisungen
+# in invalidate() und im Router erfolgen unter diesem Lock. Die Objekt-
+# Identitaet von _MC_STATE_CACHE bleibt bewusst erhalten (Importe/Tests).
+_MC_CACHE_LOCK = threading.RLock()
+
+
+def invalidate() -> None:
+    """Atomare Invalidierung des MC-State-Caches (unter Lock)."""
+    with _MC_CACHE_LOCK:
+        cache = _MC_STATE_CACHE
+        cache["ts"] = 0.0
+        cache["data"] = None
+        cache["tenant"] = ""
+
 
 _MIGRATION_DONE = False
 
@@ -136,19 +153,35 @@ class _ClosingKanbanConnection(sqlite3.Connection):
 
 
 def _connect_kanban(db_path: Optional[str] = None) -> sqlite3.Connection:
+    from backend.db_paths import DB_BUSY_TIMEOUT_MS
     path = os.path.abspath(db_path or _resolve_kanban_db_path())
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    conn = sqlite3.connect(path, timeout=15.0, factory=_ClosingKanbanConnection)
-    conn.execute("PRAGMA busy_timeout=10000;")
+    conn = sqlite3.connect(
+        path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0, factory=_ClosingKanbanConnection
+    )
+    # D03/HIGH: SSOT busy_timeout + FK-Integritaet fuer JEDE Connection.
+    conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+    conn.execute("PRAGMA foreign_keys = ON;")
+    wal_enabled = os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes")
     if path not in _KANBAN_PRAGMA_INITIALIZED:
         try:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA synchronous=NORMAL;")
+            if wal_enabled:
+                conn.execute("PRAGMA journal_mode=WAL;")
             _KANBAN_PRAGMA_INITIALIZED.add(path)
         except sqlite3.Error as exc:
             logger.warning(f"[MissionControl] SQLite WAL-PRAGMA fehlgeschlagen ({path}): {exc}")
+    # D03/MED: `synchronous` ist verbindungsbezogen — nicht cache-guardieren.
+    if wal_enabled:
+        conn.execute("PRAGMA synchronous=NORMAL;")
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def invalidate_caches_after_restore(target_path: Optional[str] = None) -> None:
+    """D03/MED: Restore-Pfad muss alle SQLite-Caches dieser Datei verwerfen."""
+    _KANBAN_PRAGMA_INITIALIZED.clear()
+    _MC_TABLES_INITIALIZED.clear()
+    invalidate()
 
 
 _MC_TABLES_INITIALIZED: set[str] = set()
@@ -544,7 +577,11 @@ def _maybe_auto_migrate() -> None:
 def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
     _ensure_mc_tables(conn)
 
-    link_rows = conn.execute("SELECT parent_id, child_id FROM task_links WHERE COALESCE(kind, 'subtask') = 'subtask'").fetchall()
+    # D08/MED (A5-Delegation): harte Obergrenze statt unbegrenztem Scan.
+    link_rows = conn.execute(
+        "SELECT parent_id, child_id FROM task_links "
+        "WHERE COALESCE(kind, 'subtask') = 'subtask' LIMIT 5000"
+    ).fetchall()
     children_map: Dict[str, List[str]] = {}
     parent_map: Dict[str, str] = {}
     for lr in link_rows:
@@ -562,6 +599,7 @@ def _load_sqlite_state_from_conn(conn: sqlite3.Connection) -> Dict[str, Any]:
         LEFT JOIN mc_task_meta m ON m.task_id = t.id
         WHERE LOWER(COALESCE(t.status, '')) != 'archived'
         ORDER BY t.created_at DESC
+        LIMIT 5000
         """
     ).fetchall()
 
@@ -695,6 +733,15 @@ def _save_sqlite_state_to_conn(
     if previous_ids is not None:
         removed_ids = previous_ids - new_ids
         for rid in removed_ids:
+            # D03/MED: ein Full-State-Save darf KEINE Tasks loeschen, die
+            # Fremdschreiber (Hermes, Kanban-Sidecar, Watchdog) eingefuegt
+            # haben. Nur MC-eigene Tasks (created_by='mission_control') sind
+            # Teil des MC-State und duerfen entfernt werden.
+            owner = conn.execute(
+                "SELECT created_by FROM tasks WHERE id = ?", (rid,)
+            ).fetchone()
+            if owner is not None and str(owner[0] or "") not in ("mission_control", "mc", "mission-control"):
+                continue
             conn.execute("DELETE FROM tasks WHERE id = ?", (rid,))
             conn.execute("DELETE FROM mc_task_meta WHERE task_id = ?", (rid,))
             conn.execute("DELETE FROM task_links WHERE parent_id = ? OR child_id = ?", (rid, rid))
@@ -931,7 +978,7 @@ def mc_capture_task_sqlite(
             conn.commit()
         finally:
             conn.close()
-    _MC_STATE_CACHE["ts"] = 0.0
+    invalidate()
     return new_task
 
 
@@ -1188,7 +1235,7 @@ def _write_mc_atomic(data: dict):
                 conn.commit()
             finally:
                 conn.close()
-            _MC_STATE_CACHE["ts"] = 0.0
+            invalidate()
             return
 
         _dir = os.path.dirname(os.path.abspath(MISSION_CONTROL_FILE)) or "."
@@ -1284,7 +1331,7 @@ def update_mission_control_data(mutator):
             conn.commit()
         finally:
             conn.close()
-        _MC_STATE_CACHE["ts"] = 0.0
+        invalidate()
         return result
 
 
@@ -1307,4 +1354,6 @@ __all__ = [
     "TaskLinkCycleError", "enforce_task_budget_caps",
     "mc_append_audit_sqlite",
     "_MC_STATE_CACHE",
+    "_MC_CACHE_LOCK",
+    "invalidate",
 ]

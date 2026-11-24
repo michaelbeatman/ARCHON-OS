@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_d13_fanout_cap_wired_in_chat():
     src = (ROOT / "archon" / "routers" / "chat.py").read_text(encoding="utf-8")
     block = src.split("payloads, invalid_blocks = _parse_delegation_blocks(", 1)[1][:200]
-    assert "fanout_cap=DEFAULT_MAX_DELEGATIONS_PER_RESPONSE" in block
+    assert "fanout_cap=" in block
+    assert "invalid_blocks.fanout_cap = cap" in src
 
 
 def test_d13_router_hop_no_traj_prefix_gate():
@@ -17,7 +18,7 @@ def test_d13_router_hop_no_traj_prefix_gate():
     assert 'if str(task_id or "").startswith("traj-"):' not in src
     assert "normalize_trajectory_id(" in src
     assert "allow_repeat=True" in src
-    assert "task_id=session_id" in (ROOT / "archon" / "routers" / "chat.py").read_text(encoding="utf-8")
+    assert "task_id=mission_task_id or session_id" in (ROOT / "archon" / "routers" / "chat.py").read_text(encoding="utf-8")
 
 
 def test_d13_reserve_hop_allow_repeat(tmp_path):

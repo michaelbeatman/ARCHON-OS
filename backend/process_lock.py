@@ -10,15 +10,60 @@ keine stale Lockfiles und kein TTL-Rätselraten. Jeder Loop hält genau eine
 Connection für seine gesamte Laufzeit.
 """
 
+import asyncio
 import functools
 import glob
 import hashlib
 import logging
 import os
 import sqlite3
-from typing import Optional
+import time
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger("archon_os.process_lock")
+
+# D07/MED (A9/A3-DELEGATED): eine Lock-Sackgasse ist kein normaler Zustand.
+# main.py:/readyz liest diese Liste ueber get_loop_lock_failures().
+_LOOP_LOCK_FAILURES: list = []
+
+
+def get_loop_lock_failures() -> list:
+    """Kopie der persistierten Sackgassen fuer den Readiness-Gate."""
+    return list(_LOOP_LOCK_FAILURES)
+
+
+def _record_loop_lock_failure(name: str, reason: str) -> Dict[str, Any]:
+    entry: Dict[str, Any] = {"loop": str(name), "reason": str(reason), "ts": time.time()}
+    _LOOP_LOCK_FAILURES.append(entry)
+    return entry
+
+
+async def _escalate_loop_lock_failure(name: str) -> None:
+    """HITL-Broadcast + DLQ-Eintrag — statt stiller Sackgasse."""
+    detail = f"Exclusive-Loop '{name}': Prozess-Lock nicht verfügbar — Loop startet NICHT."
+    try:
+        from archon.core.runtime import broadcast_event
+        broadcast_event("hitl_required", {
+            "title": "Hintergrund-Loop nicht gestartet (Lock-Sackgasse)",
+            "detail": detail,
+            "source": "process_lock",
+        })
+    except Exception as exc:
+        logger.error("[ExclusiveLoop] HITL-Broadcast fehlgeschlagen: %s", exc)
+    try:
+        from backend.dead_letter_queue import dead_letter_queue_manager as _dlq
+        result = await asyncio.to_thread(
+            _dlq.enqueue_task,
+            "loop_lock_unavailable",
+            "process_lock",
+            {"loop": str(name), "reason": "lock_unavailable"},
+            idempotency_key=f"loop_lock_unavailable:{name}",
+        )
+        if not result.get("queued"):
+            logger.warning("[ExclusiveLoop] DLQ-Eintrag nicht queued: %s", result)
+    except Exception as exc:
+        logger.error("[ExclusiveLoop] DLQ-Eintrag fehlgeschlagen: %s", exc)
+
 
 try:
     from backend.db_paths import resolve_db as _resolve_db
@@ -147,9 +192,12 @@ def exclusive_loop(name: str):
         async def wrapper(*args, **kwargs):
             lock = try_acquire_loop_lock(name)
             if lock is None:
-                # E: main.py startet den Loop sonst lautlos nie — laut loggen,
-                # aber nicht raisen, damit andere Loops weiterlaufen.
+                # D07/MED: laut loggen REICHT NICHT. Der nicht gestartete Loop
+                # wird jetzt zusaetzlich eskaliert (HITL + DLQ) und in /readyz
+                # gespiegelt. Kein raise, damit andere Loops weiterlaufen.
                 logger.error("[ExclusiveLoop] Lock nicht verfügbar: Loop %s startet NICHT", name)
+                _record_loop_lock_failure(name, "lock_unavailable")
+                await _escalate_loop_lock_failure(name)
                 return None
             try:
                 return await fn(*args, **kwargs)

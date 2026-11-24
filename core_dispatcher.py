@@ -1,19 +1,21 @@
-import os
-import sys
-import time
-import datetime
-import json
-import logging
-import httpx
+# mypy: ignore-errors
 import asyncio
 import contextvars
+import datetime
 import functools
 import hashlib
+import json
+import logging
+import os
 import random
-import threading
-import weakref
 import sqlite3
+import sys
+import threading
+import time
+import weakref
 from typing import Any, Dict, List, Optional
+
+import httpx
 
 logger = logging.getLogger("archon.core_dispatcher")
 
@@ -23,12 +25,50 @@ logger = logging.getLogger("archon.core_dispatcher")
 _PROMPT_VERSION_CTX: contextvars.ContextVar[Optional[Dict[str, Any]]] = contextvars.ContextVar(
     "archon_dispatch_prompt_version", default=None
 )
+# D15/HIGH (A8): task-lokales Pflichtfeld-Schema fuer den Structured-Output-
+# Chokepoint. Ohne Schema bleibt der Enforcer inaktiv (kein "schema_required"-
+# Fehler fuer normale Freitext-Dispatcher).
+_STRUCTURED_OUTPUT_SCHEMA_CTX: contextvars.ContextVar[Optional[Dict[str, Any]]] = contextvars.ContextVar(
+    "archon_structured_output_schema", default=None
+)
+
+
+def set_structured_output_schema(schema: Optional[Dict[str, Any]]) -> None:
+    """Setzt das Pflichtfeld-Schema fuer den naechsten Dispatch (task-lokal)."""
+    _STRUCTURED_OUTPUT_SCHEMA_CTX.set(dict(schema) if isinstance(schema, dict) else None)
+
+
 # Audit-Schreibpfade sind sync SQLite. Serialisiert ueber einen Thread-Lock und
 # aus dem Event-Loop via asyncio.to_thread ausgelagert (kein Event-Loop-Block).
 _AUDIT_WRITE_LOCK = threading.Lock()
 
+# D07/MED (A9): fehlgeschlagene Task-Abbrueche sind keine Erfolge und duerfen
+# nicht still verschwinden. Prozess-lokal, kein Event-Replay (G-01/G-02).
+_FAILED_CANCELS: list = []
+
+
+def _record_failed_cancel(task_name: str, detail: str) -> None:
+    """Persistiert einen gescheiterten cancel() inkl. Audit (best effort)."""
+    entry = {"task": str(task_name), "detail": str(detail)[:500], "ts": time.time()}
+    _FAILED_CANCELS.append(entry)
+    logger.error("[Dispatcher] Cancel fehlgeschlagen: %s — %s", task_name, entry["detail"])
+    try:
+        with _AUDIT_WRITE_LOCK:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="recovery",
+                action="cancel_failed",
+                payload=entry,
+            )
+    except Exception as audit_exc:
+        logger.warning("[Dispatcher] Cancel-Fehler nicht auditierbar: %s", audit_exc)
+
+
 # D11: explizite Kürzungs-Marker statt stiller Slices in OTel-Spans.
 from backend.handoff_desk import mark_truncated as _mark_truncated  # noqa: E402
+
+# D15/HIGH (A8): zentrale Structured-Output-Pflicht am Antwort-Chokepoint.
+from backend.structured_output_enforcer import structured_output_enforcer  # noqa: E402
 
 
 def _prompt_version_fallback(agent_id: str, model: str = "") -> Dict[str, Any]:
@@ -104,30 +144,58 @@ async def _guard_silent_failures(res: dict, agent_id: str, task_id: str) -> dict
     """D12: 'success' trotz versteckter Tool-/Token-Anomalien ist kein Erfolg.
 
     Der Flightlog-Produzent (tool_runtime.execute_agent_tool) schreibt Events
-    unter ``run_id=current_trace_id()``. Der Detektor laeuft gegen genau diese
-    run_id. Bei Flags wird der Status auf ``needs_human``/``blocked`` gesetzt
+    unter ``flightlog_run_id`` (Trajectory-/Task-ID; A5 spiegelt zusaetzlich
+    unter der Trace-ID). Der Dispatcher prueft Trajectory-ID **und** Trace-ID.
+    Bei Flags wird der Status auf ``needs_human``/``blocked`` gesetzt
     und ein signiertes Audit-Event geschrieben.
     """
     if not isinstance(res, dict) or res.get("status") != "success":
         return res
-    run_id = ""
+    # D13/HIGH: Produzent schreibt unter flightlog_run_id (Trajectory/Task-ID),
+    # nicht unter current_trace_id(). Beide Namensraeume abfragen.
+    run_ids: list[str] = []
+    try:
+        from backend.trajectory_budget import normalize_trajectory_id
+        if str(task_id or "").strip():
+            run_ids.append(normalize_trajectory_id(
+                task_id if str(task_id).startswith("traj-") else None,
+                root_ticket_id=str(task_id),
+            ))
+    except Exception as exc:
+        logger.debug("[Dispatcher] Trajectory-ID nicht verfuegbar: %s", exc)
     try:
         from backend.trace_context import current_trace_id
-        run_id = str(current_trace_id() or "")
-    except Exception as trace_exc:
-        logger.debug("[Dispatcher] Trace-ID fuer Silent-Failure-Check nicht verfuegbar: %s", trace_exc)
-    if not run_id:
+        trace = str(current_trace_id() or "").strip()
+        if trace and trace not in run_ids:
+            run_ids.append(trace)          # Fallback: gespiegelter Namensraum (A5)
+    except Exception as exc:
+        logger.debug("[Dispatcher] Trace-ID nicht verfuegbar: %s", exc)
+    if not run_ids:
         return res
+
     try:
         from backend.flightlog_backtester import detect_silent_failures
-        finding = await asyncio.to_thread(
-            detect_silent_failures,
-            run_id,
-            res.get("status", "success"),
-            str(res.get("content") or ""),
-        )
     except Exception as flight_exc:
         logger.debug("[Dispatcher] Silent-Failure-Detektor nicht verfuegbar: %s", flight_exc)
+        return res
+
+    finding: dict = {}
+    run_id = run_ids[0]
+    for rid in run_ids:
+        try:
+            candidate = await asyncio.to_thread(
+                detect_silent_failures, rid,
+                res.get("status", "success"), str(res.get("content") or ""),
+            )
+        except Exception as flight_exc:
+            logger.debug("[Dispatcher] Silent-Failure-Detektor fuer %s nicht verfuegbar: %s", rid, flight_exc)
+            continue
+        if not finding or candidate.get("flags"):
+            finding = candidate
+            run_id = rid
+        if candidate.get("flags"):
+            break
+    if not finding:
         return res
 
     flags = [str(f) for f in (finding.get("flags") or [])]
@@ -193,8 +261,20 @@ async def _provider_backoff(response=None, *, provider: str = "") -> None:
     await asyncio.sleep(delay * (0.75 + random.random() * 0.5))
 
 
-def _dispatch_cache_scope(agent_id: str = "") -> str:
-    """Tenant-Scope fuer den semantischen Cache (Cross-Tenant-Leak vermeiden)."""
+def _dispatch_cache_scope(
+    agent_id: str = "",
+    *,
+    data_category: str = "",
+    canary: bool = False,
+    zero_egress_active: bool = False,
+) -> str:
+    """Tenant-/Policy-Scope fuer den semantischen Cache (kein Cross-Tenant-Leak).
+
+    D02/HIGH: der Scope umfasst jetzt auch die wirksame Datenkategorie, die
+    Prompt-Canary-Variante und den tatsaechlich aktiven Zero-Egress-Zustand.
+    Eine zwischenzeitlich geaenderte Policy darf keine alte gecachte Antwort
+    als "success" ausgeben.
+    """
     tenant = ""
     try:
         from backend import tenant_context as _tc
@@ -211,7 +291,101 @@ def _dispatch_cache_scope(agent_id: str = "") -> str:
     # geänderte Policy darf keine alte gecachte Antwort als "success" ausgeben.
     policy_version = str(os.environ.get("ARCHON_POLICY_VERSION") or "")
     zero_egress = str(os.environ.get("ARCHON_ZERO_EGRESS_STRICT") or "").strip().lower()
-    return f"{tenant or 'default'}:{agent_id or 'default'}:{policy_version}:{zero_egress}"
+    return (
+        f"{tenant or 'default'}:{agent_id or 'default'}:{policy_version}:{zero_egress}"
+        f":{data_category or 'general'}:{'canary' if canary else 'stable'}"
+        f":{'zero_active' if zero_egress_active else 'egress_allowed'}"
+    )
+
+
+def _cache_policy_context(agent_id: str, role: str = "", prompt: str = "") -> tuple[str, bool]:
+    """Wirksame Datenkategorie / Zero-Egress fuer den Cache-Key (ohne Audit-Write)."""
+    explicit_cat = ""
+    try:
+        from backend.data_classifier import DataClassifier
+        if not DataClassifier.classify(prompt or "").get("cloud_llm_allowed", True):
+            explicit_cat = "confidential"
+    except Exception as exc:
+        logger.warning("[Dispatcher] Cache-DataClassifier fehlgeschlagen (fail-closed): %s", exc)
+        explicit_cat = "confidential"
+    try:
+        from backend.llm_egress_guard import infer_data_category
+        from backend.privacy_router import get_privacy_config, is_sensitive_category
+        cfg = get_privacy_config() or {}
+        category = infer_data_category(agent_id=agent_id, role=role, explicit_category=explicit_cat)
+        zero_active = bool(cfg.get("zero_egress_strict", False)) or (
+            bool(cfg.get("sensitive_local_routing", False))
+            and is_sensitive_category(category, cfg)
+        )
+        return category, bool(zero_active)
+    except Exception as exc:
+        # scope-seitig fail-closed: anderer Scope => Cache-Miss => echter Gate-Pfad.
+        logger.error("[Dispatcher] Cache-Policy-Kontext nicht verfuegbar (fail-closed): %s", exc)
+        return "confidential", True
+
+
+def _validate_cache_hit_gate(
+    agent_id: str,
+    provider: str,
+    model: str,
+    prompt: str,
+    role: str = "",
+    system_prompt: str = "",
+) -> dict:
+    """D02/HIGH: Governance-Gate bei JEDEM Cache-Hit erneut auswerten.
+
+    Compliance-/Activation-Check, DataClassifier und
+    ``evaluate_and_gate_llm_dispatch()`` sind die Produzenten des
+    ``blocked``-Verdikts; hier gibt es endlich einen Konsumenten. Fehler
+    eskalieren als ZeroEgressBlockedError (fail-closed), nie als Cache-Erfolg.
+    """
+    from backend.llm_egress_guard import (
+        ZeroEgressBlockedError,
+        evaluate_and_gate_llm_dispatch,
+    )
+
+    try:
+        from backend.compliance_engine import compliance_engine
+        chk = compliance_engine.check_activation_allowed(
+            agent_id, system_prompt=system_prompt or prompt or ""
+        )
+        if not chk.get("allowed", True):
+            raise ZeroEgressBlockedError(
+                chk.get("reason") or f"Compliance Guardrail blockiert '{agent_id}'.",
+                error_code=chk.get("error_code") or "COMPLIANCE_BLOCKED",
+            )
+    except ZeroEgressBlockedError:
+        raise
+    except Exception as exc:
+        logger.error("[Dispatcher] Cache-Hit Compliance-Gate nicht verfuegbar — blockiert: %s", exc)
+        raise ZeroEgressBlockedError(
+            f"Compliance-Gate nicht verfuegbar: {exc}",
+            error_code="COMPLIANCE_GATE_UNAVAILABLE",
+        ) from exc
+
+    explicit_cat = ""
+    try:
+        from backend.data_classifier import DataClassifier
+        if not DataClassifier.classify(prompt or "").get("cloud_llm_allowed", True):
+            explicit_cat = "confidential"
+    except Exception as exc:
+        logger.error("[Dispatcher] Cache-Hit DataClassifier fehlgeschlagen (fail-closed): %s", exc)
+        explicit_cat = "confidential"
+
+    gate = evaluate_and_gate_llm_dispatch(
+        agent_id=agent_id,
+        provider=provider or "omniroute",
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        role=role,
+        explicit_category=explicit_cat,
+    )
+    if not gate.get("allowed", True):
+        raise ZeroEgressBlockedError(
+            "Dispatch-Gate verweigert den Cache-Hit (fail-closed).",
+            error_code="LLM_DISPATCH_GATE_BLOCKED",
+        )
+    return gate
 
 # --- External Agent URLs ---
 # Defaulting to docker network hostnames, but can be overridden by env vars
@@ -688,7 +862,10 @@ async def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok:
 
 def _log_dispatcher_usage_sync(agent_id: str, model: str, in_tok: int, out_tok: int, task_id: str = ""):
     try:
-        import sqlite3, os, time, sys
+        import os
+        import sqlite3
+        import sys
+        import time
         try:
             from backend.db_paths import resolve_db as _resolve_db
             db_path = _resolve_db("state.db")
@@ -697,8 +874,11 @@ def _log_dispatcher_usage_sync(agent_id: str, model: str, in_tok: int, out_tok: 
         if not os.path.exists(os.path.dirname(db_path)):
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
             
-        with sqlite3.connect(db_path, timeout=15.0, factory=_DispClosingConn) as conn:
-            conn.execute("PRAGMA busy_timeout=15000;")
+        # D03/H6 (A3-Delegation): busy_timeout + Connect-Timeout aus der SSOT,
+        # keine hartcodierten 15000/15.0 mehr (Drift/Lock-Contention).
+        from backend.db_paths import DB_BUSY_TIMEOUT_MS
+        with sqlite3.connect(db_path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0, factory=_DispClosingConn) as conn:
+            conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
             now = time.time()
             eff_task = task_id or f"agent_{agent_id}"
             s_id = f"task_{eff_task}" if not str(eff_task).startswith("task_") else str(eff_task)
@@ -838,8 +1018,22 @@ async def dispatch_to_omniroute_or_container(
     # Abbruch (CancelledError) waehrend des Cache-Lookups den Slot niemals leakt.
     try:
         # Semantischer Cache VOR dem LLM-Call: ein Treffer erspart Budget-Reservierung
-        # und Provider-Aufruf. Scope enthaelt tenant_id + agent_id (kein Cross-Tenant-Leak).
-        cache_scope = _dispatch_cache_scope(agent_id)
+        # und Provider-Aufruf. D02/HIGH: Scope umfasst jetzt Tenant/Agent plus die
+        # wirksame Policy (data_category, canary, zero_egress_active).
+        cache_category, cache_zero_active = _cache_policy_context(agent_id, role=role, prompt=prompt)
+        cache_canary = False
+        try:
+            cache_canary = bool(
+                (await asyncio.to_thread(_resolve_prompt_ref, agent_id, task_id, model)).get("canary")
+            )
+        except Exception as cache_ref_exc:
+            logger.debug("[Dispatcher] Cache-Prompt-Ref nicht verfuegbar: %s", cache_ref_exc)
+        cache_scope = _dispatch_cache_scope(
+            agent_id,
+            data_category=cache_category,
+            canary=cache_canary,
+            zero_egress_active=cache_zero_active,
+        )
         cache_hit = None
         try:
             from backend.semantic_cache import semantic_cache_manager
@@ -851,16 +1045,25 @@ async def dispatch_to_omniroute_or_container(
             )
         except Exception as cache_exc:
             logger.debug(f"[Dispatcher] Semantischer Cache-Lookup nicht verfuegbar: {cache_exc}")
-        # D02: bei aktivem Zero-Egress nie einen Cache-Hit ohne erneutes Gate
-        # ausliefern — sonst umgeht der Cache Compliance-/Egress-Entscheidungen.
         if cache_hit and cache_hit.get("hit"):
+            # D02/HIGH: bei JEDEM Hit das Governance-Gate erneut validieren.
+            # Der Cache darf weder einen Compliance-/HITL-Block noch eine
+            # DataClassifier- oder Zero-Egress-Entscheidung umgehen, und es
+            # gibt keinen Cloud-Fallback auf einen blockierten Treffer.
             try:
-                from backend.privacy_router import get_privacy_config
-                if bool((get_privacy_config() or {}).get("zero_egress_strict")):
-                    cache_hit = None
-            except Exception as _pol_exc:
-                logger.error("[Dispatcher] Policy-Revalidierung beim Cache-Hit fehlgeschlagen: %s", _pol_exc)
-                cache_hit = None
+                _validate_cache_hit_gate(
+                    agent_id, provider, model, prompt,
+                    role=role, system_prompt=system_prompt,
+                )
+            except Exception as gate_exc:
+                logger.error("[Dispatcher] Cache-Hit durch Governance-Gate blockiert: %s", gate_exc)
+                return _with_prompt_info({
+                    "status": "blocked",
+                    "error": str(gate_exc),
+                    "error_code": getattr(gate_exc, "error_code", None) or "LLM_DISPATCH_GATE_BLOCKED",
+                    "content": f"🛑 [GOVERNANCE-GATE]: {gate_exc}",
+                    "audit_event": getattr(gate_exc, "audit_event", None),
+                })
         if cache_hit and cache_hit.get("hit"):
             cached_content = str(cache_hit.get("response") or "")
             cache_clean_ok = True
@@ -900,8 +1103,8 @@ async def dispatch_to_omniroute_or_container(
                 # est_eur greift der harte EUR-Cap erst NACH dem Geldausgeben.
                 est_out_tokens = max(256, est_in_tokens // 2)
                 try:
-                    from backend.role_budget_engine import USD_TO_EUR_RATE
                     from backend.llm_kernel import estimate_model_cost_usd
+                    from backend.role_budget_engine import USD_TO_EUR_RATE
                     est_cost_eur = round(
                         estimate_model_cost_usd(model, est_in_tokens, est_out_tokens, provider=provider)
                         * USD_TO_EUR_RATE,
@@ -961,6 +1164,53 @@ async def dispatch_to_omniroute_or_container(
             # D12 (Agent E): Flightlog-Silent-Failure-Guard vor jeder
             # Erfolgsverbuchung (Cache, Budget-Settle, OTel-OK).
             res = await _guard_silent_failures(res, agent_id, task_id)
+
+            # D15/HIGH (A8): Structured-Output-Pflicht am zentralen
+            # Antwort-Chokepoint (nach parse_omniroute_response /
+            # _clean_dispatch_output im Exec-Pfad, VOR Cache-Store und
+            # Budget-Settle). Ohne Schema bleibt der Pfad inaktiv.
+            if isinstance(res, dict) and res.get("status") == "success":
+                _schema: Optional[Dict[str, Any]] = _STRUCTURED_OUTPUT_SCHEMA_CTX.get()
+                if not isinstance(_schema, dict) or not _schema:
+                    for _schema_key in ("output_schema", "response_schema", "schema"):
+                        _candidate = res.get(_schema_key)
+                        if isinstance(_candidate, dict) and _candidate:
+                            _schema = _candidate
+                            break
+                if isinstance(_schema, dict) and _schema:
+                    # Das DAG-Format {"required": [...]} auf das Enforcer-
+                    # Format {feld: typ} abbilden (sonst "required" als
+                    # Pflichtfeld fehlinterpretiert).
+                    _schema_to_use = _schema
+                    if isinstance(_schema.get("required"), (list, tuple)):
+                        _schema_to_use = {str(_f): "str" for _f in _schema["required"]}
+                        for _k, _v in _schema.items():
+                            if _k != "required":
+                                _schema_to_use[_k] = _v
+                    try:
+                        _soe_res = structured_output_enforcer.validate_and_enforce(
+                            raw_output=str(res.get("content") or ""),
+                            schema=_schema_to_use,
+                        )
+                        if _soe_res.get("valid") is False:
+                            logger.error(
+                                "[Dispatcher] Structured-Output ungueltig: %s",
+                                _soe_res.get("error"),
+                            )
+                            res["status"] = "error"
+                            res["error_code"] = "STRUCTURED_OUTPUT_INVALID"
+                            res["error"] = str(_soe_res.get("error") or "structured_output_invalid")
+                            res["structured_output_validation"] = _soe_res
+                    except Exception as _soe_exc:
+                        # Fail-closed: kein Erfolg ohne auswertbare Validierung.
+                        logger.error(
+                            "[Dispatcher] Structured-Output-Enforcer fehlgeschlagen (fail-closed): %s",
+                            _soe_exc,
+                        )
+                        res["status"] = "error"
+                        res["error_code"] = "STRUCTURED_OUTPUT_INVALID"
+                        res["error"] = f"structured_output_enforcement_failed: {_soe_exc}"
+
             duration_ms = (time.time() - t_start) * 1000.0
             in_tok = int(res.get("input_tokens", 0) or 0)
             out_tok = int(res.get("output_tokens", 0) or 0)
@@ -1179,6 +1429,11 @@ async def _dispatch_to_omniroute_or_container_impl(
     history: Optional[list] = None,
     available_tools: Optional[List[Dict[str, Any]]] = None,
 ) -> dict:
+    # D07/MED (A7): dieselbe Kettendeadline wie im Wrapper auch hier sichtbar,
+    # damit nach einer fehlgeschlagenen Exception kein weiterer Hop gestartet
+    # wird, wenn die Restzeit bereits aufgebraucht ist.
+    _fallback_budget = max(5.0, float(os.environ.get("ARCHON_DISPATCH_FALLBACK_BUDGET_SEC", "90") or 90))
+    chain_deadline = time.monotonic() + _fallback_budget
     # JEV Tool-Pruning im echten Dispatch-Pfad: nur die zum Prompt passenden
     # Werkzeuge gehen in den LLM-Request (statt aller MCP-Tools).
     pruned_tools: List[Dict[str, Any]] = []
@@ -1485,7 +1740,11 @@ async def _dispatch_to_omniroute_or_container_impl(
             }
 
     async def _audited_post(http_client: httpx.AsyncClient, url: str, *, provider_id: str, model_id: str, headers: dict | None = None, json_body: dict | None = None, timeout: float | None = None):
-        from backend.llm_egress_guard import enforce_egress_firewall_for_url, sanitize_llm_endpoint, sanitize_outbound_llm_payload
+        from backend.llm_egress_guard import (
+            enforce_egress_firewall_for_url,
+            sanitize_llm_endpoint,
+            sanitize_outbound_llm_payload,
+        )
         hop_gate = evaluate_and_gate_llm_dispatch(
             agent_id=agent_id,
             provider=provider_id,
@@ -1800,6 +2059,9 @@ async def _dispatch_to_omniroute_or_container_impl(
         groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"]
         client = _get_dispatcher_http_client()
         for g_model in groq_models:
+            if time.monotonic() >= chain_deadline:
+                logger.error("[Dispatcher] Fallback-Kettendeadline erreicht — kein weiterer Groq-Hop.")
+                break
             try:
                 resp = await _audited_post(
                     client,
@@ -1827,6 +2089,13 @@ async def _dispatch_to_omniroute_or_container_impl(
             except ZeroEgressBlockedError as ze_err:
                 return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
             except Exception as e:
+                # D07/MED (A7): kein stilles continue — Hop sichtbar quittieren,
+                # Backoff und Kettendeadline pruefen (HopResult-Modell: DELEGATED).
+                logger.warning("[Dispatcher] Groq-Hop %s fehlgeschlagen: %s", g_model, e)
+                await _provider_backoff(response=getattr(e, "response", None), provider="groq")
+                if time.monotonic() >= chain_deadline:
+                    logger.error("[Dispatcher] Fallback-Kettendeadline nach Groq-Hop erreicht.")
+                    break
                 continue
 
     # 3. Tertiär: OmniRoute Gateway (Port 20128)
@@ -1844,6 +2113,9 @@ async def _dispatch_to_omniroute_or_container_impl(
 
     client = _get_dispatcher_http_client()
     for omni_url in omni_urls:
+        if time.monotonic() >= chain_deadline:
+            logger.error("[Dispatcher] Fallback-Kettendeadline erreicht — kein weiterer OmniRoute-Hop.")
+            break
         try:
             resp = await _audited_post(
                 client,
@@ -1866,6 +2138,13 @@ async def _dispatch_to_omniroute_or_container_impl(
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as e:
+            # D07/MED (A7): kein stilles continue — Hop sichtbar quittieren,
+            # Backoff und Kettendeadline pruefen (HopResult-Modell: DELEGATED).
+            logger.warning("[Dispatcher] OmniRoute-Hop %s fehlgeschlagen: %s", omni_url, e)
+            await _provider_backoff(response=getattr(e, "response", None), provider="omniroute")
+            if time.monotonic() >= chain_deadline:
+                logger.error("[Dispatcher] Fallback-Kettendeadline nach OmniRoute-Hop erreicht.")
+                break
             continue
 
     # 3b. Direkter OpenRouter-Fallback bei OmniRoute-Ausfall / Rate-Limit
@@ -1928,6 +2207,9 @@ async def _dispatch_to_omniroute_or_container_impl(
         f"http://{agent_id}:8080/v1/chat/completions"
     ]
     for url in direct_urls:
+        if time.monotonic() >= chain_deadline:
+            logger.error("[Dispatcher] Fallback-Kettendeadline erreicht — kein weiterer Container-Hop.")
+            break
         try:
             resp = await _audited_post(
                 client,
@@ -1946,7 +2228,7 @@ async def _dispatch_to_omniroute_or_container_impl(
                     data = {"content": data}
                 raw_content = data.get("content") or data.get("output") or data.get("result")
                 if not raw_content:
-                    logger.debug("[Dispatcher] Container-Antwort ohne Inhalt: %s", str(data)[:200])
+                    logger.warning("[Dispatcher] Container-Antwort ohne Inhalt: %s", str(data)[:200])
                     continue
                 content = _clean_dispatch_output(raw_content)
                 i_tok, o_tok = _extract_tokens_usage(resp.text, prompt, str(content))
@@ -1955,7 +2237,13 @@ async def _dispatch_to_omniroute_or_container_impl(
         except ZeroEgressBlockedError as ze_err:
             return {"status": "blocked", "error": str(ze_err), "error_code": ze_err.error_code, "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze_err}", "audit_event": ze_err.audit_event}
         except Exception as container_exc:
-            logger.debug("[Dispatcher] Container-Hop %s fehlgeschlagen: %s", url, container_exc)
+            # D07/MED (A7): kein stilles continue — Hop sichtbar quittieren,
+            # Backoff und Kettendeadline pruefen (HopResult-Modell: DELEGATED).
+            logger.warning("[Dispatcher] Container-Hop %s fehlgeschlagen: %s", url, container_exc)
+            await _provider_backoff(response=getattr(container_exc, "response", None), provider="container")
+            if time.monotonic() >= chain_deadline:
+                logger.error("[Dispatcher] Fallback-Kettendeadline nach Container-Hop erreicht.")
+                break
             continue
 
     # 5. Robuste Fehlerbehandlung (Keine Dummy-Bereitschaftsmeldung vortaeuschen)
@@ -2177,6 +2465,7 @@ CATEGORIZED_FRAMEWORKS_EN = {
 }
 
 import copy
+
 DEFAULT_CATEGORIZED_FRAMEWORKS = copy.deepcopy(CATEGORIZED_FRAMEWORKS)
 DEFAULT_CATEGORIZED_FRAMEWORKS_EN = copy.deepcopy(CATEGORIZED_FRAMEWORKS_EN)
 
@@ -2276,6 +2565,55 @@ def build_final_system_prompt(selected_framework_id: str, base_system_prompt: st
     return "\n\n".join(parts)
 
 
+def _boardroom_tier(agent: dict) -> str:
+    """Tier aus der verifizierten Slot-SSOT (D14/MED: Produzent fehlt sonst)."""
+    from backend.consensus_gate import _infer_tier
+
+    return str(agent.get("tier") or _infer_tier(str(agent.get("id") or "")))
+
+
+def _boardroom_guardrail_result(res: dict) -> Dict[str, Any]:
+    """D14/HIGH: strukturiertes Guardrail-Result aus dem Dispatch-Ergebnis.
+
+    Die Felder wandern als bool/str in das ``agent_response``-Event und werden
+    von ``resolve_debate_consensus()`` als hartes Veto ausgewertet — kein
+    Freitext-Marker, keine Mehrheitsabstimmung ueber einen Policy-Verstoß.
+    """
+    out: Dict[str, Any] = {
+        "policy_violation": False,
+        "guardrail_violation": False,
+        "severity": None,
+        "source_trace_id": None,
+    }
+    if not isinstance(res, dict):
+        return out
+    gr = res.get("guardrail_result")
+    if isinstance(gr, dict):
+        out["policy_violation"] = bool(gr.get("policy_violation"))
+        out["guardrail_violation"] = bool(gr.get("guardrail_violation"))
+        out["severity"] = gr.get("severity")
+        out["source_trace_id"] = gr.get("source_trace_id")
+    for key in ("policy_violation", "guardrail_violation"):
+        if bool(res.get(key)):
+            out[key] = True
+    out["severity"] = str(out["severity"] or res.get("severity") or "") or None
+    _trace = out["source_trace_id"] or res.get("source_trace_id") or res.get("trace_id")
+    out["source_trace_id"] = str(_trace) if _trace else None
+    if not out["source_trace_id"]:
+        try:
+            from backend.trace_context import current_trace_id
+            out["source_trace_id"] = str(current_trace_id() or "") or None
+        except Exception:
+            pass
+    # Ein vom Governance-Gate blockierter Dispatch ist immer ein Veto, nie
+    # eine zaehlbare Ja-Stimme.
+    if str(res.get("status") or "").strip().lower() == "blocked":
+        out["guardrail_violation"] = True
+        out["policy_violation"] = True
+        out["severity"] = out["severity"] or "high"
+    return out
+
+
 def _boardroom_cancellation_guard(fn):
     """
     Wrappt den kompletten Debatten-Generator:
@@ -2321,7 +2659,7 @@ async def stream_boardroom_debate(
     cancel_scope('boardroom') nie erreichte und nie aufgeräumt wurde
     (Audit 23.11.2026).
     """
-    from backend.cancellation import get_child_token, clear_scope
+    from backend.cancellation import clear_scope, get_child_token
     own_token = cancel_token is None
     if own_token:
         cancel_token = get_child_token("boardroom", f"boardroom:{time.time_ns()}")
@@ -2527,7 +2865,9 @@ async def _stream_boardroom_debate_inner(
                     f"Beende deine Aussage mit EINER eigenen Zeile, die genau einen der "
                     f"Marker enthält: `KONSENS_ERREICHT` (du stimmst zu) oder `KEIN KONSENS` "
                     f"(du widersprichst oder hast Vorbehalte). Ohne Marker zählt deine "
-                    f"Aussage nicht als Konsens."
+                    f"Aussage nicht als Konsens. Wenn du einen Regel-/Policy-Verstoß "
+                    f"feststellst, schreibe zusätzlich eine eigene Zeile `POLICY_VIOLATION` "
+                    f"— dieses Veto ist stärker als jede Mehrheit."
                 )
                 sys_prompt = build_final_system_prompt(framework, ag.get("prompt", ""))
                 token.check()  # Abbruch vor jedem Agent-Dispatch beachten
@@ -2549,6 +2889,10 @@ async def _stream_boardroom_debate_inner(
                     "agent_name": ag["name"],
                     "role": ag.get("role", "Expert"),
                     "model": ag.get("model") or "deepseek/deepseek-chat",
+                    # D14: Tier aus verifizierter Slot-SSOT + strukturiertes
+                    # Guardrail-Result (kein Freitext-Marker) am Event-Grenze.
+                    "tier": _boardroom_tier(ag),
+                    **_boardroom_guardrail_result(res),
                     "content": res.get("content", "Keine Antwort.")
                 }
 
@@ -2593,7 +2937,32 @@ async def _stream_boardroom_debate_inner(
                 for t in tasks:
                     if not t.done():
                         t.cancel()
-                await asyncio.gather(*tasks, return_exceptions=True)
+                # D07/MED (A9): Result-Liste auswerten statt verwerfen.
+                # CancelledError ist der erwartete Normalfall; jede andere
+                # BaseException ist ein fehlgeschlagener Abbruch -> Audit.
+                try:
+                    cancel_results = await asyncio.wait_for(
+                        asyncio.gather(*tasks, return_exceptions=True),
+                        timeout=10.0,
+                    )
+                except asyncio.TimeoutError:
+                    # Bei Timeout werden nicht beendete Tasks NICHT aus der
+                    # Registry geloescht, sondern als failed_cancels quittiert.
+                    cancel_results = []
+                    for t in tasks:
+                        if not t.done():
+                            _record_failed_cancel(
+                                t.get_name() or "boardroom_agent",
+                                "cancel_timeout: Task nicht innerhalb von 10s beendet",
+                            )
+                for t, cres in zip(tasks, cancel_results):
+                    if isinstance(cres, asyncio.CancelledError):
+                        continue
+                    if isinstance(cres, BaseException):
+                        _record_failed_cancel(
+                            t.get_name() or "boardroom_agent",
+                            f"{type(cres).__name__}: {cres}",
+                        )
         else:
             for agent in expert_agents:
                 agent_prompt = (
@@ -2608,7 +2977,9 @@ async def _stream_boardroom_debate_inner(
                     f"Beende deine Aussage mit EINER eigenen Zeile, die genau einen der "
                     f"Marker enthält: `KONSENS_ERREICHT` (du stimmst zu) oder `KEIN KONSENS` "
                     f"(du widersprichst oder hast Vorbehalte). Ohne Marker zählt deine "
-                    f"Aussage nicht als Konsens."
+                    f"Aussage nicht als Konsens. Wenn du einen Regel-/Policy-Verstoß "
+                    f"feststellst, schreibe zusätzlich eine eigene Zeile `POLICY_VIOLATION` "
+                    f"— dieses Veto ist stärker als jede Mehrheit."
                 )
                 
                 agent_sys_prompt = build_final_system_prompt(framework, agent.get("prompt", ""))
@@ -2634,6 +3005,8 @@ async def _stream_boardroom_debate_inner(
                     "agent_name": agent["name"],
                     "role": agent.get("role", "Expert"),
                     "model": agent.get("model") or "deepseek/deepseek-chat",
+                    "tier": _boardroom_tier(agent),
+                    **_boardroom_guardrail_result(res),
                     "content": resp_content
                 }
                 debate_statements.append(ev_agent)
@@ -2673,13 +3046,12 @@ async def _stream_boardroom_debate_inner(
                 "content": "Kein Konsens nach der letzten Debattenrunde — Eskalation an HITL.",
             }
 
-    # 4. FINAL SYNTHESIS (STANDARD ODER MIXTURE OF AGENTS - MoA)
-    final_verdict = str(consensus.get("verdict") or "NO_CONSENSUS").upper()
-    has_final_decision = final_verdict.startswith("CONSENSUS_REACHED")
-
-    # 4a. DEDIZIERTER CRITIQUE-DISPATCH (D02/MED) — vor der Synthese,
-    # eigene Instanz, eigener adversarischer System-Prompt.
+    # 3a. DEDIZIERTER CRITIQUE-DISPATCH (D14/HIGH) — VOR der finalen
+    # Konsensauswertung. Der Critique ist ein echter Veto-Produzent, keine
+    # Prompt-Floskel nach der bereits gefassten Entscheidung.
     token.check()
+    critique_text = ""
+    critique_error = False
     try:
         critique_prompt = (
             f"Du bist der unabhaengige Boardroom-Critic (Adversarial Review).\n"
@@ -2687,7 +3059,9 @@ async def _stream_boardroom_debate_inner(
             f"Debattenprotokoll:\n{_prompt_transcript(running_transcript)}\n\n"
             f"Pruefe schonungslos: logische Brueche, unbelegte Behauptungen, "
             f"Regel-/Policy-Verstoesse, blinde Flecken und ungeloeste Konflikte. "
-            f"Benenne mindestens ein konkretes Risiko. Formuliere deine Befunde knapp."
+            f"Benenne mindestens ein konkretes Risiko. Formuliere deine Befunde knapp.\n"
+            f"Wenn du einen Regel-/Policy-Verstoß findest, schreibe zusaetzlich eine "
+            f"eigene Zeile `POLICY_VIOLATION` — dieses Veto ist staerker als jede Mehrheit."
         )
         res_critique = await dispatch_to_external_agent(
             agent_id="boardroom-critic",
@@ -2707,15 +3081,47 @@ async def _stream_boardroom_debate_inner(
             "type": "critique",
             "agent_id": "boardroom-critic",
             "agent_name": "Boardroom Critic",
+            "role": "Adversarial Reviewer",
+            "tier": "specialist",
+            **_boardroom_guardrail_result(res_critique),
             "content": critique_text,
         }
         debate_statements.append(critique_ev)
         running_transcript += f"\n--- CRITIQUE (Adversarial Review) ---\n{critique_text}\n\n"
         yield critique_ev
     except Exception as critique_exc:
-        logger.warning("[Boardroom] Critique-Dispatch fehlgeschlagen: %s", critique_exc)
+        critique_error = True
+        logger.error("[Boardroom] Critique-Dispatch fehlgeschlagen (fail-closed): %s", critique_exc)
         yield {"type": "critique_error", "content": str(critique_exc)}
 
+    # 4. FINALE KONSENSAUSWERTUNG NACH DER KRITIK (D14/HIGH).
+    # Der Critique kann einen vorherigen CONSENSUS_REACHED noch kippen.
+    from backend.consensus_gate import resolve_debate_consensus
+    consensus = resolve_debate_consensus(
+        debate_statements,
+        authority={
+            str(s.get("agent_id") or ""): str(s.get("tier") or "")
+            for s in debate_statements if isinstance(s, dict) and s.get("tier")
+        } or None,
+    )
+    if critique_error:
+        # Fail-closed: ohne abgeschlossene Kritik kein Finalbeschluss (HITL).
+        consensus = dict(consensus)
+        consensus["consensus_reached"] = False
+        consensus["verdict"] = "NO_CONSENSUS"
+        consensus["veto_by"] = "boardroom-critic"
+        consensus["critique_error"] = True
+        yield {
+            "type": "no_consensus",
+            "verdict": "NO_CONSENSUS",
+            "veto_by": "boardroom-critic",
+            "critique_error": True,
+            "content": "Critique nicht verfuegbar — kein Finalbeschluss, HITL erforderlich.",
+        }
+    final_verdict = str(consensus.get("verdict") or "NO_CONSENSUS").upper()
+    has_final_decision = final_verdict.startswith("CONSENSUS_REACHED")
+
+    # 4b. FINAL SYNTHESIS (STANDARD ODER MIXTURE OF AGENTS - MoA)
     # D02/BLOCKER: Bei NO_CONSENSUS garantiert KEINE finale Entscheidung.
     no_consensus_mode = not has_final_decision
     synthesis_directive = (
@@ -2875,6 +3281,7 @@ async def _stream_boardroom_debate_inner(
         "veto_by": consensus.get("veto_by"),
         "veto_marker": "POLICY_VIOLATION" if final_verdict == "NO_CONSENSUS_POLICY_VIOLATION" else None,
         "critique": critique_text,
+        "critique_error": critique_error,
         "is_final_decision": has_final_decision,
         "evidence": consensus.get("evidence", []),
     }
@@ -2912,6 +3319,7 @@ async def run_boardroom_debate(
         "consensus_reached": False,
         "veto_by": None,
         "critique": "",
+        "critique_error": False,
         "is_final_decision": False,
     }
 
@@ -2929,6 +3337,7 @@ async def run_boardroom_debate(
             task_res["consensus_reached"] = bool(ev.get("consensus_reached"))
             task_res["veto_by"] = ev.get("veto_by")
             task_res["critique"] = ev.get("critique", "")
+            task_res["critique_error"] = bool(ev.get("critique_error"))
             task_res["evidence"] = ev.get("evidence", [])
             # Nur echter Konsens ist eine finale Entscheidung.
             task_res["is_final_decision"] = verdict.startswith("CONSENSUS_REACHED")
@@ -2943,6 +3352,7 @@ async def run_boardroom_debate(
             # werden (Decision-Engine/Telegram hingen am status=Feld).
             task_res["status"] = "cancelled"
             task_res["cancel_reason"] = ev.get("reason", "")
+            task_res["cancel_scope"] = ev.get("cancel_scope") or "boardroom"
             break
         elif ev_type == "round_start":
             continue
@@ -2950,6 +3360,12 @@ async def run_boardroom_debate(
             events.append(ev)
 
     task_res["events"] = events
+    # D02/HIGH: ein Abbruch ist ein eigener Terminalstatus. Er darf nicht
+    # durch den allgemeinen Unvollständigkeits-Check zu "incomplete" werden,
+    # sonst ist ein Cancel im Result/Archiv nicht mehr von einer leeren
+    # Debatte zu unterscheiden.
+    if str(task_res.get("status") or "").lower() == "cancelled":
+        return task_res
     # D01/S-1.7: Stream ohne done-Event oder ohne Synthese ist keine
     # erfolgreiche Entscheidung — nie als "success" an Client/Archiv geben.
     if not done_seen or not str(task_res.get("synthesis") or "").strip():

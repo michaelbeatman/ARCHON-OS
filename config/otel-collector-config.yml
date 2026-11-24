@@ -1,12 +1,16 @@
 # Archon OS — OpenTelemetry Collector Configuration (D16 / P1, Re-Audit R-B6)
 #
 # Kein toter Default-Endpunkt mehr: ohne explizit gesetzten Downstream bleiben
-# die Spans in einem lokalen file-Exporter (immer erreichbar). Langfuse v2 ist
-# EOL und Opt-in (Profil `langfuse`, NICHT in tracing/observability/all/full);
-# der App-Export dorthin laeuft direkt ueber LANGFUSE_* und meldet ehrlich
-# `not_configured` (S-1.5), wenn die Keys fehlen.
-# Ein echter OTLP-Consumer (Tempo/Langfuse v4) muss von P0 aktiv verdrahtet
-# werden — kein Default auf einen nicht gestarteten Container.
+# die Spans in einem lokalen file-Exporter (immer erreichbar). Das EOL-
+# Langfuse-v2-Artefakt ist aus Compose und Startern entfernt (Audit D09/D10,
+# D-D8); ein aktuelles Langfuse wird nur ueber die LANGFUSE_*-Werte als
+# direkter App-Export angebunden und meldet ohne Keys ehrlich `not_configured`.
+# EHR-LICHER STATUS (D16/HIGH, S-1.5): collector_downstream =
+# not_configured/local_only. Es ist KEIN Tempo/Jaeger/Langfuse-Downstream
+# verdrahtet; die Spans landen ausschliesslich in debug + file/traces-local.
+# backend/otel_tracer.get_tracing_status() meldet exakt diesen Zustand, statt
+# einen nicht gestarteten Consumer zu behaupten. Ein echter Downstream muss
+# aktiv (Compose + Volume + Grafana-Datasource) verdrahtet werden — A1.
 
 receivers:
   otlp:

@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 Archon OS - Email Draft Engine mit Freigabe-Queue und GoBD/ISO 27001 Auditierung (t-7ca8cd)
 Verwaltung KI-generierter E-Mail-Entwuerfe vor dem Versand mit 5 Aktionen:
@@ -8,10 +9,12 @@ Verwaltung KI-generierter E-Mail-Entwuerfe vor dem Versand mit 5 Aktionen:
 5. Abbrechen / Verwerfen
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("email_draft_engine")
 
 import os
 import sqlite3
+
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -22,18 +25,19 @@ class _ArchonClosingConn(sqlite3.Connection):
             super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
+import datetime
 import hashlib
 import json
 import secrets
-import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
-    from backend.db_paths import resolve_db
+    from backend.db_paths import DB_BUSY_TIMEOUT_MS, resolve_db
     DB_FILE = resolve_db("agentic_memory.db")
 except Exception:
     DB_FILE = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+    DB_BUSY_TIMEOUT_MS = 5000  # Fallback: SSOT (backend.db_paths) nicht importierbar
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
 
 # Epochen-Migration (block_id): neue Bloecke werden mit
@@ -76,7 +80,7 @@ class EmailDraftEngine:
     def _get_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=15.0, factory=_ArchonClosingConn)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA busy_timeout = 10000;")
+        conn.execute(f"PRAGMA busy_timeout = {DB_BUSY_TIMEOUT_MS};")
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
         return conn
@@ -537,7 +541,7 @@ def _verify_email_draft_chain_raw(db_path: Optional[str] = None) -> Dict[str, An
     der Hash eines neuen Blocks haengt vom gespeicherten prev_hash ab, nicht
     davon, wie der Vorgänger signiert wurde — der Uebergang ist daher bruchfrei.
     """
-    from backend.audit_log import HMAC_PREFIX, _verify_hash, _hmac_epochs
+    from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
 
     conn = sqlite3.connect(db_path or DB_FILE, timeout=15.0, factory=_ArchonClosingConn)
     conn.row_factory = sqlite3.Row

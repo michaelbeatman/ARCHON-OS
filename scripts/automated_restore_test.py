@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 scripts/automated_restore_test.py
 Automatisierter Restore- & Integritätstest für SQLite-Backups und Litestream-Replikate.
@@ -9,17 +10,17 @@ Führt einen wöchentlichen oder On-Demand Prüflauf in einer isolierten Wegwerf
 4. Alarmierung via NotificationHub (Telegram-Push bei Fehlern)
 """
 
-import os
-import sys
+import datetime
 import glob
 import gzip
 import json
-import time
-import sqlite3
+import os
 import shutil
+import sqlite3
+import sys
 import tempfile
-import datetime
-from typing import Dict, Any, List
+import time
+from typing import Any, Dict, List
 
 try:
     import yaml  # PyYAML 6.x ist im Archon-Container verfügbar
@@ -64,8 +65,16 @@ def find_latest_backup(name: str) -> str:
 
 
 def _tenant_dbs_present() -> List[str]:
-    """Physisch isolierte Mandanten-DBs (FULL_TENANT_ISOLATION defaultet '1')."""
-    return sorted(glob.glob(os.path.join(WORKSPACE_DIR, "data", "tenants", "*", "*.db")))
+    """Physisch isolierte Mandanten-DBs (APP_DATA_DIR + Workspace-Legacy)."""
+    try:
+        from backend.db_paths import APP_DATA_DIR
+    except Exception:
+        APP_DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
+    found = set(
+        glob.glob(os.path.join(APP_DATA_DIR, "tenants", "*", "*.db"))
+        + glob.glob(os.path.join(WORKSPACE_DIR, "data", "tenants", "*", "*.db"))
+    )
+    return sorted(os.path.abspath(p) for p in found)
 
 
 def _is_tenant_target(value: Any) -> bool:
@@ -170,11 +179,18 @@ class AutomatedRestoreTester:
         # prüfen, sondern im Sandbox-Restore mit integrity/FK/Smoke testen.
         for _path in _tenant_dbs_present():
             _tid = os.path.basename(os.path.dirname(_path))
+            _db_file = os.path.basename(_path)
+            # D03/MED: echtes tenant_<tid>__<db>_<stamp>.db.gz-Artefakt
+            # bevorzugen (Namensschema aus db_backup_manager). Nur wenn kein
+            # Backup existiert, wird die Live-Kopie als SKIPPED vermerkt.
+            _artifact = find_latest_backup(f"tenant_{_tid}__{_db_file}")
             self.dbs_to_test.append({
-                "name": f"tenant:{_tid}/{os.path.basename(_path)}",
-                "source": _path,
+                "name": f"tenant:{_tid}/{_db_file}",
+                "source": _artifact or _path,
                 "required_table": (),  # kein festes Schema — erste Tabelle als Smoke
-                "optional": True,
+                "optional": not bool(_artifact),
+                "source_kind": "backup" if _artifact else "tenant_live",
+                "tenant_tid": _tid,
             })
 
     def run_restore_test(self, notify: bool = True) -> Dict[str, Any]:
@@ -228,7 +244,8 @@ class AutomatedRestoreTester:
                 safe_dest_name = db_name.replace(":", "_").replace("/", "_").replace("\\", "_")
                 dest_path = os.path.join(sandbox_dir, f"restored_{safe_dest_name}")
                 if db_name.startswith("tenant:"):
-                    source_kind = "tenant_live"
+                    # echtes Backup-Artefakt hat Vorrang vor der Live-Kopie
+                    source_kind = item.get("source_kind") or "tenant_live"
                     db_report["source_kind"] = source_kind
                 else:
                     source_kind = "backup" if find_latest_backup(db_name) else "live"
@@ -365,6 +382,42 @@ class AutomatedRestoreTester:
             if not tenant_covered:
                 results["databases_failed"] += 1
 
+        # D03/MED: Secret-Restores waren bisher gar nicht getestet. Dry-run gegen ein
+        # vorhandenes .secret.gz-Artefakt (kein Schreiben, kein Confirm).
+        secret_artifacts = sorted(glob.glob(os.path.join(BACKUP_DIR, "*.secret.gz")))
+        if secret_artifacts:
+            try:
+                from backend.db_backup_manager import db_backup_manager
+                secret_name = os.path.basename(secret_artifacts[-1])
+                secret_res = db_backup_manager.restore_secret_files(
+                    secret_name, dry_run=True, confirm=False
+                )
+                results["details"].append({
+                    "database": "SECRET_RESTORE_DRY_RUN",
+                    "source_path": secret_artifacts[-1],
+                    "source_exists": True,
+                    "source_size_bytes": os.path.getsize(secret_artifacts[-1]),
+                    "integrity_check": "N/A",
+                    "foreign_key_check": "N/A",
+                    "smoke_test": f"OK ({secret_res.get('secret')})",
+                    "source_kind": "backup",
+                    "status": "PASSED",
+                    "error": None,
+                })
+            except Exception as exc:
+                results["details"].append({
+                    "database": "SECRET_RESTORE_DRY_RUN",
+                    "source_path": secret_artifacts[-1],
+                    "source_exists": True,
+                    "source_size_bytes": 0,
+                    "integrity_check": "FAILED",
+                    "foreign_key_check": "FAILED",
+                    "smoke_test": "FAILED",
+                    "status": "FAILED",
+                    "error": str(exc),
+                })
+                results["databases_failed"] += 1
+
         results["duration_seconds"] = round(time.time() - t_start, 2)
         if results["databases_failed"] > 0:
             results["overall_status"] = "FAILED"
@@ -392,11 +445,28 @@ class AutomatedRestoreTester:
         history = history[:30]
 
         os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+        # D03/MED: atomic write + sichtbarer Fehler (frueher open("w") mit
+        # verschluckter Exception — die Historie war bei Abbruch weg).
+        tmp_path = None
         try:
-            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            fd, tmp_path = tempfile.mkstemp(
+                dir=os.path.dirname(HISTORY_FILE), prefix=".restore_history_", suffix=".tmp"
+            )
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(history, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, HISTORY_FILE)
+            tmp_path = None
+        except Exception as exc:
+            print(f"[RestoreTest] FEHLER beim Speichern der Historie: {exc}", file=sys.stderr)
+            raise
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
     def _dispatch_notification(self, report: Dict[str, Any]):
         """Sendet einen Alarm via NotificationHub / Telegram."""

@@ -13,6 +13,7 @@ import json
 import os
 import sqlite3
 import tempfile
+
 import pytest
 
 
@@ -47,10 +48,12 @@ def test_d01_profiles_reader_preserves_custom_fields(monkeypatch, tmp_path):
         prof.invalidate_hermes_profiles_cache()
 
 
-def test_d02_audit_log_parallel_hash_integrity(tmp_path):
+def test_d02_audit_log_parallel_hash_integrity(tmp_path, monkeypatch):
     """D-02: 8 parallele Threads erzeugen keine Hashketten-Gabelung."""
     from backend.audit_log import ChainedAuditLog
 
+    # A2: kein externer Anker in diesem Test -> expliziter Dev-Opt-out.
+    monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")
     db_file = str(tmp_path / "test_audit.db")
     audit = ChainedAuditLog(db_path=db_file)
 
@@ -75,8 +78,8 @@ def test_d02_audit_log_parallel_hash_integrity(tmp_path):
 
 def test_d03_post_task_pipeline_dest_doc_path(monkeypatch, tmp_path):
     """D-03: write_project_folder_artifact wirft keinen NameError auf end_doc_path."""
-    from backend import post_task_pipeline as ptp
     import backend.kanban_sidecar as kside
+    from backend import post_task_pipeline as ptp
 
     monkeypatch.setattr(ptp, "VAULT_DIR", tmp_path / "vault")
     monkeypatch.setattr(ptp, "BASE_DIR", tmp_path)

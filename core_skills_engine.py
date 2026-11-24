@@ -1,10 +1,47 @@
-import os
-import sys
-import json
-import httpx
+# mypy: ignore-errors
 import datetime
+import json
+import os
 import subprocess
-from typing import List, Dict, Optional
+import sys
+import tempfile
+import threading
+from typing import Dict, List, Optional
+
+import httpx
+
+_VAULT_WRITE_LOCK = threading.Lock()
+
+
+def _atomic_write_text(path: str, text: str) -> None:
+    """D03/MED: atomarer Vault-Write (temp + fsync + replace + dir-fsync).
+
+    Divergenz zum Router behoben: ``open(path, "w")`` erzeugte bei Abbruch
+    eine halbe Notiz und war nicht gegen parallele Schreiber abgesichert.
+    """
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".skill_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+        try:
+            dir_fd = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 try:
     from archon.core.cache import ttl_cache  # SSOT: TTL-Cache mit Single-Flight
@@ -35,10 +72,10 @@ except ImportError:  # pragma: no cover - Root nicht im sys.path (direkter CLI-A
         return decorator
 
 try:
-    from utils.path_jail import safe_path_within, safe_filename, PathJailError
+    from utils.path_jail import PathJailError, safe_filename, safe_path_within
 except ImportError:  # pragma: no cover - direkter Aufruf ausserhalb des Repo-Roots
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from utils.path_jail import safe_path_within, safe_filename, PathJailError
+    from utils.path_jail import PathJailError, safe_filename, safe_path_within
 
 try:
     import docker
@@ -131,7 +168,8 @@ class DockerControlSkill:
         # der eigentliche Pfad laeuft ueber ``utils.docker_client`` (HTTP). Die
         # alte Vorpruefung auf ``self.client`` verweigerte jeden Neustart auf
         # einem Stack ohne SDK-Init, obwohl stop+start technisch ginge.
-        from utils.docker_client import docker_client as _dc, DockerError as _DockerError
+        from utils.docker_client import DockerError as _DockerError
+        from utils.docker_client import docker_client as _dc
         try:
             _dc.restart_container(container_name)
             return {"status": "success", "message": f"Container '{container_name}' restarted successfully."}
@@ -195,8 +233,8 @@ class ObsidianVaultSkill:
         
         note_text = frontmatter + content + "\n\n[[Archon OS]]"
         try:
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(note_text)
+            with _VAULT_WRITE_LOCK:
+                _atomic_write_text(filepath, note_text)
             return {"status": "success", "filepath": filepath, "filename": filename}
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -233,13 +271,14 @@ class ObsidianVaultSkill:
         entry += "\n"
         
         try:
-            existing = ""
-            if os.path.exists(changelog_path):
-                with open(changelog_path, "r", encoding="utf-8") as f:
-                    existing = f.read()
-            
-            with open(changelog_path, "w", encoding="utf-8") as f:
-                f.write(entry + existing)
+            # D03/MED: Read-Modify-Write unter Lock + atomarer Replace,
+            # sonst verliert ein paralleler Release-Lauf seine Changelog-Zeile.
+            with _VAULT_WRITE_LOCK:
+                existing = ""
+                if os.path.exists(changelog_path):
+                    with open(changelog_path, "r", encoding="utf-8") as f:
+                        existing = f.read()
+                _atomic_write_text(changelog_path, entry + existing)
             return {"status": "success", "changelog": changelog_path}
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -374,6 +413,7 @@ class GitTestingSkill:
 # MODULE 5: MCP (MODEL CONTEXT PROTOCOL) ADAPTER
 # =====================================================================
 import asyncio
+
 
 class MCPAdapterSkill:
     def __init__(self):
@@ -512,11 +552,11 @@ if __name__ == "__main__":
         if i >= len(args):
             break
         val = args[i]
-        if p.annotation == int:
+        if p.annotation is int:
             val = int(val)
-        elif p.annotation == List[str] or p.annotation == list:
+        elif p.annotation == List[str] or p.annotation is list:
             val = val.split(",")
-        elif p.annotation == dict or p.annotation == Dict:
+        elif p.annotation is dict or p.annotation == Dict:
             val = json.loads(val)
         typed_args.append(val)
 

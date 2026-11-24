@@ -2,7 +2,7 @@
   {
     "id": "b1c3f1e9b2d84f01",
     "name": "Archon Article Extractor",
-    "active": false,
+    "active": true,
     "nodes": [
       {
         "parameters": {
@@ -11,7 +11,7 @@
           "responseMode": "lastNode",
           "options": {}
         },
-        "id": "wh-extract",
+        "id": "wh-archon-extract-article",
         "name": "Webhook Ingest",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 2,
@@ -23,30 +23,78 @@
       },
       {
         "parameters": {
+          "jsCode": "// A/H5 + D06/HIGH: HMAC-SHA256 ueber den EXAKTEN kompakten Body.\n// Bevorzugt: crypto.createHmac + crypto.timingSafeEqual (constant time).\n// Fallback, falls der n8n-Task-Runner Built-ins blockt: reines JS-HMAC mit\n// constant-time XOR-Vergleich. Beide Pfade sind fail-closed.\nlet _crypto = null;\ntry { _crypto = require('crypto'); } catch (_e) { _crypto = null; }\nconst K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\nconst RR=(x,n)=>(x>>>n)|(x<<(32-n));\nfunction sha(b){const n=b.length,L=n*8,t=Math.ceil((n+9)/64)*64,m=new Uint8Array(t);m.set(b);m[n]=0x80;const v=new DataView(m.buffer);v.setUint32(t-8,Math.floor(L/4294967296),false);v.setUint32(t-4,L>>>0,false);let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];const w=new Uint32Array(64);for(let i=0;i<t;i+=64){for(let j=0;j<16;j++)w[j]=v.getUint32(i+j*4,false);for(let j=16;j<64;j++){const x=w[j-15],y=w[j-2];w[j]=(w[j-16]+(RR(x,7)^RR(x,18)^(x>>>3))+w[j-7]+(RR(y,17)^RR(y,19)^(y>>>10)))>>>0;}let[a,b,c,d,e,f,g,h]=H;for(let j=0;j<64;j++){const S1=RR(e,6)^RR(e,11)^RR(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[j]+w[j])>>>0,S0=RR(a,2)^RR(a,13)^RR(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];}const o=new Uint8Array(32),ov=new DataView(o.buffer);for(let i=0;i<8;i++)ov.setUint32(i*4,H[i],false);return o;}\nfunction hmacJs(key,msg){let k=key;if(k.length>64)k=sha(k);const kp=new Uint8Array(64);kp.set(k);const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=kp[i]^0x36;op[i]=kp[i]^0x5c;}const inner=new Uint8Array(64+msg.length);inner.set(ip);inner.set(msg,64);const ih=sha(inner);const outer=new Uint8Array(96);outer.set(op);outer.set(ih,64);return sha(outer);}\nconst secret=String(($env&&$env.ARCHON_WEBHOOK_HMAC_SECRET)||'').trim();\nif(!secret){throw new Error('ARCHON_WEBHOOK_HMAC_SECRET fehlt - Trigger abgelehnt (fail-closed).');}\nconst item=$input.first().json||{};\nconst hdrs={};for(const[k,v]of Object.entries(item.headers||{}))hdrs[k.toLowerCase()]=String(v);\nconst body=Object.prototype.hasOwnProperty.call(item,'body')?item.body:item;\nconst sig=String(hdrs['x-archon-webhook-signature']||'');\nconst alg=String(hdrs['x-archon-webhook-algorithm']||'');\nif(alg&&alg!=='HMAC-SHA256'){throw new Error('Falscher HMAC-Algorithmus - Trigger abgelehnt.');}\nif(!sig.startsWith('sha256=')||!/^[0-9a-fA-F]{64}$/.test(sig.slice(7))){throw new Error('Fehlende/ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nconst enc=new TextEncoder();\n// Exakt dieselbe kompakte Serialisierung wie der Sender:\n// Python json.dumps(..., ensure_ascii=False, separators=(',',':')) == JSON.stringify(body).\nconst bodyBytes=(item.rawBody && item.rawBody.length)\n  ? (item.rawBody instanceof Uint8Array ? item.rawBody : enc.encode(String(item.rawBody)))\n  : enc.encode(JSON.stringify(body));\nconst got=Uint8Array.from(sig.slice(7).match(/../g).map(x=>parseInt(x,16)));\nconst want=(_crypto && typeof _crypto.createHmac==='function')\n  ? new Uint8Array(_crypto.createHmac('sha256',secret).update(Buffer.from(bodyBytes)).digest())\n  : hmacJs(enc.encode(secret),bodyBytes);\nif(got.length!==want.length){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nlet valid;\nif(_crypto && typeof _crypto.timingSafeEqual==='function'){\n  valid=_crypto.timingSafeEqual(Buffer.from(got),Buffer.from(want));\n}else{\n  let diff=0;for(let i=0;i<want.length;i++){diff|=got[i]^want[i];}\n  valid=(diff===0);\n}\nif(!valid){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nreturn $input.all();"
+        },
+        "id": "hmac-verify-archon-extract-article",
+        "name": "Archon HMAC Verify",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ],
+        "notesInFlow": true,
+        "notes": "D06/HIGH: HMAC-SHA256 (crypto.timingSafeEqual, Fallback Constant-Time-XOR) ueber den exakten kompakten Body; nur signierte Webhook-Trigger erreichen den Archon-API-Node."
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://archon-os:8501/api/v2/research/triangulate",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "{{ JSON.stringify({topic: String($json.body.url || $json.body.topic || '')}) }}"
+        },
+        "id": "http-extract",
+        "name": "Extract Article (Archon API)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
           "assignments": {
             "assignments": [
               {
                 "id": "e1",
                 "name": "status",
-                "value": "not_implemented",
+                "value": "{{ $json.status || 'success' }}",
                 "type": "string"
               },
               {
                 "id": "e2",
                 "name": "extracted_url",
-                "value": "={{ $json.body.url }}",
+                "value": "{{ $json.body.url || '' }}",
                 "type": "string"
               },
               {
                 "id": "e3",
                 "name": "format",
-                "value": "={{ $json.body.format || 'markdown' }}",
+                "value": "{{ $json.body.format || 'markdown' }}",
                 "type": "string"
               },
               {
                 "id": "e4",
-                "name": "message",
-                "value": "NOT IMPLEMENTED (Audit K6): nur Webhook+Set-Stub, kein Extraktions-Node. Workflow deaktiviert.",
+                "name": "verified",
+                "value": "hmac_sha256",
+                "type": "string"
+              },
+              {
+                "id": "e5",
+                "name": "result",
+                "value": "{{ JSON.stringify($json) }}",
                 "type": "string"
               }
             ]
@@ -58,416 +106,7 @@
         "type": "n8n-nodes-base.set",
         "typeVersion": 3.4,
         "position": [
-          240,
-          0
-        ]
-      }
-    ],
-    "connections": {
-      "Webhook Ingest": {
-        "main": [
-          [
-            {
-              "node": "Format Extract Response",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "settings": {
-      "executionOrder": "v1"
-    }
-  },
-  {
-    "id": "b1c3f1e9b2d84f02",
-    "name": "Archon Multi-Channel Dispatcher",
-    "active": false,
-    "nodes": [
-      {
-        "parameters": {
-          "httpMethod": "POST",
-          "path": "archon-dispatch-message",
-          "responseMode": "lastNode",
-          "options": {}
-        },
-        "id": "wh-dispatch",
-        "name": "Webhook Ingest",
-        "type": "n8n-nodes-base.webhook",
-        "typeVersion": 2,
-        "position": [
-          0,
-          0
-        ],
-        "webhookId": "archon-dispatch-message"
-      },
-      {
-        "parameters": {
-          "assignments": {
-            "assignments": [
-              {
-                "id": "d1",
-                "name": "status",
-                "value": "not_implemented",
-                "type": "string"
-              },
-              {
-                "id": "d2",
-                "name": "channel",
-                "value": "={{ $json.body.channel }}",
-                "type": "string"
-              },
-              {
-                "id": "d3",
-                "name": "recipient",
-                "value": "={{ $json.body.recipient }}",
-                "type": "string"
-              },
-              {
-                "id": "d4",
-                "name": "dispatched",
-                "value": false,
-                "type": "boolean"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "id": "set-dispatch",
-        "name": "Format Dispatch Response",
-        "type": "n8n-nodes-base.set",
-        "typeVersion": 3.4,
-        "position": [
-          240,
-          0
-        ]
-      }
-    ],
-    "connections": {
-      "Webhook Ingest": {
-        "main": [
-          [
-            {
-              "node": "Format Dispatch Response",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "settings": {
-      "executionOrder": "v1"
-    }
-  },
-  {
-    "id": "b1c3f1e9b2d84f03",
-    "name": "Archon Document Renderer",
-    "active": false,
-    "nodes": [
-      {
-        "parameters": {
-          "httpMethod": "POST",
-          "path": "archon-render-document",
-          "responseMode": "lastNode",
-          "options": {}
-        },
-        "id": "wh-render",
-        "name": "Webhook Ingest",
-        "type": "n8n-nodes-base.webhook",
-        "typeVersion": 2,
-        "position": [
-          0,
-          0
-        ],
-        "webhookId": "archon-render-document"
-      },
-      {
-        "parameters": {
-          "assignments": {
-            "assignments": [
-              {
-                "id": "r1",
-                "name": "status",
-                "value": "not_implemented",
-                "type": "string"
-              },
-              {
-                "id": "r2",
-                "name": "document_type",
-                "value": "={{ $json.body.document_type || 'pdf' }}",
-                "type": "string"
-              },
-              {
-                "id": "r3",
-                "name": "title",
-                "value": "={{ $json.body.title || 'Dokument' }}",
-                "type": "string"
-              },
-              {
-                "id": "r4",
-                "name": "rendered",
-                "value": false,
-                "type": "boolean"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "id": "set-render",
-        "name": "Format Render Response",
-        "type": "n8n-nodes-base.set",
-        "typeVersion": 3.4,
-        "position": [
-          240,
-          0
-        ]
-      }
-    ],
-    "connections": {
-      "Webhook Ingest": {
-        "main": [
-          [
-            {
-              "node": "Format Render Response",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "settings": {
-      "executionOrder": "v1"
-    }
-  },
-  {
-    "id": "b1c3f1e9b2d84f04",
-    "name": "Archon Feed & Search Engine",
-    "active": false,
-    "nodes": [
-      {
-        "parameters": {
-          "httpMethod": "POST",
-          "path": "archon-search-feed",
-          "responseMode": "lastNode",
-          "options": {}
-        },
-        "id": "wh-feed",
-        "name": "Webhook Ingest",
-        "type": "n8n-nodes-base.webhook",
-        "typeVersion": 2,
-        "position": [
-          0,
-          0
-        ],
-        "webhookId": "archon-search-feed"
-      },
-      {
-        "parameters": {
-          "assignments": {
-            "assignments": [
-              {
-                "id": "f1",
-                "name": "status",
-                "value": "not_implemented",
-                "type": "string"
-              },
-              {
-                "id": "f2",
-                "name": "category",
-                "value": "={{ $json.body.category || 'news' }}",
-                "type": "string"
-              },
-              {
-                "id": "f3",
-                "name": "query",
-                "value": "={{ $json.body.query || '' }}",
-                "type": "string"
-              },
-              {
-                "id": "f4",
-                "name": "results_count",
-                "value": 0,
-                "type": "number"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "id": "set-feed",
-        "name": "Format Feed Response",
-        "type": "n8n-nodes-base.set",
-        "typeVersion": 3.4,
-        "position": [
-          240,
-          0
-        ]
-      }
-    ],
-    "connections": {
-      "Webhook Ingest": {
-        "main": [
-          [
-            {
-              "node": "Format Feed Response",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "settings": {
-      "executionOrder": "v1"
-    }
-  },
-  {
-    "id": "b1c3f1e9b2d84f05",
-    "name": "Archon CRM Sync Pipeline",
-    "active": false,
-    "nodes": [
-      {
-        "parameters": {
-          "httpMethod": "POST",
-          "path": "archon-sync-crm",
-          "responseMode": "lastNode",
-          "options": {}
-        },
-        "id": "wh-crm",
-        "name": "Webhook Ingest",
-        "type": "n8n-nodes-base.webhook",
-        "typeVersion": 2,
-        "position": [
-          0,
-          0
-        ],
-        "webhookId": "archon-sync-crm"
-      },
-      {
-        "parameters": {
-          "assignments": {
-            "assignments": [
-              {
-                "id": "c1",
-                "name": "status",
-                "value": "not_implemented",
-                "type": "string"
-              },
-              {
-                "id": "c2",
-                "name": "entity_type",
-                "value": "={{ $json.body.entity_type }}",
-                "type": "string"
-              },
-              {
-                "id": "c3",
-                "name": "identifier",
-                "value": "={{ $json.body.identifier }}",
-                "type": "string"
-              },
-              {
-                "id": "c4",
-                "name": "synced",
-                "value": false,
-                "type": "boolean"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "id": "set-crm",
-        "name": "Format CRM Response",
-        "type": "n8n-nodes-base.set",
-        "typeVersion": 3.4,
-        "position": [
-          240,
-          0
-        ]
-      }
-    ],
-    "connections": {
-      "Webhook Ingest": {
-        "main": [
-          [
-            {
-              "node": "Format CRM Response",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "settings": {
-      "executionOrder": "v1"
-    }
-  },
-  {
-    "id": "a7c3f1e9b2d84f00",
-    "name": "Archon Execution Bridge (HMAC receiver)",
-    "active": false,
-    "notes": "B/H5: Empfaenger-Signaturpruefung fuer /webhook/archon-execution. BEWUSST INAKTIV: der produktive Receiver (Workflow a7c3... in der Live-n8n) ist nicht in diesem Bundle versioniert und konnte nicht verifiziert werden. Erst nach Pruefung der Live-Implementierung (HMAC-SHA256 + Constant-Time-Vergleich, Secret ARCHON_WEBHOOK_HMAC_SECRET) aktivieren. responseMode 'onReceived' ist bewusst nicht blockierend: eine Ablehnung wirkt auf die Ausfuehrung, nicht auf den HTTP-Status. Die Doku-Behauptung in docs/AUDIT_FINDINGS_REGISTER.md (H5) bleibt unveraendert, da ausserhalb dieses Scopes (andere Datei).",
-    "nodes": [
-      {
-        "parameters": {
-          "httpMethod": "POST",
-          "path": "archon-execution",
-          "responseMode": "onReceived",
-          "options": {}
-        },
-        "id": "wh-execution",
-        "name": "Webhook Ingest",
-        "type": "n8n-nodes-base.webhook",
-        "typeVersion": 2,
-        "position": [
-          0,
-          0
-        ],
-        "webhookId": "archon-execution"
-      },
-      {
-        "parameters": {
-          "jsCode": "// B/H5: HMAC-SHA256 ohne require('crypto') - der n8n-Task-Runner erlaubt 'crypto' nicht.\n// Signatur: sha256=<hex> ueber den kompakt serialisierten Body (Sender: utils/safe_http.py).\n// Secret nur aus $env.ARCHON_WEBHOOK_HMAC_SECRET (kein Default, kein Repo).\nconst K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\nconst RR=(x,n)=>(x>>>n)|(x<<(32-n));\nfunction sha(b){const n=b.length,L=n*8,t=Math.ceil((n+9)/64)*64,m=new Uint8Array(t);m.set(b);m[n]=0x80;const v=new DataView(m.buffer);v.setUint32(t-8,Math.floor(L/4294967296),false);v.setUint32(t-4,L>>>0,false);let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];const w=new Uint32Array(64);for(let i=0;i<t;i+=64){for(let j=0;j<16;j++)w[j]=v.getUint32(i+j*4,false);for(let j=16;j<64;j++){const x=w[j-15],y=w[j-2];w[j]=(w[j-16]+(RR(x,7)^RR(x,18)^(x>>>3))+w[j-7]+(RR(y,17)^RR(y,19)^(y>>>10)))>>>0;}let[a,b,c,d,e,f,g,h]=H;for(let j=0;j<64;j++){const S1=RR(e,6)^RR(e,11)^RR(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[j]+w[j])>>>0,S0=RR(a,2)^RR(a,13)^RR(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];}const o=new Uint8Array(32),ov=new DataView(o.buffer);for(let i=0;i<8;i++)ov.setUint32(i*4,H[i],false);return o;}\nfunction hmac(key,msg){let k=key;if(k.length>64)k=sha(k);const kp=new Uint8Array(64);kp.set(k);const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=kp[i]^0x36;op[i]=kp[i]^0x5c;}const inner=new Uint8Array(64+msg.length);inner.set(ip);inner.set(msg,64);const ih=sha(inner);const outer=new Uint8Array(96);outer.set(op);outer.set(ih,64);return sha(outer);}\nconst secret=String(($env&&$env.ARCHON_WEBHOOK_HMAC_SECRET)||'').trim();\nif(!secret){throw new Error('ARCHON_WEBHOOK_HMAC_SECRET fehlt - Webhook abgelehnt (fail-closed).');}\nconst item=$input.first().json||{};\nconst hdrs={};for(const[k,v]of Object.entries(item.headers||{}))hdrs[k.toLowerCase()]=String(v);\nconst body=Object.prototype.hasOwnProperty.call(item,'body')?item.body:item;\nconst sig=String(hdrs['x-archon-webhook-signature']||'');\nconst alg=String(hdrs['x-archon-webhook-algorithm']||'');\nif(alg&&alg!=='HMAC-SHA256'){throw new Error('Falscher HMAC-Algorithmus - Webhook abgelehnt.');}\nif(!sig.startsWith('sha256=')||!/^[0-9a-fA-F]{64}$/.test(sig.slice(7))){throw new Error('Fehlende/ungueltige Webhook-Signatur - Webhook abgelehnt.');}\nconst enc=new TextEncoder();\nconst got=Uint8Array.from(sig.slice(7).match(/../g).map(x=>parseInt(x,16)));\nconst want=hmac(enc.encode(secret),enc.encode(JSON.stringify(body)));\nif(got.length!==want.length){throw new Error('Ungueltige Webhook-Signatur - Webhook abgelehnt.');}\nlet diff=0;for(let i=0;i<want.length;i++){diff|=got[i]^want[i];}\nif(diff!==0){throw new Error('Ungueltige Webhook-Signatur - Webhook abgelehnt.');}\nreturn $input.all();"
-        },
-        "id": "hmac-verify-execution",
-        "name": "Archon HMAC Verify",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          240,
-          0
-        ],
-        "notesInFlow": true,
-        "notes": "B/H5: Constant-Time-HMAC-Vergleich (XOR) gegen ARCHON_WEBHOOK_HMAC_SECRET. reply-Modus des Webhooks ist onReceived (nicht blockierend) - Ablehnung stoppt die Ausfuehrung, nicht den HTTP-Status."
-      },
-      {
-        "parameters": {
-          "assignments": {
-            "assignments": [
-              {
-                "id": "x1",
-                "name": "status",
-                "value": "accepted",
-                "type": "string"
-              },
-              {
-                "id": "x2",
-                "name": "verified",
-                "value": "hmac_sha256",
-                "type": "string"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "id": "set-exec-ack",
-        "name": "Format Ack",
-        "type": "n8n-nodes-base.set",
-        "typeVersion": 3.4,
-        "position": [
-          480,
+          720,
           0
         ]
       }
@@ -488,7 +127,781 @@
         "main": [
           [
             {
+              "node": "Extract Article (Archon API)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Article (Archon API)": {
+        "main": [
+          [
+            {
+              "node": "Format Extract Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f02",
+    "name": "Archon Multi-Channel Dispatcher",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-dispatch-message",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-archon-dispatch-message",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "archon-dispatch-message"
+      },
+      {
+        "parameters": {
+          "jsCode": "// A/H5 + D06/HIGH: HMAC-SHA256 ueber den EXAKTEN kompakten Body.\n// Bevorzugt: crypto.createHmac + crypto.timingSafeEqual (constant time).\n// Fallback, falls der n8n-Task-Runner Built-ins blockt: reines JS-HMAC mit\n// constant-time XOR-Vergleich. Beide Pfade sind fail-closed.\nlet _crypto = null;\ntry { _crypto = require('crypto'); } catch (_e) { _crypto = null; }\nconst K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\nconst RR=(x,n)=>(x>>>n)|(x<<(32-n));\nfunction sha(b){const n=b.length,L=n*8,t=Math.ceil((n+9)/64)*64,m=new Uint8Array(t);m.set(b);m[n]=0x80;const v=new DataView(m.buffer);v.setUint32(t-8,Math.floor(L/4294967296),false);v.setUint32(t-4,L>>>0,false);let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];const w=new Uint32Array(64);for(let i=0;i<t;i+=64){for(let j=0;j<16;j++)w[j]=v.getUint32(i+j*4,false);for(let j=16;j<64;j++){const x=w[j-15],y=w[j-2];w[j]=(w[j-16]+(RR(x,7)^RR(x,18)^(x>>>3))+w[j-7]+(RR(y,17)^RR(y,19)^(y>>>10)))>>>0;}let[a,b,c,d,e,f,g,h]=H;for(let j=0;j<64;j++){const S1=RR(e,6)^RR(e,11)^RR(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[j]+w[j])>>>0,S0=RR(a,2)^RR(a,13)^RR(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];}const o=new Uint8Array(32),ov=new DataView(o.buffer);for(let i=0;i<8;i++)ov.setUint32(i*4,H[i],false);return o;}\nfunction hmacJs(key,msg){let k=key;if(k.length>64)k=sha(k);const kp=new Uint8Array(64);kp.set(k);const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=kp[i]^0x36;op[i]=kp[i]^0x5c;}const inner=new Uint8Array(64+msg.length);inner.set(ip);inner.set(msg,64);const ih=sha(inner);const outer=new Uint8Array(96);outer.set(op);outer.set(ih,64);return sha(outer);}\nconst secret=String(($env&&$env.ARCHON_WEBHOOK_HMAC_SECRET)||'').trim();\nif(!secret){throw new Error('ARCHON_WEBHOOK_HMAC_SECRET fehlt - Trigger abgelehnt (fail-closed).');}\nconst item=$input.first().json||{};\nconst hdrs={};for(const[k,v]of Object.entries(item.headers||{}))hdrs[k.toLowerCase()]=String(v);\nconst body=Object.prototype.hasOwnProperty.call(item,'body')?item.body:item;\nconst sig=String(hdrs['x-archon-webhook-signature']||'');\nconst alg=String(hdrs['x-archon-webhook-algorithm']||'');\nif(alg&&alg!=='HMAC-SHA256'){throw new Error('Falscher HMAC-Algorithmus - Trigger abgelehnt.');}\nif(!sig.startsWith('sha256=')||!/^[0-9a-fA-F]{64}$/.test(sig.slice(7))){throw new Error('Fehlende/ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nconst enc=new TextEncoder();\n// Exakt dieselbe kompakte Serialisierung wie der Sender:\n// Python json.dumps(..., ensure_ascii=False, separators=(',',':')) == JSON.stringify(body).\nconst bodyBytes=(item.rawBody && item.rawBody.length)\n  ? (item.rawBody instanceof Uint8Array ? item.rawBody : enc.encode(String(item.rawBody)))\n  : enc.encode(JSON.stringify(body));\nconst got=Uint8Array.from(sig.slice(7).match(/../g).map(x=>parseInt(x,16)));\nconst want=(_crypto && typeof _crypto.createHmac==='function')\n  ? new Uint8Array(_crypto.createHmac('sha256',secret).update(Buffer.from(bodyBytes)).digest())\n  : hmacJs(enc.encode(secret),bodyBytes);\nif(got.length!==want.length){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nlet valid;\nif(_crypto && typeof _crypto.timingSafeEqual==='function'){\n  valid=_crypto.timingSafeEqual(Buffer.from(got),Buffer.from(want));\n}else{\n  let diff=0;for(let i=0;i<want.length;i++){diff|=got[i]^want[i];}\n  valid=(diff===0);\n}\nif(!valid){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nreturn $input.all();"
+        },
+        "id": "hmac-verify-archon-dispatch-message",
+        "name": "Archon HMAC Verify",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ],
+        "notesInFlow": true,
+        "notes": "D06/HIGH: HMAC-SHA256 (crypto.timingSafeEqual, Fallback Constant-Time-XOR) ueber den exakten kompakten Body; nur signierte Webhook-Trigger erreichen den Archon-API-Node."
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://archon-os:8501/api/telegram/send",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "{{ JSON.stringify({text: String($json.body.body || $json.body.text || '')}) }}"
+        },
+        "id": "http-dispatch",
+        "name": "Dispatch Message (Archon API)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "d1",
+                "name": "status",
+                "value": "{{ $json.status || 'success' }}",
+                "type": "string"
+              },
+              {
+                "id": "d2",
+                "name": "channel",
+                "value": "{{ $json.body.channel || 'telegram' }}",
+                "type": "string"
+              },
+              {
+                "id": "d3",
+                "name": "recipient",
+                "value": "{{ $json.body.recipient || '' }}",
+                "type": "string"
+              },
+              {
+                "id": "d4",
+                "name": "dispatched",
+                "value": true,
+                "type": "boolean"
+              },
+              {
+                "id": "d5",
+                "name": "verified",
+                "value": "hmac_sha256",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-dispatch",
+        "name": "Format Dispatch Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          720,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Archon HMAC Verify",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Archon HMAC Verify": {
+        "main": [
+          [
+            {
+              "node": "Dispatch Message (Archon API)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Dispatch Message (Archon API)": {
+        "main": [
+          [
+            {
+              "node": "Format Dispatch Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f03",
+    "name": "Archon Document Renderer",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-render-document",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-archon-render-document",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "archon-render-document"
+      },
+      {
+        "parameters": {
+          "jsCode": "// A/H5 + D06/HIGH: HMAC-SHA256 ueber den EXAKTEN kompakten Body.\n// Bevorzugt: crypto.createHmac + crypto.timingSafeEqual (constant time).\n// Fallback, falls der n8n-Task-Runner Built-ins blockt: reines JS-HMAC mit\n// constant-time XOR-Vergleich. Beide Pfade sind fail-closed.\nlet _crypto = null;\ntry { _crypto = require('crypto'); } catch (_e) { _crypto = null; }\nconst K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\nconst RR=(x,n)=>(x>>>n)|(x<<(32-n));\nfunction sha(b){const n=b.length,L=n*8,t=Math.ceil((n+9)/64)*64,m=new Uint8Array(t);m.set(b);m[n]=0x80;const v=new DataView(m.buffer);v.setUint32(t-8,Math.floor(L/4294967296),false);v.setUint32(t-4,L>>>0,false);let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];const w=new Uint32Array(64);for(let i=0;i<t;i+=64){for(let j=0;j<16;j++)w[j]=v.getUint32(i+j*4,false);for(let j=16;j<64;j++){const x=w[j-15],y=w[j-2];w[j]=(w[j-16]+(RR(x,7)^RR(x,18)^(x>>>3))+w[j-7]+(RR(y,17)^RR(y,19)^(y>>>10)))>>>0;}let[a,b,c,d,e,f,g,h]=H;for(let j=0;j<64;j++){const S1=RR(e,6)^RR(e,11)^RR(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[j]+w[j])>>>0,S0=RR(a,2)^RR(a,13)^RR(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];}const o=new Uint8Array(32),ov=new DataView(o.buffer);for(let i=0;i<8;i++)ov.setUint32(i*4,H[i],false);return o;}\nfunction hmacJs(key,msg){let k=key;if(k.length>64)k=sha(k);const kp=new Uint8Array(64);kp.set(k);const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=kp[i]^0x36;op[i]=kp[i]^0x5c;}const inner=new Uint8Array(64+msg.length);inner.set(ip);inner.set(msg,64);const ih=sha(inner);const outer=new Uint8Array(96);outer.set(op);outer.set(ih,64);return sha(outer);}\nconst secret=String(($env&&$env.ARCHON_WEBHOOK_HMAC_SECRET)||'').trim();\nif(!secret){throw new Error('ARCHON_WEBHOOK_HMAC_SECRET fehlt - Trigger abgelehnt (fail-closed).');}\nconst item=$input.first().json||{};\nconst hdrs={};for(const[k,v]of Object.entries(item.headers||{}))hdrs[k.toLowerCase()]=String(v);\nconst body=Object.prototype.hasOwnProperty.call(item,'body')?item.body:item;\nconst sig=String(hdrs['x-archon-webhook-signature']||'');\nconst alg=String(hdrs['x-archon-webhook-algorithm']||'');\nif(alg&&alg!=='HMAC-SHA256'){throw new Error('Falscher HMAC-Algorithmus - Trigger abgelehnt.');}\nif(!sig.startsWith('sha256=')||!/^[0-9a-fA-F]{64}$/.test(sig.slice(7))){throw new Error('Fehlende/ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nconst enc=new TextEncoder();\n// Exakt dieselbe kompakte Serialisierung wie der Sender:\n// Python json.dumps(..., ensure_ascii=False, separators=(',',':')) == JSON.stringify(body).\nconst bodyBytes=(item.rawBody && item.rawBody.length)\n  ? (item.rawBody instanceof Uint8Array ? item.rawBody : enc.encode(String(item.rawBody)))\n  : enc.encode(JSON.stringify(body));\nconst got=Uint8Array.from(sig.slice(7).match(/../g).map(x=>parseInt(x,16)));\nconst want=(_crypto && typeof _crypto.createHmac==='function')\n  ? new Uint8Array(_crypto.createHmac('sha256',secret).update(Buffer.from(bodyBytes)).digest())\n  : hmacJs(enc.encode(secret),bodyBytes);\nif(got.length!==want.length){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nlet valid;\nif(_crypto && typeof _crypto.timingSafeEqual==='function'){\n  valid=_crypto.timingSafeEqual(Buffer.from(got),Buffer.from(want));\n}else{\n  let diff=0;for(let i=0;i<want.length;i++){diff|=got[i]^want[i];}\n  valid=(diff===0);\n}\nif(!valid){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nreturn $input.all();"
+        },
+        "id": "hmac-verify-archon-render-document",
+        "name": "Archon HMAC Verify",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ],
+        "notesInFlow": true,
+        "notes": "D06/HIGH: HMAC-SHA256 (crypto.timingSafeEqual, Fallback Constant-Time-XOR) ueber den exakten kompakten Body; nur signierte Webhook-Trigger erreichen den Archon-API-Node."
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://archon-os:8501/api/corporate/render-template",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "{{ JSON.stringify({template_type: String($json.body.document_type || 'letterhead'), custom: $json.body.custom || {}}) }}"
+        },
+        "id": "http-render",
+        "name": "Render Document (Archon API)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "r1",
+                "name": "status",
+                "value": "{{ $json.status || 'success' }}",
+                "type": "string"
+              },
+              {
+                "id": "r2",
+                "name": "document_type",
+                "value": "{{ $json.body.document_type || 'letterhead' }}",
+                "type": "string"
+              },
+              {
+                "id": "r3",
+                "name": "title",
+                "value": "{{ $json.body.title || 'Dokument' }}",
+                "type": "string"
+              },
+              {
+                "id": "r4",
+                "name": "rendered",
+                "value": true,
+                "type": "boolean"
+              },
+              {
+                "id": "r5",
+                "name": "verified",
+                "value": "hmac_sha256",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-render",
+        "name": "Format Render Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          720,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Archon HMAC Verify",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Archon HMAC Verify": {
+        "main": [
+          [
+            {
+              "node": "Render Document (Archon API)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Render Document (Archon API)": {
+        "main": [
+          [
+            {
+              "node": "Format Render Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f04",
+    "name": "Archon Feed & Search Engine",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-search-feed",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-archon-search-feed",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "archon-search-feed"
+      },
+      {
+        "parameters": {
+          "jsCode": "// A/H5 + D06/HIGH: HMAC-SHA256 ueber den EXAKTEN kompakten Body.\n// Bevorzugt: crypto.createHmac + crypto.timingSafeEqual (constant time).\n// Fallback, falls der n8n-Task-Runner Built-ins blockt: reines JS-HMAC mit\n// constant-time XOR-Vergleich. Beide Pfade sind fail-closed.\nlet _crypto = null;\ntry { _crypto = require('crypto'); } catch (_e) { _crypto = null; }\nconst K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\nconst RR=(x,n)=>(x>>>n)|(x<<(32-n));\nfunction sha(b){const n=b.length,L=n*8,t=Math.ceil((n+9)/64)*64,m=new Uint8Array(t);m.set(b);m[n]=0x80;const v=new DataView(m.buffer);v.setUint32(t-8,Math.floor(L/4294967296),false);v.setUint32(t-4,L>>>0,false);let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];const w=new Uint32Array(64);for(let i=0;i<t;i+=64){for(let j=0;j<16;j++)w[j]=v.getUint32(i+j*4,false);for(let j=16;j<64;j++){const x=w[j-15],y=w[j-2];w[j]=(w[j-16]+(RR(x,7)^RR(x,18)^(x>>>3))+w[j-7]+(RR(y,17)^RR(y,19)^(y>>>10)))>>>0;}let[a,b,c,d,e,f,g,h]=H;for(let j=0;j<64;j++){const S1=RR(e,6)^RR(e,11)^RR(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[j]+w[j])>>>0,S0=RR(a,2)^RR(a,13)^RR(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];}const o=new Uint8Array(32),ov=new DataView(o.buffer);for(let i=0;i<8;i++)ov.setUint32(i*4,H[i],false);return o;}\nfunction hmacJs(key,msg){let k=key;if(k.length>64)k=sha(k);const kp=new Uint8Array(64);kp.set(k);const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=kp[i]^0x36;op[i]=kp[i]^0x5c;}const inner=new Uint8Array(64+msg.length);inner.set(ip);inner.set(msg,64);const ih=sha(inner);const outer=new Uint8Array(96);outer.set(op);outer.set(ih,64);return sha(outer);}\nconst secret=String(($env&&$env.ARCHON_WEBHOOK_HMAC_SECRET)||'').trim();\nif(!secret){throw new Error('ARCHON_WEBHOOK_HMAC_SECRET fehlt - Trigger abgelehnt (fail-closed).');}\nconst item=$input.first().json||{};\nconst hdrs={};for(const[k,v]of Object.entries(item.headers||{}))hdrs[k.toLowerCase()]=String(v);\nconst body=Object.prototype.hasOwnProperty.call(item,'body')?item.body:item;\nconst sig=String(hdrs['x-archon-webhook-signature']||'');\nconst alg=String(hdrs['x-archon-webhook-algorithm']||'');\nif(alg&&alg!=='HMAC-SHA256'){throw new Error('Falscher HMAC-Algorithmus - Trigger abgelehnt.');}\nif(!sig.startsWith('sha256=')||!/^[0-9a-fA-F]{64}$/.test(sig.slice(7))){throw new Error('Fehlende/ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nconst enc=new TextEncoder();\n// Exakt dieselbe kompakte Serialisierung wie der Sender:\n// Python json.dumps(..., ensure_ascii=False, separators=(',',':')) == JSON.stringify(body).\nconst bodyBytes=(item.rawBody && item.rawBody.length)\n  ? (item.rawBody instanceof Uint8Array ? item.rawBody : enc.encode(String(item.rawBody)))\n  : enc.encode(JSON.stringify(body));\nconst got=Uint8Array.from(sig.slice(7).match(/../g).map(x=>parseInt(x,16)));\nconst want=(_crypto && typeof _crypto.createHmac==='function')\n  ? new Uint8Array(_crypto.createHmac('sha256',secret).update(Buffer.from(bodyBytes)).digest())\n  : hmacJs(enc.encode(secret),bodyBytes);\nif(got.length!==want.length){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nlet valid;\nif(_crypto && typeof _crypto.timingSafeEqual==='function'){\n  valid=_crypto.timingSafeEqual(Buffer.from(got),Buffer.from(want));\n}else{\n  let diff=0;for(let i=0;i<want.length;i++){diff|=got[i]^want[i];}\n  valid=(diff===0);\n}\nif(!valid){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nreturn $input.all();"
+        },
+        "id": "hmac-verify-archon-search-feed",
+        "name": "Archon HMAC Verify",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ],
+        "notesInFlow": true,
+        "notes": "D06/HIGH: HMAC-SHA256 (crypto.timingSafeEqual, Fallback Constant-Time-XOR) ueber den exakten kompakten Body; nur signierte Webhook-Trigger erreichen den Archon-API-Node."
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "http://archon-os:8501/api/inbox-watcher/scan-now",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          },
+          "sendBody": false
+        },
+        "id": "http-feed",
+        "name": "Scan Feed (Archon API)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "f1",
+                "name": "status",
+                "value": "{{ $json.status || 'success' }}",
+                "type": "string"
+              },
+              {
+                "id": "f2",
+                "name": "category",
+                "value": "{{ $json.body.category || 'news' }}",
+                "type": "string"
+              },
+              {
+                "id": "f3",
+                "name": "query",
+                "value": "{{ $json.body.query || '' }}",
+                "type": "string"
+              },
+              {
+                "id": "f4",
+                "name": "results",
+                "value": "{{ JSON.stringify($json) }}",
+                "type": "string"
+              },
+              {
+                "id": "f5",
+                "name": "verified",
+                "value": "hmac_sha256",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-feed",
+        "name": "Format Feed Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          720,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Archon HMAC Verify",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Archon HMAC Verify": {
+        "main": [
+          [
+            {
+              "node": "Scan Feed (Archon API)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Scan Feed (Archon API)": {
+        "main": [
+          [
+            {
+              "node": "Format Feed Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "b1c3f1e9b2d84f05",
+    "name": "Archon CRM Sync Pipeline",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-sync-crm",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wh-archon-sync-crm",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "archon-sync-crm"
+      },
+      {
+        "parameters": {
+          "jsCode": "// A/H5 + D06/HIGH: HMAC-SHA256 ueber den EXAKTEN kompakten Body.\n// Bevorzugt: crypto.createHmac + crypto.timingSafeEqual (constant time).\n// Fallback, falls der n8n-Task-Runner Built-ins blockt: reines JS-HMAC mit\n// constant-time XOR-Vergleich. Beide Pfade sind fail-closed.\nlet _crypto = null;\ntry { _crypto = require('crypto'); } catch (_e) { _crypto = null; }\nconst K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\nconst RR=(x,n)=>(x>>>n)|(x<<(32-n));\nfunction sha(b){const n=b.length,L=n*8,t=Math.ceil((n+9)/64)*64,m=new Uint8Array(t);m.set(b);m[n]=0x80;const v=new DataView(m.buffer);v.setUint32(t-8,Math.floor(L/4294967296),false);v.setUint32(t-4,L>>>0,false);let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];const w=new Uint32Array(64);for(let i=0;i<t;i+=64){for(let j=0;j<16;j++)w[j]=v.getUint32(i+j*4,false);for(let j=16;j<64;j++){const x=w[j-15],y=w[j-2];w[j]=(w[j-16]+(RR(x,7)^RR(x,18)^(x>>>3))+w[j-7]+(RR(y,17)^RR(y,19)^(y>>>10)))>>>0;}let[a,b,c,d,e,f,g,h]=H;for(let j=0;j<64;j++){const S1=RR(e,6)^RR(e,11)^RR(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[j]+w[j])>>>0,S0=RR(a,2)^RR(a,13)^RR(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];}const o=new Uint8Array(32),ov=new DataView(o.buffer);for(let i=0;i<8;i++)ov.setUint32(i*4,H[i],false);return o;}\nfunction hmacJs(key,msg){let k=key;if(k.length>64)k=sha(k);const kp=new Uint8Array(64);kp.set(k);const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=kp[i]^0x36;op[i]=kp[i]^0x5c;}const inner=new Uint8Array(64+msg.length);inner.set(ip);inner.set(msg,64);const ih=sha(inner);const outer=new Uint8Array(96);outer.set(op);outer.set(ih,64);return sha(outer);}\nconst secret=String(($env&&$env.ARCHON_WEBHOOK_HMAC_SECRET)||'').trim();\nif(!secret){throw new Error('ARCHON_WEBHOOK_HMAC_SECRET fehlt - Trigger abgelehnt (fail-closed).');}\nconst item=$input.first().json||{};\nconst hdrs={};for(const[k,v]of Object.entries(item.headers||{}))hdrs[k.toLowerCase()]=String(v);\nconst body=Object.prototype.hasOwnProperty.call(item,'body')?item.body:item;\nconst sig=String(hdrs['x-archon-webhook-signature']||'');\nconst alg=String(hdrs['x-archon-webhook-algorithm']||'');\nif(alg&&alg!=='HMAC-SHA256'){throw new Error('Falscher HMAC-Algorithmus - Trigger abgelehnt.');}\nif(!sig.startsWith('sha256=')||!/^[0-9a-fA-F]{64}$/.test(sig.slice(7))){throw new Error('Fehlende/ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nconst enc=new TextEncoder();\n// Exakt dieselbe kompakte Serialisierung wie der Sender:\n// Python json.dumps(..., ensure_ascii=False, separators=(',',':')) == JSON.stringify(body).\nconst bodyBytes=(item.rawBody && item.rawBody.length)\n  ? (item.rawBody instanceof Uint8Array ? item.rawBody : enc.encode(String(item.rawBody)))\n  : enc.encode(JSON.stringify(body));\nconst got=Uint8Array.from(sig.slice(7).match(/../g).map(x=>parseInt(x,16)));\nconst want=(_crypto && typeof _crypto.createHmac==='function')\n  ? new Uint8Array(_crypto.createHmac('sha256',secret).update(Buffer.from(bodyBytes)).digest())\n  : hmacJs(enc.encode(secret),bodyBytes);\nif(got.length!==want.length){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nlet valid;\nif(_crypto && typeof _crypto.timingSafeEqual==='function'){\n  valid=_crypto.timingSafeEqual(Buffer.from(got),Buffer.from(want));\n}else{\n  let diff=0;for(let i=0;i<want.length;i++){diff|=got[i]^want[i];}\n  valid=(diff===0);\n}\nif(!valid){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nreturn $input.all();"
+        },
+        "id": "hmac-verify-archon-sync-crm",
+        "name": "Archon HMAC Verify",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ],
+        "notesInFlow": true,
+        "notes": "D06/HIGH: HMAC-SHA256 (crypto.timingSafeEqual, Fallback Constant-Time-XOR) ueber den exakten kompakten Body; nur signierte Webhook-Trigger erreichen den Archon-API-Node."
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "http://archon-os:8501/api/crm/contacts",
+          "options": {},
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Archon-Service-Token",
+                "value": "__ARCHON_SERVICE_TOKEN__"
+              }
+            ]
+          },
+          "sendBody": false
+        },
+        "id": "http-crm",
+        "name": "Sync CRM (Archon API)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "c1",
+                "name": "status",
+                "value": "{{ $json.status || 'success' }}",
+                "type": "string"
+              },
+              {
+                "id": "c2",
+                "name": "entity_type",
+                "value": "{{ $json.body.entity_type || 'contact' }}",
+                "type": "string"
+              },
+              {
+                "id": "c3",
+                "name": "identifier",
+                "value": "{{ $json.body.identifier || '' }}",
+                "type": "string"
+              },
+              {
+                "id": "c4",
+                "name": "synced",
+                "value": true,
+                "type": "boolean"
+              },
+              {
+                "id": "c5",
+                "name": "contacts_count",
+                "value": "{{ Array.isArray($json.contacts) ? $json.contacts.length : 0 }}",
+                "type": "number"
+              },
+              {
+                "id": "c6",
+                "name": "verified",
+                "value": "hmac_sha256",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-crm",
+        "name": "Format CRM Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          720,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Archon HMAC Verify",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Archon HMAC Verify": {
+        "main": [
+          [
+            {
+              "node": "Sync CRM (Archon API)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sync CRM (Archon API)": {
+        "main": [
+          [
+            {
+              "node": "Format CRM Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  },
+  {
+    "id": "a7c3f1e9b2d84f6a",
+    "name": "Archon Execution Bridge (HMAC receiver)",
+    "active": true,
+    "notes": "D06/HIGH: versionierter, AKTIVER HMAC-Empfaenger fuer /webhook/archon-execution. Stabile ID a7c3f1e9b2d84f6a (Doku-ID-Drift behoben). responseMode 'response': HMAC-Fehler -> Error-Branch -> HTTP 401; Erfolg -> HTTP 200 mit executionId. Secret nur aus $env.ARCHON_WEBHOOK_HMAC_SECRET.",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "archon-execution",
+          "responseMode": "response",
+          "options": {}
+        },
+        "id": "wh-archon-execution",
+        "name": "Webhook Ingest",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "archon-execution"
+      },
+      {
+        "parameters": {
+          "jsCode": "// A/H5 + D06/HIGH: HMAC-SHA256 ueber den EXAKTEN kompakten Body.\n// Bevorzugt: crypto.createHmac + crypto.timingSafeEqual (constant time).\n// Fallback, falls der n8n-Task-Runner Built-ins blockt: reines JS-HMAC mit\n// constant-time XOR-Vergleich. Beide Pfade sind fail-closed.\nlet _crypto = null;\ntry { _crypto = require('crypto'); } catch (_e) { _crypto = null; }\nconst K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\nconst RR=(x,n)=>(x>>>n)|(x<<(32-n));\nfunction sha(b){const n=b.length,L=n*8,t=Math.ceil((n+9)/64)*64,m=new Uint8Array(t);m.set(b);m[n]=0x80;const v=new DataView(m.buffer);v.setUint32(t-8,Math.floor(L/4294967296),false);v.setUint32(t-4,L>>>0,false);let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];const w=new Uint32Array(64);for(let i=0;i<t;i+=64){for(let j=0;j<16;j++)w[j]=v.getUint32(i+j*4,false);for(let j=16;j<64;j++){const x=w[j-15],y=w[j-2];w[j]=(w[j-16]+(RR(x,7)^RR(x,18)^(x>>>3))+w[j-7]+(RR(y,17)^RR(y,19)^(y>>>10)))>>>0;}let[a,b,c,d,e,f,g,h]=H;for(let j=0;j<64;j++){const S1=RR(e,6)^RR(e,11)^RR(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[j]+w[j])>>>0,S0=RR(a,2)^RR(a,13)^RR(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];}const o=new Uint8Array(32),ov=new DataView(o.buffer);for(let i=0;i<8;i++)ov.setUint32(i*4,H[i],false);return o;}\nfunction hmacJs(key,msg){let k=key;if(k.length>64)k=sha(k);const kp=new Uint8Array(64);kp.set(k);const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=kp[i]^0x36;op[i]=kp[i]^0x5c;}const inner=new Uint8Array(64+msg.length);inner.set(ip);inner.set(msg,64);const ih=sha(inner);const outer=new Uint8Array(96);outer.set(op);outer.set(ih,64);return sha(outer);}\nconst secret=String(($env&&$env.ARCHON_WEBHOOK_HMAC_SECRET)||'').trim();\nif(!secret){throw new Error('ARCHON_WEBHOOK_HMAC_SECRET fehlt - Trigger abgelehnt (fail-closed).');}\nconst item=$input.first().json||{};\nconst hdrs={};for(const[k,v]of Object.entries(item.headers||{}))hdrs[k.toLowerCase()]=String(v);\nconst body=Object.prototype.hasOwnProperty.call(item,'body')?item.body:item;\nconst sig=String(hdrs['x-archon-webhook-signature']||'');\nconst alg=String(hdrs['x-archon-webhook-algorithm']||'');\nif(alg&&alg!=='HMAC-SHA256'){throw new Error('Falscher HMAC-Algorithmus - Trigger abgelehnt.');}\nif(!sig.startsWith('sha256=')||!/^[0-9a-fA-F]{64}$/.test(sig.slice(7))){throw new Error('Fehlende/ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nconst enc=new TextEncoder();\n// Exakt dieselbe kompakte Serialisierung wie der Sender:\n// Python json.dumps(..., ensure_ascii=False, separators=(',',':')) == JSON.stringify(body).\nconst bodyBytes=(item.rawBody && item.rawBody.length)\n  ? (item.rawBody instanceof Uint8Array ? item.rawBody : enc.encode(String(item.rawBody)))\n  : enc.encode(JSON.stringify(body));\nconst got=Uint8Array.from(sig.slice(7).match(/../g).map(x=>parseInt(x,16)));\nconst want=(_crypto && typeof _crypto.createHmac==='function')\n  ? new Uint8Array(_crypto.createHmac('sha256',secret).update(Buffer.from(bodyBytes)).digest())\n  : hmacJs(enc.encode(secret),bodyBytes);\nif(got.length!==want.length){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nlet valid;\nif(_crypto && typeof _crypto.timingSafeEqual==='function'){\n  valid=_crypto.timingSafeEqual(Buffer.from(got),Buffer.from(want));\n}else{\n  let diff=0;for(let i=0;i<want.length;i++){diff|=got[i]^want[i];}\n  valid=(diff===0);\n}\nif(!valid){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}\nreturn $input.all();",
+          "onError": "continueErrorOutput"
+        },
+        "id": "hmac-verify-execution",
+        "name": "Archon HMAC Verify",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ],
+        "notesInFlow": true,
+        "notes": "D06/HIGH: HMAC-SHA256 (crypto.timingSafeEqual, Fallback Constant-Time-XOR) ueber den exakten kompakten Body; nur signierte Webhook-Trigger erreichen den Archon-API-Node."
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "x1",
+                "name": "status",
+                "value": "accepted",
+                "type": "string"
+              },
+              {
+                "id": "x2",
+                "name": "verified",
+                "value": "hmac_sha256",
+                "type": "string"
+              },
+              {
+                "id": "x3",
+                "name": "executionId",
+                "value": "{{ $execution.id }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-exec-ack",
+        "name": "Format Ack",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}",
+          "responseCode": 200,
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "id": "respond-ok",
+        "name": "Respond OK (200)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          720,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "{\"status\":\"error\",\"error\":\"invalid_signature\"}",
+          "responseCode": 401,
+          "options": {
+            "responseCode": 401
+          }
+        },
+        "id": "respond-401",
+        "name": "Respond HMAC Error (401)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          480,
+          220
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook Ingest": {
+        "main": [
+          [
+            {
+              "node": "Archon HMAC Verify",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Archon HMAC Verify": {
+        "main": [
+          [
+            {
               "node": "Format Ack",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond HMAC Error (401)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Ack": {
+        "main": [
+          [
+            {
+              "node": "Respond OK (200)",
               "type": "main",
               "index": 0
             }

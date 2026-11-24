@@ -1,22 +1,28 @@
 from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_session_actor
+
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import require_session_actor
+
 """
 Kanban Persistenz Router fuer Archon OS.
 Verwaltet /api/kanban Endpunkte (Karten lesen und synchronisieren in kanban.db und JSON).
 Extrahiert aus main.py zur Modularisierung.
 """
 
-import os
-import sys
+import asyncio
 import json
+import os
 import sqlite3
-from typing import Dict, Any, List, Optional
+import sys
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
-from archon.core.runtime import atomic_write_json, logger, run_io_bound
+
 from archon.core.paths import KANBAN_CARDS_FILE, KANBAN_DB_PATH
-from backend.platform_paths import HERMES_HOME
+from archon.core.runtime import atomic_write_json, logger, run_io_bound
 from backend.db_paths import get_db_connection
+from backend.platform_paths import HERMES_HOME
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["kanban"])
 
@@ -28,7 +34,7 @@ def _get_kanban_cards_file() -> str:
         if cand != KANBAN_CARDS_FILE:
             return cand
     try:
-        from backend.tenant_context import tenant_context, PRIMARY_TENANT_IDS
+        from backend.tenant_context import PRIMARY_TENANT_IDS, tenant_context
         tid = tenant_context.get_active_tenant_id()
         if tid not in PRIMARY_TENANT_IDS:
             return os.path.join(tenant_context.get_tenant_dir(tid), "kanban_cards.json")
@@ -182,6 +188,20 @@ async def api_kanban_graph():
     return {"status": "success", **build_dependency_graph(tasks, links)}
 
 
+def _load_hitl_creator(kanban_db: str, task_id: str) -> str:
+    """D08/MED: SQLite-Lesezugriff des HITL-Endpoints aus dem Loop auslagern."""
+    if not os.path.exists(kanban_db):
+        return ""
+    kconn = get_db_connection(kanban_db, timeout=5.0)
+    try:
+        row = kconn.execute(
+            "SELECT created_by FROM tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+        return str(row["created_by"] or "") if row else ""
+    finally:
+        kconn.close()
+
+
 # --- M76: Kanban Card HITL Decision (override_budget | retry | abort) ---
 @router.post("/api/operations/kanban/tasks/{task_id}/hitl")
 async def api_kanban_task_hitl(request: Request, task_id: str):
@@ -197,14 +217,7 @@ async def api_kanban_task_hitl(request: Request, task_id: str):
     created_by = ""
     try:
         kanban_db = _resolve_active_kanban_db()
-        if os.path.exists(kanban_db):
-            kconn = get_db_connection(kanban_db, timeout=5.0)
-            try:
-                row = kconn.execute("SELECT created_by FROM tasks WHERE id = ?", (task_id,)).fetchone()
-                if row:
-                    created_by = str(row["created_by"] or "")
-            finally:
-                kconn.close()
+        created_by = await run_io_bound(_load_hitl_creator, kanban_db, task_id)
     except Exception as exc:
         logger.warning("[Kanban] HITL-Ersteller nicht lesbar: %s", exc)
 
@@ -244,7 +257,10 @@ async def api_kanban_task_hitl(request: Request, task_id: str):
     # Signiertes Audit-Event mit Resolution, Actor und alter/neuer Budgetwert.
     try:
         from backend.audit_log import chained_audit_log
-        chained_audit_log.record_event(
+        # D08/MED: signierte HMAC-Kette (BEGIN IMMEDIATE, timeout=30) nie im
+        # Event-Loop. audit_log.py:604 serialisiert die Kettenreihenfolge.
+        await run_io_bound(
+            chained_audit_log.record_event,
             category="security",
             action="kanban_hitl_resolution",
             agent_id=actor,
@@ -348,7 +364,8 @@ async def api_list_taint_approvals(request: Request):
     # Audit-Event fuer jeden Lesezugriff auf die Freigabe-Queue (signierte Kette).
     try:
         from backend.audit_log import chained_audit_log
-        chained_audit_log.record_event(
+        await run_io_bound(
+            chained_audit_log.record_event,
             category="security",
             action="taint_approval_queue_read",
             agent_id=actor,

@@ -23,7 +23,7 @@ import httpx
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi import Depends as _ArchonDepends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import api_provider
 import core_dispatcher
@@ -371,6 +371,10 @@ class ChatStreamRequest(BaseModel):
     provider: Optional[str] = None
     reasoning_level: Optional[str] = None
     task_type: Optional[str] = None
+    # D13/HIGH: hartes Ticket-Budget. Ohne expliziten Wert werden die
+    # konservativen Schätzwerte des Missions-Modus verwendet.
+    token_budget: Optional[int] = Field(default=None, ge=1, le=2_000_000)
+    cost_limit_eur: Optional[float] = Field(default=None, ge=0.01, le=10_000.0)
 
 
 class SetProfileModelRequest(BaseModel):
@@ -626,6 +630,80 @@ def _prepare_chat_stream_context(
     }
 
 
+def _capture_mission_task_with_budget(
+    new_task: Dict[str, Any],
+    audit_entry: Optional[Dict[str, Any]],
+    token_budget: int,
+    cost_limit_eur: float,
+) -> Dict[str, Any]:
+    """D13/HIGH: Task + Budget-Allocation in EINER Transaktion anlegen.
+
+    `budget_bank.reserve()` prüft Task-Caps nur, wenn eine
+    `task_budget_allocations`-Zeile existiert. Ohne atomare Zeile entsteht ein
+    Task ohne hartes Cap. Beide Tabellen liegen in verschiedenen SQLite-DBs,
+    daher ATTACH innerhalb desselben BEGIN IMMEDIATE (kein Event-Replay, keine
+    Migration).
+    """
+    import sqlite3 as _sqlite3
+
+    from archon.core import mission_control as _mc
+    from backend import role_budget_engine as _rbe
+
+    tid = str(new_task.get("id") or "")
+    agent_id = str(new_task.get("agent_id") or "default")
+    cap_tokens = max(1, int(token_budget or 0))
+    cap_eur = max(0.0, float(cost_limit_eur or 0.0))
+    now = datetime.datetime.now().isoformat()
+    _ALLOC_SQL = (
+        "INSERT INTO task_budget_allocations "
+        "(task_id, parent_task_id, agent_id, token_budget, tokens_used, "
+        " cost_limit_eur, cost_used_eur, complexity_weight, budget_share_pct, "
+        " allow_autonomous_hiring, status, created_at, updated_at) "
+        "VALUES (?, NULL, ?, ?, 0, ?, 0, 1.0, 100.0, 0, 'active', ?, ?) "
+        "ON CONFLICT(task_id) DO UPDATE SET "
+        "agent_id=excluded.agent_id, token_budget=excluded.token_budget, "
+        "cost_limit_eur=excluded.cost_limit_eur, status='active', "
+        "updated_at=excluded.updated_at"
+    )
+    _ALLOC_PARAMS = (tid, agent_id, cap_tokens, cap_eur, now, now)
+
+    if _mc._is_file_override():
+        # Test-/Dev-Modus: die Mission-Control-Datei hat keine Transaktion.
+        mc_capture_task_sqlite(new_task, audit_entry)
+        _rbe.init_budget_tables()
+        with _sqlite3.connect(_rbe.BUDGET_DB_PATH, timeout=15.0) as conn:
+            conn.execute(_ALLOC_SQL, _ALLOC_PARAMS)
+            conn.commit()
+        return new_task
+
+    _rbe.init_budget_tables()
+    with _mc._MC_DATA_LOCK:
+        conn = _mc._connect_kanban()
+        try:
+            conn.execute("ATTACH DATABASE ? AS budget", (_rbe.BUDGET_DB_PATH,))
+            conn.execute("BEGIN IMMEDIATE")
+            _mc._ensure_mc_tables(conn)
+            _mc._upsert_task_in_conn(conn, new_task, overwrite=True)
+            if audit_entry:
+                conn.execute(
+                    "INSERT INTO task_events (task_id, run_id, kind, payload, created_at) "
+                    "VALUES (?, NULL, 'mc_audit', ?, ?)",
+                    (tid, json.dumps(audit_entry, ensure_ascii=False), int(time.time())),
+                )
+            conn.execute(
+                _ALLOC_SQL.replace("task_budget_allocations", "budget.task_budget_allocations"),
+                _ALLOC_PARAMS,
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    _MC_STATE_CACHE["ts"] = 0.0
+    return new_task
+
+
 @router.post("/api/chat/stream")
 async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # type: ignore[assignment]
     """
@@ -722,6 +800,24 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
         # Task in Archon OS erfassen mit status: approval
         est_tokens = 95000 if len(user_msg) > 200 else 45000
         est_cost = 0.18 if len(user_msg) > 200 else 0.05
+        # D13/HIGH: hartes, validiertes Ticket-Budget (Pydantic ge/le).
+        token_budget = int(req.token_budget or est_tokens)
+        cost_limit_eur = float(req.cost_limit_eur or est_cost)
+        try:
+            from backend.trajectory_budget import (
+                DEFAULT_MAX_REPLANS,
+                ensure_trajectory,
+                normalize_trajectory_id,
+            )
+            _mission_tid = normalize_trajectory_id(None, root_ticket_id=task_id)
+            ensure_trajectory(
+                _mission_tid, root_ticket_id=task_id, max_tokens=token_budget,
+                max_replans=DEFAULT_MAX_REPLANS,
+            )
+        except Exception as _traj_exc:
+            # Fail-closed: ohne Trajectory kein hartes Ticket-Cap -> kein Dispatch.
+            logger.error("[Chat] Mission-Trajectory nicht anlegbar: %s", _traj_exc)
+            raise HTTPException(status_code=503, detail="trajectory_budget_unavailable")
 
         # Operative Zielaktion erkennen (z.B. ACTION: POST_LINKEDIN)
         detected_action = core_dispatcher.detect_target_action(user_msg)
@@ -743,6 +839,16 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
             "model": model,
             "estimated_tokens": est_tokens,
             "estimated_cost_eur": est_cost,
+            "token_budget": token_budget,
+            "cost_limit_eur": cost_limit_eur,
+            # D13/MED: echter Produzent für den Task-Meta-Budget-Alias.
+            "trajectory_id": _mission_tid,
+            "root_ticket_id": task_id,
+            "max_tokens": token_budget,
+            "tokens_used": 0,
+            "max_replans": DEFAULT_MAX_REPLANS,
+            "replans_used": 0,
+            "replan_count": 0,
             "subagents_count": 0,  # F-007: ehrlich — noch keine Subtasks erzeugt
             "subagents_count_source": "none_yet",  # D01: nach Fan-Out durch echte Zahl ersetzt
             "subagents_count_estimated": False,
@@ -764,7 +870,15 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
             "source": "Approval Gate",
             "msg": f"Missions-Modus: Task #{task_id} erfordert Freigabe vor Ausführung!"
         }
-        await asyncio.to_thread(mc_capture_task_sqlite, new_task, audit_entry)
+        await asyncio.to_thread(
+            _capture_mission_task_with_budget,
+            new_task, audit_entry, token_budget, cost_limit_eur,
+        )
+        try:
+            from backend.trajectory_budget import sync_task_budget_meta
+            await asyncio.to_thread(sync_task_budget_meta, _mission_tid, task_id)
+        except Exception as _sync_exc:
+            logger.debug("[Chat] Mission-Budget-Meta nicht gespiegelt: %s", _sync_exc)
         
         # --- 2c: Mission liegt im HITL-Approval-Gate -> ueber den zentralen
         # Entscheidungs-Service (echter Kanban-Task, EIN Schreibpfad) ---
@@ -1007,8 +1121,10 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
                 reasoning_level=reasoning_level,
                 agent_id=agent_id,
                 role=str((prof or {}).get("name") or ""),
-                # D13: Task-/Session-Kontext für den Trajectory-Hop-Gate.
-                task_id=session_id,
+                # D13/HIGH: im Missionsmodus die echte Ticket-ID durchreichen,
+                # damit reserve_tokens() gegen dieselbe Trajectory (und damit
+                # dasselbe `max_tokens`) bucht wie das Task-Anlegen.
+                task_id=mission_task_id or session_id,
             ):
                 if chunk.startswith("ERROR: "):
                     provider_failed = True
@@ -1087,25 +1203,87 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
         try:
             # D13: zentraler Fan-out-Cap im Produktivpfad (vorher nur Default
             # im Modul, chat.py rief ohne Cap -> beliebig viele Delegationen).
-            from backend.trajectory_budget import DEFAULT_MAX_DELEGATIONS_PER_RESPONSE
-            payloads, invalid_blocks = _parse_delegation_blocks(
-                full_assistant_text, fanout_cap=DEFAULT_MAX_DELEGATIONS_PER_RESPONSE
+            from backend.trajectory_budget import (
+                DEFAULT_MAX_DELEGATIONS_PER_RESPONSE,
+                normalize_trajectory_id,
             )
+            cap = DEFAULT_MAX_DELEGATIONS_PER_RESPONSE
+            # D13/HIGH: erst ALLE Payloads (strukturiert + Legacy-Regex) in
+            # dieselbe Menge/dedup, dann den Cap EINMAL anwenden. Der Parser
+            # bekommt bewusst einen weiten Cap, damit er nicht vorzeitig
+            # kürzt und der Überschuss hier einheitlich quittiert wird.
+            payloads, invalid_blocks = _parse_delegation_blocks(
+                full_assistant_text, fanout_cap=max(cap, len(full_assistant_text) // 8 + 1)
+            )
+            seen_hashes = {
+                f"{str(p.get('ziel_agent') or '')}:{str(p.get('auftrag') or '')[:40]}"
+                for p in payloads
+            }
             # Legacy-Fallback: alte `hermes -p ...`-CLI-Befehle weiterhin abfangen
             for m in re.finditer(r'hermes\s+-p\s+([a-zA-Z0-9_-]+)\s+chat\s+.*?-q\s+["\'](.*?)["\']', full_assistant_text, re.DOTALL):
                 mm = re.search(r'-m\s+([a-zA-Z0-9_/.:-]+)', m.group(0))
-                payloads.append({
+                legacy = {
                     "ziel_agent": m.group(1),
                     "auftrag": m.group(2),
                     "modell": mm.group(1) if mm else "",
                     "prioritaet": "normal"
-                })
+                }
+                h = f"{legacy['ziel_agent']}:{legacy['auftrag'][:40]}"
+                if h in seen_hashes:
+                    continue
+                seen_hashes.add(h)
+                payloads.append(legacy)
+
+            if len(payloads) > cap:
+                from archon.core.delegation import DelegationReceipt
+                from backend.trajectory_budget import _audit
+                omitted = payloads[cap:]
+                payloads = payloads[:cap]
+                _fanout_tid = normalize_trajectory_id(None, root_ticket_id=session_id)
+                for _op in omitted:
+                    _ziel = str(_op.get("ziel_agent") or "?")
+                    receipt = DelegationReceipt(
+                        f"❌ DELEGATION BLOCKIERT — Grund: FANOUT_CAP (max {cap} pro Antwort) | "
+                        f"Ziel: {_ziel} | Der Auftrag wurde NICHT ausgeführt. HITL/escalate required.",
+                        status="blocked", reason="FANOUT_CAP", block_kind="fanout_cap",
+                        failure_reason="FANOUT_CAP", trajectory_id=_fanout_tid,
+                    )
+                    delegation_receipts.append(receipt)
+                    invalid_blocks.append({
+                        "raw": "", "error": "FANOUT_CAP", "blocked": True,
+                        "cap": cap, "ziel_agent": _ziel,
+                        "reason": f"MAX_DELEGATIONS_PER_RESPONSE={cap} überschritten",
+                    })
+                    try:
+                        _audit(_fanout_tid, f"FANOUT_CAP: {_ziel} blockiert (cap={cap})", mission_task_id or session_id)
+                    except Exception:
+                        pass
+                if mission_task_id:
+                    try:
+                        from archon.core.mission_control import mc_update_task_sqlite
+                        await asyncio.to_thread(
+                            mc_update_task_sqlite, mission_task_id,
+                            {"status": "blocked", "block_kind": "fanout_cap",
+                             "failure_reason": "FANOUT_CAP"},
+                        )
+                    except Exception as _mc_exc:
+                        logger.debug("[Chat] FANOUT_CAP-Task-Meta nicht persistiert: %s", _mc_exc)
+                try:
+                    invalid_blocks.fanout_cap = cap  # type: ignore[attr-defined]
+                    invalid_blocks.fanout_blocked = True  # type: ignore[attr-defined]
+                    invalid_blocks.omitted_count = len(omitted)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+
             for payload in payloads:
                 try:
                     delegation_receipts.append(_execute_delegation(agent_id, payload, provider, all_keys, origin_session_id=session_id))
                 except Exception as de:
                     delegation_receipts.append(f"⚠️ DELEGATION-FEHLER — Intern: {de}")
             for bad in invalid_blocks:
+                if str(bad.get("error") or "") == "FANOUT_CAP":
+                    # Bereits oben als `blocked`/FANOUT_CAP-Quittung ausgegeben.
+                    continue
                 delegation_receipts.append(
                     f"⚠️ DELEGATION-FEHLER — Ungültiger Delegations-Block ({bad['error']}). "
                     f"Der Auftrag wurde NICHT ausgeführt. Block: {bad['raw'][:120]}"
@@ -1168,7 +1346,9 @@ class ImageGenerateToolRequest(BaseModel):
 @router.post("/api/v1/tools/image_generate")
 async def api_tool_image_generate(req: ImageGenerateToolRequest):
     """Führt eine direkte Bildgenerierung über OpenRouter (z.B. Google Nano Banana) oder Bild-Modelle aus."""
-    all_keys = api_provider.collect_keys()
+    # D08/MED: der TTL/Lock-gesicherte Profil-.env-Scan liest beim Cache-Miss
+    # ~70 Dateien — im Worker-Thread, nicht im SSE-/API-Event-Loop.
+    all_keys = await asyncio.to_thread(api_provider.collect_keys)
     prompt = req.prompt.strip()
     if not prompt:
         raise HTTPException(status_code=400, detail={"code": "chat_prompt_empty", "params": {}})

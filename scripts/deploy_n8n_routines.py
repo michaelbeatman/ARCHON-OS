@@ -3,8 +3,8 @@ import os
 import subprocess
 import sys
 import tempfile
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,12 +30,16 @@ def _load_routine_workflows() -> list:
 # bevor ein privilegierter Endpoint (/api/system/..., /api/telegram/send,
 # /api/inbox-watcher/scan-now) erreicht wird. Der Schedule-Trigger bleibt
 # bewusst ohne diesen Node (lokal vertrauenswuerdig).
-HMAC_VERIFY_JS = """// A/H5: HMAC-SHA256 ohne require('crypto') - der n8n-Task-Runner erlaubt 'crypto' nicht.
-// Secret nur aus $env.ARCHON_WEBHOOK_HMAC_SECRET (kein Default, kein Repo).
+HMAC_VERIFY_JS = """// A/H5 + D06/HIGH: HMAC-SHA256 ueber den EXAKTEN kompakten Body.
+// Bevorzugt: crypto.createHmac + crypto.timingSafeEqual (constant time).
+// Fallback, falls der n8n-Task-Runner Built-ins blockt: reines JS-HMAC mit
+// constant-time XOR-Vergleich. Beide Pfade sind fail-closed.
+let _crypto = null;
+try { _crypto = require('crypto'); } catch (_e) { _crypto = null; }
 const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
 const RR=(x,n)=>(x>>>n)|(x<<(32-n));
 function sha(b){const n=b.length,L=n*8,t=Math.ceil((n+9)/64)*64,m=new Uint8Array(t);m.set(b);m[n]=0x80;const v=new DataView(m.buffer);v.setUint32(t-8,Math.floor(L/4294967296),false);v.setUint32(t-4,L>>>0,false);let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];const w=new Uint32Array(64);for(let i=0;i<t;i+=64){for(let j=0;j<16;j++)w[j]=v.getUint32(i+j*4,false);for(let j=16;j<64;j++){const x=w[j-15],y=w[j-2];w[j]=(w[j-16]+(RR(x,7)^RR(x,18)^(x>>>3))+w[j-7]+(RR(y,17)^RR(y,19)^(y>>>10)))>>>0;}let[a,b,c,d,e,f,g,h]=H;for(let j=0;j<64;j++){const S1=RR(e,6)^RR(e,11)^RR(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[j]+w[j])>>>0,S0=RR(a,2)^RR(a,13)^RR(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];}const o=new Uint8Array(32),ov=new DataView(o.buffer);for(let i=0;i<8;i++)ov.setUint32(i*4,H[i],false);return o;}
-function hmac(key,msg){let k=key;if(k.length>64)k=sha(k);const kp=new Uint8Array(64);kp.set(k);const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=kp[i]^0x36;op[i]=kp[i]^0x5c;}const inner=new Uint8Array(64+msg.length);inner.set(ip);inner.set(msg,64);const ih=sha(inner);const outer=new Uint8Array(96);outer.set(op);outer.set(ih,64);return sha(outer);}
+function hmacJs(key,msg){let k=key;if(k.length>64)k=sha(k);const kp=new Uint8Array(64);kp.set(k);const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=kp[i]^0x36;op[i]=kp[i]^0x5c;}const inner=new Uint8Array(64+msg.length);inner.set(ip);inner.set(msg,64);const ih=sha(inner);const outer=new Uint8Array(96);outer.set(op);outer.set(ih,64);return sha(outer);}
 const secret=String(($env&&$env.ARCHON_WEBHOOK_HMAC_SECRET)||'').trim();
 if(!secret){throw new Error('ARCHON_WEBHOOK_HMAC_SECRET fehlt - Trigger abgelehnt (fail-closed).');}
 const item=$input.first().json||{};
@@ -46,11 +50,24 @@ const alg=String(hdrs['x-archon-webhook-algorithm']||'');
 if(alg&&alg!=='HMAC-SHA256'){throw new Error('Falscher HMAC-Algorithmus - Trigger abgelehnt.');}
 if(!sig.startsWith('sha256=')||!/^[0-9a-fA-F]{64}$/.test(sig.slice(7))){throw new Error('Fehlende/ungueltige Webhook-Signatur - Trigger abgelehnt.');}
 const enc=new TextEncoder();
+// Exakt dieselbe kompakte Serialisierung wie der Sender:
+// Python json.dumps(..., ensure_ascii=False, separators=(',',':')) == JSON.stringify(body).
+const bodyBytes=(item.rawBody && item.rawBody.length)
+  ? (item.rawBody instanceof Uint8Array ? item.rawBody : enc.encode(String(item.rawBody)))
+  : enc.encode(JSON.stringify(body));
 const got=Uint8Array.from(sig.slice(7).match(/../g).map(x=>parseInt(x,16)));
-const want=hmac(enc.encode(secret),enc.encode(JSON.stringify(body)));
+const want=(_crypto && typeof _crypto.createHmac==='function')
+  ? new Uint8Array(_crypto.createHmac('sha256',secret).update(Buffer.from(bodyBytes)).digest())
+  : hmacJs(enc.encode(secret),bodyBytes);
 if(got.length!==want.length){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}
-let diff=0;for(let i=0;i<want.length;i++){diff|=got[i]^want[i];}
-if(diff!==0){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}
+let valid;
+if(_crypto && typeof _crypto.timingSafeEqual==='function'){
+  valid=_crypto.timingSafeEqual(Buffer.from(got),Buffer.from(want));
+}else{
+  let diff=0;for(let i=0;i<want.length;i++){diff|=got[i]^want[i];}
+  valid=(diff===0);
+}
+if(!valid){throw new Error('Ungueltige Webhook-Signatur - Trigger abgelehnt.');}
 return $input.all();"""
 
 
@@ -69,12 +86,12 @@ def _hmac_node(node_id: str, note: str) -> dict:
 
 
 def _ensure_bridge_hmac_receiver(bundle):
-    """B/H5: archon-execution nie ohne HMAC-Empfaenger aktiv sein lassen.
+    """B/H5 + D06/HIGH: archon-execution nie ohne HMAC-Empfaenger aktiv sein lassen.
 
-    Landet ein (z. B. aus der Live-n8n exportierter) Execution-Bridge-Workflow
-    im Bundle, wird der Verifier nachgeruestet, der Webhook auf 'onReceived'
-    gestellt und der Workflow bleibt bis zur Verifikation INAKTIV. Die
-    Doku-Behauptung (H5) wird nicht angefasst — sie betrifft eine andere Datei.
+    Der versionierte Receiver (stabile ID a7c3f1e9b2d84f6a) ist im Bundle
+    aktiv und antwortet im `response`-Modus: HMAC-Fehler fuehren ueber den
+    Error-Branch des Code-Nodes zu HTTP 401 statt zu einem vorzeitigen 200.
+    Nachgeruestete Workflows werden auf denselben Stand gebracht.
     """
     for wf in bundle:
         nodes = wf.get("nodes", [])
@@ -88,16 +105,27 @@ def _ensure_bridge_hmac_receiver(bundle):
         ]
         if not wh_nodes:
             continue
-        if any(
-            n.get("name") == "Archon HMAC Verify"
-            and "ARCHON_WEBHOOK_HMAC_SECRET" in str(n.get("parameters", {}).get("jsCode", ""))
-            and "HMAC-SHA256" in str(n.get("parameters", {}).get("jsCode", ""))
-            for n in nodes
-        ):
+        verifier = next(
+            (
+                n for n in nodes
+                if n.get("name") == "Archon HMAC Verify"
+                and "ARCHON_WEBHOOK_HMAC_SECRET" in str(n.get("parameters", {}).get("jsCode", ""))
+            ),
+            None,
+        )
+        if verifier is not None:
+            # Bereits vorhanden: auf den aktuellen Stand normalisieren statt
+            # still eine inaktive/onReceived-Variante durchzulassen.
+            verifier.setdefault("parameters", {})["jsCode"] = HMAC_VERIFY_JS
+            for n in wh_nodes:
+                n.setdefault("parameters", {})["responseMode"] = "response"
+            wf["active"] = True
+            wf["id"] = "a7c3f1e9b2d84f6a"  # stabile, in der Doku gefuehrte ID
             continue
         wh = wh_nodes[0]
         wh_name = wh.get("name", "Webhook Ingest")
-        wh.setdefault("parameters", {})["responseMode"] = "onReceived"
+        # response/lastNode: HTTP-Status erst NACH der HMAC-Pruefung senden.
+        wh.setdefault("parameters", {})["responseMode"] = "response"
         target = None
         try:
             target = wf["connections"][wh_name]["main"][0][0].get("node")
@@ -105,17 +133,17 @@ def _ensure_bridge_hmac_receiver(bundle):
             target = None
         nodes.append(_hmac_node(
             "hmac-verify-execution",
-            "B/H5: nachgeruestete HMAC-Pruefung (Constant-Time-XOR-Vergleich) fuer archon-execution; Workflow bleibt bis zur Verifikation inaktiv.",
+            "B/H5 + D06/HIGH: HMAC-SHA256 mit crypto.timingSafeEqual (Fallback: Constant-Time-XOR) fuer archon-execution; Fehler -> HTTP 401.",
         ))
         conns = wf.setdefault("connections", {})
         conns[wh_name] = {"main": [[{"node": "Archon HMAC Verify", "type": "main", "index": 0}]]}
         if target:
             conns["Archon HMAC Verify"] = {"main": [[{"node": target, "type": "main", "index": 0}]]}
-        wf["active"] = False
+        wf["active"] = True
         prior = str(wf.get("notes", "")).strip()
         wf["notes"] = (prior + " | " if prior else "") + (
-            "B/H5: HMAC-Empfaenger nachgeruestet; bis zur Verifikation der "
-            "Live-Implementierung INAKTIV."
+            "B/H5 + D06/HIGH: aktiver HMAC-Empfaenger, stabile ID a7c3f1e9b2d84f6a, "
+            "responseMode 'response' — Ablehnung liefert HTTP 401."
         )
     return bundle
 
@@ -131,7 +159,19 @@ def _load_service_token() -> str:
         return ""
 
 
-def _prepare_workflows(token: str):
+BUNDLE_PATH = ROOT / "scripts" / "n8n_workflows_bundle.json"
+
+
+def _load_bundle_workflows() -> list:
+    """Laedt die versionierten On-Demand-Workflows inkl. HMAC-Empfaenger (D06/HIGH)."""
+    try:
+        with BUNDLE_PATH.open("r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return []
+
+
+def _inject_service_token(workflows: list, token: str) -> list:
     """Nur an Archon-API-HTTP-Nodes den Token injizieren, Host korrigieren.
 
     C17/F-037: Dieses Skript hat frueher die tokenhaltige Vorlage
@@ -145,7 +185,6 @@ def _prepare_workflows(token: str):
     httpRequest-Nodes (Sonst waere das Token ein Exfiltrationsrisiko bei
     spaeter ergaenzten Nodes).
     """
-    workflows = json.loads(json.dumps(_load_routine_workflows()))
     for wf in workflows:
         for node in wf.get("nodes", []):
             params = node.get("parameters", {})
@@ -175,9 +214,25 @@ def _prepare_workflows(token: str):
     return workflows
 
 
+def _prepare_workflows(token: str) -> list:
+    """Alle 9 Workflows (3 Routinen + 6 On-Demand inkl. Receiver) mit echtem Token."""
+    workflows = json.loads(json.dumps(_load_routine_workflows()))
+    known = {wf.get("id") for wf in workflows}
+    for wf in _load_bundle_workflows():
+        if wf.get("id") not in known:
+            workflows.append(json.loads(json.dumps(wf)))
+            known.add(wf.get("id"))
+    return _inject_service_token(workflows, token)
+
+
+def _prepare_routine_template() -> list:
+    """Nur die 3 Routine-Workflows mit Platzhalter (fuer die Bundle-SSOT)."""
+    return _inject_service_token(json.loads(json.dumps(_load_routine_workflows())), TOKEN_PLACEHOLDER)
+
+
 def run():
     print("=" * 60)
-    print("DEPLOYMENT DER N8N ROUTINE-WORKFLOWS")
+    print("DEPLOYMENT ALLER N8N WORKFLOWS (3 Routinen + 6 On-Demand/Receiver)")
     print("=" * 60)
 
     # 0. C17: ohne Service-Token keine aktiven, tokenlosen Workflows deployen.
@@ -192,7 +247,7 @@ def run():
     workflows = _prepare_workflows(token)
     # Repo-getrackte Dateien enthalten NUR den Platzhalter — nie den echten
     # Token. Das import_n8n_workflows.py ersetzt ihn bei Bedarf zur Laufzeit.
-    template = _prepare_workflows(TOKEN_PLACEHOLDER)
+    template = _prepare_routine_template()
 
     # 1. Alles NUR im temporaeren Verzeichnis: der gehaertete Container hat
     # ein read-only /app und darf keine Repo-Dateien beschreiben.

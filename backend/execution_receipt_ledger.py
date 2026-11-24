@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 backend/execution_receipt_ledger.py
 Paket 4 (Feature 20): Manipulationssichere Kosten- & Entscheidungs-Quittungen (Execution Receipts).
@@ -5,14 +6,14 @@ Erzeugt für jeden abgeschlossenen Task eine kryptografisch verkettete SHA-256-Q
 mit Modell, Token-Verbrauch, Kosten in USD, genutzten Tools und Policy-Status in SQLite (`execution_receipts_ledger`).
 """
 
-import os
-import json
-import uuid
 import hashlib
 import hmac
+import json
+import logging
+import os
 import sqlite3
 import threading
-import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class _ArchonClosingConn(sqlite3.Connection):
         finally:
             self.close()
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _LEDGER_LOCK = threading.RLock()
@@ -177,7 +178,14 @@ def _receipt_trace_fields(
         if not tp and tid and sid:
             tp = _tc.format_traceparent(tid, sid, bool(_tc.current_sampled()))
     except Exception as exc:  # pragma: no cover - Trace-Kontext optional
-        logger.debug("[Receipt] Trace-Kontext nicht verfuegbar: %s", exc)
+        # A9-DELEGATED (D16/MED): kein stiller DEBUG-Swallower; Fehler im
+        # zentralen Tracing-Status zaehlen (note_local_trace_error).
+        logger.warning("[Receipt] Trace-Kontext nicht verfuegbar: %s", exc)
+        try:
+            from backend.trace_context import note_local_trace_error
+            note_local_trace_error("receipt-context", exc)
+        except Exception as _count_exc:
+            logger.debug("[Receipt] Fehlerzaehler nicht erreichbar: %s", _count_exc)
     return tid, sid, tp
 
 

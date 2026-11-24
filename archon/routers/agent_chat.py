@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi import Depends as _ArchonDepends
@@ -17,14 +17,37 @@ from pydantic import BaseModel
 import core_dispatcher
 from archon.core.runtime import MEMORY_DIR, WORKSPACE_DIR, add_ticker
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from backend.handoff_desk import mark_truncated
 
 logger = logging.getLogger("archon.routers.agent_chat")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["agent_chat"])
 
 
+class ChatMessage(BaseModel):
+    """D11/MED: strukturierte Chat-Nutzlast statt Freitext-Zerlegung."""
+
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class RunRequest(BaseModel):
     prompt: str
+
+
+def _as_chat_messages(raw: Any) -> List[ChatMessage]:
+    """Validiert Rollen/Reihenfolge maschinell; lehnt unbekannte Rollen ab."""
+    if not isinstance(raw, list):
+        return []
+    result: List[ChatMessage] = []
+    for item in raw:
+        if isinstance(item, ChatMessage):
+            result.append(item)
+        elif isinstance(item, dict):
+            result.append(ChatMessage.model_validate(item))
+        else:
+            raise HTTPException(status_code=422, detail={"code": "INVALID_CHAT_MESSAGE"})
+    return result
 
 
 async def fetch_agent_response_api(agent: Dict, user_prompt: str) -> Dict:
@@ -42,7 +65,14 @@ async def fetch_agent_response_api(agent: Dict, user_prompt: str) -> Dict:
 
     prompt_text = user_prompt
     if isinstance(user_prompt, list):
-        prompt_text = "\n".join([f"{m.get('role', '')}: {m.get('content', '')}" for m in user_prompt])
+        # D11/MED: Rollen und Reihenfolge bleiben als maschinell auswertbare
+        # Struktur erhalten, statt in Verluste-Freitext zerlegt zu werden.
+        chat_messages = _as_chat_messages(user_prompt)
+        last_user = next((m.content for m in reversed(chat_messages) if m.role == "user"), "")
+        prompt_text = last_user or (
+            "[STRUKTURIERTER VERLAUF]\n"
+            + json.dumps([m.model_dump() for m in chat_messages], ensure_ascii=False)
+        )
 
     try:
         res = await core_dispatcher.dispatch_to_external_agent(
@@ -85,9 +115,15 @@ async def fetch_agent_response_api(agent: Dict, user_prompt: str) -> Dict:
         "agent_id": agent_id,
         "agent_name": agent_name,
         "status": res.get("status"),
+        "error_code": res.get("error_code"),
         "content": res.get("content"),
         "duration": f"{duration:.2f}s",
-        "model": model_combo,
+        "model": res.get("model") or model_combo,
+        "effective_prompt_info": res.get("effective_prompt_info"),
+        "prompt_version_info": res.get("prompt_version_info"),
+        "trace_id": res.get("trace_id"),
+        "session_id": res.get("session_id"),
+        "correlation_id": res.get("correlation_id"),
     }
 
 
@@ -128,7 +164,7 @@ class DirectAgentChatRequest(BaseModel):
     message: str
     attachment_name: Optional[str] = None
     attachment_content: Optional[str] = None
-    history: Optional[List[Dict[str, Any]]] = []
+    history: Optional[List[ChatMessage]] = []
 
 
 _PROFILES_LIST_CACHE: Dict[str, Any] = {"sig": None, "data": []}
@@ -190,13 +226,13 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
         fallback_list = load_profiles_list()
         prof = next((p for p in fallback_list if p.get("id") == req.agent_id), None)
     if not prof:
-        prof = {
-            "id": req.agent_id,
-            "person_name": req.agent_id,
-            "name": req.agent_id,
-            "system_prompt": "Du bist ein intelligenter KI-Spezialist in Archon OS. Antworte präzise, strukturiert und direkt.",
-            "model": "gpt-4o-mini",
-        }
+        # D11/HIGH: unbekannte agent_id ist kein "Spezialist" mit erfundenem
+        # Prompt/Modell, sondern eine harte Ablehnung ohne jeden Dispatch.
+        raise HTTPException(status_code=404, detail={
+            "status": "error",
+            "code": "UNKNOWN_AGENT_PROFILE",
+            "agent_id": req.agent_id,
+        })
 
     from archon.core.profiles import append_negative_scope
 
@@ -212,13 +248,16 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
 
     user_msg = req.message
     if req.attachment_content:
-        user_msg = f"[Angehängte Datei: {req.attachment_name or 'Dokument'}]\n```\n{req.attachment_content[:6000]}\n```\n\n{req.message}"
+        # D11/MED: keine stille Kuerzung — mark_truncated() setzt einen
+        # maschinenlesbaren Marker inkl. Artifact-Referenz.
+        attachment = mark_truncated(
+            req.attachment_content, 6000, artifact="request.attachment"
+        )
+        user_msg = f"[Angehängte Datei: {req.attachment_name or 'Dokument'}]\n```\n{attachment}\n```\n\n{req.message}"
 
-    messages = [{"role": "system", "content": system_prompt}]
-    if req.history:
-        for h in req.history[-8:]:
-            messages.append({"role": h.get("role", "user"), "content": h.get("content", "")})
-    messages.append({"role": "user", "content": user_msg})
+    # D11/MED: strukturierte History direkt an den Dispatcher (der filtert auf
+    # user/assistant). Tote lokale `messages`-Liste entfernt.
+    history_payload = [m.model_dump() for m in (req.history or [])[-8:]]
 
     model_to_use = prof.get("model") or "deepseek/deepseek-chat"
     provider_to_use = prof.get("provider") or "openrouter"
@@ -233,7 +272,7 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
             system_prompt=system_prompt,
             model=model_to_use,
             provider=provider_to_use,
-            history=req.history,
+            history=history_payload,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail={
@@ -257,10 +296,19 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
     duration = round(time.time() - start_t, 2)
     add_ticker("Direct Chat", f"Nachricht an {agent_name} beantwortet ({duration}s)")
 
+    # D11/HIGH: berechnete Werte und Korrelationsfelder duerfen am Endpunkt
+    # nicht verworfen werden — nur real vorhandene Werte weitergeben.
     return {
+        "status": st,
         "agent_id": prof["id"],
         "agent_name": agent_name,
         "reply": str(reply_text),
+        "model": res.get("model") or model_to_use,
         "duration": duration,
         "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+        "effective_prompt_info": res.get("effective_prompt_info"),
+        "prompt_version_info": res.get("prompt_version_info"),
+        "trace_id": res.get("trace_id"),
+        "session_id": res.get("session_id"),
+        "correlation_id": res.get("correlation_id"),
     }

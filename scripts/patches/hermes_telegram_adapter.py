@@ -1,7 +1,11 @@
+# mypy: ignore-errors
 
 def _mirror_to_archon_inbox(msg):
     try:
-        import json, time, datetime, os
+        import datetime
+        import json
+        import os
+        import time
         os.makedirs('/opt/data/inbox/telegram', exist_ok=True)
         u = getattr(msg, 'from_user', None)
         s_name = f'@{u.username}' if (u and getattr(u, 'username', None)) else (getattr(u, 'first_name', 'User') if u else 'User')
@@ -39,12 +43,13 @@ Uses python-telegram-bot library for:
 import asyncio
 import dataclasses
 import faulthandler
+import html as _html
 import inspect
 import json
 import logging
 import os
-import html as _html
 import re
+import secrets as _secrets
 import threading
 import time
 from contextvars import ContextVar
@@ -263,21 +268,23 @@ async def _shutdown_abandoned_app(app) -> None:
             logger.debug("Abandoned Telegram request shutdown failed", exc_info=True)
 
 try:
-    from telegram import Update, Bot, Message, InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
     try:
         from telegram import LinkPreviewOptions
     except ImportError:
         LinkPreviewOptions = None
+    from telegram.constants import ChatType, ParseMode
     from telegram.ext import (
         Application,
-        CommandHandler,
         CallbackQueryHandler,
-        MessageHandler as TelegramMessageHandler,
+        CommandHandler,
         ContextTypes,
         TypeHandler,
         filters,
     )
-    from telegram.constants import ParseMode, ChatType
+    from telegram.ext import (
+        MessageHandler as TelegramMessageHandler,
+    )
     from telegram.request import HTTPXRequest
     TELEGRAM_AVAILABLE = True
 except ImportError:
@@ -306,26 +313,27 @@ except ImportError:
 
 import sys
 from pathlib import Path as _Path
+
 sys.path.insert(0, str(_Path(__file__).resolve().parents[3]))
 
 from gateway.authz_mixin import _coerce_allow_set
 from gateway.config import Platform, PlatformConfig
 from gateway.platforms.base import (
+    _TEXT_INJECT_EXTENSIONS,
+    SUPPORTED_DOCUMENT_TYPES,
+    SUPPORTED_IMAGE_DOCUMENT_TYPES,
+    SUPPORTED_VIDEO_TYPES,
     BasePlatformAdapter,
     MessageEvent,
     MessageType,
     ProcessingOutcome,
     SendResult,
-    classify_send_error,
-    cache_image_from_bytes,
     cache_audio_from_bytes,
-    cache_video_from_bytes,
     cache_document_from_bytes,
+    cache_image_from_bytes,
+    cache_video_from_bytes,
+    classify_send_error,
     resolve_proxy_url,
-    SUPPORTED_VIDEO_TYPES,
-    SUPPORTED_DOCUMENT_TYPES,
-    SUPPORTED_IMAGE_DOCUMENT_TYPES,
-    _TEXT_INJECT_EXTENSIONS,
     utf16_len,
 )
 from plugins.platforms.telegram.telegram_ids import (
@@ -336,6 +344,7 @@ from plugins.platforms.telegram.telegram_network import (
     discover_fallback_ips,
     parse_fallback_ip_env,
 )
+
 from utils import atomic_replace, env_float, env_int
 
 _TELEGRAM_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
@@ -454,19 +463,35 @@ def check_telegram_requirements() -> bool:
     except Exception:
         return False
     try:
-        from telegram import Update as _Update, Bot as _Bot, Message as _Message
-        from telegram import InlineKeyboardButton as _IKB, InlineKeyboardMarkup as _IKM
+        from telegram import Bot as _Bot
+        from telegram import InlineKeyboardButton as _IKB
+        from telegram import InlineKeyboardMarkup as _IKM
+        from telegram import Message as _Message
+        from telegram import Update as _Update
         try:
             from telegram import LinkPreviewOptions as _LPO
         except ImportError:
             _LPO = None
+        from telegram.constants import ChatType as _CtT
+        from telegram.constants import ParseMode as _PM
         from telegram.ext import (
-            Application as _App, CommandHandler as _CH,
-            CallbackQueryHandler as _CQH,
-            MessageHandler as _MH,
-            ContextTypes as _CT, filters as _filters,
+            Application as _App,
         )
-        from telegram.constants import ParseMode as _PM, ChatType as _CtT
+        from telegram.ext import (
+            CallbackQueryHandler as _CQH,
+        )
+        from telegram.ext import (
+            CommandHandler as _CH,
+        )
+        from telegram.ext import (
+            ContextTypes as _CT,
+        )
+        from telegram.ext import (
+            MessageHandler as _MH,
+        )
+        from telegram.ext import (
+            filters as _filters,
+        )
         from telegram.request import HTTPXRequest as _HR
     except ImportError:
         return False
@@ -549,10 +574,13 @@ def _separate_chunk_indicator_from_fence(text: str) -> str:
 
 from gateway.platforms.helpers import (
     TABLE_SEPARATOR_RE as _TABLE_SEPARATOR_RE,
+)
+from gateway.platforms.helpers import (
     compile_mention_patterns,
+)
+from gateway.platforms.helpers import (
     convert_table_to_bullets as _wrap_markdown_tables,
 )
-
 
 # ---------------------------------------------------------------------------
 # Rich-message newline normalization
@@ -697,6 +725,90 @@ def gate_decision_answer(decision: str, status_code: int,
     if decision == "approve":
         return GATE_OK_TEXT
     return GATE_REJECT_TEXT
+
+
+# --- D16/HIGH: Trace-Kontext ueber Telegram-HITL-Callbacks -----------------
+# Der Adapter laeuft im Hermes-Container und hat KEINEN Zugriff auf
+# backend.trace_context. Daher hier ein schlanker, eigenstaendiger W3C-Kontext:
+# traceparent aus HITL-/Decision-Events merken, pro Versuch einen Child forken
+# und den Wert zusaetzlich in den JSON-Body legen (decisions.py konsumiert ihn).
+_ARCHON_TRACEPARENT_RE = re.compile(
+    r"^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$", re.IGNORECASE
+)
+_ARCHON_TRACE_STATE: Dict[str, str] = {"traceparent": "", "tracestate": ""}
+_ARCHON_TRACE_BY_REF: Dict[str, str] = {}
+
+
+def _archon_remember_trace(*values: Any) -> None:
+    """Merkt sich den ersten gueltigen traceparent aus HITL-Event/Payload."""
+    for value in values:
+        if not value:
+            continue
+        candidates = value if isinstance(value, (list, tuple)) else [value]
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            match = _ARCHON_TRACEPARENT_RE.match(candidate.strip())
+            if not match:
+                continue
+            trace_id, span_id, flags = match.groups()
+            if trace_id == "0" * 32 or span_id == "0" * 16:
+                continue
+            _ARCHON_TRACE_STATE["traceparent"] = (
+                "00-%s-%s-%s" % (trace_id.lower(), span_id.lower(), flags.lower())
+            )
+            return
+
+
+def _archon_remember_trace_payload(payload: Any) -> None:
+    if isinstance(payload, dict):
+        _archon_remember_trace(payload.get("traceparent"))
+        ts = payload.get("tracestate")
+        if isinstance(ts, str) and ts.strip():
+            _ARCHON_TRACE_STATE["tracestate"] = ts.strip()[:512]
+        ref = payload.get("task_id") or payload.get("ref_id") or payload.get("gate_id")
+        if ref and _ARCHON_TRACE_STATE["traceparent"]:
+            _ARCHON_TRACE_BY_REF[str(ref)] = _ARCHON_TRACE_STATE["traceparent"]
+    elif isinstance(payload, str):
+        _archon_remember_trace(payload)
+
+
+def _archon_fork_traceparent(reference: str = "") -> str:
+    """Kind-Span: gleiche trace_id, neue span_id, Sampled-Flag unveraendert."""
+    source = reference or _ARCHON_TRACE_STATE["traceparent"]
+    match = _ARCHON_TRACEPARENT_RE.match(source or "")
+    if not match:
+        tid = _secrets.token_hex(16)
+        flags = "01"
+    else:
+        tid, _parent_sid, flags = match.groups()
+    new_sid = _secrets.token_hex(8)
+    return "00-%s-%s-%s" % (tid, new_sid, flags)
+
+
+def _archon_trace_headers(base_headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    headers = {
+        k: v for k, v in dict(base_headers or {}).items()
+        if k.lower() not in ("traceparent", "tracestate")
+    }
+    headers["traceparent"] = _archon_fork_traceparent()
+    ts = _ARCHON_TRACE_STATE.get("tracestate")
+    if ts:
+        headers["tracestate"] = ts
+    return headers
+
+
+def _archon_trace_fields() -> Dict[str, str]:
+    """Felder fuer den JSON-Body (decisions.py::_consume_sse_trace)."""
+    state = dict(_ARCHON_TRACE_STATE)
+    tp = state.get("traceparent") or ""
+    parsed = _ARCHON_TRACEPARENT_RE.match(tp)
+    out = {k: v for k, v in state.items() if v}
+    if parsed:
+        out["traceparent"] = tp
+        out["trace_id"] = parsed.group(1)
+        out["span_id"] = parsed.group(2)
+    return out
 
 
 class _PollingLifecycleAbort(RuntimeError):
@@ -3759,13 +3871,13 @@ class TelegramAdapter(BasePlatformAdapter):
             # List is derived from the central COMMAND_REGISTRY — adding a new
             # gateway command there automatically adds it to the Telegram menu.
             try:
+                from hermes_cli.commands import telegram_menu_commands, telegram_menu_max_commands
                 from telegram import (
                     BotCommand,
-                    BotCommandScopeAllPrivateChats,
                     BotCommandScopeAllGroupChats,
+                    BotCommandScopeAllPrivateChats,
                     BotCommandScopeDefault,
                 )
-                from hermes_cli.commands import telegram_menu_commands, telegram_menu_max_commands
                 if not self._bot:
                     return
                 # Telegram allows up to 100 commands but has an undocumented
@@ -6774,6 +6886,22 @@ class TelegramAdapter(BasePlatformAdapter):
         query_thread_id = getattr(query_message, "message_thread_id", None)
         query_user_name = getattr(query.from_user, "first_name", None)
 
+        # D16/HIGH: HITL-Event trägt den traceparent im Nachrichtentext (oder
+        # in einer Trace-Zeile des Replies). Vor dem Klick merken, damit
+        # der Callback die Kausalkette fortsetzt statt einen neuen Root zu starten.
+        _archon_remember_trace(
+            getattr(query_message, "text", ""),
+            getattr(query_message, "caption", ""),
+            getattr(getattr(query_message, "reply_to_message", None), "text", ""),
+            getattr(getattr(query_message, "reply_to_message", None), "caption", ""),
+            data,
+        )
+        try:
+            _event_payload = json.loads(getattr(query_message, "text", "") or "{}")
+            if isinstance(_event_payload, dict):
+                _archon_remember_trace_payload(_event_payload)
+        except Exception:
+            pass
         async def _archon_req(_method, _url, **_kw):
             """ARCHON-OS-Request mit Retry (3 Versuche, Backoff) + IP-Notfallpfad.
 
@@ -6785,15 +6913,35 @@ class TelegramAdapter(BasePlatformAdapter):
             (nicht britt: die IP wird erst im Notfall frisch bestimmt).
             """
             import asyncio as _asyncio
+
             import httpx as _hx
             _last = None
+
+            def _traced_kwargs():
+                """Pro Versuch einen Kind-Span forken; Header UND Body tragen ihn."""
+                _out = dict(_kw)
+                _headers = _archon_trace_headers(_out.pop("headers", None))
+                _out["headers"] = _headers
+                _body = _out.get("json")
+                if isinstance(_body, dict):
+                    _body = dict(_body)
+                    _body["traceparent"] = _headers["traceparent"]
+                    if "tracestate" in _headers:
+                        _body["tracestate"] = _headers["tracestate"]
+                    _parsed = _ARCHON_TRACEPARENT_RE.match(_headers["traceparent"])
+                    if _parsed:
+                        _body["trace_id"] = _parsed.group(1)
+                        _body["span_id"] = _parsed.group(2)
+                    _out["json"] = _body
+                return _out
+
             # 25 s statt 12 s: der Entscheidungs-Endpoint macht mehrere eigene
             # Round-Trips (Status, Folgeaktion, Sidecar) und darf nicht schon
             # client-seitig abbrechen, waehrend er serverseitig weiterlaeuft.
             for _i in range(3):
                 try:
                     async with _hx.AsyncClient(timeout=25.0) as _cl:
-                        return await _cl.request(_method, _url, **_kw)
+                        return await _cl.request(_method, _url, **_traced_kwargs())
                 except Exception as _e:
                     _last = _e
                     logger.warning(
@@ -6803,14 +6951,15 @@ class TelegramAdapter(BasePlatformAdapter):
                         await _asyncio.sleep(0.5 * (_i + 1))
             try:
                 import socket as _sock
-                from urllib.parse import urlsplit as _us, urlunsplit as _uun
+                from urllib.parse import urlsplit as _us
+                from urllib.parse import urlunsplit as _uun
                 _u = _us(_url)
                 _ip = _sock.gethostbyname(_u.hostname)
                 _url2 = _uun((_u.scheme, "%s:%s" % (_ip, _u.port or 80),
                               _u.path, _u.query, _u.fragment))
                 logger.warning("[Telegram] ARCHON-Request IP-Notfallpfad -> %s", _url2)
                 async with _hx.AsyncClient(timeout=12.0) as _cl:
-                    return await _cl.request(_method, _url2, **_kw)
+                    return await _cl.request(_method, _url2, **_traced_kwargs())
             except Exception:
                 raise _last
 
@@ -6834,11 +6983,15 @@ class TelegramAdapter(BasePlatformAdapter):
             if decision in ("approve", "reject") and gate_id:
                 _resp = None
                 err = None
+                # Per-Gate-Kontext aus frueheren HITL-Events bevorzugen.
+                _gate_tp = _ARCHON_TRACE_BY_REF.get(gate_id, _ARCHON_TRACE_STATE["traceparent"])
+                if _gate_tp:
+                    _archon_remember_trace(_gate_tp)
                 try:
                     _resp = await _archon_req(
                         "POST",
                         "http://ARCHON-OS:8501/api/permission-gates/%s/decide" % gate_id,
-                        json={"decision": decision},
+                        json={"decision": decision, **_archon_trace_fields()},
                     )
                 except Exception as _exc:
                     err = str(_exc) or type(_exc).__name__
@@ -7190,6 +7343,11 @@ class TelegramAdapter(BasePlatformAdapter):
             if len(parts) == 3:
                 action, ref_id = parts[1], parts[2]
                 caller_id = str(getattr(query.from_user, "id", ""))
+                # Der Klick referenziert ein HITL-Event: gemerkten traceparent
+                # genau dieser task_id wiederherstellen (SSE → Telegram → Audit).
+                _ref_tp = _ARCHON_TRACE_BY_REF.get(ref_id, "")
+                if _ref_tp:
+                    _archon_remember_trace(_ref_tp)
                 if not self._is_callback_user_authorized(
                     caller_id,
                     chat_id=query_chat_id,
@@ -7251,7 +7409,12 @@ class TelegramAdapter(BasePlatformAdapter):
                         try:
                             _rd = await _archon_req(
                                 "POST", f"{_archon}/api/decisions/decide",
-                                json={"task_id": ref_id, "decision": action, "von": "telegram"})
+                                json={
+                                    "task_id": ref_id,
+                                    "decision": action,
+                                    "von": "telegram",
+                                    **_archon_trace_fields(),
+                                })
                             if _rd.status_code == 200:
                                 done = True
                                 _dec_ergebnis = (_rd.json() or {}).get("ergebnis") or ""
@@ -9539,8 +9702,8 @@ class TelegramAdapter(BasePlatformAdapter):
                 chat_id = int(chat.id)
                 if chat_id in self._forum_command_registered:
                     return
-                from telegram import BotCommand, BotCommandScopeChat
                 from hermes_cli.commands import telegram_menu_commands, telegram_menu_max_commands
+                from telegram import BotCommand, BotCommandScopeChat
                 menu_commands, _ = telegram_menu_commands(max_commands=telegram_menu_max_commands())
                 bot_commands = [BotCommand(name, desc) for name, desc in menu_commands]
                 await self._bot.set_my_commands(bot_commands, scope=BotCommandScopeChat(chat_id=chat_id))
@@ -9588,7 +9751,10 @@ class TelegramAdapter(BasePlatformAdapter):
 
         # Archon OS Inbox Mirroring
         try:
-            import json, time, datetime, os
+            import datetime
+            import json
+            import os
+            import time
             os.makedirs('/opt/data/inbox/telegram', exist_ok=True)
             u = getattr(msg, 'from_user', None)
             s_name = f'@{u.username}' if (u and getattr(u, 'username', None)) else (getattr(u, 'first_name', 'User') if u else 'User')
@@ -9668,8 +9834,9 @@ class TelegramAdapter(BasePlatformAdapter):
                 user_prompt = parts[1].strip() if len(parts) > 1 else ""
                 
                 # Profile von Archon-OS abrufen
-                import httpx as _httpx
                 import asyncio
+
+                import httpx as _httpx
                 _archon = "http://ARCHON-OS:8501"
                 matched_profiles = []
                 try:
@@ -10324,11 +10491,11 @@ class TelegramAdapter(BasePlatformAdapter):
         a placeholder noting the emoji.
         """
         from gateway.sticker_cache import (
-            get_cached_description,
-            cache_sticker_description,
-            build_sticker_injection,
-            build_animated_sticker_injection,
             STICKER_VISION_PROMPT,
+            build_animated_sticker_injection,
+            build_sticker_injection,
+            cache_sticker_description,
+            get_cached_description,
         )
 
         sticker = msg.sticker

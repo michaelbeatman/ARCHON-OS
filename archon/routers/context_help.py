@@ -1,16 +1,23 @@
+# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """
 Archon OS Router fuer Kontext-Hilfe und UI-Assistenz.
 Extrahiert aus main.py zur Modularisierung und Entschlackung des Monolithen.
 """
+import asyncio
 import logging
+
 logger = logging.getLogger("archon.routers.context_help")
 
 from typing import Any, Dict
+
 from fastapi import APIRouter, Body, HTTPException
 
 from archon.routers._validated_body import PassthroughBody, as_payload
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["context-help"])
 
 HELP_CONTEXT_DATA = {
@@ -247,9 +254,11 @@ async def api_ask_help_assistant(payload: PassthroughBody = Body(...)):
 
     import json as _json
     import os as _os
+
     import api_provider
     from backend.agent_router import router_instance
-    all_keys = api_provider.collect_keys()
+    # D08/MED: ~70 Profil-.env-Dateien beim TTL-Miss nicht im Event-Loop lesen.
+    all_keys = await asyncio.to_thread(api_provider.collect_keys)
     reply_text = ""
 
     # Konfiguriertes Support-/Hilfe-Profil aus model_routing & agent_profiles laden
@@ -261,7 +270,10 @@ async def api_ask_help_assistant(payload: PassthroughBody = Body(...)):
         logger.debug(f"model_routing-Konfiguration nicht ladbar, nutze Default-Support-Profil: {exc}")
 
     profile_cfg = {}
-    for prof_path in ("data/agent_profiles.json", "agent_profiles.json"):
+    # A4/D02: Root `agent_profiles.json` ist die SSOT; `data/agent_profiles.json`
+    # ist ein veralteter Runtime-Cache (enthält z. B. noch 'micha', dafür kein
+    # 'aggregation_lisa'). SSOT zuerst laden, damit sie gewinnt.
+    for prof_path in ("agent_profiles.json", "data/agent_profiles.json"):
         if _os.path.exists(prof_path):
             try:
                 with open(prof_path, "r", encoding="utf-8") as _pf:

@@ -1317,6 +1317,7 @@ async def _run_synthesis_cascade(
     # echte Kind-Identitaet sowie trace_id/session_id/correlation_id.
     reports = []
     fan_statements: List[Dict[str, Any]] = []
+    from backend.consensus_gate import _infer_tier as _fan_tier
     for s in siblings:
         sub_title = s.get("title", "Teilaufgabe")
         sub_agent = s.get("agent_name") or s.get("agent_id") or "Fachagent"
@@ -1336,9 +1337,33 @@ async def _run_synthesis_cascade(
         artifact_ref = art_path or f"tasks.result/{child_id}"
         display_content = mark_truncated(content, 4000, artifact=artifact_ref)
         reports.append(f"### Arbeitspaket von {sub_agent} ({sub_title})\n\n{display_content}\n")
+        # D02/D14/MED: Produzent der Konsens-Marker + Tier. Ohne diese Felder
+        # wertet resolve_debate_consensus() Kind-Arbeitsberichte strukturell
+        # immer als 0/0-NO_CONSENSUS aus („Theater"). Strukturierte
+        # Kind-Ergebnisse (verdict/policy_violation) werden in echte Marker
+        # uebersetzt, statt Freitext zu erraten.
+        _child_verdict = str(
+            s.get("consensus_verdict") or s.get("verdict") or s.get("decision_status") or ""
+        ).strip().upper()
+        _child_policy = bool(s.get("policy_violation") or s.get("guardrail_violation"))
+        if _child_policy:
+            _marker_line = "POLICY_VIOLATION"
+        elif _child_verdict.startswith("CONSENSUS_REACHED"):
+            _marker_line = "KONSENS_ERREICHT"
+        elif (
+            _child_verdict.startswith("NO_CONSENSUS")
+            or "WIDERSPRUCH" in _child_verdict
+            or "KEIN KONSENS" in _child_verdict
+        ):
+            _marker_line = "KEIN KONSENS"
+        else:
+            _marker_line = ""
         fan_statements.append({
             "agent_id": child_agent,
-            "content": display_content,
+            "content": display_content + (f"\n{_marker_line}" if _marker_line else ""),
+            "tier": _fan_tier(child_agent),
+            "policy_violation": _child_policy,
+            "severity": str(s.get("severity") or "") or ("high" if _child_policy else None),
             "trace_id": str(s.get("trace_id") or parent_task.get("trace_id") or ""),
             "session_id": str(s.get("session_id") or parent_task.get("session_id") or ""),
             "correlation_id": str(s.get("correlation_id") or (f"task:{child_id}" if child_id else "")),
@@ -1365,6 +1390,12 @@ async def _run_synthesis_cascade(
 
     # Pydantic-Validierung (DebateStatement, extra=forbid) vor der Konsensauswertung.
     fan_consensus = resolve_debate_consensus(validate_debate_statements(fan_statements))
+    # B7: ALLE NO_CONSENSUS*-Verdikte (inkl. NO_CONSENSUS_BY_AUTHORITY und
+    # NO_CONSENSUS_POLICY_VIOLATION) sperren die Finalisierung. Der Verdict
+    # wird einmal zentral abgeleitet, nicht mehrfach und abweichend gelesen.
+    _fan_verdict = str((fan_consensus or {}).get("verdict") or "").strip().upper()
+    _fan_final_ok = _fan_verdict.startswith("CONSENSUS_REACHED")
+    _fan_policy_veto = _fan_verdict == "NO_CONSENSUS_POLICY_VIOLATION"
     _negative_markers = {
         "KEIN KONSENS", "KEIN CONSENSUS", "NICHT ERREICHT", "NO CONSENSUS",
         "WIDERSPRUCH", "DISAGREE", "DEBATTE_FORTSETZEN",
@@ -1399,8 +1430,13 @@ async def _run_synthesis_cascade(
         )
     _parts.extend([
         "## Naechste Schritte",
-        "Freigabe durch ROBERT (executive_decision_architect) einholen; bei Ablehnung "
-        "Entwurf als Approval-Task im Board belassen.",
+        (
+            "Freigabe durch ROBERT (executive_decision_architect) einholen; bei Ablehnung "
+            "Entwurf als Approval-Task im Board belassen."
+            if _fan_final_ok else
+            "Kein Konsens / Policy-Veto: KEINE Freigabe und keine finale Entscheidung. "
+            "Konflikte und Guardrail-Befunde gehen an HITL zur Klaerung."
+        ),
         _MARKER,
     ])
     synthesis_reply = "\n\n".join(_parts)
@@ -1461,20 +1497,29 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     r_system = ((r_prof or {}).get("system_prompt") or (r_prof or {}).get("prompt")
                 or "Du bist Robert, Executive Decision Architect und leitender Chefstratege von Archon OS. Antworte mit FREIGABE oder ABLEHNUNG als erste Zeile.")
     r_model = (r_prof or {}).get("model") or "deepseek/deepseek-v4-flash-0731"
-    ticker("Robert", f"Prueft Lisas Synthese fuer '{parent_title[:30]}...'")
     robert_reply = ""
-    try:
-        rres = await dispatcher.dispatch_to_omniroute_or_container(
-            agent_id="executive_decision_architect",
-            agent_name="Robert (Chefstratege)",
-            prompt=robert_prompt,
-            role="Executive Decision Architect",
-            system_prompt=r_system,
-            model=r_model,
+    if _fan_policy_veto:
+        # B7/HIGH: ein Policy-Veto ist eine HARTE Ablehnung. Kein
+        # Freigabe-Prompt, keine Finalisierung — nur HITL mit Belegen.
+        ticker("Robert", "Policy-Veto im Fan-in — Freigabe gesperrt, HITL erforderlich")
+        logger.warning(
+            "[Cascade-Loop] Fan-in-Policy-Veto (%s): Robert-Freigabe wird nicht angefragt.",
+            _fan_verdict,
         )
-        robert_reply = (rres.get("content", "") or "").strip()
-    except Exception as r_err:
-        logger.warning(f"[Cascade-Loop] Freigabe-Dispatch an Robert fehlgeschlagen: {r_err}")
+    else:
+        ticker("Robert", f"Prueft Lisas Synthese fuer '{parent_title[:30]}...'")
+        try:
+            rres = await dispatcher.dispatch_to_omniroute_or_container(
+                agent_id="executive_decision_architect",
+                agent_name="Robert (Chefstratege)",
+                prompt=robert_prompt,
+                role="Executive Decision Architect",
+                system_prompt=r_system,
+                model=r_model,
+            )
+            robert_reply = (rres.get("content", "") or "").strip()
+        except Exception as r_err:
+            logger.warning(f"[Cascade-Loop] Freigabe-Dispatch an Robert fehlgeschlagen: {r_err}")
 
     # ROBUSTE FREIGABE-ERKENNUNG (Struktur-Thema 4/1, User-Entscheidung): NUR die
     # exakte erste Zeile zaehlt. Alles andere (Floskeln, "KEINE FREIGABE", leer)
@@ -1545,8 +1590,9 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
             )
     _commit_draft()
 
-    _fan_verdict = str((fan_consensus or {}).get("verdict") or "").strip().upper()
-    if freigegeben and _fan_verdict.startswith("CONSENSUS_REACHED"):
+    # B7: harter Gate — kein NO_CONSENSUS*-Verdict (inkl. Policy-Veto) darf
+    # unabhängig von Roberts Antwort eine finale Beschlussvorlage erzeugen.
+    if freigegeben and _fan_final_ok:
         await finalize_approval(
             parent_project_id, draft_path, synthesis_reply,
             "Robert: " + mark_truncated(robert_reply, 200, artifact=draft_path),
@@ -1579,7 +1625,19 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
                 f"Lisas Entwurf: {draft_path}",   # body
                 {"parent_project_id": parent_project_id, "draft_path": draft_path,
                  "projekt": parent_title, "von": "Lisa · Ergebnis-Kuratorin",
-                 "teilberichte": f"{len(reports)}/{len(reports)}"},                    # extra
+                 "teilberichte": f"{len(reports)}/{len(reports)}",
+                 # B7: HITL braucht die Konfliktbelege, sonst ist die Eskalation
+                 # nicht nachvollziehbar (D14: original_verdict/veto_by/evidence).
+                 **({} if _fan_final_ok else {
+                     "original_verdict": _fan_verdict,
+                     "veto_by": (fan_consensus or {}).get("veto_by"),
+                     "policy_violation": _fan_policy_veto,
+                     "evidence": [
+                         {"agent_id": str(getattr(e, "agent_id", "")),
+                          "marker": str(getattr(e, "marker", ""))}
+                         for e in ((fan_consensus or {}).get("evidence") or [])
+                     ],
+                 })},                                                                # extra
                 (f"01_PROJEKTE/{_fan_ordner}" if _fan_ordner else None),             # obsidian
             )
         except Exception as _de:

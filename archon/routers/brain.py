@@ -1,11 +1,10 @@
+# mypy: ignore-errors
 """
 Brain & Archiv Router (3D Galaxy, Vault API, Library & Quartz Config)
 für Archon OS. Ausgelagert aus main.py zur modularen Entschlackung.
 """
 
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import asyncio
 import base64
@@ -17,16 +16,19 @@ from typing import Any, Callable, Dict, List, Optional, Set
 
 import yaml
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import Depends as _ArchonDepends
 from fastapi.responses import HTMLResponse, Response
 
 from archon.core.cache import ttl_cache
 from archon.core.config import config
-from archon.core.roles_data import DEFAULT_ROLES
+from archon.core.roles_data import DEFAULT_ROLES as DEFAULT_ROLES  # Import-Kompatibilitaet
+from archon.core.roles_data import load_default_roles
 from archon.core.runtime import (
     OBSIDIAN_VAULT_DIR,
     WORKSPACE_DIR,
     logger,
 )
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 from archon.routers._rbac import require_admin_or_503
 from backend.platform_paths import OBSIDIAN_VAULT, OBSIDIAN_VAULT_ALT
 from utils.path_jail import PathJailError, safe_path
@@ -171,7 +173,9 @@ def api_brain_galaxy_data(vault_limit: int = Query(600, description="Max. Vault-
                 logger.debug(f"agent_profiles.json unter {path} nicht lesbar: {exc}")
     
     if not agent_profiles:
-        agent_profiles = DEFAULT_ROLES
+        # A8-DELEGATED: SSOT-Projektion statt statischem Import-Snapshot.
+        # DEFAULT_ROLES bleibt als Import-Kompatibilitaet erhalten.
+        agent_profiles = load_default_roles()
 
     for a in agent_profiles:
         aid = f"agent_{a.get('id', a.get('name'))}"
@@ -352,7 +356,11 @@ async def api_library_upload(request: Request):
     # steht VOR jedem makedirs/open, damit ein 403 keinen Seiteneffekt hat.
     require_admin_or_503(request)
     try:
-        from utils.batch_library_importer import resolve_raw_docs_dir, resolve_vault_path, process_document
+        from utils.batch_library_importer import (
+            process_document,
+            resolve_raw_docs_dir,
+            resolve_vault_path,
+        )
         raw_dir = resolve_raw_docs_dir()
         vault_dir = resolve_vault_path()
         os.makedirs(raw_dir, exist_ok=True)

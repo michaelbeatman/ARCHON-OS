@@ -1,15 +1,16 @@
-import os
-import sys
+# mypy: ignore-errors
+import datetime
 import json
 import logging
-import sqlite3
-import datetime
-import re
-import time
 import math
+import os
+import re
 import secrets
+import sqlite3
+import sys
 import tempfile
-from typing import List, Dict, Optional, Any
+import time
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("archon.local_memory_bridge")
 
@@ -92,8 +93,14 @@ class LocalMemoryBridge:
         self._init_db()
 
     def _get_conn(self):
-        conn = sqlite3.connect(self.db_path, timeout=10.0, factory=_ClosingMemoryConn)
-        conn.execute("PRAGMA busy_timeout=5000;")
+        from backend.db_paths import DB_BUSY_TIMEOUT_MS
+        conn = sqlite3.connect(
+            self.db_path, timeout=DB_BUSY_TIMEOUT_MS / 1000.0, factory=_ClosingMemoryConn
+        )
+        conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+        # D03/MED: synchronous ist verbindungsbezogen — nicht nur beim Init.
+        if os.environ.get("ARCHON_DISABLE_WAL", "").strip().lower() not in ("1", "true", "yes"):
+            conn.execute("PRAGMA synchronous=NORMAL;")
         # J (dieses Audits): SQLite schaltet FK standardmässig aus. Ohne dieses
         # PRAGMA wirken deklarierte Relations/ON DELETE-Actions nicht (siehe
         # db_paths.py:190).
@@ -260,18 +267,22 @@ class LocalMemoryBridge:
         return "semantic"
 
     def record_learning(self, agent_id, category, summary, detailed_note=None, tenant_id: str = "", project_id: str = "", memory_tier: Optional[str] = None):
-        obsidian_link = None
+        # D03/MED: ERST der DB-Satz (mit vorbereitetem Link), DANN die Notiz.
+        # Vorher erzeugte ein Notizfehler eine verwaiste .md-Datei, die Art.17
+        # in memory.db nie erreichte; ein INSERT-Fehler liess die Notiz ohne
+        # DB-Referenz zurueck.
+        note_filename = None
+        note_path = None
+        md_content = None
+        obsidian_link: Optional[str] = None
         if detailed_note and os.path.exists(self.vault_path):
-            memories_dir = os.path.join(self.vault_path, "memories")
-            os.makedirs(memories_dir, exist_ok=True)
-            
             safe_title = summary[:50].replace(" ", "_").replace("/", "_").replace("\\", "_").replace(":", "_")
             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             # C20: Zufallssuffix verhindert Ueberschreiben bei identischem
             # Summary und gleicher Sekunde (zwei Agenten parallel).
             note_filename = f"learning_{safe_title}_{ts}_{secrets.token_hex(3)}.md"
-            note_path = os.path.join(memories_dir, note_filename)
-
+            note_path = os.path.join(self.vault_path, "memories", note_filename)
+            obsidian_link = f"[[{note_filename[:-3]}]]"
             md_content = f"""---
 title: "{summary[:80]}"
 agent: "{agent_id}"
@@ -292,11 +303,6 @@ tags: ["learning", "memory", "{agent_id}"]
 ---
 [[00_VAULT_KNOWLEDGE]] | [[Archiv-Hubs]]
 """
-            try:
-                _atomic_write_text(note_path, md_content)
-                obsidian_link = f"[[{note_filename[:-3]}]]"
-            except Exception as e:
-                print(f"[MemoryBridge] Warning: Failed to write obsidian note: {e}", file=sys.stderr)
 
         with self._get_conn() as conn:
             cur = conn.cursor()
@@ -308,10 +314,28 @@ tags: ["learning", "memory", "{agent_id}"]
             learning_id = cur.lastrowid
             conn.commit()
 
+        note_error: Optional[str] = None
+        if note_path is not None and md_content is not None:
+            try:
+                os.makedirs(os.path.dirname(note_path), exist_ok=True)
+                _atomic_write_text(note_path, md_content)
+            except Exception as e:
+                note_error = str(e)
+                # Explizite Markierung: kein Link mehr, aber der DB-Satz bleibt
+                # (kein stiller Verlust des Learnings, keine verwaiste Notiz).
+                with self._get_conn() as conn:
+                    conn.execute(
+                        "UPDATE learnings SET obsidian_link = NULL WHERE id = ?",
+                        (learning_id,),
+                    )
+                    conn.commit()
+                print(f"[MemoryBridge] Warning: Failed to write obsidian note: {e}", file=sys.stderr)
+
         return {
-            "status": "success",
+            "status": "success" if not note_error else "success_with_warning",
             "learning_id": learning_id,
-            "obsidian_link": obsidian_link
+            "obsidian_link": obsidian_link if not note_error else None,
+            "note_error": note_error,
         }
 
     def record_conversation(self, agent_id: str, role: str, content: str, session_id: Optional[str] = None):
@@ -443,7 +467,7 @@ tags: ["learning", "memory", "{agent_id}"]
     @staticmethod
     def calculate_decay_score(importance: float, last_accessed_ts: Any, half_life_days: float = 14.0) -> float:
         """Berechnet exponentiellen Zerfall: score = importance * e^(-0.693 * days / half_life)."""
-        import math, time
+        import time
         if importance is None:
             importance = 1.0
         importance = float(importance)

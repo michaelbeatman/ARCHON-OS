@@ -344,6 +344,21 @@ def _put_chain(tid: str, chain: tuple, task_id: Optional[str] = None) -> None:
                 _CHAIN_TASK_BY_TRAJECTORY.pop(old, None)
 
 
+def _trajectory_for_task(task_id: str) -> str:
+    """Inverse von _CHAIN_TASK_BY_TRAJECTORY: Task-ID -> Trajectory-Key.
+
+    D02/MED: der Run-Abschluss darf nicht ``_SESSION_TRAJECTORY[task_id]``
+    lesen — das Dict ist ausschließlich nach Session-IDs gekeysst. Ohne die
+    Inverse wird eine frische trajectory_id abgeleitet und die eigentliche
+    Trajectory bleibt aktiv (Zyklusschutz/Hop-Zaehler nicht geschlossen).
+    """
+    with _CHAIN_LOCK:
+        return next(
+            (tid for tid, linked in _CHAIN_TASK_BY_TRAJECTORY.items() if linked == str(task_id)),
+            "",
+        )
+
+
 def _finalize_trajectory(tid: str, task_id: Optional[str] = None, status: str = "completed") -> None:
     with _CHAIN_LOCK:
         _TRAJECTORY_ACTIVE.discard(tid)
@@ -1261,13 +1276,20 @@ async def _watch_delegated_task(
             from backend.trajectory_budget import normalize_trajectory_id
             _w_tid = (
                 _SESSION_TRAJECTORY.get(str(s_id))
-                or _SESSION_TRAJECTORY.get(str(task_id))
+                or _trajectory_for_task(str(task_id))
                 or normalize_trajectory_id(None, origin_sess_id or task_id)
             )
             _finalize_trajectory(_w_tid, task_id, status)
+            # D13/HIGH (A5-Nachlauf): derselbe Namensraum wie der Detektor in
+            # core_dispatcher._guard_silent_failures() (flightlog_run_id).
+            # Vorher `run_id=str(task_id)` — ein dritter, unlesbarer Raum.
+            _flight_run_id = normalize_trajectory_id(
+                str(task_id) if str(task_id).startswith("traj-") else None,
+                root_ticket_id=str(task_id),
+            )
             from backend.flightlog_backtester import record_flight_event
             record_flight_event(
-                run_id=str(task_id), agent_id=str(prof_id),
+                run_id=_flight_run_id, agent_id=str(prof_id),
                 tool_name="delegation_run_complete",
                 args={"trajectory_id": _w_tid, "status": status},
                 tool_ok=str(status) in ("done", "review"), tokens_used=0,

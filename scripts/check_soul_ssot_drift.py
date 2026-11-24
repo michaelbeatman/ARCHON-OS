@@ -47,6 +47,10 @@ def _sha(text: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--allow-missing", action="store_true")
+    ap.add_argument(
+        "--min-checked", type=int, default=0,
+        help="Mindestanzahl gepruefter Runtime-SOULs; schuetzt vor gruenem Gate bei 0 Dateien (CI)",
+    )
     args = ap.parse_args()
 
     if not CANON.is_dir():
@@ -105,6 +109,12 @@ def main() -> int:
                 checked += 1
                 if _sha(soul.read_text(encoding="utf-8", errors="replace").strip()) not in known:
                     problems.append(f"{soul.relative_to(ROOT)}: Inhalt nicht in souls/ kanonisch")
+
+    if checked < args.min_checked:
+        problems.append(
+            f"nur {checked} Runtime-SOULs geprueft — Minimum {args.min_checked} "
+            "(Runtime-Caches fehlen im Checkout oder sind nicht synchronisiert)"
+        )
 
     print(f"[DRIFT] {checked} Runtime-SOULs gegen {len(canon_hashes)} kanonische Profile geprüft; {len(problems)} Abweichungen.")
     for item in problems[:25]:

@@ -203,6 +203,8 @@ def api_export_verfahrensdokumentation_pdf(request: Request):
     )
     pdf_bytes, pdf_sha256 = build_verfahrensdokumentation_pdf(snap)
 
+    audit_status = "ok"
+    audit_error = ""
     try:
         from backend.audit_log import chained_audit_log
         chained_audit_log.record_event(
@@ -217,17 +219,37 @@ def api_export_verfahrensdokumentation_pdf(request: Request):
             },
         )
     except Exception as exc:
-        logger.warning(f"[Governance] Audit-Log fuer Compliance-PDF fehlgeschlagen: {exc}")
+        # D05/M: ein fehlender Revisionsnachweis darf nie als erfolgreicher
+        # Export quittiert werden (gleiche Eskalation wie RBAC/Restore).
+        audit_status = "error"
+        audit_error = type(exc).__name__
+        logger.error("[Governance] Audit-Log fuer Compliance-PDF fehlgeschlagen: %s", exc)
+        strict_raw = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower()
+        if strict_raw not in {"0", "false", "no", "off", "none"}:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "status": "error",
+                    "reason": "audit_write_failed",
+                    "audit_status": "error",
+                    "audit_error": audit_error,
+                },
+                headers={"X-Archon-Audit-Status": "error"},
+            )
 
     filename = f"Archon_Verfahrensdokumentation_GoBD_EU_AI_Act_{snap['tenant_id']}.pdf"
+    audit_headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-Document-SHA256": pdf_sha256,
+        "X-Document-ID": snap["document_id"],
+        "X-Archon-Audit-Status": audit_status,
+    }
+    if audit_error:
+        audit_headers["X-Archon-Audit-Error"] = audit_error
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "X-Document-SHA256": pdf_sha256,
-            "X-Document-ID": snap["document_id"],
-        },
+        headers=audit_headers,
     )
 
 

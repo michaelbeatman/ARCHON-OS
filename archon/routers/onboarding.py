@@ -26,7 +26,6 @@ router = APIRouter(dependencies=[Depends(forbid_viewer_writes)], tags=["onboardi
 
 def _require_admin(request: Request) -> None:
     # Zentraler Rollenzaun: eine Pruefung, ein Injectionspunkt, fail-closed.
-    from archon.routers._rbac import require_admin_or_503
 
     require_admin_or_503(request)
 
@@ -40,9 +39,10 @@ def _forbid_demo_writes() -> None:
 
 
 def _to_dict(model: BaseModel) -> Dict[str, Any]:
-    if hasattr(model, "model_dump"):
-        return model.model_dump(exclude_unset=True)
-    return model.dict(exclude_unset=True)
+    # A7: Pydantic v2 ist verbindlich — der `.dict()`-Fallback (Pydantic v1)
+    # ist entfernt und wuerde hier eine still inkompatible Serialisierung
+    # ermoeglichen.
+    return model.model_dump(exclude_unset=True)
 
 
 class ProviderTestRequest(BaseModel):

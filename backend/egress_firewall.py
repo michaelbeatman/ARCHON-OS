@@ -5,11 +5,13 @@ Prüft ausgehende HTTP-/Webhook-Aufrufe von Agenten gegen die Domain-Allowlist (
 und blockiert unautorisierte Ziele oder direkte IP-Exfiltrationen (Prompt-Injection Data-Leak-Abwehr).
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("egress_firewall")
 
 import os
 import re
 import sqlite3
+
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -20,9 +22,9 @@ class _ArchonClosingConn(sqlite3.Connection):
             super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
-from urllib.parse import urlparse
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -43,6 +45,43 @@ def _record_audit_error(action: str, exc: BaseException) -> None:
         "[GoBD-Audit] '%s' fehlgeschlagen (count=%d): %s",
         action, _AUDIT_ERROR_COUNTS[action], exc,
     )
+
+
+def _egress_disable_opt_in() -> bool:
+    """D04/MED: explizites Opt-in fuer eine Deaktivierung der Egress-Firewall."""
+    return os.environ.get("ARCHON_ALLOW_EGRESS_FIREWALL_DISABLE", "").strip().lower() in (
+        "1", "true", "yes", "on"
+    )
+
+
+def _audit_egress_disabled(agent_id: str, host: str, target_url: str, opt_in: bool) -> str:
+    """D04/MED: signiertes (HMAC-Hashketten-)Event bei Deaktivierung.
+
+    Die Audit-Schreibung darf den Fail-Closed-Pfad nicht aufweichen: ein
+    Fehler wird sichtbar gemacht (_record_audit_error), aber nicht geworfen.
+    """
+    action = "egress_firewall_disabled"
+    try:
+        from backend.audit_log import chained_audit_log
+
+        chained_audit_log.record_event(
+            category="security",
+            action=action,
+            agent_id=agent_id or "unknown",
+            payload={
+                "hostname": host,
+                "target_url": target_url,
+                "bypassed": True,
+                "explicit_opt_in": opt_in,
+                "reason": (
+                    "Egress-Firewall per settings.json deaktiviert; "
+                    "Zugriff fail-closed blockiert."
+                ),
+            },
+        )
+    except Exception as exc:
+        _record_audit_error(action, exc)
+    return action
 
 
 def _active_tenant_id() -> str:
@@ -116,7 +155,7 @@ class EgressFirewall:
             zero_strict = (os.environ.get("PRIVACY_ZERO_EGRESS") or "").strip().lower() in ("1", "true", "yes", "on")
 
         if zero_strict:
-            from backend.audit_log import sanitize_llm_endpoint, chained_audit_log
+            from backend.audit_log import chained_audit_log, sanitize_llm_endpoint
             clean_ep, _, zone = sanitize_llm_endpoint(target_url)
             if zone != "LOCAL_ON_PREM":
                 reason = f"Zero-Egress Strict aktiv: Externes Ziel '{host}' ({zone}) hart blockiert."
@@ -147,7 +186,38 @@ class EgressFirewall:
                 }
 
         if not enabled:
-            return {"allowed": True, "bypassed": True, "hostname": host, "url": target_url}
+            # D04/MED: ein settings.json-Schalter allein war ein ungesicherter
+            # Fail-Open-Pfad. Deaktivierung ist nur mit explizitem Env-Opt-in
+            # zulaessig und wird signiert auditiert. Ein `bypassed`-Flag darf
+            # NIE als Positivpruefung (`allowed=True`) an Aufrufer zurueckgehen.
+            opt_in = _egress_disable_opt_in()
+            _audit_egress_disabled(agent_id, host, target_url, opt_in)
+            reason = (
+                "Egress-Firewall ist deaktiviert (bypassed=True) — Zugriff fail-closed "
+                "blockiert; allowed=True setzt eine echte Positivpruefung voraus."
+            )
+            now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+                    conn.execute(
+                        "INSERT INTO egress_firewall_logs "
+                        "(agent_id, target_url, hostname, allowed, reason, created_at, tenant_id) "
+                        "VALUES (?, ?, ?, 0, ?, ?, ?)",
+                        (agent_id, target_url, host, reason, now_iso, tenant_id),
+                    )
+                    conn.commit()
+            except Exception as exc:
+                _record_audit_error("egress_firewall_disabled_log", exc)
+            return {
+                "allowed": False,
+                "blocked": True,
+                "bypassed": True,
+                "agent_id": agent_id,
+                "target_url": target_url,
+                "hostname": host,
+                "explicit_opt_in": opt_in,
+                "reason": reason,
+            }
 
         allowlist: List[str] = [str(d).lower().strip() for d in cfg.get("allowed_domains", [])]
         block_raw_ip = bool(cfg.get("block_raw_ip_egress", True))

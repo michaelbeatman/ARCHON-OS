@@ -23,7 +23,9 @@ B wurde auf A und anschließend auf `origin/main` (9947e098) rebase't; beide Str
 | `388f03cb` | D15 | Manifest-Hash über normalisierte Zeilenenden; `.gitattributes` `souls/** text eol=lf` |
 | `64bd85cf` | D10, D03 | `time.sleep(86400)`-Scheinworker aus beiden Compose-Dateien entfernt; `backup_archon.py` sichert Tenant-DBs; Litestream `watch: true` |
 | `8726cb1b` | D01 | War-Room: UNKNOWN + `evaluation_failed` statt erfundenem MEDIUM, fail-closed; Eval-Suite-Endpoint mit RBAC |
-| `388f03cb`+ | D16 | `backend/trace_context.py` (W3C traceparent, contextvars), `TraceContextMiddleware`, Audit-Korrelation, OmniRoute-Header, Doku-Korrektur |
+| `dbfdf0b0` | D16 | `backend/trace_context.py` (W3C traceparent, contextvars), `TraceContextMiddleware`, Audit-Korrelation, OmniRoute-Header, Doku-Korrektur |
+| `7406fca` | Doku | `.gitignore`-Ausnahme: alle 16 Domänenberichte + Gesamt- und Statusbericht sind jetzt versioniert |
+| `B7` | D08 | `api_provider.collect_keys()` korrekt mit 30-s-TTL-Cache + Lock + Invalidierung nach `deploy_keys()` — kein Profil-.env-Scan pro Dispatch mehr |
 
 *(Die Commit-Hashes können nach dem Rebase abweichen — maßgeblich ist `git log audit-fixes-mass`.)*
 
@@ -34,7 +36,7 @@ B wurde auf A und anschließend auf `origin/main` (9947e098) rebase't; beide Str
 
 ## Offene Punkte (ausdrücklich noch NICHT behoben)
 1. **D16:** Trace-Propagation über alle 18 Systemgrenzen (n8n, Hermes, PocketBase, MCP, SSE, Outbox, `to_thread`) und echter OTel-Collector/Langfuse-Export mit Sampling.
-2. **D08:** Performance-Hotpaths (`api_provider.py` Key-Cache, `chat.py` SQLite-Writes via `to_thread`, `LIMIT`-Queries, Frontend-Virtualisierung).
+2. **D08 (Rest):** Performance-Hotpaths (`chat.py` SQLite-Writes via `to_thread`, `SELECT *`/`fetchall()` ohne `LIMIT`, Frontend-Virtualisierung der 832 Templates). Der `api_provider.py`-Key-Cache ist behoben.
 3. **D11/D14:** Pydantic-Handoffs ohne stille Truncation; `NO_CONSENSUS`-Tie-Breaking vollständig; Vier-Augen-Ersteller-Abgleich.
 4. **D10:** Produktiv-Deploy-Pfad (Ansible nutzt weiterhin `docker-compose.dev.yml` mit `--reload`); externer Dead-Man-Switch; RPO/RTO.
 5. **Laufzeit-Caches:** `.hermes/profiles/` und `data/hermes_profiles/` müssen im Haupt-Repo einmalig mit `python scripts/sync_soul_modes.py --mode compact` aus der neuen SSOT regeneriert werden (gitignorierte Caches, nicht im Worktree sichtbar).

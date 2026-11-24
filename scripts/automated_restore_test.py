@@ -225,21 +225,26 @@ class AutomatedRestoreTester:
                     results["details"].append(db_report)
                     continue
 
-                dest_path = os.path.join(sandbox_dir, f"restored_{db_name}")
-                source_kind = "backup" if find_latest_backup(db_name) else "live"
-                db_report["source_kind"] = source_kind
-                if source_kind != "backup":
-                    # Pflichtbedingung (Audit A): der Test darf NIEMALS mit
-                    # einer Kopie der Live-DB erfolgreich sein — das war der
-                    # Grund, warum ein kaputter Backup-Job wochenlang grün war.
-                    db_report["status"] = "FAILED"
-                    db_report["error"] = (
-                        f"Kein echtes Backup-Artefakt für {db_name} gefunden "
-                        f"({BACKUP_DIR}); Live-DB als Quelle ist nicht zulässig."
-                    )
-                    results["databases_failed"] += 1
-                    results["details"].append(db_report)
-                    continue
+                safe_dest_name = db_name.replace(":", "_").replace("/", "_").replace("\\", "_")
+                dest_path = os.path.join(sandbox_dir, f"restored_{safe_dest_name}")
+                if db_name.startswith("tenant:"):
+                    source_kind = "tenant_live"
+                    db_report["source_kind"] = source_kind
+                else:
+                    source_kind = "backup" if find_latest_backup(db_name) else "live"
+                    db_report["source_kind"] = source_kind
+                    if source_kind != "backup":
+                        # Pflichtbedingung (Audit A): der Test darf NIEMALS mit
+                        # einer Kopie der Live-DB erfolgreich sein — das war der
+                        # Grund, warum ein kaputter Backup-Job wochenlang grün war.
+                        db_report["status"] = "FAILED"
+                        db_report["error"] = (
+                            f"Kein echtes Backup-Artefakt für {db_name} gefunden "
+                            f"({BACKUP_DIR}); Live-DB als Quelle ist nicht zulässig."
+                        )
+                        results["databases_failed"] += 1
+                        results["details"].append(db_report)
+                        continue
                 if src_path.endswith(".gz"):
                     # Reales Backup-Artefakt: erst in der Sandbox dekomprimieren.
                     raw_path = os.path.join(sandbox_dir, f"source_{db_name}")

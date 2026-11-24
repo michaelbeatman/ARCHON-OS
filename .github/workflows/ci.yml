@@ -175,8 +175,8 @@ jobs:
           for d in details:
               print(f"  {d.get('status')}: {d.get('database')} {d.get('error') or ''}")
           if (report.get("overall_status") != "PASSED"
-                  or len(details) != 5 or len(passed) != 5):
-              sys.exit("Restore-Gate fehlgeschlagen: 5/5 erwartet")
+                  or len(details) < 5 or len(passed) != len(details)):
+              sys.exit(f"Restore-Gate fehlgeschlagen: {len(passed)}/{len(details)} bestanden")
           PY
 
   frontend-build:

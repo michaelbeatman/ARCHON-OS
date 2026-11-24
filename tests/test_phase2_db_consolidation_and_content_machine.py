@@ -287,4 +287,10 @@ def test_tenant_context_and_backup_manager_support_consolidated_dbs(tmp_path, mo
     assert res["status"] == "success"
     # Secrets (Vault-/HITL-Keys) zählen nicht als DB-Backups (Audit-Fix).
     db_backups = [b for b in res["backups"] if b.get("kind") != "secret"]
-    assert len(db_backups) == 3
+    # D03: der Manager sichert inzwischen auch alle Tenant-DBs — hier zählen
+    # nur die drei monkeypatchten konsolidierten Ziele.
+    consolidated = [
+        b for b in db_backups
+        if b.get("db_name") in ("ops.db", "business.db", "memory.db")
+    ]
+    assert len(consolidated) == 3

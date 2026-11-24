@@ -157,7 +157,8 @@ def test_delete_verweigert_gate_mit_falschem_kind(service_umgebung):
 
 
 def test_delete_schuetzt_systemprofile(service_umgebung):
-    for name in ("default", "hermes_default", "micha"):
+    # 'micha' wurde bewusst aus der SSOT entfernt (User-Entscheidung 24.11.).
+    for name in ("default", "hermes_default"):
         with pytest.raises(ProfileProtectedError) as exc:
             delete_profile(name)
         assert name in str(exc.value)

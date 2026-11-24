@@ -134,7 +134,11 @@ def test_m76_kanban_verifier_budget_and_proof():
 
     # HITL decision helper: ohne verifiziertes Ergebnis bleibt der Override
     # blockiert (frueher wurde er unberechtigt freigegeben).
-    d_ovr = resolve_card_hitl_decision("override_budget", current_budget=10000, override_budget=25000)
+    # D14: Overrides brauchen einen verifizierten Ersteller (fail-closed).
+    d_ovr = resolve_card_hitl_decision(
+        "override_budget", current_budget=10000, override_budget=25000,
+        actor="approver", created_by="requester",
+    )
     assert d_ovr["next_status"] == "blocked"
     assert d_ovr["block_kind"] == "override_reverification_failed_hitl"
     assert d_ovr["verified"] is False
@@ -145,6 +149,7 @@ def test_m76_kanban_verifier_budget_and_proof():
     d_ok = resolve_card_hitl_decision(
         "override_budget", current_budget=10000, override_budget=25000,
         result_text="Fertig", proof_command=ok_cmd,
+        actor="approver", created_by="requester",
     )
     assert d_ok["verified"] is True
     assert d_ok["block_kind"] == "approval_granted"

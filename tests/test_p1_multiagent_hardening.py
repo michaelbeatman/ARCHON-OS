@@ -26,7 +26,8 @@ def test_p1_root_orchestrator_can_delegate():
 
 def test_p1_delegation_subtasks_are_not_stuck_in_approval():
     src = (REPO_ROOT / "archon/core/delegation.py").read_text(encoding="utf-8")
-    assert '_del_cfg.get("autonomy", "autonomous")' in src
+    # D07: fail-closed Default 'manual' — kein HITL-Bypass bei Config-Fehler.
+    assert '_del_cfg.get("autonomy", "manual")' in src
     assert '"approval_granted" if _del_autonomy == "autonomous"' in src
     assert "block_kind" in src
 

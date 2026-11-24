@@ -20,7 +20,7 @@ def test_no_sleeping_placeholder_worker_in_compose():
 def test_backup_discovers_tenant_dbs():
     text = (ROOT / "backup_archon.py").read_text(encoding="utf-8")
     assert "data/tenants" in text
-    assert "tenant_{_tid}_{_db}" in text
+    assert "tenant_{_tid}_{_stem}" in text  # D03: alle tenant-*.db, nicht nur 3 Namen
     ast.parse(text)
 
 

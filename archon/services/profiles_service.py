@@ -61,7 +61,9 @@ __all__ = [
 GATE_KIND_TOOLS = "tools_erweiterung"
 GATE_KIND_DELETE = "profil_loeschen"
 
-PROTECTED_PROFILES = ("default", "hermes_default", "founder", "micha")
+# D02/MED: 'micha' wurde bewusst aus der SSOT entfernt — kein Schutz mehr für
+# eine nicht mehr existierende Profil-ID.
+PROTECTED_PROFILES = ("default", "hermes_default", "founder")
 
 
 def _delegation_eval_gate_required() -> bool:
@@ -280,7 +282,8 @@ def save_profile(profile_data: Dict[str, Any], *,
         reasoning_val = "high"
     profile_data["reasoning_level"] = reasoning_val
     status_val = profile_data.get("status", "active")
-    is_fav = bool(profile_data.get("is_favorite", (p_id in ["default", "micha"])))
+    # D02/MED: Favoriten-Default auf registrierte IDs, nicht auf gelöschtes 'micha'.
+    is_fav = bool(profile_data.get("is_favorite", (p_id in ["default", "executive_decision_architect"])))
 
     # Prompt robust auflösen: Payload -> SOUL.md auf Disk -> Fallback
     prompt_val = (profile_data.get("prompt") or profile_data.get("system_prompt") or "").strip()

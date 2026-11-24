@@ -9,6 +9,31 @@ import os
 from typing import Dict, Any, List
 
 
+def _jail_disable_opt_in() -> bool:
+    """Explizites Opt-in fuer eine (auditierte) Jail-Deaktivierung."""
+    return os.environ.get("ARCHON_ALLOW_RBAC_JAIL_DISABLE", "").strip().lower() in ("1", "true", "yes")
+
+
+def _audit_jail_bypass(role: str, tool_name: str, opt_in: bool) -> None:
+    """Signiertes Audit-Event bei versuchter Jail-Umgehung."""
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="security",
+            action="rbac_jail_bypass_blocked",
+            agent_id=role or "unknown",
+            payload={
+                "role": role,
+                "tool": tool_name,
+                "bypassed": True,
+                "explicit_opt_in": opt_in,
+            },
+        )
+    except Exception:
+        # Audit darf den Deny-Pfad nicht aufweichen.
+        pass
+
+
 def _get_cfg() -> Dict[str, Any]:
     try:
         from backend.autonomy_settings import get_module_config
@@ -60,7 +85,25 @@ class AgentRBACJail:
     ) -> Dict[str, Any]:
         cfg = _get_cfg()
         if not bool(cfg.get("enabled", True)):
-            return {"allowed": True, "bypassed": True, "role": role, "tool": tool_name}
+            # D04/MED: ein deaktivierter Jail lieferte frueher
+            # {"allowed": True, "bypassed": True}; PolicyEngine._enforce_file_jail()
+            # prueft nur `allowed` und liess den Bypass damit passieren. Ein
+            # `bypassed` darf NIE als Positivpruefung gelten -> hart deny.
+            opt_in = _jail_disable_opt_in()
+            _audit_jail_bypass(role, tool_name, opt_in)
+            return {
+                "allowed": False,
+                "blocked": True,
+                "bypassed": True,
+                "role": role,
+                "tool": tool_name,
+                "target_path": target_path,
+                "explicit_opt_in": opt_in,
+                "reason": (
+                    "RBAC-Jail ist deaktiviert (bypassed=True) — Zugriff fail-closed "
+                    "blockiert; allowed=True setzt eine echte Positivpruefung voraus."
+                ),
+            }
 
         norm_role = (role or "researcher").lower().strip()
         if norm_role not in ROLE_POLICIES:

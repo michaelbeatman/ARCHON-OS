@@ -197,7 +197,10 @@ def _evaluate_text_item(
             schema_ok = False
             failures.append(f"Ungueltiges JSON: {jerr}")
 
-    # 5. Anti-AI-Slop Check via content_machine falls verfügbar
+    # 5. Anti-AI-Slop Check via content_machine — D01/MED: fail-closed.
+    # Frueher liess `except: pass` den Default 100.0 stehen und `passed` ignorierte
+    # den Wert vollstaendig: ein intern fehlgeschlagener Quality-Check fuehrte
+    # trotzdem zur Freigabe. Jetzt sperrt ein fehlgeschlagener Check das Item.
     anti_slop_val = 100.0
     try:
         from backend.content_machine import evaluate_asset_quality
@@ -206,11 +209,16 @@ def _evaluate_text_item(
         if anti_slop_val < 70.0:
             score -= (70.0 - anti_slop_val) * 0.5
             failures.append(f"Anti-Slop-Index niedrig ({anti_slop_val:.0f}/100)")
-    except Exception:
-        pass
+    except Exception as exc:
+        anti_slop_val = 0.0
+        failures.append(f"Anti-Slop-Prüfung fehlgeschlagen: {exc}")
 
     final_score = max(0.0, min(100.0, round(score, 1)))
-    passed = final_score >= float(item.get("min_score") or 65.0) and not slop_hits
+    passed = (
+        final_score >= float(item.get("min_score") or 65.0)
+        and not slop_hits
+        and anti_slop_val >= 70.0
+    )
 
     return {
         "item_id": item.get("id"),

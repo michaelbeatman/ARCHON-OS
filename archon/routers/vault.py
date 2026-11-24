@@ -22,33 +22,77 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["
 _VAULT_FILES_CACHE: Dict[str, Any] = {"ts": 0.0, "data": []}
 
 
-def _atomic_write_text(path: str, content: str) -> None:
-    """C20: Temp+fsync+os.replace — kein halber Vault-Stand bei Abbruch."""
-    tdir = os.path.dirname(os.path.abspath(path)) or "."
-    os.makedirs(tdir, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=tdir, prefix=".vault_", suffix=".tmp")
+def _atomic_write_text(
+    path: str,
+    content: str,
+    *,
+    expected_mtime: Optional[float] = None,
+    expected_size: Optional[int] = None,
+) -> None:
+    """C20 + D03/MED: Temp+fsync+os.replace mit atomarer Konfliktprüfung.
+
+    Der Vault-weite OS-Lock (SQLite-EXCLUSIVE auf einer separaten Lock-DB)
+    serialisiert Schreibzugriffe ueber Prozessgrenzen. mtime/size werden
+    UNMITTELBAR vor ``os.replace`` unter diesem Lock erneut geprueft; bei
+    Abweichung HTTP 409 und kein Replace. Damit kann Obsidian nicht im Fenster
+    zwischen Erstpruefung und Write dazwischenschreiben.
+    """
+    from backend.process_lock import try_acquire_loop_lock
+
+    lock = try_acquire_loop_lock("vault_write", timeout=5.0)
+    if lock is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Vault wird gerade von einem anderen Prozess geschrieben.",
+        )
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-        # H (dieses Audits): ohne Directory-fsync kann der Rename nach
-        # Stromausfall im FS-Journal verloren gehen (siehe db_backup_manager).
+        tdir = os.path.dirname(os.path.abspath(path)) or "."
+        os.makedirs(tdir, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=tdir, prefix=".vault_", suffix=".tmp")
         try:
-            dir_fd = os.open(tdir, os.O_RDONLY)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+
+            # D03/MED: Wiederholung der Konfliktprüfung direkt vor dem
+            # Austausch — unter demselben Lock wie der Replace.
+            if expected_mtime is not None and os.path.exists(path):
+                try:
+                    if abs(float(os.path.getmtime(path)) - float(expected_mtime)) > 0.001:
+                        raise HTTPException(
+                            status_code=409, detail="Vault-Datei wurde inzwischen geaendert."
+                        )
+                except (TypeError, ValueError):
+                    pass
+            if expected_size is not None and os.path.exists(path):
+                try:
+                    if int(os.path.getsize(path)) != int(expected_size):
+                        raise HTTPException(
+                            status_code=409, detail="Vault-Datei wurde inzwischen geaendert (Groesse)."
+                        )
+                except (TypeError, ValueError):
+                    pass
+
+            os.replace(tmp, path)
+            # H (dieses Audits): ohne Directory-fsync kann der Rename nach
+            # Stromausfall im FS-Journal verloren gehen (siehe db_backup_manager).
             try:
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
-        except OSError:
-            pass
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+                dir_fd = os.open(tdir, os.O_RDONLY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
+            except OSError:
+                pass
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+    finally:
+        lock.release()
 
 
 def _active_tenant_id() -> str:
@@ -199,7 +243,11 @@ def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body
         logger.warning("[Vault] Audit fehlgeschlagen, Edit abgelehnt: %s", exc)
         raise HTTPException(status_code=500, detail="Audit-Log nicht verfügbar — Vault-Aenderung abgelehnt.")
     os.makedirs(os.path.dirname(real_path), exist_ok=True)
-    _atomic_write_text(real_path, content)
+    _atomic_write_text(
+        real_path, content,
+        expected_mtime=expected_mtime,
+        expected_size=expected_size,
+    )
     cache = _get_vault_cache()
     cache["ts"] = 0.0
     return {"status": "success", "path": real_path}

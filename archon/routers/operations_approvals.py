@@ -43,6 +43,12 @@ class DelegationSetRequest(BaseModel):
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
+# D14/MED (Re-Audit): die Auto-Freigabe-Schwelle ist eine Hoheits-Schwelle und
+# darf NICHT ueber den Einzel-Admin-Pfad verschoben werden. Fixierter Wert als
+# SSOT im Code (Seed der Engine ist 50.00) — Aenderungen nur mit code-seitiger
+# Aenderung, nicht per POST /approvals/policies.
+FINANCE_AUTO_APPROVAL_MAX_FIXED = "50.00"
+
 
 @router.get("/approvals/policies")
 def api_get_approval_policies(request: Request, domain: Optional[str] = None):
@@ -67,12 +73,110 @@ def api_update_approval_policy(request: Request, req: ApprovalPolicyUpdateReques
     if not policy_key or new_value == "":
         raise HTTPException(status_code=400, detail={"code": "approvals_policy_key_value_required", "params": {}})
 
+    # D14/MED: 50 -> 499 EUR durch EINEN Admin war moeglich, weil die Engine
+    # fuer finance_auto_approval_max nur die Invariante "< four_eyes_min"
+    # prueft. Der Router blockiert den Einzel-Admin-Pfad hart. Ein Ruecksetzen
+    # auf den fixierten Wert bleibt als Reparaturpfad erlaubt.
+    if policy_key == "finance_auto_approval_max":
+        try:
+            _is_fixed_value = float(new_value) == float(FINANCE_AUTO_APPROVAL_MAX_FIXED)
+        except (TypeError, ValueError):
+            _is_fixed_value = False
+        if not _is_fixed_value:
+            logger.warning(
+                "Blocked single-admin change of finance_auto_approval_max to '%s' by '%s'.",
+                new_value, user_id,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "approvals_policy_auto_max_fixed",
+                    "message": (
+                        "finance_auto_approval_max ist auf 50.00 EUR fixiert und darf nicht "
+                        "durch einen einzelnen Admin erhoeht werden."
+                    ),
+                    "params": {"policy_key": policy_key, "fixed_value": FINANCE_AUTO_APPROVAL_MAX_FIXED},
+                },
+            )
+
     try:
         from backend.approval_policy_engine import approval_engine
         res = approval_engine.update_policy(policy_key, new_value, user_id=user_id)
         return {"status": "success", "result": res}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/approvals/policies/proposals")
+def api_get_policy_change_proposals(request: Request, status: Optional[str] = None):
+    """D14/MED: Vorschlaege zur Aenderung einer Hoheits-Schwelle sichtbar machen."""
+    require_admin_or_503(request)
+    try:
+        from backend.approval_policy_engine import approval_engine
+        getter = getattr(approval_engine, "get_policy_change_proposals", None)
+        if callable(getter):
+            proposals = getter(status=status)
+        else:
+            # Der Engine gibt es aktuell keinen oeffentlichen Getter; read-only
+            # ueber die bestehende Verbindung — kein zweiter DB-Pfad, kein Write.
+            with approval_engine._get_conn() as conn:
+                sql = "SELECT * FROM approval_policy_change_proposals"
+                params: list = []
+                if status:
+                    sql += " WHERE status = ?"
+                    params.append(status)
+                sql += " ORDER BY created_at DESC"
+                proposals = [dict(r) for r in conn.execute(sql, params).fetchall()]
+        return {"status": "success", "proposals": proposals}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/approvals/policies/proposals/{proposal_id}/approve")
+def api_approve_policy_change_proposal(request: Request, proposal_id: str):
+    """Zweite, unabhaengige Freigabe fuer eine Policy-Aenderung (Vier-Augen).
+
+    D14/MED: ``approve_policy_change_proposal()`` existierte nur im Engine-Modul.
+    Der Endpunkt ist der fehlende Konsument; Actor kommt ausschliesslich aus
+    der verifizierten Session, nie aus dem Body.
+    """
+    require_admin_or_503(request)
+    approver_id = require_session_actor(request)
+    proposal_id = str(proposal_id or "").strip()
+    if not proposal_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "approvals_proposal_id_required", "params": {}},
+        )
+    try:
+        from backend.approval_policy_engine import approval_engine
+        res = approval_engine.approve_policy_change_proposal(proposal_id, approver_id=approver_id)
+        return {"status": "success", "result": res}
+    except ValueError as exc:
+        message = str(exc)
+        if "Vier-Augen" in message or "andere Person" in message:
+            logger.warning(
+                "Vier-Augen-Verletzung: '%s' wollte Policy-Vorschlag %s freigeben.",
+                approver_id, proposal_id,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "approvals_proposal_four_eyes_violation",
+                    "message": message,
+                    "params": {"proposal_id": proposal_id},
+                },
+            )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "approvals_proposal_invalid",
+                "message": message,
+                "params": {"proposal_id": proposal_id},
+            },
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

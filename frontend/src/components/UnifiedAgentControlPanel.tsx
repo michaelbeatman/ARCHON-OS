@@ -85,11 +85,14 @@ const API_BASE = "/api/archon";
 
   const activeAgent = REGISTERED_AGENTS.find((a) => a.id === selectedAgentId) || REGISTERED_AGENTS[0];
 
+  // D08/S-8.5: Request an den Lifecycle des Profiles binden.
+  const sendAbortRef = React.useRef<AbortController | null>(null);
+
   // Load persistent session from backend when profile changes
-  const loadSession = async (profileId: string) => {
+  const loadSession = async (profileId: string, signal?: AbortSignal) => {
     setSessionLoaded(false);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/quickchat/session/${profileId}`);
+      const res = await fetch(`${API_BASE}/api/v1/quickchat/session/${profileId}`, { signal });
       if (res.ok) {
         const data = await res.json();
         const history = (data.messages || []).map((m: any) => ({
@@ -105,7 +108,8 @@ const API_BASE = "/api/archon";
           setMessages(history);
         }
       }
-    } catch {
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
       setMessages([{ role: "agent", text: "Hallo! Wie kann ich dir helfen?" }]);
     } finally {
       setSessionLoaded(true);
@@ -114,9 +118,13 @@ const API_BASE = "/api/archon";
 
   // Load session on mount and on profile switch
   React.useEffect(() => {
-    loadSession(selectedAgentId);
+    const controller = new AbortController();
+    loadSession(selectedAgentId, controller.signal);
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAgentId]);
+
+  React.useEffect(() => () => sendAbortRef.current?.abort(), []);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,16 +135,20 @@ const API_BASE = "/api/archon";
     setPromptInput("");
     setIsLoading(true);
 
+    const controller = new AbortController();
+    sendAbortRef.current = controller;
     try {
       const res = await fetch(`${API_BASE}/api/v1/quickchat/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profile_id: selectedAgentId, message: userText }),
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setMessages((prev) => [...prev, { role: "agent", text: data.reply }]);
     } catch (err: any) {
+      if (err?.name === "AbortError") return;
       setMessages((prev) => [
         ...prev,
         { role: "agent", text: `⚠ Verbindungsfehler: ${err.message}` },

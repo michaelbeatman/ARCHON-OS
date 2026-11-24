@@ -1,20 +1,70 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { pb } from '@/lib/pocketbase';
 import { Lock, Mail, Key, ShieldCheck, AlertCircle, LogIn } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
   onLoginSuccess: () => void;
+  /** D09/S-9.5: Escape und Fokus-Rueckgabe brauchen einen Schliesspfad. */
+  onClose?: () => void;
   themeMode?: 'light' | 'dark';
 }
 
-export function AuthModal({ isOpen, onLoginSuccess, themeMode = 'light' }: AuthModalProps) {
+export function AuthModal({ isOpen, onLoginSuccess, onClose, themeMode = 'light' }: AuthModalProps) {
   const [identity, setIdentity] = useState('admin@archon.local');
   const [password, setPassword] = useState('Mackie.d8b');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // D09/S-9.5: Dialog-Semantik, Initialfokus, Tab-Falle, Escape und
+  // Fokus-Restore. Der Ref haelt den Callback, damit Tastatureingaben nicht
+  // durch eine neue Props-Identitaet den Fokus zuruecksetzen.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const dialog = dialogRef.current;
+    const focusableItems = () => Array.from(
+      dialog?.querySelectorAll<HTMLElement>(
+        'input:not([disabled]), button:not([disabled]), a[href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) ?? []
+    );
+    focusableItems()[0]?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = focusableItems();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (!dialog?.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previousFocus?.focus();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -44,7 +94,13 @@ export function AuthModal({ isOpen, onLoginSuccess, themeMode = 'light' }: AuthM
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-      <div className={`w-full max-w-md rounded-2xl border p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200 ${
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        tabIndex={-1}
+        className={`w-full max-w-md rounded-2xl border p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200 ${
         isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
       }`}>
         
@@ -53,7 +109,7 @@ export function AuthModal({ isOpen, onLoginSuccess, themeMode = 'light' }: AuthM
           <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 flex items-center justify-center mx-auto text-xl font-bold font-mono shadow-lg shadow-emerald-500/10">
             PB
           </div>
-          <h2 className="text-xl font-bold tracking-tight">PocketBase CRM Login</h2>
+          <h2 id="auth-modal-title" className="text-xl font-bold tracking-tight">PocketBase CRM Login</h2>
           <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
             Melde dich an, um Zugriff auf die Kontakte-Collection zu erhalten.
           </p>

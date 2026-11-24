@@ -153,7 +153,17 @@ class EvalRegressionRunner:
             "simulated": simulated,
             "status": status,
             "cases": results,
+            # D01/MED: `release_approved` ist ein Diagnosewert ohne Konsument —
+            # keine Promotion-/Deploy-Gate verdrahtet. Explizit kennzeichnen,
+            # damit niemand den Wert als echte Freigabe liest.
+            "advisory_only": True,
+            "release_gate_consumer": None,
         }
+        release_note = (
+            "Diagnosewert: release_approved ist advisory und wird von keinem "
+            "Promotion-/Deploy-Gate konsumiert; ohne echten Kandidaten-Executor "
+            "erfolgt grundsaetzlich keine Freigabe."
+        )
 
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""
@@ -177,6 +187,9 @@ class EvalRegressionRunner:
             "pass_rate_pct": pass_rate,
             "min_pass_rate_pct": min_pass_rate,
             "release_approved": approved,
+            "advisory_only": True,
+            "release_gate_consumer": None,
+            "release_note": release_note,
             "cases": results
         }
 

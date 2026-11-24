@@ -498,11 +498,20 @@ async def _execute_mission_control_task(
                             _paperclip_hire_profile_by_id(sub_agent_id, profiles, current_task_id=sub_task_id)
                         except Exception as _hire_err:
                             logger.warning(f"[AutoHire/MusterB] {_hire_err}")
+
+                    # D01/MED: nach dem Fan-out die Prognose durch die echte
+                    # Subtask-Anzahl ersetzen. Der Task wird in `_commit()` (finally)
+                    # atomar in den Task-Store gemergt.
+                    if task.get("subtask_ids"):
+                        task["subagents_count"] = len(task["subtask_ids"])
+                        task["subagents_count_source"] = "actual"
+                        task["subagents_count_estimated"] = False
         except Exception as parse_err:
             logger.warning(f"[Auto-Staffing] Fehler beim Parsen der Nominierungsmatrix: {parse_err}")
 
         # Cascade-Loop Schritt A: Hat Robert strategisch vorgelegt ohne direkte Nominierung? -> Sandy beauftragen
-        if agent_id in ("executive_decision_architect", "robert", "micha", "default") and not task.get("parent_project_id"):
+        # D02/MED: 'micha' ist aus der SSOT entfernt — nie wieder als Sonderfall.
+        if agent_id in ("executive_decision_architect", "robert", "default") and not task.get("parent_project_id"):
             if not task.get("subtask_ids"):
                 _spawn_tracked(trigger_sandy(task, profiles), name="sandy_staffing")
 

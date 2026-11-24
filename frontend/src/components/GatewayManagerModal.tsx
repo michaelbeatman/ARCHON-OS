@@ -30,17 +30,18 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [savedTimeout, setSavedTimeout] = useState(false);
 
-  const fetchProfiles = useCallback(async () => {
+  const fetchProfiles = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/gateway/list`);
+      const res = await fetch(`${API_BASE}/api/v1/gateway/list`, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setProfiles(data.profiles || []);
       setIdleTimeout(data.idle_timeout_minutes ?? 30);
       setIdleInput(String(data.idle_timeout_minutes ?? 30));
     } catch (e: any) {
+      if (e?.name === "AbortError") return;
       setError(`Fehler beim Laden: ${e.message}`);
     } finally {
       setLoading(false);
@@ -48,7 +49,11 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
   }, []);
 
   useEffect(() => {
-    if (isOpen) fetchProfiles();
+    if (!isOpen) return;
+    // D08/S-8.5: Profil-Liste beim Schliessen/Unmount abbrechen.
+    const controller = new AbortController();
+    void fetchProfiles(controller.signal);
+    return () => controller.abort();
   }, [isOpen, fetchProfiles]);
 
   // HTTP-Fehler duerfen nicht verschluckt werden: res.ok pruefen und den
@@ -181,7 +186,7 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={fetchProfiles}
+              onClick={() => void fetchProfiles()}
               disabled={loading}
               className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
               title="Aktualisieren"

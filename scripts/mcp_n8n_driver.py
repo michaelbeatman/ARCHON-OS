@@ -274,6 +274,21 @@ class N8nMcpDriver:
         from utils.safe_http import webhook_signature_headers, _RejectAllRedirectsHandler
         headers.update(webhook_signature_headers(body_bytes))
 
+        # D06/MED-Rest: der Redirect-Block allein verhindert nicht, dass der
+        # X-N8N-API-KEY an einen fremden Host geht. Ziel muss zusaetzlich gegen
+        # die Egress-Regeln geprueft und auf die konfigurierte n8n-Base-URL
+        # begrenzt sein (kein IMDS-/SSRF-Ziel mit API-Key).
+        from urllib.parse import urlparse
+        from utils.egress_guard import EgressBlocked, check_target_url
+        _base = urlparse(self.base_url)
+        _allowed_n8n = f"{_base.hostname}:{_base.port or (443 if _base.scheme == 'https' else 80)}"
+        try:
+            if not url.rstrip("/").startswith(self.base_url.rstrip("/") + "/"):
+                raise EgressBlocked("Ziel liegt ausserhalb der konfigurierten n8n-Base-URL", url)
+            check_target_url(url, allowed=[_allowed_n8n])
+        except EgressBlocked as exc:
+            return {"status": "error", "error": f"Egress-Block: {exc}"}
+
         req = urllib.request.Request(url, data=body_bytes, headers=headers, method="POST")
         opener = urllib.request.build_opener(_RejectAllRedirectsHandler())
 

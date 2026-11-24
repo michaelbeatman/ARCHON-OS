@@ -101,6 +101,12 @@ export function withTraceHeaders(init?: RequestInit): RequestInit {
   return { ...init, headers };
 }
 
+/** D08/S-8.5: lifecycle-gebundene Requests koennen ein AbortSignal durchreichen. */
+function withSignal(init: RequestInit | undefined, signal?: AbortSignal): RequestInit | undefined {
+  if (!signal) return init;
+  return { ...(init || {}), signal };
+}
+
 export async function archonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const cleanPath = path.replace(/^\/+/, '');
   const traced = withTraceHeaders(init);
@@ -148,8 +154,10 @@ export const archonApi = {
     ),
 
   // Workflow & DAG Engine
-  listWorkflowTemplates: () =>
-    archonFetch<{ status: string; templates: WorkflowTemplate[] }>('api/v2/workflows/templates'),
+  listWorkflowTemplates: (signal?: AbortSignal) =>
+    archonFetch<{ status: string; templates: WorkflowTemplate[] }>(
+      'api/v2/workflows/templates', withSignal(undefined, signal)
+    ),
   runWorkflowTemplate: (tplId: string, inputs: Record<string, string> = {}) =>
     archonFetch<{ status: string; run_id: string }>(`api/v2/workflows/templates/${encodeURIComponent(tplId)}/run`, {
       method: 'POST',
@@ -160,9 +168,14 @@ export const archonApi = {
       method: 'POST',
       body: JSON.stringify(template),
     }),
-  listDagRuns: () => archonFetch<{ status: string; runs: WorkflowRunSummary[] }>('api/v2/workflows/dag/runs'),
-  getDagRun: (runId: string) =>
-    archonFetch<{ status: string; run: WorkflowRunDetail }>(`api/v2/workflows/dag/runs/${encodeURIComponent(runId)}`),
+  listDagRuns: (signal?: AbortSignal) =>
+    archonFetch<{ status: string; runs: WorkflowRunSummary[] }>(
+      'api/v2/workflows/dag/runs', withSignal(undefined, signal)
+    ),
+  getDagRun: (runId: string, signal?: AbortSignal) =>
+    archonFetch<{ status: string; run: WorkflowRunDetail }>(
+      `api/v2/workflows/dag/runs/${encodeURIComponent(runId)}`, withSignal(undefined, signal)
+    ),
   resumeDagRun: (runId: string, gateApprovals: Record<string, boolean>) =>
     archonFetch<{ status: string; run_id: string }>(`api/v2/workflows/dag/runs/${encodeURIComponent(runId)}/resume`, {
       method: 'POST',
@@ -170,8 +183,10 @@ export const archonApi = {
     }),
 
   // DB Consolidation (28 -> 3)
-  getDbConsolidationPlan: () =>
-    archonFetch<DbConsolidationPlan>('api/v2/system/db-consolidation/plan'),
+  getDbConsolidationPlan: (signal?: AbortSignal) =>
+    archonFetch<DbConsolidationPlan>(
+      'api/v2/system/db-consolidation/plan', withSignal(undefined, signal)
+    ),
   runDbConsolidation: (opts: { dry_run: boolean; activate?: boolean; create_backup?: boolean }) =>
     archonFetch<Record<string, unknown>>('api/v2/system/db-consolidation/run', {
       method: 'POST',

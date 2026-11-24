@@ -55,8 +55,27 @@ VALID_TRANSITIONS: Dict[str, set] = {
 TERMINAL_STATES = frozenset({COMPLETED, FAILED, CANCELLED})
 
 
+class _ArchonClosingConn(sqlite3.Connection):
+    """SQLite-Kontextmanager, der beim Verlassen des `with`-Blocks schliesst.
+
+    Der Standard-Kontextmanager von sqlite3 committet nur/rollbackt, laesst die
+    Verbindung aber offen. Bei hoher Transition-Frequenz entstand so ein
+    FD-Leak (Audit D07/S-7.3).
+    """
+
+    def __enter__(self):
+        super().__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
+
+
 def _connect(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path, timeout=15.0)
+    conn = sqlite3.connect(db_path, timeout=15.0, factory=_ArchonClosingConn)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=15000;")
     return conn
@@ -326,6 +345,8 @@ class DurableExecutionKernel:
             "state_data": state["state_data"],
             "fencing_token": state["fencing_token"],
             "claim_expires": state["claim_expires"],
+            "checkpoint_error": state.get("checkpoint_error"),
+            "resume_blocked": bool(state.get("resume_blocked", False)),
             "commands": self.command_log(run_id),
         }
 
@@ -361,6 +382,29 @@ class DurableExecutionKernel:
                 raise InvalidTransitionError(
                     f"Resume nur aus SUSPENDED moeglich (aktuell: {row['state']})."
                 )
+            # Fail-closed: ein beschaedigter Checkpoint darf niemals als
+            # "resumed" mit leerem State quittiert werden. Die Pruefung findet
+            # vor jeder Transition statt, damit der Run in SUSPENDED bleibt.
+            try:
+                step_data = json.loads(row["state_json"] or "{}")
+                if not isinstance(step_data, dict):
+                    raise ValueError("state_json ist kein JSON-Objekt")
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                conn.rollback()
+                logger.error(
+                    "[DurableKernel] Resume blockiert: korruptes state_json fuer '%s': %s",
+                    run_id, exc,
+                )
+                return {
+                    "status": "resume_blocked",
+                    "run_id": run_id,
+                    "resume_blocked": True,
+                    "checkpoint_error": "corrupt_state_json",
+                    "state_data": None,
+                    "fencing_token": "",
+                    "resume_from_step": 0,
+                    "seq": 0,
+                }
             if fencing_token and fencing_token == row["fencing_token"]:
                 token = fencing_token
             elif float(row["claim_expires"] or 0) <= now:
@@ -388,10 +432,7 @@ class DurableExecutionKernel:
                 (RUNNING, token, now + max(30, int(ttl_seconds)), now, run_id),
             )
             conn.commit()
-        try:
-            step_data = json.loads(row["state_json"] or "{}")
-        except Exception:
-            step_data = {}
+        assert isinstance(step_data, dict), "state_json muss ein JSON-Objekt sein"
         return {
             "status": "resumed",
             "run_id": run_id,
@@ -409,8 +450,12 @@ class DurableExecutionKernel:
             data = dict(row)
             try:
                 data["state_data"] = json.loads(data.pop("state_json") or "{}")
-            except Exception:
-                data["state_data"] = {}
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                data.pop("state_json", None)
+                data["state_data"] = None
+                data["checkpoint_error"] = "corrupt_state_json"
+                data["resume_blocked"] = True
+                logger.error("[DurableKernel] Korruptes state_json fuer '%s': %s", run_id, exc)
             return data
 
     def command_log(self, run_id: str) -> List[Dict[str, Any]]:
@@ -424,8 +469,14 @@ class DurableExecutionKernel:
             d = dict(r)
             try:
                 d["payload"] = json.loads(d.pop("payload_json") or "{}")
-            except Exception:
-                d["payload"] = {}
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                d.pop("payload_json", None)
+                d["payload"] = None
+                d["payload_error"] = "corrupt_payload_json"
+                logger.error(
+                    "[DurableKernel] Korruptes payload_json in Run '%s', Seq %s: %s",
+                    run_id, d.get("seq"), exc,
+                )
             out.append(d)
         return out
 

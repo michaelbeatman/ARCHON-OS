@@ -5,10 +5,13 @@ Quelle: agent_profiles.json (SSOT). Ziel: souls/<id>/SOUL_{COMPACT,PRO,FULL}.md
 sowie die englischen Varianten *_EN.md und SOUL.md (aktive Stufe = compact).
 Runtime-Verzeichnisse (.hermes/profiles, data/hermes_profiles) sind Caches.
 
-SOLL-SPEC-ZAHL (Welle 0, vom User freigegeben): 511 Artefakte = 73 Profile x 7
-(je 3 Tier-Dateien DE + 3 Tier-Dateien EN + SOUL.md). Die alten 490 kamen aus
-70 Profilen und liessen alpha, micha und linkedin_social_media_specialist
-weg; das Manifest wird hier aus denselben 511 normalisierten Bytes gebaut.
+AKZEPTIERTE ZAHL (User-Entscheidung 2026-11-24): 497 Artefakte = 71 Profile x 7
+(je 3 Tier-Dateien DE + 3 Tier-Dateien EN + SOUL.md). Die frueheren 511/490
+Zahlen aus Welle 0 (73 bzw. 70 Profile) sind ueberholt: `micha` und `alpha`
+wurden bewusst entfernt, `linkedin_social_media_specialist` ist nicht Teil
+der akzeptierten SSOT. Das Manifest wird hier aus denselben 497 normalisierten
+Bytes gebaut; EXPECTED_ARTIFACT_COUNT (unten) und souls/manifest.json stimmen
+damit ueberein.
 
 Usage: python scripts/build_souls_ssot.py [--check]
 """

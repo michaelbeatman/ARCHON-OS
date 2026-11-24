@@ -24,6 +24,20 @@ def guard_tool_output(
     head_chars: int = 4500,
     tail_chars: int = 2500,
 ) -> Dict[str, Any]:
+    # D01/MED: Ein fehlgeschlagener/leerer Tool-Call ist kein Ergebnis. Frueher
+    # wurde `None` via str() zum Literal "None" und als untrusted Inhalt in den
+    # LLM-Kontext gewrappt (und vom Batch-Orchestrator als "ok" gemeldet).
+    if raw_output is None or (isinstance(raw_output, str) and not raw_output.strip()):
+        return {
+            "tool": tool_name,
+            "status": "error",
+            "error": "EMPTY_TOOL_RESULT",
+            "output": "",
+            "truncated": False,
+            "original_chars": 0,
+            "security": {},
+        }
+
     text = raw_output if isinstance(raw_output, str) else str(raw_output)
     orig_len = len(text)
 
@@ -96,7 +110,7 @@ def guard_tool_output(
 
     if orig_len <= max_chars:
         return {
-            "tool": tool_name, "truncated": False, "original_chars": orig_len,
+            "tool": tool_name, "status": "ok", "truncated": False, "original_chars": orig_len,
             "output": _wrap(text), "security": {**mask_report, **injection_report},
         }
 
@@ -107,7 +121,7 @@ def guard_tool_output(
         f"{text[-tail_chars:]}"
     )
     return {
-        "tool": tool_name, "truncated": True, "original_chars": orig_len,
+        "tool": tool_name, "status": "ok", "truncated": True, "original_chars": orig_len,
         "output": _wrap(compacted), "security": {**mask_report, **injection_report},
     }
 
@@ -124,7 +138,9 @@ async def run_batch_tool_calls(
         try:
             res = await tool_executor(tname, args)
             guarded = guard_tool_output(tname, res, max_chars=max_chars_per_result)
-            return {"tool": tname, "status": "ok", **guarded}
+            # D01/MED: den Status aus dem Guard durchreichen — ein leeres Tool-
+            # Ergebnis darf nicht durch "ok" zu einem Erfolg umgewertet werden.
+            return {"tool": tname, **guarded}
         except Exception as exc:
             return {"tool": tname, "status": "error", "error": str(exc), "output": ""}
 

@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import sqlite3
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -426,6 +427,48 @@ def _online_backup_file(src_path: str, dst_path: str) -> None:
         src.close()
 
 
+def _snapshot_target_for_rollback(dom_path: str, rollback_dir: str, tag: str) -> Dict[str, Any]:
+    """Sichert eine bereits existierende Ziel-DB vor der Konsolidierung.
+
+    D03/MED: ohne diesen Snapshot koennen die Ziel-DBs bei einem spaeteren
+    DATENVERLUST-Abbruch teil-migriert zurueckbleiben.
+    """
+    os.makedirs(rollback_dir, exist_ok=True)
+    snap: Dict[str, Any] = {
+        "path": os.path.abspath(dom_path),
+        "existed_before": os.path.exists(dom_path),
+        "backup_path": os.path.join(rollback_dir, f"{tag}__{os.path.basename(dom_path)}"),
+    }
+    if snap["existed_before"]:
+        _online_backup_file(snap["path"], snap["backup_path"])
+    return snap
+
+
+def _rollback_targets_from_snapshots(snapshots: List[Dict[str, Any]]) -> List[str]:
+    """Stellt die Ziel-DBs bei DATENVERLUST wieder her (kein Teilstand)."""
+    restored: List[str] = []
+    for snap in snapshots:
+        path = snap.get("path")
+        if not path:
+            continue
+        for suffix in ("-wal", "-shm", "-journal"):
+            sidecar = path + suffix
+            try:
+                if os.path.exists(sidecar):
+                    os.unlink(sidecar)
+            except OSError:
+                pass
+        try:
+            if os.path.exists(path):
+                os.unlink(path)
+        except OSError:
+            pass
+        if snap.get("existed_before") and os.path.isfile(snap.get("backup_path") or ""):
+            _online_backup_file(snap["backup_path"], path)
+            restored.append(path)
+    return restored
+
+
 def run_consolidation(
     source_dirs: Optional[Sequence[str]] = None,
     target_dir: Optional[str] = None,
@@ -452,6 +495,18 @@ def run_consolidation(
                 parent_tag = _sanitize_ident(os.path.basename(os.path.dirname(src["path"])))
                 b_dst = os.path.join(backup_dir, f"{parent_tag}__{src['filename']}")
                 _online_backup_file(src["path"], b_dst)
+
+    # D03/MED: Rollback-Snapshots der Ziel-DBs. Bei DATENVERLUST werden die
+    # committeten Teilmigrationen damit vor dem Abbruch zurueckgespielt, statt
+    # teil-migrierte Ziel-DBs ohne Manifest zurueckzulassen.
+    rollback_dir = os.path.join(tgt_dir, "backups", f"rollback_{ts}")
+    target_snapshots: List[Dict[str, Any]] = []
+    for _dom, _dom_plan in plan["domains"].items():
+        target_snapshots.append(
+            _snapshot_target_for_rollback(
+                _dom_plan["target_path"], rollback_dir, _sanitize_ident(_dom)
+            )
+        )
 
     migration_report: Dict[str, Any] = {}
 
@@ -618,10 +673,16 @@ def run_consolidation(
         if "DATENVERLUST" in str(w)
     ]
     if data_loss:
+        # D03/MED: zuerst alle Ziel-DBs aus den Snapshots zuruecks-spielen,
+        # DANN abbrechen. Es bleibt kein committeter Teilstand zurueck.
+        restored = _rollback_targets_from_snapshots(target_snapshots)
+        shutil.rmtree(rollback_dir, ignore_errors=True)
         raise RuntimeError(
-            "Konsolidierung abgebrochen — DATENVERLUST erkannt: " + "; ".join(data_loss)
+            "Konsolidierung abgebrochen — DATENVERLUST erkannt "
+            f"({len(restored)} Ziel-DB(s) zurueckgerollt): " + "; ".join(data_loss)
         )
 
+    shutil.rmtree(rollback_dir, ignore_errors=True)
     manifest_data = {
         "active": bool(activate),
         "version": 1,

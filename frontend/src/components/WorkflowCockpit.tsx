@@ -27,15 +27,17 @@ export function WorkflowCockpit() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // D08/S-8.5: Template-Liste fenstern statt alle Knoten im DOM zu halten.
+  const [tplVisibleCount, setTplVisibleCount] = useState(60);
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
       const [tplRes, runRes, planRes] = await Promise.all([
-        archonApi.listWorkflowTemplates().catch(() => ({ templates: [] })),
-        archonApi.listDagRuns().catch(() => ({ runs: [] })),
-        archonApi.getDbConsolidationPlan().catch(() => null),
+        archonApi.listWorkflowTemplates(signal).catch(() => ({ templates: [] })),
+        archonApi.listDagRuns(signal).catch(() => ({ runs: [] })),
+        archonApi.getDbConsolidationPlan(signal).catch(() => null),
       ]);
       setTemplates(tplRes.templates || []);
       setRuns(runRes.runs || []);
@@ -48,7 +50,10 @@ export function WorkflowCockpit() {
   }, []);
 
   useEffect(() => {
-    loadAll();
+    const controller = new AbortController();
+    void loadAll(controller.signal);
+    // D08/S-8.5: laufende Requests beim Unmount/Navigation abbrechen.
+    return () => controller.abort();
   }, [loadAll]);
 
   // Live-DAG-Status und HITL-Gates über den gemeinsamen SSE-Bus.
@@ -126,7 +131,7 @@ export function WorkflowCockpit() {
               Zurueck zum Cockpit
             </Link>
             <button
-              onClick={loadAll}
+              onClick={() => void loadAll()}
               disabled={loading}
               className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold flex items-center gap-1.5"
             >
@@ -147,7 +152,7 @@ export function WorkflowCockpit() {
           <section className="lg:col-span-5 p-4 rounded-xl border border-slate-800 bg-slate-900/70 space-y-3">
             <h2 className="text-sm font-bold">Workflow-Templates ({templates.length})</h2>
             <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-              {templates.map((tpl) => (
+              {templates.slice(0, tplVisibleCount).map((tpl) => (
                 <div
                   key={tpl.id}
                   className="p-3 rounded-lg border border-slate-800 bg-slate-950/70 flex items-center justify-between gap-2"
@@ -168,6 +173,15 @@ export function WorkflowCockpit() {
                   </button>
                 </div>
               ))}
+              {tplVisibleCount < templates.length && (
+                <button
+                  type="button"
+                  onClick={() => setTplVisibleCount((count) => count + 60)}
+                  className="w-full py-1.5 rounded-md border border-slate-700 text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  Mehr laden ({templates.length - tplVisibleCount})
+                </button>
+              )}
             </div>
           </section>
 

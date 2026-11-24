@@ -108,14 +108,25 @@ def _receipt_key() -> bytes:
     return _receipt_key_for_block(None)
 
 
-def _receipt_digest(canonical: str, block_id=None) -> str:
+def _receipt_digest(canonical: str, block_id=None, *, allow_legacy: bool = False) -> str:
+    """D05/MED: ohne HMAC-Key keine neue (ungeschuetzte) Quittung schreiben.
+
+    Der fruehere stille Fallback auf nacktes SHA-256 war ein impliziter
+    HMAC-Abschalter: fehlte ``ARCHON_RECEIPT_HMAC_KEY``/``ARCHON_AUDIT_HMAC_KEY``,
+    wurden neue Bloecke ungeschuetzt geschrieben und dennoch als valid
+    ausgewiesen. Legacy-Bloecke bleiben nur im Verify-Pfad ueber explizites
+    ``allow_legacy=True`` pruefbar.
+    """
     key = _receipt_key_for_block(block_id)
     payload = canonical.encode("utf-8")
     if key:
         import hmac as _hmac
         return RECEIPT_HMAC_PREFIX + _hmac.new(key, _HMAC_DOMAIN + payload, hashlib.sha256).hexdigest()
-    # Rueckwaerts-Kompatibilitaet (Tests ohne ENV): alter SHA-256-Modus wird
-    # in verify_chain_integrity explizit als 'unprotected' gemeldet.
+    if not allow_legacy:
+        raise RuntimeError(
+            "[Receipt] HMAC-Key fehlt — keine ungeschuetzte Quittung schreiben. "
+            "ARCHON_RECEIPT_HMAC_KEY (oder ARCHON_AUDIT_HMAC_KEY) setzen."
+        )
     return hashlib.sha256(payload).hexdigest()
 try:
     from backend.db_paths import resolve_db
@@ -451,7 +462,10 @@ class ExecutionReceiptLedger:
             if stored.startswith(RECEIPT_HMAC_PREFIX):
                 # C (Audit): mit dem Key der Epoche des Blocks pruefen, nicht
                 # mit dem aktuellen — sonst loest Rotation einen Fehlalarm aus.
-                recomputed = _receipt_digest(canonical_str, r["id"])
+                # Verify ist lesend: allow_legacy=True verhindert einen Raise,
+                # falls der Key nach dem Schreiben entfernt wurde — der Hash
+                # mismatch markiert den Block dann als `tampered` (fail-closed).
+                recomputed = _receipt_digest(canonical_str, r["id"], allow_legacy=True)
             elif _receipt_key():
                 # Audit 23.11.2026: bei aktivem eigenen HMAC-Key darf keine
                 # Quittung ohne HMAC-Praefix akzeptiert werden (Downgrade).
@@ -459,8 +473,9 @@ class ExecutionReceiptLedger:
                 expected_prev = stored
                 continue
             else:
-                # Legacy-Quittungen (vor HMAC-Einfuehrung) weiterhin pruefbar
-                recomputed = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
+                # Legacy-Quittungen (vor HMAC-Einfuehrung) nur explizit im
+                # Verify-Pfad pruefbar — der Schreibpfad nutzt allow_legacy=False.
+                recomputed = _receipt_digest(canonical_str, r["id"], allow_legacy=True)
             if not hmac.compare_digest(stored, recomputed):
                 tampered_hashes.append(rid)
             expected_prev = r["receipt_hash"]
@@ -470,6 +485,9 @@ class ExecutionReceiptLedger:
                 len(broken_links) == 0 and len(tampered_hashes) == 0
                 and len(sequence_gaps) == 0 and len(bypass_markers) == 0
                 and not bypass_markers_unreadable
+                # D05/MED: eine Kette ohne HMAC-Key ist fuer Pruefer nie "valide",
+                # auch wenn alle (Legacy-)Hashes formal zusammenpassen.
+                and bool(_receipt_key())
             ),
             "bypass_markers_unreadable": bypass_markers_unreadable,
             "hmac_protected": bool(_receipt_key()),

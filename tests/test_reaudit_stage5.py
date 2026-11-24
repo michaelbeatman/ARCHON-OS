@@ -65,6 +65,10 @@ def test_d06_webhook_is_signed_over_compact_body(monkeypatch):
             captured["data"] = req.data
             return _Resp()
 
+    # Die D06/MED-Egress-Pruefung ist echt und darf im Unit-Test nicht das
+    # Netz kontaktieren.
+    import utils.egress_guard as eg
+    monkeypatch.setattr(eg, "check_target_url", lambda *a, **kw: None)
     monkeypatch.setattr(drv.urllib.request, "build_opener", lambda handler: _Opener())
     driver = drv.N8nMcpDriver.__new__(drv.N8nMcpDriver)
     driver.base_url = "http://archon-os:5678"

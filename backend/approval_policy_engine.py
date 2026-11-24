@@ -26,6 +26,30 @@ except Exception:
     DB_FILE = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
 
+
+def _actor_identity_tokens(actor: str) -> set:
+    """Identitaets-Tokens eines Actors (inkl. Stellvertretungs-Suffix).
+
+    D04/D14: gemeinsam genutzt von der Ersteller-Sperre und der
+    Vier-Augen-Pruefung, damit "alice" und "alice (i.V. Bob)" als dieselbe
+    physische Person erkannt werden.
+    """
+    s = (actor or "").strip().lower()
+    if not s:
+        return set()
+    tokens = {s}
+    if " (i.v. " in s:
+        main_p, sub_p = s.split(" (i.v. ", 1)
+        tokens.add(main_p.strip())
+        sub_clean = sub_p.rstrip(")").strip()
+        if sub_clean:
+            tokens.add(sub_clean)
+            tokens.add(sub_clean.split(" ")[0])
+    else:
+        tokens.add(s.split(" ")[0])
+    return {t for t in tokens if t}
+
+
 class ApprovalPolicyEngine:
     _chain_lock = threading.RLock()
 
@@ -119,6 +143,14 @@ class ApprovalPolicyEngine:
                     payload_json TEXT
                 );
             """)
+            # D04/MED: Der Antragsteller wird als eigene Spalte persistiert,
+            # damit die Ersteller-Sperre engine-seitig (nicht nur im Router)
+            # greift. Idempotenter SQLite-ALTER wie in session_taint_guard.py.
+            _columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(approval_requests)").fetchall()
+            }
+            if "requester_id" not in _columns:
+                conn.execute("ALTER TABLE approval_requests ADD COLUMN requester_id TEXT")
 
             # d14/HIGH: Aenderung der 4-Augen-Schwelle benötigt einen zweiten,
             # unabhaengigen Genehmiger. Einzel-Admin erzeugt nur einen Vorschlag.
@@ -456,8 +488,16 @@ class ApprovalPolicyEngine:
     # --------------------------------------------------------------------------
     # Request Evaluation & Queue
     # --------------------------------------------------------------------------
-    def evaluate_and_enqueue(self, domain: str, title: str, amount: float = 0.0, 
-                             reference_id: Optional[str] = None, payload: Optional[dict] = None) -> Dict[str, Any]:
+    def evaluate_and_enqueue(self, domain: str, title: str, amount: float = 0.0,
+                             reference_id: Optional[str] = None, payload: Optional[dict] = None,
+                             requester_id: Optional[str] = None) -> Dict[str, Any]:
+        # D04/MED: requester_id ist jetzt Teil des Engine-Vertrags. Er wird
+        # zusaetzlich signiert im payload_json abgelegt (defense in depth),
+        # damit auch Router/Caller ohne Spaltenzugriff den Ersteller pruefen.
+        stored_payload = dict(payload or {})
+        requester = str(requester_id or "").strip()
+        if requester:
+            stored_payload.setdefault("_requester_id", requester)
         policies = {p["policy_key"]: p["policy_value"] for p in self.get_policies(domain)}
         now = datetime.datetime.now(datetime.timezone.utc)
         now_iso = now.isoformat()
@@ -490,12 +530,13 @@ class ApprovalPolicyEngine:
                 INSERT INTO approval_requests (
                     id, domain, reference_id, title, amount, currency, status,
                     requires_four_eyes, first_approver, first_approved_at,
-                    expires_at, created_at, payload_json
-                ) VALUES (?, ?, ?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?)
+                    expires_at, created_at, payload_json, requester_id
+                ) VALUES (?, ?, ?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 req_id, domain, reference_id, title, amount, status,
                 requires_four_eyes, first_approver, first_approved_at,
-                expires_at, now_iso, json.dumps(payload or {}, ensure_ascii=False)
+                expires_at, now_iso, json.dumps(stored_payload, ensure_ascii=False),
+                requester or None
             ))
             conn.commit()
 
@@ -530,7 +571,9 @@ class ApprovalPolicyEngine:
             rows = cur.execute(query, params).fetchall()
             return [dict(r) for r in rows]
 
-    def approve_request(self, request_id: str, approver_id: str = "admin") -> Dict[str, Any]:
+    def approve_request(self, request_id: str, approver_id: str) -> Dict[str, Any]:
+        # D04/MED: kein Default-Approver mehr — die Identitaet muss vom
+        # Aufrufer explizit aus der verifizierten Session kommen.
         with self._chain_lock:
             with self._get_conn() as conn:
                 conn.execute("BEGIN IMMEDIATE")
@@ -541,6 +584,28 @@ class ApprovalPolicyEngine:
 
                 if req["status"] in ("approved", "rejected"):
                     raise ValueError(f"Anfrage kann nicht genehmigt werden (aktueller Status: {req['status']}).")
+
+                # D04/MED: Ersteller-Sperre zentral im Engine — nicht nur im
+                # Router. Jeder Aufrufer (u. a. MCP-Pfad) ist damit gebunden.
+                # Quelle: eigene Spalte -> signiertes Payload -> created_by.
+                requester = str(req["requester_id"] or "").strip()
+                if not requester:
+                    pl = req["payload_json"]
+                    if isinstance(pl, str):
+                        try:
+                            pl = json.loads(pl)
+                        except (TypeError, ValueError):
+                            pl = {}
+                    if isinstance(pl, dict):
+                        requester = str(pl.get("_requester_id") or pl.get("requester_id") or "").strip()
+                if not requester and "created_by" in req.keys():
+                    requester = str(req["created_by"] or "").strip()
+                if requester and bool(
+                    _actor_identity_tokens(approver_id) & _actor_identity_tokens(requester)
+                ):
+                    raise ValueError(
+                        "Vier-Augen-Prinzip: der Ersteller darf die eigene Freigabeanfrage nicht genehmigen."
+                    )
 
                 now = datetime.datetime.now(datetime.timezone.utc).isoformat()
                 deleg_row = cur.execute("SELECT * FROM delegation_settings WHERE user_id = ?", (approver_id,)).fetchone()

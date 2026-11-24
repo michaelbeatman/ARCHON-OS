@@ -16,12 +16,28 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CANON = ROOT / "souls"
 RUNTIMES = (ROOT / ".hermes" / "profiles", ROOT / "data" / "hermes_profiles")
 SOUL_PREFIXES = ("SOUL.md", "SOUL_COMPACT.md", "SOUL_PRO.md", "SOUL_FULL.md")
+
+# D15/MED: nur explizit freigegebene Fremd-Caches sind toleriert. `alpha` und
+# `micha` wurden bewusst aus der SSOT entfernt; die restlichen drei stammen
+# von fremden Tools. Jeder OTHER Fremd-Cache ist ab jetzt ein harter Drift.
+ALLOWED_FOREIGN_CACHES = {
+    "alpha", "micha", "agility_story", "hermes_default", "ruediger_cheng",
+}
+FOREIGN_CACHE_ENV = "ARCHON_ALLOWED_FOREIGN_SOUL_CACHES"
+
+
+def _allowed_foreign_caches() -> set[str]:
+    extra = {
+        item.strip() for item in os.environ.get(FOREIGN_CACHE_ENV, "").split(",") if item.strip()
+    }
+    return ALLOWED_FOREIGN_CACHES | extra
 
 
 def _sha(text: str) -> str:
@@ -57,6 +73,7 @@ def main() -> int:
         except Exception as exc:
             print(f"[DRIFT] agent_profiles.json nicht lesbar ({exc}) — alle Cache-Profile werden geprueft.")
 
+    allowed_foreign = _allowed_foreign_caches()
     problems: list[str] = []
     checked = 0
     for runtime in RUNTIMES:
@@ -71,7 +88,14 @@ def main() -> int:
             known = canon_hashes.get(agent)
             if not known:
                 if known_agents and agent not in known_agents:
-                    # Fremd-Cache, kein Archon-Profil — informativ, nicht hart.
+                    # Nur explizit freigegebene Fremd-Caches sind informativ;
+                    # unbekannte Direktorien sind harter Drift (D15/MED).
+                    if agent in allowed_foreign:
+                        continue
+                    problems.append(
+                        f"{agent_dir.relative_to(ROOT)}: Fremd-Cache nicht in SSOT "
+                        f"und nicht in {FOREIGN_CACHE_ENV} freigegeben"
+                    )
                     continue
                 problems.append(f"{agent_dir.relative_to(ROOT)}: kein kanonisches Profil")
                 continue

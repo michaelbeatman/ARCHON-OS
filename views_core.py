@@ -15,6 +15,7 @@ import html
 import re
 import shutil
 import glob
+import tempfile
 import threading
 import time
 import json
@@ -214,6 +215,34 @@ def _write_cache_atomic(path: str, payload: Dict[str, Any]) -> None:
                 os.unlink(tmp_path)
             except OSError as rm_exc:
                 logger.debug(f"[ViewsCore] Temp-Datei {tmp_path} nicht entfernt: {rm_exc}")
+
+
+def _atomic_write_text(path: str, content: str) -> None:
+    """D03/MED: Text atomar schreiben (tmp + fsync + os.replace + dir-fsync)."""
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".tmp_", suffix=".css")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+        try:
+            dir_fd = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
 
 def _build_vault_tree_fast(current_dir, rel_path="", depth=0, max_depth=4):
     if depth > max_depth:
@@ -1095,9 +1124,8 @@ async def save_theme_live_overrides(request: Request, payload: ThemeOverridesPay
             "textOverrides": payload.textOverrides or {},
             "updated_at": datetime.datetime.now().isoformat()
         }
-        os.makedirs(os.path.dirname(os.path.abspath(THEME_OVERRIDES_FILE)), exist_ok=True)
-        with open(THEME_OVERRIDES_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        # D03/MED: atomar statt direkter open("w")-Schreibvorgang.
+        _runtime.atomic_write_json(THEME_OVERRIDES_FILE, data, indent=2)
 
         # [ARCHIVED] Überschreiben von static/custom_studio.css deaktiviert zugunsten
         # der zentralen 15-Bausteine-Engine (/api/design/themes).
@@ -1111,15 +1139,34 @@ async def delete_theme_live_overrides(request: Request):
     require_admin_or_503(request)
     try:
         data = {"rules": {}, "textOverrides": {}, "updated_at": datetime.datetime.now().isoformat()}
-        os.makedirs(os.path.dirname(os.path.abspath(THEME_OVERRIDES_FILE)), exist_ok=True)
-        with open(THEME_OVERRIDES_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        for target_css in ["static/custom_studio.css", "/app/static/custom_studio.css", os.path.join(WORKSPACE_DIR, "static", "custom_studio.css")]:
+        _runtime.atomic_write_json(THEME_OVERRIDES_FILE, data, indent=2)
+        # D03/MED: CSS-Ziele über safe_path_within auf WORKSPACE_DIR/static
+        # jailen und atomar schreiben (kein direkter open("w"), kein Pfad
+        # ausserhalb der erlaubten Wurzel).
+        static_root = os.path.join(WORKSPACE_DIR, "static")
+        css_candidates = (
+            "static/custom_studio.css",
+            "/app/static/custom_studio.css",
+            os.path.join(WORKSPACE_DIR, "static", "custom_studio.css"),
+        )
+        written: set[str] = set()
+        for target_css in css_candidates:
             try:
-                with open(target_css, "w", encoding="utf-8") as f:
-                    f.write("/* Custom Studio CSS Reset */\n")
+                safe_css = safe_path_within(
+                    target_css, [static_root], allow_write=True, allow_dirs=False,
+                )
+            except (PathJailError, ValueError, OSError) as exc:
+                logger.warning(
+                    f"[ViewsCore] Custom-Studio-CSS Ziel abgelehnt ({target_css}): {exc}"
+                )
+                continue
+            if safe_css in written:
+                continue
+            written.add(safe_css)
+            try:
+                _atomic_write_text(safe_css, "/* Custom Studio CSS Reset */\n")
             except OSError as exc:
-                logger.warning(f"[ViewsCore] Custom-Studio-CSS Reset fehlgeschlagen ({target_css}): {exc}")
+                logger.warning(f"[ViewsCore] Custom-Studio-CSS Reset fehlgeschlagen ({safe_css}): {exc}")
         return {"status": "success", "message": "Theme Overrides erfolgreich zurückgesetzt."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Zurücksetzen: {str(e)}")

@@ -1301,6 +1301,10 @@ class BudgetBank:
             conn = _get_conn(self.db_path)
             try:
                 conn.execute("BEGIN IMMEDIATE")
+                # D13/MED: Direktbuchungen haben keine Reservierung; ohne
+                # Initialisierung schlaegt `if late_settlement:` mit
+                # UnboundLocalError fehl (record_budget_usage war damit tot).
+                late_settlement = False
                 if reservation_id:
                     row = conn.execute(
                         "SELECT * FROM budget_reservations WHERE reservation_id = ? "

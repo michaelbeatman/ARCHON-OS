@@ -1255,6 +1255,7 @@ export default function CrmPage() {
           setIsAuthModalOpen(false);
           fetchKontakte();
         }}
+        onClose={() => setIsAuthModalOpen(false)}
         themeMode={themeMode}
       />
 

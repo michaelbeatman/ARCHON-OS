@@ -23,6 +23,12 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger("archon.db_backup_manager")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+try:
+    from backend.db_paths import APP_DATA_DIR as _APP_DATA_DIR
+except Exception:
+    _APP_DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
+# D03/MED: der Sidecar-Scan bleibt auf produktive Datenverzeichnisse begrenzt.
+_CLEANUP_ROOTS = (_APP_DATA_DIR, os.path.join(WORKSPACE_DIR, ".hermes", "backups"))
 BACKUP_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "backups", "db")
 TENANTS_DIR = os.path.join(WORKSPACE_DIR, "data", "tenants")
 # K2 (Audit 23.11.2026): PocketBase-CRM war in keinem wiederkehrenden Backup.
@@ -54,6 +60,22 @@ _SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+\.secret\.gz$")
 
 # K1 (Audit 23.11.2026): parallele Restores müssen serialisiert werden.
 _RESTORE_LOCK = threading.RLock()
+# D03/MED: auch die Sidecar-Bereinigung ist serialisiert (exists()+unlink()).
+_SIDECAR_CLEANUP_LOCK = threading.RLock()
+
+
+def _release_db_guard(conn: Optional[sqlite3.Connection]) -> None:
+    """Gibt einen EXCLUSIVE-Guard auf der Ziel-DB idempotent frei (D03/MED)."""
+    if conn is None:
+        return
+    try:
+        conn.execute("ROLLBACK")
+    except Exception:
+        pass
+    try:
+        conn.close()
+    except Exception:
+        pass
 
 
 def _verify_snapshot(conn: sqlite3.Connection, label: str) -> None:
@@ -81,31 +103,59 @@ def cleanup_orphaned_sidecars(root_dir: Optional[str] = None) -> Dict[str, Any]:
     aktiver Datenbanken werden nie angefasst. Historische Restore-Artefakte
     wie `.memory.db.restore.<stamp>.tmp-wal` werden damit erfasst.
     """
-    root = os.path.abspath(root_dir or WORKSPACE_DIR)
+    roots = [os.path.abspath(root_dir)] if root_dir else [os.path.abspath(r) for r in _CLEANUP_ROOTS]
     removed: list[str] = []
     errors: list[str] = []
+    skipped = False
     suffixes = ("-wal", "-shm", "-journal")
-    # Rekursiv: Mandanten-DBs liegen unter data/tenants/<tid>/, historische
-    # Restore-Artefakte direkt unter data/.
-    for dirpath, dirnames, _filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in ("node_modules", "__pycache__")]
-        try:
-            entries = os.listdir(dirpath)
-        except OSError:
-            continue
-        for name in entries:
-            matched = next((s for s in suffixes if name.endswith(s)), None)
-            if not matched:
-                continue
-            base = name[: -len(matched)]
-            if not base or os.path.exists(os.path.join(dirpath, base)):
-                continue
-            victim = os.path.join(dirpath, name)
+    # D03/MED: OS-verwalteter Lock ueber die gesamte Bereinigung. Bei
+    # Kontention wird NICHT geloescht (fail-safe) statt in ein fremdes
+    # Restore/Writer-Fenster hineinzugreifen.
+    os_lock = None
+    try:
+        from backend.process_lock import try_acquire_loop_lock
+        os_lock = try_acquire_loop_lock("sidecar_cleanup", timeout=1.0)
+    except Exception as exc:
+        errors.append(f"os_lock: {exc}")
+    if os_lock is None:
+        skipped = True
+        logger.warning("[DBBackup] Sidecar-Cleanup uebersprungen: OS-Lock nicht verfuegbar.")
+    try:
+        if not skipped:
+            for root in roots:
+                # Rekursiv: Mandanten-DBs liegen unter data/tenants/<tid>/,
+                # historische Restore-Artefakte direkt unter data/.
+                for dirpath, dirnames, _filenames in os.walk(root):
+                    dirnames[:] = [d for d in dirnames if d not in ("node_modules", "__pycache__")]
+                    try:
+                        entries = os.listdir(dirpath)
+                    except OSError:
+                        continue
+                    for name in entries:
+                        matched = next((s for s in suffixes if name.endswith(s)), None)
+                        if not matched:
+                            continue
+                        base = name[: -len(matched)]
+                        if not base:
+                            continue
+                        victim = os.path.join(dirpath, name)
+                        with _SIDECAR_CLEANUP_LOCK:
+                            # D03/MED: erneuter Existenz-Check UNMITTELBAR vor
+                            # unlink() — sonst kann zwischen exists() und
+                            # unlink() eine aktive DB inkl. WAL entstehen.
+                            if os.path.exists(os.path.join(dirpath, base)):
+                                continue
+                            try:
+                                os.unlink(victim)
+                                removed.append(os.path.relpath(victim, root))
+                            except OSError as exc:
+                                errors.append(f"{victim}: {exc}")
+    finally:
+        if os_lock is not None:
             try:
-                os.unlink(victim)
-                removed.append(os.path.relpath(victim, root))
-            except OSError as exc:
-                errors.append(f"{victim}: {exc}")
+                os_lock.release()
+            except Exception:
+                pass
     # Lock-DB-Journals haben eine existierende Basis und brauchen einen
     # EXCLUSIVE-Probe (eigener Helper in process_lock).
     try:
@@ -114,7 +164,7 @@ def cleanup_orphaned_sidecars(root_dir: Optional[str] = None) -> Dict[str, Any]:
             removed.append(os.path.basename(j))
     except Exception as exc:
         errors.append(f"lock_journals: {exc}")
-    return {"removed": removed, "errors": errors, "count": len(removed)}
+    return {"removed": removed, "errors": errors, "count": len(removed), "skipped": skipped}
 
 
 def _audit_backup_restore(metadata: Dict[str, Any]) -> Dict[str, Any]:
@@ -568,41 +618,56 @@ class DBBackupManager:
                         guard = sqlite3.connect(target, timeout=2.0, isolation_level=None)
                         guard.execute("BEGIN EXCLUSIVE")
                 except sqlite3.Error as exc:
+                    _release_db_guard(guard)
+                    guard = None
                     raise RuntimeError(
                         f"Restore abgelehnt: Zieldatenbank nicht verfügbar ({exc}). "
                         "Erst Hintergrund-Loops/Agenten in den Drain-Modus schicken."
                     ) from exc
-                finally:
-                    if guard is not None:
-                        try:
-                            guard.execute("ROLLBACK")
-                        except Exception:
-                            pass
-                        guard.close()
 
-                # Der Guard wird hier freigegeben, weil Windows einen
-                # `os.replace()` auf eine noch offene Datei verweigert. Das
-                # Cross-Prozess-Gate (_restore_gate) bleibt bis zum Ende der
-                # Phase gehalten. Restrisiko: ein Writer, der genau in diesem
-                # winzigen Fenster die alte Inode öffnet, schreibt danach in
-                # die verworfene Datei. Deshalb im Anschluss verifizieren.
-                # Letzte, fail-closed Kontrolle des Snapshots unmittelbar vor
-                # dem Austausch (D03): kein FK-inkonsistentes oder beschädigtes
-                # Backup darf den Produktionspfad erreichen.
-                recheck = sqlite3.connect(f"file:{tmp_path}?mode=ro", uri=True, timeout=5.0)
                 try:
-                    _verify_snapshot(recheck, "Restore-Snapshot (pre-replace)")
-                finally:
-                    recheck.close()
+                    # Letzte, fail-closed Kontrolle des Snapshots unmittelbar
+                    # vor dem Austausch (D03): kein FK-inkonsistentes oder
+                    # beschädigtes Backup darf den Produktionspfad erreichen.
+                    recheck = sqlite3.connect(f"file:{tmp_path}?mode=ro", uri=True, timeout=5.0)
+                    try:
+                        _verify_snapshot(recheck, "Restore-Snapshot (pre-replace)")
+                    finally:
+                        recheck.close()
 
-                for suffix in ("-wal", "-shm", "-journal"):
-                    sidecar = target + suffix
-                    if os.path.exists(sidecar):
-                        try:
-                            os.remove(sidecar)
-                        except OSError as exc:
-                            logger.warning("[DBBackup] Sidecar %s nicht entfernbar: %s", sidecar, exc)
-                os.replace(tmp_path, target)
+                    for suffix in ("-wal", "-shm", "-journal"):
+                        sidecar = target + suffix
+                        if os.path.exists(sidecar):
+                            try:
+                                os.remove(sidecar)
+                            except OSError as exc:
+                                logger.warning("[DBBackup] Sidecar %s nicht entfernbar: %s", sidecar, exc)
+
+                    # D03/MED: Auf POSIX (Linux) bleibt der EXCLUSIVE-Guard bis
+                    # NACH os.replace() offen. Damit kann kein Writer im
+                    # frueheren Fenster zwischen Guard-Release und Replace die
+                    # alte Inode oeffnen und danach in die verworfene Datei
+                    # schreiben. Windows verweigert os.replace() auf eine noch
+                    # geoeffnete Datei (Sharing-Violation); dort wird der Guard
+                    # vorher freigegeben und das Restrisiko ueber das
+                    # Cross-Prozess-Gate + Cache-Invalidierung (siehe unten)
+                    # abgedeckt und im Result ehrlich ausgewiesen.
+                    if os.name == "nt":
+                        result["guard_held_through_replace"] = False
+                        logger.warning(
+                            "[DBBackup] Windows: EXCLUSIVE-Guard vor os.replace() "
+                            "freigegeben (Sharing-Violation). Schutz: Cross-Prozess-Gate "
+                            "+ Cache-Invalidierung; minimales Restfenster bleibt."
+                        )
+                        _release_db_guard(guard)
+                        guard = None
+                    else:
+                        result["guard_held_through_replace"] = True
+                    os.replace(tmp_path, target)
+                    _release_db_guard(guard)
+                    guard = None
+                finally:
+                    _release_db_guard(guard)
 
                 # Post-Condition: die restaurierte Datei muss lesbar und
                 # integr sein. Schlägt sie fehl, wird die pre_restore-Kopie

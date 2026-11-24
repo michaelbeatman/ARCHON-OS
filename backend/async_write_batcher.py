@@ -24,7 +24,7 @@ import threading
 from collections import deque
 from datetime import datetime
 from types import MappingProxyType
-from typing import Dict, Any, List, Deque
+from typing import Dict, Any, List, Deque, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -34,6 +34,10 @@ except Exception:
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
 _CFG_TTL = 5.0
+# D08/S-8.4: harte Retention fuer die gebündelte Telemetrie-Tabelle. Ohne
+# Begrenzung waechst sie linear und der Statistik-Endpoint wird mit der Zeit
+# langsamer. Konfigurierbar via `retention_max_rows` im write_batcher-Modul.
+_DEFAULT_MAX_ROWS = 100_000
 _CFG_CACHE_LOCK = threading.Lock()
 # F-059: Ein EINZIGER unveraenderlicher Wert. Die Referenz-Zuweisung ist atomar,
 # damit parallele Reader (Event-Loop + FastAPI-Threadpool) nie ein teils
@@ -99,6 +103,8 @@ class AsyncWriteBatcher:
         self._total_flushed_events = 0
         self._total_batch_commits = 0
         self._last_flush_time = time.time()
+        #Materialisierter, bounded Zaehler statt COUNT(*)-Full-Scan in get_stats().
+        self._persisted_in_db: Optional[int] = None
 
     def enqueue(self, event_type: str, source_module: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         cfg = _get_cfg()
@@ -150,10 +156,20 @@ class AsyncWriteBatcher:
             self._last_flush_time = time.time()
 
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cfg = _get_cfg()
+        max_rows = max(1, int(cfg.get("retention_max_rows", _DEFAULT_MAX_ROWS)))
         try:
             with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
                 conn.execute("PRAGMA journal_mode=WAL")
                 conn.execute("PRAGMA synchronous=NORMAL")
+                #Einmalige, auf max_rows begrenzte Baseline (bestehende DBs).
+                baseline = self._persisted_in_db
+                if baseline is None:
+                    row = conn.execute(
+                        "SELECT COUNT(*) FROM (SELECT id FROM batched_telemetry_events LIMIT ?)",
+                        (max_rows,),
+                    ).fetchone()
+                    baseline = int(row[0] if row else 0)
                 conn.executemany("""
                     INSERT INTO batched_telemetry_events
                     (event_type, source_module, payload_json, created_at, flushed_at)
@@ -162,6 +178,13 @@ class AsyncWriteBatcher:
                     (item["event_type"], item["source_module"], item["payload_json"], item["created_at"], now_iso)
                     for item in batch
                 ])
+                #Retention im selben Batch: aelteste Zeilen fallen unter die
+                #konfigurierte Hoechstzahl (kein Drainer/Replay noetig).
+                conn.execute(
+                    "DELETE FROM batched_telemetry_events WHERE id NOT IN "
+                    "(SELECT id FROM batched_telemetry_events ORDER BY id DESC LIMIT ?)",
+                    (max_rows,),
+                )
                 conn.commit()
         except Exception as e:
             with self._lock:
@@ -171,6 +194,7 @@ class AsyncWriteBatcher:
         with self._lock:
             self._total_flushed_events += len(batch)
             self._total_batch_commits += 1
+            self._persisted_in_db = min(baseline + len(batch), max_rows)
 
         return {
             "flushed_count": len(batch),
@@ -180,13 +204,12 @@ class AsyncWriteBatcher:
 
     def get_stats(self) -> Dict[str, Any]:
         cfg = _get_cfg()
-        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
-            row = conn.execute("SELECT COUNT(*) FROM batched_telemetry_events").fetchone()
         with self._lock:
             buf_len = len(self._buffer)
             enq = self._total_enqueued
             flushed = self._total_flushed_events
             commits = self._total_batch_commits
+            persisted = self._persisted_in_db or 0
 
         io_reduction_pct = round((1.0 - (commits / max(1, flushed))) * 100, 1) if flushed > 0 else 0.0
         return {
@@ -197,7 +220,7 @@ class AsyncWriteBatcher:
             "total_enqueued": enq,
             "total_flushed_events": flushed,
             "total_batch_commits": commits,
-            "persisted_in_db": row[0] if row else 0,
+            "persisted_in_db": persisted,
             "estimated_io_reduction_pct": max(0.0, io_reduction_pct)
         }
 

@@ -18,7 +18,9 @@ import sqlite3
 import datetime
 import hashlib
 import secrets
-from typing import Dict, Any, List, Optional
+import contextlib
+import contextvars
+from typing import Dict, Any, List, Optional, Iterator
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -46,6 +48,35 @@ TRUNCATION_MARKER_TEMPLATE = "… [gekürzt: {n} Zeichen; vollständig in {artif
 HANDOFF_HMAC_PREFIX = "hmac-sha256:"
 HANDOFF_HMAC_ENV = "ARCHON_HANDOFF_HMAC_KEY"
 HANDOFF_HMAC_FALLBACK_ENV = "ARCHON_AUDIT_HMAC_KEY"
+
+# D11/S-11.4 (MED): Korrelationsfelder duerfen nicht erfunden werden. Der
+# Produzent einer Übergabe bindet hier die *echte* Trace-/Session-ID seiner
+# Kante. `create_handoff()` uebernimmt diese Werte, wenn der Aufrufer keine
+# expliziten Argumente liefert — statt `session_id=""` und einer synthetischen
+# `correlation_id`. Die ContextVars werden beim Verlassen zurueckgesetzt.
+_HANDOFF_TRACE_ID: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "archon_handoff_trace_id", default=""
+)
+_HANDOFF_SESSION_ID: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "archon_handoff_session_id", default=""
+)
+
+
+@contextlib.contextmanager
+def bind_handoff_context(*, trace_id: str = "", session_id: str = "") -> Iterator[None]:
+    """D11/S-11.4: echten Trace-/Session-Kontext an eine Übergabe binden.
+
+    Explizite Argumente an ``create_handoff()`` haben weiterhin Vorrang. Der
+    Kontextmanager ist fuer Produzenten gedacht, die `create_handoff()` ohne
+    Korrelationsargumente aufrufen (z. B. Delegations-Watcher, API-Routen).
+    """
+    t_token = _HANDOFF_TRACE_ID.set(str(trace_id or ""))
+    s_token = _HANDOFF_SESSION_ID.set(str(session_id or ""))
+    try:
+        yield
+    finally:
+        _HANDOFF_SESSION_ID.reset(s_token)
+        _HANDOFF_TRACE_ID.reset(t_token)
 
 
 def mark_truncated(text: Any, limit: int, *, artifact: str = "Vollversion in Datenbank/Artefakt") -> str:
@@ -222,6 +253,17 @@ class HandoffDesk:
             active_trace = str(current_trace_id() or "")
         except Exception:
             pass
+        # D11/S-11.4 (MED): echte Korrelation vor erfundenen Defaults.
+        # Reihenfolge: explizites Argument > gebundener Kontext > aktiver Trace.
+        resolved_trace = str(trace_id or active_trace or _HANDOFF_TRACE_ID.get() or "")
+        resolved_session = str(session_id or _HANDOFF_SESSION_ID.get() or "")
+        # `task:<id>` bleibt nur als Legacy-Fallback, wenn *kein* Trace-Kontext
+        # existiert. Mit Trace-Kontext kommt die Korrelation aus diesem — nicht
+        # aus der Task-ID (S-11.4).
+        resolved_correlation = str(
+            correlation_id
+            or (f"trace:{resolved_trace}" if resolved_trace else f"task:{task_id}")
+        )
         envelope = HandoffEnvelope.model_validate({
             "task_id": str(task_id or ""),
             "from_agent": str(from_agent or ""),
@@ -230,9 +272,9 @@ class HandoffDesk:
             "acceptance_criteria": str(acceptance_criteria or ""),
             "message_id": str(message_id or f"msg-{secrets.token_hex(6)}"),
             "reply_to": str(reply_to or ""),
-            "correlation_id": str(correlation_id or f"task:{task_id}"),
-            "trace_id": str(trace_id or active_trace or ""),
-            "session_id": str(session_id or ""),
+            "correlation_id": resolved_correlation,
+            "trace_id": resolved_trace,
+            "session_id": resolved_session,
             "confidence": _coerce_confidence(confidence),
             "attachments": [str(x) for x in (attachments or [])],
         })

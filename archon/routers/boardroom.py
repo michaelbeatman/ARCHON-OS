@@ -283,6 +283,62 @@ async def api_boardroom_parse_attachment(file: UploadFile = File(...)):
     }
 
 
+# D14/MED (Re-Audit): eine textuelle Prompt-Directive allein verhindert nicht,
+# dass ein nicht konformes Modell bei NO_CONSENSUS doch eine finale Entscheidung
+# in Vault/History schreibt. Die folgenden Helfer pruefen das deterministisch.
+_FINAL_DECISION_MARKERS = (
+    "final actionable decision",
+    "final decision",
+    "finale entscheidung",
+    "entscheidung getroffen",
+    "### 3. final",
+)
+
+
+def _has_final_consensus(result: Dict[str, Any]) -> bool:
+    """Nur ein explizites CONSENSUS_REACHED berechtigt zur finalen Synthese."""
+    verdict = str(
+        result.get("consensus_verdict") or result.get("consensus_status") or ""
+    ).strip().upper()
+    return verdict.startswith("CONSENSUS_REACHED")
+
+
+def _conflict_analysis_synthesis(text: Any) -> str:
+    """Entfernt Final-Decision-Abschnitte aus NO_CONSENSUS-Artefakten."""
+    raw = str(text or "")
+    kept: List[str] = []
+    dropping = False
+    for line in raw.splitlines():
+        lowered = line.lower()
+        if any(marker in lowered for marker in _FINAL_DECISION_MARKERS):
+            dropping = True
+            continue
+        if dropping:
+            # Eine neue Ueberschrift beendet den zu entfernenden Abschnitt.
+            if re.match(r"^#{1,6}\s", line.strip()):
+                dropping = False
+            else:
+                continue
+        kept.append(line)
+    cleaned = "\n".join(kept).strip()
+    if not cleaned:
+        return (
+            "Keine finale Entscheidung — kein Konsens erreicht. "
+            "Siehe Diskussionsprotokoll und HITL-Eskalation."
+        )
+    return cleaned
+
+
+def _verified_tier(agent_id: str) -> str:
+    """Tier aus der Rollen-SSOT, nie aus einem frei waehlbaren Body-Wert."""
+    try:
+        from backend.role_budget_engine import get_default_role_budget
+        return str(get_default_role_budget(agent_id).get("tier") or "")
+    except Exception as exc:
+        logger.warning("[Boardroom] Tier-SSOT nicht verfuegbar (%s) — kein Tier-Gewicht.", exc)
+        return ""
+
+
 def _prepare_boardroom_agents(req: BoardroomRequest):
     roles = _DEPS["load_roles"]()
     # D14: case-normalisierte Map — Vergleich und Lookup nutzen exakt denselben
@@ -353,6 +409,7 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
         "model": chairman_chosen_model,
         "provider": chairman_chosen_provider,
         "reasoning_level": _resolve_reasoning(chairman_prof),
+        "tier": _verified_tier(chairman_id),
         "active": True
     }
     
@@ -362,7 +419,14 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
         for idx, s in enumerate(req.slots):
             p_id = str(s.profile_id or "senior_coder").strip().lower()
             r_name = s.role_name or f"Experte {idx+1}"
-            prof = roles_map.get(p_id, {})
+            # D14/MED: unbekanntes Slot-Profil darf kein leeres Profil und damit
+            # keine frei waehlbare Executive-ID mit Tier-Gewicht 3 erzeugen.
+            prof = roles_map.get(p_id)
+            if not prof:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Slot-Profil '{p_id}' ist nicht als registriertes Profil bekannt.",
+                )
             chosen_model = (s.model_id or "").strip() or prof.get("model") or "deepseek/deepseek-chat"
             chosen_provider = (s.provider or "").strip() or prof.get("provider") or "openrouter"
             participant_agents.append({
@@ -373,6 +437,8 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
                 "model": chosen_model,
                 "provider": chosen_provider,
                 "reasoning_level": _resolve_reasoning(prof),
+                # Tier stammt aus der geprueften Rollen-SSOT, nicht aus dem Body.
+                "tier": _verified_tier(p_id),
                 "active": True
             })
     else:
@@ -387,6 +453,7 @@ def _prepare_boardroom_agents(req: BoardroomRequest):
                 "model": prof.get("model") or "deepseek/deepseek-chat",
                 "provider": prof.get("provider") or "openrouter",
                 "reasoning_level": _resolve_reasoning(prof),
+                "tier": _verified_tier(str(r["id"]).strip().lower()),
                 "active": True
             })
             
@@ -473,7 +540,17 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
         moa_reference_models=req.moa_reference_models,
         moa_aggregator=req.moa_aggregator
     )
-    
+
+    # D14/MED: Konsens deterministisch aus dem Verdict ableiten und die
+    # Synthese vor jeder Archivierung bereinigen. Eine Prompt-Directive allein
+    # haelt ein nicht konformes Modell nicht von einer Final Decision ab.
+    _consensus_status = str(
+        res.get("consensus_verdict") or res.get("consensus_status") or ""
+    ).strip().upper()
+    _has_consensus = _has_final_consensus(res)
+    if not _has_consensus:
+        res["synthesis"] = _conflict_analysis_synthesis(res.get("synthesis", ""))
+
     # Speichere finales Protokoll im Obsidian Vault
     try:
         vault_dir = OBSIDIAN_VAULT_DIR
@@ -487,7 +564,8 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
         md_content += f"**Chairman:** {res.get('chairman', {}).get('name', 'Unbekannt')}\n"
         md_content += f"**Max Runden:** {req.rounds}\n\n"
         md_content += f"## Diskussionsprotokoll\n\n{res.get('transcript', '')}\n\n"
-        md_content += f"## Finale Synthese\n\n{res.get('synthesis', '')}\n"
+        _vault_heading = "## Finale Synthese" if _has_consensus else "## Konfliktanalyse / keine Entscheidung"
+        md_content += f"{_vault_heading}\n\n{res.get('synthesis', '')}\n"
         
         def _write_vault_note(path: str, text: str) -> None:
             with open(path, "w", encoding="utf-8") as f:
@@ -497,12 +575,10 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
 
         # Speichere strukturierten Eintrag in boardroom_history
         try:
-            _consensus_status = str(res.get("consensus_status") or "").strip().upper()
             _debate_status = str(res.get("status") or "").strip().lower()
-            # D02/D14/BLOCKER: NUR ein explizites CONSENSUS_REACHED ist eine
-            # finale Entscheidung. NO_CONSENSUS (inkl. Policy-Veto) darf nie
+            # D02/D14/BLOCKER: _consensus_status/_has_consensus wurden oben aus
+            # dem Verdict berechnet. NO_CONSENSUS (inkl. Policy-Veto) darf nie
             # approved werden — auch nicht durch einen leeren Status.
-            _has_consensus = _consensus_status.startswith("CONSENSUS_REACHED")
             _is_final_decision = (
                 _has_consensus
                 and _debate_status not in ("cancelled", "canceled", "error", "aborted", "no_consensus")
@@ -612,7 +688,16 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                     break
                 if ev.get("type") == "done":
                     running_transcript = ev.get("transcript", "")
+                    _stream_verdict = str(
+                        ev.get("consensus_verdict") or ev.get("consensus_status") or "NO_CONSENSUS"
+                    ).upper()
+                    _stream_final = _stream_verdict.startswith("CONSENSUS_REACHED")
+                    # D14/MED: auch im Stream keine Final Decision im Artefakt,
+                    # wenn der Gate kein CONSENSUS_REACHED geliefert hat.
                     synthesis_text = ev.get("synthesis", "")
+                    if not _stream_final:
+                        synthesis_text = _conflict_analysis_synthesis(synthesis_text)
+                        ev["synthesis"] = synthesis_text
                     vault_file_name = ""
                     # Save to Obsidian Vault
                     try:
@@ -628,7 +713,10 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                         md_content += f"**Chairman:** {chairman_agent.get('name', 'Unbekannt')}\n"
                         md_content += f"**Max Runden:** {req.rounds}\n\n"
                         md_content += f"## Diskussionsprotokoll\n\n{running_transcript}\n\n"
-                        md_content += f"## Finale Synthese\n\n{synthesis_text}\n"
+                        _vault_heading = (
+                            "## Finale Synthese" if _stream_final else "## Konfliktanalyse / keine Entscheidung"
+                        )
+                        md_content += f"{_vault_heading}\n\n{synthesis_text}\n"
 
                         def _write_vault_note_stream(path: str, text: str) -> None:
                             with open(path, "w", encoding="utf-8") as f:
@@ -641,10 +729,8 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
 
                     # Save structured debate entry to boardroom history
                     try:
-                        _stream_verdict = str(
-                            ev.get("consensus_verdict") or ev.get("consensus_status") or "NO_CONSENSUS"
-                        ).upper()
-                        _stream_final = _stream_verdict.startswith("CONSENSUS_REACHED")
+                        # _stream_verdict/_stream_final bereits beim done-Event
+                        # berechnet (siehe oben) — keine zweite, abweichende Lesart.
                         hist_entry = {
                             "id": f"deb_{int(time.time())}_{uuid.uuid4().hex[:6]}",
                             "timestamp": datetime.datetime.now().isoformat(),

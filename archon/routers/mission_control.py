@@ -220,9 +220,16 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
 
     est_tokens = int(req.token_budget) if (req.token_budget and req.token_budget > 0) else (120000 if is_large else 35000)
     est_cost = float(req.cost_limit_eur) if (req.cost_limit_eur and req.cost_limit_eur > 0) else (0.22 if is_large else 0.04)
-    subagents = 3 if (is_large or req.allow_autonomous_hiring) else 1
-    agent_id = "sandy" if "audit" in title.lower() or "hr" in title.lower() else "micha"
-    agent_name = "Sandy Hooks" if agent_id == "sandy" else "Michael Keller"
+    # D01/MED: `subagents_count` ist beim Capture eine Prognose und damit kein
+    # Fakt. Wie im Chat-Pfad (chat.py:740-742) ehrlich 0 + Quellenmarker setzen;
+    # nach dem Fan-Out ersetzt _execute_mission_control_task den Wert durch die
+    # echte Subtask-Anzahl. Die Triageschaetzung bleibt als `estimated_subagents`
+    # erhalten, wird aber nicht als gemessenes Ergebnis ausgegeben.
+    estimated_subagents = 3 if (is_large or req.allow_autonomous_hiring) else 1
+    # D02/MED: 'micha' ist bewusst aus der SSOT entfernt — nie wieder als
+    # Ziel-ID verwenden. Default ist ein registriertes Profil (roles.json:3).
+    agent_id = "sandy" if "audit" in title.lower() or "hr" in title.lower() else "default"
+    agent_name = "Sandy Hooks" if agent_id == "sandy" else "Default Agent"
     model = "anthropic/claude-3.7-sonnet" if is_large else "deepseek/deepseek-v4-flash-0731"
 
     new_task = {
@@ -242,7 +249,10 @@ async def capture_mission_control_task(req: NewTaskCaptureRequest):
         "estimated_cost_eur": est_cost,
         "cost_limit_eur": est_cost,
         "allow_autonomous_hiring": bool(req.allow_autonomous_hiring),
-        "subagents_count": subagents,
+        "subagents_count": 0,  # D01/MED: ehrlich — noch keine Subtasks erzeugt
+        "subagents_count_source": "none_yet",
+        "subagents_count_estimated": False,
+        "estimated_subagents": estimated_subagents,  # nur Triageschaetzung, kein Fakt
         "status": "backlog",
         "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
         "result_summary": "",

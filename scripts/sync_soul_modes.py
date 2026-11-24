@@ -1026,23 +1026,24 @@ def extract_clean_base_persona(prof: Dict[str, Any], old_persona: str = "", lang
         if len(res) > 40:
             return res.replace("Michael Keller", "Alex Rivera")
 
-    for base_dir in get_profile_directories():
-        comp_path = os.path.join(base_dir, pid, "SOUL_COMPACT.md")
-        if os.path.exists(comp_path):
-            try:
-                with open(comp_path, "r", encoding="utf-8") as f:
-                    c_txt = f.read().strip()
-                if c_txt and not c_txt.startswith("# SOUL DIRECTIVE") and "**Domain:**" not in c_txt:
-                    c_txt = c_txt.split("\n## ")[0].strip()
-                    lines = [
-                        ln for ln in c_txt.splitlines()
-                        if not ln.startswith("# ") and not ln.startswith("**Domäne:**") and not ln.startswith("**Fachdomäne:**") and not ln.startswith("**Kernauftrag:**")
-                    ]
-                    cleaned = "\n".join(lines).strip()
-                    if cleaned:
-                        return cleaned.replace("Michael Keller", "Alex Rivera")
-            except Exception:
-                pass
+    if os.environ.get("ARCHON_SSOT_REPO_ONLY") != "1":
+        for base_dir in get_profile_directories():
+            comp_path = os.path.join(base_dir, pid, "SOUL_COMPACT.md")
+            if os.path.exists(comp_path):
+                try:
+                    with open(comp_path, "r", encoding="utf-8") as f:
+                        c_txt = f.read().strip()
+                    if c_txt and not c_txt.startswith("# SOUL DIRECTIVE") and "**Domain:**" not in c_txt:
+                        c_txt = c_txt.split("\n## ")[0].strip()
+                        lines = [
+                            ln for ln in c_txt.splitlines()
+                            if not ln.startswith("# ") and not ln.startswith("**Domäne:**") and not ln.startswith("**Fachdomäne:**") and not ln.startswith("**Kernauftrag:**")
+                        ]
+                        cleaned = "\n".join(lines).strip()
+                        if cleaned:
+                            return cleaned.replace("Michael Keller", "Alex Rivera")
+                except Exception:
+                    pass
 
     curr_prompt = (prof.get("prompt") or "").strip()
     if "**Domain:**" in curr_prompt:

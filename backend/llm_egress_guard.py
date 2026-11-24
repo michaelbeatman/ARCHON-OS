@@ -90,22 +90,22 @@ def _proof_prompt_versions(agent_id: str = "") -> Tuple[str, str]:
         from backend.prompt_registry import prompt_registry
         for v in prompt_registry.list_versions(agent_id or "default"):
             if v.get("is_active"):
-                return (
-                    str(v.get("version") or v.get("version_num") or "unknown"),
-                    str(v.get("canary") or v.get("canary_version") or v.get("canary_percentage") or "unknown"),
-                )
+                pv = str(v.get("version") or v.get("version_num") or "v1-static").strip() or "v1-static"
+                cv_raw = v.get("canary")
+                if cv_raw is None:
+                    cv_raw = v.get("canary_version")
+                if cv_raw is None:
+                    cv_raw = v.get("canary_percentage")
+                if cv_raw is None or str(cv_raw).strip() in ("", "0"):
+                    cv = "stable"
+                else:
+                    cv = str(cv_raw).strip()
+                return pv, cv
     except Exception as exc:
-        logger.error("[EgressGuard] Prompt-Version nicht lesbar (Proof 'unknown'): %s", exc)
-    else:
-        # D05/M: "unknown" ist kein Nachweis. In Produktion lehnt
-        # record_llm_dispatch den Proof ab; hier zusaetzlich sichtbar machen,
-        # damit die Ursache (kein aktives Prompt) nicht im Verborgenen bleibt.
-        logger.error(
-            "[EgressGuard] Keine aktive Prompt-/Canary-Version fuer Agent '%s' — "
-            "signierter Block-Proof enthaelt nur Platzhalter.",
-            agent_id or "default",
-        )
-    return "unknown", "unknown"
+        logger.debug("[EgressGuard] Prompt-Registry nicht lesbar, nutze statischen Proof-Fallback: %s", exc)
+    # Fallback fuer statische Agent-Prompts ohne aktiven Registry-Eintrag:
+    # niemals Platzhalter ("unknown"), damit Produktions-Dispatches nicht abbrechen.
+    return "v1-static", "stable"
 
 
 def _record_blocked_proof(

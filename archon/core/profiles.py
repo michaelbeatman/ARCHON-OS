@@ -430,7 +430,7 @@ def api_get_hermes_profiles(lang: Optional[str] = None):
         prof_dir = os.path.join(HERMES_PROFILES_DIR, p_id)
         os.makedirs(prof_dir, exist_ok=True)
 
-        ydata = {}
+        ydata: Dict[str, Any] = {}
         yaml_path = os.path.join(prof_dir, "profile.yaml")
         if os.path.exists(yaml_path):
             try:
@@ -439,7 +439,7 @@ def api_get_hermes_profiles(lang: Optional[str] = None):
             except Exception as e:
                 logger.warning(f"[Profiles] Error reading {yaml_path}: {e}")
 
-        cdata = {}
+        cdata: Dict[str, Any] = {}
         cfg_path = os.path.join(prof_dir, "config.yaml")
         if os.path.exists(cfg_path):
             try:
@@ -824,9 +824,32 @@ def save_all_agent_profiles(profiles_list: List[Dict[str, Any]]):
         logger.error(f"[Profiles] profile.yaml/SOUL.md-Rueckschreiben fehlgeschlagen: {exc}")
 
 
+def append_negative_scope(system_prompt: str, prof: Optional[Dict[str, Any]]) -> str:
+    """Haengt den strukturierten `negative_scope` eines Profils idempotent an den System-Prompt an."""
+    base = str(system_prompt or "")
+    if not isinstance(prof, dict):
+        return base
+    neg = prof.get("negative_scope")
+    if not neg:
+        return base
+    if isinstance(neg, (list, tuple, set)):
+        items = [str(x).strip() for x in neg if str(x).strip()]
+        neg_text = "; ".join(items)
+    else:
+        neg_text = str(neg).strip()
+    if not neg_text:
+        return base
+    marker = "NEGATIVE_SCOPE (Strikt verboten / Nicht-Zustaendigkeiten):"
+    if marker in base or neg_text in base:
+        return base
+    sep = "\n\n" if base else ""
+    return f"{base}{sep}{marker}\n{neg_text}"
+
+
 __all__ = [
     "DEFAULT_HERMES_TOOLS", "ALL_HERMES_TOOLS", "AgentProfileValidationSchema",
     "get_hermes_profiles_base_dirs", "get_primary_hermes_profiles_dir",
     "invalidate_hermes_profiles_cache", "api_get_hermes_profiles",
+    "append_negative_scope",
     "create_rolling_backup", "save_all_agent_profiles", "_HERMES_PROFILES_CACHE",
 ]

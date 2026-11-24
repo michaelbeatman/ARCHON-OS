@@ -6,22 +6,22 @@ Konfigurations- sowie LLM-Dispatch-Ereignisse (Provider, Modell, Ziel-Endpunkt, 
 mit 1-Klick Prüfer-Export (JSON/CSV) und kryptografischer Integritätsprüfung.
 """
 
-import os
-import sys
+import contextlib
 import csv
-import io
-import json
+import datetime
 import hashlib
 import hmac
-import sqlite3
-import datetime
+import io
 import ipaddress
+import json
+import logging
+import os
+import sqlite3
+import sys
 import threading
 import time
-import contextlib
-from typing import Dict, Any, List, Optional, Tuple
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
-import logging
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
@@ -800,7 +800,7 @@ class ChainedAuditLog:
         (`provider`, `model`, `target_host`, `target_endpoint`, `egress_zone`).
         """
         conn = self._get_conn()
-        with _read_snapshot(self._lock, conn):
+        with _read_snapshot(self._lock, conn):  # type: ignore[arg-type]
             try:
                 cur = conn.cursor()
                 select_cols = [
@@ -1397,7 +1397,7 @@ def get_chain_anchors(chain: str, limit: int = 20) -> List[Dict[str, Any]]:
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT id, payload_json FROM audit_log WHERE category=? ORDER BY id DESC LIMIT ?",
+            "SELECT id, payload_json FROM audit_log WHERE category=? AND action='chain_head_anchor' ORDER BY id DESC LIMIT ?",
             (CHAIN_ANCHOR_CATEGORY, max(1, int(limit) * 20)),
         ).fetchall()
         for r in rows:

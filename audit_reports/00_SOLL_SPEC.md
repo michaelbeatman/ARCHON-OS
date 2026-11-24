@@ -1,12 +1,13 @@
-# Archon OS — SOLL-SPEZIFIKATION (Phase 0, frischer Lauf 24.11.2026)
+# Archon OS — SOLL-SPEZIFIKATION (Phase 0, Audit-Lauf 24.11.2026)
 
 > Verbindlicher Maßstab für alle 16 Domänen-Audits. **Ausschließlich aus Systemdokumentation
 > extrahiert; kein Implementierungscode als Quelle verwendet.**
-> Basis: HEAD `83691375` (main, v0.5.7.7).
+> Basis: HEAD `82851c48` (Branch `main`, Working Tree clean, 24.11.2026).
+> Vorheriger Lauf archiviert unter `audit_reports/_archiv_2026-11-24_pre_audit/`.
 
 ## Quellen / SSOT-Rangfolge
 
-1. `docs/system/NEVER_DO_LIST.md` — Veto, Benutzerentscheidung 22.11.2026
+1. `docs/system/NEVER_DO_LIST.md` — Veto, Benutzerentscheidung 22.11.2026 (**G-01/G-02 bleiben verbindlich**)
 2. `docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md` — Architektur-SSOT
 3. `docs/AUDIT_FINDINGS_REGISTER.md` — Findings-SSOT („kein Fix ohne Registereintrag")
 4. `docs/system/WIRING_AUDIT_2026.md` — 100%-Verdrahtungskriterium
@@ -15,13 +16,14 @@
 
 ## 0. Globale Randbedingungen
 
-| ID | Anforderung | Quelle |
+| ID | Anforderung | Quelle / Status |
 |---|---|---|
-| G-01 | **Kein Coroutine-/Event-Replay** im Durable Kernel. Persistierte Node-States + Checkpoints sind die akzeptierte Lösung. Nicht implementieren, nicht vorschlagen. | NEVER_DO §1 |
-| G-02 | **Keine PostgreSQL-Migration.** SQLite bleibt DB. Konsolidierung `28 → 3` Domänen-DBs + physisch isolierte Mandanten-DBs ist Endarchitektur. | NEVER_DO §2 |
+| G-01 | **Kein Coroutine-/Event-Replay** im Durable Kernel. Persistierte Node-States + Checkpoints sind die akzeptierte Lösung. Nicht implementieren, nicht vorschlagen. | NEVER_DO §1 — **weiterhin verbindlich** |
+| G-02 | **Keine PostgreSQL-Migration.** SQLite bleibt DB. Konsolidierung `28 → 3` Domänen-DBs + physisch isolierte Mandanten-DBs ist Endarchitektur. | NEVER_DO §2 — **weiterhin verbindlich** |
 | G-03 | **100 %-Verdrahtung:** Jede Mechanik braucht (1) Produzent, (2) Konsument im Produktivpfad, (3) sichtbarer Effekt (DB/Datei/Webhook/Audit), (4) Test/Metrik. Fehlt ein Glied → „Theater". | WIRING_AUDIT |
 | G-04 | Status „implementiert" nur mit Verifikation (Test/py_compile/Container). „Keine Regression" ≠ „fertig". Grüne Tests heißen nur: keine Regression. | REGISTER §5 |
-| G-05 | Bewusst akzeptierte Risiken nicht neu verhandeln: `main.py` God-Object, 11k-Zeilen-Telegram-Adapter, prozess-lokale Provider-Breaker, Dev-Default ohne Auth nur bei `127.0.0.1`, n8n-Stubs deaktiviert statt implementiert. | REGISTER §6 |
+| G-05 | **WIEDERHERGESTELLT (User-Entscheidung 24.11.2026).** Für pre-1.0 bewusst akzeptiert und **nicht als Finding zu bewerten**: (1) `main.py` God-Object, (2) 11k-Zeilen-Telegram-Adapter, (3) lokaler Single-User-Default auf `127.0.0.1`, (4) prozess-lokale Provider-Breaker. Diese Punkte bleiben dokumentiert, werden aber nicht mit Kritikalität gewichtet und gehen nicht in die Reifegrad-Bewertung ein. | REGISTER §6 — vom User am 24.11.2026 erneut bestätigt; Auswirkung siehe MASTER_PLAN §5 |
+| G-05a | **Nicht Teil der Wiederherstellung:** n8n-Stubs (deaktiviert statt implementiert) standen nicht in der User-Liste vom 24.11.2026 und bleiben daher **regulär bewertet** (siehe D06). | Bewusste Abweichung zur Ursprungsfassung von G-05 |
 | G-06 | Doku-Behauptungen sind **Behauptungen**, keine Beweise. Jede Aussage ist gegen Code zu verifizieren. | REGISTER §5 / TRACING §0 |
 | G-07 | Zweisprachigkeit DE/EN: 70 Spezialisten + 3 Meta-Profile (73 Einträge), 3-Tier `SOUL.md` (Compact/Pro/Full), 832 Prompts, 55 Frameworks, 11 UI-Lokale. | README / Architektur |
 
@@ -65,7 +67,7 @@
 
 ## 4. Governance, Security & Permissions
 
-- S-4.1 Default-Deny: `ARCHON_REQUIRE_AUTH=true` / Auth fail-closed für Mesh/Prod; Non-Loopback-Bind erzwingt Auth; lokaler Single-User nur bei `127.0.0.1`.
+- S-4.1 Default-Deny: `ARCHON_REQUIRE_AUTH=true` / Auth fail-closed für Mesh/Prod; Non-Loopback-Bind erzwingt Auth; lokaler Single-User nur bei `127.0.0.1` (**G-05: bewusst akzeptiert, kein Finding**).
 - S-4.2 RBAC auf **allen** schreibenden Admin-Routen; kein fail-open `_require_admin`; Actor aus Body nie autoritativ; 19 RBAC-Duplikate zentralisiert.
 - S-4.3 HITL: Passkey/WebAuthn (ES256/RS256, `rpIdHash`, `signCount`, UV, Attestation), Proof an `action` + `resource` gebunden, fail-closed 503/403; Vier-Augen ab 500 € mit Ersteller-Abgleich; Auto-Freigabe bis 50 €; 24 h Eskalation.
 - S-4.4 Taint-Gate Default-Deny: `is_critical_egress_tool()` parkt `terminal`, `execute_code`, `computer_use`, `mcp__*`, unbekannte Tools; Einmal-Token verbraucht.
@@ -88,7 +90,7 @@
 ## 6. Integrationen, Webhooks & API-Routing
 
 - S-6.1 OmniRoute :20128, Multi-Provider, Key aus `OMNIROUTE_API_KEY` auch für `/v1/models`; Allowlist + Diff vor `--fix`.
-- S-6.2 n8n :5678: **eine** Workflow-Quelle, echte Nodes, Service-Token in allen HTTP-Nodes, Host `archon-os`, Browser-ID-Bindung, kein Auto-Owner-Fallback, Webhooks authentifiziert/aktiv.
+- S-6.2 n8n :5678: **eine** Workflow-Quelle, echte Nodes, Service-Token in allen HTTP-Nodes, Host `archon-os`, Browser-ID-Bindung, kein Auto-Owner-Fallback, Webhooks authentifiziert/aktiv (n8n-Stubs unter G-05 **regulär zu prüfen**).
 - S-6.3 Outbound-Webhooks HMAC-SHA256 über exakten (kompakten) Body, Secret nur aus `ARCHON_WEBHOOK_HMAC_SECRET`, Empfänger `compare_digest`/`timingSafeEqual`.
 - S-6.4 Pydantic v2 statt roher `dict = Body(...)`; `extra="ignore"`; keine `.dict()`-Reste; Steuerungsfelder vor externen Keys geschützt; Container-Antworten nur bekannte Inhaltsfelder.
 - S-6.5 Timeouts auf allen `requests`/`urlopen`, Retry-After + Jitter, strukturierte Hop-Resultate; keine stillen Fallbacks.
@@ -117,7 +119,7 @@
 - S-9.1 Python 3.13 / Node 22 konsistent; alle Compose-Images mit `@sha256:` gepinnt.
 - S-9.2 Reproduzierbare Builds: Lockfile + `--require-hashes`; `npm ci` ohne `|| npm install`; Actions per SHA gepinnt.
 - S-9.3 CI-Qualitätstor wirkungsvoll: keine `continue-on-error`/`|| true` für Ruff/Mypy/Coverage/ESLint; `ARCHON_TEST_DB_ISOLATION=1` in **allen** Test-Jobs.
-- S-9.4 Pydantic-v2-Modelle, Typsicherheit, Modularität statt God-Objects (bewusst akzeptierte Ausnahmen nach G-05).
+- S-9.4 Pydantic-v2-Modelle, Typsicherheit, Modularität statt God-Objects (**God-Object `main.py` / 11k-Telegram-Adapter: G-05 bewusst akzeptiert, kein Finding**).
 - S-9.5 Keine XSS-Sinks (`dangerouslySetInnerHTML` nur sanitisiert), WCAG/Focus-Trap.
 
 ## 10. System-Härtung & 24/7-Resilienz
@@ -183,3 +185,9 @@
 **1 = schlecht / kaputt / disfunktional · 10 = top / funktional im Sinne des Erfinders.**
 
 Jeder Domänenbericht schließt mit `DOMÄNEN-SCORE: X/10` + einzeiliger Begründung.
+
+## Pflichtformat pro Befund (alle Domänen)
+
+`[Kritikalität: BLOCKER/HIGH/MED] | [Dateipfad:Zeile] | [Soll-Ist-Abweichung] | [Technischer Nachweis] | [Konkreter Fix-Plan]`
+
+Jeder Subagent schreibt **nur** in seine Datei `domain_NN.md` und meldet im Chat ausschließlich `done: domain_NN.md`.

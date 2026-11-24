@@ -1,5 +1,7 @@
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """
 Obsidian Vault Router fuer Archon OS.
 Verwaltet /api/vault/ Endpunkte (Dateiliste, Lesen, Bearbeiten, Loeschen, Index).
@@ -10,13 +12,15 @@ import os
 import sys
 import tempfile
 import time
-from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, Query, Body, Request
-from archon.routers._rbac import require_admin_or_503
-from archon.core.runtime import logger, OBSIDIAN_VAULT_DIR
-from utils.path_jail import safe_path, safe_path_within, PathJailError
+from typing import Any, Dict, List, Optional
 
+from fastapi import APIRouter, Body, HTTPException, Query, Request
+
+from archon.core.runtime import OBSIDIAN_VAULT_DIR, logger
+from archon.routers._rbac import require_admin_or_503
 from archon.routers._validated_body import PassthroughBody, as_payload
+from utils.path_jail import PathJailError, safe_path, safe_path_within
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["vault"])
 
 _VAULT_FILES_CACHE: Dict[str, Any] = {"ts": 0.0, "data": []}
@@ -117,7 +121,11 @@ def _get_vault_dir() -> str:
         root = getattr(main_mod, "OBSIDIAN_VAULT_DIR")
     else:
         root = OBSIDIAN_VAULT_DIR
-    tenant_dir = os.path.join(root, _active_tenant_id())
+    tid = _active_tenant_id()
+    tenant_dir = os.path.join(root, tid)
+    if tid not in ("default", "archon-systems"):
+        os.makedirs(tenant_dir, exist_ok=True)
+        return tenant_dir
     if os.path.isdir(tenant_dir):
         return tenant_dir
     return root
@@ -189,7 +197,9 @@ def api_get_vault_list(request: Request):
 
 
 @router.get("/api/vault/file")
-def api_read_vault_file_direct(path: str = Query(...)):
+def api_read_vault_file_direct(path: str = Query(...), request: Request = None):
+    if request is not None:
+        require_admin_or_503(request)
     vault_dir = _get_vault_dir()
     try:
         real_path = safe_path_within(
@@ -206,9 +216,9 @@ def api_read_vault_file_direct(path: str = Query(...)):
 @router.post("/api/vault/edit")
 def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body(...)):
     require_admin_or_503(request)
-    payload = as_payload(payload)
-    path = payload.get("path", "")
-    content = payload.get("content", "")
+    data = as_payload(payload)
+    path = data.get("path", "")
+    content = data.get("content", "")
     if not path:
         raise HTTPException(status_code=400, detail="Pfad fehlt.")
     vault_dir = _get_vault_dir()

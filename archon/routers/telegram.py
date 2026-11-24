@@ -1,7 +1,5 @@
 """Router fuer Telegram-Relay, Voice-Relay und Benachrichtigungsversand."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import asyncio
 import datetime
@@ -11,10 +9,12 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends as _ArchonDepends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from archon.core.config import config
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 from archon.routers._rbac import require_admin_or_503
 
 logger = logging.getLogger("archon.routers.telegram")
@@ -117,11 +117,14 @@ async def api_telegram_relay(
         f"Antworte mit dem Ergebnis der Aufgabe (Deutsch, ohne Begruessung)."
     )
 
+    from archon.core.profiles import append_negative_scope
+
     system_prompt = (
         prof.get("system_prompt")
         or prof.get("prompt")
         or f"Du bist {agent_name}. Antworte praezise auf Deutsch."
     )
+    system_prompt = append_negative_scope(system_prompt, prof)
     model = (
         prof.get("model")
         if prof.get("model") not in ("", "free-forever")
@@ -153,7 +156,7 @@ async def api_telegram_relay(
         antwort = ""
         dispatch_error = str(rel_err)
     else:
-        dispatch_error = None
+        dispatch_error = ""
 
     if not antwort:
         grund = dispatch_error or (

@@ -259,9 +259,9 @@ def reserve_hop(
         except Exception:
             visited = []
         aid = str(agent_id or "").strip()
-        # D13: Ein Retry/Replan desselben Knotens ist KEIN Delegationszyklus.
+        # D13: Ein Retry/Replan/Tool-Call desselben Knotens ist KEIN Delegationszyklus.
         # Zyklen sind A->B->A (Agentwechsel); Wiederholungen zaehlen nur als Hop.
-        _is_repeat = allow_repeat or str(reason or "").startswith(("retry:", "replan:", "repair:"))
+        _is_repeat = allow_repeat or str(reason or "").startswith(("retry:", "replan:", "repair:", "tool:"))
         if aid and aid in visited and not _is_repeat:
             blocked = _block(conn, tid, f"CYCLE_DETECTED:{aid}")
             _audit(tid, f"CYCLE_DETECTED via {aid} ({reason})", str(root_ticket_id or ""))
@@ -494,8 +494,9 @@ def zombie_eligible(row: Dict[str, Any], now: Optional[float] = None) -> bool:
         pid = row.get("pid")
         if pid:
             try:
-                from backend.deadlock_supervisor import _pid_alive
-                if _pid_alive(int(pid)):
+                import backend.deadlock_supervisor as _ds
+                _pid_alive = getattr(_ds, "_pid_alive", None)
+                if callable(_pid_alive) and _pid_alive(int(pid)):
                     return False
             except Exception:
                 return False

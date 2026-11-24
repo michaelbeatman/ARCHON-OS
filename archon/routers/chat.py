@@ -4,8 +4,6 @@ für Archon OS. Ausgelagert aus main.py zur modularen Entschlackung.
 """
 
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
 
 import asyncio
 import base64
@@ -23,6 +21,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import Depends as _ArchonDepends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -48,6 +47,8 @@ from archon.core.state_db import (
     _get_profile_state_db,
     _get_state_db,
 )
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import require_admin_or_503
 from archon.routers.llm_providers import get_llm_prices
 from archon.routers.skills import (
     build_skills_file_index,
@@ -543,8 +544,11 @@ def _prepare_chat_stream_context(
         # antworten — still und schwer erkennbar. Now: harter Fehler.
         raise ValueError(f"Unbekannte agent_id: {agent_id!r}")
 
+    from archon.core.profiles import append_negative_scope
+
     agent_name = prof.get("person_name") or prof.get("name") or "Hermes Agent"
     system_prompt = prof.get("prompt") or prof.get("system_prompt") or "You are Hermes Agent, an intelligent AI assistant created by Nous Research."
+    system_prompt = append_negative_scope(system_prompt, prof)
     delegation_prompt_addon = _get_delegation_prompt_for(agent_id)
     if delegation_prompt_addon:
         system_prompt += delegation_prompt_addon
@@ -597,7 +601,9 @@ def _prepare_chat_stream_context(
             model = "auto/best-coding"
 
     try:
-        from backend.model_routing import is_enabled as _mr_enabled, resolve as _mr_resolve, classify_task as _mr_classify
+        from backend.model_routing import classify_task as _mr_classify
+        from backend.model_routing import is_enabled as _mr_enabled
+        from backend.model_routing import resolve as _mr_resolve
         if _mr_enabled():
             _task_type = (req_task_type or "").strip()
             if not _task_type:
@@ -846,7 +852,7 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):
                     
                     image_blocks = []
                     text_attachments = []
-                    from utils.path_jail import safe_path_within, PathJailError
+                    from utils.path_jail import PathJailError, safe_path_within
                     allowed_attach_roots = [
                         r for r in (
                             WORKSPACE_DIR,
@@ -906,7 +912,7 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):
 
     # Enterprise Skill Resolver (Dynamische Kontext-Injektion für Session)
     skills_prompt_block = None
-    freshly_loaded_skills = []
+    freshly_loaded_skills: List[str] = []
     direct_skill_notice = None
     try:
         from scripts.skill_resolver import resolve_and_prepare_skill_context

@@ -1,26 +1,27 @@
 """Router fuer Core Settings, Ticker, Agents & Roles."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 
-from archon.core.profiles import materialize_role_avatars
 from archon.core.paths import ROLES_FILE, SETTINGS_FILE
-from backend.platform_paths import OBSIDIAN_VAULT
+from archon.core.profiles import materialize_role_avatars
 from archon.core.runtime import (
     WORKSPACE_DIR,
     _load_json,
     _save_json,
     ticker_entries,
 )
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from backend.platform_paths import OBSIDIAN_VAULT
 
 logger = logging.getLogger("archon.routers.core_settings")
 
 from archon.routers._validated_body import PassthroughBody, as_payload
+
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["core_settings"])
 
 
@@ -86,17 +87,17 @@ async def get_settings(request: Request):
 @router.post("/api/settings")
 async def api_save_settings(request: Request, settings: PassthroughBody = Body(None)):
     _require_admin(request)
-    settings = as_payload(settings)
+    settings_data = as_payload(settings)
     if "x-hermes-session-token" in request.headers or "x-hermes-csrf-token" in request.headers:
         import main as app_main
         return await app_main.forward_to_hermes(request)
 
     current = _load_json(SETTINGS_FILE, {})
-    if isinstance(current, dict) and isinstance(settings, dict):
-        current.update(settings)
+    if isinstance(current, dict) and isinstance(settings_data, dict):
+        current.update(settings_data)
         _save_json(SETTINGS_FILE, current)
-    elif settings is not None:
-        _save_json(SETTINGS_FILE, settings)
+    elif settings_data is not None:
+        _save_json(SETTINGS_FILE, settings_data)
     try:
         from backend.audit_log import chained_audit_log
         keys_changed = list(settings.keys()) if isinstance(settings, dict) else ["all"]
@@ -167,13 +168,23 @@ def api_save_roles(request: Request, roles: List[Dict]):
 
 
 @router.post("/api/v1/jev/test")
-def api_test_jev(payload: PassthroughBody = Body(None)):
-    payload = as_payload(payload)
+def api_test_jev(request: Request, payload: PassthroughBody = Body(None)):
+    _require_admin(request)
+    data = as_payload(payload)
     import jev_router
+    from utils.egress_guard import EgressBlocked, check_public_url
 
-    payload = payload or {}
+    data = data or {}
+    base_url = data.get("base_url")
+    if base_url:
+        try:
+            base_url = check_public_url(str(base_url))
+        except (EgressBlocked, ValueError) as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Ungueltige JEV-URL blockiert: {exc}"
+            ) from exc
     res = jev_router.test_jev_connection(
-        api_key=payload.get("api_key"),
-        base_url=payload.get("base_url"),
+        api_key=data.get("api_key"),
+        base_url=base_url,
     )
     return res

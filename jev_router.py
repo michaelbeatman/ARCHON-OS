@@ -7,14 +7,15 @@ Bietet schnelles, deterministisches Vorfiltern von Benutzeranfragen:
 3. Fail-Open: Fällt bei Nichtverfügbarkeit oder Deaktivierung transparent auf die Standard-Pipeline zurück.
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("jev_router")
 
-import os
 import json
+import os
 import time
-import urllib.request
 import urllib.error
-from typing import Dict, List, Optional, Any
+import urllib.request
+from typing import Any, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_workspace")
 SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
@@ -165,7 +166,16 @@ def prune_tools(prompt: str, available_tools: List[Dict[str, Any]]) -> List[Dict
 def test_jev_connection(api_key: Optional[str] = None, base_url: Optional[str] = None) -> dict:
     """Prüft die Erreichbarkeit und Latenz des konfigurierten Endpunkts."""
     cfg = get_jev_config()
-    key = api_key if api_key is not None else cfg["api_key"]
+    cfg_url = str(cfg.get("base_url") or "").rstrip("/")
+    req_url = str(base_url or "").rstrip("/")
+    is_custom_url = bool(req_url and req_url != cfg_url)
+    # Keine Key-Exfiltration: Gespeicherten API-Key niemals an eine abweichende Test-URL senden.
+    if api_key is not None and api_key != "***":
+        key = api_key
+    elif is_custom_url:
+        key = ""
+    else:
+        key = cfg["api_key"]
     url = base_url or cfg["base_url"]
 
     start = time.time()

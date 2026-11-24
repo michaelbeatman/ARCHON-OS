@@ -1,7 +1,5 @@
 """Router fuer Quickchat-Sessions (Archon OS)."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import datetime
 import logging
@@ -11,7 +9,10 @@ import time
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends as _ArchonDepends
 from pydantic import BaseModel
+
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 logger = logging.getLogger("archon.routers.quickchat")
 
@@ -116,12 +117,15 @@ async def api_quickchat_send(req: QuickchatSendRequest):
             "provider": "openrouter",
         }
 
+    from archon.core.profiles import append_negative_scope
+
     agent_name = prof.get("person_name") or prof.get("name") or prof.get("id")
     role_title = prof.get("name") or req.profile_id
     system_prompt = prof.get("system_prompt") or prof.get("prompt") or (
         f"Du bist {agent_name} (Rolle: {role_title}) in Archon OS. "
         "Antworte präzise, kompetent und direkt. Halte den Kontext der bisherigen Konversation."
     )
+    system_prompt = append_negative_scope(system_prompt, prof)
     model = prof.get("model") or "gpt-4o-mini"
     provider = prof.get("provider") or "openrouter"
 
@@ -136,7 +140,7 @@ async def api_quickchat_send(req: QuickchatSendRequest):
     try:
         res = await app_main.core_dispatcher.dispatch_to_omniroute_or_container(
             agent_id=prof["id"],
-            agent_name=agent_name,
+            agent_name=str(agent_name or prof.get("id") or "agent"),
             prompt=user_msg,
             role=role_title,
             system_prompt=system_prompt,

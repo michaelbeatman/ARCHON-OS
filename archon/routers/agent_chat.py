@@ -1,7 +1,5 @@
 """Router fuer Agent Run Dispatcher und Direct Agent Chat."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import asyncio
 import datetime
@@ -13,10 +11,12 @@ import time
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends as _ArchonDepends
 from pydantic import BaseModel
 
 import core_dispatcher
 from archon.core.runtime import MEMORY_DIR, WORKSPACE_DIR, add_ticker
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 logger = logging.getLogger("archon.routers.agent_chat")
 
@@ -198,6 +198,8 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
             "model": "gpt-4o-mini",
         }
 
+    from archon.core.profiles import append_negative_scope
+
     agent_name = prof.get("person_name") or prof.get("name") or prof.get("id")
     role_title = prof.get("name") or "IT-Spezialist & DevOps Auditor"
     system_prompt = prof.get("system_prompt") or prof.get("prompt") or (
@@ -206,6 +208,7 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
         "Wenn dir Log-Einträge, Fehlermeldungen oder Systemfragen übergeben werden, analysiere die Ursache sofort präzise "
         "und erkläre dem Nutzer Schritt für Schritt, wie das Problem behoben werden kann (inklusive passender Konfigurations- oder Terminal-Befehle)."
     )
+    system_prompt = append_negative_scope(system_prompt, prof)
 
     user_msg = req.message
     if req.attachment_content:
@@ -224,7 +227,7 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
     try:
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
             agent_id=prof["id"],
-            agent_name=agent_name,
+            agent_name=str(agent_name or prof.get("id") or "agent"),
             prompt=user_msg,
             role=prof.get("name", "Spezialist"),
             system_prompt=system_prompt,

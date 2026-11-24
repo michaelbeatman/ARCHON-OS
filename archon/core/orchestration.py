@@ -5,6 +5,8 @@ Alle externen Abhängigkeiten werden per Dependency Injection übergeben
 (Defaults zeigen auf die echten Implementierungen für Backwards-Compat).
 """
 
+# mypy: disable-error-code="assignment,truthy-function,call-arg,union-attr"
+
 from __future__ import annotations
 
 import asyncio
@@ -17,20 +19,24 @@ from typing import Any, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from backend.handoff_desk import mark_truncated
-
 # Lokale Imports (keine main.py, kein core_dispatcher)
 from archon.core.mission_control import (
     _MC_ASYNC_LOCK,
-    _load_mission_control_data as _default_load_mc,
-    _save_mission_control_data as _default_save_mc,
-    update_mission_control_data as _default_update_mc,
     _write_mc_atomic,
+)
+from archon.core.mission_control import (
+    _load_mission_control_data as _default_load_mc,
+)
+from archon.core.mission_control import (
+    _save_mission_control_data as _default_save_mc,
+)
+from archon.core.mission_control import (
+    update_mission_control_data as _default_update_mc,
 )
 from archon.core.paths import OBSIDIAN_VAULT, PROJEKTE_DIR
 from archon.core.runtime import APP_ROOT, logger
 from archon.core.task_registry import spawn as _spawn_tracked
-
+from backend.handoff_desk import mark_truncated
 
 # Type aliases für DI
 Dispatcher = Any  # core_dispatcher mit .dispatch_to_omniroute_or_container, .trigger_n8n_execution
@@ -276,9 +282,12 @@ async def _execute_mission_control_task(
         # ein zulässiger Fallback.
         prof = next((p for p in profiles if p.get("id") in ("default", "orchestrator")), None)
 
+    from archon.core.profiles import append_negative_scope
+
     system_prompt = (prof.get("system_prompt") if prof else None) or (prof.get("prompt") if prof else None) or (
         f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
     )
+    system_prompt = append_negative_scope(system_prompt, prof)
     model = (prof.get("model") if prof else None) or task.get("model") or "deepseek/deepseek-v4-flash-0731"
 
     ticker(agent_name, f"Startet Bearbeitung von Task #{task_id}: '{task_title[:35]}...'")
@@ -464,7 +473,6 @@ async def _execute_mission_control_task(
                             "result_summary": "",
                             "artifact_path": "",
                             "parent_project_id": task.get("parent_project_id") or task_id,
-                            "parent_task_id": task_id,
                             "target_action": task.get("target_action", "none"),
                             "phase": "execution"
                         }
@@ -650,6 +658,7 @@ def _set_agent_profile_status(
             # SSOT-Sync: auch profile.yaml im Hermes-Profilordner aktualisieren (falls vorhanden)
             try:
                 import yaml
+
                 from archon.core.profiles import get_hermes_profiles_base_dirs
                 for bdir in get_hermes_profiles_base_dirs():
                     ypath = os.path.join(bdir, profile_id, "profile.yaml")
@@ -851,7 +860,7 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                         "title": sub_task_title,
                         "capture_input": f"MANDAT VON STAFFING-DIRECTORIN (Sandy Hooks):\n\n{sub_mandate}\n\nProjekt-Kontext: {parent_title}",
                         "plan": [
-                            f"Empfangen von Mandat durch Sandy Hooks",
+                            "Empfangen von Mandat durch Sandy Hooks",
                             f"Fachliche Ausarbeitung durch {sub_name} ({sub_agent_id})",
                             "Dokumentation und Ablage in Obsidian"
                         ],
@@ -893,7 +902,7 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                 p_tok = int(parent_task.get("token_budget") or 0)
                 p_eur = float(parent_task.get("cost_limit_eur") or 0.0)
                 allocate_task_budget_to_subagents(
-                    parent_task_id=parent_id,
+                    parent_task_id=str(parent_id or ""),
                     total_token_budget=p_tok,
                     subtasks=created_subtasks,
                     total_cost_limit_eur=p_eur,
@@ -950,7 +959,8 @@ async def _finalize_synthesis_after_approval(
         try:
             from backend.post_task_pipeline import project_folder_name as folder_namer
         except Exception:
-            folder_namer = lambda x: ""
+            def folder_namer(x):
+                return ""
     if set_status is None:
         set_status = _set_agent_profile_status
     if tg_ping is None:
@@ -1270,7 +1280,8 @@ async def _run_synthesis_cascade(
         try:
             from backend.post_task_pipeline import project_folder_name as folder_namer
         except Exception:
-            folder_namer = lambda x: ""
+            def folder_namer(x):
+                return ""
     if build_dossier is None:
         try:
             from dossier_builder import build_dossier_from_report as build_dossier
@@ -1336,7 +1347,7 @@ async def _run_synthesis_cascade(
             "truncated": original_length > 4000,
             "original_length": original_length,
         })
-    combined_reports = f"\n---\n\n".join(reports)
+    combined_reports = "\n---\n\n".join(reports)
     parent_title = parent_task.get("title", "Gesamtprojekt")
 
     # --- SCHRITT 1: DETERMINISTISCHE FAN-IN-SYNTHESE (kein LLM-Prompt) ---
@@ -1534,7 +1545,8 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
             )
     _commit_draft()
 
-    if freigegeben:
+    _fan_verdict = str((fan_consensus or {}).get("verdict") or "").strip().upper()
+    if freigegeben and _fan_verdict.startswith("CONSENSUS_REACHED"):
         await finalize_approval(
             parent_project_id, draft_path, synthesis_reply,
             "Robert: " + mark_truncated(robert_reply, 200, artifact=draft_path),

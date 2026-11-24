@@ -20,15 +20,14 @@ if ROOT not in sys.path:
 # Import NUR aus archon.core.orchestration (nicht main.py)
 from archon.core.orchestration import (  # noqa: E402
     _execute_mission_control_task,
-    _paperclip_hire_profile_by_id,
-    _set_agent_profile_status,
-    _trigger_sandy_staffing_nomination,
-    _finalize_synthesis_after_approval,
     _fan_in_maybe_start_synthesis,
-    _tg_ping_synthesis,
+    _finalize_synthesis_after_approval,
+    _paperclip_hire_profile_by_id,
     _run_synthesis_cascade,
+    _set_agent_profile_status,
+    _tg_ping_synthesis,
+    _trigger_sandy_staffing_nomination,
 )
-
 
 # ============================================================================
 # Test-Fixtures & Helpers — ALLE als Mock-Objekte
@@ -1067,9 +1066,9 @@ class TestRunSynthesisCascade:
             "tasks": [
                 {"id": parent_pid, "title": "Parent Project", "capture_input": "Original requirement"},
                 {"id": "sub-1", "title": "Sub 1", "agent_name": "Agent A", "parent_project_id": parent_pid,
-                 "artifact_path": "/fake/a.md", "result_summary": "Result A", "status": "completed"},
+                 "artifact_path": "/fake/a.md", "result_summary": "CONSENSUS_REACHED: Result A", "status": "completed"},
                 {"id": "sub-2", "title": "Sub 2", "agent_name": "Agent B", "parent_project_id": parent_pid,
-                 "artifact_path": "/fake/b.md", "result_summary": "Result B", "status": "completed"},
+                 "artifact_path": "/fake/b.md", "result_summary": "CONSENSUS_REACHED: Result B", "status": "completed"},
             ],
             "metrics": {}, "audit_logs": []
         }
@@ -1127,7 +1126,9 @@ class TestRunSynthesisCascade:
             "tasks": [
                 {"id": parent_pid, "title": "Parent", "capture_input": "Req"},
                 {"id": "sub-1", "title": "Sub 1", "agent_name": "A", "parent_project_id": parent_pid,
-                 "result_summary": "R", "status": "completed"},
+                 "result_summary": "CONSENSUS_REACHED: R", "status": "completed"},
+                {"id": "sub-2", "title": "Sub 2", "agent_name": "B", "parent_project_id": parent_pid,
+                 "result_summary": "CONSENSUS_REACHED: R2", "status": "completed"},
             ],
             "metrics": {}, "audit_logs": []
         }

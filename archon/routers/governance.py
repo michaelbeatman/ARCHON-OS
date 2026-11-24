@@ -1,5 +1,7 @@
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """Router /api/governance/ — ausgelagerte Routen (Modularisierung main.py -> archon/routers)."""
 
 import asyncio
@@ -14,21 +16,28 @@ from typing import Any, Dict, List, Optional, Union
 import httpx
 import yaml
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
-
-from archon.routers._rbac import require_admin_or_503
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 import core_dispatcher  # noqa: F401
 from archon.core.runtime import (  # noqa: F401
-    WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, SETTINGS_FILE, OBSIDIAN_VAULT_DIR, APP_ROOT,
-    add_ticker, broadcast_event, ticker_entries, _load_json, _save_json, atomic_write_json,
+    APP_ROOT,
+    DATA_DIR,
+    MEMORY_DIR,
+    OBSIDIAN_VAULT_DIR,
+    SETTINGS_FILE,
+    WORKSPACE_DIR,
+    _load_json,
+    _save_json,
+    add_ticker,
+    atomic_write_json,
+    broadcast_event,
     logger,
+    ticker_entries,
 )
-
-
-from utils.docker_client import docker_client as _docker_client, parse_docker_stream  # noqa: F401
-
+from archon.routers._rbac import require_admin_or_503
+from utils.docker_client import docker_client as _docker_client  # noqa: F401
+from utils.docker_client import parse_docker_stream
 
 # --------------------------------------------------
 # Dependency-Injektion statt Kopie
@@ -45,7 +54,7 @@ def configure(**deps: Any) -> None:
         logger.warning(f"[Router] governance: fehlende Dependencies {sorted(_missing)}")
 
 
-def docker_socket_request(method: str, path: str, payload: dict = None, timeout: float = 1.0) -> bytes:
+def docker_socket_request(method: str, path: str, payload: Optional[dict] = None, timeout: float = 1.0) -> bytes:
     """Lokale Fassade auf den abgesicherten DockerClient (Allowlist)."""
     try:
         return _docker_client.request(method, path, payload, timeout=timeout)
@@ -329,7 +338,10 @@ async def test_agent_profile_governance(agent_id: str):
     prof = next((p for p in profiles if p.get("id") == agent_id or p.get("person_name") == agent_id), None)
     agent_name = prof.get("person_name", agent_id) if prof else agent_id
     role = prof.get("name", "Spezialist") if prof else "Spezialist"
+    from archon.core.profiles import append_negative_scope
+
     system_prompt = (prof.get("system_prompt") if prof else None) or (prof.get("prompt") if prof else None) or f"Du bist {agent_name} in Archon OS."
+    system_prompt = append_negative_scope(system_prompt, prof)
     model = (prof.get("model") if prof else None) or "auto/best-fast"
 
     test_cases = [
@@ -378,7 +390,7 @@ async def test_agent_profile_governance(agent_id: str):
             res = await core_dispatcher.dispatch_to_omniroute_or_container(
                 agent_id=agent_id,
                 agent_name=agent_name,
-                prompt=tc["prompt"],
+                prompt=str(tc["prompt"]),
                 role=role,
                 system_prompt=system_prompt,
                 model=model,
@@ -389,7 +401,8 @@ async def test_agent_profile_governance(agent_id: str):
             assertions = []
             test_passed = True
             
-            for nc in tc.get("not_contains", []):
+            _nc_raw = tc.get("not_contains")
+            for nc in (_nc_raw if isinstance(_nc_raw, list) else []):
                 failed = nc.lower() in content.lower()
                 assertions.append({
                     "type": "not-contains",
@@ -398,8 +411,9 @@ async def test_agent_profile_governance(agent_id: str):
                 })
                 if failed:
                     test_passed = False
-                    
-            for c in tc.get("contains", []):
+
+            _c_raw = tc.get("contains")
+            for c in (_c_raw if isinstance(_c_raw, list) else []):
                 passed = c.lower() in content.lower()
                 assertions.append({
                     "type": "contains",
@@ -451,7 +465,8 @@ async def test_agent_profile_governance(agent_id: str):
     
     now_t = datetime.datetime.now().strftime("%H:%M:%S")
     audit_msg = f"Promptfoo Evaluierung für {agent_name}: {score_str}"
-    from archon.core.mission_control import _load_mission_control_data as _default_mc_load, mc_append_audit_sqlite
+    from archon.core.mission_control import _load_mission_control_data as _default_mc_load
+    from archon.core.mission_control import mc_append_audit_sqlite
     if _DEPS.get("_load_mission_control_data") in (None, _default_mc_load):
         mc_append_audit_sqlite("Governance", audit_msg, task_id=agent_id, time_str=now_t)
     else:

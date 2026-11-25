@@ -1,10 +1,9 @@
-import os
-import json
 import sqlite3
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from starlette.requests import Request
 from starlette.exceptions import HTTPException
+from starlette.requests import Request
 
 
 def _make_dummy_request(role: str = "admin") -> Request:

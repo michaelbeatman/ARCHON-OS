@@ -3,26 +3,22 @@ Operations API Router for Archon OS
 Provides Kanban (Hermes kanban.db), Org-Chart, and Inter-Agent Communication Feed.
 """
 
-import base64
-import logging
-import os
-
-logger = logging.getLogger("archon_os.operations_api")
-
 import asyncio
+import base64 as base64
 import datetime
 import json
+import logging
+import os
 import re
 import secrets
 import sqlite3
-import subprocess
 import sys
 import threading
 import time
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from archon.core.provider_registry import get_provider
@@ -30,6 +26,8 @@ from backend.handoff_desk import mark_truncated, require_accepted_handoff
 from backend.operations_constants import TEAMS_DEFINITION, _get_org_hierarchy_file
 from backend.platform_paths import HERMES_HOME
 from backend.rbac_guards import forbid_viewer_writes, require_admin_or_503, require_session_actor
+
+logger = logging.getLogger("archon_os.operations_api")
 
 
 # ---------------------------------------------------------------------------
@@ -1011,18 +1009,30 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
                 from backend.kanban_sidecar import update_kanban_meta
                 def _save_create_meta(meta):
                     tmeta = meta.setdefault("tasks", {}).setdefault(task_id, {})
-                    if req.soul_mode: tmeta["soul_mode"] = req.soul_mode
-                    if req.reasoning_effort: tmeta["reasoning_effort"] = req.reasoning_effort
-                    if req.tool_preset: tmeta["tool_preset"] = req.tool_preset
-                    if req.token_budget: tmeta["token_budget"] = int(req.token_budget)
-                    if req.cost_limit_usd is not None: tmeta["cost_limit_usd"] = float(req.cost_limit_usd)
-                    if eff_cost_eur is not None: tmeta["cost_limit_eur"] = float(eff_cost_eur)
-                    if req.require_hitl: tmeta["require_hitl"] = True
-                    if req.due_date: tmeta["due"] = str(req.due_date)[:10]
-                    if req.cron_schedule: tmeta["cron_schedule"] = str(req.cron_schedule).strip()
-                    if req.depends_on: tmeta["depends_on"] = str(req.depends_on).strip()
-                    if req.trusted_input: tmeta["trusted_input"] = True
-                    if req.allow_autonomous_hiring: tmeta["allow_autonomous_hiring"] = True
+                    if req.soul_mode:
+                        tmeta["soul_mode"] = req.soul_mode
+                    if req.reasoning_effort:
+                        tmeta["reasoning_effort"] = req.reasoning_effort
+                    if req.tool_preset:
+                        tmeta["tool_preset"] = req.tool_preset
+                    if req.token_budget:
+                        tmeta["token_budget"] = int(req.token_budget)
+                    if req.cost_limit_usd is not None:
+                        tmeta["cost_limit_usd"] = float(req.cost_limit_usd)
+                    if eff_cost_eur is not None:
+                        tmeta["cost_limit_eur"] = float(eff_cost_eur)
+                    if req.require_hitl:
+                        tmeta["require_hitl"] = True
+                    if req.due_date:
+                        tmeta["due"] = str(req.due_date)[:10]
+                    if req.cron_schedule:
+                        tmeta["cron_schedule"] = str(req.cron_schedule).strip()
+                    if req.depends_on:
+                        tmeta["depends_on"] = str(req.depends_on).strip()
+                    if req.trusted_input:
+                        tmeta["trusted_input"] = True
+                    if req.allow_autonomous_hiring:
+                        tmeta["allow_autonomous_hiring"] = True
                 update_kanban_meta(_save_create_meta)
             except Exception as meta_err:
                 print(f"[OperationsAPI] Meta save warning: {meta_err}", file=sys.stderr)

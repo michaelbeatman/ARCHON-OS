@@ -1,63 +1,77 @@
 import asyncio
-import base64
-import csv
-import datetime
+import base64 as base64
+import csv as csv
+import datetime as datetime
 import json
 import logging
 import os
-import re
-import secrets
-import shutil
-import socket
-import sqlite3
+import re as re
+import secrets as secrets
+import shutil as shutil
+import socket as socket
+import subprocess as subprocess
 import sys
-import tempfile
+import tempfile as tempfile
 import threading
 import time
-import uuid
+import uuid as uuid
 from typing import Any, Dict, List, Optional
 
-import httpx
-import yaml
-from fastapi import (
-    BackgroundTasks,
-    Body,
-    FastAPI,
-    File,
-    Form,
-    HTTPException,
-    Query,
-    Request,
-    UploadFile,
-)
+import httpx as httpx
+import yaml as yaml
+from fastapi import BackgroundTasks as BackgroundTasks
+from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import File as File
+from fastapi import Form as Form
+from fastapi import Query as Query
+from fastapi import UploadFile as UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
-    HTMLResponse,
     JSONResponse,
     RedirectResponse,
     Response,
     StreamingResponse,
 )
+from fastapi.responses import HTMLResponse as HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
 import core_dispatcher
-
-# --- A5-Etappe 1: unveraenderliche Modul-Konstanten ausgelagert ------------
-# Quelle ist jetzt archon/core/constants.py (ein Ort, keine Kopie). Mutabler
-# State und Pfad-Konstanten bleiben bewusst in dieser Datei (Fallstrick 24 / B10).
+from archon.core.cache import invalidate as invalidate_ttl_cache
+from archon.core.cache import ttl_cache
 from archon.core.constants import (
     _AUTH_API_PREFIXES,
     _AUTH_PROTECTED_PREFIXES,
     _AUTH_PUBLIC_PREFIXES,
-    _DECISION_TYPEN,
-    DELEGATION_PROTOCOL_PROMPT,
-    STUDIO_BG_UPLOAD_DIR,
 )
-
-# Orchestration functions (extracted to archon.core.orchestration)
+from archon.core.constants import _DECISION_TYPEN as _DECISION_TYPEN
+from archon.core.constants import DELEGATION_PROTOCOL_PROMPT as DELEGATION_PROTOCOL_PROMPT
+from archon.core.constants import STUDIO_BG_UPLOAD_DIR as STUDIO_BG_UPLOAD_DIR
+from archon.core.delegation import DELEGATION_ALIAS_MAP as DELEGATION_ALIAS_MAP
+from archon.core.delegation import _build_kader_roster_summary as _build_kader_roster_summary
+from archon.core.delegation import _check_delegation_permission as _check_delegation_permission
+from archon.core.delegation import _execute_delegation as _execute_delegation
+from archon.core.delegation import _get_delegation_prompt_for as _get_delegation_prompt_for
+from archon.core.delegation import _load_org_hierarchy_map as _load_org_hierarchy_map
+from archon.core.delegation import _parse_delegation_blocks as _parse_delegation_blocks
+from archon.core.delegation import _resolve_target_agent_id as _resolve_target_agent_id
+from archon.core.delegation import (
+    _trigger_autonomous_orchestrator_followup as _trigger_autonomous_orchestrator_followup,
+)
+from archon.core.delegation import configure as _delegation_configure
+from archon.core.mission_control import (
+    _MC_ASYNC_LOCK,
+    _load_mission_control_data,
+    _save_mission_control_data,
+    _write_mc_atomic,
+    update_mission_control_data,
+)
+from archon.core.mission_control import _MC_DATA_LOCK as _MC_DATA_LOCK
+from archon.core.mission_control import _MC_STATE_CACHE as _MC_STATE_CACHE
+from archon.core.mission_control import MISSION_CONTROL_FILE as MISSION_CONTROL_FILE
 from archon.core.orchestration import (
     _execute_mission_control_task as _orch_execute_mission_control_task,
 )
@@ -70,34 +84,490 @@ from archon.core.orchestration import (
 from archon.core.orchestration import (
     _paperclip_hire_profile_by_id as _orch_paperclip_hire_profile_by_id,
 )
-from archon.core.orchestration import (
-    _run_synthesis_cascade as _orch_run_synthesis_cascade,
-)
-from archon.core.orchestration import (
-    _set_agent_profile_status as _orch_set_agent_profile_status,
-)
-from archon.core.orchestration import (
-    _tg_ping_synthesis as _orch_tg_ping_synthesis,
-)
+from archon.core.orchestration import _run_synthesis_cascade as _orch_run_synthesis_cascade
+from archon.core.orchestration import _set_agent_profile_status as _orch_set_agent_profile_status
+from archon.core.orchestration import _tg_ping_synthesis as _orch_tg_ping_synthesis
 from archon.core.orchestration import (
     _trigger_sandy_staffing_nomination as _orch_trigger_sandy_staffing_nomination,
 )
-from backend.platform_paths import (
-    HERMES_HOME,
-    OBSIDIAN_VAULT,
-    OBSIDIAN_VAULT_ALT,
-    PERSONALAKTEN_DIR,
-    PROJEKTE_DIR,
-    agent_log_path,
-    profile_dir,
-    soul_path,
+from archon.core.paths import _SKILL_INDEX_DISK_PATH as _SKILL_INDEX_DISK_PATH
+from archon.core.paths import (
+    AGENTS_FILE,
+    COUPLED_AGENTS_FILE,
+    FRAMEWORKS_FILE,
+    HERMES_PROFILES_DIR,
+    MEMORY_FILE,
+    QUICKCHAT_SESSIONS_DIR,
+    ROLES_FILE,
+    SERVICES_FILE,
+    THEME_FILE,
 )
-from utils.docker_client import (
-    DockerError,
-    docker_client,
-    parse_docker_stream,
-    parse_docker_stream_bytes,
+from archon.core.paths import BOARDROOM_HISTORY_FILE as BOARDROOM_HISTORY_FILE
+from archon.core.paths import CONFIG_FILE as CONFIG_FILE
+from archon.core.paths import GATEWAY_CONFIG_FILE as GATEWAY_CONFIG_FILE
+from archon.core.paths import KANBAN_CARDS_FILE as KANBAN_CARDS_FILE
+from archon.core.paths import KANBAN_FILE as KANBAN_FILE
+from archon.core.paths import SETTINGS_FILE as SETTINGS_FILE
+from archon.core.paths import THEME_LIVE_FILE as THEME_LIVE_FILE
+from archon.core.paths import THEMES_DIR as THEMES_DIR
+from archon.core.permissions import PERMISSION_GATES_FILE as PERMISSION_GATES_FILE
+from archon.core.permissions import create_permission_gate as create_permission_gate
+from archon.core.permissions import load_permission_gates as load_permission_gates
+from archon.core.permissions import save_permission_gates as save_permission_gates
+from archon.core.permissions import set_decision_factory as _set_decision_factory
+from archon.core.profiles import ALL_HERMES_TOOLS as ALL_HERMES_TOOLS
+from archon.core.profiles import DEFAULT_HERMES_TOOLS as DEFAULT_HERMES_TOOLS
+from archon.core.profiles import AgentProfileValidationSchema as AgentProfileValidationSchema
+from archon.core.profiles import (
+    api_get_hermes_profiles,
+    create_rolling_backup,
+    invalidate_hermes_profiles_cache,
+    resolve_avatar_file,
+    restore_data_uri_avatars,
+    save_all_agent_profiles,
 )
+from archon.core.profiles import get_hermes_profiles_base_dirs as get_hermes_profiles_base_dirs
+from archon.core.profiles import get_primary_hermes_profiles_dir as get_primary_hermes_profiles_dir
+from archon.core.profiles import materialize_role_avatars as materialize_role_avatars
+from archon.core.roles_data import DEFAULT_ROLES as DEFAULT_ROLES
+from archon.core.roles_data import load_default_roles
+from archon.core.runtime import _SSE_SUB_LOCK as _SSE_SUB_LOCK
+from archon.core.runtime import _SSE_SUBSCRIBERS as _SSE_SUBSCRIBERS
+from archon.core.runtime import DATA_DIR as DATA_DIR
+from archon.core.runtime import (
+    MEMORY_DIR,
+    OBSIDIAN_VAULT_DIR,
+    WORKSPACE_DIR,
+    _load_json,
+    _save_json,
+    add_ticker,
+    broadcast_event,
+    subscribe_events,
+    unsubscribe_events,
+)
+from archon.core.runtime import atomic_write_json as atomic_write_json
+from archon.core.runtime import resolve_obsidian_vault_path as resolve_obsidian_vault_path
+from archon.core.runtime import ticker_entries as ticker_entries
+from archon.core.settings_state import (
+    DEFAULT_AGENTS,
+    DEFAULT_SERVICES,
+    GHOST_AGENT_IDS,
+    SYSTEM_INTERNAL_IDS,
+)
+from archon.core.state_db import STATE_DB_PATH, _get_state_db
+from archon.core.state_db import ClosingConnection as ClosingConnection
+from archon.core.state_db import _get_profile_state_db as _get_profile_state_db
+from archon.routers._rbac import require_admin_or_503
+from archon.routers.agent_chat import DirectAgentChatRequest as DirectAgentChatRequest
+from archon.routers.agent_chat import RunRequest as RunRequest
+from archon.routers.agent_chat import api_direct_agent_chat as api_direct_agent_chat
+from archon.routers.agent_chat import api_run_parallel as api_run_parallel
+from archon.routers.agent_chat import fetch_agent_response_api as fetch_agent_response_api
+from archon.routers.agent_chat import load_profiles_list as load_profiles_list
+from archon.routers.agent_chat import router as _agent_chat_router
+from archon.routers.auth import api_auth_change_password as api_auth_change_password
+from archon.routers.auth import api_auth_create_user as api_auth_create_user
+from archon.routers.auth import api_auth_delete_user as api_auth_delete_user
+from archon.routers.auth import api_auth_list_users as api_auth_list_users
+from archon.routers.auth import api_auth_login as api_auth_login
+from archon.routers.auth import api_auth_logout as api_auth_logout
+from archon.routers.auth import api_auth_me as api_auth_me
+from archon.routers.auth import api_auth_status as api_auth_status
+from archon.routers.auth import api_auth_toggle as api_auth_toggle
+from archon.routers.auth import api_auth_update_user as api_auth_update_user
+from archon.routers.auth import configure as _auth_configure
+from archon.routers.auth import get_current_user_from_request as get_current_user_from_request
+from archon.routers.auth import require_admin
+from archon.routers.auth import router as _auth_router
+from archon.routers.autonomy_settings import (
+    api_get_autonomy_modules_settings as api_get_autonomy_modules_settings,
+)
+from archon.routers.autonomy_settings import api_get_model_routing as api_get_model_routing
+from archon.routers.autonomy_settings import api_optimize_role_prompt as api_optimize_role_prompt
+from archon.routers.autonomy_settings import api_resolve_model_routing as api_resolve_model_routing
+from archon.routers.autonomy_settings import (
+    api_run_eval_regression_suite as api_run_eval_regression_suite,
+)
+from archon.routers.autonomy_settings import (
+    api_save_autonomy_modules_settings as api_save_autonomy_modules_settings,
+)
+from archon.routers.autonomy_settings import api_save_model_routing as api_save_model_routing
+from archon.routers.autonomy_settings import api_semantic_cache_clear as api_semantic_cache_clear
+from archon.routers.autonomy_settings import api_semantic_cache_lookup as api_semantic_cache_lookup
+from archon.routers.autonomy_settings import api_semantic_cache_stats as api_semantic_cache_stats
+from archon.routers.autonomy_settings import api_semantic_cache_store as api_semantic_cache_store
+from archon.routers.autonomy_settings import router as _autonomy_settings_router
+from archon.routers.brain import api_brain_galaxy_data as api_brain_galaxy_data
+from archon.routers.brain import api_brain_vault_file as api_brain_vault_file
+from archon.routers.brain import api_get_quartz_config as api_get_quartz_config
+from archon.routers.brain import api_library_book_content as api_library_book_content
+from archon.routers.brain import api_library_books as api_library_books
+from archon.routers.brain import api_library_ingest as api_library_ingest
+from archon.routers.brain import api_library_upload as api_library_upload
+from archon.routers.brain import api_save_quartz_config as api_save_quartz_config
+from archon.routers.brain import configure as _brain_configure
+from archon.routers.brain import router as _brain_router
+from archon.routers.chat import ChatStreamRequest as ChatStreamRequest
+from archon.routers.chat import ImageGenerateToolRequest as ImageGenerateToolRequest
+from archon.routers.chat import RenameSessionRequest as RenameSessionRequest
+from archon.routers.chat import SetProfileModelRequest as SetProfileModelRequest
+from archon.routers.chat import _ensure_session_exists, _save_message_to_db
+from archon.routers.chat import _ensure_state_session as _ensure_state_session
+from archon.routers.chat import _load_state_history as _load_state_history
+from archon.routers.chat import _quickchat_state_session_id as _quickchat_state_session_id
+from archon.routers.chat import _record_session_model_usage as _record_session_model_usage
+from archon.routers.chat import _warn_price_lookup_once as _warn_price_lookup_once
+from archon.routers.chat import api_chat_stream as api_chat_stream
+from archon.routers.chat import api_chat_upload as api_chat_upload
+from archon.routers.chat import api_get_chat_session_messages as api_get_chat_session_messages
+from archon.routers.chat import api_get_chat_sessions as api_get_chat_sessions
+from archon.routers.chat import api_rename_chat_session as api_rename_chat_session
+from archon.routers.chat import api_tool_image_generate as api_tool_image_generate
+from archon.routers.chat import configure as _chat_configure
+from archon.routers.chat import record_task_tokens as record_task_tokens
+from archon.routers.chat import router as _chat_router
+from archon.routers.container_ops import ContainerExecRequest as ContainerExecRequest
+from archon.routers.container_ops import abort_agent_endpoint as abort_agent_endpoint
+from archon.routers.container_ops import exec_container_command_api as exec_container_command_api
+from archon.routers.container_ops import router as _container_ops_router
+from archon.routers.container_ops import send_prompt_to_agent as send_prompt_to_agent
+from archon.routers.containers import ContainerActionRequest as ContainerActionRequest
+from archon.routers.containers import _container_stats_payload as _container_stats_payload
+from archon.routers.containers import _docker_container_stats as _docker_container_stats
+from archon.routers.containers import configure as _containers_configure
+from archon.routers.containers import docker_socket_request as docker_socket_request
+from archon.routers.containers import get_all_container_logs_api as get_all_container_logs_api
+from archon.routers.containers import get_container_file_content as get_container_file_content
+from archon.routers.containers import get_container_files_api as get_container_files_api
+from archon.routers.containers import get_container_logs_api as get_container_logs_api
+from archon.routers.containers import get_container_metrics_api as get_container_metrics_api
+from archon.routers.containers import get_container_settings as get_container_settings
+from archon.routers.containers import get_hermes_profile_logs_api as get_hermes_profile_logs_api
+from archon.routers.containers import inject_container_config as inject_container_config
+from archon.routers.containers import load_agent_configs as load_agent_configs
+from archon.routers.containers import router as _containers_router
+from archon.routers.containers import run_container_action as run_container_action
+from archon.routers.containers import save_agent_config as save_agent_config
+from archon.routers.containers import save_container_settings as save_container_settings
+from archon.routers.content_machine import router as _content_machine_router
+from archon.routers.context_help import HELP_CONTEXT_DATA as HELP_CONTEXT_DATA
+from archon.routers.context_help import router as _context_help_router
+from archon.routers.context_meter import router as _context_meter_router
+from archon.routers.core_settings import api_get_agents as api_get_agents
+from archon.routers.core_settings import api_get_roles as api_get_roles
+from archon.routers.core_settings import api_save_agents as api_save_agents
+from archon.routers.core_settings import api_save_roles as api_save_roles
+from archon.routers.core_settings import api_save_settings as api_save_settings
+from archon.routers.core_settings import api_test_jev as api_test_jev
+from archon.routers.core_settings import clear_ticker as clear_ticker
+from archon.routers.core_settings import get_settings as get_settings
+from archon.routers.core_settings import get_ticker as get_ticker
+from archon.routers.core_settings import router as _core_settings_router
+from archon.routers.deals import router as _deals_router
+from archon.routers.decisions import _antwort_grund as _antwort_grund
+from archon.routers.decisions import _decision_followup as _decision_followup
+from archon.routers.decisions import _decision_kanban_status as _decision_kanban_status
+from archon.routers.decisions import _decision_self_api as _decision_self_api
+from archon.routers.decisions import _folge_nicht as _folge_nicht
+from archon.routers.decisions import _followup_mission_start as _impl_followup_mission_start
+from archon.routers.decisions import _followup_permission_gate as _impl_followup_permission_gate
+from archon.routers.decisions import _followup_synthesis as _impl_followup_synthesis
+from archon.routers.decisions import _pruefe_gate_antwort as _pruefe_gate_antwort
+from archon.routers.decisions import _pruefe_gate_persistiert as _pruefe_gate_persistiert
+from archon.routers.decisions import _pruefe_move_antwort as _pruefe_move_antwort
+from archon.routers.decisions import _pruefe_synthese_beleg as _pruefe_synthese_beleg
+from archon.routers.decisions import _sync_org_hierarchy_node, create_decision, register_decision
+from archon.routers.decisions import _synthese_parent as _synthese_parent
+from archon.routers.decisions import api_decide_decision as api_decide_decision
+from archon.routers.decisions import api_decide_permission_gate as api_decide_permission_gate
+from archon.routers.decisions import router as _decisions_router
+from archon.routers.docker_services import _services_config_fallback as _services_config_fallback
+from archon.routers.docker_services import api_docker_start as api_docker_start
+from archon.routers.docker_services import api_docker_stop as api_docker_stop
+from archon.routers.docker_services import api_get_models as api_get_models
+from archon.routers.docker_services import api_get_models_v1 as api_get_models_v1
+from archon.routers.docker_services import api_get_services as api_get_services
+from archon.routers.docker_services import api_save_services as api_save_services
+from archon.routers.docker_services import detect_container_port, post_docker_container_action
+from archon.routers.docker_services import (
+    get_docker_containers_from_socket as get_docker_containers_from_socket,
+)
+from archon.routers.docker_services import router as _docker_services_router
+from archon.routers.documents import _resolve_parser_input as _resolve_parser_input
+from archon.routers.documents import api_extract_tables as api_extract_tables
+from archon.routers.documents import api_parse_document as api_parse_document
+from archon.routers.documents import router as _documents_router
+from archon.routers.email_settings import api_save_smtp_settings as api_save_smtp_settings
+from archon.routers.email_settings import api_test_smtp_settings as api_test_smtp_settings
+from archon.routers.email_settings import router as _email_settings_router
+from archon.routers.gateway import _get_all_installed_profiles as _get_all_installed_profiles
+from archon.routers.gateway import _load_gateway_config as _load_gateway_config
+from archon.routers.gateway import _parse_gateway_list as _parse_gateway_list
+from archon.routers.gateway import _run_docker_exec as _run_docker_exec
+from archon.routers.gateway import _save_gateway_config as _save_gateway_config
+from archon.routers.gateway import _update_profile_status as _update_profile_status
+from archon.routers.gateway import api_gateway_autostart as api_gateway_autostart
+from archon.routers.gateway import api_gateway_list as api_gateway_list
+from archon.routers.gateway import api_gateway_start as api_gateway_start
+from archon.routers.gateway import api_gateway_stop as api_gateway_stop
+from archon.routers.gateway import api_gateway_stop_all as api_gateway_stop_all
+from archon.routers.gateway import api_get_gateway_config as api_get_gateway_config
+from archon.routers.gateway import (
+    api_save_gateway_config_endpoint as api_save_gateway_config_endpoint,
+)
+from archon.routers.gateway import router as _gateway_router
+from archon.routers.guardian import _GUARDIAN_ALLOWED_TIMEFRAMES as _GUARDIAN_ALLOWED_TIMEFRAMES
+from archon.routers.guardian import _GUARDIAN_CACHE_MAX_ENTRIES as _GUARDIAN_CACHE_MAX_ENTRIES
+from archon.routers.guardian import _GUARDIAN_CACHE_TTL as _GUARDIAN_CACHE_TTL
+from archon.routers.guardian import api_clear_guardian_cache as api_clear_guardian_cache
+from archon.routers.guardian import api_get_guardian_config as api_get_guardian_config
+from archon.routers.guardian import api_get_guardian_stats as api_get_guardian_stats
+from archon.routers.guardian import api_get_plugin_config as api_get_plugin_config
+from archon.routers.guardian import api_save_guardian_config as api_save_guardian_config
+from archon.routers.guardian import api_save_plugin_config as api_save_plugin_config
+from archon.routers.guardian import api_toggle_guardian_plugin as api_toggle_guardian_plugin
+from archon.routers.guardian import router as _guardian_router
+from archon.routers.hermes_config import _get_hermes_config_paths as _get_hermes_config_paths
+from archon.routers.hermes_config import api_get_hermes_form_config as api_get_hermes_form_config
+from archon.routers.hermes_config import api_get_hermes_raw_config as api_get_hermes_raw_config
+from archon.routers.hermes_config import api_save_hermes_form_config as api_save_hermes_form_config
+from archon.routers.hermes_config import api_save_hermes_raw_config as api_save_hermes_raw_config
+from archon.routers.hermes_config import configure as _hermes_config_configure
+from archon.routers.hermes_config import router as _hermes_config_router
+from archon.routers.hermes_ops import _get_hermes_config_path as _get_hermes_config_path
+from archon.routers.hermes_ops import api_get_hermes_config as api_get_hermes_config
+from archon.routers.hermes_ops import api_hermes_memory_purge as api_hermes_memory_purge
+from archon.routers.hermes_ops import api_save_hermes_config as api_save_hermes_config
+from archon.routers.hermes_ops import router as _hermes_ops_router
+from archon.routers.hermes_proxy import _PROXY_WRITE_METHODS as _PROXY_WRITE_METHODS
+from archon.routers.hermes_proxy import _hermes_proxy_token as _hermes_proxy_token
+from archon.routers.hermes_proxy import forward_to_hermes as forward_to_hermes
+from archon.routers.hermes_proxy import proxy_hermes_api_endpoints as proxy_hermes_api_endpoints
+from archon.routers.hermes_proxy import proxy_web_ui as proxy_web_ui
+from archon.routers.hermes_proxy import router as _hermes_proxy_router
+from archon.routers.hr import LogActivityReq as LogActivityReq
+from archon.routers.hr import SavePersonalakteReq as SavePersonalakteReq
+from archon.routers.hr import SaveSoulReq as SaveSoulReq
+from archon.routers.hr import api_get_hermes_soul as api_get_hermes_soul
+from archon.routers.hr import api_get_personalakte as api_get_personalakte
+from archon.routers.hr import api_log_personalakte_activity as api_log_personalakte_activity
+from archon.routers.hr import api_save_hermes_soul as api_save_hermes_soul
+from archon.routers.hr import api_save_personalakte as api_save_personalakte
+from archon.routers.hr import router as _hr_router
+from archon.routers.inbox_tools import api_create_tool_proposal as api_create_tool_proposal
+from archon.routers.inbox_tools import api_resolve_tool_proposal as api_resolve_tool_proposal
+from archon.routers.inbox_tools import (
+    api_save_inbox_watcher_config as api_save_inbox_watcher_config,
+)
+from archon.routers.inbox_tools import router as _inbox_tools_router
+from archon.routers.kanban import api_get_kanban as api_get_kanban
+from archon.routers.kanban import api_save_kanban as api_save_kanban
+from archon.routers.kanban import router as _kanban_router
+from archon.routers.llm_providers import get_llm_prices as get_llm_prices
+from archon.routers.marketplace import api_assign_skill_to_profile as api_assign_skill_to_profile
+from archon.routers.marketplace import api_get_marketplace_sources as api_get_marketplace_sources
+from archon.routers.marketplace import (
+    api_get_marketplace_template_detail as api_get_marketplace_template_detail,
+)
+from archon.routers.marketplace import (
+    api_get_marketplace_templates as api_get_marketplace_templates,
+)
+from archon.routers.marketplace import api_get_skill_detail as api_get_skill_detail
+from archon.routers.marketplace import api_get_skill_sources as api_get_skill_sources
+from archon.routers.marketplace import api_get_skills_list as api_get_skills_list
+from archon.routers.marketplace import api_marketplace_recruit as api_marketplace_recruit
+from archon.routers.marketplace import configure as _marketplace_configure
+from archon.routers.marketplace import router as _marketplace_router
+from archon.routers.memory_ops import api_consolidate_memory as api_consolidate_memory
+from archon.routers.memory_ops import api_evict_stale_memory as api_evict_stale_memory
+from archon.routers.memory_ops import api_get_agent_real_stats as api_get_agent_real_stats
+from archon.routers.memory_ops import api_get_memory_stats as api_get_memory_stats
+from archon.routers.memory_ops import api_memory_context as api_memory_context
+from archon.routers.memory_ops import api_memory_learning as api_memory_learning
+from archon.routers.memory_ops import api_memory_profile as api_memory_profile
+from archon.routers.memory_ops import api_memory_vault_summary as api_memory_vault_summary
+from archon.routers.memory_ops import clear_chat_history_api as clear_chat_history_api
+from archon.routers.memory_ops import get_chat_history_api as get_chat_history_api
+from archon.routers.memory_ops import router as _memory_ops_router
+from archon.routers.mesh import api_accept_handoff as api_accept_handoff
+from archon.routers.mesh import api_analyze_vision as api_analyze_vision
+from archon.routers.mesh import api_approve_skill_proposal as api_approve_skill_proposal
+from archon.routers.mesh import api_browse_and_capture as api_browse_and_capture
+from archon.routers.mesh import api_check_task_budget as api_check_task_budget
+from archon.routers.mesh import api_create_handoff as api_create_handoff
+from archon.routers.mesh import api_diff_preview as api_diff_preview
+from archon.routers.mesh import api_execute_sandbox as api_execute_sandbox
+from archon.routers.mesh import api_get_concurrency_status as api_get_concurrency_status
+from archon.routers.mesh import api_get_consensus_history as api_get_consensus_history
+from archon.routers.mesh import (
+    api_get_memory_consolidation_settings as api_get_memory_consolidation_settings,
+)
+from archon.routers.mesh import api_get_war_room_history as api_get_war_room_history
+from archon.routers.mesh import api_ingest_inbound_event as api_ingest_inbound_event
+from archon.routers.mesh import api_list_event_history as api_list_event_history
+from archon.routers.mesh import api_list_skill_proposals as api_list_skill_proposals
+from archon.routers.mesh import api_query_rag as api_query_rag
+from archon.routers.mesh import api_review_task_consensus as api_review_task_consensus
+from archon.routers.mesh import api_run_council_vote as api_run_council_vote
+from archon.routers.mesh import api_run_war_room as api_run_war_room
+from archon.routers.mesh import api_save_concurrency_config as api_save_concurrency_config
+from archon.routers.mesh import (
+    api_save_memory_consolidation_settings as api_save_memory_consolidation_settings,
+)
+from archon.routers.mesh import api_scan_inbox_directory as api_scan_inbox_directory
+from archon.routers.mesh import router as _mesh_router
+from archon.routers.notebooks import api_attach_vault_source as api_attach_vault_source
+from archon.routers.notebooks import api_create_notebook as api_create_notebook
+from archon.routers.notebooks import api_delete_notebook as api_delete_notebook
+from archon.routers.notebooks import api_delete_notebook_source as api_delete_notebook_source
+from archon.routers.notebooks import api_get_notebook_chat as api_get_notebook_chat
+from archon.routers.notebooks import api_get_notebook_sources as api_get_notebook_sources
+from archon.routers.notebooks import api_get_notebooks as api_get_notebooks
+from archon.routers.notebooks import api_query_notebook as api_query_notebook
+from archon.routers.notebooks import api_sync_notebook_obsidian as api_sync_notebook_obsidian
+from archon.routers.notebooks import api_upload_notebook_source as api_upload_notebook_source
+from archon.routers.notebooks import router as _notebooks_router
+from archon.routers.oracle_seo import api_get_oracle_feed as api_get_oracle_feed
+from archon.routers.oracle_seo import api_run_oracle_cycle as api_run_oracle_cycle
+from archon.routers.oracle_seo import api_seo_articles as api_seo_articles
+from archon.routers.oracle_seo import api_seo_generate as api_seo_generate
+from archon.routers.oracle_seo import api_triage_oracle_signal as api_triage_oracle_signal
+from archon.routers.oracle_seo import router as _oracle_seo_router
+from archon.routers.prompts import PromptOptimizeRequest as PromptOptimizeRequest
+from archon.routers.prompts import TemplateSaveRequest as TemplateSaveRequest
+from archon.routers.prompts import optimize_prompt_endpoint as optimize_prompt_endpoint
+from archon.routers.prompts import router as _prompts_router
+from archon.routers.prompts import upload_prompt_studio_context as upload_prompt_studio_context
+from archon.routers.proxies import _get_n8n_proxy as _get_n8n_proxy
+from archon.routers.proxies import _get_omniroute_proxy as _get_omniroute_proxy
+from archon.routers.proxies import _get_shared_proxy_client as _get_shared_proxy_client
+from archon.routers.proxies import forward_to_n8n as forward_to_n8n
+from archon.routers.proxies import forward_to_omniroute as forward_to_omniroute
+from archon.routers.proxies import n8n_assets_proxy as n8n_assets_proxy
+from archon.routers.proxies import n8n_proxy as n8n_proxy
+from archon.routers.proxies import n8n_rest_proxy as n8n_rest_proxy
+from archon.routers.proxies import omniroute_next_assets as omniroute_next_assets
+from archon.routers.proxies import omniroute_proxy as omniroute_proxy
+from archon.routers.proxies import router as _proxies_router
+from archon.routers.quickchat import QuickchatSendRequest as QuickchatSendRequest
+from archon.routers.quickchat import _load_quickchat_session as _load_quickchat_session
+from archon.routers.quickchat import _quickchat_session_path as _quickchat_session_path
+from archon.routers.quickchat import _save_quickchat_session as _save_quickchat_session
+from archon.routers.quickchat import api_delete_quickchat_session as api_delete_quickchat_session
+from archon.routers.quickchat import api_get_quickchat_session as api_get_quickchat_session
+from archon.routers.quickchat import api_quickchat_send as api_quickchat_send
+from archon.routers.quickchat import router as _quickchat_router
+from archon.routers.research import api_get_research_dossier as api_get_research_dossier
+from archon.routers.research import api_get_research_history as api_get_research_history
+from archon.routers.research import api_get_research_providers as api_get_research_providers
+from archon.routers.research import api_get_research_sources as api_get_research_sources
+from archon.routers.research import api_run_research_mission as api_run_research_mission
+from archon.routers.research import router as _research_router
+from archon.routers.resilience import api_heal_service as api_heal_service
+from archon.routers.resilience import api_restore_snapshot as api_restore_snapshot
+from archon.routers.resilience import router as _resilience_router
+from archon.routers.security_scanner import router as _security_scanner_router
+from archon.routers.telegram import TelegramSendPayload as TelegramSendPayload
+from archon.routers.telegram import _redact_telegram_secrets as _redact_telegram_secrets
+from archon.routers.telegram import api_telegram_relay as api_telegram_relay
+from archon.routers.telegram import api_telegram_send as api_telegram_send
+from archon.routers.telegram import api_telegram_voice_relay as api_telegram_voice_relay
+from archon.routers.telegram import router as _telegram_router
+from archon.routers.telemetry import _count_running_containers as _count_running_containers
+from archon.routers.telemetry import api_get_agent_activity as api_get_agent_activity
+from archon.routers.telemetry import api_get_agent_projects as api_get_agent_projects
+from archon.routers.telemetry import api_telemetry_dashboard as api_telemetry_dashboard
+from archon.routers.telemetry import get_hud_telemetry as get_hud_telemetry
+from archon.routers.telemetry import router as _telemetry_router
+from archon.routers.theme import DESIGN_THEMES_TARGETS as DESIGN_THEMES_TARGETS
+from archon.routers.theme import api_bake_theme_into_main_design as api_bake_theme_into_main_design
+from archon.routers.theme import api_delete_design_theme as api_delete_design_theme
+from archon.routers.theme import api_delete_theme_by_name as api_delete_theme_by_name
+from archon.routers.theme import api_delete_theme_live_overrides as api_delete_theme_live_overrides
+from archon.routers.theme import api_get_design_themes as api_get_design_themes
+from archon.routers.theme import api_get_theme as api_get_theme
+from archon.routers.theme import api_get_theme_by_name as api_get_theme_by_name
+from archon.routers.theme import api_get_theme_live_overrides as api_get_theme_live_overrides
+from archon.routers.theme import api_get_themes as api_get_themes
+from archon.routers.theme import api_save_design_themes as api_save_design_themes
+from archon.routers.theme import api_save_theme as api_save_theme
+from archon.routers.theme import api_save_theme_by_name as api_save_theme_by_name
+from archon.routers.theme import api_save_theme_live_overrides as api_save_theme_live_overrides
+from archon.routers.theme import api_upload_theme_background as api_upload_theme_background
+from archon.routers.theme import router as _theme_router
+from archon.routers.ui import FullHtmlSaveRequest as FullHtmlSaveRequest
+from archon.routers.ui import TextReplacementItem as TextReplacementItem
+from archon.routers.ui import TextReplacementsRequest as TextReplacementsRequest
+from archon.routers.ui import _full_html_target_files as _full_html_target_files
+from archon.routers.ui import api_save_full_html as api_save_full_html
+from archon.routers.ui import api_save_text_replacements as api_save_text_replacements
+from archon.routers.ui import api_studio_upload_bg as api_studio_upload_bg
+from archon.routers.ui import get_hud_page as get_hud_page
+from archon.routers.ui import get_index as get_index
+from archon.routers.ui import get_index_v2 as get_index_v2
+from archon.routers.ui import get_manifest as get_manifest
+from archon.routers.ui import get_mobile_cockpit as get_mobile_cockpit
+from archon.routers.ui import router as _ui_router
+from archon.routers.updater import api_hermes_update_apply as api_hermes_update_apply
+from archon.routers.updater import api_hermes_update_check as api_hermes_update_check
+from archon.routers.updater import router as _updater_router
+from archon.routers.v2_capabilities import router as _v2_capabilities_router
+from archon.routers.vault import _VAULT_FILES_CACHE as _VAULT_FILES_CACHE
+from archon.routers.vault import api_delete_vault_file_direct as api_delete_vault_file_direct
+from archon.routers.vault import api_edit_vault_file_direct as api_edit_vault_file_direct
+from archon.routers.vault import api_generate_vault_index as api_generate_vault_index
+from archon.routers.vault import api_get_vault_files as api_get_vault_files
+from archon.routers.vault import api_get_vault_list as api_get_vault_list
+from archon.routers.vault import api_read_vault_file_direct as api_read_vault_file_direct
+from archon.routers.vault import router as _vault_router
+from archon.routers.watchdog import (
+    acknowledge_watchdog_alarm_endpoint as acknowledge_watchdog_alarm_endpoint,
+)
+from archon.routers.watchdog import api_get_watchdog_config as api_get_watchdog_config
+from archon.routers.watchdog import api_save_watchdog_config as api_save_watchdog_config
+from archon.routers.watchdog import api_trigger_watchdog_run as api_trigger_watchdog_run
+from archon.routers.watchdog import api_watchdog_dispatch_action as api_watchdog_dispatch_action
+from archon.routers.watchdog import get_watchdog_alarms_endpoint as get_watchdog_alarms_endpoint
+from archon.routers.watchdog import router as _watchdog_router
+from archon.routers.watchdog import (
+    trigger_test_watchdog_alarm_endpoint as trigger_test_watchdog_alarm_endpoint,
+)
+from archon.services import profiles_service
+from archon.services.mission_sync import _LIVE_TELEMETRY_CACHE as _LIVE_TELEMETRY_CACHE
+from archon.services.mission_sync import _get_live_telemetry_metrics, _sync_task_to_obsidian
+from archon.services.mission_sync import _slugify as _slugify
+from archon.services.profiles_service import delete_profile as delete_profile
+from archon.services.profiles_service import save_profile as save_profile
+from backend.auth_service import auth_service as auth_service
+from backend.platform_paths import HERMES_HOME as HERMES_HOME
+from backend.platform_paths import OBSIDIAN_VAULT as OBSIDIAN_VAULT
+from backend.platform_paths import OBSIDIAN_VAULT_ALT as OBSIDIAN_VAULT_ALT
+from backend.platform_paths import PERSONALAKTEN_DIR as PERSONALAKTEN_DIR
+from backend.platform_paths import PROJEKTE_DIR as PROJEKTE_DIR
+from backend.platform_paths import agent_log_path as agent_log_path
+from backend.platform_paths import profile_dir as profile_dir
+from backend.platform_paths import soul_path as soul_path
+from backend.post_task_pipeline import project_folder_name
+from backend.process_lock import exclusive_loop as _exclusive_loop
+from backend.trace_context import extract_headers as _extract_traceparent
+from backend.trace_context import response_trace_headers as _response_trace_headers
+from backend.trace_context import start_trace as _start_trace
+from dossier_builder import build_dossier_from_report
+from telegram_notify import send_telegram_document, send_telegram_message
+from utils.docker_client import DockerError as DockerError
+from utils.docker_client import docker_client as docker_client
+from utils.docker_client import parse_docker_stream as parse_docker_stream
+from utils.docker_client import parse_docker_stream_bytes as parse_docker_stream_bytes
+
+_create_permission_gate = create_permission_gate
+_load_permission_gates = load_permission_gates
+_save_permission_gates = save_permission_gates
+
+# --- A5-Etappe 1: unveraenderliche Modul-Konstanten ausgelagert ------------
+# Quelle ist jetzt archon/core/constants.py (ein Ort, keine Kopie). Mutabler
+# State und Pfad-Konstanten bleiben bewusst in dieser Datei (Fallstrick 24 / B10).
+
+# Orchestration functions (extracted to archon.core.orchestration)
 
 # W3: Log-Level zur Laufzeit konfigurierbar (Incidents brauchen DEBUG ohne
 # Code-Änderung/Neustart).
@@ -361,20 +831,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # _install_rate_limit_middleware()/_install_cors_middleware() registriert
 # (siehe unten) — nur dann ist sie die äußerste Schicht und setzt den Kontext
 # auch bei 401/403/429/503. Starlette wickelt zuletzt registrierte zuerst aus.
-from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 
-from backend.trace_context import (
-    current_trace_id as _current_trace_id,
-)
-from backend.trace_context import (
-    extract_headers as _extract_traceparent,
-)
-from backend.trace_context import (
-    response_trace_headers as _response_trace_headers,
-)
-from backend.trace_context import (  # noqa: E402
-    start_trace as _start_trace,
-)
 
 
 class TraceContextMiddleware(BaseHTTPMiddleware):
@@ -976,16 +1433,6 @@ def prometheus_metrics():
     except Exception as e:
         return Response(content=f"# Error collecting metrics: {e}\n", status_code=500, media_type="text/plain")
 
-from archon.routers.telemetry import (
-    _count_running_containers,
-    api_get_agent_activity,
-    api_get_agent_projects,
-    api_telemetry_dashboard,
-    get_hud_telemetry,
-)
-from archon.routers.telemetry import (
-    router as _telemetry_router,
-)
 
 app.include_router(_telemetry_router)
 
@@ -993,112 +1440,16 @@ app.include_router(_telemetry_router)
 
 # Pfade + Laufzeit-Helfer kommen aus app.core.runtime (gemeinsame Basis für
 # main.py und die ausgelagerten Router; dort zyklenfrei definiert).
-from archon.core.cache import invalidate as invalidate_ttl_cache  # noqa: E402
-from archon.core.cache import ttl_cache
-from archon.core.mission_control import (  # noqa: E402
-    _MC_ASYNC_LOCK,
-    _MC_DATA_LOCK,
-    # F-12/Z-12: Der Leser von /api/mission-control/state ist
-    # ``archon/routers/mission_control.py``; er benutzt DEN Cache aus
-    # ``archon.core.mission_control``. ``main.py`` hatte einen zweiten,
-    # toten Cache-Eigenbau (siehe unten) und invalidierte genau den —
-    # die Invalidierung lief ins Leere. Jetzt wird der echte Cache
-    # importiert und invalidiert.
-    _MC_STATE_CACHE,
-    MISSION_CONTROL_FILE,
-    _load_mission_control_data,
-    _save_mission_control_data,
-    _write_mc_atomic,
-    update_mission_control_data,
-)
 
 # --- A5-Etappe 4b: Pfad-Konstanten ausgelagert -----------------------------
 # Quelle ist archon/core/paths.py; alle Pfade leiten sich aus den Basis-
 # Verzeichnissen oben ab (keine zweite __file__-Wahrheit). main.py importiert
 # nur noch — die Werte sind per scripts/path_constants_snapshot.py belegt.
-from archon.core.paths import (
-    _SKILL_INDEX_DISK_PATH,
-    AGENTS_FILE,
-    BOARDROOM_HISTORY_FILE,
-    CONFIG_FILE,
-    COUPLED_AGENTS_FILE,
-    FRAMEWORKS_FILE,
-    GATEWAY_CONFIG_FILE,
-    HERMES_PROFILES_DIR,
-    KANBAN_CARDS_FILE,
-    KANBAN_FILE,
-    MEMORY_FILE,
-    QUICKCHAT_SESSIONS_DIR,
-    ROLES_FILE,
-    SERVICES_FILE,
-    SETTINGS_FILE,
-    THEME_FILE,
-    THEME_LIVE_FILE,
-    THEMES_DIR,
-)
-from archon.core.permissions import (  # noqa: E402
-    PERMISSION_GATES_FILE,
-)
-from archon.core.permissions import (
-    create_permission_gate as _create_permission_gate,
-)
-from archon.core.permissions import (
-    load_permission_gates as _load_permission_gates,
-)
-from archon.core.permissions import (
-    save_permission_gates as _save_permission_gates,
-)
-from archon.core.permissions import (
-    set_decision_factory as _set_decision_factory,
-)
-from archon.core.profiles import (  # noqa: E402
-    ALL_HERMES_TOOLS,
-    DEFAULT_HERMES_TOOLS,
-    AgentProfileValidationSchema,
-    api_get_hermes_profiles,
-    create_rolling_backup,
-    get_hermes_profiles_base_dirs,
-    get_primary_hermes_profiles_dir,
-    invalidate_hermes_profiles_cache,
-    materialize_role_avatars,
-    resolve_avatar_file,
-    restore_data_uri_avatars,
-    save_all_agent_profiles,
-)
-from archon.core.runtime import (  # noqa: E402
-    _SSE_SUB_LOCK,
-    _SSE_SUBSCRIBERS,
-    DATA_DIR,
-    MEMORY_DIR,
-    OBSIDIAN_VAULT_DIR,
-    WORKSPACE_DIR,
-    _load_json,
-    _save_json,
-    add_ticker,
-    atomic_write_json,
-    broadcast_event,
-    resolve_obsidian_vault_path,
-    subscribe_events,
-    ticker_entries,
-    unsubscribe_events,
-)
-from archon.core.state_db import (  # noqa: E402
-    STATE_DB_PATH,
-    ClosingConnection,
-    _get_profile_state_db,
-    _get_state_db,
-)
 
 # Kostenanzeige im Chat-Stream braucht die Preisliste des Providers-Routers.
-from archon.routers.llm_providers import get_llm_prices  # noqa: E402
 
 # Gate-Ausfuehrung ruft den Service, nicht die HTTP-Endpunkte: die Endpunkte
 # brauchen einen Request (require_admin_or_503) und waren hier nie importiert.
-from archon.services import profiles_service  # noqa: E402
-from archon.services.profiles_service import (  # noqa: E402
-    delete_profile,
-    save_profile,
-)
 
 # --- Pfad-Jail: jeder dateibasierte Endpunkt bleibt in erlaubten Wurzeln ---
 try:
@@ -1135,7 +1486,6 @@ except Exception as _pj_err:  # pragma: no cover - darf den Start nie blockieren
 # require_admin-Funktion am Dateiende per configure(); hier wird nur der
 # Aufrufpfad importiert. Fehlt die Injektion, sperrt der Zaun (503) statt
 # still durchzulassen — fail-closed.
-from archon.routers._rbac import require_admin_or_503  # noqa: E402
 
 os.makedirs(OBSIDIAN_VAULT_DIR, exist_ok=True)
 os.makedirs(os.path.join(WORKSPACE_DIR, "sandbox"), exist_ok=True)
@@ -1192,14 +1542,6 @@ os.makedirs(QUICKCHAT_SESSIONS_DIR, exist_ok=True)
 # =====================================================================
 # PERSISTENZ-HELFER (Basic UI Configuration State)
 # =====================================================================
-from archon.core.roles_data import DEFAULT_ROLES as DEFAULT_ROLES  # Re-Export fuer container_ops.py
-from archon.core.roles_data import load_default_roles
-from archon.core.settings_state import (
-    DEFAULT_AGENTS,
-    DEFAULT_SERVICES,
-    GHOST_AGENT_IDS,
-    SYSTEM_INTERNAL_IDS,
-)
 
 
 def load_agents() -> List[Dict]:
@@ -1284,100 +1626,20 @@ def save_theme(theme_data: Dict): _save_json(THEME_FILE, theme_data)
 # REST ENDPOINTS
 # =====================================================================
 
-from archon.routers.core_settings import (
-    api_get_agents,
-    api_get_roles,
-    api_save_agents,
-    api_save_roles,
-    api_save_settings,
-    api_test_jev,
-    clear_ticker,
-    get_settings,
-    get_ticker,
-)
-from archon.routers.core_settings import (
-    router as _core_settings_router,
-)
-from archon.routers.hermes_proxy import (
-    _PROXY_WRITE_METHODS,
-    _hermes_proxy_token,
-    forward_to_hermes,
-    proxy_hermes_api_endpoints,
-    proxy_web_ui,
-)
-from archon.routers.hermes_proxy import (
-    router as _hermes_proxy_router,
-)
 
 app.include_router(_core_settings_router)
 
-from archon.routers.oracle_seo import (
-    api_get_oracle_feed,
-    api_run_oracle_cycle,
-    api_seo_articles,
-    api_seo_generate,
-    api_triage_oracle_signal,
-)
-from archon.routers.oracle_seo import (
-    router as _oracle_seo_router,
-)
 
 app.include_router(_oracle_seo_router)
 
 # --- THEME & DESIGN ROUTER (ausgelagert nach archon.routers.theme) ---
-from archon.routers.theme import (
-    DESIGN_THEMES_TARGETS,
-    api_bake_theme_into_main_design,
-    api_delete_design_theme,
-    api_delete_theme_by_name,
-    api_delete_theme_live_overrides,
-    api_get_design_themes,
-    api_get_theme,
-    api_get_theme_by_name,
-    api_get_theme_live_overrides,
-    api_get_themes,
-    api_save_design_themes,
-    api_save_theme,
-    api_save_theme_by_name,
-    api_save_theme_live_overrides,
-    api_upload_theme_background,
-)
-from archon.routers.theme import (
-    router as _theme_router,
-)
 
 app.include_router(_theme_router)
 
 
-from archon.routers.docker_services import (
-    _services_config_fallback,
-    api_docker_start,
-    api_docker_stop,
-    api_get_models,
-    api_get_models_v1,
-    api_get_services,
-    api_save_services,
-    detect_container_port,
-    get_docker_containers_from_socket,
-    post_docker_container_action,
-)
-from archon.routers.docker_services import (
-    router as _docker_services_router,
-)
 
 app.include_router(_docker_services_router)
 
-from archon.routers.agent_chat import (
-    DirectAgentChatRequest,
-    RunRequest,
-    api_direct_agent_chat,
-    api_run_parallel,
-    fetch_agent_response_api,
-    load_profiles_list,
-)
-from archon.routers.agent_chat import (
-    router as _agent_chat_router,
-)
 
 app.include_router(_agent_chat_router)
 
@@ -1394,26 +1656,7 @@ def load_boardroom_frameworks():
 # GATEWAY MANAGER — Hermes Profile Start/Stop/Autostart/Idle-Timeout
 # =====================================================================
 
-import subprocess
 
-from archon.routers.gateway import (
-    _get_all_installed_profiles,
-    _load_gateway_config,
-    _parse_gateway_list,
-    _run_docker_exec,
-    _save_gateway_config,
-    _update_profile_status,
-    api_gateway_autostart,
-    api_gateway_list,
-    api_gateway_start,
-    api_gateway_stop,
-    api_gateway_stop_all,
-    api_get_gateway_config,
-    api_save_gateway_config_endpoint,
-)
-from archon.routers.gateway import (
-    router as _gateway_router,
-)
 
 app.include_router(_gateway_router)
 
@@ -1422,18 +1665,6 @@ app.include_router(_gateway_router)
 # INTERNET WATCHDOG (SÄULE 4 DER KOGNITION: AUTONOMER WEB-RADAR)
 # =====================================================================
 
-from archon.routers.watchdog import (
-    acknowledge_watchdog_alarm_endpoint,
-    api_get_watchdog_config,
-    api_save_watchdog_config,
-    api_trigger_watchdog_run,
-    api_watchdog_dispatch_action,
-    get_watchdog_alarms_endpoint,
-    trigger_test_watchdog_alarm_endpoint,
-)
-from archon.routers.watchdog import (
-    router as _watchdog_router,
-)
 
 app.include_router(_watchdog_router)
 
@@ -1454,7 +1685,6 @@ async def _gateway_idle_stop_loop():
         _idle_stop_running = False
 
 
-from backend.process_lock import exclusive_loop as _exclusive_loop
 
 
 @_exclusive_loop("email_imap")
@@ -1847,36 +2077,11 @@ async def _cancel_background_tasks():
     # Nur tatsaechlich beendete Tasks entfernen; Zombies bleiben sichtbar.
     _BACKGROUND_TASKS[:] = [t for t in _BACKGROUND_TASKS if not t.done()]
 
-from archon.routers.quickchat import (
-    QuickchatSendRequest,
-    _load_quickchat_session,
-    _quickchat_session_path,
-    _save_quickchat_session,
-    api_delete_quickchat_session,
-    api_get_quickchat_session,
-    api_quickchat_send,
-)
-from archon.routers.quickchat import (
-    router as _quickchat_router,
-)
-from archon.routers.ui import (
-    FullHtmlSaveRequest,
-    TextReplacementItem,
-    TextReplacementsRequest,
-    _full_html_target_files,
-    api_save_full_html,
-    api_save_text_replacements,
-    api_studio_upload_bg,
-)
-from archon.routers.ui import (
-    router as _ui_router,
-)
 
 app.include_router(_quickchat_router)
 app.include_router(_ui_router)
 
 # Kontext-Meter & Session-Compaction (M73, Teil 1+2)
-from archon.routers.context_meter import router as _context_meter_router  # noqa: E402
 
 app.include_router(_context_meter_router)
 
@@ -1884,22 +2089,6 @@ app.include_router(_context_meter_router)
 # ============================================================================
 # BRAIN & ARCHIV ROUTER (ausgelagert nach archon.routers.brain)
 # ============================================================================
-from archon.routers.brain import (
-    api_brain_galaxy_data,
-    api_brain_vault_file,
-    api_get_quartz_config,
-    api_library_book_content,
-    api_library_books,
-    api_library_ingest,
-    api_library_upload,
-    api_save_quartz_config,
-)
-from archon.routers.brain import (
-    configure as _brain_configure,
-)
-from archon.routers.brain import (
-    router as _brain_router,
-)
 
 _brain_configure(
     _spawn_background=_spawn_background,
@@ -1911,21 +2100,6 @@ _brain_configure(
 app.include_router(_brain_router)
 
 # --- NOTEBOOKLM STUDIO & GROUNDED RETRIEVAL API (ausgelagert nach archon.routers.notebooks) ---
-from archon.routers.notebooks import (
-    api_attach_vault_source,
-    api_create_notebook,
-    api_delete_notebook,
-    api_delete_notebook_source,
-    api_get_notebook_chat,
-    api_get_notebook_sources,
-    api_get_notebooks,
-    api_query_notebook,
-    api_sync_notebook_obsidian,
-    api_upload_notebook_source,
-)
-from archon.routers.notebooks import (
-    router as _notebooks_router,
-)
 
 app.include_router(_notebooks_router)
 
@@ -1958,16 +2132,6 @@ async def _warm_hermes_skill_caches():
     threading.Thread(target=_warm, daemon=True, name="skills-warmup").start()
 
 
-from archon.routers.telegram import (
-    TelegramSendPayload,
-    _redact_telegram_secrets,
-    api_telegram_relay,
-    api_telegram_send,
-    api_telegram_voice_relay,
-)
-from archon.routers.telegram import (
-    router as _telegram_router,
-)
 
 app.include_router(_telegram_router)
 
@@ -1976,35 +2140,6 @@ app.include_router(_telegram_router)
 # =========================================================================
 # ZENTRALER ENTSCHEIDUNGS-SERVICE (ausgelagert nach archon.routers.decisions)
 # =========================================================================
-from archon.routers.decisions import (
-    _antwort_grund,
-    _decision_followup,
-    _decision_kanban_status,
-    _decision_self_api,
-    _folge_nicht,
-    _pruefe_gate_antwort,
-    _pruefe_gate_persistiert,
-    _pruefe_move_antwort,
-    _pruefe_synthese_beleg,
-    _sync_org_hierarchy_node,
-    _synthese_parent,
-    api_decide_decision,
-    api_decide_permission_gate,
-    create_decision,
-    register_decision,
-)
-from archon.routers.decisions import (
-    _followup_mission_start as _impl_followup_mission_start,
-)
-from archon.routers.decisions import (
-    _followup_permission_gate as _impl_followup_permission_gate,
-)
-from archon.routers.decisions import (
-    _followup_synthesis as _impl_followup_synthesis,
-)
-from archon.routers.decisions import (
-    router as _decisions_router,
-)
 
 app.include_router(_decisions_router)
 _set_decision_factory(create_decision)
@@ -2032,15 +2167,6 @@ class ProfileStatusUpdate(BaseModel):
 # 
 
 
-from archon.routers.hermes_ops import (
-    _get_hermes_config_path,
-    api_get_hermes_config,
-    api_hermes_memory_purge,
-    api_save_hermes_config,
-)
-from archon.routers.hermes_ops import (
-    router as _hermes_ops_router,
-)
 
 app.include_router(_hermes_ops_router)
 
@@ -2049,32 +2175,6 @@ app.include_router(_hermes_ops_router)
 # ============================================================================
 # D-12: Default Fallback Modell für OmniRoute / Chat Stream
 model = "auto/best-coding"
-from archon.routers.chat import (
-    ChatStreamRequest,
-    ImageGenerateToolRequest,
-    RenameSessionRequest,
-    SetProfileModelRequest,
-    _ensure_session_exists,
-    _ensure_state_session,
-    _load_state_history,
-    _quickchat_state_session_id,
-    _record_session_model_usage,
-    _save_message_to_db,
-    _warn_price_lookup_once,
-    api_chat_stream,
-    api_chat_upload,
-    api_get_chat_session_messages,
-    api_get_chat_sessions,
-    api_rename_chat_session,
-    api_tool_image_generate,
-    record_task_tokens,
-)
-from archon.routers.chat import (
-    configure as _chat_configure,
-)
-from archon.routers.chat import (
-    router as _chat_router,
-)
 
 _chat_configure(create_decision=create_decision)
 app.include_router(_chat_router)
@@ -2082,20 +2182,6 @@ app.include_router(_chat_router)
 # ============================================================================
 # DELEGATION ENGINE v2 (ausgelagert nach archon.core.delegation)
 # ============================================================================
-from archon.core.delegation import (
-    DELEGATION_ALIAS_MAP,
-    _build_kader_roster_summary,
-    _check_delegation_permission,
-    _execute_delegation,
-    _get_delegation_prompt_for,
-    _load_org_hierarchy_map,
-    _parse_delegation_blocks,
-    _resolve_target_agent_id,
-    _trigger_autonomous_orchestrator_followup,
-)
-from archon.core.delegation import (
-    configure as _delegation_configure,
-)
 
 _delegation_configure(
     api_get_hermes_profiles=api_get_hermes_profiles,
@@ -2109,71 +2195,20 @@ _delegation_configure(
 
 _GUARDIAN_STATS_CACHE: Dict[str, Any] = {}
 # --- GUARDIAN ROUTER (ausgelagert nach archon.routers.guardian, 1157 Zeilen) ---
-from archon.routers.guardian import (
-    _GUARDIAN_ALLOWED_TIMEFRAMES,
-    _GUARDIAN_CACHE_MAX_ENTRIES,
-    _GUARDIAN_CACHE_TTL,
-    api_clear_guardian_cache,
-    api_get_guardian_config,
-    api_get_guardian_stats,
-    api_get_plugin_config,
-    api_save_guardian_config,
-    api_save_plugin_config,
-    api_toggle_guardian_plugin,
-)
-from archon.routers.guardian import (
-    router as _guardian_router,
-)
 
 app.include_router(_guardian_router)
 
 # --- HERMES RAW CONFIG & LIVE EDITOR ENDPOINTS ---
 # --- HERMES CONFIG ROUTER (ausgelagert nach archon.routers.hermes_config, 792 Zeilen) ---
-from archon.routers.hermes_config import (
-    _get_hermes_config_paths,
-    api_get_hermes_form_config,
-    api_get_hermes_raw_config,
-    api_save_hermes_form_config,
-    api_save_hermes_raw_config,
-)
-from archon.routers.hermes_config import (
-    configure as _hermes_config_configure,
-)
-from archon.routers.hermes_config import (
-    router as _hermes_config_router,
-)
 
 _hermes_config_configure(_sync_org_hierarchy_node=_sync_org_hierarchy_node)
 app.include_router(_hermes_config_router)
 
 # --- KONTEXT-HILFE (ausgelagert nach archon.routers.context_help) ---
-from archon.routers.context_help import HELP_CONTEXT_DATA
-from archon.routers.context_help import router as _context_help_router
 
 app.include_router(_context_help_router)
 
 # --- MEILENSTEIN 4: MULTI-USER & RBAC ENDPOINTS (ausgelagert nach archon.routers.auth) ---
-from archon.routers.auth import (
-    api_auth_change_password,
-    api_auth_create_user,
-    api_auth_delete_user,
-    api_auth_list_users,
-    api_auth_login,
-    api_auth_logout,
-    api_auth_me,
-    api_auth_status,
-    api_auth_toggle,
-    api_auth_update_user,
-    get_current_user_from_request,
-    require_admin,
-)
-from archon.routers.auth import (
-    configure as _auth_configure,
-)
-from archon.routers.auth import (
-    router as _auth_router,
-)
-from backend.auth_service import auth_service
 
 _auth_configure(
     _load_json=_load_json,
@@ -2203,78 +2238,19 @@ def api_get_paperclip_agents():
 
 
 # --- TALENT- & SKILL-MARKTPLATZ ENDPOINTS (ausgelagert nach archon.routers.marketplace) ---
-from archon.routers.marketplace import (
-    api_assign_skill_to_profile,
-    api_get_marketplace_sources,
-    api_get_marketplace_template_detail,
-    api_get_marketplace_templates,
-    api_get_skill_detail,
-    api_get_skill_sources,
-    api_get_skills_list,
-    api_marketplace_recruit,
-)
-from archon.routers.marketplace import (
-    configure as _marketplace_configure,
-)
-from archon.routers.marketplace import (
-    router as _marketplace_router,
-)
 
 _marketplace_configure(save_all_agent_profiles=save_all_agent_profiles)
 app.include_router(_marketplace_router)
 
-from archon.routers.memory_ops import (
-    api_consolidate_memory,
-    api_evict_stale_memory,
-    api_get_agent_real_stats,
-    api_get_memory_stats,
-    api_memory_context,
-    api_memory_learning,
-    api_memory_profile,
-    api_memory_vault_summary,
-    clear_chat_history_api,
-    get_chat_history_api,
-)
-from archon.routers.memory_ops import (
-    router as _memory_ops_router,
-)
 
 app.include_router(_memory_ops_router)
 
-from archon.routers.email_settings import (
-    SmtpConfigPayload,
-    api_get_smtp_settings,
-    api_save_smtp_settings,
-    api_sync_emails_endpoint,
-    api_test_smtp_settings,
-)
-from archon.routers.email_settings import (
-    router as _email_settings_router,
-)
 
 app.include_router(_email_settings_router)
 
-from archon.routers.security_scanner import (
-    api_get_security_stats,
-    api_scan_email_security,
-    api_validate_output_security,
-)
-from archon.routers.security_scanner import (
-    router as _security_scanner_router,
-)
 
 app.include_router(_security_scanner_router)
 
-from archon.routers.research import (
-    api_get_research_dossier,
-    api_get_research_history,
-    api_get_research_providers,
-    api_get_research_sources,
-    api_run_research_mission,
-)
-from archon.routers.research import (
-    router as _research_router,
-)
 
 app.include_router(_research_router)
 
@@ -2284,13 +2260,6 @@ app.include_router(_research_router)
 
 
 # --- HERMES AGENT CORE UPDATE (NousResearch/hermes-agent) ---
-from archon.routers.updater import (
-    api_hermes_update_apply,
-    api_hermes_update_check,
-)
-from archon.routers.updater import (
-    router as _updater_router,
-)
 
 app.include_router(_updater_router)
 
@@ -2350,30 +2319,11 @@ async def on_shutdown_graceful():
 
 
 # --- DOKUMENTEN-PARSING & TABELLENEXTRAKTION (t-539b65) ---
-from archon.routers.documents import (
-    _resolve_parser_input,
-    api_extract_tables,
-    api_parse_document,
-)
-from archon.routers.documents import (
-    router as _documents_router,
-)
 
 app.include_router(_documents_router)
 
 
 # --- DEAL-PIPELINE & FORECAST-ENGINE (ausgelagert nach archon.routers.deals) ---
-from archon.routers.deals import (
-    api_deal_forecast,
-    api_delete_deal,
-    api_get_deal,
-    api_list_deals,
-    api_move_deal_stage,
-    api_save_deal,
-)
-from archon.routers.deals import (
-    router as _deals_router,
-)
 
 app.include_router(_deals_router)
 
@@ -2381,25 +2331,10 @@ app.include_router(_deals_router)
 # --- PLUGIN SYSTEM & EXTENSIBILITY (MEILENSTEIN 5) ---
 
 
-_VAULT_FILES_CACHE = {"ts": 0.0, "data": []}
-
-
 
 
 
 # --- OBSIDIAN VAULT ROUTER (ausgelagert nach archon.routers.vault) ---
-from archon.routers.vault import (
-    _VAULT_FILES_CACHE,
-    api_delete_vault_file_direct,
-    api_edit_vault_file_direct,
-    api_generate_vault_index,
-    api_get_vault_files,
-    api_get_vault_list,
-    api_read_vault_file_direct,
-)
-from archon.routers.vault import (
-    router as _vault_router,
-)
 
 app.include_router(_vault_router)
 
@@ -2415,49 +2350,16 @@ def api_run_python_sandbox(request: Request, payload: Dict = Body(...)):
 
 
 # --- KANBAN PERSISTENZ ROUTER (ausgelagert nach archon.routers.kanban) ---
-from archon.routers.kanban import (
-    api_get_kanban,
-    api_save_kanban,
-)
-from archon.routers.kanban import (
-    router as _kanban_router,
-)
 
 app.include_router(_kanban_router)
 
 # --- ARCHON V2 CAPABILITIES ROUTER (M32-M94) ---
-from archon.routers.v2_capabilities import router as _v2_capabilities_router
 
 app.include_router(_v2_capabilities_router)
-from archon.routers.content_machine import router as _content_machine_router
 
 app.include_router(_content_machine_router)
 
 # --- DOCKER CONTAINER MANAGEMENT ROUTER (ausgelagert nach archon.routers.containers) ---
-from archon.routers.containers import (
-    ContainerActionRequest,
-    _container_stats_payload,
-    _docker_container_stats,
-    docker_socket_request,
-    get_all_container_logs_api,
-    get_container_file_content,
-    get_container_files_api,
-    get_container_logs_api,
-    get_container_metrics_api,
-    get_container_settings,
-    get_hermes_profile_logs_api,
-    inject_container_config,
-    load_agent_configs,
-    run_container_action,
-    save_agent_config,
-    save_container_settings,
-)
-from archon.routers.containers import (
-    configure as _containers_configure,
-)
-from archon.routers.containers import (
-    router as _containers_router,
-)
 
 _containers_configure(
     detect_container_port=detect_container_port,
@@ -2465,15 +2367,6 @@ _containers_configure(
 )
 app.include_router(_containers_router)
 
-from archon.routers.container_ops import (
-    ContainerExecRequest,
-    abort_agent_endpoint,
-    exec_container_command_api,
-    send_prompt_to_agent,
-)
-from archon.routers.container_ops import (
-    router as _container_ops_router,
-)
 
 app.include_router(_container_ops_router)
 
@@ -2487,19 +2380,6 @@ app.include_router(_hermes_proxy_router)
 
 
 
-from archon.routers.hr import (
-    LogActivityReq,
-    SavePersonalakteReq,
-    SaveSoulReq,
-    api_get_hermes_soul,
-    api_get_personalakte,
-    api_log_personalakte_activity,
-    api_save_hermes_soul,
-    api_save_personalakte,
-)
-from archon.routers.hr import (
-    router as _hr_router,
-)
 
 app.include_router(_hr_router)
 
@@ -2510,7 +2390,6 @@ app.include_router(_hr_router)
 # =====================================================================
 
 
-from pydantic import BaseModel
 
 
 class OSKanbanTaskStatusUpdate(BaseModel):
@@ -2518,12 +2397,6 @@ class OSKanbanTaskStatusUpdate(BaseModel):
 
 # Mission-Control-Store -> archon.core.mission_control (Import oben)
 
-from archon.services.mission_sync import (
-    _LIVE_TELEMETRY_CACHE,
-    _get_live_telemetry_metrics,
-    _slugify,
-    _sync_task_to_obsidian,
-)
 
 
 @app.get("/api/v1/events/stream")
@@ -2594,9 +2467,6 @@ async def _execute_mission_control_task(task_id: str):
     )
 
 
-from backend.post_task_pipeline import project_folder_name
-from dossier_builder import build_dossier_from_report
-from telegram_notify import send_telegram_document, send_telegram_message
 
 
 def _paperclip_hire_profile_by_id(profile_id: str, profiles: list, current_task_id: str = "") -> bool:
@@ -2697,45 +2567,14 @@ async def _run_synthesis_cascade(parent_project_id: str):
 # (Prompt Templates & Studio Variablen in archon.routers.templates)
 
 
-from archon.routers.prompts import (
-    PromptOptimizeRequest,
-    TemplateSaveRequest,
-    optimize_prompt_endpoint,
-    upload_prompt_studio_context,
-)
-from archon.routers.prompts import (
-    router as _prompts_router,
-)
 
 app.include_router(_prompts_router)
 
 
-from archon.routers.proxies import (
-    _get_n8n_proxy,
-    _get_omniroute_proxy,
-    _get_shared_proxy_client,
-    forward_to_n8n,
-    forward_to_omniroute,
-    n8n_assets_proxy,
-    n8n_proxy,
-    n8n_rest_proxy,
-    omniroute_next_assets,
-    omniroute_proxy,
-)
-from archon.routers.proxies import (
-    router as _proxies_router,
-)
 
 app.include_router(_proxies_router)
 
 
-from archon.routers.ui import (
-    get_hud_page,
-    get_index,
-    get_index_v2,
-    get_manifest,
-    get_mobile_cockpit,
-)
 
 try:
     from views_core import get_apps_dir
@@ -2792,81 +2631,10 @@ def debug_db(request: Request):
 # =====================================================================
 
 
-from archon.routers.inbox_tools import (
-    api_create_tool_proposal,
-    api_get_inbox_watcher_config,
-    api_list_tool_proposals,
-    api_resolve_tool_proposal,
-    api_save_inbox_watcher_config,
-    api_scan_inbox_watcher_now,
-)
-from archon.routers.inbox_tools import (
-    router as _inbox_tools_router,
-)
 
 app.include_router(_inbox_tools_router)
 
 
-from archon.routers.autonomy_settings import (
-    api_get_autonomy_modules_settings,
-    api_get_model_routing,
-    api_optimize_role_prompt,
-    api_resolve_model_routing,
-    api_run_eval_regression_suite,
-    api_save_autonomy_modules_settings,
-    api_save_model_routing,
-    api_semantic_cache_clear,
-    api_semantic_cache_lookup,
-    api_semantic_cache_stats,
-    api_semantic_cache_store,
-)
-from archon.routers.autonomy_settings import (
-    router as _autonomy_settings_router,
-)
-from archon.routers.mesh import (
-    api_accept_handoff,
-    api_analyze_vision,
-    api_approve_skill_proposal,
-    api_browse_and_capture,
-    api_check_task_budget,
-    api_create_handoff,
-    api_diff_preview,
-    api_execute_sandbox,
-    api_get_concurrency_status,
-    api_get_consensus_history,
-    api_get_memory_consolidation_settings,
-    api_get_war_room_history,
-    api_ingest_inbound_event,
-    api_list_event_history,
-    api_list_skill_proposals,
-    api_query_rag,
-    api_review_task_consensus,
-    api_run_council_vote,
-    api_run_war_room,
-    api_save_concurrency_config,
-    api_save_memory_consolidation_settings,
-    api_scan_inbox_directory,
-)
-from archon.routers.mesh import (
-    router as _mesh_router,
-)
-from archon.routers.resilience import (
-    api_dispatch_notification,
-    api_fleet_health_check,
-    api_fork_task_trace,
-    api_get_healing_logs,
-    api_get_task_trace,
-    api_heal_service,
-    api_list_audit_logs,
-    api_list_recent_notifications,
-    api_list_snapshots,
-    api_restore_snapshot,
-    api_rollback_task_trace,
-    api_verify_audit_log,
-)
-from archon.routers.resilience import (
-    router as _resilience_router,
-)
 
 app.include_router(_resilience_router)
 app.include_router(_mesh_router)
@@ -3552,9 +3320,9 @@ def _verify_all_audit_chains() -> Dict[str, Dict[str, Any]]:
     Einzelfehler werden als ``valid=False`` normalisiert (fail-closed): eine
     nicht ausführbare Verifikation ist kein Grund, den Start fortzusetzen.
     """
-    from backend.audit_log import chained_audit_log as _audit_chain
     from backend.api_key_manager import api_key_manager as _api_key_chain
     from backend.approval_policy_engine import approval_engine as _approval_chain
+    from backend.audit_log import chained_audit_log as _audit_chain
     from backend.email_draft_engine import verify_email_draft_chain
     from backend.execution_receipt_ledger import execution_receipt_ledger
     from backend.gdpr_compliance_engine import verify_gdpr_audit_chain

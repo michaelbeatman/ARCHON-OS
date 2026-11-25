@@ -214,8 +214,8 @@ def _call(module_name, func_name, request):
 @pytest.fixture()
 def guards(monkeypatch):
     """Verdrahtet die Sonde in alle drei Injektionswege (main, _rbac, system._DEPS)."""
-    from archon.routers import _rbac as rbac_module
     import archon.routers.system as system_router
+    from archon.routers import _rbac as rbac_module
 
     main = _app()
     real = main.require_admin

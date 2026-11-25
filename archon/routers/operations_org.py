@@ -1,12 +1,3 @@
-import logging
-
-from backend.operations_constants import TEAMS_DEFINITION, _get_org_hierarchy_file
-
-_archon_exc_logger = logging.getLogger("operations_org")
-from fastapi import Depends as _ArchonDepends
-
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
-
 """Sub-Router fuer Org-Chart, Teams, Comm-Feed, Hierarchie und Concurrency Governance.
 
 Ausgelagert aus backend/operations_api.py.
@@ -15,17 +6,23 @@ Ausgelagert aus backend/operations_api.py.
 import asyncio
 import datetime
 import json
+import logging
 import os
 import sys
 import weakref
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import Depends as _ArchonDepends
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from archon.core.runtime import broadcast_event, subscribe_events, unsubscribe_events
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 from archon.routers._rbac import require_admin_or_503
+from backend.operations_constants import TEAMS_DEFINITION, _get_org_hierarchy_file
+
+_archon_exc_logger = logging.getLogger("operations_org")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -517,7 +514,7 @@ def _generate_default_hierarchy():
             nodes.append(_make_node(s_id, sx, sy, tier=3, team_id=tid))  # type: ignore[arg-type]
             links.append({"from": lead_id, "to": s_id})  # type: ignore[dict-item]
 
-    links = [l for l in links if l.get("from") and l.get("to") and l["from"] != l["to"]]
+    links = [link for link in links if link.get("from") and link.get("to") and link["from"] != link["to"]]
 
     return {
         "nodes": nodes,
@@ -562,8 +559,8 @@ def get_org_hierarchy():
                             node["provider"] = p["provider"]
 
                 data["links"] = [
-                    l for l in data.get("links", [])
-                    if l.get("from") and l.get("to") and l["from"] != l["to"]
+                    link for link in data.get("links", [])
+                    if link.get("from") and link.get("to") and link["from"] != link["to"]
                 ]
                 data["canvas_width"] = max(data.get("canvas_width", 3200), 3200)
                 data["canvas_height"] = max(data.get("canvas_height", 3600), 3600)

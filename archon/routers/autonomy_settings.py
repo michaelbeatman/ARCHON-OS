@@ -18,13 +18,9 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["
 
 
 def guardian_limits_path() -> str:
-    """Ein gemeinsamer Pfad für Guardian-UI und AgentRouter (D13/MED).
-
-    Vorher schrieb `guardian.py` nach `MEMORY_DIR/guardian_limits.json`
-    (Host: `.`), während `agent_router.py` `<workspace>/memory/...` las.
-    """
-    from archon.core.runtime import MEMORY_DIR
-    return os.path.join(MEMORY_DIR, "guardian_limits.json")
+    """Kompatibilitaets-Helfer (F1a): SSOT liegt jetzt in archon.core.paths."""
+    from archon.core.paths import GUARDIAN_LIMITS_FILE
+    return GUARDIAN_LIMITS_FILE
 
 
 GUARDIAN_LIMITS_FILE = guardian_limits_path()

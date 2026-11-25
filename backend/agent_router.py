@@ -304,7 +304,7 @@ class AgentRouter:
         try:
             # D13/MED: gemeinsamer Pfad mit der Guardian-UI statt eigener
             # `<workspace>/memory/`-Ableitung (Host/Container-Drift).
-            from archon.routers.autonomy_settings import GUARDIAN_LIMITS_FILE
+            from archon.core.paths import GUARDIAN_LIMITS_FILE
             limits_file = GUARDIAN_LIMITS_FILE
             if os.path.exists(limits_file):
                 with open(limits_file, "r", encoding="utf-8") as f:

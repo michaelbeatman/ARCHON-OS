@@ -4,11 +4,8 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 """LLM-Provider-Verwaltung (Auswahl, Keys, Preise, Privacy-Routing)."""
 
-import json
 import os
 import re
-import threading
-import time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -18,6 +15,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.runtime import logger  # noqa: F401
 from archon.routers._rbac import require_admin_or_503
+# F1a: Preis-SSOT liegt in backend/ (backend/** darf archon.routers nicht
+# importieren). Re-Export haelt main.py:1093 / chat.py:50 unveraendert.
+from backend.llm_prices import (
+    _get_llm_prices_impl,
+    get_llm_prices,
+    get_price_cache,
+)
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -149,9 +153,9 @@ def api_get_llm_provider_models(provider: str = Query("openrouter")):
         ]
     }
     models = list(catalog.get(p, catalog["openrouter"]))
-    global _openrouter_price_cache
-    if p == "openrouter" and _openrouter_price_cache:
-        for mid in _openrouter_price_cache.keys():
+    price_cache = get_price_cache()
+    if p == "openrouter" and price_cache:
+        for mid in price_cache.keys():
             if mid not in models:
                 models.append(mid)
     return {"status": "success", "provider": p, "models": models}
@@ -245,59 +249,10 @@ def get_llm_providers():
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e), "providers": []})
 
 
-_openrouter_price_cache = None
-
-
-_openrouter_price_timestamp = 0
-# C15: Single-Flight — ohne Lock starten nach TTL-Ablauf N Threadpool-Threads
-# parallel denselben 5-s-HTTP-Call (Thundering Herd).
-# Bewusst ein threading.Lock (KEIN asyncio.Lock): get_llm_prices() wird auch
-# von Sync-Pfaden genutzt (api_get_llm_provider_models, api_get_llm_prices_route,
-# backend.llm_kernel). Async Caller (chat.py SSE) rufen ueber asyncio.to_thread
-# auf — dann haelt ein Worker-Thread das Lock, nie der Event-Loop.
-_openrouter_price_lock = threading.Lock()
-
-
-def _get_llm_prices_impl(refresh: int = 0) -> Dict[str, Any]:
-    """Kernlogik der Preisabfrage; liefert immer ein Dict (alter Body-Shape)."""
-    global _openrouter_price_cache, _openrouter_price_timestamp
-    with _openrouter_price_lock:
-        return _get_llm_prices_locked(refresh=refresh)
-
-
-def _get_llm_prices_locked(refresh: int = 0) -> Dict[str, Any]:
-    global _openrouter_price_cache, _openrouter_price_timestamp
-    try:
-        now = time.time()
-        if refresh or _openrouter_price_cache is None or (now - _openrouter_price_timestamp > 3600):
-            import json
-            import urllib.request
-            req = urllib.request.Request("https://openrouter.ai/api/v1/models", headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = json.loads(resp.read().decode("utf-8")).get("data", [])
-                formatted = {}
-                for m in data:
-                    pricing = m.get("pricing", {})
-                    prompt_price = float(pricing.get("prompt", 0))
-                    completion_price = float(pricing.get("completion", 0))
-                    formatted[m["id"]] = {
-                        "name": m.get("name") or m["id"],
-                        "prompt_1m": prompt_price * 1000000,
-                        "completion_1m": completion_price * 1000000,
-                        "context_length": m.get("context_length", 0)
-                    }
-                _openrouter_price_cache = formatted
-                _openrouter_price_timestamp = now  # type: ignore[assignment]
-                return {"status": "ok", "prices": formatted}
-        else:
-            return {"status": "ok", "prices": _openrouter_price_cache}
-    except Exception as e:
-        return {"status": "error", "message": str(e), "prices": _openrouter_price_cache or {}}
-
-
-def get_llm_prices(refresh: int = 0) -> Dict[str, Any]:
-    """Interner Helfer (chat.py, llm_kernel.py, main.py): immer ein Dict."""
-    return _get_llm_prices_impl(refresh=refresh)
+# F1a: Cache, Single-Flight-Lock und Preisabfrage liegen jetzt in
+# backend/llm_prices.py (SSOT). get_llm_prices / _get_llm_prices_impl werden
+# oben aus backend.llm_prices re-exportiert, damit main.py:1093 und
+# archon/routers/chat.py:50 unveraendert bleiben.
 
 
 @router.get('/api/llm-providers/prices')

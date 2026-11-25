@@ -138,15 +138,23 @@ def estimate_model_cost_usd(
 
     in_per_1m, out_per_1m = 0.30, 1.20
     try:
-        # P0-8: backend.llm_prices existiert nicht — der ImportError wurde
-        # verschluckt, weshalb immer die statische 8-Modell-Tabelle galt.
-        from archon.routers.llm_providers import get_llm_prices
-        prices = get_llm_prices()
-        if isinstance(prices, dict) and model in prices:
+        # F1a: Preis-SSOT liegt in backend/. get_llm_prices() liefert
+        # {"status": ..., "prices": {model_id: {"prompt_1m", "completion_1m"}}}.
+        # Vorher wurde "prices" nie ausgepackt und nach "input"/"prompt_per_1m"
+        # gesucht -> Live-Preise griffen nie (Antigravity-Befund).
+        from backend.llm_prices import get_llm_prices
+        result = get_llm_prices()
+        prices = result.get("prices") if isinstance(result, dict) else None
+        if (
+            isinstance(result, dict)
+            and result.get("status") == "ok"
+            and isinstance(prices, dict)
+            and model in prices
+        ):
             entry = prices[model]
             if isinstance(entry, dict):
-                in_per_1m = float(entry.get("input", entry.get("prompt_per_1m", in_per_1m)) or in_per_1m)
-                out_per_1m = float(entry.get("output", entry.get("completion_per_1m", out_per_1m)) or out_per_1m)
+                in_per_1m = float(entry.get("prompt_1m", in_per_1m) or in_per_1m)
+                out_per_1m = float(entry.get("completion_1m", out_per_1m) or out_per_1m)
                 return round((max(0, int(input_tokens)) / 1_000_000.0) * in_per_1m + (max(0, int(output_tokens)) / 1_000_000.0) * out_per_1m, 6)
     except Exception:
         pass

@@ -46,6 +46,9 @@ THEME_LIVE_FILE = os.path.join(MEMORY_DIR, "theme_live_overrides.json")
 GATEWAY_CONFIG_FILE = os.path.join(MEMORY_DIR, "gateway_config.json")
 QUICKCHAT_SESSIONS_DIR = os.path.join(MEMORY_DIR, "quickchat_sessions")
 HERMES_PROFILES_DIR = os.path.join(MEMORY_DIR, "hermes_profiles")
+# F1a: gemeinsamer Pfad fuer Guardian-UI und AgentRouter (D13/MED).
+# Vorher in archon/routers/autonomy_settings.py -> backend importierte einen Router.
+GUARDIAN_LIMITS_FILE = os.path.join(MEMORY_DIR, "guardian_limits.json")
 
 # --- Daten unter DATA_DIR (heute identisch zu MEMORY_DIR) -------------------
 _SKILL_INDEX_DISK_PATH = os.path.join(DATA_DIR, "hermes_skills_index.json")
@@ -89,6 +92,7 @@ __all__ = (
     "ROLES_FILE",
     "SERVICES_FILE",
     "HERMES_PROFILES_DIR",
+    "GUARDIAN_LIMITS_FILE",
     "_SKILL_INDEX_DISK_PATH",
     "SETTINGS_FILE",
     "KANBAN_CARDS_FILE",

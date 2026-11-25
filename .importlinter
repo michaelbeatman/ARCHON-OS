@@ -30,16 +30,15 @@ forbidden_modules =
 # Das harte Ratchet-Gate bleibt tests/test_import_layer_contracts.py.
 allow_indirect_imports = true
 
-# Dokumentierte Altschuld (S1-Bestandsaufnahme, 25.11.2026):
-#   37 Importzeilen / 23 Modul-Paare / 8 backend-Module.
+# Dokumentierte Altschuld (S1-Bestandsaufnahme, 25.11.2026; nach F1a 35/21/6):
+#   35 Importzeilen / 21 Modul-Paare / 6 backend-Module.
+#   F1a getilgt: agent_router -> autonomy_settings, llm_kernel -> llm_providers.
 #   Tilgung: S3 (operations_api.py) + eigene Schritte fuer die 7 weiteren
 #   Module. NEUE Importe backend -> archon.routers sind ab sofort ein Verstoss
 #   (Ratchet). tests/test_import_layer_contracts.py liest diese Datei als SSOT
 #   und enforced sie in CI (ci.yml:305 / :555); import-linter selbst ist nicht
 #   in requirements-ci.lock.txt und bleibt daher ein lokales Tool.
 ignore_imports =
-    backend.agent_router -> archon.routers.autonomy_settings
-    backend.llm_kernel -> archon.routers.llm_providers
     backend.mcp_gateway -> archon.routers.context_meter
     backend.operations_api -> archon.routers._rbac
     backend.operations_api -> archon.routers.auth

@@ -13,10 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import Any, Callable, Dict, List, Optional
-
-logger = logging.getLogger(__name__)
 
 __all__ = ["execute_media_node"]
 

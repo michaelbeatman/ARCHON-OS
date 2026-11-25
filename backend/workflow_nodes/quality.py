@@ -16,7 +16,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Awaitable, Callable, Dict, NamedTuple, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+# Gleicher Logger-Name wie vor der Extraktion (kein stiller Kanal-Wechsel).
+logger = logging.getLogger("archon.workflow_dag")
 
 __all__ = ["QualityOutcome", "run_quality_revisions"]
 

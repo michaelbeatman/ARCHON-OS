@@ -18,7 +18,8 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+# Gleicher Logger-Name wie vor der Extraktion (kein stiller Kanal-Wechsel).
+logger = logging.getLogger("archon.workflow_dag")
 
 __all__ = ["PromptContext", "build_agent_prompt"]
 

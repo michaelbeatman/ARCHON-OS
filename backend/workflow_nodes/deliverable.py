@@ -18,7 +18,8 @@ import re
 import time
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger(__name__)
+# Gleicher Logger-Name wie vor der Extraktion (kein stiller Kanal-Wechsel).
+logger = logging.getLogger("archon.workflow_dag")
 
 __all__ = ["write_deliverable"]
 

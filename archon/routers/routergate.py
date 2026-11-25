@@ -70,26 +70,26 @@ class BanditOutcomeRequest(_RouterGateRequest):
 
 @router.post("/api/router/benchmark")
 async def api_run_model_benchmark(payload: ModelBenchmarkRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.model_benchmarker import run_model_benchmark
     return await run_model_benchmark(
-        prompt=payload.get("prompt", "Erstelle eine strukturierte Zusammenfassung der DSGVO-Kernpflichten."),
-        model_a=payload.get("model_a", "deepseek/deepseek-chat"),
-        model_b=payload.get("model_b", "anthropic/claude-3-5-sonnet"),
-        role=payload.get("role", "Senior Analyst")
+        prompt=data.get("prompt", "Erstelle eine strukturierte Zusammenfassung der DSGVO-Kernpflichten."),
+        model_a=data.get("model_a", "deepseek/deepseek-chat"),
+        model_b=data.get("model_b", "anthropic/claude-3-5-sonnet"),
+        role=data.get("role", "Senior Analyst")
     )
 
 
 @router.post("/api/router/estimate-cost")
 def api_estimate_cost(request: Request, payload: EstimateCostRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.cost_estimator import estimate_prompt_cost
     return estimate_prompt_cost(
-        prompt=payload.get("prompt", ""),
-        model_name=payload.get("model", "deepseek/deepseek-chat"),
-        expected_output_tokens=int(payload.get("expected_output_tokens", 1000)),
-        task_budget_usd=float(payload.get("task_budget_usd", 0.25))
+        prompt=data.get("prompt", ""),
+        model_name=data.get("model", "deepseek/deepseek-chat"),
+        expected_output_tokens=int(data.get("expected_output_tokens", 1000)),
+        task_budget_usd=float(data.get("task_budget_usd", 0.25))
     )
 
 
@@ -107,20 +107,20 @@ async def api_hedged_completion(payload: HedgedCompletionRequest = Body(...)):
     wird gegen deren echte Antworten verifiziert. ``demo: true`` erzeugt
     ausschliesslich einen explizit gekennzeichneten Simulationslauf.
     """
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.speculative_hedger import make_dispatcher_coro, speculative_hedger
 
-    prompt = str(payload.get("prompt") or "Test-Anfrage")
-    primary_model = str(payload.get("primary_model") or "openai/gpt-4o")
+    prompt = str(data.get("prompt") or "Test-Anfrage")
+    primary_model = str(data.get("primary_model") or "openai/gpt-4o")
     try:
         from backend.autonomy_settings import get_module_config
         _hedge_cfg = get_module_config("speculative_hedger")
     except Exception:
         _hedge_cfg = {}
     fallback_model = str(
-        payload.get("fallback_model") or _hedge_cfg.get("fallback_model") or "deepseek/deepseek-chat"
+        data.get("fallback_model") or _hedge_cfg.get("fallback_model") or "deepseek/deepseek-chat"
     )
-    demo = bool(payload.get("demo", False))
+    demo = bool(data.get("demo", False))
     primary_coro_fn = None if demo else make_dispatcher_coro(prompt, primary_model)
     fallback_coro_fn = None if demo else make_dispatcher_coro(prompt, fallback_model)
 
@@ -128,9 +128,9 @@ async def api_hedged_completion(payload: HedgedCompletionRequest = Body(...)):
         prompt=prompt,
         primary_model=primary_model,
         fallback_model_override=fallback_model,
-        hedge_delay_override=payload.get("hedge_delay_seconds"),
-        simulate_primary_latency_sec=payload.get("simulate_primary_latency_sec"),
-        simulate_fallback_latency_sec=float(payload.get("simulate_fallback_latency_sec", 0.05)),
+        hedge_delay_override=data.get("hedge_delay_seconds"),
+        simulate_primary_latency_sec=data.get("simulate_primary_latency_sec"),
+        simulate_fallback_latency_sec=float(data.get("simulate_fallback_latency_sec", 0.05)),
         primary_coro_fn=primary_coro_fn,
         fallback_coro_fn=fallback_coro_fn,
     )
@@ -149,12 +149,12 @@ def api_hedged_stats(request: Request):
 
 @router.post("/api/router/bandit-outcome")
 def api_bandit_record_outcome(payload: BanditOutcomeRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.bandit_model_router import bandit_model_router
     return bandit_model_router.record_outcome(
-        model_id=payload.get("model_id", "deepseek/deepseek-chat"),
-        success=bool(payload.get("success", True)),
-        latency_ms=float(payload.get("latency_ms", 500.0))
+        model_id=data.get("model_id", "deepseek/deepseek-chat"),
+        success=bool(data.get("success", True)),
+        latency_ms=float(data.get("latency_ms", 500.0))
     )
 
 

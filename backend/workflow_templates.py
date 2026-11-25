@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/workflow_templates.py — Multi-Agent Workflow-Vorlagen-Registry & DAG-Materializer.
 
@@ -630,8 +629,8 @@ def import_n8n_workflow_json(n8n_data: Dict[str, Any], title_override: Optional[
 
         rtype = str(rn.get("type") or "").lower()
         pos = rn.get("position") if isinstance(rn.get("position"), list) else [60 + idx * 240, 120]
-        x = max(20, int(round((float(pos[0]) if len(pos) > 0 else 60) / 20.0) * 20))
-        y = max(20, int(round((float(pos[1]) if len(pos) > 1 else 120) / 20.0) * 20))
+        x = max(20, int(round((float(pos[0]) if len(pos) > 0 else 60) / 20.0) * 20))  # type: ignore[index, arg-type]
+        y = max(20, int(round((float(pos[1]) if len(pos) > 1 else 120) / 20.0) * 20))  # type: ignore[index, arg-type]
 
         agent_id = "research"
         node_type = "agent"

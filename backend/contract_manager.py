@@ -184,12 +184,12 @@ class ContractParser:
             d = int(m.group(1))
             month_name = m.group(2).lower()
             y = int(m.group(3))
-            mo = cls.MONTH_MAP.get(month_name)
-            if mo:
+            month_num = cls.MONTH_MAP.get(month_name)
+            if month_num:
                 try:
-                    return datetime.date(y, mo, d).strftime("%Y-%m-%d")
+                    return datetime.date(y, month_num, d).strftime("%Y-%m-%d")
                 except ValueError as exc:
-                    print(f"[ContractManager] Ungültiges Datum y={y} mo={mo} d={d}: {exc}", file=sys.stderr)
+                    print(f"[ContractManager] Ungültiges Datum y={y} mo={month_num} d={d}: {exc}", file=sys.stderr)
 
         return None
 
@@ -367,8 +367,8 @@ class ContractParser:
         # 7. Daten (Beginn & Ende)
         # Suche nach Datumskombinationen
         date_candidates = []
-        for pat in cls.DATE_PATTERNS:
-            for match in pat.finditer(text):
+        for date_pattern in cls.DATE_PATTERNS:
+            for match in date_pattern.finditer(text):
                 parsed = cls.normalize_date(match.group(0))
                 if parsed and parsed not in date_candidates:
                     date_candidates.append(parsed)
@@ -549,7 +549,8 @@ class ContractManager:
                 now, now
             ))
         conn.close()
-        return cls.get(cid)
+        saved = cls.get(cid)
+        return saved if saved is not None else {}
 
     @classmethod
     def get(cls, contract_id: str) -> Optional[Dict[str, Any]]:

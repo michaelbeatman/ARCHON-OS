@@ -4,6 +4,7 @@ Loads from data/skills_marketplace_catalog.json
 """
 import os
 import json
+from typing import Optional
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if "__file__" in locals() else os.getcwd()
 CATALOG_CANDIDATES = [
@@ -59,7 +60,7 @@ def get_skill_marketplace_sources():
         for k, v in catalog.items()
     ]
 
-def list_skills_for_source(source_id: str = "hermes_skills", search: str = None, category: str = None):
+def list_skills_for_source(source_id: str = "hermes_skills", search: Optional[str] = None, category: Optional[str] = None):
     catalog = _load_catalog()
     target_id = SOURCE_ALIASES.get(source_id, source_id)
     source_data = catalog.get(target_id)

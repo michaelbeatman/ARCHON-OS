@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 Milestone 30: Interactive First-Run Web Setup Wizard & Onboarding Backend.
 
@@ -531,7 +530,7 @@ def save_company_profile(profile_data: Dict[str, Any]) -> Dict[str, Any]:
             s["language"] = validated["language"]
             if validated.get("logo_url"):
                 branding = s.get("branding") if isinstance(s.get("branding"), dict) else {}
-                branding["corner_logo_url"] = validated["logo_url"]
+                branding["corner_logo_url"] = validated["logo_url"]  # type: ignore[index]
                 s["branding"] = branding
 
         _update_both_settings(_mutate)
@@ -856,7 +855,7 @@ def save_providers_and_privacy(
 
     def _mutate(s: Dict[str, Any]) -> None:
         priv = s.get("privacy") if isinstance(s.get("privacy"), dict) else {}
-        priv = dict(priv)
+        priv = dict(priv)  # type: ignore[arg-type]
         priv["zero_egress"] = bool(zero_egress)
         s["privacy"] = priv
 
@@ -993,7 +992,7 @@ def save_channels_config(channels_cfg: Dict[str, Any]) -> Dict[str, Any]:
     def _mutate(s: Dict[str, Any]) -> None:
         s["channels"] = sanitized_channels
         obs = s.get("obsidian") if isinstance(s.get("obsidian"), dict) else {}
-        obs = dict(obs)
+        obs = dict(obs)  # type: ignore[arg-type]
         obs["vault_path"] = sanitized_channels["obsidian_vault_path"]
         s["obsidian"] = obs
 
@@ -1380,10 +1379,10 @@ def get_onboarding_status() -> Dict[str, Any]:
     demo = is_demo_mode()
 
     onb = settings.get("onboarding") if isinstance(settings.get("onboarding"), dict) else {}
-    completed = bool(onb.get("completed") or settings.get("onboarding_completed"))
-    dismissed = bool(onb.get("dismissed"))
-    completed_at = onb.get("completed_at") or settings.get("completed_at")
-    dismissed_at = onb.get("dismissed_at")
+    completed = bool(onb.get("completed") or settings.get("onboarding_completed"))  # type: ignore[union-attr]
+    dismissed = bool(onb.get("dismissed"))  # type: ignore[union-attr]
+    completed_at = onb.get("completed_at") or settings.get("completed_at")  # type: ignore[union-attr]
+    dismissed_at = onb.get("dismissed_at")  # type: ignore[union-attr]
 
     auto_open = not (demo or completed or dismissed)
 
@@ -1397,7 +1396,7 @@ def get_onboarding_status() -> Dict[str, Any]:
 
     priv = settings.get("privacy") if isinstance(settings.get("privacy"), dict) else {}
     env_ze = (file_env.get("PRIVACY_ZERO_EGRESS") or os.environ.get("PRIVACY_ZERO_EGRESS") or "").strip().lower()
-    zero_egress = bool(priv.get("zero_egress")) or env_ze in ("1", "true", "yes")
+    zero_egress = bool(priv.get("zero_egress")) or env_ze in ("1", "true", "yes")  # type: ignore[union-attr]
 
     tenant_profile = _load_json_dict(TENANT_PROFILE_FILE)
     company_profile = (
@@ -1449,31 +1448,31 @@ def get_onboarding_status() -> Dict[str, Any]:
     domains_summary = get_specialist_domains_summary(saved_active_domains)
 
     saved_channels = settings.get("channels") if isinstance(settings.get("channels"), dict) else {}
-    email_ch = saved_channels.get("email") if isinstance(saved_channels.get("email"), dict) else {}
-    tg_ch = saved_channels.get("telegram") if isinstance(saved_channels.get("telegram"), dict) else {}
+    email_ch = saved_channels.get("email") if isinstance(saved_channels.get("email"), dict) else {}  # type: ignore[union-attr]
+    tg_ch = saved_channels.get("telegram") if isinstance(saved_channels.get("telegram"), dict) else {}  # type: ignore[union-attr]
 
     has_email_pw = bool(
-        email_ch.get("password_configured")
+        email_ch.get("password_configured")  # type: ignore[union-attr]
         or file_env.get("SMTP_PASSWORD")
         or os.environ.get("SMTP_PASSWORD")
     )
     has_tg_tok = bool(
-        tg_ch.get("bot_token_configured")
+        tg_ch.get("bot_token_configured")  # type: ignore[union-attr]
         or file_env.get("TELEGRAM_BOT_TOKEN")
         or os.environ.get("TELEGRAM_BOT_TOKEN")
     )
 
     sanitized_channels = {
-        "imap_host": str(email_ch.get("imap_host") or file_env.get("IMAP_HOST") or ""),
-        "imap_port": int(email_ch.get("imap_port") or file_env.get("IMAP_PORT") or 993),
-        "smtp_host": str(email_ch.get("smtp_host") or file_env.get("SMTP_HOST") or ""),
-        "smtp_port": int(email_ch.get("smtp_port") or file_env.get("SMTP_PORT") or 587),
-        "email_user": str(email_ch.get("email_user") or file_env.get("SMTP_USER") or ""),
+        "imap_host": str(email_ch.get("imap_host") or file_env.get("IMAP_HOST") or ""),  # type: ignore[union-attr]
+        "imap_port": int(email_ch.get("imap_port") or file_env.get("IMAP_PORT") or 993),  # type: ignore[union-attr]
+        "smtp_host": str(email_ch.get("smtp_host") or file_env.get("SMTP_HOST") or ""),  # type: ignore[union-attr]
+        "smtp_port": int(email_ch.get("smtp_port") or file_env.get("SMTP_PORT") or 587),  # type: ignore[union-attr]
+        "email_user": str(email_ch.get("email_user") or file_env.get("SMTP_USER") or ""),  # type: ignore[union-attr]
         "email_password_configured": has_email_pw,
-        "telegram_chat_id": str(tg_ch.get("chat_id") or file_env.get("TELEGRAM_CHAT_ID") or ""),
+        "telegram_chat_id": str(tg_ch.get("chat_id") or file_env.get("TELEGRAM_CHAT_ID") or ""),  # type: ignore[union-attr]
         "telegram_bot_configured": has_tg_tok,
         "obsidian_vault_path": str(
-            saved_channels.get("obsidian_vault_path")
+            saved_channels.get("obsidian_vault_path")  # type: ignore[union-attr]
             or file_env.get("ARCHON_OBSIDIAN_DIR")
             or "./obsidian_vault"
         ),
@@ -1481,15 +1480,15 @@ def get_onboarding_status() -> Dict[str, Any]:
 
     saved_int = settings.get("integrations") if isinstance(settings.get("integrations"), dict) else {}
     sanitized_integrations = {
-        "n8n_url": str(saved_int.get("n8n_url") or file_env.get("N8N_URL") or os.environ.get("N8N_URL") or "http://localhost:5678"),
-        "n8n_webhook_path": str(saved_int.get("n8n_webhook_path") or "/webhook/archon-execution"),
-        "n8n_api_key_configured": bool(saved_int.get("n8n_api_key_configured") or file_env.get("N8N_API_KEY") or os.environ.get("N8N_API_KEY")),
-        "n8n_webhook_secret_configured": bool(saved_int.get("n8n_webhook_secret_configured") or file_env.get("N8N_WEBHOOK_SECRET") or os.environ.get("N8N_WEBHOOK_SECRET")),
-        "pocketbase_url": str(saved_int.get("pocketbase_url") or file_env.get("POCKETBASE_URL") or os.environ.get("POCKETBASE_URL") or "http://127.0.0.1:8090"),
-        "firecrawl_configured": bool(saved_int.get("firecrawl_configured") or file_env.get("FIRECRAWL_API_KEY") or os.environ.get("FIRECRAWL_API_KEY")),
-        "linkedin_configured": bool(saved_int.get("linkedin_configured") or file_env.get("LINKEDIN_ACCESS_TOKEN") or os.environ.get("LINKEDIN_ACCESS_TOKEN")),
-        "github_configured": bool(saved_int.get("github_configured") or file_env.get("GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")),
-        "brave_configured": bool(saved_int.get("brave_configured") or file_env.get("BRAVE_API_KEY") or os.environ.get("BRAVE_API_KEY")),
+        "n8n_url": str(saved_int.get("n8n_url") or file_env.get("N8N_URL") or os.environ.get("N8N_URL") or "http://localhost:5678"),  # type: ignore[union-attr]
+        "n8n_webhook_path": str(saved_int.get("n8n_webhook_path") or "/webhook/archon-execution"),  # type: ignore[union-attr]
+        "n8n_api_key_configured": bool(saved_int.get("n8n_api_key_configured") or file_env.get("N8N_API_KEY") or os.environ.get("N8N_API_KEY")),  # type: ignore[union-attr]
+        "n8n_webhook_secret_configured": bool(saved_int.get("n8n_webhook_secret_configured") or file_env.get("N8N_WEBHOOK_SECRET") or os.environ.get("N8N_WEBHOOK_SECRET")),  # type: ignore[union-attr]
+        "pocketbase_url": str(saved_int.get("pocketbase_url") or file_env.get("POCKETBASE_URL") or os.environ.get("POCKETBASE_URL") or "http://127.0.0.1:8090"),  # type: ignore[union-attr]
+        "firecrawl_configured": bool(saved_int.get("firecrawl_configured") or file_env.get("FIRECRAWL_API_KEY") or os.environ.get("FIRECRAWL_API_KEY")),  # type: ignore[union-attr]
+        "linkedin_configured": bool(saved_int.get("linkedin_configured") or file_env.get("LINKEDIN_ACCESS_TOKEN") or os.environ.get("LINKEDIN_ACCESS_TOKEN")),  # type: ignore[union-attr]
+        "github_configured": bool(saved_int.get("github_configured") or file_env.get("GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")),  # type: ignore[union-attr]
+        "brave_configured": bool(saved_int.get("brave_configured") or file_env.get("BRAVE_API_KEY") or os.environ.get("BRAVE_API_KEY")),  # type: ignore[union-attr]
     }
 
     return {
@@ -1584,7 +1583,7 @@ def complete_onboarding(payload: Dict[str, Any]) -> Dict[str, Any]:
             s["onboarding_completed"] = True
             s["completed_at"] = completed_at
             onb = s.get("onboarding") if isinstance(s.get("onboarding"), dict) else {}
-            onb = dict(onb)
+            onb = dict(onb)  # type: ignore[arg-type]
             onb["completed"] = True
             onb["dismissed"] = False
             onb["completed_at"] = completed_at
@@ -1615,7 +1614,7 @@ def skip_onboarding() -> Dict[str, Any]:
 
     def _mark_dismissed(s: Dict[str, Any]) -> None:
         onb = s.get("onboarding") if isinstance(s.get("onboarding"), dict) else {}
-        onb = dict(onb)
+        onb = dict(onb)  # type: ignore[arg-type]
         onb["dismissed"] = True
         onb["dismissed_at"] = dismissed_at
         s["onboarding"] = onb

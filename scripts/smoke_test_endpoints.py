@@ -4,6 +4,7 @@ Usage (inside container):  python scripts/smoke_test_endpoints.py [base_url]
 Writes docs/system/smoke_test_results.json
 """
 import json, sys, time, os, urllib.request
+from typing import Any
 from _archon_auth import headers as _archon_headers
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8501"
@@ -33,7 +34,7 @@ for path, ops in sorted(spec.get("paths", {}).items()):
     print(f"{str(st):>7} {ms:>6}ms {size:>9}B  {path}")
 
 os.makedirs("docs/system", exist_ok=True)
-summary = {
+summary: dict[str, Any] = {
     "base": BASE,
     "total_get_routes": len(results),
     "ok": sum(1 for r in results if r["status"] == 200),

@@ -29,7 +29,7 @@ import urllib.error
 import collections
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape as _xml_escape
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, cast
 import logging
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -44,6 +44,11 @@ TENANTS_BASE_DIR = os.path.join(_APP_DATA_DIR, "tenants")
 _DEFAULT_TENANTS_BASE_DIR = TENANTS_BASE_DIR
 
 logger = logging.getLogger("archon.erp_manager")
+
+
+def _as_dict(value: Any) -> Dict[str, Any]:
+    """Verschachtelte Stammdaten als Dict garantieren (None/Fremdtyp -> {})."""
+    return value if isinstance(value, dict) else {}
 
 
 def _sanitize_company_id(company_id: Optional[str]) -> str:
@@ -943,7 +948,7 @@ class ERPManager:
         try:
             eid = payload.get("id") or f"ent-{uuid.uuid4().hex[:8]}"
             existing = conn.execute("SELECT * FROM crm_entities WHERE id = ?", (eid,)).fetchone()
-            existing_dict = dict(existing) if existing else {}
+            existing_dict: Dict[str, Any] = dict(existing) if existing else {}
 
             if "vat_id" in payload:
                 validated_vat_id = self.validate_vat_id(payload.get("vat_id"))
@@ -1081,7 +1086,9 @@ class ERPManager:
                 if cp.get("last_name") or cp.get("full_name"):
                     self.save_contact(cp, company_id=cid)
 
-            return self.get_entity_detail(eid, company_id=cid)
+            # Nach dem erfolgreichen Upsert existiert der Datensatz garantiert;
+            # get_entity_detail ist Optional, cast ist hier ein reiner Typ-Hinweis.
+            return cast(Dict[str, Any], self.get_entity_detail(eid, company_id=cid))
         finally:
             conn.close()
 
@@ -1090,7 +1097,7 @@ class ERPManager:
         try:
             cnt_id = payload.get("id") or f"cnt-{uuid.uuid4().hex[:8]}"
             existing = conn.execute("SELECT * FROM crm_contacts WHERE id = ?", (cnt_id,)).fetchone()
-            ex = dict(existing) if existing else {}
+            ex: Dict[str, Any] = dict(existing) if existing else {}
 
             first_name = payload.get("first_name", ex.get("first_name", "")).strip()
             last_name = payload.get("last_name", ex.get("last_name", "")).strip()
@@ -1297,7 +1304,7 @@ class ERPManager:
         try:
             iid = payload.get("id") or f"itm-{uuid.uuid4().hex[:8]}"
             existing = conn.execute("SELECT * FROM erp_items WHERE id = ?", (iid,)).fetchone()
-            ex = dict(existing) if existing else {}
+            ex: Dict[str, Any] = dict(existing) if existing else {}
 
             item_no = (payload.get("item_no") or ex.get("item_no") or "").strip()
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1582,7 +1589,7 @@ class ERPManager:
         try:
             doc_id = payload.get("id") or f"doc-{uuid.uuid4().hex[:8]}"
             existing = conn.execute("SELECT * FROM erp_documents WHERE id = ?", (doc_id,)).fetchone()
-            ex = dict(existing) if existing else {}
+            ex: Dict[str, Any] = dict(existing) if existing else {}
 
             # GoBD-Unveränderbarkeitsschutz: Gebuchte, versendete, bezahlte oder stornierte Belege dürfen nicht zurück
             # in den Entwurf und ändern keine Positionen/Beträge/Stammdaten mehr in-place.
@@ -1618,7 +1625,8 @@ class ERPManager:
                                 )
                         elif new_status in ("booked", "paid") and int(ex.get("stock_deducted") or 0) == 0:
                             self._apply_inventory_stock_delta(conn, doc_id, sign=-1)
-                return self.get_document(doc_id, company_id=cid)
+                # Der Beleg wurde gerade geschrieben; get_document ist Optional.
+                return cast(Dict[str, Any], self.get_document(doc_id, company_id=cid))
 
             doc_type = payload.get("doc_type", ex.get("doc_type", "offer"))
             entity_id = payload.get("entity_id", ex.get("entity_id"))
@@ -1628,7 +1636,7 @@ class ERPManager:
             ent_row = conn.execute("SELECT * FROM crm_entities WHERE id = ?", (entity_id,)).fetchone()
             if not ent_row:
                 raise ValueError(f"Geschäftspartner {entity_id} nicht gefunden.")
-            ent = dict(ent_row)
+            ent: Dict[str, Any] = dict(ent_row)
 
             contact_id = payload.get("contact_id", ex.get("contact_id"))
             cnt = None
@@ -1897,7 +1905,8 @@ class ERPManager:
                 if doc_type == "invoice" and status in ("booked", "paid") and not already_deducted:
                     self._apply_inventory_stock_delta(conn, doc_id, sign=-1)
 
-            return self.get_document(doc_id, company_id=cid)
+            # Nach dem Upsert ist der Beleg vorhanden; get_document ist Optional.
+            return cast(Dict[str, Any], self.get_document(doc_id, company_id=cid))
         finally:
             conn.close()
 
@@ -2110,14 +2119,15 @@ class ERPManager:
         except Exception:
             seller = {}
 
-        seller_addr = seller.get("address") if isinstance(seller.get("address"), dict) else {}
-        seller_contact = seller.get("contact") if isinstance(seller.get("contact"), dict) else {}
-        seller_tax = seller.get("tax") if isinstance(seller.get("tax"), dict) else {}
-        seller_bank = seller.get("bank") if isinstance(seller.get("bank"), dict) else {}
+        seller_addr = _as_dict(seller.get("address"))
+        seller_contact = _as_dict(seller.get("contact"))
+        seller_tax = _as_dict(seller.get("tax"))
+        seller_bank = _as_dict(seller.get("bank"))
 
-        ent_detail = self.get_entity_detail(doc["entity_id"], company_id=cid) or {}
-        ent = ent_detail.get("entity") if isinstance(ent_detail.get("entity"), dict) else ent_detail
-        snap = doc.get("recipient_snapshot") if isinstance(doc.get("recipient_snapshot"), dict) else {}
+        ent_detail: Dict[str, Any] = self.get_entity_detail(doc["entity_id"], company_id=cid) or {}
+        ent_raw = ent_detail.get("entity")
+        ent: Dict[str, Any] = ent_raw if isinstance(ent_raw, dict) else ent_detail
+        snap = _as_dict(doc.get("recipient_snapshot"))
 
         doc_num = str(doc.get("doc_number") or doc_id)
         currency = str(doc.get("currency") or "EUR").upper()
@@ -2967,7 +2977,7 @@ class ERPManager:
         matched = 0
         auto_paid = 0
         items_out: List[Dict[str, Any]] = []
-        docs_to_mark_paid: List[str] = []
+        docs_to_mark_paid: List[Tuple[str, str]] = []
 
         try:
             open_invoices = [

@@ -73,6 +73,62 @@ The 70 specialist agent profiles in Archon OS (including legal, tax, financial, 
 - **openai / edge-tts**: Apache-2.0 / GPL-3.0 (edge-tts CLI/library interface invoked for local voice synthesis)
 - **pytest / pytest-xdist**: MIT License
 
+### Development / CI tooling (nicht zur Laufzeit)
+
+Folgende Pakete werden **ausschliesslich zur Entwicklung und in der CI** eingesetzt.
+Sie sind **Dev-only, keine Produktiv-Abhängigkeit**: sie werden nicht zur Laufzeit
+von Archon OS importiert und nicht in `requirements.lock.txt` (Produktiv-Lock) geführt.
+Wo ein Eintrag in `requirements-ci.lock.txt` existiert, ist das Artefakt dort per
+`--hash=sha256:…` fixiert; Installation nur via
+`pip install --require-hashes --no-deps -r requirements-ci.lock.txt`.
+Die Lizenzangaben folgen den Upstream-Projektmetadaten; die Pakete werden nicht
+im Repo vendoriert, sondern zur Laufzeit der CI aus dem Hash-Lock installiert.
+
+**Versionshinweis:** In dieser Dokumentations-Session war die Shell gesperrt
+(`pwsh.exe: Zugriff verweigert, os error 5`). `.venv\Scripts\*.exe --version`
+konnte daher **nicht** ausgeführt werden. Bei Tools ohne Hash-Lock-Eintrag steht
+deshalb ehrlich „lokal installiert, Version im Scan-Log" — es wird keine Version
+erfunden. Bei Tools mit Eintrag ist die Version die des tatsächlich im Lockfile
+stehenden pins. Details: `docs/system/STATIC_ANALYSIS_TOOLCHAIN_GUIDE.md`.
+
+**Alle Zeilen dieser Tabelle sind Dev-only = „ja"**: kein Runtime-Import, kein
+Eintrag im Produktiv-Lock. Der Scanner-Lauf ist read-only und schreibt ausschliesslich
+nach `audit_reports/tool_scans/*.txt` (siehe `scripts/run_static_toolchain.ps1`).
+
+| Tool | Version | Lizenz / Copyright | Zweck | Dev-only | Hash-Pin in `requirements-ci.lock.txt` |
+|---|---|---|---|---|---|
+| **mypy** | 2.4.1 (Lock) | MIT License, (c) Jukka Lehtosalo / mypy contributors | Statisches Typ-Gate für Python (siehe `docs/system/MYPY_TYPE_GATE_GUIDE.md`); SSOT `mypy.ini` | ja | ja — `mypy==2.4.1`, 4 `--hash=sha256:…` (Zeile 165) |
+| **pytest / pytest-xdist** | siehe `requirements-test.lock.txt` | MIT License | Unit-/Regressions-Suites, auch für die CI-Quality-Gates | ja | nein — eigenes Test-Lockfile |
+| **ruff** | 0.17.6 (Lock) | MIT License, (c) Astral Software Inc. | Linting: kritische Fehlerklassen E9/F63/F7/F82 + Changed-Files-Ratchet (E,F,I ohne E501) | ja | ja — `ruff==0.17.6`, 3 `--hash=sha256:…` (Zeile 287) |
+| **vulture** | lokal installiert, Version im Scan-Log | MIT License | Toter Code / unerreichbare Symbole → Hinweis auf „verdrahteten Schein" (§0) | ja | nein — kein Eintrag im Hash-Lock |
+| **radon** | lokal installiert, Version im Scan-Log | MIT License | Komplexität (Cyclomatic Complexity) / God-Objects | ja | nein — kein Eintrag im Hash-Lock |
+| **import-linter** (`lint-imports`) | lokal installiert, Version im Scan-Log | MIT License | Layergrenzen `archon` ↔ `backend`; SSOT `.importlinter` (Contract `backend-no-router-imports`) | ja | nein — kein Eintrag im Hash-Lock |
+| **detect-secrets** | lokal installiert, Version im Scan-Log | Apache-2.0, (c) Yelp | versehentlich committete Secrets / Credentials (`scan --all-files`) | ja | nein — kein Eintrag im Hash-Lock |
+| **bandit** | 1.9.4 (Lock) | Apache-2.0, (c) PyCQA / OpenStack | SAST, hartes CI-Gate auf HIGH-Severity-Funde | ja | ja — `bandit==1.9.4`, 2 `--hash=sha256:…` (Zeile 32) |
+| **pip-audit** | 2.10.1 (Lock) | Apache-2.0, (c) PyPA / Trail of Bits | Bekannte CVEs in den hash-geprüften Lockdateien | ja | ja — `pip-audit==2.10.1`, 2 `--hash=sha256:…` (Zeile 202) |
+| **semgrep** | lokal installiert, Version im Scan-Log | LGPL-3.0, (c) Semgrep Inc. | Taint-/Policy-Regeln (Egress, Body-Actor, HITL-Skip); lokaler Lauf mit `p/ci` | ja | nein — kein Eintrag im Hash-Lock |
+| **coverage** | 7.17.5 (Lock) | Apache-2.0, (c) Ned Batchelder | nie ausgeführte Pfade; CI führt `coverage run -m pytest tests/ -q` + `coverage report` aus | ja | ja — `coverage==7.17.5`, 4 `--hash=sha256:…` (Zeile 68) |
+| **pyright** | unbekannt (Shell gesperrt; kein Scan im Skript) | MIT License, (c) Microsoft | strengere Typen als mypy — Ideen-Pool, noch **nicht** im Scanner-Skript und ohne CI-Gate | ja | nein — kein Eintrag im Hash-Lock |
+| **cyclonedx-bom** (`cyclonedx-py`) | 9.0.0 (Lock) | Apache-2.0, (c) OWASP CycloneDX contributors | Erzeugung der CycloneDX-1.5-SBOM aus den Hash-Locks | ja | ja — `cyclonedx-bom==9.0.0`, 2 `--hash=sha256:…` (Zeile 75) |
+
+Beispiel-Hash-Pin (mypy 2.4.1, Auszug aus `requirements-ci.lock.txt`):
+
+```text
+mypy==2.4.1 \
+    --hash=sha256:1784648d6ec8c2b5465e3f26241b845a0b3cb4e56c993c64abe16989e7698999 \
+    --hash=sha256:1fb70621535c22fd4b1a0450d37ed1d6c5eb39656a1cebfb189084c12de54ba7 \
+    --hash=sha256:63b590965691e540a335fa74dadf31a7069142f6b72e234689bbd244edf55623 \
+    --hash=sha256:680ba5d9f0e3fe0c746b3d14df15f2a718e4bc308a1145616a1ea691ce7c354b
+```
+
+**Hinweis:** Dev-only, keine Produktiv-Abhängigkeit. Ein Upgrade der hash-gepinnten
+Tools erfolgt ausschliesslich über eine bewusste Aktualisierung des Hash-Lockfiles,
+nicht über Versionsbereiche in der Laufzeitumgebung. Fehlende Hash-Pins werden
+nicht erfunden; sie sind als offene Aufgabe im
+`docs/system/STATIC_ANALYSIS_TOOLCHAIN_GUIDE.md` vermerkt. Ein
+„Clean-Code-Zertifikat" wird erst bei vollständig sauberem Stand ausgestellt —
+der aktuelle Stand ist es nicht (siehe Ideen-Pool in `docs/system/ROADMAP_2026.md`).
+
 ### Frontend Vendor Assets (`static/`)
 - **Lucide Icons (`static/vendor/lucide.min.js`)**: ISC License (`(c) Lucide Contributors`)
 - **Tailwind CSS (`static/js/tailwind.cdn.js`)**: MIT License (`(c) Tailwind Labs, Inc.`)

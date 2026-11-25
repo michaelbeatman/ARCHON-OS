@@ -38,11 +38,11 @@ def api_get_inbox_watcher_config():
 @router.post("/api/inbox-watcher/config")
 def api_save_inbox_watcher_config(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.inbox_watcher import get_inbox_config, save_inbox_config
 
     current = get_inbox_config()
-    current.update(payload)
+    current.update(data)
     ok = save_inbox_config(current)
     return {"status": "success" if ok else "error", "config": current}
 
@@ -72,16 +72,16 @@ def api_list_tool_proposals(status: Optional[str] = None):
 @router.post("/api/tools/proposals")
 def api_create_tool_proposal(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.tool_permission_manager import tool_permission_manager
 
     # D04/MED: kein Body-Actor in Freigabe-/Protokollpfaden. Der Actor kommt
     # ausschließlich aus der verifizierten Session (require_session_actor).
     return tool_permission_manager.propose_tool_installation(
-        tool_name=payload.get("tool_name", ""),
-        tool_type=payload.get("tool_type", "pip"),
-        reason=payload.get("reason", ""),
-        command=payload.get("command"),
+        tool_name=data.get("tool_name", ""),
+        tool_type=data.get("tool_type", "pip"),
+        reason=data.get("reason", ""),
+        command=str(data.get("command") or ""),
         requested_by=_require_session_actor(request),
     )
 
@@ -89,8 +89,8 @@ def api_create_tool_proposal(request: Request, payload: PassthroughBody = Body(.
 @router.post("/api/tools/proposals/{permission_id}/resolve")
 def api_resolve_tool_proposal(request: Request, permission_id: str, payload: PassthroughBody = Body(...)):
     _require_admin(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.tool_permission_manager import tool_permission_manager
 
-    action = payload.get("action", "grant")
+    action = data.get("action", "grant")
     return tool_permission_manager.resolve_proposal(permission_id, action=action)

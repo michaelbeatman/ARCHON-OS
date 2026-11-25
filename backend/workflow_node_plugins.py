@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# mypy: ignore-errors
 """
 backend/workflow_node_plugins.py
 ================================
@@ -99,7 +98,7 @@ def resolve_upstream_templates(params: Dict[str, Any], upstream: Dict[str, Any])
         if isinstance(val, str):
             return re.sub(
                 r"\{\{\s*(upstream\.[a-zA-Z0-9_.-]+)\s*\}\}",
-                lambda m: _lookup(m.group(1)) if _lookup(m.group(1)) is not None else m.group(0),
+                lambda m: _lookup(m.group(1)) if _lookup(m.group(1)) is not None else m.group(0),  # type: ignore[arg-type, return-value]
                 val,
             )
         if isinstance(val, list):
@@ -326,12 +325,12 @@ def validate_node_config(plugin_id: str, overlay: Optional[Dict[str, Any]]) -> L
     for field in fields:
         if not isinstance(field, dict):
             continue
-        key = field.get("key")
+        key = field.get("key")  # type: ignore[assignment]
         value = overlay.get(key, field.get("default"))
         ftype = str(field.get("type") or "text").lower()
         if ftype == "number":
             try:
-                numeric = float(value)
+                numeric = float(value)  # type: ignore[arg-type]
             except (TypeError, ValueError):
                 errors.append(f"{key}: keine Zahl")
                 continue
@@ -766,7 +765,7 @@ async def execute_workflow_node_plugin(
             headers.update({str(k): str(v) for k, v in spec["headers"].items()})
 
         auth_cfg = spec.get("auth") if isinstance(spec.get("auth"), dict) else {}
-        env_var = str(auth_cfg.get("env_var") or spec.get("auth_env_var") or "").strip()
+        env_var = str(auth_cfg.get("env_var") or spec.get("auth_env_var") or "").strip()  # type: ignore[union-attr]
         if env_var:
             secret_val = str(os.environ.get(env_var) or "").strip()
             if not secret_val:
@@ -780,15 +779,15 @@ async def execute_workflow_node_plugin(
                         f"API-Key `{env_var}` fehlt fuer Live-Ausfuehrung."
                     ),
                 }
-            auth_type = str(auth_cfg.get("type") or "bearer").strip().lower()
+            auth_type = str(auth_cfg.get("type") or "bearer").strip().lower()  # type: ignore[union-attr]
             if auth_type == "bearer":
-                prefix = str(auth_cfg.get("prefix") if auth_cfg.get("prefix") is not None else "Bearer ")
-                headers[str(auth_cfg.get("header_name") or "Authorization")] = f"{prefix}{secret_val}"
+                prefix = str(auth_cfg.get("prefix") if auth_cfg.get("prefix") is not None else "Bearer ")  # type: ignore[union-attr]
+                headers[str(auth_cfg.get("header_name") or "Authorization")] = f"{prefix}{secret_val}"  # type: ignore[union-attr]
             elif auth_type == "header":
-                headers[str(auth_cfg.get("header_name") or "X-API-Key")] = secret_val
+                headers[str(auth_cfg.get("header_name") or "X-API-Key")] = secret_val  # type: ignore[union-attr]
             elif auth_type == "query":
                 sep = "&" if "?" in endpoint_url else "?"
-                q_param = str(auth_cfg.get("query_param") or "api_key")
+                q_param = str(auth_cfg.get("query_param") or "api_key")  # type: ignore[union-attr]
                 endpoint_url = f"{endpoint_url}{sep}{urllib.parse.quote(q_param)}={urllib.parse.quote(secret_val)}"
 
         # Optionales Request-Mapping fuer 3rd-Party-APIs

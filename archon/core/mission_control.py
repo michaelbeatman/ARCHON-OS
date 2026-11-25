@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Mission-Control-Store (SQLite-backed über kanban.db mit atomarem Adapter).
 
 Seit v0.5.1 (Ablösung von mission_control_data.json):
@@ -535,11 +534,11 @@ def migrate_mission_control_json_to_sqlite(json_path: Optional[str] = None, *, b
         try:
             conn.execute("BEGIN IMMEDIATE")
             _ensure_mc_tables(conn)
-            for t in tasks:
+            for t in tasks:  # type: ignore[union-attr]
                 if isinstance(t, dict) and t.get("id"):
                     _upsert_task_in_conn(conn, t, overwrite=False)
                     migrated_count += 1
-            for entry in reversed(audit_logs):
+            for entry in reversed(audit_logs):  # type: ignore[arg-type]
                 if isinstance(entry, dict):
                     conn.execute(
                         "INSERT INTO task_events (task_id, run_id, kind, payload, created_at) VALUES (?, NULL, 'mc_audit', ?, ?)",
@@ -728,7 +727,7 @@ def _save_sqlite_state_to_conn(
 ) -> None:
     _ensure_mc_tables(conn)
     tasks = data.get("tasks") if isinstance(data.get("tasks"), list) else []
-    new_ids = {str(t.get("id")) for t in tasks if isinstance(t, dict) and t.get("id")}
+    new_ids = {str(t.get("id")) for t in tasks if isinstance(t, dict) and t.get("id")}  # type: ignore[union-attr]
 
     if previous_ids is not None:
         removed_ids = previous_ids - new_ids
@@ -746,7 +745,7 @@ def _save_sqlite_state_to_conn(
             conn.execute("DELETE FROM mc_task_meta WHERE task_id = ?", (rid,))
             conn.execute("DELETE FROM task_links WHERE parent_id = ? OR child_id = ?", (rid, rid))
 
-    for t in tasks:
+    for t in tasks:  # type: ignore[union-attr]
         if isinstance(t, dict) and t.get("id"):
             _upsert_task_in_conn(conn, t, overwrite=True)
 
@@ -754,7 +753,7 @@ def _save_sqlite_state_to_conn(
     audit_logs = data.get("audit_logs") if isinstance(data.get("audit_logs"), list) else []
     seen_sigs = previous_audit_sigs if previous_audit_sigs is not None else set()
     new_entries: List[Dict[str, Any]] = []
-    for entry in audit_logs:
+    for entry in audit_logs:  # type: ignore[union-attr]
         if not isinstance(entry, dict):
             continue
         sig = json.dumps(entry, sort_keys=True, ensure_ascii=False)

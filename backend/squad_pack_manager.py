@@ -359,6 +359,7 @@ class SquadPackManager:
                         existing_map[pid] = pval
                         imported_counts["profiles"] += 1
                 # SSOT-Format beibehalten: Liste bleiben Liste, Dict bleibt Dict.
+                merged_out: Any
                 if isinstance(existing_prof, list):
                     merged_out = list(existing_map.values())
                 else:

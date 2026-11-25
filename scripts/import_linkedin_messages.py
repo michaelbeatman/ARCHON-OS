@@ -28,6 +28,7 @@ import re
 import sys
 import time
 import urllib.parse
+from typing import cast
 import urllib.request
 
 POCKETBASE_URL = os.environ.get("POCKETBASE_URL", "http://localhost:8090")
@@ -61,7 +62,7 @@ def extract_columns(header):
         elif "sender profile url" in n or "from profile" in n:
             cols["from_url"] = i
         elif n in ("to", "last name"):
-            cols["to_name"] = i if "to" == n else cols.get("to_name")
+            cols["to_name"] = i if "to" == n else cast(int, cols.get("to_name"))
         elif "recipient profile" in n or "to profile" in n:
             cols["to_url"] = i
         elif "date" in n or "created" in n:
@@ -161,7 +162,11 @@ def load_messages(csv_path, encoding="utf-8"):
             "type": "linkedin",
         }
         # Stabile ID aus Hash (Dedupe ueber Import-Laeufe hinweg)
-        h = hashlib.sha1(f"{timestamp}|{text}".encode("utf-8")).hexdigest()[:10]
+        # Dedupe-ID, keine Sicherheitsfunktion: usedforsecurity=False stoppt
+        # Bandit B324 und macht die Absicht explizit (stabiler 10-Hex-Präfix).
+        h = hashlib.sha1(
+            f"{timestamp}|{text}".encode("utf-8"), usedforsecurity=False
+        ).hexdigest()[:10]
         msg["id"] = f"msg_{h}"
         messages.append((target_url, target_name.lower(), msg))
         count += 1
@@ -285,8 +290,8 @@ def main():
     messages = load_messages(args.csv_path, args.csv_encoding)
 
     # Nachrichten nach Ziel gruppieren (URL bevorzugt, dann Name)
-    by_url = {}
-    by_name = {}
+    by_url: dict[str, list] = {}
+    by_name: dict[str, list] = {}
     for url_key, name_key, msg in messages:
         if url_key:
             by_url.setdefault(url_key, []).append(msg)
@@ -302,7 +307,7 @@ def main():
 
     # Indizes: URL -> Kontakt UND Name -> Liste von Kontakten
     url_map = {}
-    name_map = {}
+    name_map: dict[str, list] = {}
     for c in contacts:
         if c.get("linkedin_url"):
             url_map[normalize_url(c["linkedin_url"])] = c
@@ -375,8 +380,8 @@ def main():
     print(f"   Neue Nachrichten gesamt:   {total_added}")
     if unmatched_keys:
         print(f"   ⚠️  {len(unmatched_keys)} Chat-Partner ohne CRM-Kontakt (werden uebersprungen):")
-        for k in sorted(unmatched_keys)[:10]:
-            print(f"      - {k}")
+        for uk in sorted(unmatched_keys)[:10]:
+            print(f"      - {uk}")
 
     if args.dry_run:
         print("\n🚫 DRY-RUN: Keine Änderungen geschrieben.")

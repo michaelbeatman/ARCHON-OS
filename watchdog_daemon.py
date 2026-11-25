@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# mypy: ignore-errors
 """
 Archon OS Watchdog Daemon
 Autonomous background supervisor for profile-level loop prevention and resource governance.
@@ -18,7 +17,7 @@ try:
 except ImportError:
     import urllib.error
     import urllib.request
-    requests = None
+    requests = None  # type: ignore[assignment]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -230,11 +229,11 @@ class WatchdogDaemon:
             headers = {"Content-Type": "application/json"}
             headers.update(webhook_signature_headers(body))
             if requests:
-                resp = requests.post(webhook_url, data=body, headers=headers, timeout=4)
+                resp = requests.post(webhook_url, data=body, headers=headers, timeout=4)  # type: ignore[arg-type]
                 logger.info(f"n8n webhook response: HTTP {resp.status_code}")
             else:
                 req = urllib.request.Request(
-                    webhook_url,
+                    webhook_url,  # type: ignore[arg-type]
                     data=body,
                     headers=headers
                 )
@@ -324,12 +323,12 @@ class WatchdogDaemon:
         """
         Analysiert Dateigrößen-Deltas und Metriken der Profile.
         """
-        if not os.path.exists(LOG_DIR):
+        if not os.path.exists(LOG_DIR):  # type: ignore[arg-type]
             return
 
-        for root, _, files in os.walk(LOG_DIR):
+        for root, _, files in os.walk(LOG_DIR):  # type: ignore[type-var]
             for file in files:
-                file_path = os.path.join(root, file)
+                file_path = os.path.join(root, file)  # type: ignore[arg-type, arg-type]
                 try:
                     current_size = os.path.getsize(file_path)
                     prev_size = self.file_tracker.get(file_path, current_size)
@@ -339,34 +338,34 @@ class WatchdogDaemon:
                     delta_mb = delta_bytes / (1024 * 1024)
 
                     # Profil-Handle aus Dateiname oder Ordnerstruktur ableiten (ohne Unterstriche abzuschneiden)
-                    if file in ("agent.log", "gateway.log") and os.path.basename(os.path.dirname(root)):
-                        parent_name = os.path.basename(root)
+                    if file in ("agent.log", "gateway.log") and os.path.basename(os.path.dirname(root)):  # type: ignore[type-var, type-var]
+                        parent_name = os.path.basename(root)  # type: ignore[type-var]
                         profile_handle = (
-                            os.path.basename(os.path.dirname(root))
+                            os.path.basename(os.path.dirname(root))  # type: ignore[type-var, type-var]
                             if parent_name == "logs"
                             else parent_name
                         )
                     else:
                         stem = file
-                        if stem.endswith(".log"):
-                            stem = stem[:-4]
-                        if stem.startswith("agent_"):
-                            stem = stem[len("agent_"):]
-                        elif stem.startswith("gateway-"):
-                            stem = stem[len("gateway-"):]
+                        if stem.endswith(".log"):  # type: ignore[union-attr]
+                            stem = stem[:-4]  # type: ignore[index]
+                        if stem.startswith("agent_"):  # type: ignore[union-attr]
+                            stem = stem[len("agent_"):]  # type: ignore[index]
+                        elif stem.startswith("gateway-"):  # type: ignore[union-attr]
+                            stem = stem[len("gateway-"):]  # type: ignore[index]
                         profile_handle = stem or "unknown"
 
                     # 1. Prüfe Log-Wachstum (Endlosschleifen-Indikator)
-                    if delta_mb >= CONFIG["MAX_LOG_SIZE_MB"]:
+                    if delta_mb >= CONFIG["MAX_LOG_SIZE_MB"]:  # type: ignore[operator]
                         self.abort_agent_thread(
-                            profile_handle=profile_handle,
+                            profile_handle=profile_handle,  # type: ignore[arg-type]
                             reason=f"Log Growth Limit Exceeded ({delta_mb:.2f} MB in 60s > {CONFIG['MAX_LOG_SIZE_MB']} MB)",
                             details={"delta_mb": delta_mb, "file": file_path}
                         )
 
                     # 2. Prüfe Token- & API-Metriken im Logfile falls vorhanden
-                    if delta_bytes > 0 and file.endswith(".log"):
-                        self._inspect_recent_log_lines(file_path, profile_handle, delta_bytes)
+                    if delta_bytes > 0 and file.endswith(".log"):  # type: ignore[union-attr]
+                        self._inspect_recent_log_lines(file_path, profile_handle, delta_bytes)  # type: ignore[arg-type]
 
                 except Exception as e:
                     logger.debug(f"Error scanning file {file_path}: {e}")
@@ -383,7 +382,7 @@ class WatchdogDaemon:
                 token_matches = re.findall(r'\"?total_tokens\"?:\s*(\d+)', chunk)
                 if token_matches:
                     total_tokens = sum(int(x) for x in token_matches)
-                    if total_tokens >= CONFIG["MAX_TOKENS_PER_MIN"]:
+                    if total_tokens >= CONFIG["MAX_TOKENS_PER_MIN"]:  # type: ignore[operator]
                         self.abort_agent_thread(
                             profile_handle=profile_handle,
                             reason=(f"Token Usage Limit Exceeded ({total_tokens} tokens "
@@ -474,7 +473,7 @@ class WatchdogDaemon:
                 # Oracle News Radar alle 4 Stunden autonom im separaten Daemon-Thread ausführen,
                 # damit Netzwerk-I/O niemals den 30s-Watchdog-Loop blockiert (Pillar 1)
                 if time.time() - self.last_oracle_run > 14400:
-                    self.last_oracle_run = time.time()
+                    self.last_oracle_run = time.time()  # type: ignore[assignment]
                     import threading
 
                     def _run_oracle_bg():
@@ -489,7 +488,7 @@ class WatchdogDaemon:
                     threading.Thread(target=_run_oracle_bg, daemon=True, name="OracleRadarBg").start()
 
                 # Event.wait statt sleep: der Stopp wirkt sofort, nicht erst nach 30 s.
-                if self._stop_event.wait(CONFIG["CHECK_INTERVAL_SEC"]):
+                if self._stop_event.wait(CONFIG["CHECK_INTERVAL_SEC"]):  # type: ignore[arg-type]
                     break
         finally:
             # Audit D10: der Tod des Supervisors darf nicht still passieren.

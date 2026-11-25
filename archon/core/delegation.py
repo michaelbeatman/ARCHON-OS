@@ -481,7 +481,7 @@ def resolve_isolated_scope_with_role_limits(
     from backend.delegation_isolation import resolve_isolated_execution_scope
 
     scope = dict(resolve_isolated_execution_scope(target_agent_id, requested_model, profiles=profiles))
-    prof = next((p for p in (profiles or []) if p.get("id") == target_agent_id), {}) or {}
+    prof = next((p for p in (profiles or []) if p.get("id") == target_agent_id), {}) or {}  # type: ignore[var-annotated]
     scope["negative_scope"] = str(prof.get("negative_scope") or "").strip()
     scope["negative_scope_en"] = str(prof.get("negative_scope_en") or "").strip()
     risk_tier = str(prof.get("risk_tier") or "").strip()
@@ -876,7 +876,7 @@ def _canonical_aliases() -> Dict[str, str]:
     und Compliance konsumieren jetzt dieselbe Map.
     """
     _load_org_hierarchy_map()  # refresst Cache inkl. aliases bei mtime-Aenderung
-    return dict(_ORG_HIERARCHY_CACHE.get("aliases") or {})
+    return dict(_ORG_HIERARCHY_CACHE.get("aliases") or {})  # type: ignore[call-overload]
 
 
 def canonical_agent_id(raw: str, known_ids: Optional[set] = None) -> str:
@@ -2301,7 +2301,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
             parent_title_var = str(payload.get("projekt_titel") or payload.get("titel") or "").strip()
             mc_link_subtask_sqlite(
                 parent_pid,
-                task_id,
+                task_id,  # type: ignore[arg-type]
                 parent_defaults={
                     "id": parent_pid,
                     "title": parent_title_var or f"Delegationsprojekt {parent_pid}",

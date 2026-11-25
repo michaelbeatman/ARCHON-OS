@@ -45,7 +45,7 @@ def collect(routes, out=None):
 
 
 paths = sorted(set(collect(main.app.routes)))
-rows = []
+rows: list[tuple[float, object, str]] = []
 with httpx.Client(base_url="http://127.0.0.1:8501", timeout=8.0,
                   headers={"x-archon-service-token": TOKEN}) as c:
     for p in paths:

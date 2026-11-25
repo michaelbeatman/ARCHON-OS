@@ -311,11 +311,11 @@ def api_auth_status():
 
 @router.post("/api/auth/toggle")
 def api_auth_toggle(request: Request, payload: AuthToggleRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     curr = get_current_user_from_request(request)
     if curr.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Nur Administratoren dürfen den Authentifizierungsmodus ändern.")
-    enabled = bool(payload.get("enabled", False))
+    enabled = bool(data.get("enabled", False))
     s = _load_json_helper(SETTINGS_FILE, {})
     if "auth" not in s or not isinstance(s["auth"], dict):
         s["auth"] = {}
@@ -361,9 +361,9 @@ def api_auth_me(request: Request):
 
 @router.post("/api/auth/login")
 def api_auth_login(request: Request, payload: AuthLoginRequest = Body(...)):
-    payload = payload.model_dump()
-    username = payload.get("username", "")
-    password = payload.get("password", "")
+    data = payload.model_dump()
+    username = data.get("username", "")
+    password = data.get("password", "")
     client_ip = request.client.host if request.client else ""
     user_agent = request.headers.get("user-agent", "")
     try:
@@ -433,17 +433,17 @@ def api_auth_list_users(request: Request):
 
 @router.post("/api/auth/users")
 def api_auth_create_user(request: Request, payload: AuthCreateUserRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     curr = get_current_user_from_request(request)
     if curr.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Nur Administratoren dürfen neue Benutzer anlegen.")
     try:
         new_u = auth_service.create_user(
-            username=payload.get("username"),
-            password=payload.get("password"),
-            role=payload.get("role", "operator"),
-            display_name=payload.get("display_name", ""),
-            email=payload.get("email", "")
+            username=data["username"],
+            password=data["password"],
+            role=data.get("role", "operator"),
+            display_name=data.get("display_name", ""),
+            email=data.get("email", "")
         )
         _audit_auth_event(
             "user_created", actor=str(curr.get("username") or curr.get("id") or "admin"),
@@ -458,20 +458,20 @@ def api_auth_create_user(request: Request, payload: AuthCreateUserRequest = Body
 
 @router.patch("/api/auth/users/{user_id}")
 def api_auth_update_user(user_id: str, request: Request, payload: AuthUpdateUserRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     curr = get_current_user_from_request(request)
     if curr.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Benutzerrollen anpassen.")
     try:
         updated = auth_service.update_user(
             user_id=user_id,
-            role=payload.get("role"),
-            display_name=payload.get("display_name"),
-            email=payload.get("email"),
-            is_active=payload.get("is_active")
+            role=data.get("role"),
+            display_name=data.get("display_name"),
+            email=data.get("email"),
+            is_active=data.get("is_active")
         )
         _audit_auth_event(
-            "role_changed" if payload.get("role") else "user_updated",
+            "role_changed" if data.get("role") else "user_updated",
             actor=str(curr.get("username") or curr.get("id") or "admin"),
             request=request,
             user_id=str(updated.get("id") or user_id),
@@ -486,19 +486,19 @@ def api_auth_update_user(user_id: str, request: Request, payload: AuthUpdateUser
 @router.post("/api/auth/change-password")
 def api_auth_change_password(request: Request, payload: AuthChangePasswordRequest = Body(...)):
     """Passwort ändern: eigener Account (mit aktuellem Passwort) oder als Admin für andere."""
-    payload = payload.model_dump()
+    data = payload.model_dump()
     curr = get_current_user_from_request(request)
     if not curr or curr.get("id") in (None, "", "usr_anonymous"):
         raise HTTPException(status_code=401, detail="Nicht angemeldet.")
 
-    target_id = str(payload.get("user_id") or curr.get("id")).strip()
-    new_pw = str(payload.get("new_password") or "")
+    target_id = str(data.get("user_id") or curr.get("id")).strip()
+    new_pw = str(data.get("new_password") or "")
     if len(new_pw) < 8:
         raise HTTPException(status_code=400, detail="Das neue Passwort muss mindestens 8 Zeichen haben.")
 
     is_self = (target_id == curr.get("id"))
     if is_self:
-        current_pw = str(payload.get("current_password") or "")
+        current_pw = str(data.get("current_password") or "")
         if not auth_service.verify_password(curr.get("username", ""), current_pw):
             raise HTTPException(status_code=400, detail="Das aktuelle Passwort ist falsch.")
     elif curr.get("role") != "admin":
@@ -571,11 +571,11 @@ def api_get_passkey_config(request: Request, user_id: Optional[str] = None):
 
 @router.post("/api/auth/passkey/config")
 def api_update_passkey_config(request: Request, payload: PasskeyConfigRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required, update_user_passkey_config
-    target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
-    if payload.get("enabled") is False and is_passkey_required(target_id, "system"):
-        proof = str(payload.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
+    target_id, _ = _resolve_target_passkey_user(request, data.get("user_id"))
+    if data.get("enabled") is False and is_passkey_required(target_id, "system"):
+        proof = str(data.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
         if not proof or not consume_hitl_proof_token(
             proof, target_id, "system",
             action="Passkey-HITL deaktivieren", resource=target_id,
@@ -583,9 +583,9 @@ def api_update_passkey_config(request: Request, payload: PasskeyConfigRequest = 
             raise HTTPException(status_code=403, detail="Passkey-Verifizierung erforderlich, um Passkey-HITL zu deaktivieren. Passkey-Registrierung erforderlich: /api/auth/passkey/register/options")
     cfg = update_user_passkey_config(
         target_id,
-        enabled=payload.get("enabled"),
-        scope=payload.get("scope"),
-        categories=payload.get("categories"),
+        enabled=data.get("enabled"),
+        scope=data.get("scope"),
+        categories=data.get("categories"),
     )
     return {"status": "success", **cfg}
 
@@ -597,30 +597,30 @@ def api_passkey_register_options(request: Request, payload: PasskeyRegisterOptio
     is_passkey_required() darf hier niemals angewendet werden — sonst Lockout
     bei der Erstregistrierung.
     """
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.passkey_hitl import create_registration_options
-    target_id, curr_name = _resolve_target_passkey_user(request, payload.get("user_id"))
+    target_id, curr_name = _resolve_target_passkey_user(request, data.get("user_id"))
     rp_id, _ = _request_rp_id_and_origin(request)
-    username = str(payload.get("username") or curr_name or target_id)
+    username = str(data.get("username") or curr_name or target_id)
     opts = create_registration_options(target_id, username, rp_id)
     return {"status": "success", "options": opts}
 
 
 @router.post("/api/auth/passkey/register/verify")
 def api_passkey_register_verify(request: Request, payload: PasskeyRegisterVerifyRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.passkey_hitl import (
         consume_hitl_proof_token,
         get_user_passkey_config,
         is_additional_passkey_registration_protected,
         verify_and_store_registration,
     )
-    target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
+    target_id, _ = _resolve_target_passkey_user(request, data.get("user_id"))
     existing_cfg = get_user_passkey_config(target_id)
     # Registrierungs-Route: bewusst NICHT is_passkey_required() — die
     # Erstregistrierung (keine Credentials) bleibt immer moeglich.
     if (existing_cfg.get("credentials") or []) and is_additional_passkey_registration_protected(target_id):
-        proof = str(payload.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
+        proof = str(data.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
         if not proof or not consume_hitl_proof_token(
             proof, target_id, "system",
             action="Weiteren Passkey registrieren", resource=target_id,
@@ -633,14 +633,14 @@ def api_passkey_register_verify(request: Request, payload: PasskeyRegisterVerify
     try:
         cfg = verify_and_store_registration(
             user_id=target_id,
-            credential_id=str(payload.get("id") or ""),
-            client_data_b64=str(payload.get("clientDataJSON") or ""),
-            public_key_spki_b64=str(payload.get("publicKeySpki") or ""),
-            alg=int(payload.get("alg", -7)),
-            label=str(payload.get("label") or "Passkey"),
+            credential_id=str(data.get("id") or ""),
+            client_data_b64=str(data.get("clientDataJSON") or ""),
+            public_key_spki_b64=str(data.get("publicKeySpki") or ""),
+            alg=int(data.get("alg", -7)),
+            label=str(data.get("label") or "Passkey"),
             expected_origin=origin,
-            authenticator_data_b64=str(payload.get("authenticatorData") or ""),
-            attestation_object_b64=str(payload.get("attestationObject") or ""),
+            authenticator_data_b64=str(data.get("authenticatorData") or ""),
+            attestation_object_b64=str(data.get("attestationObject") or ""),
         )
         return {"status": "success", **cfg}
     except Exception as exc:
@@ -664,11 +664,11 @@ def api_passkey_delete_credential(cred_id: str, request: Request, user_id: Optio
 
 @router.post("/api/auth/passkey/hitl/options")
 def api_passkey_hitl_options(request: Request, payload: PasskeyHitlOptionsRequest = Body(default=PasskeyHitlOptionsRequest())):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.passkey_hitl import create_hitl_assertion_options, is_passkey_required
-    target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
-    category = str(payload.get("category") or "all")
-    if not is_passkey_required(target_id, category) and not payload.get("force"):
+    target_id, _ = _resolve_target_passkey_user(request, data.get("user_id"))
+    category = str(data.get("category") or "all")
+    if not is_passkey_required(target_id, category) and not data.get("force"):
         return {"status": "success", "required": False}
     rp_id, _ = _request_rp_id_and_origin(request)
     try:
@@ -676,8 +676,8 @@ def api_passkey_hitl_options(request: Request, payload: PasskeyHitlOptionsReques
             target_id,
             rp_id,
             category=category,
-            action_label=str(payload.get("action_label") or ""),
-            resource=str(payload.get("resource") or ""),
+            action_label=str(data.get("action_label") or ""),
+            resource=str(data.get("resource") or ""),
         )
         return {"status": "success", "required": True, "options": opts}
     except ValueError as exc:
@@ -686,17 +686,17 @@ def api_passkey_hitl_options(request: Request, payload: PasskeyHitlOptionsReques
 
 @router.post("/api/auth/passkey/hitl/verify")
 def api_passkey_hitl_verify(request: Request, payload: PasskeyHitlVerifyRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.passkey_hitl import verify_hitl_assertion
-    target_id, _ = _resolve_target_passkey_user(request, payload.get("user_id"))
+    target_id, _ = _resolve_target_passkey_user(request, data.get("user_id"))
     _, origin = _request_rp_id_and_origin(request)
     try:
         proof = verify_hitl_assertion(
             user_id=target_id,
-            credential_id=str(payload.get("id") or ""),
-            client_data_b64=str(payload.get("clientDataJSON") or ""),
-            authenticator_data_b64=str(payload.get("authenticatorData") or ""),
-            signature_b64=str(payload.get("signature") or ""),
+            credential_id=str(data.get("id") or ""),
+            client_data_b64=str(data.get("clientDataJSON") or ""),
+            authenticator_data_b64=str(data.get("authenticatorData") or ""),
+            signature_b64=str(data.get("signature") or ""),
             expected_origin=origin,
         )
         return {"status": "success", "proof": proof}

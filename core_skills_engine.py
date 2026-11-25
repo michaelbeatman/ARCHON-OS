@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import datetime
 import json
 import os
@@ -6,7 +5,7 @@ import subprocess
 import sys
 import tempfile
 import threading
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -53,7 +52,7 @@ except ImportError:  # pragma: no cover - Root nicht im sys.path (direkter CLI-A
     def ttl_cache(seconds: float = 30.0, maxsize: int = 256):
         """Minimaler, arg-keyed Fallback ohne externe Dependencies."""
         def decorator(fn):
-            store = {}
+            store: Dict[Any, Any] = {}
             lock = threading.Lock()
 
             @functools.wraps(fn)
@@ -521,7 +520,7 @@ if __name__ == "__main__":
     args = sys.argv[3:]
 
     engine = CoreSkillsEngine()
-    target_module = None
+    target_module: Any = None
 
     if module_name == "docker":
         target_module = engine.docker
@@ -547,11 +546,11 @@ if __name__ == "__main__":
     sig = inspect.signature(method)
     params = list(sig.parameters.values())
     
-    typed_args = []
+    typed_args: List[Any] = []
     for i, p in enumerate(params):
         if i >= len(args):
             break
-        val = args[i]
+        val: Any = args[i]
         if p.annotation is int:
             val = int(val)
         elif p.annotation == List[str] or p.annotation is list:

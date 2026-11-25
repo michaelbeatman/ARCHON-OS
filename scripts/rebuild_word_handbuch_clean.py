@@ -21,7 +21,7 @@ import docx
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-sys.stdout.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
 DOCS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE_PRISTINE = os.path.join(DOCS_DIR, "docs", "system", "ARCHON_OS_SYSTEM_HANDBUCH_2026_BASE_PRISTINE.docx")
@@ -45,7 +45,7 @@ def load_agents_data():
             profiles = json.load(f)
 
     prof_map = {p.get("id"): p for p in profiles}
-    by_cat = {}
+    by_cat: dict[str, list] = {}
     for a in inventory:
         cat = a.get("category", "7. Tech, Software & Data")
         by_cat.setdefault(cat, []).append(a)
@@ -180,8 +180,8 @@ def rebuild_clean_docx():
 
         lines = text.splitlines()
         in_code_block = False
-        code_lines = []
-        table_lines = []
+        code_lines: list[str] = []
+        table_lines: list[str] = []
 
         def flush_code():
             nonlocal code_lines

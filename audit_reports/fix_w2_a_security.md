@@ -139,9 +139,12 @@ Python-3.13-Lauf war in dieser Umgebung nicht möglich.
    `fallback_to_eu=true`. `get_privacy_config()` wendet die verstärkenden
    `zero_egress_governance`-Werte danach an; die Datei selbst sollte vom
    Konfigurations-Owner mit `settings.json` konsolidiert werden.
-4. **Key-Rotation (operativ):** alle unter dem alten Salt
-   `ARCHON_OS_API_KEY_SALT_2026_SECURE` erzeugten API-Keys sind als
-   kompromittiert zu betrachten und müssen widerrufen und neu ausgestellt
-   werden. `ARCHON_API_KEY_PEPPER` ist in Produktion Pflicht (Fail-Fast).
+4. **Key-Rotation (operativ):** alle unter dem alten, hartcodierten
+   Legacy-Salt erzeugten API-Keys (exakter Wert siehe historischer Befund in
+   `audit_reports/domain_04.md`) sind als kompromittiert zu betrachten und
+   müssen widerrufen und neu ausgestellt werden. `ARCHON_API_KEY_PEPPER` ist
+   in Produktion Pflicht (Fail-Fast). Der konkrete Salt-Literal wurde hier
+   bewusst nicht wiederholt, damit der Secrets-Scanner nicht auf eine reine
+   Doku-Erwähnung anspricht.
 5. NEVER_DO_LIST (§5: kein Replay-Framework, keine PostgreSQL-Migration)
    und alle Gates bleiben intakt; keine Stubs, keine deaktivierten Prüfungen.

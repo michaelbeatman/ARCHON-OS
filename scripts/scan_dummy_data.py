@@ -71,8 +71,8 @@ findings = []
 for fpath in files_to_scan:
     rel_path = os.path.relpath(fpath, base_dir)
     try:
-        with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()
+        with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+            lines = fh.readlines()
         for idx, line in enumerate(lines, 1):
             clean = line.strip()
             if not clean or clean.startswith(("#", "//", "/*", "*")):

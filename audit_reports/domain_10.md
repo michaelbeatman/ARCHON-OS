@@ -77,3 +77,13 @@ rg -n "_FAIL_FAST_HOOKS|raise$|timeout=10.0|_LOOPS_STARTED = False" main.py
 - Laufzeitverhalten auf einem echten Docker-Host: keine Container gestartet, keine Netzwerke angelegt, keine echten Restores durchgeführt; alle Aussagen stammen aus statischem Code-/Config-Review (mit Ausnahme der vorhandenen Testdateien, die nicht ausgeführt wurden).
 - Frontend-Build (`npm ci`, `tsc --noEmit`) und externe Empfänger (Telegram, Uptime-Kuma, NAS/DR-Mount) — nicht in dieser Domäne bzw. ohne Zugang.
 - Historische, nicht mehr im Working Tree befindliche Revisionen; `git status` zeigt modification an Audit-Reports, der Code selbst wurde nicht verändert.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** H-10-1 (`/readyz` im Default dauerhaft 503 durch hart verdrahtete n8n-Probe) und die 4 MED (Compose-Override in Startern, Chaos-SLA + echte Schreiblast, Concurrency, veralteter Heartbeat-Kommentar) — `fix_w4_c_hardening.md`: `ARCHON_READINESS_PROBE_URLS` mit Default nur OmniRoute, `-f docker-compose.yml` in Startern, Restart-SLA und SQLite-Concurrency. Live-Betrieb: `/livez`, `/readyz`, `/health` alle 200 (§9.1 `MASTER_PLAN.md`).
+- **Bewusst offen:** Keine domänenspezifischen HIGH/BLOCKER. Ein Chaos-Lauf zum Stall-503 wurde in diesem Pass nicht neu durchgeführt. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Orchestrator `pytest tests/test_fix_w4_c_hardening.py -q` → **16 passed**, Compose `config --quiet` Exit 0 (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

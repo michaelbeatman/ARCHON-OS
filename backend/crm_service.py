@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/crm_service.py
 Archon OS 2026 — Native SQLite CRM Engine for Säule 3 (WIRTSCHAFT & ERP).
@@ -716,7 +715,7 @@ class CRMService:
             active_count = len(active_contacts)
 
             # 2. Status distribution
-            status_counts = {}
+            status_counts = {}  # type: ignore[var-annotated]
             for k in active_contacts:
                 st = (k["status"] or "Ohne Status").strip()
                 status_counts[st] = status_counts.get(st, 0) + 1

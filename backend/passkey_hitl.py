@@ -320,7 +320,7 @@ def _attestation_format(attestation_object_b64: str) -> str:
     if not raw:
         return ""
     try:
-        import cbor2  # type: ignore
+        import cbor2
         data = cbor2.loads(raw)
         if isinstance(data, dict):
             return str(data.get("fmt") or "").strip().lower()

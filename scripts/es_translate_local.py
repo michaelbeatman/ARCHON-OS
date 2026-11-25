@@ -974,7 +974,8 @@ def build_cache():
     for src, es in HAND_SRC2ES.items():
         cache[src] = es
     print(f"Unique gesamt: {len(items)} | aus HAND: {len(HAND_SRC2ES)} | Engine-pending: {len(pending)}", flush=True)
-    batch, done = [], 0
+    batch: list[str] = []
+    done = 0
     for txt in pending:
         if len(batch) >= BATCH:
             for s_src in batch:

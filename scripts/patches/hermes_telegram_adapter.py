@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 
 def _mirror_to_archon_inbox(msg):
     try:
@@ -345,7 +344,7 @@ from plugins.platforms.telegram.telegram_network import (
     parse_fallback_ip_env,
 )
 
-from utils import atomic_replace, env_float, env_int
+from utils import atomic_replace, env_float, env_int  # type: ignore[attr-defined, attr-defined, attr-defined]
 
 _TELEGRAM_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 _TELEGRAM_IMAGE_MIME_TO_EXT = {
@@ -2159,7 +2158,7 @@ class TelegramAdapter(BasePlatformAdapter):
             # return_type=Message would make PTB deserialize a Bot API 10.1
             # response shape it does not fully model yet; a post-delivery parse
             # error must not be mistaken for a sendable failure.
-            msg = await self._bot.do_api_request(
+            msg = await self._bot.do_api_request(  # type: ignore[union-attr]
                 "sendRichMessage", api_kwargs=payload
             )
         except Exception as exc:
@@ -2264,7 +2263,7 @@ class TelegramAdapter(BasePlatformAdapter):
             # Raw Bot API result; do not request return_type=Message (PTB does
             # not fully model the 10.1 response shape yet — a post-edit parse
             # error must not be mistaken for a failed edit).
-            await self._bot.do_api_request("editMessageText", api_kwargs=payload)
+            await self._bot.do_api_request("editMessageText", api_kwargs=payload)  # type: ignore[union-attr]
         except Exception as exc:
             if self._is_rich_fallback_error(exc):
                 if self._is_rich_capability_error(exc):
@@ -2347,7 +2346,7 @@ class TelegramAdapter(BasePlatformAdapter):
         if thread_id is not None:
             payload["message_thread_id"] = int(thread_id)
         try:
-            ok = await self._bot.do_api_request("sendRichMessageDraft", api_kwargs=payload)
+            ok = await self._bot.do_api_request("sendRichMessageDraft", api_kwargs=payload)  # type: ignore[union-attr]
             return bool(ok)
         except Exception as exc:
             if self._is_rich_capability_error(exc):
@@ -2491,7 +2490,7 @@ class TelegramAdapter(BasePlatformAdapter):
         adapter = self
         base_cls = type(request)
 
-        class _InstrumentedPollingRequest(base_cls):
+        class _InstrumentedPollingRequest(base_cls):  # type: ignore[valid-type, misc]
             __slots__ = ()
 
             async def do_request(self, *args, **kwargs):
@@ -3144,7 +3143,7 @@ class TelegramAdapter(BasePlatformAdapter):
         if not callable(get_webhook_info):
             return
         try:
-            info = await asyncio.wait_for(get_webhook_info(), probe_timeout)  # type: ignore[arg-type]
+            info = await asyncio.wait_for(get_webhook_info(), probe_timeout)  # type: ignore[arg-type, unused-ignore]
         except (asyncio.TimeoutError, OSError):
             # A failed probe is a connectivity symptom the get_me() path or the
             # outer handler will catch; don't treat it as a stuck-queue signal.
@@ -3630,7 +3629,7 @@ class TelegramAdapter(BasePlatformAdapter):
             topic_conf = {"name": name}
             chat_entry.setdefault("topics", []).append(topic_conf)
 
-        thread_id = await self._create_dm_topic(
+        thread_id = await self._create_dm_topic(  # type: ignore[assignment]
             chat_id_int,
             name=name,
             icon_color=topic_conf.get("icon_color"),
@@ -3814,7 +3813,7 @@ class TelegramAdapter(BasePlatformAdapter):
                     # Send a seed message so the topic is visible in Telegram's client.
                     # Empty topics are hidden by the client UI until they contain a message.
                     try:
-                        await self._bot.send_message(
+                        await self._bot.send_message(  # type: ignore[union-attr]
                             chat_id=normalize_telegram_chat_id(chat_id),
                             message_thread_id=thread_id,
                             text=f"\U0001f4cc {topic_name}",
@@ -4273,7 +4272,7 @@ class TelegramAdapter(BasePlatformAdapter):
                 import httpx as _httpx
 
                 _pool_limits = _httpx.Limits(
-                    max_connections=request_kwargs["connection_pool_size"],
+                    max_connections=request_kwargs["connection_pool_size"],  # type: ignore[arg-type]
                     max_keepalive_connections=_base_limits.max_keepalive_connections,
                     keepalive_expiry=_base_limits.keepalive_expiry,
                 )
@@ -4605,7 +4604,7 @@ class TelegramAdapter(BasePlatformAdapter):
                         logger.error("[%s] Telegram polling _redact_telegram_error_text(error): %s", self.name, error, exc_info=True)
 
                 # Store reference for retry use in _handle_polling_conflict
-                self._polling_error_callback_ref = _polling_error_callback
+                self._polling_error_callback_ref = _polling_error_callback  # type: ignore[assignment]
 
                 polling_started = await self._start_polling_resilient(
                     # On a cold first boot drop the stale Bot API queue; on a
@@ -4841,7 +4840,7 @@ class TelegramAdapter(BasePlatformAdapter):
             lifecycle_seen.add(marker)
             task.cancel()
             if asyncio.isfuture(task) or asyncio.iscoroutine(task):
-                lifecycle_tasks.append(task)
+                lifecycle_tasks.append(task)  # type: ignore[arg-type]
         if lifecycle_tasks:
             await self._await_disconnect_step(
                 asyncio.gather(*lifecycle_tasks, return_exceptions=True),
@@ -5045,17 +5044,17 @@ class TelegramAdapter(BasePlatformAdapter):
             try:
                 from telegram.error import NetworkError as _NetErr
             except ImportError:
-                _NetErr = OSError  # type: ignore[misc,assignment]
+                _NetErr = OSError  # type: ignore[misc, assignment, unused-ignore]
 
             try:
                 from telegram.error import BadRequest as _BadReq
             except ImportError:
-                _BadReq = None  # type: ignore[assignment,misc]
+                _BadReq = None  # type: ignore[assignment, misc, unused-ignore]
 
             try:
                 from telegram.error import TimedOut as _TimedOut
             except (ImportError, AttributeError):
-                _TimedOut = None  # type: ignore[assignment,misc]
+                _TimedOut = None  # type: ignore[assignment, misc, unused-ignore]
 
             for i, chunk in enumerate(chunks):
                 retried_thread_not_found = False
@@ -5249,7 +5248,7 @@ class TelegramAdapter(BasePlatformAdapter):
                                 await asyncio.sleep(wait)
                                 continue
                         raise
-                message_ids.append(str(msg.message_id))
+                message_ids.append(str(msg.message_id))  # type: ignore[union-attr]
 
             # Re-trigger typing indicator after sending a message.
             # Telegram clears the typing state when a new message is delivered,
@@ -5603,7 +5602,7 @@ class TelegramAdapter(BasePlatformAdapter):
                     self.format_message(first_chunk)
                 )
                 try:
-                    await self._bot.edit_message_text(
+                    await self._bot.edit_message_text(  # type: ignore[union-attr]
                         chat_id=normalize_telegram_chat_id(chat_id),
                         message_id=int(message_id),
                         text=formatted,
@@ -5616,13 +5615,13 @@ class TelegramAdapter(BasePlatformAdapter):
                             "failed, falling back to plain text: %s",
                             self.name, _redact_telegram_error_text(fmt_err),
                         )
-                        await self._bot.edit_message_text(
+                        await self._bot.edit_message_text(  # type: ignore[union-attr]
                             chat_id=normalize_telegram_chat_id(chat_id),
                             message_id=int(message_id),
                             text=_strip_mdv2(first_chunk),
                         )
             else:
-                await self._bot.edit_message_text(
+                await self._bot.edit_message_text(  # type: ignore[union-attr]
                     chat_id=normalize_telegram_chat_id(chat_id),
                     message_id=int(message_id),
                     text=first_chunk,
@@ -5671,7 +5670,7 @@ class TelegramAdapter(BasePlatformAdapter):
                         # the raw chunk (raw ** / ``` markers would render
                         # literally); streaming previews stay raw.
                         text = _strip_mdv2(chunk) if finalize else chunk
-                    sent_msg = await self._bot.send_message(
+                    sent_msg = await self._bot.send_message(  # type: ignore[union-attr]
                         chat_id=normalize_telegram_chat_id(chat_id),
                         text=text,
                         parse_mode=ParseMode.MARKDOWN_V2 if use_markdown else None,
@@ -5694,7 +5693,7 @@ class TelegramAdapter(BasePlatformAdapter):
                             )
                         )
                         try:
-                            sent_msg = await self._bot.send_message(
+                            sent_msg = await self._bot.send_message(  # type: ignore[union-attr]
                                 chat_id=normalize_telegram_chat_id(chat_id),
                                 text=_strip_mdv2(chunk) if finalize else chunk,
                                 **retry_thread_kwargs,
@@ -6961,7 +6960,7 @@ class TelegramAdapter(BasePlatformAdapter):
                 async with _hx.AsyncClient(timeout=12.0) as _cl:
                     return await _cl.request(_method, _url2, **_traced_kwargs())
             except Exception:
-                raise _last
+                raise _last  # type: ignore[misc]
 
 
         # --- ARCHON PERMISSION-GATE (12.10.2026, Owner-Bestaetigung) ---
@@ -7165,7 +7164,7 @@ class TelegramAdapter(BasePlatformAdapter):
                 # loop and (if it returns a string) send it as a follow-up
                 # message in the same chat.
                 try:
-                    from tools import slash_confirm as _slash_confirm_mod
+                    from tools import slash_confirm as _slash_confirm_mod  # type: ignore[attr-defined]
                     result_text = await _slash_confirm_mod.resolve(
                         session_key, confirm_id, choice,
                     )
@@ -7287,7 +7286,7 @@ class TelegramAdapter(BasePlatformAdapter):
                 # has been cleaned up (race with timeout / session reset).
                 resolved_text: Optional[str] = None
                 try:
-                    from tools.clarify_gateway import _entries as _clarify_entries  # type: ignore
+                    from tools.clarify_gateway import _entries as _clarify_entries  # type: ignore[unused-ignore]
                     entry = _clarify_entries.get(clarify_id)
                     if entry and entry.choices and 0 <= idx < len(entry.choices):
                         resolved_text = entry.choices[idx]
@@ -9706,7 +9705,7 @@ class TelegramAdapter(BasePlatformAdapter):
                 from telegram import BotCommand, BotCommandScopeChat
                 menu_commands, _ = telegram_menu_commands(max_commands=telegram_menu_max_commands())
                 bot_commands = [BotCommand(name, desc) for name, desc in menu_commands]
-                await self._bot.set_my_commands(bot_commands, scope=BotCommandScopeChat(chat_id=chat_id))
+                await self._bot.set_my_commands(bot_commands, scope=BotCommandScopeChat(chat_id=chat_id))  # type: ignore[union-attr]
                 self._forum_command_registered.add(chat_id)
                 logger.info("[%s] Lazy-registered %d commands for forum chat %s", self.name, len(bot_commands), chat_id)
             except Exception as e:
@@ -10015,13 +10014,13 @@ class TelegramAdapter(BasePlatformAdapter):
         existing = self._pending_text_batches.get(key)
         chunk_len = len(event.text or "")
         if existing is None:
-            event._last_chunk_len = chunk_len  # type: ignore[attr-defined]
+            event._last_chunk_len = chunk_len  # type: ignore[attr-defined, unused-ignore]
             self._pending_text_batches[key] = event
         else:
             # Append text from the follow-up chunk
             if event.text:
                 existing.text = f"{existing.text}\n{event.text}" if existing.text else event.text
-            existing._last_chunk_len = chunk_len  # type: ignore[attr-defined]
+            existing._last_chunk_len = chunk_len  # type: ignore[attr-defined, unused-ignore]
             # Merge any media that might be attached
             if event.media_urls:
                 existing.media_urls.extend(event.media_urls)
@@ -11164,7 +11163,7 @@ def _apply_yaml_config(yaml_cfg: dict, telegram_cfg: dict) -> dict | None:
     _telegram_extra = telegram_cfg.get("extra") if isinstance(telegram_cfg.get("extra"), dict) else {}
     _telegram_rtm = (
         telegram_cfg["reply_to_mode"] if "reply_to_mode" in telegram_cfg
-        else _telegram_extra.get("reply_to_mode")
+        else _telegram_extra.get("reply_to_mode")  # type: ignore[union-attr]
     )
     if _telegram_rtm is not None and not os.getenv("TELEGRAM_REPLY_TO_MODE"):
         _rtm_str = "off" if _telegram_rtm is False else str(_telegram_rtm).lower()
@@ -11175,13 +11174,13 @@ def _apply_yaml_config(yaml_cfg: dict, telegram_cfg: dict) -> dict | None:
             allowed_users = ",".join(str(v) for v in allowed_users)
         if not _skip_env_bridge and not os.getenv("TELEGRAM_ALLOWED_USERS"):
             os.environ["TELEGRAM_ALLOWED_USERS"] = str(allowed_users)
-    group_allowed_users = telegram_cfg.get("group_allow_from") or _telegram_extra.get("group_allow_from")
+    group_allowed_users = telegram_cfg.get("group_allow_from") or _telegram_extra.get("group_allow_from")  # type: ignore[union-attr]
     if group_allowed_users is not None:
         if isinstance(group_allowed_users, list):
             group_allowed_users = ",".join(str(v) for v in group_allowed_users)
         if not _skip_env_bridge and not os.getenv("TELEGRAM_GROUP_ALLOWED_USERS"):
             os.environ["TELEGRAM_GROUP_ALLOWED_USERS"] = str(group_allowed_users)
-    group_allowed_chats = telegram_cfg.get("group_allowed_chats") or _telegram_extra.get("group_allowed_chats")
+    group_allowed_chats = telegram_cfg.get("group_allowed_chats") or _telegram_extra.get("group_allowed_chats")  # type: ignore[union-attr]
     if group_allowed_chats is not None:
         if isinstance(group_allowed_chats, list):
             group_allowed_chats = ",".join(str(v) for v in group_allowed_chats)
@@ -11203,7 +11202,7 @@ def _apply_yaml_config(yaml_cfg: dict, telegram_cfg: dict) -> dict | None:
         "channel_skill_bindings", "channel_prompts", "gateway_restart_notification",
         "allow_from", "allow_admin_from", "dm_policy", "group_policy",
     }
-    for _k, _v in _telegram_extra.items():
+    for _k, _v in _telegram_extra.items():  # type: ignore[union-attr]
         if _k not in _GENERIC_MERGE_KEYS:
             extras.setdefault(_k, _v)
 

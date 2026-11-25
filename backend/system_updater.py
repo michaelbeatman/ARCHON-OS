@@ -135,7 +135,10 @@ def _run_git(args: List[str], timeout: int = 60) -> Dict[str, Any]:
         except subprocess.TimeoutExpired:
             if is_posix:
                 try:
-                    os.killpg(proc.pid, signal.SIGKILL)
+                    # POSIX-only APIs; die Windows-Stubs deklarieren killpg/SIGKILL nicht.
+                    posix_os: Any = os
+                    posix_signal: Any = signal
+                    posix_os.killpg(proc.pid, posix_signal.SIGKILL)
                 except ProcessLookupError as exc:
                     logger.debug(f"[SystemUpdater] killpg: Prozessgruppe bereits beendet: {exc}")
             else:
@@ -296,7 +299,7 @@ def get_github_auth_info() -> Dict[str, Any]:
     can_push = bool(has_token and is_master and allow_push)
     
     masked = None
-    if has_token:
+    if gh_token and has_token:
         masked = gh_token[:4] + "..." + gh_token[-4:]
 
     role_label = "👑 Michael (Master: Push autorisiert)" if can_push else "🔒 Read-Only Client (Push gesperrt)"

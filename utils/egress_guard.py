@@ -70,6 +70,10 @@ class ValidatedURL(str):
     Loopback-Alias in einer Testumgebung).
     """
 
+    # In __new__ gesetzte Instanzattribute (reine Typdeklaration, keine Laufzeitwirkung).
+    pinned_ip: str
+    validated_ip: str
+
     def __new__(cls, value: str, *, pinned_ip: str = "") -> "ValidatedURL":
         obj = super().__new__(cls, str(value or ""))
         obj.pinned_ip = str(pinned_ip or "")
@@ -110,7 +114,9 @@ def _resolve(host: str, port: int, target: str):
         )
 
 
-def _target_ip_allowed(ip: ipaddress._BaseAddress, host: str, port: int, explicit) -> bool:
+def _target_ip_allowed(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address, host: str, port: int, explicit
+) -> bool:
     """IP fuer den Proxy-/Webhook-Pfad zulässig? (DNS-Rebinding-Protection.)
 
     IP-Literale werden vor dieser Funktion geprüft; hier geht es umHostnamen,
@@ -239,7 +245,7 @@ def check_public_url_with_ip(
         if not _match_allowlist(host, port, explicit):
             raise EgressBlocked(f"Interner Host '{host}' fuer Web-Egress blockiert", target)
 
-    def _reject_if_internal(ip: ipaddress._BaseAddress) -> None:
+    def _reject_if_internal(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> None:
         if _is_never_allowed(ip):
             raise EgressBlocked(f"Metadaten-/Link-Local-Adresse {ip} ist nie erlaubt", target)
         if (

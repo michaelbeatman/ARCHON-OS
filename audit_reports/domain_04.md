@@ -57,3 +57,13 @@ Unabhängige, skeptische Verifikation der Soll-Abschnitte §2.1–2.2, §2.3, §
 - Keine kryptografische Validierung echter FIDO2-Attestation-Zertifikate oder echter WebAuthn-Authenticator-Replies.
 - Keine Prüfung der Domänen 01–03, 05–16 (insb. Audit-Hashkette, Receipt-Kette, Tenant-DB-Isolation, Orchestrierung, Frontend-Build) — diese gehören zu anderen Subagenten.
 - Keine Bewertung der inhaltlichen Angemessenheit der `allowed_domains`-Allowlist (`settings.json:557-566`) oder der konkreten API-Key-Scope-Zuordnung pro MCP-Tool über `TOOL_SECURITY_POLICY` hinaus.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** Alle 5 HIGH (H-04-1 Classifier-Fail-Open, H-04-2 Pepper-Platzhalter, H-04-3 `requested_by`=Vier-Augen-Bypass, H-04-4 Treasury ohne 500-€-Schwelle/Identität, H-04-5 MCP-HITL-Replay-Fail-Open) und die 5 MED — siehe `fix_w2_a_security.md` (fail-closed Classifier, Env-Pepper-Pflicht, Warrant-/Privacy-SSOT, Demo-Guard fail-closed).
+- **Bewusst offen:** Der vormals als obsolet gemeldete Legacy-Pepper-Test (`FIX_VERIFICATION_LOG.md`, W5-ToDo) ist im finalen Full-Suite-Lauf mit 0 failed nicht mehr rot; eine eigene Nachstellung war in diesem Pass nicht möglich. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Orchestrator `pytest tests/test_fix_w2_a_security.py -q` → **18 passed**, Subagent `compileall` 0, Secrets-Gate 0 Funde. Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

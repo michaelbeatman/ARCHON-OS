@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Router fuer Hermes Core Config (/api/hermes/config) und Memory Purge."""
 from __future__ import annotations
 
@@ -123,7 +122,7 @@ def _restore_masked_dict_secrets(existing: Any, updated: Any) -> Any:
 @router.post("/api/hermes/config")
 def api_save_hermes_config(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
-    payload = as_payload(payload)
+    payload = as_payload(payload)  # type: ignore[assignment]
     import main as app_main
 
     cfg_file = _get_hermes_config_path()
@@ -131,7 +130,7 @@ def api_save_hermes_config(request: Request, payload: PassthroughBody = Body(...
     if hasattr(app_main, "create_rolling_backup"):
         app_main.create_rolling_backup(cfg_file, max_backups=3)
 
-    config_data = payload.get("config", payload)
+    config_data = payload.get("config", payload)  # type: ignore[attr-defined]
     # Vorhandene Secrets wiederherstellen, falls Client maskierte '••••'-Werte zuruecksendet
     if os.path.exists(cfg_file) and isinstance(config_data, dict):
         try:
@@ -209,9 +208,9 @@ def _purge_state_memory(purge_options: Dict) -> Dict:
 def api_hermes_memory_purge(request: Request, purge_options: PassthroughBody = Body(default={})):
     """Cleans sessions and chat messages while strictly preserving session_model_usage."""
     _require_admin(request)
-    purge_options = as_payload(purge_options)
+    purge_options = as_payload(purge_options)  # type: ignore[assignment]
     try:
-        return _purge_state_memory(purge_options)
+        return _purge_state_memory(purge_options)  # type: ignore[arg-type]
     except Exception as e:
         logger.error(f"[Memory Purge Error]: {e}")
         raise HTTPException(

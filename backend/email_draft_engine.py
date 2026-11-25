@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 Archon OS - Email Draft Engine mit Freigabe-Queue und GoBD/ISO 27001 Auditierung (t-7ca8cd)
 Verwaltung KI-generierter E-Mail-Entwuerfe vor dem Versand mit 5 Aktionen:
@@ -310,7 +309,7 @@ class EmailDraftEngine:
             }, created_by=created_by, conn=conn)
             conn.commit()
 
-        return self.get_draft(draft_id)
+        return self.get_draft(draft_id)  # type: ignore[return-value]
 
     # AKTION 1: Freigeben & Senden
     def approve_and_send(self, draft_id: str, approver_id: str = "admin") -> Dict[str, Any]:
@@ -422,7 +421,7 @@ class EmailDraftEngine:
             }, created_by=editor_id, conn=conn)
             conn.commit()
 
-        return self.get_draft(draft_id)
+        return self.get_draft(draft_id)  # type: ignore[return-value]
 
     # AKTION 3: Spaeter erinnern (Snooze)
     def snooze_draft(self, draft_id: str, hours: int = 1, user_id: str = "admin") -> Dict[str, Any]:
@@ -443,7 +442,7 @@ class EmailDraftEngine:
             }, created_by=user_id, conn=conn)
             conn.commit()
 
-        return self.get_draft(draft_id)
+        return self.get_draft(draft_id)  # type: ignore[return-value]
 
     # AKTION 4: Neu generieren (Prompt-Feedback)
     def regenerate_draft(self, draft_id: str, feedback_text: str, user_id: str = "admin") -> Dict[str, Any]:
@@ -461,7 +460,7 @@ class EmailDraftEngine:
             }, created_by=user_id, conn=conn)
             conn.commit()
 
-        return self.get_draft(draft_id)
+        return self.get_draft(draft_id)  # type: ignore[return-value]
 
     # AKTION 5: Abbrechen / Verwerfen
     def reject_draft(self, draft_id: str, reason: str = "Vom Nutzer verworfen", user_id: str = "admin") -> Dict[str, Any]:
@@ -479,7 +478,7 @@ class EmailDraftEngine:
             }, created_by=user_id, conn=conn)
             conn.commit()
 
-        return self.get_draft(draft_id)
+        return self.get_draft(draft_id)  # type: ignore[return-value]
 
     def get_status_counts(self) -> Dict[str, int]:
         """Liefert die Anzahl der Entwuerfe je Status für Filter-Badges und Listen-API."""

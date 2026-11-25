@@ -23,7 +23,7 @@ HERMES_DIR = os.environ.get("ARCHON_HERMES_DIR", os.path.expanduser("~/.hermes")
 # D03/MED (F015): wird zur Laufzeit aus APP_DATA_DIR + Konsolidierung +
 # Tenant-Verzeichnissen gebaut (runtime_db_targets()). Die alte statische Liste
 # sicherte nur Legacy-Dateien und lieferte trotzdem Exit 0.
-DBS_TO_BACKUP = []
+DBS_TO_BACKUP: list[str] = []
 
 FILES_TO_COPY = [
     ("settings.json", os.path.join(PROJECT_DIR, "settings.json")),

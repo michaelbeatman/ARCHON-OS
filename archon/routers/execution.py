@@ -124,16 +124,16 @@ async def api_execute_map_reduce(request: Request, payload: MapReduceRequest = B
     gemeldet, nie als Erfolg.
     """
     require_admin_or_503(request)
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.map_reduce_executor import make_dispatcher_worker_fn, map_reduce_executor
 
-    demo = bool(payload.get("demo", False))
+    demo = bool(data.get("demo", False))
     worker_fn = None if demo else make_dispatcher_worker_fn()
     result = await map_reduce_executor.execute_map_reduce(
-        task_title=payload.get("task_title", "Map-Reduce Batch"),
-        items=payload.get("items", []),
-        instruction=payload.get("instruction", "Analysiere und extrahiere Kernergebnisse"),
-        max_workers_override=payload.get("max_parallel_workers"),
+        task_title=data.get("task_title", "Map-Reduce Batch"),
+        items=data.get("items", []),
+        instruction=data.get("instruction", "Analysiere und extrahiere Kernergebnisse"),
+        max_workers_override=data.get("max_parallel_workers"),
         worker_fn=worker_fn,
     )
     result["demo_only"] = demo
@@ -148,28 +148,28 @@ def api_map_reduce_history(limit: int = 20):
 
 @router.post("/api/execution/structured-output")
 def api_structured_output_validate(payload: StructuredOutputRequest = Body(...)):
-    payload = _as_payload(payload)
-    if not payload.get("schema"):
+    data = _as_payload(payload)
+    if not data.get("schema"):
         raise HTTPException(status_code=400, detail={"code": "schema_required"})
     from backend.structured_output_enforcer import structured_output_enforcer
     return structured_output_enforcer.validate_and_enforce(
-        raw_output=payload.get("raw_output", ""),
-        schema=payload.get("schema")
+        raw_output=data.get("raw_output", ""),
+        schema=data.get("schema")
     )
 
 
 @router.post("/api/execution/checkpoints/save")
 def api_save_durable_checkpoint(payload: DurableCheckpointRequest = Body(...)):
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.durable_checkpoint_manager import durable_checkpoint_manager
     return durable_checkpoint_manager.save_checkpoint(
-        workflow_id=payload.get("workflow_id", "wf-default"),
-        task_title=payload.get("task_title", "Workflow"),
-        current_step_index=int(payload.get("current_step_index", 1)),
-        total_steps=int(payload.get("total_steps", 5)),
-        state_payload=payload.get("state", {}),
-        completed_steps=payload.get("completed_steps", []),
-        status=payload.get("status", "in_progress")
+        workflow_id=data.get("workflow_id", "wf-default"),
+        task_title=data.get("task_title", "Workflow"),
+        current_step_index=int(data.get("current_step_index", 1)),
+        total_steps=int(data.get("total_steps", 5)),
+        state_payload=data.get("state", {}),
+        completed_steps=data.get("completed_steps", []),
+        status=data.get("status", "in_progress")
     )
 
 
@@ -187,50 +187,50 @@ def api_list_durable_checkpoints(status: Optional[str] = None):
 
 @router.post("/api/execution/idempotency/check")
 def api_idempotency_check(payload: IdempotencyCheckRequest = Body(...)):
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.idempotency_guard import idempotency_guard
     return idempotency_guard.check_or_register(
-        tool_name=payload.get("tool_name", "send_email"),
-        params=payload.get("params", {}),
-        explicit_key=payload.get("idempotency_key"),
-        execution_result=payload.get("execution_result")
+        tool_name=data.get("tool_name", "send_email"),
+        params=data.get("params", {}),
+        explicit_key=data.get("idempotency_key"),
+        execution_result=data.get("execution_result")
     )
 
 
 @router.post("/api/execution/dry-run")
 def api_dry_run_simulate(payload: DryRunRequest = Body(...)):
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.dry_run_simulator import dry_run_simulator
     return dry_run_simulator.simulate_task_plan(
-        task_title=payload.get("task_title", "Shadow Simulation"),
-        proposed_actions=payload.get("proposed_actions", [])
+        task_title=data.get("task_title", "Shadow Simulation"),
+        proposed_actions=data.get("proposed_actions", [])
     )
 
 
 @router.post("/api/execution/dlq/enqueue")
 def api_dlq_enqueue(request: Request, payload: DlqEnqueueRequest = Body(...)):
     require_admin_or_503(request)
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.enqueue_failed_job(
-        job_type=payload.get("job_type", "webhook_delivery"),
-        source_module=payload.get("source_module", "router"),
-        payload=payload.get("payload", {}),
-        error_message=payload.get("error_message", "Unbekannter Fehler")
+        job_type=data.get("job_type", "webhook_delivery"),
+        source_module=data.get("source_module", "router"),
+        payload=data.get("payload", {}),
+        error_message=data.get("error_message", "Unbekannter Fehler")
     )
 
 
 @router.post("/api/execution/dlq/replay")
 def api_dlq_replay(request: Request, payload: DlqReplayRequest = Body(...)):
     require_admin_or_503(request)
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.replay_job(
-        dlq_id=payload.get("dlq_id", ""),
+        dlq_id=data.get("dlq_id", ""),
         # Default: echter Replay. Simulation nur explizit und gekennzeichnet
         # (Audit 23.11.2026) — sonst werden Jobs als erfolgreich markiert,
         # ohne dass jemals ein Zustelldurchlauf stattfand.
-        simulate_success=bool(payload.get("simulate_success", False))
+        simulate_success=bool(data.get("simulate_success", False))
     )
 
 
@@ -247,27 +247,27 @@ def api_dlq_list(status: Optional[str] = None):
 @router.post("/api/execution/queue/enqueue")
 def api_queue_enqueue(request: Request, payload: QueueEnqueueRequest = Body(...)):
     require_admin_or_503(request)
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.enqueue_task(
-        job_type=payload.get("job_type", "generic"),
-        source_module=payload.get("source_module", "router"),
-        payload=payload.get("payload", {}),
-        priority=int(payload.get("priority", 0)),
-        idempotency_key=str(payload.get("idempotency_key", "") or ""),
-        max_retries=payload.get("max_retries"),
+        job_type=data.get("job_type", "generic"),
+        source_module=data.get("source_module", "router"),
+        payload=data.get("payload", {}),
+        priority=int(data.get("priority", 0)),
+        idempotency_key=str(data.get("idempotency_key", "") or ""),
+        max_retries=data.get("max_retries"),
     )
 
 
 @router.post("/api/execution/queue/claim")
 def api_queue_claim(request: Request, payload: QueueClaimRequest = Body(default=QueueClaimRequest())):
     require_admin_or_503(request)
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     item = dead_letter_queue_manager.claim_next(
-        worker_id=str(payload.get("worker_id") or "api-worker"),
-        lease_seconds=int(payload.get("lease_seconds", 120)),
-        job_types=payload.get("job_types") or None,
+        worker_id=str(data.get("worker_id") or "api-worker"),
+        lease_seconds=int(data.get("lease_seconds", 120)),
+        job_types=data.get("job_types") or None,
     )
     return {"claimed": item is not None, "item": item}
 
@@ -275,18 +275,18 @@ def api_queue_claim(request: Request, payload: QueueClaimRequest = Body(default=
 @router.post("/api/execution/queue/{dlq_id}/complete")
 def api_queue_complete(request: Request, dlq_id: str, payload: QueueCompleteRequest = Body(default=QueueCompleteRequest())):
     require_admin_or_503(request)
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
-    return {"completed": dead_letter_queue_manager.complete(dlq_id, payload.get("result") or {})}
+    return {"completed": dead_letter_queue_manager.complete(dlq_id, data.get("result") or {})}
 
 
 @router.post("/api/execution/queue/{dlq_id}/fail")
 def api_queue_fail(request: Request, dlq_id: str, payload: QueueFailRequest = Body(default=QueueFailRequest())):
     require_admin_or_503(request)
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.dead_letter_queue import dead_letter_queue_manager
     return dead_letter_queue_manager.fail(
-        dlq_id, str(payload.get("error_message") or "Worker-Fehler")
+        dlq_id, str(data.get("error_message") or "Worker-Fehler")
     )
 
 

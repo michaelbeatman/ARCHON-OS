@@ -35,3 +35,13 @@
 ---
 
 **Bemerkung zur Negativsuche:** In `archon/`, `backend/`, `plugins/`, `scripts/`, `config/`, `views/`, `main.py`, `core_dispatcher.py` wurden keine offenen `TODO`/`FIXME`-Markierungen und keine leeren Python-Funktionsrümpfe gefunden. `archon/routers/v2_capabilities.py:1167–1169` dokumentiert, dass sechs frühere Theater-Module (M84/M87/M88/M92/M39/M54/M85) entfernt und archiviert wurden; eine UI-Referenzsuche nach deren Bezeichnern in `static/js`, `static/index.html` und `frontend/src` ergab keine verwaisten Trigger. DLQ, Outbox, PbD, Theme-Overrides, Org-Sync, bot-screen-abort und der Großteil der `simulated`-Endpunkte sind ehrlich gekennzeichnet bzw. tatsächlich verdrahtet und daher nicht als Befund gewertet.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** Alle 3 HIGH (H-01-1 Map-Reduce, H-01-2 Speculative Hedging, H-01-3 Plugin-Hooks) sowie die 4 MED (JEV-Remote, MCTS, no-op-JS-Handler/Scheinerfolg, Bot-Screen-Computer-Use) — siehe `fix_w4_c_hardening.md`: echte Dispatcher-Worker/Coroutines, Hooks auf echten Chokepoint reduziert, no-op-Shims und Erfolgs-Toast entfernt. Orchestrator: `pytest tests/test_fix_w4_c_hardening.py -q` → **16 passed** (`FIX_VERIFICATION_LOG.md`).
+- **Bewusst offen:** Keine domänenspezifischen Restpunkte. Übergreifend bleiben W4-D1 (D09: MyPy/God-Objects) und der Audit-Ketten-Bruch (D05) bewusst offen.
+- **Verifikation:** Statusübernahme aus `FIX_VERIFICATION_LOG.md`; dieser Re-Audit lief ohne Shell (`pwsh.exe: Zugriff verweigert, os error 5`) und hat **keine eigenen Tests** ausgeführt.

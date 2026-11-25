@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/metrics_collector.py
 Zentraler Prometheus- & System-Metriken-Kollektor für Archon OS.
@@ -224,7 +223,7 @@ def _sync_alert_state(observed: Dict[tuple, Dict[str, Any]]) -> List[str]:
             dispatched.append(msg)
 
     for key, info in observed.items():
-        entry = _ALERT_STATE.get(key)
+        entry = _ALERT_STATE.get(key)  # type: ignore[assignment]
         escalate = False
         if entry is not None:
             idx = int(entry.get("repeat_index", 0))

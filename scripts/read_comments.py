@@ -1,6 +1,6 @@
 import zipfile, re, sys
 
-sys.stdout.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding='utf-8')  # type: ignore[union-attr]
 
 z = zipfile.ZipFile(r'.\docs\system\ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage.docx')
 doc_xml = z.read('word/document.xml').decode('utf-8')

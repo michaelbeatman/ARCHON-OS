@@ -24,7 +24,7 @@ PROFILES_FILE = os.path.join(DATA_DIR, "corporate_profiles.json")
 # save_company() legte nur noch die Default-Firma an (alle uebrigen weg).
 _DATA_LOCK = threading.RLock()
 
-DEFAULT_PRIMARY_COMPANY = {
+DEFAULT_PRIMARY_COMPANY: Dict[str, Any] = {
     "id": "archon-systems",
     "name": "Archon Systems GmbH",
     "legal_form": "GmbH",
@@ -90,6 +90,11 @@ _PLACEHOLDER_TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
 def _esc(val: Any) -> str:
     """Idempotentes HTML-Escaping (verhindert XSS ohne Doppel-Encoding)."""
     return html.escape(html.unescape(str(val if val is not None else "")), quote=True)
+
+
+def _as_dict(value: Any) -> Dict[str, Any]:
+    """Verschachtelte Stammdaten als Dict garantieren (None/Fremdtyp -> {})."""
+    return value if isinstance(value, dict) else {}
 
 
 def _normalize_template_type(template_type: str) -> str:
@@ -378,7 +383,7 @@ class CorporateManager:
             if company_id:
                 raise ValueError(f"Unbekannte Company-ID: {company_id}")
             company = DEFAULT_PRIMARY_COMPANY
-        layouts = company.get("template_layouts") if isinstance(company.get("template_layouts"), dict) else {}
+        layouts = _as_dict(company.get("template_layouts"))
         return _normalize_layout(layouts.get(norm_type))
 
     def save_template_layout(
@@ -423,9 +428,9 @@ class CorporateManager:
     ) -> Dict[str, Any]:
         """Prüft § 14 Abs. 4 UStG / HGB Pflichtangaben am aktuellen Beleg (M29 Live-Check)."""
         norm_type = _normalize_template_type(template_type)
-        addr = company.get("address") if isinstance(company.get("address"), dict) else {}
-        tax = company.get("tax") if isinstance(company.get("tax"), dict) else {}
-        bank = company.get("bank") if isinstance(company.get("bank"), dict) else {}
+        addr = _as_dict(company.get("address"))
+        tax = _as_dict(company.get("tax"))
+        bank = _as_dict(company.get("bank"))
 
         has_supplier = bool(
             str(company.get("name") or "").strip()
@@ -698,7 +703,7 @@ class CorporateManager:
         c_primary = des.get("primary_color", "#4f46e5")
         c_secondary = des.get("secondary_color", "#06b6d4")
 
-        saved_layouts = company.get("template_layouts") if isinstance(company.get("template_layouts"), dict) else {}
+        saved_layouts = _as_dict(company.get("template_layouts"))
         norm_type = _normalize_template_type(template_type)
         merged_layout_raw = dict(saved_layouts.get(norm_type) or {})
         if isinstance(custom.get("layout"), dict):

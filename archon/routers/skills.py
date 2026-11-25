@@ -75,7 +75,7 @@ _HERMES_SKILLS_CACHE_TTL = 300.0
 _HERMES_SKILLS_CACHE = None
 
 
-_HERMES_SKILLS_CACHE_TIME = 0
+_HERMES_SKILLS_CACHE_TIME: float = 0.0
 
 
 def _atomic_write_json(path: str, data: Any) -> None:
@@ -150,10 +150,10 @@ GLOBAL_HERMES_SKILLS = [
 ]
 
 
-_SKILL_FILE_INDEX = {}
+_SKILL_FILE_INDEX: Dict[str, str] = {}
 
 
-_SKILL_FILE_INDEX_TIME = 0
+_SKILL_FILE_INDEX_TIME: float = 0.0
 
 
 @_serialized(_SKILL_INDEX_LOCK)
@@ -643,10 +643,10 @@ def api_skills_rag_query(prompt: str):
 @router.post("/api/v1/skills/rag/store")
 def api_skills_rag_store(request: Request, event_data: PassthroughBody = Body(...)):
     require_admin_or_503(request)
-    event_data = as_payload(event_data)
+    event_payload = as_payload(event_data)
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
-    return _DEPS["skills_engine"].rag.store_system_metric(event_data)
+    return _DEPS["skills_engine"].rag.store_system_metric(event_payload)
 
 
 @router.post("/api/v1/skills/git/pytest")
@@ -676,7 +676,7 @@ async def api_skills_mcp_connect(request: Request, server_script_or_url: str = B
 @router.post("/api/v1/skills/mcp/execute")
 async def api_skills_mcp_execute(request: Request, tool_name: str = Body(...), arguments: PassthroughBody = Body(...), agent_id: str = Body(None)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    arguments = as_payload(arguments)
+    arguments_payload = as_payload(arguments)
     if not _DEPS.get("skills_engine"):
          raise HTTPException(status_code=500, detail="Skills engine not initialized")
     if not agent_id:
@@ -701,12 +701,12 @@ async def api_skills_mcp_execute(request: Request, tool_name: str = Body(...), a
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     try:
-        arguments = await pm.apply_before_tool_execute(tool_name, arguments, {"agent_id": agent_id})
+        resolved_arguments = await pm.apply_before_tool_execute(tool_name, arguments_payload, {"agent_id": agent_id})
     except PermissionError as pe:
         raise HTTPException(status_code=403, detail=str(pe))
     
     engine = _DEPS.get("skills_engine")
     if not engine:
         raise HTTPException(status_code=503, detail="skills_engine dependency not configured")
-    raw_res = await engine.mcp.execute_mcp_tool(tool_name, arguments)
+    raw_res = await engine.mcp.execute_mcp_tool(tool_name, resolved_arguments)
     return await pm.apply_after_tool_execute(tool_name, raw_res, {"agent_id": agent_id})

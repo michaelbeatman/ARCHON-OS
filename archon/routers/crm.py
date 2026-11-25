@@ -81,17 +81,17 @@ def api_crm_get_contact(contact_id: str, request: Request):
 @router.post("/api/crm/contacts")
 def api_crm_create_contact(request: Request, payload: CrmContactBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.crm_service import crm_service
-    return crm_service.save_contact(contact_id=payload.get("id"), payload=payload)
+    return crm_service.save_contact(contact_id=data.get("id"), payload=data)
 
 
 @router.put("/api/crm/contacts/{contact_id}")
 def api_crm_update_contact(request: Request, contact_id: str, payload: CrmContactBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.crm_service import crm_service
-    return crm_service.save_contact(contact_id=contact_id, payload=payload)
+    return crm_service.save_contact(contact_id=contact_id, payload=data)
 
 
 @router.delete("/api/crm/contacts/{contact_id}")
@@ -105,12 +105,12 @@ def api_crm_delete_contact(request: Request, contact_id: str):
 @router.post("/api/crm/contacts/{contact_id}/messages")
 def api_crm_add_message(request: Request, contact_id: str, payload: CrmMessageBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.crm_service import crm_service
-    text = payload.get("text", "")
-    channel = payload.get("channel", "note")
-    direction = payload.get("direction", "outbound")
-    sender = payload.get("sender", "Michael Keller")
+    text = data.get("text", "")
+    channel = data.get("channel", "note")
+    direction = data.get("direction", "outbound")
+    sender = data.get("sender", "Michael Keller")
     return crm_service.add_contact_message(
         contact_id=contact_id, text=text, channel=channel, direction=direction, sender=sender
     )

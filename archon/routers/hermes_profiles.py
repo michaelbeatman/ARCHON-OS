@@ -329,7 +329,7 @@ def api_delete_hermes_profile(request: Request, profile_id: str, gate_approved_i
 
 
 @router.post("/api/hermes/profiles/{profile_id}/favorite")
-def api_toggle_hermes_profile_favorite(profile_id: str, is_fav: Optional[bool] = None, request: Request = None):
+def api_toggle_hermes_profile_favorite(profile_id: str, is_fav: Optional[bool] = None, request: Request = None):  # type: ignore[assignment]
     if request is not None and isinstance(request, Request):
         require_admin_or_503(request)  # RBAC: Admin-Sache
     if ".." in profile_id or "/" in profile_id or "\\" in profile_id:

@@ -76,7 +76,9 @@ def sync_calendar_bidirectional(
         elif re_ and not le:
             merged.append(re_)
             pull_to_local.append(re_)
-        else:
+        elif le is not None and re_ is not None:
+            # Beide UID-Karten muessen belegt sein (uid stammt aus der Vereinigung
+            # beider Maps); die explizite Pruefung macht das gegenueber MyPy sichtbar.
             lu = str(le.get("updated_at") or "")
             ru = str(re_.get("updated_at") or "")
             if ru > lu:

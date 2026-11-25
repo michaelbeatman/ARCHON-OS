@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/async_write_batcher.py
 Paket 1 (Feature 5): SQLite Connection-Pool & Async Write-Batching.
@@ -95,8 +94,8 @@ def _get_cfg() -> Dict[str, Any]:
     now = time.monotonic()
     cached = _CFG_CACHE
     cfg = cached["cfg"]
-    if cfg is not None and (now - cached["ts"]) < _CFG_TTL:
-        return cfg
+    if cfg is not None and (now - cached["ts"]) < _CFG_TTL:  # type: ignore[operator]
+        return cfg  # type: ignore[return-value]
 
     # Double-Check unter Lock: bei einem TTL-Miss baut genau EIN Thread den
     # Cache neu (Single-Flight), alle anderen warten und lesen danach das
@@ -105,20 +104,20 @@ def _get_cfg() -> Dict[str, Any]:
         cached = _CFG_CACHE
         now = time.monotonic()
         cfg = cached["cfg"]
-        if cfg is not None and (now - cached["ts"]) < _CFG_TTL:
-            return cfg
+        if cfg is not None and (now - cached["ts"]) < _CFG_TTL:  # type: ignore[operator]
+            return cfg  # type: ignore[return-value]
         try:
             from backend.autonomy_settings import get_module_config
-            cfg = get_module_config("write_batcher")
+            cfg = get_module_config("write_batcher")  # type: ignore[assignment]
         except Exception:
-            cfg = {
+            cfg = {  # type: ignore[assignment]
                 "enabled": True,
                 "batch_size": 25,
                 "flush_interval_seconds": 2.0,
                 "max_queue_size": 1000
             }
         _CFG_CACHE = MappingProxyType({"ts": now, "cfg": cfg})
-        return cfg
+        return cfg  # type: ignore[return-value]
 
 
 def _init_db() -> None:

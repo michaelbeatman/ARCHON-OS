@@ -253,9 +253,12 @@ if __name__ == "__main__":
             def _apply_rlimits():
                 try:
                     import resource
-                    resource.setrlimit(resource.RLIMIT_CPU, (timeout_seconds, timeout_seconds))
-                    resource.setrlimit(resource.RLIMIT_FSIZE, (4 * 1024 * 1024, 4 * 1024 * 1024))
-                    resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+                    # POSIX-only APIs; the Windows stub of `resource` does not
+                    # declare setrlimit/RLIMIT_*. Keep runtime behaviour intact.
+                    resource_api: Any = resource
+                    resource_api.setrlimit(resource_api.RLIMIT_CPU, (timeout_seconds, timeout_seconds))
+                    resource_api.setrlimit(resource_api.RLIMIT_FSIZE, (4 * 1024 * 1024, 4 * 1024 * 1024))
+                    resource_api.setrlimit(resource_api.RLIMIT_NOFILE, (64, 64))
                 except Exception as _exc:
                     _archon_exc_logger.debug("[self_evolving_tooling] Ignorierte Ausnahme (Z.128): %s", _exc)
 

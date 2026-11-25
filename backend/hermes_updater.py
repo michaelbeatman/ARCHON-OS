@@ -89,7 +89,7 @@ def _env_seconds(name: str, default: float) -> float:
     return value if value > 0 else default
 
 # In-Memory Cache gegen GitHub API Rate-Limits (15 Minuten TTL)
-_cache_lock_time = 0
+_cache_lock_time: float = 0
 _cached_update_data: Optional[Dict[str, Any]] = None
 CACHE_TTL_SECONDS = 900
 
@@ -110,7 +110,9 @@ class DockerSocketClient:
                 conn_self.sock_path = sock_path
 
             def connect(conn_self):
-                conn_self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                # AF_UNIX ist Linux-spezifisch (Docker-Socket-Pfad); die
+                # Windows-Stubs von typeshed kennen das Attribut nicht.
+                conn_self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)  # type: ignore[attr-defined]
                 conn_self.sock.settimeout(120)
                 conn_self.sock.connect(conn_self.sock_path)
 

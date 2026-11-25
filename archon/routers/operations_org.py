@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import logging
 
 _archon_exc_logger = logging.getLogger("operations_org")
@@ -37,7 +36,7 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 # Jetzt liest genau eine Hintergrundaufgabe pro Loop die task_events und
 # verteilt sie ueber broadcast_event("comm_message", ...) an den gemeinsamen
 # archon:sse-Bus (eine Verbindung pro Seite, eine Poll-Frequenz total).
-_COMM_BRIDGE_TASKS = weakref.WeakKeyDictionary()  # loop -> asyncio.Task
+_COMM_BRIDGE_TASKS = weakref.WeakKeyDictionary()  # type: ignore[var-annotated]# loop -> asyncio.Task
 
 
 async def _comm_feed_bridge_loop():
@@ -271,7 +270,7 @@ def get_org_chart():
 
     teams = []
     for t in TEAMS_DEFINITION:
-        lead = _enrich(t["lead_id"], is_lead=True)
+        lead = _enrich(t["lead_id"], is_lead=True)  # type: ignore[arg-type]
         members = [_enrich(m_id) for m_id in t["members"] if m_id != t["lead_id"] and m_id in profiles]
         teams.append({
             "id": t["id"],
@@ -345,7 +344,7 @@ async def get_communication_feed(limit: int = Query(50), agent_filter: Optional[
     except Exception:
         limit = 50
     if hasattr(agent_filter, "default"):
-        agent_filter = agent_filter.default
+        agent_filter = agent_filter.default  # type: ignore[union-attr]
 
     await _ensure_comm_bridge()
 
@@ -477,7 +476,7 @@ def _poll_comm_feed_sync(
     _get_fallback_avatar,
 ) -> tuple[str, list]:
     conn = _get_kanban_connection()
-    items = []
+    items = []  # type: ignore[var-annotated]
     try:
         cursor = conn.cursor()
         cursor.execute("""
@@ -629,15 +628,15 @@ def _generate_default_hierarchy():
 
     for t in TEAMS_DEFINITION:
         tid = t["id"]
-        tx = team_x_coords.get(tid, 500)
+        tx = team_x_coords.get(tid, 500)  # type: ignore[call-overload]
         lead_id = t["lead_id"]
 
         if lead_id not in ["executive_decision_architect", "system_architect_orchestrator"]:
-            nodes.append(_make_node(lead_id, tx + 100, 380, tier=2, team_id=tid))
+            nodes.append(_make_node(lead_id, tx + 100, 380, tier=2, team_id=tid))  # type: ignore[arg-type, arg-type]
 
         if lead_id not in ["executive_decision_architect", "system_architect_orchestrator"]:
             parent_id = "system_architect_orchestrator" if tid in ["team_tech", "team_operations"] else "executive_decision_architect"
-            links.append({"from": parent_id, "to": lead_id})
+            links.append({"from": parent_id, "to": lead_id})  # type: ignore[dict-item]
 
         specialists = [m for m in t["members"] if m != lead_id and m in profiles]
         for s_idx, s_id in enumerate(specialists):
@@ -645,8 +644,8 @@ def _generate_default_hierarchy():
             row = s_idx // 2
             sx = tx + (col * 200)
             sy = 560 + (row * 180)
-            nodes.append(_make_node(s_id, sx, sy, tier=3, team_id=tid))
-            links.append({"from": lead_id, "to": s_id})
+            nodes.append(_make_node(s_id, sx, sy, tier=3, team_id=tid))  # type: ignore[arg-type]
+            links.append({"from": lead_id, "to": s_id})  # type: ignore[dict-item]
 
     links = [l for l in links if l.get("from") and l.get("to") and l["from"] != l["to"]]
 

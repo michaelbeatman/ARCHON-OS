@@ -41,7 +41,7 @@ class CostGuardPlugin(BasePlugin):
     async def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Any:
         if tool_name == "check_token_budget":
             budget = float(self.config.get("daily_budget_usd", 10.0))
-            spent = float(self.burn_data.get("spent_usd", 0.0))
+            spent = float(str(self.burn_data.get("spent_usd") or 0.0))
             remaining = max(0.0, budget - spent)
             percent = (spent / budget * 100) if budget > 0 else 0
             return {

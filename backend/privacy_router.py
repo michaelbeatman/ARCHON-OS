@@ -214,7 +214,8 @@ def save_privacy_config(cfg: Dict[str, Any], operator: str = "operator") -> Dict
             with open(ROOT_SETTINGS_FILE, "r", encoding="utf-8") as sf:
                 sdata = json.load(sf)
             if isinstance(sdata, dict):
-                priv = sdata.get("privacy") if isinstance(sdata.get("privacy"), dict) else {}
+                priv_raw = sdata.get("privacy")
+                priv: Dict[str, Any] = priv_raw if isinstance(priv_raw, dict) else {}
                 priv["zero_egress"] = bool(current["zero_egress_strict"])
                 sdata["privacy"] = priv
                 gov = sdata.get("zero_egress_governance")

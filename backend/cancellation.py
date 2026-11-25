@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("archon_os.cancellation")
 
@@ -214,10 +214,12 @@ def reset_scope(scope: str) -> bool:
         if root is None:
             return False
         doomed = {key}
-        frontier = [root]
+        frontier: list[CancelToken] = [root]
         while frontier:
             parent = frontier.pop()
-            for child in list(getattr(parent, "_children", ())):
+            for child in list(getattr(parent, "_children", ()) or ()):
+                if not isinstance(child, CancelToken):
+                    continue
                 child_key = str(getattr(child, "scope", ""))
                 if child_key and _REGISTRY.get(child_key) is child and child_key not in doomed:
                     doomed.add(child_key)
@@ -225,10 +227,10 @@ def reset_scope(scope: str) -> bool:
         for k in doomed:
             token = _REGISTRY.pop(k, None)
             if token is not None:
-                parent = getattr(token, "_parent", None)
-                if parent is not None:
+                parent_token: Any = getattr(token, "_parent", None)
+                if parent_token is not None:
                     try:
-                        parent._children.remove(token)
+                        parent_token._children.remove(token)
                     except ValueError:
                         pass
         return True

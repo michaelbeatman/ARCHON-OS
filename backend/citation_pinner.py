@@ -63,7 +63,7 @@ class CitationPinner:
             best_src = None
             best_overlap = 0
             for sp in source_profiles:
-                overlap = len(s_tokens & sp["tokens"])
+                overlap = len(s_tokens & set(sp["tokens"]))
                 if overlap > best_overlap:
                     best_overlap = overlap
                     best_src = sp

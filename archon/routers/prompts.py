@@ -87,8 +87,8 @@ async def upload_prompt_studio_context(file: UploadFile = File(...)):
                     sample = f.read(2048)
                     f.seek(0)
                     delimiter = ";" if ";" in sample and sample.count(";") > sample.count(",") else ","
-                    reader = csv.reader(f, delimiter=delimiter)
-                    rows = list(reader)
+                    csv_reader = csv.reader(f, delimiter=delimiter)
+                    rows = list(csv_reader)
                 if rows:
                     header = rows[0]
                     md_lines = [

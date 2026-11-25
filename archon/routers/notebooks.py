@@ -6,12 +6,14 @@ Verwaltet Notebooks, Wissensquellen, Vault-Anhaenge, Recherchen
 und Obsidian-Synchronisationen.
 """
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Request, UploadFile
 from archon.routers._rbac import require_admin_or_503
 try:
     from utils.path_jail import PathJailError
 except ImportError:
-    class PathJailError(PermissionError):
+    # Fail-closed-Ersatz wenn das PathJail-Subsystem nicht importierbar ist.
+    # Gleiche Namensbindung wie main.py; mypy sieht beide Definitionen.
+    class PathJailError(PermissionError):  # type: ignore[no-redef]
         pass
 
 
@@ -51,13 +53,13 @@ def api_get_notebooks():
 @router.post("/api/v1/notebooks")
 def api_create_notebook(request: Request, payload: NotebookCreateBody = Body(...)):
     require_admin_or_503(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     try:
         from utils.notebook_engine import create_notebook
-        name = payload.get("name", "").strip()
+        name = data.get("name", "").strip()
         if not name:
             raise HTTPException(status_code=400, detail={"code": "notebooks_name_required", "params": {}})
-        description = payload.get("description", "").strip()
+        description = data.get("description", "").strip()
         nb = create_notebook(name, description)
         return {"status": "success", "notebook": nb}
     except HTTPException:
@@ -99,10 +101,10 @@ async def api_upload_notebook_source(nb_id: str, request: Request):
         from utils.notebook_engine import add_source_file
         form = await request.form()
         file = form.get("file")
-        if not file:
+        if not isinstance(file, UploadFile):
             raise HTTPException(status_code=400, detail={"code": "notebooks_no_file", "params": {}})
         file_bytes = await file.read()
-        res = add_source_file(nb_id, file_bytes, file.filename)
+        res = add_source_file(nb_id, file_bytes, file.filename or "")
         return res
     except HTTPException:
         raise
@@ -117,10 +119,10 @@ async def api_upload_notebook_source(nb_id: str, request: Request):
 @router.post("/api/v1/notebooks/{nb_id}/sources/attach-vault")
 def api_attach_vault_source(request: Request, nb_id: str, payload: NotebookAttachBody = Body(...)):
     require_admin_or_503(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     try:
         from utils.notebook_engine import add_source_from_vault
-        rel_path = payload.get("rel_path")
+        rel_path = data.get("rel_path")
         if not rel_path:
             raise HTTPException(status_code=400, detail="rel_path ist erforderlich.")
         res = add_source_from_vault(nb_id, rel_path)
@@ -166,10 +168,10 @@ def api_get_notebook_chat(nb_id: str):
 
 @router.post("/api/v1/notebooks/{nb_id}/query")
 async def api_query_notebook(nb_id: str, payload: NotebookQueryBody = Body(...)):
-    payload = as_payload(payload)
+    data = as_payload(payload)
     try:
         from utils.notebook_engine import query_notebook
-        prompt = payload.get("prompt", "").strip()
+        prompt = data.get("prompt", "").strip()
         if not prompt:
             raise HTTPException(status_code=400, detail="Prompt ist erforderlich.")
         res = await query_notebook(nb_id, prompt)
@@ -183,12 +185,12 @@ async def api_query_notebook(nb_id: str, payload: NotebookQueryBody = Body(...))
 @router.post("/api/v1/notebooks/{nb_id}/sync-obsidian")
 def api_sync_notebook_obsidian(request: Request, nb_id: str, payload: NotebookSyncBody = Body(...)):
     require_admin_or_503(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     try:
         from utils.notebook_engine import save_to_obsidian
-        query = payload.get("query", "")
-        response_text = payload.get("response", "")
-        citations = payload.get("citations", "")
+        query = data.get("query", "")
+        response_text = data.get("response", "")
+        citations = data.get("citations", "")
         res = save_to_obsidian(nb_id, query, response_text, citations)
         return res
     except Exception as e:

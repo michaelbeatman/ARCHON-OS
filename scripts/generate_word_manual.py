@@ -3,6 +3,7 @@ import os
 import time
 import subprocess
 import json
+from typing import Any
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -19,7 +20,7 @@ os.makedirs(IMG_DIR, exist_ok=True)
 # -------------------------------------------------------------
 # DETAILLIERTE DATENSTRUKTUR FÜR ALLE 16 SYSTEM-ANSICHTEN & STUDIOS
 # -------------------------------------------------------------
-VIEWS = [
+VIEWS: list[dict[str, Any]] = [
     {
         "id": "mission_control",
         "title": "1. Mission Control (Cockpit & Leitstand)",
@@ -1363,7 +1364,7 @@ r_app_in.font.name = "Calibri"
 r_app_in.font.size = Pt(10.5)
 r_app_in.font.color.rgb = COLOR_SECONDARY
 
-USE_CASES = [
+USE_CASES: list[dict[str, Any]] = [
     {
         "num": "Use Case 1",
         "level": "Komplexitätsstufe 1: Gering (Ad-hoc Direktdialog)",

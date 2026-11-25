@@ -57,13 +57,13 @@ def api_list_plugins():
 @router.post("/api/v1/plugins/{plugin_id}/toggle")
 def api_toggle_plugin(request: Request, plugin_id: str, payload: PluginToggleRequest = Body(default=PluginToggleRequest())):
     require_admin_or_503(request)
-    payload = payload.model_dump()  # RBAC: Admin-Sache
+    data = payload.model_dump()  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     plugin = pm.plugins.get(plugin_id)
     if not plugin:
         raise HTTPException(status_code=404, detail={"code": "plugins_plugin_not_found", "params": {"plugin_id": plugin_id}})
-    enable = payload.get("enable")
+    enable = data.get("enable")
     if enable is None:
         enable = not plugin.enabled
     if enable:
@@ -103,13 +103,13 @@ def api_get_plugin_settings(request: Request, plugin_id: str):
 @router.post("/api/v1/plugins/{plugin_id}/config")
 def api_save_plugin_settings(request: Request, plugin_id: str, payload: PluginSettingsRequest = Body(...)):
     require_admin_or_503(request)
-    payload = payload.model_dump()  # RBAC: Admin-Sache
+    data = payload.model_dump()  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     pm = get_plugin_manager()
     plugin = pm.plugins.get(plugin_id)
     if not plugin:
         raise HTTPException(status_code=404, detail={"code": "plugins_plugin_not_found_3", "params": {"plugin_id": plugin_id}})
-    success = plugin.save_config(payload)
+    success = plugin.save_config(data)
     return {"status": "success" if success else "error", "config": plugin.config}
 
 
@@ -132,18 +132,18 @@ def api_get_plugin_tools():
 @router.post("/api/v1/plugins/tools/execute")
 async def api_execute_plugin_tool(request: Request, payload: PluginToolExecuteRequest = Body(...)):
     require_admin_or_503(request)
-    payload = payload.model_dump()  # RBAC: Admin-Sache
+    data = payload.model_dump()  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
     from backend.tool_runtime import enforce_tool_execution, guard_result, record_tool_read_side_effect
     pm = get_plugin_manager()
-    tool_name = str(payload.get("tool_name") or "").strip()
-    args = payload.get("args", {})
+    tool_name = str(data.get("tool_name") or "").strip()
+    args = data.get("args", {})
     # Actor/Session/Agent aus der authentifizierten Identität — nie aus dem
     # Body. Ein client-gesteuertes agent_id umgeht agentenbezogene Taint-/RBAC-
     # und Budget-Gates (Audit 23.11.2026).
     session_id = f"user:{get_session_actor(request)}"
     agent_id = session_id
-    approval_id = payload.get("approval_id")
+    approval_id = data.get("approval_id")
     # Warrant ausschließlich aus dem serverseitigen Registry, nie aus dem Body.
     from backend.tool_warrants import get_warrant_for_session
     warrant = get_warrant_for_session(session_id, tool_name)

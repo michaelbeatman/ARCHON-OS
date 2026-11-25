@@ -16,6 +16,7 @@ import json
 import shutil
 import datetime
 from pathlib import Path
+from typing import Any, Optional, cast
 
 from archon.core.config import config
 from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
@@ -33,9 +34,10 @@ try:
     import pypdf
 except ImportError:
     try:
-        import PyPDF2 as pypdf
+        import PyPDF2 as _pypdf_compat
+        pypdf = _pypdf_compat
     except ImportError:
-        pypdf = None
+        pypdf = cast(Any, None)
 
 try:
     import pdf2image
@@ -51,7 +53,7 @@ except ImportError:
 try:
     import docx
 except ImportError:
-    docx = None
+    docx = cast(Any, None)
 
 
 def resolve_vault_path() -> str:
@@ -268,11 +270,12 @@ def extract_docx(docx_path: str, assets_dir: str, doc_slug: str) -> dict:
     
     for para in doc.paragraphs:
         if para.text.strip():
-            if para.style.name.startswith("Heading 1"):
+            style_name = para.style.name if para.style is not None else ""
+            if style_name.startswith("Heading 1"):
                 full_text.append(f"# {para.text.strip()}\n")
-            elif para.style.name.startswith("Heading 2"):
+            elif style_name.startswith("Heading 2"):
                 full_text.append(f"## {para.text.strip()}\n")
-            elif para.style.name.startswith("Heading 3"):
+            elif style_name.startswith("Heading 3"):
                 full_text.append(f"### {para.text.strip()}\n")
             else:
                 full_text.append(f"{para.text.strip()}\n\n")
@@ -307,7 +310,10 @@ def extract_epub(epub_path: str, assets_dir: str, doc_slug: str) -> dict:
             try:
                 container_xml = z.read("META-INF/container.xml")
                 root = ET.fromstring(container_xml)
-                opf_rel_path = root.find(".//{urn:oasis:names:tc:opendocument:xmlns:container}rootfile").attrib["full-path"]
+                rootfile = root.find(".//{urn:oasis:names:tc:opendocument:xmlns:container}rootfile")
+                if rootfile is None:
+                    raise ValueError("Kein rootfile-Eintrag im EPUB-Container")
+                opf_rel_path = rootfile.attrib["full-path"]
             except Exception:
                 opf_candidates = [n for n in z.namelist() if n.endswith(".opf")]
                 if opf_candidates:
@@ -784,7 +790,7 @@ def run_batch_ingest() -> dict:
     }
 
 
-def list_indexed_books(vault_dir: str = None) -> list[dict]:
+def list_indexed_books(vault_dir: Optional[str] = None) -> list[dict]:
     """Liest alle gespiegelten Fachbücher und Dokumente aus 02_Wissensbibliothek aus."""
     if not vault_dir:
         vault_dir = resolve_vault_path()

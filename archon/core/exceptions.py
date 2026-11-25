@@ -7,6 +7,7 @@ from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from typing import Optional
 import logging
 
 logger = logging.getLogger("archon.exceptions")
@@ -37,7 +38,7 @@ def get_client_language(request: Request) -> str:
 SUPPORTED_LANGUAGES = {"de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"}
 
 
-def _trace_context() -> tuple:
+def _trace_context() -> str:
     """D16/MED: trace_id aus dem aktiven W3C-Kontext (fail-safe leer)."""
     try:
         from backend.trace_context import current_trace_id
@@ -46,7 +47,7 @@ def _trace_context() -> tuple:
         return ""
 
 
-def _trace_headers(trace_id: str, base: dict = None) -> dict:
+def _trace_headers(trace_id: str, base: Optional[dict] = None) -> dict:
     """Antwort-Header ueber den zentralen Helper (X-Trace-Id + traceparent/tracestate).
 
     Vorhandene Header (z. B. WWW-Authenticate) bleiben erhalten.

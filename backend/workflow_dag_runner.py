@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# mypy: ignore-errors
 """
 backend/workflow_dag_runner.py
 ==============================
@@ -89,7 +88,7 @@ def _recovery_audit(action: str, payload: Dict[str, Any]) -> None:
     try:
         from backend.audit_log import chained_audit_log
 
-        chained_audit_log.record_event(
+        chained_audit_log.record_event(  # type: ignore[call-arg]
             category="recovery", action=action,
             payload={"ts": time.time(), **payload},
         )
@@ -993,7 +992,7 @@ def _update_kanban_task_status(
                 conn.commit()
             finally:
                 conn.close()
-            last_exc = None
+            last_exc = None  # type: ignore[assignment]
             break
         except Exception as exc:
             last_exc = exc
@@ -1567,7 +1566,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
             if not isinstance(_obj, dict):
                 return False, None, "JSON-Root muss ein Objekt sein."
             req_keys = schema.get("required") if isinstance(schema.get("required"), list) else list(schema.keys())
-            missing = [k for k in req_keys if k not in _obj]
+            missing = [k for k in req_keys if k not in _obj]  # type: ignore[union-attr]
             if missing:
                 return False, _obj, f"Fehlende Pflichtfelder: {', '.join(str(m) for m in missing)}"
             return True, _obj, ""
@@ -1664,7 +1663,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
                     "cta": _q_cta,
                 })
             else:
-                max_rev = max(0, min(2, int(node.get("max_revisions") if node.get("max_revisions") is not None else 1)))
+                max_rev = max(0, min(2, int(node.get("max_revisions") if node.get("max_revisions") is not None else 1)))  # type: ignore[arg-type]
                 min_q = int(node.get("min_quality_score") or 75)
                 lines_c = [ln.strip() for ln in content.splitlines() if ln.strip()]
                 quality_report = evaluate_asset_quality({
@@ -1752,12 +1751,12 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         _base_in = int(res.get("input_tokens") or 0) - _rep_in_tok - _esc_in_tok
         _base_out = int(res.get("output_tokens") or 0) - _rep_out_tok - _esc_out_tok
         if _base_in or _base_out:
-            _cost_usd += _est_cost(model, _base_in, _base_out)
+            _cost_usd += _est_cost(model, _base_in, _base_out)  # type: ignore[operator]
         if _rep_in_tok or _rep_out_tok:
-            _cost_usd += _est_cost(locals().get("_repair_model_used") or model, _rep_in_tok, _rep_out_tok)
+            _cost_usd += _est_cost(locals().get("_repair_model_used") or model, _rep_in_tok, _rep_out_tok)  # type: ignore[operator]
         if _esc_in_tok or _esc_out_tok:
-            _cost_usd += _est_cost(_esc_model or model, _esc_in_tok, _esc_out_tok)
-        _cost_usd = round(_cost_usd, 6)
+            _cost_usd += _est_cost(_esc_model or model, _esc_in_tok, _esc_out_tok)  # type: ignore[operator]
+        _cost_usd = round(_cost_usd, 6)  # type: ignore[arg-type]
         _cost_unverified = False
     except Exception as _cost_exc:
         # D12: kein 0.0 als realer Wert bei fehlgeschlagener Berechnung.
@@ -1792,7 +1791,7 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         _update_kanban_task_status,
         kanban_task_id,
         "blocked" if is_error else "done",
-        result=content or out["error"],
+        result=content or out["error"],  # type: ignore[arg-type]
         block_kind="workflow_error" if is_error else None,
         event_kind="workflow_node_failed" if is_error else "workflow_node_completed",
         event_payload={"node_id": node.get("id"), "agent_id": agent_id, "status": out["status"]},
@@ -2468,7 +2467,7 @@ async def _run_workflow_dag_locked(
                 model=str(node.get("model") or ""),
                 output_data=out if isinstance(out, dict) else {"result": out},
                 status="OK" if st in SUCCESS_NODE_STATES else "ERROR",
-                cost_usd=float(out.get("cost_usd") or 0.0) if isinstance(out, dict) else 0.0,
+                cost_usd=float(out.get("cost_usd") or 0.0) if isinstance(out, dict) else 0.0,  # type: ignore[arg-type]
                 duration_ms=round((time.perf_counter() - node_started) * 1000.0, 2),
                 attributes={
                     "run_id": rid, "node_id": nid, "node_type": ntype, "status": st,
@@ -2602,7 +2601,7 @@ async def _run_workflow_dag_locked(
     for target_nid, inc_edges in edge_map.items():
         if statuses.get(target_nid) in ("completed", "skipped_cached"):
             for e in inc_edges:
-                if e.get("condition") == "on_failure" and statuses.get(e.get("from")) == "failed":
+                if e.get("condition") == "on_failure" and statuses.get(e.get("from")) == "failed":  # type: ignore[arg-type]
                     recovered_failures.add(e["from"])
 
     unrecovered_fail = any(
@@ -2832,7 +2831,7 @@ async def resume_workflow_run(
                 try:
                     from backend.audit_log import chained_audit_log
 
-                    chained_audit_log.record_event(
+                    chained_audit_log.record_event(  # type: ignore[call-arg]
                         category="recovery",
                         action="cancel_failed",
                         payload={
@@ -2926,7 +2925,7 @@ async def resume_workflow_run(
 async def resume_suspended_workflow_run(
     run_id: str,
     *,
-    executor_fn: ExecutorFn = None,
+    executor_fn: ExecutorFn = None,  # type: ignore[assignment]
     db_path: Optional[str] = None,
     max_missing_outputs: int = 0,
 ) -> Dict[str, Any]:

@@ -20,15 +20,16 @@ from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SNAPSHOTS_DIR = os.path.join(WORKSPACE_DIR, ".hermes", "snapshots")
+_ClosingConnection: type[sqlite3.Connection] = sqlite3.Connection
 try:
     from backend.db_paths import (
         resolve_db as _resolve_db,
-        ClosingConnection as _ClosingConnection,
+        ClosingConnection as _ClosingConnectionFromPaths,
         DB_BUSY_TIMEOUT_MS,
     )
+    _ClosingConnection = _ClosingConnectionFromPaths
     DB_PATH = _resolve_db("agentic_memory.db")
 except Exception:
-    _ClosingConnection = sqlite3.Connection
     DB_BUSY_TIMEOUT_MS = 5000
     DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 

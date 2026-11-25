@@ -73,8 +73,8 @@ if os.path.exists(OBSIDIAN_SOURCE):
         dst_full = os.path.join(OBSIDIAN_DEST, dest_folder)
         if os.path.exists(src_full):
             shutil.copytree(src_full, dst_full)
-            for r, d, f in os.walk(dst_full):
-                for file in f:
+            for r, d, files in os.walk(dst_full):
+                for file in files:
                     if file.endswith(".md"):
                         p = os.path.join(r, file)
                         try:

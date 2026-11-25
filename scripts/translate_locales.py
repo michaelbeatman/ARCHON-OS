@@ -47,7 +47,7 @@ def flatten_dict(d: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
 
 def unflatten_dict(flat: Dict[str, Any]) -> Dict[str, Any]:
     """Convert dot-notation keys back to nested dict."""
-    result = {}
+    result: Dict[str, Any] = {}
     for key, value in flat.items():
         parts = key.split('.')
         target = result
@@ -96,7 +96,7 @@ def translate_batch(values: Dict[str, str], target_lang: str) -> Dict[str, str]:
     """Translate a batch of values via OmniRoute."""
     prompt = build_prompt(values, target_lang)
     
-    payload = {
+    payload: Dict[str, Any] = {
         "model": MODEL,
         "messages": [
             {"role": "system", "content": f"You are a professional UI translator. Translate German to {target_lang}. Return ONLY valid JSON."},

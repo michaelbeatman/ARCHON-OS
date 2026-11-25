@@ -40,7 +40,7 @@ def _require_admin(request: Request):
     require_admin_or_503(request)
 
 
-def detect_container_port(container_identifier: str, inspected_port: int = None) -> int:
+def detect_container_port(container_identifier: str, inspected_port: Optional[int] = None) -> int:
     """Ermittelt den echten Host-Port eines Docker-Containers."""
     cid_lower = str(container_identifier).lower()
     known_ports = {
@@ -201,7 +201,7 @@ def get_docker_containers_from_socket() -> List[Dict]:
     return app_main.load_services() if hasattr(app_main, "load_services") else []
 
 
-def post_docker_container_action(container_name: str, action: str = "start", raise_on_error: bool = False) -> dict:
+def post_docker_container_action(container_name: str, action: str = "start", raise_on_error: bool = False) -> dict | JSONResponse:
     try:
         if action == "restart":
             docker_client.restart_container(container_name)

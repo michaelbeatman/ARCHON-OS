@@ -62,3 +62,13 @@ rg -n "setTimeout\(\(\) => fetchMissionControlData|addEventListener\(\"archon:ss
 ---
 
 DOMÄNEN-SCORE: 5/10 — Die dokumentierten Großregressionen (50-ms-Block, 300-s-Fallback, DDL pro Budget-Call, `id(loop)`, fehlender Shutdown-Hook, doppelte SSE, unbegrenzte MC-Queries, unvirtualisiertes Template-Raster, blockierender Beleg-Upload, Health-Probes) sind im aktuellen HEAD real und nachweisbar behoben. Verbleibende zwölf Befunde liegen konzentriert in den **zentralen Exec-Pfaden**, die weiterhin synchrone SQLite-/Datei-I/O direkt im Event-Loop ausführen (LLM-Dispatch-Kontext, Kanban-Worker, DAG-Engine, Boardroom, MC-Idempotency, `/readyz`) — genau dort, wo §3 Event-Loop-Lebendigkeit und 24/7-Betrieb fordert. Sieben MED-Funde betreffen Connection-/FD-Leaks, Lock-Contention, Feedback-/Idempotency-Schreibzugriffe und redundantes Polling.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** Alle 5 HIGH (H-08-1 Dispatch-Kontextquellen, H-08-2 `/readyz` blockierte seinen Healthcheck, H-08-3 Kanban-Terminalstatus, H-08-4 DAG-Hotpath, H-08-5 Boardroom-SSE) — `fix_w3_b_performance.md` (`asyncio.to_thread`) und `fix_w3_d_trajectory_dag.md` (DAG-`to_thread`, Batcher, LRU/FD-Schutz). Zugehörige MED (Prefetcher-FD-Leak, Sync-Flush, RLock-Kontention, 15-s-MC-Polling) in denselben Reports mitbehandelt.
+- **Bewusst offen:** Keine domänenspezifischen HIGH/BLOCKER; Performance-Messwerte unter echter Last wurden in diesem Pass nicht neu erhoben. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Subagent `compileall` 0, 21 neue + 224 gezielte Bestandstests grün (2 fremde rot), W3-D 12/12 (`FIX_VERIFICATION_LOG.md`); Full-Suite final 2335/0/16. Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

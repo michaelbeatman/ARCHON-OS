@@ -11,6 +11,7 @@ import json
 import argparse
 import urllib.request
 import urllib.error
+from typing import Any, Dict, Optional
 from _archon_auth import headers as _archon_headers
 
 FRAMEWORK_DEFAULTS = {
@@ -77,7 +78,7 @@ def auto_detect_framework(task_text: str) -> str:
         return "CLEAR-Model"
     return "Steffi Kieffer Boardroom"
 
-def run_debate(task: str, framework: str = None, budget: str = "balanced", rounds: int = 2, chairman_id: str = "default", host: str = "http://127.0.0.1:8501"):
+def run_debate(task: str, framework: Optional[str] = None, budget: str = "balanced", rounds: int = 2, chairman_id: str = "default", host: str = "http://127.0.0.1:8501"):
     if not framework:
         framework = auto_detect_framework(task)
     
@@ -101,7 +102,7 @@ def run_debate(task: str, framework: str = None, budget: str = "balanced", round
             "model_id": preset["model"]
         })
     
-    payload = {
+    payload: Dict[str, Any] = {
         "task": task,
         "rounds": rounds,
         "chairman_id": chairman_id,

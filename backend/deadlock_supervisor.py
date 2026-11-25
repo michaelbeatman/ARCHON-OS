@@ -85,7 +85,7 @@ class DeadlockSupervisor:
         if value <= 0:
             return False
         try:
-            import psutil  # type: ignore[import-not-found]
+            import psutil
             return bool(psutil.pid_exists(value))
         except Exception:  # pragma: no cover - psutil ist Runtime-Dependency
             if os.name == "nt":

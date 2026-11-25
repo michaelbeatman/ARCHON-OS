@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 Operations API Router for Archon OS
 Provides Kanban (Hermes kanban.db), Org-Chart, and Inter-Agent Communication Feed.
@@ -145,7 +144,7 @@ def _maybe_auto_reset_zombie_tasks(conn: sqlite3.Connection) -> int:
     try:
         from backend.trajectory_budget import zombie_eligible
     except Exception:
-        zombie_eligible = None
+        zombie_eligible = None  # type: ignore[assignment]
 
     eligible_ids = []
     for row in candidates:
@@ -297,7 +296,7 @@ def _sync_to_memory_bridge(task_id: str, title: Optional[str], assignee: Optiona
         print(f"[OperationsAPI] MemoryBridge task sync notice: {e}", file=sys.stderr)
 
 
-_PROFILES_MAP_CACHE = {"mtime": 0.0, "data": {}}
+_PROFILES_MAP_CACHE: Dict[str, Any] = {"mtime": 0.0, "data": {}}
 
 def _load_profiles_map() -> Dict[str, Dict]:
     if os.path.exists(PROFILES_FILE):
@@ -561,9 +560,9 @@ def _enrich_task(
     task_dict["tags"] = tmeta.get("tags") or []
     tid = task_dict.get("id")
     if obsidian_map is not None:
-        task_dict["obsidian"] = obsidian_map.get(tid)
+        task_dict["obsidian"] = obsidian_map.get(tid)  # type: ignore[arg-type]
     else:
-        task_dict["obsidian"] = _resolve_task_obsidian_rel(tid, meta)
+        task_dict["obsidian"] = _resolve_task_obsidian_rel(tid, meta)  # type: ignore[arg-type]
     task_dict["tokens"] = tmeta.get("tokens") or None
     task_dict["cost"] = tmeta.get("cost") or None
     task_dict["quality_review"] = tmeta.get("quality_review") or None
@@ -813,7 +812,7 @@ def get_kanban_tasks(archived: bool = Query(False)):
         rows = cursor.fetchall()
         obs_map = _build_kanban_obsidian_map(conn, rows, meta)
 
-        columns = {
+        columns: Dict[str, List[Any]] = {
             "triage": [],
             "todo": [],
             "ready": [],
@@ -944,9 +943,9 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
         if req.team_id:
             team_match = next((t for t in TEAMS_DEFINITION if t["id"] == req.team_id), None)
             if team_match:
-                team_name = team_match["name"]
+                team_name = team_match["name"]  # type: ignore[assignment]
                 if not target_assignee:
-                    target_assignee = team_match["lead_id"]
+                    target_assignee = team_match["lead_id"]  # type: ignore[assignment]
                     
         # Optionales Team-Präfix im Body
         task_body = req.body or ""
@@ -1099,7 +1098,7 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
                     task_id, dec_err,
                 )
                 _block_task_budget_allocation_failed_sync(
-                    task_id, req.title, target_assignee, str(dec_err), created_subtask_ids
+                    task_id, req.title, target_assignee, str(dec_err), created_subtask_ids  # type: ignore[arg-type]
                 )
                 return {
                     "status": "blocked", "task_id": task_id,
@@ -1124,7 +1123,7 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
                     task_id, alloc_err,
                 )
                 _block_task_budget_allocation_failed_sync(
-                    task_id, req.title, target_assignee, str(alloc_err)
+                    task_id, req.title, target_assignee, str(alloc_err)  # type: ignore[arg-type]
                 )
                 return {
                     "status": "blocked", "task_id": task_id,
@@ -1506,7 +1505,7 @@ async def _execute_kanban_task_async(task_id: str):
                                 "[KanbanWorker] Lease '%s' verloren — Ausfuehrung wird abgebrochen.",
                                 task_id,
                             )
-                            cancel_token.cancel("lease_lost")
+                            cancel_token.cancel("lease_lost")  # type: ignore[union-attr]
                             return
                     except Exception as exc:
                         # H8 (Audit 23.11.2026): ein fehlgeschlagener
@@ -1518,7 +1517,7 @@ async def _execute_kanban_task_async(task_id: str):
                             "[KanbanWorker] Heartbeat fehlgeschlagen — Task %s wird abgebrochen: %s",
                             task_id, exc,
                         )
-                        cancel_token.cancel("lease_heartbeat_failed")
+                        cancel_token.cancel("lease_heartbeat_failed")  # type: ignore[union-attr]
                         return
 
             heartbeat_task = asyncio.create_task(_hb(), name=f"kanban_lease_{task_id}")
@@ -1570,8 +1569,8 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         _cancel_token = _get_cancel_token(f"task:{task_id}")
         _current = asyncio.current_task()
         if _current is not None:
-            _cancel_token.register_task(_current)
-        _cancel_token.check()
+            _cancel_token.register_task(_current)  # type: ignore[union-attr]
+        _cancel_token.check()  # type: ignore[union-attr]
     except asyncio.CancelledError as cancel_exc:
         # E: dieser Check liegt VOR dem grossen try/finally unten — ohne
         # eigenen Status-Update stuerbt der Worker als stille BaseException
@@ -1815,7 +1814,7 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
             or ((res.get("input_tokens") or 0) + (res.get("output_tokens") or 0))
             or 0
         )
-        _sidecar_tmeta = {}
+        _sidecar_tmeta: Dict[str, Any] = {}
         try:
             _sidecar_tmeta = ((_load_kanban_meta().get("tasks") or {}).get(task_id) or {})
         except Exception:
@@ -2830,7 +2829,7 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
             })
             main.broadcast_event("ticker_update", {
                 "agent": review_data.get("reviewer", "Reviewer"),
-                "message": f"4-Augen-Review ({verdict.upper()}): {review_data.get('summary', '')[:40]}",
+                "message": f"4-Augen-Review ({verdict.upper()}): {review_data.get('summary', '')[:40]}",  # type: ignore[index]
                 "time": datetime.datetime.now().strftime("%H:%M:%S")
             })
     except Exception as exc:
@@ -2868,7 +2867,7 @@ async def override_quality_review(
         created_by=created_by, approval_id=req.approval_id,
     )
     now_iso = datetime.datetime.now().isoformat()
-    override_review = {
+    override_review: Dict[str, Any] = {
         "status": "approved",
         "reviewer": actor,
         "reviewer_id": actor,
@@ -3192,7 +3191,7 @@ def _get_session_usage_map():
     """Liest Token-, Modell-, Kosten- und Tool-Nutzung pro session_id aus state.db."""
     import json
     import sqlite3
-    usage = {}
+    usage: Dict[str, Any] = {}
     db_path = "/opt/data/state.db" if os.path.exists("/opt/data/state.db") else os.path.join("data", "state.db")
     if not os.path.exists(db_path):
         return usage
@@ -3248,7 +3247,7 @@ def get_projects_overview():
     session_usage = _get_session_usage_map()
 
     # 1. Hole alle Tasks aus kanban.db gruppiert nach project_id
-    tasks_by_project = {}
+    tasks_by_project: Dict[str, List[Any]] = {}
     conn = _get_kanban_connection()
     try:
         cur = conn.cursor()
@@ -3404,7 +3403,7 @@ def get_projects_overview():
             enriched_subtasks = []
             proj_tokens = 0
             proj_cost = 0.0
-            used_tools_set = set()
+            used_tools_set: set[Any] = set()
             subtask_dates = []
             for st in subtasks:
                 st_c = dict(st)
@@ -3745,7 +3744,7 @@ def find_vault_file(request: Request, q: str, limit: int = 8):
     if not q or len(q) < 3:
         raise HTTPException(status_code=400, detail="Suchbegriff zu kurz.")
     vault = _P(get_vault_dir()).resolve()
-    treffer, scanned = [], 0
+    treffer, scanned = [], 0  # type: ignore[var-annotated]
     try:
         # ZUERST 01_PROJEKTE (Ergebnis-MDs), dann Rest - hart begrenzt
         for raum in (vault / "01_PROJEKTE", vault):
@@ -4056,9 +4055,9 @@ def get_task_details(task_id: str):
             
         task = dict(task_row)
         assignee_id = task.get("assignee")
-        prof = profiles.get(assignee_id, {})
+        prof = profiles.get(assignee_id, {})  # type: ignore[arg-type]
         task["assignee_name"] = prof.get("name") or assignee_id or "Nicht zugewiesen"
-        task["assignee_avatar"] = prof.get("avatar") or _get_fallback_avatar(assignee_id)
+        task["assignee_avatar"] = prof.get("avatar") or _get_fallback_avatar(assignee_id)  # type: ignore[arg-type]
 
         # Obsidian-Projekt-Bruecke (Sidecar config/kanban_meta.json, Option A 11.10.2026)
         _meta_all = _load_kanban_meta()

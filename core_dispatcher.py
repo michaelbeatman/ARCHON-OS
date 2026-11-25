@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import asyncio
 import contextvars
 import datetime
@@ -893,8 +892,8 @@ MAX_CONCURRENT_AGENT_TASKS = int(os.getenv("MAX_CONCURRENT_AGENT_TASKS", "5"))
 # WeakKeyDictionary statt id(loop): id() wird nach GC eines Loops wiederverwendet
 # und lieferte dann einen geschlossenen Client/Semaphore an einen neuen Loop.
 # Ausserdem verhindert die Weak-Referenz, dass tote Loops Pools halten.
-_TASK_SEMAPHORES = weakref.WeakKeyDictionary()
-_DISPATCHER_HTTP_CLIENTS = weakref.WeakKeyDictionary()
+_TASK_SEMAPHORES: Any = weakref.WeakKeyDictionary()
+_DISPATCHER_HTTP_CLIENTS: Any = weakref.WeakKeyDictionary()
 
 
 def _get_task_semaphore() -> asyncio.Semaphore:
@@ -1996,7 +1995,11 @@ async def _dispatch_to_omniroute_or_container_impl(
                 agent_id=agent_id or "system",
                 provider=prov_lower or "omniroute",
                 model=selected_model or "",
-                target_endpoint=url or "egress-firewall://proof.local",
+                # F821-Fix 25.11.2026: `url` existiert nur als Parameter des
+                # spaeter definierten `_audited_post`, nicht in diesem Scope.
+                # Der Proof-Pfad läuft vor der Provider-Auswahl — hier ist der
+                # explizite Platzhalter korrekt und verhindert den NameError.
+                target_endpoint="egress-firewall://proof.local",
                 action="llm_dispatch_blocked_classifier_unavailable",
                 error_code="DATA_CLASSIFIER_UNAVAILABLE",
                 reason=f"DataClassifier nicht verfuegbar — fail-closed: {cls_err}",
@@ -2177,7 +2180,7 @@ async def _dispatch_to_omniroute_or_container_impl(
             }
         except Exception as loc_err:
             if preflight_gate.get("zero_egress_active") or _local_requested:
-                ev = await _audit_log_async(
+                ev = await _audit_log_async(  # type: ignore[assignment]
                     agent_id=agent_id,
                     provider="local",
                     model=local_model,
@@ -2958,8 +2961,8 @@ async def stream_boardroom_debate(
     framework: str = "Steffi Kieffer Boardroom",
     timeout: int = 30,
     use_moa: bool = False,
-    moa_reference_models: list = None,
-    moa_aggregator: dict = None,
+    moa_reference_models: list = None,  # type: ignore[assignment]
+    moa_aggregator: dict = None,  # type: ignore[assignment]
     cancel_token: Optional[Any] = None,
     task_id: Optional[str] = None,
 ):
@@ -2981,7 +2984,7 @@ async def stream_boardroom_debate(
     # fail-closed — inkl. Scope-Cleanup im selben try/finally.
     try:
         try:
-            cancel_token.register_task(asyncio.current_task())
+            cancel_token.register_task(asyncio.current_task())  # type: ignore[union-attr]
         except Exception as exc:
             logger.error("[Boardroom] Kill-Switch-Registrierung fehlgeschlagen: %s", exc)
             raise RuntimeError("Kill-Switch konnte nicht registriert werden") from exc
@@ -3001,7 +3004,7 @@ async def stream_boardroom_debate(
             yield ev
     finally:
         if own_token:
-            clear_scope(cancel_token.scope)
+            clear_scope(cancel_token.scope)  # type: ignore[union-attr]
 
 
 @_boardroom_cancellation_guard
@@ -3013,8 +3016,8 @@ async def _stream_boardroom_debate_inner(
     framework: str = "Steffi Kieffer Boardroom",
     timeout: int = 30,
     use_moa: bool = False,
-    moa_reference_models: list = None,
-    moa_aggregator: dict = None,
+    moa_reference_models: list = None,  # type: ignore[assignment]
+    moa_aggregator: dict = None,  # type: ignore[assignment]
     cancel_token: Optional[Any] = None,
     task_id: Optional[str] = None
 ):
@@ -3062,7 +3065,7 @@ async def _stream_boardroom_debate_inner(
     
     chairman_sys_prompt = build_final_system_prompt(framework, chairman.get("prompt", ""))
 
-    token.check()  # Abbruch vor dem ersten Dispatch beachten
+    token.check()  # type: ignore[union-attr]  # Abbruch vor dem ersten Dispatch beachten
     res_init = await dispatch_to_external_agent(
         agent_id=chairman["id"],
         agent_name=chairman["name"],
@@ -3123,7 +3126,7 @@ async def _stream_boardroom_debate_inner(
         }
         # Abbruch zu Beginn jeder Runde pruefen (nach round_start, damit das
         # cancelled-Event die korrekte Rundennummer trägt).
-        token.check()
+        token.check()  # type: ignore[union-attr]
         # H5 (Audit 23.11.2026): der Circuit-Breaker existierte nur im
         # Master-Chat-Pfad. Ping-Pong/Endlosschleifen in Boardroom- und
         # Subagenten-Ketten wurden nicht erkannt. Wir übergeben nur ein
@@ -3180,7 +3183,7 @@ async def _stream_boardroom_debate_inner(
                     f"— dieses Veto ist stärker als jede Mehrheit."
                 )
                 sys_prompt = build_final_system_prompt(framework, ag.get("prompt", ""))
-                token.check()  # Abbruch vor jedem Agent-Dispatch beachten
+                token.check()  # type: ignore[union-attr]  # Abbruch vor jedem Agent-Dispatch beachten
                 res = await dispatch_to_external_agent(
                     agent_id=ag["id"],
                     agent_name=ag["name"],
@@ -3294,7 +3297,7 @@ async def _stream_boardroom_debate_inner(
                 
                 agent_sys_prompt = build_final_system_prompt(framework, agent.get("prompt", ""))
 
-                token.check()  # Abbruch vor jedem Agent-Dispatch beachten
+                token.check()  # type: ignore[union-attr]  # Abbruch vor jedem Agent-Dispatch beachten
                 res = await dispatch_to_external_agent(
                     agent_id=agent["id"],
                     agent_name=agent["name"],
@@ -3359,7 +3362,7 @@ async def _stream_boardroom_debate_inner(
     # 3a. DEDIZIERTER CRITIQUE-DISPATCH (D14/HIGH) — VOR der finalen
     # Konsensauswertung. Der Critique ist ein echter Veto-Produzent, keine
     # Prompt-Floskel nach der bereits gefassten Entscheidung.
-    token.check()
+    token.check()  # type: ignore[union-attr]
     critique_text = ""
     critique_error = False
     try:
@@ -3480,7 +3483,7 @@ async def _stream_boardroom_debate_inner(
             m_id = m_item.get("model", "deepseek/deepseek-chat")
             m_prov = m_item.get("provider", "openrouter")
             m_name = m_item.get("name", m_id)
-            token.check()  # Abbruch vor jedem Agent-Dispatch beachten
+            token.check()  # type: ignore[union-attr]  # Abbruch vor jedem Agent-Dispatch beachten
             try:
                 res = await dispatch_to_external_agent(
                     agent_id=f"moa_ref_{m_name}",
@@ -3533,7 +3536,7 @@ async def _stream_boardroom_debate_inner(
             "message": f"Aggregator {agg_model.get('name', 'Chair')} synthetisiert alle Layer-1 Ergebnisse..."
         }
 
-        token.check()  # Abbruch vor dem Aggregator-Dispatch beachten
+        token.check()  # type: ignore[union-attr]  # Abbruch vor dem Aggregator-Dispatch beachten
         res_agg = await dispatch_to_external_agent(
             agent_id=chairman["id"],
             agent_name=agg_model.get("name", chairman["name"]),
@@ -3555,7 +3558,7 @@ async def _stream_boardroom_debate_inner(
             f"{synthesis_directive}"
         )
     
-        token.check()  # Abbruch vor dem Synthese-Dispatch beachten
+        token.check()  # type: ignore[union-attr]  # Abbruch vor dem Synthese-Dispatch beachten
         res_synth = await dispatch_to_external_agent(
             agent_id=chairman["id"],
             agent_name=chairman["name"],
@@ -3605,8 +3608,8 @@ async def run_boardroom_debate(
     framework: str = "Steffi Kieffer Boardroom",
     timeout: int = 30,
     use_moa: bool = False,
-    moa_reference_models: list = None,
-    moa_aggregator: dict = None
+    moa_reference_models: list = None,  # type: ignore[assignment]
+    moa_aggregator: dict = None  # type: ignore[assignment]
 ) -> dict:
     events = []
     # D01/S-1.7: solange kein done-Event mit Synthese eingegangen ist, darf
@@ -3702,7 +3705,7 @@ async def execute_with_self_correction(
     """
     attempt = 1
     current_args = dict(initial_args)
-    correction_history = []
+    correction_history: list[Any] = []
     
     while attempt <= max_retries:
         try:

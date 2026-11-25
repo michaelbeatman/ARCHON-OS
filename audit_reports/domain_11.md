@@ -69,3 +69,13 @@ rg -n "target_status|mark_truncated" backend/operations_api.py archon/core/orche
 - Vollständige SOUL-Artefakt-Generierung/Hash-Kette (`scripts/build_souls_ssot.py`, `scripts/check_soul_ssot_drift.py`) — gehört zu Domäne 15; hier nur die Tier-Konsumtion an der Delegationskante geprüft.
 - Kryptografische Detailprüfung des Audit-/Receipt-HMAC (Domäne 05) und Taint-Guard-DB-Implementierung (Domäne 04) — nur die Übergabe der Felder wurde geprüft.
 - Andere Domänen übergreifende Bewertung (Stub-Detection, Budget-Policies, OTel-Propagation) — nicht Gegenstand dieses Berichts.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** BLOCKER **B-11** (verlustfreie Session-DAG ohne Produktiv-Produzent) — `fix_w1_b_lossless.md`: Produzent in Token-Guard/Compactor, rekursive Expansion, UNION-Suche, `resolve_db`, Tenant-Spalte, HMAC, Art.-17-Funktionen. Die 2 HIGH (H-11-1/2 Schema-Verluste an der Handoff-Kante) und 7 MED — `fix_w3_a_orchestration.md`: ein kanonisches `extra="forbid"`-Handoff-Schema mit Signatur und Child-Cancel-Token, harter Gate `require_accepted_handoff()` (Entfernung der `hermes-orchestrator`-Self-Attestation), HANDOFF-/Kontextmarker. Obsolete Tests: `fix_w5_b_tests.md`.
+- **Bewusst offen:** Keine domänenspezifischen HIGH/BLOCKER; die ehemalige `hermes-orchestrator`-Self-Attestation ist behoben (siehe oben), der **Alias** selbst wurde in D15 über die kanonische SSOT aufgelöst. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** `pytest tests/test_fix_w1_b_lossless.py -q` → **5 passed**, `compileall` Exit 0; W3-A 15/15 neue Tests (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

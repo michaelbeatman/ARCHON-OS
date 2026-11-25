@@ -94,9 +94,9 @@ def api_get_contract(contract_id: str):
 @router.post("/api/v1/contracts")
 def api_save_contract(request: Request, payload: ContractSaveBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.contract_manager import ContractManager
-    saved = ContractManager.create_or_update(payload)
+    saved = ContractManager.create_or_update(data)
     return {"status": "success", "contract": saved}
 
 
@@ -113,9 +113,9 @@ def api_delete_contract(request: Request, contract_id: str):
 @router.post("/api/v1/contracts/parse")
 def api_parse_contract(request: Request, payload: ContractParseBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.contract_manager import ContractParser
-    text = payload.get("text", "")
+    text = data.get("text", "")
     parsed = ContractParser.parse(text)
     return {"status": "success", "parsed": parsed}
 
@@ -124,10 +124,10 @@ def api_parse_contract(request: Request, payload: ContractParseBody = Body(...))
 @router.post("/api/v1/contracts/scan-deadlines")
 def api_scan_contract_deadlines(request: Request, payload: ContractScanBody = Body(default=ContractScanBody())):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.contract_manager import ContractManager
-    send_telegram = payload.get("send_telegram", True)
-    create_kanban = payload.get("create_kanban_task", True)
+    send_telegram = data.get("send_telegram", True)
+    create_kanban = data.get("create_kanban_task", True)
     alerts = ContractManager.scan_and_alert_deadlines(send_telegram=send_telegram, create_kanban_task=create_kanban)
     return {"status": "success", "alerts_triggered": alerts, "count": len(alerts)}
 
@@ -146,26 +146,26 @@ def api_renew_contract(request: Request, contract_id: str):
 @router.post("/api/contracts/create")
 def api_create_contract(request: Request, payload: ContractCreateBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    # Handler prueft per `"key" in payload` -> None-Werte entfernen.
-    payload = as_payload(payload, exclude_none=True)
+    # Handler prueft per `"key" in data` -> None-Werte entfernen.
+    data = as_payload(payload, exclude_none=True)
     from backend.sla_contract_enforcer import sla_contract_enforcer
     return sla_contract_enforcer.create_contract(
-        task_id=payload.get("task_id", "task-sla"),
-        delegator_agent=payload.get("delegator", "agent-lead"),
-        assignee_agent=payload.get("assignee", "agent-worker"),
-        required_keys=payload.get("required_keys"),
-        min_content_length=int(payload["min_content_length"]) if "min_content_length" in payload else None,
-        acceptance_criteria=payload.get("acceptance_criteria"),
-        max_turnaround_minutes=int(payload["max_turnaround_minutes"]) if "max_turnaround_minutes" in payload else None
+        task_id=data.get("task_id", "task-sla"),
+        delegator_agent=data.get("delegator", "agent-lead"),
+        assignee_agent=data.get("assignee", "agent-worker"),
+        required_keys=data.get("required_keys"),
+        min_content_length=int(data["min_content_length"]) if "min_content_length" in data else None,
+        acceptance_criteria=data.get("acceptance_criteria"),
+        max_turnaround_minutes=int(data["max_turnaround_minutes"]) if "max_turnaround_minutes" in data else None
     )
 
 
 @router.post("/api/contracts/validate")
 def api_validate_contract(request: Request, payload: ContractValidateBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.sla_contract_enforcer import sla_contract_enforcer
     return sla_contract_enforcer.validate_delivery(
-        contract_id=payload.get("contract_id", ""),
-        delivery_payload=payload.get("delivery", {})
+        contract_id=data.get("contract_id", ""),
+        delivery_payload=data.get("delivery", {})
     )

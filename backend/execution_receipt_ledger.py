@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/execution_receipt_ledger.py
 Paket 4 (Feature 20): Manipulationssichere Kosten- & Entscheidungs-Quittungen (Execution Receipts).
@@ -72,18 +71,18 @@ def _receipt_epochs() -> list:
         except Exception as exc:
             import logging
             logging.getLogger(__name__).error("Ungueltige Receipt-HMAC-Epochen: %s", exc)
-    key = os.environ.get(_RECEIPT_KEY_ENV, "").strip()
+    key = os.environ.get(_RECEIPT_KEY_ENV, "").strip()  # type: ignore[assignment]
     if key:
         from_env = _RECEIPT_EPOCH_FROM_ENV
     else:
-        key = os.environ.get(_LEGACY_KEY_ENV, "").strip()
+        key = os.environ.get(_LEGACY_KEY_ENV, "").strip()  # type: ignore[assignment]
         from_env = _LEGACY_EPOCH_FROM_ENV
     if key:
         try:
             start = int(os.environ.get(from_env, "0") or 0)
         except ValueError:
             start = 0
-        epochs.append((start, key.encode("utf-8")))
+        epochs.append((start, key.encode("utf-8")))  # type: ignore[attr-defined]
     try:
         return sorted(set(epochs))
     except Exception:
@@ -202,7 +201,7 @@ def _receipt_trace_fields(
     return tid, sid, tp
 
 
-def _init_db(db_path: str = None) -> None:
+def _init_db(db_path: str = None) -> None:  # type: ignore[assignment]
     target = db_path or DB_PATH
     os.makedirs(os.path.dirname(target), exist_ok=True)
     with sqlite3.connect(target, timeout=15.0, factory=_ArchonClosingConn) as conn:
@@ -287,7 +286,7 @@ def _init_db(db_path: str = None) -> None:
 
 
 class ExecutionReceiptLedger:
-    def __init__(self, db_path: str = None):
+    def __init__(self, db_path: str = None):  # type: ignore[assignment]
         self._lock = _LEDGER_LOCK
         self.db_path = db_path or DB_PATH
         _init_db(self.db_path)

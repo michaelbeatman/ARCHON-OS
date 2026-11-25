@@ -47,9 +47,9 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 - **Observability & tooling:** OTel traces in the LLM kernel and DAG, trace-to-eval replay fixtures, Python 3.13, split test requirements.
 - **Workspace:** 4-step onboarding wizard v2, operations calendar and 11 LinkedIn skills.
 
-> **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.8**; the PDF manual still targets v0.5.2.1.
+> **Configuration & security note (audit 23.11.2026):** the shipped `settings.json` has **no `auth` block at all**. The system therefore runs in an intentional **local single-user mode** (fallback admin, no login) when bound to `127.0.0.1`. **This mode is for local desktop use only.** Non-loopback binds already force auth via `_must_force_auth()`, but you must add `"auth": {"enabled": true}` before any LAN or production exposure. Egress flags are also off by default (`privacy.zero_egress = false`, `zero_egress_strict = false`; only `hard_block_on_local_offline = true`). `config/version.json` reports **v0.5.7.8**; the PDF manual still targets v0.5.2.1 — *PDF basiert weiter auf v0.5.2.1, siehe [CHANGELOG.md](CHANGELOG.md) für v0.5.7.8*.
 
-> **Counts measured in this checkout:** 71 entries in `agent_profiles.json`, 71 roles in `roles.json`, 71 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7.8`.
+> **Counts measured in this checkout:** 71 entries in `agent_profiles.json`, 71 roles in `roles.json`, 71 synced profiles in `.hermes/profiles/`, 312 portrait assets in `static/avatars/`, 832 prompt templates and 11 UI locales. The PDF manuals were generated for `v0.5.2.1` and have not yet been regenerated for `v0.5.7.8` — see [CHANGELOG.md](CHANGELOG.md) for v0.5.7.8.
 
 ### Product Tour
 
@@ -68,7 +68,7 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 | Document | English (EN) | Deutsch (DE) | Scope |
 |---|---|---|---|
 | **User & Company Manual** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 pp., 1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 pp., 1.9 MB)* | Installation, Chapters 1–19, 5 Use Cases, Encryption/GDPR Overview & A–Z Glossary |
-| **Complete Feature List (`v0.5.2.1`)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | Full module catalog, Bilingual Global Edition, Live Demo Mode, First-Run Wizard, FinOps & Security |
+| **Complete Feature List (PDF: v0.5.2.1 — see CHANGELOG for v0.5.7.8)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | Full module catalog, Bilingual Global Edition, Live Demo Mode, First-Run Wizard, FinOps & Security |
 | **AI Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 55 structured Decision Engine methodologies (EN & DE) & index |
 
 *More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M113)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF & Multi-Tenant Guide (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise Features & Playbooks Guide](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live Demo Mode Guide](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup Wizard Guide](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosystem & Migration Guide](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
@@ -238,10 +238,12 @@ ARCHON-OS/
 ```
 
 - **User & Company Manual (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(German: [DE PDF](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
-- **Complete Feature List & System Catalog (v0.5.2.1, EN, PDF):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
+- **Complete Feature List & System Catalog (PDF: v0.5.2.1 — see CHANGELOG for v0.5.7.8, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
 - **Decision Engine & 55 Boardroom Frameworks (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
 - **Detailed Roadmap (M0–M113):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
 - **Live Demo Mode Guide (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](docs/system/LIVE_DEMO_MODE_GUIDE.md)
 - **First-Run Setup Wizard Guide:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)
 - **Ecosystem & Migration Guide:** [docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md)
 - **System Architecture & Audit:** [docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md)
+- **MyPy Type-Gate Guide:** [docs/system/MYPY_TYPE_GATE_GUIDE.md](docs/system/MYPY_TYPE_GATE_GUIDE.md)
+- **Static Analysis Toolchain Guide:** [docs/system/STATIC_ANALYSIS_TOOLCHAIN_GUIDE.md](docs/system/STATIC_ANALYSIS_TOOLCHAIN_GUIDE.md)

@@ -51,19 +51,19 @@ def api_get_deal(deal_id: str):
 @router.post("/api/deals")
 @router.post("/api/v1/deals")
 def api_save_deal(payload: DealSaveBody = Body(...)):
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.deal_pipeline import DealPipelineManager
-    saved = DealPipelineManager.create_or_update(payload)
+    saved = DealPipelineManager.create_or_update(data)
     return {"status": "success", "deal": saved}
 
 
 @router.post("/api/deals/{deal_id}/move-stage")
 @router.post("/api/v1/deals/{deal_id}/move-stage")
 def api_move_deal_stage(deal_id: str, payload: DealStageBody = Body(...)):
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.deal_pipeline import DealPipelineManager
-    new_stage = payload.get("stage", "")
-    notes = payload.get("notes")
+    new_stage = data.get("stage", "")
+    notes = data.get("notes")
     if not new_stage:
         raise HTTPException(status_code=400, detail={"code": "deals_stage_required", "params": {}})
     moved = DealPipelineManager.move_stage(deal_id, new_stage, notes=notes)

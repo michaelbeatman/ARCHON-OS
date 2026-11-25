@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/docuseal_client.py
 Archon OS DocuSeal E-Signature Integration Client.
@@ -54,7 +53,7 @@ class DocuSealClient:
     @staticmethod
     def _resolve_cid(company_id: Optional[str] = None) -> str:
         try:
-            from backend.tenant_context import get_active_company_id, sanitize_tenant_id
+            from backend.tenant_context import get_active_company_id, sanitize_tenant_id  # type: ignore[attr-defined]
             return sanitize_tenant_id(company_id or get_active_company_id() or "default")
         except Exception:
             return (company_id or "default").strip() or "default"

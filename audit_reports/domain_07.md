@@ -67,4 +67,14 @@ rg -n "while True|max_attempts|max_retries|MIN_LEASE_TTL_SECONDS|asyncio.wait_fo
 - Frontend/TypeScript und SSE-Client-Seite (andere Domänen).
 - Installer-/Demo-Daten-Skripte und `scripts/patches/hermes_telegram_adapter.py` (großer Drittanbieter-Patch, eigene Cancellation-/Retry-Semantik; nur Stichprobe).
 - Laufzeitverhalten unter echtem SQLite-Lock-Contention, Docker-Spawn-Fehler und Windows-Process-Kill — hier nur statische Code-Analyse; die Aussagen zu „Run bleibt RUNNING" sind aus den Kontrollflüssen abgeleitet, nicht durch einen Chaos-Lauf reproduziert.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben/saniert:** D07 hatte keine HIGH/BLOCKER, aber 11 MED (verschluckte Audit-/Status-Schreibfehler, Lease-/Cancel-Pfad, Fallback/Shutdown/Zombies). Über `fix_w1_a_audit.md` (einheitlicher Audit-Fehler-Helper), `fix_w3_a_orchestration.md` (Chat-FANOUT-Audit, HANDOFF-Gate), `fix_w3_b_performance.md` (fail-closed Shutdown/Cancel/Watchdog, Batcher-Drain) und `fix_w3_d_trajectory_dag.md` (DAG-Recovery, SSE-Broadcast, Budget fail-closed) weitgehend adressiert.
+- **Bewusst offen:** Die MED-Funde wurden nicht einzeln gegen den finalen HEAD re-verifiziert; die Laufzeitaussagen des Originalberichts („Run bleibt RUNNING") bleiben als statisch abgeleitete Evidenz stehen. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Subagent-Verifikation in W1-A/W3-A/W3-B/W3-D (`compileall` 0, neue Tests grün), finaler Full-Suite-Lauf 2335/0/16 (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.
 - Kryptografische Integrität der Audit-Kette selbst (Domäne 05) und spezifische RBAC-/Tenant-Fail-Open-Pfade (Domäne 04).

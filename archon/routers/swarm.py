@@ -48,13 +48,13 @@ def _as_payload(value) -> Dict[str, Any]:
 @router.post("/api/swarm/spawn-ephemeral-team")
 async def api_spawn_ephemeral_team(request: Request, payload: SwarmSpawnRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    payload = _as_payload(payload)
+    data = _as_payload(payload)
     from backend.ephemeral_team_spawner import ephemeral_team_spawner
     return await ephemeral_team_spawner.spawn_task_force(
-        mission_title=payload.get("mission_title", "Spezial-Auftrag"),
-        mission_brief=payload.get("mission_brief", ""),
+        mission_title=data.get("mission_title", "Spezial-Auftrag"),
+        mission_brief=data.get("mission_brief", ""),
         # Produktiv-Defaults: echter DAG-Lauf, kein Dry-Run. Opt-out bleibt
         # explizit ueber das Payload moeglich.
-        execute_dag=bool(payload.get("execute_dag", True)),
-        dry_run=bool(payload.get("dry_run", False)),
+        execute_dag=bool(data.get("execute_dag", True)),
+        dry_run=bool(data.get("dry_run", False)),
     )

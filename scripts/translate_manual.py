@@ -26,6 +26,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import Counter
+from typing import Any, Optional, cast
 
 import docx
 from docx.oxml import OxmlElement
@@ -130,7 +131,7 @@ def merge_adjacent_similar_runs(p_el) -> None:
         prev_sig = sig
 
 
-def call_llm_batch(items: list, url: str, api_key: str, model: str, sys_prompt: str, extra_headers: dict = None) -> list:
+def call_llm_batch(items: list, url: str, api_key: str, model: str, sys_prompt: str, extra_headers: Optional[dict] = None) -> list:
     payload_map = {str(i): txt for i, txt in enumerate(items)}
     body = {
         "model": model,
@@ -180,7 +181,7 @@ def export_pdf_and_update_glossary_windows(docx_path: str, pdf_path: str, page_p
     doc = docx.Document(docx_path)
     last_h1 = ""
     for p in doc.paragraphs:
-        if "Heading 1" in p.style.name or "berschrift" in p.style.name:
+        if "Heading 1" in cast(Any, p.style).name or "berschrift" in cast(Any, p.style).name:
             if p.text.strip():
                 last_h1 = p.text.strip()
 
@@ -252,7 +253,7 @@ if ($PdfOut -ne "" -and (Test-Path $tmpPdf)) {
         for row in tbl.rows[1:]:
             term = row.cells[0].text.strip()
             needle = term.split(" (")[0].strip()
-            hits = Counter()
+            hits: Counter[str] = Counter()
             h_hits = []
             rx = re.compile(re.escape(needle), re.IGNORECASE)
             for rec in records:
@@ -260,7 +261,7 @@ if ($PdfOut -ne "" -and (Test-Path $tmpPdf)) {
                     if "berschrift" in rec["style"] or "Heading" in rec["style"]:
                         h_hits.append(rec["page"])
                     hits[rec["page"]] += 1
-            sel = []
+            sel: list[str] = []
             for p in h_hits + [p for p, _ in hits.most_common(6)]:
                 if p not in sel and len(sel) < 4:
                     sel.append(p)
@@ -358,7 +359,8 @@ def main():
     sys_prompt = build_system_prompt(lang_name)
     os.makedirs(os.path.dirname(cache_path) or ".", exist_ok=True)
 
-    batch, batch_chars, done = [], 0, 0
+    batch: list[str] = []
+    batch_chars, done = 0, 0
     for txt in unique_pending:
         if len(batch) >= args.batch_size or (batch_chars + len(txt) > 3200 and batch):
             tr_list = call_llm_batch(batch, url, api_key, model, sys_prompt)

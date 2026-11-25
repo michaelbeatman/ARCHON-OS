@@ -103,7 +103,7 @@ def api_get_hermes_form_config(path: Optional[str] = None):
     else:
         target_path = active_path
     
-    parsed = {}
+    parsed: Dict[str, Any] = {}
     content = ""
     if target_path and os.path.exists(target_path):
         try:
@@ -286,10 +286,10 @@ def api_get_hermes_form_config(path: Optional[str] = None):
 @router.post("/api/hermes/settings")
 def api_save_hermes_form_config(request: Request, payload: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    payload = as_payload(payload)
+    data = as_payload(payload)
     import yaml, shutil
-    target_path = payload.get("config_path")
-    settings = payload.get("settings", {})
+    target_path = data.get("config_path")
+    settings = data.get("settings", {})
     
     if not target_path:
         active_path, _ = _get_hermes_config_paths()
@@ -302,7 +302,7 @@ def api_save_hermes_form_config(request: Request, payload: PassthroughBody = Bod
     if not target_path:
         raise HTTPException(status_code=400, detail={"code": "hermes_config_invalid_path", "params": {}})
 
-    existing_data = {}
+    existing_data: Dict[str, Any] = {}
     if os.path.exists(target_path):
         try:
             with open(target_path, "r", encoding="utf-8") as f:
@@ -523,7 +523,7 @@ def api_save_hermes_form_config(request: Request, payload: PassthroughBody = Bod
     # BIDIREKTIONALE SYNCHRONISATION: Hermes (config.yaml) -> Archon Autonomie-Module (settings.json)
     try:
         from backend.autonomy_settings import save_autonomy_settings
-        aut_sync = {}
+        aut_sync: Dict[str, Any] = {}
         if "delegation_max_concurrent_children" in settings or "task_timeout_seconds" in settings:
             aut_sync["concurrency"] = {}
             if "delegation_max_concurrent_children" in settings:
@@ -682,7 +682,7 @@ def api_get_hermes_raw_config(request: Request, path: Optional[str] = None):
         target_path = active_path
     
     content = ""
-    parsed = {}
+    parsed: Dict[str, Any] = {}
     if target_path and os.path.exists(target_path):
         try:
             with open(target_path, "r", encoding="utf-8") as f:
@@ -716,10 +716,10 @@ def api_get_hermes_raw_config(request: Request, path: Optional[str] = None):
 @router.post("/api/hermes/raw_config")
 def api_save_hermes_raw_config(request: Request, payload: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    payload = as_payload(payload)
+    data = as_payload(payload)
     import yaml, shutil
-    target_path = payload.get("config_path")
-    yaml_content = payload.get("yaml_content", "")
+    target_path = data.get("config_path")
+    yaml_content = data.get("yaml_content", "")
     
     if not target_path:
         active_path, _ = _get_hermes_config_paths()

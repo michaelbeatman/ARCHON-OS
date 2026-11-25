@@ -269,8 +269,8 @@ def api_gateway_list():
 @router.post("/start")
 async def api_gateway_start(request: Request, payload: GatewayStartRequest = Body(...)):
     _require_admin(request)
-    payload = _as_payload(payload)
-    profile_id = payload.get("profile_id", "").strip()
+    data = _as_payload(payload)
+    profile_id = data.get("profile_id", "").strip()
     if not profile_id:
         raise HTTPException(status_code=400, detail="profile_id required")
 
@@ -298,8 +298,8 @@ async def api_gateway_start(request: Request, payload: GatewayStartRequest = Bod
 @router.post("/stop")
 async def api_gateway_stop(request: Request, payload: GatewayStopRequest = Body(...)):
     _require_admin(request)
-    payload = _as_payload(payload)
-    profile_id = payload.get("profile_id", "").strip()
+    data = _as_payload(payload)
+    profile_id = data.get("profile_id", "").strip()
     if not profile_id:
         raise HTTPException(status_code=400, detail="profile_id required")
     if profile_id == "default":
@@ -334,16 +334,16 @@ def api_get_gateway_config():
 def api_save_gateway_config_endpoint(request: Request, payload: GatewayConfigRequest = Body(...)):
     _require_admin(request)
     # Handler prueft per `"key" in payload` — None-Werte muessen weg.
-    payload = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
     app_main = get_provider("app_main")
     cfg = app_main._load_gateway_config()
-    if "idle_timeout_minutes" in payload:
+    if "idle_timeout_minutes" in data:
         try:
-            cfg["idle_timeout_minutes"] = max(1, int(payload["idle_timeout_minutes"]))
+            cfg["idle_timeout_minutes"] = max(1, int(data["idle_timeout_minutes"]))
         except (ValueError, TypeError) as exc:
             logger.debug(f"[GatewayManager] Ungueltiger idle_timeout_minutes-Wert ignoriert: {exc}")
-    if "autostart" in payload and isinstance(payload["autostart"], dict):
-        cfg["autostart"].update(payload["autostart"])
+    if "autostart" in data and isinstance(data["autostart"], dict):
+        cfg["autostart"].update(data["autostart"])
     app_main._save_gateway_config(cfg)
     return cfg
 
@@ -351,11 +351,11 @@ def api_save_gateway_config_endpoint(request: Request, payload: GatewayConfigReq
 @router.post("/autostart")
 def api_gateway_autostart(request: Request, payload: GatewayAutostartRequest = Body(...)):
     _require_admin(request)
-    payload = _as_payload(payload)
-    profile_id = str(payload.get("profile_id", "")).strip()
+    data = _as_payload(payload)
+    profile_id = str(data.get("profile_id", "")).strip()
     if not profile_id:
         raise HTTPException(status_code=400, detail="profile_id required")
-    enable = bool(payload.get("autostart", False))
+    enable = bool(data.get("autostart", False))
     app_main = get_provider("app_main")
     cfg = app_main._load_gateway_config()
     cfg.setdefault("autostart", {})

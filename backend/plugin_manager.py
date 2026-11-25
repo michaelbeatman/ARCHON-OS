@@ -225,7 +225,7 @@ class PluginManager:
         """
         Durchsucht das plugins/-Verzeichnis nach Unterordnern mit plugin.json oder manifest.json.
         """
-        discovered = []
+        discovered: list[str] = []
         if not os.path.exists(self.plugins_dir):
             return discovered
 
@@ -391,7 +391,8 @@ class PluginManager:
             if inspect.iscoroutinefunction(plugin.on_unload):
                 asyncio.create_task(plugin.on_unload())
             else:
-                plugin.on_unload()
+                unload_sync: Any = plugin.on_unload
+                unload_sync()
         except Exception as _exc:
             logger.debug("[plugin_manager] Ignorierte Ausnahme (Z.384): %s", _exc)
 

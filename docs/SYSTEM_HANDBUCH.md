@@ -3290,9 +3290,11 @@ In `.github/workflows/ci.yml` ist der automatisierte Ablauf für Pull Requests u
 ---
 
 ### V.20 Systemarchitektur & Technisches Audit 2026
-# AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.2.1)
+# AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.2.1, historischer Audit-Stand)
 
-*Stand: 13. November 2026 | Release: v0.5.2.1 (Global Release Edition)*  
+*Stand: 13. November 2026 | Audit-Release: v0.5.2.1 (Global Release Edition)*  
+*Aktueller Code-Stand: **v0.5.7.8** (`config/version.json`, 25.11.2026).*  
+*Hinweis: Dieses eingebettete Audit-Kapitel und die PDF-Manuale basieren weiter auf v0.5.2.1 — siehe [CHANGELOG.md](../CHANGELOG.md) für v0.5.7.8.*  
 *Maschinenlesbares Gegenstück:* [`docs/system/system_architecture_spec.json`](system_architecture_spec.json)  
 *Endbenutzer-Handbuch (PDF):* [`docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf`](ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)  
 *Vollständige Featureliste (PDF):* [`docs/system/ARCHON_OS_FEATURELISTE_2026.pdf`](ARCHON_OS_FEATURELISTE_2026.pdf) | *55 Boardroom-Frameworks:* [`docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf`](ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)

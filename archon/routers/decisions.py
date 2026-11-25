@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Router & Engine fuer Permission-Gates und zentralen Entscheidungs-Service."""
 from __future__ import annotations
 
@@ -116,9 +115,9 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Passthrough
 
     fn_admin = getattr(app_main, "require_admin", _require_admin)
     fn_admin(request)
-    body = as_payload(body)
+    body = as_payload(body)  # type: ignore[assignment]
 
-    decision = str(body.get("decision") or "").lower().strip()
+    decision = str(body.get("decision") or "").lower().strip()  # type: ignore[attr-defined]
     if decision not in ("approve", "reject"):
         raise HTTPException(status_code=400, detail="decision muss approve oder reject sein")
 
@@ -150,14 +149,14 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Passthrough
                     # koennen die Identitaet nicht ueber den Body ueberschreiben.
                     _has_svc = getattr(app_main, "_request_has_service_token", None)
                     if callable(_has_svc) and _has_svc(request):
-                        uid = str(body.get("user_id") or "").strip()
+                        uid = str(body.get("user_id") or "").strip()  # type: ignore[attr-defined]
                 uid = uid or "owner"
                 category = (
                     "destructive_actions" if gate.get("kind") == "profil_loeschen" else "system"
                 )
                 if is_passkey_required(uid, category):
                     proof = str(
-                        body.get("passkey_proof_token")
+                        body.get("passkey_proof_token")  # type: ignore[attr-defined]
                         or request.headers.get("x-passkey-proof")
                         or ""
                     ).strip()
@@ -191,11 +190,11 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Passthrough
 
                 if gate.get("kind") == "tools_erweiterung":
                     payload["_approved_gate_id"] = gate_id
-                    res = fn_save_profile(payload)
+                    res = fn_save_profile(payload)  # type: ignore[misc]
                     ergebnis = f"Tools gespeichert fuer '{payload.get('id')}': " + str(res)
                     ausgefuehrt = True
                 elif gate.get("kind") == "profil_loeschen":
-                    res = fn_delete_profile(payload.get("profile_id", ""), approved_gate_id=gate_id)
+                    res = fn_delete_profile(payload.get("profile_id", ""), approved_gate_id=gate_id)  # type: ignore[misc]
                     ergebnis = f"Profil '{payload.get('profile_id')}' archiviert/geloescht: " + str(res)[:120]
                     ausgefuehrt = True
                 else:
@@ -252,7 +251,7 @@ def _decision_kanban_status(typ: str, decision: str) -> str:
     }.get(typ, "todo" if approve else "archived")
 
 
-def _decision_self_api(method: str, path: str, payload: dict = None, timeout: float = 15.0):
+def _decision_self_api(method: str, path: str, payload: dict = None, timeout: float = 15.0):  # type: ignore[assignment]
     """Selbstaufruf der eigenen API."""
     import main as app_main
 
@@ -283,10 +282,10 @@ def register_decision(
     titel: str,
     kurzfassung: str = "",
     ref_id: str = "",
-    dossier: str = None,
+    dossier: str = None,  # type: ignore[assignment]
     body: str = "",
-    extra: dict = None,
-    obsidian: str = None,
+    extra: dict = None,  # type: ignore[assignment]
+    obsidian: str = None,  # type: ignore[assignment]
     created_by: str = "",
 ) -> dict:
     """Haengt den Entscheidungs-Block an einen BESTEHENDEN Kanban-Task und pingt den Owner mit ✅/❌."""
@@ -313,7 +312,7 @@ def register_decision(
         # im Auflösungs-Eintrag und im Audit-Payload verloren. Das verschachtelte
         # Original wird zusätzlich erhalten (Alt-Consumer bleiben kompatibel).
         if isinstance(extra, dict):
-            dec["extra"] = dict(extra)
+            dec["extra"] = dict(extra)  # type: ignore[assignment]
         # Audit D14: created_by NACH extra setzen, damit ein Produktivaufrufer
         # den Ersteller nicht über `extra` überschreiben/spoofen kann.
         dec["created_by"] = (created_by or "").strip()
@@ -387,10 +386,10 @@ def create_decision(
     titel: str,
     kurzfassung: str = "",
     ref_id: str = "",
-    dossier: str = None,
+    dossier: str = None,  # type: ignore[assignment]
     body: str = "",
-    extra: dict = None,
-    obsidian: str = None,
+    extra: dict = None,  # type: ignore[assignment]
+    obsidian: str = None,  # type: ignore[assignment]
     created_by: str = "",
 ) -> dict:
     """Legt einen NEUEN Entscheidungs-Task im Kanban an und registriert die Entscheidung darauf."""
@@ -793,12 +792,12 @@ async def _decision_followup(typ: str, dec: dict, decision: str, proof_token: st
 
 @router.post("/api/decisions/decide", dependencies=[_ArchonDepends(_require_admin)])
 async def api_decide_decision(request: Request, body: PassthroughBody = Body(...)):
-    body = as_payload(body)
+    body = as_payload(body)  # type: ignore[assignment]
     """EINZIGER Schreibpfad für Entscheidungen — Telegram UND Kanban rufen ihn."""
     import main as app_main
 
-    task_id = str(body.get("task_id") or "").strip()
-    decision = str(body.get("decision") or "").lower().strip()
+    task_id = str(body.get("task_id") or "").strip()  # type: ignore[attr-defined]
+    decision = str(body.get("decision") or "").lower().strip()  # type: ignore[attr-defined]
     # Audit D14: ApproverIdentity NIE aus dem Body — sonst kann ein Client
     # beliebige "von"-Werte simulieren und Vier-Augen vortäuschen.
     from archon.routers._rbac import require_session_actor
@@ -856,7 +855,7 @@ async def api_decide_decision(request: Request, body: PassthroughBody = Body(...
             if decision == "approve" and str(dec_local.get("typ") or "") in _DECISION_HITL_TYPEN:
                 try:
                     proof_token, proof_uid = _decision_hitl_proof(
-                        request, body, str(dec_local.get("typ")), str(dec_local.get("ref_id") or "")
+                        request, body, str(dec_local.get("typ")), str(dec_local.get("ref_id") or "")  # type: ignore[arg-type]
                     )
                 except HTTPException as proof_err:
                     logger.error(

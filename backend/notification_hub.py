@@ -123,7 +123,7 @@ class NotificationHub:
         message: str,
         severity: str = "INFO",
         category: str = "system",
-        metadata: Dict[str, Any] = None
+        metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Verteilt eine Benachrichtigung basierend auf Dringlichkeit und Ruhezeiten."""
         sev = severity.upper().strip()

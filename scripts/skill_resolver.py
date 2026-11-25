@@ -249,7 +249,7 @@ def resolve_and_prepare_skill_context(
         )
     # 3. Obsidian Bewerbungs-Datenbank (Direkt-Kontext bei Bewerbungs-Aufgaben)
     if any("bewerbung" in str(s).lower() for s in all_active) or "bewerbung" in user_msg.lower():
-        obsidian_docs = []
+        obsidian_docs: list[str] = []
         doc_paths = [
             "/opt/data/obsidian/02_Wissensbibliothek/Project_Protocol.md",
             "./obsidian_vault/Bewerbung\\Vorlagen\\Project_Protocol.md",

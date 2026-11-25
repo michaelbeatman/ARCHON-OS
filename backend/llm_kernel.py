@@ -245,7 +245,8 @@ async def dispatch_llm(
 ) -> Any:
     """Einheitlicher LLM-Einstiegspunkt fuer Agenten- & Chat-Calls."""
     try:
-        from backend import trace_context as _tctx
+        from backend import trace_context as _tctx_module
+        _tctx: Any = _tctx_module
     except Exception:
         _tctx = None
 
@@ -414,7 +415,7 @@ async def dispatch_llm(
                     model=model,
                     provider=provider,
                     reasoning_level=reasoning_level,
-                    task_id=task_id,
+                    task_id=task_id or "",
                 )
         else:
             res = await core_dispatcher.dispatch_to_omniroute_or_container(
@@ -426,7 +427,7 @@ async def dispatch_llm(
                 model=model,
                 provider=provider,
                 reasoning_level=reasoning_level,
-                task_id=task_id,
+                task_id=task_id or "",
             )
         return _with_dispatch_context(
             res,

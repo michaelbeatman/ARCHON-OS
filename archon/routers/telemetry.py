@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Router fuer HUD-Telemetrie, Agent-Aktivitaeten, Projekte und Metriken."""
 from __future__ import annotations
 
@@ -150,7 +149,7 @@ def _has_json1(conn: sqlite3.Connection) -> bool:
 
 def _collect_ops_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
     """Ops-DB: Tasks, Task-Events und Task-Runs des Agenten."""
-    entries, counts = [], {}
+    entries, counts = [], {}  # type: ignore[var-annotated, var-annotated]
     conn, _path = _open_activity_db("ops.db")
     if conn is None:
         return entries, counts
@@ -199,7 +198,7 @@ def _collect_ops_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
             if clauses:
                 time_col = "created_at" if "created_at" in cols else "id"
                 select = [
-                    c for c in ("task_id", "kind", "payload", time_col) if c in cols
+                    c for c in ("task_id", "kind", "payload", time_col) if c in cols  # type: ignore[misc]
                 ]
                 rows = conn.execute(
                     "SELECT "
@@ -238,7 +237,7 @@ def _collect_ops_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
                 (c for c in ("agent_id", "assignee", "worker_id", "worker", "agent") if c in cols),
                 None,
             )
-            time_col = next(
+            time_col = next(  # type: ignore[assignment]
                 (c for c in ("started_at", "created_at", "start_time", "created_ts") if c in cols),
                 None,
             )
@@ -255,7 +254,7 @@ def _collect_ops_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
                 select = []
                 for col in ("id", "run_id", "task_id", agent_col, status_col, time_col):
                     if col and col in cols and col not in select:
-                        select.append(col)
+                        select.append(col)  # type: ignore[arg-type]
                 order = f"{time_col} DESC" if time_col else "rowid DESC"
                 rows = conn.execute(
                     "SELECT "
@@ -284,7 +283,7 @@ def _collect_ops_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
 
 def _collect_memory_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
     """Memory-DB: Audit-Log, OTel-Traces, Execution-Receipts und Egress-Log."""
-    entries, counts = [], {}
+    entries, counts = [], {}  # type: ignore[var-annotated, var-annotated]
     conn, _path = _open_activity_db("memory.db")
     if conn is None:
         return entries, counts
@@ -320,7 +319,7 @@ def _collect_memory_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
         cols = _table_columns(conn, "otel_traces")
         if "agent_id" in cols:
             select = [
-                c for c in ("start_time", "name", "status", "total_tokens", "total_cost_usd", "duration_ms", "task_id")
+                c for c in ("start_time", "name", "status", "total_tokens", "total_cost_usd", "duration_ms", "task_id")  # type: ignore[misc]
                 if c in cols
             ]
             rows = conn.execute(
@@ -352,7 +351,7 @@ def _collect_memory_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
         agent_col = next((c for c in ("agent_role", "agent_id") if c in cols), None)
         if agent_col:
             select = [
-                c for c in ("created_at", "model_used", "prompt_tokens", "completion_tokens", "cost_usd", "task_id")
+                c for c in ("created_at", "model_used", "prompt_tokens", "completion_tokens", "cost_usd", "task_id")  # type: ignore[misc]
                 if c in cols
             ]
             rows = conn.execute(
@@ -381,7 +380,7 @@ def _collect_memory_activity(agent_id: str, limit: int = _ACTIVITY_LIMIT):
         cols = _table_columns(conn, "egress_firewall_logs")
         if "agent_id" in cols:
             select = [
-                c for c in ("created_at", "hostname", "target_url", "allowed", "reason") if c in cols
+                c for c in ("created_at", "hostname", "target_url", "allowed", "reason") if c in cols  # type: ignore[misc]
             ]
             rows = conn.execute(
                 "SELECT "
@@ -484,7 +483,7 @@ def api_get_agent_activity(agent_id: str):
             logger.debug(f"[Telemetry] Logdatei nicht lesbar: {exc}")
 
     # Duplikate entfernen, nach Zeit absteigend sortieren und begrenzen.
-    unique = {}
+    unique = {}  # type: ignore[var-annotated]
     for ts, line, source in entries:
         unique.setdefault(line, (ts, line, source))
     ordered = sorted(unique.values(), key=lambda item: item[0], reverse=True)[:_ACTIVITY_MAX_LINES]
@@ -858,7 +857,7 @@ def _count_running_containers() -> int:
     """Echte Zahl laufender Container (60 s gecacht, damit der Endpunkt billig bleibt)."""
     now = time.time()
     if now - _TELEMETRY_CACHE["ts"] < 60 and _TELEMETRY_CACHE["ts"]:
-        return _TELEMETRY_CACHE["containers"]
+        return _TELEMETRY_CACHE["containers"]  # type: ignore[return-value]
     count = 0
     try:
         import subprocess
@@ -907,7 +906,7 @@ def api_telemetry_dashboard():
     hours, rest = divmod(uptime_seconds, 3600)
     minutes = rest // 60
 
-    load_agents_fn = getattr(app_main, "load_agents", lambda: [])
+    load_agents_fn = getattr(app_main, "load_agents", lambda: [])  # type: ignore[var-annotated]
 
     return {
         "active_agents": len(load_agents_fn()),

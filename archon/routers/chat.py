@@ -1237,7 +1237,7 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
 
         # Delegation Engine v2: strukturierte ```delegation```-Blöcke + Legacy-CLI-Interception.
         # Quittungen werden in die Delegator-Session geschrieben -> der Agent "erinnert" sich.
-        delegation_receipts = []
+        delegation_receipts: list[str] = []
         try:
             # D13: zentraler Fan-out-Cap im Produktivpfad (vorher nur Default
             # im Modul, chat.py rief ohne Cap -> beliebig viele Delegationen).
@@ -1317,9 +1317,9 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
                     except Exception as _mc_exc:
                         logger.debug("[Chat] FANOUT_CAP-Task-Meta nicht persistiert: %s", _mc_exc)
                 try:
-                    invalid_blocks.fanout_cap = cap  # type: ignore[attr-defined]
-                    invalid_blocks.fanout_blocked = True  # type: ignore[attr-defined]
-                    invalid_blocks.omitted_count = len(omitted)  # type: ignore[attr-defined]
+                    invalid_blocks.fanout_cap = cap
+                    invalid_blocks.fanout_blocked = True
+                    invalid_blocks.omitted_count = len(omitted)
                 except Exception:
                     pass
 

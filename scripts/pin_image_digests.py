@@ -17,6 +17,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 DEFAULT_FILES = ("docker-compose.yml", "docker-compose.dev.yml",
                  "docker-compose.demo.yml", "docker-compose.hermes.yml")
@@ -72,7 +73,7 @@ def pin_file(path: Path) -> int:
             continue
         pinned = f"{ref}@{digest}"
         if VAR_RE.match(raw.strip()):
-            var = VAR_RE.match(raw.strip()).group(1)
+            var = cast(re.Match[str], VAR_RE.match(raw.strip())).group(1)
             new_raw = f"${{{var}:-{pinned}}}"
         else:
             new_raw = pinned

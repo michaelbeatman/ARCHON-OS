@@ -34,9 +34,9 @@ def _estimate_tokens(messages: List[Dict[str, Any]]) -> int:
 
 def _extract_hard_facts(messages: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     file_paths = set()
-    decisions = []
-    errors_and_fixes = []
-    goals = []
+    decisions: list[str] = []
+    errors_and_fixes: list[str] = []
+    goals: list[str] = []
 
     path_pattern = re.compile(r"(?:[a-zA-Z]:[\\/]|/)?[\w.\-/\\]+\.(?:py|js|ts|html|css|json|md|docx|sql|sh|yaml|yml)")
 

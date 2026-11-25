@@ -28,7 +28,7 @@ ADMIN_PASSWORD = os.getenv("POCKETBASE_ADMIN_PASSWORD", "").strip()
 COLLECTION = "kontakte"
 
 # Name -> PocketBase-Field-Definition (kein SQL mehr!)
-NEW_FIELDS = {
+NEW_FIELDS: dict[str, dict] = {
     "dsgvo_legal_basis": {"type": "text", "max": 64, "values": ["art6_1_f", "art6_1_a", "art6_1_c", "art7_1"]},
     "dsgvo_opt_email": {"type": "number"},
     "dsgvo_opt_phone": {"type": "number"},

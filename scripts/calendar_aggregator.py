@@ -43,7 +43,7 @@ import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # Load .env file manually if it exists
 try:
@@ -74,7 +74,7 @@ def make_event(
     end: str,
     source: str,
     location: str = "",
-    attendees: list = None,
+    attendees: Optional[list] = None,
     description: str = "",
 ) -> Dict[str, Any]:
     return {
@@ -214,7 +214,7 @@ def fetch_google_events() -> List[Dict[str, Any]]:
         return []
 
 
-def create_google_event(title: str, start: str, end: str, location: str = "", description: str = "", attendees: list = None) -> Dict[str, Any]:
+def create_google_event(title: str, start: str, end: str, location: str = "", description: str = "", attendees: Optional[list] = None) -> Dict[str, Any]:
     """
     Creates a new event in Google Calendar.
     """
@@ -227,7 +227,7 @@ def create_google_event(title: str, start: str, end: str, location: str = "", de
         cal_id = os.getenv("GOOGLE_CALENDAR_ID", "primary")
         service = build("calendar", "v3", credentials=creds)
 
-        event_body = {
+        event_body: Dict[str, Any] = {
             "summary": title,
             "start": {
                 "dateTime": start,

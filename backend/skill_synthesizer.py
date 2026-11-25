@@ -14,7 +14,7 @@ import json
 import sqlite3
 import datetime
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -55,7 +55,7 @@ class SkillSynthesizer:
             """)
             conn.commit()
 
-    def propose_new_skill(self, agent_id: str, skill_name: str, trigger_intent: str, workflow_description: str, tools_used: List[str] = None) -> Dict[str, Any]:
+    def propose_new_skill(self, agent_id: str, skill_name: str, trigger_intent: str, workflow_description: str, tools_used: Optional[List[str]] = None) -> Dict[str, Any]:
         """Erstellt einen neuen Skill-Entwurf und trägt ihn in die Personalakte ein."""
         import re as _re
         tools_used = tools_used or ["local_memory", "core_dispatcher"]
@@ -155,7 +155,7 @@ Wird automatisch aktiviert bei: `{trigger_intent}`
                 "message": f"Skill '{item['skill_name']}' dauerhaft im Agenten-Repertoire aktiviert."
             }
 
-    def list_proposals(self, status: str = None) -> List[Dict[str, Any]]:
+    def list_proposals(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
         with self._get_conn() as conn:
             cur = conn.cursor()
             if status:

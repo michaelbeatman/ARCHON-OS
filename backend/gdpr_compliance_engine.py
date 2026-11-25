@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/gdpr_compliance_engine.py
 DSGVO- / GDPR-Compliance Engine für Archon OS 2026.
@@ -1157,9 +1156,9 @@ class GDPRComplianceEngine:
             c_reg = comp.get("registry") if isinstance(comp.get("registry"), dict) else {}
             controller = {
                 "name": comp.get("name") or "Archon Systems GmbH",
-                "address": f"{c_addr.get('street', '')}, {c_addr.get('postal_code', '')} {c_addr.get('city', '')}".strip(", "),
-                "representative": c_reg.get("managing_directors") or "Geschäftsführung",
-                "email": c_cnt.get("email") or "",
+                "address": f"{c_addr.get('street', '')}, {c_addr.get('postal_code', '')} {c_addr.get('city', '')}".strip(", "),  # type: ignore[union-attr]
+                "representative": c_reg.get("managing_directors") or "Geschäftsführung",  # type: ignore[union-attr]
+                "email": c_cnt.get("email") or "",  # type: ignore[union-attr]
             }
         except Exception:
             controller = {"name": "Archon Systems"}

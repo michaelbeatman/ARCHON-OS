@@ -69,3 +69,13 @@ rg -n "record_event\(" core_dispatcher.py backend/agent_rbac_jail.py archon/rout
 ---
 
 DOMÄNEN-SCORE: 6/10 — Die kryptografischen Primitiven und die Nebenketten-Verdrahtung sind nach dem Re-Audit weitgehend saniert; die verbleibenden blockers/HIGHs betreffen die **Wirksamkeit im Produktivpfad** (kein Fail-Fast bei Manipulation, Anker-Key-Rotation, fehlende externe Verankerung, fehlende Auth-/Recovery-Audits).
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** BLOCKER **B-05** (kein Fail-Fast bei Kettenmanipulation) und alle 4 HIGH (H-05-1 Anker-Key-Rotation, H-05-2 nur lokaler Anker, H-05-3 fehlende Auth-Events, H-05-4 toter `_record_failed_cancel`-Pfad) sowie zugehörige MED — siehe `fix_w1_a_audit.md` (`_assert_audit_integrity()` + `AUDIT_COMPROMISED`→`/readyz` 503, Anker-Epochen, externes Volume, Auth-Events, `agent_id`-Signatur, Receipt-Key-Trennung) und `fix_w4_d2_residuals.md` (getrennte/epochenbewusste Keys bei Rotation).
+- **Bewusst offen:** **Audit-Ketten-Bruch** aus der DB-Wiederherstellung: die wiederhergestellte `data/memory.db` enthält alte Plain-SHA-Blöcke bei neuem HMAC-Key. Bewusst **nicht** stumm re-signiert — eine bewusste Betreiberentscheidung (Beweisverlust durch Re-Signierung vs. dokumentierter Bruch) steht noch aus. Ebenfalls offen: W4-D1 (D09).
+- **Verifikation:** Subagent `compileall` Exit 0, 11/11 neue Tests; Full-Suite final 2335/0/16 (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

@@ -8,6 +8,7 @@ Verifiziert:
 """
 
 from pathlib import Path
+import os
 import pytest
 from unittest.mock import MagicMock
 from fastapi import HTTPException

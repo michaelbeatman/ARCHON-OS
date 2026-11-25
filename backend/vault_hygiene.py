@@ -75,8 +75,8 @@ def generate_vault_index_and_hygiene() -> Dict[str, Any]:
     moc_file = os.path.join(projects_dir, "_MOC_Projekt_Index.md")
     try:
         os.makedirs(projects_dir, exist_ok=True)
-        with open(moc_file, "w", encoding="utf-8") as f:
-            f.write(moc_content)
+        with open(moc_file, "w", encoding="utf-8") as fh:
+            fh.write(moc_content)
     except Exception as e:
         return {"status": "error", "message": f"Konnte Index nicht schreiben: {e}"}
 

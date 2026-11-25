@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/ephemeral_team_spawner.py
 Paket 5 (Feature 24): Dynamisches Ephemeral-Team-Spawning (Ad-hoc Task-Force).
@@ -176,7 +175,7 @@ class EphemeralTeamSpawner:
                 # P0-10: asyncio.run() erzeugte eine NEUE Event-Loop pro Call —
                 # Dispatcher-Semaphoren/HTTP-Pools sind loop-keyed und wurden
                 # damit umgangen. Aus async-Kontext haette es hart gecrasht.
-                dag_run = await run_workflow_dag(dag_def=dag_def, executor_fn=eff_exec)
+                dag_run = await run_workflow_dag(dag_def=dag_def, executor_fn=eff_exec)  # type: ignore[arg-type]
                 dag_succeeded = str(dag_run.get("status", "")).lower() in ("success", "completed", "ok")
             except Exception as dag_exc:
                 dag_succeeded = False

@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import asyncio
 import json
 import logging
@@ -233,7 +232,7 @@ class AgentRouter:
         """Einmal pro Kalendertag Telegram-Warnung bei >= 80% Budget."""
         today = datetime.now().strftime("%Y-%m-%d")
         try:
-            state = {}
+            state = {}  # type: ignore[var-annotated]
             if os.path.exists(BUDGET_WARN_MARKER):
                 with open(BUDGET_WARN_MARKER, "r", encoding="utf-8") as f:
                     state = json.load(f) or {}
@@ -407,7 +406,7 @@ class AgentRouter:
             from backend.handoff_desk import mark_truncated
         except Exception as _mark_exc:
             logger.error("[AgentRouter] mark_truncated nicht verfuegbar: %s", _mark_exc)
-            mark_truncated = None
+            mark_truncated = None  # type: ignore[assignment]
 
         sys_msg = messages[0]
         recent_count = max(3, min(8, len(messages) // 3))
@@ -981,7 +980,7 @@ class AgentRouter:
                 )
                 if not hop.get("allowed", False):
                     await asyncio.to_thread(
-                        budget_bank.release, check.get("reservation_id"), "trajectory_hop_blocked"
+                        budget_bank.release, check.get("reservation_id"), "trajectory_hop_blocked"  # type: ignore[arg-type]
                     )
                     _detail = str(hop.get("detail") or "")
                     if _detail == "REPEAT_BUDGET_EXCEEDED":
@@ -1016,7 +1015,7 @@ class AgentRouter:
                 )
                 if not token_res.get("allowed", False):
                     await asyncio.to_thread(
-                        budget_bank.release, check.get("reservation_id"), "token_cap_reached"
+                        budget_bank.release, check.get("reservation_id"), "token_cap_reached"  # type: ignore[arg-type]
                     )
                     raise BudgetExceededError(
                         f"[{token_res.get('reason')}]: Ticket-Token-Cap erreicht"
@@ -1026,7 +1025,7 @@ class AgentRouter:
             except Exception as exc:
                 logger.error("[AgentRouter] Token-Reservierung nicht verfuegbar — fail-closed: %s", exc)
                 await asyncio.to_thread(
-                    budget_bank.release, check.get("reservation_id"), "token_gate_unavailable"
+                    budget_bank.release, check.get("reservation_id"), "token_gate_unavailable"  # type: ignore[arg-type]
                 )
                 raise BudgetExceededError(f"[TOKEN_GATE_UNAVAILABLE]: {exc}") from exc
         return str(check.get("reservation_id") or ""), est_in + est_out, est_eur, _hop_tid
@@ -1106,7 +1105,7 @@ class AgentRouter:
             )
             return {
                 "blocked": False,
-                "text": f"Deterministisch via n8n ausgeführt (0 Tokens): {_res.get('status')}",
+                "text": f"Deterministisch via n8n ausgeführt (0 Tokens): {_res.get('status')}",  # type: ignore[attr-defined]
             }
         return {
             "blocked": False,
@@ -1354,13 +1353,13 @@ class AgentRouter:
                         if not isinstance(choices, list) or not choices:
                             raise RuntimeError(f"Leere LLM-Antwort ohne choices von {eff_provider}/{m_try}.")
                         msg_obj = choices[0].get("message") if isinstance(choices[0], dict) else None
-                        raw_text = msg_obj.get("content") if isinstance(msg_obj, dict) else None
+                        raw_text = msg_obj.get("content") if isinstance(msg_obj, dict) else None  # type: ignore[assignment]
                     if not isinstance(raw_text, str) or not raw_text.strip():
                         raise RuntimeError(f"Leerer LLM-Antworttext von {eff_provider}/{m_try} (HTTP 200 ohne Inhalt).")
                     raw_text = self._finalize_output_guard(raw_text, hop_sid, is_local_hop)
                     usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
-                    p_toks = int(usage.get("prompt_tokens") or usage.get("input_tokens") or max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4))
-                    c_toks = int(usage.get("completion_tokens") or usage.get("output_tokens") or max(1, len(raw_text) // 4))
+                    p_toks = int(usage.get("prompt_tokens") or usage.get("input_tokens") or max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4))  # type: ignore[union-attr]
+                    c_toks = int(usage.get("completion_tokens") or usage.get("output_tokens") or max(1, len(raw_text) // 4))  # type: ignore[union-attr]
                     est_cost_unverified = True
                     est_cost = 0.0
                     try:
@@ -1393,11 +1392,11 @@ class AgentRouter:
                 except ZeroEgressBlockedError:
                     raise
                 except Exception as e:
-                    last_err = e
+                    last_err = e  # type: ignore[assignment]
                     if idx < len(candidate_models) - 1:
                         logger.warning(f"[AgentRouter] Call to '{m_try}' failed ({e}), trying fallback '{candidate_models[idx+1]}'...")
                         continue
-                    raise last_err
+                    raise last_err  # type: ignore[misc]
             # A: wenn jeder Kandidat per Circuit-Breaker uebersprungen wurde,
             # endet die Schleife ohne return/raise. Ein stilles None wird von
             # Konsumenten (z. B. context_help.py) als leerer Treffer gewertet.
@@ -1727,12 +1726,12 @@ class AgentRouter:
             except TimeoutError as timeout_err:
                 # D07: Ketten-Deadline ist erreichte Obergrenze, kein Provider-
                 # Ausfall — kein weiterer Fallback-Hop, kein false-healthy-Breaker.
-                last_err = timeout_err
+                last_err = timeout_err  # type: ignore[assignment]
                 logger.error("[AgentRouter Stream] %s", timeout_err)
                 yield f"ERROR: {timeout_err}"
                 return
             except Exception as e:
-                last_err = e
+                last_err = e  # type: ignore[assignment]
                 # B: der Half-Open-Probe muss bei Verbindungsfehlern als Failure
                 # verbucht werden, sonst bleibt `probing=True` gesetzt und
                 # allow() verweigert den Provider dauerhaft (gleiches Muster wie
@@ -1871,7 +1870,7 @@ async def chat_with_verification_escalation(
     # D07/S-7.4: ohne verifier_fn darf nicht "bestanden" behauptet werden;
     # ein leerer Text war früher ebenfalls ein Pass.
     has_verifier = callable(verifier_fn)
-    passed = bool(verifier_fn(first_out)) if has_verifier else None
+    passed = bool(verifier_fn(first_out)) if has_verifier else None  # type: ignore[misc]
     _verification = "passed" if passed is True else ("failed" if passed is False else "unverified")
     if passed is True or first_pick["model"] == frontier_model:
         return {
@@ -1903,7 +1902,7 @@ async def chat_with_verification_escalation(
     )
     # D07/S-7.4: auch die eskalierte Antwort muss reverifiziert werden. Ein
     # Fehlschlag ist kein Erfolg und braucht HITL-Kennzeichnung.
-    esc_passed = bool(verifier_fn(esc_out)) if has_verifier else False
+    esc_passed = bool(verifier_fn(esc_out)) if has_verifier else False  # type: ignore[misc]
     return {
         "content": esc_out,
         "model_used": esc_pick["model"],

@@ -117,8 +117,9 @@ class EvalRegressionRunner:
             # FAIL-CLOSED: ohne echte Kandidaten-Ausgabe darf kein Fall als
             # bestanden gelten. Frueher wurden die erwarteten Keywords selbst
             # in die Antwort geschrieben -> immer 100 % und release_approved.
-            evaluated = simulated_outputs is not None and cid in simulated_outputs
-            out_text = str(simulated_outputs[cid]) if evaluated else ""
+            outputs = simulated_outputs or {}
+            evaluated = cid in outputs
+            out_text = str(outputs[cid]) if evaluated else ""
 
             out_low = out_text.lower()
             has_expected = any(k.lower() in out_low for k in expected) if expected else True

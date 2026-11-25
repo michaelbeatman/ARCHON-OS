@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Router und Forwarder fuer Hermes-Dashboard und WebUI-Proxy."""
 from __future__ import annotations
 
@@ -271,7 +270,7 @@ async def proxy_web_ui(url: str):
 
         res_obj = HTMLResponse(content=html_text, status_code=resp.status_code)
     else:
-        res_obj = Response(
+        res_obj = Response(  # type: ignore[assignment]
             content=resp.content,
             media_type=content_type,
             status_code=resp.status_code,

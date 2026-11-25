@@ -182,7 +182,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.default_limit = default_limit or _env_int("ARCHON_RATE_LIMIT_DEFAULT", 600)
         self.strict_limit = strict_limit or _env_int("ARCHON_RATE_LIMIT_STRICT", 20)
-        self._buckets: Dict[Tuple[str, str], _Bucket] = {}
+        self._buckets: Dict[Tuple[str, str, str], _Bucket] = {}
         self._lock = threading.Lock()
         self._last_prune = time.monotonic()
         self._blocked_log: Dict[str, float] = {}

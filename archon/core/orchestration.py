@@ -1032,7 +1032,7 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
         # Atomares Commit: nur unser Delta (neue Subtasks + Parent-Update) in den frischen Store mergen
         def _commit():
             if update_mc is not None:
-                update_mc(lambda fresh: _merge_sandy_delta(fresh, data, parent_id, created_sub_ids, created_subtasks))
+                update_mc(lambda fresh: _merge_sandy_delta(fresh, data, parent_id, created_sub_ids, created_subtasks))  # type: ignore[arg-type]
             else:
                 raise RuntimeError(
                     "_trigger_sandy_staffing_nomination: Parameter 'update_mc' fehlt. "

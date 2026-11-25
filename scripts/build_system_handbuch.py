@@ -36,7 +36,7 @@ def load_agent_roster():
     prof_map = {p.get("id"): p for p in profiles}
     
     # Categorize
-    by_cat = {}
+    by_cat: dict[str, list] = {}
     for a in inventory:
         cat = a.get("category", "7. Tech, Software & Data")
         by_cat.setdefault(cat, []).append(a)

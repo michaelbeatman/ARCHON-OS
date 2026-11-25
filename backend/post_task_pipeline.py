@@ -147,8 +147,8 @@ def send_smtp_email(subject: str, text_content: str, html_content: Optional[str]
     try:
         msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
-        msg["From"] = from_addr
-        msg["To"] = to_addr
+        msg["From"] = str(from_addr or "")
+        msg["To"] = str(to_addr or "")
 
         alt_part = MIMEMultipart("alternative")
         alt_part.attach(MIMEText(text_content, "plain", "utf-8"))

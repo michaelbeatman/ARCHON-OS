@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/auth_service.py
 Meilenstein 4: Multi-User-Architektur & Rollenbasierte Zugriffskontrolle (RBAC).
@@ -140,7 +139,7 @@ def _get_db() -> sqlite3.Connection:
     return conn
 
 
-def _hash_password(password: str, salt: str = None, iterations: int = _PBKDF2_ITERATIONS) -> tuple:
+def _hash_password(password: str, salt: str = None, iterations: int = _PBKDF2_ITERATIONS) -> tuple:  # type: ignore[assignment]
     if not salt:
         salt = uuid.uuid4().hex
     pwd_bytes = password.encode("utf-8")
@@ -639,14 +638,14 @@ class AuthService:
                 params.append(email.strip().lower())
             if is_active is not None:
                 updates.append("is_active = ?")
-                params.append(1 if is_active else 0)
+                params.append(1 if is_active else 0)  # type: ignore[arg-type]
 
             if updates:
                 params.append(user_id)
                 cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", tuple(params))
                 conn.commit()
 
-        return self.get_user_by_id(user_id)
+        return self.get_user_by_id(user_id)  # type: ignore[return-value]
 
     def verify_password(self, username: str, password: str) -> bool:
         """Prüft ein Passwort, ohne eine Session anzulegen."""

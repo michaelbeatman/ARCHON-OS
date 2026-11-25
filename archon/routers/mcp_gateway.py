@@ -157,14 +157,15 @@ async def mcp_sse_stream(request: Request):
     async def _event_generator():
         # M5: Trace-Kontext IM Generator oeffnen — der Kontext der
         # StreamingResponse-Header ist beim Generator-Lauf bereits zurückgesetzt.
+        use_trace_context: Any = None
         try:
-            from backend.trace_context import use_trace_context
+            from backend.trace_context import use_trace_context as _use_trace_context
+            use_trace_context = _use_trace_context
         except Exception as exc:
             _archon_exc_logger.warning("[mcp_gateway] Trace-Kontext nicht verfügbar: %s", exc)
-            use_trace_context = None
         ctx = use_trace_context(
             traceparent=initial_tp, tracestate=trace_headers.get("tracestate")
-        ) if (use_trace_context and initial_tp) else contextlib.nullcontext()
+        ) if (use_trace_context is not None and initial_tp) else contextlib.nullcontext()
         try:
             with ctx:
                 frame = _sse_frame_trace()

@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 backend/otel_tracer.py
 W3C-Trace-Context + lokaler SQLite-Span-Recorder für Archon OS (Pillar 1 & 6).
@@ -63,7 +62,7 @@ class OpenTelemetryTracer:
         Aufrufer (z. B. llm_kernel/workflow_dag_runner) können damit Start-,
         Span- und End-Fehler auf WARNING heben und im Status zählen.
         """
-        self._record_stats["failures"] += 1
+        self._record_stats["failures"] += 1  # type: ignore[operator]
         self._record_stats["last_error"] = f"{stage}: {exc}"
         key = str(stage)
         self._stage_failures[key] = self._stage_failures.get(key, 0) + 1
@@ -278,7 +277,7 @@ class OpenTelemetryTracer:
         # Hartes Sampling: "00-...-00" erzeugt gar keinen lokalen Span und
         # damit auch nichts, was spaeter exportiert werden koennte.
         if not sampled:
-            self._record_stats["sampled_out"] += 1
+            self._record_stats["sampled_out"] += 1  # type: ignore[operator]
             return ""
 
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -302,7 +301,7 @@ class OpenTelemetryTracer:
                         total_tokens, cost_usd, duration_ms, now_iso, now_iso, json.dumps(attrs)
                     ))
                     conn.commit()
-            self._record_stats["success"] += 1
+            self._record_stats["success"] += 1  # type: ignore[operator]
         except Exception as exc:
             self.note_local_trace_error("record_span", exc)
             raise
@@ -477,7 +476,7 @@ class OpenTelemetryTracer:
                     headers = tc.inject_headers(base)
                     tp = str(headers.get("traceparent") or "")
                     self._record_stats.setdefault("export_hops", 0)
-                    self._record_stats["export_hops"] += 1
+                    self._record_stats["export_hops"] += 1  # type: ignore[operator]
                     return headers, {
                         "traceparent": tp,
                         "span_id": hop_sid,
@@ -507,9 +506,9 @@ class OpenTelemetryTracer:
                     )
                     with urllib.request.urlopen(req, timeout=5):
                         pass
-                    self._export_stats["success"] += 1
+                    self._export_stats["success"] += 1  # type: ignore[operator]
                 except Exception as exc:
-                    self._export_stats["failures"] += 1
+                    self._export_stats["failures"] += 1  # type: ignore[operator]
                     self._export_stats["last_error"] = f"otlp: {exc}"
                     _archon_exc_logger.warning("[otel_tracer] OTLP-Export fehlgeschlagen (%s): %s", otlp_ep, exc)
             if lf_enabled:
@@ -560,9 +559,9 @@ class OpenTelemetryTracer:
                     )
                     with urllib.request.urlopen(req, timeout=5):
                         pass
-                    self._export_stats["success"] += 1
+                    self._export_stats["success"] += 1  # type: ignore[operator]
                 except Exception as exc:
-                    self._export_stats["failures"] += 1
+                    self._export_stats["failures"] += 1  # type: ignore[operator]
                     self._export_stats["last_error"] = f"langfuse: {exc}"
                     _archon_exc_logger.warning("[otel_tracer] Langfuse-Export fehlgeschlagen (%s): %s", lf_host, exc)
 

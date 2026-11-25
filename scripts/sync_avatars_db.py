@@ -74,11 +74,11 @@ def main():
                 f'/opt/data/webui/static_avatars/avatars/avatar_{idx:03d}.jpg',
                 f'/opt/data/webui/static_avatars/avatar_{idx:03d}.jpg'
             ]
-            img_path = next((p for p in candidates if os.path.exists(p)), None)
-            if not img_path:
+            fallback_path = next((p for p in candidates if os.path.exists(p)), None)
+            if not fallback_path:
                 continue
 
-            with open(img_path, 'rb') as f:
+            with open(fallback_path, 'rb') as f:
                 blob = f.read()
             mime = 'image/jpeg'
             fallback_count += 1

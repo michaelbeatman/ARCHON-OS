@@ -19,12 +19,13 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from archon.core.paths import OBSIDIAN_VAULT, OPT_DATA_DIR
 
 try:
-    import httpx
+    import httpx as _httpx
+    httpx: Any = _httpx
 except ImportError:
     httpx = None
 

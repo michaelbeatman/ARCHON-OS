@@ -5,6 +5,7 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 Ausgelagert aus backend/operations_api.py.
 """
 
+import json
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -108,15 +109,20 @@ def execute_jit_persona_task(request: Request, req: JITPersonaTaskRequest):
     from backend.jit_persona_engine import get_jit_persona_engine
     engine = get_jit_persona_engine()
     persona = engine.analyze_and_induct_persona(
-        task_description=req.task_description,
-        creator_agent=req.creator_agent,
-        ttl_hours=2 if req.auto_purge_on_complete else 24,
+        task_prompt=req.task_description,
+        domain_hint=req.creator_agent or None,
     )
+    prompt = req.task_description
+    if req.context:
+        prompt = f"{prompt}\n\nKontext:\n{json.dumps(req.context, ensure_ascii=False, default=str)}"
     res = engine.execute_with_persona(
         persona_id=persona["persona_id"],
-        task_prompt=req.task_description,
-        context=req.context,
+        prompt=prompt,
     )
+    # Die Engine verwaltet keine TTL; das Auto-Purge-Flag des Requests wird
+    # nach der Ausfuehrung ueber purge_persona() umgesetzt.
+    if req.auto_purge_on_complete:
+        engine.purge_persona(str(persona.get("persona_id") or ""))
     return res
 
 

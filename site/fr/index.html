@@ -233,11 +233,12 @@ pre{background:var(--code-bg);color:var(--code-fg);border:1px solid var(--line);
 .status{border-left:4px solid var(--accent);padding:var(--space-2) 0 var(--space-2) var(--space-4);color:var(--fg-muted);max-width:52rem;background:var(--accent-soft);border-radius:0 var(--radius-md) var(--radius-md) 0}
 footer{margin-top:var(--space-16);border-top:1px solid var(--line);padding:var(--space-8) 0 var(--space-10);color:var(--fg-subtle);font-size:var(--text-sm)}
 footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:center;text-align:center}
+.hero .wrap{position:relative;z-index:2}
 .hero-split{position:relative}
 .hero-left{position:relative;z-index:2;max-width:60%}
 .hero-left .logo-showcase{justify-content:flex-start;padding:var(--space-10) 0 0}
 .hero-left .logo-showcase img{max-width:540px;width:100%}
-.hero-right{position:absolute;top:-16px;right:-4%;width:42%;max-width:540px;z-index:1;pointer-events:none;user-select:none}
+.hero-right{position:absolute;top:0.5rem;right:-3%;width:clamp(340px,38vw,620px);z-index:1;pointer-events:none;user-select:none}
 .blueprint-stage{position:relative;width:100%;transform:translate3d(0,var(--parallax-y,0px),0);will-change:transform}
 .asymmetric-blueprint{width:100%;height:auto;display:block;opacity:0.28}
 @media (prefers-color-scheme:dark){
@@ -245,7 +246,7 @@ footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:cent
 }
 @media (max-width:767px){
   .hero-left{max-width:100%}
-  .hero-right{top:0;right:-16%;width:72%;opacity:0.32}
+  .hero-right{top:0;right:-18%;width:72%;opacity:0.32}
 }
 @media (prefers-reduced-motion:reduce){
   .blueprint-stage{transform:none}
@@ -277,9 +278,10 @@ footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:cent
 </picture>
 </div>
 </div>
-<div class="hero-right"><div class="blueprint-stage"><picture><source srcset="../archon_blueprint_dark.png" media="(prefers-color-scheme: dark)"><img src="../archon_blueprint_light.png" class="asymmetric-blueprint" alt="Archon OS Governance &amp; Zero-Egress Architecture Sketch" loading="eager"></picture></div></div>
 </div>
-</div></section>
+</div>
+<div class="hero-right"><div class="blueprint-stage"><picture><source srcset="../archon_blueprint_dark.png" media="(prefers-color-scheme: dark)"><img src="../archon_blueprint_light.png" class="asymmetric-blueprint" alt="Archon OS Governance &amp; Zero-Egress Architecture Sketch" loading="eager"></picture></div></div>
+</section>
 
 <div class="wrap">
 <h3 class="sec">Screenshots</h3>

@@ -20,15 +20,15 @@ from __future__ import annotations
 
 import os
 
-from archon.core.runtime import DATA_DIR, MEMORY_DIR, WORKSPACE_DIR, OBSIDIAN_VAULT_DIR
+from archon.core.runtime import DATA_DIR, MEMORY_DIR, WORKSPACE_DIR
 from backend.platform_paths import (
     HERMES_HOME,
     OBSIDIAN_VAULT,
     PERSONALAKTEN_DIR,
     PROJEKTE_DIR,
-    soul_path,
-    profile_dir,
     agent_log_path,
+    profile_dir,
+    soul_path,
 )
 
 # --- Basisverzeichnisse Plattform & Host ------------------------------------

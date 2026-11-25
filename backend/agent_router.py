@@ -17,7 +17,6 @@ logger = logging.getLogger("agent_router")
 
 from backend.llm_kernel import AUTO_MODEL_MAP  # noqa: E402
 
-
 # D13/MED (W3-D): gezählte Wiederholungen liegen persistiert in
 # `backend.trajectory_budget.trajectory_repeat_budget`. `reserve_hop(...,
 # allow_repeat=True)` konsumiert genau dieses repeat_budget und blockiert mit
@@ -605,7 +604,11 @@ class AgentRouter:
         # idempotent in der verlustfreien Historie der konsolidierten memory.db.
         # Läuft im Worker-Thread (asyncio.to_thread), nie im Event-Loop.
         try:
-            from backend.lossless_session_dag import derive_session_id, derive_tenant_id, record_turns
+            from backend.lossless_session_dag import (
+                derive_session_id,
+                derive_tenant_id,
+                record_turns,
+            )
             _lcm_sid = derive_session_id(messages)
             _lcm_tid = derive_tenant_id(messages)
             record_turns(_lcm_sid, messages, tenant_id=_lcm_tid)

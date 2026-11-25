@@ -272,8 +272,8 @@ async def dispatch_llm(
         # Der Router erwartet provider UND api_keys als Pflichtargumente und
         # kennt kein session_id. Das Session-/Trace-Feld wird daher ueber den
         # Trace-Kontext und die Ergebnis-Metadaten mitgefuehrt.
-        from backend.agent_router import router_instance
         import api_provider
+        from backend.agent_router import router_instance
         msgs = list(messages or [])
         if not msgs and prompt:
             if system_prompt:

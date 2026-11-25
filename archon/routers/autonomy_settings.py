@@ -1,18 +1,22 @@
 """Router fuer Autonomie-Module, Model-Routing, Semantic-Cache & Evolution."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import logging
 import os
 from typing import Dict
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi import Depends as _ArchonDepends
+
+from archon.routers._rbac import (
+    forbid_viewer_writes as _forbid_viewer_writes,
+)
+from archon.routers._rbac import (
+    require_admin_or_503,
+)
+from archon.routers._validated_body import PassthroughBody, as_payload
 
 logger = logging.getLogger("archon.routers.autonomy_settings")
-
-from archon.routers._validated_body import PassthroughBody, as_payload
-from archon.routers._rbac import require_admin_or_503
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["autonomy_settings"])
 

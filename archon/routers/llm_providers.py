@@ -1,28 +1,28 @@
-from fastapi import Depends as _ArchonDepends
-
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
-
 """LLM-Provider-Verwaltung (Auswahl, Keys, Preise, Privacy-Routing)."""
 
 import os
-import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-import httpx
-from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import Depends as _ArchonDepends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.runtime import logger  # noqa: F401
-from archon.routers._rbac import require_admin_or_503
-# F1a: Preis-SSOT liegt in backend/ (backend/** darf archon.routers nicht
-# importieren). Re-Export haelt main.py:1093 / chat.py:50 unveraendert.
+from archon.routers._rbac import (
+    forbid_viewer_writes as _forbid_viewer_writes,
+)
+from archon.routers._rbac import (
+    require_admin_or_503,
+)
 from backend.llm_prices import (
     _get_llm_prices_impl,
     get_llm_prices,
     get_price_cache,
 )
 
+# F1a: Preis-SSOT liegt in backend/ (backend/** darf archon.routers nicht
+# importieren). Re-Export haelt main.py:1093 / chat.py:50 unveraendert.
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
 

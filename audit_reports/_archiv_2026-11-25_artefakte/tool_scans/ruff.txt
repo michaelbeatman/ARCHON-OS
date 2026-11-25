@@ -1,0 +1,8 @@
+576	I001	[*] unsorted-imports
+246	F601	[ ] multi-value-repeated-key-literal
+ 46	F541	[*] f-string-missing-placeholders
+ 14	F811	[-] redefined-while-unused
+  3	E731	[ ] lambda-assignment
+  2	F821	[ ] undefined-name
+Found 887 errors.
+[*] 635 fixable with `--fix` (177 unsafe fixes available with `--fix --unsafe-fixes`).

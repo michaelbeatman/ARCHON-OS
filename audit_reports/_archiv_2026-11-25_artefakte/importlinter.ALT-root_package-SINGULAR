@@ -1,0 +1,14 @@
+[importlinter]
+root_package = archon
+include_external_packages = False
+
+[importlinter:contract:backend-no-router-imports]
+name = backend darf keine archon.routers importieren (Layergrenze D09/H-09-2)
+type = forbidden
+source_modules =
+    backend
+forbidden_modules =
+    archon.routers
+ignore_imports =
+    backend.operations_api -> archon.routers._rbac
+    backend.operations_api -> archon.core.provider_registry

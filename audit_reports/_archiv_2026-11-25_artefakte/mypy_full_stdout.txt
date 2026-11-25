@@ -1,0 +1,419 @@
+scripts\read_comments.py:3: error: Item "TextIO" of "TextIO | Any" has no
+attribute "reconfigure"  [union-attr]
+    sys.stdout.reconfigure(encoding='utf-8')
+    ^~~~~~~~~~~~~~~~~~~~~~
+scripts\pin_image_digests.py:75: error: Item "None" of "Match[str] | None" has
+no attribute "group"  [union-attr]
+                var = VAR_RE.match(raw.strip()).group(1)
+                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+scripts\generate_notebooklm_package.py:543: error: Unsupported operand types
+for / ("Path" and "Collection[str]")  [operator]
+                nb_dir = OUT / lang / concept["id"]
+                                      ^~~~~~~~~~~~~
+scripts\generate_notebooklm_package.py:550: error: Argument 4 to
+"write_manifest" has incompatible type "Collection[str]"; expected
+"dict[Any, Any]"  [arg-type]
+    ...           write_manifest(nb_dir, concept, lang, meta, keys, redaction...
+                                                        ^~~~
+scripts\generate_notebooklm_package.py:550: error: Argument 5 to
+"write_manifest" has incompatible type "Collection[str]"; expected "list[str]" 
+[arg-type]
+    ...         write_manifest(nb_dir, concept, lang, meta, keys, redactions)
+                                                            ^~~~
+scripts\generate_notebooklm_package.py:551: error: Argument 1 to "append" of
+"list" has incompatible type "tuple[str, Collection[str], str]"; expected
+"tuple[str, str, str]"  [arg-type]
+                built.append((str(nb_dir.relative_to(ROOT)).replace("\\", ...
+                             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~...
+scripts\generate_notebooklm_package.py:573: error: Value of type
+"Collection[str]" is not indexable  [index]
+    ...ang == 'de' else 'EN'} | `{nb_id}` | `{path}` | {concept[lang]['focus'...
+                                                        ^~~~~~~~~~~~~~~~~~~~~~
+backend\telegram_gateway_v2.py:68: error: Dict entry 2 has incompatible type
+"str": "bool"; expected "str": "str"  [dict-item]
+    ...rn {"action": parts[1], "approval_id": parts[2], "approved": parts[1] ...
+                                                        ^~~~~~~~~~~~~~~~~~~~~...
+backend\qr_girocode.py:159: error: Incompatible types in assignment (expression
+has type "list[int]", variable has type "int")  [assignment]
+            for b in blocks_data:
+            ^
+backend\qr_girocode.py:160: error: Argument 1 to "len" has incompatible type
+"int"; expected "Sized"  [arg-type]
+                if i < len(b):
+                           ^
+backend\qr_girocode.py:161: error: Value of type "int" is not indexable 
+[index]
+                    codewords.append(b[i])
+                                     ^~~~
+utils\skill_marketplace.py:62: error: Incompatible default for parameter
+"search" (default has type "None", parameter has type "str")  [assignment]
+    ...(source_id: str = "hermes_skills", search: str = None, category: str =...
+                                                        ^~~~
+utils\skill_marketplace.py:62: note: PEP 484 prohibits implicit Optional. Accordingly, mypy has changed its default to no_implicit_optional=True
+utils\skill_marketplace.py:62: note: Use https://github.com/hauntsaninja/no_implicit_optional to automatically upgrade your codebase
+utils\skill_marketplace.py:62: error: Incompatible default for parameter
+"category" (default has type "None", parameter has type "str")  [assignment]
+    ..._id: str = "hermes_skills", search: str = None, category: str = None):
+                                                                       ^~~~
+scripts\audit_route_guards.py:137: error: "AST" has no attribute "args" 
+[attr-defined]
+        for node in ast.walk(fn.args):
+                             ^~~~~~~
+scripts\audit_route_guards.py:155: error: "AST" has no attribute "body" 
+[attr-defined]
+        for node in tree.body:
+                    ^~~~~~~~~
+scripts\audit_route_guards.py:300: error: Need type annotation for
+"api_route_mixed" (hint: "api_route_mixed: dict[<type>, <type>] = ...") 
+[var-annotated]
+        api_route_mixed = {}
+        ^~~~~~~~~~~~~~~
+scripts\audit_route_guards.py:331: error: Need type annotation for "by_file"
+(hint: "by_file: dict[<type>, <type>] = ...")  [var-annotated]
+        by_file = {}
+        ^~~~~~~
+backend\demo_mode.py:884: error: Unsupported operand types for * ("float" and
+"str")  [operator]
+            d["weighted_value"] = round(d["deal_value"] * d["probability"]...
+                                        ^
+backend\demo_mode.py:884: error: Unsupported operand types for * ("str" and
+"float")  [operator]
+            d["weighted_value"] = round(d["deal_value"] * d["probability"]...
+                                        ^
+backend\demo_mode.py:884: error: Unsupported operand types for * ("str" and
+"str")  [operator]
+            d["weighted_value"] = round(d["deal_value"] * d["probability"]...
+                                        ^
+backend\demo_mode.py:884: note: Both left and right operands are unions
+backend\demo_mode.py:884: error: Argument 1 to "round" has incompatible type
+"float | Any | str"; expected "_SupportsRound2[Any]"  [arg-type]
+            d["weighted_value"] = round(d["deal_value"] * d["probability"]...
+                                        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+scripts\audit_secrets.py:151: error: Incompatible default for parameter "now"
+(default has type "None", parameter has type "datetime")  [assignment]
+    ...= ROTATION_REGISTER_FILE, now: datetime.datetime = None) -> List[str]:
+                                                          ^~~~
+scripts\audit_secrets.py:151: note: PEP 484 prohibits implicit Optional. Accordingly, mypy has changed its default to no_implicit_optional=True
+scripts\audit_secrets.py:151: note: Use https://github.com/hauntsaninja/no_implicit_optional to automatically upgrade your codebase
+backend\calendar_sync_blocker.py:80: error: Item "None" of
+"dict[str, Any] | None" has no attribute "get"  [union-attr]
+                lu = str(le.get("updated_at") or "")
+                         ^~~~~~
+backend\calendar_sync_blocker.py:81: error: Item "None" of
+"dict[str, Any] | None" has no attribute "get"  [union-attr]
+                ru = str(re_.get("updated_at") or "")
+                         ^~~~~~~
+backend\calendar_sync_blocker.py:83: error: Argument 1 to "append" of "list"
+has incompatible type "dict[str, Any] | None"; expected "dict[str, Any]" 
+[arg-type]
+                    merged.append(re_)
+                                  ^~~
+backend\calendar_sync_blocker.py:84: error: Argument 1 to "append" of "list"
+has incompatible type "dict[str, Any] | None"; expected "dict[str, Any]" 
+[arg-type]
+                    pull_to_local.append(re_)
+                                         ^~~
+backend\calendar_sync_blocker.py:86: error: Argument 1 to "append" of "list"
+has incompatible type "dict[str, Any] | None"; expected "dict[str, Any]" 
+[arg-type]
+                    merged.append(le)
+                                  ^~
+backend\calendar_sync_blocker.py:88: error: Argument 1 to "append" of "list"
+has incompatible type "dict[str, Any] | None"; expected "dict[str, Any]" 
+[arg-type]
+                        push_to_remote.append(le)
+                                              ^~
+scripts\dump_comments.py:6: error: Item "TextIO" of "TextIO | Any" has no
+attribute "reconfigure"  [union-attr]
+    sys.stdout.reconfigure(encoding='utf-8')
+    ^~~~~~~~~~~~~~~~~~~~~~
+scripts\dump_comments.py:23: error: Unsupported operand types for + ("str" and
+"None")  [operator]
+        m = re.search(r'w:id=["\']' + cid + r'["\']', doc_xml)
+                      ^
+scripts\dump_comments.py:23: note: Right operand is of type "str | None"
+backend\supervisor_rollover.py:41: error: Unused "type: ignore" comment 
+[unused-ignore]
+                return _cache["parents"], _cache["nodes"]  # type: ignore[...
+                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~...
+backend\model_routing.py:81: error: "object" has no attribute "append" 
+[attr-defined]
+                cfg["routes"].append(norm)
+                ^~~~~~~~~~~~~~~~~~~~
+backend\model_routing.py:88: error: Unsupported target for indexed assignment
+("object")  [index]
+            cfg["autonomy"][key] = level if level in AUTONOMY_LEVELS else ...
+            ^~~~~~~~~~~~~~~~~~~~
+backend\model_routing.py:153: error: Argument "key" to "max" has incompatible
+type overloaded function; expected
+"Callable[[str], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"  [arg-type]
+        best = max(scores, key=scores.get)
+                               ^~~~~~~~~~
+scripts\sync_avatars_db.py:77: error: Incompatible types in assignment
+(expression has type "str | None", variable has type "str")  [assignment]
+                img_path = next((p for p in candidates if os.path.exists(p...
+                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~...
+scripts\scan_dummy_data.py:74: error: Incompatible types in assignment
+(expression has type "TextIOWrapper[_WrappedBuffer]", variable has type "str") 
+[assignment]
+            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                 ^
+scripts\scan_dummy_data.py:75: error: "str" has no attribute "readlines" 
+[attr-defined]
+                lines = f.readlines()
+                        ^~~~~~~~~~~
+utils\egress_guard.py:75: error: "ValidatedURL" has no attribute "pinned_ip" 
+[attr-defined]
+            obj.pinned_ip = str(pinned_ip or "")
+            ^~~~~~~~~~~~~
+utils\egress_guard.py:76: error: "ValidatedURL" has no attribute "validated_ip"
+ [attr-defined]
+            obj.validated_ip = obj.pinned_ip
+            ^~~~~~~~~~~~~~~~
+utils\egress_guard.py:76: error: "ValidatedURL" has no attribute "pinned_ip" 
+[attr-defined]
+            obj.validated_ip = obj.pinned_ip
+                               ^~~~~~~~~~~~~
+utils\egress_guard.py:123: error: "_BaseAddress" has no attribute "is_loopback"
+ [attr-defined]
+        if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_...
+           ^~~~~~~~~~~~~~
+utils\egress_guard.py:123: error: "_BaseAddress" has no attribute
+"is_link_local"  [attr-defined]
+        if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_...
+                             ^~~~~~~~~~~~~~~~
+utils\egress_guard.py:123: error: "_BaseAddress" has no attribute
+"is_multicast"  [attr-defined]
+        if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_...
+                                                 ^~~~~~~~~~~~~~~
+utils\egress_guard.py:123: error: "_BaseAddress" has no attribute
+"is_unspecified"  [attr-defined]
+    ..._loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+                                                           ^~~~~~~~~~~~~~~~~
+utils\egress_guard.py:125: error: "_BaseAddress" has no attribute "is_private" 
+[attr-defined]
+        if ip.is_private and ("." in host and not host.endswith(".internal...
+           ^~~~~~~~~~~~~
+utils\egress_guard.py:246: error: "_BaseAddress" has no attribute "is_private" 
+[attr-defined]
+                ip.is_private
+                ^~~~~~~~~~~~~
+utils\egress_guard.py:247: error: "_BaseAddress" has no attribute "is_loopback"
+ [attr-defined]
+                or ip.is_loopback
+                   ^~~~~~~~~~~~~~
+utils\egress_guard.py:248: error: "_BaseAddress" has no attribute
+"is_link_local"  [attr-defined]
+                or ip.is_link_local
+                   ^~~~~~~~~~~~~~~~
+utils\egress_guard.py:249: error: "_BaseAddress" has no attribute
+"is_multicast"  [attr-defined]
+                or ip.is_multicast
+                   ^~~~~~~~~~~~~~~
+utils\egress_guard.py:250: error: "_BaseAddress" has no attribute "is_reserved"
+ [attr-defined]
+                or ip.is_reserved
+                   ^~~~~~~~~~~~~~
+utils\egress_guard.py:251: error: "_BaseAddress" has no attribute
+"is_unspecified"  [attr-defined]
+                or ip.is_unspecified
+                   ^~~~~~~~~~~~~~~~~
+scripts\prepare_finetuning_dataset.py:48: error: Need type annotation for
+"samples" (hint: "samples: list[<type>] = ...")  [var-annotated]
+        samples = []
+        ^~~~~~~
+scripts\prepare_finetuning_dataset.py:94: error: Need type annotation for
+"samples" (hint: "samples: list[<type>] = ...")  [var-annotated]
+        samples = []
+        ^~~~~~~
+backend\mcts_engine.py:37: error: Item "None" of "MCTSNode | None" has no
+attribute "visits"  [union-attr]
+    ..._value + exploration_weight * math.sqrt(math.log(self.parent.visits) /...
+                                                        ^~~~~~~~~~~~~~~~~~
+utils\repo_sync.py:10: error: Need type annotation for "_CACHE" (hint:
+"_CACHE: dict[<type>, <type>] = ...")  [var-annotated]
+    _CACHE = {}
+    ^~~~~~
+utils\repo_sync.py:75: error: Incompatible default for parameter "search"
+(default has type "None", parameter has type "str")  [assignment]
+    ...mplates_for_source(source_id: str, search: str = None, category: str =...
+                                                        ^~~~
+utils\repo_sync.py:75: note: PEP 484 prohibits implicit Optional. Accordingly, mypy has changed its default to no_implicit_optional=True
+utils\repo_sync.py:75: note: Use https://github.com/hauntsaninja/no_implicit_optional to automatically upgrade your codebase
+utils\repo_sync.py:75: error: Incompatible default for parameter "category"
+(default has type "None", parameter has type "str")  [assignment]
+    ..._for_source(source_id: str, search: str = None, category: str = None):
+                                                                       ^~~~
+utils\docker_client.py:296: error: Module has no attribute "AF_UNIX"; maybe
+"AF_IPX"?  [attr-defined]
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                                     ^~~~~~~~~~~~~~
+scripts\telegram_singleton.py:29: error: Incompatible types in assignment
+(expression has type "TextIOWrapper[_WrappedBuffer]", variable has type "None") 
+[assignment]
+                self._fp = open(self.lock_path, "w")
+                           ^~~~~~~~~~~~~~~~~~~~~~~~~
+scripts\telegram_singleton.py:38: error: "None" has no attribute "seek" 
+[attr-defined]
+                self._fp.seek(0)
+                ^~~~~~~~~~~~~
+scripts\telegram_singleton.py:39: error: Argument 2 to "dump" has incompatible
+type "None"; expected "SupportsWrite[str]"  [arg-type]
+                json.dump(payload, self._fp)
+                                   ^~~~~~~~
+scripts\telegram_singleton.py:40: error: "None" has no attribute "flush" 
+[attr-defined]
+                self._fp.flush()
+                ^~~~~~~~~~~~~~
+scripts\skill_resolver.py:252: error: Need type annotation for "obsidian_docs"
+(hint: "obsidian_docs: list[<type>] = ...")  [var-annotated]
+            obsidian_docs = []
+            ^~~~~~~~~~~~~
+backend\research_sources.py:460: error: Unsupported operand types for >= ("int"
+and "object")  [operator]
+            "is_established": tier_info["level"] <= 2,
+                              ^
+scripts\installer_build\build_export.py:76: error: Incompatible types in
+assignment (expression has type "list[str]", variable has type
+"TextIOWrapper[_WrappedBuffer]")  [assignment]
+                for r, d, f in os.walk(dst_full):
+                ^
+backend\settings_json.py:133: error: Too few arguments  [call-arg]
+            data = loader() if loader is not None else _load_raw(path, str...
+                   ^~~~~~~~
+utils\safe_http.py:68: error: Unused "type: ignore" comment  [unused-ignore]
+                peer = self.sock.getpeername()[0]  # type: ignore[union-at...
+                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+utils\safe_http.py:68: error: "_PinnedConnectionMixin" has no attribute "sock" 
+[attr-defined]
+                peer = self.sock.getpeername()[0]  # type: ignore[union-at...
+                       ^~~~~~~~~
+utils\safe_http.py:68: note: Error code "attr-defined" not covered by "type: ignore[union-attr]" comment
+utils\safe_http.py:110: error: "_PinnedHTTPSConnection" has no attribute
+"_tunnel_host"  [attr-defined]
+            server_hostname = self._tunnel_host or self._pinned_server_hos...
+                              ^~~~~~~~~~~~~~~~~
+utils\safe_http.py:111: error: "_PinnedHTTPSConnection" has no attribute
+"_context"  [attr-defined]
+            self.sock = self._context.wrap_socket(self.sock, server_hostna...
+                        ^~~~~~~~~~~~~
+utils\safe_http.py:188: error: Argument 1 to "append" of "list" has
+incompatible type "_PinnedHTTPSHandler"; expected "ProxyHandler"  [arg-type]
+                handlers.append(_PinnedHTTPSHandler(pinned_ip, server_host...
+                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~...
+utils\safe_http.py:190: error: Argument 1 to "append" of "list" has
+incompatible type "_PinnedHTTPHandler"; expected "ProxyHandler"  [arg-type]
+                handlers.append(_PinnedHTTPHandler(pinned_ip))
+                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+utils\safe_http.py:202: error: Argument 1 to "append" of "list" has
+incompatible type "_RejectAllRedirectsHandler"; expected "ProxyHandler" 
+[arg-type]
+        handlers.append(_RejectAllRedirectsHandler())
+                        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+scripts\smoke_test_endpoints.py:45: error: Argument 1 to "len" has incompatible
+type "object"; expected "Sized"  [arg-type]
+    print(f"\nOK {summary['ok']} / failed {len(summary['failed'])} / skipp...
+                                               ^~~~~~~~~~~~~~~~~
+scripts\migrate_dsgvo_cols.py:81: error: Unpacked dict entry 1 has incompatible
+type "object"; expected "SupportsKeysAndGetItem[Any, Any]"  [dict-item]
+                         {"name": name, **definition}, token=token)
+                                          ^~~~~~~~~~
+scripts\import_linkedin_messages.py:64: error: Incompatible types in assignment
+(expression has type "int | None", target has type "int")  [assignment]
+                cols["to_name"] = i if "to" == n else cols.get("to_name")
+                                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+scripts\import_linkedin_messages.py:288: error: Need type annotation for
+"by_url" (hint: "by_url: dict[<type>, <type>] = ...")  [var-annotated]
+        by_url = {}
+        ^~~~~~
+scripts\import_linkedin_messages.py:289: error: Need type annotation for
+"by_name" (hint: "by_name: dict[<type>, <type>] = ...")  [var-annotated]
+        by_name = {}
+        ^~~~~~~
+scripts\import_linkedin_messages.py:305: error: Need type annotation for
+"name_map" (hint: "name_map: dict[<type>, <type>] = ...")  [var-annotated]
+        name_map = {}
+        ^~~~~~~~
+scripts\crm_dedupe_deep.py:31: error: Item "TextIO" of "TextIO | Any" has no
+attribute "reconfigure"  [union-attr]
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        ^~~~~~~~~~~~~~~~~~~~~~
+backend\hermes_updater.py:113: error: Module has no attribute "AF_UNIX"; maybe
+"AF_IPX"?  [attr-defined]
+                    conn_self.sock = socket.socket(socket.AF_UNIX, socket....
+                                                   ^~~~~~~~~~~~~~
+backend\hermes_updater.py:419: error: Incompatible types in assignment
+(expression has type "float", variable has type "int")  [assignment]
+        _cache_lock_time = now
+                           ^~~
+scripts\update_system_handbuch_docx.py:37: error: Need type annotation for
+"by_cat" (hint: "by_cat: dict[<type>, <type>] = ...")  [var-annotated]
+        by_cat = {}
+        ^~~~~~
+scripts\rebuild_word_handbuch_clean.py:24: error: Item "TextIO" of
+"TextIO | Any" has no attribute "reconfigure"  [union-attr]
+    sys.stdout.reconfigure(encoding="utf-8")
+    ^~~~~~~~~~~~~~~~~~~~~~
+scripts\rebuild_word_handbuch_clean.py:48: error: Need type annotation for
+"by_cat" (hint: "by_cat: dict[<type>, <type>] = ...")  [var-annotated]
+        by_cat = {}
+        ^~~~~~
+scripts\rebuild_word_handbuch_clean.py:183: error: Need type annotation for
+"code_lines" (hint: "code_lines: list[<type>] = ...")  [var-annotated]
+            code_lines = []
+            ^~~~~~~~~~
+scripts\rebuild_word_handbuch_clean.py:184: error: Need type annotation for
+"table_lines" (hint: "table_lines: list[<type>] = ...")  [var-annotated]
+            table_lines = []
+            ^~~~~~~~~~~
+scripts\translate_nl_local.py:10: error: Argument 1 to "module_from_spec" has
+incompatible type "ModuleSpec | None"; expected "ModuleSpec"  [arg-type]
+    tm = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(...
+                                         ^~~~~
+scripts\translate_nl_local.py:10: error: Item "None" of "ModuleSpec | None" has
+no attribute "loader"  [union-attr]
+    tm = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(...
+                                                 ^~~~~~~~~~~~
+scripts\translate_nl_local.py:10: error: Item "None" of "Loader | Any | None"
+has no attribute "exec_module"  [union-attr]
+    tm = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(...
+                                                 ^~~~~~~~~~~~~~~~~~~~~~~~
+scripts\translate_nl_local.py:1274: error: Need type annotation for "m" (hint:
+"m: list[<type>] = ...")  [var-annotated]
+        m=[]
+        ^
+scripts\translate_manual.py:133: error: Incompatible default for parameter
+"extra_headers" (default has type "None", parameter has type "dict[Any, Any]") 
+[assignment]
+    ...str, model: str, sys_prompt: str, extra_headers: dict = None) -> list:
+                                                               ^~~~
+scripts\translate_manual.py:133: note: PEP 484 prohibits implicit Optional. Accordingly, mypy has changed its default to no_implicit_optional=True
+scripts\translate_manual.py:133: note: Use https://github.com/hauntsaninja/no_implicit_optional to automatically upgrade your codebase
+scripts\translate_manual.py:183: error: Item "None" of "ParagraphStyle | None"
+has no attribute "name"  [union-attr]
+            if "Heading 1" in p.style.name or "berschrift" in p.style.name...
+                              ^~~~~~~~~~~~
+scripts\translate_manual.py:255: error: Need type annotation for "hits" 
+[var-annotated]
+                hits = Counter()
+                       ^~~~~~~~~
+scripts\translate_manual.py:263: error: Need type annotation for "sel" (hint:
+"sel: list[<type>] = ...")  [var-annotated]
+                sel = []
+                ^~~
+scripts\translate_manual.py:361: error: Need type annotation for "batch" (hint:
+"batch: list[<type>] = ...")  [var-annotated]
+        batch, batch_chars, done = [], 0, 0
+        ^~~~~
+scripts\generate_word_manual.py:788: error: Value of type "object" is not
+indexable  [index]
+        local_img = os.path.join(IMG_DIR, f"{v['id']}.png")
+                                             ^~~~~~~
+scripts\generate_word_manual.py:791: error: Value of type "object" is not
+indexable  [index]
+Generated TXT report (via XSLT): C:\.Antigravity-projekte\AgenticOS-2026\audit_reports\mypy_full_report\index.txt
+error: INTERNAL ERROR -- Please try using mypy master on GitHub:
+https://mypy.readthedocs.io/en/stable/common_issues.html#using-a-development-mypy-build
+If this issue continues with mypy master, please report a bug at https://github.com/python/mypy/issues
+version: 2.4.1
+note: please use --show-traceback to print a traceback when reporting a bug

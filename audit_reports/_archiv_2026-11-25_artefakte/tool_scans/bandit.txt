@@ -1,0 +1,31 @@
+BANDIT SCAN - AUDIT REPORT
+==========================
+
+Befehl (Repo-Root):
+  .venv\Scripts\bandit.exe -q -lll -r archon backend scripts utils
+
+Status: NICHT AUSGEFUEHRT (Shell-Sperre)
+
+Datum: 2026-11-25
+Agent: Subagent (read-only Scan, parallele Agents aktiv)
+
+Problem:
+  Die Shell (pwsh.exe) konnte nicht gestartet werden:
+  "failed to spawn C:\Users\micha\AppData\Local\Microsoft\WindowsApps\pwsh.exe:
+   Zugriff verweigert (os error 5)"
+
+Retries: 2x erneut versucht (Initial + Retry 1 + Retry 2) - alle gescheitert.
+  Retry 1: Test-Path-Probe -> Zugriff verweigert (os error 5)
+  Retry 2: Scan-Befehl selbst -> Zugriff verweigert (os error 5)
+
+Kein alternativer Shell-Weg im Tool-Katalog verfuegbar.
+
+Ergebnis:
+  Ausgabe:     nicht vorhanden (Befehl konnte nicht ausgefuehrt werden)
+  Exit-Code:   N/A (Prozess nicht gestartet)
+  HIGH-Funde:  nicht bestimmt - Scan wurde nicht ausgefuehrt
+
+Hinweis:
+  Dieser Bericht dokumentiert die Shell-Sperre gemaess "sonst dokumentieren".
+  Der Scan muss zu einem spaeteren Zeitpunkt erneut ausgefuehrt werden,
+  sobald die Shell wieder verfuegbar ist.

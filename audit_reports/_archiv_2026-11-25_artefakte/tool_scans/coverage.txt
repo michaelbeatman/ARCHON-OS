@@ -1,0 +1,55 @@
+COVERAGE SCAN - AUSFUEHRUNG NICHT MOEGLICH
+==========================================
+Datum: 2026-11-25
+Auftrag: Einen Coverage-Lauf ausfuehren, keine Code-Dateien aendern.
+
+UMGEBUNG / VORBEDINGUNGEN
+-------------------------
+Repo-Root: C:\.Antigravity-projekte\AgenticOS-2026
+Geplantes ARCHON_DATA_DIR: C:\Users\micha\AppData\Local\Temp\opencode\archon-coverage-scan
+  (Hinweis: ./data wurde zu keinem Zeitpunkt beruehrt.)
+.exe vorhanden: .venv\Scripts\coverage.exe  (bestaetigt per Verzeichnislese)
+tests/ vorhanden: ja (bestaetigt per Verzeichnislese)
+
+BLOCKER
+-------
+Das Shell-Tool konnte keinen Prozess starten. Jeder Aufruf scheitert bereits
+beim Spawnen der Shell, noch bevor einer der Befehle ausgefuehrt wird:
+
+  failed to spawn C:\Users\micha\AppData\Local\Microsoft\WindowsApps\pwsh.exe:
+  Zugriff verweigert (os error 5)
+
+Damit wurde KEINER der beiden Coverage-Befehle tatsaechlich ausgefuehrt.
+
+Retry-Protokoll (Shell-Sperre, retries gemaess Auftrag 2x, erweitert):
+  Versuch 1: Get-Location + Test-Path   -> Zugriff verweigert (os error 5)
+  Versuch 2: Get-Location + Test-Path   -> Zugriff verweigert (os error 5)
+  Versuch 3: Get-Location + Test-Path   -> Zugriff verweigert (os error 5)
+  Versuch 4: echo test                  -> Zugriff verweigert (os error 5)
+  Versuch 5: echo test                  -> Zugriff verweigert (os error 5)
+  Versuch 6: echo test123 (30s timeout) -> Zugriff verweigert (os error 5)
+  Versuch 7: env setzen + echo          -> Zugriff verweigert (os error 5)
+  Versuch 8: vollstaendiger Run-Befehl  -> Zugriff verweigert (os error 5)
+
+Es steht kein alternatives Kommando-/Terminal-Tool zur Verfuegung
+(Code-Mode-Katalog enthaelt nur Browser-/OpenCode-Tools).
+
+BEFEHLE (nicht ausgefuehrt, dokumentiert damit der Lauf reproduzierbar ist)
+---------------------------------------------------------------------------
+$env:ARCHON_DATA_DIR='C:\Users\micha\AppData\Local\Temp\opencode\archon-coverage-scan'
+.venv\Scripts\coverage.exe run --source=archon,backend -m pytest tests/ -q --tb=no
+.venv\Scripts\coverage.exe report --skip-covered
+
+EXIT-CODES
+----------
+coverage run  : nicht verfuegbar (Prozess nie gestartet)
+coverage report: nicht verfuegbar (Prozess nie gestartet)
+
+OUTPUT
+------
+Kein Output vorhanden, da der Shell-Prozess nicht gestartet werden konnte.
+Insbesondere liegt KEINE Coverage-Prozentzahl vor. Dies ist keine Aussage
+ueber den Zustand des Codes (z. B. fehlendes cryptography), sondern
+ausschliesslich ein Harness-/Shell-Problem.
+
+Es wurden keine Code-Dateien geaendert.

@@ -8,11 +8,10 @@ Autonomous background supervisor for profile-level loop prevention and resource 
 import json
 import logging
 import os
-import sys
 import threading
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 try:
     import requests

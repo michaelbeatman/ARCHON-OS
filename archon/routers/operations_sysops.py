@@ -309,7 +309,8 @@ async def api_stream_task_execution(task_id: str):
     q: asyncio.Queue = asyncio.Queue(maxsize=200)
 
     try:
-        import main
+        from archon.core.provider_registry import get_provider
+        main = get_provider("app_main")
         if hasattr(main, "_SSE_SUBSCRIBERS"):
             lock = getattr(main, "_SSE_SUB_LOCK", None)
             if lock is not None:
@@ -344,7 +345,8 @@ async def api_stream_task_execution(task_id: str):
             raise
         finally:
             try:
-                import main
+                from archon.core.provider_registry import get_provider
+                main = get_provider("app_main")
                 if hasattr(main, "_SSE_SUBSCRIBERS"):
                     lock = getattr(main, "_SSE_SUB_LOCK", None)
                     if lock is not None:
@@ -374,7 +376,8 @@ def api_broadcast_task_chunk(task_id: str, req: TaskChunkBroadcastRequest):
     agent_id = req.agent_id or ""
     status = req.status
     try:
-        import main
+        from archon.core.provider_registry import get_provider
+        main = get_provider("app_main")
         if hasattr(main, "broadcast_event"):
             main.broadcast_event("task_chunk", {"task_id": task_id, "agent_id": agent_id, "chunk": chunk, "status": status})
             if status in ("done", "failed"):

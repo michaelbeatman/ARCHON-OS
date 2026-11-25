@@ -99,7 +99,8 @@ def api_get_autonomy_modules_settings():
 def api_save_autonomy_modules_settings(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
     data = as_payload(payload)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     from backend.autonomy_settings import save_autonomy_settings
 
     updated = save_autonomy_settings(data)

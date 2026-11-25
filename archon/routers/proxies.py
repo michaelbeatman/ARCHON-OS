@@ -79,7 +79,8 @@ async def forward_to_omniroute(request: Request, path: str):
 )
 async def omniroute_proxy(request: Request, path: str = ""):
     require_admin_or_503(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fn = getattr(app_main, "forward_to_omniroute", forward_to_omniroute)
     return await fn(request, path)
@@ -87,7 +88,8 @@ async def omniroute_proxy(request: Request, path: str = ""):
 
 @router.api_route("/_next/{path:path}", methods=["GET", "HEAD"])
 async def omniroute_next_assets(request: Request, path: str = ""):
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fn = getattr(app_main, "forward_to_omniroute", forward_to_omniroute)
     return await fn(request, f"_next/{path}")
@@ -178,7 +180,8 @@ async def forward_to_n8n(request: Request, path: str):
 )
 async def n8n_proxy(request: Request, path: str = ""):
     require_admin_or_503(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fn = getattr(app_main, "forward_to_n8n", forward_to_n8n)
     return await fn(request, path)
@@ -202,7 +205,8 @@ async def n8n_assets_proxy(request: Request, path: str = ""):
                     return FileResponse(target)
         except Exception as exc:
             logger.debug(f"[Proxy] Statische Datei-Auslieferung uebersprungen: {exc}")
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     ref = request.headers.get("referer", "")
     if "/anythingllm-proxy" in ref and path:
@@ -218,7 +222,8 @@ async def n8n_assets_proxy(request: Request, path: str = ""):
 @router.api_route("/rest/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 async def n8n_rest_proxy(request: Request, path: str = ""):
     require_admin_or_503(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fn = getattr(app_main, "forward_to_n8n", forward_to_n8n)
     return await fn(request, f"rest/{path}")
@@ -227,7 +232,8 @@ async def n8n_rest_proxy(request: Request, path: str = ""):
 @router.api_route("/types/{path:path}", methods=["GET", "HEAD"])
 async def n8n_types_proxy(request: Request, path: str = ""):
     require_admin_or_503(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fn = getattr(app_main, "forward_to_n8n", forward_to_n8n)
     return await fn(request, f"types/{path}")

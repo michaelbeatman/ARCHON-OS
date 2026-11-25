@@ -55,7 +55,8 @@ def _validate_agent_id(agent_id: str) -> str:
 @router.get("/api/v1/hr/personalakte/{agent_id}")
 def api_get_personalakte(agent_id: str):
     _validate_agent_id(agent_id)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     vault_dir = app_main.OBSIDIAN_VAULT_DIR
     candidates = [
@@ -94,7 +95,8 @@ def api_get_personalakte(agent_id: str):
 def api_save_personalakte(request: Request, agent_id: str, req: SavePersonalakteReq):
     _require_admin(request)
     _validate_agent_id(agent_id)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     vault_dir = app_main.OBSIDIAN_VAULT_DIR
     target_dirs = [
@@ -145,7 +147,8 @@ def api_set_soul_mode(request: Request, req: SetSoulModeReq):
 @router.get("/api/v1/hermes/soul/{agent_id}")
 def api_get_hermes_soul(agent_id: str):
     """Liest die echte SOUL.md Direktive des Hermes-Profils aus."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     from utils.path_jail import safe_identifier, PathJailError
 
     try:
@@ -229,7 +232,8 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
     """Speichert die SOUL.md Datei fuer ein Hermes-Profil und synchronisiert Cache + agent_profiles.json."""
     _require_admin(request)
     _validate_agent_id(agent_id)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     from archon.core.profiles import (
         api_get_hermes_profiles,
         invalidate_hermes_profiles_cache,
@@ -280,7 +284,8 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
 def api_log_personalakte_activity(request: Request, agent_id: str, req: LogActivityReq):
     _require_admin(request)
     _validate_agent_id(agent_id)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     vault_dir = app_main.OBSIDIAN_VAULT_DIR
     personalakten_dir = os.path.join(vault_dir, "00_HR_Agenten", "Personalakten")

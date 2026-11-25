@@ -88,7 +88,8 @@ async def generate_morning_standup(force: bool = True) -> dict:
     active_services = 0
     total_services = 7
     try:
-        from main import get_hud_telemetry
+        from archon.core.provider_registry import get_provider
+        get_hud_telemetry = get_provider("get_hud_telemetry")
         telem = await get_hud_telemetry()
         fleet = telem.get("fleet", [])
         total_services = len(fleet) or 7

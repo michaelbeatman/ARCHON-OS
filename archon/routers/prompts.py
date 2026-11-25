@@ -151,7 +151,8 @@ async def optimize_prompt_endpoint(req: PromptOptimizeRequest):
     sendet via OmniRoute einen schnellen Call an ein kostenguenstiges Modell
     und transformiert den Text in die 5-Felder-Struktur inklusive Phrasenverbot.
     """
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     raw_input = req.prompt.strip()
     if not raw_input:

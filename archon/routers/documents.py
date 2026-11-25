@@ -50,7 +50,8 @@ def api_parse_document(request: Request, payload: DocumentParseRequest):
     _require_admin_or_503(request)
     from backend.document_parser import DocumentParserEngine
 
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     if isinstance(payload, dict):  # direkte Aufrufe (Tests/Interop) weiterhin moeglich
         payload = DocumentParseRequest.model_validate(payload)
@@ -66,7 +67,8 @@ def api_extract_tables(request: Request, payload: DocumentParseRequest):
     _require_admin_or_503(request)
     from backend.document_parser import DocumentParserEngine
 
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     if isinstance(payload, dict):  # direkte Aufrufe (Tests/Interop) weiterhin moeglich
         payload = DocumentParseRequest.model_validate(payload)

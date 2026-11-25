@@ -63,7 +63,8 @@ def _sync_task_to_obsidian(task: dict) -> str:
     4. Paperclip-Status-Schließung
     5. E-Mail-Versand (falls konfiguriert)
     """
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     # D03/MED: kanonischer Vault-Pfad ueber den Resolver (kein hartcodierter
     # Fallback), wenn main.py keinen expliziten Override bereitstellt.

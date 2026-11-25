@@ -266,7 +266,8 @@ async def api_trigger_watchdog_run(request: Request):
 
 @router.get("/alarms")
 def get_watchdog_alarms_endpoint():
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     runner = getattr(app_main, "watchdog_runner", None)
     if runner:
@@ -277,7 +278,8 @@ def get_watchdog_alarms_endpoint():
 @router.post("/test-alarm")
 def trigger_test_watchdog_alarm_endpoint(request: Request):
     _require_admin(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     runner = getattr(app_main, "watchdog_runner", None)
     if runner:
@@ -299,7 +301,8 @@ def trigger_test_watchdog_alarm_endpoint(request: Request):
 @router.post("/acknowledge")
 def acknowledge_watchdog_alarm_endpoint(request: Request, payload: Optional[AcknowledgeAlarmRequest] = None):
     _require_admin(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     runner = getattr(app_main, "watchdog_runner", None)
     if runner:

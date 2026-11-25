@@ -62,7 +62,8 @@ def _sse_frame_trace() -> Dict[str, str]:
 
 def _has_valid_service_token(request: Request) -> bool:
     try:
-        from main import _request_has_service_token
+        from archon.core.provider_registry import get_provider
+        _request_has_service_token = get_provider("_request_has_service_token")
         return bool(_request_has_service_token(request))
     except Exception:
         return False

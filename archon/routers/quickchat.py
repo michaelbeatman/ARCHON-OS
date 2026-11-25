@@ -20,14 +20,16 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["
 
 
 def _quickchat_session_path(profile_id: str) -> str:
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", profile_id)
     return os.path.join(app_main.QUICKCHAT_SESSIONS_DIR, f"{safe_id}.json")
 
 
 def _load_quickchat_session(profile_id: str) -> Dict:
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     path = _quickchat_session_path(profile_id)
     if os.path.exists(path):
@@ -43,7 +45,8 @@ def _load_quickchat_session(profile_id: str) -> Dict:
 
 
 def _save_quickchat_session(session: Dict):
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     session["updated_at"] = datetime.datetime.now().isoformat()
     app_main._save_json(_quickchat_session_path(session["profile_id"]), session)
@@ -51,7 +54,8 @@ def _save_quickchat_session(session: Dict):
 
 def _load_db_messages(sid: str) -> List[Dict]:
     """Hilfsfunktion fuer Datenbankzugriff ausserhalb des AST-Routers."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     msgs = []
     try:
@@ -77,7 +81,8 @@ def _load_db_messages(sid: str) -> List[Dict]:
 @router.get("/api/v1/quickchat/session/{profile_id}")
 def api_get_quickchat_session(profile_id: str):
     """Verlauf aus state.db (identisch mit Master-/Agentenchat)."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     sid = app_main._quickchat_state_session_id(profile_id)
     msgs = _load_db_messages(sid)
@@ -93,7 +98,8 @@ class QuickchatSendRequest(BaseModel):
 
 @router.post("/api/v1/quickchat/send")
 async def api_quickchat_send(req: QuickchatSendRequest):
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     state_sid = app_main._quickchat_state_session_id(req.profile_id)
     app_main._ensure_state_session(

@@ -29,7 +29,8 @@ def _require_admin(request: Request):
 
 def _full_html_target_files() -> list:
     """Die Zieldateien fuer "HTML einfrieren" (existierende Kandidaten)."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     workspace_dir = getattr(app_main, "WORKSPACE_DIR", "/app")
     candidates = [
@@ -53,7 +54,8 @@ class TextReplacementsRequest(BaseModel):
 @router.post("/api/v1/ui/save-text-replacements")
 def api_save_text_replacements(request: Request, req: TextReplacementsRequest):
     _require_admin(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     workspace_dir = getattr(app_main, "WORKSPACE_DIR", "/app")
     candidates = [
@@ -102,7 +104,8 @@ class FullHtmlSaveRequest(BaseModel):
 @router.post("/api/v1/ui/save-full-html")
 def api_save_full_html(request: Request, req: FullHtmlSaveRequest):
     _require_admin(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fn_targets = getattr(app_main, "_full_html_target_files", _full_html_target_files)
     target_files = fn_targets()
@@ -172,7 +175,8 @@ async def api_studio_upload_bg(file: UploadFile = File(...)):
         with open(path, "wb") as f:
             f.write(data)
     await asyncio.to_thread(_write_studio_bg, out_path, content)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     if hasattr(app_main, "add_ticker"):
         app_main.add_ticker("CSS Studio", f"Hintergrundbild hochgeladen: {out_name}")

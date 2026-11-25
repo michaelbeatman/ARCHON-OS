@@ -111,7 +111,8 @@ def api_decide_permission_gate(request: Request, gate_id: str, body: Passthrough
     Textbefehl 'Erlauben/Verbieten <gate_id>' via Skill).
     12.10: bewusst SYNCHRON (fastapi-Threadpool) - als async blockierte
     das sync-Innenleben (Save+Telegram) die Event-Loop der ganzen App."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fn_admin = getattr(app_main, "require_admin", _require_admin)
     fn_admin(request)
@@ -253,7 +254,8 @@ def _decision_kanban_status(typ: str, decision: str) -> str:
 
 def _decision_self_api(method: str, path: str, payload: dict = None, timeout: float = 15.0):  # type: ignore[assignment]
     """Selbstaufruf der eigenen API."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     if hasattr(app_main, "_decision_self_api") and app_main._decision_self_api != _decision_self_api:
         return app_main._decision_self_api(method, path, payload=payload, timeout=timeout)
@@ -289,7 +291,8 @@ def register_decision(
     created_by: str = "",
 ) -> dict:
     """Haengt den Entscheidungs-Block an einen BESTEHENDEN Kanban-Task und pingt den Owner mit ✅/❌."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     if typ not in _DECISION_TYPEN or not task_id:
         logger.warning(f"[Decision] register_decision ohne gueltigen Typ/Task ({typ}, {task_id})")
@@ -393,7 +396,8 @@ def create_decision(
     created_by: str = "",
 ) -> dict:
     """Legt einen NEUEN Entscheidungs-Task im Kanban an und registriert die Entscheidung darauf."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     if typ not in _DECISION_TYPEN:
         logger.warning(f"[Decision] Unbekannter Typ '{typ}'")
@@ -451,7 +455,8 @@ def _pruefe_move_antwort(antwort: Any, ref: str) -> str:
 
 def _pruefe_gate_persistiert(ref: str) -> str:
     """Persistierter Gate-Status: nur ein 'approved'-Gate gilt als ausgefuehrt."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fn_load_gates = getattr(app_main, "_load_permission_gates", _load_permission_gates)
     try:
@@ -518,7 +523,8 @@ def _decision_hitl_proof(request: Request, body: dict, typ: str, ref: str) -> tu
     ``body``-Parameter existiert nur fuer den Proof-Token; eine dort mitgelieferte
     UID wird ignoriert (siehe ``_decision_session_actor_uid``).
     """
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required
 
     # Ohne ref_id gibt es keine Zielbindung fuer den Proof -> fail-closed.
@@ -589,7 +595,8 @@ def _pruefe_synthese_beleg(task: Any) -> str:
 
 async def _synthese_parent(pid: str):
     """(lesbar, task) aus dem persistierten Mission-Control-Store."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fn_load_mc = getattr(app_main, "_load_mission_control_data", None)
     try:
@@ -607,7 +614,8 @@ async def _synthese_parent(pid: str):
 
 
 async def _followup_synthesis(pid: str, dossier: str, dec: dict) -> str:
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     aktion = f"Synthese für {pid}"
     lesbar, vorher = await _synthese_parent(pid)
@@ -647,7 +655,8 @@ async def _followup_synthesis(pid: str, dossier: str, dec: dict) -> str:
 
 
 async def _followup_mission_start(ref: str) -> str:
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     aktion = f"Ausführung für Mission {ref or '(ohne ref_id)'}"
     if not ref:
@@ -669,7 +678,8 @@ async def _followup_mission_start(ref: str) -> str:
 
 
 async def _followup_permission_gate(ref: str, proof_token: str = "", proof_uid: str = "") -> str:
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     aktion = f"Rechte-Gate {ref or '(ohne ref_id)'}"
     if not ref:
@@ -714,7 +724,8 @@ async def _followup_permission_gate(ref: str, proof_token: str = "", proof_uid: 
 
 async def _decision_followup(typ: str, dec: dict, decision: str, proof_token: str = "", proof_uid: str = "") -> str:
     """Fuehrt nach der Statusaenderung die typ-spezifische Folgeaktion aus."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     ref = dec.get("ref_id") or ""
     dossier = dec.get("dossier") or ""
@@ -794,7 +805,8 @@ async def _decision_followup(typ: str, dec: dict, decision: str, proof_token: st
 async def api_decide_decision(request: Request, body: PassthroughBody = Body(...)):
     body = as_payload(body)  # type: ignore[assignment]
     """EINZIGER Schreibpfad für Entscheidungen — Telegram UND Kanban rufen ihn."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     task_id = str(body.get("task_id") or "").strip()  # type: ignore[attr-defined]
     decision = str(body.get("decision") or "").lower().strip()  # type: ignore[attr-defined]
@@ -1020,7 +1032,8 @@ def _sync_org_hierarchy_node(
     reasoning_level: Optional[str] = None,
 ):
     """Synchronisiert Änderungen eines Agenten-Profils direkt in config/org_hierarchy.json und leert den Operations-Cache."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     try:
         root_dir = (

@@ -201,7 +201,8 @@ async def forward_to_hermes(request: Request) -> Response:
 @router.get("/api/proxy", dependencies=[_ArchonDepends(require_admin_or_503)])
 async def proxy_web_ui(url: str):
     """Header-stripping async proxy to bypass X-Frame-Options & CSP for embedded Web UIs."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     from utils.egress_guard import EgressBlocked, check_target_url
 
     try:
@@ -366,7 +367,8 @@ async def proxy_hermes_api_endpoints(request: Request, path: str = ""):
                 status_code=503,
                 detail="Auth-Service fuer Hermes-Proxy nicht verfuegbar.",
             ) from exc
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     return await app_main.forward_to_hermes(request)
 
 

@@ -186,7 +186,8 @@ def api_diff_preview(request: Request, payload: MeshDiffPreviewRequest = Body(..
     if not raw_path:
         raise HTTPException(status_code=400, detail="Gültiger 'file_path' erforderlich.")
 
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     repo_root = (
         os.path.dirname(os.path.abspath(app_main.__file__))

@@ -16,7 +16,8 @@ router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], prefix=
 
 @router.get("/providers")
 def api_get_research_providers():
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     import research_engine
 
     settings = app_main._load_json(app_main.SETTINGS_FILE, {})
@@ -28,7 +29,8 @@ def api_get_research_providers():
 
 @router.post("/run")
 def api_run_research_mission(payload: dict):
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     import research_engine
 
     query = payload.get("query", "").strip()
@@ -91,7 +93,8 @@ def api_run_research_mission(payload: dict):
 
 @router.get("/history")
 def api_get_research_history():
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     import research_engine
 
     settings = app_main._load_json(app_main.SETTINGS_FILE, {})
@@ -102,7 +105,8 @@ def api_get_research_history():
 
 @router.get("/dossier/{filename}")
 def api_get_research_dossier(filename: str):
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     settings = app_main._load_json(app_main.SETTINGS_FILE, {})
     workspace_dir = settings.get("workspace_dir", "/app/agent_workspace")

@@ -48,7 +48,8 @@ def _prepare_telegram_relay_payload(
     datei_b64: str,
 ):
     """Synchrone Profilsuche und Anhang-Persistenz für ``asyncio.to_thread``."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     ziel = (ziel_agent or "").strip() or "executive_decision_architect"
     profiles = app_main.api_get_hermes_profiles()
@@ -105,7 +106,8 @@ async def api_telegram_relay(
     """TELEGRAM-RELAY (12.10.2026, User-Vorgabe): Owner-Nachricht (Text +
     optionale Datei als base64) 1:1 an einen Agenten weiterleiten und die
     ANTWORT automatisch per Telegram zurueckschicken."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     ziel, prof, agent_name, msg, anhang_hinweis = await asyncio.to_thread(
         _prepare_telegram_relay_payload, ziel_agent, text, datei_name, datei_b64
@@ -235,7 +237,8 @@ async def api_telegram_voice_relay(
     target = (ziel_agent or "").strip() or detected_agent
 
     # 3. An bestehenden Relay weiterleiten
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     relay_res = await app_main.api_telegram_relay(
         ziel_agent=target,
         text=clean_prompt,

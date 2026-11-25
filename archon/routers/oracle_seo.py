@@ -106,7 +106,8 @@ async def api_seo_generate(request: Request, payload: SeoGenerateRequest):
 
 @router.get("/api/seo/articles")
 def api_seo_articles():
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     workspace_dir = getattr(app_main, "WORKSPACE_DIR", "/app")
     content_dir = os.path.join(workspace_dir, "obsidian_vault", "05_Content")

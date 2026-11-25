@@ -73,7 +73,8 @@ def api_get_memory_stats():
 @router.get("/api/v1/agent/{agent_id}/stats")
 def api_get_agent_real_stats(agent_id: str):
     """Liefert echte Leistungsdaten aus der Personalakte und den Datenbanken."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     from utils.path_jail import safe_identifier, safe_path_within, PathJailError
 
     try:
@@ -236,7 +237,8 @@ def api_evict_stale_memory(request: Request, payload: Optional[MemoryEvictReques
 
 @router.get("/api/v1/chat/history")
 def get_chat_history_api(agent_id: str, limit: int = 30, session_id: Optional[str] = None):
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     mb = getattr(app_main, "memory_bridge", None)
     if mb:
@@ -250,7 +252,8 @@ def get_chat_history_api(agent_id: str, limit: int = 30, session_id: Optional[st
 @router.delete("/api/v1/chat/history")
 def clear_chat_history_api(request: Request, agent_id: str, session_id: Optional[str] = None):
     require_admin_or_503(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     mb = getattr(app_main, "memory_bridge", None)
     if mb:
@@ -261,7 +264,8 @@ def clear_chat_history_api(request: Request, agent_id: str, session_id: Optional
 
 @router.get("/api/v1/memory/context")
 def api_memory_context(agent_id: str = "hermes_default", limit: int = 5):
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     mb = getattr(app_main, "memory_bridge", None)
     if not mb:
@@ -271,7 +275,8 @@ def api_memory_context(agent_id: str = "hermes_default", limit: int = 5):
 
 @router.get("/api/v1/memory/profile")
 def api_memory_profile():
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     mb = getattr(app_main, "memory_bridge", None)
     if not mb:
@@ -288,7 +293,8 @@ def api_memory_learning(
     detailed_note: Optional[str] = Body(None),
 ):
     require_admin_or_503(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     mb = getattr(app_main, "memory_bridge", None)
     if not mb:
@@ -298,7 +304,8 @@ def api_memory_learning(
 
 @router.get("/api/v1/memory/vault-summary")
 def api_memory_vault_summary():
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     mb = getattr(app_main, "memory_bridge", None)
     if not mb:

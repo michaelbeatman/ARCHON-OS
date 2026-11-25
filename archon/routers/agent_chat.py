@@ -51,7 +51,8 @@ def _as_chat_messages(raw: Any) -> List[ChatMessage]:
 
 
 async def fetch_agent_response_api(agent: Dict, user_prompt: str) -> Dict:
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     agent_name = agent["name"]
     model_combo = agent.get("model", "free-forever")
@@ -129,7 +130,8 @@ async def fetch_agent_response_api(agent: Dict, user_prompt: str) -> Dict:
 
 @router.post("/api/run")
 async def api_run_parallel(req: RunRequest):
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     agents = app_main.load_agents() if hasattr(app_main, "load_agents") else []
     active_agents = [a for a in agents if a.get("active")]
@@ -177,7 +179,8 @@ def load_profiles_list() -> List[Dict]:
     neu geparst. Die Signatur aus Pfad/mtime/size erkennt Änderungen ohne
     Neustart, bleibt aber bei unveränderter Datei ein Cache-Hit.
     """
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     _app_root = (
         os.path.dirname(os.path.abspath(app_main.__file__))

@@ -33,7 +33,8 @@ def _require_admin(request: Request):
 
 
 def _get_hermes_config_path() -> str:
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     memory_dir = getattr(app_main, "MEMORY_DIR", os.path.join(OPT_DATA_DIR, "memory"))
     candidates = [
@@ -71,7 +72,8 @@ def _mask_config_secrets(obj: Any) -> Any:
 @router.get("/api/hermes/config")
 def api_get_hermes_config(request: Request):
     _require_admin(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     cfg_file = _get_hermes_config_path()
     try:
@@ -123,7 +125,8 @@ def _restore_masked_dict_secrets(existing: Any, updated: Any) -> Any:
 def api_save_hermes_config(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
     payload = as_payload(payload)  # type: ignore[assignment]
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     cfg_file = _get_hermes_config_path()
     os.makedirs(os.path.dirname(os.path.abspath(cfg_file)), exist_ok=True)
@@ -168,7 +171,8 @@ def api_save_hermes_config(request: Request, payload: PassthroughBody = Body(...
 
 def _purge_state_memory(purge_options: Dict) -> Dict:
     """DB-Zugriff als separate Hilfsfunktion ausserhalb des AST-Routers."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     state_db_path = getattr(app_main, "STATE_DB_PATH", STATE_DB_PATH)
     cleared_sessions = 0

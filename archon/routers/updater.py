@@ -24,7 +24,8 @@ def api_hermes_update_check(force: bool = False):
 @router.post("/api/v1/hermes/update/apply")
 def api_hermes_update_apply(request: Request, payload: PassthroughBody = Body(default={})):
     data = as_payload(payload)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     curr_user = app_main.get_current_user_from_request(request)
     if curr_user.get("role") != "admin":

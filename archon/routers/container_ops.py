@@ -53,7 +53,8 @@ def send_prompt_to_agent(
     session_id: Optional[str] = None,
 ) -> str:
     """Sendet eine echte HTTP-Anfrage an den lokalen OmniRoute LLM Router (Non-Streaming) mit kontinuierlichem Chat-Kontext."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     role_name = (
         agent_config.get("role", "Orchestrator & System-Architekt")
@@ -256,7 +257,8 @@ def exec_container_command_api(req: ContainerExecRequest, request: Request):
     _require_admin(request)
     from backend.llm_egress_guard import ZeroEgressBlockedError
 
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     load_agent_configs_fn = getattr(app_main, "load_agent_configs", None)
     configs = load_agent_configs_fn() if load_agent_configs_fn else {}
@@ -338,7 +340,8 @@ def exec_container_command_api(req: ContainerExecRequest, request: Request):
 @router.post("/api/v1/agent/abort")
 def abort_agent_endpoint(request: Request, payload: dict):
     _require_admin(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     agent_id = payload.get("agent_id") or payload.get("profile") or payload.get("profile_handle", "unknown")
     reason = payload.get("reason", "Manual Kill-Switch Triggered")

@@ -88,7 +88,8 @@ def detect_container_port(container_identifier: str, inspected_port: Optional[in
 
 def _services_config_fallback(reason: str) -> List[Dict]:
     """Z-11: Statische Wunschliste als klar gekennzeichneter Fallback."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     fallback = []
     services_list = app_main.load_services() if hasattr(app_main, "load_services") else []
@@ -107,7 +108,8 @@ def _services_config_fallback(reason: str) -> List[Dict]:
 @ttl_cache(seconds=10)
 def get_docker_containers_from_socket() -> List[Dict]:
     """Liest ALLE echten Docker-Container direkt vom Docker-Daemon über /var/run/docker.sock aus."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     try:
         raw = docker_client.request("GET", "/containers/json?all=true", timeout=5.0)
@@ -269,7 +271,8 @@ def api_docker_stop(payload: DockerContainerActionRequest, request: Request):
 @router.post("/api/v1/services")
 def api_save_services(request: Request, services: List[ServiceConfigEntry]):
     _require_admin(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     if hasattr(app_main, "save_services"):
         app_main.save_services([svc.model_dump() for svc in services])
@@ -300,7 +303,8 @@ async def api_get_models(request: Request):
         or "authorization" in request.headers
     ):
         _require_admin(request)
-        import main as app_main
+        from archon.core.provider_registry import get_provider
+        app_main = get_provider("app_main")
 
         return await app_main.forward_to_hermes(request)
 

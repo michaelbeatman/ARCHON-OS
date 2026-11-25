@@ -438,7 +438,8 @@ def _read_recent_turns(agent_id: str) -> list[str]:
 @router.get("/api/v1/agent/{agent_id}/activity")
 def api_get_agent_activity(agent_id: str):
     """Liefert echte Aktivitaetsdaten aus ops.db + memory.db statt Standby-Platzhalter."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     from utils.path_jail import PathJailError, safe_identifier
 
     try:
@@ -512,7 +513,8 @@ def api_get_agent_activity(agent_id: str):
 @router.get("/api/v1/agent/{agent_id}/projects")
 def api_get_agent_projects(agent_id: str):
     """Liefert die spezifische Projekthistorie (Beteiligungen) fuer einen bestimmten Agenten."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     projects = []
     seen_ids = set()
@@ -775,7 +777,8 @@ def _load_hud_configs(app_main: Any) -> tuple:
 @router.get("/api/v1/hud/telemetry")
 async def get_hud_telemetry():
     """Real-time Hermes HUD-UI consciousness and system telemetry stream."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     agents, services = await asyncio.to_thread(_load_hud_configs, app_main)
 
@@ -898,7 +901,8 @@ def _get_running_tasks_count() -> int:
 @router.get("/api/v1/telemetry/dashboard")
 def api_telemetry_dashboard():
     """Live-Kennzahlen. Keine festen Werte — alles wird zur Laufzeit ermittelt."""
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
 
     tasks_running = _get_running_tasks_count()
     app_start_ts = getattr(app_main, "_APP_START_TS", time.time())

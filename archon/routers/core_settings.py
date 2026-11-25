@@ -36,7 +36,8 @@ def _require_admin(request: Request):
 async def get_settings(request: Request):
     if "x-hermes-session-token" in request.headers or "x-hermes-csrf-token" in request.headers:
         _require_admin(request)
-        import main as app_main
+        from archon.core.provider_registry import get_provider
+        app_main = get_provider("app_main")
         return await app_main.forward_to_hermes(request)
 
     s = _load_json(SETTINGS_FILE, {})
@@ -89,7 +90,8 @@ async def api_save_settings(request: Request, settings: PassthroughBody = Body(N
     _require_admin(request)
     settings_data = as_payload(settings)
     if "x-hermes-session-token" in request.headers or "x-hermes-csrf-token" in request.headers:
-        import main as app_main
+        from archon.core.provider_registry import get_provider
+        app_main = get_provider("app_main")
         return await app_main.forward_to_hermes(request)
 
     current = _load_json(SETTINGS_FILE, {})
@@ -126,7 +128,8 @@ def clear_ticker():
 
 @router.get("/api/agents")
 def api_get_agents():
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     agents = app_main.load_agents()
     try:
         from archon.core.profiles import api_get_hermes_profiles
@@ -148,21 +151,24 @@ def api_get_agents():
 @router.post("/api/agents")
 def api_save_agents(request: Request, agents: List[Dict]):
     _require_admin(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     app_main.save_agents(agents)
     return {"status": "success"}
 
 
 @router.get("/api/roles")
 def api_get_roles():
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     return materialize_role_avatars(app_main.load_roles())
 
 
 @router.post("/api/roles")
 def api_save_roles(request: Request, roles: List[Dict]):
     _require_admin(request)
-    import main as app_main
+    from archon.core.provider_registry import get_provider
+    app_main = get_provider("app_main")
     app_main.save_roles(roles)
     return {"status": "success"}
 

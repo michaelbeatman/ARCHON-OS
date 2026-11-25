@@ -122,7 +122,7 @@ class OperationsCalendarManager:
             dispatch_workflow_event(
                 source="calendar",
                 event_type="created",
-                title=ev["title"],
+                title=str(ev["title"]),
                 summary=f"Datum: {ev['date']} {ev['time']} | Kategorie: {ev['category']}",
                 payload={"event_id": ev["id"], "date": ev["date"], "time": ev["time"], "trigger_workflow_id": ev["trigger_workflow_id"]},
                 correlation_id=f"cal-create-{ev['id']}",
@@ -494,8 +494,8 @@ class OperationsCalendarManager:
             if src.get("username") and src.get("password"):
                 tok = base64.b64encode(f"{src['username']}:{src['password']}".encode("utf-8")).decode("ascii")
                 headers["Authorization"] = f"Basic {tok}"
-            resp_ics = safe_http_request(src["url"], method="GET", headers=headers, timeout=15.0, max_bytes=8 * 1024 * 1024)
-            ics_text = (resp_ics.get("body") or b"").decode("utf-8", errors="ignore")
+            _status_ics, _headers_ics, body_ics = safe_http_request(src["url"], method="GET", headers=headers, timeout=15.0, max_bytes=8 * 1024 * 1024)
+            ics_text = (body_ics or b"").decode("utf-8", errors="ignore")
             parsed = parse_ics_events(ics_text)
             for idx, pe in enumerate(parsed):
                 st = str(pe.get("start") or "")
@@ -1046,7 +1046,8 @@ class OperationsCalendarManager:
             raise ValueError(f"Tageslimit ({bt.get('max_per_day')}) fuer '{slug}' am {d_iso} erreicht.")
         members = [str(m).strip() for m in (bt.get("team_members") or []) if str(m).strip()]
         assigned = self._next_round_robin_member(slug, members, d_iso, start, end) if members else ""
-        answers = payload.get("answers") if isinstance(payload.get("answers"), dict) else {}
+        answers_raw = payload.get("answers")
+        answers: Dict[str, Any] = answers_raw if isinstance(answers_raw, dict) else {}
         ans_text = " | ".join(f"{k}: {v}" for k, v in answers.items() if str(v).strip())
         extra = []
         if assigned:
@@ -1104,8 +1105,8 @@ class OperationsCalendarManager:
             if src.get("username") and src.get("password"):
                 tok = base64.b64encode(f"{src['username']}:{src['password']}".encode("utf-8")).decode("ascii")
                 headers["Authorization"] = f"Basic {tok}"
-            resp = safe_http_request(target_url, method="PUT", headers=headers, data=ics, timeout=12.0)
-            return {"pushed": True, "provider": prov, "status_code": resp.get("status", 200)}
+            status_code, _, _ = safe_http_request(target_url, method="PUT", headers=headers, data=ics, timeout=12.0)
+            return {"pushed": True, "provider": prov, "status_code": status_code}
 
         if prov == "google_oauth":
             token = self._ensure_fresh_oauth_token(src)
@@ -1116,14 +1117,14 @@ class OperationsCalendarManager:
                 "start": {"date": ev["date"]} if ev.get("all_day") else {"dateTime": f"{ev['start'][:16]}:00Z"},
                 "end": {"date": ev["date"]} if ev.get("all_day") else {"dateTime": f"{(ev.get('end') or ev['start'])[:16]}:00Z"},
             }).encode("utf-8")
-            resp = safe_http_request(
+            status_code, _, _ = safe_http_request(
                 "https://www.googleapis.com/calendar/v3/calendars/primary/events",
                 method="POST",
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
                 data=body,
                 timeout=12.0,
             )
-            return {"pushed": True, "provider": prov, "status_code": resp.get("status", 200)}
+            return {"pushed": True, "provider": prov, "status_code": status_code}
 
         if prov == "outlook_oauth":
             token = self._ensure_fresh_oauth_token(src)
@@ -1133,14 +1134,14 @@ class OperationsCalendarManager:
                 "start": {"dateTime": f"{ev['start'][:16]}:00", "timeZone": "Europe/Berlin"},
                 "end": {"dateTime": f"{(ev.get('end') or ev['start'])[:16]}:00", "timeZone": "Europe/Berlin"},
             }).encode("utf-8")
-            resp = safe_http_request(
+            status_code, _, _ = safe_http_request(
                 "https://graph.microsoft.com/v1.0/me/events",
                 method="POST",
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
                 data=body,
                 timeout=12.0,
             )
-            return {"pushed": True, "provider": prov, "status_code": resp.get("status", 200)}
+            return {"pushed": True, "provider": prov, "status_code": status_code}
 
         return {"pushed": False, "reason": "read_only_ics_provider"}
 
@@ -1781,7 +1782,8 @@ class OperationsCalendarManager:
             ids = (data[0] or b"").split()[-25:]
             for msg_id in ids:
                 polled += 1
-                _, msg_data = imap.fetch(msg_id, "(RFC822)")
+                msg_id_str = msg_id.decode("ascii", errors="ignore") if isinstance(msg_id, bytes) else str(msg_id)
+                _, msg_data = imap.fetch(msg_id_str, "(RFC822)")
                 if not msg_data or not isinstance(msg_data[0], tuple):
                     continue
                 msg = py_email.message_from_bytes(msg_data[0][1])
@@ -1790,7 +1792,7 @@ class OperationsCalendarManager:
                     fname = str(part.get_filename() or "").lower()
                     if ctype == "text/calendar" or fname.endswith(".ics"):
                         payload_b = part.get_payload(decode=True)
-                        if payload_b:
+                        if isinstance(payload_b, bytes) and payload_b:
                             all_updates.extend(self.process_rsvp_ics_text(payload_b.decode("utf-8", errors="ignore")))
         return {"polled": polled, "updated": all_updates}
 
@@ -1874,6 +1876,8 @@ class OperationsCalendarManager:
                 },
                 company_id=company_id,
             )
+            if not updated:
+                return "Termin konnte nicht verschoben werden."
             return f"Termin verschoben: **{updated['title']}** neu am **{new_d.isoformat()}** um **{new_t} Uhr**."
 
         # 4. Standard: Neuen Termin per Quick-Add anlegen

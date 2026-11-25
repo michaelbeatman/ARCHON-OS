@@ -219,12 +219,17 @@ def _fetch_rss_items(url: str, max_items: int = 10) -> List[Dict[str, str]]:
     return items
 
 
-def _send_telegram_notification(text: str, reply_markup: dict = None) -> bool:
+def _send_telegram_notification(text: str, reply_markup: Optional[dict] = None) -> bool:
     """Sendet Telegram-Nachricht via telegram_notify oder direkt per urllib Fallback."""
     # 1. Versuche telegram_notify falls verfügbar
     try:
         import telegram_notify
-        if telegram_notify.send_telegram_message(text, reply_markup=reply_markup):
+        sent = (
+            telegram_notify.send_telegram_message(text)
+            if reply_markup is None
+            else telegram_notify.send_telegram_message(text, reply_markup=reply_markup)
+        )
+        if sent:
             return True
     except Exception as exc:
         logger.debug("[Watchdog] telegram_notify nicht verfuegbar oder Sendeversuch fehlgeschlagen: %s", exc)

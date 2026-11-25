@@ -45,7 +45,7 @@ def sanitize_text(text: str) -> str:
 
 def extract_from_feedback(db_path: str, min_score: int = 1):
     """Extracts pairs where human either approved or explicitly corrected the output."""
-    samples = []
+    samples: list[dict[str, str]] = []
     if not os.path.exists(db_path):
         return samples
 
@@ -91,7 +91,7 @@ def extract_from_feedback(db_path: str, min_score: int = 1):
 
 def extract_from_learnings(db_path: str):
     """Extracts distilled architectural learnings and guidelines."""
-    samples = []
+    samples: list[dict[str, str]] = []
     if not os.path.exists(db_path):
         return samples
 

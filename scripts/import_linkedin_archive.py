@@ -11,7 +11,9 @@ COLLECTION_NAME = "kontakte"
 
 # Ensure UTF-8 output on Windows consoles
 if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    _reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding='utf-8', errors='replace')
 
 def get_existing_contacts():
     items = []
@@ -88,14 +90,14 @@ def merge_and_import_connections(csv_path):
             next(f)
             
         dr = csv.DictReader(f)
-        for row in dr:
-            first_name = row.get("First Name") or row.get("Vorname", "")
-            last_name = row.get("Last Name") or row.get("Nachname", "")
-            url = row.get("URL") or row.get("Url", "")
-            email = row.get("Email Address") or row.get("E-Mail-Adresse", "")
-            company = row.get("Company") or row.get("Unternehmen", "")
-            position = row.get("Position", "")
-            connected_on = row.get("Connected On") or row.get("Vernetzt am", "")
+        for entry in dr:
+            first_name = entry.get("First Name") or entry.get("Vorname", "")
+            last_name = entry.get("Last Name") or entry.get("Nachname", "")
+            url = entry.get("URL") or entry.get("Url", "")
+            email = entry.get("Email Address") or entry.get("E-Mail-Adresse", "")
+            company = entry.get("Company") or entry.get("Unternehmen", "")
+            position = entry.get("Position", "")
+            connected_on = entry.get("Connected On") or entry.get("Vernetzt am", "")
             
             full_name = f"{first_name} {last_name}".strip()
             if not full_name:

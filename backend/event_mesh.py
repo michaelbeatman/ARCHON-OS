@@ -1284,7 +1284,7 @@ class EventMesh:
         # werden verarbeitet. Vorher erzeugte jeder Scan fuer jede noch liegende
         # Datei ein neues Event, einen neuen Kanban-Task und einen Agent-Run.
         cursor_file = os.path.join(target_dir, ".event_mesh_processed.json")
-        seen = {}
+        seen: dict[str, Any] = {}
         try:
             if os.path.exists(cursor_file):
                 with open(cursor_file, "r", encoding="utf-8") as f:

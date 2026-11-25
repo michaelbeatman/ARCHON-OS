@@ -68,11 +68,11 @@ def api_get_model_routing():
 @router.post("/api/settings/model-routing")
 def api_save_model_routing(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.model_routing import save_config
 
     try:
-        cfg = save_config(payload)
+        cfg = save_config(data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "success", "config": cfg}
@@ -98,11 +98,11 @@ def api_get_autonomy_modules_settings():
 @router.post("/api/settings/autonomy-modules")
 def api_save_autonomy_modules_settings(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     import main as app_main
     from backend.autonomy_settings import save_autonomy_settings
 
-    updated = save_autonomy_settings(payload)
+    updated = save_autonomy_settings(data)
     try:
         import yaml
 
@@ -115,7 +115,7 @@ def api_save_autonomy_modules_settings(request: Request, payload: PassthroughBod
                 hdata = yaml.safe_load(f.read()) or {}
             if not isinstance(hdata, dict):
                 hdata = {}
-            conc = payload.get("concurrency", {})
+            conc = data.get("concurrency", {})
             if isinstance(conc, dict):
                 if "max_concurrent_agents" in conc:
                     hdata.setdefault("delegation", {})["max_concurrent_children"] = int(
@@ -125,7 +125,7 @@ def api_save_autonomy_modules_settings(request: Request, payload: PassthroughBod
                     hdata.setdefault("agent", {})["task_timeout_seconds"] = int(
                         conc["queue_timeout_seconds"]
                     )
-            cb = payload.get("circuit_breaker", {})
+            cb = data.get("circuit_breaker", {})
             if isinstance(cb, dict):
                 tlg = hdata.setdefault("tool_loop_guardrails", {})
                 if "loop_detection_enabled" in cb:
@@ -134,21 +134,21 @@ def api_save_autonomy_modules_settings(request: Request, payload: PassthroughBod
                     tlg.setdefault("hard_stop_after", {})["exact_failure"] = int(cb["max_identical_turns"])
                 if "max_steps_per_task" in cb:
                     hdata.setdefault("agent", {})["max_turns"] = int(cb["max_steps_per_task"])
-            sb = payload.get("ephemeral_sandbox", {})
+            sb = data.get("ephemeral_sandbox", {})
             if isinstance(sb, dict):
                 term = hdata.setdefault("terminal", {})
                 if "cpu_limit" in sb:
                     term["container_cpu"] = float(sb["cpu_limit"])
                 if "timeout_seconds" in sb:
                     term["timeout"] = int(sb["timeout_seconds"])
-            cc = payload.get("context_compactor", {})
+            cc = data.get("context_compactor", {})
             if isinstance(cc, dict):
                 comp = hdata.setdefault("compression", {})
                 if "enabled" in cc:
                     comp["enabled"] = bool(cc["enabled"])
                 if "keep_recent_turns" in cc:
                     comp["protect_last_n"] = int(cc["keep_recent_turns"])
-            cg = payload.get("consensus_gate", {})
+            cg = data.get("consensus_gate", {})
             if isinstance(cg, dict) and "enabled" in cg:
                 hdata.setdefault("moa", {})["enabled"] = bool(cg["enabled"])
             with open(active_path, "w", encoding="utf-8") as f:
@@ -163,25 +163,25 @@ def api_save_autonomy_modules_settings(request: Request, payload: PassthroughBod
 
 @router.post("/api/cache/semantic-lookup")
 def api_semantic_cache_lookup(payload: PassthroughBody = Body(...)):
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.semantic_cache import semantic_cache_manager
 
     return semantic_cache_manager.lookup(
-        prompt=payload.get("prompt", ""),
-        model=payload.get("model", "any"),
-        threshold_override=payload.get("similarity_threshold"),
+        prompt=data.get("prompt", ""),
+        model=data.get("model", "any"),
+        threshold_override=data.get("similarity_threshold"),
     )
 
 
 @router.post("/api/cache/semantic-store")
 def api_semantic_cache_store(payload: PassthroughBody = Body(...)):
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.semantic_cache import semantic_cache_manager
 
     return semantic_cache_manager.store(
-        prompt=payload.get("prompt", ""),
-        response=payload.get("response", ""),
-        model=payload.get("model", "any"),
+        prompt=data.get("prompt", ""),
+        response=data.get("response", ""),
+        model=data.get("model", "any"),
     )
 
 
@@ -206,13 +206,13 @@ def api_semantic_cache_clear(request: Request):
 @router.post("/api/evolution/optimize-prompt")
 def api_optimize_role_prompt(request: Request, payload: PassthroughBody = Body(...)):
     _require_admin(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.prompt_optimizer import prompt_optimizer
 
     return prompt_optimizer.optimize_role_prompt(
-        agent_role=payload.get("agent_role", "backend_architect"),
-        current_prompt=payload.get("current_prompt", "Du bist ein präziser System-Agent."),
-        recent_failures=payload.get("recent_failures", []),
+        agent_role=data.get("agent_role", "backend_architect"),
+        current_prompt=data.get("current_prompt", "Du bist ein präziser System-Agent."),
+        recent_failures=data.get("recent_failures", []),
     )
 
 
@@ -225,8 +225,8 @@ def api_run_eval_regression_suite(
     # Audit D01/D12: dieser Endpoint konnte clientseitige simulated_outputs als
     # echten Kandidatenlauf ausgeben und release_approved=true schreiben.
     require_admin_or_503(request)  # Admin-Gate (auch fuer Simulationspfad)
-    payload = as_payload(payload)
-    simulated_outputs = payload.get("simulated_outputs")
+    data = as_payload(payload)
+    simulated_outputs = data.get("simulated_outputs")
     if simulated_outputs is not None and not simulation:
         raise HTTPException(
             status_code=400,
@@ -235,6 +235,6 @@ def api_run_eval_regression_suite(
     from backend.eval_regression_runner import eval_regression_runner
 
     return eval_regression_runner.run_suite(
-        candidate_label=payload.get("candidate_label", "v2026.10-release"),
+        candidate_label=data.get("candidate_label", "v2026.10-release"),
         simulated_outputs=simulated_outputs,
     )

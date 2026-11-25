@@ -44,6 +44,7 @@ import ast
 import json
 import os
 import sys
+from typing import Any
 
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 READING = {"GET", "HEAD", "OPTIONS"}
@@ -110,7 +111,7 @@ def _has_guard(fn: ast.AST) -> tuple[bool, list[str]]:
     return (len(hits) > 0, hits)
 
 
-def _first_stmt_guard(fn: ast.AST) -> bool:
+def _first_stmt_guard(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Steht der Zaun wirklich am Anfang? Docstring zaehlt nicht als Anweisung.
 
     Nötig, weil `_has_guard` jede Erwähnung im Rumpf zählt: ein
@@ -144,7 +145,7 @@ def _first_stmt_guard(fn: ast.AST) -> bool:
     return False
 
 
-def _router_prefix(tree: ast.AST) -> str:
+def _router_prefix(tree: ast.Module) -> str:
     """Liest `router = APIRouter(prefix="/api/operations")` der Datei.
 
     Ohne diesen Prefix steht in jeder Zeile eines Routers nur der Teilpfad
@@ -297,7 +298,7 @@ def main() -> int:
     catch_all_open = [r for r in catch_all if r["mutating"] and not r["guarded"]]
 
     # api_route mit gemischten Methoden
-    api_route_mixed = {}
+    api_route_mixed: dict[Any, Any] = {}
     for r in rows:
         key = (r["file"], r["line"])
         api_route_mixed.setdefault(key, set()).add(r["method"])
@@ -328,7 +329,7 @@ def main() -> int:
         for r in sorted(mut_public, key=lambda x: (x["file"], x["line"])):
             print(f"  {r['file']}:{r['line']} {r['method']:6s} {r['path']}")
     print()
-    by_file = {}
+    by_file: dict[Any, Any] = {}
     for r in mut_open:
         by_file[r["file"]] = by_file.get(r["file"], 0) + 1
     print("mutierend OHNE Zaun je Datei:")

@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
 
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
@@ -404,8 +403,8 @@ def get_system_language():
 @router.post("/api/system/language")
 def set_system_language(request: Request, payload: SystemLanguageRequest = Body(...)):
     _require_admin(request)
-    payload = payload.model_dump()  # RBAC: Admin-Sache
-    lang = (payload.get("language") or "de").strip().lower()
+    payload = payload.model_dump()  # type: ignore[assignment]# RBAC: Admin-Sache
+    lang = (payload.get("language") or "de").strip().lower()  # type: ignore[attr-defined]
     supported = ["de", "en", "es", "fr", "pt", "ru", "ja", "ko", "zh"]
     if lang not in supported:
         raise HTTPException(status_code=400, detail={"code": "system_unsupported_language", "params": {"lang": lang}})
@@ -443,24 +442,24 @@ def api_system_update_local_changes(force: bool = False):
 @router.post("/api/v1/system/update/push")
 def api_system_update_push(request: Request, payload: SystemUpdatePushRequest = Body(default=SystemUpdatePushRequest())):
     _require_admin(request)
-    payload = payload.model_dump()  # RBAC: Admin-Sache
+    payload = payload.model_dump()  # type: ignore[assignment]# RBAC: Admin-Sache
     from backend import (
         system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     )
-    msg = payload.get("message")
-    version = payload.get("version")
-    step = payload.get("step", "custom")
+    msg = payload.get("message")  # type: ignore[attr-defined]
+    version = payload.get("version")  # type: ignore[attr-defined]
+    step = payload.get("step", "custom")  # type: ignore[attr-defined]
     return system_updater.push_changes(commit_message=msg, custom_version=version, version_step=step)
 
 
 @router.post("/api/v1/system/update/apply")
-def api_system_update_apply(request: Request, payload: SystemUpdateApplyRequest = Body(default=SystemUpdateApplyRequest()), background_tasks: BackgroundTasks = None):
+def api_system_update_apply(request: Request, payload: SystemUpdateApplyRequest = Body(default=SystemUpdateApplyRequest()), background_tasks: BackgroundTasks = None):  # type: ignore[assignment]
     _require_admin(request)
-    payload = payload.model_dump()  # RBAC-Pilot: Update des Systems ist Admin-Sache
+    payload = payload.model_dump()  # type: ignore[assignment]# RBAC-Pilot: Update des Systems ist Admin-Sache
     from backend import (
         system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     )
-    make_backup = payload.get("backup", True)
+    make_backup = payload.get("backup", True)  # type: ignore[attr-defined]
     res = system_updater.apply_update(make_backup=make_backup)
     if res.get("status") == "success" and background_tasks is not None:
         background_tasks.add_task(system_updater.schedule_delayed_reload, delay=2.0)
@@ -478,11 +477,11 @@ def api_system_update_snapshots():
 @router.post("/api/v1/system/update/rollback")
 def api_system_update_rollback(request: Request, payload: SystemUpdateRollbackRequest = Body(...)):
     _require_admin(request)
-    payload = payload.model_dump()  # RBAC-Pilot: Rollback des Systems ist Admin-Sache
+    payload = payload.model_dump()  # type: ignore[assignment]# RBAC-Pilot: Rollback des Systems ist Admin-Sache
     from backend import (
         system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     )
-    snapshot_id = payload.get("snapshot_id", "").strip()
+    snapshot_id = payload.get("snapshot_id", "").strip()  # type: ignore[attr-defined]
     if not snapshot_id:
         raise HTTPException(status_code=400, detail="Snapshot-ID erforderlich.")
     return system_updater.rollback_snapshot(snapshot_id)
@@ -491,11 +490,11 @@ def api_system_update_rollback(request: Request, payload: SystemUpdateRollbackRe
 @router.post("/api/v1/system/update/backup")
 def api_system_update_backup(request: Request, payload: SystemUpdateBackupRequest = Body(default=SystemUpdateBackupRequest())):
     _require_admin(request)
-    payload = payload.model_dump()  # RBAC: Admin-Sache
+    payload = payload.model_dump()  # type: ignore[assignment]# RBAC: Admin-Sache
     from backend import (
         system_updater,  # kein reload: zerstoerte Caches und kostete ~0.5-1.5s/Request
     )
-    tag = payload.get("tag", "manual").strip() or "manual"
+    tag = payload.get("tag", "manual").strip() or "manual"  # type: ignore[attr-defined]
     return system_updater.create_snapshot(tag=tag)
 
 
@@ -510,10 +509,10 @@ def api_drain_status():
 @router.post("/api/v1/system/drain/start")
 def api_start_drain(request: Request, payload: DrainStartRequest = Body(default=DrainStartRequest())):
     _require_admin(request)
-    payload = payload.model_dump()  # RBAC: Admin-Sache
+    payload = payload.model_dump()  # type: ignore[assignment]# RBAC: Admin-Sache
     from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-    reason = payload.get("reason", "Manuell angefordertes Draining")
-    grace = payload.get("grace_seconds", 15.0)
+    reason = payload.get("reason", "Manuell angefordertes Draining")  # type: ignore[attr-defined]
+    grace = payload.get("grace_seconds", 15.0)  # type: ignore[attr-defined]
     res = graceful_shutdown_coordinator.start_draining(reason=reason, grace_seconds=grace)
     return {"status": "success", "result": res}
 
@@ -531,10 +530,10 @@ def api_cancel_drain(request: Request):
 @router.post("/api/v1/system/drain/execute-shutdown")
 def api_execute_shutdown(request: Request, payload: DrainShutdownRequest = Body(default=DrainShutdownRequest())):
     _require_admin(request)
-    payload = payload.model_dump()  # RBAC: Admin-Sache
+    payload = payload.model_dump()  # type: ignore[assignment]# RBAC: Admin-Sache
     from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-    reason = payload.get("reason", "API-gesteuerter Shutdown")
-    grace = payload.get("grace_seconds", 5.0)
+    reason = payload.get("reason", "API-gesteuerter Shutdown")  # type: ignore[attr-defined]
+    grace = payload.get("grace_seconds", 5.0)  # type: ignore[attr-defined]
     res = graceful_shutdown_coordinator.execute_graceful_shutdown_sync(reason=reason, grace_seconds=grace)
     return {"status": "success", "result": res}
 
@@ -658,21 +657,21 @@ def api_generate_dossier(request: Request):
 @router.post("/api/system/consolidate-memory")
 def api_trigger_memory_consolidation(request: Request, payload: MemoryConsolidationTriggerRequest = Body(default=MemoryConsolidationTriggerRequest())):
     _require_admin(request)
-    payload = _as_payload(payload)
+    payload = _as_payload(payload)  # type: ignore[assignment]
     from backend.memory_consolidator import run_sleep_cycle_consolidation
-    force = bool(payload.get("force", True))
+    force = bool(payload.get("force", True))  # type: ignore[attr-defined]
     return run_sleep_cycle_consolidation(force=force)
 
 
 @router.post("/api/system/write-batcher/enqueue")
 def api_write_batcher_enqueue(request: Request, payload: WriteBatcherEnqueueRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
-    payload = _as_payload(payload)
+    payload = _as_payload(payload)  # type: ignore[assignment]
     from backend.async_write_batcher import async_write_batcher
     return async_write_batcher.enqueue(
-        event_type=payload.get("event_type", "telemetry"),
-        source_module=payload.get("source_module", "router"),
-        payload=payload.get("payload", {})
+        event_type=payload.get("event_type", "telemetry"),  # type: ignore[attr-defined]
+        source_module=payload.get("source_module", "router"),  # type: ignore[attr-defined]
+        payload=payload.get("payload", {})  # type: ignore[attr-defined]
     )
 
 
@@ -729,27 +728,27 @@ def _load_legal_profile() -> Dict[str, str]:
     c_cnt = corp.get("contact") if isinstance(corp.get("contact"), dict) else {}
     c_reg = corp.get("registry") if isinstance(corp.get("registry"), dict) else {}
     c_tax = corp.get("tax") if isinstance(corp.get("tax"), dict) else {}
-    c_city = " ".join(x for x in (str(c_addr.get("postal_code") or "").strip(), str(c_addr.get("city") or "").strip()) if x)
-    street_val = str(legal.get("street") or c_addr.get("street") or "Bitte in settings.json -> legal_profile pflegen")
+    c_city = " ".join(x for x in (str(c_addr.get("postal_code") or "").strip(), str(c_addr.get("city") or "").strip()) if x)  # type: ignore[union-attr]
+    street_val = str(legal.get("street") or c_addr.get("street") or "Bitte in settings.json -> legal_profile pflegen")  # type: ignore[union-attr]
     postal_city_val = str(legal.get("postal_city") or c_city or "-")
-    rep_val = str(legal.get("represented_by") or c_reg.get("managing_directors") or "Geschäftsführung")
-    email_val = str(legal.get("email") or c_cnt.get("email") or settings_data.get("admin_email") or "-")
+    rep_val = str(legal.get("represented_by") or c_reg.get("managing_directors") or "Geschäftsführung")  # type: ignore[union-attr]
+    email_val = str(legal.get("email") or c_cnt.get("email") or settings_data.get("admin_email") or "-")  # type: ignore[union-attr]
     return {
         "company_name": str(legal.get("company_name") or corp.get("name") or settings_data.get("company_name") or "Archon OS Betreiber (in settings.json -> legal_profile konfigurieren)"),
         "legal_form": str(legal.get("legal_form") or corp.get("legal_form") or "-"),
         "street": street_val,
         "postal_city": postal_city_val,
-        "country": str(legal.get("country") or c_addr.get("country") or "Deutschland"),
+        "country": str(legal.get("country") or c_addr.get("country") or "Deutschland"),  # type: ignore[union-attr]
         "represented_by": rep_val,
         "editorial_responsible": str(legal.get("editorial_responsible") or rep_val),
         "editorial_address": str(legal.get("editorial_address") or f"{street_val}, {postal_city_val}"),
         "email": email_val,
-        "phone": str(legal.get("phone") or c_cnt.get("phone") or "-"),
-        "website": str(legal.get("website") or c_cnt.get("website") or "-"),
-        "vat_id": str(legal.get("vat_id") or c_tax.get("vat_id") or "-"),
-        "w_idnr": str(legal.get("w_idnr") or c_tax.get("w_idnr") or "-"),
-        "register_court": str(legal.get("register_court") or c_reg.get("court") or "-"),
-        "register_number": str(legal.get("register_number") or c_reg.get("number") or "-"),
+        "phone": str(legal.get("phone") or c_cnt.get("phone") or "-"),  # type: ignore[union-attr]
+        "website": str(legal.get("website") or c_cnt.get("website") or "-"),  # type: ignore[union-attr]
+        "vat_id": str(legal.get("vat_id") or c_tax.get("vat_id") or "-"),  # type: ignore[union-attr]
+        "w_idnr": str(legal.get("w_idnr") or c_tax.get("w_idnr") or "-"),  # type: ignore[union-attr]
+        "register_court": str(legal.get("register_court") or c_reg.get("court") or "-"),  # type: ignore[union-attr]
+        "register_number": str(legal.get("register_number") or c_reg.get("number") or "-"),  # type: ignore[union-attr]
         "supervisory_authority": str(legal.get("supervisory_authority") or "-"),
         "dpo_contact": str(legal.get("dpo_contact") or f"Datenschutzbeauftragte(r) unter obiger Anschrift oder {email_val}"),
     }

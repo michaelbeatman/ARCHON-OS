@@ -268,7 +268,7 @@ def get_prompt_studio_catalog(category: Optional[str] = None, q: Optional[str] =
     catalog = _load_prompt_studio_catalog()
     is_en = (lang or "").lower() == "en"
     if is_en:
-        categories = sorted(list({(t.get("category_en") or t.get("category")) for t in catalog if t.get("category") or t.get("category_en")}))
+        categories = sorted({str(t.get("category_en") or t.get("category")) for t in catalog if t.get("category") or t.get("category_en")})
     else:
         categories = sorted(list({t["category"] for t in catalog if "category" in t}))
 

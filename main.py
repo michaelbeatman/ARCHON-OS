@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import asyncio
 import base64
 import csv
@@ -499,7 +498,7 @@ _AUTH_PUBLIC_EXACT = {
 # Nicht-/api-Pfade, die trotzdem geschuetzt sein muessen: eingebettete
 # Admin-Oberflaechen (n8n-Editor, OmniRoute-Konsole) und App-Shells.
 
-_SERVICE_TOKEN_CACHE = {"ts": 0.0, "token": ""}
+_SERVICE_TOKEN_CACHE: Dict[str, Any] = {"ts": 0.0, "token": ""}
 
 
 def _get_service_token() -> str:
@@ -1113,7 +1112,7 @@ try:
 except Exception as _pj_err:  # pragma: no cover - darf den Start nie blockieren
     print(f"[PathJail] Konnte utils.path_jail nicht laden: {_pj_err}", file=sys.stderr)
 
-    class PathJailError(PermissionError):
+    class PathJailError(PermissionError):  # type: ignore[no-redef]
         pass
 
     def safe_path(candidate, **kwargs):  # type: ignore[misc]
@@ -1150,7 +1149,7 @@ try:
     )
 except Exception as e:
     print(f"Failed to import core_skills_engine: {e}", file=sys.stderr)
-    skills_engine = None
+    skills_engine = None  # type: ignore[assignment]
 
 try:
     from backend.db_paths import resolve_db as _resolve_db_path
@@ -1161,7 +1160,7 @@ try:
     )
 except Exception as e:
     print(f"Failed to import local_memory_bridge: {e}", file=sys.stderr)
-    memory_bridge = None
+    memory_bridge = None  # type: ignore[assignment]
 
 watchdog_runner = None
 
@@ -1566,7 +1565,7 @@ async def _deadlock_supervisor_loop():
         try:
             from archon.core.orchestration import recover_stale_synthesis
             from archon.core.task_registry import spawn as _tracked_spawn
-            stale = await asyncio.to_thread(
+            stale = await asyncio.to_thread(  # type: ignore[call-arg]
                 recover_stale_synthesis,
                 _load_mission_control_data,
                 update_mission_control_data,
@@ -2108,7 +2107,7 @@ _delegation_configure(
     fan_in=lambda pid: _fan_in_maybe_start_synthesis(pid),
 )
 
-_GUARDIAN_STATS_CACHE = {}
+_GUARDIAN_STATS_CACHE: Dict[str, Any] = {}
 # --- GUARDIAN ROUTER (ausgelagert nach archon.routers.guardian, 1157 Zeilen) ---
 from archon.routers.guardian import (
     _GUARDIAN_ALLOWED_TIMEFRAMES,
@@ -2634,7 +2633,7 @@ async def _trigger_sandy_staffing_nomination(parent_task: dict, profiles: list):
 
 async def _finalize_synthesis_after_approval(parent_pid: str, draft_path: str,
                                               synthese_text: str, approver_note: str,
-                                              daten: dict = None):
+                                              daten: dict = None):  # type: ignore[assignment]
     """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
     await _orch_finalize_synthesis_after_approval(
         parent_pid, draft_path, synthese_text, approver_note, daten,
@@ -2668,8 +2667,8 @@ def _tg_ping_synthesis(parent_title, parent_project_id, synthese_text, draft_pat
     """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
     _orch_tg_ping_synthesis(
         parent_title, parent_project_id, synthese_text, draft_path, app_id, dossier_dir,
-        send_doc=send_telegram_document,
-        send_msg=send_telegram_message,
+        send_doc=send_telegram_document,  # type: ignore[arg-type]
+        send_msg=send_telegram_message,  # type: ignore[arg-type]
         build_dossier=build_dossier_from_report,
     )
 
@@ -3085,7 +3084,7 @@ async def _close_all_http_clients() -> None:
             if module_path.startswith("archon"):
                 from archon.routers import hermes_proxy as _pool_module
             else:
-                from utils import reverse_proxy as _pool_module
+                from utils import reverse_proxy as _pool_module  # type: ignore[no-redef]
             pool = getattr(_pool_module, pool_name, None)
             clients = list(pool.values()) if pool is not None else []
             for client in clients:

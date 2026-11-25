@@ -17,7 +17,7 @@ import subprocess
 import argparse
 import datetime
 import json
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 _WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROTATION_REGISTER_FILE = os.environ.get(
@@ -148,7 +148,7 @@ def get_tracked_files() -> List[str]:
     except Exception as exc:
         raise RuntimeError(f"[Audit-Secrets] Git-Tracking nicht lesbar: {exc}") from exc
 
-def check_rotation(register_path: str = ROTATION_REGISTER_FILE, now: datetime.datetime = None) -> List[str]:
+def check_rotation(register_path: str = ROTATION_REGISTER_FILE, now: Optional[datetime.datetime] = None) -> List[str]:
     """Prueft Alter/Rotationsfristen. Gibt nur Key-Namen und Alter zurueck."""
     now = now or datetime.datetime.now(datetime.timezone.utc)
     if not os.path.isfile(register_path):

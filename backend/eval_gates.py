@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# mypy: ignore-errors
 """backend/eval_gates.py
 ======================
 Automatische Eval- & Regression-Gates für Archon OS (Punkt 3.2.4).
@@ -351,7 +350,7 @@ async def run_evaluation(
         for item in dataset:
             t0 = time.perf_counter()
             inputs = dict(item.get("inputs") or {})
-            dag_def = _build_dag_def_from_template(tpl, inputs)
+            dag_def = _build_dag_def_from_template(tpl, inputs)  # type: ignore[call-arg]
             wf_db = os.path.join(os.environ.get("ARCHON_DATA_DIR", "data"), "eval_temp_wf.db")
             try:
                 wf_res = await run_workflow_dag(dag_def=dag_def, db_path=wf_db)

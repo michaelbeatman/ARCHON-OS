@@ -293,7 +293,9 @@ class DockerClient:
             host, _, port = target.partition(":")
             sock = socket.create_connection((host, int(port or 2375)), timeout=timeout)
         else:
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            # AF_UNIX existiert nur auf POSIX; die Windows-Typeshed kennt das
+            # Attribut nicht. Der Pfad wird ausschliesslich unter Linux genutzt.
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)  # type: ignore[attr-defined]
             sock.settimeout(timeout)
             sock.connect(target)
 

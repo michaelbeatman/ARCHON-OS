@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 api_provider.py — Hermes-nativer API-Provider-Manager für AgenticOS.
 
@@ -263,13 +262,13 @@ def _list_provider_models_uncached(norm_pid: str) -> List[str]:
                         data = json.loads(resp.read().decode("utf-8"))
                         raw_models = [m.get("id") for m in data.get("data", []) if isinstance(m, dict) and m.get("id")]
                         # Bereinigen von kryptischen Guards
-                        clean_models = [m for m in raw_models if "session-guard" not in m.lower()]
+                        clean_models = [m for m in raw_models if "session-guard" not in m.lower()]  # type: ignore[union-attr]
                         if clean_models:
                             # Priorisiere auto/* Router-Modelle nach oben
-                            auto_routers = [m for m in clean_models if m.startswith("auto/") or m.startswith("omniroute/")]
-                            other_models = [m for m in clean_models if not (m.startswith("auto/") or m.startswith("omniroute/"))]
+                            auto_routers = [m for m in clean_models if m.startswith("auto/") or m.startswith("omniroute/")]  # type: ignore[union-attr]
+                            other_models = [m for m in clean_models if not (m.startswith("auto/") or m.startswith("omniroute/"))]  # type: ignore[union-attr]
                             return ProviderModelList(
-                                auto_routers + sorted(other_models),
+                                auto_routers + sorted(other_models),  # type: ignore[type-var]
                                 source="live",
                                 verified_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
                                 status="ok",
@@ -777,7 +776,7 @@ def collect_keys() -> Dict[str, str]:
     found: Dict[str, str] = {}
     # 1. process env / all provider env vars (best effort; wir sammeln nur was existiert)
     cat = load_provider_catalog()
-    env_names = set()
+    env_names = set()  # type: ignore[var-annotated]
     for pid, v in cat.items():
         if isinstance(v, dict):
             env_names.update(v.get("env", []) or [])
@@ -1056,7 +1055,7 @@ def read_profile_config(profile_id: str, profiles_dir: Optional[str] = None) -> 
     """Liest model/provider/base_url aus der config.yaml eines Profils (Hermes-Struktur)."""
     path = profile_config_path(profile_id, profiles_dir)
     info: Dict[str, Optional[str]] = {"model": None, "provider": None, "base_url": None,
-                                      "path": path, "exists": os.path.exists(path)}
+                                      "path": path, "exists": os.path.exists(path)}  # type: ignore[dict-item]
     if not os.path.exists(path):
         return info
     try:

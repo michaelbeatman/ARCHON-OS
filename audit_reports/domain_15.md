@@ -79,3 +79,14 @@ Hinweis: die Shell war in dieser Audit-Session nicht benutzbar (`pwsh.exe`: Zugr
 - Frontend-Rollen-Darstellung, UI-Org-Chart-Rendering, MCP-Server-Scope-Keys (`admin_full` etc.) — andere Domänen.
 - Kryptografische Hash-Werte selbst (SOUL-Pin, Audit-Kette) — nur Vorhandensein/Vergleichslogik geprüft, keine Neutralisierung.
 - `agents.json` wurde auf Registry-Ebene geprüft, nicht auf Container-Launch-Verhalten.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** Alle 6 HIGH (Isolation-Header ohne `negative_scope`, 4 falsch klassifizierte Außenkommunikationsrollen, `founder`-Inkonsistenz, Lisa-/Reviewer-Rollen-Theater, erfundene Freigabe) — `fix_w2_c_governance_roles.md`: `founder`/`crisis_escalation_lead` nun `HIGH_RISK`, Inventar 71 Einträge (28 HIGH / 18 SPECIFIC_TRANSPARENCY / 25 MINIMAL_RISK), echte Reviewer-Rolle fail-closed, Freigabetext entfernt, Tool-Alias-SSOT. Orchestrator: **18 passed**.
+- **`hermes-orchestrator` jetzt behoben:** Die Eskalation aus `FIX_VERIFICATION_LOG.md` („`COMPLIANCE_BLOCKED / agent_not_in_ai_act_inventory`") ist aufgelöst: `backend/compliance_engine.py:350-357` löst den Handle über `canonical_agent_id()` (mit `backend/agent_aliases.py` als Fallback) auf, und `config/org_hierarchy.json:17-18` / `backend/agent_aliases.py:18-19` mappen `hermes-orchestrator` auf `system_architect_orchestrator`. Statisch verifiziert in diesem Pass; **kein** eigener Testlauf (Shell gesperrt).
+- **Bewusst offen:** Verbleibende MED (u. a. `soul_mode` dauerhaft `compact`, APEX-SSOT, Tool-Scopes beratender Rollen) wurden nicht einzeln re-verifiziert. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** `pytest tests/test_fix_w2_c_governance_roles.py -q` → **18 passed** (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

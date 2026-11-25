@@ -7,7 +7,7 @@ Extrahiert aus main.py zur Modularisierung.
 """
 
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, cast
 from fastapi import APIRouter, HTTPException, Query, Body, Request
 from archon.routers._rbac import require_admin_or_503
 from archon.core.runtime import add_ticker, logger
@@ -35,17 +35,17 @@ except Exception as _exc:
     # D01/MED: Importfehler nicht verschlucken und durch Fake-Quellen
     # ersetzen. Endpunkte melden explizit `not_configured` (HTTP 503).
     _MARKETPLACE_IMPORT_ERRORS["repo_sync"] = str(_exc)
-    get_marketplace_sources = None
-    list_templates_for_source = None
-    get_template_detail = None
+    get_marketplace_sources = cast(Any, None)
+    list_templates_for_source = cast(Any, None)
+    get_template_detail = cast(Any, None)
 
 try:
     from utils.skill_marketplace import get_skill_marketplace_sources, list_skills_for_source, get_skill_detail
 except Exception as _exc:
     _MARKETPLACE_IMPORT_ERRORS["skill_marketplace"] = str(_exc)
-    get_skill_marketplace_sources = None
-    list_skills_for_source = None
-    get_skill_detail = None
+    get_skill_marketplace_sources = cast(Any, None)
+    list_skills_for_source = cast(Any, None)
+    get_skill_detail = cast(Any, None)
 
 
 def _require_marketplace_backend(name: str) -> None:
@@ -103,10 +103,10 @@ def api_get_skill_detail(source: str = Query(...), id: str = Query(...)):
 @router.post("/api/marketplace/skills/assign")
 def api_assign_skill_to_profile(request: Request, data: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    data = as_payload(data)
+    data_payload = as_payload(data)
     import re as _re
-    profile_id = data.get("profile_id")
-    skill_name = data.get("skill_name") or data.get("skill_id")
+    profile_id = data_payload.get("profile_id")
+    skill_name = data_payload.get("skill_name") or data_payload.get("skill_id")
     if not profile_id or not skill_name:
         raise HTTPException(status_code=400, detail="profile_id and skill_name are required")
     if (
@@ -164,10 +164,10 @@ def api_assign_skill_to_profile(request: Request, data: PassthroughBody = Body(.
 @router.post("/api/marketplace/recruit")
 def api_marketplace_recruit(request: Request, data: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    data = as_payload(data)
-    source = data.get("source", "fabric")
-    template_id = data.get("template_id") or data.get("id")
-    custom_name = data.get("name")
+    data_payload = as_payload(data)
+    source = data_payload.get("source", "fabric")
+    template_id = str(data_payload.get("template_id") or data_payload.get("id") or "")
+    custom_name = data_payload.get("name")
 
     _require_marketplace_backend("repo_sync")
     tpl = get_template_detail(source, template_id)

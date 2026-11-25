@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 Brain & Archiv Router (3D Galaxy, Vault API, Library & Quartz Config)
 für Archon OS. Ausgelagert aus main.py zur modularen Entschlackung.
@@ -260,7 +259,7 @@ def api_brain_galaxy_data(vault_limit: int = Query(600, description="Max. Vault-
                         if is_personalakte:
                             for a in agent_profiles:
                                 aid = f"agent_{a.get('id', a.get('name'))}"
-                                if a.get("id") and a.get("id").lower() in file.lower() or file.lower().replace(".md", "") in a.get("id", "").lower():
+                                if a.get("id") and a.get("id").lower() in file.lower() or file.lower().replace(".md", "") in a.get("id", "").lower():  # type: ignore[union-attr]
                                     if aid in node_ids:
                                         links.append({"source": aid, "target": note_id, "relationship": "documented_in", "color": "rgba(234, 179, 8, 0.6)"})
                                         matched_agent = True
@@ -296,7 +295,7 @@ def api_brain_galaxy_data(vault_limit: int = Query(600, description="Max. Vault-
             "total_links": len(links),
             "agents_count": len([n for n in nodes if n["group"] == "agent"]),
             "skills_count": len([n for n in nodes if n["group"] == "skill"]),
-            "vault_notes_count": len([n for n in nodes if "note" in n["group"] or "personalakte" in n["group"]]),
+            "vault_notes_count": len([n for n in nodes if "note" in n["group"] or "personalakte" in n["group"]]),  # type: ignore[operator]
             "vault_notes_truncated": len(_drop)
         }
     }
@@ -375,7 +374,7 @@ async def api_library_upload(request: Request):
         if not uploaded_files:
             raise HTTPException(status_code=400, detail={"code": "brain_no_files", "params": {}})
             
-        auto_ingest = form.get("auto_ingest", "true").lower() in ["true", "1", "yes"]
+        auto_ingest = form.get("auto_ingest", "true").lower() in ["true", "1", "yes"]  # type: ignore[union-attr]
         category = form.get("category", "auto")
         
         results = []
@@ -401,7 +400,7 @@ async def api_library_upload(request: Request):
                         status_code=400,
                         detail=f"Dateiname nicht erlaubt: {e}"
                     )
-                content = await file.read()
+                content = await file.read()  # type: ignore[union-attr]
                 def _save_file(target_path: str, data: bytes) -> None:
                     with open(target_path, "wb") as f:
                         f.write(data)
@@ -415,7 +414,7 @@ async def api_library_upload(request: Request):
                 
                 if auto_ingest:
                     try:
-                        ingest_res = await asyncio.to_thread(process_document, file_path, vault_dir, target_category=category)
+                        ingest_res = await asyncio.to_thread(process_document, file_path, vault_dir, target_category=category)  # type: ignore[arg-type]
                         item_info["ingest"] = ingest_res
                     except Exception as err:
                         item_info["ingest"] = {"status": "error", "error": str(err)}

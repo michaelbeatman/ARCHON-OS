@@ -178,11 +178,11 @@ def api_query_rag(q: str = Query(..., description="Suchbegriff für das Anything
 @router.post("/api/diff/preview")
 def api_diff_preview(request: Request, payload: MeshDiffPreviewRequest = Body(...)):
     _require_admin_or_503(request)
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.diff_engine import compute_file_diff
     from utils.path_jail import PathJailError, safe_path_within
 
-    raw_path = str(payload.get("file_path", "")).strip()
+    raw_path = str(data.get("file_path", "")).strip()
     if not raw_path:
         raise HTTPException(status_code=400, detail="Gültiger 'file_path' erforderlich.")
 
@@ -205,8 +205,8 @@ def api_diff_preview(request: Request, payload: MeshDiffPreviewRequest = Body(..
 
     return compute_file_diff(
         file_path=real_path,
-        new_content=payload.get("new_content", ""),
-        context_lines=int(payload.get("context_lines", 3)),
+        new_content=data.get("new_content", ""),
+        context_lines=int(data.get("context_lines", 3)),
     )
 
 
@@ -217,7 +217,9 @@ def api_diff_preview(request: Request, payload: MeshDiffPreviewRequest = Body(..
 def api_list_skill_proposals(status: Optional[str] = None):
     from backend.skill_synthesizer import skill_synthesizer
 
-    return {"status": "success", "proposals": skill_synthesizer.list_proposals(status=status)}
+    # list_proposals() behandelt leeren Status als "alle" (`if status:`).
+    # None -> "" ist daher verhaltensidentisch und erfuellt den str-Parameter.
+    return {"status": "success", "proposals": skill_synthesizer.list_proposals(status=status or "")}
 
 
 @router.post("/api/skills/proposals/{proposal_id}/approve")
@@ -301,10 +303,10 @@ def api_list_event_history(limit: int = 50):
 @router.post("/api/events/scan-directory")
 def api_scan_inbox_directory(request: Request, payload: InboxScanRequest = Body(default=InboxScanRequest())):
     _require_admin(request)
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.event_mesh import event_mesh
 
-    return event_mesh.scan_inbox_directory(inbox_dir=payload.get("inbox_dir"))
+    return event_mesh.scan_inbox_directory(inbox_dir=data.get("inbox_dir"))
 
 
 # --- CONCURRENCY THROTTLE ---
@@ -320,13 +322,13 @@ def api_get_concurrency_status():
 @router.post("/api/concurrency/config")
 def api_save_concurrency_config(request: Request, payload: ConcurrencyConfigRequest = Body(...)):
     _require_admin(request)
-    payload = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
     from backend.concurrency_throttle import get_concurrency_config, save_concurrency_config
 
     cfg = get_concurrency_config()
     for key in _CONCURRENCY_CONFIG_KEYS:
-        if key in payload:
-            cfg[key] = payload[key]
+        if key in data:
+            cfg[key] = data[key]
     ok = save_concurrency_config(cfg)
     return {"status": "success" if ok else "error", "concurrency": cfg}
 
@@ -336,12 +338,12 @@ def api_save_concurrency_config(request: Request, payload: ConcurrencyConfigRequ
 
 @router.post("/api/vision/analyze")
 def api_analyze_vision(payload: VisionAnalyzeRequest = Body(...)):
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.vision_pipeline import analyze_image_file
 
     return analyze_image_file(
-        image_path=payload.get("image_path", ""),
-        focus_prompt=payload.get("focus_prompt", "Beschreibe den Inhalt dieses Screenshots detailliert."),
+        image_path=data.get("image_path", ""),
+        focus_prompt=data.get("focus_prompt", "Beschreibe den Inhalt dieses Screenshots detailliert."),
     )
 
 
@@ -350,21 +352,21 @@ def api_analyze_vision(payload: VisionAnalyzeRequest = Body(...)):
 
 @router.post("/api/handoff/create")
 def api_create_handoff(payload: HandoffCreateRequest = Body(...)):
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.handoff_desk import handoff_desk
 
     return handoff_desk.create_handoff(
-        task_id=payload.get("task_id", ""),
-        from_agent=payload.get("from_agent", ""),
-        to_agent=payload.get("to_agent", ""),
-        deliverables=payload.get("deliverables", {}),
-        acceptance_criteria=payload.get("acceptance_criteria", ""),
+        task_id=data.get("task_id", ""),
+        from_agent=data.get("from_agent", ""),
+        to_agent=data.get("to_agent", ""),
+        deliverables=data.get("deliverables", {}),
+        acceptance_criteria=data.get("acceptance_criteria", ""),
     )
 
 
 @router.post("/api/handoff/{handoff_id}/accept")
 def api_accept_handoff(request: Request, handoff_id: str, payload: HandoffAcceptRequest = Body(...)):
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from archon.routers._rbac import require_session_actor
     from backend.handoff_desk import handoff_desk
 
@@ -373,7 +375,7 @@ def api_accept_handoff(request: Request, handoff_id: str, payload: HandoffAccept
     # der Request-Actor muss zusätzlich verifiziert sein.
     require_session_actor(request)
     envelope = handoff_desk.get_handoff(handoff_id) or {}
-    claimed = str(payload.get("receiving_agent") or "").strip()
+    claimed = str(data.get("receiving_agent") or "").strip()
     assignee = ""
     try:
         from backend.operations_api import _get_kanban_connection
@@ -398,14 +400,14 @@ def api_accept_handoff(request: Request, handoff_id: str, payload: HandoffAccept
 
 @router.post("/api/tasks/review-consensus")
 async def api_review_task_consensus(payload: TaskConsensusReviewRequest = Body(...)):
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.consensus_gate import review_task_output
 
-    task_id = payload.get("task_id", "task-gen")
-    task_title = payload.get("title", "")
-    task_output = payload.get("output", "")
-    worker = payload.get("worker_agent", "hermes-coder")
-    priority = int(payload.get("priority", 3))
+    task_id = data.get("task_id", "task-gen")
+    task_title = data.get("title", "")
+    task_output = data.get("output", "")
+    worker = data.get("worker_agent", "hermes-coder")
+    priority = int(data.get("priority", 3))
     return await review_task_output(
         task_id, task_title, task_output, worker_agent=worker, priority=priority
     )
@@ -413,27 +415,27 @@ async def api_review_task_consensus(payload: TaskConsensusReviewRequest = Body(.
 
 @router.post("/api/tasks/{task_id}/budget/check")
 def api_check_task_budget(task_id: str, payload: TaskBudgetCheckRequest = Body(...)):
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.agent_router import check_task_budget
 
     return check_task_budget(
         task_id=task_id,
-        cost_usd=payload.get("cost_usd", 0.0),
-        budget_usd=payload.get("budget_usd", 0.25),
-        task_title=payload.get("title", ""),
+        cost_usd=data.get("cost_usd", 0.0),
+        budget_usd=data.get("budget_usd", 0.25),
+        task_title=data.get("title", ""),
     )
 
 
 @router.post("/api/consensus/council-vote")
 async def api_run_council_vote(payload: CouncilVoteRequest = Body(...)):
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.consensus_gate import run_tri_agent_council
 
     return await run_tri_agent_council(
-        task_id=payload.get("task_id", "council-task"),
-        task_title=payload.get("title", ""),
-        task_output=payload.get("output", ""),
-        model=payload.get("model"),
+        task_id=data.get("task_id", "council-task"),
+        task_title=data.get("title", ""),
+        task_output=data.get("output", ""),
+        model=data.get("model"),
     )
 
 
@@ -450,18 +452,18 @@ def api_get_consensus_history(limit: int = 25):
 @router.post("/api/sandbox/execute")
 def api_execute_sandbox(request: Request, payload: SandboxExecuteRequest = Body(...)):
     _require_admin(request)
-    # Der Handler prueft per `"key" in payload` — None-Werte muessen daher
+    # Der Handler prueft per `"key" in data` — None-Werte muessen daher
     # entfernt werden, sonst int(None)/float(None)/bool(None).
-    payload = payload.model_dump(exclude_none=True)
+    data = payload.model_dump(exclude_none=True)
     from backend.ephemeral_sandbox import ephemeral_sandbox
 
     return ephemeral_sandbox.execute_in_sandbox(
-        code=payload.get("code", ""),
-        language=payload.get("language", "python"),
-        memory_limit_mb=int(payload["memory_limit_mb"]) if "memory_limit_mb" in payload else None,
-        cpu_limit=float(payload["cpu_limit"]) if "cpu_limit" in payload else None,
-        timeout_seconds=int(payload["timeout_seconds"]) if "timeout_seconds" in payload else None,
-        network_enabled=bool(payload["network_enabled"]) if "network_enabled" in payload else None,
+        code=data.get("code", ""),
+        language=data.get("language", "python"),
+        memory_limit_mb=int(data["memory_limit_mb"]) if "memory_limit_mb" in data else None,
+        cpu_limit=float(data["cpu_limit"]) if "cpu_limit" in data else None,
+        timeout_seconds=int(data["timeout_seconds"]) if "timeout_seconds" in data else None,
+        network_enabled=bool(data["network_enabled"]) if "network_enabled" in data else None,
     )
 
 
@@ -478,13 +480,13 @@ def api_get_memory_consolidation_settings():
 @router.post("/api/settings/memory-consolidation")
 def api_save_memory_consolidation_settings(request: Request, payload: MemoryConsolidationConfigRequest = Body(...)):
     _require_admin(request)
-    payload = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump(exclude_none=True) if hasattr(payload, "model_dump") else dict(payload)
     from backend.memory_consolidator import get_consolidation_config, save_consolidation_config
 
     cfg = get_consolidation_config()
     for key in _CONSOLIDATION_CONFIG_KEYS:
-        if key in payload:
-            cfg[key] = payload[key]
+        if key in data:
+            cfg[key] = data[key]
     ok = save_consolidation_config(cfg)
     return {"status": "success" if ok else "error", "config": cfg}
 
@@ -495,14 +497,14 @@ def api_save_memory_consolidation_settings(request: Request, payload: MemoryCons
 @router.post("/api/browser/browse-and-capture")
 def api_browse_and_capture(request: Request, payload: BrowseCaptureRequest = Body(...)):
     _require_admin(request)
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.visual_web_agent import visual_web_agent
 
     return visual_web_agent.browse_and_capture(
-        task_id=payload.get("task_id", f"vis-{datetime.datetime.now().strftime('%H%M%S')}"),
-        target_url=payload.get("url", "https://example.com"),
-        actions=payload.get("actions"),
-        extract_selector=payload.get("extract_selector"),
+        task_id=data.get("task_id", f"vis-{datetime.datetime.now().strftime('%H%M%S')}"),
+        target_url=data.get("url", "https://example.com"),
+        actions=data.get("actions"),
+        extract_selector=data.get("extract_selector"),
     )
 
 
@@ -511,14 +513,14 @@ def api_browse_and_capture(request: Request, payload: BrowseCaptureRequest = Bod
 
 @router.post("/api/simulation/war-room")
 async def api_run_war_room(payload: WarRoomRequest = Body(...)):
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
     from backend.war_room_simulator import run_war_room_simulation
 
     result = await run_war_room_simulation(
-        topic=payload.get("topic", "System-Update"),
-        proposal_text=payload.get("proposal", ""),
-        model=payload.get("model"),
-        task_id=str(payload.get("task_id") or "") or None,
+        topic=data.get("topic", "System-Update"),
+        proposal_text=data.get("proposal", ""),
+        model=data.get("model"),
+        task_id=str(data.get("task_id") or "") or None,
     )
     # Bei blocked=True wurde echt blockiert (HITL-Decision + Task-Status),
     # nicht nur eine Empfehlung zurueckgegeben.

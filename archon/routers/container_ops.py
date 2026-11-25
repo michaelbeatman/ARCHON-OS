@@ -35,6 +35,9 @@ class BlockedDispatch(str):
     blocked` und den echten `error_code`, den der Endpunkt auswertet.
     """
 
+    status: str
+    error_code: str
+
     def __new__(cls, message: str, *, error_code: str = "ZERO_EGRESS_BLOCKED"):
         obj = super().__new__(cls, message)
         obj.status = "blocked"
@@ -278,13 +281,14 @@ def exec_container_command_api(req: ContainerExecRequest, request: Request):
                 cmd = classification.get("command")
                 desc = classification.get("description", "System-Befehl")
                 cmd_args = shlex.split(cmd) if isinstance(cmd, str) else cmd
-                proc = subprocess.run(cmd_args, shell=False, capture_output=True, text=True, timeout=30)
-                out = proc.stdout if proc.stdout else proc.stderr
-                return {
-                    "exit_code": proc.returncode,
-                    "stdout": f"[⚡ JEV Fast-Path: {desc}]\n\n{out.strip() if out else '(Befehl erfolgreich ohne Ausgabe ausgeführt)'}",
-                    "stderr": proc.stderr,
-                }
+                if isinstance(cmd_args, list) and cmd_args:
+                    proc = subprocess.run(cmd_args, shell=False, capture_output=True, text=True, timeout=30)
+                    out = proc.stdout if proc.stdout else proc.stderr
+                    return {
+                        "exit_code": proc.returncode,
+                        "stdout": f"[⚡ JEV Fast-Path: {desc}]\n\n{out.strip() if out else '(Befehl erfolgreich ohne Ausgabe ausgeführt)'}",
+                        "stderr": proc.stderr,
+                    }
     except Exception as e_jev:
         logger.warning(f"JEV Fast-Path Fehler (Fallback auf LLM): {e_jev}")
 

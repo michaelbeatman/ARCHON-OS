@@ -278,7 +278,7 @@ def api_call_mcp_tool(request: Request, req: McpToolCallRequest):
         if not gate.get("allowed"):
             raise HTTPException(status_code=403, detail=gate)
         server = ArchonMcpServer()
-        result = server.execute_tool(tool_name, arguments)
+        result = server.execute_tool(tool_name, arguments if isinstance(arguments, dict) else {})
         record_tool_read_side_effect(session_id, tool_name)
         try:
             guarded = guard_result(tool_name, result)
@@ -306,7 +306,7 @@ async def api_stream_task_execution(task_id: str):
     Server-Sent Events (SSE) Stream für die Live-Beobachtung einer laufenden Task-Ausführung.
     Ermöglicht Token-Streaming in Echtzeit ohne Polling.
     """
-    q = asyncio.Queue(maxsize=200)
+    q: asyncio.Queue = asyncio.Queue(maxsize=200)
 
     try:
         import main

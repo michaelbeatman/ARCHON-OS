@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 ==============================================================================
 Archon OS 2026 - GoBD/ISO 27001 Compliant Approval Policy Engine (t-5596bd)
@@ -341,7 +340,7 @@ class ApprovalPolicyEngine:
                         f"Policy '{key}' fehlt — Schwellen-Invariante nicht pruefbar (fail-closed)."
                     )
                 values[key] = self._parse_finance_threshold(row["policy_value"], key)
-        gap = values["finance_four_eyes_min"] - values["finance_auto_approval_max"]
+        gap = values["finance_four_eyes_min"] - values["finance_auto_approval_max"]  # type: ignore[operator, operator, operator]
         if gap + _GAP_EPSILON < FINANCE_THRESHOLD_MIN_GAP:
             raise ValueError(
                 "Invariante verletzt: finance_auto_approval_max muss mindestens "

@@ -61,3 +61,13 @@ Die Shell-Ausführung war in dieser Sandbox nicht möglich (`failed to spawn ...
 - Kryptografie-Implementierung der Audit-/Receipt-Hashketten und HMAC-Key-Verwaltung (Domäne 05); HMAC-Parameter des Break-Glass nur informell geprüft.
 - PocketBase-Server-internes Schema/Migrationen (`pocketbase/` Binary-Daten), echte E-Mail-/Telegram-Benachrichtigungszustellung.
 - Performance-/Concurrency-Messungen (8 Threads × 50 Tx gem. §3) — Domäne 08.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** Alle 11 Befunde (3 HIGH H-03-1/2/3, 7 MED, 1 LOW) laut `fix_w1_c_persistence.md`: GDPR `APP_DATA_DIR` + 0-Treffer-Abbruch und erweiterte Ziel-Tabellen, PocketBase-Feld-Whitelist/COALESCE/UNIQUE, Corporate fail-closed, Vault-Tenant + HMAC-Key, Busy-Timeout-Gate, Backup-/Break-Glass-DB-Liste. Obsolete Test-Erwartungen dazu in `fix_w5_b_tests.md` / `fix_w5_c_tests.md` nachgezogen.
+- **Bewusst offen:** Keine domänenspezifischen HIGH/BLOCKER. Übergreifend offen: W4-D1 (D09) und der Audit-Ketten-Bruch (D05, bewusst nicht re-signiert).
+- **Verifikation:** Subagent `compileall` Exit 0, 170 gezielte Tests (15 neue); finaler Full-Suite-Lauf 2335 grün (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

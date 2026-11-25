@@ -53,3 +53,13 @@ Geprüfte Fragestellungen: harte `max_hops`/Rekursionstiefe/Fanout-Caps pro Tick
 - Externe Hermes-/OmniRoute-/n8n-Schichten und deren eigene Loop-Guards; nur die Archon-Seite der Übergabekanten.
 - Domänenfremde Aspekte (RBAC, Egress, Audit-Hashkette, Persistenz-Tenant-Scope, Performance) wurden nur gestreift, soweit sie die hier geprüften Caps beeinflussen.
 - `archon/routers/v2_capabilities.py:239–287` nutzt `detect_silent_failures` nur als Diagnose-Endpoint, nicht als Produktions-Chokepoint — daher nicht als Verifikationsglied gezählt.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** H-13-1 (kein `reserve_hop`/`reserve_tokens` im zentralen Chokepoint) — `fix_w3_b_performance.md`. Die MED-Cluster — `fix_w3_d_trajectory_dag.md`: SSOT `MAX_DELEGATION_DEPTH = 3`, Expansionspfad entfernt, gezähltes `repeat_budget` statt Präfix-Whitelist, D07-Recovery; `fix_w3_a_orchestration.md`: Guardian-Wirkung/History-Marker, Depth-SSOT. Budget-Allokationsfehler fail-closed in `role_budget_engine.py`.
+- **Bewusst offen:** Keine domänenspezifischen HIGH/BLOCKER. Langzeitverhalten unter echter Last (TTL/CAS-Stress) wurde nicht neu gemessen. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Subagent `compileall` 0, 12/12 neue Tests, Abschluss 59 grün (W3-D), W3-B 21 neue + 224 gezielte Tests (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

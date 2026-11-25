@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
 
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
@@ -231,17 +230,17 @@ def api_get_help_context(view_id: str):
 
 @router.post("/api/help/ask")
 async def api_ask_help_assistant(payload: PassthroughBody = Body(...)):
-    payload = as_payload(payload)
-    view_id = payload.get("view_id", "operations")
-    question = payload.get("question", "").strip()
+    payload = as_payload(payload)  # type: ignore[assignment]
+    view_id = payload.get("view_id", "operations")  # type: ignore[attr-defined]
+    question = payload.get("question", "").strip()  # type: ignore[attr-defined]
     if not question:
         raise HTTPException(status_code=400, detail="Keine Frage übermittelt.")
 
     normalized = (view_id or "").strip().lower().replace("-", "_")
     ctx = HELP_CONTEXT_DATA.get(view_id) or HELP_CONTEXT_DATA.get(normalized) or {}
-    view_title = ctx.get("title", view_id)
-    view_purpose = ctx.get("purpose", "Bereich im Archon Agentic OS.")
-    top_actions = ctx.get("top_actions", [])
+    view_title = ctx.get("title", view_id)  # type: ignore[attr-defined]
+    view_purpose = ctx.get("purpose", "Bereich im Archon Agentic OS.")  # type: ignore[attr-defined]
+    top_actions = ctx.get("top_actions", [])  # type: ignore[attr-defined]
 
     system_prompt = (
         f"Du bist der hochkompetente, präzise Archon OS System-Assistent.\n"
@@ -325,7 +324,7 @@ async def api_ask_help_assistant(payload: PassthroughBody = Body(...)):
     # Fallback: Keyword-basierte / kontextspezifische Offline-Antwort
     if not reply_text:
         q_low = question.lower()
-        faq = ctx.get("faq", {})
+        faq = ctx.get("faq", {})  # type: ignore[attr-defined]
         matched_faq = next((ans for kw, ans in faq.items() if kw in q_low), None)
         actions_txt = "\n- ".join(top_actions) if top_actions else "Siehe Bedienelemente im Kopfbereich der Ansicht."
         if matched_faq:

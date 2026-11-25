@@ -9,6 +9,7 @@ import time
 import json
 import logging
 import fcntl
+from typing import Optional, TextIO
 
 logger = logging.getLogger("telegram_singleton")
 
@@ -17,7 +18,7 @@ LOCK_FILE = "/opt/data/telegram_bot.lock" if os.path.exists("/opt/data") else os
 class TelegramSingletonLock:
     def __init__(self, lock_path: str = LOCK_FILE):
         self.lock_path = lock_path
-        self._fp = None
+        self._fp: Optional[TextIO] = None
         os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
 
     def acquire(self) -> bool:

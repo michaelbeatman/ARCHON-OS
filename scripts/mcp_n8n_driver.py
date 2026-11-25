@@ -23,7 +23,7 @@ import hashlib
 import socket
 import logging
 import contextlib
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, cast
 
 _archon_logger = logging.getLogger("archon.n8n_mcp_driver")
 import urllib.request
@@ -113,7 +113,7 @@ class N8nMcpDriver:
     Modular MCP Driver connecting Archon Agentic OS to n8n workflows.
     """
 
-    CAPABILITIES = [
+    CAPABILITIES: List[Dict[str, Any]] = [
         {
             "name": "mcp__n8n__extract_article",
             "description": "Extract clean, ad-free article text or markdown from a web page, job listing, or documentation URL via n8n.",
@@ -438,7 +438,7 @@ class N8nMcpDriver:
         try:
             from backend import trace_context as tc
         except Exception as exc:  # pragma: no cover - nur bei fehlendem Backend
-            tc = None
+            tc = cast(Any, None)
             _archon_logger.warning("[Trace] n8n-Hop: trace_context nicht verfuegbar: %s", exc)
 
         # D16/H-16-3: genau EIN Child-Span je Webhook-Aufruf. inject_payload()
@@ -574,9 +574,9 @@ class N8nMcpDriver:
                 validation_error = self._validate_arguments(cap.get("inputSchema", {}), arguments)
                 if validation_error:
                     return {"status": "error", "message": validation_error}
-                webhook_path = cap.get("webhook_path")
-                if webhook_path:
-                    return self.execute_webhook(webhook_path, arguments)
+                cap_webhook_path = cap.get("webhook_path")
+                if cap_webhook_path:
+                    return self.execute_webhook(cap_webhook_path, arguments)
 
         return {"status": "error", "message": f"Unknown tool: {name}"}
 
@@ -710,5 +710,5 @@ if __name__ == "__main__":
         print(f"Base URL: {driver.base_url}")
         print(f"Health:   {json.dumps(driver.health_check())}")
         print(f"Tools ({len(driver.CAPABILITIES)}):")
-        for tool in driver.list_tools():
-            print(f"  - {tool['name']}: {tool['description'][:75]}...")
+        for tool_spec in driver.list_tools():
+            print(f"  - {tool_spec['name']}: {tool_spec['description'][:75]}...")

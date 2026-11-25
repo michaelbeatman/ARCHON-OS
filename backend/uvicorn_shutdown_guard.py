@@ -25,7 +25,7 @@ SHUTDOWN_GRACE_SECONDS = 5.0
 
 def install() -> bool:
     try:
-        import uvicorn.server as uv_server  # type: ignore
+        import uvicorn.server as uv_server
     except Exception:
         return False
 
@@ -49,7 +49,7 @@ def install() -> bool:
             )
             self.force_exit = True
 
-    server_cls._wait_tasks_to_complete = _wait_bounded
+    setattr(server_cls, "_wait_tasks_to_complete", _wait_bounded)
     setattr(server_cls, "_archon_shutdown_patched", True)
     logger.info("[shutdown_guard] aktiv (grace=%.0fs)", SHUTDOWN_GRACE_SECONDS)
     return True

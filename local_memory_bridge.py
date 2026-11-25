@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import datetime
 import json
 import logging
@@ -443,7 +442,7 @@ tags: ["learning", "memory", "{agent_id}"]
             return {"status": "error", "message": f"Vault path {self.vault_path} not found"}
 
         notes_count = 0
-        categories = {}
+        categories: Dict[str, int] = {}
         for root, dirs, files in os.walk(self.vault_path):
             dirs[:] = [d for d in dirs if not d.startswith(".")]
             for f in files:
@@ -819,7 +818,7 @@ tags: ["learning", "memory", "{agent_id}"]
 
 
 
-    def deduplicate_and_record_learning(self, agent_id: str, category: str, summary: str, detailed_note: str = None, similarity_threshold: float = 0.85, tenant_id: str = "", project_id: str = "") -> Dict[str, Any]:
+    def deduplicate_and_record_learning(self, agent_id: str, category: str, summary: str, detailed_note: str = None, similarity_threshold: float = 0.85, tenant_id: str = "", project_id: str = "") -> Dict[str, Any]:  # type: ignore[assignment]
         """
         Pillar 4: Semantic Memory Deduplication
         Prüft vor dem Speichern, ob eine inhaltlich identische Lektion bereits existiert.
@@ -936,7 +935,7 @@ tags: ["learning", "memory", "{agent_id}"]
                 entry.get("checkpoint_id"), exc,
             )
 
-    def save_workflow_checkpoint(self, checkpoint_id: str, workflow_id: str, agent_id: str, current_step: int, total_steps: int, state_data: dict, status: str = "running", pause_reason: str = None) -> bool:
+    def save_workflow_checkpoint(self, checkpoint_id: str, workflow_id: str, agent_id: str, current_step: int, total_steps: int, state_data: dict, status: str = "running", pause_reason: str = None) -> bool:  # type: ignore[assignment]
         # F-046: Ein beschaedigter Checkpoint darf nicht ueber einen Resume
         # still mit leerem State ueberschrieben werden (fail-closed).
         if status == "resumed":
@@ -980,7 +979,7 @@ tags: ["learning", "memory", "{agent_id}"]
             self._decode_checkpoint_state(d)
             return d
 
-    def list_workflow_checkpoints(self, status: str = None, limit: int = 50) -> list:
+    def list_workflow_checkpoints(self, status: str = None, limit: int = 50) -> list:  # type: ignore[assignment]
         with self._get_conn() as conn:
             cur = conn.cursor()
             if status:
@@ -996,7 +995,7 @@ tags: ["learning", "memory", "{agent_id}"]
 # Singleton Bridge-Instanz und Modul-Export-Helper
 memory_bridge = LocalMemoryBridge()
 
-def save_workflow_checkpoint(checkpoint_id: str, workflow_id: str = '', agent_id: str = '', current_step: int = 0, total_steps: int = 0, state_data: dict = None, status: str = 'running', pause_reason: str = None) -> bool:
+def save_workflow_checkpoint(checkpoint_id: str, workflow_id: str = '', agent_id: str = '', current_step: int = 0, total_steps: int = 0, state_data: dict = None, status: str = 'running', pause_reason: str = None) -> bool:  # type: ignore[assignment]
     if state_data is None:
         state_data = {}
     return memory_bridge.save_workflow_checkpoint(checkpoint_id, workflow_id, agent_id, current_step, total_steps, state_data, status, pause_reason)
@@ -1004,5 +1003,5 @@ def save_workflow_checkpoint(checkpoint_id: str, workflow_id: str = '', agent_id
 def get_workflow_checkpoint(checkpoint_id: str):
     return memory_bridge.get_workflow_checkpoint(checkpoint_id)
 
-def list_workflow_checkpoints(status: str = None, limit: int = 50):
+def list_workflow_checkpoints(status: str = None, limit: int = 50):  # type: ignore[assignment]
     return memory_bridge.list_workflow_checkpoints(status, limit)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# mypy: ignore-errors
 """
 Synchronizes and manages the three SOUL.md tiers (Compact, Pro, Full-Expert)
 across all 70 specialist profiles in Archon OS in both German ('de') and English ('en').
@@ -860,7 +859,7 @@ def get_localized_profile_fields(prof: Dict[str, Any], lang: str = "de") -> tupl
 def write_hermes_profile_yaml(pdir: str, prof: Dict[str, Any], lang: str = "de") -> None:
     """Writes or updates <pdir>/profile.yaml localized for `lang` ('de' or 'en')."""
     try:
-        import yaml  # type: ignore
+        import yaml  # type: ignore[unused-ignore]
     except ImportError:
         yaml = None
 
@@ -1662,7 +1661,7 @@ def build_full_soul(
 
 
 def get_profile_directories() -> List[str]:
-    dirs = []
+    dirs = []  # type: ignore[var-annotated]
     env_hermes = (os.environ.get("ARCHON_HERMES_DIR") or "").strip()
     if env_hermes:
         p = os.path.join(env_hermes, "profiles")

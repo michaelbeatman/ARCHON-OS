@@ -55,3 +55,13 @@ python -m pip show opentelemetry-sdk
 - Frontend-Dateien wurden nur über die D16-Testverträge und `pocketbase.ts` stichprobenartig geprüft; keine `npm ci`/`tsc`/Build-Ausführung.
 - Nicht Gegenstand dieser Domäne: RBAC/Auth-Ketten, Budget-Engine, GoBD-Audit-Hashkette als solche (nur deren `trace_id`-Korrelation), Persistenz-Tenant-Isolation, Performance-Locks. Diese werden von den Domänen 03/04/05/08 geprüft.
 - Die in `docs/system/LLM_TRACING_LANGFUSE_GUIDE.md:59-72` beschriebene `docker compose --profile tracing up -d langfuse` ist nach `docker-compose.yml:614-618` veraltet (Container entfernt); dies ist ein Doku-Thema (Domäne 09), hier nur als Kontext vermerkt.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben / ehrlich ausgewiesen:** H-16-1..4 — `fix_w4_a_tracing.md`: ehrlicher OTel-Status `otel_sdk=false` statt halber Integration, Tempo-Pipeline/Grafana-Default, Child-Span in n8n und beiden PocketBase-Pfaden, Root-Wrapper gehärtet. `fix_w4_b_integrations.md`: Trace-Spalten und Event-Mesh-Handoff. `fix_w4_d2_residuals.md`: Span-Produzenten (`delegation`/`tool`/`gate`), Replay-Endpunkt, Exemplar-Schlüssel. Obsolete Test-Mocks in `fix_w5_a_obsolete_tests.md` und W5-Last nachgezogen.
+- **Bewusst offen:** Ein echtes OTel-SDK ist weiterhin **nicht** installiert — bewusst als `otel_sdk=false` ausgewiesen (kein Fake-Claim); aggressiver externer Export bleibt eine Betreiberentscheidung. Keine HIGH/BLOCKER offen. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Orchestrator `pytest tests/test_fix_w4_a_tracing.py -q` → **11 passed**, `test_fix_w4_b_integrations.py -q` → **17 passed**, W4-D2-Läufe mit `ARCHON_DATA_DIR=<temp>` (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

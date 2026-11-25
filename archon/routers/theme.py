@@ -128,9 +128,9 @@ def api_get_theme_by_name(theme_name: str):
 
 @router.post("/api/themes/{theme_name}", dependencies=[_ArchonDepends(_check_admin)])
 def api_save_theme_by_name(theme_name: str, theme_data: PassthroughBody = Body(...)):
-    theme_data = as_payload(theme_data)
+    data = as_payload(theme_data)
     path = _safe_theme_path(theme_name)
-    _save_json_delegate(path, theme_data)
+    _save_json_delegate(path, data)
     return {"status": "success", "theme_name": theme_name}
 
 
@@ -162,22 +162,22 @@ def api_get_design_themes():
 
 @router.post("/api/design/themes", dependencies=[_ArchonDepends(_check_admin)])
 def api_save_design_themes(payload: PassthroughBody = Body(...)):
-    payload = as_payload(payload)
+    data = as_payload(payload)
     current = api_get_design_themes()
-    if "active_theme_id" in payload:
-        current["active_theme_id"] = payload["active_theme_id"]
-    if "active_mode" in payload:
-        current["active_mode"] = payload["active_mode"]
-    if "themes" in payload and isinstance(payload["themes"], dict):
-        current["themes"] = payload["themes"]
-    if "theme" in payload and isinstance(payload["theme"], dict):
-        t = payload["theme"]
+    if "active_theme_id" in data:
+        current["active_theme_id"] = data["active_theme_id"]
+    if "active_mode" in data:
+        current["active_mode"] = data["active_mode"]
+    if "themes" in data and isinstance(data["themes"], dict):
+        current["themes"] = data["themes"]
+    if "theme" in data and isinstance(data["theme"], dict):
+        t = data["theme"]
         tid = t.get("id") or "custom_" + str(int(time.time()))
         t["id"] = tid
         if "themes" not in current or not isinstance(current["themes"], dict):
             current["themes"] = {}
         current["themes"][tid] = t
-        if payload.get("set_active", True):
+        if data.get("set_active", True):
             current["active_theme_id"] = tid
 
     written, failed = [], {}
@@ -227,8 +227,8 @@ def api_get_theme():
 
 @router.post("/api/theme", dependencies=[_ArchonDepends(_check_admin)])
 def api_save_theme(theme_data: PassthroughBody = Body(...)):
-    theme_data = as_payload(theme_data)
-    save_theme(theme_data)
+    data = as_payload(theme_data)
+    save_theme(data)
     return {"status": "success"}
 
 
@@ -239,17 +239,17 @@ def api_get_theme_live_overrides():
 
 @router.post("/api/theme/live-overrides", dependencies=[_ArchonDepends(_check_admin)])
 def api_save_theme_live_overrides(payload: PassthroughBody = Body(...)):
-    payload = as_payload(payload)
+    data = as_payload(payload)
     target_file = _get_theme_live_file()
     existing = _load_json_delegate(target_file, {"rules": {}, "rawCss": "", "textOverrides": {}, "htmlOverrides": {}})
     merged = dict(existing) if isinstance(existing, dict) else {}
 
-    if "rawCss" in payload:
-        merged["rawCss"] = payload["rawCss"]
+    if "rawCss" in data:
+        merged["rawCss"] = data["rawCss"]
 
     for field in ("rules", "textOverrides", "htmlOverrides"):
-        if field in payload:
-            new_val = payload[field]
+        if field in data:
+            new_val = data[field]
             if isinstance(new_val, dict):
                 if new_val:
                     if not isinstance(merged.get(field), dict):
@@ -259,8 +259,8 @@ def api_save_theme_live_overrides(payload: PassthroughBody = Body(...)):
                 merged[field] = new_val
 
     for meta_key in ("migration_version", "updated_at"):
-        if meta_key in payload:
-            merged[meta_key] = payload[meta_key]
+        if meta_key in data:
+            merged[meta_key] = data[meta_key]
 
     # Clear any prior bake/reset_all marker once new live overrides are saved
     merged.pop("reset_all", None)
@@ -271,7 +271,7 @@ def api_save_theme_live_overrides(payload: PassthroughBody = Body(...)):
 
 @router.post("/api/theme/bake-into-main-design", dependencies=[_ArchonDepends(_check_admin)])
 def api_bake_theme_into_main_design(payload: PassthroughBody = Body(None)):
-    payload = as_payload(payload)
+    body = as_payload(payload)
     """Kompiliert alle Live-Studio-Regeln direkt in static/custom_studio.css,
     leert die temporären Overrides auf Server und Client und setzt den Zähler auf 0 zurück.
     """
@@ -279,7 +279,7 @@ def api_bake_theme_into_main_design(payload: PassthroughBody = Body(None)):
     import tempfile
 
     target_file = _get_theme_live_file()
-    data = payload or _load_json_delegate(target_file, {})
+    data = body or _load_json_delegate(target_file, {})
     rules = data.get("rules", {})
     if not rules:
         live = _load_json_delegate(target_file, {})

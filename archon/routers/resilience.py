@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Router fuer Resilienz: Snapshots, Audit-Log, Fleet-Healing, Notifications, Traces & Self-Healing."""
 from __future__ import annotations
 
@@ -134,14 +133,14 @@ def api_fleet_health_check(request: Request):
 @router.post("/api/notifications/dispatch")
 def api_dispatch_notification(request: Request, payload: NotificationDispatchRequest = Body(...)):
     _require_admin_or_503(request)
-    payload = _as_payload(payload)
+    payload = _as_payload(payload)  # type: ignore[assignment]
     from backend.notification_hub import notification_hub
 
     return notification_hub.dispatch_notification(
-        title=payload.get("title", "System-Benachrichtigung"),
-        message=payload.get("message", ""),
-        severity=payload.get("severity", "INFO"),
-        category=payload.get("category", "system"),
+        title=payload.get("title", "System-Benachrichtigung"),  # type: ignore[attr-defined]
+        message=payload.get("message", ""),  # type: ignore[attr-defined]
+        severity=payload.get("severity", "INFO"),  # type: ignore[attr-defined]
+        category=payload.get("category", "system"),  # type: ignore[attr-defined]
     )
 
 
@@ -169,26 +168,26 @@ def api_get_task_trace(task_id: str):
 @router.post("/api/traces/{task_id}/fork")
 def api_fork_task_trace(request: Request, task_id: str, payload: TraceForkRequest = Body(...)):
     _require_admin_or_503(request)
-    payload = _as_payload(payload)
+    payload = _as_payload(payload)  # type: ignore[assignment]
     from backend.time_travel_debugger import time_travel_debugger
 
     return time_travel_debugger.fork_execution(
         task_id=task_id,
-        from_step=int(payload.get("from_step", 1)),
-        new_prompt=payload.get("new_prompt"),
-        new_model=payload.get("new_model"),
+        from_step=int(payload.get("from_step", 1)),  # type: ignore[attr-defined]
+        new_prompt=payload.get("new_prompt"),  # type: ignore[attr-defined]
+        new_model=payload.get("new_model"),  # type: ignore[attr-defined]
     )
 
 
 @router.post("/api/traces/{task_id}/rollback")
 def api_rollback_task_trace(request: Request, task_id: str, payload: TraceRollbackRequest = Body(...)):
     _require_admin_or_503(request)
-    payload = _as_payload(payload)
+    payload = _as_payload(payload)  # type: ignore[assignment]
     from backend.time_travel_debugger import time_travel_debugger
 
     return time_travel_debugger.rollback_to_step(
         task_id=task_id,
-        to_step=int(payload.get("to_step", 0)),
+        to_step=int(payload.get("to_step", 0)),  # type: ignore[attr-defined]
     )
 
 

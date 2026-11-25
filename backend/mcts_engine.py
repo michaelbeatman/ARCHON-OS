@@ -12,7 +12,7 @@ abzuwägen und den optimalen Aktionspfad (höchstes Q-Value) auszuwählen.
 import math
 import random
 import datetime
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, cast
 
 
 class MCTSNode:
@@ -34,7 +34,10 @@ class MCTSNode:
     def ucb1(self, exploration_weight: float = 1.414) -> float:
         if self.visits == 0:
             return float('inf')
-        return self.q_value + exploration_weight * math.sqrt(math.log(self.parent.visits) / self.visits)
+        # ucb1 wird nur auf Kindknoten gerufen; dort ist parent stets gesetzt.
+        # cast ist zur Laufzeit ein No-op und aendert keine MCTS-Werte.
+        parent = cast("MCTSNode", self.parent)
+        return self.q_value + exploration_weight * math.sqrt(math.log(parent.visits) / self.visits)
 
 
 class MCTSEngine:

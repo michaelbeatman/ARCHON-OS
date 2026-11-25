@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Lokale DE->NL Übersetzung (eigenes Wissen, KEIN API-Call). Spiegelt translate_manual.py."""
 import json, os, re, sys
+from typing import Any, cast
 import docx
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
 import importlib.util
 _spec = importlib.util.spec_from_file_location("tm", os.path.join(os.path.dirname(os.path.abspath(__file__)), "translate_manual.py"))
+_spec = cast(Any, _spec)
 tm = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(tm)
 
 LOCKED = ["Archon OS","Mission Control","Decision Engine","Showroom","Research Lab","Token Guard",
@@ -1271,7 +1273,7 @@ WORDS = {
 def protect(text):
     # Zuerst URLs/Pfade/Code stachen (rohe URLs enthalten ggf. LOCKED-Terme wie n8n),
     # danach erst LOCKED-Terme schützen, damit keine Marker in gestachten URLs landen.
-    m=[]
+    m: list[str] = []
     def stash(pat, txt):
         def rep(mo):
             k=f"\u0001{len(m)}\u0001"

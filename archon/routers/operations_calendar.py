@@ -11,11 +11,11 @@ _archon_exc_logger = logging.getLogger("operations_calendar")
 import asyncio
 import html
 import json
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Annotated, Any, Dict, List, Optional, Set, Union
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
-from pydantic import BaseModel, ConfigDict, Field, conint
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.routers._rbac import forbid_viewer_writes, require_admin_or_503
 from backend.operations_calendar import operations_calendar
@@ -52,7 +52,9 @@ class _CalendarEventBase(BaseModel):
     allow_conflict: Optional[bool] = None
     reminder_min: Optional[int] = Field(None, ge=0, le=10080)
     recurrence: Optional[str] = Field(None, max_length=32)
-    recurrence_days: Optional[List[conint(ge=0, le=6)]] = Field(None, max_length=7)
+    # Pydantic-v2: Annotated statt conint() im Annotationsausdruck (mypy kann
+    # Funktionsaufrufe in Typannotationen nicht auflösen).
+    recurrence_days: Optional[List[Annotated[int, Field(ge=0, le=6)]]] = Field(None, max_length=7)
     recurrence_until: Optional[str] = Field(None, max_length=32)
     color: Optional[str] = Field(None, max_length=64)
     trigger_workflow_id: Optional[str] = Field(None, max_length=128)

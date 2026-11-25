@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 scripts/automated_restore_test.py
 Automatisierter Restore- & Integritätstest für SQLite-Backups und Litestream-Replikate.
@@ -210,9 +209,9 @@ class AutomatedRestoreTester:
 
         with tempfile.TemporaryDirectory() as sandbox_dir:
             for item in self.dbs_to_test:
-                db_name = item["name"]
-                src_path = item["source"]
-                req_table = item["required_table"]
+                db_name = item["name"]  # type: ignore[index]
+                src_path = item["source"]  # type: ignore[index]
+                req_table = item["required_table"]  # type: ignore[index]
 
                 db_report = {
                     "database": db_name,
@@ -228,25 +227,25 @@ class AutomatedRestoreTester:
                 }
 
                 if not os.path.exists(src_path):
-                    if item.get("optional"):
+                    if item.get("optional"):  # type: ignore[attr-defined]
                         db_report["status"] = "SKIPPED"
                         db_report["skip_reason"] = (
                             "PocketBase nicht lokal verfügbar — ARCHON_POCKETBASE_DB setzen "
                             "oder Backup-Artefakt pb_data.db bereitstellen."
                         )
-                        results["databases_skipped"] += 1
+                        results["databases_skipped"] += 1  # type: ignore[operator]
                     else:
                         db_report["status"] = "FAILED"
                         db_report["error"] = f"Quelldatenbank nicht gefunden: {src_path}"
-                        results["databases_failed"] += 1
-                    results["details"].append(db_report)
+                        results["databases_failed"] += 1  # type: ignore[operator]
+                    results["details"].append(db_report)  # type: ignore[attr-defined]
                     continue
 
                 safe_dest_name = db_name.replace(":", "_").replace("/", "_").replace("\\", "_")
                 dest_path = os.path.join(sandbox_dir, f"restored_{safe_dest_name}")
                 if db_name.startswith("tenant:"):
                     # echtes Backup-Artefakt hat Vorrang vor der Live-Kopie
-                    source_kind = item.get("source_kind") or "tenant_live"
+                    source_kind = item.get("source_kind") or "tenant_live"  # type: ignore[attr-defined]
                     db_report["source_kind"] = source_kind
                 else:
                     source_kind = "backup" if find_latest_backup(db_name) else "live"
@@ -260,8 +259,8 @@ class AutomatedRestoreTester:
                             f"Kein echtes Backup-Artefakt für {db_name} gefunden "
                             f"({BACKUP_DIR}); Live-DB als Quelle ist nicht zulässig."
                         )
-                        results["databases_failed"] += 1
-                        results["details"].append(db_report)
+                        results["databases_failed"] += 1  # type: ignore[operator]
+                        results["details"].append(db_report)  # type: ignore[attr-defined]
                         continue
                 if src_path.endswith(".gz"):
                     # Reales Backup-Artefakt: erst in der Sandbox dekomprimieren.
@@ -326,27 +325,27 @@ class AutomatedRestoreTester:
                         db_report["error"] = (
                             f"Foreign-Key-Check fehlgeschlagen: {len(fk_res)} Verletzung(en)."
                         )
-                        results["databases_failed"] += 1
+                        results["databases_failed"] += 1  # type: ignore[operator]
                     elif candidates and (smoke_table is None or not db_report.get("record_count")):
                         db_report["status"] = "FAILED"
                         db_report["error"] = (
                             f"Smoke-Test fehlgeschlagen: keine Pflichttabelle {candidates} "
                             "vorhanden oder leer."
                         )
-                        results["databases_failed"] += 1
+                        results["databases_failed"] += 1  # type: ignore[operator]
                     elif int_res.lower() != "ok":
                         db_report["status"] = "FAILED"
                         db_report["error"] = f"Integritätsprüfung fehlgeschlagen: {int_res}"
-                        results["databases_failed"] += 1
+                        results["databases_failed"] += 1  # type: ignore[operator]
                     else:
-                        results["databases_checked"] += 1
+                        results["databases_checked"] += 1  # type: ignore[operator]
 
                 except Exception as e:
                     db_report["status"] = "FAILED"
                     db_report["error"] = str(e)
-                    results["databases_failed"] += 1
+                    results["databases_failed"] += 1  # type: ignore[operator]
 
-                results["details"].append(db_report)
+                results["details"].append(db_report)  # type: ignore[attr-defined]
 
         # Audit D / v0.5-Härtung: Tenant-DBs liegen bei FULL_TENANT_ISOLATION=1
         # unter data/tenants/<tid>/*.db. `_litestream_covers_tenants()` akzeptiert
@@ -358,7 +357,7 @@ class AutomatedRestoreTester:
         tenant_dbs = _tenant_dbs_present()
         if tenant_dbs:
             tenant_covered = _litestream_covers_tenants()
-            results["details"].append({
+            results["details"].append({  # type: ignore[attr-defined]
                 "database": "TENANT_REPLICATION",
                 "source_path": os.path.join(WORKSPACE_DIR, "data", "tenants"),
                 "source_exists": True,
@@ -381,7 +380,7 @@ class AutomatedRestoreTester:
                 ),
             })
             if not tenant_covered:
-                results["databases_failed"] += 1
+                results["databases_failed"] += 1  # type: ignore[operator]
 
         # D03/MED: Secret-Restores waren bisher gar nicht getestet. Dry-run gegen ein
         # vorhandenes .secret.gz-Artefakt (kein Schreiben, kein Confirm).
@@ -393,7 +392,7 @@ class AutomatedRestoreTester:
                 secret_res = db_backup_manager.restore_secret_files(
                     secret_name, dry_run=True, confirm=False
                 )
-                results["details"].append({
+                results["details"].append({  # type: ignore[attr-defined]
                     "database": "SECRET_RESTORE_DRY_RUN",
                     "source_path": secret_artifacts[-1],
                     "source_exists": True,
@@ -406,7 +405,7 @@ class AutomatedRestoreTester:
                     "error": None,
                 })
             except Exception as exc:
-                results["details"].append({
+                results["details"].append({  # type: ignore[attr-defined]
                     "database": "SECRET_RESTORE_DRY_RUN",
                     "source_path": secret_artifacts[-1],
                     "source_exists": True,
@@ -417,10 +416,10 @@ class AutomatedRestoreTester:
                     "status": "FAILED",
                     "error": str(exc),
                 })
-                results["databases_failed"] += 1
+                results["databases_failed"] += 1  # type: ignore[operator]
 
         results["duration_seconds"] = round(time.time() - t_start, 2)
-        if results["databases_failed"] > 0:
+        if results["databases_failed"] > 0:  # type: ignore[operator]
             results["overall_status"] = "FAILED"
 
         # Verlauf speichern

@@ -38,7 +38,7 @@ def _load() -> tuple:
     mtime = os.path.getmtime(ORG_PATH) if os.path.isfile(ORG_PATH) else -1.0
     with _lock:
         if _cache["mtime"] == mtime:
-            return _cache["parents"], _cache["nodes"]  # type: ignore[return-value]
+            return _cache["parents"], _cache["nodes"]
         parents: Dict[str, str] = {}
         nodes: Dict[str, dict] = {}
         if os.path.isfile(ORG_PATH):

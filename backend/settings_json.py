@@ -121,7 +121,7 @@ def _write_atomic(path: str, data: Dict[str, Any]) -> None:
 def atomic_update_settings(
     path: str,
     mutator: Callable[[Dict[str, Any]], Any],
-    loader: Optional[Callable[[str], Dict[str, Any]]] = None,
+    loader: Optional[Callable[[], Dict[str, Any]]] = None,
 ) -> Any:
     """Laden -> mutator(daten) -> atomar speichern — alles unter EINER Sperre.
 

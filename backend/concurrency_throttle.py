@@ -18,7 +18,7 @@ import asyncio
 import heapq
 import threading
 from types import MappingProxyType
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Mapping
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
@@ -29,7 +29,10 @@ SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "settings.json")
 # atomar. Double-Check unter Lock macht den TTL-Rebuild single-flight, damit
 # Event-Loop und FastAPI-Threadpool sich nicht gegenseitig ueberschreiben.
 _CONFIG_CACHE_LOCK = threading.Lock()
-_CONFIG_CACHE = MappingProxyType({"ts": 0.0, "cfg": None})
+# Der Cache ist ein unveraenderliches (ts, cfg)-Paar; die Werte haben
+# unterschiedliche Typen, daher Mapping[str, Any] statt des inferierten
+# MappingProxyType[str, float | None].
+_CONFIG_CACHE: Mapping[str, Any] = MappingProxyType({"ts": 0.0, "cfg": None})
 _CONFIG_TTL = 5.0
 
 
@@ -85,7 +88,8 @@ def save_concurrency_config(new_cfg: Dict[str, Any]) -> bool:
 # F-059: gleicher Single-Flight-Double-Check wie beim Config-Cache: genau ein
 # Thread misst die Host-Metriken, alle anderen lesen danach den fertigen Wert.
 _BP_CACHE_LOCK = threading.Lock()
-_BP_CACHE = MappingProxyType({"ts": 0.0, "data": {}})
+# Analog zum Config-Cache: ts ist float, data ein Dict — gemischte Wertetypen.
+_BP_CACHE: Mapping[str, Any] = MappingProxyType({"ts": 0.0, "data": {}})
 _BP_TTL = 2.0
 
 

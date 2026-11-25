@@ -6,7 +6,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 COLOR_DARK = RGBColor(0x0F, 0x17, 0x2A)   # #0F172A Slate-900
 COLOR_BODY = RGBColor(0x33, 0x41, 0x55)   # #334155 Slate-700
@@ -122,6 +123,9 @@ def process_document(docx_path, out_path):
     
     for i, p in enumerate(doc.paragraphs):
         t = p.text.strip()
+        style_name = p.style.name if p.style is not None else ""
+        prev_para = doc.paragraphs[i-1] if i > 0 else None
+        prev_style = prev_para.style.name if prev_para is not None and prev_para.style is not None else ""
         if '5.1 Modell-Wechsel' in t:
             in_target_zone = True
             
@@ -129,7 +133,7 @@ def process_document(docx_path, out_path):
             continue
             
         # Clean double bullets in List Bullet
-        if p.style.name == 'List Bullet' and (t.startswith('•') or t.startswith('-')):
+        if style_name == 'List Bullet' and (t.startswith('•') or t.startswith('-')):
             # Strip bullet symbol
             cleaned = re.sub(r'^[•\-\*]\s*', '', t).strip()
             # Split into Key: Value if colon exists
@@ -182,7 +186,7 @@ def process_document(docx_path, out_path):
             set_run_font(r, size_pt=9.5, bold=True, color=COLOR_DARK)
             
         # Format numbered steps under Praxis-Workflow or Use Case (1. ... to 9. ...)
-        elif re.match(r'^\d+\.\s+', t) and p.style.name in ['Normal', 'List Paragraph'] and not t.startswith('Arbeitsablauf:'):
+        elif re.match(r'^\d+\.\s+', t) and style_name in ['Normal', 'List Paragraph'] and not t.startswith('Arbeitsablauf:'):
             set_para_spacing(p, space_before_pt=1.0, space_after_pt=3.0, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
             # Format runs to 9.5pt body color
             for r in p.runs:
@@ -213,13 +217,13 @@ def process_document(docx_path, out_path):
                     set_run_font(r_mod, size_pt=9.5, color=COLOR_TEAL)
 
         # Format Heading 1
-        elif p.style.name == 'Heading 1':
+        elif style_name == 'Heading 1':
             set_para_spacing(p, space_before_pt=14.0, space_after_pt=2.0)
             for r in p.runs:
                 set_run_font(r, color=COLOR_DARK)
                 
         # Format Subtitle directly under Heading 1
-        elif i > 0 and doc.paragraphs[i-1].style.name == 'Heading 1' and p.style.name == 'Normal' and t and not any('drawing' in r._r.xml for r in p.runs):
+        elif prev_style == 'Heading 1' and style_name == 'Normal' and t and not any('drawing' in r._r.xml for r in p.runs):
             set_para_spacing(p, space_before_pt=None, space_after_pt=2.0, align=WD_ALIGN_PARAGRAPH.JUSTIFY)
             for r in p.runs:
                 set_run_font(r, size_pt=10.5, italic=True, color=COLOR_TEAL)

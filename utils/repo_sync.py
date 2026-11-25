@@ -3,11 +3,12 @@ _archon_exc_logger = logging.getLogger("repo_sync")
 import os
 import json
 import re
+from typing import Optional
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if "__file__" in locals() else os.getcwd()
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 
-_CACHE = {}
+_CACHE: dict[str, list] = {}
 
 GERMAN_SEARCH_SYNONYMS = {
     "buchhalter": ["accountant", "accounting", "bookkeeper", "ledger", "finance", "audit", "tax", "bilanz"],
@@ -72,7 +73,7 @@ def _is_safe_segment(val: str) -> bool:
     return bool(val and isinstance(val, str) and ".." not in val and re.fullmatch(r"[A-Za-z0-9._\-]{1,128}", val))
 
 
-def list_templates_for_source(source_id: str, search: str = None, category: str = None):
+def list_templates_for_source(source_id: str, search: Optional[str] = None, category: Optional[str] = None):
     if not _is_safe_segment(source_id):
         return []
     source_dir = os.path.join(TEMPLATES_DIR, source_id)

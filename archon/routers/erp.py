@@ -225,30 +225,30 @@ def api_erp_get_entity_detail(entity_id: str, company_id: Optional[str] = None):
 @router.post("/api/erp/entities")
 def api_erp_save_entity(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = _authorized_company_id(payload.get("company_id"))
-    saved = erp_manager.save_entity(payload=payload, company_id=company_id)
+    company_id = _authorized_company_id(data.get("company_id"))
+    saved = erp_manager.save_entity(payload=data, company_id=company_id)
     return {"success": True, "data": saved}
 
 
 @router.post("/api/erp/contacts")
 def api_erp_save_contact(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = _authorized_company_id(payload.get("company_id"))
-    saved = erp_manager.save_contact(payload=payload, company_id=company_id)
+    company_id = _authorized_company_id(data.get("company_id"))
+    saved = erp_manager.save_contact(payload=data, company_id=company_id)
     return {"success": True, "contact": saved}
 
 
 @router.post("/api/erp/interactions")
 def api_erp_add_interaction(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = _authorized_company_id(payload.get("company_id"))
-    saved = erp_manager.add_interaction(payload=payload, company_id=company_id)
+    company_id = _authorized_company_id(data.get("company_id"))
+    saved = erp_manager.add_interaction(payload=data, company_id=company_id)
     return {"success": True, "interaction": saved}
 
 
@@ -266,10 +266,10 @@ def api_erp_list_items(
 @router.post("/api/erp/items")
 def api_erp_save_item(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = _authorized_company_id(payload.get("company_id"))
-    saved = erp_manager.save_item(payload=payload, company_id=company_id)
+    company_id = _authorized_company_id(data.get("company_id"))
+    saved = erp_manager.save_item(payload=data, company_id=company_id)
     return {"success": True, "item": saved}
 
 
@@ -302,20 +302,20 @@ def api_erp_get_document(doc_id: str, company_id: Optional[str] = None):
 @router.post("/api/erp/documents")
 def api_erp_save_document(request: Request, payload: ErpPayloadRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = _authorized_company_id(payload.get("company_id"))
-    saved = erp_manager.save_document(payload=payload, company_id=company_id)
+    company_id = _authorized_company_id(data.get("company_id"))
+    saved = erp_manager.save_document(payload=data, company_id=company_id)
     return {"success": True, "document": saved}
 
 
 @router.post("/api/erp/documents/{doc_id}/convert")
 def api_erp_convert_document(request: Request, doc_id: str, payload: ErpConvertDocumentRequest = Body(default=ErpConvertDocumentRequest())):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    target_type = payload.get("target_doc_type", "invoice")
-    company_id = _authorized_company_id(payload.get("company_id"))
+    target_type = data.get("target_doc_type", "invoice")
+    company_id = _authorized_company_id(data.get("company_id"))
     converted = erp_manager.convert_document(
         source_doc_id=doc_id, target_doc_type=target_type, company_id=company_id
     )
@@ -326,10 +326,10 @@ def api_erp_convert_document(request: Request, doc_id: str, payload: ErpConvertD
 def api_erp_cancel_document(request: Request, doc_id: str, payload: ErpCancelDocumentRequest = Body(default=ErpCancelDocumentRequest())):
     """Storniert einen Beleg GoBD-konform über eine Storno-Gutschrift (Typ 381)."""
     require_admin_or_503(request)
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = _authorized_company_id(payload.get("company_id"))
-    reason = str(payload.get("reason") or "")
+    company_id = _authorized_company_id(data.get("company_id"))
+    reason = str(data.get("reason") or "")
     try:
         res = erp_manager.cancel_document(doc_id=doc_id, reason=reason, company_id=company_id)
     except ValueError as exc:
@@ -438,17 +438,17 @@ def api_erp_list_bank_transactions(request: Request, company_id: Optional[str] =
 def api_erp_import_bank_statement(request: Request, payload: ErpBankImportRequest = Body(...)):
     """Importiert Kontoauszüge (ISO 20022 CAMT.053 XML, MT940, Bank-CSV) und führt automatischen OPOS-Abgleich aus."""
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    raw_content = payload.get("content") or ""
+    raw_content = data.get("content") or ""
     if not str(raw_content).strip():
         raise HTTPException(status_code=400, detail="Kontoauszugs-Inhalt ('content') darf nicht leer sein.")
     try:
         return erp_manager.import_and_reconcile_bank_statement(
             raw_content=str(raw_content),
-            fmt=str(payload.get("format") or "auto"),
-            auto_mark_paid=bool(payload.get("auto_mark_paid", False)),
-            company_id=_authorized_company_id(payload.get("company_id")),
+            fmt=str(data.get("format") or "auto"),
+            auto_mark_paid=bool(data.get("auto_mark_paid", False)),
+            company_id=_authorized_company_id(data.get("company_id")),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -460,17 +460,17 @@ def api_erp_import_bank_statement(request: Request, payload: ErpBankImportReques
 def api_erp_match_bank_transaction(request: Request, tx_id: str, payload: ErpMatchBankTransactionRequest = Body(...)):
     """Ordnet eine importierte Banktransaktion einer Rechnung zu und verbucht optional als bezahlt."""
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    doc_id = str(payload.get("doc_id") or "").strip()
+    doc_id = str(data.get("doc_id") or "").strip()
     if not doc_id:
         raise HTTPException(status_code=400, detail="doc_id ist erforderlich.")
     try:
         return erp_manager.match_bank_transaction(
             tx_id=tx_id,
             doc_id=doc_id,
-            mark_paid=bool(payload.get("mark_paid", True)),
-            company_id=_authorized_company_id(payload.get("company_id")),
+            mark_paid=bool(data.get("mark_paid", True)),
+            company_id=_authorized_company_id(data.get("company_id")),
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -479,9 +479,9 @@ def api_erp_match_bank_transaction(request: Request, tx_id: str, payload: ErpMat
 @router.post("/api/erp/sync/pocketbase")
 def api_erp_sync_pocketbase(request: Request, payload: ErpSyncPocketbaseRequest = Body(default=ErpSyncPocketbaseRequest())):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.erp_manager import erp_manager
-    company_id = _authorized_company_id(payload.get("company_id"))
-    if "pocketbase_url" in payload or "collection_name" in payload:
-        erp_manager.update_sync_config(payload, company_id=company_id)
+    company_id = _authorized_company_id(data.get("company_id"))
+    if "pocketbase_url" in data or "collection_name" in data:
+        erp_manager.update_sync_config(data, company_id=company_id)
     return erp_manager.sync_with_pocketbase(company_id=company_id)

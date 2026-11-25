@@ -68,3 +68,13 @@ Statische Reproduktion (Tool-`grep`/`read`, äquivalent zu folgenden Shell-Aufru
 - `grep -n "DEFAULT_MAX_HOPS\|DEFAULT_MAX_DELEGATIONS_PER_RESPONSE\|def reserve_hop" backend/trajectory_budget.py`
 - `grep -n "enriched_profiles.sort\|_sort_key" archon/core/profiles.py`
 - `grep -n "apex_ids\|terminal\|filesystem" archon/core/delegation.py agent_profiles.json backend/delegation_isolation.py`
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** H-02-1 (unbekannter `ziel_agent` → `@default` mit `terminal`/`filesystem`) und H-02-2 (`cancelled` fehlt in `terminal_states`) — siehe `fix_w3_a_orchestration.md`: Unknown-Agent fail-closed, `cancelled` in Fan-in und Watcher, harter HANDOFF-Gate. Zugehörige MED-Cluster (Depth-SSOT=3, gezähltes Repeat-Budget, Hop-Reservierung nach den Autorisierungs-Gates) in `fix_w3_a_orchestration.md` und `fix_w3_d_trajectory_dag.md`.
+- **Bewusst offen:** Die übrigen MED-Funde dieser Domäne (u. a. `deterministic_script`-Erfolgstext, DAG-Run-Cap für unbezifferte Nodes) wurden nicht einzeln re-verifiziert; sie gehören nicht zu den 51 als geschlossen gemeldeten BLOCKER/HIGH. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Subagent `compileall` Exit 0, 15/15 neue Tests, 120 gezielte Regressionstests (`FIX_VERIFICATION_LOG.md`, W3-A/W3-D). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

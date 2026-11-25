@@ -149,7 +149,7 @@ class BidirectionalPIIScrubber:
         self,
         response_text: str,
         session_id: str,
-        custom_vault: Dict[str, str] = None,
+        custom_vault: Optional[Dict[str, str]] = None,
         *,
         agent_id: str = "",
         hour: Optional[int] = None,

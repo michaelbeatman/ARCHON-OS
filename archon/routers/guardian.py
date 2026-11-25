@@ -90,17 +90,17 @@ def api_get_guardian_stats(timeframe: str = "all"):
     if cached and (now_ts - cached["ts"]) < _GUARDIAN_CACHE_TTL:
         return cached["data"]
     
-    profiles_stats = []
+    profiles_stats: List[Dict[str, Any]] = []
     models_stats = {}
     daily_trend = {}
     all_sessions_list = []
     grand_total_tokens = 0
-    grand_cache_tokens = 0
+    grand_cache_tokens = 0.0
     grand_total_cost = 0.0
     grand_total_calls = 0
     max_overall_ts = 0
     
-    min_ts = 0
+    min_ts: float = 0
     if timeframe == "24h":
         min_ts = now_ts - 86400
     elif timeframe == "7d":
@@ -130,7 +130,7 @@ def api_get_guardian_stats(timeframe: str = "all"):
                 rows = con.execute(query).fetchall()
             
             p_tokens = 0
-            p_cache = 0
+            p_cache = 0.0
             p_cost = 0.0
             p_calls = 0
             p_models = {}
@@ -291,7 +291,7 @@ def api_get_guardian_config():
     if not os.path.exists(config_file):
         config_file = HERMES_CONFIG_YAML
         
-    cfg = {}
+    cfg: Dict[str, Any] = {}
     if os.path.exists(config_file):
         try:
             with open(config_file, "r", encoding="utf-8") as f:
@@ -508,16 +508,16 @@ def api_get_guardian_config():
 def api_save_guardian_config(request: Request, payload: GuardianConfigSave):
     """Speichert Budget-Limits, Session-Schranken und Wächter-Einstellungen."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    payload = payload.model_dump(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True)
     # Speichere Budget
     cost_budget_file = os.path.expanduser("~/.hermes/cost-budget.json")
     if not os.path.exists(cost_budget_file):
         cost_budget_file = os.path.join(OPT_DATA_DIR, "cost-budget.json")
     
-    if "daily_budget" in payload or "task_budget" in payload:
+    if "daily_budget" in data or "task_budget" in data:
         b_data = {
-            "daily_budget": float(payload.get("daily_budget", 2.0)),
-            "task_budget": float(payload.get("task_budget", 0.5))
+            "daily_budget": float(data.get("daily_budget", 2.0)),
+            "task_budget": float(data.get("task_budget", 0.5))
         }
         try:
             with open(cost_budget_file, "w", encoding="utf-8") as f:
@@ -533,7 +533,7 @@ def api_save_guardian_config(request: Request, payload: GuardianConfigSave):
         save_circuit_breaker_limits,
     )
     try:
-        save_circuit_breaker_limits(payload)
+        save_circuit_breaker_limits(data)
     except Exception as _cb_save_exc:
         logger.error("[Guardian] Circuit-Breaker-Config nicht speicherbar: %s", _cb_save_exc)
         raise HTTPException(status_code=503, detail="circuit_breaker config write failed")
@@ -546,8 +546,8 @@ def api_save_guardian_config(request: Request, payload: GuardianConfigSave):
             with open(limits_file, "r", encoding="utf-8") as f:
                 cur_limits = json.load(f)
         for k in ["max_context_tokens", "max_history_messages", "max_steps_per_task", "session_timeout_seconds", "loop_detection_enabled", "cache_ttl_hours", "max_cache_entries", "watchdog_interval_seconds"]:
-            if k in payload:
-                cur_limits[k] = payload[k]
+            if k in data:
+                cur_limits[k] = data[k]
         with open(limits_file, "w", encoding="utf-8") as f:
             json.dump(cur_limits, f, indent=2)
             
@@ -561,12 +561,12 @@ def api_save_guardian_config(request: Request, payload: GuardianConfigSave):
                 h_cfg = yaml.safe_load(f) or {}
             if "agent" not in h_cfg:
                 h_cfg["agent"] = {}
-            if "max_context_tokens" in payload:
-                h_cfg["agent"]["max_context_tokens"] = int(payload["max_context_tokens"])
-            if "max_history_messages" in payload:
-                h_cfg["agent"]["max_history_messages"] = int(payload["max_history_messages"])
-            if "session_timeout_seconds" in payload:
-                h_cfg["agent"]["task_timeout_seconds"] = int(payload["session_timeout_seconds"])
+            if "max_context_tokens" in data:
+                h_cfg["agent"]["max_context_tokens"] = int(data["max_context_tokens"])
+            if "max_history_messages" in data:
+                h_cfg["agent"]["max_history_messages"] = int(data["max_history_messages"])
+            if "session_timeout_seconds" in data:
+                h_cfg["agent"]["task_timeout_seconds"] = int(data["session_timeout_seconds"])
             with open(config_file, "w", encoding="utf-8") as f:
                 yaml.dump(h_cfg, f, allow_unicode=True, sort_keys=False)
     except Exception as e:
@@ -581,11 +581,11 @@ def api_toggle_guardian_plugin(request: Request, payload: PluginToggleRequest):
     """Aktiviert oder deaktiviert ein Plugin in Hermes."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     import yaml
-    payload = payload.model_dump(exclude_unset=True)
-    plugin_id = payload.get("plugin_id") or payload.get("id")
-    enable = payload.get("enable")
+    data = payload.model_dump(exclude_unset=True)
+    plugin_id = data.get("plugin_id") or data.get("id")
+    enable = data.get("enable")
     if enable is None:
-        enable = payload.get("enabled", True)
+        enable = data.get("enabled", True)
     
     if not plugin_id:
         return JSONResponse(status_code=400, content={"status": "error", "message": "plugin_id fehlt"})
@@ -595,7 +595,7 @@ def api_toggle_guardian_plugin(request: Request, payload: PluginToggleRequest):
         config_file = HERMES_CONFIG_YAML
         
     try:
-        cfg = {}
+        cfg: Dict[str, Any] = {}
         if os.path.exists(config_file):
             with open(config_file, "r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
@@ -669,7 +669,7 @@ _PLUGIN_AUTONOMY_BRIDGE = {
     "evey-delegate-model": ("speculative_hedger", "enabled"),
 }
 
-DEFAULT_PLUGIN_CONFIGS = {
+DEFAULT_PLUGIN_CONFIGS: Dict[str, Dict[str, Any]] = {
     "evey-cost-guard": {
         "daily_budget": 2.0,
         "task_budget": 0.5,

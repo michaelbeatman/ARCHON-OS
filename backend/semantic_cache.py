@@ -89,9 +89,10 @@ def _build_sparse_vector(text: str) -> Dict[str, float]:
     norm = _normalize_text(text)
     words = re.findall(r"[a-zA-Z0-9äöüßÄÖÜ_]{2,}", norm)
     ngrams = [norm[i:i+3] for i in range(max(0, len(norm) - 2)) if " " not in norm[i:i+3]]
-    counts = Counter(words)
+    counts: dict[str, float] = {w: float(c) for w, c in Counter(words).items()}
     for ng in ngrams[:150]:
-        counts[f"#{ng}"] += 0.5
+        key = f"#{ng}"
+        counts[key] = counts.get(key, 0.0) + 0.5
 
     norm_factor = math.sqrt(sum(v * v for v in counts.values())) or 1.0
     return {k: round(v / norm_factor, 5) for k, v in counts.items()}

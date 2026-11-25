@@ -594,7 +594,8 @@ def create_asset(payload: Dict[str, Any], db_path: Optional[str] = None) -> Dict
         status = "draft"
 
     now = _utc_now_iso()
-    hashtags = payload.get("hashtags") if isinstance(payload.get("hashtags"), list) else []
+    raw_hashtags = payload.get("hashtags")
+    hashtags: list[Any] = raw_hashtags if isinstance(raw_hashtags, list) else []
     asset_view = {
         "channel": channel,
         "hook": payload.get("hook") or "",
@@ -961,7 +962,7 @@ def evaluate_plagiarism_risk(asset: Any, corpus: Any = None) -> Dict[str, Any]:
             "matched_source": "",
             "note": "Keine Belegquellen im Korpus — Freigabe blockiert.",
         }
-    base = {
+    base: Dict[str, Any] = {
         "passed": True,
         "checked": True,
         "max_similarity": 0.0,

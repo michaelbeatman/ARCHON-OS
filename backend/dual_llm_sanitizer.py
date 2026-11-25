@@ -121,7 +121,7 @@ def toggle_trusted_source(source_id: str, operator: str = "operator") -> Dict[st
 
 def scan_heuristic_threats(text: str) -> List[str]:
     """Scannt Text (inkl. NFKC-Normalisierung gegen Homoglyphen) auf bekannte Injection-Signaturen."""
-    found = []
+    found: List[str] = []
     if not text:
         return found
     norm = unicodedata.normalize("NFKC", text)

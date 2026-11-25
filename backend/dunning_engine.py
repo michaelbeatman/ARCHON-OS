@@ -97,8 +97,8 @@ class DunningEngine:
     @staticmethod
     def _resolve_cid(company_id: Optional[str] = None) -> str:
         try:
-            from backend.tenant_context import get_active_company_id, sanitize_tenant_id
-            return sanitize_tenant_id(company_id or get_active_company_id() or "default")
+            from backend.tenant_context import sanitize_tenant_id, tenant_context
+            return sanitize_tenant_id(company_id or tenant_context.get_active_tenant_id() or "default")
         except Exception:
             return (company_id or "default").strip() or "default"
 
@@ -193,7 +193,7 @@ class DunningEngine:
         year = datetime.date.today().year
 
         inserted = False
-        last_error = None
+        last_error: Optional[Exception] = None
         invoice_id = ""
 
         if os.path.exists(self.memory_db):

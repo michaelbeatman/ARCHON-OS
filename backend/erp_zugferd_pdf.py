@@ -29,6 +29,12 @@ MARGIN_L = 44.0
 MARGIN_R = 44.0
 CONTENT_W = PAGE_W - MARGIN_L - MARGIN_R
 
+
+def _as_dict(value: Any) -> Dict[str, Any]:
+    """Gibt ein Dict unverändert zurück, sonst ein leeres Dict (Typ-Narrowing fuer mypy)."""
+    return value if isinstance(value, dict) else {}
+
+
 _TTF_CANDIDATES: Dict[str, Tuple[str, List[str]]] = {
     "F1": (
         "LiberationSans",
@@ -303,11 +309,11 @@ def build_zugferd_invoice_pdf(
     issue_date = str(doc.get("issue_date") or datetime.date.today().isoformat())[:10]
     due_date = str(doc.get("due_date") or issue_date)[:10]
 
-    seller_addr = seller.get("address") if isinstance(seller.get("address"), dict) else {}
-    seller_tax = seller.get("tax") if isinstance(seller.get("tax"), dict) else {}
-    seller_bank = seller.get("bank") if isinstance(seller.get("bank"), dict) else {}
-    seller_contact = seller.get("contact") if isinstance(seller.get("contact"), dict) else {}
-    seller_reg = seller.get("registry") if isinstance(seller.get("registry"), dict) else {}
+    seller_addr = _as_dict(seller.get("address"))
+    seller_tax = _as_dict(seller.get("tax"))
+    seller_bank = _as_dict(seller.get("bank"))
+    seller_contact = _as_dict(seller.get("contact"))
+    seller_reg = _as_dict(seller.get("registry"))
     service_date = str(doc.get("service_date") or issue_date)[:10]
 
     seller_name = str(seller.get("name") or "Archon Systems GmbH")
@@ -595,8 +601,8 @@ def _draw_qr_pdf_cmds(matrix: List[List[int]], x: float, y: float, target_pt: fl
 
 def build_corporate_template_pdf(rendered: Dict[str, Any]) -> bytes:
     """Erstellt ein druckfertiges DIN-A4-PDF für beliebige Vorlagen-Studio-/Beleg-Daten (M29)."""
-    meta = rendered.get("pdf_meta") if isinstance(rendered.get("pdf_meta"), dict) else {}
-    layout = rendered.get("layout") if isinstance(rendered.get("layout"), dict) else {}
+    meta = _as_dict(rendered.get("pdf_meta"))
+    layout = _as_dict(rendered.get("layout"))
     margin_mm = float(layout.get("margin_mm") or 15.0)
     margin_pt = max(24.0, min(85.0, margin_mm * 72.0 / 25.4))
     right_edge = PAGE_W - margin_pt

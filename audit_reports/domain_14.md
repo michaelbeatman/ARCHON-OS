@@ -74,3 +74,13 @@ DOMÄNEN-SCORE: 6/10 — Der algorithmische Kern (deterministischer Konsens inkl
 - Keine Prüfung der tatsächlichen LLM-Antwortinhalte, der Modellverfügbarkeit oder der Performance/Prompt-Kosten.
 - Kein tiefer Einstieg in Break-Glass-Krypto/Audit-Kette (Domäne 05/07), Tenant-DB-Isolation (Domäne 03), Egress-/Taint-Gates im Detail (Domäne 04), UI-/Frontend-Handler (Domäne 01/04), n8n-Workflows (Domäne 06) oder SOUL-/Prompt-Trennschärfe (Domäne 15) — Überschneidungen wurden nur soweit als Hoheits-/Vier-Augen-Aspekt gewertet.
 - Keine Prüfung der Datenbank-Inhalte (`data/*.db`, `boardroom_history.json`, `ai_act_literacy_register.json`) auf tatsächlich persistierte Werte; Aussagen über „nie gesetzte Felder" beruhen auf der vollständigen Suche über alle `.py`-Produzenten.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** Alle 3 HIGH — H-14-1 (fehlender Fan-in-Marker-Produzent) durch `fix_w3_a_orchestration.md` (Produzent für `consensus_verdict`/`policy_violation` in Kind-Tasks, Final-Gate wirksam); H-14-2 (fälschbares `force_verdict`) und H-14-3 (Einzel-Admin-Reklassifikation) durch `fix_w2_c_governance_roles.md` (`force_verdict` entfernt, 4-Augen-Override mit Actor + Passkey-Proof, Reklassifikation nur nach Vier-Augen-Freigabe). Zugehörige MED (Actor/HITL-Proof bei Status-Force) in W2-C mitbehandelt.
+- **Bewusst offen:** Keine HIGH/BLOCKER. Zwei MED aus dem Originalbericht (inkonsistente Autoritäts-SSOTs, Cross-Modell-Verifier ohne echten Modellaufruf) wurden nicht einzeln re-verifiziert. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Orchestrator `pytest tests/test_fix_w2_c_governance_roles.py -q` → **18 passed**; W3-A 15/15 neue Tests (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

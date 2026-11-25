@@ -61,7 +61,7 @@ def api_create_workflow_checkpoint(req: WorkflowCheckpointCreateRequest):
     bridge.save_workflow_checkpoint(
         req.checkpoint_id, req.workflow_id, req.agent_id,
         req.current_step, req.total_steps, req.state_data,
-        req.status or "running", req.pause_reason
+        req.status or "running", req.pause_reason or ""
     )
     return {"status": "success", "checkpoint_id": req.checkpoint_id}
 
@@ -71,7 +71,12 @@ def api_list_workflow_checkpoints(status: Optional[str] = None):
     """Liefert aktive oder pausierte Workflow-Snapshots."""
     from local_memory_bridge import LocalMemoryBridge
     bridge = LocalMemoryBridge()
-    return {"status": "success", "checkpoints": bridge.list_workflow_checkpoints(status=status)}
+    checkpoints = (
+        bridge.list_workflow_checkpoints(status=status)
+        if status is not None
+        else bridge.list_workflow_checkpoints()
+    )
+    return {"status": "success", "checkpoints": checkpoints}
 
 
 @router.post("/workflows/checkpoints/{checkpoint_id}/resume")
@@ -85,7 +90,7 @@ def api_resume_workflow_checkpoint(checkpoint_id: str):
     bridge.save_workflow_checkpoint(
         checkpoint_id, cp["workflow_id"], cp["agent_id"],
         cp["current_step"], cp["total_steps"], cp.get("state", {}),
-        status="resumed", pause_reason=None
+        status="resumed", pause_reason=""
     )
     return {"status": "success", "message": f"Workflow {cp['workflow_id']} ab Schritt {cp['current_step']} reaktiviert.", "checkpoint": cp}
 

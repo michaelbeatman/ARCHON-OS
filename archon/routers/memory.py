@@ -124,73 +124,73 @@ def _validate_scope(scope: Optional[str]) -> Optional[str]:
 @router.post("/api/memory/harvest")
 def api_harvest_memory(request: Request, payload: MemoryHarvestRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from local_memory_bridge import LocalMemoryBridge
     bridge = LocalMemoryBridge()
-    text = payload.get("text", "")
-    agent_id = payload.get("agent_id", "orchestrator")
+    text = data.get("text", "")
+    agent_id = data.get("agent_id", "orchestrator")
     return bridge.harvest_facts_and_preferences(text, agent_id=agent_id)
 
 
 @router.post("/api/memory/compact-context")
 def api_compact_context(request: Request, payload: MemoryCompactRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.context_compactor import context_compactor
     return context_compactor.compact_messages(
-        messages=payload.get("messages", []),
-        force=bool(payload.get("force", False)),
-        keep_recent_override=payload.get("keep_recent_turns")
+        messages=data.get("messages", []),
+        force=bool(data.get("force", False)),
+        keep_recent_override=data.get("keep_recent_turns")
     )
 
 
 @router.post("/api/memory/hybrid-index")
 def api_hybrid_index_doc(request: Request, payload: MemoryIndexRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.hybrid_search_engine import hybrid_search_engine
     return hybrid_search_engine.index_document(
-        doc_id=payload.get("doc_id", "DOC-1"),
-        title=payload.get("title", "Unbenanntes Dokument"),
-        content=payload.get("content", ""),
-        source=payload.get("source", "system_docs")
+        doc_id=data.get("doc_id", "DOC-1"),
+        title=data.get("title", "Unbenanntes Dokument"),
+        content=data.get("content", ""),
+        source=data.get("source", "system_docs")
     )
 
 
 @router.post("/api/memory/hybrid-search")
 def api_hybrid_search(request: Request, payload: MemorySearchRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.hybrid_search_engine import hybrid_search_engine
     return hybrid_search_engine.search(
-        query=payload.get("query", ""),
-        top_k_override=payload.get("top_k"),
-        rrf_k_override=payload.get("rrf_k")
+        query=data.get("query", ""),
+        top_k_override=data.get("top_k"),
+        rrf_k_override=data.get("rrf_k")
     )
 
 
 @router.post("/api/memory/knowledge-graph/triple")
 def api_kg_add_triple(request: Request, payload: MemoryTripleRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.knowledge_graph_store import knowledge_graph_store
     return knowledge_graph_store.add_triple(
-        subject=payload.get("subject", ""),
-        predicate=payload.get("predicate", "RELATED_TO"),
-        obj=payload.get("object", ""),
-        confidence=float(payload.get("confidence", 0.90)),
-        source=payload.get("source", "manual")
+        subject=data.get("subject", ""),
+        predicate=data.get("predicate", "RELATED_TO"),
+        obj=data.get("object", ""),
+        confidence=float(data.get("confidence", 0.90)),
+        source=data.get("source", "manual")
     )
 
 
 @router.post("/api/memory/knowledge-graph/ingest")
 def api_kg_ingest_text(request: Request, payload: MemoryIngestRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.knowledge_graph_store import knowledge_graph_store
     return knowledge_graph_store.ingest_text(
-        text=payload.get("text", ""),
-        source=payload.get("source", "auto_extractor")
+        text=data.get("text", ""),
+        source=data.get("source", "auto_extractor")
     )
 
 
@@ -203,11 +203,11 @@ def api_kg_subgraph(entity: str, hops: Optional[int] = None):
 @router.post("/api/memory/crag-retrieve")
 def api_crag_retrieve(request: Request, payload: MemoryCragRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.corrective_rag import corrective_rag_engine
     return corrective_rag_engine.retrieve_and_verify(
-        query=payload.get("query", ""),
-        threshold_override=payload.get("relevance_threshold")
+        query=data.get("query", ""),
+        threshold_override=data.get("relevance_threshold")
     )
 
 
@@ -228,36 +228,36 @@ def api_get_core_memory_blocks(
 @router.post("/api/memory/core-blocks")
 def api_upsert_core_memory_block(request: Request, payload: MemoryCoreBlockRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
-    scope = _validate_scope(payload.get("scope"))
+    data = payload.model_dump()
+    scope = _validate_scope(data.get("scope"))
     from backend.core_memory_manager import core_memory_manager
     return core_memory_manager.upsert_block(
-        block_key=payload.get("block_key", "custom_block"),
-        content=payload.get("content", ""),
-        block_title=payload.get("block_title", ""),
-        mode=payload.get("mode", "replace"),
+        block_key=data.get("block_key", "custom_block"),
+        content=data.get("content", ""),
+        block_title=data.get("block_title", ""),
+        mode=data.get("mode", "replace"),
         scope=scope or "global",
-        acl=payload.get("acl"),
-        ttl_seconds=payload.get("ttl_seconds"),
-        project_id=str(payload.get("project_id") or ""),
+        acl=data.get("acl"),
+        ttl_seconds=data.get("ttl_seconds"),
+        project_id=str(data.get("project_id") or ""),
     )
 
 
 @router.post("/api/memory/compartment/store")
 def api_compartment_store(request: Request, payload: MemoryCompartmentStoreRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
-    scope = _validate_scope(payload.get("scope"))
+    data = payload.model_dump()
+    scope = _validate_scope(data.get("scope"))
     from backend.offline_memory_vault import store_memory
     eid = store_memory(
-        namespace=str(payload.get("namespace") or "default"),
-        content=str(payload.get("content") or ""),
-        tags=list(payload.get("tags") or []),
+        namespace=str(data.get("namespace") or "default"),
+        content=str(data.get("content") or ""),
+        tags=list(data.get("tags") or []),
         scope=scope or "global",
-        acl=payload.get("acl"),
-        ttl_seconds=payload.get("ttl_seconds"),
-        agent_id=str(payload.get("agent_id") or "global"),
-        project_id=str(payload.get("project_id") or ""),
+        acl=data.get("acl"),
+        ttl_seconds=data.get("ttl_seconds"),
+        agent_id=str(data.get("agent_id") or "global"),
+        project_id=str(data.get("project_id") or ""),
     )
     return {"status": "success", "id": eid, "scope": scope or "global"}
 
@@ -287,9 +287,9 @@ def api_compartment_recall(
 @router.post("/api/memory/pin-citations")
 def api_pin_citations(request: Request, payload: MemoryPinCitationsRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.citation_pinner import citation_pinner
     return citation_pinner.pin_citations(
-        response_text=payload.get("response_text", ""),
-        sources=payload.get("sources", [])
+        response_text=data.get("response_text", ""),
+        sources=data.get("sources", [])
     )

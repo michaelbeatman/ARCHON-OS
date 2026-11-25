@@ -2,8 +2,9 @@ import zipfile
 import xml.etree.ElementTree as ET
 import sys
 import re
+from typing import cast
 
-sys.stdout.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding='utf-8')  # type: ignore[union-attr]
 
 docx_path = r'.\docs\system\ARCHON_OS_SYSTEM_HANDBUCH_2026_Vorlage.docx'
 z = zipfile.ZipFile(docx_path)
@@ -20,7 +21,7 @@ for c in root.findall('.//w:comment', ns):
     text = ''.join(c.itertext()).strip()
     
     # find where in doc_xml this comment is anchored
-    m = re.search(r'w:id=["\']' + cid + r'["\']', doc_xml)
+    m = re.search(r'w:id=["\']' + cast(str, cid) + r'["\']', doc_xml)
     snippet = ''
     if m:
         pos = m.start()

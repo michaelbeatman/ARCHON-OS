@@ -2,6 +2,17 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [Remediation 25.11.2026] — v0.5.7.8 (Final-Re-Audit)
+
+### Fixed
+- **Remediation W0–W5 abgeschlossen:** 2 BLOCKER (`B-05` Audit-Fail-Fast, `B-11` verlustfreie Session-DAG) und **49 HIGH**-Befunde des Audits vom 25.11.2026 behoben; Nachweise in `audit_reports/fix_w*.md` und `audit_reports/FIX_VERIFICATION_LOG.md`.
+- **Full-Suite grün:** `ARCHON_DATA_DIR=<temp> .ci_venv\Scripts\python.exe -m pytest tests/ -q --tb=short` → **2335 passed / 0 failed / 16 skipped**. `compileall`, `docker compose -f docker-compose.yml config --quiet`, `npx tsc --noEmit` und `npm run build` jeweils Exit 0; Produktiv-Login bestätigt.
+- **Doku-Abgleich:** Versionsreferenzen in `README.md`, `README.de.md`, allen 11 Sprach-Readmes und `docs/SYSTEM_HANDBUCH.md` an den Code-Stand **v0.5.7.8** (`config/version.json`) angepasst. Die PDF-Manuale wurden **nicht** neu erzeugt und basieren weiter auf **v0.5.2.1** — siehe die Einträge ab `[v0.5.7]` in diesem CHANGELOG für v0.5.7.8.
+- **Re-Audit:** Alle 16 `audit_reports/domain_*.md` um `## Re-Audit 25.11.2026 (Final)` ergänzt; ursprüngliche Befunde bleiben als historische Evidenz unverändert erhalten.
+- **`hermes-orchestrator`:** Alias-Auflösung über die kanonische SSOT (`config/org_hierarchy.json`, `backend/agent_aliases.py`) im Compliance-Pfad wirksam — `COMPLIANCE_BLOCKED` durch `agent_not_in_ai_act_inventory` behoben (statisch geprüft, kein eigener Testlauf in diesem Doku-Pass).
+
+> **Verifikationshinweis:** Die Gate-Ergebnisse stammen aus den dokumentierten Läufen des Orchestrators (`FIX_VERIFICATION_LOG.md`, §9 `MASTER_PLAN.md`). Der Doku-Pass selbst konnte keine Shell starten (`pwsh.exe: Zugriff verweigert, os error 5`) und hat daher keine eigenen Tests ausgeführt.
+
 ## [Unreleased] — 2026-11-22 (M114: Abschluss der Multi-Agent- & Content-Machine-Roadmap, 28/28)
 
 ### Added

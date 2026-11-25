@@ -36,6 +36,7 @@ import sys
 import docx
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
+from docx.text.paragraph import Paragraph
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import OxmlElement, parse_xml
@@ -423,8 +424,8 @@ def main():
     for idx, child in enumerate(body):
         tag = child.tag.split("}")[-1]
         if tag == "p":
-            p = docx.text.paragraph.Paragraph(child, doc)
-            if p.style.name.startswith("Heading 1"):
+            p = Paragraph(child, doc)
+            if p.style is not None and p.style.name.startswith("Heading 1"):
                 heading_indices[p.text.strip().split("\n")[0]] = idx
                 
     print("Found headings in body:", heading_indices)

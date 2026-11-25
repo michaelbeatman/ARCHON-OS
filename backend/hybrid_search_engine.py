@@ -174,8 +174,8 @@ class HybridSearchEngine:
         combined = []
         candidate_ids = set(bm25_ranks.keys()) | set(vec_ranks.keys())
         for doc_id in candidate_ids:
-            doc = all_docs.get(doc_id)
-            if not doc:
+            doc_entry = all_docs.get(doc_id)
+            if not doc_entry:
                 continue
             r_bm25 = bm25_ranks.get(doc_id)
             r_vec = vec_ranks.get(doc_id)
@@ -189,9 +189,9 @@ class HybridSearchEngine:
 
             combined.append({
                 "doc_id": doc_id,
-                "title": doc["title"],
-                "source": doc["source"],
-                "content": doc["content"],
+                "title": doc_entry["title"],
+                "source": doc_entry["source"],
+                "content": doc_entry["content"],
                 "rrf_score": rrf_score,
                 "bm25_rank": r_bm25,
                 "bm25_score": bm25_scores.get(doc_id, 0.0),

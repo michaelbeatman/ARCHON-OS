@@ -773,7 +773,9 @@ def _build_crm_contacts(lang: str) -> List[Dict[str, Any]]:
 
 def _build_deals(lang: str) -> List[Dict[str, Any]]:
     is_de = lang == "de"
-    raw_deals = [
+    # Demodaten sind heterogen (str/float); Any hier ist reine Typangabe,
+    # die Gewichtung weiter unten bleibt unverändert.
+    raw_deals: List[Dict[str, Any]] = [
         {
             "id": "deal-m47-01",
             "title": (

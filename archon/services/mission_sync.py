@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """Hilfs- und Sync-Funktionen fuer Mission Control, Obsidian-Spiegelung und Live-Telemetrie."""
 from __future__ import annotations
 
@@ -27,11 +26,11 @@ logger = logging.getLogger("archon.services.mission_sync")
 class _SyncPath(str):
     """Pfad + ehrlicher Sync-Status (str-Kompatibilitaet fuer bestehende Aufrufer)."""
 
-    def __new__(cls, value: str, status: str, replicas: list, hashes: dict):
+    def __new__(cls, value: str, status: str, replicas: list, hashes: dict):  # type: ignore[no-untyped-def]
         obj = super().__new__(cls, value)
-        obj.status = status
-        obj.replicas = replicas
-        obj.hashes = hashes
+        obj.status = status  # type: ignore[attr-defined]
+        obj.replicas = replicas  # type: ignore[attr-defined]
+        obj.hashes = hashes  # type: ignore[attr-defined]
         return obj
 
 
@@ -196,9 +195,9 @@ def _get_live_telemetry_metrics() -> Dict[str, Any]:
     if (
         _LIVE_TELEMETRY_CACHE.get("tenant") == _tenant_id
         and _LIVE_TELEMETRY_CACHE["data"] is not None
-        and (now_ts - _LIVE_TELEMETRY_CACHE["ts"]) < 15.0
+        and (now_ts - _LIVE_TELEMETRY_CACHE["ts"]) < 15.0  # type: ignore[operator, operator]
     ):
-        return _LIVE_TELEMETRY_CACHE["data"]
+        return _LIVE_TELEMETRY_CACHE["data"]  # type: ignore[return-value]
     all_dbs = sorted(glob.glob(os.path.join(HERMES_PROFILES_BASE, "*", "state.db")) + [STATE_DB_PATH])
     if not all_dbs:
         all_dbs = sorted(
@@ -230,7 +229,7 @@ def _get_live_telemetry_metrics() -> Dict[str, Any]:
     today_cost = 0.0
     latest_model = "deepseek/deepseek-v4-flash-0731"
     latest_tokens = 0
-    model_breakdown = {}
+    model_breakdown = {}  # type: ignore[var-annotated]
     all_sessions = []
 
     # Minuten-Buckets für die 15-Minuten Sparkline
@@ -301,6 +300,6 @@ def _get_live_telemetry_metrics() -> Dict[str, Any]:
         "top_models_cost": [{"model": m, "cost": round(c, 4)} for m, c in top_models_cost],
     }
     _LIVE_TELEMETRY_CACHE["ts"] = time.time()
-    _LIVE_TELEMETRY_CACHE["data"] = res
+    _LIVE_TELEMETRY_CACHE["data"] = res  # type: ignore[assignment]
     _LIVE_TELEMETRY_CACHE["tenant"] = _tenant_id
     return res

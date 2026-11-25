@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 research_engine_v2.py - Prototyp: Reflexionsschleife + Seiten-Scraper + Kompression.
 
@@ -131,7 +130,8 @@ def _is_safe_url(url: str) -> bool:
         infos = socket.getaddrinfo(host, p.port or (443 if p.scheme == "https" else 80), type=socket.SOCK_STREAM)
         if not infos:
             return False
-        return all(_is_global_ip(info[4][0]) for info in infos)
+        # D3 2026-11-25: getaddrinfo liefert fuer AF_INET/AF_INET6 (SOCK_STREAM + Hostname) str; AF_UNIX wird hier nicht angefragt. Keine Laufzeitänderung im SSRF-Pfad.
+        return all(_is_global_ip(info[4][0]) for info in infos)  # type: ignore[arg-type]
     except socket.gaierror:
         # Fail-Closed: Nicht aufloesbare oder manipulierbare DNS-Ziele blockieren
         return False

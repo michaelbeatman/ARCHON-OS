@@ -65,3 +65,13 @@
 - Frontend/TypeScript (`static/**`, Next.js-App) und Nicht-Python-Komponenten (Node/n8n-Workflow-Definitionen, Hermes-Patches unter `scripts/patches/`) nur stichprobenartig über Querverweise.
 - Keine Bewertung der inhaltlichen Korrektheit echter LLM-Antworten; geprüft wurde ausschließlich die Erkennung/Eskalation leerer oder fehlerhafter Antworten.
 - Archivierte Audit-Reports (`audit_reports/_archiv_2026-11-24_pre_audit/**`, `audit_reports/domain_12.md` Vorversion) wurden nur als Suchhinweise verwendet; deren Befunde sind im aktuellen Code nachweislich behoben und daher **nicht** übernommen.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** Alle 5 HIGH (H-12-1 Firewall-Urteil verworfen, H-12-2 Leerwerte/Nicht-Strings umgehen Firewall, H-12-3 Injection-Klassifikator fail-open, H-12-4 n8n 200/204 mit leerem Body, H-12-5 CRM-Fehler identisch zu „keine Kontakte") — `fix_w2_b_silent.md`: Status bis `tool_ok` durchgereicht, Leerwerte als Fehlermarker, Klassifikator fail-closed, strukturierte Webhook-/CRM-Fehler. Die eskalierten Restpfade (`scripts/run_email_matching.py`, Root-`archon_crm_mcp.py`) in `fix_w4_b_integrations.md` §7 nachgezogen.
+- **Bewusst offen:** Keine domänenspezifischen HIGH/BLOCKER; die 7 MED wurden über W2-B/W4-B weitgehend adressiert, aber nicht einzeln gegen den finalen HEAD re-verifiziert. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Subagent `compileall` Exit 0, 15 neue Tests grün, Nachbar-Suite 133 passed/2 skipped; Full-Suite final 2335/0/16 (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

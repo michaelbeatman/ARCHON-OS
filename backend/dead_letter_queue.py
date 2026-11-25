@@ -27,7 +27,7 @@ class _ArchonClosingConn(sqlite3.Connection):
         finally:
             self.close()
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Coroutine, Dict, Any, List, Optional, cast
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -228,7 +228,7 @@ _JOB_EXECUTORS: Dict[str, Callable[..., Any]] = {}
 # C: Referenzen auf fire-and-forget Replay-Tasks. Ohne Registry kann ein
 # Replay-Thread den Task verlieren und ein zweiter Replay denselben Job
 # noch einmal zustellen (doppelte Webhooks/Mails).
-_RUNNING_TASKS = set()
+_RUNNING_TASKS: "set[asyncio.Task[Any]]" = set()
 
 
 def _track_replay_task(task: "asyncio.Task[Any]") -> None:
@@ -262,15 +262,22 @@ def _builtin_executor(job_type: str) -> Optional[Callable[..., Any]]:
         def _redeliver(payload: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
             from backend import trace_context as tc
             from backend.event_mesh import event_mesh
-            src = {k: (item.get(k) or payload.get(k) or "") for k in _TRACE_COLS}
-            trace = _trace_fields(**src)
+            src: Dict[str, Any] = {k: (item.get(k) or payload.get(k) or "") for k in _TRACE_COLS}
+            trace = _trace_fields(payload=src)
             # Persistierten Kontext wiederherstellen; emit_outbound_event erzeugt
             # daraus den Child-Span und injiziert traceparent/tracestate erneut.
-            with tc.use_trace_context(**trace):
+            with tc.use_trace_context(
+                trace_id=trace["trace_id"],
+                span_id=trace["span_id"],
+                traceparent=trace["traceparent"],
+                tracestate=trace["tracestate"],
+            ):
+                raw_payload = payload.get("payload")
+                event_payload: Dict[str, Any] = raw_payload if isinstance(raw_payload, dict) else payload
                 return event_mesh.emit_outbound_event(
                     webhook_url=str(payload.get("target_url") or ""),
                     event_type=str(payload.get("event_type") or "webhook_delivery"),
-                    payload=payload.get("payload") if isinstance(payload.get("payload"), dict) else payload,
+                    payload=event_payload,
                     trace_columns=trace,
                 )
         return _redeliver
@@ -284,13 +291,14 @@ def _run_executor(executor: Callable[..., Any], payload: Dict[str, Any], item: D
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = None
+        coro = cast("Coroutine[Any, Any, Any]", result)
         if loop is not None and loop.is_running():
             # Aus async Kontext: nicht blockieren, Task im laufenden Loop fortfuehren.
             # C: Task referenzieren, damit er nicht GC-verloren geht und
             # Exceptions nicht unbemerkt bleiben.
-            _track_replay_task(loop.create_task(result))
+            _track_replay_task(loop.create_task(coro))
             return {"status": "scheduled"}
-        return asyncio.run(result)
+        return asyncio.run(coro)
     return result
 
 

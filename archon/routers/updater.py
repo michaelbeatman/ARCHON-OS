@@ -23,7 +23,7 @@ def api_hermes_update_check(force: bool = False):
 
 @router.post("/api/v1/hermes/update/apply")
 def api_hermes_update_apply(request: Request, payload: PassthroughBody = Body(default={})):
-    payload = as_payload(payload)
+    data = as_payload(payload)
     import main as app_main
 
     curr_user = app_main.get_current_user_from_request(request)
@@ -33,6 +33,6 @@ def api_hermes_update_apply(request: Request, payload: PassthroughBody = Body(de
         )
     from backend import hermes_updater
 
-    channel = payload.get("channel", "latest")
-    auto_restart = payload.get("restart", True)
+    channel = data.get("channel", "latest")
+    auto_restart = data.get("restart", True)
     return hermes_updater.apply_hermes_update(channel=channel, auto_restart=auto_restart)

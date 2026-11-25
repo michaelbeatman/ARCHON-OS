@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+from typing import Any, Dict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(ROOT, "data", "model_routing.json")
@@ -69,7 +70,7 @@ def load_config() -> dict:
         except Exception:
             return json.loads(json.dumps(DEFAULT_CONFIG))
 
-    cfg = {
+    cfg: Dict[str, Any] = {
         "enabled": bool(data.get("enabled", False)),
         "routes": [],
         "autonomy": {"operations": "approval", "orchestrator": "approval"},
@@ -150,7 +151,8 @@ def classify_task(text: str) -> str:
     """Ordnet einen Aufgabentext einer Kategorie zu. Konservativ: Default 'reasoning'."""
     low = (text or "").lower()
     scores = {task: sum(1 for kw in kws if kw in low) for task, kws in _TASK_HINTS.items()}
-    best = max(scores, key=scores.get)
+    # scores.get ist ueberladen; der Lambda-Key ist aequivalent, aber eindeutig typisiert.
+    best = max(scores, key=lambda k: scores[k])
     return best if scores[best] > 0 else "reasoning"
 
 

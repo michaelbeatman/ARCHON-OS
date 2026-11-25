@@ -76,34 +76,34 @@ def api_save_watchdog_config(request: Request, payload: WatchdogConfigSave):
     _require_admin(request)
     from backend.internet_watchdog import get_watchdog_config, save_watchdog_config
 
-    payload = payload.model_dump(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True)
     cfg = get_watchdog_config()
-    if "enabled" in payload:
-        cfg["enabled"] = bool(payload["enabled"])
-    if "interval_minutes" in payload:
+    if "enabled" in data:
+        cfg["enabled"] = bool(data["enabled"])
+    if "interval_minutes" in data:
         try:
-            cfg["interval_minutes"] = max(5, int(payload["interval_minutes"]))
+            cfg["interval_minutes"] = max(5, int(data["interval_minutes"]))
         except (ValueError, TypeError) as exc:
-            logger.debug(f"Ungueltiger interval_minutes-Wert {payload.get('interval_minutes')!r}, Uebernahme uebersprungen: {exc}")
-    if "basket_threshold" in payload:
+            logger.debug(f"Ungueltiger interval_minutes-Wert {data.get('interval_minutes')!r}, Uebernahme uebersprungen: {exc}")
+    if "basket_threshold" in data:
         try:
-            cfg["basket_threshold"] = max(1, int(payload["basket_threshold"]))
+            cfg["basket_threshold"] = max(1, int(data["basket_threshold"]))
         except (ValueError, TypeError) as exc:
-            logger.debug(f"Ungueltiger basket_threshold-Wert {payload.get('basket_threshold')!r}, Uebernahme uebersprungen: {exc}")
-    if "priority_keywords" in payload and isinstance(
-        payload["priority_keywords"], list
+            logger.debug(f"Ungueltiger basket_threshold-Wert {data.get('basket_threshold')!r}, Uebernahme uebersprungen: {exc}")
+    if "priority_keywords" in data and isinstance(
+        data["priority_keywords"], list
     ):
         cfg["priority_keywords"] = [
             str(k).strip()
-            for k in payload["priority_keywords"]
+            for k in data["priority_keywords"]
             if str(k).strip()
         ]
-    if "basket" in payload and isinstance(payload["basket"], list):
-        cfg["basket"] = payload["basket"]
-    if "channels" in payload and isinstance(payload["channels"], dict):
-        cfg.setdefault("channels", {}).update(payload["channels"])
-    if "targets" in payload and isinstance(payload["targets"], list):
-        cfg["targets"] = payload["targets"]
+    if "basket" in data and isinstance(data["basket"], list):
+        cfg["basket"] = data["basket"]
+    if "channels" in data and isinstance(data["channels"], dict):
+        cfg.setdefault("channels", {}).update(data["channels"])
+    if "targets" in data and isinstance(data["targets"], list):
+        cfg["targets"] = data["targets"]
     save_watchdog_config(cfg)
     return {"ok": True, "config": cfg}
 

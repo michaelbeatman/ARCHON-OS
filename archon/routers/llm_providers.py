@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
 
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
@@ -288,7 +287,7 @@ def _get_llm_prices_locked(refresh: int = 0) -> Dict[str, Any]:
                         "context_length": m.get("context_length", 0)
                     }
                 _openrouter_price_cache = formatted
-                _openrouter_price_timestamp = now
+                _openrouter_price_timestamp = now  # type: ignore[assignment]
                 return {"status": "ok", "prices": formatted}
         else:
             return {"status": "ok", "prices": _openrouter_price_cache}

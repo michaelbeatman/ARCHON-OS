@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
 
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
@@ -239,8 +238,8 @@ def api_get_boardroom_frameworks(lang: Optional[str] = None, request: Request = 
 @router.post("/api/boardroom/frameworks")
 def api_save_boardroom_frameworks(request: Request, frameworks: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    frameworks = as_payload(frameworks)
-    core_dispatcher.CATEGORIZED_FRAMEWORKS = frameworks
+    frameworks = as_payload(frameworks)  # type: ignore[assignment]
+    core_dispatcher.CATEGORIZED_FRAMEWORKS = frameworks  # type: ignore[assignment]
     _save_json(FRAMEWORKS_FILE, frameworks)
     return {"status": "success"}
 
@@ -594,7 +593,7 @@ def _persist_boardroom_result_sync(
 
 
 @router.post("/api/boardroom/run")
-async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
+async def api_run_boardroom(req: BoardroomRequest, request: Request = None):  # type: ignore[assignment]
     if request is not None:
         require_admin_or_503(request)
     chairman_agent, all_debate_agents = _prepare_boardroom_agents(req)
@@ -608,8 +607,8 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
         active_agents=all_debate_agents,
         framework=req.framework,
         use_moa=req.use_moa,
-        moa_reference_models=req.moa_reference_models,
-        moa_aggregator=req.moa_aggregator
+        moa_reference_models=req.moa_reference_models,  # type: ignore[arg-type]
+        moa_aggregator=req.moa_aggregator  # type: ignore[arg-type]
     )
 
     # D14/MED: Konsens deterministisch aus dem Verdict ableiten und die
@@ -743,8 +742,8 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                 active_agents=all_debate_agents,
                 framework=req.framework,
                 use_moa=req.use_moa,
-                moa_reference_models=req.moa_reference_models,
-                moa_aggregator=req.moa_aggregator,
+                moa_reference_models=req.moa_reference_models,  # type: ignore[arg-type]
+                moa_aggregator=req.moa_aggregator,  # type: ignore[arg-type]
                 cancel_token=cancel_token,
             ):
                 cancel_token.check()

@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 views_core.py - Zentraler Code-Contract & API-Provider für Archon OS Frontend Views
 
@@ -255,7 +254,7 @@ def _atomic_write_text(path: str, content: str) -> None:
 def _build_vault_tree_fast(current_dir, rel_path="", depth=0, max_depth=4):
     if depth > max_depth:
         return []
-    items = []
+    items = []  # type: ignore[var-annotated]
     try:
         with os.scandir(current_dir) as it:
             entries = sorted(it, key=lambda e: e.name)
@@ -308,7 +307,7 @@ def _refresh_vault_cache_worker(vault_dir):
     try:
         tree = _build_vault_tree_fast(vault_dir)
         _vault_tree_in_memory_cache = tree
-        _vault_tree_cache_time = time.time()
+        _vault_tree_cache_time = time.time()  # type: ignore[assignment]
         # N-09: atomarer Write — die Cache-Datei kann nie halb geschrieben sein.
         _write_cache_atomic(
             VAULT_CACHE_FILE,
@@ -421,7 +420,7 @@ async def get_showroom_tree():
     Projekte -> 01_Zwischenberichte, 02_Medien, 03_Endprodukte
     """
     now = datetime.datetime.now().timestamp()
-    if _showroom_tree_cache["data"] and (now - _showroom_tree_cache["ts"] < 15):
+    if _showroom_tree_cache["data"] and (now - _showroom_tree_cache["ts"] < 15):  # type: ignore[operator]
         return {"status": "ok", "cached": True, "tree": _showroom_tree_cache["data"]}
 
     vault_dir = resolve_obsidian_vault_dir()
@@ -462,7 +461,7 @@ async def get_showroom_tree():
                             break
                 except OSError as exc:
                     logger.debug(f"[ViewsCore] PROJEKT.md Titel nicht lesbar: {exc}")
-            if _date_part and not proj_info["title"].startswith(_date_part):
+            if _date_part and not proj_info["title"].startswith(_date_part):  # type: ignore[attr-defined]
                 proj_info["title"] = f"{_date_part} · {proj_info['title']}"
 
             for sec, subname in [("zwischenberichte", "01_Zwischenberichte"), ("medien", "02_Medien"), ("endprodukte", "03_Endprodukte"), ("auftraege", "04_Auftraege")]:
@@ -470,7 +469,7 @@ async def get_showroom_tree():
                 if s_path.exists():
                     for f in sorted(s_path.iterdir()):
                         if f.is_file():
-                            proj_info["sections"][sec].append({
+                            proj_info["sections"][sec].append({  # type: ignore[index]
                                 "name": f.name,
                                 "path": str(f),
                                 "ext": f.suffix.lower(),
@@ -483,7 +482,7 @@ async def get_showroom_tree():
                                 sz = sum(x.stat().st_size for x in f.rglob('*') if x.is_file())
                             except Exception:
                                 sz = 0
-                            proj_info["sections"][sec].append({
+                            proj_info["sections"][sec].append({  # type: ignore[index]
                                 "name": f.name,
                                 "path": str(f),
                                 "ext": "[Ordner]",
@@ -501,7 +500,7 @@ async def get_showroom_tree():
                         sz = sum(f.stat().st_size for f in item.rglob('*') if f.is_file()) if is_dir else item.stat().st_size
                     except Exception:
                         sz = 0
-                    proj_info["root_files"].append({
+                    proj_info["root_files"].append({  # type: ignore[attr-defined]
                         "name": item.name,
                         "path": str(item),
                         "ext": "[Ordner]" if is_dir else item.suffix.lower(),
@@ -512,7 +511,7 @@ async def get_showroom_tree():
             else:
                 for f in sorted(p_dir.iterdir()):
                     if f.is_file():
-                        proj_info["root_files"].append({
+                        proj_info["root_files"].append({  # type: ignore[attr-defined]
                             "name": f.name,
                             "path": str(f),
                             "ext": f.suffix.lower(),
@@ -523,8 +522,8 @@ async def get_showroom_tree():
 
             tree.append(proj_info)
 
-    _showroom_tree_cache["data"] = tree
-    _showroom_tree_cache["ts"] = now
+    _showroom_tree_cache["data"] = tree  # type: ignore[assignment]
+    _showroom_tree_cache["ts"] = now  # type: ignore[assignment]
     return {"status": "ok", "cached": False, "tree": tree}
 
 
@@ -791,7 +790,7 @@ def _scan_showroom_reports(vault_dir: str, reports_dir: str) -> list:
     """D08/MED: kompletter Showroom-FS-Scan in einem Worker-Thread."""
     projects_dir = Path(vault_dir) / "01_PROJEKTE"
     reports_root = Path(reports_dir)
-    reports = []
+    reports = []  # type: ignore[var-annotated]
     seen = set()
 
     # 1. Scanne Obsidian Projects Endprodukte (begrenzt, kein Full-Read)
@@ -836,7 +835,7 @@ def _scan_showroom_reports(vault_dir: str, reports_dir: str) -> list:
                     "path": str(fpath)
                 })
 
-    reports.sort(key=lambda x: x["mtime"], reverse=True)
+    reports.sort(key=lambda x: x["mtime"], reverse=True)  # type: ignore[arg-type, return-value]
     return reports
 
 
@@ -884,7 +883,7 @@ async def get_showroom_report_content(filename: str = Query(...)):
 
 def _scan_showroom_apps(apps_dir: str) -> list:
     """D08/MED: os.listdir/stat im Worker-Thread, begrenzt auf 1000 Einträge."""
-    apps = []
+    apps = []  # type: ignore[var-annotated]
     if not os.path.exists(apps_dir):
         return apps
     for item in os.listdir(apps_dir):
@@ -913,7 +912,7 @@ def _scan_showroom_apps(apps_dir: str) -> list:
                 "mtime": mtime,
                 "date": datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
             })
-    apps.sort(key=lambda x: x["mtime"], reverse=True)
+    apps.sort(key=lambda x: x["mtime"], reverse=True)  # type: ignore[arg-type, return-value]
     return apps
 
 

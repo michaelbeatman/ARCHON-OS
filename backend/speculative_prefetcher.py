@@ -98,7 +98,7 @@ class SpeculativePrefetcher:
         self.ttl_seconds = ttl
         now = time.time()
         self._prune_expired(now)
-        prefetched = {}
+        prefetched: dict[str, Any] = {}
         scope = f"{tenant_id or 'active'}:{agent_id or 'global'}"
 
         # 1. CRM / E-Mail Erkennung
@@ -154,8 +154,8 @@ class SpeculativePrefetcher:
         cid = tenant_id
         if not cid:
             try:
-                from backend.tenant_context import get_active_company_id
-                cid = get_active_company_id() or "default"
+                from backend.tenant_context import tenant_context
+                cid = tenant_context.get_active_tenant_id() or "default"
             except Exception:
                 cid = "default"
         try:

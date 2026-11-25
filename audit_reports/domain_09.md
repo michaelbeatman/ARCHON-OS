@@ -133,4 +133,14 @@ mutables `Body`-Default, verwaiste Build-Context-Verzeichnisse, Doku-Versionsdri
 ungesicherte globale States und fiktive Seed-Daten in der GoBD-DB.
 
 **DOMÄNEN-SCORE: 6/10.** Keine BLOCKER; §5-Negativconstraints sind eingehalten.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Teilweise behoben:** F002/`fix_w0_ci.md` liefert `mypy.ini`, `requirements-ci.lock.txt` (61 Pakete/148 Hashes), echten CycloneDX-SBOM mit Hashes-Gate, Hash-Pins in CI und `.dockerignore`. Der **Doku-Versionsdrift** wurde in diesem Doku-Pass behoben: `README.md`, `README.de.md`, alle 11 Sprach-Readmes und `docs/SYSTEM_HANDBUCH.md` nennen den Code-Stand **v0.5.7.8** (`config/version.json`); die nicht neu erzeugten PDF-Manuale sind ausdrücklich als „PDF basiert weiter auf v0.5.2.1, siehe CHANGELOG für v0.5.7.8" gekennzeichnet (`CHANGELOG.md`, Remediation-Eintrag 25.11.2026).
+- **Bewusst offen:** H-09-1 Rest (43 `# mypy: ignore-errors`), H-09-2 (`archon`↔`backend`-Importzyklen) und H-09-3 (God-Objects: `hermes_telegram_adapter.py` 11.233 Zeilen, `main.py` 3.393) — W4-D1 an Antigravity, **nicht** erledigt. Ebenfalls offen: das CI-Gate zum automatischen Abgleich der Versionsstrings (kein Code-Change in diesem Doku-Pass) sowie der übergreifende Audit-Ketten-Bruch (D05).
+- **Verifikation:** W0 `yaml-ok`, Hash-Zählung `148`; Full-Suite final 2335/0/16; `tsc --noEmit` und `npm run build` Exit 0 (`FIX_VERIFICATION_LOG.md`, §9 `MASTER_PLAN.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.
 </think:6124c78e><tool_call:6124c78e>read<arg_key:6124c78e>path</arg_key:6124c78e><arg_value:6124c78e>C:\.Antigravity-projekte\AgenticOS-2026\audit_reports\domain_09.md

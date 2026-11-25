@@ -65,7 +65,9 @@ class _PinnedConnectionMixin:
         if not self._pinned_ip:
             return
         try:
-            peer = self.sock.getpeername()[0]  # type: ignore[union-attr]
+            # `sock` wird von HTTPConnection/HTTPSConnection bereitgestellt;
+            # das Mixin allein deklariert es nicht (typeshed: attr-defined).
+            peer = self.sock.getpeername()[0]  # type: ignore[attr-defined]
             expected = ipaddress.ip_address(self._pinned_ip)
             actual = ipaddress.ip_address(peer)
         except Exception as exc:
@@ -107,8 +109,10 @@ class _PinnedHTTPSConnection(_PinnedConnectionMixin, http.client.HTTPSConnection
         http.client.HTTPConnection.connect(self)
         self._verify_pinned_peer()
         # Schritt 2: TLS mit SNI = Original-Host (Zertifikatspruefung bleibt wirksam).
-        server_hostname = self._tunnel_host or self._pinned_server_hostname or self.host
-        self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
+        # `_tunnel_host` und `_context` werden zur Laufzeit von HTTPConnection.set_tunnel()
+        # bzw. HTTPSConnection.__init__ gesetzt, sind aber nicht in typeshed deklariert.
+        server_hostname = self._tunnel_host or self._pinned_server_hostname or self.host  # type: ignore[attr-defined]
+        self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)  # type: ignore[attr-defined]
 
 
 class _PinnedHTTPHandler(urllib.request.HTTPHandler):
@@ -179,7 +183,7 @@ def safe_http_request(
     host = (parsed.hostname or "").lower().rstrip(".")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
 
-    handlers = []
+    handlers: list[urllib.request.BaseHandler] = []
     if pinned_ip:
         safe_url = _pinned_url(safe_url, pinned_ip, host, port)
         # Proxy-Umleitung wuerde den Connect zur geprueften IP umgehen.

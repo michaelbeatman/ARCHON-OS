@@ -151,7 +151,7 @@ def rights_from_html(raw_html: str) -> Dict[str, Any]:
 # ==============================================================================
 # TRUST TIERS (VERTRAUENSSTUFEN)
 # ==============================================================================
-TRUST_TIERS = {
+TRUST_TIERS: Dict[str, Dict[str, Any]] = {
     "TIER_1_OFFICIAL": {
         "level": 1,
         "name": "Amtlich & Primärquelle",

@@ -68,9 +68,9 @@ def api_get_corporate_company(company_id: str):
 @router.post("/api/corporate/companies")
 def api_save_corporate_company(request: Request, payload: CorporateCompanyBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.corporate_manager import corporate_manager
-    saved = corporate_manager.save_company(payload)
+    saved = corporate_manager.save_company(data)
     return {"success": True, "company": saved}
 
 
@@ -105,11 +105,11 @@ def api_delete_corporate_company(request: Request, company_id: str):
 @router.post("/api/corporate/render-template")
 def api_render_corporate_template(request: Request, payload: CorporateTemplateBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.corporate_manager import corporate_manager
-    template_type = payload.get("template_type", "letterhead")
-    company_id = payload.get("company_id")
-    custom = payload.get("custom", {})
+    template_type = data.get("template_type", "letterhead")
+    company_id = data.get("company_id")
+    custom = data.get("custom", {})
     try:
         result = corporate_manager.render_template(template_type=template_type, company_id=company_id, custom=custom)
     except ValueError as verr:
@@ -135,11 +135,12 @@ def api_get_corporate_template_layout(
 @router.post("/api/corporate/template-layout")
 def api_save_corporate_template_layout(request: Request, payload: CorporateLayoutBody = Body(...)):
     require_admin_or_503(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.corporate_manager import corporate_manager
-    template_type = str(payload.get("template_type") or "letterhead")
-    company_id = payload.get("company_id")
-    layout = payload.get("layout") if isinstance(payload.get("layout"), dict) else {}
+    template_type = str(data.get("template_type") or "letterhead")
+    company_id = data.get("company_id")
+    layout_raw = data.get("layout")
+    layout = layout_raw if isinstance(layout_raw, dict) else {}
     try:
         saved = corporate_manager.save_template_layout(
             company_id=company_id,
@@ -154,12 +155,12 @@ def api_save_corporate_template_layout(request: Request, payload: CorporateLayou
 @router.post("/api/corporate/render-pdf")
 def api_render_corporate_template_pdf(request: Request, payload: CorporateTemplateBody = Body(...)):
     require_admin_or_503(request)
-    payload = as_payload(payload)
+    data = as_payload(payload)
     from backend.corporate_manager import corporate_manager
     from backend.erp_zugferd_pdf import build_corporate_template_pdf
-    template_type = str(payload.get("template_type") or "letterhead")
-    company_id = payload.get("company_id")
-    custom = payload.get("custom") if isinstance(payload.get("custom"), dict) else {}
+    template_type = str(data.get("template_type") or "letterhead")
+    company_id = data.get("company_id")
+    custom = data.get("custom") if isinstance(data.get("custom"), dict) else {}
     try:
         rendered = corporate_manager.render_template(
             template_type=template_type,

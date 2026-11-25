@@ -11,13 +11,14 @@ import sys
 import json
 import time
 import email
+import email.utils
 import imaplib
 import smtplib
 import logging
 import datetime
 from pathlib import Path
 from email.header import decode_header
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, cast
 
 logger = logging.getLogger("email_service")
 
@@ -148,17 +149,22 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                 body_html = ""
 
                 if msg.is_multipart():
-                    for part in msg.walk():
-                        ctype = part.get_content_type()
-                        cdisp = str(part.get("Content-Disposition", ""))
+                    # Eigener Name: `part` oben ist ein IMAP-Rohantwort-Tupel
+                    # (bytes | tuple | None), hier ist es ein Message-Objekt.
+                    for msg_part in msg.walk():
+                        ctype = msg_part.get_content_type()
+                        cdisp = str(msg_part.get("Content-Disposition", ""))
                         if "attachment" in cdisp:
                             continue
                         try:
-                            payload_bytes = part.get_payload(decode=True)
-                            if not payload_bytes:
+                            part_payload = msg_part.get_payload(decode=True)
+                            if not part_payload:
                                 continue
-                            charset = part.get_content_charset() or "utf-8"
-                            text = payload_bytes.decode(charset, errors="replace")
+                            charset = msg_part.get_content_charset() or "utf-8"
+                            # typeshed: get_payload(decode=True) -> Message | bytes | None.
+                            # decode=True auf einem nicht-multipart Part liefert bytes;
+                            # cast ist zur Laufzeit ein No-op.
+                            text = cast(bytes, part_payload).decode(charset, errors="replace")
                             if ctype == "text/plain" and not body_plain:
                                 body_plain = text
                             elif ctype == "text/html" and not body_html:
@@ -169,7 +175,7 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                     try:
                         payload_bytes = msg.get_payload(decode=True)
                         charset = msg.get_content_charset() or "utf-8"
-                        text = payload_bytes.decode(charset, errors="replace") if payload_bytes else ""
+                        text = cast(bytes, payload_bytes).decode(charset, errors="replace") if payload_bytes else ""
                         if msg.get_content_type() == "text/html":
                             body_html = text
                         else:

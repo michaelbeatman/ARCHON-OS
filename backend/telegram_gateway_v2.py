@@ -61,7 +61,7 @@ def build_hitl_inline_keyboard(
     }
 
 
-def parse_hitl_callback(callback_data: str) -> Optional[Dict[str, str]]:
+def parse_hitl_callback(callback_data: str) -> Optional[Dict[str, Any]]:
     parts = (callback_data or "").strip().split(":", 2)
     if len(parts) != 3 or parts[0] != "hitl" or parts[1] not in ("approve", "reject"):
         return None

@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 from fastapi import Depends as _ArchonDepends
 
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
@@ -78,7 +77,7 @@ def save_agent_config(container_name: str, config: Dict[str, Any]) -> None:
         print(f"Error saving config: {e}")
 
 
-def docker_socket_request(method: str, path: str, payload: dict = None, timeout: float = 1.0) -> bytes:
+def docker_socket_request(method: str, path: str, payload: dict = None, timeout: float = 1.0) -> bytes:  # type: ignore[assignment]
     """Deprecated-Fassade: leitet auf den abgesicherten DockerClient weiter."""
     try:
         return _dc.request(method, path, payload, timeout=timeout)
@@ -90,7 +89,7 @@ def docker_socket_request(method: str, path: str, payload: dict = None, timeout:
         return b""
 
 
-def _dsr(method: str, path: str, payload: dict = None, timeout: float = 1.0) -> bytes:
+def _dsr(method: str, path: str, payload: dict = None, timeout: float = 1.0) -> bytes:  # type: ignore[assignment]
     """Delegiert an main.docker_socket_request falls dort gepatcht (fuer Test-Mocks)."""
     main_mod = sys.modules.get("main")
     fn = getattr(main_mod, "docker_socket_request", None) if main_mod else None
@@ -109,7 +108,7 @@ def get_container_settings(container_name: str):
                     with open(cpath, "r", encoding="utf-8") as f:
                         configs = json.load(f)
                         if isinstance(configs, list):
-                            configs = {item.get("id"): item for item in configs if isinstance(item, dict)}
+                            configs = {item.get("id"): item for item in configs if isinstance(item, dict)}  # type: ignore[misc]
                         break
                 except Exception as exc:
                     logger.debug(f"[Containers] Kupplungs-Config nicht lesbar ({cpath}): {exc}")
@@ -129,8 +128,8 @@ def get_container_settings(container_name: str):
 @router.post("/api/v1/container/settings")
 def save_container_settings(request: Request, container_name: str, config: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    config = as_payload(config)
-    save_agent_config(container_name, config)
+    config = as_payload(config)  # type: ignore[assignment]
+    save_agent_config(container_name, config)  # type: ignore[arg-type]
     return {"status": "success"}
 
 
@@ -179,7 +178,7 @@ def _read_file_tail(file_path: str, max_lines: int = 150, max_bytes: int = 13107
         if file_size > max_bytes:
             f.seek(file_size - max_bytes)
             f.readline()  # Teilzeile am Seek-Offset verwerfen
-        tail_lines = deque(maxlen=max_lines)
+        tail_lines = deque(maxlen=max_lines)  # type: ignore[var-annotated]
         for raw_line in f:
             line = raw_line.decode("utf-8", errors="ignore").strip()
             if line:
@@ -254,7 +253,7 @@ def get_hermes_profile_logs_api(request: Request, profile_id: str, tail: int = 1
         lp = os.path.join(hermes_home, "logs", log_name)
         if os.path.exists(lp):
             try:
-                matched = deque(maxlen=max(tail, 1))
+                matched = deque(maxlen=max(tail, 1))  # type: ignore[var-annotated]
                 with open(lp, "r", encoding="utf-8", errors="ignore") as f:
                     for l in f:
                         if profile_id in l:
@@ -470,7 +469,7 @@ def run_container_action(request: Request, req: ContainerActionRequest):
 @router.post("/api/v1/container/inject_config")
 async def inject_container_config(request: Request, container_name: str, config: PassthroughBody = Body(...)):
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    config = as_payload(config)
+    config = as_payload(config)  # type: ignore[assignment]
     ports_map = {
         "odysseus": 7000,
         "hermes": 8787,
@@ -530,8 +529,8 @@ async def inject_container_config(request: Request, container_name: str, config:
     payload = {
         "config": {
             "api_base": "http://omniroute:20128/v1",
-            "model": config.get("model", "free-forever"),
-            "system_prompt": config.get("system_prompt", ""),
+            "model": config.get("model", "free-forever"),  # type: ignore[attr-defined]
+            "system_prompt": config.get("system_prompt", ""),  # type: ignore[attr-defined]
         }
     }
 

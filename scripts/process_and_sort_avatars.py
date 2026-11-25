@@ -89,11 +89,11 @@ def main():
         
         non_gutters = np.where(col_mean <= 245)[0]
         ng_splits = np.where(np.diff(non_gutters) > 1)[0]
-        cols = list(zip([non_gutters[0]] + [non_gutters[i+1] for i in ng_splits], [non_gutters[i] for i in ng_splits] + [non_gutters[-1]]))
+        cols = list(zip([non_gutters[0]] + [non_gutters[int(i)+1] for i in ng_splits], [non_gutters[int(i)] for i in ng_splits] + [non_gutters[-1]]))
         
         non_gutters_y = np.where(row_mean <= 245)[0]
         ng_splits_y = np.where(np.diff(non_gutters_y) > 1)[0]
-        rows = list(zip([non_gutters_y[0]] + [non_gutters_y[i+1] for i in ng_splits_y], [non_gutters_y[i] for i in ng_splits_y] + [non_gutters_y[-1]]))
+        rows = list(zip([non_gutters_y[0]] + [non_gutters_y[int(i)+1] for i in ng_splits_y], [non_gutters_y[int(i)] for i in ng_splits_y] + [non_gutters_y[-1]]))
         
         for r_idx, (y1, y2) in enumerate(rows):
             for c_idx, (x1, x2) in enumerate(cols):
@@ -166,8 +166,8 @@ def main():
             
     # Save metadata JSON
     meta_path = os.path.join(avatars_dir, 'avatars_metadata.json')
-    with open(meta_path, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, indent=2, ensure_ascii=False)
+    with open(meta_path, 'w', encoding='utf-8') as fh:
+        json.dump(metadata, fh, indent=2, ensure_ascii=False)
         
     print(f'Saved {len(metadata)} avatars and metadata to {avatars_dir}.')
     
@@ -179,8 +179,8 @@ def main():
         
     # Mapping table
     mapping_path = os.path.join(avatars_dir, 'old_to_new_mapping.json')
-    with open(mapping_path, 'w', encoding='utf-8') as f:
-        json.dump(old_to_new_mapping, f, indent=2)
+    with open(mapping_path, 'w', encoding='utf-8') as fh:
+        json.dump(old_to_new_mapping, fh, indent=2)
         
     for target in ['avatar_009.jpg', 'avatar_019.jpg', 'avatar_033.jpg', 'avatar_083.jpg']:
         print(f'Mapping {target} -> {old_to_new_mapping.get(target)}')

@@ -69,7 +69,7 @@ class ToolPermissionManager:
             """)
             conn.commit()
 
-    def propose_tool_installation(self, tool_name: str, tool_type: str = "pip", reason: str = "", command: str = None, requested_by: str = "Robert (Lead Orchestrator)") -> Dict[str, Any]:
+    def propose_tool_installation(self, tool_name: str, tool_type: str = "pip", reason: str = "", command: Optional[str] = None, requested_by: str = "Robert (Lead Orchestrator)") -> Dict[str, Any]:
         """Robert reicht einen Antrag zur Installation eines neuen Tools ein."""
         req_id = f"tool-perm-{datetime.datetime.now().strftime('%m%d%H%M%S')}"
         if not command:

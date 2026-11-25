@@ -114,7 +114,9 @@ def is_hardened_mode(mode: int, path: Optional[str] = None) -> bool:
     gehaertet; ohne Pfad/Pruefung bleibt der Status 'unverified' = False.
     """
     if os.name == "nt":
-        return bool(path) and _windows_dacl_is_hardened(path)
+        if not path:
+            return False
+        return _windows_dacl_is_hardened(path)
     return mode == SAFE_MODE
 
 
@@ -324,10 +326,10 @@ def _extract_scoped_yaml_secrets(text: str):
     damit gleichnamige Schlüssel wie 'api_key:' in verschiedenen Provider-Abschnitten
     sich beim Wiederherstellen niemals gegenseitig überschreiben.
     """
-    section_stack = []  # Liste aus (indent_len, section_name)
+    section_stack: list[tuple[int, str]] = []  # Liste aus (indent_len, section_name)
     scoped = {}         # (section_path_tuple, key, occ_idx) -> raw_val
-    path_counts = {}    # (section_path_tuple, key) -> count
-    flat_counts = {}    # key -> count
+    path_counts: dict[tuple[tuple[str, ...], str], int] = {}    # (section_path_tuple, key) -> count
+    flat_counts: dict[str, int] = {}    # key -> count
     flat_last = {}      # key -> raw_val
 
     _ANY_KV_RE = _re.compile(r'^(?P<indent>\s*)(?:-\s+)?(?P<key>[A-Za-z0-9_.-]+)\s*:\s*(?P<rest>.*)$')
@@ -372,8 +374,8 @@ def restore_masked_values(original_text: str, new_text: str) -> str:
     """
     orig_scoped, flat_counts, flat_last = _extract_scoped_yaml_secrets(original_text or "")
 
-    section_stack = []
-    seen_counts = {}
+    section_stack: list[tuple[int, str]] = []
+    seen_counts: dict[tuple[tuple[str, ...], str], int] = {}
     _ANY_KV_RE = _re.compile(r'^(?P<indent>\s*)(?:-\s+)?(?P<key>[A-Za-z0-9_.-]+)\s*:\s*(?P<rest>.*)$')
 
     out = []

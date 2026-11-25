@@ -20,21 +20,22 @@ from __future__ import annotations
 import sqlite3
 
 class _ArchonClosingConn(sqlite3.Connection):
-    def __enter__(self):
+    def __enter__(self) -> "_ArchonClosingConn":
         super().__enter__()
         return self
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
         try:
             super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
+        return False
 
 import datetime
 import json
 import os
 import re
 import shutil
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 import yaml
 from pydantic import BaseModel
@@ -250,7 +251,7 @@ def save_profile(profile_data: Dict[str, Any], *,
             }
 
     if isinstance(incoming_tools, list) and not _approved_gate_id:
-        _alt_tools = []
+        _alt_tools: list[str] = []
         for p_base in get_hermes_profiles_base_dirs():
             yml = os.path.join(p_base, p_id, "profile.yaml")
             if os.path.exists(yml):

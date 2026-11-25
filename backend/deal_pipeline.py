@@ -166,7 +166,8 @@ class DealPipelineManager:
                 expected_close, actual_close, agent, notes, lost_reason, now, now
             ))
         conn.close()
-        return cls.get(did)
+        saved = cls.get(did)
+        return saved if saved is not None else {}
 
     @classmethod
     def get(cls, deal_id: str) -> Optional[Dict[str, Any]]:

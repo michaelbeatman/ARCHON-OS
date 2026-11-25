@@ -78,3 +78,13 @@ Select-String -Path archon\routers\mesh.py,backend\event_mesh.py -Pattern 'extra
 - JavaScript-Laufzeitverhalten der n8n-Code-Nodes und `patch_omniroute_headers.js` (nur statisch gelesen).
 - Frontend-/Next.js-Proxy-Schicht (Domäne 10/16), OTel-ExportNachweis (Domäne 16), RBAC-/Session-Interna (Domäne 04), SQLite-Locking/Concurrency (Domäne 08).
 - Nicht-im-Scope-Dateien aus `config/{caddy,authelia,grafana,loki,promtail,alertmanager}` jenseits der OmniRoute-Prometheus-Jobs.
+
+---
+
+## Re-Audit 25.11.2026 (Final)
+
+> Die obigen Befunde bleiben als historische Evidenz unverändert; dieser Abschnitt ergänzt nur den Status nach W0–W5.
+
+- **Behoben:** H-06-1 (cross-tenant Ledger/Dedup) — `fix_w1_d_tenant_ledger.md`: Ledger-DBs über `resolve_tenant_db("memory.db")`, fail-closed, Tenant-Präfixe, additive Migration. Die 6 MED (Event-Bus-Circuit-Breaker, JEV-Redirect-Block, n8n-Outbox, DNS-Pinning, Inbound-HMAC, Retention/Trace-Spalten) — `fix_w4_b_integrations.md`. Obsoleter Dedup-Key-Test nachgezogen in `fix_w5_c_tests.md`.
+- **Bewusst offen:** Keine domänenspezifischen HIGH/BLOCKER. Übergreifend offen: W4-D1 (D09) und Audit-Ketten-Bruch (D05).
+- **Verifikation:** Orchestrator `pytest tests/test_fix_w1_d_tenant_ledger.py -q` → **8 passed**, `tests/test_fix_w4_b_integrations.py -q` → **17 passed**, W5-C 13/13 (`FIX_VERIFICATION_LOG.md`). Dieser Re-Audit lief ohne Shell und hat **keine eigenen Tests** ausgeführt.

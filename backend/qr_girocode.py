@@ -156,9 +156,11 @@ def _encode_codewords(raw: bytes) -> Tuple[int, List[int]]:
     codewords: List[int] = []
     max_data_len = max(len(b) for b in blocks_data)
     for i in range(max_data_len):
-        for b in blocks_data:
-            if i < len(b):
-                codewords.append(b[i])
+        # Eigener Name statt `b`: das `b` aus `for b in raw` (Bytes) ist im
+        # Funktionsscope bereits als int gebunden. Kein Werte-/Reihenfolgewechsel.
+        for blk in blocks_data:
+            if i < len(blk):
+                codewords.append(blk[i])
     for i in range(ec_per_block):
         for ec in blocks_ec:
             if i < len(ec):

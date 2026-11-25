@@ -14,7 +14,7 @@ import os
 import re
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import httpx
 import yaml
@@ -79,41 +79,41 @@ class ExecutionReceiptIssueRequest(_SecurityRequest):
 
 @router.post("/api/security/mask-secrets")
 def api_mask_secrets(payload: MaskSecretsRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.secret_masker import mask_sensitive_text
-    masked, count = mask_sensitive_text(payload.get("text", ""))
+    masked, count = mask_sensitive_text(data.get("text", ""))
     return {"status": "success", "masked_text": masked, "redacted_count": count}
 
 
 @router.post("/api/security/pii-scrub")
 def api_pii_scrub(payload: PiiScrubRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.pii_scrubber import pii_scrubber
     return pii_scrubber.scrub_text(
-        text=payload.get("text", ""),
-        session_id=payload.get("session_id", "")
+        text=data.get("text", ""),
+        session_id=data.get("session_id", "")
     )
 
 
 @router.post("/api/security/pii-rehydrate")
 def api_pii_rehydrate(request: Request, payload: PiiRehydrateRequest = Body(...)):
     require_admin_or_503(request)
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.pii_scrubber import pii_scrubber
     return pii_scrubber.rehydrate_text(
-        response_text=payload.get("response_text", ""),
-        session_id=payload.get("session_id", ""),
-        custom_vault=payload.get("vault_map")
+        response_text=data.get("response_text", ""),
+        session_id=data.get("session_id", ""),
+        custom_vault=cast(Dict[str, str], data.get("vault_map"))
     )
 
 
 @router.post("/api/security/egress-check")
 def api_egress_firewall_check(payload: EgressCheckRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.egress_firewall import egress_firewall
     return egress_firewall.check_url(
-        target_url=payload.get("url", ""),
-        agent_id=payload.get("agent_id", "agent-worker")
+        target_url=data.get("url", ""),
+        agent_id=data.get("agent_id", "agent-worker")
     )
 
 
@@ -126,37 +126,37 @@ def api_egress_firewall_logs(request: Request, limit: int = 25):
 
 @router.post("/api/security/rbac-check")
 def api_rbac_jail_check(payload: RbacCheckRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.agent_rbac_jail import agent_rbac_jail
     return agent_rbac_jail.check_access(
-        role=payload.get("role", "researcher"),
-        tool_name=payload.get("tool_name", "read_file"),
-        target_path=payload.get("target_path", "")
+        role=data.get("role", "researcher"),
+        tool_name=data.get("tool_name", "read_file"),
+        target_path=data.get("target_path", "")
     )
 
 
 @router.post("/api/security/lint-output")
 def api_lint_agent_output(payload: LintOutputRequest = Body(...)):
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.output_policy_linter import output_policy_linter
     return output_policy_linter.lint_and_clean(
-        output_text=payload.get("output_text", "")
+        output_text=data.get("output_text", "")
     )
 
 
 @router.post("/api/security/receipts/issue")
 def api_issue_execution_receipt(request: Request, payload: ExecutionReceiptIssueRequest = Body(...)):
     require_admin_or_503(request)  # RBAC: Audit v3 Befund 2.2
-    payload = payload.model_dump()
+    data = payload.model_dump()
     from backend.execution_receipt_ledger import execution_receipt_ledger
     return execution_receipt_ledger.issue_receipt(
-        task_id=payload.get("task_id", "task-01"),
-        agent_role=payload.get("agent_role", "backend_architect"),
-        model_used=payload.get("model_used", "deepseek/deepseek-chat"),
-        prompt_tokens=int(payload.get("prompt_tokens", 500)),
-        completion_tokens=int(payload.get("completion_tokens", 250)),
-        cost_usd=float(payload.get("cost_usd", 0.0012)),
-        tools_invoked=payload.get("tools_invoked", [])
+        task_id=data.get("task_id", "task-01"),
+        agent_role=data.get("agent_role", "backend_architect"),
+        model_used=data.get("model_used", "deepseek/deepseek-chat"),
+        prompt_tokens=int(data.get("prompt_tokens", 500)),
+        completion_tokens=int(data.get("completion_tokens", 250)),
+        cost_usd=float(data.get("cost_usd", 0.0012)),
+        tools_invoked=data.get("tools_invoked", [])
     )
 
 

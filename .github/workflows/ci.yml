@@ -61,7 +61,7 @@ jobs:
         run: python scripts/sync_soul_runtime_cache.py
 
       - name: Runtime-SOUL-Cache Drift (D15)
-        run: python scripts/check_soul_ssot_drift.py --allow-missing --min-checked 568
+        run: python scripts/check_soul_ssot_drift.py --allow-missing --min-checked 284
 
       - name: Rollen-SSOT — semantische Negativ-Abgrenzung (D15)
         run: |

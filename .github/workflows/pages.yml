@@ -36,3 +36,31 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4 (gepinnt)
+
+      # IndexNow ping after successful deploy
+      - name: Ping IndexNow
+        if: success()
+        run: |
+          KEY="ecac6512cb55e5cf2c2cbc128fb011880d31a24bbf3e8fcbda3db80e2ecab3b6"
+          HOST="michaelbeatman.github.io"
+          URLS=(
+            "https://${HOST}/ARCHON-OS/"
+            "https://${HOST}/ARCHON-OS/de/"
+            "https://${HOST}/ARCHON-OS/zh/"
+            "https://${HOST}/ARCHON-OS/ja/"
+            "https://${HOST}/ARCHON-OS/ko/"
+            "https://${HOST}/ARCHON-OS/ru/"
+            "https://${HOST}/ARCHON-OS/fr/"
+            "https://${HOST}/ARCHON-OS/es/"
+            "https://${HOST}/ARCHON-OS/it/"
+            "https://${HOST}/ARCHON-OS/nl/"
+            "https://${HOST}/ARCHON-OS/pt/"
+          )
+          for url in "${URLS[@]}"; do
+            echo "Pinging IndexNow for: $url"
+            curl -s -X POST "https://api.indexnow.org/indexnow" \
+              -H "Content-Type: application/json" \
+              -d "{\"host\":\"${HOST}\",\"key\":\"${KEY}\",\"urlList\":[\"${url}\"]}" \
+              || echo "Warning: ping failed for $url"
+            sleep 0.5
+          done

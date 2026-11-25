@@ -31,7 +31,9 @@ import shutil
 import sqlite3
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from backend.db_paths import APP_DATA_DIR, DB_BUSY_TIMEOUT_MS  # F-013: SSOT busy_timeout
+from backend.db_paths import (  # F-013/F015: SSOT busy_timeout
+    APP_DATA_DIR, DB_BUSY_TIMEOUT_MS, DB_BUSY_TIMEOUT_S,
+)
 
 logger = logging.getLogger("archon.db_consolidation")
 
@@ -126,7 +128,7 @@ def get_schema_versions(target_dir: Optional[str] = None) -> Dict[str, int]:
             continue
         seen.add(path)
         try:
-            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2.0)
+            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=DB_BUSY_TIMEOUT_S)
             try:
                 versions[name] = int(conn.execute("PRAGMA user_version").fetchone()[0])
             finally:
@@ -223,7 +225,7 @@ def _inspect_sqlite_file(db_path: str, *, fast_count: bool = False) -> Dict[str,
 
     conn = None
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=DB_BUSY_TIMEOUT_S)
         conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
         rows = conn.execute(
             "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
@@ -451,8 +453,8 @@ def _rewrite_create_table_sql(create_sql: str, src_table: str, dst_table: str) -
 
 def _online_backup_file(src_path: str, dst_path: str) -> None:
     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
-    src = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True, timeout=10.0)
-    dst = sqlite3.connect(dst_path, timeout=10.0)
+    src = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True, timeout=DB_BUSY_TIMEOUT_S)
+    dst = sqlite3.connect(dst_path, timeout=DB_BUSY_TIMEOUT_S)
     try:
         src.backup(dst)
     finally:

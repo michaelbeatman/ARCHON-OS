@@ -9,6 +9,9 @@ import os
 import json
 import hashlib
 import sqlite3
+import logging
+
+logger = logging.getLogger("archon_os.idempotency_guard")
 
 class _ArchonClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -25,9 +28,69 @@ from typing import Dict, Any, Optional
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
     from backend.db_paths import resolve_db as _resolve_db
-    DB_PATH = _resolve_db("agentic_memory.db")
+    _LEGACY_DB_PATH = _resolve_db("memory.db")
 except Exception:
-    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+    _LEGACY_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "memory.db")
+
+# F014 / H-06-1: DB_PATH bleibt der historische, monkeypatchbare Default
+# (bestehende Tests und Deployment-Overrides setzen ihn explizit). Im
+# Produktivpfad wird der Pfad PRO AUFRUF ueber die SSOT mandantenisoliert
+# aufgeloest; ein explizit abweichender Wert hat Vorrang.
+DB_PATH = _LEGACY_DB_PATH
+
+_LEGACY_SHARED_ENV = "ARCHON_LEDGER_LEGACY_SHARED_DB"
+
+# Modul-Import initiiert das Schema des Modul-Singletons, manchmal noch bevor
+# die Request-/Mandanten-Infrastruktur voll verfuegbar ist. Dieser Flag erlaubt
+# ausschliesslich waehrend des Imports einen best-effort Fallback; zur Laufzeit
+# ist der Resolver fail-closed (F014). Kein Runtime-Legacy-Pfad.
+_IMPORT_BOOTSTRAP = True
+
+
+def _legacy_shared_allowed() -> bool:
+    """Expliziter, dokumentierter Legacy-Modus fuer eine geteilte Ledger-DB.
+
+    Default ist fail-closed: ohne Opt-in darf der Resolver nicht auf eine
+    mandantenuebergreifende Datei zurueckfallen (FULL_TENANT_ISOLATION).
+    """
+    return os.environ.get(_LEGACY_SHARED_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _db_path() -> str:
+    """F014: mandantenisolierter Pfad ueber `db_paths.resolve_tenant_db`."""
+    if DB_PATH != _LEGACY_DB_PATH:
+        return DB_PATH  # expliziter Override (Tests / bewusste Konfiguration)
+    try:
+        from backend.db_paths import resolve_tenant_db
+        return resolve_tenant_db("memory.db")
+    except Exception as exc:
+        if _legacy_shared_allowed() or _IMPORT_BOOTSTRAP:
+            logger.warning(
+                "[F014] Tenant-Resolver unavailable (%s); best-effort legacy path: %s",
+                "explicit legacy mode" if _legacy_shared_allowed() else "import bootstrap",
+                exc,
+            )
+            return _LEGACY_DB_PATH
+        raise RuntimeError(
+            f"[F014] Tenant-DB resolution failed for idempotency ledger: {exc}. "
+            f"Set {_LEGACY_SHARED_ENV}=1 only for an explicitly accepted legacy deployment."
+        ) from exc
+
+
+def _current_tenant_id() -> str:
+    """Aktiver Mandant (Request-Kontext vor Corporate-Default)."""
+    try:
+        from backend.tenant_context import _REQUEST_TENANT_VAR, sanitize_tenant_id
+        tid = _REQUEST_TENANT_VAR.get()
+        if tid:
+            return sanitize_tenant_id(tid)
+    except Exception:
+        pass
+    try:
+        from backend.tenant_context import tenant_context
+        return tenant_context.get_active_tenant_id()
+    except Exception:
+        return "default"
 
 
 def _get_cfg() -> Dict[str, Any]:
@@ -42,9 +105,22 @@ def _get_cfg() -> Dict[str, Any]:
         }
 
 
-def _init_db() -> None:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+_INITIALIZED_PATHS: set[str] = set()
+
+
+def _ensure_db() -> str:
+    """Stellt Schema fuer den *jeweiligen* Mandanten-Pfad sicher (einmal pro Pfad)."""
+    path = _db_path()
+    if path not in _INITIALIZED_PATHS:
+        _init_db(path)
+        _INITIALIZED_PATHS.add(path)
+    return path
+
+
+def _init_db(db_path: Optional[str] = None) -> str:
+    db_path = db_path or _db_path()
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    with sqlite3.connect(db_path, timeout=15.0, factory=_ArchonClosingConn) as conn:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous = NORMAL;")
         conn.execute("""
@@ -75,22 +151,26 @@ def _init_db() -> None:
             conn.execute("ALTER TABLE idempotency_ledger ADD COLUMN owner_id TEXT DEFAULT ''")
         if cols and "lease_expires" not in cols:
             conn.execute("ALTER TABLE idempotency_ledger ADD COLUMN lease_expires TEXT DEFAULT ''")
+        # F014/H-06-1: tenant_id als eigene Spalte (bestandskompatibel via ALTER).
+        # Der scope_key war bereits tenant-präfigiert; die Spalte macht den
+        # Mandanten abfragbar und ermoeglicht explizite Cross-Tenant-Guards.
+        if cols and "tenant_id" not in cols:
+            conn.execute("ALTER TABLE idempotency_ledger ADD COLUMN tenant_id TEXT DEFAULT ''")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_idem_expires ON idempotency_ledger(expires_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_idem_scope ON idempotency_ledger(scope_key)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_idem_tenant ON idempotency_ledger(tenant_id)")
         conn.commit()
+    return db_path
 
 
 def _current_scope() -> str:
-    try:
-        from backend import tenant_context as _tc
-        return str(_tc._REQUEST_TENANT_VAR.get() or "default")
-    except Exception:
-        return "default"
+    """F014: der Scope ist immer der aktive Mandant (SSOT tenant_context)."""
+    return _current_tenant_id()
 
 
 class IdempotencyGuard:
     def __init__(self):
-        _init_db()
+        _INITIALIZED_PATHS.add(_init_db())
 
     def check_or_register(
         self,
@@ -106,7 +186,10 @@ class IdempotencyGuard:
         block_dups = bool(cfg.get("block_duplicate_side_effects", True))
         ttl_hours = int(cfg.get("ttl_hours", 24))
 
-        scope = str(scope_key or _current_scope())
+        tenant_id = _current_tenant_id()
+        # Ein expliziter scope_key darf den Mandanten NIE ersetzen — sonst
+        # koennen zwei Mandanten mit gleichem Scope denselben Key treffen (H-06-1).
+        scope = f"{tenant_id}::{scope_key}" if scope_key else tenant_id
         canonical_params = json.dumps(params, sort_keys=True, ensure_ascii=False)
         payload_hash = hashlib.sha256(
             f"{scope}::{tool_name}::{canonical_params}".encode("utf-8")
@@ -132,7 +215,7 @@ class IdempotencyGuard:
         # Worker uebernehmen (z. B. nach Crash ohne invalidate_key).
         lease_iso = (now + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
 
-        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             conn.execute("DELETE FROM idempotency_ledger WHERE expires_at < ?", (now_iso,))
 
@@ -141,9 +224,9 @@ class IdempotencyGuard:
             # den zweiten INSERT -> IntegrityError -> 500 statt Duplikat-Block.
             cur = conn.execute("""
                 INSERT OR IGNORE INTO idempotency_ledger
-                (idempotency_key, tool_name, payload_hash, result_json, duplicate_blocks_count, created_at, expires_at, status, scope_key, owner_id, lease_expires)
-                VALUES (?, ?, ?, NULL, 0, ?, ?, 'pending', ?, ?, ?)
-            """, (idem_key, tool_name, payload_hash, now_iso, exp_iso, scope, owner, lease_iso))
+                (idempotency_key, tool_name, payload_hash, result_json, duplicate_blocks_count, created_at, expires_at, status, scope_key, owner_id, lease_expires, tenant_id)
+                VALUES (?, ?, ?, NULL, 0, ?, ?, 'pending', ?, ?, ?, ?)
+            """, (idem_key, tool_name, payload_hash, now_iso, exp_iso, scope, owner, lease_iso, tenant_id))
             if cur.rowcount > 0:
                 # Erster Anruf: mit echtem Resultat sofort als executed registrieren.
                 if execution_result:
@@ -247,7 +330,7 @@ class IdempotencyGuard:
         Versuche, kein erfundener Erfolg.
         """
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
             cur = conn.execute("""
                 UPDATE idempotency_ledger
                 SET status = 'executed', result_json = ?, executed_at = ?
@@ -260,7 +343,7 @@ class IdempotencyGuard:
         """Loescht einen Key nach FEHLGESCHLAGENER Ausfuehrung (Phase 2b, N-04),
         damit ein Retry frisch registrieren kann.
         """
-        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
             cur = conn.execute(
                 "DELETE FROM idempotency_ledger WHERE idempotency_key = ?", (key,)
             )
@@ -269,3 +352,6 @@ class IdempotencyGuard:
 
 
 idempotency_guard = IdempotencyGuard()
+
+# F014: ab hier gilt fail-closed — kein stiller Fallback auf die globale DB.
+_IMPORT_BOOTSTRAP = False

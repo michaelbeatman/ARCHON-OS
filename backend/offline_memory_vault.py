@@ -48,13 +48,27 @@ VALID_MEMORY_SCOPES = (SCOPE_PRIVATE, SCOPE_SHARED, SCOPE_PROJECT, SCOPE_GLOBAL)
 
 
 def _active_tenant_id() -> str:
-    """Aktiver Mandant aus dem Request-Kontext (Fail-Closed auf 'default')."""
+    """Aktiver Mandant aus dem Request-Kontext — strikt fail-closed (D03/MED).
+
+    Vorher fiel jeder Resolverfehler auf "default" zurueck: Memories eines
+    fremden Mandanten landeten in der Default-Tenant-DB unter AAD
+    ``default|...`` (Cross-Tenant-Kontamination, still). Jetzt wird ohne
+    gueltigen Kontext hart abgebrochen; "default" ist kein zulaessiger Wert.
+    """
     try:
         from backend.tenant_context import tenant_context
-        return str(tenant_context.get_active_tenant_id() or "default")
-    except Exception as _exc:
-        _archon_exc_logger.debug("[offline_memory_vault] Tenant-Kontext nicht verfuegbar: %s", _exc)
-        return "default"
+        tenant = str(tenant_context.get_active_tenant_id() or "").strip()
+    except Exception as exc:
+        raise RuntimeError(
+            f"[offline_memory_vault] Kein gueltiger Tenant-Kontext verfuegbar — "
+            f"Vault-Zugriff abgebrochen: {exc}"
+        ) from exc
+    if not tenant or tenant.lower() in ("default", "none", "null"):
+        raise RuntimeError(
+            "[offline_memory_vault] Tenant-Kontext leer oder 'default' — "
+            "Vault-Zugriff ohne explizite tenant_id abgebrochen."
+        )
+    return tenant
 
 
 def _tenant_vault_paths(tenant_id: Optional[str] = None) -> tuple[str, str]:
@@ -160,10 +174,26 @@ def _row_is_visible(
     return owner == "global" or requester == owner
 
 
-def load_or_create_vault_key(key_path: Optional[str] = None) -> bytes:
+def load_or_create_vault_key(
+    key_path: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+) -> bytes:
+    """Vault-Key laden/erzeugen — pro Mandant (D03/MED, F015).
+
+    Der Env-Key ist nur noch Master-Seed: die pro Mandant gueltige Key ist
+    ``HMAC-SHA256(master, tenant_id)``. Ohne tenant_id gibt es beim Env-Override
+    bewusst KEINEN globalen Key mehr (hart abbrechen).
+    """
     env_hex = (os.environ.get("COMPARTMENT_VAULT_KEY") or "").strip()
     if env_hex:
-        return hashlib.sha256(env_hex.encode("utf-8")).digest()
+        tid = str(tenant_id or "").strip()
+        if not tid or tid.lower() in ("default", "none", "null"):
+            raise RuntimeError(
+                "[offline_memory_vault] COMPARTMENT_VAULT_KEY erfordert eine "
+                "explizite tenant_id — kein globaler Vault-Key."
+            )
+        master = hashlib.sha256(env_hex.encode("utf-8")).digest()
+        return hmac.new(master, tid.encode("utf-8"), hashlib.sha256).digest()
     path = key_path or DEFAULT_KEY_PATH
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if os.path.exists(path):
@@ -281,10 +311,15 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
     # C1: ohne expliziten Pfad IMMER die mandantenisolierte Vault-DB nehmen.
     path = db_path or _tenant_vault_paths()[0]
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    conn = sqlite3.connect(path, timeout=10.0)
+    # D03/MED (F015): busy_timeout-SSOT aus backend.db_paths (5000 ms).
+    try:
+        from backend.db_paths import DB_BUSY_TIMEOUT_MS, DB_BUSY_TIMEOUT_S
+    except Exception:  # pragma: no cover - Standalone-Import
+        DB_BUSY_TIMEOUT_MS, DB_BUSY_TIMEOUT_S = 5000, 5.0
+    conn = sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_S)
     try:
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA busy_timeout=5000;")
+        conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
         # DDL nur EINMAL pro DB-Pfad: vorher lief bei jeder Verbindung ein
         # executescript + 6 ALTER TABLE-Versuche (jeder wirft OperationalError)
         # -> Schreiblock-Contention und Fehler-Log-Spam.
@@ -334,14 +369,16 @@ def store_memory(
 ) -> str:
     """Speichert einen Eintrag; Scope/ACL/TTL sind rueckwaertskompatibel optional."""
     scope = normalize_scope(scope)
-    tenant = _active_tenant_id()
     explicit_db, explicit_key = db_path is not None, key is not None
+    # Legacy-API (db_path + key explizit): kein Tenant-Kontext noetig, AAD bleibt
+    # der reine Namespace. Produktivpfad: Tenant zwingend fail-closed auflösen.
+    tenant = "" if (explicit_db and explicit_key) else _active_tenant_id()
     if not explicit_db or not explicit_key:
         tenant_db, tenant_key = _tenant_vault_paths(tenant)
         if db_path is None:
             db_path = tenant_db
         if key is None:
-            key = load_or_create_vault_key(tenant_key)
+            key = load_or_create_vault_key(tenant_key, tenant_id=tenant)
     k = key or load_or_create_vault_key()
     # C1: AAD bindet den Ciphertext an Mandant + Namespace. Wenn beide
     # Pfade/Keys explizit uebergeben werden (Legacy-API/Tests), bleibt das
@@ -384,14 +421,14 @@ def recall_memory(
 ) -> List[Dict[str, Any]]:
     """Recall mit Scope-/ACL-/TTL-Sichtbarkeit; Defaults erhalten das alte Verhalten."""
     scope_filter = normalize_scope(scope) if scope is not None else None
-    tenant = _active_tenant_id()
     explicit_db, explicit_key = db_path is not None, key is not None
+    tenant = "" if (explicit_db and explicit_key) else _active_tenant_id()
     if not explicit_db or not explicit_key:
         tenant_db, tenant_key = _tenant_vault_paths(tenant)
         if db_path is None:
             db_path = tenant_db
         if key is None:
-            key = load_or_create_vault_key(tenant_key)
+            key = load_or_create_vault_key(tenant_key, tenant_id=tenant)
     k = key or load_or_create_vault_key()
     aad_ns = namespace if (explicit_db and explicit_key) else f"{tenant}|{namespace}"
     q_vec = _local_embed(query)

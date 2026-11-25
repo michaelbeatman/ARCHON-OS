@@ -148,11 +148,27 @@ def test_d13_record_budget_usage_alias_books_usage(tmp_path):
 
 
 def test_d13_expired_reservation_still_settles_real_usage(tmp_path):
-    """Abgelaufene Reservierungen duerfen Verbrauch nicht unterzaehlen."""
+    """Abgelaufene Reservierungen duerfen Verbrauch nicht unterzaehlen.
+
+    W3-D: ``BudgetBank.reserve`` ist fuer registrierte Tasks fail-closed.
+    Der Test muss daher vor der Reservierung ein echtes Task-Cap anlegen —
+    frueher wurde ohne Allokation ein stilles Fail-Open erwartet.
+    """
     from backend.role_budget_engine import BudgetBank
 
     db = str(tmp_path / "budget.db")
     bank = BudgetBank(db_path=db)
+    from backend.role_budget_engine import init_budget_tables
+    init_budget_tables(db_path=db)
+    now = datetime.datetime.now().isoformat()
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO task_budget_allocations "
+            "(task_id, agent_id, token_budget, tokens_used, cost_limit_eur, cost_used_eur, created_at, updated_at) "
+            "VALUES (?, ?, ?, 0, ?, 0.0, ?, ?)",
+            ("t-expired", "d13_expired_agent", 5000, 10.0, now, now),
+        )
+        conn.commit()
     r = bank.reserve(
         "d13_expired_agent", task_id="t-expired",
         estimated_tokens=500, estimated_cost_eur=0.05, ttl_seconds=1,

@@ -7,6 +7,8 @@ WORKDIR /app
 # F-062: Reproduzierbare, hash-gepruefte Installation — identisch zum
 # Haupt-Dockerfile. Build-Kontext ist das Repository-Root, damit die SSOT
 # requirements.lock.txt erreichbar ist (wie bei Dockerfile:27-30).
+# F002: kein ungepinntes `--upgrade pip`; CI nutzt requirements-ci.lock.txt
+# mit derselben `--require-hashes --no-deps`-Regel.
 COPY requirements.lock.txt .
 RUN pip install --no-cache-dir --require-hashes --no-deps -r requirements.lock.txt
 

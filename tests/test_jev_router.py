@@ -70,11 +70,16 @@ class TestJevRouterUnit(unittest.TestCase):
         self.assertIn("obsidian__search_notes", notes_names)
 
     def test_connection_probe_fail_open(self):
-        # Unreachable port should fail gracefully with an error dictionary, never raise an unhandled crash
+        # W4-B/Haertung: eine interne/private Ziel-URL (127.0.0.1) wird vom
+        # Egress-Guard fail-closed blockiert ("blocked") statt als harmloser
+        # Verbindungsfehler ("error") durchgewinkt. Die Funktion darf weiterhin
+        # nie unhandled crashen, sondern liefert ein strukturiertes Dict.
         res = jev_router.test_jev_connection(api_key="fake-key", base_url="http://127.0.0.1:59999/v1")
         self.assertIsInstance(res, dict)
         self.assertIn("status", res)
-        self.assertEqual(res["status"], "error")
+        self.assertEqual(res["status"], "blocked")
+        self.assertEqual(res["error_code"], "EGRESS_BLOCKED")
+        self.assertEqual(res["code"], 400)
 
 
 class TestJevAPIIntegration(unittest.TestCase):

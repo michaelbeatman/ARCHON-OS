@@ -76,7 +76,7 @@ def _has_tables(path: str) -> bool:
     if not os.path.isfile(path):
         return False
     try:
-        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3.0)
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=DB_BUSY_TIMEOUT_S)
         try:
             rows = con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             return len(rows) > 0
@@ -244,7 +244,7 @@ def get_db_connection(db_name_or_path: str, timeout: Optional[float] = None) -> 
 def audit_busy_timeout_ssot(
     root_dir: Optional[str] = None,
     *,
-    include_connect_timeout: bool = False,
+    include_connect_timeout: bool = True,
 ) -> list[tuple[str, int, str]]:
     """Read-only Scan: findet vom SSOT abweichende busy_timeout-Setzer.
 
@@ -254,11 +254,12 @@ def audit_busy_timeout_ssot(
     gesetzt wird. Literale mit 5000 ms sind zulässig (SSOT-konform), alle
     anderen (z.B. 10000/15000) sind Drift.
 
-    D03/HIGH: mit ``include_connect_timeout=True`` werden zusätzlich
-    abweichende ``sqlite3.connect(..., timeout=<literal>)``-Werte erkannt —
-    der connect()-Parameter ist der zweite, bisher unsichtbare Setzer. Das
-    Flag ist Default-AUS, damit der bestehende Gate bis zur Migration aller
-    Fremdmodule (DELEGATED an A1) nicht rot wird.
+    D03/HIGH (F015): ``include_connect_timeout=True`` (DEFAULT AN) erkennt
+    zusätzlich abweichende ``sqlite3.connect(..., timeout=<literal>)``-Werte —
+    der connect()-Parameter ist der zweite Setzer. Vorher war der Detektor
+    Default-AUS und die SSOT-Behauptung im CI-Gate faktisch blind. Bekannte
+    Altlasten koennen ueber ``--allow-drift`` (datiert) toleriert werden;
+    neue Drifts lassen das Gate rot werden.
     """
     import re as _re
 
@@ -320,8 +321,13 @@ def audit_busy_timeout_cli(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--audit-busy-timeout", action="store_true", help="Detektor ausfuehren")
     parser.add_argument("--root", default=None, help="Repo-Wurzel (Default: Workspace)")
     parser.add_argument(
-        "--include-connect-timeout", action="store_true",
-        help="Auch abweichende sqlite3.connect(timeout=...)Literal melden (D03/HIGH)",
+        "--include-connect-timeout", action="store_true", default=True,
+        help="Auch abweichende sqlite3.connect(timeout=...)Literal melden (D03/HIGH, DEFAULT AN)",
+    )
+    parser.add_argument(
+        "--no-include-connect-timeout", dest="include_connect_timeout",
+        action="store_false",
+        help="Connect-Timeout-Drift bewusst ignorieren (nur fuer Altlast-Diagnose)",
     )
     parser.add_argument(
         "--allow-drift", action="append", default=[],

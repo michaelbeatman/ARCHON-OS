@@ -51,16 +51,21 @@ def scan_vault_epistemic_hygiene(
         return {
             "status": "error",
             "message": f"Obsidian-Vault nicht gefunden: {root_dir}",
+            "partial": True,
+            "read_errors": [],
             "scanned_files": 0,
             "conflicts": [],
             "stale_legal_entries": [],
             "orphans": [],
+            "hygiene_score": None,
         }
 
     metric_claims: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
     stale_entries: List[Dict[str, Any]] = []
     orphans: List[str] = []
     scanned = 0
+    discovered = 0
+    read_errors: List[str] = []
 
     for dirpath, _, filenames in os.walk(root_dir):
         for fname in sorted(filenames):
@@ -70,12 +75,18 @@ def scan_vault_epistemic_hygiene(
             if not (fpath == root_dir or fpath.startswith(root_dir + os.sep)):
                 continue
             rel = os.path.relpath(fpath, root_dir)
-            scanned += 1
+            discovered += 1
             try:
                 with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
                     text = fh.read(50_000)
-            except Exception:
+            except Exception as exc:
+                # D12/MED: nicht gelesene Dateien duerfen nicht als "scanned"
+                # gelten — sonst behauptet ein hoher Score eine vollstaendige
+                # Pruefung, obwohl Widerspraeche unsichtbar bleiben.
+                read_errors.append(f"{rel}: {type(exc).__name__}: {exc}")
                 continue
+            # Zaehler erst nach erfolgreichem Lesen erhoehen.
+            scanned += 1
 
             if "[[" not in text:
                 orphans.append(rel)
@@ -115,8 +126,23 @@ def scan_vault_epistemic_hygiene(
                 "variants": variants,
             })
 
+    # D12/MED: bei Lesefehlern kein erfundener "sauber"-Score und kein
+    # "success" — die Pruefung war unvollstaendig (§0/§4).
+    if read_errors and scanned == 0:
+        status = "error"
+    elif read_errors:
+        status = "partial"
+    else:
+        status = "success"
+    hygiene_score = (
+        None if read_errors
+        else max(0, 100 - len(conflicts) * 15 - len(stale_entries) * 10 - min(20, len(orphans) * 2))
+    )
     return {
-        "status": "success",
+        "status": status,
+        "partial": bool(read_errors),
+        "read_errors": read_errors,
+        "discovered_files": discovered,
         "vault_path": root_dir,
         "scanned_files": scanned,
         "conflict_count": len(conflicts),
@@ -125,5 +151,5 @@ def scan_vault_epistemic_hygiene(
         "stale_legal_entries": stale_entries,
         "orphan_count": len(orphans),
         "orphans": orphans[:100],
-        "hygiene_score": max(0, 100 - len(conflicts) * 15 - len(stale_entries) * 10 - min(20, len(orphans) * 2)),
+        "hygiene_score": hygiene_score,
     }

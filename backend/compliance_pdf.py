@@ -401,7 +401,16 @@ def build_verfahrensdokumentation_pdf(snapshot: Dict[str, Any]) -> Tuple[bytes, 
     audit = snapshot.get("audit_chain") or {}
     guard = snapshot.get("guardrails") or {}
 
-    chain_ok = "VERIFIZIERT & UNVERSEHRT (0 Manipulationen)" if audit.get("valid") else f"PRÜFFehler: {audit.get('error', 'Prüfung erforderlich')}"
+    if audit.get("valid"):
+        chain_ok = "VERIFIZIERT & UNVERSEHRT (0 Manipulationen)"
+    else:
+        # D05/MED: kein Platzhalter — konkreter Manipulationsbefund aus
+        # verify_integrity() (reason/corrupted_id) im Prüfdokument ausgeben.
+        detail = str(audit.get("reason") or audit.get("error") or "Integritätsprüfung fehlgeschlagen")
+        corrupted_id = audit.get("corrupted_id")
+        if corrupted_id not in (None, ""):
+            detail = f"{detail} [Block/Anker: {corrupted_id}]"
+        chain_ok = f"PRÜFFehler: {detail}"
     worker_net_label = (
         f"{priv.get('worker_network_name', 'archon-worker-zero-egress_net')} — ISOLIERT (Internal=true, keine Internet-Route)"
         if priv.get("worker_network_internal")
@@ -409,7 +418,7 @@ def build_verfahrensdokumentation_pdf(snapshot: Dict[str, Any]) -> Tuple[bytes, 
     )
     pdf.add_kv_grid(
         [
-            ("GoBD SHA-256 Hashkette (M21)", chain_ok),
+            ("GoBD HMAC-SHA256 Hashkette (M21)", chain_ok),
             ("Geprüfte Audit-Blöcke (inkl. LLM-Calls)", f"{audit.get('checked_blocks', audit.get('total_records', 0))} gesamt | {audit.get('llm_dispatch_records', 0)} LLM-Dispatches (Provider/Modell/Host)"),
             ("Aktueller Merkle-Head-Hash", str(audit.get("head_hash", audit.get("latest_hash", "0" * 64)))),
             ("Zero-Egress & Privacy-Router Modus", "STRICT ZERO-EGRESS (Gesamtsystem)" if priv.get("zero_egress_strict") else ("AKTIV (On-Premise für Sensibel)" if priv.get("sensitive_local_routing") else "BEREIT")),

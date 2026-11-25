@@ -108,33 +108,56 @@ def test_research_engine_ssrf_guard_and_jina_disable(monkeypatch):
     assert re2.scrape_jina("https://8.8.8.8/") == ""
 
 
-def test_api_key_manager_pepper_hmac_and_legacy_fallback(tmp_path, monkeypatch):
-    from backend.api_key_manager import ApiKeyManager
+def test_api_key_manager_pepper_hmac_without_legacy_fallback(tmp_path, monkeypatch):
+    """W2-A/W5: ausschliesslich keyed HMAC mit ENV-Pepper, kein Legacy-Pfad mehr.
+
+    Der frühere Test erzeugte einen_key ohne Pepper und erwartete, dass er nach
+    Setzen des Peppers weiterhin gueltig bleibt — genau dieses Fallback wurde
+    als H-04-2 (Platzhalter-Salt im Regelbetrieb) entfernt.
+    """
+    import hashlib
+    import hmac
+
+    from backend.api_key_manager import ApiKeyManager, ApiKeyPepperMissingError
 
     db_file = str(tmp_path / "api_keys.db")
-    monkeypatch.delenv("ARCHON_API_KEY_PEPPER", raising=False)
+    monkeypatch.setenv("ARCHON_API_KEY_PEPPER", "pepper-alpha-2026")
     mgr = ApiKeyManager(db_path=db_file)
 
-    legacy_created = mgr.create_key("legacy-test", ["read_only"], created_by="admin")
-    legacy_raw = legacy_created["raw_token"]
-    ok_leg, _, _ = mgr.validate_and_consume(legacy_raw, required_scope="read_only")
-    assert ok_leg is True
-
-    monkeypatch.setenv("ARCHON_API_KEY_PEPPER", "super-secret-pepper-2026")
-    peppered_created = mgr.create_key("peppered-test", ["read_only"], created_by="admin")
-    peppered_raw = peppered_created["raw_token"]
+    created = mgr.create_key("peppered-test", ["read_only"], created_by="admin")
+    peppered_raw = created["raw_token"]
 
     with sqlite3.connect(db_file) as conn:
         stored_hash = conn.execute(
             "SELECT key_hash FROM api_keys WHERE key_id = ?",
-            (peppered_created["key_id"],),
+            (created["key_id"],),
         ).fetchone()[0]
-    assert stored_hash != ApiKeyManager._legacy_hash_token(peppered_raw)
+    expected = hmac.new(
+        b"pepper-alpha-2026", peppered_raw.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    assert stored_hash == expected
+    assert stored_hash != hashlib.sha256(peppered_raw.encode("utf-8")).hexdigest()
+    assert not hasattr(ApiKeyManager, "_legacy_hash_token")
 
     ok_pep, _, _ = mgr.validate_and_consume(peppered_raw, required_scope="read_only")
-    ok_leg2, _, _ = mgr.validate_and_consume(legacy_raw, required_scope="read_only")
     assert ok_pep is True
-    assert ok_leg2 is True
+
+    # Key-Rotation: ohne Legacy-Fallback wird der alte Token ungültig.
+    monkeypatch.setenv("ARCHON_API_KEY_PEPPER", "pepper-beta-2026")
+    rotated = ApiKeyManager(db_path=db_file)
+    ok_old, _, _ = rotated.validate_and_consume(peppered_raw, required_scope="read_only")
+    assert ok_old is False
+    fresh = rotated.create_key("after-rotation", ["read_only"], created_by="admin")
+    ok_new, _, _ = rotated.validate_and_consume(fresh["raw_token"], required_scope="read_only")
+    assert ok_new is True
+
+    # Produktion ohne Pepper: harter Fail-Closed, kein Zufalls-Salt.
+    monkeypatch.delenv("ARCHON_API_KEY_PEPPER", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    with pytest.raises(ApiKeyPepperMissingError):
+        ApiKeyManager(db_path=str(tmp_path / "prod.db")).create_key(
+            "prod-test", ["read_only"], created_by="admin"
+        )
 
 
 def test_local_memory_bridge_evict_rejects_unknown_table(tmp_path):

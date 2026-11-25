@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Stellt sicher, dass ARCHON_AUDIT_HMAC_KEY in .env gesetzt ist.
+"""Stellt die drei getrennten Audit-HMAC-Secrets in .env sicher.
 
 Audit 23.11.2026: der Startup-Check bricht seit der Sanierung bei nicht-
-lokaler Bindung/Auth-Zwang ohne HMAC-Key hart ab. Bestehende Installationen
-haben den Key oft noch nicht — dieses Skript erzeugt ihn einmalig und
-idempotent (ein Key wird niemals überschrieben).
+lokaler Bindung/Auth-Zwang ohne HMAC-Key hart ab. D05 (H-05-1/MED): die
+Execution-Receipt-Kette und der externe Anker brauchen EIGENE Keys — ein
+kompromittierter Audit-Key darf nicht beide anderen Ketten mitkompromittieren.
+Dieses Skript erzeugt alle fehlenden Keys einmalig und idempotent
+(ein vorhandener Key wird niemals überschrieben).
 
 Usage:
     python scripts/ensure_audit_hmac_key.py            # erzeugt falls nötig
@@ -22,16 +24,27 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env"
-KEY_NAME = "ARCHON_AUDIT_HMAC_KEY"
-KEY_RE = re.compile(rf"^\s*{KEY_NAME}\s*=\s*(.*?)\s*$", re.MULTILINE)
+
+# (Env-Name, Zweck) — drei getrennte Secrets, kein Geteilter Key.
+KEY_SPECS = (
+    ("ARCHON_AUDIT_HMAC_KEY", "zentrale Audit-Kette"),
+    ("ARCHON_RECEIPT_HMAC_KEY", "Execution-Receipt-Kette"),
+    ("ARCHON_AUDIT_ANCHOR_KEY", "externer Audit-Anker"),
+)
+# Rückwärtskompatible Konstante für alte Aufrufer.
+KEY_NAME = KEY_SPECS[0][0]
+
+
+def _key_re(name: str) -> re.Pattern:
+    return re.compile(rf"^\s*{re.escape(name)}\s*=\s*(.*?)\s*$", re.MULTILINE)
 
 
 def read_env() -> str:
     return ENV_FILE.read_text(encoding="utf-8") if ENV_FILE.is_file() else ""
 
 
-def current_key(env_text: str) -> str:
-    m = KEY_RE.search(env_text)
+def current_key(env_text: str, name: str) -> str:
+    m = _key_re(name).search(env_text)
     if not m:
         return ""
     value = m.group(1).strip()
@@ -40,35 +53,49 @@ def current_key(env_text: str) -> str:
     return value.strip()
 
 
+def _present(env_text: str, name: str) -> str:
+    """ENV-Variable der Umgebung hat Vorrang (Docker-Secrets etc.)."""
+    return os.environ.get(name, "").strip() or current_key(env_text, name)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Nur prüfen, nichts schreiben")
     args = parser.parse_args()
 
     env_text = read_env()
-    # ENV-Variable der Umgebung hat Vorrang (Docker-Secrets etc.).
-    env_value = os.environ.get(KEY_NAME, "").strip()
-    key = env_value or current_key(env_text)
-
-    if key:
-        print(f"[OK] {KEY_NAME} vorhanden ({len(key)} Zeichen).")
-        return 0
+    missing: list[tuple[str, str]] = []
+    for name, _purpose in KEY_SPECS:
+        if not _present(env_text, name):
+            missing.append((name, _purpose))
 
     if args.check:
-        print(f"[FEHLER] {KEY_NAME} fehlt in {ENV_FILE}.", file=sys.stderr)
-        return 1
+        if missing:
+            for name, purpose in missing:
+                print(f"[FEHLER] {name} ({purpose}) fehlt in {ENV_FILE}.", file=sys.stderr)
+            return 1
+        for name, purpose in KEY_SPECS:
+            print(f"[OK] {name} ({purpose}) vorhanden.")
+        return 0
 
-    generated = secrets.token_hex(32)
-    line = f"{KEY_NAME}={generated}\n"
+    if not missing:
+        for name, purpose in KEY_SPECS:
+            print(f"[OK] {name} ({purpose}) vorhanden ({len(_present(env_text, name))} Zeichen).")
+        return 0
+
+    lines: list[str] = []
     if env_text and not env_text.endswith("\n"):
         env_text += "\n"
-    ENV_FILE.write_text(env_text + line, encoding="utf-8")
+    for name, purpose in missing:
+        generated = secrets.token_hex(32)
+        lines.append(f"{name}={generated}")
+        print(f"[OK] {name} ({purpose}) erzeugt und in .env gespeichert.")
+    ENV_FILE.write_text(env_text + "\n".join(lines) + "\n", encoding="utf-8")
     try:
         ENV_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600
     except OSError:
         pass  # Windows: ACL-Härtung erfolgt durch utils/secret_files.py
-    print(f"[OK] {KEY_NAME} erzeugt und in .env gespeichert (0644->0600).")
-    print("[HINWEIS] Archon OS neu starten, damit der Startup-Check den Key sieht.")
+    print("[HINWEIS] Archon OS neu starten, damit die Keys im Prozess sichtbar sind.")
     return 0
 
 

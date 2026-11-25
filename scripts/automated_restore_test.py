@@ -45,6 +45,7 @@ HISTORY_FILE = os.path.join(WORKSPACE_DIR, "data", "restore_test_history.json")
 # <workspace>/.hermes/backups/db schreibt — dadurch griff er stets auf die
 # Live-DB zurück und meldete grün. Keine Duplizierung der Konstanten mehr.
 from backend.db_backup_manager import BACKUP_DIR, BACKUP_GLOB_PATTERN  # noqa: E402
+from backend.db_paths import DB_BUSY_TIMEOUT_S  # D03/MED (F015): SSOT busy_timeout  # noqa: E402
 
 BACKUP_DIRS = (
     BACKUP_DIR,
@@ -275,11 +276,11 @@ class AutomatedRestoreTester:
                     # der Test pruefte einen veralteten Snapshot und meldete
                     # PASSED, obwohl die letzten Commits fehlten.
                     try:
-                        src_conn = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True, timeout=10.0)
+                        src_conn = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True, timeout=DB_BUSY_TIMEOUT_S)
                     except Exception:
-                        src_conn = sqlite3.connect(src_path, timeout=10.0)
+                        src_conn = sqlite3.connect(src_path, timeout=DB_BUSY_TIMEOUT_S)
 
-                    dest_conn = sqlite3.connect(dest_path)
+                    dest_conn = sqlite3.connect(dest_path, timeout=DB_BUSY_TIMEOUT_S)
                     with dest_conn:
                         src_conn.backup(dest_conn, pages=200)
                     src_conn.close()

@@ -187,4 +187,15 @@ def api_test_jev(request: Request, payload: PassthroughBody = Body(None)):
         api_key=data.get("api_key"),
         base_url=base_url,
     )
+    # W4-B/D06: ein geblockter Redirect/IMDS-Ziel ist ein harter Client-Fehler,
+    # kein 'connected'-Erfolg. Der Aufrufer darf daraus keine Gueltigkeit der
+    # konfigurierten URL ableiten.
+    if str(res.get("status") or "").lower() in ("blocked", "redirect_blocked"):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": str(res.get("error_code") or "REDIRECT_BLOCKED"),
+                "message": str(res.get("message") or "JEV-Ziel blockiert"),
+            },
+        )
     return res

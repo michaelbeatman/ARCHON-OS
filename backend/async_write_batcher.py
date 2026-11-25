@@ -7,10 +7,14 @@ gebündelt in einer einzigen SQLite-WAL-Transaktion auf die Festplatte (`batch_s
 `flush_interval_seconds` Standard: 2.0s). Reduziert Disk-I/O und SQLite-Lock-Contention um ~80 %.
 """
 
+import asyncio
 import json
+import logging
 import os
 import sqlite3
 import time
+
+logger = logging.getLogger("archon.write_batcher")
 
 
 class _ArchonClosingConn(sqlite3.Connection):
@@ -154,6 +158,68 @@ class AsyncWriteBatcher:
         # D03/HIGH: pro Ziel-DB (Mandant), damit die Summe ehrlich bleibt.
         self._persisted_in_db: Optional[int] = None
         self._persisted_by_db: Dict[str, int] = {}
+        # D08/MED: dedizierter Drain-Task. enqueue() darf NIE mehr synchron
+        # flush() aufrufen — der Produzent lief aus einem async Endpoint und
+        # blockierte den Event-Loop mit executemany + Retention-DELETE + commit.
+        self._drain_lock = threading.Lock()
+        self._drain_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._drain_thread: Optional[threading.Thread] = None
+        self._drain_wakeup: Optional[asyncio.Event] = None
+
+    async def _drain_worker(self, wakeup: asyncio.Event) -> None:
+        """Eigener Task: wartet auf Signal + Intervall, flusht im Threadpool."""
+        while True:
+            try:
+                cfg = _get_cfg()
+                interval = max(0.05, min(10.0, float(cfg.get("flush_interval_seconds", 2.0))))
+            except Exception:
+                interval = 2.0
+            try:
+                await asyncio.wait_for(wakeup.wait(), timeout=interval)
+            except (asyncio.TimeoutError, TimeoutError):
+                pass
+            wakeup.clear()
+            try:
+                await asyncio.to_thread(self.flush)
+            except Exception as exc:
+                # Fehler-Restore (Puffer wiederherstellen) passiert in flush()
+                # selbst; hier nur sichtbar machen, nie verschlucken.
+                logger.error("[AsyncWriteBatcher] Drain-Flush fehlgeschlagen: %s", exc)
+
+    def _request_drain(self) -> None:
+        """Signal an den dedizierten Drain-Loop (auch aus Sync-Callern)."""
+        with self._drain_lock:
+            loop = self._drain_loop
+            wakeup = self._drain_wakeup
+            if loop is None or not loop.is_running() or wakeup is None:
+                ready = threading.Event()
+                holder: dict = {}
+
+                def _run_loop() -> None:
+                    own_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(own_loop)
+                    own_wakeup = asyncio.Event()
+                    holder["loop"] = own_loop
+                    holder["wakeup"] = own_wakeup
+                    own_loop.create_task(self._drain_worker(own_wakeup))
+                    ready.set()
+                    own_loop.run_forever()
+
+                thread = threading.Thread(
+                    target=_run_loop, name="archon-write-batcher-drain", daemon=True
+                )
+                self._drain_thread = thread
+                thread.start()
+                ready.wait(timeout=5.0)
+                loop = holder.get("loop")
+                wakeup = holder.get("wakeup")
+                self._drain_loop = loop
+                self._drain_wakeup = wakeup
+        if loop is not None and wakeup is not None:
+            try:
+                loop.call_soon_threadsafe(wakeup.set)
+            except RuntimeError as exc:
+                logger.warning("[AsyncWriteBatcher] Drain-Signal nicht zustellbar: %s", exc)
 
     def enqueue(self, event_type: str, source_module: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         cfg = _get_cfg()
@@ -186,16 +252,17 @@ class AsyncWriteBatcher:
             if queue_full or not enabled or len(self._buffer) >= batch_size or elapsed >= flush_interval:
                 should_flush = True
 
-        flush_result = None
+        # D08/MED: NUR PufferMutation + Drain-Signal. Die eigentliche SQLite-
+        # Arbeit passiert im dedizierten Task via `await asyncio.to_thread(flush)`.
         if should_flush:
-            flush_result = self.flush()
+            self._request_drain()
 
         return {
             "enqueued": True,
             "batching_enabled": enabled,
             "buffer_size": len(self._buffer),
             "auto_flushed": should_flush,
-            "flush_result": flush_result
+            "flush_result": {"drain_scheduled": bool(should_flush)}
         }
 
     def flush(self) -> Dict[str, Any]:

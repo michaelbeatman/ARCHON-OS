@@ -382,7 +382,10 @@ class HandoffDesk:
                 return {"status": "error", "message": f"Übergabe {handoff_id} nicht gefunden."}
 
             item = dict(row)
-            if item["to_agent"] != receiving_agent and receiving_agent != "hermes-orchestrator":
+            # D11/MED: keine Self-Attestation und keine hermes-orchestrator-
+            # Ausnahme mehr. Der Empfänger muss EXAKT mit dem signierten
+            # Envelope übereinstimmen (Identität aus dem echten Executor).
+            if item["to_agent"] != receiving_agent:
                 return {"status": "error", "message": f"Agent {receiving_agent} ist nicht der autorisierte Empfänger."}
 
             # D11: HMAC vor jeder Annahme pruefen — manipulierte Envelopes
@@ -483,3 +486,72 @@ class HandoffDesk:
             return d
 
 handoff_desk = HandoffDesk()
+
+
+def require_accepted_handoff(
+    task_id: str,
+    executor_agent: str,
+    *,
+    desk: Optional[HandoffDesk] = None,
+) -> Dict[str, Any]:
+    """D11/MED: HARD GATE vor jedem kostenpflichtigen Dispatch.
+
+    Der bisherige Konsument `accept_handoff` schrieb nur ein Event und liess
+    die Ausführung unabhängig davon weiterlaufen (§0: Produzent + Konsument,
+    aber kein Effekt). Diese Funktion liefert eine verbindliche Entscheidung:
+
+    * Empfängeridentität kommt vom **eigentlichen Executor**, nicht aus dem
+      signierten Envelope (keine Self-Attestation);
+    * HMAC/Schema werden erneut geprüft;
+    * ohne gültige, akzeptierte Übergabe → ``allowed=False`` (Task muss
+      `blocked` + HITL/DLQ werden, kein LLM-Call).
+
+    Für `backend/operations_api.py` (W3-B) bereitgestellt: direkt vor
+    `dispatch_to_omniroute_or_container()` aufrufen und bei ``allowed=False``
+    den Task blockieren.
+    """
+    desk = desk or handoff_desk
+    tid = str(task_id or "").strip()
+    executor = str(executor_agent or "").strip()
+    if not tid or not executor:
+        return {"allowed": False, "reason": "task_id/executor_agent fehlt"}
+    handoff_id = desk.latest_handoff_id_for_task(tid)
+    if not handoff_id:
+        # Keine A2A-Übergabe an dieser Kante: z. B. direkte Kanban-Tasks ohne
+        # Delegation. Das ist erlaubt; der Gate greift nur bei vorhandener
+        # Übergabe (kein erfundener Envelope).
+        return {"allowed": True, "handoff_id": "", "reason": "no_handoff_for_task"}
+    with desk._get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM agent_handoffs WHERE id = ?", (handoff_id,)
+        ).fetchone()
+    if not row:
+        return {"allowed": False, "handoff_id": handoff_id, "reason": "handoff_missing"}
+    item = dict(row)
+    if str(item.get("to_agent") or "") != executor:
+        return {
+            "allowed": False, "handoff_id": handoff_id,
+            "reason": f"executor_mismatch: {executor} != {item.get('to_agent')}",
+        }
+    try:
+        envelope = desk._envelope_from_row(item)
+        if not desk.verify_envelope(envelope, str(item.get("payload_hash") or "")):
+            return {"allowed": False, "handoff_id": handoff_id, "reason": "handoff_hmac_invalid"}
+    except Exception as exc:
+        return {"allowed": False, "handoff_id": handoff_id, "reason": f"handoff_schema_invalid: {exc}"}
+    if str(item.get("status") or "") != "accepted":
+        result = desk.accept_handoff(handoff_id, executor)
+        if str(result.get("status") or "") != "accepted":
+            return {
+                "allowed": False, "handoff_id": handoff_id,
+                "reason": f"handoff_not_accepted: {result.get('message')}",
+            }
+    return {
+        "allowed": True,
+        "handoff_id": handoff_id,
+        "reason": "accepted",
+        "trace_id": str(item.get("trace_id") or ""),
+        "session_id": str(item.get("session_id") or ""),
+        "correlation_id": str(item.get("correlation_id") or ""),
+    }
+

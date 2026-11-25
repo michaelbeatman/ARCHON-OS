@@ -25,6 +25,57 @@ from archon.core.runtime import atomic_write_json, logger
 router = APIRouter(tags=["auth"])
 
 
+def _audit_auth_event(
+    action: str,
+    *,
+    actor: str,
+    request: Optional[Request] = None,
+    **payload_extra: Any,
+) -> None:
+    """H-05-3: signiertes Auth-Event — Actor + Hash-IP/User-Agent, keine Secrets.
+
+    Bei ARCHON_AUDIT_STRICT=1 (Default) ist ein Audit-Schreibfehler eine
+    Hartablehnung (HTTP 503); sonst wird er auf ERROR eskaliert, aber die
+    Aktion nicht blockiert.
+    """
+    from backend.audit_log import (
+        _require_audit_event,
+        audit_actor_context,
+        chained_audit_log,
+        is_audit_strict,
+    )
+
+    client_ip = request.client.host if request is not None and request.client else ""
+    user_agent = request.headers.get("user-agent", "") if request is not None else ""
+    # Defense-in-depth: auch versehentlich übergebene Secrets nie signieren.
+    _SENSITIVE = (
+        "password", "secret", "token", "credential", "authorization", "cookie",
+        "session", "private_key", "otp", "code",
+    )
+    safe_extra = {
+        k: v for k, v in payload_extra.items()
+        if v not in ("", None)
+        and not any(marker in k.lower() for marker in _SENSITIVE)
+    }
+    payload: Dict[str, Any] = {
+        **audit_actor_context(ip_address=client_ip, user_agent=user_agent),
+        **safe_extra,
+    }
+    strict = is_audit_strict()
+    try:
+        if strict:
+            _require_audit_event("auth", action, str(actor or "unknown"), payload)
+        else:
+            chained_audit_log.record_event("auth", action, str(actor or "unknown"), payload)
+    except Exception as exc:
+        logger.error(f"[Auth] Audit-Event {action} nicht schreibbar: {exc}")
+        if strict:
+            raise HTTPException(
+                status_code=503,
+                detail={"status": "error", "reason": "audit_write_failed", "action": action},
+            )
+
+
 # ---------------------------------------------------------------------------
 # Pydantic-v2 Request-Modelle (API_VALIDATION_ROADMAP, Etappe 2a — Auth)
 # Kompatibilitaetsregel: extra="ignore" (Client-Zusatzfelder wie created_by
@@ -320,7 +371,16 @@ def api_auth_login(request: Request, payload: AuthLoginRequest = Body(...)):
     except PermissionError as lock_err:
         raise HTTPException(status_code=429, detail=str(lock_err)) from lock_err
     if not session:
+        # login_failed wird zentral in auth_service.authenticate/_record_failed_login
+        # signiert (deckt auch Nicht-HTTP-Callers ab) — hier kein Doppel-Event.
         raise HTTPException(status_code=401, detail="Ungültiger Benutzername oder falsches Passwort.")
+    _audit_auth_event(
+        "login_success", actor=str(session.get("user", {}).get("username") or username),
+        request=request,
+        user_id=str(session.get("user", {}).get("id") or ""),
+        role=str(session.get("user", {}).get("role") or ""),
+        reason="credentials_valid",
+    )
     res = JSONResponse(content={"status": "success", **session})
     is_https = (
         request.url.scheme == "https"
@@ -346,6 +406,18 @@ def api_auth_logout(request: Request):
             token = auth_hdr[7:].strip()
     if token:
         auth_service.logout(token)
+    actor = "unknown"
+    user_id = ""
+    try:
+        curr = get_current_user_from_request(request)
+        actor = str(curr.get("username") or curr.get("id") or "unknown")
+        user_id = str(curr.get("id") or "")
+    except Exception as exc:
+        logger.debug(f"[Auth] Logout-Aktor nicht lesbar: {exc}")
+    _audit_auth_event(
+        "logout", actor=actor, request=request,
+        user_id=user_id, reason="explicit_logout",
+    )
     res = JSONResponse(content={"status": "success", "message": "Erfolgreich abgemeldet."})
     res.delete_cookie(key="archon_session")
     return res
@@ -373,6 +445,12 @@ def api_auth_create_user(request: Request, payload: AuthCreateUserRequest = Body
             display_name=payload.get("display_name", ""),
             email=payload.get("email", "")
         )
+        _audit_auth_event(
+            "user_created", actor=str(curr.get("username") or curr.get("id") or "admin"),
+            request=request,
+            user_id=str(new_u.get("id") or ""), role=str(new_u.get("role") or ""),
+            target_username=str(new_u.get("username") or ""), reason="admin_created_user",
+        )
         return {"status": "success", "user": new_u}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -391,6 +469,14 @@ def api_auth_update_user(user_id: str, request: Request, payload: AuthUpdateUser
             display_name=payload.get("display_name"),
             email=payload.get("email"),
             is_active=payload.get("is_active")
+        )
+        _audit_auth_event(
+            "role_changed" if payload.get("role") else "user_updated",
+            actor=str(curr.get("username") or curr.get("id") or "admin"),
+            request=request,
+            user_id=str(updated.get("id") or user_id),
+            role=str(updated.get("role") or ""),
+            reason="admin_updated_user",
         )
         return {"status": "success", "user": updated}
     except ValueError as e:
@@ -425,6 +511,10 @@ def api_auth_change_password(request: Request, payload: AuthChangePasswordReques
     if not ok:
         raise HTTPException(status_code=404, detail="Benutzer nicht gefunden.")
 
+    _audit_auth_event(
+        "password_changed", actor=str(curr.get("username") or curr.get("id") or "unknown"),
+        request=request, user_id=str(target_id), reason="self" if is_self else "admin_reset",
+    )
     return {
         "status": "success",
         "message": "Passwort geändert.",
@@ -439,6 +529,10 @@ def api_auth_delete_user(user_id: str, request: Request):
         raise HTTPException(status_code=403, detail="Nur Administratoren dürfen Benutzer löschen.")
     try:
         auth_service.delete_user(user_id)
+        _audit_auth_event(
+            "user_deleted", actor=str(curr.get("username") or curr.get("id") or "admin"),
+            request=request, user_id=str(user_id), reason="admin_deleted_user",
+        )
         return {"status": "success", "message": "Benutzer gelöscht."}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

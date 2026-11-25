@@ -121,10 +121,79 @@ def _hmac_key() -> bytes:
     return epochs[-1][1] if epochs else b""
 
 
+def _anchor_key_epochs() -> list:
+    """(from_block, key)-Epochen des dedizierten Anker-Keys (H-05-1).
+
+    ``ARCHON_AUDIT_ANCHOR_KEY`` ist bewusst unabhängig vom rotierenden
+    Audit-HMAC-Key: eine Audit-Key-Rotation darf historische Anker nicht
+    ungültig machen. Frühere Anker-Keys stehen als JSON-Liste in
+    ``ARCHON_AUDIT_ANCHOR_EPOCHS`` (Format wie ARCHON_AUDIT_HMAC_EPOCHS).
+    Ohne dedicated Konfiguration greift der Audit-Key als Fallback — dann
+    trägt jede Ankerzeile einen Epochen-Marker (siehe ``_anchor_signing_key``).
+    """
+    epochs: list = []
+    raw = os.environ.get("ARCHON_AUDIT_ANCHOR_EPOCHS", "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+            if isinstance(data, list):
+                for item in data:
+                    key = str(item.get("key", "")).strip().encode("utf-8")
+                    if key:
+                        epochs.append((int(item.get("from_block", 0)), key))
+        except Exception as exc:
+            logger.error("[Audit] ARCHON_AUDIT_ANCHOR_EPOCHS ungueltig: %s", exc)
+    current = os.environ.get("ARCHON_AUDIT_ANCHOR_KEY", "").strip().encode("utf-8")
+    if current:
+        try:
+            start = int(os.environ.get("ARCHON_AUDIT_ANCHOR_EPOCH_FROM", "0") or 0)
+        except ValueError:
+            start = 0
+        epochs.append((start, current))
+    by_block: Dict[int, bytes] = {}
+    for start, key in epochs:
+        if start in by_block and by_block[start] != key:
+            logger.error("[Audit] Doppelte Anker-HMAC-Epoche fuer from_block=%s.", start)
+        by_block[start] = key
+    return sorted(by_block.items(), key=lambda item: item[0])
+
+
 def _anchor_key() -> bytes:
-    """Dedizierter Anker-Key (ARCHON_AUDIT_ANCHOR_KEY), Fallback auf Audit-HMAC-Key."""
-    dedicated = os.environ.get("ARCHON_AUDIT_ANCHOR_KEY", "").strip().encode("utf-8")
-    return dedicated or _hmac_key()
+    """Aktueller Anker-Key: dedizierter Key, sonst Fallback auf Audit-HMAC-Key."""
+    epochs = _anchor_key_epochs()
+    return epochs[-1][1] if epochs else _hmac_key()
+
+
+def _anchor_key_for_epoch(epoch_from: int) -> bytes:
+    """Key zum Epochen-Marker einer Ankerzeile (dediziert oder Audit-Fallback)."""
+    for source in (_anchor_key_epochs(), _hmac_epochs()):
+        for start, key in source:
+            if start == epoch_from:
+                return key
+    return b""
+
+
+def _anchor_known_keys() -> List[bytes]:
+    """Alle bekannten Anker-Keys — für Legacy-Ankerzeilen ohne Epochen-Marker."""
+    keys: List[bytes] = []
+    for _start, key in (_anchor_key_epochs() or _hmac_epochs()):
+        if key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _anchor_signing_key(block_id) -> Tuple[bytes, int]:
+    """(Key, epoch_from) für eine neue Ankerzeile — epochenbewusst (H-05-1)."""
+    epochs = _anchor_key_epochs() or _hmac_epochs()
+    if not epochs:
+        return b"", 0
+    try:
+        bid = int(block_id)
+    except (TypeError, ValueError):
+        bid = None
+    usable = [(start, key) for start, key in epochs if bid is None or start <= bid]
+    start, key = usable[-1] if usable else epochs[-1]
+    return key, start
 
 
 def _key_for_block(block_id) -> bytes:
@@ -374,6 +443,14 @@ class ChainedAuditLog:
         Netzwerkzugriff (funktioniert offline und im Container)."""
         path = os.environ.get("ARCHON_AUDIT_ANCHOR_PATH", "").strip()
         if not path:
+            # H-05-2: in Produktion ist "kein externes Ziel" kein neutraler
+            # Zustand, sondern ein Integritätsvorfall (verify_integrity()
+            # fail-closed). Hier zusätzlich laut im Log sichtbar machen.
+            if _is_production() and not _allow_insecure_audit_dev():
+                logger.error(
+                    "[Audit] ARCHON_AUDIT_ANCHOR_PATH fehlt — externe Verankerung "
+                    "in Produktion inaktiv (fail-closed via verify_integrity)."
+                )
             return
         worker = threading.Thread(
             target=self._anchor_loop,
@@ -416,15 +493,29 @@ class ChainedAuditLog:
         block_id = int(row["id"])
         latest = str(row["current_hash"] or "")
         ts = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
-        akey = _anchor_key()
+        # H-05-1: Anker mit dem Key der passenden Epoche signieren und den
+        # Epochen-Marker als 5. Spalte mitschreiben. Alte Anker bleiben nach
+        # einer Rotation verifizierbar (analog _key_for_block).
+        akey, epoch_from = _anchor_signing_key(block_id)
         sig = (
             hmac.new(akey, f"{ts}|{block_id}|{latest}".encode("utf-8"), hashlib.sha256).hexdigest()
             if akey
             else ""
         )
+        line = f"{ts}\t{block_id}\t{latest}\t{sig}\t{epoch_from}\n"
         os.makedirs(os.path.dirname(os.path.abspath(anchor)), exist_ok=True)
-        with open(anchor, "a", encoding="utf-8") as fh:
-            fh.write(f"{ts}\t{block_id}\t{latest}\t{sig}\n")
+        try:
+            # H-05-2: 0600 statt umask-abhängiger Default-Rechte. DACL-Härtung
+            # auf Windows erfolgt im Installer (utils/secret_files.py).
+            fd = os.open(anchor, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        except OSError:
+            with open(anchor, "a", encoding="utf-8") as fh:
+                fh.write(line)
+        else:
+            with os.fdopen(fd, "a", encoding="utf-8") as fh:
+                fh.write(line)
+        with contextlib.suppress(OSError):
+            os.chmod(anchor, 0o600)
         return latest
 
     def _get_conn(self):
@@ -834,6 +925,12 @@ class ChainedAuditLog:
                 )
                 if has_dispatch_cols:
                     select_cols.extend(["provider", "model", "target_host", "target_endpoint", "egress_zone"])
+                has_correlation_cols = all(
+                    c in getattr(self, "cols", set())
+                    for c in ("trace_id", "session_id", "correlation_id")
+                )
+                if has_correlation_cols:
+                    select_cols.extend(["trace_id", "session_id", "correlation_id"])
 
                 # F-08: Append-only Trigger-Existenz pruefen.
                 existing_triggers = {
@@ -1060,17 +1157,41 @@ class ChainedAuditLog:
                                         "reason": f"Spaltenmanipulation bei Block #{r['id']}: Indexspalte '{col_key}' ('{col_val}') weicht vom signierten Hash-Payload ('{pay_val}') ab.",
                                     }
 
+                    # D05/MED: trace_id/session_id/correlation_id sind denormalisierte
+                    # OTel-Korrelationsspalten. Sie werden signiert, aber bisher
+                    # nie gegen den Payload geprüft — ein Angreifer konnte die
+                    # Trace-Zuordnung ändern, ohne dass valid=False wird.
+                    if has_correlation_cols:
+                        if parsed_payload is None:
+                            try:
+                                parsed_payload = json.loads(r["payload_json"])
+                            except Exception:
+                                parsed_payload = None
+                        if isinstance(parsed_payload, dict):
+                            for col_key in ("trace_id", "session_id", "correlation_id"):
+                                col_val = str(r[col_key] or "")
+                                pay_val = str(parsed_payload.get(col_key, "") or "")
+                                if col_val != pay_val:
+                                    return {
+                                        "valid": False,
+                                        "hmac_active": key_active,
+                                        "hmac_blocks": hmac_blocks,
+                                        "corrupted_id": r["id"],
+                                        "reason": f"Spaltenmanipulation bei Block #{r['id']}: Korrelationsspalte '{col_key}' ('{col_val}') weicht vom signierten Payload ('{pay_val}') ab.",
+                                    }
+
                     chain_hashes.append(str(r["current_hash"] or ""))
                     expected_prev = r["current_hash"]
 
                 # F-02: Signierter externer Anker + Tail-Loeschungs- & Rollback-Pruefung.
+                # Format v3 (5 Spalten): ts \t block_id \t current_hash \t hmac_sig \t epoch_from
                 # Format v2 (4 Spalten): ts \t block_id \t current_hash \t hmac_sig
                 # Format v1 (Legacy, 2 Spalten): ts \t current_hash
                 anchor_path = os.environ.get("ARCHON_AUDIT_ANCHOR_PATH", "").strip()
                 anchor_ok: Optional[bool] = None
                 id_to_hash = {int(r["id"]): str(r["current_hash"] or "") for r in rows}
                 max_id = int(rows[-1]["id"]) if rows else 0
-                akey = _anchor_key()
+                known_anchor_keys = _anchor_known_keys()
                 if anchor_path and os.path.isfile(anchor_path):
                     try:
                         with open(anchor_path, "r", encoding="utf-8") as fh:
@@ -1088,19 +1209,42 @@ class ChainedAuditLog:
                                     except ValueError:
                                         anchor_ok = False
                                         break
-                                    # Signaturpruefung (fail-closed wenn Key aktiv)
-                                    if akey:
-                                        exp_sig = hmac.new(
-                                            akey,
-                                            f"{ts_val}|{bid}|{a_hash}".encode("utf-8"),
-                                            hashlib.sha256,
-                                        ).hexdigest()
-                                        if not a_sig or not hmac.compare_digest(exp_sig, a_sig):
+                                    # H-05-1: v3 trägt den Epochen-Marker als 5.
+                                    # Spalte — der historische Key wird
+                                    # verwendet, damit Rotation alte Anker
+                                    # nicht ungültig macht. v2 akzeptiert jeden
+                                    # bekannten Anker-/Audit-Epochen-Key.
+                                    if len(parts) >= 5:
+                                        try:
+                                            epoch_from = int(parts[4].strip())
+                                        except ValueError:
+                                            anchor_ok = False
+                                            break
+                                        epoch_key = _anchor_key_for_epoch(epoch_from)
+                                        # Marker existiert nach einer
+                                        # Konfigurationsänderung evtl. nicht mehr
+                                        # exakt (z. B. EPOCH_FROM verschoben) —
+                                        # dann alle bekannten Keys als Fallback,
+                                        # aber nie ein unbekannter Key.
+                                        candidate_keys = (
+                                            [epoch_key] if epoch_key else known_anchor_keys
+                                        )
+                                    else:
+                                        candidate_keys = known_anchor_keys
+                                    if candidate_keys:
+                                        msg = f"{ts_val}|{bid}|{a_hash}".encode("utf-8")
+                                        signature_ok = bool(a_sig) and any(
+                                            hmac.compare_digest(
+                                                hmac.new(k, msg, hashlib.sha256).hexdigest(), a_sig
+                                            )
+                                            for k in candidate_keys
+                                        )
+                                        if not signature_ok:
                                             anchor_ok = False
                                             break
                                     elif not _allow_insecure_audit_dev():
-                                        # D05/H: ohne Anker-Key ist eine
-                                        # 4-Spalten-Signatur nicht pruefbar.
+                                        # Ohne bekannten Key ist eine signierte
+                                        # Ankerzeile nicht pruefbar.
                                         anchor_ok = False
                                         break
                                     # Monotonie (kein Rollback-Anhang) & Tail-Loeschung (bid > max_id)
@@ -1135,6 +1279,15 @@ class ChainedAuditLog:
                         "triggers_intact": triggers_intact,
                         "corrupted_id": "audit_anchor",
                         "reason": "Externer Audit-Anker ungueltig oder weicht von der Kette ab (Tail-Loeschung, Rollback oder Signaturbruch).",
+                    }
+                # H-05-2: externer Anker ist Produktions-Default. Ohne Ziel
+                # fail-closed statt inaktiv — kein stilles "valid=True".
+                if _is_production() and not anchor_path and not _allow_insecure_audit_dev():
+                    return {
+                        "valid": False,
+                        "triggers_intact": triggers_intact,
+                        "corrupted_id": "audit_anchor",
+                        "reason": "Kein externer Audit-Anker konfiguriert — Produktion fail-closed.",
                     }
                 # D05/H: Strukturprüfungen unbedingt, also ohne is_prod.
                 # Einziger (laut geloggter) Ausweg: explizites
@@ -1470,29 +1623,47 @@ def _secondary_db_path(chain: str, db_path: Optional[str] = None) -> str:
     return DB_PATH
 
 
-def get_chain_anchors(chain: str, limit: int = 20) -> List[Dict[str, Any]]:
-    """Liefert die letzten gespeicherten Head-Anker (neueste zuerst) aus der Zentralkette."""
+def get_chain_anchors(
+    chain: str, limit: int = 20, *, db_path: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Liefert die letzten gespeicherten Head-Anker (neueste zuerst) aus der Zentralkette.
+
+    D05-Testisolierung: Anker werden pro Quell-DB gefiltert. Ohne diesen Filter
+    vergleicht eine isolierte Test-DB ihren 1-Block-Stand mit den Ankern der
+    produktiven Zentral-DB (=> falscher "Tail-Loeschung"-Alarm). Legacy-Anker
+    ohne ``db_path`` bleiben für den Default-Pfad der Kette akzeptiert.
+    """
     anchors: List[Dict[str, Any]] = []
     conn = sqlite3.connect(DB_PATH, timeout=10.0)
     conn.row_factory = sqlite3.Row
+    expected_db = os.path.abspath(db_path) if db_path else ""
     try:
         rows = conn.execute(
             "SELECT id, payload_json FROM audit_log WHERE category=? AND action='chain_head_anchor' ORDER BY id DESC LIMIT ?",
-            (CHAIN_ANCHOR_CATEGORY, max(1, int(limit) * 20)),
+            (CHAIN_ANCHOR_CATEGORY, max(1, int(limit) * 40)),
         ).fetchall()
         for r in rows:
             try:
                 p = json.loads(r["payload_json"])
             except Exception:
                 continue
-            if str(p.get("chain", "")) == chain:
-                anchors.append({
-                    "id": int(r["id"]),
-                    "head": str(p.get("head", "") or ""),
-                    "count": int(p.get("count", 0) or 0),
-                })
-                if len(anchors) >= int(limit):
-                    break
+            if str(p.get("chain", "")) != chain:
+                continue
+            anchor_db = str(p.get("db_path") or "")
+            if expected_db:
+                if anchor_db:
+                    if os.path.abspath(anchor_db) != expected_db:
+                        continue
+                elif expected_db != os.path.abspath(_secondary_db_path(chain)):
+                    continue
+            anchors.append({
+                "id": int(r["id"]),
+                "head": str(p.get("head", "") or ""),
+                "count": int(p.get("count", 0) or 0),
+                "db_path": anchor_db,
+            })
+            if len(anchors) >= int(limit):
+                break
     except Exception as exc:
         logger.error("[Audit] Head-Anker fuer %s nicht lesbar (fail-closed): %s", chain, exc)
     finally:
@@ -1500,14 +1671,22 @@ def get_chain_anchors(chain: str, limit: int = 20) -> List[Dict[str, Any]]:
     return anchors
 
 
-def get_chain_anchor(chain: str) -> Optional[Dict[str, Any]]:
-    anchors = get_chain_anchors(chain, limit=1)
+def get_chain_anchor(chain: str, *, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    # Rückwärtskompatibel zu Aufrufern, die get_chain_anchors() mit der
+    # alten 2-Argument-Signatur monkeypatchen (z. B. tests/test_reaudit_stage5).
+    anchors = (
+        get_chain_anchors(chain, limit=1)
+        if db_path is None
+        else get_chain_anchors(chain, limit=1, db_path=db_path)
+    )
     return anchors[0] if anchors else None
 
 
-def record_chain_anchor(chain: str, head: str, count: int) -> Dict[str, Any]:
+def record_chain_anchor(
+    chain: str, head: str, count: int, *, db_path: Optional[str] = None
+) -> Dict[str, Any]:
     """Schreibt einen signierten Head-Anker in die Zentralkette (idempotent bei unveraendertem Head)."""
-    existing = get_chain_anchor(chain)
+    existing = get_chain_anchor(chain) if db_path is None else get_chain_anchor(chain, db_path=db_path)
     if existing and existing["head"] == str(head or "") and existing["count"] == int(count):
         return {"chain": chain, "written": False, "head": existing["head"], "count": existing["count"]}
     # R-B/D05 (Re-Audit): frueher wurde jeder abweichende Head bedingungslos
@@ -1548,7 +1727,12 @@ def record_chain_anchor(chain: str, head: str, count: int) -> Dict[str, Any]:
         category=CHAIN_ANCHOR_CATEGORY,
         action="chain_head_anchor",
         agent_id="system",
-        payload={"chain": chain, "head": str(head or ""), "count": int(count)},
+        payload={
+            "chain": chain,
+            "head": str(head or ""),
+            "count": int(count),
+            "db_path": str(db_path or ""),
+        },
     )
     return {"chain": chain, "written": True, "head": str(head or ""), "count": int(count), "event_id": ev.get("event_id")}
 
@@ -1584,7 +1768,10 @@ def anchor_secondary_chains(db_path: Optional[str] = None) -> Dict[str, Any]:
     for chain in SECONDARY_CHAIN_HEADS:
         try:
             head_info = get_secondary_chain_head(chain, db_path=db_path)
-            result[chain] = record_chain_anchor(chain, head_info["head"], head_info["count"])
+            result[chain] = record_chain_anchor(
+                chain, head_info["head"], head_info["count"],
+                db_path=_secondary_db_path(chain, db_path),
+            )
         except Exception as exc:
             # Audit-Schreibfehler niemals verschlucken (d05 F-05).
             logger.error("[Audit] Head-Anker %s fehlgeschlagen: %s", chain, exc)
@@ -1609,7 +1796,7 @@ def finalize_secondary_chain_verification(
     count = len(hashes)
     head = hashes[-1] if hashes else ""
 
-    anchors = get_chain_anchors(chain, limit=1)
+    anchors = get_chain_anchors(chain, limit=1, db_path=db_path)
     anchor_verified: Optional[bool] = None
     anchor_reason: Optional[str] = None
     if anchors:
@@ -1678,6 +1865,45 @@ def finalize_secondary_chain_verification(
     if "chain_valid" in result:
         result["chain_valid"] = result["valid"]
     return result
+
+
+# ---------------------------------------------------------------------------
+# F024: einheitlicher Pflicht-Audit-Helper für sicherheitsrelevante Pfade.
+# Schreibfehler werden nie verschluckt; der Aufrufer entscheidet über die
+# fail-closed-Reaktion (typisch: ARCHON_AUDIT_STRICT=1 => HTTP 503 / deny).
+# ---------------------------------------------------------------------------
+def is_audit_strict() -> bool:
+    """Öffentliche Lesart des Strict-Flags (Default AN)."""
+    return _is_audit_strict()
+
+
+def audit_actor_context(*, ip_address: str = "", user_agent: str = "") -> Dict[str, str]:
+    """Hashes für IP/User-Agent — keine Klartext-PII in signierten Payloads."""
+    salt = _hmac_key() or b"archon-audit-context"
+    def _digest(value: str) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        return hmac.new(salt, text.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+    return {
+        "client_ip_hash": _digest(ip_address),
+        "user_agent_hash": _digest(user_agent),
+    }
+
+
+def _require_audit_event(
+    category: str,
+    action: str,
+    agent_id: str,
+    payload: Dict[str, Any],
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Pflicht-Event: bei Schreibfehler immer RuntimeError('audit_write_failed')."""
+    try:
+        return chained_audit_log.record_event(category, action, agent_id, payload, **kwargs)
+    except Exception as exc:
+        logger.error("[Audit] Pflicht-Event %s/%s fehlgeschlagen: %s", category, action, exc)
+        raise RuntimeError("audit_write_failed") from exc
 
 
 # Singleton Instanz

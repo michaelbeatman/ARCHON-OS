@@ -17,6 +17,37 @@ from archon.routers._rbac import require_admin_or_503
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["autonomy_settings"])
 
 
+def guardian_limits_path() -> str:
+    """Ein gemeinsamer Pfad für Guardian-UI und AgentRouter (D13/MED).
+
+    Vorher schrieb `guardian.py` nach `MEMORY_DIR/guardian_limits.json`
+    (Host: `.`), während `agent_router.py` `<workspace>/memory/...` las.
+    """
+    from archon.core.runtime import MEMORY_DIR
+    return os.path.join(MEMORY_DIR, "guardian_limits.json")
+
+
+GUARDIAN_LIMITS_FILE = guardian_limits_path()
+
+
+def save_circuit_breaker_limits(limits: Dict) -> Dict:
+    """D13/MED: Guardian-Toggles in die SSOT schreiben, die der CB liest.
+
+    `agent_router._get_guardian_policy()` liest `get_module_config(
+    "circuit_breaker")` aus settings.json — nicht guardian_limits.json.
+    """
+    from backend.autonomy_settings import save_autonomy_settings
+
+    cb = {
+        key: limits[key]
+        for key in ("loop_detection_enabled", "max_steps_per_task", "max_identical_turns")
+        if key in limits
+    }
+    if not cb:
+        return {}
+    return save_autonomy_settings({"circuit_breaker": cb})
+
+
 def _require_admin(request: Request):
     # Zentraler Rollenzaun: eine Pruefung, ein Injectionspunkt, fail-closed.
     from archon.routers._rbac import require_admin_or_503

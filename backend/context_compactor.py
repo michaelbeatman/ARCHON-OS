@@ -7,8 +7,11 @@ oder auf explizite Anforderung in einen strukturierten `[HIERARCHICAL_MEMORY_STA
 Nachrichten im Original erhalten bleiben. Spart ~65–80 % Kontext-Tokens ohne Faktenverlust.
 """
 
+import logging
 import re
 from typing import List, Dict, Any, Optional
+
+logger = logging.getLogger("archon.context_compactor")
 
 
 def _get_cfg() -> Dict[str, Any]:
@@ -73,6 +76,22 @@ class ContextCompactor:
         keep_recent_override: Optional[int] = None
     ) -> Dict[str, Any]:
         cfg = _get_cfg()
+        # F011/B-11: Produzent im echten Compaction-Pfad. Jede einzelne Nachricht
+        # wird idempotent in die verlustfreie Historie der konsolidierten
+        # memory.db aufgenommen (auch wenn keine Komprimierung stattfindet).
+        try:
+            from backend.lossless_session_dag import (
+                derive_session_id, derive_tenant_id, record_turns,
+            )
+            _lcm_sid = derive_session_id(messages)
+            _lcm_tid = derive_tenant_id(messages)
+            record_turns(_lcm_sid, messages, tenant_id=_lcm_tid)
+        except Exception as _lcm_exc:
+            logger.error(
+                "[ContextCompactor] Lossless-Turn-Persistenz fehlgeschlagen: %s", _lcm_exc
+            )
+            _lcm_sid, _lcm_tid = "compactor-unknown", "default"
+
         enabled = bool(cfg.get("enabled", True))
         threshold = int(cfg.get("trigger_token_threshold", 6000))
         keep_recent = int(keep_recent_override if keep_recent_override is not None else cfg.get("keep_recent_turns", 4))
@@ -86,6 +105,7 @@ class ContextCompactor:
                 "original_tokens": original_tokens,
                 "compacted_tokens": original_tokens,
                 "saved_pct": 0.0,
+                "lossless_session_id": _lcm_sid,
                 "messages": messages
             }
 
@@ -96,6 +116,7 @@ class ContextCompactor:
                 "original_tokens": original_tokens,
                 "compacted_tokens": original_tokens,
                 "saved_pct": 0.0,
+                "lossless_session_id": _lcm_sid,
                 "messages": messages
             }
 
@@ -125,6 +146,20 @@ class ContextCompactor:
             "content": "\n".join(summary_lines)
         }
 
+        # F011/B-11: ECHTER PRODUZENT — Summary-Knoten mit den verdichteten
+        # Turns in der verlustfreien Historie verknüpfen (tenant-scoped, HMAC).
+        _lcm_summary_id = ""
+        try:
+            from backend.lossless_session_dag import compact_conversation_turns
+            _lcm_summary_id = compact_conversation_turns(
+                _lcm_sid, older_turns, compacted_block["content"], tenant_id=_lcm_tid
+            )
+        except Exception as _lcm_exc:
+            logger.error(
+                "[ContextCompactor] Lossless-Compaction-Persistenz fehlgeschlagen: %s",
+                _lcm_exc,
+            )
+
         new_messages = system_msgs + [compacted_block] + recent_turns
         compacted_tokens = _estimate_tokens(new_messages)
         saved_pct = round(max(0.0, (1.0 - (compacted_tokens / max(1, original_tokens))) * 100), 1)
@@ -137,6 +172,9 @@ class ContextCompactor:
             "compacted_tokens": compacted_tokens,
             "saved_pct": saved_pct,
             "extracted_facts": facts,
+            # F011: nachweisbarer Effekt (§0) statt unsichtbarem DB-Schreibvorgang
+            "lossless_session_id": _lcm_sid,
+            "lossless_summary_id": _lcm_summary_id,
             "messages": new_messages
         }
 

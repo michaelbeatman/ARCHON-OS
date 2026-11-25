@@ -28,8 +28,10 @@ RUN mkdir -p /app/data /app/data/inbox /app/agent_workspace /app/agent_workspace
 # Python dependencies
 COPY --chown=streamlituser:streamlitgroup requirements.lock.txt .
 # Reproduzierbare, hash-geprüfte Installation (Audit 23.11.2026).
-# D09/S-9.2: kein ungepinntes `--upgrade pip` mehr — das gepinnte Basisimage
+# D09/S-9.2: kein ungepinntes Upgrade von pip mehr — das gepinnte Basisimage
 # liefert eine feste pip-Version, sonst aendert sich der Resolver ohne Codechange.
+# F002: dieselbe Regel gilt jetzt auch in CI: dort kommt pip und alle Helfer
+# hash-geprueft aus requirements-ci.lock.txt (ohne pip-Upgrade-Schritt).
 RUN pip install --no-cache-dir --require-hashes --no-deps -r requirements.lock.txt
 
 # Complete application code & static assets (runs standalone even without bind-mount)

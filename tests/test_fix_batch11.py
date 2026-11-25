@@ -103,7 +103,16 @@ async def test_n11_boardroom_debate_ids_collision_free(monkeypatch, tmp_path):
 
     # Mock dependencies
     saved_history = []
-    monkeypatch.setattr("archon.routers.boardroom.save_boardroom_history_item", lambda item: saved_history.append(item))
+
+    # W1-A: der Persistenzpfad uebergibt inzwischen den verifizierten
+    # Session-Actor als ``actor_id`` (zusaetzlich zum Dict-Eintrag). Der Mock
+    # muss die neue Signatur akzeptieren, sonst schluckt der Endpoint den
+    # TypeError und ``history_id`` fehlt im Response.
+    def _fake_save(item, **kwargs):
+        saved_history.append(item)
+        return list(saved_history)
+
+    monkeypatch.setattr("archon.routers.boardroom.save_boardroom_history_item", _fake_save)
     monkeypatch.setattr("archon.routers.boardroom.OBSIDIAN_VAULT_DIR", str(tmp_path))
     monkeypatch.setattr("archon.routers.boardroom.add_ticker", lambda *args: None)
     from archon.routers import boardroom
@@ -128,6 +137,10 @@ async def test_n11_boardroom_debate_ids_collision_free(monkeypatch, tmp_path):
     hist_id2 = res2["history_id"]
 
     assert hist_id1 != hist_id2, f"Debatten-IDs kollidieren: {hist_id1} == {hist_id2}"
+    # Beide Debatten muessen auch tatsaechlich als eigene History-Eintraeuge
+    # persistiert worden sein (Kollisionsfreiheit nicht nur im Response).
+    assert len(saved_history) == 2
+    assert saved_history[0]["id"] != saved_history[1]["id"]
 
 
 def test_n12_task_self_healer_safety(tmp_path):

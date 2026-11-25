@@ -7,19 +7,236 @@ sowie Watchdog-getriggerte Workflow-Automationen in SQLite WAL (`data/workflow_s
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import sqlite3
+import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DEFAULT_SCHEDULES_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "workflow_schedules.db")
 SCHEDULES_DB_PATH = _DEFAULT_SCHEDULES_DB_PATH
 
 logger = logging.getLogger("backend.workflow_scheduler")
+
+# D07/F7: SSE-Broadcast-Fehler waren bisher `except Exception: pass` — der
+# einzige Live-Stream-Effekt des Event-Bus verschwand ohne jede Spur. Zaehler
+# + Telemetrie-Event liefern jetzt den §0-Verifikationsteil (Metrik + Test).
+_EVENT_BUS_BROADCAST_FAILED = 0
+_EVENT_BUS_BROADCAST_FAILED_LOCK = threading.Lock()
+
+
+def event_bus_broadcast_failed_count() -> int:
+    """Metrik `event_bus_broadcast_failed` — Anzahl fehlgeschlagener SSE-Broadcasts."""
+    with _EVENT_BUS_BROADCAST_FAILED_LOCK:
+        return _EVENT_BUS_BROADCAST_FAILED
+
+
+def _record_event_bus_broadcast_failed(event_id: str, source: str, exc: BaseException) -> None:
+    global _EVENT_BUS_BROADCAST_FAILED
+    with _EVENT_BUS_BROADCAST_FAILED_LOCK:
+        _EVENT_BUS_BROADCAST_FAILED += 1
+    logger.warning(
+        "[WorkflowScheduler] SSE-Event-Broadcast event_id=%s source=%s fehlgeschlagen: %s",
+        event_id, source, exc,
+    )
+    try:
+        _enqueue_telemetry("event_bus_broadcast_failed", {
+            "event_id": event_id,
+            "source": source,
+            "detail": f"{type(exc).__name__}: {exc}"[:500],
+        })
+    except Exception as telemetry_exc:
+        logger.error(
+            "[WorkflowScheduler] Telemetrie event_bus_broadcast_failed fehlgeschlagen: %s",
+            telemetry_exc,
+        )
+
+
+# ---------------------------------------------------------------------------
+# W4-B / D06: zustandsbehafteter Event-Bus-Circuit-Breaker pro (source,target).
+# Der vorherige "Circuit-Breaker" war nur ein gleitendes 1-Minuten-Fenster.
+# Vorbild: backend/provider_circuit_breaker.py::ProviderCircuitBreaker.allow()
+# inkl. verwaister Probe-Expiry (ein Probe, kein Thundering Herd).
+# ---------------------------------------------------------------------------
+_TRACE_EVENT_COLS = ("trace_id", "span_id", "traceparent", "tracestate")
+_EVENT_BUS_CIRCUIT_THRESHOLD = max(
+    1, int(os.environ.get("ARCHON_EVENT_BUS_CIRCUIT_THRESHOLD", "3") or 3)
+)
+_EVENT_BUS_CIRCUIT_COOLDOWN_SEC = max(
+    1.0, float(os.environ.get("ARCHON_EVENT_BUS_CIRCUIT_COOLDOWN_SEC", "30") or 30)
+)
+_EVENT_BUS_CIRCUIT_OPEN_TOTAL: Dict[Tuple[str, str], int] = {}
+_EVENT_BUS_CIRCUIT_BLOCKED_TOTAL: Dict[Tuple[str, str], int] = {}
+_EVENT_BUS_CIRCUIT_LOCK = threading.Lock()
+
+
+def event_bus_circuit_open_total() -> Dict[str, int]:
+    """Metrik `event_bus_circuit_open_total{source,target}` als Zaehler-Map."""
+    with _EVENT_BUS_CIRCUIT_LOCK:
+        return {f"{src}|{tgt}": n for (src, tgt), n in _EVENT_BUS_CIRCUIT_OPEN_TOTAL.items()}
+
+
+def event_bus_circuit_blocked_total() -> Dict[str, int]:
+    """Anzahl der wegen OPEN/HALF_OPEN-Probe abgewiesenen Events."""
+    with _EVENT_BUS_CIRCUIT_LOCK:
+        return {f"{src}|{tgt}": n for (src, tgt), n in _EVENT_BUS_CIRCUIT_BLOCKED_TOTAL.items()}
+
+
+class EventBusCircuitBreaker:
+    """OPEN/HALF_OPEN/CLOSED pro (tenant, source, target), thread-safe.
+
+    Drei aufeinanderfolgende `rate_limited`-Ereignisse oeffnen den Breaker fuer
+    `cooldown` Sekunden. Danach darf genau EIN Probe durch; bleibt dieser
+    Probe ohne record_success/record_rate_limited (verwaist), verfällt er nach
+    einer Cooldown-Zeit und darf erneut gestartet werden.
+    """
+
+    def __init__(
+        self, threshold: int = _EVENT_BUS_CIRCUIT_THRESHOLD,
+        cooldown_seconds: float = _EVENT_BUS_CIRCUIT_COOLDOWN_SEC,
+    ) -> None:
+        self.threshold = max(1, int(threshold))
+        self.cooldown = float(cooldown_seconds)
+        self._state: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+
+    @staticmethod
+    def _key(source: str, target: str, tenant_id: str) -> Tuple[str, str, str]:
+        return (str(tenant_id or "default"), str(source or "unknown"), str(target or "all"))
+
+    def allow(self, source: str, target: str, tenant_id: str = "default") -> bool:
+        key = self._key(source, target, tenant_id)
+        with _EVENT_BUS_CIRCUIT_LOCK:
+            st = self._state.get(key)
+            if not st:
+                return True
+            open_until = float(st.get("open_until") or 0.0)
+            if open_until <= 0:
+                return True
+            now = time.time()
+            if now < open_until:
+                _EVENT_BUS_CIRCUIT_BLOCKED_TOTAL[(key[1], key[2])] = (
+                    _EVENT_BUS_CIRCUIT_BLOCKED_TOTAL.get((key[1], key[2]), 0) + 1
+                )
+                return False
+            if st.get("probing"):
+                probe_at = float(st.get("probe_at") or 0.0)
+                if probe_at and (now - probe_at) > self.cooldown:
+                    # verwaister Probe: kein record_success/record_failure
+                    # erreicht (z. B. abgebrochener Task) -> erneut erlaubt.
+                    st["probing"] = False
+                    st["probe_at"] = 0.0
+                else:
+                    _EVENT_BUS_CIRCUIT_BLOCKED_TOTAL[(key[1], key[2])] = (
+                        _EVENT_BUS_CIRCUIT_BLOCKED_TOTAL.get((key[1], key[2]), 0) + 1
+                    )
+                    return False
+            st["probing"] = True
+            st["probe_at"] = now
+            return True
+
+    def record_rate_limited(self, source: str, target: str, tenant_id: str = "default") -> None:
+        key = self._key(source, target, tenant_id)
+        with _EVENT_BUS_CIRCUIT_LOCK:
+            st = self._state.setdefault(key, {
+                "state": "CLOSED", "consecutive": 0, "open_until": 0.0,
+                "probing": False, "probe_at": 0.0,
+            })
+            st["consecutive"] = int(st.get("consecutive") or 0) + 1
+            st["probing"] = False
+            st["probe_at"] = 0.0
+            if st["consecutive"] >= self.threshold:
+                st["state"] = "OPEN"
+                st["open_until"] = time.time() + self.cooldown
+                pair = (key[1], key[2])
+                _EVENT_BUS_CIRCUIT_OPEN_TOTAL[pair] = (
+                    _EVENT_BUS_CIRCUIT_OPEN_TOTAL.get(pair, 0) + 1
+                )
+                logger.warning(
+                    "[EventBus] Circuit OPEN: source=%s target=%s tenant=%s "
+                    "(%d aufeinanderfolgende rate_limited, cooldown=%.1fs)",
+                    key[1], key[2], key[0], st["consecutive"], self.cooldown,
+                )
+
+    def record_success(self, source: str, target: str, tenant_id: str = "default") -> None:
+        key = self._key(source, target, tenant_id)
+        with _EVENT_BUS_CIRCUIT_LOCK:
+            self._state[key] = {
+                "state": "CLOSED", "consecutive": 0, "open_until": 0.0,
+                "probing": False, "probe_at": 0.0,
+            }
+
+    def snapshot(self) -> Dict[str, Dict[str, Any]]:
+        with _EVENT_BUS_CIRCUIT_LOCK:
+            return {"/".join(k): dict(v) for k, v in self._state.items()}
+
+
+event_bus_breaker = EventBusCircuitBreaker()
+
+
+@contextlib.contextmanager
+def _workflow_event_trace(trace_columns: Optional[Dict[str, Any]] = None):
+    """Outbound-Child-Span fuer den Event-Bus oder Wiederherstellung bei Handoff.
+
+    W4-B/D16: ``dispatch_workflow_event`` erzeugt einen eigenen Child-Span;
+    der Event-Mesh-Handoff uebergibt die persistierten Trace-Spalten, statt
+    nur ``correlation_id`` zu reichen.
+    """
+    try:
+        from backend import trace_context as tc
+    except Exception as exc:
+        logger.warning("[WorkflowScheduler] trace_context nicht verfügbar: %s", exc)
+        yield {k: "" for k in _TRACE_EVENT_COLS}
+        return
+    explicit = {k: str((trace_columns or {}).get(k) or "") for k in _TRACE_EVENT_COLS}
+    if any(explicit.values()):
+        with tc.use_trace_context(
+            trace_id=explicit["trace_id"], span_id=explicit["span_id"],
+            traceparent=explicit["traceparent"], tracestate=explicit["tracestate"],
+        ):
+            yield explicit
+        return
+    with tc.child_span() as (trace_id, span_id, _parent_sid):
+        yield {
+            "trace_id": trace_id,
+            "span_id": span_id,
+            "traceparent": tc.format_traceparent(trace_id, span_id, tc.should_sample()),
+            "tracestate": tc.sanitize_tracestate(tc.current_tracestate()),
+        }
+
+
+def _current_tenant_id() -> str:
+    """F014: aktiver Mandant (Request-Kontext vor Corporate-Default)."""
+    try:
+        from backend.tenant_context import _REQUEST_TENANT_VAR, sanitize_tenant_id
+        tid = _REQUEST_TENANT_VAR.get()
+        if tid:
+            return sanitize_tenant_id(tid)
+    except Exception:
+        pass
+    try:
+        from backend.tenant_context import tenant_context
+        return tenant_context.get_active_tenant_id()
+    except Exception:
+        return "default"
+
+
+def _tenant_sql(tenant_id: str, column: str = "tenant_id") -> tuple[str, tuple[str, str]]:
+    """F014: tenant-scoped WHERE-Klausel (Legacy-Zeilen nur fuer Default)."""
+    return (
+        f"({column} = ? OR (COALESCE({column}, '') = '' AND ? = 'default'))",
+        (str(tenant_id), str(tenant_id)),
+    )
+
+
+def _tenant_prefix(tenant_id: str, value: str) -> str:
+    """Mandanten-Praefix fuer correlation_id / schedule-id (H-06-1)."""
+    return f"{tenant_id}::{value}" if value else ""
 
 
 def _resolve_schedules_db_path() -> str:
@@ -67,7 +284,9 @@ def init_schedules_db() -> None:
                 next_run_at TEXT DEFAULT '',
                 last_run_id TEXT DEFAULT '',
                 last_status TEXT DEFAULT 'idle',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                company_id TEXT NOT NULL DEFAULT '',
+                tenant_id TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -84,9 +303,37 @@ def init_schedules_db() -> None:
                 matched_schedule_ids_json TEXT NOT NULL DEFAULT '[]',
                 triggered_run_ids_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL DEFAULT 'received',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                company_id TEXT NOT NULL DEFAULT '',
+                tenant_id TEXT NOT NULL DEFAULT '',
+                trace_id TEXT DEFAULT '',
+                span_id TEXT DEFAULT '',
+                traceparent TEXT DEFAULT '',
+                tracestate TEXT DEFAULT ''
             )
             """
+        )
+        # F014/H-06-1 + W4-B/D16: Bestands-DBs werden verlustfrei um
+        # company_id/tenant_id und die vier Trace-Spalten erweitert
+        # (CREATE IF NOT EXISTS aendert bestehende Tabellen nicht).
+        for table in ("workflow_schedules", "workflow_events"):
+            cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            for col in ("company_id", "tenant_id"):
+                if cols and col not in cols:
+                    conn.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {col} TEXT NOT NULL DEFAULT ''"
+                    )
+            if table == "workflow_events":
+                for col in _TRACE_EVENT_COLS:
+                    if cols and col not in cols:
+                        conn.execute(f"ALTER TABLE workflow_events ADD COLUMN {col} TEXT DEFAULT ''")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflow_events_tenant_corr "
+            "ON workflow_events(tenant_id, source, correlation_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflow_schedules_tenant "
+            "ON workflow_schedules(tenant_id)"
         )
         conn.commit()
     finally:
@@ -225,17 +472,25 @@ def _row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
     return d
 
 
-def list_schedules(template_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_schedules(
+    template_id: Optional[str] = None, tenant_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """F014: Schedule-Reads sind auf den aktiven Mandanten begrenzt."""
     init_schedules_db()
+    tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
     conn = _get_conn()
     try:
         if template_id:
             rows = conn.execute(
-                "SELECT * FROM workflow_schedules WHERE template_id = ? ORDER BY created_at DESC",
-                (template_id,),
+                f"SELECT * FROM workflow_schedules WHERE template_id = ? AND {tenant_sql} "
+                "ORDER BY created_at DESC",
+                (template_id, *tenant_params),
             ).fetchall()
         else:
-            rows = conn.execute("SELECT * FROM workflow_schedules ORDER BY created_at DESC").fetchall()
+            rows = conn.execute(
+                f"SELECT * FROM workflow_schedules WHERE {tenant_sql} ORDER BY created_at DESC",
+                tenant_params,
+            ).fetchall()
         return [_row_to_dict(r) for r in rows]
     finally:
         conn.close()
@@ -247,7 +502,16 @@ def upsert_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not template_id:
         raise ValueError("template_id_required")
 
+    tenant_id = str(
+        payload.get("tenant_id") or payload.get("company_id") or _current_tenant_id()
+    )
+    company_id = str(payload.get("company_id") or tenant_id)
     sid = str(payload.get("id") or f"sched-{uuid.uuid4().hex[:8]}").strip()
+    # F014: PK bleibt id — nicht-default Mandanten erhalten einen praefigierten
+    # id-Wert, damit gleiche IDs zweier Mandanten nicht kollidieren. Bestehende
+    # Default-Schedules behalten ihre IDs unveraendert.
+    if tenant_id not in ("", "default") and not sid.startswith(f"{tenant_id}::"):
+        sid = _tenant_prefix(tenant_id, sid)
     trigger_type = str(payload.get("trigger_type") or "cron").strip()
     if trigger_type not in {"cron", "watchdog", "cron_and_watchdog", "inbox", "research", "boardroom", "calendar", "approval", "any_event"}:
         trigger_type = "cron"
@@ -269,7 +533,11 @@ def upsert_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     conn = _get_conn()
     try:
-        existing = conn.execute("SELECT run_count, created_at FROM workflow_schedules WHERE id = ?", (sid,)).fetchone()
+        tenant_sql, tenant_params = _tenant_sql(tenant_id)
+        existing = conn.execute(
+            f"SELECT run_count, created_at FROM workflow_schedules WHERE id = ? AND {tenant_sql}",
+            (sid, *tenant_params),
+        ).fetchone()
         run_count = int(existing["run_count"]) if existing else 0
         created_at = existing["created_at"] if existing else now.isoformat()
         conn.execute(
@@ -277,8 +545,9 @@ def upsert_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
             INSERT INTO workflow_schedules (
                 id, template_id, title, enabled, trigger_type, cron_expr,
                 start_at, end_at, start_condition, end_condition, max_runs, run_count,
-                watchdog_keyword, inputs_json, n8n_webhook_url, next_run_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                watchdog_keyword, inputs_json, n8n_webhook_url, next_run_at, created_at,
+                company_id, tenant_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 template_id=excluded.template_id,
                 title=excluded.title,
@@ -313,6 +582,8 @@ def upsert_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
                 str(payload.get("n8n_webhook_url") or "").strip(),
                 next_run or "",
                 created_at,
+                company_id,
+                tenant_id,
             ),
         )
         conn.execute(
@@ -328,7 +599,9 @@ def upsert_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
                 matched_schedule_ids_json TEXT NOT NULL DEFAULT '[]',
                 triggered_run_ids_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL DEFAULT 'received',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                company_id TEXT NOT NULL DEFAULT '',
+                tenant_id TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -339,11 +612,15 @@ def upsert_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
         conn.close()
 
 
-def delete_schedule(schedule_id: str) -> bool:
+def delete_schedule(schedule_id: str, tenant_id: Optional[str] = None) -> bool:
     init_schedules_db()
+    tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
     conn = _get_conn()
     try:
-        cur = conn.execute("DELETE FROM workflow_schedules WHERE id = ?", (schedule_id,))
+        cur = conn.execute(
+            f"DELETE FROM workflow_schedules WHERE id = ? AND {tenant_sql}",
+            (schedule_id, *tenant_params),
+        )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS workflow_events (
@@ -357,7 +634,9 @@ def delete_schedule(schedule_id: str) -> bool:
                 matched_schedule_ids_json TEXT NOT NULL DEFAULT '[]',
                 triggered_run_ids_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL DEFAULT 'received',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                company_id TEXT NOT NULL DEFAULT '',
+                tenant_id TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -418,7 +697,9 @@ def _execute_schedule_row(conn: sqlite3.Connection, row: sqlite3.Row, now: datet
                 matched_schedule_ids_json TEXT NOT NULL DEFAULT '[]',
                 triggered_run_ids_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL DEFAULT 'received',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                company_id TEXT NOT NULL DEFAULT '',
+                tenant_id TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -440,7 +721,9 @@ def _execute_schedule_row(conn: sqlite3.Connection, row: sqlite3.Row, now: datet
                 matched_schedule_ids_json TEXT NOT NULL DEFAULT '[]',
                 triggered_run_ids_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL DEFAULT 'received',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                company_id TEXT NOT NULL DEFAULT '',
+                tenant_id TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -462,7 +745,9 @@ def _execute_schedule_row(conn: sqlite3.Connection, row: sqlite3.Row, now: datet
                 matched_schedule_ids_json TEXT NOT NULL DEFAULT '[]',
                 triggered_run_ids_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL DEFAULT 'received',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                company_id TEXT NOT NULL DEFAULT '',
+                tenant_id TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -515,7 +800,9 @@ def _execute_schedule_row(conn: sqlite3.Connection, row: sqlite3.Row, now: datet
                 matched_schedule_ids_json TEXT NOT NULL DEFAULT '[]',
                 triggered_run_ids_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL DEFAULT 'received',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                company_id TEXT NOT NULL DEFAULT '',
+                tenant_id TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -540,7 +827,9 @@ def _execute_schedule_row(conn: sqlite3.Connection, row: sqlite3.Row, now: datet
                 matched_schedule_ids_json TEXT NOT NULL DEFAULT '[]',
                 triggered_run_ids_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL DEFAULT 'received',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                company_id TEXT NOT NULL DEFAULT '',
+                tenant_id TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -630,13 +919,110 @@ def _run_workflow_events_retention(conn: sqlite3.Connection, now: datetime) -> N
             logger.debug("[workflow_scheduler] Ignorierte Ausnahme (Z.571): %s", _exc)
 
 
-def _calendar_event_already_handled(conn: sqlite3.Connection, corr_id: str, today_start_iso: str) -> bool:
-    """True, wenn fuer (source='calendar', correlation_id) HEUTE bereits ein
-    Event existiert (jeder Status zaehlt als 'schon behandelt', auch
-    skipped_loop/rate_limited). Dann GAR NICHTS mehr in die DB schreiben."""
+# ---------------------------------------------------------------------------
+# W4-B / D06: zentrale 14-Tage-Retention fuer alle Integrations-Tabellen.
+# Der 30-s-Drainer raeumt mit (gedrosselt wie _run_workflow_events_retention).
+# ---------------------------------------------------------------------------
+_INTEGRATION_RETENTION_LAST_TS: Optional[datetime] = None
+_INTEGRATION_RETENTION_INTERVAL_MIN = 30
+_INTEGRATION_RETENTION_DELETED_TOTAL: Dict[str, int] = {}
+_INTEGRATION_RETENTION_LOCK = threading.Lock()
+
+
+def integration_retention_deleted_total() -> Dict[str, int]:
+    """Metrik `integration_retention_deleted_total{table}`."""
+    with _INTEGRATION_RETENTION_LOCK:
+        return dict(_INTEGRATION_RETENTION_DELETED_TOTAL)
+
+
+def purge_integration_retention(
+    days: int = _RETENTION_DAYS,
+    now: Optional[datetime] = None,
+    *,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Loescht veraltete Integrations-Zeilen (nur abgeschlossene Zustaende).
+
+    Betroffen: event_mesh_log, event_mesh_outbox (delivered/dead),
+    event_mesh_dedup (first_seen), effect_ledger (resolved_at) und
+    dead_letter_queue (completed). Offene Eintraege bleiben unberuehrt.
+    """
+    global _INTEGRATION_RETENTION_LAST_TS
+    cur = now or datetime.now(timezone.utc)
+    if (
+        not force and _INTEGRATION_RETENTION_LAST_TS is not None
+        and (cur - _INTEGRATION_RETENTION_LAST_TS) < timedelta(minutes=_INTEGRATION_RETENTION_INTERVAL_MIN)
+    ):
+        return {"status": "throttled", "deleted": {}}
+    _INTEGRATION_RETENTION_LAST_TS = cur
+    cutoff_dt = (cur - timedelta(days=max(1, int(days)))).replace(tzinfo=None)
+    cutoff_iso = cutoff_dt.isoformat()
+    cutoff_space = cutoff_dt.strftime("%Y-%m-%d %H:%M:%S")
+    deleted: Dict[str, int] = {}
+    errors: List[str] = []
+
+    def _purge_db(db_path: str, specs) -> None:
+        conn = sqlite3.connect(db_path, timeout=15.0)
+        try:
+            for table, column, extra_where, params in specs:
+                sql = (
+                    f"DELETE FROM {table} WHERE ({column} < ? OR {column} < ?)"
+                    + (f" AND {extra_where}" if extra_where else "")
+                )
+                deleted[table] = int(conn.execute(sql, (cutoff_iso, cutoff_space, *params)).rowcount or 0)
+            conn.commit()
+        finally:
+            conn.close()
+
+    try:
+        from backend import event_mesh as _em
+
+        _purge_db(_em._db_path(), [
+            ("event_mesh_log", "created_at", None, ()),
+            ("event_mesh_outbox", "created_at", "status IN ('delivered', 'dead')", ()),
+            ("event_mesh_dedup", "first_seen", None, ()),
+            ("effect_ledger", "resolved_at", "resolved_at IS NOT NULL", ()),
+        ])
+    except Exception as exc:
+        errors.append(f"event_mesh: {exc}")
+        logger.warning("[WorkflowScheduler] Integrations-Retention (Ledger) fehlgeschlagen: %s", exc)
+    try:
+        from backend import dead_letter_queue as _dlq
+
+        _purge_db(_dlq._db_path(), [
+            ("dead_letter_queue", "created_at", "status = 'completed'", ()),
+        ])
+    except Exception as exc:
+        errors.append(f"dead_letter_queue: {exc}")
+        logger.warning("[WorkflowScheduler] Integrations-Retention (DLQ) fehlgeschlagen: %s", exc)
+
+    with _INTEGRATION_RETENTION_LOCK:
+        for table, count in deleted.items():
+            if count:
+                _INTEGRATION_RETENTION_DELETED_TOTAL[table] = (
+                    _INTEGRATION_RETENTION_DELETED_TOTAL.get(table, 0) + count
+                )
+    if any(deleted.values()):
+        logger.info("[WorkflowScheduler] Integrations-Retention (14 d) geloescht: %s", deleted)
+    return {
+        "status": "error" if errors else "ok",
+        "deleted": deleted,
+        "errors": errors,
+        "cutoff": cutoff_iso,
+    }
+
+
+def _calendar_event_already_handled(
+    conn: sqlite3.Connection, corr_id: str, today_start_iso: str,
+    tenant_id: Optional[str] = None,
+) -> bool:
+    """True, wenn fuer (source='calendar', correlation_id, tenant) HEUTE bereits
+    ein Event existiert (jeder Status zaehlt als 'schon behandelt')."""
+    tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
     row = conn.execute(
-        "SELECT 1 FROM workflow_events WHERE source = 'calendar' AND correlation_id = ? AND created_at >= ? LIMIT 1",
-        (corr_id, today_start_iso),
+        f"SELECT 1 FROM workflow_events WHERE source = 'calendar' AND correlation_id = ? "
+        f"AND created_at >= ? AND {tenant_sql} LIMIT 1",
+        (corr_id, today_start_iso, *tenant_params),
     ).fetchone()
     return bool(row)
 
@@ -693,9 +1079,10 @@ def evaluate_due_schedules(now: Optional[datetime] = None) -> List[Dict[str, Any
                 today_str = cur_now.date().isoformat()
                 today_start_iso = datetime(cur_now.year, cur_now.month, cur_now.day, tzinfo=timezone.utc).isoformat()
                 cal_events = operations_calendar.list_events(start_date=today_str, end_date=today_str)
+                cal_tenant = _current_tenant_id()
                 for cev in cal_events:
-                    cid = f"cal-{cev.get('id', '')}-{today_str}"
-                    if _calendar_event_already_handled(conn, cid, today_start_iso):
+                    cid = _tenant_prefix(cal_tenant, f"cal-{cev.get('id', '')}-{today_str}")
+                    if _calendar_event_already_handled(conn, cid, today_start_iso, tenant_id=cal_tenant):
                         continue  # Heute schon behandelt -> kein weiteres DB-Write (auch kein skipped_loop-Event)
                     ev_res = dispatch_workflow_event(
                         source="calendar",
@@ -704,6 +1091,7 @@ def evaluate_due_schedules(now: Optional[datetime] = None) -> List[Dict[str, Any
                         summary=f"Quelle: {cev.get('source', '')} | Kategorie: {cev.get('category', '')}",
                         payload={"date": cev.get("date"), "time": cev.get("time", ""), "category": cev.get("category", "")},
                         correlation_id=cid,
+                        tenant_id=cal_tenant,
                     )
                     triggered.extend(ev_res.get("triggered") or [])
             except Exception as exc:
@@ -769,15 +1157,51 @@ def dispatch_workflow_event(
     payload: Optional[Dict[str, Any]] = None,
     correlation_id: Optional[str] = None,
     bypass_hitl: bool = False,
+    tenant_id: Optional[str] = None,
+    trace_columns: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Zentraler Event-Bus für Watchdog, Posteingang, Research Lab und AI Boardroom."""
+    """Oeffentlicher Einstieg: Outbound-Child-Span + Trace-Kontext (W4-B/D16)."""
+    init_schedules_db()
+    _init_policies_table()
+    with _workflow_event_trace(trace_columns) as trace_cols:
+        return _dispatch_workflow_event_impl(
+            source=source, event_type=event_type, title=title, summary=summary,
+            payload=payload, correlation_id=correlation_id, bypass_hitl=bypass_hitl,
+            tenant_id=tenant_id, trace_columns=trace_cols,
+        )
+
+
+def _dispatch_workflow_event_impl(
+    source: str,
+    event_type: str,
+    title: str = "",
+    summary: str = "",
+    payload: Optional[Dict[str, Any]] = None,
+    correlation_id: Optional[str] = None,
+    bypass_hitl: bool = False,
+    tenant_id: Optional[str] = None,
+    trace_columns: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Zentraler Event-Bus für Watchdog, Posteingang, Research Lab und AI Boardroom.
+
+    F014: Dedup/Rate-Limit/Correlation sind pro Mandant — zwei Mandanten mit
+    identischem correlation_id unterdruecken sich nicht gegenseitig.
+    W4-B: Circuit-Breaker pro (source,target) und Trace-Spalten an allen
+    workflow_events-Zeilen.
+    """
     init_schedules_db()
     _init_policies_table()
     now = datetime.now(timezone.utc)
     event_id = f"evt-{uuid.uuid4().hex[:10]}"
     src = str(source or "manual").strip().lower()
+    tid = str(tenant_id or _current_tenant_id())
+    company_id = str((payload or {}).get("company_id") or (payload or {}).get("tenant_id") or tid) if isinstance(payload, dict) else tid
+    tenant_sql, tenant_params = _tenant_sql(tid)
     corr = str(correlation_id or "").strip()
+    if corr and not corr.startswith(f"{tid}::"):
+        corr = _tenant_prefix(tid, corr)
     payload_dict = payload if isinstance(payload, dict) else {}
+    trace_cols = {k: str((trace_columns or {}).get(k) or "") for k in _TRACE_EVENT_COLS}
 
     source_triggers = {
         "watchdog": ("watchdog", "cron_and_watchdog", "any_event"),
@@ -792,49 +1216,91 @@ def dispatch_workflow_event(
     try:
         if corr:
             dup = conn.execute(
-                "SELECT id FROM workflow_events WHERE correlation_id = ? AND source = ? LIMIT 1",
-                (corr, src),
+                f"SELECT id FROM workflow_events WHERE correlation_id = ? AND source = ? "
+                f"AND {tenant_sql} LIMIT 1",
+                (corr, src, *tenant_params),
             ).fetchone()
             if dup:
                 conn.execute(
                     """
-                    INSERT INTO workflow_events (id, source, event_type, title, summary, payload_json, correlation_id, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped_loop', ?)
+                    INSERT INTO workflow_events
+                    (id, source, event_type, title, summary, payload_json, correlation_id, status,
+                     created_at, company_id, tenant_id, trace_id, span_id, traceparent, tracestate)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped_loop', ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (event_id, src, event_type, title, summary, json.dumps(payload_dict, ensure_ascii=False), corr, now.isoformat()),
+                    (event_id, src, event_type, title, summary, json.dumps(payload_dict, ensure_ascii=False),
+                     corr, now.isoformat(), company_id, tid,
+                     trace_cols["trace_id"], trace_cols["span_id"],
+                     trace_cols["traceparent"], trace_cols["tracestate"]),
                 )
                 conn.commit()
                 return {"event_id": event_id, "status": "skipped_loop", "triggered": []}
 
-        # Rate-Limit / Circuit-Breaker pro Quelle
-        # Skipping-Status-Namen die hier geschrieben werden (grep: 'skipped_loop',
-        # 'rate_limited'; 'deduped' wird extern verwendet). Diese zaehlen NICHT
-        # als Traffic, sonst loest der Circuit-Breaker sich selbst aus.
+        # W4-B: Policy-Konfiguration + zustandsbehafteter Breaker pro
+        # (source,target). Bei OPEN/HALF_OPEN-Probe wird sofort (ohne
+        # Event-Scan, ohne Trigger) abgeblockt und protokolliert.
+        pol_rows = conn.execute("SELECT * FROM event_bus_policies WHERE source = ?", (src,)).fetchall()
+        pol_map = {r["target"]: dict(r) for r in pol_rows}
+        targets = [str(t) for t in pol_map if t != "all"] or list(EVENT_BUS_TARGETS)
+        open_targets = [t for t in targets if not event_bus_breaker.allow(src, t, tid)]
+        if open_targets:
+            circuit_payload = dict(payload_dict)
+            circuit_payload["circuit_open_targets"] = open_targets
+            conn.execute(
+                """
+                INSERT INTO workflow_events
+                (id, source, event_type, title, summary, payload_json, correlation_id, status,
+                 created_at, company_id, tenant_id, trace_id, span_id, traceparent, tracestate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'circuit_open', ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (event_id, src, event_type, title, summary,
+                 json.dumps(circuit_payload, ensure_ascii=False), corr, now.isoformat(),
+                 company_id, tid, trace_cols["trace_id"], trace_cols["span_id"],
+                 trace_cols["traceparent"], trace_cols["tracestate"]),
+            )
+            conn.commit()
+            return {
+                "event_id": event_id, "status": "circuit_open", "triggered": [],
+                "circuit_target": open_targets[0],
+            }
+
+        # Skipping-Status-Namen ('skipped_loop','rate_limited','deduped')
+        # zaehlen NICHT als Traffic, sonst loest der Breaker sich selbst aus.
         one_min_ago = (now - timedelta(minutes=1)).isoformat()
         recent_cnt = conn.execute(
             "SELECT COUNT(*) FROM workflow_events WHERE source = ? AND created_at >= ? "
-            "AND status NOT IN ('skipped_loop', 'rate_limited', 'deduped')",
-            (src, one_min_ago),
+            f"AND status NOT IN ('skipped_loop', 'rate_limited', 'deduped', 'circuit_open') "
+            f"AND {tenant_sql}",
+            (src, one_min_ago, *tenant_params),
         ).fetchone()[0]
-        pol_rows = conn.execute("SELECT * FROM event_bus_policies WHERE source = ?", (src,)).fetchall()
-        pol_map = {r["target"]: dict(r) for r in pol_rows}
         all_rule = pol_map.get("all")
         max_pm = int(all_rule["max_per_min"] or 20) if all_rule else max([int(r["max_per_min"] or 20) for r in pol_rows] or [20])
         if recent_cnt >= max_pm:
+            for target in targets:
+                event_bus_breaker.record_rate_limited(src, target, tid)
             conn.execute(
                 """
-                INSERT INTO workflow_events (id, source, event_type, title, summary, payload_json, correlation_id, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'rate_limited', ?)
+                INSERT INTO workflow_events
+                (id, source, event_type, title, summary, payload_json, correlation_id, status,
+                 created_at, company_id, tenant_id, trace_id, span_id, traceparent, tracestate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'rate_limited', ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (event_id, src, event_type, title, summary, json.dumps(payload_dict, ensure_ascii=False), corr, now.isoformat()),
+                (event_id, src, event_type, title, summary, json.dumps(payload_dict, ensure_ascii=False),
+                 corr, now.isoformat(), company_id, tid,
+                 trace_cols["trace_id"], trace_cols["span_id"],
+                 trace_cols["traceparent"], trace_cols["tracestate"]),
             )
             conn.commit()
             return {"event_id": event_id, "status": "rate_limited", "triggered": []}
+        # Erfolgreich am Breaker vorbei: CLOSED (auch ein HALF_OPEN-Probe).
+        for target in targets:
+            event_bus_breaker.record_success(src, target, tid)
 
         placeholders = ",".join("?" for _ in source_triggers)
         rows = conn.execute(
-            f"SELECT * FROM workflow_schedules WHERE enabled = 1 AND trigger_type IN ({placeholders})",
-            source_triggers,
+            f"SELECT * FROM workflow_schedules WHERE enabled = 1 "
+            f"AND trigger_type IN ({placeholders}) AND {tenant_sql}",
+            (*source_triggers, *tenant_params),
         ).fetchall()
 
         haystack = f"{title} {summary} {json.dumps(payload_dict, ensure_ascii=False)}".lower()
@@ -871,6 +1337,11 @@ def dispatch_workflow_event(
             for k, v in payload_dict.items():
                 if isinstance(v, (str, int, float)):
                     extra[f"event_{k}"] = v
+            # W4-B/D16: Trace-Kontext an den Workflow-Run weitergeben
+            # (Outbound-Child), nicht nur correlation_id.
+            for k in _TRACE_EVENT_COLS:
+                if trace_cols.get(k):
+                    extra[f"event_{k}"] = trace_cols[k]
             res = _execute_schedule_row(conn, row, now, extra_inputs=extra)
             if res:
                 triggered_runs.append(res)
@@ -884,8 +1355,9 @@ def dispatch_workflow_event(
             """
             INSERT INTO workflow_events (
                 id, source, event_type, title, summary, payload_json, correlation_id,
-                matched_schedule_ids_json, triggered_run_ids_json, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                matched_schedule_ids_json, triggered_run_ids_json, status, created_at,
+                company_id, tenant_id, trace_id, span_id, traceparent, tracestate
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 event_id,
@@ -899,6 +1371,12 @@ def dispatch_workflow_event(
                 json.dumps([r.get("run_id") for r in triggered_runs if r.get("run_id")]),
                 status,
                 now.isoformat(),
+                company_id,
+                tid,
+                trace_cols["trace_id"],
+                trace_cols["span_id"],
+                trace_cols["traceparent"],
+                trace_cols["tracestate"],
             ),
         )
         conn.commit()
@@ -912,13 +1390,14 @@ def dispatch_workflow_event(
                 "status": status,
                 "triggered": [r.get("run_id") for r in triggered_runs if r.get("run_id")],
             })
-        except Exception:
-            pass
+        except Exception as exc:
+            _record_event_bus_broadcast_failed(event_id, src, exc)
         _enqueue_telemetry("workflow_event", {
             "event_id": event_id,
             "source": src,
             "event_type": str(event_type or "event"),
             "status": status,
+            "tenant_id": tid,
             "triggered": [r.get("run_id") for r in triggered_runs if r.get("run_id")],
         })
         return {"event_id": event_id, "status": status, "triggered": triggered_runs}
@@ -926,19 +1405,24 @@ def dispatch_workflow_event(
         conn.close()
 
 
-def list_workflow_events(limit: int = 100, source: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_workflow_events(
+    limit: int = 100, source: Optional[str] = None, tenant_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """F014: Event-Bus-Reads sind auf den aktiven Mandanten begrenzt."""
     init_schedules_db()
+    tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
     conn = _get_conn()
     try:
         if source and source != "all":
             rows = conn.execute(
-                "SELECT * FROM workflow_events WHERE source = ? ORDER BY created_at DESC LIMIT ?",
-                (source, int(limit)),
+                f"SELECT * FROM workflow_events WHERE source = ? AND {tenant_sql} "
+                "ORDER BY created_at DESC LIMIT ?",
+                (source, *tenant_params, int(limit)),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM workflow_events ORDER BY created_at DESC LIMIT ?",
-                (int(limit),),
+                f"SELECT * FROM workflow_events WHERE {tenant_sql} ORDER BY created_at DESC LIMIT ?",
+                (*tenant_params, int(limit)),
             ).fetchall()
         out: List[Dict[str, Any]] = []
         for r in rows:
@@ -954,10 +1438,13 @@ def list_workflow_events(limit: int = 100, source: Optional[str] = None) -> List
         conn.close()
 
 
-def dispatch_watchdog_triggers(findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def dispatch_watchdog_triggers(
+    findings: List[Dict[str, Any]], tenant_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     if not findings:
         return []
     triggered: List[Dict[str, Any]] = []
+    tid = str(tenant_id or _current_tenant_id())
     for f in findings:
         ev_res = dispatch_workflow_event(
             source="watchdog",
@@ -966,6 +1453,7 @@ def dispatch_watchdog_triggers(findings: List[Dict[str, Any]]) -> List[Dict[str,
             summary=f.get("summary", ""),
             payload={"category": f.get("category", ""), "link": f.get("link", "")},
             correlation_id=str(f.get("id") or f.get("link") or ""),
+            tenant_id=tid,
         )
         triggered.extend(ev_res.get("triggered") or [])
     return triggered
@@ -1047,16 +1535,27 @@ def upsert_event_policy(source: str, target: str, policy: str, max_per_min: int 
         conn.close()
 
 
-def replay_workflow_event(event_id: str, bypass_hitl: bool = False) -> Dict[str, Any]:
+def replay_workflow_event(
+    event_id: str, bypass_hitl: bool = False, tenant_id: Optional[str] = None,
+) -> Dict[str, Any]:
     init_schedules_db()
+    tid = str(tenant_id or _current_tenant_id())
+    tenant_sql, tenant_params = _tenant_sql(tid)
     conn = _get_conn()
     try:
-        row = conn.execute("SELECT * FROM workflow_events WHERE id = ?", (event_id,)).fetchone()
+        row = conn.execute(
+            f"SELECT * FROM workflow_events WHERE id = ? AND {tenant_sql}",
+            (event_id, *tenant_params),
+        ).fetchone()
         if not row:
             raise KeyError("event_not_found")
         payload = json.loads(row["payload_json"] or "{}")
+        replay_tenant = str(row["tenant_id"] or tid)
         if bypass_hitl and row["status"] == "awaiting_hitl":
-            conn.execute("UPDATE workflow_events SET status = 'hitl_approved' WHERE id = ?", (event_id,))
+            conn.execute(
+                f"UPDATE workflow_events SET status = 'hitl_approved' WHERE id = ? AND {tenant_sql}",
+                (event_id, *tenant_params),
+            )
             conn.commit()
     finally:
         conn.close()
@@ -1068,12 +1567,15 @@ def replay_workflow_event(event_id: str, bypass_hitl: bool = False) -> Dict[str,
         payload=payload,
         correlation_id=None,
         bypass_hitl=bypass_hitl,
+        tenant_id=replay_tenant,
     )
 
 
-def approve_and_replay_hitl_event(event_id: str) -> Dict[str, Any]:
+def approve_and_replay_hitl_event(
+    event_id: str, tenant_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """Gibt ein per require_hitl pausiertes Event frei und startet die passenden Workflows."""
-    return replay_workflow_event(event_id, bypass_hitl=True)
+    return replay_workflow_event(event_id, bypass_hitl=True, tenant_id=tenant_id)
 
 
 async def workflow_scheduler_background_loop() -> None:
@@ -1101,12 +1603,19 @@ async def workflow_scheduler_background_loop() -> None:
         except Exception as exc:
             logger.warning(f"[WorkflowScheduler] DLQ-Drain fehlgeschlagen: {exc}")
             dlq_result = {"error": str(exc)[:300]}
+        # W4-B: 14-Tage-Retention der Integrations-Tabellen (intern gedrosselt).
+        retention: Dict[str, Any] = {}
+        try:
+            retention = await asyncio.to_thread(purge_integration_retention)
+        except Exception as exc:
+            logger.warning(f"[WorkflowScheduler] Integrations-Retention fehlgeschlagen: {exc}")
         _enqueue_telemetry("scheduler_cycle", {
             "outbox_processed": outbox.get("processed", 0),
             "outbox_dead": outbox.get("dead", 0),
             "dlq_handled": dlq_result.get("handled", 0),
             "dlq_failed": dlq_result.get("failed", 0),
             "dlq_unhandled": dlq_result.get("unhandled", 0),
+            "integration_retention_deleted": sum((retention.get("deleted") or {}).values()),
         })
         await asyncio.sleep(30)
 

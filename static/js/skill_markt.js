@@ -525,7 +525,6 @@
       if (typeof switchView === "function") switchView("agent-profiles");
       if (typeof createNewAgentProfile === "function") createNewAgentProfile();
     }
-    function closePresetModal() {}
     async function submitPresetModal() {
       await saveAgentsToServer();
       await loadAgentsFromServer();
@@ -3289,7 +3288,6 @@
       if (typeof switchView === "function") switchView("agent-profiles");
       if (typeof createNewAgentProfile === "function") createNewAgentProfile();
     }
-    function closeCreateAgentModal() {}
     async function submitCreateAgent() {
       const idEl = document.getElementById("new-agent-id");
       const nameEl = document.getElementById("new-agent-name");
@@ -3344,8 +3342,8 @@
       renderAgentRegistryTable();
       renderSidebarPresetsSelect();
       openTerminalForAgent(id);
-      
-      closeCreateAgentModal();
+      // D01/MED: frueher closeCreateAgentModal() — ein leerer no-op. Das
+      // Inline-Panel ist bereits geoeffnet; es gibt nichts zu schliessen.
     }
     function renderAgentsSidebar() {
       const listDiv = document.getElementById("sidebar-agents-nodes");

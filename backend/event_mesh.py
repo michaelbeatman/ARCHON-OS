@@ -7,6 +7,7 @@ Ereignisse direkt einzuspeisen und autonome Workflows zu triggern.
 
 import os
 import sys
+import asyncio
 import contextlib
 import json
 import uuid
@@ -34,9 +35,75 @@ def get_audit_error_counts() -> Dict[str, int]:
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
     from backend.db_paths import resolve_db as _resolve_db
-    DB_PATH = _resolve_db("agentic_memory.db")
+    _LEGACY_DB_PATH = _resolve_db("memory.db")
 except Exception:
-    DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
+    _LEGACY_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "memory.db")
+
+# F014 / H-06-1: DB_PATH bleibt der historische, monkeypatchbare Default.
+# Produktiv wird der Ledger-Pfad PRO AUFRUF ueber die SSOT mandantenisoliert
+# aufgeloest; ein expliziter Wert (Tests/Deployment) hat Vorrang.
+DB_PATH = _LEGACY_DB_PATH
+
+_LEGACY_SHARED_ENV = "ARCHON_LEDGER_LEGACY_SHARED_DB"
+
+# Nur waehrend des Modul-Imports (Singleton-Schema) best-effort; zur Laufzeit
+# ist der Tenant-Resolver fail-closed (F014).
+_IMPORT_BOOTSTRAP = True
+
+
+def _legacy_shared_allowed() -> bool:
+    """Expliziter, dokumentierter Legacy-Modus fuer eine geteilte Ledger-DB."""
+    return os.environ.get(_LEGACY_SHARED_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _db_path() -> str:
+    """F014: mandantenisolierter Ledger-Pfad (SSOT: db_paths.resolve_tenant_db)."""
+    if DB_PATH != _LEGACY_DB_PATH:
+        return DB_PATH  # expliziter Override (Tests / bewusste Konfiguration)
+    try:
+        from backend.db_paths import resolve_tenant_db
+        return resolve_tenant_db("memory.db")
+    except Exception as exc:
+        if _legacy_shared_allowed() or _IMPORT_BOOTSTRAP:
+            logger.warning(
+                "[F014] Tenant-Resolver unavailable (%s); best-effort legacy path: %s",
+                "explicit legacy mode" if _legacy_shared_allowed() else "import bootstrap",
+                exc,
+            )
+            return _LEGACY_DB_PATH
+        raise RuntimeError(
+            f"[F014] Tenant-DB resolution failed for event mesh: {exc}. "
+            f"Set {_LEGACY_SHARED_ENV}=1 only for an explicitly accepted legacy deployment."
+        ) from exc
+
+
+def _current_tenant_id() -> str:
+    """Aktiver Mandant (Request-Kontext vor Corporate-Default)."""
+    try:
+        from backend.tenant_context import _REQUEST_TENANT_VAR, sanitize_tenant_id
+        tid = _REQUEST_TENANT_VAR.get()
+        if tid:
+            return sanitize_tenant_id(tid)
+    except Exception:
+        pass
+    try:
+        from backend.tenant_context import tenant_context
+        return tenant_context.get_active_tenant_id()
+    except Exception:
+        return "default"
+
+
+def _tenant_key(tenant_id: str, key: str) -> str:
+    """Mandanten-Praefix fuer Dedup-/Idempotency-Keys (H-06-1)."""
+    return f"{tenant_id}::{key}" if key else ""
+
+
+def _tenant_sql(tenant_id: str) -> tuple[str, tuple[str, str]]:
+    """F014: tenant-scoped WHERE-Klausel (Legacy-Zeilen nur fuer Default)."""
+    return (
+        "(tenant_id = ? OR (COALESCE(tenant_id, '') = '' AND ? = 'default'))",
+        (str(tenant_id), str(tenant_id)),
+    )
 
 
 def _webhook_target_host(url: str) -> str:
@@ -146,13 +213,24 @@ class EffectLedger:
     """
 
     RETRYABLE = frozenset({"PENDING", "FAILED"})
+    _INITIALIZED_PATHS: set[str] = set()
 
-    def __init__(self, db_path: str = DB_PATH):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        # None => dynamische, mandantenisolierte SSOT-Auflösung pro Aufruf.
+        self._explicit_db_path = db_path
+        self.db_path = db_path or _db_path()
         self._init_db()
+        self._INITIALIZED_PATHS.add(self._conn_path(ensure=False))
+
+    def _conn_path(self, ensure: bool = True) -> str:
+        path = self._explicit_db_path or _db_path()
+        if ensure and path not in self._INITIALIZED_PATHS:
+            self._init_db()
+            self._INITIALIZED_PATHS.add(path)
+        return path
 
     def _init_db(self) -> None:
-        conn = self._conn()
+        conn = self._conn(ensure=False)
         try:
             with conn:
                 conn.execute("""
@@ -170,16 +248,25 @@ class EffectLedger:
                         evidence_json TEXT,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
-                        resolved_at TEXT
+                        resolved_at TEXT,
+                        tenant_id TEXT NOT NULL DEFAULT ''
                     )
                 """)
+                # F014: Bestands-DBs ohne Datenverlust migrieren.
+                cols = {r[1] for r in conn.execute("PRAGMA table_info(effect_ledger)").fetchall()}
+                if cols and "tenant_id" not in cols:
+                    conn.execute("ALTER TABLE effect_ledger ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_effect_ledger_state ON effect_ledger(state)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_effect_ledger_tenant ON effect_ledger(tenant_id)")
+                # W4-B/Retention: Indizes fuer den 14-Tage-Purge (kein Full-Scan).
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_effect_ledger_created ON effect_ledger(created_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_effect_ledger_resolved ON effect_ledger(resolved_at)")
                 conn.commit()
         finally:
             conn.close()
 
-    def _conn(self):
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
+    def _conn(self, ensure: bool = True):
+        conn = sqlite3.connect(self._conn_path(ensure=ensure), timeout=10.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout=5000;")
         return conn
@@ -194,7 +281,11 @@ class EffectLedger:
         expected_version: Optional[str] = None,
         authorized_by: Optional[str] = None,
         approval_id: Optional[str] = None,
+        tenant_id: Optional[str] = None,
     ) -> Dict[str, Any]:
+        # F014: der Idempotency-Key ist bereits tenant-präfigiert; die Spalte
+        # macht den Mandanten zusaetzlich explizit abfragbar.
+        tid = str(tenant_id or _current_tenant_id())
         now = datetime.datetime.now().isoformat()
         effect_id = f"eff-{uuid.uuid4().hex[:12]}"
         conn = self._conn()
@@ -203,10 +294,10 @@ class EffectLedger:
                 cur = conn.execute(
                     "INSERT OR IGNORE INTO effect_ledger "
                     "(effect_id, idempotency_key, tool, target, state, payload_hash, expected_version, "
-                    " authorized_by, approval_id, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?)",
+                    " authorized_by, approval_id, created_at, updated_at, tenant_id) "
+                    "VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?)",
                     (effect_id, idempotency_key, tool, target, payload_hash,
-                     expected_version, authorized_by, approval_id, now, now),
+                     expected_version, authorized_by, approval_id, now, now, tid),
                 )
                 inserted = int(cur.rowcount or 0)
                 conn.commit()
@@ -277,12 +368,17 @@ class EffectLedger:
         finally:
             conn.close()
 
-    def list_unresolved(self, limit: int = 25) -> List[Dict[str, Any]]:
+    def list_unresolved(
+        self, limit: int = 25, tenant_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """F014: nur UNKNOWN-Effekte des aktiven Mandanten (kein Cross-Tenant-Read)."""
+        tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
         conn = self._conn()
         try:
             rows = conn.execute(
-                "SELECT * FROM effect_ledger WHERE state = 'UNKNOWN' ORDER BY updated_at ASC LIMIT ?",
-                (max(1, min(200, int(limit))),),
+                f"SELECT * FROM effect_ledger WHERE state = 'UNKNOWN' AND {tenant_sql} "
+                "ORDER BY updated_at ASC LIMIT ?",
+                (*tenant_params, max(1, min(200, int(limit)))),
             ).fetchall()
         finally:
             conn.close()
@@ -293,19 +389,31 @@ effect_ledger = EffectLedger()
 
 
 class EventMesh:
-    def __init__(self, db_path: str = DB_PATH):
-        self.db_path = db_path
+    _INITIALIZED_PATHS: set[str] = set()
+
+    def __init__(self, db_path: Optional[str] = None):
+        # None => mandantenisolierte SSOT-Auflösung pro Aufruf (F014).
+        self._explicit_db_path = db_path
+        self.db_path = db_path or _db_path()
         self.effect_ledger = EffectLedger(db_path)
         self._init_db()
+        self._INITIALIZED_PATHS.add(self._conn_path(ensure=False))
 
-    def _get_conn(self):
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
+    def _conn_path(self, ensure: bool = True) -> str:
+        path = self._explicit_db_path or _db_path()
+        if ensure and path not in self._INITIALIZED_PATHS:
+            self._init_db()
+            self._INITIALIZED_PATHS.add(path)
+        return path
+
+    def _get_conn(self, ensure: bool = True):
+        conn = sqlite3.connect(self._conn_path(ensure=ensure), timeout=10.0)
         conn.execute("PRAGMA busy_timeout=5000;")
         conn.row_factory = sqlite3.Row
         return conn
 
     def _init_db(self):
-        conn = self._get_conn()
+        conn = self._get_conn(ensure=False)
         try:
             with conn:
                 conn.execute("""
@@ -316,7 +424,8 @@ class EventMesh:
                         direction TEXT NOT NULL,
                         payload_json TEXT NOT NULL,
                         status TEXT DEFAULT 'processed',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        tenant_id TEXT NOT NULL DEFAULT ''
                     )
                 """)
                 # Inbound-Dedup: gleicher Webhook darf bei Retry keine zweite
@@ -326,7 +435,8 @@ class EventMesh:
                         dedup_key TEXT PRIMARY KEY,
                         channel TEXT,
                         event_type TEXT,
-                        first_seen TEXT NOT NULL
+                        first_seen TEXT NOT NULL,
+                        tenant_id TEXT NOT NULL DEFAULT ''
                     )
                 """)
                 # Outbox: outbound Side-Effects werden erst persistiert, dann
@@ -347,7 +457,8 @@ class EventMesh:
                         trace_id TEXT,
                         span_id TEXT,
                         traceparent TEXT,
-                        tracestate TEXT
+                        tracestate TEXT,
+                        tenant_id TEXT NOT NULL DEFAULT ''
                     )
                 """)
                 # P2: CAS-Claim gegen parallele Worker. Ohne Claim lesen zwei
@@ -361,15 +472,45 @@ class EventMesh:
                 ):
                     if cols and col not in cols:
                         conn.execute(f"ALTER TABLE event_mesh_outbox ADD COLUMN {col} {decl}")
+                # F014: tenant_id auch in Bestands-DBs nachziehen (ALTER, kein
+                # Datenverlust). Die dedup-Spalte existiert in alten DBs evtl.
+                # noch nicht — CREATE IF NOT EXISTS aendert sie nicht.
+                for table in ("event_mesh_log", "event_mesh_dedup"):
+                    tcols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+                    if tcols and "tenant_id" not in tcols:
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''")
+                if cols and "tenant_id" not in cols:
+                    conn.execute("ALTER TABLE event_mesh_outbox ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_event_mesh_outbox_pending ON event_mesh_outbox(status, next_try_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_event_mesh_dedup_tenant ON event_mesh_dedup(tenant_id)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_event_mesh_log_tenant ON event_mesh_log(tenant_id)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_event_mesh_outbox_tenant ON event_mesh_outbox(tenant_id)")
+                # W4-B/Retention: created_at/first_seen-Indizes fuer purge_integration_retention.
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_event_mesh_log_created ON event_mesh_log(created_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_event_mesh_dedup_first_seen ON event_mesh_dedup(first_seen)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_event_mesh_outbox_created ON event_mesh_outbox(created_at)")
                 conn.commit()
         finally:
             conn.close()
 
-    def ingest_inbound_event(self, channel: str, event_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Nimmt ein externes Webhook-Ereignis (z. B. von n8n oder GitHub) entgegen."""
+    def ingest_inbound_event(
+        self, channel: str, event_type: str, payload: Dict[str, Any], *,
+        idempotency_key: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+        trace_columns: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Nimmt ein externes Webhook-Ereignis (z. B. von n8n oder GitHub) entgegen.
+
+        W4-B: ``idempotency_key``/``correlation_id`` duerfen NIE aus dem Payload
+        stammen. Nur der authentifizierte Router bzw. ein interner Produzent
+        darf sie explizit uebergeben; sonst werden sie aus
+        (Mandant, Kanal, Event-Typ, kanonischer Body-Hash) abgeleitet.
+        """
         now_iso = datetime.datetime.now().isoformat()
+        tenant_id = _current_tenant_id()
         safe_payload = dict(payload or {})
+        for _controlled in ("idempotency_key", "correlation_id"):
+            safe_payload.pop(_controlled, None)
         try:
             from backend.dual_llm_sanitizer import sanitize_external_input
             for txt_key in ("title", "message", "text", "body", "prompt", "description"):
@@ -387,10 +528,10 @@ class EventMesh:
             # KRITISCH (Audit 23.11.2026): ein fehlgeschlagener Sanitizer darf
             # NEVER fail-open. Kein Log, kein Kanban-Task, kein Event-Bus.
             logger.error("[EventMesh] Sanitizer fehlgeschlagen — Event blockiert: %s", exc)
-            blocked_key = hashlib.sha256(json.dumps(
+            blocked_key = _tenant_key(tenant_id, hashlib.sha256(json.dumps(
                 {"channel": channel, "event_type": event_type, "payload": safe_payload},
                 sort_keys=True, ensure_ascii=False, default=str,
-            ).encode("utf-8")).hexdigest()
+            ).encode("utf-8")).hexdigest())
             return {
                 "status": "blocked",
                 "blocked": True,
@@ -408,22 +549,30 @@ class EventMesh:
             }
         payload_str = json.dumps(safe_payload, ensure_ascii=False, separators=(",", ":"))
 
-        # Idempotenz: stabiler Key aus channel + event_type + kanonischem Payload
-        # (oder explizit vom Sender geliefert). EinRetry darf keine zweiten
-        # Seiteneffekte (Kanban-Task, Agent-Run) erzeugen.
-        dedup_key = str(safe_payload.get("idempotency_key") or "").strip()
-        if not dedup_key:
+        # Idempotenz: W4-B — ausschliesslich serverseitig aus
+        # (tenant, channel, event_type, kanonischer Body-Hash) bzw. aus einem
+        # expliziten, vertrauenswuerdigen Argument. Ein Sender kann den Key
+        # nicht mehr ueberschreiben und damit echte Events unterdruecken.
+        raw_dedup_key = str(idempotency_key or "").strip()
+        if not raw_dedup_key:
             canonical = json.dumps(
-                {"channel": channel, "event_type": event_type, "payload": safe_payload},
+                {"tenant": tenant_id, "channel": channel, "event_type": event_type,
+                 "payload": safe_payload},
                 sort_keys=True, ensure_ascii=False, default=str,
             )
-            dedup_key = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+            raw_dedup_key = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        # F014: der Key darf nie mandantenuebergreifend greifen (kein Doppel-Praefix).
+        dedup_key = (
+            raw_dedup_key if raw_dedup_key.startswith(f"{tenant_id}::")
+            else _tenant_key(tenant_id, raw_dedup_key)
+        )
         dedup_conn = self._get_conn()
         try:
             with dedup_conn:
                 cur = dedup_conn.execute(
-                    "INSERT OR IGNORE INTO event_mesh_dedup (dedup_key, channel, event_type, first_seen) VALUES (?, ?, ?, ?)",
-                    (dedup_key, channel, event_type, now_iso),
+                    "INSERT OR IGNORE INTO event_mesh_dedup "
+                    "(dedup_key, channel, event_type, first_seen, tenant_id) VALUES (?, ?, ?, ?, ?)",
+                    (dedup_key, channel, event_type, now_iso, tenant_id),
                 )
                 inserted = int(cur.rowcount or 0)
                 dedup_conn.commit()
@@ -451,9 +600,10 @@ class EventMesh:
             with conn:
                 cur = conn.cursor()
                 cur.execute("""
-                    INSERT INTO event_mesh_log (channel, event_type, direction, payload_json, status, created_at)
-                    VALUES (?, ?, 'inbound', ?, 'processed', CURRENT_TIMESTAMP)
-                """, (channel, event_type, payload_str))
+                    INSERT INTO event_mesh_log
+                    (channel, event_type, direction, payload_json, status, created_at, tenant_id)
+                    VALUES (?, ?, 'inbound', ?, 'processed', CURRENT_TIMESTAMP, ?)
+                """, (channel, event_type, payload_str, tenant_id))
                 conn.commit()
                 evt_id = cur.lastrowid
         finally:
@@ -488,7 +638,19 @@ class EventMesh:
                     title=str(safe_payload.get("title") or f"Mesh-Event: {channel}/{event_type}"),
                     summary=str(safe_payload.get("summary") or safe_payload.get("message") or safe_payload.get("text") or "")[:800],
                     payload=safe_payload,
-                    correlation_id=str(safe_payload.get("correlation_id") or "") or None,
+                    # F014/W4-B: correlation_id ist serverseitig abgeleitet und
+                    # mandanten-gepräfigt. Der Sender darf sie nicht setzen.
+                    correlation_id=_tenant_key(
+                        tenant_id,
+                        str(correlation_id or "").strip() or f"mesh-{dedup_key}",
+                    ),
+                    tenant_id=tenant_id,
+                    # W4-B/D16: Trace-Spalten statt nur correlation_id weitergeben,
+                    # damit die Kausalkette ueber die Systemgrenze erhalten bleibt.
+                    trace_columns=_restored_trace_columns({
+                        k: (trace_columns or {}).get(k, safe_payload.get(k, ""))
+                        for k in _TRACE_COLS
+                    }),
                 )
             except Exception as exc:
                 side_effect_errors.append(f"event_bus: {exc}")
@@ -545,29 +707,31 @@ class EventMesh:
         }
 
     @staticmethod
-    def _outbox_key(webhook_url: str, event_type: str, payload: Dict[str, Any]) -> str:
+    def _outbox_key(
+        webhook_url: str, event_type: str, payload: Dict[str, Any],
+        tenant_id: Optional[str] = None,
+    ) -> str:
         clean = {k: v for k, v in (payload or {}).items() if k not in _TRACE_COLS}
+        tid = str(tenant_id or _current_tenant_id())
         explicit = str(clean.get("idempotency_key") or "").strip()
         if explicit:
-            return explicit
+            return _tenant_key(tid, explicit)
         canonical = json.dumps(
             {"url": webhook_url, "event_type": event_type, "payload": clean},
             sort_keys=True, ensure_ascii=False, default=str,
         )
-        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        # F014: tenant-präfigierter Outbox-Key (UNIQUE greift nur pro Mandant).
+        return _tenant_key(tid, hashlib.sha256(canonical.encode("utf-8")).hexdigest())
 
-    def emit_outbound_event(
-        self, webhook_url: str, event_type: str, payload: Dict[str, Any], timeout: float = 5.0,
+    def _prepare_outbox(
+        self, webhook_url: str, event_type: str, payload: Dict[str, Any],
         *, trace_columns: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Outbox-first: Effekt wird persistiert, dann zugestellt (mit Idempotency-Key).
-
-        D16: Der Trace-Kontext wird in der Outbox gespeichert und bei Retry/DLQ
-        re-injiziert. ``trace_columns`` wird von DLQ-Replays übergeben.
-        """
+        """Persistiert den Outbox-Eintrag VOR dem Versand (M110/Outbox-first)."""
         base_payload = dict(payload or {})
+        tenant_id = _current_tenant_id()
         # Idempotenz bleibt stabil: Trace-Felder zählen nicht zum Payload-Key.
-        idem = self._outbox_key(webhook_url, event_type, base_payload)
+        idem = self._outbox_key(webhook_url, event_type, base_payload, tenant_id=tenant_id)
         if trace_columns is None:
             with _outbound_child_span() as stored:
                 trace = _restored_trace_columns(stored)
@@ -583,35 +747,39 @@ class EventMesh:
                 cur = conn.execute(
                     "INSERT OR IGNORE INTO event_mesh_outbox "
                     "(idempotency_key, target_url, event_type, payload_json, status, created_at, "
-                    " trace_id, span_id, traceparent, tracestate) "
-                    "VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
+                    " trace_id, span_id, traceparent, tracestate, tenant_id) "
+                    "VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)",
                     (
                         idem, webhook_url, event_type, payload_str, now_iso,
                         trace["trace_id"], trace["span_id"], trace["traceparent"], trace["tracestate"],
+                        tenant_id,
                     ),
                 )
                 inserted = int(cur.rowcount or 0)
+                row = conn.execute(
+                    "SELECT id, status FROM event_mesh_outbox WHERE idempotency_key = ?", (idem,)
+                ).fetchone()
+                outbox_id = int(row["id"] or 0) if row else 0
                 conn.commit()
             # DLQ-Replay (trace_columns gesetzt) deliveries bewusst erneut —
             # gleicher Idempotency-Key, aber wiederhergestellter Trace-Kontext.
             if inserted == 0 and trace_columns is None:
-                row = conn.execute(
-                    "SELECT status, attempts FROM event_mesh_outbox WHERE idempotency_key = ?", (idem,)
-                ).fetchone()
                 return {
-                    "status": "duplicate", "duplicate": True,
-                    "idempotency_key": idem,
-                    "outbox_status": str(row["status"]) if row else "unknown",
-                    "target_url": webhook_url,
-                    **_audit_webhook_event("webhook_delivered", {
-                        "direction": "outbound",
-                        "event_type": event_type,
-                        "idempotency_key": idem,
-                        "status": "duplicate",
+                    "duplicate": {
+                        "status": "duplicate", "duplicate": True,
+                        "idempotency_key": idem, "outbox_id": outbox_id,
                         "outbox_status": str(row["status"]) if row else "unknown",
-                        "target_host": _webhook_target_host(webhook_url),
-                        "http_status": 0,
-                    }),
+                        "target_url": webhook_url,
+                        **_audit_webhook_event("webhook_delivered", {
+                            "direction": "outbound",
+                            "event_type": event_type,
+                            "idempotency_key": idem,
+                            "status": "duplicate",
+                            "outbox_status": str(row["status"]) if row else "unknown",
+                            "target_host": _webhook_target_host(webhook_url),
+                            "http_status": 0,
+                        }),
+                    }
                 }
         finally:
             conn.close()
@@ -621,83 +789,159 @@ class EventMesh:
             tool="http_post",
             target=webhook_url,
             payload_hash=hashlib.sha256(payload_str.encode("utf-8")).hexdigest(),
+            tenant_id=tenant_id,
         )
-        return self._deliver_outbox(
-            idem, webhook_url, event_type, payload_str, float(timeout), attempts=0,
-            trace_columns=trace,
-        )
+        return {
+            "idem": idem, "outbox_id": outbox_id, "trace": trace,
+            "payload_str": payload_str, "tenant_id": tenant_id,
+        }
 
-    def _deliver_outbox(
-        self,
-        idem: str,
-        target: str,
-        event_type: str,
-        payload_str: str,
-        timeout: float,
-        attempts: int,
-        update_ledger: bool = True,
-        trace_columns: Optional[Dict[str, Any]] = None,
+    def emit_outbound_event(
+        self, webhook_url: str, event_type: str, payload: Dict[str, Any], timeout: float = 5.0,
+        *, trace_columns: Optional[Dict[str, Any]] = None,
+        ack_required: bool = False,
     ) -> Dict[str, Any]:
-        # P0-7b: Bei der UNKNOWN-Reconciliation darf _deliver_outbox den
-        # Ledger-Zustand NICHT selbst aendern — sonst trifft reconcile() mit
-        # WHERE state='UNKNOWN' auf 0 Zeilen und der Fall bleibt ungeklaert.
-        from utils.safe_http import safe_http_request, webhook_signature_headers
-        definitive_rejection = False
-        retry_after_sec = 0.0
-        try:
-            body_bytes = payload_str.encode("utf-8")
-            headers = {"Content-Type": "application/json", "X-Idempotency-Key": idem}
-            # D16: Re-Injektion des persistierten Kontexts als Child-Span —
-            # der Drainer läuft ohne Request-Kontext (Retry/DLQ inklusive).
-            trace = _restored_trace_columns(trace_columns)
-            try:
-                from backend import trace_context as tc
-                with tc.use_trace_context(
-                    trace_id=trace["trace_id"], span_id=trace["span_id"],
-                    traceparent=trace["traceparent"], tracestate=trace["tracestate"],
-                ):
-                    with tc.child_span(incoming=trace["traceparent"] or None):
-                        headers = tc.inject_headers(headers)
-            except Exception as exc:
-                logger.warning("[EventMesh] Trace-Header fehlgeschlagen: %s", exc)
-            headers.update(webhook_signature_headers(body_bytes))
-            _st, _hd, raw_body = safe_http_request(
-                target,
-                method="POST",
-                headers=headers,
-                data=body_bytes,
-                timeout=float(timeout),
-                max_bytes=1024 * 1024,
-            )
-            status_code = int(_st)
-            res_body = raw_body.decode("utf-8", errors="ignore")[:300]
-            # G: Retry-After (vom Server vorgegebene Wartezeit) respektieren.
-            ra = _hd.get("retry-after") if isinstance(_hd, dict) else None
-            if ra:
-                try:
-                    retry_after_sec = max(0.0, float(ra))
-                except (TypeError, ValueError):
-                    pass  # HTTP-Datum o. a.: nicht interpretierbar → Jitter-Backoff
-            status_str = "delivered" if status_code < 400 else ("dead" if 400 <= status_code < 500 else "delivery_failed")
-            definitive_rejection = 400 <= status_code < 500
-        except Exception as e:
-            # Timeout/Netzwerkfehler: der Effekt KÖNNTE angekommen sein →
-            # UNKNOWN statt FAILED (kein direkter Retry ohne Reconciliation).
-            status_code = 500
-            res_body = str(e)
-            status_str = "delivery_failed"
+        """Outbox-first: Effekt wird persistiert, dann zugestellt (mit Idempotency-Key).
 
+        D16: Der Trace-Kontext wird in der Outbox gespeichert und bei Retry/DLQ
+        re-injiziert. ``trace_columns`` wird von DLQ-Replays übergeben.
+        W4-B: ``ack_required`` verlangt einen bestaetigten executionId/status im
+        Response-Body (n8n), bevor der Versand als 'delivered' gilt.
+        """
+        prepared = self._prepare_outbox(
+            webhook_url, event_type, payload, trace_columns=trace_columns
+        )
+        if "duplicate" in prepared:
+            return prepared["duplicate"]
+        return self._deliver_outbox(
+            prepared["idem"], webhook_url, event_type, prepared["payload_str"],
+            float(timeout), attempts=0, trace_columns=prepared["trace"],
+            outbox_id=prepared["outbox_id"], ack_required=bool(ack_required),
+            reuse_trace=True,
+        )
+
+    async def emit_outbound_event_async(
+        self, webhook_url: str, event_type: str, payload: Dict[str, Any], timeout: float = 5.0,
+        *, trace_columns: Optional[Dict[str, Any]] = None,
+        ack_required: bool = False,
+        transport: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Async Variante fuer Dispatcher-Hops mit eigener HTTP-Transport-Injektion.
+
+        ``transport`` ist ein awaitbares Callable
+        ``(url, method, headers, body, timeout) -> (status, headers, body)``.
+        Ohne Transport wird der sync-Pfad im Thread ausgefuehrt.
+        """
+        prepared = self._prepare_outbox(
+            webhook_url, event_type, payload, trace_columns=trace_columns
+        )
+        if "duplicate" in prepared:
+            return prepared["duplicate"]
+        args = (
+            prepared["idem"], webhook_url, event_type, prepared["payload_str"],
+            float(timeout), 0,
+        )
+        kwargs = {
+            "trace_columns": prepared["trace"],
+            "outbox_id": prepared["outbox_id"],
+            "ack_required": bool(ack_required),
+            "reuse_trace": True,
+        }
+        if transport is None:
+            return await asyncio.to_thread(self._deliver_outbox, *args, **kwargs)
+        return await self._deliver_outbox_async(*args, transport=transport, **kwargs)
+
+    @staticmethod
+    def _outbound_headers(
+        idem: str, payload_str: str, trace: Dict[str, Any], *, new_child: bool = True,
+    ):
+        """Signierte Outbox-Header inklusive Trace-Child-Span (D16/H5).
+
+        ``new_child=False`` wird beim ERSTEN Versand verwendet: dort stammt
+        der Child-Span bereits aus ``_prepare_outbox`` und steht im Payload —
+        ein zweiter Child-Span wuerde traceparent und Payload-span_id
+        auseinanderziehen (keine kausale Kante mehr). Retry/DLQ oeffnen
+        bewusst einen neuen Child-Span.
+        """
+        from utils.safe_http import webhook_signature_headers
+
+        body_bytes = payload_str.encode("utf-8")
+        headers = {"Content-Type": "application/json", "X-Idempotency-Key": idem}
+        try:
+            from backend import trace_context as tc
+
+            def _inject():
+                return tc.inject_headers(headers)
+
+            with tc.use_trace_context(
+                trace_id=trace["trace_id"], span_id=trace["span_id"],
+                traceparent=trace["traceparent"], tracestate=trace["tracestate"],
+            ):
+                if new_child:
+                    with tc.child_span(incoming=trace["traceparent"] or None):
+                        headers = _inject()
+                else:
+                    headers = _inject()
+        except Exception as exc:
+            logger.warning("[EventMesh] Trace-Header fehlgeschlagen: %s", exc)
+        headers.update(webhook_signature_headers(body_bytes))
+        return headers, body_bytes
+
+    @staticmethod
+    def _parse_delivery_response(
+        status_code: int, raw_body: bytes, resp_headers: Any, ack_required: bool,
+    ) -> tuple[str, bool, float, bool, str]:
+        """Bewertet HTTP-Status + optionalen n8n-Ack (executionId/status)."""
+        res_body = raw_body.decode("utf-8", errors="ignore")[:300] if raw_body else ""
+        retry_after_sec = 0.0
+        ra = resp_headers.get("retry-after") if isinstance(resp_headers, dict) else None
+        if ra:
+            try:
+                retry_after_sec = max(0.0, float(ra))
+            except (TypeError, ValueError):
+                pass  # HTTP-Datum o. a.: nicht interpretierbar → Jitter-Backoff
+        ack_confirmed = True
+        if ack_required and status_code < 400:
+            try:
+                ack = json.loads(raw_body.decode("utf-8", errors="ignore") or "{}") if raw_body else {}
+            except (ValueError, TypeError):
+                ack = {}
+            if not isinstance(ack, dict):
+                ack = {}
+            exec_id = str(ack.get("executionId") or ack.get("execution_id") or "").strip()
+            ack_status = str(ack.get("status") or "").strip().lower()
+            ack_confirmed = bool(exec_id) or ack_status in ("success", "ok", "running", "queued")
+            if not ack_confirmed:
+                res_body = f"N8N_ACK_UNCONFIRMED: {res_body}"[:300]
+        if status_code >= 400:
+            status_str = "dead" if status_code < 500 else "delivery_failed"
+        elif not ack_confirmed:
+            # HTTP 200 ohne Bestaetigung ist KEIN Erfolg — gleicher Key retryt.
+            status_str = "delivery_failed"
+        else:
+            status_str = "delivered"
+        return (
+            status_str, 400 <= status_code < 500, retry_after_sec, ack_confirmed, res_body,
+        )
+
+    def _finalize_outbox(
+        self, idem: str, outbox_id: int, target: str, event_type: str, payload_str: str,
+        status_code: int, res_body: str, retry_after_sec: float, definitive_rejection: bool,
+        attempts: int, update_ledger: bool, ack_confirmed: bool,
+    ) -> Dict[str, Any]:
+        """Ledger/Outbox-Status + Audit nach dem Versand (sync oder async)."""
         if update_ledger:
-            if status_str == "delivered":
+            if status_code < 400 and not definitive_rejection and ack_confirmed:
                 self.effect_ledger.commit(idem, {"http_status": status_code})
             elif definitive_rejection:
                 self.effect_ledger.fail(idem, {"http_status": status_code, "response": res_body[:300]})
             else:
                 self.effect_ledger.mark_unknown(idem, {"http_status": status_code, "error": res_body[:300]})
-
         next_attempt = int(attempts) + 1
+        status_str = "delivered" if (
+            status_code < 400 and not definitive_rejection and ack_confirmed
+        ) else ("dead" if definitive_rejection else "delivery_failed")
         delivered_at = datetime.datetime.now().isoformat() if status_str == "delivered" else None
-        # G: Jitter verhindert Thundering Herd bei parallelen Workern.
         backoff = min(3600.0, (2.0 ** min(next_attempt, 10)) * random.uniform(0.75, 1.25))
         if retry_after_sec > 0:
             backoff = min(3600.0, max(backoff, retry_after_sec * random.uniform(0.75, 1.25)))
@@ -708,18 +952,17 @@ class EventMesh:
                     "UPDATE event_mesh_outbox SET status = ?, attempts = ?, next_try_at = ?, "
                     "last_error = ?, delivered_at = ? WHERE idempotency_key = ?",
                     (
-                        status_str,
-                        next_attempt,
+                        status_str, next_attempt,
                         time.time() + backoff if status_str == "delivery_failed" else 0.0,
                         None if status_str == "delivered" else res_body[:500],
-                        delivered_at,
-                        idem,
+                        delivered_at, idem,
                     ),
                 )
                 conn.execute(
-                    "INSERT INTO event_mesh_log (channel, event_type, direction, payload_json, status, created_at) "
-                    "VALUES (?, ?, 'outbound', ?, ?, CURRENT_TIMESTAMP)",
-                    (target, event_type, payload_str, status_str),
+                    "INSERT INTO event_mesh_log "
+                    "(channel, event_type, direction, payload_json, status, created_at, tenant_id) "
+                    "VALUES (?, ?, 'outbound', ?, ?, CURRENT_TIMESTAMP, ?)",
+                    (target, event_type, payload_str, status_str, _current_tenant_id()),
                 )
                 conn.commit()
         finally:
@@ -730,6 +973,8 @@ class EventMesh:
             "target_url": target,
             "response": res_body,
             "idempotency_key": idem,
+            "outbox_id": int(outbox_id or 0),
+            "ack_confirmed": bool(ack_confirmed),
             "attempts": next_attempt,
             **_audit_webhook_event("webhook_delivered", {
                 "direction": "outbound",
@@ -743,16 +988,100 @@ class EventMesh:
             }),
         }
 
-    def process_outbox(self, limit: int = 25, max_attempts: int = 5) -> Dict[str, Any]:
+    def _deliver_outbox(
+        self,
+        idem: str,
+        target: str,
+        event_type: str,
+        payload_str: str,
+        timeout: float,
+        attempts: int,
+        update_ledger: bool = True,
+        trace_columns: Optional[Dict[str, Any]] = None,
+        outbox_id: int = 0,
+        ack_required: bool = False,
+        reuse_trace: bool = False,
+    ) -> Dict[str, Any]:
+        # P0-7b: Bei der UNKNOWN-Reconciliation darf _deliver_outbox den
+        # Ledger-Zustand NICHT selbst aendern — sonst trifft reconcile() mit
+        # WHERE state='UNKNOWN' auf 0 Zeilen und der Fall bleibt ungeklaert.
+        from utils.safe_http import safe_http_request
+
+        trace = _restored_trace_columns(trace_columns)
+        http_status = 0
+        try:
+            headers, body_bytes = self._outbound_headers(
+                idem, payload_str, trace, new_child=not reuse_trace
+            )
+            _st, _hd, raw_body = safe_http_request(
+                target, method="POST", headers=headers, data=body_bytes,
+                timeout=float(timeout), max_bytes=1024 * 1024,
+            )
+            http_status = int(_st)
+            parsed = self._parse_delivery_response(http_status, raw_body or b"", _hd, ack_required)
+        except Exception as e:
+            # Timeout/Netzwerkfehler: der Effekt KÖNNTE angekommen sein →
+            # UNKNOWN statt FAILED (kein direkter Retry ohne Reconciliation).
+            if http_status <= 0:
+                http_status = 500
+            parsed = ("delivery_failed", False, 0.0, False, str(e)[:300])
+        _status_str, definitive, retry_after, ack_confirmed, res_body = parsed
+        return self._finalize_outbox(
+            idem, outbox_id, target, event_type, payload_str,
+            http_status, res_body, retry_after, definitive, attempts,
+            update_ledger, ack_confirmed,
+        )
+
+    async def _deliver_outbox_async(
+        self,
+        idem: str,
+        target: str,
+        event_type: str,
+        payload_str: str,
+        timeout: float,
+        attempts: int,
+        *,
+        transport: Any,
+        update_ledger: bool = True,
+        trace_columns: Optional[Dict[str, Any]] = None,
+        outbox_id: int = 0,
+        ack_required: bool = False,
+        reuse_trace: bool = False,
+    ) -> Dict[str, Any]:
+        """Async Versand mit injiziertem Transport (z. B. httpx im Dispatcher)."""
+        trace = _restored_trace_columns(trace_columns)
+        http_status = 500
+        try:
+            headers, body_bytes = self._outbound_headers(
+                idem, payload_str, trace, new_child=not reuse_trace
+            )
+            _st, _hd, raw_body = await transport(
+                target, "POST", headers, body_bytes, float(timeout)
+            )
+            http_status = int(_st)
+            parsed = self._parse_delivery_response(http_status, raw_body or b"", _hd, ack_required)
+        except Exception as e:
+            parsed = ("delivery_failed", False, 0.0, False, str(e)[:300])
+        _status_str, definitive, retry_after, ack_confirmed, res_body = parsed
+        return self._finalize_outbox(
+            idem, outbox_id, target, event_type, payload_str,
+            http_status, res_body, retry_after, definitive, attempts,
+            update_ledger, ack_confirmed,
+        )
+
+    def process_outbox(
+        self, limit: int = 25, max_attempts: int = 5, tenant_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Zuerst UNKNOWN-Effekte reconcilen, dann retrybare Einträge zustellen."""
         reconciled = 0
         worker_id = f"{os.getpid()}:{uuid.uuid4().hex[:8]}"
         claim_ttl = 120.0
         unknown_claimed_skipped = 0
+        tid = str(tenant_id or _current_tenant_id())
         # M110: UNKNOWN nie direkt retryen. Reconciliation = erneuter Versand
         # mit DEMSELBEN Idempotency-Key; der Zielserver dedupliziert. Das
         # Ergebnis wird als Beweis (Evidence) im Ledger festgehalten.
-        for u in self.effect_ledger.list_unresolved(limit):
+        for u in self.effect_ledger.list_unresolved(limit, tenant_id=tid):
             idem = str(u["idempotency_key"])
             c = self._get_conn()
             try:
@@ -1011,12 +1340,19 @@ class EventMesh:
             "events": created
         }
 
-    def list_events(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def list_events(
+        self, limit: int = 50, tenant_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """F014: kein Cross-Tenant-Read im Event-Log."""
+        tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
         conn = self._get_conn()
         try:
             with conn:
                 cur = conn.cursor()
-                cur.execute("SELECT * FROM event_mesh_log ORDER BY id DESC LIMIT ?", (limit,))
+                cur.execute(
+                    f"SELECT * FROM event_mesh_log WHERE {tenant_sql} ORDER BY id DESC LIMIT ?",
+                    (*tenant_params, int(limit)),
+                )
                 res = []
                 for r in cur.fetchall():
                     d = dict(r)
@@ -1030,3 +1366,6 @@ class EventMesh:
             conn.close()
 
 event_mesh = EventMesh()
+
+# F014: ab hier fail-closed (kein Runtime-Fallback auf die globale DB).
+_IMPORT_BOOTSTRAP = False

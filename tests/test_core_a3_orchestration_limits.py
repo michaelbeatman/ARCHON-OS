@@ -7,7 +7,9 @@ Email-Draft-Downgrade-Schutz und Core-Dispatcher Slot-Leak-Schutz.
 Referenz: d02, d05, d07, d08, d14.
 """
 import asyncio
+import datetime
 import os
+import sqlite3
 import pytest
 
 
@@ -74,11 +76,29 @@ def test_cancellation_cancel_and_reset_scope_does_not_lock_future_debates():
 
 
 def test_role_budget_engine_enforces_global_daily_cost_cap(tmp_path, monkeypatch):
+    """W3-D: Task-Caps muessen registriert sein; der globale Cap greift erst danach.
+
+    Der alte Test reservierte ohne ``task_budget_allocations`` und erwartete
+    Fail-Open. Jetzt werden die beiden Tasks mit echten Caps angelegt.
+    """
     from backend.role_budget_engine import BudgetBank
+
+    from backend.role_budget_engine import init_budget_tables
 
     db_file = str(tmp_path / "budget_a3.db")
     bank = BudgetBank(db_path=db_file)
+    init_budget_tables(db_path=db_file)
     monkeypatch.setenv("ARCHON_GLOBAL_DAILY_COST_CAP_EUR", "1.00")
+    now = datetime.datetime.now().isoformat()
+    with sqlite3.connect(db_file) as conn:
+        for task_id, agent_id in (("t1", "agent_a"), ("t2", "agent_b")):
+            conn.execute(
+                "INSERT INTO task_budget_allocations "
+                "(task_id, agent_id, token_budget, tokens_used, cost_limit_eur, cost_used_eur, created_at, updated_at) "
+                "VALUES (?, ?, ?, 0, ?, 0.0, ?, ?)",
+                (task_id, agent_id, 10000, 5.0, now, now),
+            )
+        conn.commit()
 
     r1 = bank.reserve(agent_id="agent_a", task_id="t1", estimated_tokens=1000, estimated_cost_eur=0.60)
     assert r1["allowed"] is True

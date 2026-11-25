@@ -46,6 +46,9 @@ class MapReduceRequest(_ExecRequest):
     items: List[Any] = []
     instruction: str = "Analysiere und extrahiere Kernergebnisse"
     max_parallel_workers: Optional[int] = None
+    # Nur explizit angeforderte Demo-Laeufe erzeugen Platzhalter-Outputs.
+    # Der Default ist der echte Dispatcher-Worker (H-01-1).
+    demo: bool = False
 
 
 class StructuredOutputRequest(_ExecRequest):
@@ -111,25 +114,29 @@ class QueueFailRequest(_ExecRequest):
 
 @router.post("/api/execution/map-reduce")
 async def api_execute_map_reduce(request: Request, payload: MapReduceRequest = Body(...)):
-    """Demo-Endpoint (D01/D12): es wird kein echter `worker_fn` injiziert.
+    """Produktivpfad fuer paralleles Map-Reduce (H-01-1/F042).
 
-    Deshalb ist jedes Ergebnis dieses Endpoints explizit als Simulation
-    gekennzeichnet. Produktivaufrufer muessen `execute_map_reduce(worker_fn=...)`
-    direkt mit einer echten Worker-Funktion nutzen.
+    Jeder Chunk wird ueber den echten zentralen Dispatcher ausgefuehrt
+    (``make_dispatcher_worker_fn``). Nur wenn der Aufrufer explizit
+    ``demo: true`` setzt, entstehen Platzhalter-Outputs — dann ist das
+    Ergebnis ``simulated``/``demo_only``/``simulation`` gekennzeichnet.
+    Ein Partial-/Fehlschlag echter Worker wird ehrlich als ``partial``/``failed``
+    gemeldet, nie als Erfolg.
     """
     require_admin_or_503(request)
     payload = _as_payload(payload)
-    from backend.map_reduce_executor import map_reduce_executor
+    from backend.map_reduce_executor import make_dispatcher_worker_fn, map_reduce_executor
+
+    demo = bool(payload.get("demo", False))
+    worker_fn = None if demo else make_dispatcher_worker_fn()
     result = await map_reduce_executor.execute_map_reduce(
         task_title=payload.get("task_title", "Map-Reduce Batch"),
         items=payload.get("items", []),
         instruction=payload.get("instruction", "Analysiere und extrahiere Kernergebnisse"),
-        max_workers_override=payload.get("max_parallel_workers")
+        max_workers_override=payload.get("max_parallel_workers"),
+        worker_fn=worker_fn,
     )
-    result["simulated"] = True
-    result["mode"] = "demo_only"
-    result["demo_only"] = True
-    result["status"] = "simulation"
+    result["demo_only"] = demo
     return result
 
 

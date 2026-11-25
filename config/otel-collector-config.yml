@@ -1,16 +1,22 @@
 # Archon OS — OpenTelemetry Collector Configuration (D16 / P1, Re-Audit R-B6)
 #
-# Kein toter Default-Endpunkt mehr: ohne explizit gesetzten Downstream bleiben
-# die Spans in einem lokalen file-Exporter (immer erreichbar). Das EOL-
-# Langfuse-v2-Artefakt ist aus Compose und Startern entfernt (Audit D09/D10,
-# D-D8); ein aktuelles Langfuse wird nur ueber die LANGFUSE_*-Werte als
-# direkter App-Export angebunden und meldet ohne Keys ehrlich `not_configured`.
-# EHR-LICHER STATUS (D16/HIGH, S-1.5): collector_downstream =
-# not_configured/local_only. Es ist KEIN Tempo/Jaeger/Langfuse-Downstream
-# verdrahtet; die Spans landen ausschliesslich in debug + file/traces-local.
-# backend/otel_tracer.get_tracing_status() meldet exakt diesen Zustand, statt
-# einen nicht gestarteten Consumer zu behaupten. Ein echter Downstream muss
-# aktiv (Compose + Volume + Grafana-Datasource) verdrahtet werden — A1.
+# Zwei echte Traces-Pipelines am selben OTLP-Receiver (vom Collector offiziell
+# supported): `traces` archiviert lokal, `traces/downstream` schickt die Spans
+# an Grafana Tempo. Damit ist die Kausalkette nicht mehr nur in der lokalen
+# SQLite-DB bzw. im Container-/tmp, sondern in einer abfragbaren
+# Trace-Backend-Instanz rekonstruierbar (Soll §3, H-16-2).
+#
+# Der lokale file-Exporter bleibt als immer erreichbarer Fallback erhalten;
+# sein Ziel liegt jetzt auf einem Compose-Volume (otel_local_traces), nicht
+# mehr auf einem fluechtigen /tmp im Container. Ein extern betriebenes
+# Langfuse wird weiterhin direkt aus der App ueber LANGFUSE_* angebunden
+# (kein EOL-Langfuse-v2-Container, kein toter Default-Endpunkt).
+#
+# EHR-LICHER STATUS (H-16-1, S-1.5): Dies ist W3C Trace Context + lokaler
+# SQLite-Span-Recorder, KEIN OTel-SDK. Die App erzeugt W3C-IDs und sendet
+# OTLP/HTTP-JSON per urllib an diesen Collector; es gibt keinen
+# TracerProvider/BatchSpanProcessor aus dem SDK. `get_tracing_status()`
+# weist das explizit aus (otel_sdk=false, implementation=...).
 
 receivers:
   otlp:
@@ -39,9 +45,15 @@ processors:
 exporters:
   debug:
     verbosity: basic
-  # Immer erreichbarer Default-Sink; kein Verweis auf einen nicht gestarteten Container.
+  # Immer erreichbarer lokaler Sink auf einem persistenten Volume.
   file/traces-local:
-    path: /tmp/archon-otel-traces.json
+    path: /var/lib/otel/traces-local.json
+  # H-16-2: echter zentraler Downstream. Tempo laeuft im selben Netz unter
+  # `tempo` und nimmt OTLP/HTTP auf 4318 entgegen (siehe docker-compose.yml).
+  otlphttp/downstream:
+    endpoint: http://tempo:4318
+    tls:
+      insecure: true
 
 service:
   pipelines:
@@ -49,3 +61,10 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, filter/unsampled, batch]
       exporters: [debug, file/traces-local]
+    # Eigene Pipeline fuer den zentralen Trace-Store. Der Receiver fan-outet
+    # dieselben Spans an beide Pipelines; die Processor-Instanzen sind
+    # pipeline-lokal (kein geteilter Zustand).
+    traces/downstream:
+      receivers: [otlp]
+      processors: [memory_limiter, filter/unsampled, batch]
+      exporters: [otlphttp/downstream]

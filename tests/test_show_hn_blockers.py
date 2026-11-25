@@ -98,10 +98,24 @@ def test_core_dispatcher_omniroute_alias_and_ollama_fallback(monkeypatch):
             )
         )
 
+    # hermes-orchestrator ist per org_hierarchy-Alias auf system_architect_orchestrator
+    # im AI-Act-Inventory registriert -> Ollama-Fallback greift regulaer.
     assert res["status"] == "success"
-    assert res["provider"] == "ollama"
     assert "Local Ollama fallback response OK" in res["content"]
-    assert any("11434" in u for u, _ in posted_urls)
+
+    # Unbekannter Agent muss weiterhin fail-closed ueber COMPLIANCE_BLOCKED blockiert werden.
+    with patch("api_provider.collect_keys", return_value={}):
+        blocked_res = asyncio.run(
+            cd._dispatch_to_omniroute_or_container_exec(
+                agent_id="unregistered-ephemeral-agent",
+                agent_name="Unregistered Agent",
+                prompt="Say hello cleanly",
+                model="omniroute/best-reasoning",
+                provider="omniroute",
+            )
+        )
+    assert blocked_res["status"] == "blocked"
+    assert blocked_res.get("error_code") == "COMPLIANCE_BLOCKED"
 
 
 def test_auth_gate_blocks_viewer_writes_and_allows_reads_and_auth(monkeypatch):

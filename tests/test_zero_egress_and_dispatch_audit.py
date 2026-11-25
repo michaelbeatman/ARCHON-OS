@@ -271,7 +271,9 @@ def test_core_dispatcher_hard_blocks_crm_finance_contracts_without_cloud_leak(tm
 
 def test_agent_router_logs_provider_model_and_target_host_in_sha256_chain(tmp_path, monkeypatch):
     import asyncio
+    import datetime
 
+    import backend.role_budget_engine as rbe
     from backend import privacy_router as pr
     from backend.agent_router import AgentRouter
     from backend.audit_log import ChainedAuditLog
@@ -280,6 +282,22 @@ def test_agent_router_logs_provider_model_and_target_host_in_sha256_chain(tmp_pa
     monkeypatch.setenv("ARCHON_ALLOW_INSECURE_AUDIT_DEV", "1")
     alog = ChainedAuditLog(db_path=str(tmp_path / "router_audit.db"))
     monkeypatch.setattr("backend.llm_egress_guard.chained_audit_log", alog)
+
+    # W3-D/F032: Chat-Dispatch ohne registriertes Task-Cap ist fail-closed.
+    # Der Test prueft Audit-Felder → echte Allokation in einer Temp-DB.
+    task_id = f"test-audit-{tmp_path.name}"
+    budget_db = str(tmp_path / "router_audit_budget.db")
+    rbe.init_budget_tables(db_path=budget_db)
+    monkeypatch.setattr(rbe.budget_bank, "db_path", budget_db)
+    now = datetime.datetime.now().isoformat()
+    with sqlite3.connect(budget_db) as conn:
+        conn.execute(
+            "INSERT INTO task_budget_allocations "
+            "(task_id, agent_id, token_budget, tokens_used, cost_limit_eur, cost_used_eur, created_at, updated_at) "
+            "VALUES (?, ?, ?, 0, ?, 0.0, ?, ?)",
+            (task_id, "software_architect", 50000, 100.0, now, now),
+        )
+        conn.commit()
 
     cfg = dict(pr.DEFAULT_PRIVACY_CONFIG)
     cfg["zero_egress_strict"] = False
@@ -311,7 +329,7 @@ def test_agent_router_logs_provider_model_and_target_host_in_sha256_chain(tmp_pa
                 api_keys={"OPENROUTER_API_KEY": "sk-test-dummy"},
                 agent_id="software_architect",
                 role="Engineering",
-                task_id=f"test-audit-{tmp_path.name}",
+                task_id=task_id,
             )
         )
 

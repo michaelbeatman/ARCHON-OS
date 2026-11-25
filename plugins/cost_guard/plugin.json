@@ -7,7 +7,7 @@
   "category": "security",
   "default_enabled": true,
   "permissions": ["system_info", "filesystem_write"],
-  "hooks": ["on_startup", "before_tool_execute", "on_task_completed"],
+  "hooks": ["on_task_completed"],
   "entry_point": "plugin.py:CostGuardPlugin",
   "settings_schema": {
     "type": "object",

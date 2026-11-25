@@ -47,21 +47,40 @@ _AUDIT_WRITE_LOCK = threading.Lock()
 _FAILED_CANCELS: list = []
 
 
-def _record_failed_cancel(task_name: str, detail: str) -> None:
-    """Persistiert einen gescheiterten cancel() inkl. Audit (best effort)."""
-    entry = {"task": str(task_name), "detail": str(detail)[:500], "ts": time.time()}
+def _record_failed_cancel(task_name: str, detail: str) -> Dict[str, Any]:
+    """Persistiert einen gescheiterten cancel() inkl. signiertem Audit-Event.
+
+    D05/HIGH (H-05-4): der frühere Aufruf ohne Pflicht-`agent_id` löste
+    garantiert TypeError aus und wurde als WARNING verschluckt — ein toter
+    Audit-Pfad. Jetzt: agent_id="system", ERROR-Eskalation und sichtbares
+    Result-Feld. Bei ARCHON_AUDIT_STRICT=1 bleibt der Vorfall ausdrücklich
+    nicht quittiert (audit_status="error"), /readyz spiegelt _FAILED_CANCELS.
+    """
+    entry: Dict[str, Any] = {
+        "task": str(task_name),
+        "detail": str(detail)[:500],
+        "ts": time.time(),
+        "audit_status": "ok",
+    }
     _FAILED_CANCELS.append(entry)
     logger.error("[Dispatcher] Cancel fehlgeschlagen: %s — %s", task_name, entry["detail"])
     try:
         with _AUDIT_WRITE_LOCK:
             from backend.audit_log import chained_audit_log
-            chained_audit_log.record_event(
+            ev = chained_audit_log.record_event(
                 category="recovery",
                 action="cancel_failed",
-                payload=entry,
+                agent_id="system",
+                payload={k: v for k, v in entry.items() if k != "audit_status"},
             )
+        entry["audit_status"] = "ok"
+        entry["audit_event_id"] = ev.get("event_id")
     except Exception as audit_exc:
-        logger.warning("[Dispatcher] Cancel-Fehler nicht auditierbar: %s", audit_exc)
+        # Audit-Schreibfehler nie verschlucken (§0 / §2.5).
+        entry["audit_status"] = "error"
+        entry["audit_error"] = f"{type(audit_exc).__name__}: {audit_exc}"
+        logger.error("[Dispatcher] Cancel-Fehler nicht auditierbar: %s", audit_exc)
+    return entry
 
 
 # D11: explizite Kürzungs-Marker statt stiller Slices in OTel-Spans.
@@ -446,84 +465,129 @@ async def trigger_n8n_execution(
     """
     Sendet einen asynchronen Outbound-Webhook an n8n (Port 5678).
     URL: http://n8n:5678/webhook/archon-execution
+
+    W4-B/D06: Outbox-first ueber ``event_mesh.emit_outbound_event_async``.
+    Der HTTP-Hop bleibt injizierbar (httpx), damit Retry/DLQ und Ack-Pruefung
+    in der Outbox liegen und ein Timeout nicht zum dauerhaften Verlust fuehrt.
     """
     import datetime
     url = f"{N8N_URL}/webhook/archon-execution"
+    executed_at = datetime.datetime.now().isoformat()
+    action = target_action or "none"
     payload = {
         "parent_project_id": parent_project_id,
         "title": title,
         "final_report_path": final_report_path,
         "content": content,
-        "action": target_action or "none",
-        "executed_at": datetime.datetime.now().isoformat()
+        "action": action,
+        "executed_at": executed_at,
     }
+    # Deterministischer Idempotency-Key aus (parent_project_id, action, executed_at).
+    key_source = json.dumps(
+        {"parent_project_id": str(parent_project_id or ""), "action": action,
+         "executed_at": executed_at},
+        sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+    )
+    idem = hashlib.sha256(key_source.encode("utf-8")).hexdigest()
+    payload["idempotency_key"] = idem
+
+    async def _httpx_transport(target, method, headers, body, request_timeout):
+        """Echter HTTP-Hop; Idempotency-Key und Trace stammen aus der Outbox.
+
+        Die Outbox injiziert den traceparent bereits mit der exakt zum Payload
+        passenden Span-ID (``new_child=False``). Der Transport darf ihn daher
+        NICHT erneut forken — sonst zeigen Header und Payload auf zwei
+        verschiedene Kanten. Nur wenn die Outbox ausnahmsweise keinen Kontext
+        beigesteuert hat, wird hier ein Child-Span erzeugt und injiziert.
+        """
+        send_headers = dict(headers)
+        try:
+            has_traceparent = any(
+                str(k).lower() == "traceparent" and bool(v)
+                for k, v in (headers or {}).items()
+            )
+            if not has_traceparent:
+                from backend.trace_context import child_span, inject_headers
+
+                with child_span():
+                    send_headers = inject_headers(send_headers)
+        except Exception as tr_exc:
+            logger.warning(
+                "[Dispatcher] Trace-Injektion im n8n-Transport fehlgeschlagen: %s", tr_exc
+            )
+        async with httpx.AsyncClient(timeout=request_timeout) as client:
+            resp = await client.post(target, content=body, headers=send_headers)
+            return (
+                int(resp.status_code),
+                {
+                    str(k).lower(): str(v)
+                    for k, v in (getattr(resp, "headers", None) or {}).items()
+                },
+                getattr(resp, "content", None) or b"",
+            )
+
     try:
-        from backend.trace_context import child_span, inject_headers, inject_payload
-    except Exception as exc:
-        logger.warning("[Dispatcher] Trace-Kontext am n8n-Hop nicht verfuegbar: %s", exc)
-        child_span = None
-        inject_headers = None
-        inject_payload = None
-    try:
-        from utils.safe_http import webhook_signature_headers
-        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
-        headers.update(webhook_signature_headers(body))
-        if child_span is not None and inject_headers is not None:
-            # D16/H2: genau EIN Child-Span fuer diesen Hop. inject_headers()/
-            # inject_payload() MUESSEN im Block laufen, damit die NEUE Span-ID
-            # in traceparent und Payload steht (sonst Self-Parenting ohne
-            # Kausalkante). child_span() forkt den aktiven Kontext; ohne
-            # Kontext entsteht genau ein Root, und beim Verlassen wird der
-            # umgebende Kontext wiederhergestellt.
-            with child_span():
-                if inject_payload is not None:
-                    payload = inject_payload(payload)
-                    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-                    headers.update(webhook_signature_headers(body))
-                headers = inject_headers(headers)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, content=body, headers=headers)
-            if resp.status_code == 200:
-                # D12/MED: HTTP 200 allein ist KEIN Nachweis einer Ausfuehrung.
-                # Ohne executionId/status bleibt der Versand unbestaeigt.
-                ack = {}
-                try:
-                    ack = resp.json() if resp.content else {}
-                except Exception as ack_exc:
-                    logger.debug("[Dispatcher] n8n-Ack nicht parsbar: %s", ack_exc)
-                if not isinstance(ack, dict):
-                    ack = {}
-                execution_id = str(ack.get("executionId") or ack.get("execution_id") or "").strip()
-                confirmed = bool(execution_id) or str(ack.get("status") or "").strip().lower() in ("success", "ok", "running", "queued")
-                if confirmed:
-                    return {
-                        "status": "success",
-                        "code": 200,
-                        "execution_id": execution_id,
-                        "message": "n8n execution acknowledged",
-                    }
-                logger.warning("[Dispatcher] n8n HTTP 200 ohne Execution-Nachweis (action=%s).", target_action)
-                return {
-                    "status": "unconfirmed",
-                    "code": 200,
-                    "error_code": "N8N_DELIVERY_UNCONFIRMED",
-                    "message": "n8n HTTP 200 ohne executionId — Ausfuehrung nicht bestaetigt.",
-                }
-            logger.warning("[Dispatcher] n8n HTTP %s (action=%s).", resp.status_code, target_action)
-            return {
-                "status": "error",
-                "code": resp.status_code,
-                "error_code": "N8N_DELIVERY_UNCONFIRMED",
-                "message": f"n8n returned HTTP {resp.status_code} — Ausfuehrung nicht bestaetigt.",
-            }
+        from backend.event_mesh import event_mesh
+
+        res = await event_mesh.emit_outbound_event_async(
+            url,
+            "archon.execution",
+            payload,
+            timeout=float(timeout),
+            ack_required=True,
+            transport=_httpx_transport,
+        )
     except Exception as e:
-        logger.error("[Dispatcher] n8n-Webhook nicht erreichbar: %s", e)
+        logger.error("[Dispatcher] n8n-Outbox nicht erreichbar: %s", e)
         return {
-            "status": "error",
-            "error_code": "N8N_DELIVERY_UNCONFIRMED",
-            "message": f"n8n unreachable: {str(e)}",
+            "status": "blocked",
+            "blocked": True,
+            "error_code": "N8N_OUTBOX_UNAVAILABLE",
+            "idempotency_key": idem,
+            "message": f"n8n outbox unavailable: {str(e)[:300]}",
         }
+
+    outbox_id = res.get("outbox_id")
+    outbox_status = str(res.get("status") or "")
+    http_status = int(res.get("http_status") or 0)
+    if outbox_status == "delivered" and res.get("ack_confirmed"):
+        ack = {}
+        try:
+            ack = json.loads(str(res.get("response") or "") or "{}")
+        except (ValueError, TypeError):
+            ack = {}
+        if not isinstance(ack, dict):
+            ack = {}
+        execution_id = str(ack.get("executionId") or ack.get("execution_id") or "").strip()
+        return {
+            "status": "success",
+            "code": http_status or 200,
+            "execution_id": execution_id,
+            "idempotency_key": idem,
+            "outbox_id": outbox_id,
+            "message": "n8n execution acknowledged via outbox",
+        }
+    # HTTP 200 ohne executionId/status ist kein Erfolg. pending,
+    # delivery_failed und dead bleiben in der Outbox und werden vom 30-s-
+    # Drainer mit demselben Key erneut zugestellt (CAS + Backoff + DLQ).
+    unconfirmed = http_status == 200 and not res.get("ack_confirmed")
+    logger.warning(
+        "[Dispatcher] n8n-Ausfuehrung nicht bestaetigt (action=%s, outbox=%s, status=%s).",
+        action, outbox_id, outbox_status,
+    )
+    return {
+        "status": "unconfirmed" if unconfirmed else "blocked",
+        "blocked": True,
+        "code": http_status,
+        "error_code": "N8N_DELIVERY_UNCONFIRMED" if unconfirmed else "N8N_OUTBOX_PENDING",
+        "idempotency_key": idem,
+        "outbox_id": outbox_id,
+        "outbox_status": outbox_status,
+        "message": (
+            "n8n HTTP 200 ohne executionId — Ausfuehrung nicht bestaetigt (Outbox "
+            f"id={outbox_id}, status={outbox_status})."
+        ),
+    }
 
 def _clean_dispatch_output(text: Any, session_id: Optional[str] = None, is_local: bool = False) -> str:
     from backend.llm_kernel import finalize_llm_output
@@ -563,10 +627,38 @@ def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt:
     explicit_cat = ""
     try:
         from backend.data_classifier import DataClassifier
-        if not DataClassifier.classify(prompt or "").get("cloud_llm_allowed", True):
+        # D04/H-04-1: fehlender Key darf NIE "Cloud erlaubt" bedeuten.
+        if DataClassifier.classify(prompt or "").get("cloud_llm_allowed", False) is not True:
             explicit_cat = "confidential"
     except Exception as exc:
-        logger.warning(f"[Dispatcher] DataClassifier fehlgeschlagen: {exc}")
+        # D04/H-04-1: Klassifikationsfehler = fail-closed confidential +
+        # signierter Block-Proof + ZeroEgressBlockedError (analog Z.308-310 /
+        # agent_router.py:834-836). Nie still mit leerer Kategorie weiterlaufen.
+        logger.error("[Dispatcher] DataClassifier fehlgeschlagen (fail-closed, Zero-Egress): %s", exc)
+        explicit_cat = "confidential"
+        ev = {}
+        try:
+            from backend.audit_log import chained_audit_log
+            from backend.llm_egress_guard import _record_blocked_proof
+            ev = _record_blocked_proof(
+                alog=chained_audit_log,
+                agent_id=aid or "system",
+                provider=provider or "omniroute",
+                model=model or "",
+                target_endpoint=url or "egress-firewall://proof.local",
+                action="llm_dispatch_blocked_classifier_unavailable",
+                error_code="DATA_CLASSIFIER_UNAVAILABLE",
+                reason=f"DataClassifier nicht verfuegbar — fail-closed: {exc}",
+                data_category="confidential",
+            )
+        except Exception as proof_exc:
+            # Auch ein fehlgeschlagener Proof darf den Block nicht aufheben.
+            logger.error("[Dispatcher] Classifier-Block-Proof nicht schreibbar (fail-closed): %s", proof_exc)
+        raise ZeroEgressBlockedError(
+            f"DataClassifier nicht verfuegbar — Zero-Egress fail-closed: {exc}",
+            audit_event=ev,
+            error_code="DATA_CLASSIFIER_UNAVAILABLE",
+        ) from exc
 
     gate = evaluate_and_gate_llm_dispatch(
         agent_id=aid,
@@ -826,18 +918,101 @@ def _get_dispatcher_http_client() -> httpx.AsyncClient:
     return c
 
 
-async def close_dispatcher_clients() -> int:
-    """Shutdown-Hook: alle gepoolten Clients kontrolliert schliessen."""
+async def close_dispatcher_clients() -> Dict[str, Any]:
+    """Shutdown-Hook: alle gepoolten Clients kontrolliert schliessen.
+
+    D08/MED (H-08/Client-Close): ein fehlgeschlagenes ``aclose()`` wurde frueher
+    verschluckt UND der Client danach aus dem Registry geloescht — der Shutdown
+    meldete Erfolg, waehrend Transport/FD offen blieben. Fehlgeschlagene Clients
+    bleiben jetzt im Dict (aufrufbarer Retry), werden auf ERROR geloggt und als
+    ``failed_closes`` zurueckgegeben.
+    """
     closed = 0
-    for client in list(_DISPATCHER_HTTP_CLIENTS.values()):
-        if not client.is_closed:
-            try:
-                await client.aclose()
-                closed += 1
-            except Exception:
-                pass
-    _DISPATCHER_HTTP_CLIENTS.clear()
-    return closed
+    failed: List[str] = []
+    for loop, client in list(_DISPATCHER_HTTP_CLIENTS.items()):
+        if client.is_closed:
+            continue
+        try:
+            await client.aclose()
+            closed += 1
+        except Exception as exc:
+            # Kein stilles Verlieren der Referenz: der Client bleibt im Registry,
+            # damit ein spaeterer Shutdown-Versuch ihn erneut schliessen kann.
+            failed.append(str(exc))
+            logger.error(
+                "[Dispatcher] HTTP-Client-Close fehlgeschlagen (FD-Leak-Risiko): %s",
+                exc, exc_info=exc,
+            )
+    return {
+        "closed": closed,
+        "failed_closes": len(failed),
+        "failed_clients": failed,
+        "remaining_clients": len(_DISPATCHER_HTTP_CLIENTS),
+    }
+
+
+def _audit_dispatch_failure(action: str, detail: str, **extra: Any) -> None:
+    """D07/MED: Budget-/Usage-Schreibfehler nie auf DEBUG verschlucken."""
+    logger.error("[Dispatcher] %s: %s", action, detail)
+    try:
+        with _AUDIT_WRITE_LOCK:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="recovery",
+                action=action,
+                agent_id="system",
+                payload={"detail": str(detail)[:500], **extra},
+            )
+    except Exception as audit_exc:
+        # Audit-Schreibfehler selbst duerfen nicht erneut verschluckt werden.
+        logger.error("[Dispatcher] Audit-Eskalation %s fehlgeschlagen: %s", action, audit_exc)
+
+
+def _reserve_trajectory_budget_sync(
+    task_id: str,
+    agent_id: str,
+    estimated_tokens: int,
+    reason: str = "",
+) -> Dict[str, Any]:
+    """D13/H-13-1: ticketweite Hop-/Token-Invariante im LLM-Chokepoint.
+
+    Laeuft als Ganzes in ``asyncio.to_thread`` (zwei BEGIN IMMEDIATE-
+    Transaktionen der Trajectory-Engine). ``root_ticket_id=task_id`` macht die
+    ID stabil — damit werden A→B→A-Zyklen und Token-Caps ueber die gesamte
+    Kette sichtbar, nicht nur im DAG-/Agent-Router-Pfad.
+    """
+    from backend.trajectory_budget import (
+        normalize_trajectory_id,
+        reserve_hop,
+        reserve_tokens,
+    )
+
+    tid = normalize_trajectory_id(None, root_ticket_id=str(task_id or ""))
+    hop_reason = str(reason or "").strip() or f"llm_call:{agent_id}"
+    hop = reserve_hop(
+        tid, str(agent_id or ""), hop_reason, root_ticket_id=str(task_id or "")
+    )
+    if not hop.get("allowed", False):
+        return {
+            "allowed": False,
+            "trajectory_id": tid,
+            "stage": "hop",
+            "reason": str(hop.get("reason") or "TRAJECTORY_CAP_BLOCKED"),
+        }
+    tokens = reserve_tokens(tid, int(estimated_tokens or 0), reason="llm_dispatch_estimate")
+    if not tokens.get("allowed", False):
+        return {
+            "allowed": False,
+            "trajectory_id": tid,
+            "stage": "tokens",
+            "reason": str(tokens.get("reason") or "TOKEN_CAP_REACHED"),
+        }
+    return {
+        "allowed": True,
+        "trajectory_id": tid,
+        "hop": hop,
+        "tokens": tokens,
+    }
 
 class _DispClosingConn(sqlite3.Connection):
     def __enter__(self):
@@ -857,7 +1032,9 @@ async def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok:
             _log_dispatcher_usage_sync, agent_id, model, in_tok, out_tok, task_id
         )
     except Exception as exc:
-        logger.debug(f"[Dispatcher] Async Usage-Log fehlgeschlagen: {exc}")
+        # D07/MED: Token-/Cost-Zaehlung ist budgetrelevant — ERROR + Audit statt
+        # eines DEBUG-Hinweises, der in Produktion (INFO) unsichtbar ist.
+        _audit_dispatch_failure("usage_log_failed", str(exc), stage="async_usage_log")
 
 
 def _log_dispatcher_usage_sync(agent_id: str, model: str, in_tok: int, out_tok: int, task_id: str = ""):
@@ -905,7 +1082,11 @@ def _log_dispatcher_usage_sync(agent_id: str, model: str, in_tok: int, out_tok: 
                     """, (s_id, unique_title, unique_title, model, agent_id, now, in_tok, out_tok, cost_usd, cost_usd))
                     inserted_session = cur.rowcount > 0
                 except sqlite3.Error as db_exc:
-                    logger.debug(f"[Dispatcher] Session-Insert fuer Usage-Logging uebersprungen: {db_exc}")
+                    # D07/MED: ohne Session-Zeile aktualisieren die folgenden
+                    # UPDATEs 0 Zeilen — still verlorene Token-/EUR-Zaehlung.
+                    _audit_dispatch_failure(
+                        "usage_log_failed", str(db_exc), stage="session_insert", task_id=str(eff_task)
+                    )
             
             conn.execute("""
                 INSERT INTO session_model_usage (
@@ -922,12 +1103,19 @@ def _log_dispatcher_usage_sync(agent_id: str, model: str, in_tok: int, out_tok: 
             """, (s_id, model, t_key, in_tok, out_tok, cost_usd, cost_usd, now, now))
             
             if not inserted_session:
-                conn.execute("""
+                cur_upd = conn.execute("""
                     UPDATE sessions 
                     SET input_tokens = input_tokens + ?, output_tokens = output_tokens + ?,
                         estimated_cost_usd = estimated_cost_usd + ?
                     WHERE id = ?
                 """, (in_tok, out_tok, cost_usd, s_id))
+                if int(cur_upd.rowcount or 0) == 0:
+                    # D07/MED: 0 Treffer bedeutet, dass die Kosten nirgends
+                    # landen — kein stilles "success" der Budget-Attribution.
+                    _audit_dispatch_failure(
+                        "usage_log_failed", "session update affected 0 rows",
+                        stage="session_update", task_id=str(eff_task),
+                    )
             
         if "main" in sys.modules:
             m = sys.modules["main"]
@@ -980,6 +1168,7 @@ async def dispatch_to_omniroute_or_container(
     task_id: str = "",
     history: Optional[list] = None,
     available_tools: Optional[List[Dict[str, Any]]] = None,
+    trajectory_reason: str = "",
 ) -> dict:
     """
     Zentraler Dispatcher: Nutzt dynamisch den im Profil konfigurierten Provider & das Sprachmodell.
@@ -1131,6 +1320,45 @@ async def dispatch_to_omniroute_or_container(
                         "content": f"🛑 [BUDGET-CAP BLOCK]: {bg_chk.get('reason')}",
                     })
                 budget_reservation_id = bg_chk.get("reservation_id")
+
+                # D13/H-13-1: die Trajectory-Invariante (Hop/Zyklus/Token-Cap)
+                # wurde bisher NUR im DAG-/Agent-Router-Pfad geprueft. Der
+                # zentrale LLM-Chokepoint war Produzent ohne Konsument. Harte
+                # Blockade VOR dem Provider-Call; die Budget-Reservierung wird
+                # im `finally` wieder freigegeben.
+                try:
+                    _traj = await asyncio.to_thread(
+                        _reserve_trajectory_budget_sync,
+                        str(task_id or ""),
+                        str(agent_id or ""),
+                        est_in_tokens + est_out_tokens,
+                        str(trajectory_reason or ""),
+                    )
+                except Exception as traj_exc:
+                    logger.error(
+                        "[Dispatcher] Trajectory-Gate nicht verfuegbar - Dispatch blockiert: %s",
+                        traj_exc,
+                    )
+                    return _with_prompt_info({
+                        "status": "blocked",
+                        "error": f"trajectory_gate_unavailable: {traj_exc}",
+                        "error_code": "TRAJECTORY_GATE_UNAVAILABLE",
+                        "content": "🛑 [TRAJECTORY-GATE]: Budget-Invariante nicht pruefbar — Dispatch blockiert (fail-closed).",
+                    })
+                if not _traj.get("allowed", False):
+                    _traj_reason = str(_traj.get("reason") or "TRAJECTORY_CAP_BLOCKED")
+                    logger.error(
+                        "[Dispatcher] Trajectory-Cap blockiert task=%s agent=%s stage=%s reason=%s",
+                        task_id, agent_id, _traj.get("stage"), _traj_reason,
+                    )
+                    return _with_prompt_info({
+                        "status": "blocked",
+                        "error": _traj_reason,
+                        "error_code": "TRAJECTORY_CAP_BLOCKED",
+                        "content": f"🛑 [TRAJECTORY-CAP]: {_traj_reason}",
+                        "trajectory_id": _traj.get("trajectory_id"),
+                        "trajectory_stage": _traj.get("stage"),
+                    })
             except Exception as bg_exc:
                 # Fail-closed: ein nicht auswertbares Budget-Gate darf niemals
                 # einen unbegrenzten Dispatch freigeben (Audit v3 Welle 6).
@@ -1303,13 +1531,16 @@ async def dispatch_to_omniroute_or_container(
             if res.get("status") in ("success", "error") and used_model:
                 try:
                     from backend.bandit_model_router import bandit_model_router
-                    bandit_model_router.record_outcome(
+                    # D08/MED: SQLite-Feedback (2 Connections, timeout=15) nach
+                    # JEDEM Dispatch gehoert in den Threadpool, nicht in den Loop.
+                    await asyncio.to_thread(
+                        bandit_model_router.record_outcome,
                         model_id=used_model,
                         success=is_ok,
                         latency_ms=duration_ms,
                     )
                 except Exception as bn_exc:
-                    logger.debug(f"[Dispatcher] Bandit-Feedback fehlgeschlagen: {bn_exc}")
+                    logger.warning("[Dispatcher] Bandit-Feedback fehlgeschlagen: %s", bn_exc)
 
             if isinstance(res, dict) and res.get("status") == "success" and res.get("content"):
                 res["content"] = _clean_dispatch_output(
@@ -1415,6 +1646,108 @@ async def _dispatch_to_omniroute_or_container_exec(
         }
 
 
+def _build_dispatch_context_sync(
+    prompt: str,
+    agent_id: str,
+    task_id: str,
+    system_prompt: str,
+    model: str,
+) -> Dict[str, Any]:
+    """D08/H-08-1: alle blockierenden Kontextquellen in EINEM Worker-Thread.
+
+    Vorher liefen Prefetcher (bis zu 3x sqlite3.connect), Prompt-Registry
+    (SQLite + open/json.load), Core-Memory (SQLite, timeout=15) und Bandit-
+    Auswahl (SQLite) direkt im Event-Loop. Bei 5 parallelen Dispatch-Slots
+    blockierten diese Lesen /livez, /health und den SSE-Stream. Jedes Quelle
+    bleibt einzeln fehlertolerant (wie zuvor), aber der Aufruf passiert nur
+    noch einmal via ``asyncio.to_thread``.
+    """
+    result: Dict[str, Any] = {
+        "prefetch_addon": "",
+        "effective_prompt_info": None,
+        "prompt_version_info": None,
+        "core_mem_addon": "",
+        "system_prompt": system_prompt,
+        "model": model,
+    }
+
+    # 1. Spekulatives Vorladen (CRM/ERP/Learnings) — SQLite + os.path.exists.
+    try:
+        from backend.speculative_prefetcher import get_speculative_prefetcher
+        p_res = get_speculative_prefetcher().prefetch_for_task(prompt, agent_id=agent_id)
+        p_items = p_res.get("cached_items", {}) if isinstance(p_res, dict) else {}
+        p_lines = []
+        if "crm_contact" in p_items:
+            c = p_items["crm_contact"]
+            p_lines.append(
+                f"- CRM-Kontakt: {c.get('first_name', '')} {c.get('last_name', '')} "
+                f"({c.get('email', '')}) [Firma: {c.get('company', 'Unbekannt')}]"
+            )
+        if "erp_doc" in p_items:
+            d = p_items["erp_doc"]
+            p_lines.append(
+                f"- ERP-Dokument: {d.get('doc_number', '')} ({d.get('type', '')}) "
+                f"[Status: {d.get('status', '')}]"
+            )
+        if p_lines:
+            result["prefetch_addon"] = (
+                "\n\n### [SPEKULATIV VORGELADENE KONTEXT-DATEN]:\n" + "\n".join(p_lines)
+            )
+    except Exception as pf_err:
+        logger.debug("[Dispatcher] Spekulatives Prefetching uebersprungen: %s", pf_err)
+
+    # 2. Prompt-Registry & Canary-Routing.
+    try:
+        from backend.prompt_registry import prompt_registry
+        eff = prompt_registry.get_effective_prompt(agent_id, task_id)
+        if eff and eff.get("prompt"):
+            # Die Registry ist die BASIS; vom DAG injizierte Bloecke bleiben
+            # erhalten (nicht ersetzen, sondern voranstellen).
+            registry_prompt = eff["prompt"]
+            if registry_prompt not in result["system_prompt"]:
+                result["system_prompt"] = f"{registry_prompt}\n\n{result['system_prompt']}"
+            result["effective_prompt_info"] = eff
+            result["prompt_version_info"] = {
+                "agent_id": agent_id,
+                "version": str(
+                    eff.get("version_num") or eff.get("version") or eff.get("prompt_version") or ""
+                ),
+                "canary": bool(eff.get("is_canary") or eff.get("canary") or False),
+                "canary_percentage": eff.get("canary_percentage"),
+                "prompt_hash": hashlib.sha256(
+                    str(eff.get("prompt") or "").encode("utf-8")
+                ).hexdigest(),
+                "prompt_chars": len(str(eff.get("prompt") or "")),
+                "model": eff.get("model") or "",
+                "resolved": True,
+            }
+            if eff.get("model") and not result["model"]:
+                result["model"] = eff["model"]
+    except Exception as pr_err:
+        logger.debug("[Dispatcher] Prompt-Registry Lookup uebersprungen: %s", pr_err)
+
+    # 3. Core Working Memory (gepinnte Bloecke).
+    try:
+        from backend.core_memory_manager import core_memory_manager
+        cm_xml = core_memory_manager.compile_system_prompt_injection(agent_id=agent_id)
+        if cm_xml:
+            result["core_mem_addon"] = f"\n\n{cm_xml}"
+    except Exception as cm_err:
+        logger.debug("[Dispatcher] Core-Memory-Injection uebersprungen: %s", cm_err)
+
+    # 4. Bandit Model Router (opt-in ueber auto/bandit).
+    if result["model"] in ("auto/bandit", "auto/best-bandit"):
+        try:
+            from backend.bandit_model_router import bandit_model_router
+            b_res = bandit_model_router.select_best_model()
+            if b_res.get("enabled") and b_res.get("selected_model"):
+                result["model"] = b_res["selected_model"]
+        except Exception as bn_err:
+            logger.debug("[Dispatcher] Bandit-Router Auswahl uebersprungen: %s", bn_err)
+
+    return result
+
+
 async def _dispatch_to_omniroute_or_container_impl(
     agent_id: str,
     agent_name: str,
@@ -1475,85 +1808,21 @@ async def _dispatch_to_omniroute_or_container_impl(
     except Exception as mem_err:
         logger.debug(f"[Dispatcher] Memory-Injection uebersprungen: {mem_err}")
 
-    # Spekulatives Vorladen von Entitaeten (CRM, ERP, relevante Notizen)
-    prefetch_addon = ""
-    try:
-        from backend.speculative_prefetcher import get_speculative_prefetcher
-        prefetcher = get_speculative_prefetcher()
-        p_res = prefetcher.prefetch_for_task(prompt, agent_id=agent_id)
-        p_items = p_res.get("cached_items", {}) if isinstance(p_res, dict) else {}
-        p_lines = []
-        if "crm_contact" in p_items:
-            c = p_items["crm_contact"]
-            p_lines.append(f"- CRM-Kontakt: {c.get('first_name', '')} {c.get('last_name', '')} ({c.get('email', '')}) [Firma: {c.get('company', 'Unbekannt')}]")
-        if "erp_doc" in p_items:
-            d = p_items["erp_doc"]
-            p_lines.append(f"- ERP-Dokument: {d.get('doc_number', '')} ({d.get('type', '')}) [Status: {d.get('status', '')}]")
-        if p_lines:
-            prefetch_addon = "\n\n### [SPEKULATIV VORGELADENE KONTEXT-DATEN]:\n" + "\n".join(p_lines)
-    except Exception as pf_err:
-        logger.debug(f"[Dispatcher] Spekulatives Prefetching uebersprungen: {pf_err}")
-
-    # Prompt-Registry & Canary-Routing
-    effective_prompt_info = None
-    prompt_version_info = None
-    try:
-        from backend.prompt_registry import prompt_registry
-        eff = prompt_registry.get_effective_prompt(agent_id, task_id)
-        if eff and eff.get("prompt"):
-            # WICHTIG: die Registry ersetzt den System-Prompt nicht einfach —
-            # sonst gehen die vom DAG injizierten Brand-Voice-/Memory-Bloecke
-            # verloren. Die Registry ist die BASIS, Addons werden angehaengt.
-            registry_prompt = eff["prompt"]
-            if registry_prompt not in system_prompt:
-                system_prompt = f"{registry_prompt}\n\n{system_prompt}"
-            effective_prompt_info = eff
-            # Audit D11: Canary-/Prompt-Version muss im Handoff nachvollziehbar
-            # bleiben. Nur Metadaten signieren, nie den kompletten Prompt-Text.
-            # D11: die Registry liefert `version_num`/`is_canary` — nicht
-            # `version`/`canary`. Ohne diese Kette war der signierte Versions-
-            # String dauerhaft leer.
-            prompt_version_info = {
-                "agent_id": agent_id,
-                "version": str(
-                    eff.get("version_num") or eff.get("version") or eff.get("prompt_version") or ""
-                ),
-                "canary": bool(eff.get("is_canary") or eff.get("canary") or False),
-                "canary_percentage": eff.get("canary_percentage"),
-                "prompt_hash": hashlib.sha256(
-                    str(eff.get("prompt") or "").encode("utf-8")
-                ).hexdigest(),
-                "prompt_chars": len(str(eff.get("prompt") or "")),
-                "model": eff.get("model") or "",
-                "resolved": True,
-            }
-            if eff.get("model") and not model:
-                model = eff["model"]
-    except Exception as pr_err:
-        logger.debug(f"[Dispatcher] Prompt-Registry Lookup uebersprungen: {pr_err}")
+    # D08/H-08-1: EIN Worker-Thread fuer alle vier blockierenden Kontextquellen
+    # (Prefetcher, Prompt-Registry, Core-Memory, Bandit-Auswahl).
+    _ctx = await asyncio.to_thread(
+        _build_dispatch_context_sync, prompt, agent_id, task_id, system_prompt, model,
+    )
+    system_prompt = _ctx["system_prompt"]
+    model = _ctx["model"]
+    prefetch_addon = _ctx["prefetch_addon"]
+    effective_prompt_info = _ctx["effective_prompt_info"]
+    prompt_version_info = _ctx["prompt_version_info"]
+    core_mem_addon = _ctx["core_mem_addon"]
 
     # Task-lokaler Ref fuer den aeusseren Dispatcher (D11: jeder Return).
+    # ContextVars muessen im Event-Loop-Task gesetzt werden (nicht im Worker).
     _PROMPT_VERSION_CTX.set(prompt_version_info)
-
-    # Core Working Memory Blocks (letzte 2-3 gepinnte Blöcke)
-    core_mem_addon = ""
-    try:
-        from backend.core_memory_manager import core_memory_manager
-        cm_xml = core_memory_manager.compile_system_prompt_injection(agent_id=agent_id)
-        if cm_xml:
-            core_mem_addon = f"\n\n{cm_xml}"
-    except Exception as cm_err:
-        logger.debug(f"[Dispatcher] Core-Memory-Injection uebersprungen: {cm_err}")
-
-    # Bandit Model Router (opt-in über auto/bandit)
-    if model in ("auto/bandit", "auto/best-bandit"):
-        try:
-            from backend.bandit_model_router import bandit_model_router
-            b_res = bandit_model_router.select_best_model()
-            if b_res.get("enabled") and b_res.get("selected_model"):
-                model = b_res["selected_model"]
-        except Exception as bn_err:
-            logger.debug(f"[Dispatcher] Bandit-Router Auswahl uebersprungen: {bn_err}")
 
     static_system_prompt = f"Du bist {agent_name} (Rolle: {role}). {system_prompt}".strip()
     dynamic_system_addon = f"{core_mem_addon}{memory_context_addon}{prefetch_addon}".strip()
@@ -1563,13 +1832,28 @@ async def _dispatch_to_omniroute_or_container_impl(
         else static_system_prompt
     )
 
-    chat_history_turns = []
+    chat_history_turns: List[Dict[str, str]] = []
     if history:
-        for h in history[-8:]:
+        # F030/W3-A: stumme Kuerzung auf die letzten 8 Turns durch den
+        # kanonischen Helper ersetzen — der dropped-Marker bleibt sichtbar (kein
+        # erfundenes Ergebnis, Verweis auf den Session-Store).
+        try:
+            from archon.routers.chat import history_with_dropped_marker
+            kept_history = history_with_dropped_marker(
+                history, 8, artifact=f"dispatch.history/{task_id or agent_id}"
+            )
+        except Exception as hist_exc:
+            logger.debug("[Dispatcher] History-Dropped-Marker nicht verfuegbar: %s", hist_exc)
+            kept_history = list(history)[-8:]
+        for h in kept_history:
             if isinstance(h, dict):
                 r = str(h.get("role", "")).strip().lower()
                 c = str(h.get("content", "") or "").strip()
-                if r in ("user", "assistant") and c:
+                if r == "system" and "GEKÜRZT" in c:
+                    # Ausschliesslich der explizite Kuerzungs-Marker darf als
+                    # System-Turn in die History (kein Prompt-Injection-Vektor).
+                    chat_history_turns.append({"role": "system", "content": c})
+                elif r in ("user", "assistant") and c:
                     chat_history_turns.append({"role": r, "content": c})
 
     messages = [{"role": "system", "content": full_system_prompt}] + chat_history_turns + [
@@ -1694,11 +1978,37 @@ async def _dispatch_to_omniroute_or_container_impl(
     classified_cat = ""
     try:
         from backend.data_classifier import DataClassifier
+        # D04/H-04-1: fehlender Key darf NIE "Cloud erlaubt" bedeuten.
         cls_res = DataClassifier.classify(prompt or "")
-        if not cls_res.get("cloud_llm_allowed", True):
+        if cls_res.get("cloud_llm_allowed", False) is not True:
             classified_cat = "confidential"
     except Exception as cls_err:
-        logger.warning(f"[Dispatcher] DataClassifier fehlgeschlagen: {cls_err}")
+        # D04/H-04-1: Klassifikationsfehler -> confidential + signierter Proof +
+        # ZeroEgressBlockedError (fail-closed, analog _gate_container_dispatch).
+        logger.error("[Dispatcher] DataClassifier fehlgeschlagen (fail-closed, Zero-Egress): %s", cls_err)
+        classified_cat = "confidential"
+        ev = {}
+        try:
+            from backend.audit_log import chained_audit_log
+            from backend.llm_egress_guard import _record_blocked_proof
+            ev = _record_blocked_proof(
+                alog=chained_audit_log,
+                agent_id=agent_id or "system",
+                provider=prov_lower or "omniroute",
+                model=selected_model or "",
+                target_endpoint=url or "egress-firewall://proof.local",
+                action="llm_dispatch_blocked_classifier_unavailable",
+                error_code="DATA_CLASSIFIER_UNAVAILABLE",
+                reason=f"DataClassifier nicht verfuegbar — fail-closed: {cls_err}",
+                data_category="confidential",
+            )
+        except Exception as proof_exc:
+            logger.error("[Dispatcher] Classifier-Block-Proof nicht schreibbar (fail-closed): %s", proof_exc)
+        raise ZeroEgressBlockedError(
+            f"DataClassifier nicht verfuegbar — Zero-Egress fail-closed: {cls_err}",
+            audit_event=ev,
+            error_code="DATA_CLASSIFIER_UNAVAILABLE",
+        ) from cls_err
 
     try:
         preflight_gate = evaluate_and_gate_llm_dispatch(
@@ -3381,7 +3691,8 @@ async def execute_with_self_correction(
     initial_args: dict,
     max_retries: int = 3,
     role: str = "Developer",
-    model: str = "deepseek/deepseek-chat"
+    model: str = "deepseek/deepseek-chat",
+    task_id: str = "",
 ) -> dict:
     """
     Pillar 2 / Self-Correction & Reflection Loop:
@@ -3439,7 +3750,14 @@ async def execute_with_self_correction(
                 prompt=reflection_prompt,
                 role=role,
                 system_prompt="Du bist ein Experte für Fehleranalyse und autonome Selbstkorrektur. Antworte ausschließlich mit JSON.",
-                model=model
+                model=model,
+                # D13/H-13-1: der Reflexions-Call muss dasselbe Ticket-Cap
+                # belasten wie der Haupt-Dispatch, sonst entstehen bis zu 3
+                # weitere, nicht zugeordnete kostenpflichtige Calls. `retry:`
+                # kennzeichnet die zaehlerbegrenzte Wiederholung desselben
+                # Agenten (kein A→B→A-Zyklus, aber ein budgetierter Hop).
+                task_id=task_id,
+                trajectory_reason=f"retry:{attempt}",
             )
             
             content = llm_res.get("content", "")

@@ -2,6 +2,7 @@
 from __future__ import annotations
 from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import require_session_actor as _require_session_actor
 
 import asyncio
 import logging
@@ -74,12 +75,14 @@ def api_create_tool_proposal(request: Request, payload: PassthroughBody = Body(.
     payload = as_payload(payload)
     from backend.tool_permission_manager import tool_permission_manager
 
+    # D04/MED: kein Body-Actor in Freigabe-/Protokollpfaden. Der Actor kommt
+    # ausschließlich aus der verifizierten Session (require_session_actor).
     return tool_permission_manager.propose_tool_installation(
         tool_name=payload.get("tool_name", ""),
         tool_type=payload.get("tool_type", "pip"),
         reason=payload.get("reason", ""),
         command=payload.get("command"),
-        requested_by=payload.get("requested_by", "Robert (Lead Orchestrator)"),
+        requested_by=_require_session_actor(request),
     )
 
 

@@ -139,9 +139,29 @@ def test_agent_router_injects_traceparent_and_records_audit_trace_id(tmp_path, m
     from backend.audit_log import ChainedAuditLog
     from backend import privacy_router as pr
 
+    import datetime
+    import sqlite3
+    import backend.role_budget_engine as rbe
+
     tid, sid = tc.start_trace()
     alog = ChainedAuditLog(db_path=str(tmp_path / "router_p1.db"))
     monkeypatch.setattr("backend.llm_egress_guard.chained_audit_log", alog)
+
+    # W3-D/F032: der Chat-Pfad ist fail-closed ohne registriertes Task-Cap.
+    # Der Test prueft Trace-Header/Audit-Korrelation, nicht das Budget-Gate —
+    # daher hier eine echte Allokation in einer Temp-DB anlegen.
+    budget_db = str(tmp_path / "router_p1_budget.db")
+    rbe.init_budget_tables(db_path=budget_db)
+    monkeypatch.setattr(rbe.budget_bank, "db_path", budget_db)
+    now = datetime.datetime.now().isoformat()
+    with sqlite3.connect(budget_db) as conn:
+        conn.execute(
+            "INSERT INTO task_budget_allocations "
+            "(task_id, agent_id, token_budget, tokens_used, cost_limit_eur, cost_used_eur, created_at, updated_at) "
+            "VALUES (?, ?, ?, 0, ?, 0.0, ?, ?)",
+            ("test-p1-trace", "software_architect", 50000, 100.0, now, now),
+        )
+        conn.commit()
 
     cfg = dict(pr.DEFAULT_PRIVACY_CONFIG)
     cfg["zero_egress_strict"] = False
@@ -170,6 +190,7 @@ def test_agent_router_injects_traceparent_and_records_audit_trace_id(tmp_path, m
                 api_keys={"OPENAI_API_KEY": "sk-test-dummy"},
                 agent_id="software_architect",
                 role="Engineering",
+                task_id="test-p1-trace",
             )
         )
     assert out == "OK"

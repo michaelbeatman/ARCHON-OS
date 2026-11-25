@@ -201,7 +201,7 @@ def check_egress_tool_call(
         if approval_id:
             row = conn.execute(
                 """
-                SELECT approval_id, status, consumed, tool_name, session_id, args_json
+                SELECT approval_id, status, consumed, tool_name, session_id, args_json, requested_by
                 FROM taint_hitl_approvals
                 WHERE approval_id = ? AND session_id = ? AND tool_name = ?
                 """,
@@ -214,6 +214,18 @@ def check_egress_tool_call(
                 except (TypeError, ValueError):
                     approved_args = None  # type: ignore[assignment]
             args_match = approved_args == (args or {})
+            if row and not str(row["requested_by"] or "").strip():
+                # D04/H-04-3: Legacy-Freigaben ohne Anforderer sind nicht
+                # vier-augen-fähig und werden als kompromittiert abgelehnt.
+                return {
+                    "allowed": False,
+                    "blocked": True,
+                    "requires_hitl": True,
+                    "tainted": True,
+                    "approval_id": None,
+                    "tool": tool_name,
+                    "reason": "Freigabe ohne verifizierten requested_by (Legacy) — fail-closed abgelehnt.",
+                }
             if row and not args_match:
                 return {
                     "allowed": False,
@@ -253,6 +265,22 @@ def check_egress_tool_call(
                     "tool": tool_name,
                 }
 
+        # D04/H-04-3: der verifizierte Anforderer ist Pflicht, bevor eine
+        # HITL-Freigabe ANGELEGT wird. Ohne ihn ist das Vier-Augen-Prinzip
+        # nicht prüfbar -> kein 'pending'-Eintrag, harter Deny. Das
+        # Einlösen einer bereits vorhandenen Freigabe bleibt zulässig.
+        clean_requester = str(requested_by or "").strip()
+        if not clean_requester:
+            return {
+                "allowed": False,
+                "blocked": True,
+                "requires_hitl": True,
+                "tainted": True,
+                "approval_id": None,
+                "tool": tool_name,
+                "reason": "requested_by fehlt — kritische Egress-Freigabe fail-closed verweigert (Vier-Augen-Prinzip).",
+            }
+
         new_id = f"ta-{secrets.token_hex(6)}"
         conn.execute(
             """
@@ -262,7 +290,7 @@ def check_egress_tool_call(
             """,
             (
                 new_id, session_id, tool_name, canonical_args, taint["source"],
-                str(requested_by or "").strip(), time.time(),
+                clean_requester, time.time(),
             ),
         )
         conn.commit()
@@ -300,8 +328,14 @@ def resolve_taint_approval(
         if not row:
             return None
         requested_by = str(row["requested_by"] or "").strip() if "requested_by" in row.keys() else ""
+        # Audit D04/H-04-3: ohne verifizierten Anforderer ist das Vier-Augen-
+        # Prinzip nicht pruefbar -> harte Ablehnung (kein stilles Ueberspringen).
+        if not requested_by:
+            raise PermissionError(
+                "Freigabe ohne verifizierten requested_by — Vier-Augen-Prinzip nicht pruefbar (fail-closed)."
+            )
         # Audit D04/MED: identischer Ersteller/Genehmiger -> harte Ablehnung.
-        if requested_by and hmac.compare_digest(requested_by, reviewer):
+        if hmac.compare_digest(requested_by, reviewer):
             logger.warning(
                 "[TaintGuard] Vier-Augen-Verletzung: %s wurde von '%s' angefordert "
                 "und soll von '%s' freigegeben werden.", approval_id, requested_by, reviewer

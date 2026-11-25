@@ -24,6 +24,23 @@ from typing import Any, Dict, List, Optional
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_KEY_FILE = os.path.join(WORKSPACE_DIR, "data", "warrant_hmac.key")
 
+# D04/MED: SSOT für alle Pfad-/Betrags-Aliase. delegation_isolation importiert
+# diese Tupel — es gibt keine zweite, kürzere Liste mehr.
+PATH_ARG_KEYS = (
+    "path", "file_path", "filepath", "file", "target_path", "filename",
+    "notebook_path", "source_path", "destination_path", "workspace",
+    "uri", "target", "src", "dst", "image_path", "url",
+    "input_path", "output_path", "output_dir", "input_dir", "media_path",
+    "source_dir", "target_dir", "workdir", "cwd",
+)
+AMOUNT_ARG_KEYS = ("amount", "value", "total", "price", "betrag")
+# Tools, bei denen eine max_amount-Constraint einen Betrag erzwingt. Ein
+# reiner Datei-Tool-Call mit Pfad braucht keinen Betrag, ein pay-Call schon.
+_AMOUNT_TOOL_MARKERS = (
+    "pay", "invoice", "transfer", "purchase", "order", "buy", "refund",
+    "withdraw", "charge", "checkout", "transaction", "payment", "spend",
+)
+
 
 def _get_warrant_secret(key_file: Optional[str] = None) -> str:
     env_sec = (os.environ.get("ARCHON_WARRANT_SECRET") or "").strip()
@@ -166,24 +183,52 @@ def verify_warrant_for_call(
 
     constraints = payload.get("constraints") or {}
     call_args = args or {}
-    if "max_amount" in constraints and "amount" in call_args:
-        try:
-            amt = float(call_args["amount"])
-            max_amt = float(constraints["max_amount"])
-        except (TypeError, ValueError):
-            return {"allowed": False, "reason": "Ungueltiger Betrag im Tool-Aufruf."}
-        if not math.isfinite(amt) or not math.isfinite(max_amt) or amt < 0:
-            return {"allowed": False, "reason": "Nicht-finiter oder negativer Betrag im Warrant-Aufruf abgelehnt."}
-        if amt > max_amt:
-            return {"allowed": False, "reason": f"Betrag {amt} ueberschreitet Warrant-Limit {max_amt}."}
+
+    if "max_amount" in constraints:
+        # D04/MED: alle Betrags-Aliase (amount/value/total/price/betrag) müssen
+        # gegen das signierte Limit geprüft werden. Bei einem betragspflichtigen
+        # Tool ist ein fehlender Betrag hart abzulehnen; ein reiner Pfad-Call
+        # (z. B. read_file) benötigt keinen Betrag.
+        amount_key = next(
+            (k for k in AMOUNT_ARG_KEYS if k in call_args and call_args[k] is not None),
+            None,
+        )
+        if amount_key is None:
+            has_path_arg = any(
+                k in call_args and call_args[k] not in (None, "") for k in PATH_ARG_KEYS
+            )
+            amount_relevant = (
+                any(m in str(tool_name).lower() for m in _AMOUNT_TOOL_MARKERS)
+                or not has_path_arg
+            )
+            if amount_relevant:
+                return {
+                    "allowed": False,
+                    "reason": "Warrant verlangt max_amount, aber kein Betrag im Tool-Call (fail-closed).",
+                }
+        else:
+            try:
+                amt = float(call_args[amount_key])
+                max_amt = float(constraints["max_amount"])
+            except (TypeError, ValueError):
+                return {"allowed": False, "reason": "Ungueltiger Betrag im Tool-Aufruf."}
+            if not math.isfinite(amt) or not math.isfinite(max_amt) or amt < 0:
+                return {"allowed": False, "reason": "Nicht-finiter oder negativer Betrag im Warrant-Aufruf abgelehnt."}
+            if amt > max_amt:
+                return {"allowed": False, "reason": f"Betrag {amt} ueberschreitet Warrant-Limit {max_amt}."}
 
     if "allowed_path_prefixes" in constraints:
         # KRITISCH: vorher wurde nur der exakte Key "path" geprueft. Ein Call
         # mit {"file_path": "../warrant_hmac.key"} umging das Constraint und
-        # konnte das Warrant-Secret lesen. Alle gaengigen Pfad-Aliase pruefen.
-        _PATH_KEYS = ("path", "file_path", "filename", "uri", "target", "src",
-                      "target_path", "source_path", "image_path", "file")
+        # konnte das Warrant-Secret lesen. Alle gaengigen Pfad-Aliase aus der
+        # SSOT (PATH_ARG_KEYS) prüfen.
+        _PATH_KEYS = PATH_ARG_KEYS
         path_values = [str(call_args[k]) for k in _PATH_KEYS if k in call_args and call_args[k]]
+        if any(str(call_args[k]).strip().lower() in ("", "none") for k in _PATH_KEYS if k in call_args):
+            return {
+                "allowed": False,
+                "reason": "Warrant verlangt Pfad-Constraint, aber ein Pfad-Argument ist leer.",
+            }
         if not path_values:
             # Pfad-Constraint vorhanden, aber kein Pfad-Argument erkennbar:
             # fail-closed statt still durchzulassen.

@@ -21,6 +21,14 @@
 # Zustellung: Alertmanager -> Telegram-Bot (config/alertmanager/alertmanager.yml).
 # Die In-App-Alarmierung (metrics_collector.py: Dedup + Auto-Resolve) bleibt
 # zusaetzlich aktiv. Prometheus-Retention: 30d (--storage.tsdb.retention.time=30d).
+#
+# Audit D10/F043 — Chaos-Suite: ES GIBT KEINE Prometheus-Metrik
+# `chaos_db_lock_errors` / `chaos_restart_sla_violations`; metrics_collector.py
+# exportiert sie nicht. Statt einen erfundenen Metriknamen zu alarmieren,
+# laeuft die Suite als harter CI-Gate und 6-h-Cron (Ansible archon_node):
+# scripts/chaos_tester.py exit 1 bei SLA-Bruch (>= 15 s) oder Lock-Fehler.
+# Die echten Werte stehen unter GET /api/operations/chaos/results und in
+# data/chaos_test_results.json. Bitte hier keine Schein-Alerts ergaenzen.
 
 groups:
   - name: archon-heartbeat

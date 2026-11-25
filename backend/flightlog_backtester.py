@@ -55,6 +55,11 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
                 created_at REAL NOT NULL
             )
         """)
+        # D12/H-12-2: additiver Fehlercode (kein Replay, keine DB-Migration —
+        # nur eine optionale Spalte in der bestehenden SQLite-Tabelle).
+        columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(flight_events)").fetchall()}
+        if "error_code" not in columns:
+            conn.execute("ALTER TABLE flight_events ADD COLUMN error_code TEXT DEFAULT ''")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_flight_run ON flight_events(run_id)")
         conn.commit()
         yield conn
@@ -70,16 +75,18 @@ def record_flight_event(
     tool_ok: bool = True,
     tokens_used: int = 0,
     db_path: Optional[str] = None,
+    error_code: str = "",
 ) -> None:
     args_str = json.dumps(args or {}, sort_keys=True, ensure_ascii=False)
     args_hash = hashlib.sha256(f"{tool_name}:{args_str}".encode("utf-8")).hexdigest()[:16]
     with _connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO flight_events (run_id, agent_id, tool_name, args_json, args_hash, tool_ok, tokens_used, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO flight_events (run_id, agent_id, tool_name, args_json, args_hash, tool_ok, tokens_used, created_at, error_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (run_id, agent_id, tool_name, args_str, args_hash, 1 if tool_ok else 0, int(tokens_used), time.time()),
+            (run_id, agent_id, tool_name, args_str, args_hash, 1 if tool_ok else 0,
+             int(tokens_used), time.time(), str(error_code or "")),
         )
         conn.commit()
 
@@ -121,6 +128,7 @@ def mirror_flight_event_to_trace(
     tokens_used: int = 0,
     session_id: str = "",
     db_path: Optional[str] = None,
+    error_code: str = "",
 ) -> List[str]:
     """Spiegelt ein bereits geschriebenes Flight-Event unter der Trace-ID.
 
@@ -138,6 +146,7 @@ def mirror_flight_event_to_trace(
         record_flight_event(
             run_id=rid, agent_id=agent_id, tool_name=tool_name, args=args,
             tool_ok=tool_ok, tokens_used=tokens_used, db_path=db_path,
+            error_code=error_code,
         )
         written.append(rid)
     return written
@@ -153,7 +162,8 @@ def detect_silent_failures(
     """Analysiert einen Run auf versteckte Fehler trotz 'success'-Status."""
     with _connect(db_path) as conn:
         rows = conn.execute(
-            "SELECT tool_name, args_hash, tool_ok, tokens_used FROM flight_events WHERE run_id = ? ORDER BY id ASC",
+            "SELECT tool_name, args_hash, tool_ok, tokens_used, error_code "
+            "FROM flight_events WHERE run_id = ? ORDER BY id ASC",
             (run_id,),
         ).fetchall()
 
@@ -162,7 +172,19 @@ def detect_silent_failures(
 
     hidden_errors = sum(1 for e in events if e["tool_ok"] == 0)
     if hidden_errors > 0 and final_status == "success":
+        # D12/H-12-2: bewusst UNABHAENGIG von der Laenge des Finaltextes —
+        # ein langer, halluzinierter Finaltext darf einen leeren Tool-Output
+        # nicht maskieren.
         flags.append(f"hidden_tool_errors:{hidden_errors}")
+
+    # D12/H-12-2: EMPTY_TOOL_RESULT als eigenes, nachweisbares Flag. Das
+    # deckt auch Legacy-Events ab, bei denen tool_ok noch 1 war.
+    empty_results = sum(
+        1 for e in events
+        if str(e.get("error_code") or "") == "EMPTY_TOOL_RESULT"
+    )
+    if empty_results > 0 and final_status == "success":
+        flags.append(f"empty_tool_result:{empty_results}")
 
     # Loop detection (>= 3 identische aufeinanderfolgende Tool-Calls)
     streak = 1
@@ -194,6 +216,7 @@ def detect_silent_failures(
         "silent_failure": len(flags) > 0,
         "flags": flags,
         "event_count": len(events),
+        "empty_tool_results": empty_results,
         "total_tokens": total_tokens,
     }
 

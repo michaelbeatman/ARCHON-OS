@@ -19,6 +19,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import logging
 import os
 import sys
 import threading
@@ -26,6 +27,14 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from archon.core.runtime import WORKSPACE_DIR
+
+logger = logging.getLogger(__name__)
+
+
+def _audit_strict() -> bool:
+    raw = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off", "none"}
+
 
 DEFAULT_LITERACY_FILE = os.path.join(WORKSPACE_DIR, "data", "ai_act_literacy_register.json")
 
@@ -185,7 +194,12 @@ class ComplianceEngine:
                 },
             )
         except Exception as exc:
-            print(f"[Compliance] Audit-Log-Eintrag fuer AI-Act-Literacy-Add fehlgeschlagen: {exc}", file=sys.stderr)
+            # D05/MED: Audit-Schreibfehler nie verschlucken. Unter Strict darf
+            # die Kompetenzänderung ohne signierten Nachweis nicht als
+            # durchgeführt gelten (fail-closed).
+            logger.error("[Compliance] Audit-Log AI-Act-Literacy-Add fehlgeschlagen: %s", exc)
+            if _audit_strict():
+                raise RuntimeError("audit_write_failed") from exc
 
         return entry
 
@@ -205,7 +219,9 @@ class ComplianceEngine:
                 payload={"entry_id": entry_id},
             )
         except Exception as exc:
-            print(f"[Compliance] Audit-Log-Eintrag fuer AI-Act-Literacy-Delete fehlgeschlagen: {exc}", file=sys.stderr)
+            logger.error("[Compliance] Audit-Log AI-Act-Literacy-Delete fehlgeschlagen: %s", exc)
+            if _audit_strict():
+                raise RuntimeError("audit_write_failed") from exc
         return True
 
     # ------------------------------------------------------------------
@@ -327,10 +343,21 @@ class ComplianceEngine:
         # Historische Handles (z. B. 'hermes-orchestrator') auf echte
         # Kader-IDs übersetzen — sonst würden legitime Spezialisten als
         # "unbekannt" fail-closed blockiert (Audit 23.11.2026).
+        known_ids = {str(x.get("agent_id") or "") for x in inv}
+        # D15/MED: zuerst die kanonische Alias-SSOT (org_hierarchy.json, auch
+        # von Delegation und Konsens genutzt). Erst danach der Legacy-Resolver,
+        # damit 'robert'/'lisa' im Compliance-Pfad nicht default-deny liefert.
+        from backend.role_budget_engine import canonical_agent_id
         try:
-            from backend.agent_aliases import resolve_agent_id
-            lookup_id = resolve_agent_id(agent_id, {str(x.get("agent_id") or "") for x in inv})
-        except Exception:
+            lookup_id = canonical_agent_id(agent_id, known_ids)
+        except Exception as exc:
+            logger.warning("[Compliance] Kanonischer Alias nicht verfuegbar: %s", exc)
+            try:
+                from backend.agent_aliases import resolve_agent_id
+                lookup_id = resolve_agent_id(agent_id, known_ids)
+            except Exception:
+                lookup_id = agent_id
+        if lookup_id not in known_ids and agent_id in known_ids:
             lookup_id = agent_id
         item = next((x for x in inv if x.get("agent_id") == lookup_id), None)
         if not item:
@@ -433,6 +460,13 @@ class ComplianceEngine:
             res["checked_blocks"] = res.get("total_records", 0)
             res["head_hash"] = head_hash
             res["recent_events"] = recent[:5]
+            # D05/MED: reason/corrupted_id unverändert durchreichen und für
+            # das PDF/den Prüfer als `error` sichtbar machen (kein Platzhalter).
+            if res.get("valid") is False:
+                res["reason"] = str(res.get("reason") or "Integritätsprüfung fehlgeschlagen")
+                res["error"] = res["reason"]
+                if res.get("corrupted_id") not in (None, ""):
+                    res["error"] = f"{res['reason']} [Block/Anker: {res['corrupted_id']}]"
             return res
         except Exception as exc:
             return {"valid": False, "checked_blocks": 0, "total_records": 0, "head_hash": "ERROR", "error": str(exc), "recent_events": []}

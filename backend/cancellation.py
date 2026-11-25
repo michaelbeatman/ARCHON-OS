@@ -283,6 +283,29 @@ def get_child_token(parent_scope: str, child_scope: str) -> CancelToken:
         return token
 
 
+def task_scope(task_id: str) -> str:
+    """Einzige kanonische Scope-Schreibweise für einen Kanban-Task."""
+    key = str(task_id or "").strip()
+    if not key:
+        raise ValueError("task_scope: leere task_id — kein Cancel-Token erlaubt")
+    return f"task:{key}"
+
+
+def get_task_child_token(parent_task_id: str, child_task_id: str) -> CancelToken:
+    """F030/H-11-1: Kind-Token mit echtem Parent (nicht neuem Root-Token).
+
+    ``cancel_scope("task:<parent>")`` bricht damit auch den laufenden
+    Child-Worker ab. Vorher erzeugte ``operations_api`` mit
+    ``get_token("task:<child>")`` einen eigenstaendigen Root — der Parent-
+    Abbruch erreichte den Child nie.
+    """
+    parent_scope = task_scope(parent_task_id)
+    child_scope = task_scope(child_task_id)
+    if parent_scope == child_scope:
+        raise ValueError("get_task_child_token: Parent und Child dürfen nicht identisch sein")
+    return get_child_token(parent_scope, child_scope)
+
+
 def cancel_scope(scope: str, reason: str = "", *, strict: bool = False) -> bool:
     """Bricht einen registrierten Scope ab. False, wenn er nicht existiert."""
     with _REGISTRY_LOCK:

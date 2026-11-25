@@ -26,3 +26,19 @@ tests
 *.tmp
 *.bak*
 static/static/
+# F002 / Audit D09 (M6): verwaiste und tooling-seitige Verzeichnisse aus dem
+# Build-Context halten (nur explizite COPY-Pfade landen im Image, aber der
+# Context wird vollständig an den Daemon übertragen).
+_archive_legacy/
+archive/
+scratch/
+dist/
+site/
+.mypy_cache/
+.ruff_cache/
+.ci_venv/
+.venv-tools/
+quartz_app/
+notebooklm/
+LinkedIn-backup/
+pocketbase-media/

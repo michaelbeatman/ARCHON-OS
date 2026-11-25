@@ -58,6 +58,8 @@ class HedgedCompletionRequest(_RouterGateRequest):
     hedge_delay_seconds: Optional[float] = None
     simulate_primary_latency_sec: Optional[float] = None
     simulate_fallback_latency_sec: float = 0.05
+    # Nur explizit angeforderte Demo-Laeufe erzeugen synthetische Antworten.
+    demo: bool = False
 
 
 class BanditOutcomeRequest(_RouterGateRequest):
@@ -99,20 +101,42 @@ def api_get_benchmark_history(limit: int = 25):
 
 @router.post("/api/router/hedged-completion")
 async def api_hedged_completion(payload: HedgedCompletionRequest = Body(...)):
+    """Produktivpfad fuer Latenz-Hedging (H-01-2/F042).
+
+    Primär- und Fallback-Call sind echte Dispatcher-Coroutines; der Gewinner
+    wird gegen deren echte Antworten verifiziert. ``demo: true`` erzeugt
+    ausschliesslich einen explizit gekennzeichneten Simulationslauf.
+    """
     payload = payload.model_dump()
-    from backend.speculative_hedger import speculative_hedger
+    from backend.speculative_hedger import make_dispatcher_coro, speculative_hedger
+
+    prompt = str(payload.get("prompt") or "Test-Anfrage")
+    primary_model = str(payload.get("primary_model") or "openai/gpt-4o")
+    try:
+        from backend.autonomy_settings import get_module_config
+        _hedge_cfg = get_module_config("speculative_hedger")
+    except Exception:
+        _hedge_cfg = {}
+    fallback_model = str(
+        payload.get("fallback_model") or _hedge_cfg.get("fallback_model") or "deepseek/deepseek-chat"
+    )
+    demo = bool(payload.get("demo", False))
+    primary_coro_fn = None if demo else make_dispatcher_coro(prompt, primary_model)
+    fallback_coro_fn = None if demo else make_dispatcher_coro(prompt, fallback_model)
+
     result = await speculative_hedger.execute_hedged_call(
-        prompt=payload.get("prompt", "Test-Anfrage"),
-        primary_model=payload.get("primary_model", "openai/gpt-4o"),
-        fallback_model_override=payload.get("fallback_model"),
+        prompt=prompt,
+        primary_model=primary_model,
+        fallback_model_override=fallback_model,
         hedge_delay_override=payload.get("hedge_delay_seconds"),
         simulate_primary_latency_sec=payload.get("simulate_primary_latency_sec"),
-        simulate_fallback_latency_sec=float(payload.get("simulate_fallback_latency_sec", 0.05))
+        simulate_fallback_latency_sec=float(payload.get("simulate_fallback_latency_sec", 0.05)),
+        primary_coro_fn=primary_coro_fn,
+        fallback_coro_fn=fallback_coro_fn,
     )
-    # Der Endpoint hat keine echten LLM-Coroutines injiziert: alles, was hier
-    # zurueckkommt, ist ein Demo-La Reserve-Aufruf (kein echter Provider-Call).
-    result["demo_only"] = True
-    result["mode"] = "demo_only" if not result.get("mode") or result.get("mode") == "demo_only" else result["mode"]
+    # demo_only stammt jetzt aus der echten Verdrahtung (Coroutines vorhanden
+    # oder nicht) und wird nicht mehr vom Endpoint ueberschrieben.
+    result["demo_only"] = bool(demo or result.get("demo_only", False))
     return result
 
 

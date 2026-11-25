@@ -309,9 +309,10 @@ async def api_kanban_task_hitl(request: Request, task_id: str):
 # --- M91: Precedent Log (Tenant-/Project-isoliert) ---
 @router.get("/api/operations/precedents")
 async def api_list_precedents(project_id: Optional[str] = None):
-    from backend.precedent_log import list_precedents
+    from backend.precedent_log import canonical_tenant_id, list_precedents
     from backend.tenant_context import tenant_context
-    tid = tenant_context.get_active_tenant_id()
+    # D11/MED: `tenant`/`tenant_id` über einen Kanoniker auflösen.
+    tid = canonical_tenant_id(tenant_context.get_active_tenant_id())
     return {"status": "success", "precedents": list_precedents(tid, project_id)}
 
 
@@ -320,12 +321,12 @@ async def api_create_precedent(request: Request):
     from archon.routers._rbac import require_admin_or_503
     require_admin_or_503(request)
     payload = await request.json()
-    from backend.precedent_log import record_precedent
+    from backend.precedent_log import canonical_tenant_id, record_precedent
     from backend.tenant_context import tenant_context
     rec = record_precedent(
         # Tenant und Actor ausschliesslich aus verifiziertem Kontext (IDOR /
         # Body-Actor-Schutz, Audit 23.11.2026).
-        tenant_id=tenant_context.get_active_tenant_id(),
+        tenant_id=canonical_tenant_id(tenant_context.get_active_tenant_id()),
         project_id=str(payload.get("project_id") or ""),
         question=str(payload.get("question") or ""),
         ruling_text=str(payload.get("ruling_text") or ""),
@@ -339,9 +340,11 @@ async def api_create_precedent(request: Request):
 async def api_revoke_precedent(request: Request, precedent_id: str):
     from archon.routers._rbac import require_admin_or_503
     require_admin_or_503(request)
-    from backend.precedent_log import revoke_precedent
+    from backend.precedent_log import canonical_tenant_id, revoke_precedent
     from backend.tenant_context import tenant_context
-    ok = revoke_precedent(precedent_id, tenant_context.get_active_tenant_id())
+    ok = revoke_precedent(
+        precedent_id, canonical_tenant_id(tenant_context.get_active_tenant_id())
+    )
     if not ok:
         raise HTTPException(status_code=404, detail="Precedent not found")
     return {"status": "success", "revoked": precedent_id}

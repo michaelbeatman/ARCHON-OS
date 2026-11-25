@@ -18,6 +18,9 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+# D04/MED: SSOT für Pfad-/Betrags-Aliase liegt in backend.tool_warrants.
+from backend.tool_warrants import AMOUNT_ARG_KEYS, PATH_ARG_KEYS
+
 logger = logging.getLogger("archon.delegation_isolation")
 
 # B2: verschluckte GoBD-Audit-Fehler protokollieren und zaehlen.
@@ -168,6 +171,7 @@ def enforce_runtime_tool_gate(
     profiles: Optional[List[Dict[str, Any]]] = None,
     taint_db_path: Optional[str] = None,
     skip_profile_check: bool = False,
+    requested_by: str = "",
 ) -> Dict[str, Any]:
     """
     Harte Laufzeit-Pruefung (M75 + M89) vor jedem Tool-Aufruf:
@@ -178,6 +182,14 @@ def enforce_runtime_tool_gate(
     Warrant die Profilfreigabe ersetzt. Der M89-/HITL-Teil laeuft IMMER —
     ein Warrant darf niemals die Session-Versiegelung aushebeln.
     """
+    # D04/H-04-3: der verifizierte Actor wird unverändert an den Taint-Gate
+    # durchgereicht (Pflich-Parameter der Kette). Die harte Ablehnung bei
+    # leerem requested_by liegt im session_taint_guard: dort wird gar keine
+    # HITL-Freigabe angelegt, wenn kein Anforderer benennbar ist. Eine
+    # pauschale Ablehnung hier würde auch harmlose Tools treffen, für die
+    # keine Freigabe nötig ist.
+    clean_requester = str(requested_by or "").strip()
+
     if not agent_id:
         # M75 fail-closed: Ohne Agenten-Kontext ist keine Profil-Freigabe pruefbar.
         return {
@@ -195,12 +207,14 @@ def enforce_runtime_tool_gate(
         }
 
     from backend.session_taint_guard import check_egress_tool_call
+
     taint_res = check_egress_tool_call(
         session_id=session_id,
         tool_name=tool_name,
         args=args,
         approval_id=approval_id,
         db_path=taint_db_path,
+        requested_by=clean_requester,
     )
     if not taint_res.get("allowed", False):
         return {**taint_res, "gate": "m89_session_taint_guard"}
@@ -228,6 +242,7 @@ class PolicyEngine:
         tenant_id: Optional[str] = None,
         role: Optional[str] = None,
         profiles: Optional[List[Dict[str, Any]]] = None,
+        requested_by: str = "",
     ) -> Dict[str, Any]:
         clean_tool = str(tool_name or "").strip()
         clean_agent = str(agent_id or "").strip()
@@ -290,6 +305,7 @@ class PolicyEngine:
             approval_id=approval_id,
             profiles=profiles,
             skip_profile_check=bool(privileged and verified_warrant),
+            requested_by=str(requested_by or "").strip(),
         )
         if not gate.get("allowed"):
             return self._deny(str(gate.get("gate") or "m75_m89"), str(gate.get("reason") or "gate_denied"), base)
@@ -331,7 +347,7 @@ class PolicyEngine:
         """Betragsfelder alias-normalisieren: ein signiertes max_amount darf
         nicht durch `value`/`total`/`price` umgangen werden."""
         normalized = dict(args or {})
-        for key in ("amount", "value", "total", "price"):
+        for key in AMOUNT_ARG_KEYS:
             if normalized.get(key) is not None:
                 normalized["amount"] = normalized[key]
                 break
@@ -340,15 +356,8 @@ class PolicyEngine:
     # F-025 (S-4.5): alle in `tool_warrants.verify_warrant_for_call()` und im
     # RBAC-Jail gängigen Pfad-Aliase abdecken. Ein `{"uri": "../.env"}` darf
     # nicht deshalb durchgehen, weil der Key nicht in der Liste stand.
-    _PATH_ARG_KEYS = (
-        "path", "file_path", "filepath", "file", "target_path", "filename",
-        "notebook_path", "source_path", "destination_path", "workspace",
-        "uri", "target", "src", "dst", "image_path", "url",
-        # Node-Plugin-/Media-Pfade muessen geprueft (nicht pauschal denied)
-        # werden — sonst bremst der F-025-Fail-Closed legitime Workflow-Nodes.
-        "input_path", "output_path", "output_dir", "input_dir", "media_path",
-        "source_dir", "target_dir", "workdir", "cwd",
-    )
+    # D04/MED:identisch mit backend.tool_warrants.PATH_ARG_KEYS (SSOT).
+    _PATH_ARG_KEYS = PATH_ARG_KEYS
 
     # Erkennungsmerkmale für Tools/Argumente mit Pfad-Constraint-Relevanz.
     # Wird ein solches Tool erkannt, aber kein bekannter Pfad-Key übergeben,

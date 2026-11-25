@@ -26,6 +26,13 @@ cryptography>=50.0.0,<51.0.0  # PYSEC-2026-3552/3553/3554 in 47.x
 psutil>=5.9.0,<8.0.0
 # Performance & Serialisierung
 orjson>=3.10.0,<4.0.0
+# H-16-1 (W4-A): BEWUSST kein OTel-SDK (`opentelemetry-sdk` /
+# `opentelemetry-exporter-otlp-proto-http`). Archon nutzt W3C Trace Context +
+# lokalen SQLite-Span-Recorder und baut den OTLP/HTTP-Payload selbst. Ein SDK
+# wuerde eine neue Hash-Lock-Resolution (3.11/3.13) und einen echten
+# TracerProvider-Bridge erfordern; bis dahin weist get_tracing_status()
+# `otel_sdk=false` ehrlich aus (siehe audit_reports/fix_w4_a_tracing.md).
+# `opentelemetry-api` in requirements.lock.txt ist nur transitiv via fastapi.
 # Test-Abhängigkeiten siehe requirements-test.txt (nicht im Runtime-Image)
 # Welle 8 Media/Docs/Tooling
 PyMuPDF>=1.24.0,<2.0.0

@@ -7,6 +7,12 @@ Lesen/Schreiben/Resume der Delegationskette, Hop-, Token- und Replan-Caps.
 SQLite ONLY (keine Postgres-Migration, kein Coroutine-Replay).
 
 HANDOFF (Dateien gehoeren anderen Agenten — hier nur Vertrag, nicht geaendert):
+  * archon/core/delegation.py         : MUSS MAX_DELEGATION_DEPTH aus diesem Modul
+                                         konsumieren (W3-D Ownership-Grenze —
+                                         siehe audit_reports/fix_w3_d_*.md).
+  * backend/agent_router.py           : allow_repeat=True verbraucht jetzt das
+                                         gezaehlte repeat_budget statt die
+                                         Zyklus-Erkennung abzuschalten.
   * archon/routers/chat.py            : Fan-out-Cap 5 + task_id/token_budget beim
                                         Task-Anlegen (Agent H: operations_api.py).
   * core_dispatcher.py                : Boardroom-Fenster >= max_steps+1 und
@@ -29,18 +35,31 @@ import sqlite3
 import threading
 import time
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger("archon.trajectory_budget")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_FILENAME = "ops.db"
 
-DEFAULT_MAX_HOPS = 5
+# D13/F032: EINZIGE SSOT fuer die maximale Delegationstiefe. Der alte Wert 5
+# und der dag-seitige Expand-Pfad auf 50 sind ersatzlos entfallen. Caps werden
+# nur verschaeft, nie erweitert.
+MAX_DELEGATION_DEPTH = 3
+# Rueckwaertskompatibler Alias: gleicher Wert, keine zweite Wahrheit.
+DEFAULT_MAX_HOPS = MAX_DELEGATION_DEPTH
 DEFAULT_MAX_TOKENS = 200_000
 DEFAULT_MAX_REPLANS = 2
 DEFAULT_MAX_DELEGATIONS_PER_RESPONSE = 5
 RESERVATION_TTL_SECONDS = 7200
+
+# D13/MED: gezaehlte Wiederholungen statt Präfix-Whitelist. Pro
+# (trajectory_id, agent_id, reason_key) sind DEFAULT_REPEAT_BUDGET Reentries
+# erlaubt; danach greift CYCLE_DETECTED hart zu.
+DEFAULT_REPEAT_BUDGET = 3
+REPEAT_REASON_PREFIXES = ("tool:", "retry:", "replan:", "repair:")
+# Wiederholungs-Klassen, die einen gemeinsamen Zaehler teilen (retry:1, retry:2, ...).
+_SHARED_REPEAT_KEYS = frozenset({"retry", "replan", "repair"})
 
 _WRITE_LOCK = threading.RLock()
 
@@ -72,11 +91,11 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
 
 def init_trajectory_tables(conn: sqlite3.Connection) -> None:
     """Idempotentes SQLite-Schema — CHECK-Constraints verhindern Cap-Unterlauf."""
-    conn.execute("""
+    conn.execute(f"""
         CREATE TABLE IF NOT EXISTS trajectory_budgets (
             trajectory_id TEXT PRIMARY KEY,
             root_ticket_id TEXT NOT NULL,
-            max_hops INTEGER NOT NULL DEFAULT 5,
+            max_hops INTEGER NOT NULL DEFAULT {MAX_DELEGATION_DEPTH},
             hops_used INTEGER NOT NULL DEFAULT 0,
             max_tokens INTEGER NOT NULL DEFAULT 200000,
             tokens_used INTEGER NOT NULL DEFAULT 0,
@@ -98,10 +117,118 @@ def init_trajectory_tables(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE trajectory_budgets ADD COLUMN replans_used INTEGER NOT NULL DEFAULT 0")
     if "last_reason" not in cols:
         conn.execute("ALTER TABLE trajectory_budgets ADD COLUMN last_reason TEXT NOT NULL DEFAULT ''")
+    # D13/MED: gezaehltes Repeat-Budget pro (trajectory_id, agent_id, reason_key).
+    # Ersatz fuer die alte Präfix-Whitelist, die tool:/retry:/replan:/repair:
+    # pauschal von der Zyklus-Erkennung ausgenommen hat.
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS trajectory_repeat_budget (
+            trajectory_id TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            reason_key TEXT NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0,
+            limit_count INTEGER NOT NULL DEFAULT {DEFAULT_REPEAT_BUDGET},
+            PRIMARY KEY (trajectory_id, agent_id, reason_key)
+        )
+    """)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_trajectory_root ON trajectory_budgets(root_ticket_id)"
     )
     conn.commit()
+
+
+def clamp_max_hops(value: Optional[int]) -> int:
+    """D13/F032: SSOT-konformer Hop-Cap. 0/'ungueltig' heisst 'nicht angegeben'.
+
+    Ein Werte > MAX_DELEGATION_DEPTH wird auf die SSOT heruntergezogen und
+    niemals nach oben durchgereicht — das ist die einzige erlaubte
+    'Erweiterungs'-Richtung: keine.
+    """
+    try:
+        n = int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+    if n <= 0:
+        return 0
+    return max(1, min(MAX_DELEGATION_DEPTH, n))
+
+
+def _repeat_reason_key(reason: str) -> str:
+    """Stabile Gruppen-ID fuer das Repeat-Budget.
+
+    retry:1/retry:2 teilen sich einen Topf (sonst liefe der Retry-Cap ins
+    Leere); tool:<name> bleibt pro Tool getrennt; allow_repeat bei llm_call:<a>
+    nutzt den vollen Grund als Key.
+    """
+    text = str(reason or "").strip() or "generic"
+    head, sep, tail = text.partition(":")
+    if head in _SHARED_REPEAT_KEYS:
+        return head
+    if head == "tool":
+        return f"tool:{tail.strip() or '_unknown'}" if sep else "tool"
+    return text
+
+
+def _repeat_budget(conn: sqlite3.Connection, tid: str, aid: str, key: str) -> Tuple[int, int]:
+    row = conn.execute(
+        "SELECT used, limit_count FROM trajectory_repeat_budget "
+        "WHERE trajectory_id = ? AND agent_id = ? AND reason_key = ?",
+        (tid, aid, key),
+    ).fetchone()
+    if not row:
+        return 0, DEFAULT_REPEAT_BUDGET
+    return max(0, int(row["used"] or 0)), max(0, int(row["limit_count"] or 0))
+
+
+def _consume_repeat_budget(
+    conn: sqlite3.Connection, tid: str, aid: str, key: str, used: int
+) -> None:
+    conn.execute(
+        "INSERT INTO trajectory_repeat_budget (trajectory_id, agent_id, reason_key, used, limit_count) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(trajectory_id, agent_id, reason_key) DO UPDATE SET used = excluded.used",
+        (tid, aid, key, used, DEFAULT_REPEAT_BUDGET),
+    )
+
+
+def set_repeat_budget(
+    trajectory_id: str,
+    agent_id: str,
+    reason: str,
+    limit: int,
+    *,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Expliziter, persistierter Repeat-Cap pro (Trajectory, Agent, Reason)."""
+    tid = normalize_trajectory_id(trajectory_id)
+    aid = str(agent_id or "").strip()
+    key = _repeat_reason_key(reason)
+    cap = max(0, int(limit or 0))
+    with _WRITE_LOCK, _connect(db_path) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT INTO trajectory_repeat_budget (trajectory_id, agent_id, reason_key, used, limit_count) "
+            "VALUES (?, ?, ?, 0, ?) "
+            "ON CONFLICT(trajectory_id, agent_id, reason_key) DO UPDATE SET limit_count = excluded.limit_count",
+            (tid, aid, key, cap),
+        )
+        conn.commit()
+    return {"trajectory_id": tid, "agent_id": aid, "reason_key": key, "limit": cap}
+
+
+def repeat_budget_status(
+    trajectory_id: str,
+    agent_id: str,
+    reason: str,
+    *,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    tid = normalize_trajectory_id(trajectory_id)
+    aid = str(agent_id or "").strip()
+    key = _repeat_reason_key(reason)
+    with _connect(db_path) as conn:
+        used, cap = _repeat_budget(conn, tid, aid, key)
+    return {"trajectory_id": tid, "agent_id": aid, "reason_key": key,
+            "used": used, "limit": cap, "remaining": max(0, cap - used)}
 
 
 def stable_trajectory_id(root_ticket_id: str) -> str:
@@ -130,14 +257,20 @@ def _audit(trajectory_id: str, msg: str, task_id: str = "") -> None:
         from archon.core.mission_control import mc_append_audit_sqlite
         mc_append_audit_sqlite("trajectory_budget", msg, task_id or trajectory_id or "_system")
     except Exception as exc:
-        logger.debug("[TrajectoryBudget] Audit-Schreibfehler: %s", exc)
+        # F024/§0: Audit-Schreibfehler nie verschlucken.
+        logger.error("[TrajectoryBudget] Audit-Schreibfehler: %s", exc, exc_info=exc)
+        try:
+            from backend.trace_context import note_local_trace_error
+            note_local_trace_error("Trajectory-Audit-Schreibfehler", exc)
+        except Exception:
+            pass
     try:
         from archon.core.runtime import broadcast_event
         broadcast_event("trajectory_budget_blocked", {
             "trajectory_id": trajectory_id, "task_id": task_id, "reason": msg,
         })
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("[TrajectoryBudget] Broadcast trajectory_budget_blocked fehlgeschlagen: %s", exc)
 
 
 def get_trajectory(trajectory_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -161,6 +294,9 @@ def ensure_trajectory(
     tid = normalize_trajectory_id(trajectory_id, root_ticket_id)
     root = str(root_ticket_id or trajectory_id or tid)
     now = time.time()
+    # F032: auch der INSERT darf die SSOT nicht umgehen (frueher wurde hier
+    # ungeklemmt 50 aus den DAG-Metadaten geschrieben).
+    requested_hops = clamp_max_hops(max_hops)
     with _WRITE_LOCK, _connect(db_path) as conn:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
@@ -170,7 +306,7 @@ def ensure_trajectory(
             "VALUES (?, ?, ?, 0, ?, 0, ?, 0, '[]', 'active', '', ?, ?)",
             (
                 tid, root,
-                max(1, int(max_hops if max_hops is not None else DEFAULT_MAX_HOPS)),
+                requested_hops or MAX_DELEGATION_DEPTH,
                 max(1, int(max_tokens if max_tokens is not None else DEFAULT_MAX_TOKENS)),
                 max(0, int(max_replans if max_replans is not None else DEFAULT_MAX_REPLANS)),
                 now, now,
@@ -180,8 +316,8 @@ def ensure_trajectory(
             "SELECT * FROM trajectory_budgets WHERE trajectory_id = ?", (tid,)
         ).fetchone()
         updates: Dict[str, Any] = {}
-        if max_hops is not None:
-            updates["max_hops"] = min(int(row["max_hops"]), max(1, int(max_hops)))
+        if requested_hops:
+            updates["max_hops"] = min(int(row["max_hops"]), requested_hops)
         if max_tokens is not None:
             updates["max_tokens"] = min(int(row["max_tokens"]), max(1, int(max_tokens)))
         if max_replans is not None:
@@ -227,7 +363,14 @@ def reserve_hop(
 ) -> Dict[str, Any]:
     """Vor JEDEM Agentwechsel/Tool-Call/Retry/Replan atomar aufrufen.
 
-    Fail-closed: unbekannte Trajectory wird mit Default-Caps angelegt, eine
+    D13/F032: Reentries werden NICHT mehr pauschal durch ein Präfix
+    (`tool:`, `retry:`, `replan:`, `repair:`) oder `allow_repeat` von der
+    Zyklus-Erkennung ausgenommen. Sie verbrauchen ein gezaehltes
+    `repeat_budget` pro (trajectory_id, agent_id, reason_key); ist es
+    aufgebraucht, greift CYCLE_DETECTED. Ein echter Agentwechsel-Zyklus
+    (A -> B -> A) bleibt sofort hart blockiert.
+
+    Fail-closed: unbekannte Trajectory wird mit SSOT-Caps angelegt, eine
     blockierte Trajectory lässt keinen weiteren Hop zu.
     """
     tid = normalize_trajectory_id(trajectory_id, root_ticket_id)
@@ -238,7 +381,7 @@ def reserve_hop(
             "(trajectory_id, root_ticket_id, max_hops, max_tokens, max_replans, "
             " visited_agents, state, last_reason, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, '[]', 'active', '', ?, ?)",
-            (tid, str(root_ticket_id or tid), DEFAULT_MAX_HOPS, DEFAULT_MAX_TOKENS,
+            (tid, str(root_ticket_id or tid), MAX_DELEGATION_DEPTH, DEFAULT_MAX_TOKENS,
              DEFAULT_MAX_REPLANS, time.time(), time.time()),
         )
         row = conn.execute(
@@ -259,33 +402,62 @@ def reserve_hop(
         except Exception:
             visited = []
         aid = str(agent_id or "").strip()
-        # D13: Ein Retry/Replan/Tool-Call desselben Knotens ist KEIN Delegationszyklus.
-        # Zyklen sind A->B->A (Agentwechsel); Wiederholungen zaehlen nur als Hop.
-        _is_repeat = allow_repeat or str(reason or "").startswith(("retry:", "replan:", "repair:", "tool:"))
-        if aid and aid in visited and not _is_repeat:
-            blocked = _block(conn, tid, f"CYCLE_DETECTED:{aid}")
-            _audit(tid, f"CYCLE_DETECTED via {aid} ({reason})", str(root_ticket_id or ""))
-            return {"allowed": False, "reason": "CYCLE_DETECTED", "agent_id": aid,
-                    "trajectory_id": tid, "hops_used": int(blocked.get("hops_used", 0)),
-                    "max_hops": int(blocked.get("max_hops", DEFAULT_MAX_HOPS))}
+        reason_text = str(reason or "")
+        is_qualified_visit = bool(
+            aid and any(v == aid or v.startswith(f"{aid}::") for v in visited)
+        )
+        repeat_class = allow_repeat or reason_text.startswith(REPEAT_REASON_PREFIXES)
+        # Wiederholungen sind KEINE Delegation: sie werden ausschliesslich ueber
+        # das repeat_budget gedeckelt und belasten nicht max_hops (die SSOT
+        # MAX_DELEGATION_DEPTH=3 gilt fuer echte Agentwechsel).
+        counted_repeat = False
+        if is_qualified_visit:
+            if not repeat_class:
+                # Echter Delegationszyklus (z. B. agent_switch A->B->A).
+                blocked = _block(conn, tid, f"CYCLE_DETECTED:{aid}")
+                _audit(tid, f"CYCLE_DETECTED via {aid} ({reason_text})", str(root_ticket_id or ""))
+                return {"allowed": False, "reason": "CYCLE_DETECTED", "agent_id": aid,
+                        "trajectory_id": tid, "hops_used": int(blocked.get("hops_used", 0)),
+                        "max_hops": int(blocked.get("max_hops", MAX_DELEGATION_DEPTH))}
+            rkey = _repeat_reason_key(reason_text)
+            used, cap = _repeat_budget(conn, tid, aid, rkey)
+            if used >= cap:
+                blocked = _block(conn, tid, f"CYCLE_DETECTED:{aid}:repeat_budget_exhausted")
+                _audit(tid, f"CYCLE_DETECTED repeat_budget ({used}/{cap}) via {aid} ({reason_text})",
+                       str(root_ticket_id or ""))
+                return {"allowed": False, "reason": "CYCLE_DETECTED", "detail": "REPEAT_BUDGET_EXCEEDED",
+                        "agent_id": aid, "reason_key": rkey, "repeat_used": used, "repeat_limit": cap,
+                        "trajectory_id": tid, "hops_used": int(blocked.get("hops_used", 0)),
+                        "max_hops": int(blocked.get("max_hops", MAX_DELEGATION_DEPTH))}
+            _consume_repeat_budget(conn, tid, aid, rkey, used + 1)
+            counted_repeat = True
         hops_used = int(row["hops_used"] or 0)
         max_hops = int(row["max_hops"])
         if hops_used >= max_hops:
             blocked = _block(conn, tid, "DEPTH_EXCEEDED")
-            _audit(tid, f"DEPTH_EXCEEDED ({hops_used}/{max_hops}) via {reason}", str(root_ticket_id or ""))
+            _audit(tid, f"DEPTH_EXCEEDED ({hops_used}/{max_hops}) via {reason_text}", str(root_ticket_id or ""))
             return {"allowed": False, "reason": "DEPTH_EXCEEDED", "trajectory_id": tid,
                     "hops_used": hops_used, "max_hops": max_hops}
-        if aid and aid not in visited:
-            visited.append(aid)
+        if aid:
+            if aid not in visited:
+                visited.append(aid)
+            # D13/MED: Tool-Calls als (agent_id, tool_name) im visited-Set
+            # fuehren, damit A -> tool_x -> A als Zyklus sichtbar bleibt.
+            if reason_text.startswith("tool:"):
+                tool_name = reason_text.split(":", 1)[1].strip() or "_unknown"
+                marker = f"{aid}::tool:{tool_name}"
+                if marker not in visited:
+                    visited.append(marker)
+        new_hops = hops_used if counted_repeat else hops_used + 1
         conn.execute(
             "UPDATE trajectory_budgets SET hops_used = ?, visited_agents = ?, updated_at = ? "
             "WHERE trajectory_id = ?",
-            (hops_used + 1, json.dumps(visited, ensure_ascii=False), time.time(), tid),
+            (new_hops, json.dumps(visited, ensure_ascii=False), time.time(), tid),
         )
         conn.commit()
         return {"allowed": True, "reason": "ok", "trajectory_id": tid,
-                "hops_used": hops_used + 1, "max_hops": max_hops,
-                "visited_agents": visited}
+                "hops_used": new_hops, "max_hops": max_hops,
+                "counted_repeat": counted_repeat, "visited_agents": visited}
 
 
 def reserve_replan(
@@ -553,24 +725,30 @@ def zombie_eligible(row: Dict[str, Any], now: Optional[float] = None) -> bool:
 
 
 def _run_regression_tests() -> None:
-    """D13-Regression: A->B->A, 6 Hops, Replan #3. `python backend/trajectory_budget.py`."""
+    """D13-Regression: A->B->A, Hop 4/3, Replan #3, Repeat-Budget.
+
+    `python backend/trajectory_budget.py`.
+    """
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
         db = os.path.join(tmp, "ops.db")
         # 1) A -> B -> A muss CYCLE_DETECTED liefern.
-        tid = ensure_trajectory(max_hops=5, root_ticket_id="ticket-cycle", db_path=db)["trajectory_id"]
+        tid = ensure_trajectory(max_hops=MAX_DELEGATION_DEPTH,
+                                root_ticket_id="ticket-cycle", db_path=db)["trajectory_id"]
         reserve_hop(tid, "agent-a", "test", db_path=db)
         reserve_hop(tid, "agent-b", "test", db_path=db)
         cyc = reserve_hop(tid, "agent-a", "test", db_path=db)
         assert not cyc["allowed"] and cyc["reason"] == "CYCLE_DETECTED", cyc
         print("PASS 1: A->B->A -> CYCLE_DETECTED")
-        # 2) 6. Hop muss DEPTH_EXCEEDED liefern.
-        tid2 = ensure_trajectory(max_hops=5, root_ticket_id="ticket-depth", db_path=db)["trajectory_id"]
-        for i in range(5):
-            assert reserve_hop(tid2, f"agent-{i}", "test", db_path=db)["allowed"]
-        depth = reserve_hop(tid2, "agent-6", "test", db_path=db)
+        # 2) Hop 4/3 muss DEPTH_EXCEEDED liefern (SSOT=3, kein Expand auf 50).
+        tid2 = ensure_trajectory(max_hops=50, root_ticket_id="ticket-depth", db_path=db)
+        assert int(tid2["max_hops"]) == MAX_DELEGATION_DEPTH, tid2
+        tid2_id = tid2["trajectory_id"]
+        for i in range(MAX_DELEGATION_DEPTH):
+            assert reserve_hop(tid2_id, f"agent-{i}", "test", db_path=db)["allowed"]
+        depth = reserve_hop(tid2_id, "agent-6", "test", db_path=db)
         assert not depth["allowed"] and depth["reason"] == "DEPTH_EXCEEDED", depth
-        print("PASS 2: hop 6/5 -> DEPTH_EXCEEDED")
+        print("PASS 2: hop 4/3 -> DEPTH_EXCEEDED (50 auf SSOT geklemmt)")
         # 3) Replan #3 muss replan_cap_reached liefern (auch ueber neue run_id).
         tid3 = ensure_trajectory(max_replans=2, root_ticket_id="ticket-replan", db_path=db)["trajectory_id"]
         for i in range(2):
@@ -578,7 +756,17 @@ def _run_regression_tests() -> None:
         replan = reserve_replan(tid3, run_id="run-3", db_path=db)
         assert not replan["allowed"] and replan["reason"] == "replan_cap_reached", replan
         print("PASS 3: replan #3 -> replan_cap_reached (state=blocked)")
-    print("ALL 3 REGRESSION TESTS PASSED")
+        # 4) Gezaehltes Repeat-Budget: llm_call mit allow_repeat ist NICHT mehr
+        #    pauschal ausgenommen — der persistierte Zaehler greift (hier auf 1
+        #    verschaeft, damit der Test innerhalb der SSOT-Tiefe bleibt).
+        tid4 = ensure_trajectory(root_ticket_id="ticket-repeat", db_path=db)["trajectory_id"]
+        set_repeat_budget(tid4, "agent-r", "llm_call:agent-r", 1, db_path=db)
+        first = reserve_hop(tid4, "agent-r", "llm_call:agent-r", allow_repeat=True, db_path=db)
+        second = reserve_hop(tid4, "agent-r", "llm_call:agent-r", allow_repeat=True, db_path=db)
+        third = reserve_hop(tid4, "agent-r", "llm_call:agent-r", allow_repeat=True, db_path=db)
+        assert first["allowed"] and second["allowed"], (first, second)
+        assert third["reason"] == "CYCLE_DETECTED", third
+        print("PASS 4: repeat-Budget 1 -> 3. llm_call CYCLE_DETECTED")
 
 
 if __name__ == "__main__":
@@ -586,8 +774,10 @@ if __name__ == "__main__":
 
 
 __all__ = [
-    "DEFAULT_MAX_HOPS", "DEFAULT_MAX_TOKENS", "DEFAULT_MAX_REPLANS",
+    "MAX_DELEGATION_DEPTH", "DEFAULT_MAX_HOPS", "DEFAULT_MAX_TOKENS", "DEFAULT_MAX_REPLANS",
     "DEFAULT_MAX_DELEGATIONS_PER_RESPONSE", "RESERVATION_TTL_SECONDS",
+    "DEFAULT_REPEAT_BUDGET", "REPEAT_REASON_PREFIXES", "clamp_max_hops",
+    "set_repeat_budget", "repeat_budget_status",
     "resolve_trajectory_db_path", "stable_trajectory_id", "normalize_trajectory_id",
     "ensure_trajectory", "get_trajectory", "reserve_hop", "reserve_replan",
     "inherit_replan_count", "record_tokens", "reserve_tokens", "close_trajectory",

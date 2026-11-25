@@ -86,8 +86,25 @@ def test_tenant_context_consolidation_works_under_full_tenant_isolation(tmp_path
     assert os.path.abspath(resolved) == os.path.abspath(cons_biz)
 
 
-def test_db_paths_resolve_db_does_not_call_tenant_resolver_for_system_dbs(tmp_path, monkeypatch):
-    from backend import db_paths, tenant_context as tc_mod
+def test_db_paths_resolve_db_uses_consolidated_memory_db(tmp_path, monkeypatch):
+    """A4/W5: aktive 28->3-Konsolidierung liefert memory.db, nicht den Legacy-Namen.
+
+    Der frühere Test erwartete ``agentic_memory.db`` als Heimatpfad. Das ist
+    seit der Konsolidierung falsch: der Resolver muss den Legacy-Namen
+    transparent auf die aktive Zieldatei umleiten, ohne den Tenant-Resolver
+    fuer eine System-DB zu bemuehen.
+    """
+    from backend import db_consolidation, db_paths, tenant_context as tc_mod
+
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    consolidated = data_root / "memory.db"
+    con = sqlite3.connect(str(consolidated))
+    try:
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY)")
+        con.commit()
+    finally:
+        con.close()
 
     calls = []
     orig = tc_mod.tenant_context.resolve_active_db
@@ -98,8 +115,13 @@ def test_db_paths_resolve_db_does_not_call_tenant_resolver_for_system_dbs(tmp_pa
 
     monkeypatch.setattr(tc_mod, "FULL_TENANT_ISOLATION", True)
     monkeypatch.setattr(tc_mod.tenant_context, "resolve_active_db", _spy)
+    monkeypatch.setattr(db_paths, "APP_DATA_DIR", str(data_root))
     monkeypatch.setattr(db_paths, "_RESOLVED_DB_CACHE", {})
+    monkeypatch.setattr(db_consolidation, "is_consolidation_active", lambda _dir: True)
+    monkeypatch.setattr(db_consolidation, "resolve_consolidated_domain", lambda _name: "memory.db")
 
     path = db_paths.resolve_db("agentic_memory.db")
-    assert path.endswith("agentic_memory.db")
+    assert os.path.abspath(path) == os.path.abspath(consolidated)
+    assert path.endswith("memory.db")
     assert "agentic_memory.db" not in calls
+    assert "memory.db" not in calls

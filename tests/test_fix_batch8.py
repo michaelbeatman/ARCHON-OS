@@ -11,8 +11,13 @@ def test_r30_audit_integrity_detects_payload_tampering(tmp_path, monkeypatch):
     db_path = tmp_path / "test_approval.db"
     engine = ApprovalPolicyEngine(db_path=str(db_path))
 
-    # Manipuliere eine historische Zeile in der DB (z.B. policy_key oder new_value geaendert)
+    # Manipuliere eine historische Zeile in der DB (z.B. policy_key oder new_value geaendert).
+    # Der append-only-Trigger schuetzt den Produktivpfad; der Test simuliert
+    # einen Offline-Angriff mit direktem Dateizugriff und muss ihn dafuer in der
+    # reinen Temp-DB entfernen (nie in ./data).
     conn = sqlite3.connect(str(db_path))
+    conn.execute("DROP TRIGGER IF EXISTS approval_chain_no_hash_update")
+    conn.execute("DROP TRIGGER IF EXISTS approval_chain_no_delete")
     conn.execute("UPDATE approval_policy_audit_chain SET new_value = 'MANIPULIERT' WHERE id = 1")
     conn.commit()
     conn.close()

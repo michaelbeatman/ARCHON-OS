@@ -1,9 +1,20 @@
 # mypy: ignore-errors
 """
 backend/otel_tracer.py
-OpenTelemetry- & Langfuse-kompatibler Tracer für Archon OS (Pillar 1 & 6).
+W3C-Trace-Context + lokaler SQLite-Span-Recorder für Archon OS (Pillar 1 & 6).
 Erfasst hierarchische Traces und Spans für Tasks, Agenten-Delegationen,
 Tool-Ausführungen und LLM-Aufrufe mit Latenz, Token-Verbrauch und Kosten.
+
+EHR-LICHER STATUS (D16/H-16-1): Es ist **kein** OTel-SDK installiert und
+verwendet. `opentelemetry-api` ist nur eine transitive FastAPI-Abhängigkeit.
+Trace-/Span-IDs, Sampling und Header folgen dem W3C-Standard
+(`backend/trace_context.py`); Spans landen in `agentic_memory.db` und werden
+bei Konfiguration als OTLP/HTTP-JSON per urllib an den Collector sowie als
+Langfuse-Ingestion-Batch gesendet. Es gibt keinen TracerProvider,
+BatchSpanProcessor oder SDK-Propagator. `get_tracing_status()` weist das
+maschinenlesbar aus (`otel_sdk=false`, `implementation=...`), statt
+"OpenTelemetry-konform" zu behaupten. Die Decision ist im Fix-Report
+`audit_reports/fix_w4_a_tracing.md` begründet (Hash-Lockfile / 3.11+3.13).
 """
 import logging
 
@@ -35,8 +46,9 @@ _LOCAL_LOCK = threading.Lock()
 
 class OpenTelemetryTracer:
     """
-    Zentraler OpenTelemetry- & Langfuse-Tracer für Archon OS.
-    Speichert Spans transaktional in agentic_memory.db und streamt bei Bedarf an Langfuse.
+    Zentraler W3C-/SQLite-Span-Recorder für Archon OS (ohne OTel-SDK).
+    Speichert Spans transaktional in agentic_memory.db und streamt bei Bedarf
+    OTLP/HTTP-JSON an den Collector bzw. einen Batch an Langfuse.
     """
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
@@ -586,9 +598,10 @@ def get_tracing_status() -> dict:
         targets.append("otlp")
     if lf_configured:
         targets.append("langfuse")
-    # D16/HIGH: der Collector exportiert aktuell NUR nach debug/file. Ohne
-    # explizit verdrahteten Tempo/Jaeger-Downstream ehrlich ausweisen, statt
-    # einen nicht gestarteten Consumer zu behaupten (S-1.5).
+    # D16/H-16-2: der Collector hat seit W4-A eine echte zweite Pipeline nach
+    # Tempo (config/otel-collector-config.yml). Der Env-Wert beschreibt die
+    # *konfigurierte* Zielkette, nicht deren Liveness — das bleibt bewusst
+    # getrennt ausgewiesen (kein vorgespiegelter Consumer, S-1.5).
     downstream = (os.getenv("ARCHON_OTEL_COLLECTOR_DOWNSTREAM") or "").strip()
     stages = dict(getattr(tracer, "_stage_failures", {}))
     log_bridge_failures = sum(
@@ -601,6 +614,17 @@ def get_tracing_status() -> dict:
         if key.startswith("sse_trace") or key.startswith("sse-trace")
     )
     return {
+        # H-16-1: ehrliche Implementierungs-Kennzeichnung. Kein OTel-SDK,
+        # sondern W3C-Propagierung + SQLite-Recorder + handgebautes OTLP-JSON.
+        "otel_sdk": False,
+        "otel_sdk_installed": False,
+        "implementation": "w3c_trace_context_sqlite_recorder",
+        "implementation_note": (
+            "W3C Trace Context + lokaler SQLite-Span-Recorder, kein OTel-SDK. "
+            "IDs/Sampling/Header stammen aus backend/trace_context.py; der "
+            "OTLP/HTTP-Payload wird per urllib gebaut. Kein TracerProvider, "
+            "kein BatchSpanProcessor, kein SDK-Propagator."
+        ),
         "configured": configured,
         "status": "configured" if configured else "not_configured",
         "target": "+".join(targets) if targets else None,
@@ -619,6 +643,12 @@ def get_tracing_status() -> dict:
         "service_name": os.getenv("OTEL_SERVICE_NAME", "archon-os").strip() or "archon-os",
         "collector_downstream": downstream or "not_configured/local_only",
         "collector_local_only": not bool(downstream),
+        "collector_downstream_note": (
+            "Compose setzt ARCHON_OTEL_COLLECTOR_DOWNSTREAM=tempo; der Collector "
+            "exportiert per config/otel-collector-config.yml an http://tempo:4318. "
+            "Ohne ENV-Wert wird konservativ not_configured/local_only gemeldet "
+            "(keine Liveness-Garantie fuer den Collector)."
+        ),
         "log_bridge": {
             "status": "degraded" if log_bridge_failures else "ok",
             "installed": bool(_TRACE_LOG_FILTER_STATUS["installed"]),

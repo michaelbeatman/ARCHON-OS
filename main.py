@@ -150,7 +150,55 @@ _N8N_STARTUP_STATUS: Dict[str, Any] = {"status": "not_configured", "detail": "op
 # werden. Ein fehlgeschlagener Router-Health- oder Audit-HMAC-Check muss den
 # Start abbrechen — sonst laeuft die Anwendung mit fälschbarer Revisionskette
 # bzw. still 404-enden Router weiter.
-_FAIL_FAST_HOOKS = {"_assert_router_health", "_assert_audit_hmac", "_assert_auth_on_nonloopback_bind"}
+_FAIL_FAST_HOOKS = {
+    "_assert_router_health",
+    "_assert_audit_hmac",
+    "_assert_audit_integrity",
+    "_assert_auth_on_nonloopback_bind",
+    "_assert_api_key_pepper",
+}
+
+# B-05 (D05/BLOCKER): globaler, thread-sicherer Integritätsstatus. Wird vom
+# Startup-Hook und vom 30-s-Loop gesetzt. /readyz antwortet 503, sobald eine
+# Manipulation zur Laufzeit erkannt wurde (sticky — nur Operator-Reset).
+_AUDIT_COMPROMISED: Dict[str, Any] = {
+    "compromised": False,
+    "reason": "",
+    "chains": [],
+    "ts": 0.0,
+}
+# Öffentlicher Name laut Auftrag (AUDIT_COMPROMISED-Flag).
+AUDIT_COMPROMISED = _AUDIT_COMPROMISED
+_AUDIT_COMPROMISED_LOCK = threading.Lock()
+
+
+def _mark_audit_compromised(label: str, result: Dict[str, Any]) -> None:
+    """Loggt den Befund immer auf ERROR; setzt das 503-Flag im Produktivpfad.
+
+    In isolierter Dev/Test-Umgebung mit historischen Legacy-Blöcken bleibt der
+    Befund sichtbar, aber /readyz wird nicht dauerhaft gekillt (sonst würde
+    jede langlebige Test-Session nach dem 30-s-Loop 503 liefern).
+    """
+    if not isinstance(result, dict) or result.get("valid") is not False:
+        return
+    reason = str(
+        result.get("reason") or result.get("message") or "Integritätsprüfung fehlgeschlagen"
+    )
+    corrupted = str(result.get("corrupted_id") or "")
+    if corrupted:
+        reason = f"{reason} (corrupted_id={corrupted})"
+    logger.error("[Audit][Integritaet] %s INVALID: %s", label, result)
+    if not _audit_integrity_enforced():
+        return
+    with _AUDIT_COMPROMISED_LOCK:
+        _AUDIT_COMPROMISED["compromised"] = True
+        _AUDIT_COMPROMISED["reason"] = f"{label}: {reason}"
+        chains = list(_AUDIT_COMPROMISED.get("chains") or [])
+        if label not in chains:
+            chains.append(label)
+        _AUDIT_COMPROMISED["chains"] = chains
+        _AUDIT_COMPROMISED["ts"] = time.time()
+
 
 _LOCAL_BINDS = {"127.0.0.1", "localhost", "::1", "[::1]"}
 
@@ -196,19 +244,51 @@ def _must_force_auth() -> bool:
 
 
 def _assert_auth_on_nonloopback_bind() -> None:
-    """Nicht-Loopback-Bind ohne Auth ist Fail-Open -> Start hart abbrechen."""
+    """Nicht-Loopback-Bind ohne Auth ist Fail-Open -> Start hart abbrechen.
+
+    D04/MED: `is_auth_enabled()` enthält denselben Force-Pfad wie
+    `_must_force_auth()` und liefert deshalb immer True. Der Hook muss die
+    *echte Konfiguration* ohne Force lesen (`_read_auth_enabled()`).
+    """
     if not _must_force_auth():
         return  # lokaler 127.0.0.1-Single-User-Modus bleibt doku-konform erlaubt
     try:
-        from backend.auth_service import auth_service
-        auth_enabled = auth_service.is_auth_enabled()
+        from backend.auth_service import AuthService
+        auth_enabled = AuthService._read_auth_enabled()
     except Exception as exc:
-        logger.error(f"[Auth] Auth-Status bei Nicht-Loopback-Bind nicht pruefbar: {exc}")
-        raise RuntimeError("[Auth] Auth-Status nicht pruefbar — Start abgebrochen (fail-closed).") from exc
+        logger.error(f"[Auth] Auth-Konfiguration bei Nicht-Loopback-Bind nicht pruefbar: {exc}")
+        raise RuntimeError("[Auth] Auth-Konfiguration nicht pruefbar — Start abgebrochen (fail-closed).") from exc
     if not auth_enabled:
         raise RuntimeError(
-            "[Auth] Nicht-Loopback-Bind (z. B. 0.0.0.0) erkannt, aber Auth ist deaktiviert — "
+            "[Auth] Nicht-Loopback-Bind (z. B. 0.0.0.0) oder Produktion erkannt, aber "
+            "auth.enabled ist in settings.json nicht explizit aktiviert — "
             "Start abgebrochen (fail-closed). Auth aktivieren oder an 127.0.0.1 binden."
+        )
+
+
+def _assert_api_key_pepper() -> None:
+    """D04/H-04-2: Produktion ohne ARCHON_API_KEY_PEPPER darf nicht starten.
+
+    Kein hartcodierter Salt, kein Legacy-Fallback. Der Hook läuft im
+    Fail-Fast-Pfad des Lifespans und beendet den Start bei fehlendem Secret.
+    """
+    env_name = str(
+        os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
+    ).strip().lower()
+    if env_name not in ("production", "prod", "live"):
+        return
+    pepper = str(os.environ.get("ARCHON_API_KEY_PEPPER") or "").strip()
+    if not pepper:
+        raise RuntimeError(
+            "[Security] ARCHON_API_KEY_PEPPER fehlt in Produktion — "
+            "Start abgebrochen (fail-closed). Bitte sicheres Secret setzen und "
+            "alle bestehenden API-Keys rotieren."
+        )
+    # Kurze/triviale Pepper sind kein Schutz — hart ablehnen.
+    if len(pepper) < 16 or pepper.lower() in ("changeme", "secret", "password", "pepper"):
+        raise RuntimeError(
+            "[Security] ARCHON_API_KEY_PEPPER ist zu kurz oder ein Platzhalter — "
+            "Start abgebrochen (fail-closed)."
         )
 
 
@@ -220,6 +300,13 @@ async def _archon_lifespan(_app_instance):
         stop_loop_heartbeat = None  # type: ignore[assignment]
         logger.warning(f"[Lifespan] Loop-Liveness-Start fehlgeschlagen: {_ll_start_err}")
 
+    # D08/H-08-2: die Readiness-Schreibprobe wird EINMAL im Lifespan angelegt,
+    # nicht bei jedem Healthcheck-Scrape (vorher CREATE TABLE pro /readyz).
+    try:
+        await asyncio.to_thread(_init_readiness_probe_table)
+    except Exception as _probe_err:
+        # Kein Fail-Fast: /readyz meldet den Fehler ueber _readiness_sync_checks.
+        logger.warning(f"[Lifespan] Readiness-Probe-Tabelle nicht anlegbar: {_probe_err}")
     for hook in list(_STARTUP_HOOKS):
         name = getattr(hook, "__name__", repr(hook))
         try:
@@ -711,6 +798,36 @@ _DEPENDENCY_PROBE_CACHE: dict = {"ts": 0.0, "problems": []}
 _DEPENDENCY_PROBE_TTL = 10.0
 
 
+def _readiness_probe_targets() -> list:
+    """Konfigurierbare externe Probes (H-10-1/F043).
+
+    Default ist AUSSCHLIESSLICH OmniRoute: es ist per ``depends_on``
+    Pflichtbestandteil des Stacks. n8n ist optional (Compose-Profil
+    ``automation``/``full``) und wird nicht mehr hart probiert — sonst bleibt
+    der Ansible-Deploy-Gate im Default-Profil dauerhaft rot.
+
+    Format: ``name=url,name2=url2``. Ein explizit leerer Wert deaktiviert die
+    externen Probes vollständig.
+    """
+    raw = os.getenv("ARCHON_READINESS_PROBE_URLS")
+    if raw is None:
+        omniroute = os.getenv("OMNIROUTE_URL", "http://omniroute:20128/v1").rstrip("/")
+        raw = f"omniroute={omniroute}/models"
+    targets: list = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        if "=" in entry:
+            name, url = entry.split("=", 1)
+        else:
+            name, url = entry, entry
+        name, url = name.strip() or url.strip(), url.strip()
+        if url:
+            targets.append((name, url))
+    return targets
+
+
 def _probe_external_dependency(name: str, url: str) -> str:
     """Synchrone URL-Probe — ausschliesslich aus asyncio.to_thread gerufen.
 
@@ -728,21 +845,37 @@ def _probe_external_dependency(name: str, url: str) -> str:
     return ""
 
 
-@app.get("/readyz")
-async def readiness_check():
-    """Readiness: echte Dependency-Pruefung. Liefert 503, solange nicht bereit."""
+_READINESS_PROBE_READY = {"ok": False}
+
+
+def _init_readiness_probe_table() -> None:
+    """DDL einmalig (Lifespan) — nicht mehr pro Healthcheck-Scrape."""
+    with _get_state_db() as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS _readiness_probe (id INTEGER)")
+    _READINESS_PROBE_READY["ok"] = True
+
+
+def _readiness_sync_checks() -> list:
+    """Alle blockierenden Readiness-Checks gebuendelt im Worker-Thread.
+
+    D08/H-08-2: SQLite-Schreibprobe (frueher DDL pro Scrape), die synchrone
+    Config-Validierung (≥8 Dateien) und der Lock-Failure-Check liefen direkt
+    im Event-Loop und konnten genau den Healthcheck blockieren, der einen
+    Stall melden soll. Der Aufrufer nutzt ausschliesslich asyncio.to_thread.
+    """
     problems: list = []
-    # 1. Datenbank schreibbar?
-    try:
-        with _get_state_db() as conn:
-            conn.execute("CREATE TABLE IF NOT EXISTS _readiness_probe (id INTEGER)").fetchone()
-    except Exception as exc:
-        problems.append(f"state_db: {exc}")
-    # 2. Event-Loop reagiert (wir laufen ja bereits — implizit gegeben)
-    # 3. Router-Importfehler
-    if _ROUTER_LOAD_ERRORS:
-        problems.append(f"router_imports: {len(_ROUTER_LOAD_ERRORS)}")
-    # 4. Config-Validierung
+    if not _READINESS_PROBE_READY["ok"]:
+        # Fallback fuer TestClients ohne Lifespan: auch dann nur EINMAL.
+        try:
+            _init_readiness_probe_table()
+        except Exception as exc:
+            problems.append(f"state_db: {exc}")
+    if _READINESS_PROBE_READY["ok"]:
+        try:
+            with _get_state_db() as conn:
+                conn.execute("INSERT OR IGNORE INTO _readiness_probe (id) VALUES (1)")
+        except Exception as exc:
+            problems.append(f"state_db: {exc}")
     try:
         from backend.config_validator import validator
         res = validator.validate_all(strict=False)
@@ -750,20 +883,41 @@ async def readiness_check():
             problems.append(f"config: {res.get('error_count', '?')} Fehler")
     except Exception as exc:
         problems.append(f"config_check: {exc}")
-    # 5. Externe Dependencies (H10): nur in Produktion oder explizit aktiviert,
-    #    denn eine lokale Installation ohne OmniRoute/n8n darf nicht dauerhaft
-    #    503 liefern. In Docker übernimmt zusätzlich depends_on: service_healthy.
+    try:
+        from backend.process_lock import get_loop_lock_failures
+        _lock_failures = get_loop_lock_failures()
+        if _lock_failures:
+            problems.append(f"loop_lock_unavailable: {len(_lock_failures)}")
+    except Exception as exc:
+        problems.append(f"loop_lock_check: {exc}")
+    return problems
+
+
+@app.get("/readyz")
+async def readiness_check():
+    """Readiness: echte Dependency-Pruefung. Liefert 503, solange nicht bereit."""
+    problems: list = []
+    # D08/H-08-2: samt SQLite/Config/Lock-Checks in einem Worker-Thread.
+    problems.extend(await asyncio.to_thread(_readiness_sync_checks))
+    # Router-Importfehler
+    if _ROUTER_LOAD_ERRORS:
+        problems.append(f"router_imports: {len(_ROUTER_LOAD_ERRORS)}")
+    # B-05: zur Laufzeit erkannte Audit-Kettenmanipulation → 503.
+    if _AUDIT_COMPROMISED.get("compromised"):
+        problems.append(f"audit_compromised: {_AUDIT_COMPROMISED.get('reason')}")
+    # Externe Dependencies (H10/H-10-1): nur in Produktion oder explizit
+    # aktiviert. Die Probe-Ziele sind konfigurierbar; Default ist nur
+    # OmniRoute (zwingend per depends_on). n8n ist optional und wird nicht
+    # mehr hart probiert. In Docker übernimmt zusätzlich depends_on:
+    # service_healthy.
     _probe_enabled = (
         os.getenv("ARCHON_READINESS_PROBES", "").strip().lower() in ("1", "true", "yes")
         or os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod", "live")
     )
-    if _probe_enabled:
+    probes = _readiness_probe_targets() if _probe_enabled else []
+    if probes:
         now = time.time()
         if now - _DEPENDENCY_PROBE_CACHE["ts"] > _DEPENDENCY_PROBE_TTL:
-            probes = (
-                ("omniroute", os.getenv("OMNIROUTE_URL", "http://omniroute:20128/v1").rstrip("/") + "/models"),
-                ("n8n", os.getenv("N8N_URL", "http://n8n:5678").rstrip("/") + "/healthz"),
-            )
             # Blockierendes I/O in den Threadpool, nicht in den Event-Loop.
             dep_problems = await asyncio.gather(
                 *(
@@ -787,13 +941,6 @@ async def readiness_check():
         problems.append(f"n8n_startup_import: {_N8N_STARTUP_STATUS.get('detail')}")
     if _DB_MAINTENANCE_STATUS.get("status") == "error":
         problems.append(f"db_maintenance: {_DB_MAINTENANCE_STATUS.get('error')}")
-    try:
-        from backend.process_lock import get_loop_lock_failures
-        _lock_failures = get_loop_lock_failures()
-        if _lock_failures:
-            problems.append(f"loop_lock_unavailable: {len(_lock_failures)}")
-    except Exception as exc:
-        problems.append(f"loop_lock_check: {exc}")
     if problems:
         return JSONResponse(
             status_code=503,
@@ -804,11 +951,17 @@ async def readiness_check():
 
 @app.get("/health")
 async def health_check():
-    """Kombinierter Health-Endpunkt: 503 bei nicht-readiness."""
-    ready = await readiness_check()
-    if isinstance(ready, JSONResponse) and ready.status_code == 503:
-        return ready
-    return {"status": "ok", "timestamp": time.time(), "readiness": ready}
+    """D08/H-08-2: /health spiegelt jetzt /livez (reine Loop-Lebendigkeit).
+
+    Vorher rief /health readiness_check() auf und uebernahm damit dessen
+    blockierende DDL-/Config-Arbeit. Dependency-Probes gehören ausschliesslich
+    in /readyz; ein staller Event-Loop muss ueber /health sofort sichtbar
+    werden. Der Response-Status "ok" bleibt fuer bestehende Consumer erhalten.
+    """
+    live = await liveness_check()
+    if isinstance(live, JSONResponse) and live.status_code == 503:
+        return live
+    return {"status": "ok", "timestamp": time.time(), "liveness": live}
 
 @app.get("/metrics")
 def prometheus_metrics():
@@ -1458,48 +1611,22 @@ async def _deadlock_supervisor_loop():
         except Exception as e:
             logger.error(f"[Backpressure] Periodischer Check fehlgeschlagen: {e}")
 
-        # GoBD: Hash-Ketten periodisch verifizieren statt nur manuell.
+        # B-05 (D05/BLOCKER): Zentrale + alle sechs Nebenketten im 30-s-Loop.
+        # Vorher wurde valid=False nur geloggt — Produktion lief mit manipulier-
+        # ter Kette weiter und /readyz blieb gruen. Jetzt wird AUDIT_COMPROMISED
+        # gesetzt (=> /readyz 503) und der Befund auf ERROR eskaliert.
         try:
-            from backend.execution_receipt_ledger import execution_receipt_ledger
-            chain = await asyncio.to_thread(execution_receipt_ledger.verify_chain_integrity)
-            if isinstance(chain, dict) and chain.get("chain_valid") is False:
-                logger.error("[Integritaet] Quittungs-Hashkette INVALID: %s", chain)
+            results = await asyncio.to_thread(_verify_all_audit_chains)
+            for label, res in results.items():
+                if isinstance(res, dict) and res.get("valid") is False:
+                    _mark_audit_compromised(label, res)
         except Exception as e:
             # Audit D: ein Fehler der Ketten-Pruefung ist selbst ein
             # Integritaetsvorfall und gehoert ins Produktionslog, nicht auf DEBUG.
-            logger.error(f"[Integritaet] Quittungs-Hashkette nicht pruefbar: {e}")
-
-        # C08: zentrale Audit-Kette und Approval-Kette ebenfalls im 30-s-Loop.
-        # Vorher liefen diese Nur-On-Demand — Manipulationen blieben unbemerkt,
-        # solange kein Prüfer aktiv eine Route aufrief.
-        try:
-            from backend.api_key_manager import api_key_manager as _api_key_chain
-            from backend.approval_policy_engine import approval_engine as _approval_chain
-            from backend.audit_log import chained_audit_log as _audit_chain
-
-            # F-033: Email-Draft- und DSGVO-Verifikatoren hatten bisher keinen
-            # Produktivkonsumenten — jetzt ebenfalls im 30-s-Loop (G-03).
-            from backend.email_draft_engine import verify_email_draft_chain
-            from backend.gdpr_compliance_engine import verify_gdpr_audit_chain
-            from backend.treasury_engine import verify_treasury_chain
-            for label, verify_fn in (
-                ("Zentrale Audit-Kette", _audit_chain.verify_integrity),
-                ("Approval-Kette", _approval_chain.verify_audit_integrity),
-                ("API-Key-Kette", _api_key_chain.verify_integrity),
-                ("Treasury-Kette", verify_treasury_chain),
-                ("Email-Draft-Kette", verify_email_draft_chain),
-                ("DSGVO-Audit-Kette", verify_gdpr_audit_chain),
-            ):
-                try:
-                    res = await asyncio.to_thread(verify_fn)
-                    if isinstance(res, dict) and res.get("valid") is False:
-                        logger.error("[Integritaet] %s INVALID: %s", label, res)
-                except Exception as exc:
-                    # Audit D: Kettenname + Exception sichtbar im Produktionslog.
-                    logger.error(f"[Integritaet] {label} nicht pruefbar: {exc}")
-        except Exception as e:
-            # Audit D: Importfehler wuerden alle vier Ketten gleichzeitig blind machen.
-            logger.error(f"[Integritaet] Nebenketten-Import fehlgeschlagen: {e}")
+            logger.error(f"[Integritaet] Kettenverifikation nicht pruefbar: {e}")
+            _mark_audit_compromised(
+                "Kettenverifikation", {"valid": False, "reason": str(e)}
+            )
 
         # d05 F-03: signierte Head-Anker fuer alle sechs Nebenketten schreiben.
         # Audit-Schreibpfad gemaess D08/MED in den Thread verlagern + locken.
@@ -1521,6 +1648,12 @@ async def _deadlock_supervisor_loop():
             ]
             if failed:
                 logger.error("[Integritaet] Head-Anker fehlgeschlagen: %s", failed)
+                violations = [k for k in failed if anchors[k].get("violation") is True]
+                if violations:
+                    _mark_audit_compromised(
+                        "Head-Anker",
+                        {"valid": False, "reason": f"Tail-Loeschung/Rollback: {violations}"},
+                    )
         except Exception as e:
             logger.error(f"[Integritaet] Head-Anker-Loop fehlgeschlagen: {e}")
 
@@ -2908,11 +3041,23 @@ async def _cancel_tracked_tasks() -> None:
 async def _close_dispatcher_clients() -> None:
     try:
         import core_dispatcher
-        n = await core_dispatcher.close_dispatcher_clients()
-        if n:
-            logger.info("[Shutdown] %s Dispatcher-HTTP-Client(s) geschlossen.", n)
+        result = await core_dispatcher.close_dispatcher_clients()
+        if isinstance(result, dict):
+            closed = int(result.get("closed", 0) or 0)
+            failed = int(result.get("failed_closes", 0) or 0)
+            if closed:
+                logger.info("[Shutdown] %s Dispatcher-HTTP-Client(s) geschlossen.", closed)
+            if failed:
+                # D08/MED: fehlgeschlagene Closes bleiben sichtbar statt als
+                # Erfolg quittiert zu werden (gleicher Report wie Failed-Cancels).
+                from core_dispatcher import _record_failed_cancel
+                for detail in result.get("failed_clients") or []:
+                    _record_failed_cancel("dispatcher_http_client_close", str(detail))
+                logger.error("[Shutdown] %s Dispatcher-Client-Close(s) fehlgeschlagen.", failed)
+        elif result:
+            logger.info("[Shutdown] %s Dispatcher-HTTP-Client(s) geschlossen.", result)
     except Exception as exc:
-        logger.debug(f"[Shutdown] Dispatcher-Client-Hinweis: {exc}")
+        logger.error(f"[Shutdown] Dispatcher-Client-Close fehlgeschlagen: {exc}")
 
 
 async def _close_all_http_clients() -> None:
@@ -3389,5 +3534,106 @@ def _assert_audit_hmac() -> None:
 
 _STARTUP_HOOKS.insert(0, _assert_audit_hmac)
 
+
+def _verify_all_audit_chains() -> Dict[str, Dict[str, Any]]:
+    """Zentrale + alle sechs Nebenketten verifizieren (sync, für Hook + Loop).
+
+    Einzelfehler werden als ``valid=False`` normalisiert (fail-closed): eine
+    nicht ausführbare Verifikation ist kein Grund, den Start fortzusetzen.
+    """
+    from backend.audit_log import chained_audit_log as _audit_chain
+    from backend.api_key_manager import api_key_manager as _api_key_chain
+    from backend.approval_policy_engine import approval_engine as _approval_chain
+    from backend.email_draft_engine import verify_email_draft_chain
+    from backend.execution_receipt_ledger import execution_receipt_ledger
+    from backend.gdpr_compliance_engine import verify_gdpr_audit_chain
+    from backend.treasury_engine import verify_treasury_chain
+
+    verifiers = (
+        ("Zentrale Audit-Kette", _audit_chain.verify_integrity),
+        ("Approval-Kette", _approval_chain.verify_audit_integrity),
+        ("API-Key-Kette", _api_key_chain.verify_integrity),
+        ("Receipt-Kette", execution_receipt_ledger.verify_chain_integrity),
+        ("Treasury-Kette", verify_treasury_chain),
+        ("Email-Draft-Kette", verify_email_draft_chain),
+        ("DSGVO-Audit-Kette", verify_gdpr_audit_chain),
+    )
+    results: Dict[str, Dict[str, Any]] = {}
+    for label, verify_fn in verifiers:
+        try:
+            res = verify_fn()
+            if isinstance(res, dict):
+                if "valid" not in res and "chain_valid" in res:
+                    res = dict(res)
+                    res["valid"] = res["chain_valid"]
+                results[label] = res
+            else:
+                results[label] = {"valid": False, "reason": "Kein Verify-Result."}
+        except Exception as exc:
+            logger.error("[Integritaet] %s nicht pruefbar (fail-closed): %s", label, exc)
+            results[label] = {
+                "valid": False,
+                "corrupted_id": label,
+                "reason": f"Verifikation nicht ausfuehrbar: {type(exc).__name__}: {exc}",
+            }
+    return results
+
+
+def _audit_integrity_enforced() -> bool:
+    """§2.5: Fail-Fast nur im produktiven Pfad ('Produktion startet nicht').
+
+    Produktiv = ENVIRONMENT production/prod/live, erzwungene Auth oder
+    Non-Loopback-Bind. Explizites ARCHON_AUDIT_INTEGRITY_FAIL_FAST=1 erlaubt
+    denselben Gate auch in abweichenden Deployment-Profilen. In isolierter
+    Dev/Test-Umgebung mit historischen Legacy-Blöcken bleibt der Start möglich;
+    der 30-s-Loop markiert AUDIT_COMPROMISED jedoch unabhängig davon.
+    """
+    env_name = str(
+        os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
+    ).strip().lower()
+    if env_name in ("production", "prod", "live"):
+        return True
+    if str(os.environ.get("ARCHON_AUDIT_INTEGRITY_FAIL_FAST", "") or "").strip().lower() in (
+        "1", "true", "yes",
+    ):
+        return True
+    try:
+        return bool(_must_force_auth())
+    except Exception:
+        return True  # fail-closed: Konfiguration nicht lesbar
+
+
+def _assert_audit_integrity() -> None:
+    """B-05 (D05/BLOCKER): Fail-Fast bei Manipulation der Audit-Ketten.
+
+    Ruft verify_integrity() der Zentralkette und alle Nebenketten-Verifizierer.
+    Bei ``valid=False`` wird AUDIT_COMPROMISED gesetzt und der Start hart
+    abgebrochen (der Lifespan re-raist Fail-Fast-Hooks bereits).
+    """
+    if not _audit_integrity_enforced():
+        return
+    results = _verify_all_audit_chains()
+    broken = {
+        label: res for label, res in results.items()
+        if isinstance(res, dict) and res.get("valid") is False
+    }
+    if not broken:
+        return
+    for label, res in broken.items():
+        _mark_audit_compromised(label, res)
+    detail = "; ".join(
+        f"{label}: {res.get('reason') or res.get('message') or 'unbekannt'}"
+        for label, res in broken.items()
+    )
+    raise RuntimeError(
+        f"[Audit] Kettenintegritaet verletzt — Start abgebrochen (fail-closed): {detail}"
+    )
+
+
+_STARTUP_HOOKS.insert(0, _assert_audit_integrity)
+
 # B (Auth-Fail-Open): Nicht-Loopback-Bind ohne Auth muss den Start abbrechen.
 _STARTUP_HOOKS.insert(0, _assert_auth_on_nonloopback_bind)
+
+# D04/H-04-2: Produktion ohne API-Key-Pepper darf nicht starten.
+_STARTUP_HOOKS.insert(0, _assert_api_key_pepper)

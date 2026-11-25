@@ -74,14 +74,26 @@ class BanditModelRouter:
         _init_db()
 
     def record_outcome(self, model_id: str, success: bool, latency_ms: float) -> Dict[str, Any]:
+        """D08/MED: SELECT + UPSERT + Leaderboard in EINER Connection.
+
+        Vorher oeffnete diese Methode eine Connection fuer den Write und rief
+        am Ende `select_best_model()` mit einer zweiten Connection (jeweils
+        timeout=15.0). Bei jedem Dispatch (#Erfolg wie Fehler) waren das zwei
+        SQLite-Oeffnungen im Event-Loop. Der Aufrufer (core_dispatcher) lagert
+        den Gesamtaufruf zusaetzlich in asyncio.to_thread aus.
+        """
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+            conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT total_calls, success_calls, failed_calls, avg_latency_ms FROM bandit_model_stats WHERE model_id = ?",
                 (model_id,)
             ).fetchone()
             if row:
-                tot, succ, fail, avg_lat = row
+                tot = int(row["total_calls"])
+                succ = int(row["success_calls"])
+                fail = int(row["failed_calls"])
+                avg_lat = float(row["avg_latency_ms"])
                 new_tot = tot + 1
                 new_succ = succ + (1 if success else 0)
                 new_fail = fail + (0 if success else 1)
@@ -96,17 +108,22 @@ class BanditModelRouter:
                     INSERT INTO bandit_model_stats VALUES (?, 1, ?, ?, ?, ?)
                 """, (model_id, 1 if success else 0, 0 if success else 1, round(latency_ms, 2), now_iso))
             conn.commit()
-        return self.select_best_model()
+            rows = conn.execute("SELECT * FROM bandit_model_stats").fetchall()
+        return self._select_best_from_rows(rows)
 
     def select_best_model(self) -> Dict[str, Any]:
+        """Leaderboard aus einer einzigen Connection (unveraenderte API)."""
+        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM bandit_model_stats").fetchall()
+        return self._select_best_from_rows(rows)
+
+    def _select_best_from_rows(self, rows: List[sqlite3.Row]) -> Dict[str, Any]:
+        """Reine Auswertung bereits gelesener Rows (kein zweites connect())."""
         cfg = _get_cfg()
         enabled = bool(cfg.get("enabled", True))
         succ_w = float(cfg.get("success_weight", 0.60))
         lat_w = float(cfg.get("latency_weight", 0.40))
-
-        with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT * FROM bandit_model_stats").fetchall()
 
         leaderboard: List[Dict[str, Any]] = []
         for r in rows:

@@ -2,8 +2,9 @@
 """
 scripts/break_glass_recovery.py
 Archon OS 2026 - Dokumentierter, verschlüsselter Notfallzugang (Break-Glass Protocol) (t-8efcf3).
-Ermöglicht bei Betreiberausfall oder Systemkollaps die vollständige Wiederherstellung aller
-sensiblen Zugangsdaten (.env, settings.json, agentic_memory.db) ohne Web-UI-Login.
+Ermöglicht bei Betreiberausfall oder Systemkollaps die Wiederherstellung sensibler
+Zugangsdaten (.env, settings.json) sowie der konsolidierten DBs
+(ops/business/memory.db) und der Mandanten-DBs ohne Web-UI-Login.
 Verwendet 100% Python-Standardbibliothek mit Authenticated Encryption (PBKDF2-200k + SHA256-CTR + HMAC).
 """
 
@@ -15,6 +16,7 @@ if WORKSPACE_DIR not in sys.path:
     sys.path.insert(0, WORKSPACE_DIR)
 
 import json
+import glob
 import time
 import zipfile
 import io
@@ -41,7 +43,8 @@ KIT_DOC_FILE = os.path.join(
 )
 METADATA_FILE = os.path.join(BACKUP_DIR, "break_glass_meta.json")
 
-# Kritisches Notfall-Inventar
+# Kritisches Notfall-Inventar (statischer Kern). Die produktiven DBs kommen
+# zur Laufzeit hinzu — siehe _critical_files().
 CRITICAL_FILES = [
     (".env", ".env"),
     ("settings.json", "settings.json"),
@@ -51,6 +54,66 @@ CRITICAL_FILES = [
     ("config/settings.json", "config/settings.json"),
     ("backend/approval_policies.json", "backend/approval_policies.json")
 ]
+
+# D03/LOW (F015): konsolidierte DBs + Mandanten-DBs gehören in den Notfall-
+# Vault. Pfade ausserhalb des Workspace werden unter diesem Präfix archiviert
+# und beim Restore auf APP_DATA_DIR zurückgemappt (Zip-Slip-Jail bleibt aktiv).
+APP_DATA_MARKER = "__app_data__/"
+
+
+def _app_data_dir() -> str:
+    try:
+        from backend.db_paths import APP_DATA_DIR
+        return os.path.abspath(APP_DATA_DIR)
+    except Exception:
+        return os.path.join(WORKSPACE_DIR, "data")
+
+
+def _within(root: str, candidate: str) -> bool:
+    try:
+        return os.path.commonpath([os.path.realpath(root), os.path.realpath(candidate)]) == os.path.realpath(root)
+    except (ValueError, OSError):
+        return False
+
+
+def _archive_name(full_path: str, app_data: str) -> str:
+    """Sicherer Vault-Member-Name (relativ, ohne '..')."""
+    full = os.path.realpath(full_path)
+    if _within(app_data, full):
+        return APP_DATA_MARKER + os.path.relpath(full, app_data).replace(os.sep, "/")
+    if _within(WORKSPACE_DIR, full):
+        return os.path.relpath(full, WORKSPACE_DIR).replace(os.sep, "/")
+    return ""
+
+
+def _critical_files():
+    """Statischer Kern + konsolidierte DBs + alle physischen Tenant-DBs."""
+    result = list(CRITICAL_FILES)
+    app = _app_data_dir()
+    seen = {
+        os.path.realpath(os.path.join(WORKSPACE_DIR, rel))
+        for rel, _ in CRITICAL_FILES
+    }
+    for name in ("ops.db", "business.db", "memory.db"):
+        full = os.path.join(app, name)
+        real = os.path.realpath(full)
+        if not os.path.isfile(full) or real in seen:
+            continue
+        arc = _archive_name(full, app)
+        if arc:
+            seen.add(real)
+            result.append((full, arc))
+    for root in (os.path.join(app, "tenants"),
+                 os.path.join(WORKSPACE_DIR, "data", "tenants")):
+        for full in sorted(glob.glob(os.path.join(root, "*", "*.db"))):
+            real = os.path.realpath(full)
+            if real in seen or not os.path.isfile(full):
+                continue
+            arc = _archive_name(full, app)
+            if arc:
+                seen.add(real)
+                result.append((full, arc))
+    return result
 
 def derive_keys(passphrase: str, salt: bytes) -> Tuple[bytes, bytes]:
     """Leitet über 200.000 Runden PBKDF2-HMAC-SHA256 einen Verschlüsselungs- und MAC-Key ab."""
@@ -118,9 +181,13 @@ def _archive_into_zip(zf: "zipfile.ZipFile", full_src: str, arcname: str, stagin
     fd, tmp_path = tempfile.mkstemp(suffix=".db", dir=staging_dir)
     os.close(fd)
     try:
-        src = sqlite3.connect(f"file:{full_src}?mode=ro", uri=True, timeout=10.0)
         try:
-            dst = sqlite3.connect(tmp_path)
+            from backend.db_paths import DB_BUSY_TIMEOUT_S
+        except Exception:  # pragma: no cover - Standalone-Lauf
+            DB_BUSY_TIMEOUT_S = 5.0
+        src = sqlite3.connect(f"file:{full_src}?mode=ro", uri=True, timeout=DB_BUSY_TIMEOUT_S)
+        try:
+            dst = sqlite3.connect(tmp_path, timeout=DB_BUSY_TIMEOUT_S)
             try:
                 src.backup(dst)
             finally:
@@ -144,7 +211,7 @@ def create_break_glass_vault(operator: str = "admin") -> Dict[str, Any]:
     archived_files = []
     with tempfile.TemporaryDirectory(prefix="break_glass_stage_") as staging_dir:
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            for rel_src, arcname in CRITICAL_FILES:
+            for rel_src, arcname in _critical_files():
                 full_src = os.path.join(WORKSPACE_DIR, rel_src)
                 if os.path.exists(full_src) and os.path.isfile(full_src):
                     try:
@@ -224,7 +291,7 @@ Sollte die Web-Oberflaeche nicht erreichbar sein oder der Server neu aufgesetzt 
    python scripts/break_glass_recovery.py --restore
    ```
 3. Geben Sie den obigen Notfallschluessel ein, wenn Sie dazu aufgefordert werden.
-4. Das Skript verifiziert die kryptografische Checksumme und stellt alle Konfigurationsdateien, API-Keys und Datenbanken im Originalzustand wieder her.
+4. Das Skript verifiziert die kryptografische Checksumme und stellt die im Vault enthaltenen Dateien im Originalzustand wieder her: Konfigurationen, API-Keys, die konsolidierten DBs (ops/business/memory.db) und die Mandanten-DBs. Für einen vollständigen WAL-konsistenten Restore aller Datenbanken (inkl. PocketBase) zusätzlich `backend/db_backup_manager.py::restore_backup` verwenden — dieses Kit enthält ausschließlich die oben aufgeführten Dateien.
 5. Starten Sie das System anschliessend neu:
    ```bash
    docker compose restart
@@ -302,9 +369,21 @@ def restore_break_glass_vault(recovery_key: str, operator: str = "emergency_oper
             normalized = member.replace("\\", "/")
             if os.path.isabs(member) or ".." in normalized.split("/"):
                 raise ValueError(f"[BreakGlass] Unsafe vault member abgelehnt: {member}")
-            target_path = os.path.realpath(os.path.join(workspace_root, member))
-            if os.path.commonpath([workspace_root, target_path]) != workspace_root:
-                raise ValueError(f"[BreakGlass] Vault member ausserhalb Workspace: {member}")
+            if normalized.startswith(APP_DATA_MARKER):
+                # D03/LOW: APP_DATA_DIR kann ausserhalb des Workspace liegen
+                # (ARCHON_DATA_DIR). Member auf die kanonische Datenwurzel
+                # mappen — Jail-Pruefung gegen genau diese Wurzel.
+                rel = normalized[len(APP_DATA_MARKER):]
+                if not rel:
+                    raise ValueError(f"[BreakGlass] Unsafe vault member abgelehnt: {member}")
+                app_root = _app_data_dir()
+                target_path = os.path.realpath(os.path.join(app_root, rel.replace("/", os.sep)))
+                if not _within(app_root, target_path):
+                    raise ValueError(f"[BreakGlass] Vault member ausserhalb APP_DATA_DIR: {member}")
+            else:
+                target_path = os.path.realpath(os.path.join(workspace_root, member))
+                if not _within(workspace_root, target_path):
+                    raise ValueError(f"[BreakGlass] Vault member ausserhalb Workspace: {member}")
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             # Veraltete WAL-Sidecars entfernen, sonst wendet SQLite beim
             # naechsten Start das alte Journal auf die restore-Datei an.

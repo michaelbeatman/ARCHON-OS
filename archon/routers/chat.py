@@ -101,16 +101,52 @@ def _ensure_state_session(session_id: str, source: str = "quickchat", profile_na
         logger.warning(f"[QuickChat] Session-Anlage fehlgeschlagen: {e}")
 
 
+def history_with_dropped_marker(
+    history: List[Dict[str, str]], limit: int, *,
+    artifact: str = "state.db.messages", dropped: Optional[int] = None,
+) -> List[Dict[str, str]]:
+    """D07/D11: jede History-Kürzung trägt einen `dropped`-Marker.
+
+    Für `core_dispatcher.py` / `archon/routers/agent_chat.py` (W3-B/D)
+    bereitgestellt: dort wird `history[-8:]` still gekürzt. Aufrufer können
+    diese Funktion vor dem Dispatch nutzen; der Marker ist kein erfundenes
+    Ergebnis, sondern verweist auf die vollständige Fassung im Session-Store.
+    """
+    cap = max(1, int(limit))
+    dropped = max(0, len(history or []) - cap) if dropped is None else max(0, int(dropped))
+    kept = list(history or [])[-cap:]
+    if not dropped:
+        return kept
+    from backend.handoff_desk import mark_truncated
+    marker = (
+        f"[CHAT-HISTORY GEKÜRZT: {dropped} ältere Turns entfernt — "
+        f"Vollversion im Session-Store ({artifact})]"
+    )
+    return [{"role": "system", "content": marker}] + [
+        {"role": str(m.get("role") or ""), "content": mark_truncated(
+            m.get("content", ""), 8000, artifact=artifact
+        )} for m in kept
+    ]
+
+
 def _load_state_history(session_id: str, limit: int = 12) -> List[Dict[str, str]]:
     """Liest die letzten Nachrichten einer Sitzung aus state.db als Chat-Historie."""
     try:
         with _get_state_db() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id = ? AND active = 1",
+                (session_id,),
+            ).fetchone()[0]
             rows = conn.execute(
                 "SELECT role, content FROM messages WHERE session_id = ? AND active = 1 "
                 "ORDER BY timestamp DESC LIMIT ?",
                 (session_id, limit),
             ).fetchall()
-        return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+        history = [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+        dropped = max(0, int(total or 0) - len(rows))
+        if dropped:
+            history = history_with_dropped_marker(history, len(history), dropped=dropped)
+        return history
     except Exception:
         return []
 
@@ -1258,8 +1294,18 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
                     })
                     try:
                         _audit(_fanout_tid, f"FANOUT_CAP: {_ziel} blockiert (cap={cap})", mission_task_id or session_id)
-                    except Exception:
-                        pass
+                    except Exception as _audit_exc:
+                        # D07/MED: Audit-Fehler nie verschlucken. Die Cap-
+                        # Blockade bleibt auch ohne Audit wirksam, wird aber
+                        # als `audit_failed` markiert und in Produktion
+                        # (ARCHON_AUDIT_STRICT=1) hart abgebrochen.
+                        logger.error(
+                            "[Chat] FANOUT_CAP-Audit nicht geschrieben (Ziel=%s): %s",
+                            _ziel, _audit_exc,
+                        )
+                        receipt.failure_reason = "FANOUT_CAP (audit_failed)"
+                        if os.environ.get("ARCHON_AUDIT_STRICT", "").strip().lower() in ("1", "true", "yes"):
+                            raise RuntimeError("FANOUT_CAP audit_write_failed") from _audit_exc
                 if mission_task_id:
                     try:
                         from archon.core.mission_control import mc_update_task_sqlite

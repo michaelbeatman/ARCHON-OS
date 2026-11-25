@@ -9,7 +9,7 @@ Diese Zuordnung ist die einzige Stelle, an der die Altnamen übersetzt werden.
 
 from __future__ import annotations
 
-ALIASES = {
+_LEGACY_ALIASES = {
     "hermes-researcher": "research_scout",
     "hermes_researcher": "research_scout",
     "research_scout": "research_scout",
@@ -33,6 +33,34 @@ ALIASES = {
     "linkedin": "linkedin_social_media_specialist",
     "social_media": "linkedin_social_media_specialist",
 }
+
+
+def _load_ssot_aliases() -> dict:
+    """W2-C/F034: `config/org_hierarchy.json.aliases` ist die Alias-SSOT.
+
+    Das frühere zweite Register hier widersprach Delegation, Konsens und
+    Compliance. historische Kurz-Handles bleiben nur als Fallback für Keys,
+    die die SSOT nicht kennt — nie als Überschreibung einer SSOT-Zuordnung.
+    """
+    import json
+    import os
+
+    path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "config", "org_hierarchy.json",
+    )
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        aliases = {str(k): str(v) for k, v in (data.get("aliases") or {}).items()}
+    except Exception:
+        aliases = {}
+    merged = dict(_LEGACY_ALIASES)
+    merged.update(aliases)
+    return merged
+
+
+ALIASES = _load_ssot_aliases()
 
 
 def resolve_agent_id(agent_id: str | None, known_ids: set[str] | None = None) -> str:

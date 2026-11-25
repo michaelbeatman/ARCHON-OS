@@ -61,8 +61,23 @@ HIGH_RISK_AGENT_IDS = frozenset({
     "executive_decision_architect",
     "vendor_contract_negotiator",
     "facility_asset_manager",
+    # H-15-3/F023: funktional identisch zum CEO (Strategie-/Kapital-/Haftungs-
+    # mandate) — keine SPECIFIC_TRANSPARENCY-Rolle trotz 'cold-email'-Skill.
+    "founder",
+    # D15/MED: Containment-/Credential-/Sperraktionen mit realem Exekutivtool.
+    "crisis_escalation_lead",
 })
-EXPECTED_HIGH_RISK_COUNT = 26
+EXPECTED_HIGH_RISK_COUNT = 28
+
+# Hoheits-Reihenfolge fuer Reklassifikations-Gates (tiefer = strenger).
+RISK_TIER_ORDER = {
+    "PROHIBITED": 0,
+    "HIGH_RISK": 1,
+    "LIMITED_RISK": 2,
+    "SPECIFIC_TRANSPARENCY": 3,
+    "MINIMAL_RISK": 4,
+}
+VALID_RISK_TIERS = frozenset(RISK_TIER_ORDER)
 
 CREDIT_RISK_AGENT_IDS = frozenset({
     "credit_risk_scorer",
@@ -77,28 +92,27 @@ _PROHIBITED_MARKERS = (
     "subliminal_manipulation",
 )
 
+# H-15-2/F023: NUR reale IDs aus den 71 Profilen (SSOT agent_profiles.json).
+# Die alte Positivliste enthielt ausschliesslich nicht existierende Handles,
+# wodurch echte Außenkommunikationsrollen als MINIMAL_RISK durchfielen.
 TRANSPARENCY_AGENT_IDS = frozenset({
     "affiliate_partner_manager",
     "b2b_outreach_specialist",
-    "brand_identity_strategist",
-    "cold_outreach_writer",
-    "community_retention_manager",
-    "content_marketing_strategist",
-    "copywriter",
-    "customer_success_retention",
+    "content_repurposing_specialist",
+    "customer_retention_specialist",
+    "customer_support_lead",
     "direct_response_copywriter",
-    "ecommerce_shopify_lead",
-    "email_marketing_lifecycle",
     "gtm_launch_strategist",
-    "linkedin_personal_branding",
-    "performance_ads_media_buyer",
-    "podcast_video_scriptwriter",
+    "growth_hacker_lead",
+    "linkedin_social_media_specialist",
+    "paid_ads_manager",
+    "pitchdeck_offer_designer",
     "pr_press_communicator",
-    "sales_closer_negotiator",
-    "seo_geo_visibility_architect",
-    "social_media_growth_lead",
+    "seo_geo_specialist",
+    "speechwriter_keynote_designer",
     "storyteller_ghostwriter",
     "telegram_bot",
+    "video_script_architect",
 })
 
 _HIGH_RISK_ID_NAME_RE = re.compile(
@@ -117,11 +131,19 @@ _REGULATED_TERM_RE = re.compile(
 )
 
 _TRANSPARENCY_ID_NAME_RE = re.compile(
-    r"\b(outreach|copywrit\w*|marketing|pr_press|pressemitteilung\w*|social_media|newsletter|sales|vertrieb\w*|chatbot|support|ghostwriter|influencer|brand\w*)\b",
+    r"\b(outreach|copywrit\w*|marketing|pr_press|pressemitteilung\w*|social_media|newsletter|"
+    r"sales|vertrieb\w*|chatbot|support|ghostwriter|influencer|brand\w*|"
+    r"ads|media|content|speech\w*|keynote|retention|deck|video_script)\b",
     re.IGNORECASE,
 )
+# H-15-3/F023: Außenwirkung wird aus der BESCHREIBUNG abgeleitet, nicht aus
+# Skill-Namen (z.B. 'cold-email' im founder-Profil). Die Positivliste bleibt
+# hoheitlich; die Regex ist nur ein Hinweis für echte Außentexte.
 _TRANSPARENCY_PURPOSE_RE = re.compile(
-    r"\b(cold[- ]?email\w*|erstnachrichten|follow[- ]?up|pressemitteilung\w*|marketing[- ]?kampagne\w*|werbetext\w*|kundenkommunikation|außenkommunikation|social[- ]?media[- ]?post\w*)\b",
+    r"\b(cold[- ]?email\w*|erstnachrichten|follow[- ]?up|pressemitteilung\w*|"
+    r"marketing[- ]?kampagne\w*|werbetext\w*|werbung|kampagnen\w*|"
+    r"kundenkommunikation|außenkommunikation|social[- ]?media[- ]?post\w*|"
+    r"content[- ]?erstellung|speech|keynote|retention|pitch[- ]?deck)\b",
     re.IGNORECASE,
 )
 
@@ -204,8 +226,15 @@ class EUAIActInventoryManager:
         category = str(agent.get("category", "General")).strip()
         desc = str(agent.get("description") or "")
         skills = " ".join(agent.get("skills") or [])
-        id_and_name = f"{aid} {name} {skills}"
+        # H-15-2: die Transparenz-Regex darf NUR auf ID+Name wirken. Viele
+        # Fachrollen fuehren generische Skills wie `media`/`social-media`, die
+        # sonst 39 statt der realen Außenrollen als Art.50 klassifizieren.
+        id_and_name = f"{aid} {name}"
         purpose_text = f"{desc} {skills}"
+        # H-15-3: Art.50-Auswirkung aus der Aufgabenbeschreibung, niemals aus
+        # Skill-Namen — sonst wird ein Strategie-CEO wegen 'cold-email' falsch
+        # als Transparenzrolle klassifiziert.
+        transparency_purpose = desc
 
         provider = agent.get("provider", "omniroute")
         model = agent.get("model", "strict-free-tier-combo")
@@ -240,7 +269,7 @@ class EUAIActInventoryManager:
             and (
                 aid in TRANSPARENCY_AGENT_IDS
                 or bool(_TRANSPARENCY_ID_NAME_RE.search(id_and_name))
-                or bool(_TRANSPARENCY_PURPOSE_RE.search(purpose_text))
+                or bool(_TRANSPARENCY_PURPOSE_RE.search(transparency_purpose))
             )
         )
 
@@ -417,8 +446,50 @@ class EUAIActInventoryManager:
             ],
         }
 
-    def set_manual_override(self, agent_id: str, updates: Dict[str, Any], actor: str = "admin") -> Optional[Dict[str, Any]]:
-        """Erlaubt autorisierten Administratoren das manuelle Anpassen der Klassifizierung inkl. GoBD-Audit-Log."""
+    @staticmethod
+    def _validate_override(
+        item: Dict[str, Any], updates: Dict[str, Any], verified_approval_id: str = ""
+    ) -> Dict[str, Any]:
+        """H-14-3/F022: Hoheits-Gates fuer Reklassifikation (fail-closed)."""
+        reason = str(updates.get("override_reason") or "").strip()
+        current = str(item.get("risk_tier") or "MINIMAL_RISK")
+        new_tier = str(updates.get("risk_tier") or current)
+        # Der Router erzwingt die Begruendung ueber Pydantic fuer JEDEN
+        # Reklassifikations-Call. Auf Engine-Ebene ist sie fuer echte Tier-
+        # Aenderungen zwingend; reine Feldkorrekturen bleiben kompatibel.
+        if "risk_tier" in updates and len(reason) < 10:
+            raise ValueError("override_reason_required: Begruendung mit mind. 10 Zeichen obligatorisch.")
+        if new_tier not in VALID_RISK_TIERS:
+            raise ValueError(f"unknown_risk_tier: {new_tier}")
+        if current == "PROHIBITED" and new_tier != "PROHIBITED":
+            raise ValueError("prohibited_downgrade_forbidden: Art. 5-Sperrung ist nicht aufhebbar.")
+
+        if (
+            current in ("HIGH_RISK", "LIMITED_RISK", "SPECIFIC_TRANSPARENCY")
+            and RISK_TIER_ORDER.get(new_tier, 99) > RISK_TIER_ORDER.get(current, 99)
+            and not str(verified_approval_id or "").strip()
+        ):
+            raise ValueError(
+                "four_eyes_proposal_required: Downgrade von "
+                f"{current} nach {new_tier} erfordert den 4-Augen-Vorschlagspfad "
+                "(approval request mit zweiter, identitaetsverschiedener Person)."
+            )
+        return updates
+
+    def set_manual_override(
+        self,
+        agent_id: str,
+        updates: Dict[str, Any],
+        actor: str = "admin",
+        *,
+        verified_approval_id: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        """Manuelle Klassifizierungsaenderung inkl. zwingendem Revisionsnachweis.
+
+        H-14-3/F022: PROHIBITED-Downgrades sind hart gesperrt, Downgrades von
+        HIGH_RISK/LIMITED_RISK/SPECIFIC_TRANSPARENCY nur mit verifizierter
+        4-Augen-Freigabe. Audit-Schreibfehler werden NICHT verschluckt.
+        """
         inventory = self.get_inventory()
         target = None
         allowed_fields = {
@@ -433,29 +504,48 @@ class EUAIActInventoryManager:
         filtered = {k: v for k, v in updates.items() if k in allowed_fields}
         for idx, item in enumerate(inventory):
             if item["agent_id"] == agent_id:
+                filtered = self._validate_override(item, filtered, verified_approval_id)
+                old_tier = str(item.get("risk_tier") or "")
                 item.update(filtered)
                 item["is_manual_override"] = True
-                item["last_classified_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                item["override_by"] = str(actor or "admin")
+                item["override_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if str(verified_approval_id or "").strip():
+                    item["override_approval_id"] = str(verified_approval_id).strip()
+                item["last_classified_at"] = item["override_at"]
                 target = item
                 inventory[idx] = item
+                _old_tier = old_tier
                 break
+        else:
+            return None
 
-        if target:
-            tmp = f"{self.inventory_file}.tmp.{os.getpid()}"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(inventory, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, self.inventory_file)
-            try:
-                from backend.audit_log import chained_audit_log
-                chained_audit_log.record_event(
-                    category="governance",
-                    action="ai_act_reclassified",
-                    agent_id=actor,
-                    payload={"target_agent": agent_id, "updates": filtered},
-                )
-            except Exception as exc:
-                print(f"[EUAIAct] Warnung: Audit-Log-Eintrag fuer manuelle Neuklassifizierung fehlgeschlagen: {exc}", file=sys.stderr)
+        tmp = f"{self.inventory_file}.tmp.{os.getpid()}"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(inventory, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, self.inventory_file)
+        from backend.audit_log import _require_audit_event
+        _require_audit_event(
+            "governance", "ai_act_reclassified", str(actor or "admin"),
+            {
+                "target_agent": agent_id,
+                "updates": filtered,
+                "old_risk_tier": _old_tier,
+                "new_risk_tier": str(filtered.get("risk_tier") or _old_tier),
+                "approval_id": str(verified_approval_id or "") or None,
+            },
+        )
         return target
+
+    def apply_approved_reclassification(
+        self, agent_id: str, updates: Dict[str, Any], actor: str, approval_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Wendet einen per 4-Augen-Vorschlag freigegebenen Downgrade an."""
+        if not str(approval_id or "").strip():
+            raise ValueError("approval_id_required")
+        return self.set_manual_override(
+            agent_id, updates, actor=actor, verified_approval_id=approval_id
+        )
 
     def export_report_markdown(self) -> str:
         """Erzeugt einen behördlich konformen Markdown-Bericht über das gesamte KI-Register."""

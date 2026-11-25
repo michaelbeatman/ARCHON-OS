@@ -28,22 +28,21 @@ forbidden_modules =
 # (Tilgung S2/S3 mit eigener Regel), kein backend->routers-Import.
 # Bewusst gesetzt und im Schritt-Report begruendet - kein stilles Aufweichen.
 # Das harte Ratchet-Gate bleibt tests/test_import_layer_contracts.py.
-allow_indirect_imports = true
+allow_indirect_imports = false
 
-# Dokumentierte Altschuld (S1-Bestandsaufnahme; nach F1a + A1 = 32/18/3):
-#   32 Importzeilen / 18 Modul-Paare / 3 backend-Module.
-#   F1a getilgt: agent_router -> autonomy_settings, llm_kernel -> llm_providers.
-#   A1 getilgt: war_room_simulator / workflow_dag_runner / workflow_scheduler
-#   -> decisions (jetzt archon.core.permissions.get_decision_factory).
+# Dokumentierte Altschuld (S1; nach F1a + A1 + A2 = 31/17/2):
+#   31 Importzeilen / 17 Modul-Paare / 2 backend-Module.
+#   F1a: agent_router -> autonomy_settings, llm_kernel -> llm_providers.
+#   A1:  war_room_simulator / workflow_dag_runner / workflow_scheduler -> decisions.
+#   A2:  mcp_gateway -> context_meter (jetzt archon.services.session_compaction).
 #   Der transitive Pfad orchestration:1432 -> archon.routers.decisions ist
-#   damit ebenfalls aufgeloest.
+#   seit A1 aufgeloest; archon/core/** enthaelt 0 Router-Importe.
 #   Tilgung: S3 (operations_api.py) + eigene Schritte fuer die 7 weiteren
 #   Module. NEUE Importe backend -> archon.routers sind ab sofort ein Verstoss
 #   (Ratchet). tests/test_import_layer_contracts.py liest diese Datei als SSOT
 #   und enforced sie in CI (ci.yml:305 / :555); import-linter selbst ist nicht
 #   in requirements-ci.lock.txt und bleibt daher ein lokales Tool.
 ignore_imports =
-    backend.mcp_gateway -> archon.routers.context_meter
     backend.operations_api -> archon.routers._rbac
     backend.operations_api -> archon.routers.auth
     backend.operations_api -> archon.routers.operations_org
@@ -61,3 +60,16 @@ ignore_imports =
     backend.operations_api -> archon.routers.operations_autonomy
     backend.operations_api -> archon.routers.operations_pbd
     backend.workflow_node_plugins -> archon.routers.chat
+
+# A2 / Invariante #2: archon.core kennt keine HTTP-Schicht. 0 direkte Treffer
+# (verifiziert gegen archon/core/**). allow_indirect_imports=true beschraenkt
+# diesen Contract auf direkte Kanten; transitive Pfade ueber archon.services
+# sind nicht Gegenstand dieser Regel.
+[importlinter:contract:core-no-router-imports]
+name = archon.core darf archon.routers nicht importieren (Invariante #2)
+type = forbidden
+source_modules =
+    archon.core
+forbidden_modules =
+    archon.routers
+allow_indirect_imports = true

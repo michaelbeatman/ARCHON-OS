@@ -126,7 +126,7 @@ def test_linter_config_is_well_formed() -> None:
     # Bewusst gesetzt: die Regel betrifft direkte Importe; der transitive Pfad
     # ist ein separater S1-Neubefund (siehe .importlinter-Kommentar). Hier
     # festgeschrieben, damit die Option nicht unbemerkt geaendert wird.
-    assert cp.get(CONTRACT_SECTION, "allow_indirect_imports").lower() == "true"
+    assert cp.get(CONTRACT_SECTION, "allow_indirect_imports").lower() == "false"
 
 
 def test_every_ignored_import_actually_exists() -> None:
@@ -185,7 +185,7 @@ def test_layer_gate_detects_a_violation() -> None:
 def test_documented_debt_is_bounded() -> None:
     """Altschuld darf nur sinken (Tilgung F1a/F1b/S3), nie steigen."""
     pairs = {(src, dst) for src, dst, _, _ in _router_imports()}
-    assert len(pairs) <= 18, (
-        f"Altschuld von 18 auf {len(pairs)} Paare gewachsen - "
-        "S1-Ratchet greift, Tilgungsplan (A2/F2/F4) pruefen."
+    assert len(pairs) <= 17, (
+        f"Altschuld von 17 auf {len(pairs)} Paare gewachsen - "
+        "S1-Ratchet greift, Tilgungsplan (F2/F3/F4) pruefen."
     )

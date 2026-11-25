@@ -12,7 +12,6 @@ Implementiert:
 
 from __future__ import annotations
 
-import asyncio
 import datetime
 import json
 import logging
@@ -68,8 +67,11 @@ def bind_incoming_trace_context(headers: Dict[str, str]) -> None:
     """
     try:
         from backend.trace_context import (
-            current_trace_id, current_tracestate, extract_headers,
-            parse_traceparent, start_trace,
+            current_trace_id,
+            current_tracestate,
+            extract_headers,
+            parse_traceparent,
+            start_trace,
         )
 
         tp = extract_headers(headers)  # setzt tracestate + sampled-Flag
@@ -566,7 +568,7 @@ class ArchonMcpGateway:
         if not session_id:
             return {"status": "error", "message": "Parameter 'session_id' ist erforderlich."}
         try:
-            from archon.routers.context_meter import compact_session_core
+            from archon.services.session_compaction import compact_session_core
             res = compact_session_core(session_id)
             if res.get("compacted"):
                 return {
@@ -698,7 +700,11 @@ class ArchonMcpGateway:
 
         # Zentraler ToolRuntime-Chokepoint (M75 + M89 + M90 + PolicyEngine).
         # Fail-closed: wenn die Prüfung selbst scheitert, wird NICHT ausgeführt.
-        from backend.tool_runtime import enforce_tool_execution, guard_result, record_tool_read_side_effect
+        from backend.tool_runtime import (
+            enforce_tool_execution,
+            guard_result,
+            record_tool_read_side_effect,
+        )
         rt_session = str(key_info.get("session_id") or key_info.get("name") or "mcp_gateway")
         rt_agent = str(key_info.get("agent_id") or "mcp_gateway")
         try:

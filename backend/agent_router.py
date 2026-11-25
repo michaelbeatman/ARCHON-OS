@@ -16,7 +16,7 @@ import httpx
 
 logger = logging.getLogger("agent_router")
 
-from backend.llm_kernel import AUTO_MODEL_MAP, finalize_llm_output
+from backend.llm_kernel import AUTO_MODEL_MAP  # noqa: E402
 
 OPENROUTER_FALLBACK_CHAIN = [
     "deepseek/deepseek-chat",
@@ -398,7 +398,7 @@ class AgentRouter:
             content = str(m.get("content", "")).strip()
             if not content:
                 continue
-            lines = [l.strip() for l in content.splitlines() if l.strip()]
+            lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
             preview = lines[0] if lines else content[:120]
             if len(preview) > 160:
                 # Audit D11: Kürzung explizit markieren — sonst verschwinden
@@ -995,6 +995,44 @@ class AgentRouter:
         except Exception as exc:
             logger.warning("[AgentRouter] Budget-Release fehlgeschlagen: %s", exc)
 
+    async def _check_deterministic_execution_layer(
+        self, messages: List[Dict], agent_id: str, tid: str
+    ) -> Optional[Dict[str, Any]]:
+        """D02: Gemeinsamer 0-Token-Deterministik-Check fuer Stream- und Non-Stream-Calls."""
+        from backend.execution_routing_guard import classify_execution_layer
+
+        _prompt_text = " ".join(
+            str(m.get("content", "")) for m in messages[-4:]
+            if isinstance(m, dict)
+        )
+        _erg = classify_execution_layer(_prompt_text[:160], _prompt_text)
+        if _erg.get("layer") not in ("deterministic_n8n", "deterministic_script"):
+            return None
+        if _erg.get("requires_hitl"):
+            return {
+                "blocked": True,
+                "text": "ERROR: DETERMINISTIC_HITL_REQUIRED — kein LLM-Dispatch ohne Freigabe.",
+            }
+        if _erg.get("layer") == "deterministic_n8n":
+            from core_dispatcher import trigger_n8n_execution
+
+            _res = await asyncio.to_thread(
+                trigger_n8n_execution,
+                parent_project_id=tid or f"det-{agent_id}",
+                title=_prompt_text[:120],
+                final_report_path="",
+                content=_prompt_text[:2000],
+                target_action=str(_erg.get("webhook_action") or "none"),
+            )
+            return {
+                "blocked": False,
+                "text": f"Deterministisch via n8n ausgeführt (0 Tokens): {_res.get('status')}",
+            }
+        return {
+            "blocked": False,
+            "text": "Deterministische Aufgabe (0 Tokens) — kein LLM-Dispatch erforderlich.",
+        }
+
     async def chat_completion(
         self,
         messages: List[Dict],
@@ -1010,6 +1048,18 @@ class AgentRouter:
     ) -> str:
         """D13: Budget-Gate + Flightlog-Guard + finally-release."""
         tid = str(task_id or f"agent-router:{agent_id}")
+        try:
+            _det = await self._check_deterministic_execution_layer(messages, agent_id, tid)
+        except Exception as _route_exc:
+            logger.error(
+                "[AgentRouter] Execution-Routing-Guard fehlgeschlagen (fail-closed): %s",
+                _route_exc,
+            )
+            raise SilentFailureBlockedError(tid, ["EXECUTION_ROUTING_GUARD_UNAVAILABLE"]) from _route_exc
+        if _det is not None:
+            if _det.get("blocked"):
+                raise SilentFailureBlockedError(tid, ["DETERMINISTIC_HITL_REQUIRED"])
+            return str(_det.get("text") or "")
         reservation, tokens, eur, hop_tid = await self._reserve_task_budget(
             agent_id, tid, messages, model, provider, max_tokens
         )
@@ -1049,7 +1099,6 @@ class AgentRouter:
             ZeroEgressBlockedError,
             audit_dispatch_async,
             evaluate_and_gate_llm_dispatch,
-            log_completed_llm_dispatch,
         )
 
         # F-056: bis zu 2 s SQLite/Glob-I/O im Worker-Thread, nicht im Loop.
@@ -1292,29 +1341,9 @@ class AgentRouter:
         # wurde `classify_execution_layer()` nur in core_dispatcher/Inspektion
         # gerufen — der Chat-Pfad baute direkt einen LLM-Request (Theater).
         try:
-            from backend.execution_routing_guard import classify_execution_layer
-            _prompt_text = " ".join(
-                str(m.get("content", "")) for m in messages[-4:]
-                if isinstance(m, dict)
-            )
-            _erg = classify_execution_layer(_prompt_text[:160], _prompt_text)
-            if _erg.get("layer") in ("deterministic_n8n", "deterministic_script"):
-                if _erg.get("requires_hitl"):
-                    yield "ERROR: DETERMINISTIC_HITL_REQUIRED — kein LLM-Dispatch ohne Freigabe."
-                    return
-                if _erg.get("layer") == "deterministic_n8n":
-                    from core_dispatcher import trigger_n8n_execution
-                    _res = await asyncio.to_thread(
-                        trigger_n8n_execution,
-                        parent_project_id=tid or f"det-{agent_id}",
-                        title=_prompt_text[:120],
-                        final_report_path="",
-                        content=_prompt_text[:2000],
-                        target_action=str(_erg.get("webhook_action") or "none"),
-                    )
-                    yield f"Deterministisch via n8n ausgeführt (0 Tokens): {_res.get('status')}"
-                    return
-                yield "Deterministische Aufgabe (0 Tokens) — kein LLM-Dispatch erforderlich."
+            _det = await self._check_deterministic_execution_layer(messages, agent_id, tid)
+            if _det is not None:
+                yield str(_det.get("text") or "")
                 return
         except Exception as _route_exc:
             logger.error(
@@ -1370,7 +1399,6 @@ class AgentRouter:
             ZeroEgressBlockedError,
             audit_dispatch_async,
             evaluate_and_gate_llm_dispatch,
-            log_completed_llm_dispatch,
         )
 
         try:

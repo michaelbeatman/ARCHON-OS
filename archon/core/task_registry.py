@@ -49,24 +49,32 @@ async def cancel_all() -> int:
     """Bricht alle registrierten Tasks ab (Shutdown).
 
     Audit 23.11.2026: begrenztes Warten, sonst kann ein Task, der Cancellation
-    ignoriert, den Shutdown beliebig lange blockieren.
+    ignoriert, den Shutdown beliebig lange blockieren. Bei Timeout bleiben noch
+    laufende Zombie-Tasks in ``_TASKS`` erhalten statt still geloescht zu werden.
     """
     tasks = [t for t in list(_TASKS) if not t.done()]
     for task in tasks:
         task.cancel()
+    timed_out = False
     if tasks:
         try:
             await asyncio.wait_for(
                 asyncio.gather(*tasks, return_exceptions=True), timeout=10.0
             )
         except asyncio.TimeoutError:
-            logger.warning(
-                "[TaskRegistry] %s Task(s) haben Cancellation nicht innerhalb "
-                "von 10 s beendet — Shutdown fährt fort.", len(tasks),
+            timed_out = True
+            still_running = [t for t in tasks if not t.done()]
+            logger.error(
+                "[TaskRegistry] %s/%s Task(s) haben Cancellation nicht innerhalb "
+                "von 10 s beendet — bleiben als Zombie-Warnung registriert.",
+                len(still_running), len(tasks),
             )
+    removed = 0
     for task in tasks:
-        _TASKS.pop(task, None)
-    return len(tasks)
+        if task.done() or not timed_out:
+            _TASKS.pop(task, None)
+            removed += 1
+    return removed
 
 
 def get(name: str) -> Optional[asyncio.Task]:

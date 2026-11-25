@@ -6,6 +6,25 @@
 > **G-05 STATUS:** **WIEDERHERGESTELLT** (User-Entscheidung 24.11.2026). `main.py` God-Object, 11k-Zeilen-Telegram-Adapter, lokaler Single-User-Default auf `127.0.0.1` und prozess-lokale Provider-Breaker bleiben für pre-1.0 bewusst akzeptiert und gehen **nicht** in die Bewertung ein. n8n-Stubs sind nicht in der User-Liste und bleiben regulär bewertet (G-05a).
 > **Vorläufer archiviert:** `audit_reports/_archiv_2026-11-24_pre_audit/` (ursprünglicher 16-Domänen-Lauf, `reaudit/`, `FINAL_VERIFICATION.md`, Fix-Wellen A–G).
 
+### PHASE-3- & P4-ABSCHLUSSSTATUS (25.11.2026 — G-05 unverändert)
+
+- **B1–B8 (alle 8 BLOCKER):** **FIXED** und mit Regressionstests (`tests/test_audit_b1_b8_blockers.py`) verifiziert (`cee78206`, CI 7/7 `45503307830`).
+- **Welle 1 & 2 (`A1–A9`, `D1–D6`, ~185 Code-Änderungen):** **FIXED**, SOUL-SSOT regeneriert (497 Artefakte, 71/71 distinct `negative_scope`, `drift: false`, `0 Abweichungen`), physische korrupte DB-/`.bak`-Reste gelöscht (`d7eded46`, `3d679b30`, `74d0ebb9`, `f29b1458`, CI 7/7 `45516351676`).
+- **P4-Code-Reste (1–7 + Art.50 Challenge-Endpoint):** **FIXED** mit Regressionstests (`tests/test_p4_handoff_fixes.py`, `tests/test_med2_h_ssot.py`, `tests/test_reaudit_stage15.py`):
+  1. `archon/routers/chat.py`: Image-Generate fail-closed HTTP 502 `EMPTY_RESPONSE` bei leeren `choices`/Inhalt; ungedeckte Modellpreise liefern `"unverifiziert"` statt `0.0000$`.
+  2. `backend/agent_router.py`: `classify_execution_layer()` über `_check_deterministic_execution_layer()` in `chat_completion()` (Non-Stream) **und** `stream_chat_completion()` (Stream) vor `_reserve_task_budget()` verdrahtet.
+  3. `backend/config_validator.py`: `validate_profile_ssot()` nutzt `_projection_hashes()` und meldet `field_mismatch` hart als Fehler (`validate_config.py --strict` Exit 1).
+  4. `.env.example`: `ARCHON_AUDIT_ANCHOR_PATH` ehrlich als lokal (`./data/audit_anchor.log`) bzw. optionales externes Append-only-Volume dokumentiert.
+  5. `archon/core/task_registry.py`: `cancel_all()` behält bei `asyncio.TimeoutError` hängende Zombie-Tasks sichtbar in `_TASKS`.
+  6. `tests/test_med2_h_ssot.py`: Uniqueness-Assert (`>= 60` distinct `negative_scope`-Bodies) + HITL-Marker-Prüfung für `HIGH_RISK`-Profile.
+  7. `archon/routers/v2_capabilities.py`: Art.-17-Endpoint quittiert `RuntimeError` fail-closed mit HTTP 500 (`gdpr_erasure_failed`); Art.-50-Challenge-Endpoint `GET /api/v2/portal/links/{token}/challenge` via `verify_share_access(..., issue_disclosure_challenge=True)` ergänzt.
+- **Bewusst akzeptierte Abweichung / Admin-HITL-Vorbehalte:**
+  - `backend/otel_tracer.py` (Punkt 8): `collector_downstream` bleibt ehrlich als `not_configured/local_only` ausgewiesen (akzeptierte Abweichung).
+  - Admin-/Betriebs-HITL-Gates (absichtlich fail-closed im Produktivbetrieb): `data/ai_act_literacy_register.json` (`certificate_sha256: null` — muss per Admin-Vier-Augen über `POST /api/governance/ai-act/literacy-register` befüllt werden), n8n-Aktivierung über `ARCHON_N8N_STARTUP_IMPORT=1` / `deploy_n8n_routines`, sowie `request.state.hitl_apply_patch` auf `/api/healing/attempt`.
+- **Re-Score nach Abschluss (G-05-bereinigt):** **8,0 / 10** (von 5,0 / 10). Alle 8 BLOCKER und alle kodifizierbaren HIGH/MED-Kernbefunde aus Welle 1–2 und P4 sind behoben und durch grüne Gates belegt.
+
+---
+
 ### HANDOFF B1–B8 an Antigravity
 
 Die 8 BLOCKER sind unverändert und werden von Antigravity direkt anhand dieses Dokuments übernommen. Kein Produktivcode wurde in dieser Welle verändert.

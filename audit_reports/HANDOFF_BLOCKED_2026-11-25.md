@@ -156,3 +156,20 @@ D1–D6 (Session-IDs im `HANDOFF_PHASE3_2026-11-25.md`) arbeiten die ~40 Delegat
 8. **HITL-Flag-Produzent** (D1) — `request.state.hitl_apply_patch` muss vom produzentenseitigen Gate gesetzt werden.
 9. **Busy-timeout-Connect-Drift** (D5) — 80+ `connect(timeout=15.0)` in 30+ Dateien; harter CI-Gate erst nach breiter Migration.
 10. **Physische Artefakte + Git/CI/Container + Art.4-Vier-Augen** (P2–P4 oben).
+
+### Delegations-Bilanz — ehrliche Korrektur (Hy4, nach Abgleich)
+
+Die „72 Delegationen" aus Welle 1 waren eine Schätzung. D1–D6 haben ~66 davon bearbeitet; **folgende 8 sind per `grep` gegen den aktuellen Working Tree nachweislich OFFEN** und gehören in P4:
+
+| # | Datei | Offener Punkt | Quelle |
+|---:|---|---|---|
+| 1 | `archon/routers/chat.py` | Image-Endpoint `EMPTY_RESPONSE`→502 und `cost_usd=0.0`→`cost_unverified` fehlen (keine Treffer) | A8→A5, von A5 nicht umgesetzt |
+| 2 | `backend/agent_router.py` | `classify_execution_layer()` nur im Stream-Pfad (~Z.1295-1300); nicht-streamende `chat_completion()` ohne 0-Token-Guard | A4→A5 |
+| 3 | `backend/config_validator.py` | `validate_profile_ssot()` ohne `field_mismatch`/`_projection_hashes` — Drift bleibt Warnung | D6/D1 |
+| 4 | `.env.example:134` | `ARCHON_AUDIT_ANCHOR_PATH=./data/audit_anchor.log` — Anker weiter lokal neben der DB, nicht extern (Doku behauptet „extern") | A2→A1 |
+| 5 | `archon/core/task_registry.py:48` | `cancel_all()` löscht bei `asyncio.TimeoutError` weiter aus `_TASKS` | D2 |
+| 6 | `tests/test_med2_h_ssot.py` | Kein `distinct`-Assert — Uniqueness-Test für 71 Scopes fehlt (nur Präsenz geprüft) | A8→D5 |
+| 7 | `archon/routers/v2_capabilities.py` | `except ValueError` fängt A3s neuen `RuntimeError` (Art.17) nicht → API-Vertrag unklar | A3 |
+| 8 | `backend/otel_tracer.py` | Echter Tempo/Jaeger-Downstream fehlt (ehrlich `not_configured/local_only` ausgewiesen — akzeptabel, aber nicht erfüllt) | A9→A1 |
+
+Bereits erledigt (mein früherer grep war veraltet): `tests/test_med_d01_d02_d05.py:156` enthält jetzt `labor_law_hr_governance`.

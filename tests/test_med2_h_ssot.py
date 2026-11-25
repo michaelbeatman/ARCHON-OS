@@ -38,6 +38,28 @@ def test_all_profiles_have_role_specific_negative_scope():
     profiles = _profiles()
     missing = [pid for pid, p in profiles.items() if not str(p.get("negative_scope") or "").strip()]
     assert not missing, f"negative_scope fehlt: {missing}"
+    # Semantischer Uniqueness-Nachweis (D15): keine Boilerplate-Duplikate
+    normalized_bodies = {
+        re.sub(r"^[^:]+:\s*", "", str(p.get("negative_scope") or "").strip())
+        for p in profiles.values()
+    }
+    assert len(normalized_bodies) >= 60, (
+        f"Nur {len(normalized_bodies)} distinct negative_scope-Bodies (Minimum 60)"
+    )
+    inv_path = ROOT / "data" / "eu_ai_act_inventory.json"
+    if inv_path.is_file():
+        inv = json.loads(inv_path.read_text(encoding="utf-8"))
+        items = inv.get("agents", inv) if isinstance(inv, dict) else inv
+        if isinstance(items, dict):
+            high_risk_ids = [k for k, v in items.items() if isinstance(v, dict) and v.get("risk_tier") == "HIGH_RISK"]
+        else:
+            high_risk_ids = [x.get("agent_id") for x in items if isinstance(x, dict) and x.get("risk_tier") == "HIGH_RISK"]
+        missing_hitl = [
+            aid for aid in high_risk_ids
+            if aid in profiles
+            and not any(tok in str(profiles[aid].get("negative_scope") or "").lower() for tok in ("hitl", "freigabe", "approval"))
+        ]
+        assert not missing_hitl, f"HIGH_RISK-Rollen ohne HITL-Marker im negative_scope: {missing_hitl}"
 
 
 def test_roles_prompts_match_ssot_byte_for_byte():

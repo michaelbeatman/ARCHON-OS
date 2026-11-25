@@ -5,11 +5,9 @@ Prüft beim Systemstart agent_profiles.json, config/teams.json, config/org_hiera
 settings.json und .env auf syntaktische und semantische Konsistenz.
 """
 
-import os
-import sys
 import json
-import re
-from typing import Dict, Any, List, Tuple
+import os
+from typing import Any, Dict, List, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -43,7 +41,7 @@ class ConfigValidator:
 
         # Pruefe Zero-Egress & Privacy-Router Konsistenz (LOCAL_ON_PREM + Hard-Block)
         try:
-            from backend.privacy_router import verify_zero_egress_config, get_privacy_config
+            from backend.privacy_router import get_privacy_config, verify_zero_egress_config
             ze_report = verify_zero_egress_config(get_privacy_config())
             for issue in ze_report.get("issues", []):
                 if issue.startswith("Kritisch:"):
@@ -131,8 +129,8 @@ class ConfigValidator:
         return errors, warnings, {"total_teams": len(teams_list)}
 
     def validate_org_hierarchy(self, known_agent_ids: set) -> Tuple[List[str], List[str], Dict[str, Any]]:
-        errors = []
-        warnings = []
+        errors: List[str] = []
+        warnings: List[str] = []
         path = os.path.join(self.workspace_dir, "config", "org_hierarchy.json")
         if not os.path.exists(path):
             return [], [f"config/org_hierarchy.json existiert nicht unter {path}"], {}
@@ -216,6 +214,41 @@ class ConfigValidator:
                     errors.append(
                         f"Profil-SSOT: roles.json enthält veraltete Rollen: {', '.join(stale_roles[:8])}"
                     )
+                # P4/D15: Auch Feld-/Prompt-Drift in roles.json hart als Fehler pruefen.
+                ssot_path = os.path.join(self.workspace_dir, "agent_profiles.json")
+                if os.path.exists(ssot_path):
+                    try:
+                        from scripts.sync_profile_ssot import _projection_hashes as _proj_fn
+                    except Exception:
+                        _proj_fn = None  # type: ignore[assignment]
+                    if _proj_fn is not None:
+                        ssot_hashes = _proj_fn(ssot_path)
+                        role_hashes = _proj_fn(roles_path)
+                        field_mismatch = sorted(
+                            rid for rid in (set(ssot_hashes) & set(role_hashes))
+                            if ssot_hashes[rid] != role_hashes[rid]
+                        )
+                    else:
+                        with open(ssot_path, "r", encoding="utf-8") as sfh:
+                            ssot_list = json.load(sfh)
+                        ssot_by_id = {
+                            str(p.get("id")): p for p in (ssot_list if isinstance(ssot_list, list) else [])
+                            if isinstance(p, dict) and p.get("id")
+                        }
+                        roles_by_id = {
+                            str(r.get("id")): r for r in roles
+                            if isinstance(r, dict) and r.get("id")
+                        }
+                        field_mismatch = sorted(
+                            rid for rid in (set(ssot_by_id) & set(roles_by_id))
+                            if ssot_by_id[rid].get("prompt") != roles_by_id[rid].get("prompt")
+                        )
+                    if field_mismatch:
+                        errors.append(
+                            f"Profil-SSOT: roles.json Feld-/Prompt-Drift bei {len(field_mismatch)} Rollen: "
+                            + ", ".join(field_mismatch[:8])
+                            + (" ..." if len(field_mismatch) > 8 else "")
+                        )
             except Exception as exc:
                 errors.append(f"Profil-SSOT: roles.json nicht lesbar: {exc}")
 

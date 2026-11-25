@@ -10,14 +10,13 @@ sauber ueber /api/v2/* mit RBAC (forbid_viewer_writes + require_admin_or_503) be
 from __future__ import annotations
 
 import asyncio
-import datetime
 import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi import Depends as _ArchonDepends
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator  # noqa: E402
 
 from archon.routers._rbac import (
     forbid_viewer_writes as _forbid_viewer_writes,
@@ -396,7 +395,12 @@ async def api_v2_workflow_node_plugin_install(request: Request, plugin_id: str):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "gdpr_erasure_failed", "message": str(exc)},
+        ) from exc
 
 
 @router.delete("/api/v2/workflows/node-plugins/marketplace/{plugin_id}")
@@ -406,7 +410,12 @@ async def api_v2_workflow_node_plugin_uninstall(request: Request, plugin_id: str
     try:
         return await asyncio.to_thread(uninstall_marketplace_plugin, plugin_id)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "gdpr_erasure_failed", "message": str(exc)},
+        ) from exc
 
 
 @router.post("/api/v2/workflows/node-plugins/marketplace/custom")
@@ -416,7 +425,12 @@ async def api_v2_workflow_node_plugin_register_custom(request: Request, payload:
     try:
         return await asyncio.to_thread(register_custom_marketplace_plugin, payload.model_dump())
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "gdpr_erasure_failed", "message": str(exc)},
+        ) from exc
 
 
 @router.post("/api/v2/workflows/templates")
@@ -428,6 +442,11 @@ async def api_v2_workflow_templates_save(request: Request, payload: WorkflowTemp
         return {"status": "ok", "template": tpl}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "gdpr_erasure_failed", "message": str(exc)},
+        )
 
 
 @router.post("/api/v2/workflows/templates/import-n8n")
@@ -443,6 +462,11 @@ async def api_v2_workflow_templates_import_n8n(request: Request, payload: N8nImp
         return {"status": "ok", "template": tpl}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "gdpr_erasure_failed", "message": str(exc)},
+        )
 
 
 @router.delete("/api/v2/workflows/templates/{tpl_id}")
@@ -489,6 +513,11 @@ async def api_v2_workflow_schedules_save(request: Request, payload: WorkflowSche
         return {"status": "ok", "schedule": sched}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "gdpr_erasure_failed", "message": str(exc)},
+        )
 
 
 @router.delete("/api/v2/workflows/schedules/{schedule_id}")
@@ -564,7 +593,7 @@ async def api_v2_workflow_event_replay(request: Request, event_id: str):
 # --- Etappe 4: Pydantic-v2-Requestmodelle fuer /api/v2/treasury/* bis Dateiende ---
 # Import und Modelle stehen bewusst erst hier (nach Etappe 3), damit der
 # parallel bearbeitete Kopf der Datei nicht angefasst wird.
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator  # noqa: E402
 
 
 class TreasuryAccountSaveRequest(BaseModel):
@@ -767,6 +796,11 @@ async def api_v2_treasury_accounts_save(request: Request, req: TreasuryAccountSa
         return {"status": "ok", "account": acc}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "gdpr_erasure_failed", "message": str(exc)},
+        )
 
 
 @router.delete("/api/v2/treasury/accounts/{acc_id}")
@@ -799,6 +833,11 @@ async def api_v2_treasury_payment_request(request: Request, req: TreasuryPayment
         return {"status": "ok", "transaction": tx}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "gdpr_erasure_failed", "message": str(exc)},
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
@@ -956,6 +995,26 @@ def api_v2_create_portal_link(request: Request, req: PortalLinkCreateRequest):
     )
 
 
+@router.get("/api/v2/portal/links/{token}/challenge")
+def api_v2_get_portal_challenge(
+    token: str,
+    password: str = "",
+    disclosure_session: str = "",
+):
+    """Art. 50 EU AI Act: Liefert die serverseitig signierte KI-Transparenz-Challenge."""
+    from backend.client_approval_portal import verify_share_access
+
+    res = verify_share_access(
+        token=token,
+        password=password,
+        issue_disclosure_challenge=True,
+        disclosure_session=disclosure_session,
+    )
+    if not res.get("allowed"):
+        raise HTTPException(status_code=403, detail=res)
+    return {"status": "success", **res}
+
+
 @router.post("/api/v2/portal/decisions")
 def api_v2_submit_client_decision(req: ClientDecisionSubmitRequest):
     """D04/MED: produktiver Konsument von ``submit_client_decision()``.
@@ -1048,6 +1107,11 @@ def api_v2_gdpr_erase(request: Request, req: GdprEraseRequest):
         }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "gdpr_erasure_failed", "message": str(exc)},
+        )
 
 
 @router.post("/api/v2/telegram/route")

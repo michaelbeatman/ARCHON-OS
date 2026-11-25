@@ -9,15 +9,13 @@ import asyncio
 import base64
 import datetime
 import json
-import logging
 import os
 import re
-import shutil
 import sqlite3
 import sys
 import time
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
@@ -1160,7 +1158,8 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
             return
 
         # Kosten-Berechnung und Transparenz-Anzeige (Pillar 3/6)
-        cost_str = "0.0000"
+        cost_str = "unverifiziert"
+        cost_unverified = True
         try:
             prices = None
             try:
@@ -1186,16 +1185,19 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
                     p_rate, c_rate = (0.15, 0.60)
                 elif "gpt-4o" in m_low:
                     p_rate, c_rate = (2.50, 10.0)
-            p_cost = (max(prompt_tokens, 800) / 1_000_000) * p_rate
-            c_cost = (max(completion_tokens, 100) / 1_000_000) * c_rate
-            total_cost = p_cost + c_cost
-            if total_cost > 0:
-                cost_str = f"{total_cost:.5f}"
+            if p_rate > 0.0 or c_rate > 0.0:
+                p_cost = (max(prompt_tokens, 800) / 1_000_000) * p_rate
+                c_cost = (max(completion_tokens, 100) / 1_000_000) * c_rate
+                total_cost = p_cost + c_cost
+                if total_cost > 0:
+                    cost_str = f"{total_cost:.5f}"
+                    cost_unverified = False
         except Exception as e:
             logger.error(f"Cost calculation error: {e}")
-            
+
         tier = "High" if provider == "openrouter" else "Low"
-        transparency_tag = f"\n\n*- 🧠 Antwort generiert von `@{agent_id}` via `{model}` | Tier: `{tier}` | Est. Cost: `{cost_str}$`*"
+        cost_display = "unverifiziert" if cost_unverified else f"{cost_str}$"
+        transparency_tag = f"\n\n*- 🧠 Antwort generiert von `@{agent_id}` via `{model}` | Tier: `{tier}` | Est. Cost: `{cost_display}`*"
 
         # Delegation Engine v2: strukturierte ```delegation```-Blöcke + Legacy-CLI-Interception.
         # Quittungen werden in die Delegator-Session geschrieben -> der Agent "erinnert" sich.
@@ -1362,7 +1364,6 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
             audit_dispatch_async,
             enforce_egress_firewall_for_url,
             evaluate_and_gate_llm_dispatch,
-            log_completed_llm_dispatch,
             sanitize_outbound_llm_payload,
         )
         target_img_ep = "https://openrouter.ai/api/v1/chat/completions"
@@ -1424,10 +1425,21 @@ async def api_tool_image_generate(req: ImageGenerateToolRequest):
                 if resp.status_code != 200:
                     raise HTTPException(status_code=resp.status_code, detail={"code": "chat_openrouter_error", "params": {"error": resp.text[:300]}})
                 data = resp.json()
-                choice = data.get("choices", [{}])[0]
-                msg = choice.get("message", {})
+                choices = data.get("choices") if isinstance(data, dict) else None
+                if not isinstance(choices, list) or not choices:
+                    raise HTTPException(
+                        status_code=502,
+                        detail={"code": "EMPTY_RESPONSE", "message": "Bildgenerierung lieferte keine choices."},
+                    )
+                choice = choices[0] if isinstance(choices[0], dict) else {}
+                msg = choice.get("message", {}) if isinstance(choice.get("message"), dict) else {}
                 text = msg.get("content", "")
                 images = msg.get("images", [])
+                if not text and not images:
+                    raise HTTPException(
+                        status_code=502,
+                        detail={"code": "EMPTY_RESPONSE", "message": "Bildgenerierung lieferte weder Text noch Bild."},
+                    )
                 img_url = ""
                 if images:
                     first = images[0]

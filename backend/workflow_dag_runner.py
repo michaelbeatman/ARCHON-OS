@@ -29,7 +29,7 @@ import sqlite3
 import threading
 import time
 from contextlib import contextmanager
-from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional
+from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional, Tuple
 
 # D16/M4: zentrale Fehler-Zaehlung ueber die echte API in trace_context
 # (delegiert an tracer.note_local_trace_error). Kein lokaler Fallback mehr.
@@ -1216,6 +1216,126 @@ async def _dispatch_with_node_budget(
     return out, False
 
 
+def _compute_node_cost(
+    *,
+    res: Dict[str, Any],
+    model: str,
+    _esc_model: str,
+    _repair_in: int,
+    _repair_out: int,
+    _esc_in: int,
+    _esc_out: int,
+    _repair_model_used: str,
+) -> Tuple[Optional[float], bool]:
+    """B8/S2: Kosten-Tail als modul-lokaler Helper.
+
+    Bewusst IN dieser Datei (nicht in ``backend/workflow_nodes/``): der
+    Source-Text-Test ``test_reaudit_stage9.py:54-58`` sucht die Marker
+    ``_cost_usd = None`` und ``Kostenberechnung fehlgeschlagen`` in der ganzen
+    Datei. Sie muessen physisch hier stehen bleiben.
+
+    Der ``locals().get(...)``-Zugriff bleibt 1:1 erhalten: die 5 Werte aus
+    Cluster 7 kommen als **gleichnamige Parameter** herein, ``locals()`` findet
+    sie also exakt wie zuvor im Facade-Scope. Keine Mechanik-Aenderung.
+    """
+    _cost_usd = None
+    _cost_unverified = True
+    try:
+        from backend.llm_kernel import estimate_model_cost_usd as _est_cost
+        _rep_in_tok = int(locals().get("_repair_in", 0) or 0)
+        _rep_out_tok = int(locals().get("_repair_out", 0) or 0)
+        _esc_in_tok = int(locals().get("_esc_in", 0) or 0)
+        _esc_out_tok = int(locals().get("_esc_out", 0) or 0)
+        _base_in = int(res.get("input_tokens") or 0) - _rep_in_tok - _esc_in_tok
+        _base_out = int(res.get("output_tokens") or 0) - _rep_out_tok - _esc_out_tok
+        if _base_in or _base_out:
+            _cost_usd += _est_cost(model, _base_in, _base_out)  # type: ignore[operator]
+        if _rep_in_tok or _rep_out_tok:
+            _cost_usd += _est_cost(locals().get("_repair_model_used") or model, _rep_in_tok, _rep_out_tok)  # type: ignore[operator]
+        if _esc_in_tok or _esc_out_tok:
+            _cost_usd += _est_cost(_esc_model or model, _esc_in_tok, _esc_out_tok)  # type: ignore[operator]
+        _cost_usd = round(_cost_usd, 6)  # type: ignore[arg-type]
+        _cost_unverified = False
+    except Exception as _cost_exc:
+        # D12: kein 0.0 als realer Wert bei fehlgeschlagener Berechnung.
+        logger.error("[WorkflowDAG] Kostenberechnung fehlgeschlagen: %s", _cost_exc)
+        _cost_usd = None
+        _cost_unverified = True
+    return _cost_usd, _cost_unverified
+
+
+def _build_node_output(
+    *,
+    node: Dict[str, Any],
+    agent_id: str,
+    model: str,
+    res: Dict[str, Any],
+    content: str,
+    is_error: bool,
+    kanban_task_id: Optional[str],
+    _cost_usd: Optional[float],
+    _cost_unverified: bool,
+    quality_report: Optional[Dict[str, Any]],
+    revisions_used: int,
+    deliverable_path: str,
+    tool_trace: List[Dict[str, Any]],
+    parsed_output: Optional[Any],
+) -> Dict[str, Any]:
+    """B8/S2: Return-Normalisierung als modul-lokaler Helper.
+
+    Ebenfalls bewusst in dieser Datei: ``test_reaudit_stage9.py:57`` sucht
+    ``"cost_unverified": _cost_unverified`` im Dateitext.
+    """
+    out: Dict[str, Any] = {
+        "status": "error" if is_error else "success",
+        "node_id": node.get("id"),
+        "agent_id": agent_id,
+        "model": res.get("model") or model,
+        "content": content,
+        "error": res.get("error") or "",
+        "input_tokens": int(res.get("input_tokens") or 0),
+        "output_tokens": int(res.get("output_tokens") or 0),
+        "kanban_task_id": kanban_task_id,
+        "cost_usd": _cost_usd,
+        "cost_unverified": _cost_unverified,
+    }
+    if quality_report is not None:
+        out["quality_score"] = int(quality_report.get("score", 0))
+        out["quality_report"] = quality_report
+        out["revisions_used"] = revisions_used
+    if deliverable_path:
+        out["deliverable_path"] = deliverable_path
+    if tool_trace:
+        out["tool_trace"] = tool_trace
+    if parsed_output is not None:
+        out["parsed_output"] = parsed_output
+    return out
+
+
+def _finalize_kanban_status(
+    kanban_task_id: Optional[str],
+    is_error: bool,
+    content: str,
+    out: Dict[str, Any],
+    node: Dict[str, Any],
+    agent_id: str,
+    kanban_update: Callable[..., None],
+) -> None:
+    """B8/S2: Kanban-Final als Helper (3 Ternaries aus der Facade heraus).
+
+    S3: ``kanban_update`` wird zur Aufrufzeit uebergeben, damit
+    ``patch("backend.workflow_dag_runner._update_kanban_task_status")`` greift.
+    """
+    kanban_update(
+        kanban_task_id,
+        "blocked" if is_error else "done",
+        result=content or out["error"],
+        block_kind="workflow_error" if is_error else None,
+        event_kind="workflow_node_failed" if is_error else "workflow_node_completed",
+        event_payload={"node_id": node.get("id"), "agent_id": agent_id, "status": out["status"]},
+    )
+
+
 async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, Any]) -> Dict[str, Any]:
     """Echter Standard-Executor fuer DAG-Knoten: loest Agenten-Profil auf, reicht
     Upstream-Outputs weiter, ruft core_dispatcher auf und synchronisiert Kanban.
@@ -1434,62 +1554,41 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         revisions_used=revisions_used,
     )
 
-    # Punkt 3.2.6: exakte Kosten pro Node (Basis-/Repair-/Eskalations-Modell getrennt)
-    _cost_usd = None
-    _cost_unverified = True
-    try:
-        from backend.llm_kernel import estimate_model_cost_usd as _est_cost
-        _rep_in_tok = int(locals().get("_repair_in", 0) or 0)
-        _rep_out_tok = int(locals().get("_repair_out", 0) or 0)
-        _esc_in_tok = int(locals().get("_esc_in", 0) or 0)
-        _esc_out_tok = int(locals().get("_esc_out", 0) or 0)
-        _base_in = int(res.get("input_tokens") or 0) - _rep_in_tok - _esc_in_tok
-        _base_out = int(res.get("output_tokens") or 0) - _rep_out_tok - _esc_out_tok
-        if _base_in or _base_out:
-            _cost_usd += _est_cost(model, _base_in, _base_out)  # type: ignore[operator]
-        if _rep_in_tok or _rep_out_tok:
-            _cost_usd += _est_cost(locals().get("_repair_model_used") or model, _rep_in_tok, _rep_out_tok)  # type: ignore[operator]
-        if _esc_in_tok or _esc_out_tok:
-            _cost_usd += _est_cost(_esc_model or model, _esc_in_tok, _esc_out_tok)  # type: ignore[operator]
-        _cost_usd = round(_cost_usd, 6)  # type: ignore[arg-type]
-        _cost_unverified = False
-    except Exception as _cost_exc:
-        # D12: kein 0.0 als realer Wert bei fehlgeschlagener Berechnung.
-        logger.error("[WorkflowDAG] Kostenberechnung fehlgeschlagen: %s", _cost_exc)
-        _cost_usd = None
-        _cost_unverified = True
-    out = {
-        "status": "error" if is_error else "success",
-        "node_id": node.get("id"),
-        "agent_id": agent_id,
-        "model": res.get("model") or model,
-        "content": content,
-        "error": res.get("error") or "",
-        "input_tokens": int(res.get("input_tokens") or 0),
-        "output_tokens": int(res.get("output_tokens") or 0),
-        "kanban_task_id": kanban_task_id,
-        "cost_usd": _cost_usd,
-        "cost_unverified": _cost_unverified,
-    }
-    if quality_report is not None:
-        out["quality_score"] = int(quality_report.get("score", 0))
-        out["quality_report"] = quality_report
-        out["revisions_used"] = revisions_used
-    if deliverable_path:
-        out["deliverable_path"] = deliverable_path
-    if tool_trace:
-        out["tool_trace"] = tool_trace
-    if parsed_output is not None:
-        out["parsed_output"] = parsed_output
+    # B8/S2: Cluster 10 (Kosten + Return-Normalisierung) in die beiden
+    # MODUL-LOKALEN Helper _compute_node_cost / _build_node_output verschoben.
+    # Bewusst nicht nach workflow_nodes/: die drei D12-Marker muessen physisch
+    # in dieser Datei bleiben (test_reaudit_stage9.py:54-58). Reine Delegation.
+    _cost_usd, _cost_unverified = _compute_node_cost(
+        res=res,
+        model=model,
+        _esc_model=_esc_model,
+        _repair_in=_repair_in,
+        _repair_out=_repair_out,
+        _esc_in=_esc_in,
+        _esc_out=_esc_out,
+        _repair_model_used=_repair_model_used,
+    )
+    out = _build_node_output(
+        node=node,
+        agent_id=agent_id,
+        model=model,
+        res=res,
+        content=content,
+        is_error=is_error,
+        kanban_task_id=kanban_task_id,
+        _cost_usd=_cost_usd,
+        _cost_unverified=_cost_unverified,
+        quality_report=quality_report,
+        revisions_used=revisions_used,
+        deliverable_path=deliverable_path,
+        tool_trace=tool_trace,
+        parsed_output=parsed_output,
+    )
 
     await asyncio.to_thread(
+        _finalize_kanban_status,
+        kanban_task_id, is_error, content, out, node, agent_id,
         _update_kanban_task_status,
-        kanban_task_id,
-        "blocked" if is_error else "done",
-        result=content or out["error"],  # type: ignore[arg-type]
-        block_kind="workflow_error" if is_error else None,
-        event_kind="workflow_node_failed" if is_error else "workflow_node_completed",
-        event_payload={"node_id": node.get("id"), "agent_id": agent_id, "status": out["status"]},
     )
     return out
 

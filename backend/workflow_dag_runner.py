@@ -1271,78 +1271,23 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
             _update_kanban_task_status,
         )
 
-    agent_name = str(prof.get("person_name") or prof.get("name") or agent_id)
-    role = str(prof.get("role") or prof.get("category") or "Fach-Spezialist")
-    system_prompt = str(
-        prof.get("system_prompt")
-        or prof.get("prompt")
-        or f"Du bist {agent_name} in Archon OS. Bearbeite deinen Workflow-Schritt praezise und strukturiert."
-    )
-    model = str(node.get("model") or prof.get("model") or "deepseek/deepseek-chat").strip()
-    # Punkt 3.2.6: Cheap-First -> Frontier-Escalation pro Node
-    _esc_model = str(node.get("escalation_model") or "").strip()
-    reasoning_level = str(node.get("reasoning_effort") or "medium").strip()
+    # B3/S2: Cluster 4 (Profil-Aufloesung + Prompt-Bau) nach
+    # backend/workflow_nodes/prompt.py extrahiert. Reine Delegation, keine
+    # Logikaenderung. Das PromptContext traegt auch die Werte, die C6-C10
+    # brauchen, damit die Facade saemtliche Locals behaelt.
+    from backend.workflow_nodes.prompt import build_agent_prompt
 
-    # Optionale Markenstimme (config/voice.md) automatisch fuer Content-/Marketing-Schritte injizieren
-    _voice_block = ""
-    _channel_hint = str(node.get("channel") or "").strip().lower()
-    _is_content_node = bool(
-        _channel_hint
-        or node.get("quality_gate")
-        or any(
-            kw in f"{agent_id} {role} {node.get('title', '')}".lower()
-            for kw in ("writer", "content", "linkedin", "youtube", "tiktok", "shorts", "social", "storyteller", "newsletter", "blog")
-        )
-    )
-    if _is_content_node:
-        try:
-            from archon.core.runtime import APP_ROOT
-            _voice_path = os.path.join(APP_ROOT, "config", "voice.md")
-            if os.path.isfile(_voice_path):
-                with open(_voice_path, "r", encoding="utf-8", errors="ignore") as _vf:
-                    _voice_txt = _vf.read(3000).strip()
-                if _voice_txt:
-                    _voice_block = f"\n\n[BRAND VOICE & STIL-VORGABEN (config/voice.md)]\n{_voice_txt}"
-        except OSError as _vexc:
-            logger.debug("[WorkflowDAG] config/voice.md nicht lesbar: %s", _vexc)
-
-    # Prompt inkl. Upstream-Kontext & Guardrails aufbauen
-    sections: List[str] = []
-    node_title = str(node.get("title") or node.get("id") or "Workflow-Schritt")
-    sections.append(f"WORKFLOW-SCHRITT: {node_title}")
-    if node.get("prompt"):
-        sections.append(str(node["prompt"]))
-    if node.get("expected_output"):
-        sections.append(f"[ERWARTETES ERGEBNIS]\n{node['expected_output']}")
-    if node.get("allowed_tools"):
-        _allowed_list = [str(t) for t in node["allowed_tools"] if str(t).strip()]
-        sections.append(
-            f"[ERLAUBTE TOOLS]\n{', '.join(_allowed_list)}\n"
-            "Wenn du ein Tool ausfuehren musst, antworte exakt mit einem JSON-Objekt: "
-            '{"tool_call": {"name": "<tool_name>", "args": {...}}}'
-        )
-    if node.get("forbidden_actions"):
-        sections.append("[VERBOTEN / GUARDRAILS]\n- " + "\n- ".join(str(f) for f in node["forbidden_actions"]))
-    if node.get("map_item") is not None:
-        item_val = node["map_item"]
-        item_str = json.dumps(item_val, ensure_ascii=False) if isinstance(item_val, (dict, list)) else str(item_val)
-        sections.append(f"[AKTUELLER MAP-EINTRAG ({int(node.get('map_index', 0)) + 1}/{int(node.get('map_total', 1))})]\n{item_str}")
-        if node.get("prompt") and "{{item}}" in str(node.get("prompt")):
-            for p_idx, p_sec in enumerate(sections):
-                if "{{item}}" in p_sec:
-                    sections[p_idx] = p_sec.replace("{{item}}", item_str)
-    if upstream:
-        up_blocks = []
-        for dep_id, dep_val in upstream.items():
-            if isinstance(dep_val, dict):
-                txt = dep_val.get("content") or dep_val.get("summary") or dep_val.get("result") or json.dumps(dep_val, ensure_ascii=False)
-            else:
-                txt = str(dep_val)
-            up_blocks.append(f"### Vorlauf-Schritt `{dep_id}`:\n{str(txt)[:4000]}")
-        sections.append("[UPSTREAM-ERGEBNISSE AUS VORHERIGEN SCHRITTEN]\n" + "\n\n".join(up_blocks))
-
-    full_prompt = "\n\n".join(sections)
-    eff_system_prompt = system_prompt + _voice_block
+    pctx = build_agent_prompt(node, upstream, prof, agent_id)
+    agent_name = pctx.agent_name
+    role = pctx.role
+    model = pctx.model
+    _esc_model = pctx.escalation_model
+    reasoning_level = pctx.reasoning_level
+    _channel_hint = pctx.channel_hint
+    _is_content_node = pctx.is_content_node
+    node_title = pctx.node_title
+    full_prompt = pctx.full_prompt
+    eff_system_prompt = pctx.eff_system_prompt
 
     await asyncio.to_thread(
         _update_kanban_task_status,

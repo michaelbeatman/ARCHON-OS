@@ -388,7 +388,7 @@ document.querySelectorAll('pre').forEach(function(pre){
     if(ticking)return;
     ticking=true;
     requestAnimationFrame(function(){
-      var y=Math.min((window.scrollY||0)*0.08,48);
+      var y=Math.min((window.scrollY||0)*0.38,240);
       stage.style.setProperty('--parallax-y',y.toFixed(1)+'px');
       ticking=false;
     });

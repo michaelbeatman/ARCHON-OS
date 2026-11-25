@@ -3,22 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Archon OS - 셀프 호스팅 Agentic Operating System (GDPR & Zero-Egress)</title>
-<meta name="description" content="Hermes Agent 기반 GDPR 준수 셀프 호스팅 Agentic Operating System.">
+<title>Archon OS - 자체 호스팅 에이전트 OS (GDPR &amp; Zero-Egress)</title>
+<meta name="description" content="MIT 라이선스의 자체 호스팅 에이전트 운영체제(Hermes Agent 기반): GDPR 준수 로컬 Zero-Egress 라우팅, 70개 전문가 프로필, Atomic BudgetBank, WebAuthn 패스키 HITL, Effect-Ledger, 55개 프레임워크 AI Boardroom, GoBD 대응 SHA-256 감사 로그.">
 <meta name="keywords" content="Agentic Operating System, Archon OS, Hermes Agent, GDPR AI, DSGVO, Zero-Egress, Atomic BudgetBank, Passkey HITL, Effect-Ledger, EU AI Act, GoBD, Self-Hosted AI, Local LLM, Ollama, AI Boardroom, Obsidian RAG, MCP Server, Open Source">
 <meta name="author" content="Michael Beatman">
 <link rel="canonical" href="https://michaelbeatman.github.io/ARCHON-OS/ko/">
+<link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/">
+<link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/">
+<link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/">
+<link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/">
+<link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/">
+<link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/">
+<link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/">
+<link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/">
+<link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/">
+<link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/">
+<link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/">
+<link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/">
 <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/archon_logo.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Archon OS">
-<meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/">
-<meta property="og:title" content="Archon OS - Self-Hosted Agentic Operating System (GDPR &amp; Zero-Egress)">
-<meta property="og:description" content="Self-hosted Agentic Operating System built on Hermes Agent: 70 specialist profiles, GDPR/DSGVO Zero-Egress local routing, Atomic BudgetBank, Passkey HITL, and SHA-256 audit logs.">
+<meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/ko/">
+<meta property="og:title" content="Archon OS - 자체 호스팅 에이전트 OS (GDPR &amp; Zero-Egress)">
+<meta property="og:description" content="Hermes Agent 기반 자체 호스팅 에이전트 OS: 70개 전문가 프로필, GDPR 준수 Zero-Egress 라우팅, Atomic BudgetBank, 패스키 HITL, SHA-256 감사 로그.">
 <meta property="og:image" content="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png">
-<meta property="og:image:alt" content="Archon OS Mission Control Dashboard">
+<meta property="og:image:alt" content="Archon OS Mission Control 대시보드">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Archon OS - Self-Hosted Agentic Operating System (GDPR &amp; Zero-Egress)">
-<meta name="twitter:description" content="Self-hosted Agentic Operating System built on Hermes Agent: 70 specialist profiles, GDPR Zero-Egress local routing, Atomic BudgetBank, Passkey HITL &amp; SHA-256 audit logs.">
+<meta name="twitter:title" content="Archon OS - 자체 호스팅 에이전트 OS (GDPR &amp; Zero-Egress)">
+<meta name="twitter:description" content="Hermes Agent 기반 자체 호스팅 에이전트 OS: 70개 전문가 프로필, GDPR Zero-Egress, Atomic BudgetBank, 패스키 HITL &amp; SHA-256 감사 로그.">
 <meta name="twitter:image" content="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png">
 <script type="application/ld+json">
 {
@@ -248,118 +260,120 @@ header,.hero,.wrap,footer{position:relative;z-index:1}
   .blueprint-stage{transform:none}
 }
 header nav{align-items:center}.lang-switch{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius-sm);padding:0.2rem 0.45rem;font-size:var(--text-sm);font-family:inherit;cursor:pointer;line-height:1.3}.lang-switch:hover,.lang-switch:focus{border-color:var(--accent);outline:none}
+.bottom-bg-blueprint{position:absolute;bottom:7.5rem;right:-10%;width:clamp(520px,52vw,860px);z-index:0;pointer-events:none;user-select:none}@media (max-width:767px){.bottom-bg-blueprint{bottom:10rem;right:-24%;width:92%;opacity:0.28}}
 </style>
 </head>
 <body>
 <div class="hero-bg-blueprint" aria-hidden="true"><div class="blueprint-stage"><picture><source srcset="../archon_blueprint_dark.png" media="(prefers-color-scheme: dark)"><img src="../archon_blueprint_light.png" class="asymmetric-blueprint" alt="" loading="eager"></picture></div></div>
 <header><div class="wrap">
 <img class="hand-avatar" src="../archon_hand.png" alt="Archon OS">
-<div><h1>Archon OS</h1><span class="tag">셀프 호스팅 Agentic Operating System &middot; MIT</span></div>
-<nav><a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a><a href="#install">Install</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Security</a><select class="lang-switch" aria-label="Language" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/" selected>KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select></nav>
+<div><h1>Archon OS</h1><span class="tag">자체 호스팅 에이전트 OS · MIT</span></div>
+<nav><a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a><a href="#install">설치</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">변경 이력</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">보안</a><select class="lang-switch" aria-label="언어" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/" selected>KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select></nav>
 </div></header>
 
 <section class="hero"><div class="wrap">
-<h2>비즈니스와 당신을 위한 GDPR 준수 Zero-Egress 멀티 에이전트 OS.</h2>
-<p>Archon OS는 Hermes Agent를 GDPR 준수 Agentic Operating System으로 확장합니다: 8개 도메인 70개 전문가, Zero-Egress 로컬 라우팅, Atomic BudgetBank, Passkey HITL 및 SHA-256 감사 로그.</p>
+<h2>GDPR 준수 · Zero-Egress 멀티에이전트 OS. 기업을 위해, 그리고 당신을 위해.</h2>
+<p>Archon OS는 Hermes Agent를 GDPR 준수 에이전트 운영체제로 확장합니다: 8개 도메인의 70개 전문가 프로필, 페일 클로즈 로컬 Zero-Egress 라우팅, Atomic BudgetBank 비용 상한, WebAuthn 패스키 승인, 구조화된 AI Boardroom 토론, GoBD 대응 SHA-256 감사 로그. 당신의 문서, 당신의 Obsidian Vault, 당신의 모델.</p>
 <div class="btnrow">
 <a class="btn primary" href="https://github.com/michaelbeatman/ARCHON-OS">GitHub에서 보기</a>
-<a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.ko.md">한국어 문서 (README)</a>
+<a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.ko.md">한국어 README</a>
 <a class="btn" href="#install">빠른 시작</a>
 </div>
-<div class="badges"><span class="badge">v0.5.7.8 &middot; pre-1.0</span><span class="badge">GDPR / DSGVO &amp; EU AI Act ready</span><span class="badge">Fail-closed Zero-Egress</span><span class="badge">MIT license</span><span class="badge">70 specialists &middot; 8 domains</span><span class="badge">55 decision frameworks</span><span class="badge">Docker amd64 / arm64</span><span class="badge">11 languages</span></div>
+<div class="badges"><span class="badge">v0.5.7.8 &middot; pre-1.0</span><span class="badge">GDPR &amp; EU AI Act 대응</span><span class="badge">페일 클로즈 Zero-Egress</span><span class="badge">MIT 라이선스</span><span class="badge">70 전문가 · 8개 도메인</span><span class="badge">55개 의사결정 프레임워크</span><span class="badge">Docker amd64 / arm64</span><span class="badge">11개 언어</span></div>
 </div></section>
 
 <div class="wrap">
 <div class="logo-showcase">
 <picture>
   <source srcset="../archon_banner_dark.png" media="(prefers-color-scheme: dark)">
-  <img src="../archon_banner_light.png" alt="Archon OS - Agentic Operating System">
+  <img src="../archon_banner_light.png" alt="Archon OS - 에이전트 운영체제">
 </picture>
 </div>
-<h3 class="sec">Screenshots</h3>
+<h3 class="sec">스크린샷</h3>
 <div class="shots">
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png" alt="Mission Control dashboard"><figcaption>Mission Control - live telemetry, token sparkline &amp; HITL board</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/kader.png" alt="Agent fleet overview"><figcaption>Agent fleet - specialist profiles, OmniRoute binding &amp; live feed</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/boardroom_debate.png" alt="AI Boardroom debate"><figcaption>AI Boardroom - multi-perspective debate with framework &amp; slots</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/workflows.png" alt="Visual multi-agent workflow builder"><figcaption>Workflows - visual multi-agent DAG editor with HITL gates</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/n8n_automation.png" alt="Integrated n8n automation"><figcaption>n8n Automation - embedded webhook pipelines inside Operations</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/org.png" alt="Org chart and hierarchy"><figcaption>Org hierarchy - interactive flowchart &amp; approval boundaries</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png" alt="Mission Control 대시보드"><figcaption>Mission Control - 실시간 텔레메트리, 토큰 스파크라인 &amp; HITL 보드</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/kader.png" alt="에이전트 함대 개요"><figcaption>에이전트 함대 - 전문가 프로필, OmniRoute 바인딩 &amp; 실시간 피드</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/boardroom_debate.png" alt="AI Boardroom 토론"><figcaption>AI Boardroom - 프레임워크 &amp; 슬롯 기반 다관점 토론</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/workflows.png" alt="비주얼 멀티에이전트 워크플로 빌더"><figcaption>Workflows - HITL 게이트가 있는 비주얼 멀티에이전트 DAG 편집기</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/n8n_automation.png" alt="통합 n8n 자동화"><figcaption>n8n Automation - Operations 안에 내장된 웹훅 파이프라인</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/org.png" alt="조직도와 계층 구조"><figcaption>조직 계층 - 인터랙티브 흐름도 &amp; 승인 경계</figcaption></figure>
 </div>
 
 <h3 class="sec">주요 기능</h3>
 <div class="feats">
-<div class="feat"><h4>AI Boardroom</h4><p>Decisions run as isolated multi-perspective debates with critic cross-examination and synthesis, across 55 frameworks from OKR to Pre-Mortem.</p></div>
-<div class="feat"><h4>OmniRoute cost control</h4><p>A central switchboard routes every request to local (Ollama, LM Studio) or cloud models. Budgets are checked before dispatch and attributed per model and per task.</p></div>
-<div class="feat"><h4>Zero-Egress &amp; GDPR / DSGVO</h4><p>Finance, HR, contract, and CRM data stays on local models inside an isolated Docker network with no internet route. Fails closed - guaranteeing strict GDPR/DSGVO data residency.</p></div>
-<div class="feat"><h4>Audit Log, EU AI Act &amp; GoBD</h4><p>A SHA-256 hash-chained log records every dispatch (provider, model, host) tamper-evidently, paired with an EU AI Act risk registry and 1-click GoBD procedural documentation export.</p></div>
-<div class="feat"><h4>Obsidian vault + RAG</h4><p>Your vault is the knowledge base. Documents and scans are OCR-read, converted to Markdown and indexed into AnythingLLM/Chroma - locally.</p></div>
-<div class="feat"><h4>Kanban with approval gates</h4><p>Tasks move through a four-eyes gate: approve, reject with a reason, or escalate on expiry. Email triage, CRM and an ERP suite (alpha) sit on top.</p></div>
-<div class="feat"><h4>24/7 liveness &amp; self-healing</h4><p>An async event-loop heartbeat feeds <code>/livez</code> (503 on stall) and Docker auto-restart, backed by an optional external dead-man-switch webhook.</p></div>
-<div class="feat"><h4>Hardened &amp; traced</h4><p>SSRF and prompt-injection guards, distributed trace IDs across agent calls, and batched UI rendering for large prompt catalogs.</p></div>
-<div class="feat"><h4>Telegram, Email &amp; CRM</h4><p>Triage incoming emails and Telegram messages into Kanban tasks, sync contacts, and manage quotes and contracts in one workspace.</p></div>
-<div class="feat"><h4>Passkey / WebAuthn HITL</h4><p>High-risk approvals (payments, budget overruns, destructive actions) require cryptographic signatures via Windows Hello, Touch ID, or hardware passkeys. Models cannot forge approvals.</p></div>
-<div class="feat"><h4>Atomic BudgetBank &amp; Signed Warrants</h4><p>Token and cost budgets are reserved transactionally before execution (<code>BEGIN IMMEDIATE</code>). Privileged tools require time-bound HMAC-SHA256 warrants.</p></div>
-<div class="feat"><h4>Crash-Safe Effect-Ledger</h4><p>External side effects are tracked in a transactional ledger with idempotency keys and mandatory reconciliation after unknown states - preventing duplicate actions.</p></div>
+<div class="feat"><h4>AI Boardroom</h4><p>의사결정은 비판 역할의 반대 심문과 종합을 갖춘 독립된 다관점 토론으로 진행되며, OKR부터 Pre-Mortem까지 55개 프레임워크를 활용합니다.</p></div>
+<div class="feat"><h4>OmniRoute 비용 관리</h4><p>중앙 스위치보드가 모든 요청을 로컬(Ollama, LM Studio) 또는 클라우드 모델로 라우팅합니다. 예산은 디스패치 전에 검사되고 모델별·작업별로 배분됩니다.</p></div>
+<div class="feat"><h4>Zero-Egress &amp; GDPR</h4><p>재무, 인사, 계약, CRM 데이터는 인터넷 경로가 없는 격리 Docker 네트워크의 로컬 모델에 머뭅니다. 페일 클로즈로 엄격한 GDPR 데이터 거주지를 보장합니다.</p></div>
+<div class="feat"><h4>감사 로그, EU AI Act &amp; GoBD</h4><p>SHA-256 해시 체인 로그가 모든 디스패치(공급자, 모델, 호스트)를 위변조 탐지 가능하게 기록하며, EU AI Act 위험 등록부와 원클릭 GoBD 절차 문서 내보내기를 제공합니다.</p></div>
+<div class="feat"><h4>Obsidian Vault + RAG</h4><p>Vault가 지식 베이스입니다. 문서와 스캔본은 OCR로 읽어 Markdown으로 변환한 뒤 AnythingLLM/Chroma에 로컬로 색인됩니다.</p></div>
+<div class="feat"><h4>승인 게이트가 있는 칸반</h4><p>작업은 4-아이즈 게이트를 통과합니다: 승인, 사유와 함께 거부, 만료 시 에스컬레이션. 그 위에 이메일 트리아지, CRM, ERP 스위트(alpha)가 있습니다.</p></div>
+<div class="feat"><h4>24/7 상태 감시 &amp; 자가 복구</h4><p>비동기 이벤트 루프 하트비트가 <code>/livez</code>(정지 시 503)와 Docker 자동 재시작을 구동하며, 선택적 외부 데드맨 스위치 웹훅이 보완합니다.</p></div>
+<div class="feat"><h4>강화 &amp; 추적</h4><p>SSRF 및 프롬프트 인젝션 가드, 에이전트 호출 전반의 분산 trace ID, 대형 프롬프트 카탈로그를 위한 배치 UI 렌더링.</p></div>
+<div class="feat"><h4>Telegram, 이메일 &amp; CRM</h4><p>수신 이메일과 Telegram 메시지를 칸반 작업으로 분류하고, 연락처를 동기화하며, 견적과 계약을 하나의 워크스페이스에서 관리합니다.</p></div>
+<div class="feat"><h4>패스키 / WebAuthn HITL</h4><p>고위험 승인(결제, 예산 초과, 파괴적 작업)은 Windows Hello, Touch ID 또는 하드웨어 패스키의 암호화 서명을 요구합니다. 모델은 승인을 위조할 수 없습니다.</p></div>
+<div class="feat"><h4>Atomic BudgetBank &amp; 서명된 Warrant</h4><p>토큰 및 비용 예산은 실행 전에 트랜잭션으로 예약됩니다(<code>BEGIN IMMEDIATE</code>). 권한 있는 도구는 시간 제한 HMAC-SHA256 Warrant가 필요합니다.</p></div>
+<div class="feat"><h4>충돌 안전 Effect-Ledger</h4><p>외부 부작용은 멱등성 키와 알 수 없는 상태 이후의 필수 재조정을 갖춘 트랜잭션 원장에서 추적되어 중복 실행을 막습니다.</p></div>
 </div>
 
-<h3 class="sec">70개 전문가 플릿 - 8개 도메인</h3>
+<h3 class="sec">70개 전문가 함대 - 8개 도메인</h3>
 <table>
-<tr><th>Domain</th><th>Count</th><th>Focus</th></tr>
-<tr><td>Strategy, Leadership &amp; Life</td><td>12</td><td>CEO copilot, OKRs, M&amp;A decisions, cross-domain synthesis and final QA</td></tr>
-<tr><td>Law, Tax, Finance &amp; Insurance</td><td>11</td><td>Contracts, GDPR, IP, holdings, debt financing - with a mandatory legal/tax warning dialog</td></tr>
-<tr><td>Sales, CRM, Marketing &amp; Growth</td><td>11</td><td>B2B outreach, pricing, SEO/GEO, paid ads, retention</td></tr>
-<tr><td>Creation, Media &amp; Content</td><td>8</td><td>Copywriting, video scripts, keynotes, UI/UX brand design</td></tr>
-<tr><td>Tech, Software, Data &amp; QA</td><td>8</td><td>Fullstack architecture, DevOps/CloudSec, database tuning, test automation</td></tr>
-<tr><td>Commerce, Procurement &amp; E-Commerce</td><td>7</td><td>Supply chain, inventory forecasting, vendor negotiation, Shopify</td></tr>
-<tr><td>Real Estate &amp; Construction</td><td>7</td><td>DCF valuation, zoning/BauGB, ESG/KfW, construction management</td></tr>
-<tr><td>Medicine, Chemistry, Science &amp; Engineering</td><td>6</td><td>Clinical advisor, EU-MDR, REACH, pharma - regulated-domain guardrails</td></tr>
+<tr><th>도메인</th><th>수</th><th>중점 분야</th></tr>
+<tr><td>전략, 리더십 &amp; 라이프</td><td>12</td><td>CEO 코파일럿, OKR, M&amp;A 의사결정, 도메인 간 종합, 최종 QA</td></tr>
+<tr><td>법률, 세무, 재무 &amp; 보험</td><td>11</td><td>계약, GDPR, 지식재산, 지주회사, 차입금 조달 - 필수 법률/세무 경고 창 포함</td></tr>
+<tr><td>영업, CRM, 마케팅 &amp; 성장</td><td>11</td><td>B2B 아웃리치, 가격 책정, SEO/GEO, 유료 광고, 리텐션</td></tr>
+<tr><td>제작, 미디어 &amp; 콘텐츠</td><td>8</td><td>카피라이팅, 영상 대본, 기조연설, UI/UX 브랜드 디자인</td></tr>
+<tr><td>기술, 소프트웨어, 데이터 &amp; QA</td><td>8</td><td>풀스택 아키텍처, DevOps/CloudSec, DB 튜닝, 테스트 자동화</td></tr>
+<tr><td>상거래, 조달 &amp; E-Commerce</td><td>7</td><td>공급망, 재고 예측, 공급업체 협상, Shopify</td></tr>
+<tr><td>부동산 &amp; 건설</td><td>7</td><td>DCF 평가, 용도지역/BauGB, ESG/KfW, 건설 프로젝트 관리</td></tr>
+<tr><td>의학, 화학, 과학 &amp; 공학</td><td>6</td><td>임상 자문, EU-MDR, REACH, 제약 - 규제 도메인 가드레일</td></tr>
 </table>
 
 <h3 class="sec" id="install">설치</h3>
 <div class="install">
-<div class="card"><h4>Full stack</h4><p>Six containers: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy.</p>
+<div class="card"><h4>전체 스택</h4><p>6개 컨테이너: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy.</p>
 <pre>git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
 docker compose up -d</pre></div>
-<div class="card"><h4>Zero-key demo</h4><p>Read-only showcase without API keys and token cost, for a first look.</p>
+<div class="card"><h4>키 없는 데모</h4><p>API 키와 토큰 비용 없이 살펴볼 수 있는 읽기 전용 쇼케이스.</p>
 <pre>ARCHON_DEMO_MODE=true \
 docker compose -f docker-compose.demo.yml up --build -d
-# open http://localhost:8501</pre></div>
-<div class="card"><h4>Interactive installers</h4><p><code>setup.ps1</code> for Windows, <code>install.sh</code> for Linux/macOS, or a structured onboarding prompt for your AI coding agent (<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md">INSTALL_AGENT.md</a>).</p></div>
+# http://localhost:8501 열기</pre></div>
+<div class="card"><h4>대화형 설치 관리자</h4><p>Windows용 <code>setup.ps1</code>, Linux/macOS용 <code>install.sh</code>, 또는 AI 코딩 에이전트용 구조화된 온보딩 프롬프트(<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md">INSTALL_AGENT.md</a>).</p></div>
 </div>
 
 <h3 class="sec">왜 Archon OS인가?</h3>
 <div class="feat" style="border-left:4px solid var(--accent)">
-<p><strong>Built for commercial accountability and GDPR/DSGVO compliance, not toy demos.</strong> Unlike prompt-chaining libraries that leave cost caps, data egress, and compliance boundaries to custom glue code, Archon OS enforces fail-closed Zero-Egress local routing, Atomic BudgetBank reservations, WebAuthn Passkey approvals, EU AI Act / GoBD documentation, and SHA-256 audit trails out of the box - on 3 consolidated SQLite WAL databases (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>).</p>
+<p><strong>장난감 데모가 아니라 상업적 책임과 GDPR 준수를 위해 만들어졌습니다.</strong> 비용 상한, 데이터 유출, 컴플라이언스 경계를 맞춤 접착 코드에 맡기는 프롬프트 체이닝 라이브러리와 달리, Archon OS는 페일 클로즈 로컬 Zero-Egress 라우팅, Atomic BudgetBank 예약, WebAuthn 패스키 승인, EU AI Act / GoBD 문서화, SHA-256 감사 추적을 기본으로 강제합니다 - 3개의 통합 SQLite WAL 데이터베이스(<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>) 위에서.</p>
 </div>
 
 <h3 class="sec">자주 묻는 질문</h3>
 <div class="feats">
-<div class="feat"><h4>What is Archon OS?</h4><p>Archon OS is a self-hosted, MIT-licensed Agentic Operating System built on Hermes Agent. It organizes 70 specialist AI roles across 8 domains with pre-execution budget reservations, Zero-Egress local LLM routing, WebAuthn Passkey approvals, and a SHA-256 hash-chained audit log.</p></div>
-<div class="feat"><h4>How does it prevent sensitive data leaks?</h4><p>OmniRoute enforces a fail-closed Zero-Egress policy: finance, contracts, CRM, HR, and GDPR workloads run exclusively on local models (Ollama or LM Studio) inside an internal Docker network without an internet route.</p></div>
-<div class="feat"><h4>How are token costs &amp; risky actions controlled?</h4><p>A central PolicyEngine validates permissions before dispatch, privileged tools require signed time-bound warrants, BudgetBank reserves funds atomically, and high-risk approvals require WebAuthn Passkey signatures.</p></div>
-<div class="feat"><h4>Is it GDPR (DSGVO) &amp; EU AI Act ready?</h4><p>Yes. Sensitive business workloads stay on your server with fail-closed Zero-Egress, backed by an EU AI Act risk registry, tamper-evident SHA-256 audit logs, and 1-click GoBD procedural documentation export.</p></div>
+<div class="feat"><h4>Archon OS란 무엇인가요?</h4><p>Archon OS는 Hermes Agent 기반의 MIT 라이선스 자체 호스팅 에이전트 운영체제입니다. 8개 도메인에 70개 전문 AI 역할을 편성하며, 실행 전 예산 예약, 로컬 Zero-Egress LLM 라우팅, WebAuthn 패스키 승인, SHA-256 해시 체인 감사 로그를 갖추고 있습니다.</p></div>
+<div class="feat"><h4>민감한 데이터 유출을 어떻게 막나요?</h4><p>OmniRoute가 페일 클로즈 Zero-Egress 정책을 적용합니다: 재무, 계약, CRM, 인사, GDPR 워크로드는 인터넷 경로가 없는 내부 Docker 네트워크의 로컬 모델(Ollama 또는 LM Studio)에서만 실행됩니다.</p></div>
+<div class="feat"><h4>토큰 비용 &amp; 위험한 작업은 어떻게 통제되나요?</h4><p>중앙 PolicyEngine이 디스패치 전 권한을 검증하고, 권한 있는 도구는 시간 제한 서명 Warrant가 필요하며, BudgetBank가 자금을 원자적으로 예약하고, 고위험 승인에는 WebAuthn 패스키 서명이 필요합니다.</p></div>
+<div class="feat"><h4>GDPR &amp; EU AI Act에 대응하나요?</h4><p>네. 민감한 업무 워크로드는 페일 클로즈 Zero-Egress로 서버에 남으며, EU AI Act 위험 등록부, 위변조 탐지 SHA-256 감사 로그, 원클릭 GoBD 절차 문서 내보내기로 뒷받침됩니다.</p></div>
 </div>
 
-<h3 class="sec">현재 상태</h3>
-<p class="status">Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome.</p>
+<h3 class="sec">솔직한 상태</h3>
+<p class="status">Pre-1.0. 인터페이스와 설정 키는 릴리스마다 바뀝니다. ERP/CRM 모듈은 alpha이며, 다중 사용자 역할 강제는 아직 보강 중이고, 전문가 출력은 의사결정 지원이지 공인된 자문이 아닙니다. 이슈와 PR을 환영합니다.</p>
 
-<h3 class="sec">Documentation (11 Languages)</h3>
+<h3 class="sec">문서 (11개 언어)</h3>
 <table>
-<tr><th>Document</th><th>Languages</th><th>Scope</th></tr>
-<tr><td><strong>System Manual (97 pp.)</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ZH.pdf">ZH</a></td><td>Installation, chapters 1–19, five use cases, encryption/GDPR overview, A–Z glossary</td></tr>
-<tr><td><strong>Complete Feature List</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ZH.pdf">ZH</a></td><td>Full module catalog, demo mode, first-run wizard, FinOps, security</td></tr>
-<tr><td><strong>AI Boardroom: 55 Frameworks</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ZH.pdf">ZH</a></td><td>All 55 decision-engine methodologies, indexed</td></tr>
-<tr><td><strong>Roadmap & Milestones</strong></td><td><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/system/ROADMAP_2026.md">EN</a></td><td>Complete milestone plan including governance, prompt compression & approval gates</td></tr>
+<tr><th>문서</th><th>언어</th><th>범위</th></tr>
+<tr><td><strong>시스템 매뉴얼 (97쪽)</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ZH.pdf">ZH</a></td><td>설치, 1~19장, 5가지 사용 사례, 암호화/GDPR 개요, A–Z 용어집</td></tr>
+<tr><td><strong>전체 기능 목록</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ZH.pdf">ZH</a></td><td>전체 모듈 카탈로그, 데모 모드, 첫 실행 마법사, FinOps, 보안</td></tr>
+<tr><td><strong>AI Boardroom: 55개 프레임워크</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ZH.pdf">ZH</a></td><td>의사결정 엔진의 55개 방법론 전체, 색인 포함</td></tr>
+<tr><td><strong>로드맵 &amp; 마일스톤</strong></td><td><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/system/ROADMAP_2026.md">EN</a></td><td>거버넌스, 프롬프트 압축 &amp; 승인 게이트를 포함한 전체 마일스톤 계획</td></tr>
 </table>
 </div>
 
+<div class="bottom-bg-blueprint" aria-hidden="true"><picture><source srcset="../archon_blueprint_bottom_dark.png" media="(prefers-color-scheme: dark)"><img src="../archon_blueprint_bottom_light.png" class="asymmetric-blueprint" alt="" loading="lazy"></picture></div>
 <footer><div class="wrap">
-<span>Built on <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> by Nous Research</span>
-<a href="https://github.com/michaelbeatman/ARCHON-OS">Repository</a>
-<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">MIT License</a>
-<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/DISCLAIMER.md">Disclaimer</a>
-<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md">Third-party licenses</a>
+<span>Nous Research의 <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> 기반</span>
+<a href="https://github.com/michaelbeatman/ARCHON-OS">저장소</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">MIT 라이선스</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/DISCLAIMER.md">면책 조항</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md">제3자 라이선스</a>
 </div></footer>
 <script>
 document.querySelectorAll('pre').forEach(function(pre){
@@ -370,11 +384,11 @@ document.querySelectorAll('pre').forEach(function(pre){
   var btn=document.createElement('button');
   btn.type='button';
   btn.className='copy-btn';
-  btn.textContent='Copy';
+  btn.textContent='복사';
   btn.addEventListener('click',function(){
     navigator.clipboard.writeText(pre.textContent).then(function(){
-      btn.textContent='Copied';
-      setTimeout(function(){btn.textContent='Copy';},1500);
+      btn.textContent='복사됨';
+      setTimeout(function(){btn.textContent='복사';},1500);
     });
   });
   wrap.appendChild(btn);

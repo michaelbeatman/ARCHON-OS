@@ -3,22 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Archon OS - Zelf-gehost Agentic Operating System (AVG/GDPR & Zero-Egress)</title>
-<meta name="description" content="AVG/GDPR-conform zelf-gehost Agentic Operating System gebouwd op Hermes Agent.">
+<title>Archon OS - Self-hosted Agentic Operating System (AVG &amp; Zero-Egress)</title>
+<meta name="description" content="Self-hosted, MIT-gelicentieerd Agentic Operating System op basis van Hermes Agent: AVG-conforme lokale Zero-Egress-routing, 70 specialistprofielen, Atomic BudgetBank, WebAuthn-Passkey-HITL, Effect-Ledger, AI Boardroom met 55 frameworks en een GoBD-klaar SHA-256-auditlog.">
 <meta name="keywords" content="Agentic Operating System, Archon OS, Hermes Agent, GDPR AI, DSGVO, Zero-Egress, Atomic BudgetBank, Passkey HITL, Effect-Ledger, EU AI Act, GoBD, Self-Hosted AI, Local LLM, Ollama, AI Boardroom, Obsidian RAG, MCP Server, Open Source">
 <meta name="author" content="Michael Beatman">
 <link rel="canonical" href="https://michaelbeatman.github.io/ARCHON-OS/nl/">
+<link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/">
+<link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/">
+<link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/">
+<link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/">
+<link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/">
+<link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/">
+<link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/">
+<link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/">
+<link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/">
+<link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/">
+<link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/">
+<link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/">
 <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/archon_logo.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Archon OS">
-<meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/">
-<meta property="og:title" content="Archon OS - Self-Hosted Agentic Operating System (GDPR &amp; Zero-Egress)">
-<meta property="og:description" content="Self-hosted Agentic Operating System built on Hermes Agent: 70 specialist profiles, GDPR/DSGVO Zero-Egress local routing, Atomic BudgetBank, Passkey HITL, and SHA-256 audit logs.">
+<meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/nl/">
+<meta property="og:title" content="Archon OS - Self-hosted Agentic Operating System (AVG &amp; Zero-Egress)">
+<meta property="og:description" content="Self-hosted Agentic Operating System op basis van Hermes Agent: 70 specialistprofielen, AVG-conforme Zero-Egress-routing, Atomic BudgetBank, Passkey HITL en SHA-256-auditlogs.">
 <meta property="og:image" content="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png">
-<meta property="og:image:alt" content="Archon OS Mission Control Dashboard">
+<meta property="og:image:alt" content="Archon OS Mission Control-dashboard">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Archon OS - Self-Hosted Agentic Operating System (GDPR &amp; Zero-Egress)">
-<meta name="twitter:description" content="Self-hosted Agentic Operating System built on Hermes Agent: 70 specialist profiles, GDPR Zero-Egress local routing, Atomic BudgetBank, Passkey HITL &amp; SHA-256 audit logs.">
+<meta name="twitter:title" content="Archon OS - Self-hosted Agentic Operating System (AVG &amp; Zero-Egress)">
+<meta name="twitter:description" content="Self-hosted Agentic Operating System op basis van Hermes Agent: 70 specialistprofielen, AVG Zero-Egress-routing, Atomic BudgetBank, Passkey HITL &amp; SHA-256-auditlogs.">
 <meta name="twitter:image" content="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png">
 <script type="application/ld+json">
 {
@@ -248,118 +260,120 @@ header,.hero,.wrap,footer{position:relative;z-index:1}
   .blueprint-stage{transform:none}
 }
 header nav{align-items:center}.lang-switch{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius-sm);padding:0.2rem 0.45rem;font-size:var(--text-sm);font-family:inherit;cursor:pointer;line-height:1.3}.lang-switch:hover,.lang-switch:focus{border-color:var(--accent);outline:none}
+.bottom-bg-blueprint{position:absolute;bottom:7.5rem;right:-10%;width:clamp(520px,52vw,860px);z-index:0;pointer-events:none;user-select:none}@media (max-width:767px){.bottom-bg-blueprint{bottom:10rem;right:-24%;width:92%;opacity:0.28}}
 </style>
 </head>
 <body>
 <div class="hero-bg-blueprint" aria-hidden="true"><div class="blueprint-stage"><picture><source srcset="../archon_blueprint_dark.png" media="(prefers-color-scheme: dark)"><img src="../archon_blueprint_light.png" class="asymmetric-blueprint" alt="" loading="eager"></picture></div></div>
 <header><div class="wrap">
 <img class="hand-avatar" src="../archon_hand.png" alt="Archon OS">
-<div><h1>Archon OS</h1><span class="tag">Zelf-gehost Agentic Operating System &middot; MIT</span></div>
-<nav><a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a><a href="#install">Install</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Security</a><select class="lang-switch" aria-label="Language" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/" selected>NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select></nav>
+<div><h1>Archon OS</h1><span class="tag">Zelf-gehost Agentic Operating System · MIT</span></div>
+<nav><a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a><a href="#install">Installatie</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Wijzigingen</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Beveiliging</a><select class="lang-switch" aria-label="Taal" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/" selected>NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select></nav>
 </div></header>
 
 <section class="hero"><div class="wrap">
-<h2>Een AVG/GDPR-conform Zero-Egress multi-agent OS - voor bedrijven en voor jou.</h2>
-<p>Archon OS breidt Hermes Agent uit tot een AVG/GDPR-conform Agentic Operating System: 70 specialisten in 8 domeinen, fail-closed Zero-Egress lokale routing, Atomic BudgetBank, Passkey HITL en SHA-256 auditlog.</p>
+<h2>Een AVG-conform, Zero-Egress multi-agentbesturingssysteem voor bedrijven - en voor jou.</h2>
+<p>Archon OS breidt Hermes Agent uit tot een AVG-conform Agentic Operating System: 70 specialistprofielen in 8 domeinen, fail-closed lokale Zero-Egress-routing, Atomic BudgetBank kostenplafonds, WebAuthn-Passkey-goedkeuringen, gestructureerde AI Boardroom-debatten en een GoBD-klaar SHA-256-auditlog. Jouw documenten, jouw Obsidian-vault, jouw modellen.</p>
 <div class="btnrow">
 <a class="btn primary" href="https://github.com/michaelbeatman/ARCHON-OS">Bekijk op GitHub</a>
 <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.nl.md">Nederlandse README</a>
 <a class="btn" href="#install">Snelstart</a>
 </div>
-<div class="badges"><span class="badge">v0.5.7.8 &middot; pre-1.0</span><span class="badge">GDPR / DSGVO &amp; EU AI Act ready</span><span class="badge">Fail-closed Zero-Egress</span><span class="badge">MIT license</span><span class="badge">70 specialists &middot; 8 domains</span><span class="badge">55 decision frameworks</span><span class="badge">Docker amd64 / arm64</span><span class="badge">11 languages</span></div>
+<div class="badges"><span class="badge">v0.5.7.8 &middot; pre-1.0</span><span class="badge">AVG &amp; EU AI Act klaar</span><span class="badge">Zero-Egress met gesloten faalmodus</span><span class="badge">MIT-licentie</span><span class="badge">70 specialisten · 8 domeinen</span><span class="badge">55 besluitvormingsframeworks</span><span class="badge">Docker amd64 / arm64</span><span class="badge">11 talen</span></div>
 </div></section>
 
 <div class="wrap">
 <div class="logo-showcase">
 <picture>
   <source srcset="../archon_banner_dark.png" media="(prefers-color-scheme: dark)">
-  <img src="../archon_banner_light.png" alt="Archon OS - Agentic Operating System">
+  <img src="../archon_banner_light.png" alt="Archon OS - Agentisch besturingssysteem">
 </picture>
 </div>
-<h3 class="sec">Screenshots</h3>
+<h3 class="sec">Schermafbeeldingen</h3>
 <div class="shots">
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png" alt="Mission Control dashboard"><figcaption>Mission Control - live telemetry, token sparkline &amp; HITL board</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/kader.png" alt="Agent fleet overview"><figcaption>Agent fleet - specialist profiles, OmniRoute binding &amp; live feed</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/boardroom_debate.png" alt="AI Boardroom debate"><figcaption>AI Boardroom - multi-perspective debate with framework &amp; slots</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/workflows.png" alt="Visual multi-agent workflow builder"><figcaption>Workflows - visual multi-agent DAG editor with HITL gates</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/n8n_automation.png" alt="Integrated n8n automation"><figcaption>n8n Automation - embedded webhook pipelines inside Operations</figcaption></figure>
-<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/org.png" alt="Org chart and hierarchy"><figcaption>Org hierarchy - interactive flowchart &amp; approval boundaries</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png" alt="Mission Control-dashboard"><figcaption>Mission Control - live telemetrie, token-sparkline &amp; HITL-bord</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/kader.png" alt="Overzicht van de agentenvloot"><figcaption>Agentenvloot - specialistprofielen, OmniRoute-binding &amp; live feed</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/boardroom_debate.png" alt="AI Boardroom-debat"><figcaption>AI Boardroom - multiperspectiefdebat met framework &amp; slots</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/workflows.png" alt="Visuele multi-agent workflowbouwer"><figcaption>Workflows - visuele multi-agent DAG-editor met HITL-poorten</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/n8n_automation.png" alt="Geïntegreerde n8n-automatisering"><figcaption>n8n Automation - ingebedde webhook-pipelines in Operations</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/org.png" alt="Organigram en hiërarchie"><figcaption>Organigramhiërarchie - interactief stroomdiagram &amp; goedkeuringsgrenzen</figcaption></figure>
 </div>
 
 <h3 class="sec">Wat het doet</h3>
 <div class="feats">
-<div class="feat"><h4>AI Boardroom</h4><p>Decisions run as isolated multi-perspective debates with critic cross-examination and synthesis, across 55 frameworks from OKR to Pre-Mortem.</p></div>
-<div class="feat"><h4>OmniRoute cost control</h4><p>A central switchboard routes every request to local (Ollama, LM Studio) or cloud models. Budgets are checked before dispatch and attributed per model and per task.</p></div>
-<div class="feat"><h4>Zero-Egress &amp; GDPR / DSGVO</h4><p>Finance, HR, contract, and CRM data stays on local models inside an isolated Docker network with no internet route. Fails closed - guaranteeing strict GDPR/DSGVO data residency.</p></div>
-<div class="feat"><h4>Audit Log, EU AI Act &amp; GoBD</h4><p>A SHA-256 hash-chained log records every dispatch (provider, model, host) tamper-evidently, paired with an EU AI Act risk registry and 1-click GoBD procedural documentation export.</p></div>
-<div class="feat"><h4>Obsidian vault + RAG</h4><p>Your vault is the knowledge base. Documents and scans are OCR-read, converted to Markdown and indexed into AnythingLLM/Chroma - locally.</p></div>
-<div class="feat"><h4>Kanban with approval gates</h4><p>Tasks move through a four-eyes gate: approve, reject with a reason, or escalate on expiry. Email triage, CRM and an ERP suite (alpha) sit on top.</p></div>
-<div class="feat"><h4>24/7 liveness &amp; self-healing</h4><p>An async event-loop heartbeat feeds <code>/livez</code> (503 on stall) and Docker auto-restart, backed by an optional external dead-man-switch webhook.</p></div>
-<div class="feat"><h4>Hardened &amp; traced</h4><p>SSRF and prompt-injection guards, distributed trace IDs across agent calls, and batched UI rendering for large prompt catalogs.</p></div>
-<div class="feat"><h4>Telegram, Email &amp; CRM</h4><p>Triage incoming emails and Telegram messages into Kanban tasks, sync contacts, and manage quotes and contracts in one workspace.</p></div>
-<div class="feat"><h4>Passkey / WebAuthn HITL</h4><p>High-risk approvals (payments, budget overruns, destructive actions) require cryptographic signatures via Windows Hello, Touch ID, or hardware passkeys. Models cannot forge approvals.</p></div>
-<div class="feat"><h4>Atomic BudgetBank &amp; Signed Warrants</h4><p>Token and cost budgets are reserved transactionally before execution (<code>BEGIN IMMEDIATE</code>). Privileged tools require time-bound HMAC-SHA256 warrants.</p></div>
-<div class="feat"><h4>Crash-Safe Effect-Ledger</h4><p>External side effects are tracked in a transactional ledger with idempotency keys and mandatory reconciliation after unknown states - preventing duplicate actions.</p></div>
+<div class="feat"><h4>AI Boardroom</h4><p>Beslissingen verlopen als geïsoleerde multiperspectiefdebatten met kruisverhoor door een criticus en synthese, over 55 frameworks van OKR tot Pre-Mortem.</p></div>
+<div class="feat"><h4>OmniRoute kostenbeheer</h4><p>Een centrale schakelcentrale routeert elke aanvraag naar lokale (Ollama, LM Studio) of cloudmodellen. Budgetten worden vóór verzending gecontroleerd en per model en per taak toegerekend.</p></div>
+<div class="feat"><h4>Zero-Egress &amp; AVG</h4><p>Financiële-, HR-, contract- en CRM-gegevens blijven op lokale modellen binnen een geïsoleerd Docker-netwerk zonder internetroute. Fails closed - voor strikte AVG-datalokalisatie.</p></div>
+<div class="feat"><h4>Auditlog, EU AI Act &amp; GoBD</h4><p>Een met SHA-256 hash-geketend logboek legt elke verzending (provider, model, host) manipulatiebestendig vast, samen met een EU AI Act-risicoregister en de export van GoBD-procesdocumentatie met één klik.</p></div>
+<div class="feat"><h4>Obsidian-vault + RAG</h4><p>Jouw vault is de kennisbank. Documenten en scans worden via OCR gelezen, naar Markdown omgezet en lokaal in AnythingLLM/Chroma geïndexeerd.</p></div>
+<div class="feat"><h4>Kanban met goedkeuringspoorten</h4><p>Taken doorlopen een vier-ogenpoort: goedkeuren, afwijzen met reden of escaleren bij verloop. E-mailtriage, CRM en een ERP-suite (alpha) zitten erbovenop.</p></div>
+<div class="feat"><h4>24/7 beschikbaarheid &amp; zelfherstel</h4><p>Een asynchrone event-loop-heartbeat voedt <code>/livez</code> (503 bij stilstand) en Docker auto-restart, ondersteund door een optionele externe dead-man-switch-webhook.</p></div>
+<div class="feat"><h4>Gehard &amp; getraceerd</h4><p>SSRF- en prompt-injection-beveiliging, gedistribueerde trace-ID's over agentaanroepen en gebatchte UI-rendering voor grote promptcatalogi.</p></div>
+<div class="feat"><h4>Telegram, E-mail &amp; CRM</h4><p>Inkomende e-mails en Telegram-berichten triëren naar Kanban-taken, contacten synchroniseren en offertes en contracten beheren in één werkruimte.</p></div>
+<div class="feat"><h4>Passkey / WebAuthn HITL</h4><p>Goedkeuringen met hoog risico (betalingen, budgetoverschrijdingen, destructieve acties) vereisen cryptografische handtekeningen via Windows Hello, Touch ID of hardware-passkeys. Modellen kunnen goedkeuringen niet vervalsen.</p></div>
+<div class="feat"><h4>Atomic BudgetBank &amp; ondertekende Warrants</h4><p>Token- en kostenbudgets worden transactioneel vóór uitvoering gereserveerd (<code>BEGIN IMMEDIATE</code>). Bevoorrechte tools vereisen tijdsgebonden HMAC-SHA256-warrants.</p></div>
+<div class="feat"><h4>Crashbestendige Effect-Ledger</h4><p>Externe neveneffecten worden bijgehouden in een transactioneel grootboek met idempotency-sleutels en verplichte reconciliatie na onbekende toestanden - voorkomt dubbele acties.</p></div>
 </div>
 
-<h3 class="sec">De 70-specialisten vloot - 8 domeinen</h3>
+<h3 class="sec">De vloot van 70 specialisten - 8 domeinen</h3>
 <table>
-<tr><th>Domain</th><th>Count</th><th>Focus</th></tr>
-<tr><td>Strategy, Leadership &amp; Life</td><td>12</td><td>CEO copilot, OKRs, M&amp;A decisions, cross-domain synthesis and final QA</td></tr>
-<tr><td>Law, Tax, Finance &amp; Insurance</td><td>11</td><td>Contracts, GDPR, IP, holdings, debt financing - with a mandatory legal/tax warning dialog</td></tr>
-<tr><td>Sales, CRM, Marketing &amp; Growth</td><td>11</td><td>B2B outreach, pricing, SEO/GEO, paid ads, retention</td></tr>
-<tr><td>Creation, Media &amp; Content</td><td>8</td><td>Copywriting, video scripts, keynotes, UI/UX brand design</td></tr>
-<tr><td>Tech, Software, Data &amp; QA</td><td>8</td><td>Fullstack architecture, DevOps/CloudSec, database tuning, test automation</td></tr>
-<tr><td>Commerce, Procurement &amp; E-Commerce</td><td>7</td><td>Supply chain, inventory forecasting, vendor negotiation, Shopify</td></tr>
-<tr><td>Real Estate &amp; Construction</td><td>7</td><td>DCF valuation, zoning/BauGB, ESG/KfW, construction management</td></tr>
-<tr><td>Medicine, Chemistry, Science &amp; Engineering</td><td>6</td><td>Clinical advisor, EU-MDR, REACH, pharma - regulated-domain guardrails</td></tr>
+<tr><th>Domein</th><th>Aantal</th><th>Focus</th></tr>
+<tr><td>Strategie, Leiderschap &amp; Leven</td><td>12</td><td>CEO-copiloot, OKR's, M&amp;A-beslissingen, domeinoverstijgende synthese en finale QA</td></tr>
+<tr><td>Recht, Belasting, Financiën &amp; Verzekeringen</td><td>11</td><td>Contracten, AVG, IP, holdings, vreemd vermogen - met verplicht juridisch/fiscaal waarschuwingsvenster</td></tr>
+<tr><td>Verkoop, CRM, Marketing &amp; Groei</td><td>11</td><td>B2B-outreach, pricing, SEO/GEO, betaalde advertenties, retentie</td></tr>
+<tr><td>Creatie, Media &amp; Content</td><td>8</td><td>Copywriting, videoscenario's, keynotes, UI/UX merkdesign</td></tr>
+<tr><td>Techniek, Software, Data &amp; QA</td><td>8</td><td>Fullstack-architectuur, DevOps/CloudSec, database-tuning, testautomatisering</td></tr>
+<tr><td>Handel, Inkoop &amp; E-Commerce</td><td>7</td><td>Supply chain, voorraadprognose, leveranciersonderhandeling, Shopify</td></tr>
+<tr><td>Vastgoed &amp; Bouw</td><td>7</td><td>DCF-waardering, bestemmingsplannen/BauGB, ESG/KfW, bouwprojectmanagement</td></tr>
+<tr><td>Geneeskunde, Chemie, Wetenschap &amp; Engineering</td><td>6</td><td>Klinisch adviseur, EU-MDR, REACH, farma - guardrails voor gereguleerde domeinen</td></tr>
 </table>
 
 <h3 class="sec" id="install">Installatie</h3>
 <div class="install">
-<div class="card"><h4>Full stack</h4><p>Six containers: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy.</p>
+<div class="card"><h4>Volledige stack</h4><p>Zes containers: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy.</p>
 <pre>git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
 docker compose up -d</pre></div>
-<div class="card"><h4>Zero-key demo</h4><p>Read-only showcase without API keys and token cost, for a first look.</p>
+<div class="card"><h4>Demo zonder sleutels</h4><p>Read-only showcase zonder API-sleutels en tokenkosten, voor een eerste blik.</p>
 <pre>ARCHON_DEMO_MODE=true \
 docker compose -f docker-compose.demo.yml up --build -d
-# open http://localhost:8501</pre></div>
-<div class="card"><h4>Interactive installers</h4><p><code>setup.ps1</code> for Windows, <code>install.sh</code> for Linux/macOS, or a structured onboarding prompt for your AI coding agent (<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md">INSTALL_AGENT.md</a>).</p></div>
+# open http://localhost:8501 in de browser</pre></div>
+<div class="card"><h4>Interactieve installers</h4><p><code>setup.ps1</code> voor Windows, <code>install.sh</code> voor Linux/macOS of een gestructureerde onboarding-prompt voor je AI-codeeragent (<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md">INSTALL_AGENT.md</a>).</p></div>
 </div>
 
 <h3 class="sec">Waarom Archon OS?</h3>
 <div class="feat" style="border-left:4px solid var(--accent)">
-<p><strong>Built for commercial accountability and GDPR/DSGVO compliance, not toy demos.</strong> Unlike prompt-chaining libraries that leave cost caps, data egress, and compliance boundaries to custom glue code, Archon OS enforces fail-closed Zero-Egress local routing, Atomic BudgetBank reservations, WebAuthn Passkey approvals, EU AI Act / GoBD documentation, and SHA-256 audit trails out of the box - on 3 consolidated SQLite WAL databases (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>).</p>
+<p><strong>Gebouwd voor commerciële verantwoordelijkheid en AVG-conformiteit, niet voor speelgoeddemo's.</strong> In tegenstelling tot prompt-chaining-bibliotheken die kostenplafonds, data-egress en compliance-grenzen overlaten aan maatwerk-lijmcode, handhaaft Archon OS standaard fail-closed lokale Zero-Egress-routing, Atomic BudgetBank-reserveringen, WebAuthn-Passkey-goedkeuringen, EU AI Act-/GoBD-documentatie en SHA-256-auditsporen - op 3 geconsolideerde SQLite WAL-databases (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>).</p>
 </div>
 
 <h3 class="sec">Veelgestelde vragen</h3>
 <div class="feats">
-<div class="feat"><h4>What is Archon OS?</h4><p>Archon OS is a self-hosted, MIT-licensed Agentic Operating System built on Hermes Agent. It organizes 70 specialist AI roles across 8 domains with pre-execution budget reservations, Zero-Egress local LLM routing, WebAuthn Passkey approvals, and a SHA-256 hash-chained audit log.</p></div>
-<div class="feat"><h4>How does it prevent sensitive data leaks?</h4><p>OmniRoute enforces a fail-closed Zero-Egress policy: finance, contracts, CRM, HR, and GDPR workloads run exclusively on local models (Ollama or LM Studio) inside an internal Docker network without an internet route.</p></div>
-<div class="feat"><h4>How are token costs &amp; risky actions controlled?</h4><p>A central PolicyEngine validates permissions before dispatch, privileged tools require signed time-bound warrants, BudgetBank reserves funds atomically, and high-risk approvals require WebAuthn Passkey signatures.</p></div>
-<div class="feat"><h4>Is it GDPR (DSGVO) &amp; EU AI Act ready?</h4><p>Yes. Sensitive business workloads stay on your server with fail-closed Zero-Egress, backed by an EU AI Act risk registry, tamper-evident SHA-256 audit logs, and 1-click GoBD procedural documentation export.</p></div>
+<div class="feat"><h4>Wat is Archon OS?</h4><p>Archon OS is een self-hosted, MIT-gelicentieerd Agentic Operating System op basis van Hermes Agent. Het organiseert 70 gespecialiseerde AI-rollen in 8 domeinen met budgetreserveringen vóór uitvoering, lokale Zero-Egress-LLM-routing, WebAuthn-Passkey-goedkeuringen en een met SHA-256 hash-geketend auditlog.</p></div>
+<div class="feat"><h4>Hoe voorkomt het lekken van gevoelige gegevens?</h4><p>OmniRoute handhaaft een fail-closed Zero-Egress-beleid: financiën, contracten, CRM, HR en AVG-workloads draaien uitsluitend op lokale modellen (Ollama of LM Studio) binnen een intern Docker-netwerk zonder internetroute.</p></div>
+<div class="feat"><h4>Hoe worden tokenkosten &amp; risicovolle acties beheerst?</h4><p>Een centrale PolicyEngine valideert rechten vóór verzending, bevoorrechte tools vereisen ondertekende tijdsgebonden warrants, BudgetBank reserveert middelen atomair en goedkeuringen met hoog risico vereisen WebAuthn-Passkey-handtekeningen.</p></div>
+<div class="feat"><h4>Is het klaar voor AVG &amp; EU AI Act?</h4><p>Ja. Gevoelige bedrijfsworkloads blijven met fail-closed Zero-Egress op jouw server, ondersteund door een EU AI Act-risicoregister, manipulatiebestendige SHA-256-auditlogs en export van GoBD-procesdocumentatie met één klik.</p></div>
 </div>
 
 <h3 class="sec">Eerlijke status</h3>
-<p class="status">Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome.</p>
+<p class="status">Pre-1.0. Interfaces en config-sleutels veranderen tussen releases. De ERP/CRM-module is alpha, de handhaving van multi-user-rollen wordt nog versterkt en de output van specialisten is beslissingsondersteuning, geen erkend advies. Issues en PR's zijn welkom.</p>
 
-<h3 class="sec">Documentation (11 Languages)</h3>
+<h3 class="sec">Documentatie (11 talen)</h3>
 <table>
-<tr><th>Document</th><th>Languages</th><th>Scope</th></tr>
-<tr><td><strong>System Manual (97 pp.)</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ZH.pdf">ZH</a></td><td>Installation, chapters 1–19, five use cases, encryption/GDPR overview, A–Z glossary</td></tr>
-<tr><td><strong>Complete Feature List</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ZH.pdf">ZH</a></td><td>Full module catalog, demo mode, first-run wizard, FinOps, security</td></tr>
-<tr><td><strong>AI Boardroom: 55 Frameworks</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ZH.pdf">ZH</a></td><td>All 55 decision-engine methodologies, indexed</td></tr>
-<tr><td><strong>Roadmap & Milestones</strong></td><td><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/system/ROADMAP_2026.md">EN</a></td><td>Complete milestone plan including governance, prompt compression & approval gates</td></tr>
+<tr><th>Document</th><th>Talen</th><th>Reikwijdte</th></tr>
+<tr><td><strong>Systeemhandboek (97 pp.)</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ZH.pdf">ZH</a></td><td>Installatie, hoofdstukken 1–19, vijf use cases, versleuteling/AVG, glossarium A–Z</td></tr>
+<tr><td><strong>Volledige functielijst</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ZH.pdf">ZH</a></td><td>Volledige modulecatalogus, demomodus, first-run-wizard, FinOps, beveiliging</td></tr>
+<tr><td><strong>AI Boardroom: 55 frameworks</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf">EN</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf">DE</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ES.pdf">ES</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_FR.pdf">FR</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_IT.pdf">IT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_JA.pdf">JA</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.pdf">KO</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_NL.pdf">NL</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_PT.pdf">PT</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf">RU</a> · <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ZH.pdf">ZH</a></td><td>Alle 55 methodieken van de decision engine, geïndexeerd</td></tr>
+<tr><td><strong>Roadmap &amp; mijlpalen</strong></td><td><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/system/ROADMAP_2026.md">EN</a></td><td>Volledig mijlpalenplan incl. governance, promptcompressie &amp; goedkeuringspoorten</td></tr>
 </table>
 </div>
 
+<div class="bottom-bg-blueprint" aria-hidden="true"><picture><source srcset="../archon_blueprint_bottom_dark.png" media="(prefers-color-scheme: dark)"><img src="../archon_blueprint_bottom_light.png" class="asymmetric-blueprint" alt="" loading="lazy"></picture></div>
 <footer><div class="wrap">
-<span>Built on <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> by Nous Research</span>
-<a href="https://github.com/michaelbeatman/ARCHON-OS">Repository</a>
-<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">MIT License</a>
-<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/DISCLAIMER.md">Disclaimer</a>
-<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md">Third-party licenses</a>
+<span>Gebouwd op <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> van Nous Research</span>
+<a href="https://github.com/michaelbeatman/ARCHON-OS">Broncode-repository</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">MIT-licentie</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/DISCLAIMER.md">Disclaimer &amp; voorwaarden</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md">Licenties van derden</a>
 </div></footer>
 <script>
 document.querySelectorAll('pre').forEach(function(pre){
@@ -370,11 +384,11 @@ document.querySelectorAll('pre').forEach(function(pre){
   var btn=document.createElement('button');
   btn.type='button';
   btn.className='copy-btn';
-  btn.textContent='Copy';
+  btn.textContent='Kopiëren';
   btn.addEventListener('click',function(){
     navigator.clipboard.writeText(pre.textContent).then(function(){
-      btn.textContent='Copied';
-      setTimeout(function(){btn.textContent='Copy';},1500);
+      btn.textContent='Gekopieerd';
+      setTimeout(function(){btn.textContent='Kopiëren';},1500);
     });
   });
   wrap.appendChild(btn);

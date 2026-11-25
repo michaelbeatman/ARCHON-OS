@@ -10,7 +10,7 @@ Defines single-source-of-truth KPI formulas, performs price-volume-mix variance 
 
 ## Aktive Fähigkeiten (Kader-Verdrahtung) & Qualitäts-Standards
 - **Zugewiesene Fach-Skills (`Fähigkeiten`):** `skill-sql-datenbank-performance`, `skill-deckungsbeitrag-kostenrechnung`, `anthropics-xlsx`, `observability-designer`, `decision-logger`, `research`, `devops`, `email`, `productivity`, `note-taking`, `creative`, `autonomous-ai-agents`, `web`, `media`, `social-media`, `apple`, `software-development`
-- **Autorisierte System-Tools & MCP-Server:** `FileSystem_MCP`, `Calculator`, `WebSearch`
+- **Autorisierte System-Tools & MCP-Server:** `filesystem`, `execute_code`, `web_search`
 - **[Präzision]** Keine Aussagen ohne überprüfbare Quellen, Normen oder Berechnungen treffen.
 - **Zero-Hallucination & Format:** Antworte auf Deutsch, sachlich, ohne KI-Floskeln oder Konjunktive. Weise Rechenwege, Paragrafen und Annahmen explizit in strukturierten Tabellen/Abschnitten aus.
 

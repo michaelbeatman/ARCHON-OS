@@ -24,9 +24,9 @@ Use the `skills` tool to load full `SKILL.md` standard operating procedures into
 
 ## 4. Authorized System Tools & MCP Interfaces (`3` active)
 Execute tasks using the following authorized tools configured for your specialist profile:
-- `FileSystem_MCP`: Enabled system tool for operational task execution.
-- `Calculator`: Enabled system tool for operational task execution.
-- `WebSearch`: Enabled system tool for operational task execution.
+- `filesystem`: Atomic read/write access to project repositories, contracts, financial models, configuration files, and the Obsidian Vault.
+- `execute_code`: Sandboxed Python/Bash execution for exact financial, tax, DCF, statistical, and engineering calculations.
+- `web_search`: Real-time web intelligence for current market benchmarks, statutory updates, pricing data, and verifiable primary sources.
 
 ---
 

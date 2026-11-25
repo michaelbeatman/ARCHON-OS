@@ -219,6 +219,172 @@ Snippet, gemeinsame Helper (`_run`, `_golden`, `_assert_golden`, `_negativprobe`
 
 ---
 
+## 6c. B0b — Pflichtmaessiger zweiter Blick (`INVARIANTS §4.6`) und seine Folge
+
+Eine **frische, unabhaengige Instanz** hat `69936e5d` reviewt (rein lesend, kein
+Shell, kein Write) und einen **schwerwiegenden echten Bug** gefunden. Damit hat
+sich `§4.6` erneut bestaetigt: *„Dieses Repo hat jeden kritischen Fund durch eine
+unabhaengige Instanz gefunden, nie durch den Autor des Fixes."*
+
+**Fund:** `_golden()` lieferte `{k: out.get(k) for k in expected}` — also die
+**Ist-Werte** statt der deklarierten **Soll-Werte**. `_assert_golden` wurde damit
+zur `X == X`-Tautologie; alle 8 positiven Golden-Assertions waren
+**Theater-Gates** nach `§4.5`. „17 Tests gruen" war im Kern ein Artefakt. Die
+Negativproben prueften nur den Helper, nie die deklarierten Werte; ein fehlendes
+Feld (`out.get` → `None != bogus`) waere ebenfalls gruen geblieben.
+
+**Behoben (B0b):**
+- `_golden` liefert jetzt `expected` (SOLL) und assertiert zusaetzlich
+  `set(expected).issubset(out)` → ein verschwundenes Feld wird erkannt.
+- `_negativprobe` assertiert `field in out` (schliesst die `None`-Luecke).
+- **Meta-Test** `test_meta_golden_layer_can_actually_fail`: beweist, dass
+  `_assert_golden` rot werden kann und `_golden` SOLL liefert. Damit kann der
+  Helper nicht unbemerkt zur Tautologie regressieren.
+- Wirksamkeits-Gegenprobe (ausgefuehrt): Mutation von `content` im echten Output
+  → `AssertionError`; Mutation von `agent_id`/`model`/`task_id` im
+  Dispatch-Payload → jeweils `AssertionError`.
+
+**Nachgezogene Lücken** (Review-Auftraege 3–4, 14 neue Tests, **32 gesamt**):
+- **Querschnitt:** Dispatch-Payload (`agent_id`, `agent_name`, `role`, `model`,
+  `reasoning_level`, `task_id`, `prompt`, `system_prompt`) per `await_args_list`
+  charakterisiert. `_run(..., capture=...)` exponiert die Mocks.
+- **C4 (groesste Luecke, ~190 Z.):** Profil-Matching, `system_prompt`/`model`/`role`
+  aus Profil, `{{item}}`-Substitution, `expected_output`, `allowed_tools`,
+  `forbidden_actions`, `map_item`, Upstream-Trunkierung `[:4000]`, `voice.md`.
+- **C1:** Rueckgabe-Vertrag (unveraendert, kein Merge), `set(out) == set(return)`.
+- **C2:** `pres`-Merge + Kanban `in_progress → done` inkl. `event_kind`/`block_kind`.
+- **C3:** `generate_video_clip_matrix`-Call-Args + Upstream-Text-Merge.
+- **C5:** `TRAJECTORY_TOKEN_CAP` + `_blocked_node_result`-Shape; EUR-Cap.
+- **C6:** `reserve_hop`/`TRAJECTORY_HOP_CAP` (ToolRuntime nicht gerufen),
+  Followup-Status-Fehler.
+- **C7:** **Frontier-Eskalation** (`:1619-1653`) — vorher 0 Tests.
+- **C8:** `else`/`while`-Revisionsschleife (`:1677-1730`) — lief vorher nie.
+- **C9:** `deliverable_path` + Datei-Write, mit `PROJEKTE_DIR`-Isolation.
+- **C10:** Erfolgs-Kanban-Final + alle 11 Pflicht-Return-Felder.
+- **Isolations-Korrektur:** `test_c8` hatte `channel="linkedin"` → der
+  Deliverable-Block schrieb **real** in `PROJEKTE_DIR`; jetzt auf `tmp_path`.
+
+**Governance-Befund des Reviewers:** `INVARIANTS.md` ist im Worktree **nicht**
+vorhanden (im Hauptbaum `?? audit_reports/INVARIANTS.md`, also untracked und
+nicht Teil von `ee18373a`). Alle Zitate stammen aus dem Handoff/dem Dossier.
+Die Datei wird bewusst **nicht** in den Worktree kopiert (Tagesstand des Nutzers,
+Regel #9). Die angewandten Regeln sind ueber das Handoff belegt.
+
+---
+
+## 6d. S-Test-Impact fuer D1 (zweiter Agent, very thorough)
+
+**Korrektur des Dossiers:** Der Brech-Mechanismus ist **nicht** `inspect.getsource`
+(0 Treffer auf `workflow_dag_runner`), sondern `"..." in src` auf
+`Path(...).read_text()` der **ganzen** Datei plus ein `ast`-Import-Scan.
+
+- **14** Ganzdatei-Scanner auf `backend/workflow_dag_runner.py` in 13 Dateien.
+- **13 bleiben gruen**: alle gesuchten Strings liegen in der **Engine**
+  (< `:1219` oder > `:1811`) oder sind Top-Level-Imports (`:36`, `:72`, `:436`,
+  `:1038`) — diese Bereiche werden beim Facade-Split nicht angefasst.
+- **Genau 1 bricht:** `tests/test_reaudit_stage9.py:54-58`
+  (`test_d12_dag_cost_not_zero_on_error`) — sucht `_cost_usd = None` (`:1755`),
+  `"cost_unverified": _cost_unverified` (`:1789`),
+  `"Kostenberechnung fehlgeschlagen"` (`:1775`), alle im **Tail** der Facade.
+- **Das eigentliche Risiko sind 7 `patch("backend.workflow_dag_runner._update_kanban_task_status")`-Punkte**
+  (`test_d1_executor_characterization.py`, `test_stage1_stage3_hardening_and_bus.py:363/:389/:432/:753`,
+  `test_workflow_dag_e2e.py:90`) plus `patch(..._execute_research_dag_node)`.
+  Binden neue Module diese Namen zur **Importzeit**, greifen alle Patches ins Leere.
+
+**Gewaehlte Strategie (S3 + S5-A, 0 gebrochene S-Tests, 0 Testaenderungen):**
+1. **S5-A:** Den ~37-Zeilen-Tail `:1754-1790` (Kostenberechnung + `out`-
+   Normalisierung) **in `workflow_dag_runner.py` belassen**. Damit bleiben die
+   drei D12-Marker physisch am Ort, `test_reaudit_stage9.py` gruen, und die
+   Rest-Facade hat nur 1 `try/except` → **CC < 20 erreichbar**. Keine G7-
+   Umstellung noetig (die Alternative S5-B waere regelkonform, aber unnoetig).
+2. **S3 Dependency-Injection:** Extrahierte Cluster erhalten `_update_kanban_task_status`
+   und den Dispatcher als **Callables zur Aufrufzeit** von der Facade, statt
+   Modul-Level-Rueckimports. Kein `workflow_dag_runner ↔ workflow_nodes`-Zyklus,
+   alle Patch-Punkte bleiben wirksam. Der Dispatch wird ohnehin schon zur
+   Laufzeit ueber `core_dispatcher.dispatch_to_omniroute_or_container` aufgeloest
+   (`:1214-1215`) — passt also zum bestehenden Muster.
+3. **S4:** Engine-Bereich und `_execute_research_dag_node` (`:~1100`, haelt
+   `test_p2_content_batch_d.py:237`) bleiben unangetastet.
+4. **Re-Export `X as X`** fuer alle Patch-/Import-Ziele am alten Ort.
+5. `test_unbound_calls.py` parst nur `main.py` → gehoert zu **D2**, nicht D1;
+   behalten, aber nicht als D1-Gate zaehlen.
+
+**Fazit:** Das im Dossier befoerchtete Massensterben der S-Tests tritt bei D1
+**nicht** ein. Risiko = 7 Patch-Punkte + 1 Tail-Test, beide durch S3/S5-A
+abgedeckt.
+
+---
+
+## 6e. Verifizierte Kartierung D2 / D3 / D4 (dritter Agent)
+
+**Korrekturen gegenueber Dossier/Handoff (vor jedem Split neu messen!):**
+
+| Angabe | Dossier/Handoff | Verifiziert |
+|---|---|---|
+| `main.py` | 2919 / 3638 Z. | **3418** (`Measure-Object -Line` zaehlt nur nicht-leere Zeilen!) |
+| `operations_api.py` | 3829 / 4511 Z. | **4226** |
+| `hermes_telegram_adapter.py` | 10290 Z. | **11232** |
+| `include_router` | 75, „je Router try/except" | 75 ✓, aber **nur 32/75** in try/except (31 appends); 43 nackt |
+| `_get_ops_deps()` | „10 Aufrufstellen" | **8** (alle in `operations_org.py`) |
+| `gateway.py` | „13 fruehere Stellen" | **12** `get_provider`-Stellen |
+| `register(ctx)` | „8 Callables" | **7** callable Keywords, 17 Keywords gesamt |
+| `_apply_yaml_config` | „Methode" | **Modul-Level-Funktion** (`:11083`) |
+| Patch-Punkt `_get_kanban_connection` | `test_fix_w2_c_governance_roles.py:114` | **`:135`** |
+
+**D2-Kernbefund:** `archon/core/provider_registry.py:65` `register()` wird
+**nirgends im Repo aufgerufen** → der Container bleibt leer, `get_provider("app_main")`
+liefert immer das `main`-Modul. Der Shim ist derzeit reine Indirektion **ohne**
+Entkopplungseffekt. **90** direkte `main`-Imports in `archon/**`+`backend/**`
+(85 `import main as app_main` in 23 Dateien + 5 anderer Form: `mcp_gateway.py:65`,
+`operations_sysops.py:312/347/377`, `autonomous_standup.py:91`), `backend/**` hat
+0 `import main as app_main`. Bereits umgestellt: 21 Stellen (12 + 9).
+
+**D2-Contracts (aktuelle Zeilen):** `_ROUTER_LOAD_ERRORS :600` (31 appends),
+`_assert_router_health :3237-3263`, `_rbac_configure :2928` vor erstem Router
+`:2942`, `_FAIL_FAST_HOOKS :622-628` (5 Namen) + raise `:791-793`,
+`_STARTUP_HOOKS.insert(0, …)` **5** Stellen `:3266/:3314/:3412/:3415/:3418`
+(Ausfuehrungsreihenfolge = umgekehrte Dateireihenfolge),
+`_SHUTDOWN_HOOKS reversed() :798`, `app :823`, `auth_service :541`,
+`core_dispatcher :42`. 75 includes `:1437 … :3230`.
+
+**Die 5 D2-Characterization-Luecken sind alle weiterhin offen:**
+① `/livez` liest nur `check_loop_liveness()`/`watchdog_liveness()`, **kein**
+Bezug auf `_FAIL_FAST_HOOKS`/`_AUDIT_COMPROMISED` (letzteres haengt an `/readyz`
+`:1362-1363`). ② 0 Treffer fuer `_SHUTDOWN_HOOKS`/`reversed(`/Shutdown-Timeout.
+③ 0 Treffer fuer `_N8N_STARTUP_STATUS`. ④ nur `is_configured()` +
+Einzel-Source-Assertion, keine Reihenfolge der 75. ⑤ 0 Treffer fuer
+`HealingAttemptPayload`/`hitl_apply_patch`.
+
+**D3:** `_get_ops_deps()` = positionales 6-Tupel
+(`operations_org.py:81`: `_load_profiles_map, _get_fallback_avatar,
+_get_kanban_connection, PROFILES_FILE, WORKSPACE_DIR, _PROFILES_MAP_CACHE`),
+8 Aufrufstellen `:42/:93/:180/:222/:449/:542/:579/:853` — `:579` liest
+positional `[3]`/`[5]`. `router` `:80-84`, `_get_kanban_connection :189`,
+`_load_kanban_meta :394`, `_execute_kanban_task_async :1478`,
+`update_task_status :2198`. Kritischer Patch-Punkt
+`test_fix_w2_c_governance_roles.py:135`.
+
+**D4:** `register(ctx) :11212-11232`, Mount `docker-compose.yml:405`
+(`./scripts/patches/hermes_telegram_adapter.py:/opt/hermes/plugins/platforms/telegram/adapter.py:ro`).
+Widerspruechliche Digests: `docker-compose.yml:374/437` =
+`sha256:276d4468…` (mit Mount), `docker-compose.hermes.yml:32/75` =
+`sha256:e6d81ae5…` (ohne Tag, ohne Mount). 8 Rang-F-Bloecke,
+`_handle_callback_query :6873`. `test_telegram_gate_meldung.py` parst per `ast`
+ausschliesslich **Top-Level-Knoten** (`GATE_OK_TEXT :687`, `GATE_REJECT_TEXT :688`,
+`gate_decision_answer :691`) → ein Split **muss** diese drei als Re-Export in
+`adapter.py` erhalten. `gateway.*`/`hermes_cli.*` nur im Image.
+
+> **S4-Bewertung (vorlaeufig, regelkonform zu eskalieren):** Der produktive Mount
+> `:405` bindet **genau eine** Datei. Ein Split nach `telegram/*.py` wuerde ohne
+> Compose-Aenderung den Adapter im Container brechen; ein Compose-Eingriff
+> beruehrt laufende Container und die widerspruechlichen Digests. Handoff:
+> „Produktiv-Telegram unverändert", „Mount-Pfad :405 unverändert", „kein Push
+> ohne Freigabe". → S4 wird als **DELEGATED** dokumentiert (Grund + Empfehlung),
+> nicht still ausgefuehrt. Vgl. `§4`: „Ausserhalb Ownership = dokumentieren,
+> nicht aendern".
+
+---
+
 ## 7. Was diese Session NICHT getan hat
 
 Kein `main.py`-Split, kein `workflow_dag_runner.py`-Edit, kein Test geschrieben/geändert,

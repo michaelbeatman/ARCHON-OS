@@ -31,11 +31,11 @@ import time
 from contextlib import contextmanager
 from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional, Tuple
 
-logger = logging.getLogger("archon.workflow_dag")
-
 # D16/M4: zentrale Fehler-Zaehlung ueber die echte API in trace_context
 # (delegiert an tracer.note_local_trace_error). Kein lokaler Fallback mehr.
 from backend.trace_context import note_local_trace_error
+
+logger = logging.getLogger("archon.workflow_dag")
 
 
 async def _otel_start(name: str, run_id: str) -> Optional[str]:
@@ -244,7 +244,9 @@ def _finalize_run_sync(
                 pass
         try:
             from backend.flightlog_backtester import (
-                detect_silent_failures, mirror_flight_event_to_trace, record_flight_event,
+                detect_silent_failures,
+                mirror_flight_event_to_trace,
+                record_flight_event,
             )
             record_flight_event(
                 run_id=rid, agent_id=str(wf_id or "workflow_engine"),
@@ -1216,8 +1218,12 @@ async def _dispatch_with_node_budget(
 
 async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, Any]) -> Dict[str, Any]:
     """Echter Standard-Executor fuer DAG-Knoten: loest Agenten-Profil auf, reicht
-    Upstream-Outputs weiter, ruft core_dispatcher auf und synchronisiert Kanban."""
-    import core_dispatcher
+    Upstream-Outputs weiter, ruft core_dispatcher auf und synchronisiert Kanban.
+
+    Der Dispatch laeuft ueber _dispatch_with_node_budget (dort wird
+    core_dispatcher bei Bedarf importiert); ein zweiter Import hier war redundant
+    und wurde als vorbestehender F401 entfernt.
+    """
     from backend.agent_aliases import resolve_agent_id
 
     raw_agent = str(node.get("agent_id") or node.get("branch") or "default").strip()

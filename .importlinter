@@ -1,0 +1,63 @@
+# S1 (God-Object-Zerlegung) — Import-Layer-Regel D09/H-09-2.
+#
+# Korrektur gegenueber der Vorgaenger-Config:
+#   import-linter 2.17 kennt `root_packages` (Plural). `archon` und `backend`
+#   sind ZWEI getrennte Top-Level-Pakete; `root_package = archon` (Singular)
+#   machte `source_modules = backend` unauffindbar -> exit 1 /
+#   "No matches for ignored import". Siehe ANALYSIS_GOD_OBJECTS.md §1.3.
+#   Beide Pakete sind jetzt intern, daher include_external_packages = False.
+
+[importlinter]
+root_packages =
+    archon
+    backend
+include_external_packages = False
+
+[importlinter:contract:backend-no-router-imports]
+name = backend darf archon.routers nicht importieren (Layergrenze D09/H-09-2)
+type = forbidden
+source_modules =
+    backend
+forbidden_modules =
+    archon.routers
+# Die Regel betrifft DIREKTE Importe (Wortlaut: "backend darf archon.routers
+# nicht importieren"). import-linter prueft standardmaessig transitiv; der
+# transitive Pfad backend.operations_api -> archon.core.delegation ->
+# archon.core.orchestration -> archon.routers.decisions (l.1432) ist eine
+# archon-interne Core->Router-Verletzung und damit ein EIGENER S1-Neubefund
+# (Tilgung S2/S3 mit eigener Regel), kein backend->routers-Import.
+# Bewusst gesetzt und im Schritt-Report begruendet - kein stilles Aufweichen.
+# Das harte Ratchet-Gate bleibt tests/test_import_layer_contracts.py.
+allow_indirect_imports = true
+
+# Dokumentierte Altschuld (S1-Bestandsaufnahme, 25.11.2026):
+#   37 Importzeilen / 23 Modul-Paare / 8 backend-Module.
+#   Tilgung: S3 (operations_api.py) + eigene Schritte fuer die 7 weiteren
+#   Module. NEUE Importe backend -> archon.routers sind ab sofort ein Verstoss
+#   (Ratchet). tests/test_import_layer_contracts.py liest diese Datei als SSOT
+#   und enforced sie in CI (ci.yml:305 / :555); import-linter selbst ist nicht
+#   in requirements-ci.lock.txt und bleibt daher ein lokales Tool.
+ignore_imports =
+    backend.agent_router -> archon.routers.autonomy_settings
+    backend.llm_kernel -> archon.routers.llm_providers
+    backend.mcp_gateway -> archon.routers.context_meter
+    backend.operations_api -> archon.routers._rbac
+    backend.operations_api -> archon.routers.auth
+    backend.operations_api -> archon.routers.operations_org
+    backend.operations_api -> archon.routers.operations_dag
+    backend.operations_api -> archon.routers.operations_prompts
+    backend.operations_api -> archon.routers.operations_receipts
+    backend.operations_api -> archon.routers.operations_sysops
+    backend.operations_api -> archon.routers.operations_dunning
+    backend.operations_api -> archon.routers.operations_finetuning
+    backend.operations_api -> archon.routers.operations_approvals
+    backend.operations_api -> archon.routers.operations_keys
+    backend.operations_api -> archon.routers.operations_emails
+    backend.operations_api -> archon.routers.operations_security
+    backend.operations_api -> archon.routers.operations_bot_screen
+    backend.operations_api -> archon.routers.operations_autonomy
+    backend.operations_api -> archon.routers.operations_pbd
+    backend.war_room_simulator -> archon.routers.decisions
+    backend.workflow_dag_runner -> archon.routers.decisions
+    backend.workflow_node_plugins -> archon.routers.chat
+    backend.workflow_scheduler -> archon.routers.decisions

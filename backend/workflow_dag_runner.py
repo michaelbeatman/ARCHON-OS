@@ -1386,79 +1386,35 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     _esc_out = _schema_outcome.esc_out
     _repair_model_used = _schema_outcome.repair_model_used
 
-    # Self-Critique / Anti-AI-Slop-Revisionsschleife fuer Content- & Quality-Gate-Knoten
-    # Wichtig: Bei aktivem output_schema niemals validiertes JSON durch Prosa-Revision ueberschreiben.
-    quality_report: Optional[Dict[str, Any]] = None
-    revisions_used = 0
-    if not is_error and content and _is_content_node:
-        try:
-            from backend.content_machine import evaluate_asset_quality
-            if isinstance(output_schema, dict) and isinstance(parsed_output, dict):
-                _q_hook = str(parsed_output.get("hook") or parsed_output.get("title") or "")
-                _q_body = str(parsed_output.get("body") or parsed_output.get("content") or parsed_output.get("summary") or content)
-                _q_cta = str(parsed_output.get("cta") or "")
-                quality_report = evaluate_asset_quality({
-                    "channel": _channel_hint or "linkedin",
-                    "hook": _q_hook,
-                    "body": _q_body,
-                    "cta": _q_cta,
-                })
-            else:
-                max_rev = max(0, min(2, int(node.get("max_revisions") if node.get("max_revisions") is not None else 1)))  # type: ignore[arg-type]
-                min_q = int(node.get("min_quality_score") or 75)
-                lines_c = [ln.strip() for ln in content.splitlines() if ln.strip()]
-                quality_report = evaluate_asset_quality({
-                    "channel": _channel_hint or "linkedin",
-                    "hook": lines_c[0] if lines_c else "",
-                    "body": content,
-                    "cta": lines_c[-1] if len(lines_c) > 1 else "",
-                })
-                while (revisions_used < max_rev and not is_error
-                       and (not quality_report.get("passed") or int(quality_report.get("score", 0)) < min_q)):
-                    revisions_used += 1
-                    rev_issues = "; ".join(quality_report.get("issues") or [])
-                    rev_sugg = "; ".join(quality_report.get("suggestions") or [])
-                    rev_prompt = (
-                        f"{full_prompt}\n\n"
-                        f"[SELBST-KRITIK / ANTI-AI-SLOP-PRUEFUNG (Revision {revisions_used}/{max_rev})]\n"
-                        f"Dein bisheriger Entwurf erreichte nur Quality-Score {quality_report.get('score')}/100.\n"
-                        f"Befunde: {rev_issues}\n"
-                        f"Konkrete Korrektur-Aufgaben: {rev_sugg}\n\n"
-                        f"BISHERIGER ENTWURF:\n{content[:4500]}\n\n"
-                        "Ueberarbeite den Text direkt, konkret, faktenbasiert (mit Zahlen-Anker & klarem CTA) und komplett ohne KI-Floskeln."
-                    )
-                    rev_res, _rev_blocked = await _dispatch_with_node_budget(
-                        node, res, model,
-                        agent_id=agent_id,
-                        agent_name=agent_name,
-                        prompt=rev_prompt,
-                        role=role,
-                        system_prompt=eff_system_prompt,
-                        model=model,
-                        reasoning_level=reasoning_level,
-                        task_id=str(kanban_task_id or node.get("id") or ""),
-                        _phase="anti_slop_revision",
-                    )
-                    if _rev_blocked:
-                        is_error = True
-                        res["error"] = str(rev_res.get("error") or "NODE_TOKEN_BUDGET_EXCEEDED")
-                        break
-                    rev_content = str(rev_res.get("content") or "").strip()
-                    if rev_content and str(rev_res.get("status") or "success").lower() not in ("error", "failed", "blocked"):
-                        content = rev_content
-                        res["input_tokens"] = int(res.get("input_tokens") or 0) + int(rev_res.get("input_tokens") or 0)
-                        res["output_tokens"] = int(res.get("output_tokens") or 0) + int(rev_res.get("output_tokens") or 0)
-                        lines_c = [ln.strip() for ln in content.splitlines() if ln.strip()]
-                        quality_report = evaluate_asset_quality({
-                            "channel": _channel_hint or "linkedin",
-                            "hook": lines_c[0] if lines_c else "",
-                            "body": content,
-                            "cta": lines_c[-1] if len(lines_c) > 1 else "",
-                        })
-                    else:
-                        break
-        except Exception as _qexc:
-            logger.debug("[WorkflowDAG] Anti-Slop-Quality-Check uebersprungen: %s", _qexc)
+    # B6/S2: Cluster 8 (Self-Critique / Anti-AI-Slop) nach
+    # backend/workflow_nodes/quality.py extrahiert. Reine Delegation, keine
+    # Logikaenderung — der output_schema-Schutz bleibt ausdruecklich erhalten.
+    from backend.workflow_nodes.quality import run_quality_revisions
+
+    _quality_outcome = await run_quality_revisions(
+        node=node,
+        res=res,
+        content=content,
+        is_error=is_error,
+        output_schema=output_schema,
+        parsed_output=parsed_output,
+        channel_hint=_channel_hint,
+        is_content_node=_is_content_node,
+        model=model,
+        agent_id=agent_id,
+        agent_name=agent_name,
+        eff_system_prompt=eff_system_prompt,
+        role=role,
+        reasoning_level=reasoning_level,
+        kanban_task_id=kanban_task_id,
+        full_prompt=full_prompt,
+        dispatch_with_budget=_dispatch_with_node_budget,
+    )
+    content = _quality_outcome.content
+    res = _quality_outcome.res
+    is_error = _quality_outcome.is_error
+    quality_report = _quality_outcome.quality_report
+    revisions_used = _quality_outcome.revisions_used
 
     # Automatisches Deliverable-Export-Handling (Showroom / Obsidian 03_Endprodukte)
     deliverable_path = ""

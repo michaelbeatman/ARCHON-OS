@@ -58,8 +58,13 @@ async def _enforce_hitl_block(
     enforcement: Dict[str, Any] = {"decision_created": False, "task_blocked": False}
     ref_id = f"war-room:{int(time.time())}:{topic[:60]}"
     try:
-        from archon.routers.decisions import create_decision
+        # A1: zyklusfreie Injektion (permissions.set_decision_factory,
+        # main.py:2010) statt backend -> archon.routers Import.
+        from archon.core.permissions import get_decision_factory
 
+        create_decision = get_decision_factory()
+        if create_decision is None:
+            raise RuntimeError("Decision-Factory nicht registriert (HITL bleibt blockiert)")
         decision = await asyncio.to_thread(
             create_decision,
             typ="mission_freigabe",

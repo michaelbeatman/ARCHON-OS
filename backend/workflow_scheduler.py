@@ -1113,8 +1113,13 @@ def _create_hitl_decision(
     """Pragmatisch: legt fuer ein require_hitl-Event eine Freigabe-Decision an.
     Misslingt das, bleibt es trotzdem beim Status 'awaiting_hitl' protokolliert."""
     try:
-        from archon.routers.decisions import create_decision
+        # A1: bestehende Factory-Injektion statt backend -> archon.routers.
+        from archon.core.permissions import get_decision_factory
 
+        create_decision = get_decision_factory()
+        if create_decision is None:
+            logger.warning("[WorkflowScheduler] Decision-Factory nicht registriert (Status bleibt 'awaiting_hitl')")
+            return
         res = create_decision(
             typ="mission_freigabe",
             titel=f"HITL-Freigabe: {title or event_type}"[:180],

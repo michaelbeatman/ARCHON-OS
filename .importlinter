@@ -30,9 +30,13 @@ forbidden_modules =
 # Das harte Ratchet-Gate bleibt tests/test_import_layer_contracts.py.
 allow_indirect_imports = true
 
-# Dokumentierte Altschuld (S1-Bestandsaufnahme, 25.11.2026; nach F1a 35/21/6):
-#   35 Importzeilen / 21 Modul-Paare / 6 backend-Module.
+# Dokumentierte Altschuld (S1-Bestandsaufnahme; nach F1a + A1 = 32/18/3):
+#   32 Importzeilen / 18 Modul-Paare / 3 backend-Module.
 #   F1a getilgt: agent_router -> autonomy_settings, llm_kernel -> llm_providers.
+#   A1 getilgt: war_room_simulator / workflow_dag_runner / workflow_scheduler
+#   -> decisions (jetzt archon.core.permissions.get_decision_factory).
+#   Der transitive Pfad orchestration:1432 -> archon.routers.decisions ist
+#   damit ebenfalls aufgeloest.
 #   Tilgung: S3 (operations_api.py) + eigene Schritte fuer die 7 weiteren
 #   Module. NEUE Importe backend -> archon.routers sind ab sofort ein Verstoss
 #   (Ratchet). tests/test_import_layer_contracts.py liest diese Datei als SSOT
@@ -56,7 +60,4 @@ ignore_imports =
     backend.operations_api -> archon.routers.operations_bot_screen
     backend.operations_api -> archon.routers.operations_autonomy
     backend.operations_api -> archon.routers.operations_pbd
-    backend.war_room_simulator -> archon.routers.decisions
-    backend.workflow_dag_runner -> archon.routers.decisions
     backend.workflow_node_plugins -> archon.routers.chat
-    backend.workflow_scheduler -> archon.routers.decisions

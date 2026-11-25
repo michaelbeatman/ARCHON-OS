@@ -1032,7 +1032,13 @@ def _register_hitl_gate_decision(
     except Exception as exc:
         logger.debug(f"[WorkflowDAG] HITL-Decision-Dedupe-Check fehlgeschlagen: {exc}")
     try:
-        from archon.routers.decisions import create_decision
+        # A1: bestehende Factory-Injektion statt backend -> archon.routers.
+        from archon.core.permissions import get_decision_factory
+
+        create_decision = get_decision_factory()
+        if create_decision is None:
+            logger.debug("[WorkflowDAG] Decision-Factory nicht registriert — HITL-Gate bleibt ohne Decision-ID")
+            return None
         title = f"Workflow-Freigabe: {node.get('title') or node.get('id')} ({run_id})"
         upstream_preview = json.dumps(upstream, ensure_ascii=False)[:1500]
         deci = create_decision(

@@ -1429,7 +1429,11 @@ async def _run_synthesis_cascade(
             build_dossier = None
     if create_decision is None:
         try:
-            from archon.routers.decisions import create_decision as create_decision
+            # A1: Fallback ueber die bestehende zyklusfreie Factory-Injektion
+            # (archon.core.permissions, registriert in main.py:2010) statt
+            # archon.core -> archon.routers. Parameter-Injektion bleibt vorrangig.
+            from archon.core.permissions import get_decision_factory
+            create_decision = get_decision_factory()
         except Exception:
             create_decision = None
     if finalize_approval is None:

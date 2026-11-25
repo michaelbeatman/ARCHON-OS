@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archon OS — Self-hosted multi-agent workspace</title>
+<meta name="description" content="Self-hosted, MIT-licensed multi-agent workspace built on Hermes Agent: 70 specialist profiles, AI Boardroom Debattes across 55 frameworks, OmniRoute Kostenkontrolle, Zero-Egress local routing, SHA-256 audit log, Obsidian RAG.">
+<meta name="keywords" content="Archon OS, Hermes Agent, Multi-Agent Workspace, Self-Hosted AI, Local LLM, Ollama, AI Boardroom, Zero-Egress, EU AI Act, GoBD, Obsidian RAG, MCP Server, Open Source">
+<meta name="author" content="Michael Beatman">
+<link rel="canonical" href="https://michaelbeatman.github.io/ARCHON-OS/de/">
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/archon_logo.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Archon OS">
+<meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/">
+<meta property="og:title" content="Archon OS — Self-Hosted Multi-Agent Operating System">
+<meta property="og:description" content="Self-hosted multi-agent workspace built on Hermes Agent: 70 specialist profiles across 8 domains, 55-framework AI Boardroom, Zero-Egress local LLM routing, Obsidian RAG, and SHA-256 audit logs.">
+<meta property="og:image" content="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png">
+<meta property="og:image:alt" content="Archon OS Mission Control Dashboard">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Archon OS — Self-Hosted Multi-Agent Operating System">
+<meta name="twitter:description" content="Self-hosted multi-agent workspace built on Hermes Agent: 70 specialist profiles, 55-framework AI Boardroom, Zero-Egress local LLM routing, Obsidian RAG & SHA-256 audit logs.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Archon OS",
+  "applicationCategory": "DeveloperApplication, BusinessApplication",
+  "operatingSystem": "Linux, Windows, macOS (Docker)",
+  "softwareVersion": "0.5.7.8",
+  "license": "https://opensource.org/licenses/MIT",
+  "url": "https://michaelbeatman.github.io/ARCHON-OS/",
+  "codeRepository": "https://github.com/michaelbeatman/ARCHON-OS",
+  "image": "https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png",
+  "description": "Self-hosted, MIT-licensed multi-agent workspace built on Hermes Agent with 70 specialist profiles, 55-framework AI Boardroom Debattes, local LLM routing, Obsidian RAG, and SHA-256 audit logs.",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR"
+  }
+}
+</script>
+<style>
+:root{
+  --bg:#ffffff;
+  --bg-subtle:#f8fafc;
+  --fg:#0f172a;
+  --fg-muted:#64748b;
+  --fg-subtle:#94a3b8;
+  --card:#ffffff;
+  --card-border:#e2e8f0;
+  --line:#e2e8f0;
+  --accent:#06b6d4;
+  --accent-hover:#0891b2;
+  --accent-soft:rgba(6,182,212,0.12);
+  --accent-glow:rgba(6,182,212,0.35);
+  --success:#10b981;
+  --warning:#f59e0b;
+  --danger:#ef4444;
+  --code-bg:#0f172a;
+  --code-fg:#e2e8f0;
+  --space-1:0.25rem;
+  --space-2:0.5rem;
+  --space-3:0.75rem;
+  --space-4:1rem;
+  --space-5:1.25rem;
+  --space-6:1.5rem;
+  --space-8:2rem;
+  --space-10:2.5rem;
+  --space-12:3rem;
+  --space-16:4rem;
+  --radius-sm:6px;
+  --radius-md:10px;
+  --radius-lg:14px;
+  --radius-xl:20px;
+  --radius-full:9999px;
+  --shadow-xs:0 1px 2px rgba(15,23,42,0.04);
+  --shadow-sm:0 1px 3px rgba(15,23,42,0.06),0 1px 2px rgba(15,23,42,0.04);
+  --shadow-md:0 4px 6px -1px rgba(15,23,42,0.07),0 2px 4px -2px rgba(15,23,42,0.04);
+  --shadow-lg:0 10px 15px -3px rgba(15,23,42,0.08),0 4px 6px -4px rgba(15,23,42,0.04);
+  --shadow-xl:0 20px 25px -5px rgba(15,23,42,0.1),0 8px 10px -6px rgba(15,23,42,0.04);
+  --ease-out:cubic-bezier(0.16,1,0.3,1);
+  --ease-spring:cubic-bezier(0.34,1.56,0.64,1);
+  --duration-fast:120ms;
+  --duration-base:200ms;
+  --duration-slow:350ms;
+  --text-xs:0.7rem;
+  --text-sm:0.8125rem;
+  --text-base:0.9375rem;
+  --text-lg:1.0625rem;
+  --text-xl:1.25rem;
+  --text-2xl:1.5rem;
+  --text-3xl:2rem;
+  --text-4xl:2.5rem;
+  --text-5xl:3.5rem;
+  --font-sans:"Geist Variable","Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"Geist Mono Variable","Geist Mono",ui-monospace,SFMono-Regular,"Fira Code",monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0a0a0f;
+    --bg-subtle:#11131a;
+    --fg:#f8fafc;
+    --fg-muted:#94a3b8;
+    --fg-subtle:#64748b;
+    --card:#11131a;
+    --card-border:#1e293b;
+    --line:#1e293b;
+    --accent:#06b6d4;
+    --accent-hover:#22d3ee;
+    --accent-soft:rgba(6,182,212,0.15);
+    --accent-glow:rgba(6,182,212,0.45);
+    --code-bg:#020617;
+    --code-fg:#f1f5f9;
+    --shadow-xs:0 1px 2px rgba(0,0,0,0.3);
+    --shadow-sm:0 1px 3px rgba(0,0,0,0.4),0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md:0 4px 6px -1px rgba(0,0,0,0.4),0 2px 4px -2px rgba(0,0,0,0.3);
+    --shadow-lg:0 10px 15px -3px rgba(0,0,0,0.4),0 4px 6px -4px rgba(0,0,0,0.3);
+    --shadow-xl:0 20px 25px -5px rgba(0,0,0,0.5),0 8px 10px -6px rgba(0,0,0,0.3);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:var(--text-base)/1.65 var(--font-sans)}
+a{color:var(--accent);text-decoration:none;transition:color var(--duration-fast) var(--ease-out)}a:hover{color:var(--accent-hover)}
+.wrap{max-width:64rem;margin:0 auto;padding:0 var(--space-6)}
+header{border-bottom:1px solid var(--line);padding:var(--space-4) 0}
+header .wrap{display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap}
+header img{height:44px;width:auto;max-width:210px;display:block;object-fit:contain}
+header h1{font-size:var(--text-xl);font-weight:600;margin:0}
+header .tag{color:var(--fg-muted);font-size:var(--text-sm)}
+header nav{margin-left:auto;display:flex;gap:var(--space-5);font-size:var(--text-sm);flex-wrap:wrap}
+.hero{padding:var(--space-16) 0 var(--space-10)}
+.hero h2{font-size:var(--text-5xl);line-height:1.05;font-weight:700;margin:0 0 var(--space-4);max-width:56rem;letter-spacing:-0.02em}
+.hero p{font-size:var(--text-xl);color:var(--fg-muted);max-width:48rem;margin:0 0 var(--space-8);line-height:1.6}
+.btnrow{display:flex;gap:var(--space-3);flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-3) var(--space-6);border-radius:var(--radius-md);border:1px solid var(--line);font-weight:600;font-size:var(--text-sm);transition:all var(--duration-fast) var(--ease-out);background:var(--card)}
+.btn:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px var(--accent-glow)}
+.btn.primary:hover{background:var(--accent-hover);box-shadow:0 4px 16px var(--accent-glow)}
+@media (prefers-color-scheme:dark){.btn.primary{color:#0a0a0f}}
+.badges{display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-6)}
+.badge{font-size:var(--text-xs);color:var(--fg-muted);border:1px solid var(--line);border-radius:var(--radius-full);padding:var(--space-1) var(--space-3);background:var(--card);transition:all var(--duration-fast) var(--ease-out)}
+.badge:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+h3.sec{font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.12em;color:var(--fg-subtle);margin:var(--space-16) 0 var(--space-4);font-weight:600}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--space-4)}
+.shots figure{margin:0;border-radius:var(--radius-lg);overflow:hidden;background:var(--card);box-shadow:var(--shadow-sm);transition:transform var(--duration-base) var(--ease-out),box-shadow var(--duration-base) var(--ease-out),border-color var(--duration-base) var(--ease-out)}
+.shots figure:hover{transform:translateY(-4px);box-shadow:var(--shadow-xl);border-color:var(--accent)}
+.shots img{display:block;width:100%;height:auto}
+.shots figcaption{padding:var(--space-3) var(--space-4);font-size:var(--text-sm);color:var(--fg-muted);border-top:1px solid var(--line);background:var(--bg-subtle)}
+.feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--space-4)}
+.feat{border:1px solid var(--line);border-radius:var(--radius-lg);padding:var(--space-5) var(--space-6);background:var(--card);transition:all var(--duration-base) var(--ease-out);box-shadow:var(--shadow-xs)}
+.feat:hover{border-color:var(--accent);box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+.feat h4{margin:0 0 var(--space-2);font-size:var(--text-lg);font-weight:600}
+.feat p{margin:0;font-size:var(--text-base);color:var(--fg-muted);line-height:1.6}
+table{border-collapse:collapse;width:100%;font-size:var(--text-sm);background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-xs)}
+th,td{text-align:left;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--fg-subtle);font-weight:600;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.08em;background:var(--bg-subtle)}
+tr:last-child td{border-bottom:0}
+.pre-wrap{position:relative}
+pre{background:var(--code-bg);color:var(--code-fg);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-4) var(--space-10) var(--space-4) var(--space-4);overflow-x:auto;font-size:var(--text-sm);font-family:var(--font-mono);margin:var(--space-3) 0 var(--space-5);line-height:1.6;box-shadow:var(--shadow-sm)}
+.copy-btn{position:absolute;top:var(--space-2);right:var(--space-2);background:var(--card);color:var(--fg-muted);border:1px solid var(--line);border-radius:var(--radius-sm);padding:var(--space-1) var(--space-2);font-size:var(--text-xs);cursor:pointer;font-family:inherit;transition:all var(--duration-fast) var(--ease-out)}
+.copy-btn:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.install{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--space-4)}
+.install .card{border:1px solid var(--line);border-radius:var(--radius-lg);padding:var(--space-5) var(--space-6);background:var(--card);transition:all var(--duration-base) var(--ease-out);box-shadow:var(--shadow-xs)}
+.install .card:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
+.install h4{margin:0 0 var(--space-2);font-size:var(--text-lg);font-weight:600}
+.install p{margin:var(--space-2) 0 var(--space-4);font-size:var(--text-base);color:var(--fg-muted)}
+.status{border-left:4px solid var(--accent);padding:var(--space-2) 0 var(--space-2) var(--space-4);color:var(--fg-muted);max-width:52rem;background:var(--accent-soft);border-radius:0 var(--radius-md) var(--radius-md) 0}
+footer{margin-top:var(--space-16);border-top:1px solid var(--line);padding:var(--space-8) 0 var(--space-10);color:var(--fg-subtle);font-size:var(--text-sm)}
+footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:center;text-align:center}
+</style>
+
+<link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/">
+<link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/">
+<link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/">
+<link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/">
+<link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/">
+<link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/">
+<link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/">
+<link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/">
+<link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/">
+<link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/">
+<link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/">
+<link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/">
+</head>
+<body>
+<header><div class="wrap">
+<picture>
+  <source srcset="archon_logo_dark.png" media="(prefers-color-scheme: dark)">
+  <img src="archon_logo_light.png" alt="Archon OS logo">
+</picture>
+<div><h1>Archon OS</h1><span class="tag">Self-hosted multi-agent workspace &middot; MIT</span></div>
+<nav><a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a><a href="#install">Installation</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Security</a></nav>
+</div></header>
+
+<section class="hero"><div class="wrap">
+<h2>Ein Multi-Agenten-Workspace, der auf Ihrem eigenen Server läuft.</h2>
+<p>Archon OS erweitert Hermes Agent zu einem Business-Betriebssystem: 70 spezialisierte Agenten-Profile über 8 Domänen, strukturierte Debatten für Entscheidungen, pro-Modell Kostenkontrolle, lokales Routing und ein hash-gekettetes Audit-Log. Ihre Dokumente, Ihr Obsidian Vault, Ihre Modelle.</p>
+<div class="btnrow">
+<a class="btn primary" href="https://github.com/michaelbeatman/ARCHON-OS">Auf GitHub ansehen</a>
+<a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/README.de.md">Deutsches README</a>
+<a class="btn" href="#install">Quick Start</a>
+</div>
+<div class="badges"><span class="badge">v0.5.7.8 &middot; pre-1.0</span><span class="badge">MIT Lizenz</span><span class="badge">70 specialists &middot; 8 domains</span><span class="badge">55 Entscheidungs-Frameworks</span><span class="badge">Docker amd64 / arm64</span><span class="badge">11 Sprachen</span></div>
+</div></section>
+
+<div class="wrap">
+<h3 class="sec">Inside the cockpit</h3>
+<div class="shots">
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/mission_control.png" alt="Mission Control Dashboard"><figcaption>Mission Control — live telemetry, token sparkline &amp; HITL board</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/kader.png" alt="Agenten-Flotten-Übersicht"><figcaption>Agent fleet — specialist profiles, OmniRoute binding &amp; live feed</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/boardroom_debate.png" alt="AI Boardroom Debatte"><figcaption>AI Boardroom — multi-perspective debate with framework &amp; slots</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/workflows.png" alt="Visueller Multi-Agenten Workflow-Builder"><figcaption>Workflows — visueller Multi-Agenten DAG-Editor mit HITL-Gates</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/n8n_automation.png" alt="Integrierte n8n-Automation"><figcaption>n8n Automation — eingebettete Webhook-Pipelines in Operations</figcaption></figure>
+<figure><img loading="lazy" src="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/screenshots/org.png" alt="Organigramm und Hierarchie"><figcaption>Org hierarchy — interactive flowchart &amp; approval boundaries</figcaption></figure>
+</div>
+
+<h3 class="sec">Was es kann</h3>
+<div class="feats">
+<div class="feat"><h4>AI Boardroom</h4><p>Entscheidungen laufen als isolierte Multi-Perspektiven-Debatten mit Kritiker-Kreuzverhör und Synthese, über 55 Frameworks von OKR bis Pre-Mortem.</p></div>
+<div class="feat"><h4>OmniRoute Kostenkontrolle</h4><p>Eine zentrale Weiche leitet jede Anfrage an lokale (Ollama, LM Studio) oder Cloud-Modelle weiter. Budgets werden vor Dispatch geprüft und pro Modell und Task attribuiert.</p></div>
+<div class="feat"><h4>Zero-Egress-Routing</h4><p>Finanzen, Verträge und CRM-Arbeiten bleiben auf lokalen Modellen. Worker-Container laufen in einem internen Docker-Netzwerk ohne Internet-Route. Fail-closed, nicht offen.</p></div>
+<div class="feat"><h4>Manipulationssicheres Audit-Log</h4><p>Ein SHA-256 hash-gekettetes Log erfasst jeden Dispatch, inklusive Provider, Modell und Host. Einträge können nicht unbemerkt verändert werden.</p></div>
+<div class="feat"><h4>Obsidian Vault + RAG</h4><p>Ihr Vault ist die Wissensbasis. Dokumente und Scans werden per OCR eingelesen, in Markdown konvertiert und in AnythingLLM/Chroma indexiert — lokal.</p></div>
+<div class="feat"><h4>Kanban mit Freigabe-Gates</h4><p>Tasks durchlaufen ein Vier-Augen-Gate: genehmigen, ablehnen mit Begründung oder eskalieren bei Timeout. E-Mail-Triage, CRM und ERP-Suite (Alpha) oben drauf.</p></div>
+<div class="feat"><h4>24/7 liveness &amp; self-healing</h4><p>Ein asynchroner Event-Loop-Heartbeat speist <code>/livez</code> (503 bei Stillstand) und Docker Auto-Restart, unterstützt durch optionalen externen Dead-Man-Switch-Webhook.</p></div>
+<div class="feat"><h4>Hardened &amp; traced</h4><p>SSRF- und Prompt-Injection-Guards, verteilte Trace-IDs über Agenten-Aufrufe, gebatchtes UI-Rendering für große Prompt-Kataloge.</p></div>
+<div class="feat"><h4>Telegram, Email &amp; CRM</h4><p>Eingehende E-Mails und Telegram-Nachrichten in Kanban-Tasks triagieren, Kontakte synchronisieren, Angebote und Verträge in einem Workspace verwalten.</p></div>
+</div>
+
+<h3 class="sec">Die 70-Spezialisten-Flotte — 8 Domänen</h3>
+<table>
+<tr><th>Domäne</th><th>Anzahl</th><th>Fokus</th></tr>
+<tr><td>Strategy, Leadership &amp; Life</td><td>12</td><td>CEO copilot, OKRs, M&amp;A decisions, cross-domain synthesis and final QA</td></tr>
+<tr><td>Law, Tax, Finance &amp; Insurance</td><td>11</td><td>Verträge, DSGVO, IP, Holdings, Fremdfinanzierung — mit obligatorischem Rechts/Steuer-Warn-Dialog</td></tr>
+<tr><td>Sales, CRM, Marketing &amp; Growth</td><td>11</td><td>B2B-Outreach, Pricing, SEO/GEO, Paid Ads, Retention</td></tr>
+<tr><td>Creation, Media &amp; Content</td><td>8</td><td>Copywriting, Video-Skripte, Keynotes, UI/UX Brand Design</td></tr>
+<tr><td>Tech, Software, Data &amp; QA</td><td>8</td><td>Fullstack-Architektur, DevOps/CloudSec, DB-Tuning, Testautomatisierung</td></tr>
+<tr><td>Commerce, Procurement &amp; E-Commerce</td><td>7</td><td>Lieferkette, Bestandsprognose, Lieferantenverhandlung, Shopify</td></tr>
+<tr><td>Real Estate &amp; Construction</td><td>7</td><td>DCF-Bewertung, BauGB/Zonierung, ESG/KfW, Bauprojektmanagement</td></tr>
+<tr><td>Medicine, Chemistry, Science &amp; Engineering</td><td>6</td><td>Klinischer Berater, EU-MDR, REACH, Pharma — regulierte-Domänen-Guardrails</td></tr>
+</table>
+
+<h3 class="sec" id="install">Installation</h3>
+<div class="install">
+<div class="card"><h4>Full Stack</h4><p>Sechs Container: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker Socket Proxy.</p>
+<pre>git clone https://github.com/michaelbeatman/ARCHON-OS.git
+cd ARCHON-OS
+docker compose up -d</pre></div>
+<div class="card"><h4>Zero-Key Demo</h4><p>Read-only Showcase ohne API-Keys und Token-Kosten, für den ersten Blick.</p>
+<pre>ARCHON_DEMO_MODE=true \
+docker compose -f docker-compose.demo.yml up --build -d
+# open http://localhost:8501</pre></div>
+<div class="card"><h4>Interaktive Installer</h4><p><code>setup.ps1</code> für Windows, <code>install.sh</code> für Linux/macOS, oder ein strukturierter Onboarding-Prompt für deinen KI-Coding-Agent (<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md">INSTALL_AGENT.md</a>).</p></div>
+</div>
+
+<h3 class="sec">Ehrlicher Status</h3>
+<p class="status">Pre-1.0. Interfaces und Config-Keys ändern sich zwischen Releases. Das ERP/CRM-Modul ist Alpha, Multi-User-Rollen-Erzwingung wird noch gehärtet, und Spezialisten-Output ist Entscheidungsunterstützung, keine lizenzierte Beratung. Issues und PRs sind willkommen.</p>
+
+<h3 class="sec">Documentation (English &amp; Deutsch)</h3>
+<table>
+<tr><th>Dokument (DE / EN)</th><th>Umfang</th></tr>
+<tr><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf">User &amp; Company Manual (EN, 97 pp.)</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf">Systemhandbuch (DE, 97 S.)</a></td><td>Installationation, chapters 1–19, five use cases, encryption/GDPR overview, A–Z glossary</td></tr>
+<tr><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf">Complete Feature List (EN)</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026.pdf">Featureliste (DE)</a></td><td>Voller Modulkatalog, Demo-Modus, First-Run-Wizard, FinOps, Security</td></tr>
+<tr><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf">AI Boardroom: 55 Frameworks (EN)</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf">55 Frameworks (DE)</a></td><td>Alle 55 Decision-Engine-Methodologien, indexiert</td></tr>
+<tr><td><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/system/ROADMAP_2026.md">Roadmap & Meilensteine (M0–M112+)</a></td><td>Complete milestone plan including governance, prompt compression &amp; approval gates</td></tr>
+</table>
+</div>
+
+<footer><div class="wrap">
+<span>Aufgebaut auf <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> von Nous Research</span>
+<a href="https://github.com/michaelbeatman/ARCHON-OS">Repository</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">MIT Lizenz</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/DISCLAIMER.md">Disclaimer</a>
+<a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md">Drittanbieter-Lizenzen</a>
+</div></footer>
+<script>
+document.querySelectorAll('pre').forEach(function(pre){
+  var wrap=document.createElement('div');
+  wrap.className='pre-wrap';
+  pre.parentNode.insertBefore(wrap,pre);
+  wrap.appendChild(pre);
+  var btn=document.createElement('button');
+  btn.type='button';
+  btn.className='copy-btn';
+  btn.textContent='Copy';
+  btn.addEventListener('click',function(){
+    navigator.clipboard.writeText(pre.textContent).then(function(){
+      btn.textContent='Copied';
+      setTimeout(function(){btn.textContent='Copy';},1500);
+    });
+  });
+  wrap.appendChild(btn);
+});
+</script>
+</body>
+</html>

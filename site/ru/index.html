@@ -233,9 +233,9 @@ pre{background:var(--code-bg);color:var(--code-fg);border:1px solid var(--line);
 .status{border-left:4px solid var(--accent);padding:var(--space-2) 0 var(--space-2) var(--space-4);color:var(--fg-muted);max-width:52rem;background:var(--accent-soft);border-radius:0 var(--radius-md) var(--radius-md) 0}
 footer{margin-top:var(--space-16);border-top:1px solid var(--line);padding:var(--space-8) 0 var(--space-10);color:var(--fg-subtle);font-size:var(--text-sm)}
 footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:center;text-align:center}
-.hero-split{display:grid;grid-template-columns:1.25fr 0.75fr;gap:2.5rem;align-items:flex-start;position:relative}
-.hero-left{position:relative;z-index:2}
-.hero-right{position:relative;z-index:1;pointer-events:none;user-select:none}
+.hero-split{position:relative}
+.hero-left{position:relative;z-index:2;max-width:64%}
+.hero-right{position:absolute;top:-32px;right:-6%;width:46%;max-width:580px;z-index:1;pointer-events:none;user-select:none}
 .blueprint-stage{position:relative;width:100%;transform:translate3d(0,var(--parallax-y,0px),0);will-change:transform}
 .asymmetric-blueprint{width:100%;height:auto;display:block;opacity:0.22;filter:invert(1) contrast(1.08);animation:subtleFloat 14s ease-in-out infinite}
 .blueprint-overlay{position:absolute;inset:0;width:100%;height:100%;overflow:visible;color:#1a1a1a;opacity:0.42}
@@ -251,13 +251,9 @@ footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:cent
 @keyframes spinCW{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes spinCCW{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
 @keyframes pulleyLift{0%,100%{transform:translateY(0px)}50%{transform:translateY(-18px)}}
-@media (min-width:993px){
-  .hero-right{position:absolute;top:-40px;right:-6%;width:45%;max-width:650px}
-}
-@media (max-width:992px){
-  .hero-split{grid-template-columns:1fr;gap:1.5rem}
-  .hero-right{max-width:420px;margin:1rem auto 0 auto}
-  .asymmetric-blueprint{opacity:0.16}
+@media (max-width:767px){
+  .hero-left{max-width:100%}
+  .hero-right{top:0;right:-16%;width:72%;opacity:0.4}
 }
 @media (prefers-reduced-motion:reduce){
   .asymmetric-blueprint,.gear-cw,.gear-ccw,.gear-slow,.pulley-weight{animation:none}

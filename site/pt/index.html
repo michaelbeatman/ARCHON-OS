@@ -247,6 +247,7 @@ header,.hero,.wrap,footer{position:relative;z-index:1}
 @media (prefers-reduced-motion:reduce){
   .blueprint-stage{transform:none}
 }
+header nav{align-items:center}.lang-switch{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius-sm);padding:0.2rem 0.45rem;font-size:var(--text-sm);font-family:inherit;cursor:pointer;line-height:1.3}.lang-switch:hover,.lang-switch:focus{border-color:var(--accent);outline:none}
 </style>
 </head>
 <body>
@@ -254,7 +255,7 @@ header,.hero,.wrap,footer{position:relative;z-index:1}
 <header><div class="wrap">
 <img class="hand-avatar" src="../archon_hand.png" alt="Archon OS">
 <div><h1>Archon OS</h1><span class="tag">Agentic Operating System auto-hospedado &middot; MIT</span></div>
-<nav><a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a><a href="#install">Install</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Security</a></nav>
+<nav><a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a><a href="#install">Install</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Security</a><select class="lang-switch" aria-label="Language" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/" selected>PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select></nav>
 </div></header>
 
 <section class="hero"><div class="wrap">

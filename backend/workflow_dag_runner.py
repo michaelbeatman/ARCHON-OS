@@ -1321,122 +1321,29 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     content = str(res.get("content") or "").strip()
     is_error = status_raw in ("error", "failed", "blocked") or (not content and bool(res.get("error")))
 
-    # Multi-Turn Tool-Calling Loop ueber zentralen ToolRuntime-Chokepoint
-    tool_trace: List[Dict[str, Any]] = []
-    allowed_tool_set = {str(t).strip() for t in (node.get("allowed_tools") or []) if str(t).strip()}
-    if not is_error and content and allowed_tool_set:
-        max_turns = max(1, min(6, int(node.get("max_turns") or 3)))
-        turn_prompt = full_prompt
-        for _turn in range(max_turns):
-            _tc = None
-            try:
-                _stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip(), flags=re.IGNORECASE | re.DOTALL).strip()
-                if _stripped.startswith("{") and '"tool_call"' in _stripped:
-                    _parsed_tc = json.loads(_stripped)
-                    if isinstance(_parsed_tc, dict) and isinstance(_parsed_tc.get("tool_call"), dict):
-                        _tc = _parsed_tc["tool_call"]
-            except Exception:
-                _tc = None
-            if not _tc:
-                break
-            _tname = str(_tc.get("name") or "").strip()
-            _targs = _tc.get("args") if isinstance(_tc.get("args"), dict) else {}
-            _tid_node = str(node.get("_trajectory_id") or "")
-            _hop_ok = True
-            if _tid_node.startswith("traj-"):
-                try:
-                    from backend.trajectory_budget import reserve_hop
-                    _hop = await asyncio.to_thread(
-                        reserve_hop, _tid_node, str(node.get("agent_id") or agent_id),
-                        f"tool:{_tname}",
-                    )
-                    _hop_ok = bool(_hop.get("allowed", False))
-                except Exception:
-                    _hop_ok = False
-            if not _hop_ok:
-                _tres = {"status": "blocked", "error": "TRAJECTORY_HOP_CAP (tool call)"}
-            elif _tname not in allowed_tool_set:
-                _tres = {"status": "blocked", "error": f"Tool '{_tname}' ist in diesem DAG-Node nicht unter allowed_tools freigegeben."}
-            else:
-                from backend.tool_runtime import execute_agent_tool
-                _tres = await execute_agent_tool(
-                    tool_name=_tname,
-                    args=_targs,
-                    agent_id=agent_id,
-                    session_id=str(kanban_task_id or node.get("id") or "dag_session"),
-                    # R-B4: identischer Schluessel wie detect_silent_failures() am
-                    # Run-Abschluss (dort `rid`, hier ueber den Node mitgefuehrt).
-                    flightlog_run_id=str(node.get("_dag_run_id") or ""),
-                )
-                # D13/HIGH: der Chokepoint schreibt nur unter flightlog_run_id;
-                # der Dispatcher-Konsument liest current_trace_id(). Spiegeln
-                # ohne Event-Replay — der Primäreintrag bleibt unberührt.
-                try:
-                    from backend.flightlog_backtester import mirror_flight_event_to_trace
-                    from backend.tool_runtime import _result_token_estimate
-                    mirror_flight_event_to_trace(
-                        run_id=str(node.get("_dag_run_id") or ""),
-                        agent_id=agent_id, tool_name=_tname, args=_targs,
-                        tool_ok=str(_tres.get("status") or "").lower() == "success",
-                        tokens_used=_result_token_estimate(_tres),
-                        session_id=str(kanban_task_id or node.get("id") or "dag_session"),
-                    )
-                except Exception as _mirror_exc:
-                    logger.debug("[WorkflowDAG] Flightlog-Trace-Mirror fehlgeschlagen: %s", _mirror_exc)
-            tool_trace.append({"turn": _turn + 1, "tool": _tname, "args": _targs, "result": _tres})
-            _ckpt_rid = str(node.get("_dag_run_id") or "")
-            _ckpt_db = node.get("_dag_db_path")
-            if _ckpt_rid and node.get("id"):
-                try:
-                    with _connect(_ckpt_db) as conn:
-                        conn.execute(
-                            """
-                            INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
-                            VALUES (?, ?, ?, 'running', ?, ?)
-                            ON CONFLICT(run_id, node_id) DO UPDATE SET
-                                status='running', output_json=excluded.output_json, updated_at=excluded.updated_at
-                            """,
-                            (
-                                _ckpt_rid,
-                                str(node["id"]),
-                                "running_checkpoint",
-                                json.dumps({"partial_tool_trace": tool_trace, "turn": _turn + 1}, ensure_ascii=False),
-                                time.time(),
-                            ),
-                        )
-                        conn.commit()
-                except Exception as _cexc:
-                    logger.debug("[WorkflowDAG] Tool-Checkpoint fehlgeschlagen: %s", _cexc)
-            turn_prompt = (
-                f"{turn_prompt}\n\n[TOOL-AUFRUF #{_turn + 1}: {_tname}]\n"
-                f"Ergebnis:\n{json.dumps(_tres, ensure_ascii=False)[:3500]}\n\n"
-                "Nutze dieses Ergebnis. Wenn kein weiterer Tool-Aufruf noetig ist, liefere jetzt deine finale Antwort ohne tool_call-Wrapper."
-            )
-            _next_res, _next_blocked = await _dispatch_with_node_budget(
-                node, res, model,
-                agent_id=agent_id,
-                agent_name=agent_name,
-                prompt=turn_prompt,
-                role=role,
-                system_prompt=eff_system_prompt,
-                model=model,
-                reasoning_level=reasoning_level,
-                task_id=str(kanban_task_id or node.get("id") or ""),
-                _phase="tool_loop_followup",
-            )
-            if _next_blocked:
-                is_error = True
-                res["error"] = str(_next_res.get("error") or "NODE_TOKEN_BUDGET_EXCEEDED")
-                break
-            res["input_tokens"] = int(res.get("input_tokens") or 0) + int(_next_res.get("input_tokens") or 0)
-            res["output_tokens"] = int(res.get("output_tokens") or 0) + int(_next_res.get("output_tokens") or 0)
-            _next_status = str(_next_res.get("status") or "success").lower()
-            _next_content = str(_next_res.get("content") or "").strip()
-            if _next_status in ("error", "failed", "blocked") or not _next_content:
-                is_error = True
-                res["error"] = _next_res.get("error") or "Tool-Loop Folgeschritt fehlgeschlagen"
-                break
-            content = _next_content
+    # B4/S2: Cluster 6 (Multi-Turn Tool-Loop) nach
+    # backend/workflow_nodes/tool_loop.py extrahiert. Reine Delegation, keine
+    # Logikaenderung; Rueckgabe-Tupel haelt die Locals in der Facade.
+    # S3: _dispatch_with_node_budget und _connect werden zur AUFRUFZEIT als
+    # Callables uebergeben (kein Rueckimport, alle Patch-Punkte bleiben aktiv).
+    from backend.workflow_nodes.tool_loop import run_tool_loop
+
+    content, res, is_error, tool_trace = await run_tool_loop(
+        node=node,
+        res=res,
+        content=content,
+        is_error=is_error,
+        model=model,
+        agent_id=agent_id,
+        agent_name=agent_name,
+        eff_system_prompt=eff_system_prompt,
+        role=role,
+        reasoning_level=reasoning_level,
+        kanban_task_id=kanban_task_id,
+        full_prompt=full_prompt,
+        dispatch_with_budget=_dispatch_with_node_budget,
+        connect=_connect,
+    )
 
     # JSON/Schema-Contract-Validierung zwischen DAG-Nodes (inkl. 1 Repair-Retry)
     parsed_output: Optional[Any] = None

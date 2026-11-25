@@ -553,6 +553,7 @@ def start_background_watchdog():
         )
         daemon._mp_stop_event = stop_event
         daemon._process = proc
+        _write_watchdog_liveness(0, dead=False)
         proc.start()
         logger.info("[Watchdog] Supervisor-Prozess gestartet (pid=%s)", getattr(proc, "pid", "?"))
         return daemon
@@ -564,6 +565,7 @@ def start_background_watchdog():
             target=daemon.run_forever, daemon=True, name="ArchonWatchdogThread"
         )
         daemon._thread = t
+        _write_watchdog_liveness(0, dead=False)
         t.start()
         return daemon
 

@@ -28,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from archon.core.provider_registry import get_provider
 from archon.routers._rbac import forbid_viewer_writes, require_admin_or_503, require_session_actor
 from backend.handoff_desk import mark_truncated, require_accepted_handoff
+from backend.operations_constants import TEAMS_DEFINITION, _get_org_hierarchy_file
 from backend.platform_paths import HERMES_HOME
 
 
@@ -4110,127 +4111,19 @@ def add_task_comment(request: Request, task_id: str, author: str = Body(..., emb
 
 
 # =========================================================================
-# ORG-CHART, TEAMS, COMM-FEED, HIERARCHY & CONCURRENCY
-# Ausgelagert nach archon/routers/operations_org.py
+# OPERATIONS-UNTER-ROUTER (14): Registrierung in archon/routers/operations/
+# Reihenfolge = Pfad-Praezedenz: org -> dag -> prompts -> receipts -> sysops
+# -> dunning -> finetuning -> approvals -> keys -> emails -> security ->
+# bot_screen -> autonomy -> pbd. backend darf archon.routers nicht importieren
+# (D09/H-09-2); main.py:2752 importiert den aggregierten Router von dort.
+# Die EIGENEN Endpunkte dieses Moduls (Kanban, Esign, ...) bleiben hier.
 # =========================================================================
-from archon.routers.operations_org import (
-    TEAMS_DEFINITION,
-    CommBroadcastRequest,
-    ConcurrencyUpdateRequest,
-    OrgHierarchySaveRequest,
-    _generate_default_hierarchy,
-    _get_org_hierarchy_file,
-    broadcast_comm_message,
-    export_audit_log,
-    get_audit_log_entries,
-    get_communication_feed,
-    get_concurrency_settings,
-    get_org_chart,
-    get_org_hierarchy,
-    reset_org_hierarchy,
-    save_org_hierarchy,
-    stream_comm_feed,
-    update_concurrency_settings,
-    verify_audit_log_chain,
-)
-from archon.routers.operations_org import (
-    router as _org_router,
-)
-
 ORG_HIERARCHY_FILE = _get_org_hierarchy_file()
-router.include_router(_org_router)
 
 
 # =========================================================================
-# DAG-SCHEDULER, WORKFLOW CHECKPOINTS & OTEL TRACING
-# Ausgelagert nach archon/routers/operations_dag.py
+# ESIGN (DocuSeal) - eigene Endpunkte auf diesem Router
 # =========================================================================
-from archon.routers.operations_dag import (
-    DecomposeTaskRequest,
-    WorkflowCheckpointCreateRequest,
-    api_create_workflow_checkpoint,
-    api_dag_decompose_task,
-    api_dag_execute_task,
-    api_get_otel_trace_tree,
-    api_list_otel_traces,
-    api_list_workflow_checkpoints,
-    api_resume_workflow_checkpoint,
-)
-from archon.routers.operations_dag import (
-    router as _dag_router,
-)
-
-router.include_router(_dag_router)
-
-# =========================================================================
-# PROMPT REGISTRY, VERSIONING, CANARY & ROLLBACK
-# Ausgelagert nach archon/routers/operations_prompts.py
-# =========================================================================
-from archon.routers.operations_prompts import (
-    api_diff_prompt_versions,
-    api_list_prompt_versions,
-    api_promote_prompt_canary,
-    api_rollback_prompt_version,
-    api_save_prompt_version,
-    api_set_prompt_canary,
-)
-from archon.routers.operations_prompts import (
-    router as _prompts_router,
-)
-
-router.include_router(_prompts_router)
-
-# =========================================================================
-# BELEGVERARBEITUNG & OCR (RECEIPTS ENGINE)
-# Ausgelagert nach archon/routers/operations_receipts.py
-# =========================================================================
-from archon.routers.operations_receipts import (
-    api_receipt_image,
-    api_receipt_patch,
-    api_receipts_list,
-    api_receipts_process,
-    api_receipts_upload,
-)
-from archon.routers.operations_receipts import (
-    router as _receipts_router,
-)
-
-router.include_router(_receipts_router)
-
-# =========================================================================
-# FEEDBACK, NOTIFICATIONS, MCP, STREAMING, BACKUP, GDPR & CHAOS
-# Ausgelagert nach archon/routers/operations_sysops.py
-# =========================================================================
-from archon.routers.operations_sysops import (
-    HumanFeedbackSubmitRequest,
-    api_broadcast_task_chunk,
-    api_call_mcp_tool,
-    api_chaos_results,
-    api_chaos_run,
-    api_gdpr_audit_log,
-    api_gdpr_erase,
-    api_gdpr_export,
-    api_get_feedback_stats,
-    api_get_mcp_tools,
-    api_get_metrics_summary,
-    api_get_notification_policy,
-    api_get_restore_test_history,
-    api_get_suppressed_digest,
-    api_get_task_feedback,
-    api_stream_task_execution,
-    api_submit_human_feedback,
-    api_trigger_restore_test,
-    api_update_notification_policy,
-    api_validate_system_config,
-)
-from archon.routers.operations_sysops import (
-    router as _sysops_router,
-)
-
-router.include_router(_sysops_router)
-
-
-
 class EsignSubmissionCreateRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     title: str = Field(default="", max_length=300)
@@ -4318,194 +4211,6 @@ def api_esign_webhook(request: Request, payload: EsignWebhookEvent):
         return {"status": "success", "webhook_result": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Webhook Verarbeitung fehlgeschlagen: {e}")
-
-
-# =========================================================================
-# MAHNWESEN & DEBITORENMANAGEMENT (DUNNING ENGINE)
-# Ausgelagert nach archon/routers/operations_dunning.py
-# =========================================================================
-from archon.routers.operations_dunning import (
-    api_dunning_approve,
-    api_dunning_create_invoice,
-    api_dunning_generate_draft,
-    api_dunning_invoices,
-    api_dunning_mark_paid,
-)
-from archon.routers.operations_dunning import (
-    router as _dunning_router,
-)
-
-router.include_router(_dunning_router)
-
-# ==============================================================================
-# FINE-TUNING PIPELINE ENDPOINTS (t-56ff9d)
-# Ausgelagert nach archon/routers/operations_finetuning.py
-# ==============================================================================
-from archon.routers.operations_finetuning import (
-    api_finetuning_prepare,
-    api_finetuning_status,
-)
-from archon.routers.operations_finetuning import (
-    router as _finetuning_router,
-)
-
-router.include_router(_finetuning_router)
-
-
-
-# ==============================================================================
-# APPROVAL POLICIES & ESKALATION ENDPOINTS (t-5596bd)
-# Ausgelagert nach archon/routers/operations_approvals.py
-# ==============================================================================
-from archon.routers.operations_approvals import (
-    api_approve_request,
-    api_create_approval_request,
-    api_get_approval_audit_chain,
-    api_get_approval_policies,
-    api_get_approval_requests,
-    api_get_delegation,
-    api_reject_request,
-    api_set_delegation,
-    api_update_approval_policy,
-    api_verify_approval_audit,
-)
-from archon.routers.operations_approvals import (
-    router as _approvals_router,
-)
-
-router.include_router(_approvals_router)
-
-# ==============================================================================
-# API-KEYS & SCOPES ACCESS MANAGEMENT (t-6fad7a)
-# Ausgelagert nach archon/routers/operations_keys.py
-# ==============================================================================
-from archon.routers.operations_keys import (
-    api_create_key,
-    api_delete_key,
-    api_get_keys_audit,
-    api_list_keys,
-    api_revoke_key,
-)
-from archon.routers.operations_keys import (
-    router as _keys_router,
-)
-
-router.include_router(_keys_router)
-
-
-
-# ==============================================================================
-# EMAIL DRAFT APPROVAL QUEUE (t-7ca8cd)
-# Ausgelagert nach archon/routers/operations_emails.py
-# ==============================================================================
-from archon.routers.operations_emails import (
-    api_approve_email_draft,
-    api_create_email_draft,
-    api_edit_email_draft,
-    api_get_email_draft,
-    api_list_email_drafts,
-    api_regenerate_email_draft,
-    api_reject_email_draft,
-    api_snooze_email_draft,
-)
-from archon.routers.operations_emails import (
-    router as _emails_router,
-)
-
-router.include_router(_emails_router)
-
-# =========================================================================
-# AGENT SCORECARDS, DUAL-LLM GUARD & BREAK-GLASS PROTOCOL
-# Ausgelagert nach archon/routers/operations_security.py
-# =========================================================================
-from archon.routers.operations_security import (
-    api_create_break_glass_vault,
-    api_download_break_glass_kit,
-    api_get_agent_scorecard,
-    api_get_break_glass_status,
-    api_get_trusted_sources,
-    api_sanitize_input,
-    api_save_agent_operator_notes,
-    api_toggle_trusted_source,
-)
-from archon.routers.operations_security import (
-    router as _sec_router,
-)
-
-router.include_router(_sec_router)
-
-
-
-
-# =========================================================================
-# BOT SCREEN & HUMAN TAKEOVER (VIRTUAL DESKTOP INTEGRATION)
-# Ausgelagert nach archon/routers/operations_bot_screen.py
-# =========================================================================
-from archon.routers.operations_bot_screen import (
-    ScreenInteractionModel,
-    TakeoverRequestModel,
-    _bot_screen_state,
-    abort_bot_screen_execution,
-    get_bot_screen_status,
-    interact_with_bot_screen,
-    request_human_takeover,
-    resume_from_human_takeover,
-)
-from archon.routers.operations_bot_screen import (
-    router as _bot_screen_router,
-)
-
-router.include_router(_bot_screen_router)
-
-
-
-# ==============================================================================
-# AUTONOMIE-SYSTEME (Features 6, 8, 10, 13)
-# Ausgelagert nach archon/routers/operations_autonomy.py
-# ==============================================================================
-from archon.routers.operations_autonomy import (
-    JITPersonaTaskRequest,
-    MCTSSimulationRequest,
-    PrefetchRequest,
-    ToolEvolutionRequest,
-    execute_jit_persona_task,
-    list_ephemeral_personas,
-    list_evolved_tools,
-    simulate_mcts_trajectories,
-    trigger_speculative_prefetch,
-    trigger_tool_evolution,
-)
-from archon.routers.operations_autonomy import (
-    router as _autonomy_router,
-)
-
-router.include_router(_autonomy_router)
-
-
-
-# ==============================================================================
-# MEILENSTEIN 26: AUTONOMOUS COMPUTER-USE & PbD (Programming by Demonstration)
-# Ausgelagert nach archon/routers/operations_pbd.py
-# ==============================================================================
-from archon.routers.operations_pbd import (
-    A11yPruneRequest,
-    PBDEventRequest,
-    PBDStartRequest,
-    PBDStopRequest,
-    TrajectoryRequest,
-    calculate_ghost_cursor_trajectory,
-    get_pbd_status,
-    prune_a11y_tree,
-    record_pbd_event,
-    start_pbd_recording,
-    stop_pbd_and_synthesize,
-)
-from archon.routers.operations_pbd import (
-    router as _pbd_router,
-)
-
-router.include_router(_pbd_router)
-
 
 
 

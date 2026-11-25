@@ -2749,7 +2749,7 @@ except Exception as e_views:
     print(f"Error mounting views_core: {e_views}")
 
 try:
-    from backend.operations_api import router as operations_router
+    from archon.routers.operations import router as operations_router
     app.include_router(operations_router)
     print("Operations API mounted successfully.")
 except Exception as e_ops:

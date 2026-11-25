@@ -63,7 +63,7 @@ async def test_r24_reopen_task_clears_completed_and_started_at(tmp_path, monkeyp
 
     # Reopen to 'todo'
     req = ops_mod.TaskStatusUpdateRequest(status="todo")
-    await ops_mod.update_task_status(None, "task-1", req)
+    await ops_mod.update_task_status(None, "task-1", req)  # type: ignore[arg-type]
 
     # Pruefe DB: completed_at muss NULL sein!
     conn2 = sqlite3.connect(str(db_path))
@@ -123,19 +123,20 @@ def test_r25_failed_tasks_do_not_appear_in_todo_column(tmp_path, monkeypatch):
 def test_r26_bot_screen_abort_blocks_interaction(monkeypatch):
     """R-26: Nach Notfall-Abbruch muss interact blockiert werden (409 Conflict)."""
     import backend.operations_api as ops_mod
-    from archon.routers import _rbac
+    from archon.routers import _rbac, operations_bot_screen
 
     monkeypatch.setattr(_rbac, "_checker", lambda r: {"role": "admin"})
-    monkeypatch.setattr("backend.operations_api.require_admin_or_503", lambda r: {"role": "admin"})
+    # Aequivalent zum frueheren String-Patch; haelt ops_mod in Benutzung.
+    monkeypatch.setattr(ops_mod, "require_admin_or_503", lambda r: {"role": "admin"})
 
     req = _make_dummy_request("admin")
     # Loese Notfall-Abbruch aus
-    ops_mod.abort_bot_screen_execution(req)
+    operations_bot_screen.abort_bot_screen_execution(req)
 
     # Nachfolgender Interaktionsversuch muss abgewiesen werden
-    action = ops_mod.ScreenInteractionModel(action="click", x=100, y=200)
+    action = operations_bot_screen.ScreenInteractionModel(action="click", x=100, y=200)
     with pytest.raises(HTTPException) as exc_info:
-        ops_mod.interact_with_bot_screen(req, action)
+        operations_bot_screen.interact_with_bot_screen(req, action)
     assert exc_info.value.status_code == 409
 
 
@@ -152,7 +153,7 @@ def test_r27_container_action_raises_http_exception_on_docker_error(monkeypatch)
 
     req = _make_dummy_request("admin")
     with pytest.raises(HTTPException) as exc_info:
-        main_mod.api_docker_start({"container_name": "my-container"}, req)
+        main_mod.api_docker_start({"container_name": "my-container"}, req)  # type: ignore[arg-type]
     assert exc_info.value.status_code in (500, 502)
 
 
@@ -189,7 +190,7 @@ async def test_r28_post_kanban_syncs_to_db(tmp_path, monkeypatch):
     ]
 
     mock_request = _make_dummy_request("admin")
-    mock_request.json = AsyncMock(return_value=cards_payload)
+    mock_request.json = AsyncMock(return_value=cards_payload)  # type: ignore[method-assign]
 
     # Rufe POST auf
     res = await main_mod.api_save_kanban(mock_request)

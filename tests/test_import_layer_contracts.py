@@ -183,9 +183,9 @@ def test_layer_gate_detects_a_violation() -> None:
 
 
 def test_documented_debt_is_bounded() -> None:
-    """Altschuld darf nur sinken (Tilgung F1a/F1b/S3), nie steigen."""
+    """Altschuld darf nur sinken (Tilgung F1a/A1/A2/F4), nie steigen."""
     pairs = {(src, dst) for src, dst, _, _ in _router_imports()}
-    assert len(pairs) <= 17, (
-        f"Altschuld von 17 auf {len(pairs)} Paare gewachsen - "
-        "S1-Ratchet greift, Tilgungsplan (F2/F3/F4) pruefen."
+    assert len(pairs) <= 3, (
+        f"Altschuld von 3 auf {len(pairs)} Paare gewachsen - "
+        "S1-Ratchet greift, Tilgungsplan (F2) pruefen."
     )

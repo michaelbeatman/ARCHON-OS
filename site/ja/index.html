@@ -192,7 +192,7 @@ header img.hand-avatar{height:44px;width:44px;border-radius:10px;display:block;o
 header h1{font-size:var(--text-xl);font-weight:600;margin:0}
 header .tag{color:var(--fg-muted);font-size:var(--text-sm)}
 header nav{margin-left:auto;display:flex;gap:var(--space-5);font-size:var(--text-sm);flex-wrap:wrap}
-.hero{padding:var(--space-16) 0 var(--space-10)}
+.hero{padding:var(--space-16) 0 var(--space-10);position:relative;overflow-x:clip}
 .hero h2{font-size:var(--text-5xl);line-height:1.05;font-weight:700;margin:0 0 var(--space-4);max-width:56rem;letter-spacing:-0.02em}
 .hero p{font-size:var(--text-xl);color:var(--fg-muted);max-width:48rem;margin:0 0 var(--space-8);line-height:1.6}
 .btnrow{display:flex;gap:var(--space-3);flex-wrap:wrap}
@@ -233,6 +233,36 @@ pre{background:var(--code-bg);color:var(--code-fg);border:1px solid var(--line);
 .status{border-left:4px solid var(--accent);padding:var(--space-2) 0 var(--space-2) var(--space-4);color:var(--fg-muted);max-width:52rem;background:var(--accent-soft);border-radius:0 var(--radius-md) var(--radius-md) 0}
 footer{margin-top:var(--space-16);border-top:1px solid var(--line);padding:var(--space-8) 0 var(--space-10);color:var(--fg-subtle);font-size:var(--text-sm)}
 footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:center;text-align:center}
+.hero-split{display:grid;grid-template-columns:1.25fr 0.75fr;gap:2.5rem;align-items:flex-start;position:relative}
+.hero-left{position:relative;z-index:2}
+.hero-right{position:relative;z-index:1;pointer-events:none;user-select:none}
+.blueprint-stage{position:relative;width:100%;transform:translate3d(0,var(--parallax-y,0px),0);will-change:transform}
+.asymmetric-blueprint{width:100%;height:auto;display:block;opacity:0.22;filter:invert(1) contrast(1.08);animation:subtleFloat 14s ease-in-out infinite}
+.blueprint-overlay{position:absolute;inset:0;width:100%;height:100%;overflow:visible;color:#1a1a1a;opacity:0.42}
+@media (prefers-color-scheme:dark){
+  .asymmetric-blueprint{opacity:0.78;filter:contrast(1.06) brightness(0.96)}
+  .blueprint-overlay{color:#e5e5e5;opacity:0.55}
+}
+.gear-cw{transform-box:fill-box;transform-origin:center;animation:spinCW 68s linear infinite}
+.gear-ccw{transform-box:fill-box;transform-origin:center;animation:spinCCW 52s linear infinite}
+.gear-slow{transform-box:fill-box;transform-origin:center;animation:spinCW 96s linear infinite}
+.pulley-weight{animation:pulleyLift 11s ease-in-out infinite}
+@keyframes subtleFloat{0%,100%{transform:translateY(0px) rotate(0deg)}50%{transform:translateY(-6px) rotate(0.15deg)}}
+@keyframes spinCW{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes spinCCW{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
+@keyframes pulleyLift{0%,100%{transform:translateY(0px)}50%{transform:translateY(-18px)}}
+@media (min-width:993px){
+  .hero-right{position:absolute;top:-40px;right:-6%;width:45%;max-width:650px}
+}
+@media (max-width:992px){
+  .hero-split{grid-template-columns:1fr;gap:1.5rem}
+  .hero-right{max-width:420px;margin:1rem auto 0 auto}
+  .asymmetric-blueprint{opacity:0.16}
+}
+@media (prefers-reduced-motion:reduce){
+  .asymmetric-blueprint,.gear-cw,.gear-ccw,.gear-slow,.pulley-weight{animation:none}
+  .blueprint-stage{transform:none}
+}
 </style>
 </head>
 <body>
@@ -243,6 +273,7 @@ footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:cent
 </div></header>
 
 <section class="hero"><div class="wrap">
+<div class="hero-split"><div class="hero-left">
 <h2>企業とあなたのための GDPR対応・Zero-Egress マルチエージェント OS。</h2>
 <p>Archon OS は Hermes Agent を GDPR 準拠の Agentic Operating System に拡張します。8ドメイン70の専門プロファイル、Zero-Egress ローカルルーティング、Atomic BudgetBank、Passkey HITL、SHA-256 監査ログを搭載。</p>
 <div class="btnrow">
@@ -251,6 +282,33 @@ footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:cent
 <a class="btn" href="#install">クイックスタート</a>
 </div>
 <div class="badges"><span class="badge">v0.5.7.8 &middot; pre-1.0</span><span class="badge">GDPR / DSGVO &amp; EU AI Act ready</span><span class="badge">Fail-closed Zero-Egress</span><span class="badge">MIT license</span><span class="badge">70 specialists &middot; 8 domains</span><span class="badge">55 decision frameworks</span><span class="badge">Docker amd64 / arm64</span><span class="badge">11 languages</span></div>
+</div>
+<div class="hero-right"><div class="blueprint-stage"><img src="../archon_blueprint.png" class="asymmetric-blueprint" alt="Archon OS Governance &amp; Zero-Egress Architecture Sketch" loading="eager"><svg class="blueprint-overlay" viewBox="0 0 764 1024" fill="none" aria-hidden="true">
+  <g class="gear-cw" stroke="currentColor" stroke-width="1.1" opacity="0.72">
+    <circle cx="392" cy="198" r="118" stroke-dasharray="5 6"/>
+    <circle cx="392" cy="198" r="96" stroke-dasharray="18 8"/>
+    <line x1="274" y1="198" x2="510" y2="198" stroke-width="0.8" opacity="0.55"/>
+    <line x1="392" y1="80" x2="392" y2="316" stroke-width="0.8" opacity="0.55"/>
+  </g>
+  <g class="gear-ccw" stroke="currentColor" stroke-width="1.1" opacity="0.75">
+    <circle cx="458" cy="336" r="68" stroke-dasharray="4 5"/>
+    <circle cx="458" cy="336" r="48" stroke-dasharray="12 6"/>
+    <line x1="390" y1="336" x2="526" y2="336" stroke-width="0.8" opacity="0.5"/>
+    <line x1="458" y1="268" x2="458" y2="404" stroke-width="0.8" opacity="0.5"/>
+  </g>
+  <g class="gear-slow" stroke="currentColor" stroke-width="1.1" opacity="0.68">
+    <circle cx="330" cy="842" r="126" stroke-dasharray="6 7"/>
+    <circle cx="330" cy="842" r="94" stroke-dasharray="20 10"/>
+    <line x1="204" y1="842" x2="456" y2="842" stroke-width="0.8" opacity="0.5"/>
+    <line x1="330" y1="716" x2="330" y2="968" stroke-width="0.8" opacity="0.5"/>
+  </g>
+  <g class="pulley-weight" stroke="currentColor" stroke-width="1.2" opacity="0.8">
+    <line x1="118" y1="108" x2="118" y2="238" stroke-dasharray="3 3"/>
+    <polygon points="118,238 104,264 132,264" fill="none"/>
+    <line x1="102" y1="267" x2="134" y2="267"/>
+  </g>
+</svg></div></div>
+</div>
 </div></section>
 
 <div class="wrap">
@@ -363,6 +421,21 @@ document.querySelectorAll('pre').forEach(function(pre){
   });
   wrap.appendChild(btn);
 });
+(function(){
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  var stage=document.querySelector('.blueprint-stage');
+  if(!stage)return;
+  var ticking=false;
+  window.addEventListener('scroll',function(){
+    if(ticking)return;
+    ticking=true;
+    requestAnimationFrame(function(){
+      var y=Math.min((window.scrollY||0)*0.08,48);
+      stage.style.setProperty('--parallax-y',y.toFixed(1)+'px');
+      ticking=false;
+    });
+  },{passive:true});
+})();
 </script>
 </body>
 </html>

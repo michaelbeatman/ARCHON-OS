@@ -55,7 +55,9 @@ def test_d08_audit_dispatch_is_async():
     guard = (ROOT / "backend" / "llm_egress_guard.py").read_text(encoding="utf-8")
     assert "async def audit_dispatch_async" in guard
     assert "await asyncio.to_thread(_write)" in guard
-    for rel in ("backend/agent_router.py", "utils/notebook_engine.py", "archon/routers/chat.py"):
+    # F2: der Bildgenerierungs-Handler (und damit der audit_dispatch_async-
+    # Aufruf) liegt jetzt in backend/image_generate.py statt chat.py.
+    for rel in ("backend/agent_router.py", "utils/notebook_engine.py", "backend/image_generate.py"):
         src = (ROOT / rel).read_text(encoding="utf-8")
         assert "await audit_dispatch_async(" in src, rel
 

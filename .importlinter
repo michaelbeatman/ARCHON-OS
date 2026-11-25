@@ -30,24 +30,19 @@ forbidden_modules =
 # Das harte Ratchet-Gate bleibt tests/test_import_layer_contracts.py.
 allow_indirect_imports = false
 
-# Dokumentierte Altschuld (S1; nach F1a + A1 + A2 + F4 = 3/3/2):
-#   3 Importzeilen / 3 Modul-Paare / 2 backend-Module.
-#   F1a: agent_router -> autonomy_settings, llm_kernel -> llm_providers.
-#   A1:  war_room_simulator / workflow_dag_runner / workflow_scheduler -> decisions.
-#   A2:  mcp_gateway -> context_meter (jetzt archon.services.session_compaction).
-#   F4:  14 operations_*-Router-Registrierungen nach
-#        archon/routers/operations/__init__.py gehoben (17 -> 3 Paare).
+# Altschuld VOLLSTAENDIG getilgt (F5, 25.11.2026).
+#   0 Importzeilen / 0 Modul-Paare / 0 backend-Module / 0 Ausnahmen.
+#   Kette: 23 (S1) -> 21 (F1a) -> 18 (A1) -> 17 (A2) -> 3 (F4: 14
+#   operations_*-Router-Registrierungen nach archon/routers/operations/)
+#   -> 0 (F2: _rbac / auth / chat) -> F5: ignore_imports leer.
 #   Der transitive Pfad orchestration:1432 -> archon.routers.decisions ist
 #   seit A1 aufgeloest; archon/core/** enthaelt 0 Router-Importe.
-#   Tilgung: F2 (_rbac / auth / chat) + F5 (Ignores auf 0). NEUE Importe
-#   backend -> archon.routers sind ab sofort ein Verstoss (Ratchet).
+#   NEUE Importe backend -> archon.routers sind ab sofort ein Verstoss
+#   (Ratchet; allow_indirect_imports=false = streng transitiv).
 #   tests/test_import_layer_contracts.py liest diese Datei als SSOT und enforced
 #   sie in CI (ci.yml:305 / :555); import-linter selbst ist nicht in
 #   requirements-ci.lock.txt und bleibt daher ein lokales Tool.
 ignore_imports =
-    backend.operations_api -> archon.routers._rbac
-    backend.operations_api -> archon.routers.auth
-    backend.workflow_node_plugins -> archon.routers.chat
 
 # A2 / Invariante #2: archon.core kennt keine HTTP-Schicht. 0 direkte Treffer
 # (verifiziert gegen archon/core/**). allow_indirect_imports=true beschraenkt

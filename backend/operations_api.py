@@ -26,10 +26,10 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from archon.core.provider_registry import get_provider
-from archon.routers._rbac import forbid_viewer_writes, require_admin_or_503, require_session_actor
 from backend.handoff_desk import mark_truncated, require_accepted_handoff
 from backend.operations_constants import TEAMS_DEFINITION, _get_org_hierarchy_file
 from backend.platform_paths import HERMES_HOME
+from backend.rbac_guards import forbid_viewer_writes, require_admin_or_503, require_session_actor
 
 
 # ---------------------------------------------------------------------------
@@ -863,7 +863,7 @@ def _task_creator_actor(request: Request) -> str:
     einen Platzhalter zu prüfen).
     """
     try:
-        from archon.routers.auth import get_current_user_from_request
+        from backend.rbac_guards import get_current_user_from_request
         user = get_current_user_from_request(request)
     except Exception:
         return ""

@@ -639,7 +639,7 @@ async def _run_image_gen_plugin(params: Dict[str, Any], node: Dict[str, Any], up
         prompt = str(node.get("title") or "Editorial cover graphic")
     from fastapi import HTTPException
 
-    from archon.routers.chat import ImageGenerateToolRequest, api_tool_image_generate
+    from backend.image_generate import ImageGenerateToolRequest, api_tool_image_generate
     try:
         req_obj = ImageGenerateToolRequest(
             prompt=f"{prompt} ({params.get('style_preset', 'editorial_clean')}, aspect {params.get('aspect_ratio', '16:9')})",

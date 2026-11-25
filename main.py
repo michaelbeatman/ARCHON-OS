@@ -3153,8 +3153,20 @@ _SHUTDOWN_HOOKS.extend([
 # Rollenzaun fuer alle ausgelagerten Router: ein Injektionspunkt. Fehlt er
 # (Import-Fehler), sperren die geschuetzten Router-Routen fail-closed (503).
 try:
+    from archon.routers import _rbac as _rbac_mod
+    from archon.routers import auth as _auth_mod
     from archon.routers._rbac import configure as _rbac_configure
+    from backend.rbac_guards import configure as _guards_configure
     _rbac_configure(require_admin=require_admin)
+    # F2: backend/** darf archon.routers nicht importieren. Die Registry haelt
+    # die ORIGINAL-Guards (A1-Injektion), damit _checker/configure in _rbac.py
+    # und alle Test-Patch-Ziele 1:1 erhalten bleiben.
+    _guards_configure(
+        forbid_viewer_writes=_rbac_mod.forbid_viewer_writes,
+        require_admin_or_503=_rbac_mod.require_admin_or_503,
+        require_session_actor=_rbac_mod.require_session_actor,
+        get_current_user_from_request=_auth_mod.get_current_user_from_request,
+    )
 except Exception as _e_rbac:
     logger.error(f"[RBAC] Rollenzaun nicht verdrahtet — geschuetzte Routen sperren: {_e_rbac}")
 try:

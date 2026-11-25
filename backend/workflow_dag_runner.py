@@ -1416,25 +1416,23 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     quality_report = _quality_outcome.quality_report
     revisions_used = _quality_outcome.revisions_used
 
-    # Automatisches Deliverable-Export-Handling (Showroom / Obsidian 03_Endprodukte)
-    deliverable_path = ""
-    if not is_error and content and (bool(node.get("save_to_showroom")) or _is_content_node):
-        try:
-            from archon.core.paths import PROJEKTE_DIR
-            wf_slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(node.get("workflow_id") or "workflow_deliverables")).strip("_")[:48] or "workflow_deliverables"
-            node_slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(node.get("id") or "step")).strip("_")[:40] or "step"
-            target_dir = os.path.join(PROJEKTE_DIR, f"WF_{wf_slug}", "03_Endprodukte")
-            os.makedirs(target_dir, exist_ok=True)
-            ts_tag = time.strftime("%Y%m%d_%H%M%S")
-            deliverable_path = os.path.join(target_dir, f"{ts_tag}_{node_slug}.md")
-            header_md = f"# {node_title}\n\n- **Agent:** `{agent_id}`\n- **Modell:** `{res.get('model') or model}`\n"
-            if quality_report is not None:
-                header_md += f"- **Anti-Slop Quality-Score:** `{quality_report.get('score')}/100` (Revisionen: {revisions_used})\n"
-            header_md += "\n---\n\n"
-            with open(deliverable_path, "w", encoding="utf-8") as _df:
-                _df.write(header_md + content + "\n")
-        except OSError as _dexc:
-            logger.debug("[WorkflowDAG] Showroom-Deliverable nicht geschrieben: %s", _dexc)
+    # B7/S2: Cluster 9 (Deliverable-Export) nach
+    # backend/workflow_nodes/deliverable.py extrahiert. Reine Delegation, keine
+    # Logikaenderung (inkl. dem bewusst NICHT zurueckgesetzten Pfad bei OSError).
+    from backend.workflow_nodes.deliverable import write_deliverable
+
+    deliverable_path = write_deliverable(
+        node=node,
+        res=res,
+        content=content,
+        is_error=is_error,
+        is_content_node=_is_content_node,
+        agent_id=agent_id,
+        model=model,
+        node_title=node_title,
+        quality_report=quality_report,
+        revisions_used=revisions_used,
+    )
 
     # Punkt 3.2.6: exakte Kosten pro Node (Basis-/Repair-/Eskalations-Modell getrennt)
     _cost_usd = None

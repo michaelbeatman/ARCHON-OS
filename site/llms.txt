@@ -1,0 +1,36 @@
+# Archon OS
+
+> Archon OS is a self-hosted, MIT-licensed Agentic Operating System (multi-agent business OS) built on Hermes Agent. It provides enterprise-grade governance, pre-execution token budget control, fail-closed Zero-Egress local LLM routing, WebAuthn Passkey human-in-the-loop approvals, and a SHA-256 hash-chained audit log on your own Docker server.
+
+- Website: https://michaelbeatman.github.io/ARCHON-OS/
+- Source Code (MIT License): https://github.com/michaelbeatman/ARCHON-OS
+- Author: Michael Keller
+- Current Release: v0.5.7.8 (pre-1.0, Docker amd64 / arm64)
+
+## Core Architecture & Differentiators
+
+- **70 Specialist Agent Profiles across 8 Domains:** Strategy & Leadership, Law/Tax/Finance, Sales/CRM/Marketing, Creation/Media, Tech/Software/QA, Commerce/Procurement, Real Estate/Construction, and Medicine/Chemistry/Engineering, structured in 3 competency tiers with four-eyes verification.
+- **PolicyEngine & Signed Tool Warrants:** Default-deny tool access. Privileged tools (`pay`, external `mcp__*`) require HMAC-SHA256 signed, time-limited warrants with parameter bounds (`max_amount`, `allowed_path_prefixes`). Delegated sub-agents never inherit privileged tools.
+- **Atomic BudgetBank:** Pre-execution transactional budget reservations (`BEGIN IMMEDIATE`) prevent parallel agents from exceeding cost caps.
+- **Passkey / WebAuthn HITL:** High-risk approvals (payments, budget overruns, project starts, destructive actions) require cryptographic verification via device passkeys (Windows Hello, Touch ID, Face ID, hardware keys).
+- **Fail-Closed Zero-Egress Routing:** Central switchboard (OmniRoute) routes sensitive categories (finance, contracts, CRM, HR, GDPR) exclusively to local models (Ollama, LM Studio) inside an internal Docker network with no internet route.
+- **Crash-Safe Execution (Effect-Ledger):** Transactional Effect-Ledger (`PENDING -> COMMITTED / FAILED / UNKNOWN`) with mandatory reconciliation and Outbox idempotency keys prevents duplicate side effects.
+- **Auditability & Compliance:** SHA-256 hash-chained audit log, consolidated 3-database SQLite WAL architecture (`ops.db`, `business.db`, `memory.db`), Litestream replication, EU AI Act risk registry, and 1-click GoBD procedural documentation export.
+- **AI Boardroom & Knowledge Base:** 55 structured multi-perspective decision frameworks, local Obsidian Markdown vault + AnythingLLM/Chroma RAG, and embedded n8n webhook automation.
+
+## Business Readiness & GDPR (DSGVO) Compliance
+
+- **GDPR / DSGVO Data Residency:** Sensitive categories (finance, HR, contracts, CRM) are routed exclusively to local models inside an internal Docker network with no internet route (fail-closed Zero-Egress).
+- **Commercial Compliance:** Built-in EU AI Act risk registry, 1-click GoBD procedural documentation export, and tamper-evident SHA-256 hash-chained audit logs.
+
+## Quick Start
+
+- Full stack: `git clone https://github.com/michaelbeatman/ARCHON-OS.git && cd ARCHON-OS && docker compose up -d`
+- Zero-key demo mode: `ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d`
+
+## Documentation
+
+- System Manual (EN, 97 pp.): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
+- Systemhandbuch (DE, 97 S.): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
+- Feature List (EN): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf
+- Changelog: https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md

@@ -96,9 +96,45 @@ class TestGracefulShutdownCoordinator(unittest.TestCase):
         self.assertEqual(len(self.coord._active_tasks), 0)
 
     def test_database_wal_flush(self):
+        # W3-B: der Async-Write-Batcher flusht ueber einen eigenen Drain-Task
+        # in die mandantenisolierte DB. In der frischen Temp-DB fehlt dafuer
+        # das Schema; ohne Bootstrap meldet der WAL-Flush "partial" mit
+        # "no such table: batched_telemetry_events". Schema hier im Test
+        # anlegen — kein Produktivcode veraendern.
+        import sqlite3
+        import backend.async_write_batcher as batcher_module
+
+        batcher = batcher_module.async_write_batcher
+        try:
+            active_tid = str(batcher_module._active_tenant_id() or "default")
+        except Exception:
+            active_tid = "default"
+        tenant_ids = {active_tid}
+        with batcher._lock:
+            tenant_ids.update(
+                str(item.get("tenant_id") or "default") for item in batcher._buffer
+            )
+        for tenant_id in tenant_ids:
+            db_path = batcher_module._resolve_batcher_db_path(tenant_id)
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            with sqlite3.connect(db_path) as conn:
+                conn.execute(
+                    """CREATE TABLE IF NOT EXISTS batched_telemetry_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        event_type TEXT,
+                        source_module TEXT,
+                        payload_json TEXT,
+                        created_at TEXT,
+                        flushed_at TEXT,
+                        tenant_id TEXT DEFAULT 'default'
+                    )"""
+                )
+                conn.commit()
+
         res = self.coord.flush_all_databases()
         self.assertEqual(res["status"], "success")
         self.assertIsInstance(res["flushed_databases"], list)
+        self.assertEqual(res["errors"], [])
 
     def test_startup_recovery(self):
         res = self.coord.auto_resume_on_startup()

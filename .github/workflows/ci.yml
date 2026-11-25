@@ -24,10 +24,13 @@ jobs:
           python-version: "3.13"
           cache: "pip"
 
-      - name: Basis-Abhängigkeiten installieren
+      - name: CI-Helfer aus Hash-Lock installieren (F002)
+        # pip bleibt auf der von setup-python gepinnten Toolchain — kein
+        # Upgrade-Schritt. Alle Helfer (inkl. pip selbst) kommen
+        # hash-geprüft und mit voller Transitiv-Kette aus requirements-ci.lock.txt.
         run: |
-          python -m pip install --upgrade pip
-          pip install pyyaml requests psutil
+          test -f requirements-ci.lock.txt
+          python -m pip install --require-hashes --no-deps -r requirements-ci.lock.txt
 
       - name: Pre-Flight Konfigurationsprüfung
         run: python scripts/validate_config.py --strict
@@ -287,15 +290,15 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Abhängigkeiten installieren
+      - name: Abhängigkeiten installieren (Hash-Locks, F002)
         run: |
-          python -m pip install --upgrade pip
-          # Audit D09: Hash-Lock ist zwingend — kein stiller Fallback auf Bereiche.
+          # Audit D09: Hash-Locks sind zwingend — kein stiller Fallback auf Bereiche.
           test -f requirements.lock.txt
           pip install --require-hashes --no-deps -r requirements.lock.txt
           test -f requirements-test.lock.txt
           pip install --require-hashes --no-deps -r requirements-test.lock.txt
-          # pyyaml/requests/psutil kommen bereits hash-geprueft aus requirements.lock.txt.
+          test -f requirements-ci.lock.txt
+          pip install --require-hashes --no-deps -r requirements-ci.lock.txt
           mkdir -p data inbox
 
       - name: Gesamte Pytest-Suite ausführen
@@ -322,10 +325,10 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Abhängigkeiten installieren
+      - name: Abhängigkeiten installieren (Hash-Lock, F002)
         run: |
-          python -m pip install --upgrade pip
-          pip install pyyaml requests psutil
+          test -f requirements-ci.lock.txt
+          pip install --require-hashes --no-deps -r requirements-ci.lock.txt
           mkdir -p data inbox
 
       - name: E2E Lifecycle & MCP Testsuite
@@ -363,19 +366,80 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Security-Tools installieren
-        run: python -m pip install --upgrade pip "pip-audit>=2.7,<3.0" "bandit>=1.8,<2.0"
-
-      - name: SBOM (Python-Dependency-Inventar)
+      - name: Security-Tools + SBOM-Generator aus Hash-Lock (F002)
+        # pip-audit, bandit und cyclonedx-py (inkl. Transitiv-Kette) kommen
+        # ausschliesslich aus dem hash-geprüften CI-Lockfile.
         run: |
+          test -f requirements-ci.lock.txt
+          python -m pip install --require-hashes --no-deps -r requirements-ci.lock.txt
+
+      - name: SBOM (CycloneDX 1.5 JSON aus den Hash-Locks)
+        # Kein `pip list` mehr. cyclonedx-py erzeugt echte CycloneDX-Struktur
+        # und übernimmt die --hash=sha256-Werte beider Lockfiles in
+        # externalReferences[].hashes (Upstream-Requirements-Parser).
+        run: |
+          set -e
+          test -f requirements.lock.txt
           python -m pip install --require-hashes --no-deps -r requirements.lock.txt
-          python -m pip list --format=json > sbom-python.json
+          cat requirements.lock.txt requirements-ci.lock.txt \
+            | cyclonedx-py requirements - \
+                --spec-version 1.5 --output-format JSON \
+                --output-file sbom-python.raw.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          doc = json.loads(Path("sbom-python.raw.json").read_text(encoding="utf-8"))
+          for component in doc.get("components") or []:
+              hashes = []
+              for ref in component.get("externalReferences") or []:
+                  for item in ref.get("hashes") or []:
+                      if item not in hashes:
+                          hashes.append(item)
+              if hashes:
+                  # Der Requirements-Parser legt Hashes nur in externalReferences
+                  # ab; component.hashes ist in CycloneDX 1.5 zulässig und wird
+                  # hier aus denselben echten Werten übernommen.
+                  component["hashes"] = hashes
+          Path("sbom-python.cdx.json").write_text(
+              json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+          )
+          PY
+          rm -f sbom-python.raw.json
+
+      - name: SBOM-Gate (components[].hashes, hart)
+        run: |
+          python - <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          doc = json.loads(Path("sbom-python.cdx.json").read_text(encoding="utf-8"))
+          if doc.get("bomFormat") != "CycloneDX" or str(doc.get("specVersion")) != "1.5":
+              sys.exit(f"SBOM kein CycloneDX 1.5: {doc.get('bomFormat')} {doc.get('specVersion')}")
+          components = doc.get("components") or []
+          if len(components) < 80:
+              sys.exit(f"SBOM unvollständig: nur {len(components)} Komponenten")
+          missing = []
+          for component in components:
+              hashes = component.get("hashes") or []
+              if not any(
+                  h.get("alg") == "SHA-256"
+                  and re.fullmatch(r"[0-9a-f]{64}", h.get("content") or "")
+                  for h in hashes
+              ):
+                  missing.append(str(component.get("name")))
+          if missing:
+              sys.exit("SBOM-Gate: ohne SHA-256-Hash: " + ", ".join(sorted(set(missing))[:20]))
+          print(f"SBOM-Gate OK: {len(components)} Komponenten, alle mit SHA-256-Hash")
+          PY
 
       - name: SBOM-Artefakt hochladen
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 (gepinnt)
         with:
-          name: sbom-python
-          path: sbom-python.json
+          name: sbom-python-cdx15
+          path: sbom-python.cdx.json
 
       - name: Bekannte CVEs in Abhängigkeiten (pip-audit)
         # Hartes Gate: keine bekannten CVEs in der hash-geprüften Lockdatei.
@@ -417,18 +481,17 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Python-Abhängigkeiten für Coverage installieren (Hash-Lock, zwingend)
+      - name: Python-Abhängigkeiten + Qualitäts-Tools (Hash-Locks, F002)
         run: |
-          python -m pip install --upgrade pip
           test -f requirements.lock.txt
           pip install --require-hashes --no-deps -r requirements.lock.txt
           test -f requirements-test.lock.txt
           pip install --require-hashes --no-deps -r requirements-test.lock.txt
-          # pyyaml/requests/psutil kommen bereits hash-geprueft aus requirements.lock.txt.
+          # ruff/mypy/coverage und alle Helfer kommen hash-geprüft aus dem
+          # CI-Lockfile — keine Versionbereiche, kein ungepinnter pip-Upgrade.
+          test -f requirements-ci.lock.txt
+          pip install --require-hashes --no-deps -r requirements-ci.lock.txt
           mkdir -p data inbox
-
-      - name: Qualitäts-Tools installieren (gepinnt, isolierter Schritt)
-        run: pip install "ruff==0.17.6" "mypy==2.4.1" "coverage==7.17.5"
 
       - name: Ruff – kritische Fehlerklassen (HARTES GATE)
         # E9 = Syntaxfehler, F63/F7/F82 = ungültige Syntax/undefinierte Namen.
@@ -445,6 +508,7 @@ jobs:
             RANGE="HEAD^ HEAD"
           fi
           echo "py=$(git diff --name-only --diff-filter=ACMR $RANGE -- '*.py' '*.pyi' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          echo "newpy=$(git diff --name-only --diff-filter=A $RANGE -- '*.py' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
           echo "js=$(git diff --name-only --diff-filter=ACMR $RANGE -- 'frontend/src/**/*.ts' 'frontend/src/**/*.tsx' 'frontend/src/**/*.js' 'frontend/src/**/*.mjs' | sed 's|^frontend/||' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
 
       - name: Ruff – geänderte Dateien (HARTES RATCHET-GATE)
@@ -461,14 +525,29 @@ jobs:
           fi
 
       - name: mypy – geänderte Dateien (HARTES RATCHET-GATE)
+        # F002: mypy.ini ist die SSOT (python_version 3.11, warn_unused_ignores).
+        # Kein Flag überschreibt die Konfiguration mehr.
         shell: bash
         run: |
           FILES="${{ steps.changed.outputs.py }}"
           if [ -n "$FILES" ]; then
             echo "mypy prüft geänderte Dateien: $FILES"
-            mypy --ignore-missing-imports --follow-imports=silent $FILES
+            mypy --config-file mypy.ini $FILES
           else
             echo "Keine geänderten Python-Dateien — Ratchet nichts zu prüfen."
+          fi
+
+      - name: mypy – neu hinzugefügte Module (disallow_untyped_defs, HARTES GATE)
+        # F002: neue Module müssen von Anfang an vollständig typisiert sein.
+        # Bestandsmodule mit `# mypy: ignore-errors` bleiben davon unberührt (F044).
+        shell: bash
+        run: |
+          NEW="${{ steps.changed.outputs.newpy }}"
+          if [ -n "$NEW" ]; then
+            echo "mypy prüft neue Module mit disallow_untyped_defs: $NEW"
+            mypy --config-file mypy.ini --disallow-untyped-defs $NEW
+          else
+            echo "Keine neuen Python-Dateien — kein Neumodul-Gate nötig."
           fi
 
       - name: Coverage (HARTES GATE – pytest muss laufen)

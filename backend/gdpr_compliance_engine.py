@@ -36,6 +36,13 @@ import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# D03/HIGH: APP_DATA_DIR aus db_paths ist die kanonische Datenwurzel
+# (respektiert ARCHON_DATA_DIR). Der Workspace-Pfad bleibt nur als
+# Legacy-Zweig — exakt wie in db_backup_manager._tenant_roots().
+try:
+    from backend.db_paths import APP_DATA_DIR as _APP_DATA_DIR
+except Exception:  # pragma: no cover - Modul wird standalone importiert
+    _APP_DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
 
 # Epochen-Migration (block_id): neue Quittungen werden mit
 # _chain_hash(canonical, next_id) signiert; die ID steht explizit in der Tabelle.
@@ -107,6 +114,47 @@ def _pocketbase_db_files() -> List[str]:
     )
 
 
+def _tenant_roots() -> List[str]:
+    """D03/HIGH: kanonischer Tenant-Root + Workspace-Legacy-Zweig."""
+    # Dynamisch lesen, damit monkeypatch/ARCHON_DATA_DIR zur Laufzeit wirkt.
+    try:
+        from backend.db_paths import APP_DATA_DIR as canonical
+    except Exception:
+        canonical = _APP_DATA_DIR
+    # __file__ dynamisch auswerten: Tests und Container-Mounts koennen den
+    # Workspace-Pfad zur Laufzeit ersetzen (Legacy-Zweig darf nicht hart am
+    # Import-Zeitpunkt haengen).
+    workspace = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    roots = [os.path.join(canonical, "tenants")]
+    legacy = os.path.join(workspace, "data", "tenants")
+    if os.path.abspath(legacy) != os.path.abspath(roots[0]):
+        roots.append(legacy)
+    return roots
+
+
+def _tenant_db_files() -> List[str]:
+    """Alle physisch vorhandenen Mandanten-DBs — unter jeder bekannten Wurzel."""
+    seen: set = set()
+    found: List[str] = []
+    for root in _tenant_roots():
+        for path in sorted(glob.glob(os.path.join(root, "*", "*.db"))):
+            full = os.path.abspath(path)
+            if full in seen or not os.path.isfile(full) or os.path.getsize(full) == 0:
+                continue
+            seen.add(full)
+            found.append(full)
+    return found
+
+
+def _tenant_resolution_errors() -> List[str]:
+    """Fail-Closed: ein vorhandener, aber unbenutzbarer Tenant-Root ist ein Fehler."""
+    errors: List[str] = []
+    for root in _tenant_roots():
+        if os.path.exists(root) and not os.path.isdir(root):
+            errors.append(f"Tenant-Root ist keine Directory: {root}")
+    return errors
+
+
 _TENANT_TARGETS: Dict[str, List[str]] = {
     "crm_contacts": [
         "first_name", "last_name", "full_name", "email",
@@ -130,6 +178,15 @@ _TENANT_TARGETS: Dict[str, List[str]] = {
     "_superusers": ["email", "username", "name"],
     "erp_bank_transactions": ["counterparty_name", "counterparty_iban", "remittance_info"],
     "bank_transactions": ["counterparty_name", "counterparty_iban", "remittance_info", "purpose"],
+    # D03/MED (F012): unter FULL_TENANT_ISOLATION liegt die echte memory.db
+    # unter data/tenants/<tid>/memory.db. Diese Tabellen wurden vorher nie
+    # gescannt -> Learnings/Chats/Entwuerfe blieben ungeschwaerzt.
+    # GoBD-geschuetzte Tabellen (erp_documents, receipts, invoices, ...) bleiben
+    # bewusst ausgenommen und werden ueber die Sperrpruefung behandelt.
+    "learnings": ["summary", "content", "title"],
+    "conversations": ["content", "summary", "title"],
+    "human_feedback": ["comment", "corrected_text", "task_prompt"],
+    "email_drafts": ["subject", "recipient", "body_text"],
 }
 
 _DEFAULT_ROPA_ACTIVITIES: List[Dict[str, str]] = [
@@ -504,9 +561,14 @@ class GDPRComplianceEngine:
                 export["sources"]["memory_error"] = str(e)
 
         # 3b. Multi-Tenant-DBs (ERP, Contracts, Deals, CRM crm.db, Banktransaktionen)
-        import glob
-        tenants_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "tenants")
-        tenant_db_files = sorted(glob.glob(os.path.join(tenants_root, "*", "*.db")))
+        # D03/HIGH: APP_DATA_DIR (ARCHON_DATA_DIR) ist kanonisch, Workspace-Legacy
+        # bleibt ergaenzend erhalten — kein stilles Leer-Globbing mehr.
+        tenant_db_files = _tenant_db_files()
+        export["sources"]["tenant_roots"] = _tenant_roots()
+        export["sources"]["tenant_dbs_scanned"] = len(tenant_db_files)
+        resolution_errors = _tenant_resolution_errors()
+        if resolution_errors:
+            export["sources"]["tenant_resolver_errors"] = resolution_errors
         # D03/HIGH: PocketBase-Bestand unabhaengig vom POCKETBASE_ENABLED-Flag
         # in Art.15/17 einbeziehen (die DBs liegen physisch im Repo und werden
         # auch gesichert — "deaktiviert" darf nicht "unloeschbar" bedeuten).
@@ -637,6 +699,9 @@ class GDPRComplianceEngine:
                 "feedback_entries": 0,
                 "crm_contacts": 0,
                 "tenant_records": 0,
+                # W1-B: tenant-scoped lossless Session-DAG (Turns/Summaries)
+                "lossless_turns": 0,
+                "lossless_summaries": 0,
                 "receipts": 0,
                 "esign_contracts": 0,
                 "invoices": 0,
@@ -798,9 +863,19 @@ class GDPRComplianceEngine:
                 errors.append(f"Memory: {e}")
 
         # 3b. Multi-Tenant-DBs (ERP, Contracts, Deals, CRM crm.db, Banktransaktionen) mit BEG IV / § 147 AO Sperrprüfung
-        import glob
-        tenants_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "tenants")
-        tenant_db_files = sorted(glob.glob(os.path.join(tenants_root, "*", "*.db")))
+        # D03/HIGH: gleiche Root-Auflösung wie in Art.15 (APP_DATA_DIR + Legacy).
+        tenant_db_files = _tenant_db_files()
+        results["tenant_db_files_scanned"] = len(tenant_db_files)
+        results["tenant_roots"] = _tenant_roots()
+        errors.extend(_tenant_resolution_errors())
+        # W1-B: die lossless Session-DAG liegt in memory.db/lcm_sessions.db —
+        # sowohl pro Tenant als auch in der zentralen (konsolidierten) memory.db.
+        dag_db_files = [
+            p for p in tenant_db_files
+            if os.path.basename(p) in ("memory.db", "lcm_sessions.db")
+        ]
+        if os.path.isfile(self.memory_db) and self.memory_db not in dag_db_files:
+            dag_db_files.append(self.memory_db)
         # D03/HIGH: PocketBase-Bestand unabhaengig vom POCKETBASE_ENABLED-Flag
         # in Art.15/17 einbeziehen (die DBs liegen physisch im Repo und werden
         # auch gesichert — "deaktiviert" darf nicht "unloeschbar" bedeuten).
@@ -850,11 +925,14 @@ class GDPRComplianceEngine:
                         cur.execute(f"PRAGMA table_info({tbl})")
                         avail = {r[1] for r in cur.fetchall()}
                         use_cols = [c for c in cols if c in avail]
-                        if not use_cols or "id" not in avail:
+                        # email_drafts nutzt draft_id statt id — sonst bleibt
+                        # genau diese Tabelle unter FULL_TENANT_ISOLATION ungeschwaerzt.
+                        id_col = "id" if "id" in avail else ("draft_id" if "draft_id" in avail else None)
+                        if not use_cols or not id_col:
                             continue
                         extra_cols = [c for c in ("booking_date", "value_date") if c in avail and c not in use_cols]
                         where_sql = " OR ".join(f"{c} LIKE ?" for c in use_cols)
-                        sel_sql = f"SELECT id, {', '.join(use_cols + extra_cols)} FROM {tbl} WHERE {where_sql}"
+                        sel_sql = f"SELECT {id_col}, {', '.join(use_cols + extra_cols)} FROM {tbl} WHERE {where_sql}"
                         t_rows = cur.execute(sel_sql, [like_pat] * len(use_cols)).fetchall()
                         for row in t_rows:
                             if not any(_matches_subject(row[idx + 1], term_pat) for idx in range(len(use_cols))):
@@ -889,7 +967,7 @@ class GDPRComplianceEngine:
                             results["affected"]["tenant_records"] += 1
                             if not dry_run:
                                 set_sql = ", ".join(f"{c} = ?" for c in use_cols)
-                                upd_sql = f"UPDATE {tbl} SET {set_sql} WHERE id = ?"
+                                upd_sql = f"UPDATE {tbl} SET {set_sql} WHERE {id_col} = ?"
                                 vals = [_redact_ci(row[idx + 1]) for idx in range(len(use_cols))]
                                 cur.execute(upd_sql, vals + [rid])
                     if not dry_run:
@@ -897,6 +975,32 @@ class GDPRComplianceEngine:
             except Exception as e:
                 print(f"[GDPR] Fehler bei Tenant-DB {os.path.basename(tdb)}: {e}", file=sys.stderr)
                 errors.append(f"Tenant({os.path.basename(tdb)}): {e}")
+
+        # 3b-2. W1-B: tenant-scoped lossless Session-DAG (Turns + neu
+        # signierte Summaries). Ohne diesen Aufruf bleiben personenbezogene
+        # Turns/Summaries geschuetzt, obwohl Art.17 eine Quittung ausstellt.
+        results["lossless_dag"] = {}
+        for dag_db in dag_db_files:
+            try:
+                from backend.lossless_session_dag import (
+                    anonymize_subject_in_lossless_history,
+                )
+                tenant_id = (
+                    os.path.basename(os.path.dirname(dag_db))
+                    if os.path.basename(dag_db) in ("memory.db", "lcm_sessions.db")
+                    and os.path.basename(os.path.dirname(dag_db)) != "data"
+                    else None
+                )
+                dag_res = anonymize_subject_in_lossless_history(
+                    term, tenant_id=tenant_id, dry_run=dry_run, db_path=dag_db
+                )
+                key = tenant_id or "central"
+                results["lossless_dag"][key] = dag_res
+                results["affected"]["lossless_turns"] += int(dag_res.get("turns", 0))
+                results["affected"]["lossless_summaries"] += int(dag_res.get("summaries", 0))
+            except Exception as e:
+                print(f"[GDPR] Fehler bei Lossless-DAG {dag_db}: {e}", file=sys.stderr)
+                errors.append(f"LosslessDAG({os.path.basename(dag_db)}): {e}")
 
         # 3c. Obsidian Vault Notizen bereinigen
         if os.path.exists(self.obsidian_dir):
@@ -937,6 +1041,20 @@ class GDPRComplianceEngine:
 
         total = sum(results["affected"].values())
         results["total_affected"] = total
+
+        # D03/HIGH (F012): keine Erfolgs-Quittung ohne Treffer, wenn Mandanten-
+        # DBs bekannt sind. Ein 0-Treffer-Lauf bei vorhandenen Tenant-DBs bedeutet
+        # praktisch immer eine falsche Root-Auflösung (z. B. ignoriertes
+        # ARCHON_DATA_DIR) — genau der Fall, der vorher still als Erfolg galt.
+        if total == 0 and results.get("tenant_db_files_scanned", 0) > 0:
+            results["status"] = "failed"
+            results["receipt"] = None
+            raise RuntimeError(
+                "DSGVO Art. 17: 0 Treffer bei "
+                f"{results['tenant_db_files_scanned']} bekannten Tenant-DBs unter "
+                f"{results.get('tenant_roots')} — keine Löschquittung ausgestellt "
+                "(Tenant-Root/Resolver prüfen)."
+            )
 
         # 4. Audit-Log Quittung erstellen
         if not dry_run:
@@ -1184,7 +1302,8 @@ def _verify_gdpr_audit_chain_raw(db_path: Optional[str] = None) -> Dict[str, Any
     """
     from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
 
-    conn = sqlite3.connect(db_path or _resolve_db("agentic_memory.db"), timeout=10.0)
+    from backend.db_paths import DB_BUSY_TIMEOUT_S
+    conn = sqlite3.connect(db_path or _resolve_db("agentic_memory.db"), timeout=DB_BUSY_TIMEOUT_S)
     conn.row_factory = sqlite3.Row
     try:
         has_tbl = conn.execute(

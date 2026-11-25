@@ -7,7 +7,7 @@
   "category": "tool",
   "default_enabled": true,
   "permissions": ["system_info", "filesystem_read"],
-  "hooks": ["on_startup", "on_enable", "on_disable"],
+  "hooks": ["on_enable", "on_disable"],
   "entry_point": "plugin.py:SystemMetricsPlugin",
   "settings_schema": {
     "type": "object",

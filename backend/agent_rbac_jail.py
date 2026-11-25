@@ -5,8 +5,16 @@ Erzwingt pro Agenten-Rolle strikte Werkzeug-Berechtigungen und Verzeichnis-Grenz
 Blockiert unbefugte Zugriffe auf `.env`, SSH-Keys, Systemverzeichnisse oder fremde Code-Ordner.
 """
 
+import logging
 import os
 from typing import Dict, Any, List
+
+logger = logging.getLogger(__name__)
+
+
+def _audit_strict() -> bool:
+    raw = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off", "none"}
 
 
 def _jail_disable_opt_in() -> bool:
@@ -14,24 +22,30 @@ def _jail_disable_opt_in() -> bool:
     return os.environ.get("ARCHON_ALLOW_RBAC_JAIL_DISABLE", "").strip().lower() in ("1", "true", "yes")
 
 
-def _audit_jail_bypass(role: str, tool_name: str, opt_in: bool) -> None:
-    """Signiertes Audit-Event bei versuchter Jail-Umgehung."""
+def _audit_jail_bypass(role: str, tool_name: str, opt_in: bool) -> str:
+    """Signiertes Audit-Event bei versuchter Jail-Umgehung (D05/MED).
+
+    Gibt ``audit_status`` zurück. Ein Schreibfehler wird nie verschluckt:
+    ERROR-Log immer, bei ARCHON_AUDIT_STRICT=1 harter Abbruch. Der Deny-Pfad
+    bleibt dadurch in jedem Fall wirksam.
+    """
     try:
-        from backend.audit_log import chained_audit_log
-        chained_audit_log.record_event(
-            category="security",
-            action="rbac_jail_bypass_blocked",
-            agent_id=role or "unknown",
-            payload={
+        from backend.audit_log import _require_audit_event
+        _require_audit_event(
+            "security", "rbac_jail_bypass_blocked", role or "unknown",
+            {
                 "role": role,
                 "tool": tool_name,
                 "bypassed": True,
                 "explicit_opt_in": opt_in,
             },
         )
-    except Exception:
-        # Audit darf den Deny-Pfad nicht aufweichen.
-        pass
+    except Exception as exc:
+        logger.error("[Audit] RBAC-Jail-Bypass nicht auditierbar: %s", exc)
+        if _audit_strict():
+            raise RuntimeError("audit_write_failed") from exc
+        return "error"
+    return "ok"
 
 
 def _get_cfg() -> Dict[str, Any]:
@@ -90,11 +104,12 @@ class AgentRBACJail:
             # prueft nur `allowed` und liess den Bypass damit passieren. Ein
             # `bypassed` darf NIE als Positivpruefung gelten -> hart deny.
             opt_in = _jail_disable_opt_in()
-            _audit_jail_bypass(role, tool_name, opt_in)
+            audit_status = _audit_jail_bypass(role, tool_name, opt_in)
             return {
                 "allowed": False,
                 "blocked": True,
                 "bypassed": True,
+                "audit_status": audit_status,
                 "role": role,
                 "tool": tool_name,
                 "target_path": target_path,

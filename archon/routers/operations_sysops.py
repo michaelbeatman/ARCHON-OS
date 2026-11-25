@@ -504,7 +504,23 @@ def api_chaos_run(request: Request, req: ChaosRunRequest = Body(default=ChaosRun
         from chaos_tester import ArchonChaosTester
         tester = ArchonChaosTester(dry_run=dry_run)
         results = tester.run_all()
-        return {"status": "success", "chaos_results": results}
+        # D10/MED: kein Fake-Erfolg. Ein SLA-Bruch oder Lock-Fehler muss im
+        # Status sichtbar sein — sonst bleibt der Produktiv-Gate gruen.
+        failed = int(results.get("tests_failed", 0))
+        details = results.get("details", {}) or {}
+        db_res = details.get("db_concurrency", {}) or {}
+        restart_res = details.get("container_restart", {}) or {}
+        return {
+            # "success" bedeutet hier nur: die Suite lief durch. Der echte
+            # Testausstand steht in status/tests_failed/metrics.
+            "status": "failed" if failed else "success",
+            "chaos_results": results,
+            "tests_failed": failed,
+            "metrics": {
+                "chaos_db_lock_errors": int(db_res.get("errors_count", 0) or 0),
+                "chaos_restart_sla_violations": int(bool(restart_res.get("sla_violation"))),
+            },
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail={"code": "sysops_chaos_test_failed", "params": {"error": str(e)}})
 

@@ -180,23 +180,43 @@ def test_jev_connection(api_key: Optional[str] = None, base_url: Optional[str] =
 
     start = time.time()
     try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "AgenticOS-JEV-Router",
-                "Authorization": f"Bearer {key}" if key else ""
-            }
+        # W4-B/D06: niemals rohes urlopen() — das folgt 3xx automatisch und
+        # wuerde eine vorher validierte Public-URL auf IMDS/localhost umlenken.
+        # safe_http_request() blockiert ALLE Redirects, pinnt die gepruefte IP
+        # und begrenzt die Antwortgroesse. Die Eingangs-URL wird dabei erneut
+        # gegen Egress-Regeln geprueft (kein Vertrauen in den Aufrufer).
+        from utils.safe_http import safe_http_request
+
+        headers = {"User-Agent": "AgenticOS-JEV-Router"}
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        status_code, _resp_headers, _body = safe_http_request(
+            str(url or ""),
+            method="GET",
+            headers=headers,
+            timeout=5,
+            max_bytes=64 * 1024,
+            public_only=True,
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            latency_ms = int((time.time() - start) * 1000)
-            return {
-                "status": "success",
-                "code": resp.status,
-                "latency_ms": latency_ms,
-                "message": f"Endpunkt erreichbar ({latency_ms} ms)"
-            }
+        latency_ms = int((time.time() - start) * 1000)
+        return {
+            "status": "success",
+            "code": int(status_code),
+            "latency_ms": latency_ms,
+            "message": f"Endpunkt erreichbar ({latency_ms} ms)"
+        }
     except urllib.error.HTTPError as e:
         latency_ms = int((time.time() - start) * 1000)
+        # Der Redirect-Blocker wirft HTTPError mit dem 3xx-Status. Alles andere
+        # ist eine echte Server-Antwort und bleibt wie zuvor 'connected'/'error'.
+        if int(e.code) in (301, 302, 303, 307, 308):
+            return {
+                "status": "blocked",
+                "error_code": "REDIRECT_BLOCKED",
+                "code": int(e.code),
+                "latency_ms": latency_ms,
+                "message": f"HTTP-Redirect ({e.code}) aus SSRF-Schutzgruenden blockiert."
+            }
         return {
             "status": "connected" if e.code in (400, 401, 404, 405) else "error",
             "code": e.code,
@@ -204,6 +224,16 @@ def test_jev_connection(api_key: Optional[str] = None, base_url: Optional[str] =
             "message": f"Server antwortet mit HTTP {e.code} ({latency_ms} ms)"
         }
     except Exception as e:
+        from utils.egress_guard import EgressBlocked
+
+        if isinstance(e, EgressBlocked):
+            return {
+                "status": "blocked",
+                "error_code": "EGRESS_BLOCKED",
+                "code": 400,
+                "latency_ms": int((time.time() - start) * 1000),
+                "message": f"JEV-Ziel aus Egress-Schutzgruenden blockiert: {e}"
+            }
         return {
             "status": "error",
             "code": 0,

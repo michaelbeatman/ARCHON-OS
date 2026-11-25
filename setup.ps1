@@ -249,14 +249,23 @@ if ($stackProfile -eq "standard") {
     $services += @("anything-llm", "chroma", "n8n", "ollama-embed")
 }
 
-& docker compose up -d --build @services
+# Audit D10/F043: IMMER die produktive Compose-Datei. Eine lokal vorhandene,
+# gitignorierte docker-compose.override.yml wuerde sonst ./:/app bind-mounen
+# und die .env mit dem Audit-HMAC-Key als /app/.env im Container exponieren.
+& docker compose -f docker-compose.yml config --quiet
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERROR] Docker Compose failed. Check logs via: docker compose logs archon-os hermes" -ForegroundColor Red
+    Write-Host "[ERROR] docker-compose.yml ist ungueltig." -ForegroundColor Red
+    exit 1
+}
+
+& docker compose -f docker-compose.yml up -d --build @services
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Docker Compose failed. Check logs via: docker compose -f docker-compose.yml logs archon-os hermes" -ForegroundColor Red
     exit 1
 }
 
 Write-Host "[5/6] Generating 70 Specialist SOUL.md & Hermes profile.yaml configurations ($lang)..." -ForegroundColor Yellow
-& docker compose exec -T archon-os python scripts/sync_soul_modes.py --mode compact --lang $lang
+& docker compose -f docker-compose.yml exec -T archon-os python scripts/sync_soul_modes.py --mode compact --lang $lang
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[WARN] Profile sync inside container reported a warning; continuing health check..." -ForegroundColor Yellow
 } else {

@@ -1,6 +1,7 @@
 """Re-Audit Etappe 5 — D05 Anker-Laundering und D06 n8n-Webhook-Signatur."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,50 @@ def test_d05_normal_growing_anchor_still_written(monkeypatch):
     res = al.record_chain_anchor("gdpr_audit_log", "b" * 64, 11)
     assert res["written"] is True
     assert events and events[0]["action"] == "chain_head_anchor"
+
+
+def test_d05_key_rotation_keeps_historical_anchors_verifiable(monkeypatch):
+    """H-05-1/W1-A: Rollengetrennte Anker-/Audit-Keys mit Epochen.
+
+    Die alte Anker-Erwartung kannte nur EINEN Key: nach Rotation waren alle
+    historischen Anker ``valid=False``. Der Audit-Key und der Anker-Key sind
+    jetzt getrennt und epochenbewusst; alte Bloecke werden mit dem Key
+    verifiziert, der zum Schreibzeitpunkt galt.
+    """
+    monkeypatch.delenv("ARCHON_AUDIT_ANCHOR_EPOCHS", raising=False)
+    monkeypatch.delenv("ARCHON_AUDIT_ANCHOR_EPOCH_FROM", raising=False)
+    monkeypatch.setenv("ARCHON_AUDIT_ANCHOR_KEY", "anchor-key-epoch-0")
+    monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "audit-key-epoch-0")
+    monkeypatch.setenv("ARCHON_AUDIT_HMAC_EPOCH_FROM", "0")
+    monkeypatch.delenv("ARCHON_AUDIT_HMAC_EPOCHS", raising=False)
+
+    old_key, old_epoch = al._anchor_signing_key(10)
+    assert old_key == b"anchor-key-epoch-0"
+    assert old_epoch == 0
+    assert al._key_for_block(10) == b"audit-key-epoch-0"
+
+    # Rotation NUR des Audit-Keys: der alte Key wird als Epoche 0 explizit
+    # konfiguriert, damit alte Bloecke weiter verifizierbar bleiben.
+    monkeypatch.setenv(
+        "ARCHON_AUDIT_HMAC_EPOCHS",
+        json.dumps([{"key": "audit-key-epoch-0", "from_block": 0}]),
+    )
+    monkeypatch.setenv("ARCHON_AUDIT_HMAC_KEY", "audit-key-epoch-20")
+    monkeypatch.setenv("ARCHON_AUDIT_HMAC_EPOCH_FROM", "20")
+    assert al._key_for_block(10) == b"audit-key-epoch-0"
+    assert al._key_for_block(20) == b"audit-key-epoch-20"
+
+    # Rotation des Anker-Keys mit eigenem Epochen-Marker: der historische
+    # Anker bleibt ueber _anchor_key_for_epoch() auffindbar.
+    monkeypatch.setenv(
+        "ARCHON_AUDIT_ANCHOR_EPOCHS",
+        json.dumps([{"key": "anchor-key-epoch-0", "from_block": 0}]),
+    )
+    monkeypatch.setenv("ARCHON_AUDIT_ANCHOR_KEY", "anchor-key-epoch-30")
+    monkeypatch.setenv("ARCHON_AUDIT_ANCHOR_EPOCH_FROM", "30")
+    assert al._anchor_key_for_epoch(old_epoch) == b"anchor-key-epoch-0"
+    assert al._anchor_key_for_epoch(30) == b"anchor-key-epoch-30"
+    assert al._anchor_key_epochs()[0][1] != al._hmac_epochs()[0][1]
 
 
 def test_d06_webhook_is_signed_over_compact_body(monkeypatch):

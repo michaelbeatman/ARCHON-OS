@@ -33,6 +33,30 @@ def _resolve_treasury_db() -> str:
         return TREASURY_DB_PATH
 
 
+def _finance_threshold(policy_key: str) -> float:
+    """D04/H-04-4: Betragsschwellen aus approval_policy_engine als SSOT.
+
+    Fehlt die Policy oder ist sie nicht numerisch, wird hart abgebrochen
+    (fail-closed) — niemals ein lokaler Default-Wert, der die Freigabe
+    aufweicht.
+    """
+    try:
+        from backend.approval_policy_engine import approval_engine
+        rows = approval_engine.get_policies("finance")
+        for row in rows:
+            if str(row.get("policy_key") or "") == policy_key:
+                return approval_engine._parse_finance_threshold(
+                    row.get("policy_value"), policy_key
+                )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Finance-Policy '{policy_key}' nicht lesbar (fail-closed): {exc}"
+        ) from exc
+    raise RuntimeError(
+        f"Finance-Policy '{policy_key}' fehlt — Zahlungsfreigabe fail-closed verweigert."
+    )
+
+
 def _get_conn() -> sqlite3.Connection:
     db_path = _resolve_treasury_db()
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -420,7 +444,12 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
     recipient = str(payload.get("recipient") or "").strip()
     purpose = str(payload.get("purpose") or "").strip()
     category = str(payload.get("category") or "Sonstiges").strip()
-    requested_by = str(payload.get("requested_by") or actor_id or "user").strip()
+    # D04/H-04-4: requested_by AUSSCHLIESSLICH serverseitig aus der verifizierten
+    # Session (v2_capabilities._treasury_actor), niemals aus dem Payload. Ein
+    # Client darf die Identität des Anforderers nicht frei setzen.
+    requested_by = str(actor_id or "").strip()
+    if not requested_by or requested_by.lower() in ("anonymous", "unknown", "system"):
+        raise PermissionError("requested_by_required: kein verifizierter Anforderer aus der Session.")
     idem_key = str(payload.get("idempotency_key") or f"idem-{uuid.uuid4().hex[:12]}").strip()
 
     from backend.passkey_hitl import is_passkey_required
@@ -501,10 +530,19 @@ def request_payment(payload: Dict[str, Any], actor_id: str = "admin") -> Dict[st
                 else:
                     status = "pending_approval"
                     policy_note = "Passkey-/HITL-Schutz aktiv: Agent darf nicht selbst ausfuehren (Handy-Freigabe noetig)"
-            elif payload.get("execute_immediately") and acc["balance"] >= amount:
+            elif (
+                payload.get("execute_immediately")
+                and not passkey_enforced
+                and amount < _finance_threshold("finance_auto_approval_max")
+                and acc["balance"] >= amount
+            ):
+                # D04/H-04-4: Direktbuchung NUR unter der Auto-Freigabeschwelle
+                # (SSOT approval_policy_engine, Default 50 EUR) und ohne
+                # Passkey-HITL. request_payment() hat den Actor bereits
+                # serverseitig verifiziert (kein "anonymous"/"system").
                 status = "executed"
                 executed_at = now_iso
-                policy_note = "Direktbuchung durch Benutzer"
+                policy_note = "Direktbuchung durch Benutzer (< Auto-Freigabeschwelle, kein Passkey-HITL)"
                 conn.execute(
                     "UPDATE treasury_accounts SET balance = balance - ?, updated_at = ? WHERE id = ?",
                     (amount, now_iso, account_id),
@@ -597,6 +635,24 @@ def approve_payment(tx_id: str, approver_id: str = "admin", passkey_verified: bo
         if tx["status"] != "pending_approval":
             conn.rollback()
             return tx
+
+        # D04/H-04-4: Vier-Augen-Prinzip ab der SSOT-Schwelle
+        # (approval_policy_engine.finance_four_eyes_min, Default 500 EUR).
+        # Identitäts-Tokens kommen aus derselben SSOT wie die
+        # Ersteller-Sperre (inkl. "alice (i.V. Bob)" -> alice/bob).
+        from backend.approval_policy_engine import _actor_identity_tokens
+
+        requester = str(tx.get("requested_by") or "").strip()
+        approver = str(approver_id or "").strip()
+        if not requester or not approver:
+            conn.rollback()
+            raise PermissionError("four_eyes_identity_required: Anforderer oder Genehmiger fehlt.")
+        if float(tx["amount"]) >= _finance_threshold("finance_four_eyes_min"):
+            if _actor_identity_tokens(requester) & _actor_identity_tokens(approver):
+                conn.rollback()
+                raise PermissionError(
+                    "four_eyes_violation: Anforderer darf die eigene Zahlung nicht freigeben."
+                )
 
         acc_row = conn.execute("SELECT * FROM treasury_accounts WHERE id = ?", (tx["account_id"],)).fetchone()
         if not acc_row:

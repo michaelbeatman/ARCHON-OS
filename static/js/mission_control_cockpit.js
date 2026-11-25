@@ -54,7 +54,13 @@
         }
         if (mcRoot && !mcRoot.classList.contains("hidden")) {
           if (missionControlPollTimer) clearTimeout(missionControlPollTimer);
-          missionControlPollTimer = setTimeout(() => fetchMissionControlData(), 15000);
+          // D08/MED: kein 15-s-Parallel-Poll mehr. Der gemeinsame archon:sse-
+          // Bus liefert die Aktualisierungen; der 60-s-Timer ist NUR ein
+          // Fallback, wenn dieser Bus nachweislich keine Events mehr liefert.
+          missionControlPollTimer = setTimeout(() => {
+            const lastSse = Number(window.__mc_last_sse_ts || 0);
+            if (lastSse > 0 && Date.now() - lastSse > 60000) fetchMissionControlData();
+          }, 60000);
         }
       }
     }
@@ -70,6 +76,9 @@
       window.addEventListener("archon:sse", function(event) {
         try {
           const ev = event && event.detail;
+          // Jedes Event (auch Heartbeat) beweist eine lebende SSE-Verbindung
+          // und unterdrueckt damit den 60-s-Fallback-Poll.
+          if (ev) window.__mc_last_sse_ts = Date.now();
           if (!ev || ev.type === "heartbeat") return;
           if (ev.type === "kanban_updated" || ev.type === "task_captured") {
             clearTimeout(_mcSseDebounceTimer);

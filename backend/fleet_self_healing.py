@@ -340,8 +340,12 @@ def check_fleet_and_heal(services: Optional[List[str]] = None) -> Dict[str, Any]
         )
 
         # Audit D10: "konfiguriert" NUR bei einem echten, erreichbaren
-        # Empfaenger. Der Compose-Default `ARCHON_HEARTBEAT_ALERTMANAGER_URL`
-        # zaehlt nicht mehr — er war immer gesetzt, auch ohne Container.
+        # Empfaenger. Der externe Empfaenger ist ausschliesslich
+        # `ARCHON_HEARTBEAT_WEBHOOK_URL` (alternativ `evey-status.json`);
+        # der immer aktive Dead-Man-Switch ist die Prometheus-Metrik
+        # `archon_heartbeat_timestamp_seconds` (Alert: > 300 s bzw. absent()).
+        # Weitere historische Alertmanager-URL-Variablen gibt es nicht mehr;
+        # sie zaehlen nicht als konfigurierter Empfaenger.
         dead_man_configured = bool(_get_heartbeat_webhook_url()) and (
             bool(webhook_sent) or _HEARTBEAT_WEBHOOK_LAST_TS > 0
         )

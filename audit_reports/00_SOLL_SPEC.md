@@ -1,193 +1,292 @@
-# Archon OS — SOLL-SPEZIFIKATION (Phase 0, Audit-Lauf 24.11.2026)
+# 00 — SOLL-SPEZIFIKATION (Archon OS V5.0 SYSTEM-AUDIT)
 
-> Verbindlicher Maßstab für alle 16 Domänen-Audits. **Ausschließlich aus Systemdokumentation
-> extrahiert; kein Implementierungscode als Quelle verwendet.**
-> Basis: HEAD `82851c48` (Branch `main`, Working Tree clean, 24.11.2026).
-> Vorheriger Lauf archiviert unter `audit_reports/_archiv_2026-11-24_pre_audit/`.
-
-## Quellen / SSOT-Rangfolge
-
-1. `docs/system/NEVER_DO_LIST.md` — Veto, Benutzerentscheidung 22.11.2026 (**G-01/G-02 bleiben verbindlich**)
-2. `docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md` — Architektur-SSOT
-3. `docs/AUDIT_FINDINGS_REGISTER.md` — Findings-SSOT („kein Fix ohne Registereintrag")
-4. `docs/system/WIRING_AUDIT_2026.md` — 100%-Verdrahtungskriterium
-5. `docs/system/ORCHESTRATION_GOVERNANCE_V2_GUIDE.md`, `docs/ARCHITECTURE_N8N_VS_AGENT_ROUTING.md`
-6. `docs/system/LLM_TRACING_LANGFUSE_GUIDE.md` (Ist-Zustand Abschnitt 0 ist maßgeblich), `docs/security/*`, `README.md`, `SECURITY.md`
-
-## 0. Globale Randbedingungen
-
-| ID | Anforderung | Quelle / Status |
-|---|---|---|
-| G-01 | **Kein Coroutine-/Event-Replay** im Durable Kernel. Persistierte Node-States + Checkpoints sind die akzeptierte Lösung. Nicht implementieren, nicht vorschlagen. | NEVER_DO §1 — **weiterhin verbindlich** |
-| G-02 | **Keine PostgreSQL-Migration.** SQLite bleibt DB. Konsolidierung `28 → 3` Domänen-DBs + physisch isolierte Mandanten-DBs ist Endarchitektur. | NEVER_DO §2 — **weiterhin verbindlich** |
-| G-03 | **100 %-Verdrahtung:** Jede Mechanik braucht (1) Produzent, (2) Konsument im Produktivpfad, (3) sichtbarer Effekt (DB/Datei/Webhook/Audit), (4) Test/Metrik. Fehlt ein Glied → „Theater". | WIRING_AUDIT |
-| G-04 | Status „implementiert" nur mit Verifikation (Test/py_compile/Container). „Keine Regression" ≠ „fertig". Grüne Tests heißen nur: keine Regression. | REGISTER §5 |
-| G-05 | **WIEDERHERGESTELLT (User-Entscheidung 24.11.2026).** Für pre-1.0 bewusst akzeptiert und **nicht als Finding zu bewerten**: (1) `main.py` God-Object, (2) 11k-Zeilen-Telegram-Adapter, (3) lokaler Single-User-Default auf `127.0.0.1`, (4) prozess-lokale Provider-Breaker. Diese Punkte bleiben dokumentiert, werden aber nicht mit Kritikalität gewichtet und gehen nicht in die Reifegrad-Bewertung ein. | REGISTER §6 — vom User am 24.11.2026 erneut bestätigt; Auswirkung siehe MASTER_PLAN §5 |
-| G-05a | **Nicht Teil der Wiederherstellung:** n8n-Stubs (deaktiviert statt implementiert) standen nicht in der User-Liste vom 24.11.2026 und bleiben daher **regulär bewertet** (siehe D06). | Bewusste Abweichung zur Ursprungsfassung von G-05 |
-| G-06 | Doku-Behauptungen sind **Behauptungen**, keine Beweise. Jede Aussage ist gegen Code zu verifizieren. | REGISTER §5 / TRACING §0 |
-| G-07 | Zweisprachigkeit DE/EN: **71 Profile** (verbindliche User-Entscheidung 2026-11-24; `micha`/`alpha` entfernt, `linkedin_social_media_specialist` nicht in der SSOT), 3-Tier `SOUL.md` (Compact/Pro/Full), **497 versionierte SOUL-Artefakte** (71 × 7: je 3 Tier-Dateien DE + 3 EN + `SOUL.md`), 832 Prompts, 55 Frameworks, 11 UI-Lokale. | README / Architektur |
-
-## 1. Verdrahteter Schein & Stub-Detection
-
-- S-1.1 Keine Mocks, Dummy-Daten, hartcodierten Returns oder `TODO`/`FIXME` im Produktivkern, die als echte Funktion ausgegeben werden.
-- S-1.2 Alle vier Glieder aus G-03 nachweisbar. UI-Controls brauchen Handler + existierenden Ziel-Endpunkt; SSE hört auf echte Events; Status-Maps kennen alle Backend-Statuswerte.
-- S-1.3 Quality-/Fact-Check-/Plagiat-/Kanal-Gates **blockieren** Freigaben, nicht nur Score.
-- S-1.4 Outbox/DLQ braucht produktiven Drainer mit CAS + Retry + Dead-Letter.
-- S-1.5 Deaktivierte Stubs dürfen keinen Erfolg signalisieren; ehrlicher Zustand (`planned`/`not_configured`/`simulation`/`ARCHON_DEMO_MODE`).
-- S-1.6 Historisch offen: `subagents_count`, `suspend_task()`, Schema-Dropzone, n8n-echte Nodes, PbSettings-Endpunkte, Tool-Output-Firewall im echten Chokepoint.
-- S-1.7 Leere/fehlerhafte Antworten nie als Erfolg; „success" nur bei nachgewiesener Wirkung.
-
-## 2. Agenten-Orchestrierung & Routing
-
-- S-2.1 70 Spezialisten + 3 Meta-Profile, 3-Tier SOUL, 8 Domänen, profilbasierte Tool-Scopes.
-- S-2.2 Delegation über zentrale PolicyEngine + isolierte Scopes; Subagenten erben **keine** privilegierten Parent-Tools; fail-closed `["web_search"]`.
-- S-2.3 Zyklus-/Tiefenschutz: `visited`-Set pro Sub-Session, `_MAX_DELEGATION_DEPTH=5`, Ablehnung **bevor** Kanban-Task/LLM-Call entstehen.
-- S-2.4 Cancel-Kette: Kill-Switch fail-closed, `worker.cancel()` bei Deadline, Cancel-Token nach **jedem** `await`, Status `cancelled` persistiert, Registry-Cleanup im `finally`.
-- S-2.5 Fan-in-Synchronisation: Synthese erst wenn alle Kinder `completed`; Latch mit Timestamp + Watchdog-Reset; `_MC_ASYNC_LOCK` + `_MC_DATA_LOCK`.
-- S-2.6 Lease/Fencing: CAS-Lease, 30-s-Heartbeat, Fencing-Token bei Verlust → harter Abbruch; kein Reaktivieren laufender Tasks; Lease-Claim-Fehler fail-closed.
-- S-2.7 DAG: paralleler Fan-Out, Quorum, Human-/Machine-Gates, SHA-256-Fingerprint-Resume, `replan_count`-Cap, Pre-Execution-Validator, `CancelledError` → `cancelled`.
-- S-2.8 Effect Ledger mit `UNKNOWN` + zwingender Reconciliation (CAS gegen doppelte Zustellung).
-- S-2.9 Budget: atomare BudgetBank (`reserve → settle/release`), harte Tages-/Monatslimits, 15 % Triage/Synthese + 85 % komplexitätsgewichtet, `paused_budget` bei Überschreitung.
-- S-2.10 Routing: deterministisch vor probabilistisch (n8n/Skripte, 0 Tokens); OmniRoute :20128; Zero-Egress-Gate + Privacy-Router hart fail-closed; `evaluate_and_gate_llm_dispatch()` in **allen** Dispatch-Pfaden; `blocked` darf nicht auf Cloud-Fallback fallen.
-- S-2.11 Circuit-Breaker mit Half-Open (genau **ein** Probe), Retry-After + Jitter 0,75–1,25, 90-s-Gesamt-Deadline der Fallback-Kette.
-- S-2.12 Boardroom: 55 Frameworks, 4 Phasen + optionales MoA, isolierte Debate/Critique/Synthesis, `resolve_debate_consensus()`, Chairman-Hoheit, `NO_CONSENSUS` ohne Final Decision, Framework-Instruktion nur 1× pro Call.
-
-## 3. Persistenz, Datenbank & Vault-Integrität
-
-- S-3.1 SQLite WAL als SSOT: `ops.db`, `business.db`, `memory.db`; `busy_timeout=5000`; `resolve_db()` + `TenantContextManager`.
-- S-3.2 Physische Mandantentrennung `data/tenants/<id>/{erp,kanban,crm,contracts,deals}.db`; Echtzeit-Umschalter; keine Vermischung.
-- S-3.3 DATEV-Nummernkreise pro Mandant atomar; **eine** Authority.
-- S-3.4 GoBD-Unveränderlichkeit: `recipient_snapshot_json`, `booked_at`; `booked`/`paid → draft` gesperrt.
-- S-3.5 Backups/Restore: Cross-Prozess-Restore-Lock, `PRAGMA quick_check` + FK-Check **vor** `os.replace()`, Rollback, tenant-korrekt + Secrets + WAL; Litestream inkl. Tenant-DBs; RPO/RTO dokumentiert.
-- S-3.6 Obsidian-Vault: atomare Writes + Eindeutigkeitssuffix, `expected_mtime`-Konflikt (409), SSOT-Pfad `resolve_obsidian_vault_path()`, RAG-State path→`{mtime,size}`.
-- S-3.7 OS-verwaltete Locks, kein TOCTOU; `safe_path_within()` für alle Dateioperationen.
-- S-3.8 Schema-Per-Spec: `crm_entities`, `crm_contacts` (GDPR-Opt-In), `crm_interactions` (`external_msg_id UNIQUE`), `erp_*`.
-- S-3.9 `PRAGMA foreign_key_check = 0`; keine verwaisten WAL/SHM-Sidecars; keine stillen Datenverluste; `INSERT OR IGNORE` bei abweichender PK-Kollision → Abbruch (DATENVERLUST).
-- S-3.10 28→3-Konsolidierung braucht Manifest/Env-Aktivierung; divergierende Inhalte brechen ab.
-
-## 4. Governance, Security & Permissions
-
-- S-4.1 Default-Deny: `ARCHON_REQUIRE_AUTH=true` / Auth fail-closed für Mesh/Prod; Non-Loopback-Bind erzwingt Auth; lokaler Single-User nur bei `127.0.0.1` (**G-05: bewusst akzeptiert, kein Finding**).
-- S-4.2 RBAC auf **allen** schreibenden Admin-Routen; kein fail-open `_require_admin`; Actor aus Body nie autoritativ; 19 RBAC-Duplikate zentralisiert.
-- S-4.3 HITL: Passkey/WebAuthn (ES256/RS256, `rpIdHash`, `signCount`, UV, Attestation), Proof an `action` + `resource` gebunden, fail-closed 503/403; Vier-Augen ab 500 € mit Ersteller-Abgleich; Auto-Freigabe bis 50 €; 24 h Eskalation.
-- S-4.4 Taint-Gate Default-Deny: `is_critical_egress_tool()` parkt `terminal`, `execute_code`, `computer_use`, `mcp__*`, unbekannte Tools; Einmal-Token verbraucht.
-- S-4.5 Tool-Warrants: HMAC-SHA256, Ablaufzeit, `max_amount`, `allowed_path_prefixes`; **alle** Pfad-Aliase geprüft; RBAC-Jail zentral in `decide()`.
-- S-4.6 Secrets: keine Secrets im Git; env-basiert; `audit_secrets.py` als hartes Gate; keine statischen Fallback-Keys; Rotation (GitHub 90 d, Telegram 180 d, Provider 90 d); HMAC-Epochen.
-- S-4.7 Input-Sanitization: Dual-LLM-Quarantine, **25** Injection-Muster, Prompt-Shield, Tool-Output-Firewall, HTML-Escaping, `_validate_base_url()`, YAML-Sperre, SSRF-Schutz.
-- S-4.8 Sandbox: `python -I`, `TemporaryDirectory`, ohne Host-Env-Secrets, POSIX-`rlimit`, AST-Sperre (`os`, `subprocess`, `socket`, `ctypes`, `urllib`) — auch gegen `__import__`/`eval`/`exec`/Dunder.
-- S-4.9 Egress/DLP: `enforce_egress_firewall_for_url()` + `sanitize_outbound_llm_payload()` vor **jedem** externen Dispatch; `internal: true` Worker-Netz; Socket-Proxy-Allowlist; `cap_drop: [ALL]`.
-- S-4.10 DSGVO Art. 15/17, EU AI Act Art. 4/12/19/50, GoBD, ISO-27001; 26 HIGH_RISK-Rollen; Disclaimer-Dialoge; KI-Kompetenzregister.
-
-## 5. Audit-Trail & Kryptografie
-
-- S-5.1 HMAC-SHA256-Hashkette mit Env-Key: `HMAC(prev_hash + timestamp + payload)`; **kein** Abschalter; nacktes SHA-256 nur Legacy.
-- S-5.2 Lückenlose LLM-Dispatch-Proofs: provider, model, target_host, target_endpoint, egress_zone, **Prompt-/Canary-Version**, Spalten- **und** Payload-Konsistenz; URL-Query-Tokens vor Signatur geschwärzt.
-- S-5.3 Alle Ketten (Audit, Approval, Receipt, Treasury, ApiKey, Email-Draft, GDPR) mit `verify_integrity()`, Append-only-Trigger, Block-ID/Epochen, Anker gegen **Chain-Head** (Tail-Löschung erkannt), non-blocking.
-- S-5.4 Audit-Schreibfehler nie verschluckt; RBAC-Denials + Restore + Webhooks signiert in Zentralkette; keine Payloads/Secrets im Event.
-- S-5.5 Unveränderbarkeit: Verify-Endpoint, JSON/CSV-Export, GoBD-PDF mit verifizierten Blöcken.
-- S-5.6 5 Nebenketten im 30-s-Loop verifiziert; kein fail-open Mirror als Wahrheitsquelle; `trace_id`/`session_id`/`correlation_id` in audit_log.
-
-## 6. Integrationen, Webhooks & API-Routing
-
-- S-6.1 OmniRoute :20128, Multi-Provider, Key aus `OMNIROUTE_API_KEY` auch für `/v1/models`; Allowlist + Diff vor `--fix`.
-- S-6.2 n8n :5678: **eine** Workflow-Quelle, echte Nodes, Service-Token in allen HTTP-Nodes, Host `archon-os`, Browser-ID-Bindung, kein Auto-Owner-Fallback, Webhooks authentifiziert/aktiv (n8n-Stubs unter G-05 **regulär zu prüfen**).
-- S-6.3 Outbound-Webhooks HMAC-SHA256 über exakten (kompakten) Body, Secret nur aus `ARCHON_WEBHOOK_HMAC_SECRET`, Empfänger `compare_digest`/`timingSafeEqual`.
-- S-6.4 Pydantic v2 statt roher `dict = Body(...)`; `extra="ignore"`; keine `.dict()`-Reste; Steuerungsfelder vor externen Keys geschützt; Container-Antworten nur bekannte Inhaltsfelder.
-- S-6.5 Timeouts auf allen `requests`/`urlopen`, Retry-After + Jitter, strukturierte Hop-Resultate; keine stillen Fallbacks.
-- S-6.6 Externe LLM-Provider: Dual-LLM-Guard, Injection-Quarantine, SSRF, Base-URL-Validierung.
-- S-6.7 Telegram/Hermes :8642/:8787, MCP `/mcp` mit scoped Keys + HITL; keine internen Auth-Header nach außen; `follow_redirects=False`, `html.escape`.
-
-## 7. Error-Handling, Sackgassen & Recovery
-
-- S-7.1 Keine unbehandelten Exceptions; keine stillen `except: pass`; kein `AttributeError`-500 durch Dict/Modell-Mix; globaler 500-Handler mit `trace_id` ohne Stacktrace-Leak.
-- S-7.2 Keine Endlosschleifen: Loop-Guards, Retry-Caps, Deadlock-Watchdog, Replan-Cap, `sufficient=False`.
-- S-7.3 Keine Zombie-Prozesse; `_terminate_container()` verifiziert Entfernung; keine Checkpoint-Verluste; `cancel()`-Fehler nie verschluckt.
-- S-7.4 Fallback-Strategien mit definierter Kette + 90-s-Deadline; keine Sackgassen bei `blocked`/`failed`; fehlgeschlagene Verifikation → Eskalation; HITL-Auflösung override/retry/abort.
-- S-7.5 Fail-Closed bei allen Governance-/Auth-/Egress-/Lease-/Taint-Pfaden; Opt-in-Fail-Open nur explizit dokumentiert.
-- S-7.6 Fehler in Insertions/Artefaktwrites → `blocked`/DLQ + ehrliche Quittung, niemals `completed`/`success`.
-
-## 8. Performance, Concurrency & Engpässe
-
-- S-8.1 Kein blockierendes SQLite/I/O im Event-Loop; `asyncio.to_thread` für Hot-Paths; `run_io_bound`.
-- S-8.2 Keine `id(loop)`-Clients/Semaphoren ohne Shutdown → `WeakKeyDictionary` + zentraler `close()`.
-- S-8.3 TTL-Caches mit Lock, Single-Flight; HTTP-Client-Pools mit `aclose()` im Shutdown.
-- S-8.4 Keine Memory-Leaks, keine unbegrenzten Queries, Token-Overhead begrenzt (Framework nur 1×).
-- S-8.5 Frontend: ein zentraler SSE-Bus, Debounce/AbortController, Virtualisierung großer Listen (832 Templates).
-
-## 9. Architektur- & Code-Standards (2026)
-
-- S-9.1 Python 3.13 / Node 22 konsistent; alle Compose-Images mit `@sha256:` gepinnt.
-- S-9.2 Reproduzierbare Builds: Lockfile + `--require-hashes`; `npm ci` ohne `|| npm install`; Actions per SHA gepinnt.
-- S-9.3 CI-Qualitätstor wirkungsvoll: keine `continue-on-error`/`|| true` für Ruff/Mypy/Coverage/ESLint; `ARCHON_TEST_DB_ISOLATION=1` in **allen** Test-Jobs.
-- S-9.4 Pydantic-v2-Modelle, Typsicherheit, Modularität statt God-Objects (**God-Object `main.py` / 11k-Telegram-Adapter: G-05 bewusst akzeptiert, kein Finding**).
-- S-9.5 Keine XSS-Sinks (`dangerouslySetInnerHTML` nur sanitisiert), WCAG/Focus-Trap.
-
-## 10. System-Härtung & 24/7-Resilienz
-
-- S-10.1 Healthchecks `/health`, `/readyz`, `/livez` (503 bei Event-Loop-Hang); Prometheus/Grafana, Loki/Promtail.
-- S-10.2 Watchdog 30 s, Deadlock-Watchdog, Self-Healing **mit echtem Effekt** über Docker-Socket-Proxy (`DOCKER_HOST`, Allowlist, `DockerAdminClient`) — kein direkter Socket.
-- S-10.3 Alertmanager wirklich gestartet, Alarm reproduzierbar zustellbar; externer Heartbeat/Dead-Man-Switch konfigurierbar.
-- S-10.4 Graceful Shutdown, Crash-Recovery (6 h), Backpressure (Disk/Memory/CPU) mit korrekten Schwellen; kein Default „25 GiB frei".
-- S-10.5 Produktiv-Compose statt Dev-`--reload`; `/readyz`-Gate; externes DR-Ziel mit RPO ~5–10 s / RTO dokumentiert; **Watchdog-Supervisor außerhalb des überwachten Loops**.
-- S-10.6 Observability-Profile opt-in (`ARCHON_OBSERVABILITY=full`), tracing profile mit Langfuse-Keys; `not_configured` ehrlich gemeldet.
-
-## 11. Context Drift & Handoff-Integrität
-
-- S-11.1 Übergaben Orchestrator → Subagent strukturiert und schema-validiert (Pydantic/JSON-Schema), kein Freitext-Verlust.
-- S-11.2 Canary-/Prompt-Version im signierten Dispatch-Proof; berechnete Werte (z. B. `effective_prompt_info`) müssen im Result zurückkommen.
-- S-11.3 Kürzungen explizit markiert; keine stillen Trunkierungen von Kontext/Outputs.
-- S-11.4 Kind-Ergebnisse mit `trace_id`/`session_id`/`correlation_id` am Parent wieder zusammenführbar (Fan-in).
-- S-11.5 State-Übergabe über SQLite-Reloads hinweg persistiert (`cancelled`, `paused`, `delegation_depth`, `replan_count`, `failure_reason`).
-
-## 12. Silent Tool Failures & Hallucination-Prevention
-
-- S-12.1 HTTP 200 ohne `choices`/Text/modellierte Nutzlast → `RuntimeError`, niemals Erfolg.
-- S-12.2 `null`, leerer Body, leere Antwort, ungültiges JSON → harter Fehler + Eskalation; keine Erfindung von Fakten.
-- S-12.3 `cost_usd` real berechnet (nicht `0.0`); `structured_output_enforcer` füllt Pflichtfelder **nicht** mit `0`/`""`/`[]` und `valid: True`.
-- S-12.4 Tool-Wrapper/Webhooks/API-Clients eskalieren Fehler; `ZeroEgressBlockedError` nie geschluckt; kein Fake-Text (`[agent]: Anweisung empfangen...`).
-- S-12.5 Simulierte LLM-Antworten (RouterGate, Speculative Hedger, War-Room, Eval-Suite, Map-Reduce) nur explizit gekennzeichnet; keine simulierten Risiken in Governance/HITL.
-
-## 13. Trajectory-Governance & Loop-Prevention
-
-- S-13.1 Harte `max_hops`-, Rekursions-, Token-Budget-Limits **pro Ticket**, persistiert und zur Laufzeit geprüft.
-- S-13.2 `replan_count` hat Setzer und Cap; Zirkel-Delegation via `visited`-Set erkannt; Ping-Pong zwischen Agenten blockiert.
-- S-13.3 Breaker/Guard greift **vor** teuren Aktionen (Kanban-Task, LLM-Call, Zahlung).
-- S-13.4 Loop-Detektion mit anomalen Pfaden (Loops ≥ 3, Token-Spikes, Effort-Collapse) im Flightlog.
-
-## 14. Entscheidungs-Hoheit & Konfliktlösung
-
-- S-14.1 Deterministische Tie-Breaking-Regeln und Autoritäts-Hierarchie bei widersprüchlichen Subagenten-Ergebnissen.
-- S-14.2 Chairman nur aus erlaubter, tier-geprüfter Menge (400 bei unbekanntem ID); kein freier Body-Wert.
-- S-14.3 `NO_CONSENSUS` erzeugt **keine** Final Decision; Konflikte → HITL/Eskalation.
-- S-14.4 Approver-Identität aus Session statt Body; Vier-Augen mit Ersteller-Abgleich; Schwelle nicht durch Einzel-Admin änderbar.
-- S-14.5 Policy-Verstoß eines Subagenten → harte Ablehnung, kein „meistens gewinnt".
-
-## 15. Semantische Rollen- & Prompt-Trennschärfe
-
-- S-15.1 Rollen mit klarer Positiv- und **Negativ-Abgrenzung** („was darf diese Rolle explizit NICHT?") — alle 71 Profile; CI-Gate auf **Semantik** (≥ 60 distinct Bodies, EN-Übersetzung, HITL für alle 26 HIGH_RISK), nicht nur Präsenz.
-- S-15.2 Keine überlappenden Zuständigkeiten / widersprüchlichen System-Prompts zwischen Profilen.
-- S-15.3 Medizin/Recht/Steuer/Finanzen mit HITL-Pflicht und 26 EU-AI-Act-HIGH_RISK korrekt klassifiziert.
-- S-15.4 SOUL-SSOT: `souls/` versioniert (**497 Artefakte** DE+EN = 71 Profile × 7; User-Entscheidung 2026-11-24, ältere Zahlen 490/511 sind überholt), SHA-256-Manifest über normalisierte Zeilenenden, CI-Drift-Gates, keine erfundenen SOUL-Hashes.
-- S-15.5 `.hermes/profiles/` und `data/hermes_profiles/` aus SSOT regeneriert, keine Divergenz.
-
-## 16. Distributed Tracing & Observability
-
-- S-16.1 W3C `traceparent`/`tracestate` (128/64 Bit) über **alle 18 Systemgrenzen**: Browser→Next.js→FastAPI→LLM-Kernel→Dispatcher→Provider/n8n→Outbox→Hermes→PocketBase→MCP→SSE→Telegram→Audit→OTel→Langfuse→Loki→Prometheus.
-- S-16.2 `TraceContextMiddleware` inbound (Response-Header `X-Trace-Id`), `inject()` in allen outbound `httpx`-Calls, `contextvars` über `to_thread`/Tasks.
-- S-16.3 `trace_id` persistent in `event_mesh_outbox`, Audit-Log, Receipts; bei Retry/DLQ erneut injiziert.
-- S-16.4 Echter OTel-Collector + Langfuse-Export mit Sampling, Exportfehler nicht auf DEBUG verschluckt.
-- S-16.5 Kausale Fehlerketten lückenlos rekonstruierbar (ein Root pro Systemeintritt, keine zweiten Roots im selben Call).
+> **Phase 0 — Sollzustand-Extraktion.** Diese Datei wurde **ausschließlich** aus der
+> Systemdokumentation erstellt (READMEs, `SECURITY.md`, Architektur-Specs, ADR-/Guide-Dateien,
+> Audit-Abschlussberichte). Es wurde **kein Implementierungscode** gelesen.
+>
+> Quellen (verbindlich): `README.md`, `README.de.md`, `SECURITY.md`, `INSTALL_AGENT.md`,
+> `docs/SYSTEM_HANDBUCH.md`, `docs/ARCHITECTURE_N8N_VS_AGENT_ROUTING.md`,
+> `docs/AUDIT_FINDINGS_REGISTER.md`, `docs/system/ARCHON_ERP_ARCHITECTURE_SPEC.md`,
+> `docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md`,
+> `docs/system/SYSTEM_AUDIT_2026_KONSOLIDIERT.md`, `docs/system/AUDIT_ABSCHLUSS_2026_11_23.md`,
+> `docs/system/WIRING_AUDIT_2026.md`, `docs/system/NEVER_DO_LIST.md`,
+> `docs/system/ORCHESTRATION_GOVERNANCE_V2_GUIDE.md`, `docs/system/APPROVAL_POLICIES_GUIDE.md`,
+> `docs/system/CHAOS_RESILIENCE_GUIDE.md`, `docs/system/EVENT_BUS_GOVERNANCE_GUIDE.md`,
+> `docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md`, `docs/security/*.md`,
+> `docs/system/ROADMAP_2026.md`.
+>
+> **Vorrang-Regel:** `NEVER_DO_LIST.md` hat Vorrang vor allen anderen Dokumenten.
+> Bei Widersprüchen gilt die neueste datierte Quelle; die Versionsbasis ist
+> `v0.5.7.8` / `config/version.json` (PDF-Manuale hinken bei `v0.5.2.1` hinterher).
 
 ---
 
-## Bewertungsskala (verbindlich für Audits und Masterplan)
+## 0. Leitkriterium: „100 % korrekt verdrahtet" (aus `WIRING_AUDIT_2026.md`)
 
-**1 = schlecht / kaputt / disfunktional · 10 = top / funktional im Sinne des Erfinders.**
+Eine Mechanik gilt **nur dann als wirksam**, wenn alle vier Glieder im **Produktivpfad** nachweisbar sind:
 
-Jeder Domänenbericht schließt mit `DOMÄNEN-SCORE: X/10` + einzeiliger Begründung.
+1. **Produzent** – erzeugt Zustand / Event / Artefakt.
+2. **Konsument** – liest es im echten Ablauf (nicht nur in Tests, nicht nur manuell per Endpoint).
+3. **Effekt** – sichtbare/nachweisbare Wirkung (DB-Status, Datei, Webhook, Audit-Event).
+4. **Verifikation** – Test oder Metrik, die Scheitern sichtbar macht.
 
-## Pflichtformat pro Befund (alle Domänen)
+Fehlt ein Glied → „Theater" / verdrahteter Schein → Befund. Analoge Prüffelder:
+Gates blockieren Freigabe (nicht nur Score); Outbox/DLQ mit echtem Drainer (CAS + Retry + Dead-Letter);
+Cancel-Token nach jedem `await` geprüft + Status `cancelled` persistiert; `synthesis_started`
+mit Timestamp + Watchdog rücksetzbar; Tool-Output-Firewall im echten Chokepoint; Secret-Masking
+vor **jedem** externen LLM-Dispatch; Egress-Firewall auch für als „lokal" klassifizierte Zonen;
+Tenant-Scope in Cache/Idempotency/Ledger/GDPR-Löschung; Audit-Schreibfehler nie verschluckt;
+UI-Controls mit echtem Handler + existierendem Ziel-Endpunkt; SSE hört auf echte Events;
+Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
 
-`[Kritikalität: BLOCKER/HIGH/MED] | [Dateipfad:Zeile] | [Soll-Ist-Abweichung] | [Technischer Nachweis] | [Konkreter Fix-Plan]`
+---
 
-Jeder Subagent schreibt **nur** in seine Datei `domain_NN.md` und meldet im Chat ausschließlich `done: domain_NN.md`.
+## 1. Funktionale Soll-Anforderungen
+
+### 1.1 Kernkette (Task → Workflow → Agent → Gate → Artefakt)
+- Zentrale Steuerung: FastAPI auf `:8501` (`main.py` + `archon/routers/*`), SPA/Next.js-Cockpit.
+- 71 Agentenprofile in `agent_profiles.json` / `roles.json` / `.hermes/profiles/`, 8 Domänen,
+  dreistufige `SOUL.md` (Compact / Pro / Full), 832 Prompt-Templates, 55 Boardroom-Frameworks.
+- Delegation über `archon/core/delegation.py`; Parent/Child via `task_links` + `project_id` in `ops.db`.
+- Fan-in-Synchronisation: Synthese startet automatisch, wenn alle Kinder `completed`/`done`
+  (Sperrschutz `_MC_ASYNC_LOCK` + `_MC_DATA_LOCK`).
+- Konsens-Auflösung via `resolve_debate_consensus()`; Finalisierung über HITL-Gate-Kaskade.
+- **Hartes Budget**: `role_budget_policies` + `role_daily_budget_ledger`, Tages-/Monatslimit in
+  Tokens und EUR; Überschreitung → Rolle `paused_budget`. 15 % Reserve für Triage/Synthese,
+  85 % komplexitätsgewichtet (`complexity_weight` 0.7–2.0) auf Subagenten.
+- Autonomes CEO-Hiring nur explizit freigeschaltet (`allow_autonomous_hiring`), temporäre
+  `hired_<slug>_<hash>`-Profile mit eigenem Teilbudget, Auflösung nach Projektabschluss.
+
+### 1.2 Deterministisch vs. probabilistisch (`ARCHITECTURE_N8N_VS_AGENT_ROUTING.md`)
+- Grundregel: **„Deterministisch vor Probabilistisch"**. Kein LLM für Aufgabe mit fester
+  Ein-/Ausgabe-Logik. Klassifikation via `backend/execution_routing_guard.py`
+  (`classify_execution_layer`).
+- Routing-Matrix: E-Mail-Polling/CRM-Abgleich, RSS/News-Scans, Telegram→CRM, Finanzmathematik/
+  USt-Split/Backups = `deterministic_n8n` / `deterministic_script` = **0 Tokens**;
+  Publishing (nach Freigabe) = n8n + HITL; Content/Boardroom/Strategie = budgetierte Agenten.
+- Endpunkte: `GET /api/operations/routing/matrix`, `POST /api/operations/routing/classify`,
+  `GET|POST /api/operations/org/budgets`, `POST /api/operations/tasks/{id}/allocate-budget`.
+
+### 1.3 Persistenz & Datenbanken
+- SQLite WAL als Single Source of Truth; Konsolidierung **28 → 3** domänenisolierte DBs:
+  `data/ops.db` (Steuerung/Workflows/Security), `data/business.db` (ERP/CRM/Verträge/Treasury/
+  Content), `data/memory.db` (Agentengedächtnis/Sessions). `busy_timeout=5000`,
+  Kollisions-Präfixe `<legacy_stem>__<table>`, Pre-Consolidation-Backups, transparenter
+  Pfad-Adapter `resolve_db()` + `TenantContextManager.resolve_active_db()` + `DBBackupManager`.
+- **Mandanten-Isolation (M43)**: pro `company_id` fünf physisch getrennte WAL-DBs unter
+  `data/tenants/{company_id}/`: `erp.db`, `kanban.db`, `crm.db`, `contracts.db`, `deals.db`.
+  Keine Vermischung personenbezogener Daten/Belege zwischen Rechtseinheiten. Atomare
+  Nummernkreise: Debitoren ab 10001, Kreditoren ab 70001, Artikel `ART-1001`,
+  `ANG|AB|RE-{YYYY}-{0001}`.
+- Obsidian-Vault als Second Brain (`01_PROJEKTE`, `02_Research`, HR-Personalakten), atomare
+  Sidecars (`kanban_sidecar.py`), Litestream-WAL-Replikation (5–10 s), Restore-Tests.
+- PocketBase auf `:8090` optionaler Laptop-CRM-Sync (in Archon standardmäßig deaktiviert,
+  `POCKETBASE_ENABLED=false`); Sync gleicht nur Netzwerk-/Kommunikationsdaten ab,
+  überschreibt **nie** kaufmännische ERP-Felder.
+- ERP-Schema: `crm_entities`, `crm_contacts`, `crm_interactions`, `erp_items`,
+  `erp_documents`, `erp_document_lines` mit GoBD-unveränderlichem `recipient_snapshot_json`,
+  Statusmodell `draft→approved→booked/sent→paid|cancelled`, `external_msg_id UNIQUE`
+  (Duplikatsschutz), `pocketbase_id UNIQUE`.
+- GoBD: `booked`/`paid` → `draft` ist gesperrt; Art. 15 paginierter Export, Art. 17
+  case-insensitive Schwärzung inkl. `memory.db` (kein stiller Fallback).
+
+### 1.4 Integrationen
+- OmniRoute `:20128` (OpenAI/Anthropic/Gemini/Groq/DeepSeek + lokale Ollama/LM Studio),
+  Cost-Estimator vor Dispatch, Budget-Attribution.
+- n8n `:5678` als Event-Trigger-/Automatisierungsschicht; Webhook `/webhook/archon-execution`.
+- Event-Bus (M105, `backend/workflow_scheduler.py`) mit Trigger-Matrix
+  (Quelle × Ziel-Domäne: `allow` | `require_hitl` | `deny`), `max_per_min`-Rate-Limit +
+  Circuit-Breaker, `correlation_id`-Dedup + 14-Tage-Retention, Dead-Letter + Replay.
+  Standard: `watchdog→treasury/system` = deny; `inbox/calendar→treasury` = require_hitl.
+- Idempotency-Keys + Outbox mit Retry/DLQ für Events, Webhooks, Scheduler; Dead-Outbox → DLQ;
+  Replay echt (kein Fake-Success), `next_try_at`-Backoff.
+- MCP-Server `/mcp` (M48): Streamable HTTP/SSE, scoped Keys
+  (`read_only`|`kanban_rw`|`agent_execute`|`admin_full`), HITL-Gate für
+  `archon__trigger_boardroom_debate` / `archon__ask_specialist`.
+
+---
+
+## 2. Sicherheits-Soll-Anforderungen (Zero-Trust / Governance)
+
+### 2.1 Netzwerk & Container
+- Localhost-First: Bind `127.0.0.1:8501` default; `ARCHON_BIND_IP=0.0.0.0` nur mit
+  `auth.enabled=true`. Aktuell: `settings.json` hat **keinen `auth`-Block** → bewusster
+  Single-User-Localhost-Modus, **nicht** für LAN/Produktion. `_must_force_auth()` erzwingt
+  Auth bei Non-Loopback-Bind.
+- Zero-Trust Docker Socket Proxy über isoliertes `archon-admin_net` (Allowlist), nie roher
+  `/var/run/docker.sock`-Mount in Produktion.
+- Worker/Sandbox-Netze `archon-worker-zero-egress_net` / `archon-sandbox_net` mit
+  `internal: true` / `--network none`, kein Default-Gateway, kein NAT; Fail-Closed-Prüfung
+  vor jedem Container-Launch.
+- Non-Root UID 1000, `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges:true`.
+- Read-Only-Demo (`ARCHON_DEMO_MODE=true`): ASGI-Middleware blockt alle Mutationen,
+  Shell/Sandbox, Container-Aktionen und externen LLM-Egress.
+
+### 2.2 Auth, RBAC, Secrets
+- 3-Tier-RBAC (`admin` | `operator` | `viewer`), PBKDF2-HMAC-SHA256-Sessions,
+  Token-Bucket-Rate-Limited scoped API-Keys.
+- Alle schreibenden Admin-Routen RBAC-geschützt; Fail-Closed `require_admin_or_503`
+  (keine Fail-Open-`_require_admin`-Fallbacks). Kein Body-Actor in Freigabe-/Versandpfaden
+  (`require_session_actor`), Vier-Augen-Prinzip nicht fälschbar.
+- Echte FIDO2/WebAuthn-Signaturprüfung (ES256/RS256, `rpIdHash`, `signCount`-Replay-Schutz);
+  Passkey-Proof zwingend an `action` + `resource` gebunden.
+- API-Keys in Runtime-Env / Credential-Vault `.env` (0600), nie im Code; Missing-Key →
+  harter Fehler (fail-closed), kein Platzhalter-Fallback. Windows: echtes `icacls`-Härten
+  + DACL-Verifikation (`secret_files.py`).
+- Secrets-Gate `audit_secrets.py --all`: 0 Funde als hartes CI-Gate.
+
+### 2.3 Egress, Prompt-Injection, Taint
+- Zero-Egress-Gate + Privacy-Router: sensible Kategorien (`finance`, `contracts`, `crm`, `hr`,
+  `gdpr`) **nur** zu verifizierten `LOCAL_ON_PREM`-Endpunkten; harter Fail-Closed-Block
+  (`LOCAL_LLM_OFFLINE_HARD_BLOCK`) bei offline lokalem Modell. `zero_egress_strict`
+  weitet Lock systemweit aus. `explicit_category` darf Klassifikation **nicht** abschwächen;
+  Klassifikationsfehler → fail-closed `confidential`.
+- Egress-Firewall `enforce_egress_firewall_for_url()` + `sanitize_outbound_llm_payload()`
+  (secret_masker + pii_scrubber) vor **jedem** externen Dispatch, auch für „lokale" Zonen.
+- Dual-LLM-Quarantine-Sanitizer (`backend/dual_llm_sanitizer.py`), 25 Prompt-Injection-Muster
+  (`local_security_guard.py`), 8 standardisierte Angriffs-Szenarien (`injection_range.py`).
+- Information-Flow-Taint-Tracking (M89): nach untrusted Content werden kritische Ausgänge
+  (`send_email`, `pay`, `pay-cli`, `git_push`, `deploy`, `memory_write`, `execute_shell`,
+  `webhook_post`, `telegram_send`, `terminal`, `execute_code`, `computer_use`, `mcp__*`,
+  `node_plugin:*`, unbekannte Tools) über HITL geparkt. Default-Deny; nur explizit harmlose
+  Tools (`read_file`, `web_search`, …) ausgenommen. Einmal-Tokens (`ta-...`) werden verbraucht
+  (`consumed=1`), CAS-UPDATE `AND consumed=0`.
+- Sandbox: `python -I`, `TemporaryDirectory`, ohne Host-Env-Secrets, POSIX-`rlimit`,
+  AST-Sperre gefährlicher Module (`os`, `subprocess`, `socket`, `ctypes`, `urllib`), SSRF-Schutz
+  (`check_public_url`) für `visual_web_agent.py`.
+
+### 2.4 HITL, Approvals, Warrants
+- Vier-Augen-Prinzip ab 500 €, Auto-Freigabe bis 50 €, 24 h Eskalationsfrist;
+  Kommunikation: Freigabepflicht für KI-Antwortentwürfe, 12 h, Domain-Whitelist.
+- Jede Regel-/Statusänderung append-only in `approval_policy_audit_chain` SHA-256-Hashkette.
+- Signierte Tool-Warrants (M90): HMAC-SHA256, Ablaufzeit, Parameter-Constraints
+  (`max_amount`, `allowed_path_prefixes`); **alle** Pfad-Aliase (`file_path`, `uri`, `target`,
+  …) gegen Prefixes prüfen; fehlendes Pfad-Argument bei Pfad-Constraint → deny.
+  Pflicht für `pay` / `mcp__*`.
+- Kanban-Verifier (M76/M81): Token-Budget, Ergebnis-Integrität, `proof_command` (Exit 0);
+  Retry einmal, dann `blocked` (`budget_exceeded_hitl`/`proof_failed_hitl`) → Mensch
+  (`override_budget`|`retry`|`abort`). Cross-Modell-Verifier anderer Modellfamilie,
+  `detect_deleted_test_assertions()` blockt entfernte Test-Assertions.
+- Präzedenzfälle (M91) strikt isoliert pro `(tenant_id, project_id)`, kein Mandanten-Transfer.
+
+### 2.5 Audit-Trail & Kryptografie
+- Lückenlose HMAC-SHA256-Hashkette (Env-Key `ARCHON_AUDIT_HMAC_KEY`) in `backend/audit_log.py`:
+  `hash = HMAC_SHA256(env_key, prev_hash + timestamp + payload)`, Spalten-zu-Payload-
+  Tamper-Verifikation. Jeder LLM-Dispatch (ausgeführt **und** blockiert) atomar mit
+  `category="llm_dispatch"`, `provider`, `model`, `target_endpoint`, `target_host`,
+  `egress_zone`.
+- Bei Manipulation/Key-Fehler → **fail-fast im Lifespan**, Produktion startet nicht.
+  Audit-Schreibfehler blockieren Tool-Calls (nie verschlucken). Verankerung mit externem
+  Anker + Startup-Key-Check; Anker default-aktiv in Produktion; `verify_integrity()`
+  vergleicht letzten Anker-Hash mit Ketten-Head (Tail-Löschung erkannt).
+- Execution-Receipt-Kette: HMAC-SHA256 mit **eigenem** Env-Key + Domain-Prefix (nicht Audit-Key),
+  Append-only-Trigger gegen UPDATE/DELETE, `hmac_protected` im Verify-Result,
+  `verify_chain_integrity()` prüft alle SHA-256-Zeilenhashes.
+- Break-Glass-Notfallkey unter `data/security/`, Modus 600, getrennt vom verschlüsselten
+  Vault und HMAC-Key; Zip-Slip-Pfad-Jail + WAL-Sidecar-Entfernung beim Restore.
+
+### 2.6 Mandanten- & Rollen-Grenzen
+- Tenant-Scope in **allen** Caches, Idempotency, Ledger, Taint-Guard, Egress-Log, PII-Vault,
+  Offline-Vault (DB+Key+AAD), GDPR-Löschung; kein globaler Vault/Key.
+- EU AI Act: Default-Deny + zentrale Alias-Auflösung für unbekannte Agenten; Klassifizierung
+  HIGH_RISK (Anh. III 4/5), SPECIFIC_TRANSPARENCY (Art. 50), MINIMAL_RISK (Art. 95) mit
+  `SOUL.md`-SHA-256-Hash; Art.-4-Kompetenzregister revisionssicher.
+
+---
+
+## 3. Resilienz-, Observability- & 24/7-Soll-Anforderungen
+
+- **Liveness/Readiness**: echter async Event-Loop-Heartbeat in `/livez` (503 bei Stall),
+  `/readyz` mit 503, Docker-Healthcheck verdrahtet; `ARCHON_HEARTBEAT_WEBHOOK_URL`
+  (Dead-Man-Switch). Startup `_assert_router_health` wirft wirklich (Lifespan re-raist),
+  Loop-Guards resetten beim Re-Lifespan, Shutdown-`gather` mit 10 s Timeout.
+- **Watchdog**: eigener Thread, 30-s-Intervall, Alarmprotokoll `archon_alarms.json` beschreibbar.
+- **Recovery**: Auto-Crash-Recovery (6 h), Worker-Leases/Heartbeats mit Liveness-Check,
+  CAS-Claim fail-closed + Lease-Guard bricht DAG bei Token-Verlust hart ab; `CancelledError`
+  explizit gefangen → Nodes `cancelled`, Run-Status `cancelled` persistiert; relevante
+  Payload-Operatoren via `asyncio.to_thread`, HTTP-Client-Pools, `WeakKeyDictionary`
+  statt `id(loop)` + `close_dispatcher_clients()` als Shutdown-Hook (kein FD/Memory-Leak).
+- **Chaos-Suite** (`scripts/chaos_tester.py`): SQLite-Concurrency (8 Threads × 50 Tx,
+  WAL ohne Lock-Fehler), Container-Health, Restart-Recovery SLA < 15 s, Watchdog-Responsiveness.
+- **OTel/Langfuse-Tracing** in LLM-Kernel und DAG; Trace-to-Eval-Replay-Fixtures.
+  Gefordert: durchgängige `trace_id`/`span_id`-Propagation über Hermes, OmniRoute, n8n,
+  PocketBase (kausale Fehlerketten lückenlos rekonstruierbar).
+- Zentrale Logs (Loki/Promtail), Prometheus/Grafana, SSE/WebSocket-Live-Streaming
+  (ein gemeinsamer `archon:sse`-Bus, keine doppelten EventSources).
+
+---
+
+## 4. Code-, Architektur- & Reproduzierbarkeits-Standards (2026)
+
+- Python 3.13; Pydantic **v2** Request-Modelle (kein rohes `dict = Body(...)` in Produktions-
+  routern, `extra="ignore"`, kein `.dict()`-Rest, Union-Typen statt `Optional` ohne Default);
+  strikte Schema-Validierung an **allen** Übergabepunkten (keine unstrukturierten Freitext-
+  Handoffs zwischen Orchestrator und Subagenten).
+- `requirements.lock.txt` mit Hashes (`--require-hashes`), SBOM, `pip-audit` 0 CVEs,
+  `bandit -lll` 0 HIGH, `compileall` Exit 0, CI `security-scan` als hartes Gate (kein
+  `continue-on-error`), Image-Digests (`sha256`) + Action-Pins auf Commit-SHA.
+- Frontend: `npm ci`, `tsc --noEmit`, `npm run build` (Next.js 16 / React 19) grün;
+  Lazy-Iframes, `AbortController`-Debounce, `escapeErpHtml`/`safeMd`/XSS-Escaping,
+  `role="dialog"` + Focus-Trap + Escape/Fokus-Rückführung auf Modals, vorkompiliertes
+  Tailwind (kein Runtime-JIT-CDN), i18n-Parität über alle 11 Sprachkataloge.
+- **Keine** toten Stubs/Theater-Module: Produzent + Konsument + Effekt + Verifikation.
+  `TODO`/`FIXME`, Hardcoded Returns, Dummy-Daten, `simulated`-vs-`success` ehrlich markiert.
+
+---
+
+## 5. Verbindliche Negativ-Constraints (NEVER_DO_LIST — Vorrang)
+
+1. **Kein echtes Coroutine-Replay** im Durable Kernel. Akzeptiert: persistierte Node-States
+   + Checkpoints. Kein Event-Sourcing/Snapshotting/Replay-Framework, auch nicht als „Folgearbeit".
+2. **Keine PostgreSQL-Migration**. SQLite bleibt; Konsolidierung 28 → 3 + physisch isolierte
+   Mandanten-DBs ist Endarchitektur. Keine DSN, kein Migrationstool, keine Empfehlung.
+
+Zusätzlich (Produktmodell-Korrektur 23.11.2026): **keine eigene Content-Domäne / kein
+`/content-studio`**; Content ist Task → Workflow → Agent → Gate → Artefakt. Backend-Module
+bleiben interne Bausteine, keine Produktfläche.
+
+---
+
+## 6. Dokumentierte Risikolandschaft (Soll ↔ behaupteter Ist; zu verifizieren)
+
+Die Audit-Dokumente behaupten若干 Punkte als „behoben", andere als „teilweise offen".
+Diese Liste ist **kein Freibrief**, sondern Priorisierungshinweis für die Domänen-Audits:
+
+|_cluster | Dokumentierte Rest-Risiken (Quelle: `SYSTEM_AUDIT_2026_KONSOLIDIERT.md`, `AUDIT_ABSCHLUSS_2026_11_23.md`) |
+|---|---|
+| Auth/RBAC | Passkey-Bindung teils offen (laut Abschluss behoben — verifizieren); ~136 rohe `dict = Body` in `archon/routers/**`; `extra="allow"`-Reste |
+| Tenant | Vault/Taint teils offen (laut Abschluss tenant-scoped — verifizieren); Cache/Idempotency-Scope |
+| Orchestrierung | Cancel nach `await`, Lease/Fencing, DLQ-Scheinconsumer, Boardroom-Killswitch (teils offen laut konsolidiertem Audit) |
+| Audit/Krypto | HMAC im Break-Glass, Receipt-Kette nacktes SHA-256, verschluckte Audit-Errors, Anker nie verifiziert (teils offen) |
+| Persistenz | Restore tenant-Pfad, Backups ohne Keys, konsolidierte DBs nicht gesichert (teils offen) |
+| Performance | 50-ms-Event-Loop-Block, 300-s-Slot-Block, DDL pro Budget-Call, Loop-Keyed Clients (teils offen) |
+| Doku | PDF-Manuale bei v0.5.2.1, Versionsdrift, „100 % verdrahtet" nur Einschätzung (Frontend-Build lokal nicht verifiziert) |
+| Betrieb | `settings.json` ohne `auth`-Block; `zero_egress=false`, `zero_egress_strict=false`; kein LAN/Produktions-Default |
+
+> **Wichtiger Hinweis an alle Subagenten:** Die Doku behauptet einen weitgehend sanierten
+> Zustand. Euer Auftrag ist eine **unabhängige, skeptische Verifikation gegen den Code**,
+> nicht die Übernahme der Doku-Behauptungen. Jeder Befund braucht Dateipfad:Zeile + technischen
+> Nachweis. Vertraut der Doku nur als Soll-Definition, nie als Ist-Nachweis.
+
+---
+
+## 7. Domänen-Referenz (welche Soll-Abschnitte für welche Domäne)
+
+| Domäne | Relevante Soll-Abschnitte |
+|---|---|
+| 01 Stub-Detection/Wiring | §0 (Vier-Glieder-Kriterium), §1.1, §1.4, §4 (keine toten Stubs) |
+| 02 Orchestrierung/Routing | §1.1–1.2, §3 (Cancel/Lease), §6 |
+| 03 Persistenz/Vault | §1.3, §2.6, §6 |
+| 04 Governance/Security | §2.1–2.2, §2.3, §2.4, §2.6, §5 |
+| 05 Audit-Trail/Krypto | §2.5, §3 (OTel), §6 |
+| 06 Integrationen/Webhooks | §1.4, §2.3 (SSRF/Egress), §6 |
+| 07 Error/Recovery | §3, §0 (Audit-Fehler nicht schlucken), §6 |
+| 08 Performance/Concurrency | §3, §1.3 (WAL/Locks), §6 |
+| 09 Architektur/Standards | §4, §5 |
+| 10 System-Härtung/24-7 | §3, §2.1 |
+| 11 Context Drift/Handoff | §1.1, §4 (Pydantic-Schema an Übergaben) |
+| 12 Silent Failures/Hallucination | §0, §2.3, §2.5, §4 (kein Platzhalter-Fallback) |
+| 13 Trajectory/Loop-Prevention | §1.1 (MAX_DELEGATION_DEPTH=3, MAX_FANOUT=5), §2.4 (Budget), §1.4 (Loop-Dedup) |
+| 14 Entscheidungs-Hoheit | §1.1 (Konsens/HITL), §2.4 (Vier-Augen, Warrants), §2.6 |
+| 15 Rollen-/Prompt-Trennschärfe | §1.1 (71 Profile/3-Tier SOUL), §2.6 (EU AI Act Guardrails), §5 |
+| 16 Distributed Tracing | §3 (OTel `trace_id`/`span_id` über alle Grenzen), §2.5 (Audit-Kette) |

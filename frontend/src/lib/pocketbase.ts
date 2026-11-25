@@ -49,6 +49,9 @@ export interface KontaktRecord {
   adresse?: string;
   profilbild?: string;
   deleted_at?: string | null;
+  // D16/H-16-4: serverseitiger Sync schreibt die Korrelations-ID als
+  // Collection-Feld; der Browser-SDK injiziert zusaetzlich traceparent.
+  trace_id?: string;
   created: string;
   updated: string;
 }
@@ -122,6 +125,8 @@ export interface MediaItemRecord {
   batch_id?: string;
   metadata_json?: any;
   received_at?: string;
+  // D16/H-16-4: trace_id des auslösenden Sync-Laufs (serverseitig gesetzt).
+  trace_id?: string;
   created: string;
   updated: string;
 }

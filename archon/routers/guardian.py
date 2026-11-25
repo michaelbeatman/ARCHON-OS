@@ -317,7 +317,9 @@ def api_get_guardian_config():
             logger.warning(f"[Guardian] cost-budget.json nicht lesbar ({cost_budget_file}): {exc}")
 
     # Guardian limits json & config.yaml sync
-    limits_file = os.path.join(MEMORY_DIR, "guardian_limits.json")
+    # D13/MED: gemeinsamer Pfad mit dem AgentRouter (kein Host-/Container-Drift).
+    from archon.routers.autonomy_settings import GUARDIAN_LIMITS_FILE
+    limits_file = GUARDIAN_LIMITS_FILE
     agent_cfg = cfg.get("agent", {})
     limits = {
         "max_context_tokens": agent_cfg.get("max_context_tokens", 32000),
@@ -335,6 +337,15 @@ def api_get_guardian_config():
                 limits.update(json.load(f))
         except (OSError, ValueError) as exc:
             logger.warning(f"[Guardian] guardian_limits.json nicht lesbar ({limits_file}): {exc}")
+    # D13/MED: die UI zeigt die Werte, die der Circuit-Breaker WIRKLICH liest.
+    try:
+        from backend.autonomy_settings import get_module_config
+        _cb_effective = get_module_config("circuit_breaker") or {}
+        for _key in ("loop_detection_enabled", "max_steps_per_task"):
+            if _key in _cb_effective:
+                limits[_key] = _cb_effective[_key]
+    except Exception as _cb_exc:
+        logger.error("[Guardian] Circuit-Breaker-Config nicht lesbar: %s", _cb_exc)
 
     # Dynamische Plugin-Erkennung aus allen Plugin-Ordnern
     plugins_dir = os.path.expanduser("~/.hermes/plugins")
@@ -514,8 +525,21 @@ def api_save_guardian_config(request: Request, payload: GuardianConfigSave):
         except Exception as e:
             print(f"Error saving cost budget: {e}")
 
-    # Speichere Limits
-    limits_file = os.path.join(MEMORY_DIR, "guardian_limits.json")
+    # D13/MED: die beiden Loop-Controls MUESSEN in die SSOT, die der
+    # Circuit-Breaker liest (`circuit_breaker` in settings.json). Ohne diesen
+    # Schreibpfad war der Guardian-Toggle reines Konfigurations-Theater.
+    from archon.routers.autonomy_settings import (
+        GUARDIAN_LIMITS_FILE,
+        save_circuit_breaker_limits,
+    )
+    try:
+        save_circuit_breaker_limits(payload)
+    except Exception as _cb_save_exc:
+        logger.error("[Guardian] Circuit-Breaker-Config nicht speicherbar: %s", _cb_save_exc)
+        raise HTTPException(status_code=503, detail="circuit_breaker config write failed")
+
+    # Speichere Limits im gemeinsamen Pfad (für alle übrigen Keys).
+    limits_file = GUARDIAN_LIMITS_FILE
     try:
         cur_limits = {}
         if os.path.exists(limits_file):

@@ -1,5 +1,11 @@
 """Audit D16: leichter W3C-Trace-Context (ohne OTel-SDK-Abhängigkeit).
 
+H-16-1 / ehrlicher Status: Dieses Modul ist die ID-/Kontext-SSOT fuer den
+lokalen SQLite-Span-Recorder in ``backend/otel_tracer.py``. Es gibt keinen
+OTel-TracerProvider, keine SDK-Propagator-Kette und keinen BatchSpanProcessor;
+``traceparent``/``tracestate`` werden hier nach W3C gebaut/validiert und
+bei Bedarf als OTLP/HTTP-JSON an den Collector gesendet.
+
 LIEFERT: traceparent/tracestate-Format/Parse inkl. W3C-Validierung,
 contextvars-basierte aktive Trace-/Span-ID, Sampling-Entscheidung,
 Header-Injektion für ausgehende Requests und Extraktion aus eingehenden

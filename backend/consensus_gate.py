@@ -85,6 +85,8 @@ class DebateStatement(BaseModel):
     severity: Optional[str] = None
     # D14/HIGH: Herkunft des verifizierten Guardrail-Result (Trace-ID).
     source_trace_id: Optional[str] = None
+    # F033/H-14-1: Herkunft des Kind-Urteils aus dem echten Dispatch-Result.
+    verdict_source: Optional[str] = None
 
 
 class ConsensusEvidence(NamedTuple):
@@ -138,6 +140,39 @@ def _infer_tier(
         except Exception as exc:
             _archon_exc_logger.debug("[consensus_gate] Tier-SSOT nicht verfuegbar: %s", exc)
     return tier if tier in _TIER_WEIGHTS else "specialist"
+
+
+def extract_guardrail_result(res: Any) -> Dict[str, Any]:
+    """Kanonischer Produzent des strukturierten Policy-Veto-Kanals.
+
+    D14/MED: ``guardrail_result`` hatte im Boardroom-Dispatch keinen
+    Produzenten. Diese Funktion ist die SSOT, die `core_dispatcher.py`
+    (W3-B/D) und `archon/core/orchestration.py` (F033) konsumieren können:
+    strukturierte Flags aus dem echten Dispatch-Result, Nie aus Freitext.
+    """
+    out: Dict[str, Any] = {
+        "policy_violation": False, "guardrail_violation": False,
+        "severity": None, "source_trace_id": None,
+    }
+    if not isinstance(res, dict):
+        return out
+    gr = res.get("guardrail_result")
+    if isinstance(gr, dict):
+        out["policy_violation"] = bool(gr.get("policy_violation"))
+        out["guardrail_violation"] = bool(gr.get("guardrail_violation"))
+        out["severity"] = gr.get("severity")
+        out["source_trace_id"] = gr.get("source_trace_id")
+    for key in ("policy_violation", "guardrail_violation"):
+        if bool(res.get(key)):
+            out[key] = True
+    out["severity"] = str(out["severity"] or res.get("severity") or "") or None
+    trace = out["source_trace_id"] or res.get("trace_id")
+    out["source_trace_id"] = str(trace) if trace else None
+    if str(res.get("status") or "").strip().lower() == "blocked":
+        out["policy_violation"] = True
+        out["guardrail_violation"] = True
+        out["severity"] = out["severity"] or "high"
+    return out
 
 
 def validate_debate_statements(

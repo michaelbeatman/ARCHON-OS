@@ -9,13 +9,22 @@ Architektur & Funktionsweise:
    - id, name, version, description, author, category, permissions, hooks, tools, settings_schema
 2. BasePlugin-Klasse:
    - Standardisierte Lifecycle-Hooks: on_load, on_enable, on_disable, on_unload
-   - Runtime-Hooks: on_startup, on_shutdown, before_tool_execute, after_tool_execute, on_message_received, on_task_completed
+   - Runtime-Hooks (tatsaechlich verdrahtet): before_tool_execute, after_tool_execute,
+     on_task_completed (am echten Tool-Abschluss-Chokepoint in
+     apply_after_tool_execute, aufgerufen von archon/routers/skills.py und
+     backend/tool_runtime.py)
    - LLM-Tool-Export: get_tools(), execute_tool()
 3. PluginManager:
    - Discovery im Verzeichnis 'plugins/'
    - Sicheres Laden via importlib (mit Exception-Isolation)
    - Status-Persistenz in data/plugins_state.json
    - Dynamischer Hook-Dispatcher (asynchron, fehlertolerant)
+
+Audit D01/H-01-3: Die frueher deklarierten, aber nie dispatched Hooks
+``on_startup``, ``on_shutdown`` und ``on_message_received`` sind aus Manifesten
+und BasePlugin entfernt. ``WIRED_HOOKS`` ist die einzige SSOT dafuer, was die UI
+ueber ``to_dict()`` als aktiv melden darf. Es gibt keine stillen no-op-Hooks
+mehr im Produktivpfad.
 """
 
 import os
@@ -34,6 +43,14 @@ if not logger.handlers:
     handler.setFormatter(logging.Formatter("[PluginManager] %(levelname)s: %(message)s"))
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
+
+# SSOT: nur diese Hooks haben einen echten Aufrufer im Produktivpfad.
+# Alles andere ist Theater und darf weder in Manifesten noch in der UI
+# als "aktiv" erscheinen (D01/H-01-3).
+WIRED_HOOKS = frozenset({
+    "on_load", "on_enable", "on_disable", "on_unload",
+    "before_tool_execute", "after_tool_execute", "on_task_completed",
+})
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLUGINS_DIR = os.path.join(WORKSPACE_DIR, "plugins")
@@ -116,13 +133,8 @@ class BasePlugin:
         pass
 
     # --- SYSTEM & AGENT EVENT HOOKS ---
-    async def on_startup(self):
-        """Wird beim Start von Archon OS ausgeführt."""
-        pass
-
-    async def on_shutdown(self):
-        """Wird beim Herunterfahren von Archon OS ausgeführt."""
-        pass
+    # on_startup / on_shutdown / on_message_received wurden entfernt: sie waren
+    # reine no-ops ohne echten Aufrufer (D01/H-01-3).
 
     async def before_tool_execute(self, tool_name: str, args: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -138,15 +150,13 @@ class BasePlugin:
         """
         return result
 
-    async def on_message_received(self, message: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Wird vor der Verarbeitung einer Benutzer- oder Agentennachricht aufgerufen.
-        """
-        return message
-
     async def on_task_completed(self, task: Dict[str, Any], context: Dict[str, Any]) -> None:
-        """Wird aufgerufen, wenn ein Task abgeschlossen wurde."""
-        pass
+        """Wird am echten Tool-Abschluss-Chokepoint dispatched
+        (``PluginManager.apply_after_tool_execute`` -> ``_trigger_wired_hook``).
+        Default ist absichtlich leer; Plugins mit Budget-/Zaehlpflicht
+        ueberschreiben diesen Hook (z. B. CostGuardPlugin).
+        """
+        return None
 
     # --- TOOL EXPORT ---
     def get_tools(self) -> List[Dict[str, Any]]:
@@ -172,7 +182,8 @@ class BasePlugin:
             "author": self.author,
             "category": self.category,
             "permissions": self.permissions,
-            "hooks": self.declared_hooks,
+            # D01/H-01-3: nur tatsaechlich verdrahtete Hooks an die UI melden.
+            "hooks": [h for h in self.declared_hooks if h in WIRED_HOOKS],
             "tools": self.get_tools(),
             "enabled": self.enabled,
             "has_settings": bool(self.manifest.get("settings_schema")),
@@ -408,10 +419,15 @@ class PluginManager:
             return None
 
     async def trigger_hook(self, hook_name: str, *args, **kwargs) -> List[Any]:
+        """Löst einen *verdrahteten* Hook für alle aktivierten Plugins aus.
+
+        D01/H-01-3: nicht in ``WIRED_HOOKS`` enthaltene Namen werden nicht
+        dispatched — damit kein Manifest und keine UI einen Schein-Hook melden
+        kann, fuer den es keinen echten Aufrufer gibt.
         """
-        Löst einen Hook für alle aktivierten Plugins aus, die diesen Hook deklarieren.
-        Gibt die Liste der Ergebnisse zurück.
-        """
+        if hook_name not in WIRED_HOOKS:
+            logger.warning("Hook '%s' ist nicht verdrahtet — Dispatch verweigert", hook_name)
+            return []
         results = []
         for plugin in list(self.plugins.values()):
             if not plugin.enabled:
@@ -421,31 +437,25 @@ class PluginManager:
                 results.append(res)
         return results
 
-    async def trigger_filter_hook(self, hook_name: str, initial_value: Any, context: Dict[str, Any]) -> Any:
+    @staticmethod
+    def _extract_usage_context(result: Any, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Echte Token-/Kostenwerte aus dem Tool-Ergebnis ableiten.
+
+        Nur wenn das Ergebnis tatsächlich Verbrauchsdaten enthaelt, entsteht ein
+        ``on_task_completed``-Kontext. Es wird nichts erfunden — fehlende Werte
+        fuehren zu keinem Zaehlaufruf (kein Fake-Erfolg, D01/H-01-3).
         """
-        Pipet einen Wert nacheinander durch alle aktivierten Plugins (z. B. before_tool_execute).
-        """
-        val = initial_value
-        for plugin in list(self.plugins.values()):
-            if not plugin.enabled:
-                continue
-            if not hasattr(plugin, hook_name):
-                continue
-            try:
-                fn = getattr(plugin, hook_name)
-                if inspect.iscoroutinefunction(fn):
-                    new_val = await fn(val, context)
-                else:
-                    new_val = fn(val, context)
-                if new_val is not None:
-                    val = new_val
-            except PermissionError as pe:
-                # Sicherheits-Plugins dürfen Aktionen explizit verweigern!
-                logger.warning(f"Aktion durch Plugin '{plugin.id}' blockiert: {pe}")
-                raise
-            except Exception as e:
-                logger.error(f"Unerwarteter Fehler in Filter-Hook '{hook_name}' von Plugin '{plugin.id}': {e}")
-        return val
+        usage_ctx = dict(context)
+        if isinstance(result, dict):
+            usage = result.get("usage")
+            if not isinstance(usage, dict):
+                usage = result
+            for key in ("tokens_used", "total_tokens"):
+                if key in usage and "tokens_used" not in usage_ctx:
+                    usage_ctx["tokens_used"] = usage[key]
+            if "cost_usd" in usage and "cost_usd" not in usage_ctx:
+                usage_ctx["cost_usd"] = usage["cost_usd"]
+        return usage_ctx
 
     async def apply_before_tool_execute(self, tool_name: str, args: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Pipet Tool-Argumente vor der Ausführung durch alle aktiven Plugins."""
@@ -475,7 +485,14 @@ class PluginManager:
         return cur_args
 
     async def apply_after_tool_execute(self, tool_name: str, result: Any, context: Optional[Dict[str, Any]] = None) -> Any:
-        """Filtert oder auditiert Tool-Ergebnisse nach der Ausführung."""
+        """Filtert/auditiert Tool-Ergebnisse und dispatched ``on_task_completed``.
+
+        D01/H-01-3: ``apply_after_tool_execute`` wird von echten Chokepoints
+        aufgerufen (``archon/routers/skills.py``, ``backend/tool_runtime.py``).
+        Damit ist ``on_task_completed`` erstmals ein echter Produzent→Konsument→
+        Effekt-Pfad: CostGuardPlugin schreibt ``daily_burn.json``, sobald das
+        Tool-Ergebnis echte Token-/Kostenwerte enthaelt.
+        """
         ctx = context or {}
         cur_res = result
         for plugin in list(self.plugins.values()):
@@ -493,6 +510,14 @@ class PluginManager:
                     cur_res = res
             except Exception as e:
                 logger.error(f"Fehler in after_tool_execute von Plugin '{plugin.id}': {e}")
+
+        usage_ctx = self._extract_usage_context(cur_res, ctx)
+        if usage_ctx.get("tokens_used") or usage_ctx.get("cost_usd"):
+            await self.trigger_hook(
+                "on_task_completed",
+                {"tool": tool_name, "status": "completed"},
+                usage_ctx,
+            )
         return cur_res
 
     def get_all_exported_tools(self) -> List[Dict[str, Any]]:

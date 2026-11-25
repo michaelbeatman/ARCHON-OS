@@ -86,31 +86,31 @@ def test_b3_jev_test_requires_admin_blocks_ssrf_and_no_key_exfiltration(monkeypa
         core_settings.api_test_jev(_fake_request(), {"base_url": "http://127.0.0.1:8080/v1"})
     assert exc2.value.status_code == 400
 
-    # 3) Keine Key-Exfiltration an abweichende base_url
+    # 3) Keine Key-Exfiltration an abweichende base_url.
+    # W4-B: der HTTP-Hop laeuft ueber utils.safe_http.safe_http_request
+    # (public_only=True, keine 3xx-Follows). Eine abweichende URL wird
+    # fail-closed blockiert, BEVOR ein Request mit dem gespeicherten Key
+    # rausgeht. Die Headers werden am echten Chokepoint abgefangen.
+    from utils import safe_http as safe_http_module
+    from utils.egress_guard import EgressBlocked
+
     captured_headers = {}
 
-    class _Resp:
-        status = 200
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-    def _fake_urlopen(req, timeout=5):
-        captured_headers.update(dict(req.header_items()))
-        return _Resp()
+    def _fake_safe_http_request(url, *, method, headers, timeout, max_bytes, public_only):
+        captured_headers.update(dict(headers or {}))
+        raise EgressBlocked("test: divergent base_url blocked", str(url))
 
     monkeypatch.setattr(
         jev_router,
         "get_jev_config",
         lambda: {"api_key": "sk-secret-stored", "base_url": "https://openrouter.ai/api/v1"},
     )
-    monkeypatch.setattr(jev_router.urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr(safe_http_module, "safe_http_request", _fake_safe_http_request)
 
     res = jev_router.test_jev_connection(base_url="https://attacker.example/v1")
-    assert res["status"] == "success"
+    assert res["status"] == "blocked"
+    assert res["error_code"] == "EGRESS_BLOCKED"
+    assert res["code"] == 400
     assert captured_headers.get("Authorization", "") == ""
 
 

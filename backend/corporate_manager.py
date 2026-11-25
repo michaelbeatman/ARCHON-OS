@@ -151,7 +151,10 @@ class CorporateManager:
 
     def _ensure_storage(self):
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-        if not os.path.exists(self.filepath):
+        # Eine 0-Byte-Datei ist uninitialisiert (z. B. NamedTemporaryFile in
+        # Tests) — dort gibt es keine Stammdaten zu verlieren. Eine Datei mit
+        # Inhalt wird NIE still neu initialisiert (F012).
+        if not os.path.exists(self.filepath) or os.path.getsize(self.filepath) == 0:
             initial_data = {
                 "active_company_id": "archon-systems",
                 "companies": [DEFAULT_PRIMARY_COMPANY]
@@ -160,21 +163,57 @@ class CorporateManager:
                 json.dump(initial_data, f, indent=2, ensure_ascii=False)
 
     def _load_data(self) -> Dict[str, Any]:
+        """D03/HIGH (F012): Default NUR bei fehlender Datei.
+
+        Eine vorhandene, aber unlesbare/korrupte Datei ist ein DATENVERLUST-
+        Fall: der fruehere Still-Fallback liess den naechsten save_company()
+        den Default atomar zurueckschreiben — alle anderen Firmen und deren
+        Stammdaten waren dauerhaft weg. Jetzt harter Abbruch.
+        """
         self._ensure_storage()
-        try:
-            with open(self.filepath, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
+        if os.path.getsize(self.filepath) == 0:
             return {
                 "active_company_id": "archon-systems",
                 "companies": [DEFAULT_PRIMARY_COMPANY]
             }
+        try:
+            with open(self.filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return {
+                "active_company_id": "archon-systems",
+                "companies": [DEFAULT_PRIMARY_COMPANY]
+            }
+        except Exception as exc:
+            raise RuntimeError(
+                f"[Corporate] Firmen-Stammdaten nicht lesbar, Update abgebrochen: "
+                f"{self.filepath}: {exc}"
+            ) from exc
+        if not isinstance(data, dict):
+            raise RuntimeError(
+                f"[Corporate] Firmen-Stammdaten enthalten kein Dict, Update "
+                f"abgebrochen: {self.filepath}"
+            )
+        return data
 
     def _save_data(self, data: Dict[str, Any]):
         # F-03: atomar (Temp-Datei im selben Verzeichnis + fsync + os.replace),
         # damit ein Abbruch nie eine Halbdatei/kaputte Firmenliste hinterlaesst.
         with _DATA_LOCK:
             target = self.filepath
+            # D03/HIGH: eine beschädigte Bestandsdatei darf NIE überschrieben
+            # werden — auch nicht, wenn ein Aufrufer _save_data direkt ruft.
+            if os.path.exists(target) and os.path.getsize(target) > 0:
+                try:
+                    with open(target, "r", encoding="utf-8") as f:
+                        current = json.load(f)
+                    if not isinstance(current, dict):
+                        raise ValueError("kein JSON-Dict")
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"[Corporate] Bestandsdatei nicht lesbar — Speichern "
+                        f"verweigert: {target}: {exc}"
+                    ) from exc
             d = os.path.dirname(os.path.abspath(target)) or "."
             os.makedirs(d, exist_ok=True)
             fd, tmp = tempfile.mkstemp(dir=d, prefix=".corporate_profiles_", suffix=".tmp")

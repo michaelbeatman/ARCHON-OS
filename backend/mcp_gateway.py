@@ -25,7 +25,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from archon.core.runtime import OBSIDIAN_VAULT_DIR, WORKSPACE_DIR
 
+# D04/MED: am Modulkopf gebunden — ein Importfehler fällt beim Start auf,
+# nicht erst bei einer schreibenden MCP-Operation zur Laufzeit.
+from backend.demo_mode import is_demo_mode
+
 logger = logging.getLogger("archon.mcp_gateway")
+
+
+class HITLVerificationUnavailable(RuntimeError):
+    """D04/H-04-5: HITL-Verbrauchsstatus nicht verifizierbar -> hart deny."""
 
 SUPPORTED_PROTOCOL_VERSIONS = ("2025-03-26", "2024-11-05")
 DEFAULT_PROTOCOL_VERSION = "2025-03-26"
@@ -162,51 +170,91 @@ class ArchonMcpGateway:
             return os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
     def _is_hitl_consumed(self, approval_id: str, approval_engine: Any = None) -> bool:
+        """D04/H-04-5: bei DB-Fehler Exception statt `return False`.
+
+        Ein nicht lesbarer Verbrauchseintrag darf NIE als "nicht verbraucht"
+        gewertet werden — sonst ist ein HITL-Token beliebig oft replaybar.
+        """
         with self._hitl_lock:
             if approval_id in self._consumed_hitl_ids:
                 return True
             dbp = self._hitl_db_path(approval_engine)
             if not os.path.exists(dbp):
+                # Noch keine Verbrauchstabelle angelegt: es kann keinen
+                # Eintrag geben. `_mark_hitl_consumed` legt sie beim Verbrauch
+                # an und verifiziert per Lese-Back.
                 return False
+            conn = None
             try:
                 conn = sqlite3.connect(dbp, timeout=10.0)
-                try:
-                    conn.execute(
-                        "CREATE TABLE IF NOT EXISTS mcp_consumed_hitl_ids (approval_id TEXT PRIMARY KEY, consumed_at TEXT NOT NULL)"
-                    )
-                    row = conn.execute(
-                        "SELECT 1 FROM mcp_consumed_hitl_ids WHERE approval_id = ?",
-                        (approval_id,),
-                    ).fetchone()
-                    if row:
-                        self._consumed_hitl_ids.add(approval_id)
-                        return True
-                finally:
-                    conn.close()
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS mcp_consumed_hitl_ids (approval_id TEXT PRIMARY KEY, consumed_at TEXT NOT NULL)"
+                )
+                row = conn.execute(
+                    "SELECT 1 FROM mcp_consumed_hitl_ids WHERE approval_id = ?",
+                    (approval_id,),
+                ).fetchone()
+                if row:
+                    self._consumed_hitl_ids.add(approval_id)
+                    return True
+                return False
             except Exception as exc:
-                logger.debug("HITL-Verbrauchstabellen-Prüfung für '%s' fehlgeschlagen (Datenbank nicht lesbar): %s", approval_id, exc)
-            return False
+                logger.error("HITL-Verbrauchsstatus für '%s' nicht verifizierbar (fail-closed): %s", approval_id, exc)
+                raise HITLVerificationUnavailable(
+                    f"HITL-Verbrauchsstatus nicht verifizierbar: {exc}"
+                ) from exc
+            finally:
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
 
     def _mark_hitl_consumed(self, approval_id: str, approval_engine: Any = None) -> None:
+        """D04/H-04-5: Persistenzfehler eskalieren + Lese-Back-Verifikation.
+
+        Nur im Speicher markierte Tokens überleben keinen Prozessneustart.
+        Vor der Tool-Ausführung muss der Eintrag lesbar nachgewiesen werden.
+        """
         with self._hitl_lock:
-            self._consumed_hitl_ids.add(approval_id)
             dbp = self._hitl_db_path(approval_engine)
+            conn = None
             try:
                 os.makedirs(os.path.dirname(os.path.abspath(dbp)), exist_ok=True)
                 conn = sqlite3.connect(dbp, timeout=10.0)
-                try:
-                    conn.execute(
-                        "CREATE TABLE IF NOT EXISTS mcp_consumed_hitl_ids (approval_id TEXT PRIMARY KEY, consumed_at TEXT NOT NULL)"
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS mcp_consumed_hitl_ids (approval_id TEXT PRIMARY KEY, consumed_at TEXT NOT NULL)"
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO mcp_consumed_hitl_ids (approval_id, consumed_at) VALUES (?, ?)",
+                    (approval_id, datetime.datetime.now(datetime.timezone.utc).isoformat()),
+                )
+                conn.commit()
+                # Lese-Back: der Verbrauch MUSS aus der DB lesbar sein, bevor
+                # die Freigabe als verbraucht gilt.
+                row = conn.execute(
+                    "SELECT 1 FROM mcp_consumed_hitl_ids WHERE approval_id = ?",
+                    (approval_id,),
+                ).fetchone()
+                if not row:
+                    raise HITLVerificationUnavailable(
+                        f"HITL-Verbrauchseintrag '{approval_id}' nicht lesbar nach INSERT."
                     )
-                    conn.execute(
-                        "INSERT OR IGNORE INTO mcp_consumed_hitl_ids (approval_id, consumed_at) VALUES (?, ?)",
-                        (approval_id, datetime.datetime.now(datetime.timezone.utc).isoformat()),
-                    )
-                    conn.commit()
-                finally:
-                    conn.close()
+            except HITLVerificationUnavailable:
+                raise
             except Exception as exc:
-                logger.warning("HITL-Verbrauchseintrag für '%s' konnte nicht persistiert werden (wird nur im Speicher geführt): %s", approval_id, exc)
+                logger.error("HITL-Verbrauchseintrag für '%s' nicht persistierbar (fail-closed): %s", approval_id, exc)
+                raise HITLVerificationUnavailable(
+                    f"HITL-Verbrauchseintrag nicht persistierbar: {exc}"
+                ) from exc
+            finally:
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+            # Erst nach erfolgreicher Lese-Back-Prüfung in den Speicher-Cache.
+            self._consumed_hitl_ids.add(approval_id)
 
     # ------------------------------------------------------------------
     # Authentifizierung & Scope-Prüfung
@@ -435,7 +483,17 @@ class ArchonMcpGateway:
         expected_ref = f"mcp:{key_info.get('key_id', 'unknown')}"
         approval_id = str(arguments.get("hitl_approval_id") or "").strip()
         if approval_id:
-            if self._is_hitl_consumed(approval_id, approval_engine):
+            try:
+                consumed = self._is_hitl_consumed(approval_id, approval_engine)
+            except HITLVerificationUnavailable as exc:
+                # D04/H-04-5: Verifikationsfehler NIE als "nicht verbraucht"
+                # durchreichen — Tool-Ausführung hart verweigern.
+                return False, {
+                    "status": "pending_hitl_approval",
+                    "request_id": approval_id,
+                    "message": f"HITL-Verbrauchsstatus nicht verifizierbar — Ausfuehrung verweigert (fail-closed): {exc}",
+                }
+            if consumed:
                 return False, {
                     "status": "pending_hitl_approval",
                     "request_id": approval_id,
@@ -459,7 +517,16 @@ class ArchonMcpGateway:
                                 "request_id": approval_id,
                                 "message": f"HITL-Freigabe '{approval_id}' passt nicht zu Tool/Argumenten/API-Key.",
                             }
-                        self._mark_hitl_consumed(approval_id, approval_engine)
+                        try:
+                            self._mark_hitl_consumed(approval_id, approval_engine)
+                        except HITLVerificationUnavailable as exc:
+                            # D04/H-04-5: ohne nachweisbar persistierten
+                            # Verbrauch darf das Tool nicht ausgeführt werden.
+                            return False, {
+                                "status": "pending_hitl_approval",
+                                "request_id": approval_id,
+                                "message": f"HITL-Verbrauch nicht persistierbar — Ausfuehrung verweigert (fail-closed): {exc}",
+                            }
                         return True, None
                     return False, {
                         "status": "pending_hitl_approval",
@@ -613,13 +680,16 @@ class ArchonMcpGateway:
                 "message": f"Unzureichender API-Key-Scope für '{name}'. Erforderlich: '{required_scope}', vorhanden: {granted_scopes}."
             }
 
-        # Demo-Mode Guard (M47)
+        # D04/MED: Demo-Mode Guard (M47) — bei Prüfungsfehler HART DENY.
+        # `is_demo_mode` ist am Modulkopf importiert; ein Laufzeitfehler darf
+        # niemals dazu führen, dass eine schreibende Operation durchgeht.
         try:
-            from backend.demo_mode import is_demo_mode
-            if is_demo_mode() and required_scope != "read_only":
-                return -32003, {"message": "Schreibende MCP-Tools sind im Read-Only Demo-Modus gesperrt."}
+            demo_active = is_demo_mode()
         except Exception as exc:
-            logger.debug("Demo-Mode-Guard nicht prüfbar, Guard wird übergangen: %s", exc)
+            logger.error("Demo-Mode-Guard nicht pruefbar (fail-closed): %s", exc)
+            return -32003, {"message": "demo_guard_unavailable"}
+        if demo_active and required_scope != "read_only":
+            return -32003, {"message": "Schreibende MCP-Tools sind im Read-Only Demo-Modus gesperrt."}
 
         # HITL-Gate prüfen
         allowed, pending = self._check_hitl_gate(name, arguments, key_info)

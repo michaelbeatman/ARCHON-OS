@@ -50,23 +50,49 @@ try:
     DB_FILE = resolve_db("agentic_memory.db")
 except Exception:
     DB_FILE = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
-KEY_SALT = os.environ.get("ARCHON_API_KEY_PEPPER") or "ARCHON_OS_API_KEY_SALT_2026_SECURE"
-LEGACY_KEY_SALT = "ARCHON_OS_API_KEY_SALT_2026_SECURE"
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
 
-_PEPPER_FALLBACK_WARNED = False
+# D04/H-04-2: der Pepper ist ein echtes ENV-Secret. Es gibt KEINEN hartcodierten
+# Salt und KEinen Legacy-Hash-Pfad mehr. Fehlt der Pepper in Produktion, wird
+# hart abgebrochen (siehe main._assert_api_key_pepper). In isolierter Entwicklung
+# wird ein prozesslokaler Zufalls-Pepper verwendet — niemals eine öffentlich
+# bekannte Konstante. Damit sind Dev-Keys bewusst nicht über einen Neustart
+# hinweg gültig (kein Platzhalter-Fallback, kein kompromittierter Salz).
+_EPHEMERAL_PEPPER: str = ""
+_EPHEMERAL_PEPPER_LOCK = threading.Lock()
+_EPHEMERAL_PEPPER_WARNED = False
+_PRODUCTION_ENV = frozenset({"production", "prod", "live"})
 
 
-def _warn_missing_pepper_once() -> None:
-    global _PEPPER_FALLBACK_WARNED
-    if _PEPPER_FALLBACK_WARNED:
-        return
-    _PEPPER_FALLBACK_WARNED = True
-    import logging
-    logging.getLogger(__name__).warning(
-        "ARCHON_API_KEY_PEPPER ist nicht gesetzt; verwende Legacy-Salt-SHA256-Fallback. "
-        "Fuer Produktivbetrieb ARCHON_API_KEY_PEPPER (oder Docker-Secret) konfigurieren."
-    )
+class ApiKeyPepperMissingError(RuntimeError):
+    """D04/H-04-2: Produktion ohne ARCHON_API_KEY_PEPPER — hart fail-closed."""
+
+    status_code = 503
+
+
+def _get_api_key_pepper() -> str:
+    """Liefert den ENV-Pepper; Produktion ohne Pepper -> harter Fehler."""
+    global _EPHEMERAL_PEPPER, _EPHEMERAL_PEPPER_WARNED
+    pepper = str(os.environ.get("ARCHON_API_KEY_PEPPER") or "").strip()
+    if pepper:
+        return pepper
+    env_name = str(
+        os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
+    ).strip().lower()
+    if env_name in _PRODUCTION_ENV:
+        raise ApiKeyPepperMissingError(
+            "ARCHON_API_KEY_PEPPER fehlt in Produktion — API-Key-Hashkette fail-closed."
+        )
+    if not _EPHEMERAL_PEPPER_WARNED:
+        _EPHEMERAL_PEPPER_WARNED = True
+        logger.warning(
+            "ARCHON_API_KEY_PEPPER ist nicht gesetzt; verwende einen prozesslokalen "
+            "Zufalls-Pepper (nur für isolierte Entwicklung, nicht produktiv)."
+        )
+    with _EPHEMERAL_PEPPER_LOCK:
+        if not _EPHEMERAL_PEPPER:
+            _EPHEMERAL_PEPPER = secrets.token_urlsafe(32)
+        return _EPHEMERAL_PEPPER
 
 # Erlaubte Standard-Scopes
 VALID_SCOPES = {
@@ -157,18 +183,14 @@ class ApiKeyManager:
 
     @staticmethod
     def _hash_token(raw_token: str) -> str:
-        """Erzeugt einen keyed HMAC-SHA256 Hash mit Pepper (oder Legacy-Salt-Fallback)."""
-        pepper = os.environ.get("ARCHON_API_KEY_PEPPER")
-        if pepper:
-            return hmac.new(pepper.encode("utf-8"), raw_token.encode("utf-8"), hashlib.sha256).hexdigest()
-        _warn_missing_pepper_once()
-        salted = f"{KEY_SALT}:{raw_token}".encode("utf-8")
-        return hashlib.sha256(salted).hexdigest()
+        """D04/H-04-2: ausschließlich keyed HMAC-SHA256 mit echtem ENV-Pepper.
 
-    @staticmethod
-    def _legacy_hash_token(raw_token: str) -> str:
-        salted = f"{LEGACY_KEY_SALT}:{raw_token}".encode("utf-8")
-        return hashlib.sha256(salted).hexdigest()
+        Der frühere SHA256-Salt-Fallback und die Legacy-Hash-Prüfung wurden
+        entfernt: der Salt war öffentlich im Quellcode, alle damit erzeugten
+        Keys gelten als kompromittiert und müssen rotiert werden.
+        """
+        pepper = _get_api_key_pepper()
+        return hmac.new(pepper.encode("utf-8"), raw_token.encode("utf-8"), hashlib.sha256).hexdigest()
 
     def _log_audit(self, key_id: str, action: str, details: Dict[str, Any], created_by: str = "admin", conn: Optional[sqlite3.Connection] = None, emit_global: bool = True) -> Dict[str, Any]:
         """Fuegt einen Eintrag in die SHA-256 Hash-Kette fuer API-Keys ein.
@@ -460,13 +482,14 @@ class ApiKeyManager:
             return False, None, "Ungültiges Token-Format (erwartet: archon_live_...)"
 
         key_hash = self._hash_token(raw_token)
-        legacy_hash = self._legacy_hash_token(raw_token)
         with self._get_conn() as conn:
+            # D04/H-04-2: KEIN Legacy-Hash-Pfad mehr. Keys unter dem alten,
+            # öffentlich bekannten Salt sind kompromittiert und werden abgelehnt.
             row = conn.execute("""
                 SELECT key_id, name, scopes, rate_limit_rpm, rate_limit_rpd, is_active
                 FROM api_keys
-                WHERE key_hash = ? OR key_hash = ?
-            """, (key_hash, legacy_hash)).fetchone()
+                WHERE key_hash = ?
+            """, (key_hash,)).fetchone()
 
             if not row:
                 return False, None, "API-Key nicht gefunden oder ungültig."

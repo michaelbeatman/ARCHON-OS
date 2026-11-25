@@ -80,6 +80,98 @@ def _evidence_agent(evidence: Any) -> str:
     return str(getattr(evidence, "agent_id", "") or "")
 
 
+# --- F033/H-14-1: Produzent der Fan-in-Konsensmarker -------------------------
+# Der Marker war bisher toter Code: Kind-Tasks wurden ohne verdict-Felder
+# angelegt und `result_summary=reply` war der einzige spätere Schreibzugriff.
+# Jetzt werden die Felder aus dem ECHTEN Dispatch-Result übernommen. Es wird
+# nie ein Ja-Votum erfunden; fehlt ein strukturiertes Urteil, entsteht ein
+# expliziter KEINE_STIMME-Marker (weder Zustimmung noch Widerspruch).
+
+_FAN_NO_VOTE_MARKER = "KEINE_STIMME_STRUKTURIERT"
+
+
+def _fanout_cap_guard(nominated: list, cap: int, task_id: str, ticker: Callable) -> list:
+    """D13/MED: stumme Listen-Slice durch quittierte FANOUT_CAP ersetzen."""
+    try:
+        from backend.trajectory_budget import DEFAULT_MAX_DELEGATIONS_PER_RESPONSE as _ssot_cap
+        cap = max(1, min(int(cap), int(_ssot_cap)))
+    except Exception as exc:
+        logger.error("[Delegation] Fanout-SSOT nicht lesbar — fail-closed %s: %s", cap, exc)
+    if len(nominated) <= cap:
+        return nominated
+    omitted = len(nominated) - cap
+    msg = f"FANOUT_CAP={cap}: {omitted} von {len(nominated)} Nominierungen verworfen"
+    ticker("Delegation", f"Task #{task_id}: {msg}")
+    logger.error("[Delegation] %s (task=%s)", msg, task_id)
+    try:
+        from archon.core.mission_control import mc_append_audit_sqlite
+        mc_append_audit_sqlite("delegation", msg, str(task_id))
+    except Exception as exc:
+        logger.error("[Delegation] FANOUT_CAP-Audit fehlgeschlagen (task=%s): %s", task_id, exc)
+    return nominated[:cap]
+
+
+def extract_dispatch_verdict(res: Any, status: str = "") -> Dict[str, Any]:
+    """Hoheits-/Guardrail-Felder aus einem Dispatch-Ergebnis (fail-closed)."""
+    out: Dict[str, Any] = {
+        "consensus_verdict": "", "verdict": "", "decision_status": "",
+        "policy_violation": False, "guardrail_violation": False,
+        "severity": "", "source_trace_id": "", "verdict_source": "",
+    }
+    if not isinstance(res, dict):
+        return out
+    for key in ("consensus_verdict", "consensus_status", "verdict", "decision_status"):
+        value = str(res.get(key) or "").strip()
+        if value:
+            if not out["consensus_verdict"] and key in ("consensus_verdict", "consensus_status"):
+                out["consensus_verdict"] = value
+                out["verdict_source"] = f"dispatch_result:{key}"
+            elif key == "verdict" and not out["verdict"]:
+                out["verdict"] = value
+            elif key == "decision_status" and not out["decision_status"]:
+                out["decision_status"] = value
+    gr = res.get("guardrail_result")
+    if isinstance(gr, dict):
+        out["policy_violation"] = bool(gr.get("policy_violation"))
+        out["guardrail_violation"] = bool(gr.get("guardrail_violation"))
+        out["severity"] = str(gr.get("severity") or "")
+        out["source_trace_id"] = str(gr.get("source_trace_id") or res.get("trace_id") or "")
+    for key in ("policy_violation", "guardrail_violation"):
+        if bool(res.get(key)):
+            out[key] = True
+    if not out["severity"]:
+        out["severity"] = str(res.get("severity") or "")
+    if not out["source_trace_id"]:
+        out["source_trace_id"] = str(res.get("trace_id") or "")
+    if str(res.get("status") or status or "").strip().lower() == "blocked":
+        out["policy_violation"] = True
+        out["guardrail_violation"] = True
+        out["severity"] = out["severity"] or "high"
+        out["verdict_source"] = out["verdict_source"] or "dispatch_status:blocked"
+    return out
+
+
+def fan_verdict_marker(child: Dict[str, Any]) -> str:
+    """Übersetzt ein strukturiertes Kind-Urteil in einen echten Konsensmarker."""
+    verdict = str(
+        child.get("consensus_verdict") or child.get("verdict")
+        or child.get("decision_status") or ""
+    ).strip().upper()
+    if bool(child.get("policy_violation") or child.get("guardrail_violation")):
+        return "POLICY_VIOLATION"
+    if verdict.startswith("CONSENSUS_REACHED") or verdict in ("ZUSTIMME", "AGREE", "APPROVED", "EINVERSTANDEN"):
+        return "KONSENS_ERREICHT"
+    if (
+        verdict.startswith("NO_CONSENSUS")
+        or verdict in ("REJECTED", "ABGELEHNT", "CHANGES_REQUESTED")
+        or "WIDERSPRUCH" in verdict or "KEIN KONSENS" in verdict
+    ):
+        return "KEIN KONSENS"
+    # Nie still: ein Kind ohne strukturiertes Urteil ist eine Enthaltung und
+    # wird als solche im Statement sichtbar (kein erfundenes Ja/Nein).
+    return f"{_FAN_NO_VOTE_MARKER}:{verdict or 'kein Feld im Dispatch-Result'}"
+
+
 class NominationItem(BaseModel):
     """D11/S-11.1: Schema einer einzelnen Agenten-Nominierung."""
 
@@ -397,6 +489,9 @@ async def _execute_mission_control_task(
         # Aktualisiere Task
         task["status"] = "completed"
         task["result_summary"] = reply
+        # F033/H-14-1: echte strukturierte Hoheits-/Guardrail-Felder aus dem
+        # Dispatch-Result am Kind persistieren (nicht nur result_summary=reply).
+        task.update(extract_dispatch_verdict(res))
         task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         from archon.core.runtime import run_io_bound
         obs_path = await run_io_bound(sync_obsidian, task)
@@ -429,7 +524,7 @@ async def _execute_mission_control_task(
                         )
                         ticker("Delegation", f"Task #{task_id}: maximale Delegationstiefe erreicht — keine weiteren Sub-Tasks.")
                         continue
-                    nominated = nominated[:max_fanout]
+                    nominated = _fanout_cap_guard(nominated, max_fanout, str(task_id), ticker)
                     proj_title = parsed_dispatch.project_title or task_title
                     batch_subtasks = []
                     for idx, nom in enumerate(nominated):
@@ -472,6 +567,16 @@ async def _execute_mission_control_task(
                             "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                             "result_summary": "",
                             "artifact_path": "",
+                            # F033: deklarierte Felder von Anfang an — der
+                            # Produzent füllt sie bei Abschluss aus dem echten
+                            # Dispatch-Result (siehe `_run_task`).
+                            "consensus_verdict": "",
+                            "verdict": "",
+                            "decision_status": "",
+                            "policy_violation": False,
+                            "guardrail_violation": False,
+                            "verdict_source": "",
+                            "source_trace_id": str(task.get("trace_id") or ""),
                             "parent_project_id": task.get("parent_project_id") or task_id,
                             "target_action": task.get("target_action", "none"),
                             "phase": "execution"
@@ -843,7 +948,7 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                     )
                     ticker("Delegation", f"Task #{parent_id}: maximale Delegationstiefe erreicht.")
                     continue
-                nominated = nominated[:max_fanout]
+                nominated = _fanout_cap_guard(nominated, max_fanout, str(parent_id), ticker)
                 for idx, nom in enumerate(nominated):
                     sub_agent_id = nom.agent_id.strip()
                     sub_role = nom.role or "Spezialist"
@@ -879,6 +984,14 @@ Gib deine Antwort AUSSCHLIESSLICH als valides JSON im folgenden Format zurück:
                         "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "result_summary": "",
                         "artifact_path": "",
+                        # F033: dieselben deklarierten Felder wie im Hauptpfad.
+                        "consensus_verdict": "",
+                        "verdict": "",
+                        "decision_status": "",
+                        "policy_violation": False,
+                        "guardrail_violation": False,
+                        "verdict_source": "",
+                        "source_trace_id": str(parent_task.get("trace_id") or ""),
                         "parent_project_id": parent_id,
                         "parent_task_id": parent_id,
                         "target_action": parent_task.get("target_action", "none"),
@@ -1104,6 +1217,56 @@ async def _finalize_synthesis_after_approval(
         logger.warning(f"[Synthese] Finalisierung fehlgeschlagen: {fin_err}")
 
 
+def fan_in_start_decision(fresh: Dict[str, Any], parent_pid: str) -> Dict[str, Any]:
+    """Reine Fan-in-Entscheidung (testbar ohne SQLite/Locks).
+
+    H-02-2/F031: `cancelled` ist terminal und wird wie ein fehlgeschlagenes
+    Geschwister behandelt: Parent `blocked` + `failure_reason` + HITL-Kette,
+    aber KEINE Synthese (kein Coroutine-Replay, keine erfundenen Resultate).
+    """
+    decision: Dict[str, Any] = {}
+    tasks = fresh.get("tasks", []) or []
+    siblings = [t for t in tasks
+                if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)
+                and t.get("id") != parent_pid]
+    parent = next((t for t in tasks if t.get("id") == parent_pid), None)
+    if not siblings or not parent:
+        decision["skip"] = True
+        return decision
+    if parent.get("synthesis_started"):
+        decision["skip"] = True
+        return decision
+    terminal_states = {"completed", "done", "review", "failed", "blocked", "error", "cancelled"}
+    if not all(s.get("status") in terminal_states for s in siblings):
+        decision["skip"] = True
+        return decision
+    failed = [s for s in siblings if s.get("status") not in ("completed", "done", "review")]
+    if failed:
+        failed_ids = ", ".join(str(s.get("id") or "?") for s in failed)
+        cancelled_ids = ", ".join(
+            str(s.get("id") or "?") for s in failed if str(s.get("status")) == "cancelled"
+        )
+        parent["status"] = "blocked"
+        parent["phase"] = "blocked"
+        reason = (
+            f"Teilaufgabe abgebrochen: {cancelled_ids}. HITL-Eskalation erforderlich."
+            if cancelled_ids else f"Teilaufgaben fehlgeschlagen/blockiert: {failed_ids}"
+        )
+        parent["failure_reason"] = reason
+        parent["fan_in_escalation"] = "hitl_required" if cancelled_ids else "failed_siblings"
+        decision["blocked"] = failed_ids
+        decision["cancelled"] = cancelled_ids
+        logger.warning(
+            "[Fan-in] Parent '%s' blockiert — abgebrochene/fehlgeschlagene Kinder: %s",
+            parent_pid, failed_ids,
+        )
+        return decision
+    parent["synthesis_started"] = True
+    parent["synthesis_started_at"] = datetime.datetime.now().isoformat()
+    decision["start"] = len(siblings)
+    return decision
+
+
 async def _fan_in_maybe_start_synthesis(
     parent_pid: str,
     *,
@@ -1127,32 +1290,7 @@ async def _fan_in_maybe_start_synthesis(
         decision: Dict[str, Any] = {}
 
         def _mutate(fresh: Dict[str, Any]) -> None:
-            tasks = fresh.get("tasks", []) or []
-            siblings = [t for t in tasks
-                        if (t.get("parent_project_id") == parent_pid or t.get("parent_task_id") == parent_pid)
-                        and t.get("id") != parent_pid]
-            parent = next((t for t in tasks if t.get("id") == parent_pid), None)
-            if not siblings or not parent:
-                decision["skip"] = True
-                return
-            if parent.get("synthesis_started"):
-                decision["skip"] = True
-                return
-            terminal_states = {"completed", "done", "review", "failed", "blocked", "error"}
-            if not all(s.get("status") in terminal_states for s in siblings):
-                decision["skip"] = True
-                return
-            failed_siblings = [s for s in siblings if s.get("status") not in ("completed", "done", "review")]
-            if failed_siblings:
-                failed_ids = ", ".join(str(s.get("id") or "?") for s in failed_siblings)
-                parent["status"] = "blocked"
-                parent["phase"] = "blocked"
-                parent["failure_reason"] = f"Teilaufgaben fehlgeschlagen/blockiert: {failed_ids}"
-                decision["blocked"] = failed_ids
-                return
-            parent["synthesis_started"] = True
-            parent["synthesis_started_at"] = datetime.datetime.now().isoformat()
-            decision["start"] = len(siblings)
+            decision.update(fan_in_start_decision(fresh, parent_pid))
 
         async with mc_async_lock:
             if update_mc is not None:
@@ -1212,7 +1350,7 @@ def _tg_ping_synthesis(
                 dpath = build_dossier(
                     f"Synthese: {parent_title}", synthese_text, dossier_dir,
                     f"{re.sub(r'[^a-zA-Z0-9_-]+', '-', str(parent_project_id))[:40]}_synthese",
-                    ref_id=parent_project_id, quelle="Lisa (aggregation_lisa)")
+                    ref_id=parent_project_id, quelle="deterministic_fan_in")
             except Exception as _e:
                 logger.warning(f"[Synthese] Dossier-Aufbau fehlgeschlagen: {_e}")
         _kurz = mark_truncated(
@@ -1261,10 +1399,12 @@ async def _run_synthesis_cascade(
     tg_ping: Callable = None,
 ) -> None:
     """
-    FAN-IN SYNTHESE (12.10.2026, User-Entscheidung A+B):
+    FAN-IN SYNTHESE (12.10.2026, User-Entscheidung A+B; H-15-4/F023):
     1. Sammelt alle Teilergebnisse der Fachagenten fuer parent_project_id.
-    2. LISA (aggregation_lisa) fuegt sie zum Gesamtergebnis zusammen.
-    3. ROBERT (executive_decision_architect) gibt frei (FREIGABE/ABLEHNUNG).
+    2. `deterministic_fan_in` fuegt sie regelbasiert zusammen (KEIN LLM-Dispatch
+       und keine ausfuehrende Rolle 'aggregation_lisa' mehr).
+    3. `red_team_challenger` prueft den Entwurf (fail-closed, kein stilles
+       Ueberspringen); ROBERT (executive_decision_architect) gibt frei.
     4a. FREIGABE  -> finaler Bericht in 01_PROJEKTE + n8n-Bridge.
     4b. ABLEHNUNG -> Entwurf bleibt als Approval-Task im Board liegen.
     """
@@ -1337,33 +1477,22 @@ async def _run_synthesis_cascade(
         artifact_ref = art_path or f"tasks.result/{child_id}"
         display_content = mark_truncated(content, 4000, artifact=artifact_ref)
         reports.append(f"### Arbeitspaket von {sub_agent} ({sub_title})\n\n{display_content}\n")
-        # D02/D14/MED: Produzent der Konsens-Marker + Tier. Ohne diese Felder
-        # wertet resolve_debate_consensus() Kind-Arbeitsberichte strukturell
-        # immer als 0/0-NO_CONSENSUS aus („Theater"). Strukturierte
-        # Kind-Ergebnisse (verdict/policy_violation) werden in echte Marker
-        # uebersetzt, statt Freitext zu erraten.
-        _child_verdict = str(
-            s.get("consensus_verdict") or s.get("verdict") or s.get("decision_status") or ""
-        ).strip().upper()
+        # F033/H-14-1: ECHTER PRODUZENT der Konsens-Marker. Die Felder kommen
+        # aus dem Dispatch-Result des Kindes (siehe `_run_task`), nicht aus
+        # Freitext. `_marker_line` ist nie dauerhaft „": ein Kind ohne
+        # strukturiertes Urteil wird als explizite Enthaltung markiert.
+        _marker_line = fan_verdict_marker(s)
         _child_policy = bool(s.get("policy_violation") or s.get("guardrail_violation"))
-        if _child_policy:
-            _marker_line = "POLICY_VIOLATION"
-        elif _child_verdict.startswith("CONSENSUS_REACHED"):
-            _marker_line = "KONSENS_ERREICHT"
-        elif (
-            _child_verdict.startswith("NO_CONSENSUS")
-            or "WIDERSPRUCH" in _child_verdict
-            or "KEIN KONSENS" in _child_verdict
-        ):
-            _marker_line = "KEIN KONSENS"
-        else:
-            _marker_line = ""
+        _child_guardrail = bool(s.get("guardrail_violation"))
         fan_statements.append({
             "agent_id": child_agent,
-            "content": display_content + (f"\n{_marker_line}" if _marker_line else ""),
+            "content": display_content + f"\n{_marker_line}",
             "tier": _fan_tier(child_agent),
             "policy_violation": _child_policy,
+            "guardrail_violation": _child_guardrail,
             "severity": str(s.get("severity") or "") or ("high" if _child_policy else None),
+            "verdict_source": str(s.get("verdict_source") or ""),
+            "source_trace_id": str(s.get("source_trace_id") or s.get("trace_id") or ""),
             "trace_id": str(s.get("trace_id") or parent_task.get("trace_id") or ""),
             "session_id": str(s.get("session_id") or parent_task.get("session_id") or ""),
             "correlation_id": str(s.get("correlation_id") or (f"task:{child_id}" if child_id else "")),
@@ -1448,9 +1577,32 @@ async def _run_synthesis_cascade(
         synthesis_reply = "\n".join(_syn_lines[:-1]).strip()
 
     # --- SCHRITT 1.5: KRITISCHER REVIEWER prüft die Fan-in-Synthese vor Roberts Entscheidung ---
-    reviewer_prof = next((p for p in profiles if p.get("id") == "gpts_critical_reviewer"), None)
+    # H-15-5/F023: `gpts_critical_reviewer` existiert nicht unter den 71 Profilen.
+    # SSOT ist `red_team_challenger`. Fehlt das Profil, darf die Kette NICHT
+    # still zu Robert weiterlaufen (fail-closed: Eskalation statt Freigabe).
+    _REVIEWER_ID = "red_team_challenger"
+    reviewer_prof = next((p for p in profiles if p.get("id") == _REVIEWER_ID), None)
+    if reviewer_prof is None:
+        # Migrationspfad fuer alte Aufrufer, die noch den nie existierenden
+        # Handle `gpts_critical_reviewer` uebergeben. Produktiv liefert
+        # get_profiles() die echten 71 Profile — dort greift die SSOT-Kennung.
+        _legacy = next((p for p in profiles if p.get("id") == "gpts_critical_reviewer"), None)
+        if _legacy:
+            logger.warning(
+                "[Cascade-Loop] Legacy-Reviewer-Profil 'gpts_critical_reviewer' erkannt — "
+                "verwende echte Rolle '%s' mit dem uebergebenen Profil.", _REVIEWER_ID
+            )
+            reviewer_prof = {**_legacy, "id": _REVIEWER_ID}
     reviewer_critique = ""
-    if reviewer_prof:
+    reviewer_failed_closed = False
+    if not reviewer_prof:
+        logger.error(
+            "[Cascade-Loop] Pflicht-Reviewer '%s' fehlt in der Rollen-SSOT — "
+            "fail-closed: kein Finalisierungs-Gate, Eskalation an HITL.", _REVIEWER_ID
+        )
+        reviewer_failed_closed = True
+        ticker("Reviewer", f"Pflicht-Reviewer {_REVIEWER_ID} nicht verfuegbar — HITL-Eskalation")
+    else:
         rev_prompt = f"""Fuehre eine schonungslose Qualitaetspruefung der vorliegenden Synthese durch.
 PROJEKT: {parent_title}
 URSPRUENGLICHE ANFORDERUNG: {parent_task.get('capture_input', parent_title)}
@@ -1465,8 +1617,8 @@ AUFGABE:
         ticker("Reviewer", f"Qualitaetspruefung fuer '{parent_title[:30]}...'")
         try:
             rev_res = await dispatcher.dispatch_to_omniroute_or_container(
-                agent_id="gpts_critical_reviewer",
-                agent_name="Kritischer Reviewer",
+                agent_id=_REVIEWER_ID,
+                agent_name=(reviewer_prof.get("name") or reviewer_prof.get("person_name") or "Red Team Challenger"),
                 prompt=rev_prompt,
                 role="Critical Reviewer & QA",
                 system_prompt=((reviewer_prof or {}).get("system_prompt") or "Du bist der kritische Chef-Reviewer von Archon OS. Pruefe Entwuerfe schonungslos auf Fakten, Logik und Qualitaet."),
@@ -1475,8 +1627,12 @@ AUFGABE:
             reviewer_critique = (rev_res.get("content", "") or "").strip()
             if reviewer_critique:
                 logger.info(f"[Cascade-Loop] Reviewer-Kritik erstellt ({len(reviewer_critique)} Zeichen)")
+            else:
+                reviewer_failed_closed = True
+                logger.error("[Cascade-Loop] Reviewer lieferte keine Kritik — fail-closed.")
         except Exception as rev_err:
-            logger.warning(f"[Cascade-Loop] Reviewer-Pruefung fehlgeschlagen: {rev_err}")
+            reviewer_failed_closed = True
+            logger.error(f"[Cascade-Loop] Reviewer-Pruefung fehlgeschlagen (fail-closed): {rev_err}")
 
     # --- SCHRITT 2: ROBERT gibt frei ---
     robert_prompt = f"""Die deterministische Fan-in-Synthese hat die Teilergebnisse folgenden Projekts zusammengefuegt:
@@ -1484,7 +1640,7 @@ AUFGABE:
 PROJEKT: {parent_title}
 ANFORDERUNG: {parent_task.get('capture_input', parent_title)}
 
-LISAS SYNTHESE:
+DETERMINISTISCHE FAN-IN-SYNTHESE:
 {synthesis_reply}
 
 """ + (f"""UNABHAENGIGE QUALITAETSPRUEFUNG (Kritischer Reviewer):
@@ -1498,16 +1654,17 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
                 or "Du bist Robert, Executive Decision Architect und leitender Chefstratege von Archon OS. Antworte mit FREIGABE oder ABLEHNUNG als erste Zeile.")
     r_model = (r_prof or {}).get("model") or "deepseek/deepseek-v4-flash-0731"
     robert_reply = ""
-    if _fan_policy_veto:
-        # B7/HIGH: ein Policy-Veto ist eine HARTE Ablehnung. Kein
-        # Freigabe-Prompt, keine Finalisierung — nur HITL mit Belegen.
-        ticker("Robert", "Policy-Veto im Fan-in — Freigabe gesperrt, HITL erforderlich")
+    if _fan_policy_veto or reviewer_failed_closed:
+        # B7/HIGH + H-15-5: Policy-Veto oder fehlgeschlagener Pflicht-Reviewer
+        # ist eine HARTE Ablehnung. Kein Freigabe-Prompt, keine Finalisierung —
+        # nur HITL mit Belegen.
+        ticker("Robert", "Policy-Veto/Reviewer-Fehler im Fan-in — Freigabe gesperrt, HITL erforderlich")
         logger.warning(
-            "[Cascade-Loop] Fan-in-Policy-Veto (%s): Robert-Freigabe wird nicht angefragt.",
-            _fan_verdict,
+            "[Cascade-Loop] Fan-in gesperrt (verdict=%s, reviewer_failed_closed=%s): "
+            "Robert-Freigabe wird nicht angefragt.", _fan_verdict, reviewer_failed_closed,
         )
     else:
-        ticker("Robert", f"Prueft Lisas Synthese fuer '{parent_title[:30]}...'")
+        ticker("Robert", f"Prueft Fan-in-Synthese fuer '{parent_title[:30]}...'")
         try:
             rres = await dispatcher.dispatch_to_omniroute_or_container(
                 agent_id="executive_decision_architect",
@@ -1592,7 +1749,7 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
 
     # B7: harter Gate — kein NO_CONSENSUS*-Verdict (inkl. Policy-Veto) darf
     # unabhängig von Roberts Antwort eine finale Beschlussvorlage erzeugen.
-    if freigegeben and _fan_final_ok:
+    if freigegeben and _fan_final_ok and not reviewer_failed_closed:
         await finalize_approval(
             parent_project_id, draft_path, synthesis_reply,
             "Robert: " + mark_truncated(robert_reply, 200, artifact=draft_path),
@@ -1609,7 +1766,7 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
             _deci_dossier = build_dossier(
                 f"Synthese: {parent_title}", synthesis_reply, _tg_doss_dir,
                 f"{safe_pid}_synthese", ref_id=parent_project_id,
-                quelle="Lisa (aggregation_lisa)")
+                quelle="deterministic_fan_in")
         except Exception as _de:
             logger.warning(f"[Synthese] Dossier für die Entscheidung fehlgeschlagen: {_de}")
     _deci = None
@@ -1622,9 +1779,9 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
                 synthesis_reply,          # kurzfassung
                 parent_project_id,        # ref_id
                 _deci_dossier,            # dossier
-                f"Lisas Entwurf: {draft_path}",   # body
+                f"Entwurf der deterministischen Fan-in-Synthese: {draft_path}",   # body
                 {"parent_project_id": parent_project_id, "draft_path": draft_path,
-                 "projekt": parent_title, "von": "Lisa · Ergebnis-Kuratorin",
+                 "projekt": parent_title, "von": "deterministic_fan_in",
                  "teilberichte": f"{len(reports)}/{len(reports)}",
                  # B7: HITL braucht die Konfliktbelege, sonst ist die Eskalation
                  # nicht nachvollziehbar (D14: original_verdict/veto_by/evidence).
@@ -1679,6 +1836,46 @@ def recover_stale_synthesis(
     data = load_mc() or {}
     stale: List[str] = []
     now = datetime.datetime.now()
+
+    # H-02-2/F031: vor dem Deploy produzierte `cancelled`-Kinder haben den
+    # Fan-in damals blockiert (Status fehlte in `terminal_states`), also wurde
+    # `synthesis_started` NIE gesetzt — die klassische Recovery sah nichts.
+    # Hier werden solche Projekte nachträglich erkannt und hart eskaliert.
+    def _resolve_cancelled_children(fresh: Dict[str, Any]) -> None:
+        tasks = fresh.get("tasks", []) or []
+        for parent in tasks:
+            if parent.get("synthesis_finalized") or parent.get("synthesis_started"):
+                continue
+            if str(parent.get("status") or "") in ("done", "completed", "blocked", "cancelled"):
+                continue
+            children = [
+                t for t in tasks
+                if t.get("id") != parent.get("id")
+                and (t.get("parent_project_id") == parent.get("id")
+                     or t.get("parent_task_id") == parent.get("id"))
+            ]
+            cancelled_ids = [
+                str(c.get("id") or "?") for c in children
+                if str(c.get("status") or "") == "cancelled"
+            ]
+            if not cancelled_ids:
+                continue
+            parent["status"] = "blocked"
+            parent["phase"] = "blocked"
+            parent["failure_reason"] = (
+                f"Teilaufgabe abgebrochen: {', '.join(cancelled_ids)}. "
+                "HITL-Eskalation erforderlich (Fan-in zuvor blockiert)."
+            )
+            parent["fan_in_escalation"] = "hitl_required"
+            stale.append(str(parent.get("id") or parent.get("project_id") or "?"))
+            logger.error(
+                "[Fan-in] Recovery: Parent '%s' wegen abgebrochener Kinder blockiert: %s",
+                parent.get("id"), cancelled_ids,
+            )
+
+    update_mc(_resolve_cancelled_children)
+    data = load_mc() or {}  # frischer Snapshot nach der Mutierung
+
     for task in data.get("tasks", []) or []:
         if not task.get("synthesis_started") or task.get("synthesis_finalized"):
             continue

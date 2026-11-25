@@ -35,7 +35,7 @@ from archon.core.runtime import (  # noqa: F401
     logger,
     ticker_entries,
 )
-from archon.routers._rbac import require_admin_or_503
+from archon.routers._rbac import require_admin_or_503, require_session_actor
 from utils.docker_client import docker_client as _docker_client  # noqa: F401
 from utils.docker_client import parse_docker_stream
 
@@ -75,7 +75,26 @@ class AiActReclassifyRequest(BaseModel):
     data_protection_measures: Optional[str] = None
     compliance_status: Optional[str] = None
     audit_interval_months: Optional[int] = Field(default=None, ge=0, le=1200)
-    override_reason: Optional[str] = None
+    # H-14-3/F022: Pflicht-Begründung (mind. 10 Zeichen).
+    override_reason: str = Field(min_length=10, max_length=4000)
+
+
+class AiActReclassifyApprovalRequest(BaseModel):
+    """Vier-Augen-Freigabe eines AI-Act-Downgrade-Vorschlags."""
+
+    model_config = ConfigDict(extra="ignore")
+    request_id: str = Field(min_length=1, max_length=200)
+    passkey_proof_token: Optional[str] = None
+
+
+def _audit_or_503(action: str, actor: str, payload: Dict[str, Any]) -> None:
+    """H-14-3: Audit-Schreibfehler nie verschlucken (hart 503)."""
+    try:
+        from backend.audit_log import _require_audit_event
+        _require_audit_event("governance", action, actor, payload)
+    except RuntimeError as exc:
+        logger.error("[Governance] Pflicht-Audit %s fehlgeschlagen: %s", action, exc)
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 class LiteracyEntryCreate(BaseModel):
@@ -120,12 +139,154 @@ def api_ai_act_stats():
 @router.post("/api/governance/ai-act/reclassify/{agent_id}")
 @router.post("/api/v1/governance/ai-act/reclassify/{agent_id}")
 def api_ai_act_reclassify(request: Request, agent_id: str, payload: AiActReclassifyRequest):
+    """H-14-3/F022: Hoheitsaenderung der EU-AI-Act-Klassifizierung.
+
+    - Actor ausschliesslich aus der verifizierten Session.
+    - PROHIBITED-Downgrade hart gesperrt.
+    - HIGH_RISK/LIMITED_RISK/SPECIFIC_TRANSPARENCY -> niedriger: nur ueber den
+      4-Augen-Vorschlagspfad (zwei identitaetsverschiedene Freigaben).
+    - Pflicht-Begruendung, Audit-Schreibfehler fuehren zu 503.
+    """
     require_admin_or_503(request)  # RBAC: Admin-Sache
-    from backend.eu_ai_act_inventory import eu_ai_act_inventory_manager
-    updated = eu_ai_act_inventory_manager.set_manual_override(agent_id, payload.model_dump(exclude_unset=True))
+    actor = require_session_actor(request)
+    from backend.eu_ai_act_inventory import (
+        RISK_TIER_ORDER,
+        eu_ai_act_inventory_manager as mgr,
+    )
+
+    updates = payload.model_dump(exclude_unset=True)
+    current = next(
+        (x for x in mgr.get_inventory() if x.get("agent_id") == agent_id), None
+    )
+    if current is None:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' nicht gefunden.")
+    old_tier = str(current.get("risk_tier") or "MINIMAL_RISK")
+    new_tier = str(updates.get("risk_tier") or old_tier)
+
+    if old_tier == "PROHIBITED" and new_tier != "PROHIBITED":
+        _audit_or_503("ai_act_reclassify_denied", actor, {
+            "target_agent": agent_id, "old_tier": old_tier, "new_tier": new_tier,
+            "reason": "prohibited_downgrade_forbidden",
+        })
+        raise HTTPException(status_code=403, detail="prohibited_downgrade_forbidden")
+
+    is_downgrade = (
+        old_tier in ("HIGH_RISK", "LIMITED_RISK", "SPECIFIC_TRANSPARENCY")
+        and RISK_TIER_ORDER.get(new_tier, 99) > RISK_TIER_ORDER.get(old_tier, 99)
+    )
+    if is_downgrade:
+        from backend.approval_policy_engine import approval_engine
+        proposal = approval_engine.evaluate_and_enqueue(
+            domain="ai_act",
+            title=f"AI-Act-Downgrade {agent_id}: {old_tier} -> {new_tier}",
+            amount=0.0,
+            reference_id=agent_id,
+            payload={
+                "target_agent": agent_id,
+                "old_tier": old_tier,
+                "updates": updates,
+                "override_reason": updates.get("override_reason", ""),
+            },
+            requester_id=actor,
+            force_four_eyes=True,
+        )
+        _audit_or_503("ai_act_downgrade_proposed", actor, {
+            "target_agent": agent_id, "old_tier": old_tier, "new_tier": new_tier,
+            "request_id": proposal["request_id"],
+        })
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "pending_four_eyes",
+                "request_id": proposal["request_id"],
+                "message": (
+                    "Downgrade erfordert zwei identitaetsverschiedene Freigaben "
+                    "(POST /api/governance/ai-act/reclassify/{agent_id}/approve)."
+                ),
+            },
+        )
+
+    try:
+        updated = mgr.set_manual_override(agent_id, updates, actor=actor)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
     if not updated:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' nicht gefunden.")
     return {"status": "success", "agent": updated}
+
+
+@router.post("/api/governance/ai-act/reclassify/{agent_id}/approve")
+@router.post("/api/v1/governance/ai-act/reclassify/{agent_id}/approve")
+def api_ai_act_reclassify_approve(
+    request: Request, agent_id: str, payload: AiActReclassifyApprovalRequest
+):
+    """Vierte-Augen-Freigabe und Anwendung eines AI-Act-Downgrades."""
+    require_admin_or_503(request)
+    actor = require_session_actor(request)
+
+    from backend.approval_policy_engine import approval_engine
+    from backend.eu_ai_act_inventory import RISK_TIER_ORDER, eu_ai_act_inventory_manager as mgr
+
+    req_row = approval_engine.get_request(payload.request_id)
+    if not req_row:
+        raise HTTPException(status_code=404, detail="Freigabeanfrage nicht gefunden.")
+    if req_row.get("domain") != "ai_act" or str(req_row.get("reference_id")) != str(agent_id):
+        raise HTTPException(403, detail="Freigabeanfrage gehoert nicht zu diesem Agenten.")
+
+    # HITL-Proof (an Action + Zielagent gebunden, genau einmal verbraucht).
+    from backend.passkey_hitl import consume_hitl_proof_token
+    token = str(payload.passkey_proof_token or "").strip()
+    try:
+        ok = consume_hitl_proof_token(
+            token, actor, "system",
+            action=f"ai_act_reclassify:{agent_id}", resource=agent_id, consume=True,
+        )
+    except Exception as exc:
+        logger.error("[Governance] HITL-Pruefung fehlgeschlagen (fail-closed): %s", exc)
+        raise HTTPException(status_code=503, detail="hitl_proof_check_unavailable")
+    if not ok:
+        raise HTTPException(status_code=403, detail="Gueltiger, an Agenten gebundener Passkey-Proof erforderlich.")
+
+    try:
+        res = approval_engine.approve_request(payload.request_id, approver_id=actor)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+
+    if str(res.get("status")) != "approved":
+        _audit_or_503("ai_act_downgrade_first_approval", actor, {
+            "target_agent": agent_id, "request_id": payload.request_id, "actor": actor,
+        })
+        return {"status": "first_approved", "result": res}
+
+    # Re-Validierung gegen die SSOT (kein Body-Vertrauen bei der Anwendung).
+    pl = req_row.get("payload_json")
+    if isinstance(pl, str):
+        try:
+            pl = json.loads(pl)
+        except (ValueError, TypeError):
+            pl = {}
+    updates = dict((pl or {}).get("updates") or {})
+    updates.setdefault("override_reason", str((pl or {}).get("override_reason") or ""))
+    item = next((x for x in mgr.get_inventory() if x.get("agent_id") == agent_id), None)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' nicht gefunden.")
+    current_tier = str(item.get("risk_tier") or "")
+    if current_tier == "PROHIBITED":
+        raise HTTPException(status_code=403, detail="prohibited_downgrade_forbidden")
+    if RISK_TIER_ORDER.get(str(updates.get("risk_tier") or ""), 99) <= RISK_TIER_ORDER.get(current_tier, 99):
+        raise HTTPException(400, detail="Freigegebene Aenderung ist kein Downgrade mehr (SSOT gewandelt).")
+
+    try:
+        updated = mgr.apply_approved_reclassification(
+            agent_id, updates, actor=actor, approval_id=payload.request_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return {"status": "success", "agent": updated, "approval_id": payload.request_id}
 
 
 @router.get("/api/governance/ai-act/export")

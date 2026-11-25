@@ -7,6 +7,11 @@ from __future__ import annotations
 import logging
 _archon_exc_logger = logging.getLogger("passkey_hitl")
 
+
+def _audit_strict() -> bool:
+    raw = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off", "none"}
+
 import base64
 import datetime
 import hashlib
@@ -400,8 +405,12 @@ def verify_and_store_registration(
                 category="security", action="passkey_attestation_none_break_glass",
                 agent_id=uid, payload={"user_id": uid, "aaguid": aaguid, "reason": "legacy_break_glass"},
             )
-        except Exception:
-            _archon_exc_logger.warning("[passkey_hitl] Break-Glass-Audit nicht schreibbar.")
+        except Exception as exc:
+            # D05/MED: Break-Glass ohne signierten Nachweis darf nicht als
+            # durchgeführt gelten. ERROR immer, Strict => harter Abbruch.
+            _archon_exc_logger.error("[passkey_hitl] Break-Glass-Audit nicht schreibbar: %s", exc)
+            if _audit_strict():
+                raise RuntimeError("audit_write_failed") from exc
 
     spki_bytes = _b64u_decode(public_key_spki_b64)
     # Validieren, dass es ein gueltiger oeffentlicher Schluessel ist

@@ -2635,37 +2635,24 @@
         selectMasterChatProfile(agentId);
       }
     }
-    function togglePinAgentToCurrentTask() {
-      if (!currentSelectedProfileId) return;
-      const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
-      const name = prof ? (prof.person_name || prof.name) : currentSelectedProfileId;
-      prof.is_pinned_to_task = !prof.is_pinned_to_task;
-      showArchonToast(
-        prof.is_pinned_to_task 
-          ? `Agent '${name}' an aktiven Task geheftet!` 
-          : `Task-Bindung für '${name}' gelöst.`, 
-        "success"
-      );
-    }
+    // D01/MED (F042): togglePinAgentToCurrentTask() wurde entfernt. Es setzte
+    // nur ein lokales Flag ohne Endpoint/Persistenz und zeigte einen
+    // Erfolgs-Toast fuer eine nie erfolgte Task-Bindung (Scheinerfolg).
     // Modal-Umleitungen zur Vermeidung von Popup-Modals
     function openSoulModal(agentId) {
       if (agentId) selectProfileForEditor(agentId);
       switchAgentCadreTab('soul');
     }
-    function closeSoulModal() {}
     function saveSoulMarkdown() { saveInlineSoulMarkdown(); }
     function openPersonalakteModal(agentId) {
       if (agentId) selectProfileForEditor(agentId);
       switchAgentCadreTab('personalakte');
     }
-    function closePersonalakteModal() {}
-    function switchPersonalakteTab(tabName) {}
     function savePersonalakteMarkdown() { saveInlinePersonalakteMarkdown(); }
     function openDirectChatForCurrentProfile(agentId) {
       if (agentId) selectProfileForEditor(agentId);
       switchAgentCadreTab('chat');
     }
-    function closeAgentDirectChatModal() {}
     // Live-Aktivitaet: ein gemeinsamer SSE-Bus (chat_engine.js), keine zweite EventSource.
     let _agentActivitySseBound = false;
     let _agentActivityRefreshTimer = null;

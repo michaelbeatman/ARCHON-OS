@@ -8,7 +8,9 @@ import os
 import sys
 import time
 import json
+import shutil
 import sqlite3
+import tempfile
 import argparse
 import subprocess
 import threading
@@ -16,6 +18,10 @@ from typing import Dict, Any, List
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.getenv("DATA_DIR", "/opt/data" if os.path.exists("/opt/data") else os.path.join(os.path.expanduser("~"), ".hermes"))
+
+# D10/MED: harter Restart-Recovery-SLA. Die Suite darf nicht "passed" melden,
+# wenn die Wiederherstellung laenger als 15 s dauert.
+RESTART_SLA_S = 15.0
 
 RESULTS_FILE = os.path.join(WORKSPACE_DIR, "data", "chaos_test_results.json")
 os.makedirs(os.path.dirname(RESULTS_FILE), exist_ok=True)
@@ -47,49 +53,104 @@ class ArchonChaosTester:
         return candidates[0]
 
     def test_database_concurrency(self, num_threads: int = 8, ops_per_thread: int = 50) -> Dict[str, Any]:
-        """Testet SQLite WAL-Resilienz unter extremer Nebenläufigkeit (Lock-Contention)."""
-        db_path = self._resolve_db("kanban.db")
-        if not os.path.exists(db_path):
-            return {"status": "skipped", "reason": f"Database not found at {db_path}"}
+        """Echte WAL-Schreiblast: 8 Threads × 50 ``BEGIN IMMEDIATE``-Transaktionen.
 
-        errors = []
-        latencies = []
+        D10/MED: frueher wurden nur reine SELECTs auf ``./data/kanban.db``
+        ausgefuehrt — kein Effekt, keine Lock-Contention, kein Nachweis.
+        Jetzt: dedizierte Temp-DB (nie ``./data``), WAL + busy_timeout, echte
+        INSERTs mit BEGIN IMMEDIATE/COMMIT und ``PRAGMA integrity_check``.
+        """
+        tmp_dir = tempfile.mkdtemp(prefix="archon_chaos_db_")
+        db_path = os.path.join(tmp_dir, "chaos_concurrency.db")
+        try:
+            init_conn = sqlite3.connect(db_path, timeout=5.0)
+            try:
+                journal_mode = str(init_conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]).lower()
+                init_conn.execute("PRAGMA busy_timeout=5000")
+                init_conn.execute(
+                    "CREATE TABLE chaos_writes ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, thread INTEGER, seq INTEGER, payload TEXT)"
+                )
+                init_conn.commit()
+            finally:
+                init_conn.close()
 
-        def worker(thread_id: int):
-            for i in range(ops_per_thread):
-                t0 = time.time()
+            errors: List[str] = []
+            latencies: List[float] = []
+            committed = 0
+            lock = threading.Lock()
+
+            def worker(thread_id: int):
+                nonlocal committed
+                for i in range(ops_per_thread):
+                    t0 = time.time()
+                    conn = None
+                    try:
+                        conn = sqlite3.connect(db_path, timeout=5.0)
+                        conn.execute("PRAGMA busy_timeout=5000")
+                        conn.execute("BEGIN IMMEDIATE")
+                        conn.execute(
+                            "INSERT INTO chaos_writes (thread, seq, payload) VALUES (?, ?, ?)",
+                            (thread_id, i, f"chaos-{thread_id}-{i}"),
+                        )
+                        conn.commit()
+                        with lock:
+                            committed += 1
+                            latencies.append(time.time() - t0)
+                    except Exception as e:
+                        with lock:
+                            errors.append(f"Thread {thread_id} op {i}: {e}")
+                    finally:
+                        if conn is not None:
+                            conn.close()
+
+            threads = [threading.Thread(target=worker, args=(t,)) for t in range(num_threads)]
+            t_start = time.time()
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            total_time = time.time() - t_start
+
+            integrity = "unknown"
+            row_count = -1
+            try:
+                check_conn = sqlite3.connect(db_path, timeout=5.0)
                 try:
-                    conn = sqlite3.connect(db_path, timeout=5.0)
-                    cur = conn.cursor()
-                    cur.execute("SELECT id, status FROM tasks LIMIT 5")
-                    _ = cur.fetchall()
-                    conn.close()
-                    latencies.append(time.time() - t0)
-                except Exception as e:
-                    errors.append(f"Thread {thread_id} op {i}: {e}")
+                    integrity = str(check_conn.execute("PRAGMA integrity_check").fetchone()[0])
+                    row_count = int(check_conn.execute("SELECT COUNT(*) FROM chaos_writes").fetchone()[0])
+                finally:
+                    check_conn.close()
+            except Exception as e:
+                integrity = f"error: {e}"
 
-        threads = [threading.Thread(target=worker, args=(t,)) for t in range(num_threads)]
-        t_start = time.time()
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-        total_time = time.time() - t_start
-
-        avg_latency_ms = (sum(latencies) / len(latencies) * 1000) if latencies else 0.0
-        max_latency_ms = (max(latencies) * 1000) if latencies else 0.0
-
-        passed = len(errors) == 0
-        return {
-            "status": "passed" if passed else "failed",
-            "threads": num_threads,
-            "total_operations": len(latencies),
-            "errors_count": len(errors),
-            "errors": errors[:5],
-            "total_duration_sec": round(total_time, 3),
-            "avg_latency_ms": round(avg_latency_ms, 2),
-            "max_latency_ms": round(max_latency_ms, 2)
-        }
+            expected = num_threads * ops_per_thread
+            avg_latency_ms = (sum(latencies) / len(latencies) * 1000) if latencies else 0.0
+            max_latency_ms = (max(latencies) * 1000) if latencies else 0.0
+            passed = (
+                not errors
+                and committed == expected
+                and row_count == expected
+                and integrity == "ok"
+                and journal_mode == "wal"
+            )
+            return {
+                "status": "passed" if passed else "failed",
+                "threads": num_threads,
+                "ops_per_thread": ops_per_thread,
+                "expected_commits": expected,
+                "successful_commits": committed,
+                "row_count": row_count,
+                "journal_mode": journal_mode,
+                "integrity_check": integrity,
+                "errors_count": len(errors),
+                "errors": errors[:5],
+                "total_duration_sec": round(total_time, 3),
+                "avg_latency_ms": round(avg_latency_ms, 2),
+                "max_latency_ms": round(max_latency_ms, 2),
+            }
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def test_container_discovery_and_health(self) -> Dict[str, Any]:
         """Prüft die Erreichbarkeit und Status der Kern-Container über den Docker-Proxy."""
@@ -125,7 +186,8 @@ class ArchonChaosTester:
                 "status": "passed",
                 "mode": "dry_run",
                 "container": container_name,
-                "message": f"Simulierter Neustart von '{container_name}' übersprungen (dry_run=True)."
+                "restart_sla_s": RESTART_SLA_S,
+                "message": f"Simulierter Neustart von '{container_name}' übersprungen (dry_run=True); SLA nicht messbar."
             }
 
         try:
@@ -138,17 +200,27 @@ class ArchonChaosTester:
             info = json.loads(client.container_json(container_name).decode("utf-8"))
             current_status = str((info.get("State") or {}).get("Status") or "")
 
-            passed = current_status == "running"
-            return {
+            # D10/MED: SLA<15 s ist hart — "running" allein genuegt nicht.
+            sla_violation = restart_time >= RESTART_SLA_S
+            passed = current_status == "running" and not sla_violation
+            result = {
                 "status": "passed" if passed else "failed",
                 "container": container_name,
                 "recovery_time_sec": round(restart_time, 2),
-                "current_status": current_status
+                "restart_sla_s": RESTART_SLA_S,
+                "sla_violation": sla_violation,
+                "current_status": current_status,
             }
+            if sla_violation:
+                result["reason"] = (
+                    f"restart_sla_exceeded: {restart_time:.2f}s >= {RESTART_SLA_S:.1f}s"
+                )
+            return result
         except Exception as e:
             return {
                 "status": "failed",
                 "container": container_name,
+                "restart_sla_s": RESTART_SLA_S,
                 "error": str(e)
             }
 

@@ -24,6 +24,7 @@ from archon.routers._rbac import (
 from archon.routers._rbac import (
     get_session_actor,
     require_admin_or_503,
+    require_session_actor,
 )
 
 logger = logging.getLogger("archon.routers.v2_capabilities")
@@ -757,6 +758,18 @@ class EvalRunRequest(BaseModel):
     min_pass_score: float = Field(default=70.0, ge=0, le=100)
 
 
+class EvalReplayRequest(BaseModel):
+    """D16/MED: Trace-Replay führt den LLM-Dispatch erneut aus → HITL-pflichtig.
+
+    Das Einmal-Token wird serverseitig ausgewertet; ein Body-Boolean darf
+    niemals eine Freigabe simulieren (Vier-Augen-Prinzip).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+    passkey_proof_token: Optional[str] = Field(default=None, max_length=500)
+    min_score: float = Field(default=65.0, ge=0, le=100)
+
+
 def _treasury_actor(request: Request) -> str:
     try:
         from archon.routers.auth import _resolve_target_passkey_user
@@ -921,10 +934,15 @@ def api_v2_render_receipt_html(req: ReceiptHtmlRequest):
 
 
 @router.get("/api/v2/sessions/{session_id}/lossless/search")
-def api_v2_lossless_search(request: Request, session_id: str, q: str = ""):
+def api_v2_lossless_search(request: Request, session_id: str, q: str = "", tenant_id: str = ""):
     require_admin_or_503(request)
+    # F011/B-11: Suche ist tenant-scoped; ohne expliziten Parameter gilt der
+    # aktive Mandant (nie ein globaler, mandantenübergreifender Treffer).
     from backend.lossless_session_dag import search_lossless_history
-    return {"status": "success", "turns": search_lossless_history(session_id, q)}
+    return {
+        "status": "success",
+        "turns": search_lossless_history(session_id, q, tenant_id=tenant_id or None),
+    }
 
 
 # --- M45 & M50: Deep Research & Eval Arena ---
@@ -1140,6 +1158,92 @@ async def api_v2_eval_run(request: Request, req: EvalRunRequest):
         min_pass_score=min_pass_score,
     )
     return res
+
+
+@router.post("/api/v2/eval/traces/{trace_id}/replay")
+async def api_v2_eval_trace_replay(
+    request: Request,
+    trace_id: str,
+    req: Optional[EvalReplayRequest] = Body(default=None),
+):
+    """D16/MED: Trace-to-Eval-Replay im Produktivpfad (Konsument vorhanden).
+
+    Produzent: OTel-Spans inkl. ``delegation``/``tool``/``gate``.
+    Konsument: dieser Endpunkt baut ein PII-redaktiertes Fixture und fuehrt
+    die Steps ueber den echten Dispatcher erneut aus.
+    Effekt: ``replay_fixtures`` + ``eval_runs`` (target_type='replay').
+    Verifikation: Eval-Run-ID im Response, abrufbar ueber ``/eval/runs/{id}``.
+    Da dabei LLM-Calls erneut stattfinden, ist ein passkey-gebundenes
+    Einmal-HITL-Proof zwingend (kein clientseitiges ``verified``-Flag).
+    """
+    require_admin_or_503(request)
+    actor = require_session_actor(request)
+    req = req or EvalReplayRequest()
+    clean_trace = str(trace_id or "").strip()
+    if not clean_trace:
+        raise HTTPException(status_code=400, detail="trace_id darf nicht leer sein.")
+
+    from backend.passkey_hitl import consume_hitl_proof_token
+
+    proof = req.passkey_proof_token or request.headers.get("x-passkey-proof")
+    if not await asyncio.to_thread(
+        consume_hitl_proof_token,
+        proof,
+        actor,
+        "system",
+        "Trace-Replay ausführen",
+        clean_trace,
+    ):
+        raise HTTPException(status_code=403, detail="passkey_verification_required")
+
+    def _replay_executor(step: Dict[str, Any]) -> Dict[str, Any]:
+        """Echter Dispatcher-Hop — kein Mock, kein simulierte Erfolgsmeldung."""
+        import core_dispatcher
+
+        agent_id = str(step.get("agent_id") or "default").strip() or "default"
+        model = str(step.get("model") or "").strip() or "deepseek/deepseek-chat"
+        res = asyncio.run(
+            core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=agent_id,
+                agent_name=agent_id,
+                prompt=str(step.get("input") or ""),
+                model=model,
+                task_id=f"replay-{clean_trace}",
+                trajectory_reason="eval_trace_replay",
+            )
+        )
+        if not isinstance(res, dict):
+            raise RuntimeError("REPLAY_DISPATCH_INVALID_RESULT")
+        status = str(res.get("status") or "").lower()
+        if status in ("blocked", "error"):
+            raise RuntimeError(
+                f"REPLAY_DISPATCH_{status.upper()}: {res.get('error_code') or res.get('error') or ''}"
+            )
+        return {
+            "output": str(res.get("content") or ""),
+            "cost_usd": float(res.get("cost_usd") or 0.0),
+        }
+
+    from backend.eval_gates import replay_and_evaluate
+
+    try:
+        result = await asyncio.to_thread(
+            replay_and_evaluate,
+            clean_trace,
+            _replay_executor,
+            min_score=req.min_score,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    if str(result.get("status") or "") == "error":
+        raise HTTPException(status_code=404, detail=str(result.get("error") or "Replay fehlgeschlagen."))
+    logger.info(
+        "[v2 eval] Trace-Replay %s von %s: eval_id=%s score=%s",
+        clean_trace, actor, result.get("eval_id"), result.get("overall_score"),
+    )
+    return {"status": "success", **result}
 
 
 @router.get("/api/v2/eval/runs")

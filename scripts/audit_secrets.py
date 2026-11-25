@@ -57,6 +57,10 @@ SAFE_FILE_EXCEPTIONS = {
     "tests/test_zero_egress_and_dispatch_audit.py",
     "docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md",
     "docs/security/SECRETS_MANAGEMENT_UND_ROTATION.md",
+    # D04/H-04-2: Auditberichte zitieren den kompromittierten Konstanten-
+    # Wert als Beleg. Das ist Dokumentation, kein Code-Einsatz.
+    "audit_reports/domain_04.md",
+    "audit_reports/_archiv_2026-11-24_pre_audit/_archiv_2026-11-24_run5/2026-11-24_d04_security.md",
 }
 
 SAFE_FOLDER_EXCEPTIONS = [
@@ -76,6 +80,11 @@ CONTENT_SECRET_PATTERNS = [
     # Eigene Tokenformate (Audit 23.11.2026) — vorher nicht erkannt.
     ("Archon Live Token", re.compile(r'\barchon_live_[a-zA-Z0-9_\-]{16,}\b')),
     ("Archon HITL Proof", re.compile(r'\btok_[a-zA-Z0-9_\-]{20,}\b')),
+    # D04/H-04-2: hartcodierte API-Key-Pepper/Salts sind kompromittiert.
+    ("Hardcodierter API-Key-Pepper/Salt", re.compile(
+        r'\bARCHON_OS_API_KEY_SALT_[0-9A-Z_]+'
+        r'|\b(?:KEY_SALT|LEGACY_KEY_SALT)\s*=\s*["\'][^"\']{8,}["\']'
+    )),
 ]
 
 def is_forbidden_filename(filename: str) -> bool:

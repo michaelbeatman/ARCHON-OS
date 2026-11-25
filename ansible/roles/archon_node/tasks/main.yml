@@ -139,6 +139,7 @@
     # Produktiv-Deploy — sonst bleibt der Gate fail-open.
     ENVIRONMENT: "{{ archon_environment }}"
     ARCHON_READINESS_PROBES: "{{ archon_readiness_probes }}"
+    ARCHON_READINESS_PROBE_URLS: "{{ archon_readiness_probe_urls }}"
     # Audit D10: Watchdog-Altersschwellen an den externen Autoheal und den
     # Daemon durchreichen (beide Default 120 s).
     AUTOHEAL_WATCHDOG_MAX_AGE_S: "{{ archon_autoheal_watchdog_max_age_s }}"
@@ -231,6 +232,21 @@
   when:
     - archon_observability == "full"
     - archon_litestream_replica_dir | default('') | length > 0
+
+- name: Schedule periodic chaos resilience suite (Audit D10/F043)
+  # Restart-Recovery SLA < 15 s und echte WAL-Schreiblast (8x50
+  # BEGIN IMMEDIATE) werden alle 6 h gemessen. `--live` ist noetig, damit
+  # die SLA ueberhaupt gemessen wird (dry_run = nicht pruefbar). Ein Bruch
+  # lässt die Suite mit Exit 1 fehlschlagen und landet im Cron-Log;
+  # der CI-Gate nutzt denselben Exit-Code.
+  cron:
+    name: "archon-chaos-resilience-test"
+    minute: "15"
+    hour: "*/6"
+    job: "cd {{ archon_install_root }} && docker compose -f docker-compose.yml exec -T archon-os python scripts/chaos_tester.py --live >> {{ archon_install_root }}/logs/chaos_test.log 2>&1"
+    user: "{{ archon_user_name }}"
+  when:
+    - archon_observability == "full"
 
 - name: Display deployment completion status
   debug:

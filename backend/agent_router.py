@@ -18,6 +18,14 @@ logger = logging.getLogger("agent_router")
 
 from backend.llm_kernel import AUTO_MODEL_MAP  # noqa: E402
 
+
+# D13/MED (W3-D): gezählte Wiederholungen liegen persistiert in
+# `backend.trajectory_budget.trajectory_repeat_budget`. `reserve_hop(...,
+# allow_repeat=True)` konsumiert genau dieses repeat_budget und blockiert mit
+# `CYCLE_DETECTED/REPEAT_BUDGET_EXCEEDED`, sobald es aufgebraucht ist. Ein
+# eigener RAM-Zähler im Router würde die SSOT duplizieren und bei Restart
+# verloren gehen — daher bewusst KEIN lokaler Zähler mehr.
+
 OPENROUTER_FALLBACK_CHAIN = [
     "deepseek/deepseek-chat",
     "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -295,8 +303,10 @@ class AgentRouter:
             logger.warning(f"[AgentRouter] cost-budget.json nicht lesbar, nutze Default-Budget: {exc}")
 
         try:
-            workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            limits_file = os.path.join(workspace_dir, "memory", "guardian_limits.json")
+            # D13/MED: gemeinsamer Pfad mit der Guardian-UI statt eigener
+            # `<workspace>/memory/`-Ableitung (Host/Container-Drift).
+            from archon.routers.autonomy_settings import GUARDIAN_LIMITS_FILE
+            limits_file = GUARDIAN_LIMITS_FILE
             if os.path.exists(limits_file):
                 with open(limits_file, "r", encoding="utf-8") as f:
                     ldata = json.load(f)
@@ -384,6 +394,21 @@ class AgentRouter:
         if len(messages) <= 3:
             return messages
 
+        # F011/B-11: Session-/Tenant-Kontext einmal ableiten (kein erfundenes
+        # Korrelationsfeld) und als Artefakt-Ziel für Kürzungsmarker nutzen.
+        try:
+            from backend.lossless_session_dag import derive_session_id, derive_tenant_id
+            _lcm_sid = derive_session_id(messages)
+            _lcm_tid = derive_tenant_id(messages)
+        except Exception as _lcm_ctx_exc:
+            logger.error("[AgentRouter] Lossless-Kontext nicht ableitbar: %s", _lcm_ctx_exc)
+            _lcm_sid, _lcm_tid = "router-unknown", "default"
+        try:
+            from backend.handoff_desk import mark_truncated
+        except Exception as _mark_exc:
+            logger.error("[AgentRouter] mark_truncated nicht verfuegbar: %s", _mark_exc)
+            mark_truncated = None
+
         sys_msg = messages[0]
         recent_count = max(3, min(8, len(messages) // 3))
         recent_msgs = messages[-recent_count:]
@@ -398,12 +423,14 @@ class AgentRouter:
             content = str(m.get("content", "")).strip()
             if not content:
                 continue
-            lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
-            preview = lines[0] if lines else content[:120]
-            if len(preview) > 160:
-                # Audit D11: Kürzung explizit markieren — sonst verschwinden
-                # Safety-/Negativ-Regeln unerkannt aus dem Kontext.
-                preview = preview[:160] + f" … [GEKÜRZT: {len(preview) - 160} Zeichen]"
+            # Audit D11/MED: nicht nur die erste Zeile behalten. Der Marker
+            # nennt die tatsächlich verworfenen Zeichen und den Volltext-Ort.
+            if mark_truncated is not None:
+                preview = mark_truncated(
+                    content, 160, artifact=f"lossless-session:{_lcm_sid}"
+                )
+            else:  # nur wenn der Marker-Import selbst fehlschlägt
+                preview = content[:160] + f" … [GEKÜRZT: {len(content) - 160} Zeichen]"
             summary_lines.append(f"- [{role}]: {preview}")
 
         # Kopf (Aufgabenstellung, frühe Regeln) + Schwanz (letzte Entscheidungen)
@@ -416,6 +443,19 @@ class AgentRouter:
             "### [KONSOLIDIERTER GESPRÄCHS- & ENTSCHEIDUNGSKONTEXT (AUTOMATISCH KOMPRIMIERT)]:\n"
             + "\n".join(kept_lines)
         )
+
+        # F011/B-11: ECHTER PRODUZENT — die komprimierten Turns werden mitsamt
+        # dem Summary-Knoten in die konsolidierte memory.db geschrieben. Ohne
+        # diesen Schritt wäre search_lossless_history() im Betrieb dauerhaft leer.
+        try:
+            from backend.lossless_session_dag import compact_conversation_turns
+            compact_conversation_turns(_lcm_sid, older_msgs, compact_text, tenant_id=_lcm_tid)
+        except Exception as _lcm_exc:
+            logger.error(
+                "[AgentRouter] Lossless-Compaction-Persistenz fehlgeschlagen "
+                "(tenant=%s, session=%s): %s",
+                _lcm_tid, _lcm_sid, _lcm_exc,
+            )
 
         compact_msg = {
             "role": "system",
@@ -562,6 +602,17 @@ class AgentRouter:
         current_spend = float(policy.get("current_spend", 0.0) or 0.0)
         max_ctx_chars = max(8000, int(policy.get("max_context_tokens", 32000)) * 4)
 
+        # F011/B-11: ECHTER PRODUZENT — jeder echte Session-Turn landet
+        # idempotent in der verlustfreien Historie der konsolidierten memory.db.
+        # Läuft im Worker-Thread (asyncio.to_thread), nie im Event-Loop.
+        try:
+            from backend.lossless_session_dag import derive_session_id, derive_tenant_id, record_turns
+            _lcm_sid = derive_session_id(messages)
+            _lcm_tid = derive_tenant_id(messages)
+            record_turns(_lcm_sid, messages, tenant_id=_lcm_tid)
+        except Exception as _lcm_exc:
+            logger.error("[AgentRouter] Lossless-Turn-Persistenz fehlgeschlagen: %s", _lcm_exc)
+
         # 1. Context-Window Cap mit intelligenter Rolling Summarization (Sliding Window Memory Compression)
         total_chars = sum(len(str(m.get("content", ""))) for m in messages)
         if total_chars > max_ctx_chars and len(messages) > 3:
@@ -569,13 +620,24 @@ class AgentRouter:
         elif total_chars > max_ctx_chars and len(messages) > 2:
             trimmed = [messages[0]]
             acc = len(str(messages[0].get("content", "")))
+            dropped = 0
             for m in reversed(messages[1:]):
                 m_len = len(str(m.get("content", "")))
                 if acc + m_len <= max_ctx_chars or len(trimmed) < 2:
                     trimmed.insert(1, m)
                     acc += m_len
                 else:
-                    break
+                    # D11/MED: kein stilles break — verworfene Turns werden
+                    # wie im 4+-Pfad als System-Streifen sichtbar gemacht.
+                    dropped += 1
+            if dropped:
+                trimmed.insert(1, {
+                    "role": "system",
+                    "content": (
+                        f"[KONTEXT GEKÜRZT: {dropped} ältere Nachricht(en) entfernt — "
+                        f"Vollversion bleibt im Session-Store]"
+                    ),
+                })
             messages = trimmed
 
         # 1b. Dynamischer Token-Clipper (schützt kleine/lokale Modelle, Pillar 5)
@@ -908,16 +970,34 @@ class AgentRouter:
                     task_id if str(task_id).startswith("traj-") else None,
                     root_ticket_id=str(task_id),
                 )
+                _hop_reason = f"llm_call:{agent_id or 'default'}"
+                # W3-D-SSOT: allow_repeat=True ist kein Freibrief mehr, sondern
+                # verbraucht das persistierte repeat_budget pro
+                # (trajectory_id, agent_id, reason_key). Nach Ablauf liefert
+                # reserve_hop CYCLE_DETECTED + REPEAT_BUDGET_EXCEEDED.
                 hop = await asyncio.to_thread(
-                    reserve_hop, _hop_tid, agent_id or "default",
-                    f"llm_call:{agent_id or 'default'}",
-                    allow_repeat=True,  # erneuter Call desselben Agenten ist kein Zyklus
+                    reserve_hop, _hop_tid, agent_id or "default", _hop_reason,
+                    allow_repeat=True,
                 )
                 if not hop.get("allowed", False):
                     await asyncio.to_thread(
                         budget_bank.release, check.get("reservation_id"), "trajectory_hop_blocked"
                     )
-                    raise BudgetExceededError(f"[{hop.get('reason')}]: Trajectory-Cap erreicht")
+                    _detail = str(hop.get("detail") or "")
+                    if _detail == "REPEAT_BUDGET_EXCEEDED":
+                        logger.error(
+                            "[AgentRouter] REPEAT_BUDGET_EXCEEDED: trajectory=%s agent=%s "
+                            "%s/%s — HITL/Abbruch erforderlich",
+                            _hop_tid, agent_id, hop.get("repeat_used"), hop.get("repeat_limit"),
+                        )
+                        raise BudgetExceededError(
+                            f"[{_detail}]: {hop.get('repeat_used')}/{hop.get('repeat_limit')} "
+                            f"Wiederholungen für {agent_id} in Trajectory {_hop_tid} aufgebraucht"
+                        )
+                    raise BudgetExceededError(
+                        f"[{hop.get('reason')}]: Trajectory-Cap erreicht "
+                        f"({hop.get('hops_used')}/{hop.get('max_hops')})"
+                    )
             except BudgetExceededError:
                 raise
             except Exception as exc:

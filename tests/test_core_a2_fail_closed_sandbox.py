@@ -84,9 +84,28 @@ def test_self_evolving_ast_allows_pure_math_tool():
     _validate_synthetic_imports(code, label="tool_code")
 
 
-def test_agent_router_rejects_empty_http_200_choices(monkeypatch):
+def test_agent_router_rejects_empty_http_200_choices(tmp_path, monkeypatch):
+    import datetime
+    import sqlite3
+
+    import backend.role_budget_engine as rbe
     from backend import agent_router
     import backend.llm_egress_guard as egress_guard
+
+    # W3-D/F032: ohne registriertes Task-Cap blockt der Router vor dem HTTP-Call.
+    # Hier soll aber genau die leere HTTP-200-Antwort geprueft werden → Cap anlegen.
+    budget_db = str(tmp_path / "empty_choices_budget.db")
+    rbe.init_budget_tables(db_path=budget_db)
+    monkeypatch.setattr(rbe.budget_bank, "db_path", budget_db)
+    now = datetime.datetime.now().isoformat()
+    with sqlite3.connect(budget_db) as conn:
+        conn.execute(
+            "INSERT INTO task_budget_allocations "
+            "(task_id, agent_id, token_budget, tokens_used, cost_limit_eur, cost_used_eur, created_at, updated_at) "
+            "VALUES (?, ?, ?, 0, ?, 0.0, ?, ?)",
+            ("test-empty-choices", "default", 50000, 100.0, now, now),
+        )
+        conn.commit()
 
     router = agent_router.AgentRouter()
 
@@ -128,6 +147,8 @@ def test_agent_router_rejects_empty_http_200_choices(monkeypatch):
                 provider="openai",
                 model="gpt-4o-mini",
                 api_keys={"OPENAI_API_KEY": "sk-test-dummy"},
+                agent_id="default",
+                task_id="test-empty-choices",
             )
         )
 

@@ -27,49 +27,19 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from archon.core.provider_registry import get_provider
-from archon.routers._rbac import forbid_viewer_writes, require_admin_or_503
-from backend.handoff_desk import mark_truncated
+from archon.routers._rbac import forbid_viewer_writes, require_admin_or_503, require_session_actor
+from backend.handoff_desk import mark_truncated, require_accepted_handoff
 from backend.platform_paths import HERMES_HOME
 
 
 # ---------------------------------------------------------------------------
 # D11: schema-validierte Payloads an der Kanban→Agent-Kante und im Review-Gate.
 # ---------------------------------------------------------------------------
-class KanbanDelegationPayload(BaseModel):
-    """Die aus ``task_events.payload`` (kind='created') gelesene Delegation.
-
-    Deckt sowohl das Producer-Format (delegation.py) als auch die Felder des
-    Delegationsprotokolls ab. Unbekannte Felder werden verworfen, Pflichtfelder
-    des Handoffs bleiben erhalten.
-    """
-
-    model_config = ConfigDict(extra="ignore")
-
-    task_id: str = ""
-    title: str = ""
-    assignee: str = ""
-    via: str = ""
-    delegator: str = ""
-    ziel_agent: str = ""
-    auftrag: str = ""
-    modell: str = ""
-    prioritaet: str = ""
-    tgt_session_id: str = ""
-    origin_session_id: str = ""
-    session_id: str = ""
-    trace_id: str = ""
-    correlation_id: str = ""
-    delegation_chain: List[str] = Field(default_factory=list)
-    reasoning_level: str = ""
-    isolated: bool = False
-    allowed_tools: List[str] = Field(default_factory=list)
-    allowed_skills: List[str] = Field(default_factory=list)
-    memory_scope: str = ""
-    memory_acl: List[str] = Field(default_factory=list)
-    memory_ttl_seconds: int = 0
-    acceptance_criteria: str = ""
-    reply_to: str = ""
-    parent_project_id: str = ""
+# F030/W3-A: das kanonische Handoff-Schema liegt ausschliesslich in
+# `archon/core/delegation.py` (HandoffDelegationPayload, extra="forbid").
+# Diese Modul konsumiert es nur noch ueber `canonicalize_delegation_payload`;
+# eine lokale zweite Schema-Definition wuerde M75-Isolation und A2A-
+# Korrelation erneut durch eine model_dump()-Projektion verlieren.
 
 
 class QualityReviewVerdict(BaseModel):
@@ -84,30 +54,28 @@ class QualityReviewVerdict(BaseModel):
     actionable_next_steps: List[str] = Field(default_factory=list)
 
 
-def _load_kanban_delegation_payload(raw_payload: Any) -> Optional[KanbanDelegationPayload]:
-    """Parst ein task_events-Payload ueber Pydantic statt roher Dict-Zugriffe."""
+def _load_kanban_delegation_payload(raw_payload: Any, task_id: str = "") -> Optional[Any]:
+    """Konsumentenseite des kanonischen Handoffs (F030).
+
+    Ein einziger Aufruf der SSOT-Funktion in `archon.core.delegation`:
+    Legacy-Aliase -> extra="forbid"-Validierung -> Server-Kontext
+    (Tenant/Projekt/Cancel/Taint/Budget/Soul) -> HMAC-Signatur. Kein lokales
+    Schema, keine zweite model_dump()-Projektion, kein stiller Fallback.
+    """
     if raw_payload is None:
         return None
+    # Lazy import: `delegation` importiert seinerseits orchestration/mission_control.
+    from archon.core.delegation import (
+        HandoffDelegationPayload,
+        canonicalize_delegation_payload,
+    )
     try:
-        data = json.loads(raw_payload) if isinstance(raw_payload, str) else dict(raw_payload)
-    except (TypeError, ValueError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    # D11 (Re-Audit): kein stiller Import-Fallback mehr — DelegationPayload
-    # existiert jetzt real in archon.core.delegation.
-    from archon.core.delegation import DelegationPayload
-    try:
-        validated = DelegationPayload.model_validate(data)
-        data = dict(validated.model_dump())
-    except (ValidationError, TypeError, ValueError):
-        # Produzenten-Payload und Protokoll-Payload haben leicht
-        # unterschiedliche Feldnamen -> lokal normalisieren, nie roh .get().
-        pass
-    try:
-        return KanbanDelegationPayload.model_validate(data)
+        data = canonicalize_delegation_payload(
+            raw_payload, task_id=str(task_id or "")
+        )
+        return HandoffDelegationPayload.model_validate(data)
     except (ValidationError, TypeError, ValueError) as exc:
-        logger.warning("[KanbanWorker] Delegations-Payloadschema ungueltig: %s", exc)
+        logger.error("[KanbanWorker] Delegations-Payloadschema ungueltig: %s", exc)
         return None
 
 
@@ -651,12 +619,167 @@ class TaskStatusUpdateRequest(BaseModel):
     # Service bestaetigt selbst), sonst Doppelnachricht.
     source: Optional[str] = None
     force: Optional[bool] = False
+    # H-14-2 (F022): `force` auf `done` ist ein Hoheitsakt und braucht
+    # Begruendung + Passkey-Proof + eine identitaetsverschiedene zweite Person.
+    # Der Actor kommt ausschliesslich aus der Session (require_session_actor),
+    # NIE aus diesen Feldern.
+    reason: Optional[str] = None
+    passkey_proof_token: Optional[str] = None
+    approval_id: Optional[str] = None
 
 
 class QualityReviewRequest(BaseModel):
-    reviewer_id: Optional[str] = None
-    force_verdict: Optional[str] = None  # "approved" | "changes_requested"
-    comment: Optional[str] = None
+    """H-14-2/F022: kein Body-Actor und kein erzwungenes Verdict mehr.
+
+    `force_verdict` und `reviewer_id` waren direkt aus dem Body faehig, das
+    Vier-Augen-Gate zu faelschen (hartcodierter Reviewer `operator`). Die
+    Verifikation läuft jetzt immer ueber den Reviewer-Agenten; eine manuelle
+    Aufhebung von `changes_requested` nur ueber
+    ``POST /kanban/tasks/{id}/quality-review/override`` mit Session-Actor,
+    zweiter Identitaet und HITL-Proof.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    comment: Optional[str] = Field(default=None, max_length=4000)
+
+
+class QualityReviewOverrideRequest(BaseModel):
+    """Expliziter 4-Augen-Override eines `changes_requested`-Reviews."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    reason: str = Field(min_length=10, max_length=4000)
+    passkey_proof_token: Optional[str] = None
+    approval_id: Optional[str] = None
+
+
+# --- H-14-2/F022: gemeinsame Hoheits-Gates (4 Augen + HITL + Audit) ----------
+
+def _identity_tokens(actor: str) -> set:
+    """Normalisierte Identitaets-Tokens (wie in approval_policy_engine)."""
+    s = str(actor or "").strip().lower()
+    if not s:
+        return set()
+    tokens = {s}
+    if " (i.v. " in s:
+        main_p, sub_p = s.split(" (i.v. ", 1)
+        tokens.add(main_p.strip())
+        sub_clean = sub_p.rstrip(")").strip()
+        if sub_clean:
+            tokens.add(sub_clean)
+            tokens.add(sub_clean.split(" ")[0])
+    else:
+        tokens.add(s.split(" ")[0])
+    return {t for t in tokens if t}
+
+
+def _current_quality_review(task_id: str) -> Dict[str, Any]:
+    """Liest das Review aus der Sidecar-SSOT (fail-closed bei Fehlern)."""
+    try:
+        meta = _load_kanban_meta()
+        return dict(((meta.get("tasks") or {}).get(task_id) or {}).get("quality_review") or {})
+    except Exception as exc:
+        logger.error("[4-Augen] Review-Sidecar nicht lesbar (fail-closed): %s", exc)
+        raise HTTPException(status_code=503, detail="quality_review_state_unavailable")
+
+
+def _task_created_by(task_id: str) -> str:
+    conn = _get_kanban_connection(maintenance=True)
+    try:
+        row = conn.execute("SELECT created_by FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        return str((row["created_by"] if row else "") or "")
+    finally:
+        conn.close()
+
+
+def _task_status(task_id: str) -> str:
+    conn = _get_kanban_connection(maintenance=True)
+    try:
+        row = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        return str((row["status"] if row else "") or "")
+    finally:
+        conn.close()
+
+
+def _require_four_eyes_override(
+    *,
+    task_id: str,
+    actor: str,
+    review: Dict[str, Any],
+    reason: str,
+    proof_token: Optional[str],
+    action: str,
+    created_by: str = "",
+    approval_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Prueft die Hoheits-Kette fuer `done`-Overrides (fail-closed).
+
+    Rueckgabe: signierfaehiger Evidence-Block. Jede Verletzung fuehrt zu 403;
+    nicht verfuegbare HITL-Konfiguration zu 503. Der Actor stammt ausschliesslich
+    aus ``require_session_actor(request)``.
+    """
+    who = str(actor or "").strip()
+    why = str(reason or "").strip()
+    if not who:
+        raise HTTPException(status_code=401, detail="Keine verifizierte Session-Identitaet.")
+    if len(why) < 10:
+        raise HTTPException(400, detail="Begruendung des 4-Augen-Overrides fehlt oder zu kurz (min. 10 Zeichen).")
+
+    actor_tokens = _identity_tokens(who)
+    other_ids = [
+        str(review.get("reviewer_id") or ""),
+        str(review.get("reviewer") or ""),
+        str(created_by or ""),
+    ]
+    for other in other_ids:
+        if other and actor_tokens & _identity_tokens(other):
+            raise HTTPException(
+                status_code=403,
+                detail="Vier-Augen-Prinzip: der Override muss durch eine andere Person erfolgen "
+                       "als der Reviewer oder der Ersteller des Tasks.",
+            )
+
+    from backend.passkey_hitl import consume_hitl_proof_token
+
+    # Hoheitsakt: der Passkey-Proof ist IMMER zwingend und an action+resource
+    # gebunden. `is_passkey_required()` darf hier nicht zum Freigang fuehren —
+    # auch im Single-User-Modus ohne Passkey-Config bleibt der Akt gesperrt.
+    token = str(proof_token or "").strip()
+    try:
+        ok = consume_hitl_proof_token(
+            token, who, "system", action=action, resource=task_id, consume=True
+        )
+    except Exception as exc:
+        logger.error("[4-Augen] HITL-Pruefung fehlgeschlagen (fail-closed): %s", exc)
+        raise HTTPException(status_code=503, detail="hitl_proof_check_unavailable")
+    if not ok:
+        raise HTTPException(
+            status_code=403,
+            detail="Passkey-Proof erforderlich/ungueltig fuer diesen 4-Augen-Override "
+                   "(action/resource nicht gebunden).",
+        )
+
+    evidence = {
+        "actor": who,
+        "reason": why,
+        "action": action,
+        "resource": task_id,
+        "approval_id": str(approval_id or "").strip() or None,
+        "first_reviewer_id": str(review.get("reviewer_id") or ""),
+        "previous_review_status": str(review.get("status") or ""),
+        "hitl_proof_verified": True,
+        "verified_at": datetime.datetime.now().isoformat(),
+    }
+    try:
+        from backend.audit_log import _require_audit_event
+        _require_audit_event(
+            "governance", "four_eyes_override_verified", who,
+            {"task_id": task_id, **evidence},
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return evidence
 
 
 @router.get("/kanban/tasks")
@@ -754,6 +877,53 @@ def _task_creator_actor(request: Request) -> str:
 
 
 @router.post("/kanban/tasks")
+def _block_task_budget_allocation_failed_sync(
+    task_id: str,
+    title: str,
+    assignee: str,
+    reason: str,
+    subtask_ids: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """D13/MED: Task ohne registriertes hartes Ticket-Cap nie ausfuehrbar.
+
+    Die Allokation in ``task_budget_allocations`` ist die einzige Grundlage
+    fuer den Task-Cap in ``BudgetBank.reserve``. Schlaegt sie fehl, werden
+    Root (und bereits angelegte Subtasks) atomar auf ``blocked`` gesetzt,
+    der Grund in task_events und in die HMAC-Auditkette geschrieben.
+    """
+    now_iso = datetime.datetime.now().isoformat()
+    detail = f"budget_allocation_failed: {reason}"[:500]
+    conn = _get_kanban_connection(maintenance=True)
+    try:
+        for tid in [task_id, *(subtask_ids or [])]:
+            conn.execute(
+                "UPDATE tasks SET status = 'blocked', block_kind = 'budget_allocation_failed', "
+                "result = ? WHERE id = ?",
+                (detail, tid),
+            )
+            conn.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) "
+                "VALUES (?, 'budget_allocation_failed', ?, ?)",
+                (tid, json.dumps({"reason": detail, "task_id": tid}), now_iso),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    _sync_to_memory_bridge(task_id, title, assignee, "blocked", detail)
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="recovery",
+            action="budget_allocation_failed",
+            agent_id="system",
+            payload={"task_id": task_id, "reason": detail[:300]},
+        )
+    except Exception as audit_exc:
+        # Audit-Schreibfehler nie still verschlucken (§0).
+        logger.error("[OperationsAPI] Budget-Audit fehlgeschlagen: %s", audit_exc)
+    return {"blocked": True, "task_id": task_id, "reason": detail}
+
+
 def create_kanban_task(request: Request, req: TaskCreateRequest):
     """Erstellt eine neue Aufgabe im Hermes Kanban über CLI-Execution oder direkten Insert."""
     require_admin_or_503(request)
@@ -921,7 +1091,21 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
                                 smeta["autonomously_hired"] = True
                     update_kanban_meta(_save_sub_budgets)
             except Exception as dec_err:
-                print(f"[OperationsAPI] Native Budget-Decompose / CEO-Hiring warning: {dec_err}", file=sys.stderr)
+                # D13/MED: frueher nur stderr — der Task blieb ausfuehrbar,
+                # obwohl kein hartes Ticket-Cap in task_budget_allocations
+                # registriert war. Fail-closed: Task + evtl. Subtasks blocken.
+                logger.error(
+                    "[OperationsAPI] Budget-Decompose fehlgeschlagen — Task %s wird blockiert: %s",
+                    task_id, dec_err,
+                )
+                _block_task_budget_allocation_failed_sync(
+                    task_id, req.title, target_assignee, str(dec_err), created_subtask_ids
+                )
+                return {
+                    "status": "blocked", "task_id": task_id,
+                    "block_kind": "budget_allocation_failed",
+                    "reason": f"budget_decomposition_failed: {dec_err}",
+                }
         elif req.token_budget or eff_cost_eur:
             try:
                 from backend.role_budget_engine import allocate_task_budget_to_subagents
@@ -933,7 +1117,20 @@ def create_kanban_task(request: Request, req: TaskCreateRequest):
                     orchestrator_reserve_pct=1.0,
                 )
             except Exception as alloc_err:
-                print(f"[OperationsAPI] Single-Task Budget-Registration warning: {alloc_err}", file=sys.stderr)
+                # D13/MED: ohne Allokationszeile greift nur das Rollen-Tagesbudget;
+                # ein Task ohne hartes Cap darf NICHT ausfuehrbar bleiben.
+                logger.error(
+                    "[OperationsAPI] Budget-Allokation fehlgeschlagen — Task %s wird blockiert: %s",
+                    task_id, alloc_err,
+                )
+                _block_task_budget_allocation_failed_sync(
+                    task_id, req.title, target_assignee, str(alloc_err)
+                )
+                return {
+                    "status": "blocked", "task_id": task_id,
+                    "block_kind": "budget_allocation_failed",
+                    "reason": f"budget_allocation_failed: {alloc_err}",
+                }
 
         try:
             main = get_provider("app_main")
@@ -1097,7 +1294,7 @@ def _kanban_load_task_sync(task_id: str):
         ).fetchone()
         if ev is not None:
             raw_payload = ev["payload"] if hasattr(ev, "keys") else ev[0]
-            model = _load_kanban_delegation_payload(raw_payload)
+            model = _load_kanban_delegation_payload(raw_payload, task_id=task_id)
             if model is not None:
                 task["_delegation_payload"] = model.model_dump()
                 task["_delegation_payload_model"] = model
@@ -1173,6 +1370,99 @@ def _kanban_assign_orchestrator_sync(task_id: str) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def _persist_kanban_result_sync(
+    task_id: str,
+    *,
+    mode: str,
+    title: str = "",
+    assignee: str = "",
+    target_status: str = "",
+    reply: str = "",
+    verdict: Optional[Dict[str, Any]] = None,
+    proof_facts: Optional[Dict[str, Any]] = None,
+    is_success: bool = False,
+) -> Dict[str, Any]:
+    """D08/H-08-3: kompletter Terminalstatus-Persistenzblock im Worker-Thread.
+
+    Vorher oeffnete die ``async`` Kanban-Ausfuehrung direkt im Event-Loop bis
+    zu drei Mal eine SQLite-Verbindung (busy_timeout=5000) und schrieb UPDATEs
+    plus task_events — ein einziger Write-Lock blockierte Dispatcher und SSE.
+    Alle Pfade (Ergebnis, Exception, Cancel) laufen jetzt durch EINE Funktion
+    und werden per ``asyncio.to_thread`` aufgerufen. Cas-/Cancel-Semantik und
+    Event-Inhalte bleiben unveraendert.
+    """
+    facts: Dict[str, Any] = dict(proof_facts or {})
+    verdict = dict(verdict or {})
+    now_iso = datetime.datetime.now().isoformat()
+    conn = _get_kanban_connection(maintenance=True)
+    persisted_status = target_status
+    try:
+        if mode == "result":
+            if target_status == "blocked" and verdict.get("block_kind"):
+                conn.execute(
+                    "UPDATE tasks SET status = 'blocked', block_kind = ?, result = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?",
+                    (verdict["block_kind"], reply, task_id),
+                )
+                conn.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'awaiting_approval', ?, ?)",
+                    (task_id, json.dumps({"block_kind": verdict["block_kind"], "options": verdict.get("hitl_options", []), "reason": verdict.get("reason"), **facts}), now_iso),
+                )
+                conn.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'blocked', ?, ?)",
+                    (task_id, json.dumps({"reason": verdict["block_kind"], **facts}), now_iso),
+                )
+            elif target_status == "failed":
+                conn.execute(
+                    "UPDATE tasks SET status = 'failed', result = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?",
+                    (reply, task_id),
+                )
+                conn.execute(
+                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'failed', ?, ?)",
+                    (task_id, json.dumps({
+                        **facts,
+                        "status": "failed",
+                        "summary": mark_truncated(reply, 200, artifact=f"tasks.result/{task_id}"),
+                        "truncated": len(reply) > 200,
+                        "original_length": len(reply),
+                        "verified": False,
+                    }), now_iso),
+                )
+            else:
+                conn.execute(
+                    "UPDATE tasks SET status = ?, completed_at = ?, result = ?, consecutive_failures = 0 WHERE id = ?",
+                    (target_status, now_iso, reply, task_id),
+                )
+                conn.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)",
+                             (task_id, json.dumps({
+                                 **facts,
+                                 "status": target_status,
+                                 "summary": mark_truncated(reply, 200, artifact=f"tasks.result/{task_id}"),
+                                 "truncated": len(reply) > 200,
+                                 "original_length": len(reply),
+                                 "verified": is_success,
+                             }), now_iso))
+        elif mode == "error":
+            persisted_status = "blocked"
+            conn.execute(
+                "UPDATE tasks SET status = 'blocked', result = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?",
+                (reply, task_id),
+            )
+        elif mode == "cancelled":
+            persisted_status = "cancelled"
+            conn.execute(
+                "UPDATE tasks SET status = 'cancelled', result = ? WHERE id = ?",
+                (reply, task_id),
+            )
+        else:
+            raise ValueError(f"unbekannter Kanban-Persistenzmodus: {mode}")
+        conn.commit()
+        if mode in ("result", "error"):
+            _sync_to_memory_bridge(task_id, title, assignee, persisted_status, reply)
+    finally:
+        conn.close()
+    return {"mode": mode, "status": persisted_status, "task_id": task_id}
 
 
 async def _execute_kanban_task_async(task_id: str):
@@ -1288,20 +1578,37 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         # und der Task bleibt in_progress (danach Deadlock-Rollover).
         logger.warning("[KanbanWorker] Cancel-Token vor Ausfuehrung: %s", cancel_exc)
         try:
-            c_cancel = _get_kanban_connection(maintenance=True)
-            try:
-                c_cancel.execute(
-                    "UPDATE tasks SET status = 'cancelled', result = ? WHERE id = ?",
-                    (f"Aufgabe abgebrochen: {cancel_exc}"[:500], task_id),
-                )
-                c_cancel.commit()
-            finally:
-                c_cancel.close()
+            # D08/H-08-3: auch der Cancel-Pfad schreibt im Worker-Thread.
+            await asyncio.to_thread(
+                _persist_kanban_result_sync, task_id,
+                mode="cancelled", reply=f"Aufgabe abgebrochen: {cancel_exc}"[:500],
+            )
         except Exception as exc:
             print(f"[OperationsAPI] Cancel-Status nicht persistiert: {exc}", file=sys.stderr)
         raise
-    except ImportError:
-        pass
+    except ImportError as cancel_import_exc:
+        # D07/MED: fehlte frueher `pass` → _check_cancel() war ein No-op und der
+        # kostenpflichtige Dispatch lief unabbrechbar weiter. Fail-closed:
+        # Status 'blocked' persistieren und RuntimeError werfen, nie still
+        # weiterlaufen lassen.
+        logger.error(
+            "[KanbanWorker] Cancel-Token-Modul nicht verfuegbar — Dispatch verweigert (fail-closed): %s",
+            cancel_import_exc,
+        )
+        try:
+            await asyncio.to_thread(
+                _persist_kanban_result_sync, task_id,
+                mode="result", target_status="blocked",
+                verdict={
+                    "block_kind": "cancellation_unavailable",
+                    "hitl_options": ["retry", "abort"],
+                    "reason": f"cancellation_unavailable: {cancel_import_exc}",
+                },
+                reply=f"Dispatch verweigert: Cancel-Token nicht verfuegbar ({cancel_import_exc})"[:500],
+            )
+        except Exception as persist_exc:
+            logger.error("[KanbanWorker] Blocked-Status nicht persistiert: %s", persist_exc)
+        raise RuntimeError("cancellation unavailable") from cancel_import_exc
     t_dict = await asyncio.to_thread(_kanban_load_task_sync, task_id)
     if not t_dict:
         return
@@ -1351,6 +1658,39 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
     assignee = resolve_agent_id(raw_assignee)
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
+
+    async def _handoff_gate_ok() -> bool:
+        """F030/W3-A: harter Konsument-Gate vor jedem kostenpflichtigen Dispatch.
+
+        ``require_accepted_handoff`` ist die SSOT: ohne akzeptierte, HMAC-
+        verifizierte Uebergabe (bei vorhandener A2A-Kante) darf kein Call
+        starten. Bei Gate-Fehler fail-closed, nie still weiterlaufen.
+        """
+        try:
+            gate = await asyncio.to_thread(require_accepted_handoff, task_id, assignee)
+        except Exception as gate_exc:
+            logger.error(
+                "[KanbanWorker] Handoff-Gate nicht auswertbar — Dispatch verweigert: %s",
+                gate_exc,
+            )
+            gate = {"allowed": False, "reason": f"handoff_gate_unavailable: {gate_exc}"}
+        if bool(gate.get("allowed", False)):
+            return True
+        reason = str(gate.get("reason") or "handoff_not_accepted")
+        logger.error("[KanbanWorker] Handoff-Gate blockiert Task %s: %s", task_id, reason)
+        await asyncio.to_thread(
+            _persist_kanban_result_sync, task_id,
+            mode="result", title=title, assignee=assignee,
+            target_status="blocked",
+            verdict={
+                "block_kind": "handoff_not_accepted",
+                "hitl_options": ["retry", "abort"],
+                "reason": reason,
+            },
+            reply=f"Dispatch verweigert: {reason}"[:500],
+        )
+        return False
+
     profiles = await asyncio.to_thread(_load_profiles_map)
     prof = profiles.get(assignee, {})
     model = (t_dict.get("model_override") or "").strip()
@@ -1427,8 +1767,14 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         # M91: Praezedenzfall-Gedaechtnis (strikt pro Mandant/Projekt isoliert)
         precedent_block = ""
         try:
-            from backend.precedent_log import find_matching_precedents, format_precedents_for_prompt
-            _tenant_id = str(t_dict.get("tenant_id") or "default")
+            from backend.precedent_log import (
+                find_matching_precedents,
+                format_precedents_for_prompt,
+                resolve_task_tenant_id,
+            )
+            # F030/W3-A: kanonischer Mandant — die Kanban-Spalte `tenant` ist
+            # SSOT, kein hartes "default" und kein Body-Feld `tenant_id`.
+            _tenant_id = resolve_task_tenant_id(t_dict)
             _project_id = str(t_dict.get("project_id") or "")
             _matched_precs = await asyncio.to_thread(
                 find_matching_precedents, _tenant_id, _project_id, f"{title} {body}"
@@ -1447,6 +1793,9 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
                 if _cancel_token is not None:
                     _cancel_token.cancel("lease_lost")
                 raise asyncio.CancelledError("lease_lost")
+        # F030/W3-A: A2A-Handoff-Konsument mit echtem Effekt (vor dem Call).
+        if not await _handoff_gate_ok():
+            return {"blocked": "handoff_not_accepted", "task_id": task_id}
         res = await core_dispatcher.dispatch_to_omniroute_or_container(
             agent_id=assignee,
             agent_name=agent_name,
@@ -1493,6 +1842,8 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
                     if _cancel_token is not None:
                         _cancel_token.cancel("lease_lost")
                     raise asyncio.CancelledError("lease_lost")
+            if not await _handoff_gate_ok():
+                return {"blocked": "handoff_not_accepted", "task_id": task_id}
             res = await core_dispatcher.dispatch_to_omniroute_or_container(
                 agent_id=assignee,
                 agent_name=agent_name,
@@ -1503,6 +1854,9 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
                 provider=provider_override,
                 reasoning_level=_dispatch_reasoning,
                 task_id=task_id,
+                # D13/H-13-1: zaehlerbegrenzte Wiederholung desselben Agenten,
+                # kein A→B→A-Zyklus (siehe Trajectory-Engine `retry:`).
+                trajectory_reason="retry:verifier",
             )
             raw_reply = (res.get("content") or "").strip()
             _token_used += int(
@@ -1534,62 +1888,41 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
         if _proof_facts:
             await asyncio.to_thread(_merge_task_meta_facts, task_id, _proof_facts)
 
+        # D14/MED: echter Cross-Modell-Verifier im REGULAEREN Abschlusspfad
+        # (nicht nur im HITL-Override). Ohne bestandene Zweitpruefung kein done.
+        _cross = await _cross_model_verify_task_result(
+            task_id=task_id, result_text=raw_reply, primary_model=str(model or ""),
+            system_prompt=str(system_prompt or ""),
+        )
+        if not _cross.get("passed"):
+            verdict = dict(verdict)
+            verdict["status"] = "blocked"
+            verdict["block_kind"] = _cross.get("block_kind") or "cross_model_verification_failed_hitl"
+            verdict["reason"] = _cross.get("reason") or "Cross-Modell-Verifier abgelehnt."
+            verdict["hitl_options"] = ["override_budget", "retry", "abort"]
+        _cross_fact = {
+            "passed": bool(_cross.get("passed")),
+            "verifier_model": _cross.get("verifier_model"),
+            "model_call": bool(_cross.get("model_call")),
+            "reason": _cross.get("reason"),
+        }
+        _proof_facts["cross_model_verification"] = _cross_fact
+        await asyncio.to_thread(
+            _merge_task_meta_facts, task_id, {"cross_model_verification": _cross_fact}
+        )
+
         is_success = verdict["status"] == "done" and res.get("status") == "success"
         target_status = "done" if is_success else ("blocked" if verdict["status"] == "blocked" else "failed")
         reply = raw_reply or f"Aufgabe '{title}' abgeschlossen ({target_status})."
         if not is_success and verdict.get("reason"):
             reply = f"{reply}\n\n[VERIFIER / HITL]: {verdict['reason']}"
-        now_iso = datetime.datetime.now().isoformat()
-        
-        c = _get_kanban_connection(maintenance=True)
-        try:
-            if target_status == "blocked" and verdict.get("block_kind"):
-                c.execute(
-                    "UPDATE tasks SET status = 'blocked', block_kind = ?, result = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?",
-                    (verdict["block_kind"], reply, task_id),
-                )
-                c.execute(
-                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'awaiting_approval', ?, ?)",
-                    (task_id, json.dumps({"block_kind": verdict["block_kind"], "options": verdict.get("hitl_options", []), "reason": verdict.get("reason"), **_proof_facts}), now_iso),
-                )
-                c.execute(
-                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'blocked', ?, ?)",
-                    (task_id, json.dumps({"reason": verdict["block_kind"], **_proof_facts}), now_iso),
-                )
-            elif target_status == "failed":
-                c.execute(
-                    "UPDATE tasks SET status = 'failed', result = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?",
-                    (reply, task_id),
-                )
-                c.execute(
-                    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'failed', ?, ?)",
-                    (task_id, json.dumps({
-                        **_proof_facts,
-                        "status": "failed",
-                        "summary": mark_truncated(reply, 200, artifact=f"tasks.result/{task_id}"),
-                        "truncated": len(reply) > 200,
-                        "original_length": len(reply),
-                        "verified": False,
-                    }), now_iso),
-                )
-            else:
-                c.execute(
-                    "UPDATE tasks SET status = ?, completed_at = ?, result = ?, consecutive_failures = 0 WHERE id = ?",
-                    (target_status, now_iso, reply, task_id),
-                )
-                c.execute("INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'completed', ?, ?)",
-                          (task_id, json.dumps({
-                              **_proof_facts,
-                              "status": target_status,
-                              "summary": mark_truncated(reply, 200, artifact=f"tasks.result/{task_id}"),
-                              "truncated": len(reply) > 200,
-                              "original_length": len(reply),
-                              "verified": is_success,
-                          }), now_iso))
-            c.commit()
-            _sync_to_memory_bridge(task_id, title, assignee, target_status, reply)
-        finally:
-            c.close()
+        # D08/H-08-3: ganzer SQLite-/Memory-Bridge-Block im Worker-Thread.
+        await asyncio.to_thread(
+            _persist_kanban_result_sync, task_id,
+            mode="result", title=title, assignee=assignee,
+            target_status=target_status, reply=reply,
+            verdict=verdict, proof_facts=_proof_facts, is_success=is_success,
+        )
             
         # Obsidian-Dokumentation & Projekt-Artefakte synchronisieren
         try:
@@ -1625,28 +1958,23 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
             
     except asyncio.CancelledError:
         # Abgebrochene Aufgabe darf nicht vom Deadlock-Watchdog reaktiviert
-        # werden (Audit 23.11.2026).
+        # werden (Audit 23.11.2026). Persistenz im Worker-Thread, aber vor
+        # dem `raise` abgeschlossen (kein awaiting nach dem Cancel verloren).
         try:
-            c = _get_kanban_connection(maintenance=True)
-            c.execute(
-                "UPDATE tasks SET status = 'cancelled', result = ? WHERE id = ?",
-                ("Aufgabe abgebrochen (Cancel oder Lease-Verlust)", task_id),
+            await asyncio.to_thread(
+                _persist_kanban_result_sync, task_id,
+                mode="cancelled", reply="Aufgabe abgebrochen (Cancel oder Lease-Verlust)",
             )
-            c.commit()
-            c.close()
         except Exception as exc:
             print(f"[OperationsAPI] Cancel-Status nicht persistiert: {exc}", file=sys.stderr)
         raise
     except Exception as ex:
         print(f"[OperationsAPI] Execution failed for {task_id}: {ex}", file=sys.stderr)
-        now_iso = datetime.datetime.now().isoformat()
-        c = _get_kanban_connection(maintenance=True)
-        try:
-            c.execute("UPDATE tasks SET status = 'blocked', result = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?", (f"Fehler bei Ausführung: {ex}", task_id))
-            c.commit()
-            _sync_to_memory_bridge(task_id, title, assignee, "blocked", f"Fehler: {ex}")
-        finally:
-            c.close()
+        await asyncio.to_thread(
+            _persist_kanban_result_sync, task_id,
+            mode="error", title=title, assignee=assignee,
+            reply=f"Fehler bei Ausführung: {ex}",
+        )
         try:
             main = get_provider("app_main")
             if hasattr(main, "broadcast_event"):
@@ -1661,9 +1989,129 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = ""):
             print(f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
 
 
-def _update_task_status_db(task_id: str, new_status: str, result: Optional[str], force: bool) -> Dict[str, Any]:
+async def _cross_model_verify_task_result(
+    *, task_id: str, result_text: str, primary_model: str, diff_text: str = "",
+    system_prompt: str = "",
+) -> Dict[str, Any]:
+    """D14/MED: echter Cross-Modell-Call im regulären Abschluss-Gate.
+
+    ``cross_model_verify_card()`` lieferte bisher nur einen Modellnamens-
+    String und `passed=True` ohne Dispatch (Theater). Hier wird das Ergebnis
+    zusaetzlich von einer ANDEREN Modellfamilie geprueft; bei Fehler/unklarer
+    Antwort fail-closed (HITL), nie still `passed`.
+    """
+    from backend.kanban_verifier import cross_model_verify_card
+
+    # Ein zu kurzes Ergebnis (z.B. reines "erledigt") bietet keine substanzielle
+    # Grundlage fuer eine Zweitmeinung; hier wird der (kostenpflichtige) Call
+    # ausgelassen; ueber env kann der Call explizit erzwungen werden.
+    min_chars = 200
+    try:
+        min_chars = int(os.environ.get("ARCHON_CROSS_MODEL_VERIFY_MIN_CHARS", "200"))
+    except (TypeError, ValueError):
+        pass
+    forced = str(os.environ.get("ARCHON_CROSS_MODEL_VERIFY", "") or "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    if not forced and len(str(result_text or "").strip()) < min_chars and not str(diff_text or "").strip():
+        return {
+            "passed": True, "requires_hitl": False, "block_kind": None,
+            "reason": "Kein substantielles Ergebnis — kein Cross-Modell-Call noetig.",
+            "verifier_model": None, "model_call": False, "skipped": True,
+        }
+
+    precheck = cross_model_verify_card(task_id, primary_model, diff_text)
+    if not precheck.get("passed"):
+        return {
+            "passed": False,
+            "requires_hitl": True,
+            "block_kind": precheck.get("block_kind") or "cross_model_precheck_hitl",
+            "reason": precheck.get("reason") or "Cross-Model-Precheck fehlgeschlagen.",
+            "verifier_model": precheck.get("verifier_model"),
+            "model_call": False,
+        }
+
+    verifier_model = str(precheck.get("verifier_model") or "").strip()
+    if not verifier_model or verifier_model == str(primary_model or "").strip():
+        return {
+            "passed": False, "requires_hitl": True,
+            "block_kind": "cross_model_unavailable_hitl",
+            "reason": "Kein unabhaengiges Verifier-Modell bestimmbar (fail-closed).",
+            "verifier_model": verifier_model, "model_call": False,
+        }
+
+    prompt = (
+        "Du bist der UNABHAENGIGE Cross-Modell-Verifier einer anderen Modellfamilie. "
+        "Pruefe das folgende Arbeitsergebnis auf unbelegte Behauptungen, logische "
+        "Brueche und fehlende Nachweise. Antworte AUSSCHLIESSLICH als JSON: "
+        '{"passed": true|false, "reason": "..."}. Bei Zweifeln passed=false.\n\n'
+        f"ERGEBNIS ZUR PRUEFUNG:\n{(result_text or '')[:12000]}"
+    )
+    try:
+        import core_dispatcher
+        # Der Verifier erhält denselben rollen-/delegationsgebundenen System-
+        # Kontext wie der Writer, damit er das Ergebnis gegen den ursprünglichen
+        # Auftrag prüfen kann (kein kontextloser Rat).
+        verifier_system = (
+            str(system_prompt or "").strip()
+            + "\n\n[ROLLENWECHSEL] Du bist jetzt der UNABHAENGIGE Cross-Modell-Verifier "
+              "einer anderen Modellfamilie. Antworte ausschliesslich mit reinem JSON "
+              "{\"passed\": bool, \"reason\": str}."
+        )
+        res = await core_dispatcher.dispatch_to_omniroute_or_container(
+            agent_id="qa_test_engineer",
+            agent_name="Cross-Model Verifier",
+            prompt=prompt,
+            role="Independent QA verifier (different model family)",
+            system_prompt=verifier_system,
+            model=verifier_model,
+            task_id=task_id,
+            # D13/H-13-1: Verifier-Call ist ein Tool-Call im selben Ticket,
+            # kein Agentwechsel-Zyklus; Trajectory-Engine zaehlt ihn als Hop.
+            trajectory_reason="tool:cross_model_verify",
+        )
+        content = str(res.get("content") or "").strip()
+        parsed: Dict[str, Any] = {}
+        match = re.search(r"\{.*\}", content, re.DOTALL)
+        if match:
+            parsed = json.loads(match.group(0))
+        else:
+            first = (content.splitlines() or [""])[0].strip().upper()
+            parsed = {"passed": first in ("PASS", "PASSED", "APPROVED", "FREIGABE"), "reason": content[:500]}
+        passed = bool(parsed.get("passed")) and str(parsed.get("reason") or "").strip() != ""
+        return {
+            "passed": passed,
+            "requires_hitl": not passed,
+            "block_kind": None if passed else "cross_model_verification_failed_hitl",
+            "reason": str(parsed.get("reason") or "Keine Begruendung geliefert.")[:1000],
+            "verifier_model": verifier_model,
+            "model_call": True,
+        }
+    except Exception as exc:
+        logger.error("[CrossModel] Verifier-Dispatch fehlgeschlagen (fail-closed): %s", exc)
+        return {
+            "passed": False, "requires_hitl": True,
+            "block_kind": "cross_model_verification_failed_hitl",
+            "reason": f"Cross-Modell-Verifikation nicht abschliessbar: {exc}"[:1000],
+            "verifier_model": verifier_model, "model_call": True,
+        }
+
+
+def _update_task_status_db(
+    task_id: str,
+    new_status: str,
+    result: Optional[str],
+    force: bool,
+    actor: str = "",
+    reason: str = "",
+    override_evidence: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Fix-Sprint Paket A (Punkt 2): der komplette synchrone SQLite-/Datei-Block
-    von update_task_status — wird via asyncio.to_thread ausgefuehrt."""
+    von update_task_status — wird via asyncio.to_thread ausgefuehrt.
+
+    H-14-2/F022: der `status_changed`-Event traegt Actor, force, reason und
+    (bei erzwungenem `done`) den verifizierten 4-Augen-Evidence-Block.
+    """
     conn = _get_kanban_connection(maintenance=True)
     try:
         now_iso = datetime.datetime.now().isoformat()
@@ -1705,10 +2153,25 @@ def _update_task_status_db(task_id: str, new_status: str, result: Optional[str],
             WHERE id = ?
         """, (new_status, new_status, new_status, now_iso, new_status, now_iso, result, task_id))
 
+        status_payload: Dict[str, Any] = {
+            "from": old_status,
+            "to": new_status,
+            "actor": str(actor or ""),
+            "force": bool(force),
+            "reason": str(reason or "") or None,
+        }
+        if force and new_status == "done":
+            status_payload["four_eyes_evidence"] = override_evidence or {}
+            q_rev = _current_quality_review(task_id)
+            status_payload["previous_review"] = {
+                "status": q_rev.get("status"),
+                "reviewer_id": q_rev.get("reviewer_id"),
+                "reviewer": q_rev.get("reviewer"),
+            }
         cursor.execute("""
             INSERT INTO task_events (task_id, kind, payload, created_at)
             VALUES (?, ?, ?, ?)
-        """, (task_id, "status_changed", json.dumps({"from": old_status, "to": new_status}), now_iso))
+        """, (task_id, "status_changed", json.dumps(status_payload, ensure_ascii=False), now_iso))
 
         conn.commit()
         return {
@@ -1725,6 +2188,8 @@ def _update_task_status_db(task_id: str, new_status: str, result: Optional[str],
 async def update_task_status(request: Request, task_id: str, req: TaskStatusUpdateRequest):
     """Verschiebt eine Aufgabe in eine neue Spalte / Status und startet ggf. Ausführung."""
     require_admin_or_503(request)
+    # H-14-2/F022: Actor ausschliesslich aus der verifizierten Session.
+    actor = require_session_actor(request)
     new_status = (req.status or "").lower()
     # Punkt 3 (Fix-Sprint Paket A): Status-Validierung
     if new_status not in VALID_KANBAN_STATUSES:
@@ -1733,9 +2198,41 @@ async def update_task_status(request: Request, task_id: str, req: TaskStatusUpda
             detail=f"Ungültiger Status '{req.status}'. Erlaubt sind: {', '.join(sorted(VALID_KANBAN_STATUSES))}"
         )
 
+    # H-14-2/F022: `force=true` auf `done` ist ein Hoheitsakt. Ohne zweite,
+    # identitaetsverschiedene Person + an Task gebundenen HITL-Proof bleibt
+    # der Task unveraendert (403). Das gilt auch bei `changes_requested`.
+    override_evidence: Optional[Dict[str, Any]] = None
+    if bool(req.force) and new_status == "done":
+        review = await asyncio.to_thread(_current_quality_review, task_id)
+        created_by = await asyncio.to_thread(_task_created_by, task_id)
+        old_status_before_force = await asyncio.to_thread(_task_status, task_id)
+        override_evidence = _require_four_eyes_override(
+            task_id=task_id,
+            actor=actor,
+            review=review,
+            reason=req.reason or "",
+            proof_token=req.passkey_proof_token,
+            action="quality_review_override",
+            created_by=created_by,
+            approval_id=req.approval_id,
+        )
+        try:
+            from backend.audit_log import _require_audit_event
+            _require_audit_event(
+                "governance", "status_forced", actor,
+                {
+                    "task_id": task_id, "from": old_status_before_force, "to": new_status,
+                    "force": True, "old_review": review, "reason": req.reason or "",
+                    "approval_id": override_evidence.get("approval_id"),
+                },
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+
     # Fix-Sprint Paket A (Punkt 2): SQLite-/Datei-IO blockiert den Event-Loop nicht mehr
     info = await asyncio.to_thread(
-        _update_task_status_db, task_id, new_status, req.result, bool(req.force)
+        _update_task_status_db, task_id, new_status, req.result, bool(req.force),
+        actor, req.reason or "", override_evidence,
     )
     old_status = info["old_status"]
 
@@ -2139,6 +2636,9 @@ async def trigger_quality_review(task_id: str, request: Request, req: QualityRev
     prüft das Arbeitsergebnis objektiv gegen den ursprünglichen Auftrag.
     """
     require_admin_or_503(request)
+    # H-14-2/F022: der ausloesende Mensch kommt aus der Session, nicht aus dem
+    # Body. Er wird als `requested_by` im Review dokumentiert.
+    actor = require_session_actor(request)
     def _fetch_task_sync() -> dict:
         conn = _get_kanban_connection(maintenance=True)
         try:
@@ -2184,36 +2684,23 @@ async def trigger_quality_review(task_id: str, request: Request, req: QualityRev
     if not result:
         raise HTTPException(status_code=400, detail="Aufgabe hat noch kein Arbeitsergebnis zur Prüfung hinterlegt.")
 
-    # 1. Human-in-the-Loop Override
-    if req.force_verdict in ("approved", "changes_requested"):
-        verdict = req.force_verdict
-        score = 100 if verdict == "approved" else 45
-        summary = req.comment or ("Manuelle Freigabe durch den Operator." if verdict == "approved" else "Manuelle Nachbesserungsforderung durch den Operator.")
-        review_data = {
-            "status": verdict,
-            "reviewer": "Operator (Human-in-the-Loop)",
-            "reviewer_id": "operator",
-            "score": score,
-            "summary": summary,
-            "critique_points": [req.comment] if req.comment else [],
-            "actionable_next_steps": [],
-            "reviewed_at": now_iso
-        }
+    # H-14-2/F022: es gibt KEINEN Body-Override mehr. `force_verdict` und
+    # `reviewer_id` wurden aus dem Request-Modell entfernt. Das Verdict stammt
+    # ausschliesslich aus dem Reviewer-Dispatch; eine Aufhebung von
+    # `changes_requested` nur ueber den separaten, 4-Augen-gesicherten
+    # Override-Endpoint (siehe unten).
+    # Autonomer Reviewer-Agent (Katharina Völk für QM/Compliance oder Robert für CEO/Strategie)
+    profiles = await asyncio.to_thread(_load_profiles_map)
+    if assignee in ("katharina", "katharina-voelk", "katharina_voelk"):
+        reviewer_id = "robert"
     else:
-        # 2. Autonomer Reviewer-Agent (Katharina Völk für QM/Compliance oder Robert für CEO/Strategie)
-        profiles = await asyncio.to_thread(_load_profiles_map)
-        reviewer_id = req.reviewer_id
-        if not reviewer_id:
-            if assignee in ("katharina", "katharina-voelk", "katharina_voelk"):
-                reviewer_id = "robert"
-            else:
-                reviewer_id = "katharina"
+        reviewer_id = "katharina"
 
-        prof = profiles.get(reviewer_id, {})
-        reviewer_name = prof.get("name") or ("Katharina Völk" if reviewer_id == "katharina" else "Robert")
-        reviewer_role = prof.get("category") or prof.get("role") or "Qualitäts- & Compliance-Auditor"
+    prof = profiles.get(reviewer_id, {})
+    reviewer_name = prof.get("name") or ("Katharina Völk" if reviewer_id == "katharina" else "Robert")
+    reviewer_role = prof.get("category") or prof.get("role") or "Qualitäts- & Compliance-Auditor"
 
-        audit_prompt = f"""Du bist unabhängiger Qualitätsprüfer im 4-Augen-Review-Gate von Archon OS.
+    audit_prompt = f"""Du bist unabhängiger Qualitätsprüfer im 4-Augen-Review-Gate von Archon OS.
 Prüfe das vorgelegte Teilergebnis für die folgende Projektaufgabe unbestechlich und sachlich:
 
 TITEL: {title}
@@ -2239,57 +2726,61 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
 }}
 (Wähle "changes_requested" als verdict, falls wesentliche Aspekte fehlen oder unvollständig sind, andernfalls "approved".)
 """
-        try:
-            import core_dispatcher
-            res = await core_dispatcher.dispatch_to_omniroute_or_container(
-                agent_id=reviewer_id,
-                agent_name=reviewer_name,
-                prompt=audit_prompt,
-                role=reviewer_role,
-                system_prompt="Du bist ein strikter QM-Auditor. Gib ausschließlich reines JSON ohne Markdown-Ticks aus.",
-                model="deepseek/deepseek-chat",
-                task_id=task_id
-            )
-            content = res.get("content", "").strip()
-            json_match = re.search(r"\{.*\}", content, re.DOTALL)
-            if json_match:
-                parsed = QualityReviewVerdict.model_validate(json.loads(json_match.group(0)))
-            else:
-                # Fail-closed (R-16): liefert der Reviewer kein JSON, darf das Gate
-                # NICHT freigeben — sonst gilt ein Timeout/Prosa-Antwort als Quality-Pass.
-                parsed = QualityReviewVerdict(
-                    verdict="changes_requested",
-                    score=0,
-                    summary="Reviewer-Antwort enthielt kein auswertbares JSON — Review gilt als nicht bestanden, Nachfassung erforderlich.",
-                    critique_points=["Reviewer-Lauf lieferte keine strukturierte Bewertung."],
-                    actionable_next_steps=["Review erneut anstoßen."],
-                )
-        except Exception as e:
-            # Fail-closed (R-16): Fehler im Review-Dispatch darf die Freigabe nicht
-            # erfinden — der Task bleibt in 'review', damit kein ungeprüftes Ergebnis
-            # als done verbucht wird.
+    try:
+        import core_dispatcher
+        res = await core_dispatcher.dispatch_to_omniroute_or_container(
+            agent_id=reviewer_id,
+            agent_name=reviewer_name,
+            prompt=audit_prompt,
+            role=reviewer_role,
+            system_prompt="Du bist ein strikter QM-Auditor. Gib ausschließlich reines JSON ohne Markdown-Ticks aus.",
+            model="deepseek/deepseek-chat",
+            task_id=task_id
+        )
+        content = res.get("content", "").strip()
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
+        if json_match:
+            parsed = QualityReviewVerdict.model_validate(json.loads(json_match.group(0)))
+        else:
+            # Fail-closed (R-16): liefert der Reviewer kein JSON, darf das Gate
+            # NICHT freigeben — sonst gilt ein Timeout/Prosa-Antwort als Quality-Pass.
             parsed = QualityReviewVerdict(
                 verdict="changes_requested",
                 score=0,
-                summary=f"Reviewer-Prüfung konnte nicht abgeschlossen werden ({e}).",
-                critique_points=["Reviewer-Lauf fehlgeschlagen."],
+                summary="Reviewer-Antwort enthielt kein auswertbares JSON — Review gilt als nicht bestanden, Nachfassung erforderlich.",
+                critique_points=["Reviewer-Lauf lieferte keine strukturierte Bewertung."],
                 actionable_next_steps=["Review erneut anstoßen."],
             )
+    except Exception as e:
+        # Fail-closed (R-16): Fehler im Review-Dispatch darf die Freigabe nicht
+        # erfinden — der Task bleibt in 'review', damit kein ungeprüftes Ergebnis
+        # als done verbucht wird.
+        parsed = QualityReviewVerdict(
+            verdict="changes_requested",
+            score=0,
+            summary=f"Reviewer-Prüfung konnte nicht abgeschlossen werden ({e}).",
+            critique_points=["Reviewer-Lauf fehlgeschlagen."],
+            actionable_next_steps=["Review erneut anstoßen."],
+        )
 
-        verdict = parsed.verdict
-        if verdict not in ("approved", "changes_requested"):
-            verdict = "changes_requested"
+    verdict = parsed.verdict
+    if verdict not in ("approved", "changes_requested"):
+        verdict = "changes_requested"
 
-        review_data = {
-            "status": verdict,
-            "reviewer": reviewer_name,
-            "reviewer_id": reviewer_id,
-            "score": parsed.score,
-            "summary": parsed.summary,
-            "critique_points": parsed.critique_points,
-            "actionable_next_steps": parsed.actionable_next_steps,
-            "reviewed_at": now_iso
-        }
+    review_data = {
+        "status": verdict,
+        # H-14-2/F022: Reviewer-Identitaet stammt aus dem verifizierten Profil
+        # (nicht aus dem Body); der ausloesende Mensch ist separat dokumentiert.
+        "reviewer": reviewer_name,
+        "reviewer_id": reviewer_id,
+        "requested_by": actor,
+        "score": parsed.score,
+        "summary": parsed.summary,
+        "critique_points": parsed.critique_points,
+        "actionable_next_steps": parsed.actionable_next_steps,
+        "reviewed_at": now_iso,
+        "source": "reviewer_agent",
+    }
 
     # In Sidecar-Metadaten speichern
     from backend.kanban_sidecar import update_kanban_meta
@@ -2318,6 +2809,18 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
     await asyncio.to_thread(_record_review_sync)
 
     try:
+        from backend.audit_log import _require_audit_event
+        _require_audit_event(
+            "governance", "quality_review_completed", actor,
+            {
+                "task_id": task_id, "verdict": verdict, "reviewer_id": reviewer_id,
+                "requested_by": actor, "score": parsed.score,
+            },
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    try:
         main = get_provider("app_main")
         if hasattr(main, "broadcast_event"):
             main.broadcast_event("kanban_updated", {
@@ -2338,6 +2841,84 @@ Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Sche
         "task_id": task_id,
         "quality_review": review_data
     }
+
+
+@router.post("/kanban/tasks/{task_id}/quality-review/override")
+async def override_quality_review(
+    request: Request, task_id: str, req: QualityReviewOverrideRequest
+):
+    """H-14-2/F022: einziger erlaubter Weg, `changes_requested` aufzuheben.
+
+    Der zweite Approver kommt aus der verifizierten Session (nie aus dem Body),
+    muss sich von Reviewer und Task-Ersteller unterscheiden und einen an
+    ``action`` + ``resource=task_id`` gebundenen Einmal-Passkey-Proof vorlegen.
+    Jede Verletzung bricht mit 403 ab, ohne Review oder Status zu veraendern.
+    """
+    require_admin_or_503(request)
+    actor = require_session_actor(request)
+    review = await asyncio.to_thread(_current_quality_review, task_id)
+    if not review:
+        raise HTTPException(status_code=409, detail="Kein Quality-Review vorhanden — Override nicht zulaessig.")
+
+    created_by = await asyncio.to_thread(_task_created_by, task_id)
+    old_status = await asyncio.to_thread(_task_status, task_id)
+    evidence = _require_four_eyes_override(
+        task_id=task_id, actor=actor, review=review, reason=req.reason,
+        proof_token=req.passkey_proof_token, action="quality_review_override",
+        created_by=created_by, approval_id=req.approval_id,
+    )
+    now_iso = datetime.datetime.now().isoformat()
+    override_review = {
+        "status": "approved",
+        "reviewer": actor,
+        "reviewer_id": actor,
+        "requested_by": review.get("requested_by") or review.get("reviewer_id") or "",
+        "score": 100,
+        "summary": str(req.reason or "").strip(),
+        "critique_points": [],
+        "actionable_next_steps": [],
+        "reviewed_at": now_iso,
+        "source": "four_eyes_override",
+        "four_eyes_evidence": evidence,
+        "overrides": {
+            "previous_status": review.get("status"),
+            "previous_reviewer_id": review.get("reviewer_id"),
+        },
+    }
+    from backend.kanban_sidecar import update_kanban_meta
+
+    def _apply_meta(meta):
+        meta.setdefault("tasks", {}).setdefault(task_id, {})["quality_review"] = override_review
+        return meta
+
+    await asyncio.to_thread(update_kanban_meta, _apply_meta)
+
+    def _record_sync() -> None:
+        c = _get_kanban_connection(maintenance=True)
+        try:
+            c.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
+                (task_id, "quality_review_override", json.dumps(override_review, ensure_ascii=False), now_iso),
+            )
+            c.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
+                (task_id, "status_changed", json.dumps({
+                    "from": old_status, "to": "done", "actor": actor, "force": True,
+                    "reason": req.reason, "four_eyes_evidence": evidence,
+                    "previous_review": review,
+                }, ensure_ascii=False), now_iso),
+            )
+            if old_status == "review":
+                c.execute(
+                    "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ? AND status = 'review'",
+                    (now_iso, task_id),
+                )
+            c.commit()
+        finally:
+            c.close()
+
+    await asyncio.to_thread(_record_sync)
+    return {"status": "success", "task_id": task_id, "quality_review": override_review}
 
 
 class ResetZombieTasksRequest(BaseModel):

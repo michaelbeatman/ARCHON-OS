@@ -50,6 +50,10 @@ archon_readycheck_url: "http://localhost:8501/readyz"
 # darf diese Werte ueberschreiben.
 archon_environment: "production"
 archon_readiness_probes: "1"
+# Audit D10/F043: Default-Probe ist NUR OmniRoute (per depends_on zwingend).
+# n8n ist optional (Compose-Profil automation/full) und wird nicht probiert,
+# damit der /readyz-Deploy-Gate im Default-Profil nicht dauerhaft rot bleibt.
+archon_readiness_probe_urls: "omniroute=http://omniroute:20128/v1/models"
 
 # Audit D10: Alertmanager-Nachweis. Der Betreiber setzt
 # archon_alert_secrets_configured auf true, wenn TELEGRAM_BOT_TOKEN und

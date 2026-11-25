@@ -17,6 +17,25 @@ import asyncio
 from typing import Any, Awaitable, Callable, Dict, List
 
 
+def is_empty_tool_result(value: Any) -> bool:
+    """D12/H-12-2: alle leeren Nicht-Ergebnisse, nicht nur None/leer.
+
+    ``None``, leere Strings, leere Container und die Zahl ``0`` sind keine
+    Tool-Ergebnisse, sondern fehlende Ergebnisse. ``False`` ist bewusst
+    ausgenommen (ein gueltiges boolesches Ergebnis). Diese SSOT wird sowohl
+    von der Firewall als auch vom Tool-Chokepoint verwendet.
+    """
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, (dict, list, tuple, set)):
+        return len(value) == 0
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value == 0
+    return False
+
+
 def guard_tool_output(
     tool_name: str,
     raw_output: Any,
@@ -27,11 +46,13 @@ def guard_tool_output(
     # D01/MED: Ein fehlgeschlagener/leerer Tool-Call ist kein Ergebnis. Frueher
     # wurde `None` via str() zum Literal "None" und als untrusted Inhalt in den
     # LLM-Kontext gewrappt (und vom Batch-Orchestrator als "ok" gemeldet).
-    if raw_output is None or (isinstance(raw_output, str) and not raw_output.strip()):
+    # D12/H-12-2: None/{}/[]/0 umgehen die Firewall nicht mehr.
+    if is_empty_tool_result(raw_output):
         return {
             "tool": tool_name,
             "status": "error",
             "error": "EMPTY_TOOL_RESULT",
+            "error_code": "EMPTY_TOOL_RESULT",
             "output": "",
             "truncated": False,
             "original_chars": 0,
@@ -97,8 +118,24 @@ def guard_tool_output(
         # Egress-/DLP-Block ist immer hart — nie als "scan_error" weitergeben.
         raise
     except Exception as exc:
-        # Scanner-Fehler nicht verschlucken: mindestens sichtbar machen.
-        injection_report = {"scan_error": str(exc)}
+        # D12/H-12-3: FAIL-CLOSED. Ein Klassifikatorausfall darf niemals dazu
+        # fuehren, dass ungepruefter Tool-Rohtext im LLM-Kontext landet. Frueher
+        # wurde hier nur `scan_error` ins Reporting geschrieben und danach der
+        # Rohtext mit UNTRUSTED-Delimitern an den Agenten durchgereicht.
+        return {
+            "tool": tool_name,
+            "status": "error",
+            "error": "TOOL_OUTPUT_CLASSIFICATION_ERROR",
+            "error_code": "TOOL_OUTPUT_CLASSIFICATION_ERROR",
+            # Kein Rohtext, nur ein sichtbarer, harmloser Platzhalter.
+            "output": (
+                "[INHALT WEGEN FEHLGESCHLAGENER KLASSIFIKATION VERWORFEN — "
+                "nicht als Fakt verwenden]"
+            ),
+            "truncated": False,
+            "original_chars": orig_len,
+            "security": {**mask_report, "scan_error": str(exc)},
+        }
 
     def _wrap(body: str) -> str:
         return (
@@ -142,6 +179,9 @@ async def run_batch_tool_calls(
             # Ergebnis darf nicht durch "ok" zu einem Erfolg umgewertet werden.
             return {"tool": tname, **guarded}
         except Exception as exc:
-            return {"tool": tname, "status": "error", "error": str(exc), "output": ""}
+            return {
+                "tool": tname, "status": "error",
+                "error": str(exc), "error_code": "TOOL_EXECUTION_ERROR", "output": "",
+            }
 
     return list(await asyncio.gather(*(_one(c) for c in calls)))

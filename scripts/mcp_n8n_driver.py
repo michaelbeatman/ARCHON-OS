@@ -21,9 +21,62 @@ import time
 import re
 import hashlib
 import socket
+import logging
+import contextlib
 from typing import Dict, Any, List, Optional
+
+_archon_logger = logging.getLogger("archon.n8n_mcp_driver")
 import urllib.request
 import urllib.error
+
+# D16/H-16-3: der Treiber laeuft als eigenstaendiger Stdio-/CLI-Prozess.
+# Damit der W3C-Kontext nicht an der Prozessgrenze verloren geht, wird er
+# explizit aus `_meta.traceContext` bzw. TRACEPARENT/TRACESTATE uebernommen.
+_WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _WORKSPACE_ROOT not in sys.path:
+    sys.path.insert(0, _WORKSPACE_ROOT)
+
+
+def _trace_context_from(meta: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    """W3C-Kontext aus MCP-`_meta.traceContext` oder der Umgebung lesen."""
+    raw: Any = None
+    if isinstance(meta, dict):
+        raw = meta.get("traceContext", meta.get("traceparent"))
+    src = raw if isinstance(raw, dict) else ({"traceparent": raw} if isinstance(raw, str) else {})
+    out = {
+        "traceparent": str(src.get("traceparent") or os.getenv("TRACEPARENT") or "").strip(),
+        "tracestate": str(src.get("tracestate") or os.getenv("TRACESTATE") or "").strip(),
+        "trace_id": str(src.get("trace_id") or "").strip(),
+        "span_id": str(src.get("span_id") or "").strip(),
+    }
+    if not out["traceparent"] and out["trace_id"] and out["span_id"]:
+        out["traceparent"] = f"00-{out['trace_id']}-{out['span_id']}-01"
+    parsed = re.fullmatch(
+        r"00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})",
+        out["traceparent"], re.IGNORECASE,
+    )
+    if parsed:
+        out["trace_id"] = out["trace_id"] or parsed.group(1).lower()
+        out["span_id"] = out["span_id"] or parsed.group(2).lower()
+    return out
+
+
+@contextlib.contextmanager
+def _replay_trace_context(ctx: Dict[str, str]):
+    """MCP-Stdio: uebernommener Kontext wird im Treiber-Prozess replayed."""
+    try:
+        from backend import trace_context as tc
+    except Exception:  # pragma: no cover - nur bei fehlendem Backend
+        yield
+        return
+    with tc.use_trace_context(
+        trace_id=ctx.get("trace_id") or None,
+        span_id=ctx.get("span_id") or None,
+        traceparent=ctx.get("traceparent") or None,
+        tracestate=ctx.get("tracestate") or None,
+    ):
+        yield
+
 
 # Environment configuration
 N8N_BASE_URL = os.getenv("N8N_BASE_URL", "http://localhost:5678").rstrip("/")
@@ -240,9 +293,24 @@ class N8nMcpDriver:
         }
     ]
 
-    def __init__(self, base_url: Optional[str] = None, api_key: str = N8N_API_KEY):
+    def __init__(self, base_url: Optional[str] = None, api_key: str = N8N_API_KEY,
+                 incoming_traceparent: Optional[str] = None):
         self.base_url = (base_url or resolve_n8n_base_url()).rstrip("/")
         self.api_key = api_key
+        # Optionaler Kontext des Aufrufers (MCP-_meta / CLI / ENV). Ohne Wert
+        # forkt child_span() den aktiven Kontext oder startet einen Root.
+        self.incoming_traceparent = str(
+            incoming_traceparent or os.getenv("TRACEPARENT") or ""
+        ).strip()
+
+    @staticmethod
+    def _has_valid_payload(data: Any) -> bool:
+        """D12/H-12-4: nur eine nichtleere, geparste Nutzlast ist ein Erfolg."""
+        if data is None:
+            return False
+        if isinstance(data, (dict, list, tuple, str)):
+            return bool(data)
+        return True  # JSON-Zahl/-Boolean sind gueltige Quittungen
 
     def _http_post_json(self, url: str, payload: Dict[str, Any], timeout: float = 20.0,
                         idempotency_key: str = "") -> Dict[str, Any]:
@@ -274,6 +342,17 @@ class N8nMcpDriver:
         from utils.safe_http import webhook_signature_headers, _RejectAllRedirectsHandler
         headers.update(webhook_signature_headers(body_bytes))
 
+        # D16/H-16-3: Header-Injektion NUR innerhalb des child_span()-Blocks
+        # in execute_webhook() — sonst traego die neue Span-ID nicht in den
+        # traceparent und die Kausalkante zeigt auf sich selbst.
+        try:
+            from backend import trace_context as tc
+            headers = tc.inject_headers(headers)
+        except Exception as exc:  # pragma: no cover - nur bei fehlendem Backend
+            # Kein stiller Swallower: der Export-Hop wird sichtbar gemacht,
+            # der Webhook selbst bleibt aber sendefaehig (Header sind additiv).
+            _archon_logger.warning("[Trace] n8n-Hop: inject_headers nicht verfuegbar: %s", exc)
+
         # D06/MED-Rest: der Redirect-Block allein verhindert nicht, dass der
         # X-N8N-API-KEY an einen fremden Host geht. Ziel muss zusaetzlich gegen
         # die Egress-Regeln geprueft und auf die konfigurierte n8n-Base-URL
@@ -296,10 +375,40 @@ class N8nMcpDriver:
             with opener.open(req, timeout=timeout) as resp:
                 status_code = resp.status
                 raw = resp.read().decode("utf-8", errors="replace")
+                # D12/H-12-4: 2xx ohne Nutzlast ist KEINE nachgewiesene
+                # Zustellung. Frueher wurde b"" als {"raw_response": ""} als
+                # Erfolg an den Agenten zurueckgegeben.
+                if not raw.strip():
+                    return {
+                        "status": "error",
+                        "error_code": "EMPTY_WEBHOOK_BODY",
+                        "status_code": status_code,
+                        "error": f"HTTP {status_code} ohne Nutzlast — Wirkung nicht nachgewiesen",
+                    }
                 try:
                     data = json.loads(raw)
-                except Exception:
-                    data = {"raw_response": raw}
+                except Exception as exc:
+                    return {
+                        "status": "error",
+                        "error_code": "INVALID_WEBHOOK_JSON",
+                        "status_code": status_code,
+                        "data": {"raw_response": raw[:200]},
+                        "error": f"Ungueltige JSON-Antwort des Webhooks: {exc}",
+                    }
+                if not (200 <= status_code < 300):
+                    return {
+                        "status": "error",
+                        "error_code": "WEBHOOK_HTTP_ERROR",
+                        "status_code": status_code,
+                        "error": f"HTTP {status_code} vom Webhook",
+                    }
+                if not self._has_valid_payload(data):
+                    return {
+                        "status": "error",
+                        "error_code": "EMPTY_WEBHOOK_BODY",
+                        "status_code": status_code,
+                        "error": "Webhook-Antwort enthielt keine verwertbare Nutzlast",
+                    }
                 return {"status": "success", "status_code": status_code, "data": data}
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8", errors="replace")
@@ -326,13 +435,55 @@ class N8nMcpDriver:
         canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
         idem_key = hashlib.sha256(f"{clean_path}|{canonical}".encode("utf-8")).hexdigest()
 
+        try:
+            from backend import trace_context as tc
+        except Exception as exc:  # pragma: no cover - nur bei fehlendem Backend
+            tc = None
+            _archon_logger.warning("[Trace] n8n-Hop: trace_context nicht verfuegbar: %s", exc)
+
+        # D16/H-16-3: genau EIN Child-Span je Webhook-Aufruf. inject_payload()
+        # und inject_headers() MUESSEN innerhalb des Blocks laufen, damit die
+        # NEUE Span-ID im traceparent und Payload steht (kein Self-Parenting).
+        # Die Signatur wird anschliessend im _http_post_json ueber den
+        # injizierten Final-Body neu berechnet.
+        span_ctx = (
+            tc.child_span(incoming=self.incoming_traceparent)
+            if tc is not None
+            else contextlib.nullcontext(("", "", None))
+        )
+        with span_ctx as (hop_tid, hop_sid, _hop_parent):
+            traced_payload = tc.inject_payload(payload) if tc is not None else dict(payload)
+            res = self._run_webhook_attempts(url, traced_payload, idem_key, max_retries)
+        if isinstance(res, dict) and hop_tid and hop_sid:
+            res.setdefault("trace_id", hop_tid)
+            res.setdefault("span_id", hop_sid)
+        return res
+
+    def _run_webhook_attempts(
+        self, url: str, payload: Dict[str, Any], idem_key: str, max_retries: int
+    ) -> Dict[str, Any]:
+        """Retry-Schleife; wird ausschliesslich innerhalb des Hop-Spans gerufen."""
         last_error = None
         for attempt in range(1, max_retries + 1):
             res = self._http_post_json(url, payload, idempotency_key=idem_key)
-            if res.get("status") == "success":
+            # D12/H-12-4: success NUR bei validierter Nutzlast — nie eine
+            # leere 200/204 als Erfolgsquittung an den Agenten durchreichen.
+            if res.get("status") == "success" and self._has_valid_payload(res.get("data")):
                 res["attempt"] = attempt
                 return res
-            
+            # Ein leerer/ungueltiger Body bei 2xx ist deterministisch: ein
+            # Retry mit identischem Idempotency-Key ergaebe dasselbe Ergebnis.
+            # Keinscheiterfolg, sondern harter, sichtbarer Fehler.
+            if res.get("error_code") in ("EMPTY_WEBHOOK_BODY", "INVALID_WEBHOOK_JSON"):
+                return {"status": "error", **res}
+            if res.get("status") == "success":
+                return {
+                    "status": "error",
+                    "error_code": "EMPTY_WEBHOOK_BODY",
+                    "error": "Webhook-Quittung ohne validierte Nutzlast",
+                    "attempt": attempt,
+                }
+
             # If server error or connection error, retry
             status_code = res.get("status_code", 0)
             if status_code in (404, 400, 401, 403):
@@ -491,7 +642,15 @@ def run_stdio_server():
         elif method == "tools/call":
             tool_name = params.get("name")
             arguments = params.get("arguments", {})
-            call_res = driver.call_tool(tool_name, arguments)
+            # D16/H-16-3: der aufrufende Kontext kommt aus `_meta.traceContext`
+            # (MCP) oder TRACEPARENT/TRACESTATE (ENV) und muss im Treiber-
+            # prozess replayed werden — ContextVars des FastAPI-Prozesses
+            # gibt es hier nicht.
+            trace_ctx = _trace_context_from(params.get("_meta"))
+            if trace_ctx["traceparent"]:
+                driver.incoming_traceparent = trace_ctx["traceparent"]
+            with _replay_trace_context(trace_ctx):
+                call_res = driver.call_tool(tool_name, arguments)
             res = {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -536,8 +695,14 @@ if __name__ == "__main__":
         if len(sys.argv) > idx + 1:
             tool = sys.argv[idx + 1]
             args = json.loads(sys.argv[idx + 2]) if len(sys.argv) > idx + 2 else {}
-            driver = N8nMcpDriver()
-            print(json.dumps(driver.call_tool(tool, args), indent=2))
+            cli_tp = ""
+            if "--traceparent" in sys.argv:
+                tpi = sys.argv.index("--traceparent")
+                cli_tp = sys.argv[tpi + 1] if len(sys.argv) > tpi + 1 else ""
+            driver = N8nMcpDriver(incoming_traceparent=cli_tp or None)
+            with _replay_trace_context({"traceparent": driver.incoming_traceparent}):
+                call_res = driver.call_tool(tool, args)
+            print(json.dumps(call_res, indent=2))
     else:
         # Default info output
         driver = N8nMcpDriver()

@@ -20,11 +20,10 @@ NAS_BASE_URI = "smb://nasdc73fa.local/home/_ARCHON Backups/daily"
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERMES_DIR = os.environ.get("ARCHON_HERMES_DIR", os.path.expanduser("~/.hermes"))
 
-DBS_TO_BACKUP = [
-    ("kanban.db", os.path.join(HERMES_DIR, "kanban.db")),
-    ("state.db", os.path.join(HERMES_DIR, "state.db")),
-    ("agentic_memory.db", os.path.join(PROJECT_DIR, "data", "agentic_memory.db")),
-]
+# D03/MED (F015): wird zur Laufzeit aus APP_DATA_DIR + Konsolidierung +
+# Tenant-Verzeichnissen gebaut (runtime_db_targets()). Die alte statische Liste
+# sicherte nur Legacy-Dateien und lieferte trotzdem Exit 0.
+DBS_TO_BACKUP = []
 
 FILES_TO_COPY = [
     ("settings.json", os.path.join(PROJECT_DIR, "settings.json")),
@@ -36,14 +35,61 @@ DIRS_TO_COPY = [
 ]
 
 
-def backup_sqlite_db(src_path: str, dest_path: str):
+def runtime_db_targets():
+    """Produktive DB-Ziele zur Laufzeit (APP_DATA_DIR + Konsolidierung + Tenants)."""
+    if PROJECT_DIR not in sys.path:
+        sys.path.insert(0, PROJECT_DIR)
+    from backend.db_paths import APP_DATA_DIR, CONSOLIDATED_DB_FILENAMES
+    from backend.db_paths import DB_BUSY_TIMEOUT_S  # noqa: F401 (SSOT, s. u.)
+
+    app = os.path.abspath(APP_DATA_DIR)
+    targets = []
+    seen = set()
+
+    def add(arcname, path):
+        key = os.path.abspath(path)
+        if key in seen or not os.path.isfile(path):
+            return
+        seen.add(key)
+        targets.append((arcname, path))
+
+    for name in CONSOLIDATED_DB_FILENAMES:
+        add(name, os.path.join(app, name))
+    for name in ("agentic_memory.db", "contracts.db", "deals.db",
+                 "corporate.db", "content_machine.db"):
+        add(name, os.path.join(app, name))
+    for base in (os.path.join(app, "tenants"),
+                 os.path.join(PROJECT_DIR, "data", "tenants")):
+        if not os.path.isdir(base):
+            continue
+        for tid in sorted(os.listdir(base)):
+            tdir = os.path.join(base, tid)
+            if not os.path.isdir(tdir):
+                continue
+            for name in sorted(os.listdir(tdir)):
+                if name.endswith(".db"):
+                    add(f"tenant_{tid}__{name}", os.path.join(tdir, name))
+    for name in ("kanban.db", "state.db", "shared-state.db"):
+        add(name, os.path.join(HERMES_DIR, name))
+    return targets, DB_BUSY_TIMEOUT_S
+
+
+def required_db_targets(targets):
+    """Konsolidierte + Tenant-DBs — ohne diese darf kein Erfolg gemeldet werden."""
+    return [
+        arc for arc, _ in targets
+        if arc in ("ops.db", "business.db", "memory.db") or arc.startswith("tenant_")
+    ]
+
+
+def backup_sqlite_db(src_path: str, dest_path: str, timeout: float = 5.0):
     """Sicheres SQLite-Online-Backup."""
     if not os.path.exists(src_path):
         print(f"[WARN] Datenbank nicht gefunden: {src_path}")
         return False
     try:
-        src_conn = sqlite3.connect(src_path, timeout=15.0)
-        dest_conn = sqlite3.connect(dest_path)
+        src_conn = sqlite3.connect(src_path, timeout=timeout)
+        dest_conn = sqlite3.connect(dest_path, timeout=timeout)
         with dest_conn:
             src_conn.backup(dest_conn)
         dest_conn.close()
@@ -71,6 +117,21 @@ def upload_path(local_path: str, dest_uri: str):
 
 
 def run_backup():
+    try:
+        db_targets, db_timeout = runtime_db_targets()
+    except Exception as exc:
+        print(f"[FEHLER] DB-Zielauflösung fehlgeschlagen: {exc}")
+        return False
+    required = required_db_targets(db_targets)
+    # D03/MED: 0 konsolidierte/Tenant-DBs = kein Erfolg (frueher still Exit 0).
+    if not required:
+        print(
+            "[FEHLER] Keine konsolidierten (ops/business/memory.db) oder "
+            "Tenant-DBs gefunden — Backup abgebrochen. "
+            "APP_DATA_DIR/ARCHON_DATA_DIR pruefen."
+        )
+        return False
+
     now = datetime.now()
     folder_name = f"archon_{now.strftime('%Y%m%d_%H%M')}"
     target_uri = f"{NAS_BASE_URI}/{folder_name}"
@@ -81,10 +142,10 @@ def run_backup():
         backup_root = os.path.join(tmp_dir, folder_name)
         os.makedirs(backup_root, exist_ok=True)
 
-        # 1. Datenbanken sichern
-        for db_name, db_path in DBS_TO_BACKUP:
+        # 1. Datenbanken sichern (konsolidiert + Tenant-DBs zur Laufzeit)
+        for db_name, db_path in db_targets:
             dest_db = os.path.join(backup_root, db_name)
-            backup_sqlite_db(db_path, dest_db)
+            backup_sqlite_db(db_path, dest_db, timeout=db_timeout)
 
         # 2. Einzeldateien kopieren
         for name, src_file in FILES_TO_COPY:

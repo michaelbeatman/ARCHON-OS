@@ -78,6 +78,316 @@ _PRIVILEGED_NODE_TOOLS = frozenset({
 })
 
 
+# ---------------------------------------------------------------------------
+# D08/F035-DAG: alle SQLite-Schreibzugriffe des DAG-Hotpaths liegen in
+# SYNCHRONEN Hilfsfunktionen und werden ausschliesslich ueber asyncio.to_thread
+# aufgerufen. Damit bleibt /livez bei busy_timeout=5000 responsiv.
+# ---------------------------------------------------------------------------
+
+def _recovery_audit(action: str, payload: Dict[str, Any]) -> None:
+    """D07/F024: Audit-Schreibfehler nie verschlucken (einheitliche Eskalation)."""
+    try:
+        from backend.audit_log import chained_audit_log
+
+        chained_audit_log.record_event(
+            category="recovery", action=action,
+            payload={"ts": time.time(), **payload},
+        )
+    except Exception as exc:
+        logger.error("[WorkflowDAG] Audit '%s' fehlgeschlagen: %s", action, exc, exc_info=exc)
+        note_local_trace_error(f"DAG-Audit {action} fehlgeschlagen", exc)
+
+
+def _persist_run_cancelled_sync(db_path: Optional[str], rid: str) -> Dict[str, Any]:
+    """Cancelled-Pfad: Status 'cancelled' atomar persistieren (sync, to_thread)."""
+    updated = False
+    try:
+        with _connect(db_path) as conn:
+            cur = conn.execute(
+                "UPDATE workflow_runs SET status = 'cancelled', updated_at = ? WHERE run_id = ?",
+                (time.time(), rid),
+            )
+            updated = int(cur.rowcount or 0) > 0
+            conn.commit()
+    except Exception as exc:
+        return {"updated": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {"updated": updated, "error": "" if updated else "run_row_not_found"}
+
+
+def _persist_run_status_sync(
+    db_path: Optional[str], rid: str, wf_id: str, status: str,
+    dag_json_text: str, now: float,
+) -> None:
+    """Einheitlicher Terminal-/Zwischenstatus-Schreibblock (sync, to_thread)."""
+    with _connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(run_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at",
+            (rid, wf_id, status, dag_json_text, now, now),
+        )
+        conn.commit()
+
+
+def _load_run_gate_state_sync(
+    db_path: Optional[str], rid: str, wf_id: str,
+    gate_approvals: Optional[Dict[str, bool]],
+    now: float, dag_json_text: str,
+) -> Dict[str, Any]:
+    """Gate-Freigaben lesen + Run auf 'running' setzen + Node-Cache lesen.
+
+    Ein Parsefehler der Freigaben darf NIE zum Ueberschreiben mit einem leeren
+    Dict fuehren — deshalb der CASE-Guard beim UPDATE (unveraendert).
+    """
+    approvals: Dict[str, bool] = {}
+    parse_failed = False
+    with _connect(db_path) as conn:
+        prev = conn.execute(
+            "SELECT gate_approvals_json FROM workflow_runs WHERE run_id = ?", (rid,)
+        ).fetchone()
+        if prev and prev["gate_approvals_json"]:
+            try:
+                stored = json.loads(prev["gate_approvals_json"])
+                if isinstance(stored, dict):
+                    approvals.update({str(k): bool(v) for k, v in stored.items()})
+            except Exception as exc:
+                parse_failed = True
+                logger.error(
+                    "[WorkflowDAG] Run '%s': gate_approvals_json nicht lesbar (%s); alter Wert bewahrt.",
+                    rid, exc,
+                )
+        if gate_approvals:
+            approvals.update({str(k): bool(v) for k, v in gate_approvals.items()})
+        conn.execute(
+            """
+            INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, gate_approvals_json, created_at, updated_at)
+            VALUES (?, ?, 'running', ?, ?, ?, ?)
+            ON CONFLICT(run_id) DO UPDATE SET
+                status='running',
+                dag_json=CASE WHEN excluded.dag_json != '{}' THEN excluded.dag_json ELSE workflow_runs.dag_json END,
+                gate_approvals_json=CASE WHEN ? THEN workflow_runs.gate_approvals_json ELSE excluded.gate_approvals_json END,
+                updated_at=excluded.updated_at
+            """,
+            (rid, wf_id, dag_json_text, json.dumps(approvals, ensure_ascii=False),
+             now, now, int(parse_failed)),
+        )
+        conn.commit()
+        cached_rows = conn.execute(
+            "SELECT node_id, fingerprint, status, output_json FROM workflow_node_states WHERE run_id = ?",
+            (rid,),
+        ).fetchall()
+        cached = {r["node_id"]: dict(r) for r in cached_rows}
+    return {"approvals": approvals, "parse_failed": parse_failed, "cached": cached}
+
+
+def _persist_node_state_sync(
+    db_path: Optional[str], rid: str, nid: str, fingerprint: str,
+    status: str, output_json: str, now: float, *, preserve_fingerprint: bool = False,
+) -> None:
+    """Node-State (running/terminal/skipped) atomar schreiben (sync, to_thread)."""
+    with _connect(db_path) as conn:
+        if preserve_fingerprint:
+            conn.execute(
+                """
+                INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id, node_id) DO UPDATE SET
+                    status=excluded.status, output_json=excluded.output_json, updated_at=excluded.updated_at
+                """,
+                (rid, nid, fingerprint, status, output_json, now),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id, node_id) DO UPDATE SET
+                    fingerprint=excluded.fingerprint, status=excluded.status,
+                    output_json=excluded.output_json, updated_at=excluded.updated_at
+                """,
+                (rid, nid, fingerprint, status, output_json, now),
+            )
+        conn.commit()
+
+
+def _finalize_run_sync(
+    db_path: Optional[str], rid: str, wf_id: str,
+    final_status: str, cycle_error: Optional[str], tid: str,
+    outputs: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Kosten/Tokens, Flightlog, Trajectory-Abschluss und Run-Finalstatus.
+
+    D07: der Flightlog-Audit-Fehler wird auf ERROR + chained_audit_log
+    eskaliert (frueher nacktes `pass`); `ARCHON_AUDIT_STRICT=1` bricht hart ab.
+    """
+    flags: List[str] = []
+    total_cost = 0.0
+    total_tokens = 0
+    strict_abort: Optional[BaseException] = None
+    with _connect(db_path) as conn:
+        try:
+            for row in conn.execute(
+                "SELECT output_json FROM workflow_node_states WHERE run_id = ?", (rid,)
+            ).fetchall():
+                try:
+                    total_cost += float((json.loads(row[0] or "{}").get("cost_usd") or 0.0))
+                except Exception:
+                    pass
+        except sqlite3.OperationalError:
+            pass
+        for row in conn.execute(
+            "SELECT output_json FROM workflow_node_states WHERE run_id = ?", (rid,)
+        ).fetchall():
+            try:
+                parsed = json.loads(row[0] or "{}")
+                total_tokens += int(parsed.get("input_tokens") or 0) + int(parsed.get("output_tokens") or 0)
+            except Exception:
+                pass
+        try:
+            from backend.flightlog_backtester import (
+                detect_silent_failures, mirror_flight_event_to_trace, record_flight_event,
+            )
+            record_flight_event(
+                run_id=rid, agent_id=str(wf_id or "workflow_engine"),
+                tool_name="dag_run_complete",
+                args={"workflow_id": wf_id, "trajectory_id": tid, "status": final_status},
+                tool_ok=final_status in ("completed", "paused"),
+                tokens_used=total_tokens,
+            )
+            mirror_flight_event_to_trace(
+                run_id=rid, agent_id=str(wf_id or "workflow_engine"),
+                tool_name="dag_run_complete",
+                args={"workflow_id": wf_id, "trajectory_id": tid, "status": final_status},
+                tool_ok=final_status in ("completed", "paused"),
+                tokens_used=total_tokens,
+            )
+            detected = detect_silent_failures(
+                rid, final_status=final_status,
+                final_output="\n".join(
+                    str((v or {}).get("content") or "")[:400]
+                    for v in outputs.values() if isinstance(v, dict)
+                ),
+            )
+            flags = list(detected.get("flags") or [])
+            if flags and final_status in ("completed", "paused"):
+                final_status = "blocked"
+                cycle_error = f"SILENT_FAILURE: {', '.join(flags)}"
+                logger.error("[WorkflowDAG] '%s' blockiert durch Flightlog: %s", rid, flags)
+                try:
+                    from backend.trajectory_budget import _audit
+                    _audit(tid, f"flightlog_flags:{flags}", rid)
+                except Exception as audit_exc:
+                    logger.error(
+                        "[WorkflowDAG] Trajectory-Audit flightlog_flags fehlgeschlagen für %s: %s",
+                        rid, audit_exc, exc_info=audit_exc,
+                    )
+                    _recovery_audit("audit_write_failed", {
+                        "run_id": rid, "trajectory_id": tid, "flags": flags,
+                        "detail": f"{type(audit_exc).__name__}: {audit_exc}"[:500],
+                    })
+                    if os.environ.get("ARCHON_AUDIT_STRICT", "").strip() == "1":
+                        strict_abort = RuntimeError(
+                            f"flightlog_flags audit failed for {rid} (ARCHON_AUDIT_STRICT=1)"
+                        )
+        except Exception as flight_exc:
+            logger.debug("[WorkflowDAG] Flightlog-Abschluss nicht verfuegbar: %s", flight_exc)
+        if strict_abort is not None:
+            raise strict_abort
+        try:
+            from backend.trajectory_budget import close_trajectory, record_tokens
+            if total_tokens > 0:
+                token_res = record_tokens(
+                    tid, total_tokens, reason=f"dag_run:{rid}", set_total=True
+                )
+                if isinstance(token_res, dict) and not token_res.get("allowed", True):
+                    final_status = "blocked"
+                    cycle_error = cycle_error or f"TRAJECTORY_TOKEN_CAP: {token_res.get('reason')}"
+                    logger.error("[WorkflowDAG] '%s' blockiert durch Trajectory-Token-Cap", rid)
+            close_trajectory(
+                tid,
+                "blocked" if final_status == "blocked"
+                else ("completed" if final_status == "completed" else "failed"),
+            )
+        except Exception as traj_exc:
+            logger.error("[WorkflowDAG] Trajectory-Abschluss nicht persistiert: %s", traj_exc)
+        conn.execute(
+            "UPDATE workflow_runs SET status = ?, updated_at = ?, total_cost_usd = ? WHERE run_id = ?",
+            (final_status, time.time(), round(total_cost, 6), rid),
+        )
+        conn.commit()
+    return {"final_status": final_status, "cycle_error": cycle_error,
+            "flight_flags": flags, "total_tokens": total_tokens}
+
+
+def _recover_one_orphan(kernel: Any, run_id: str, db_path: Optional[str],
+                        reason: str = "lease_lost") -> Dict[str, Any]:
+    """Einzelner Orphan-Recovery: frischer Claim + harte FAILED-Transition."""
+    from backend.durable_execution_kernel import FAILED
+
+    fresh = f"recovery:{os.getpid()}:{secrets.token_hex(6)}"
+    try:
+        claim = kernel.claim(
+            run_id, ttl_seconds=max(30, LEASE_TTL_SEC),
+            dag_fingerprint="", fencing_token=fresh,
+        )
+    except Exception as exc:
+        return {"run_id": run_id, "terminated": False,
+                "reason": f"claim_error: {type(exc).__name__}: {exc}"}
+    if not claim.get("claimed"):
+        # Ein anderer Worker haelt eine gueltige Lease — Hoheit liegt dort,
+        # aber NEVER still: das Result wird auditiert und zurueckgegeben.
+        return {"run_id": run_id, "terminated": False,
+                "reason": str(claim.get("reason") or "claim_denied")}
+    token = str(claim["fencing_token"])
+    try:
+        kernel.transition(run_id, FAILED, token, reason=reason)
+    except Exception as exc:
+        _recovery_audit("orphan_transition_failed", {
+            "run_id": run_id, "detail": f"{type(exc).__name__}: {exc}"[:500],
+        })
+        return {"run_id": run_id, "terminated": False,
+                "reason": f"transition_failed: {type(exc).__name__}: {exc}"}
+    _persist_run_status_sync(db_path, run_id, "", "failed", "{}", time.time())
+    return {"run_id": run_id, "terminated": True, "fencing_token": token}
+
+
+def recover_orphaned_runs(
+    db_path: Optional[str] = None,
+    kernel: Any = None,
+    limit: int = 100,
+    only_run_id: str = "",
+) -> Dict[str, Any]:
+    """D07/F3: Drainer fuer RUNNING-Runs mit abgelaufener Lease.
+
+    Wird bei `guard.lost` fuer den betroffenen Run ausgefuehrt (only_run_id)
+    und kann zusaetzlich beim Startup/einem Recovery-Cycle fuer alle Orphans
+    aufgerufen werden. Kein Coroutine-Replay — nur Status-Transition + Checkpoint.
+    """
+    kernel = kernel or _kernel_for_run(db_path)
+    db_file = str(getattr(kernel, "db_path", "") or "")
+    if not db_file:
+        return {"scanned": 0, "recovered": [], "skipped": [],
+                "reason": "kernel_db_path_unavailable"}
+    conn = sqlite3.connect(db_file, timeout=5.0)
+    try:
+        rows = conn.execute(
+            "SELECT run_id FROM durable_executions WHERE state = 'RUNNING' "
+            "AND claim_expires <= ? AND (? = '' OR run_id = ?) LIMIT ?",
+            (time.time(), only_run_id or "", only_run_id or "", max(1, min(1000, int(limit)))),
+        ).fetchall()
+    except Exception as exc:
+        conn.close()
+        return {"scanned": 0, "recovered": [], "skipped": [],
+                "reason": f"scan_failed: {type(exc).__name__}: {exc}"}
+    conn.close()
+    results = [_recover_one_orphan(kernel, str(row[0]), db_path) for row in rows]
+    return {
+        "scanned": len(rows),
+        "recovered": [r for r in results if r.get("terminated")],
+        "skipped": [r for r in results if not r.get("terminated")],
+    }
+
+
 class _LeaseGuard:
     """Geteilter Zustand zwischen Lease-Heartbeat und DAG-Hauptausfuehrung.
 
@@ -349,6 +659,22 @@ def validate_dag_def(
     replan_count = int(dag_def.get("_replan_count") or 0)
     if replan_count > MAX_REPLAN_COUNT:
         errors.append(f"replan_count {replan_count} überschreitet den Deckel ({MAX_REPLAN_COUNT}).")
+
+    # D13/F032: max_hops darf die SSOT nie erweitern (alter Expand-Pfad auf 50
+    # ist entfernt). Ein zu hoher Wert ist ein harter Planfehler, kein stilles
+    # Klemmen mit anschliessendem Weiterlauf.
+    from backend.trajectory_budget import MAX_DELEGATION_DEPTH
+
+    cfg_hops = dag_def.get("max_hops") if dag_def.get("max_hops") else dag_def.get("trajectory_max_hops")
+    try:
+        cfg_hops_int = int(cfg_hops or 0)
+    except (TypeError, ValueError):
+        cfg_hops_int = 0
+        errors.append("Ungültiger max_hops-Wert in der DAG-Definition.")
+    if cfg_hops_int > MAX_DELEGATION_DEPTH:
+        errors.append(
+            f"max_hops {cfg_hops_int} überschreitet die SSOT-Schranke ({MAX_DELEGATION_DEPTH})."
+        )
 
     return {"valid": not errors, "errors": errors, "node_count": len(node_map)}
 
@@ -1612,15 +1938,28 @@ async def run_workflow_dag(
     except asyncio.CancelledError:
         rid = run_id or ""
         if rid:
+            # D08/F035-DAG: Schreibzugriff in den Threadpool, NOCH VOR dem
+            # Re-raise. D07/F1: Persistenzfehler auf ERROR + Audit/DLQ statt
+            # logger.debug (frueher blieb der Run sichtbar 'running').
             try:
-                with _connect(db_path) as conn:
-                    conn.execute(
-                        "UPDATE workflow_runs SET status = 'cancelled', updated_at = ? WHERE run_id = ?",
-                        (time.time(), rid),
+                outcome = await asyncio.to_thread(_persist_run_cancelled_sync, db_path, rid)
+                if not outcome.get("updated"):
+                    from backend.durable_execution_kernel import CANCELLED
+
+                    active_kernel = kernel or _kernel_for_run(db_path)
+                    await asyncio.to_thread(
+                        active_kernel.transition, rid, CANCELLED, fencing_token,
+                        reason="cancelled_not_persisted",
                     )
-                    conn.commit()
             except Exception as exc:
-                logger.debug("[WorkflowDAG] Cancelled-Status nicht persistierbar: %s", exc)
+                detail = f"{type(exc).__name__}: {exc}"[:500]
+                logger.error(
+                    "[WorkflowDAG] Cancelled-Status nicht persistierbar für %s: %s",
+                    rid, detail, exc_info=exc,
+                )
+                _recovery_audit("cancel_status_persist_failed", {"run_id": rid, "detail": detail})
+                if cancel_token is not None and hasattr(cancel_token, "_record_failed_cancel"):
+                    cancel_token._record_failed_cancel(f"Cancel-Status {rid}: {detail}")
         raise
 
 
@@ -1764,25 +2103,27 @@ async def _run_workflow_dag_locked(
     _node_token_cap = sum(
         int(float(n.get("token_budget") or 0)) for n in nodes if isinstance(n, dict)
     )
-    # D13: max_hops aus den Ticket-/DAG-Metadaten (hart geclamppt auf 50),
-    # statt immer DEFAULT_MAX_HOPS=5 zu verwenden.
+    # D13/F032: max_hops aus den Ticket-/DAG-Metadaten lesen, aber NIE zur
+    # Erweiterung nutzen. Der alte Expand-Pfad (UPDATE trajectory_budgets mit
+    # "max_hops < ?"-Bedingung) ist ersatzlos entfernt;
+    # `ensure_trajectory` ist die einzige Schreibstelle
+    # und verschaeft nur (min(SSOT, angefragter Wert)). `min(50, ...)` bleibt
+    # ausschliesslich als Parser-Guard gegen unsinnige Eingaben erhalten und
+    # wird unmittelbar auf die SSOT heruntergezogen.
+    from backend.trajectory_budget import MAX_DELEGATION_DEPTH
+
     _max_hops_cfg = dag_def.get("max_hops") or dag_def.get("trajectory_max_hops") or 0
     try:
-        _max_hops_cfg = max(1, min(50, int(_max_hops_cfg))) if _max_hops_cfg else 0
+        _parsed_hops = max(1, min(50, int(_max_hops_cfg))) if _max_hops_cfg else 0
     except (TypeError, ValueError):
-        _max_hops_cfg = 0
+        _parsed_hops = 0
+    _max_hops_cfg = min(MAX_DELEGATION_DEPTH, _parsed_hops) if _parsed_hops else 0
     _traj_row = ensure_trajectory(
         _tid, _root_ticket,
         max_tokens=(int(_node_token_cap) if _node_token_cap > 0 else None),
         max_hops=(_max_hops_cfg or None),
     )
-    if _max_hops_cfg:
-        with _connect(db_path) as conn:
-            conn.execute(
-                "UPDATE trajectory_budgets SET max_hops = ? WHERE trajectory_id = ? AND max_hops < ?",
-                (_max_hops_cfg, _tid, _max_hops_cfg),
-            )
-            conn.commit()
+    # KEIN UPDATE mehr — Caps werden nur verschaeft, nie erweitert.
     _inherited = inherit_replan_count(_tid, rid, dag_def, db_path=db_path)
     dag_def["_replan_count"] = max(
         int(dag_def.get("_replan_count") or 0), int(_inherited.get("replan_count") or 0)
@@ -1790,14 +2131,10 @@ async def _run_workflow_dag_locked(
     if str(_traj_row.get("state") or "") == "blocked" or dag_def["_replan_count"] > MAX_REPLAN_COUNT:
         logger.error("[WorkflowDAG] Run '%s' blockiert: Trajectory %s state=%s replan=%s",
                      rid, _tid, _traj_row.get("state"), dag_def["_replan_count"])
-        with _connect(db_path) as conn:
-            conn.execute(
-                "INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at) "
-                "VALUES (?, ?, 'blocked', ?, ?, ?) "
-                "ON CONFLICT(run_id) DO UPDATE SET status='blocked', updated_at=excluded.updated_at",
-                (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), now, now),
-            )
-            conn.commit()
+        await asyncio.to_thread(
+            _persist_run_status_sync, db_path, rid, wf_id, "blocked",
+            json.dumps(dag_def, ensure_ascii=False), now,
+        )
         return {
             "run_id": rid, "workflow_id": wf_id, "status": "blocked",
             "needs_human": True, "failure_reason": "TRAJECTORY_BLOCKED",
@@ -1811,14 +2148,10 @@ async def _run_workflow_dag_locked(
     if not validation["valid"]:
         err_msg = "Plan-Validator: " + "; ".join(validation["errors"][:8])
         logger.error(f"[WorkflowDAG] Run '{rid}' von Plan-Validator abgelehnt: {err_msg}")
-        with _connect(db_path) as conn:
-            conn.execute(
-                "INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at) "
-                "VALUES (?, ?, 'failed', ?, ?, ?) "
-                "ON CONFLICT(run_id) DO UPDATE SET status = 'failed', updated_at = excluded.updated_at",
-                (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), now, now),
-            )
-            conn.commit()
+        await asyncio.to_thread(
+            _persist_run_status_sync, db_path, rid, wf_id, "failed",
+            json.dumps(dag_def, ensure_ascii=False), now,
+        )
         return {
             "run_id": rid,
             "workflow_id": wf_id,
@@ -1835,16 +2168,9 @@ async def _run_workflow_dag_locked(
             if _dep not in node_map:
                 _err_msg = f"Unknown dependency: {_dep}"
                 logger.error(f"[WorkflowDAG] Run '{rid}': {_err_msg}")
-                with _connect(db_path) as conn:
-                    conn.execute(
-                        """
-                        INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at)
-                        VALUES (?, ?, 'failed', '{}', ?, ?)
-                        ON CONFLICT(run_id) DO UPDATE SET status = 'failed', updated_at = excluded.updated_at
-                        """,
-                        (rid, wf_id, now, now),
-                    )
-                    conn.commit()
+                await asyncio.to_thread(
+                    _persist_run_status_sync, db_path, rid, wf_id, "failed", "{}", now,
+                )
                 return {
                     "run_id": rid,
                     "workflow_id": wf_id,
@@ -1858,47 +2184,14 @@ async def _run_workflow_dag_locked(
     # im Threadpool, damit der Event-Loop nicht blockiert.
     trace_id = await _otel_start(f"workflow.{wf_id}", rid)
 
-    approvals: Dict[str, bool] = {}
-    approvals_parse_failed = False
-    with _connect(db_path) as conn:
-        prev_run = conn.execute(
-            "SELECT gate_approvals_json FROM workflow_runs WHERE run_id = ?",
-            (rid,),
-        ).fetchone()
-        if prev_run and prev_run["gate_approvals_json"]:
-            try:
-                stored_app = json.loads(prev_run["gate_approvals_json"])
-                if isinstance(stored_app, dict):
-                    approvals.update({str(k): bool(v) for k, v in stored_app.items()})
-            except Exception as exc:
-                # B: Ein Parsefehler darf NIE zum Überschreiben mit einem leeren
-                # Dict führen — das würde erteilte Freigaben dauerhaft löschen.
-                approvals_parse_failed = True
-                logger.error(
-                    "[WorkflowDAG] Run '%s': gate_approvals_json konnte nicht gelesen werden "
-                    "(%s); alter Wert wird bewahrt.", rid, exc,
-                )
-        if gate_approvals:
-            approvals.update({str(k): bool(v) for k, v in gate_approvals.items()})
-        conn.execute(
-            """
-            INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, gate_approvals_json, created_at, updated_at)
-            VALUES (?, ?, 'running', ?, ?, ?, ?)
-            ON CONFLICT(run_id) DO UPDATE SET
-                status='running',
-                dag_json=CASE WHEN excluded.dag_json != '{}' THEN excluded.dag_json ELSE workflow_runs.dag_json END,
-                gate_approvals_json=CASE WHEN ? THEN workflow_runs.gate_approvals_json ELSE excluded.gate_approvals_json END,
-                updated_at=excluded.updated_at
-            """,
-            (rid, wf_id, json.dumps(dag_def, ensure_ascii=False), json.dumps(approvals, ensure_ascii=False),
-             now, now, int(approvals_parse_failed)),
-        )
-        conn.commit()
-        cached_rows = conn.execute(
-            "SELECT node_id, fingerprint, status, output_json FROM workflow_node_states WHERE run_id = ?",
-            (rid,),
-        ).fetchall()
-        cached = {r["node_id"]: dict(r) for r in cached_rows}
+    # D08/F035-DAG: Run-Status + Gate-Freigaben + Node-Cache in EINEM
+    # Threadpool-Aufruf (frueher > 5 sync SQLite-Zugriffe im Event-Loop).
+    _gate_state = await asyncio.to_thread(
+        _load_run_gate_state_sync, db_path, rid, wf_id, gate_approvals, now,
+        json.dumps(dag_def, ensure_ascii=False),
+    )
+    approvals: Dict[str, bool] = _gate_state["approvals"]
+    cached: Dict[str, Dict[str, Any]] = _gate_state["cached"]
 
     outputs: Dict[str, Any] = {}
     statuses: Dict[str, str] = {}
@@ -1952,18 +2245,11 @@ async def _run_workflow_dag_locked(
             statuses[nid] = "skipped_cached"
             return
 
-        # Persistenter Running-Status + Live-SSE-Broadcast
-        with _connect(db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
-                VALUES (?, ?, ?, 'running', '{}', ?)
-                ON CONFLICT(run_id, node_id) DO UPDATE SET
-                    fingerprint=excluded.fingerprint, status='running', updated_at=excluded.updated_at
-                """,
-                (rid, nid, fp, time.time()),
-            )
-            conn.commit()
+        # Persistenter Running-Status + Live-SSE-Broadcast (Schreibzugriff
+        # via Threadpool — /livez bleibt auch bei Write-Lock responsiv).
+        await asyncio.to_thread(
+            _persist_node_state_sync, db_path, rid, nid, fp, "running", "{}", time.time(),
+        )
 
         try:
             from archon.core.runtime import broadcast_event
@@ -2169,30 +2455,33 @@ async def _run_workflow_dag_locked(
             outputs[nid]["durable_suspend"] = gate_suspend
 
         if trace_id:
+            # D16/MED: HITL-Gates sind eigene Span-Typen, keine agent-Spans.
+            # Ohne diese Unterscheidung fehlten Gate-Schritte in Replay-
+            # Fixtures und kausale Fehlerketten ( wartet/abgelehnt/freigegeben )
+            # waren im OTel-Baum nicht erkennbar.
+            _is_gate = requires_gate or ntype == "quality_gate"
             await _otel_span(
                 trace_id,
                 name=f"dag.node.{nid}",
-                span_type="agent",
+                span_type="gate" if _is_gate else "agent",
                 agent_id=str(node.get("agent_id") or "workflow_engine"),
                 model=str(node.get("model") or ""),
                 output_data=out if isinstance(out, dict) else {"result": out},
                 status="OK" if st in SUCCESS_NODE_STATES else "ERROR",
                 cost_usd=float(out.get("cost_usd") or 0.0) if isinstance(out, dict) else 0.0,
                 duration_ms=round((time.perf_counter() - node_started) * 1000.0, 2),
-                attributes={"run_id": rid, "node_id": nid, "node_type": ntype, "status": st},
+                attributes={
+                    "run_id": rid, "node_id": nid, "node_type": ntype, "status": st,
+                    "gate.required": bool(_is_gate),
+                    "gate.decision": str(
+                        out.get("status") if isinstance(out, dict) else st
+                    ),
+                },
             )
-        with _connect(db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(run_id, node_id) DO UPDATE SET
-                    fingerprint=excluded.fingerprint, status=excluded.status,
-                    output_json=excluded.output_json, updated_at=excluded.updated_at
-                """,
-                (rid, nid, fp, st, json.dumps(out, ensure_ascii=False), time.time()),
-            )
-            conn.commit()
+        await asyncio.to_thread(
+            _persist_node_state_sync, db_path, rid, nid, fp, st,
+            json.dumps(out, ensure_ascii=False), time.time(),
+        )
         try:
             from archon.core.runtime import broadcast_event
             broadcast_event("workflow_node_state", {
@@ -2263,17 +2552,11 @@ async def _run_workflow_dag_locked(
             outputs[nid] = {"status": "skipped", "reason": "upstream_condition_not_met"}
             statuses[nid] = "skipped_condition"
             pending.discard(nid)
-            with _connect(db_path) as conn:
-                conn.execute(
-                    """
-                    INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(run_id, node_id) DO UPDATE SET
-                        status=excluded.status, output_json=excluded.output_json, updated_at=excluded.updated_at
-                    """,
-                    (rid, nid, "skipped", "skipped_condition", json.dumps(outputs[nid], ensure_ascii=False), time.time()),
-                )
-                conn.commit()
+            await asyncio.to_thread(
+                _persist_node_state_sync, db_path, rid, nid, "skipped",
+                "skipped_condition", json.dumps(outputs[nid], ensure_ascii=False),
+                time.time(), preserve_fingerprint=True,
+            )
 
         if budget_blocked:
             for _nid in list(pending):
@@ -2352,97 +2635,17 @@ async def _run_workflow_dag_locked(
     else:
         final_status = "completed"
 
-    with _connect(db_path) as conn:
-        # Punkt 3.2.6: Gesamtkosten pro Run/Deliverable ausmessen
-        _total_cost = 0.0
-        try:
-            for _r in conn.execute("SELECT output_json FROM workflow_node_states WHERE run_id = ?", (rid,)).fetchall():
-                try:
-                    _o = json.loads(_r[0] or "{}")
-                    _total_cost += float(_o.get("cost_usd") or 0.0)
-                except Exception:
-                    pass
-        except sqlite3.OperationalError:
-            pass
-        _total_tokens = 0
-        for _r in conn.execute(
-            "SELECT output_json FROM workflow_node_states WHERE run_id = ?", (rid,)
-        ).fetchall():
-            try:
-                _o = json.loads(_r[0] or "{}")
-                _total_tokens += int(_o.get("input_tokens") or 0) + int(_o.get("output_tokens") or 0)
-            except Exception:
-                pass
-        # D13/BLOCKER: Flightlog-Abschluss-Event (Produzent im Tool-Chokepoint
-        # kommt von einem anderen Agenten) + Silent-Failure-Detektion.
-        _flight_flags: List[str] = []
-        try:
-            from backend.flightlog_backtester import (
-                detect_silent_failures,
-                record_flight_event,
-            )
-            record_flight_event(
-                run_id=rid, agent_id=str(dag_def.get("id") or "workflow_engine"),
-                tool_name="dag_run_complete",
-                args={"workflow_id": wf_id, "trajectory_id": _tid, "status": final_status},
-                tool_ok=final_status in ("completed", "paused"),
-                tokens_used=_total_tokens,
-            )
-            # D13/HIGH: Abschluss-Event unter demselben Trace-Namensraum
-            # spiegeln, den der Dispatcher abfragt.
-            from backend.flightlog_backtester import mirror_flight_event_to_trace
-            mirror_flight_event_to_trace(
-                run_id=rid, agent_id=str(dag_def.get("id") or "workflow_engine"),
-                tool_name="dag_run_complete",
-                args={"workflow_id": wf_id, "trajectory_id": _tid, "status": final_status},
-                tool_ok=final_status in ("completed", "paused"),
-                tokens_used=_total_tokens,
-            )
-            _detected = detect_silent_failures(
-                rid, final_status=final_status,
-                final_output="\n".join(
-                    str((v or {}).get("content") or "")[:400]
-                    for v in outputs.values() if isinstance(v, dict)
-                ),
-            )
-            _flight_flags = list(_detected.get("flags") or [])
-            if _flight_flags and final_status in ("completed", "paused"):
-                final_status = "blocked"
-                cycle_error = f"SILENT_FAILURE: {', '.join(_flight_flags)}"
-                logger.error("[WorkflowDAG] '%s' blockiert durch Flightlog: %s", rid, _flight_flags)
-                try:
-                    from backend.trajectory_budget import _audit
-                    _audit(_tid, f"flightlog_flags:{_flight_flags}", rid)
-                except Exception:
-                    pass
-        except Exception as _flight_exc:
-            logger.debug("[WorkflowDAG] Flightlog-Abschluss nicht verfuegbar: %s", _flight_exc)
-        try:
-            from backend.trajectory_budget import close_trajectory, record_tokens
-            if _total_tokens > 0:
-                # R-B3 (Re-Audit D13): Das Ergebnis der Budgetbuchung auswerten.
-                # Vorher wurde `blocked` ignoriert und vom Abschluss auf
-                # `completed`/`failed` ueberschrieben.
-                # D13/MED: Reservierungen aus der Laufzeit nicht doppelt buchen.
-                _token_res = record_tokens(
-                    _tid, _total_tokens, reason=f"dag_run:{rid}", set_total=True
-                )
-                if isinstance(_token_res, dict) and not _token_res.get("allowed", True):
-                    final_status = "blocked"
-                    cycle_error = cycle_error or f"TRAJECTORY_TOKEN_CAP: {_token_res.get('reason')}"
-                    logger.error("[WorkflowDAG] '%s' blockiert durch Trajectory-Token-Cap", rid)
-            close_trajectory(
-                _tid,
-                "blocked" if final_status == "blocked"
-                else ("completed" if final_status == "completed" else "failed"),
-            )
-        except Exception as _traj_exc:
-            logger.error("[WorkflowDAG] Trajectory-Abschluss nicht persistiert: %s", _traj_exc)
-        conn.execute(
-            "UPDATE workflow_runs SET status = ?, updated_at = ?, total_cost_usd = ? WHERE run_id = ?",
-            (final_status, time.time(), round(_total_cost, 6), rid),
-        )
-        conn.commit()
+    # D08/F035-DAG: Kosten-/Token-Messung, Flightlog, Trajectory-Abschluss und
+    # Finalstatus in EINEM synchronen Helper (ein to_thread statt ~10
+    # SQLite-Zugriffen im Event-Loop). D07/F5: der Flightlog-Audit-Fehler wird
+    # dort nicht mehr verschluckt.
+    _final = await asyncio.to_thread(
+        _finalize_run_sync, db_path, rid, wf_id,
+        final_status, cycle_error, _tid, outputs,
+    )
+    final_status = _final["final_status"]
+    cycle_error = _final["cycle_error"]
+    _flight_flags = _final["flight_flags"]
 
     result: Dict[str, Any] = {
         "run_id": rid,
@@ -2595,8 +2798,19 @@ async def resume_workflow_run(
         if not guard.suspended.is_set():
             try:
                 kernel.transition(run_id, _FAILED, token, reason=str(run_exc)[:300])
-            except Exception:
-                pass
+            except Exception as tr_exc:
+                # D07/F2: kein nacktes `pass` mehr — Transition ist ein
+                # Terminalzustand und darf nicht still verloren gehen.
+                detail = f"status_transition_failed: {type(tr_exc).__name__}: {tr_exc}"[:500]
+                failed_cancels.append(detail)
+                logger.error(
+                    "[WorkflowDAG] Run '%s': FAILED-Transition nach %s fehlgeschlagen: %s",
+                    run_id, type(run_exc).__name__, detail, exc_info=tr_exc,
+                )
+                _recovery_audit("status_transition_failed", {
+                    "run_id": run_id, "detail": detail,
+                    "original": f"{type(run_exc).__name__}: {run_exc}"[:300],
+                })
         raise
     finally:
         heartbeat.cancel()
@@ -2631,16 +2845,27 @@ async def resume_workflow_run(
                 except Exception as audit_exc:
                     note_local_trace_error("Heartbeat-Cancel-Audit fehlgeschlagen", audit_exc)
 
-    if failed_cancels and isinstance(result, dict):
-        result["failed_cancels"] = failed_cancels
-
     if guard.lost.is_set():
-        # Fencing-Token ist veraltet: kein Status-Transition mit diesem Token,
-        # der uebernehmende Worker besitzt die Hoheit.
+        # Fencing-Token ist veraltet: NICHT mit diesem Token transitionieren.
+        # D07/F4: der Orphan-Drainer holt den Run mit frischem Claim in einen
+        # harten Terminalzustand (FAILED, reason="lease_lost"), statt ihn als
+        # RUNNING zurueckzulassen. Bei gueltiger fremder Lease bleibt die Hoheit
+        # beim uebernehmenden Worker — aber auch das wird auditiert.
         logger.error("[WorkflowDAG] Run '%s': Lease verloren — Resume als fehlgeschlagen markiert.", run_id)
         if isinstance(result, dict):
             result["status"] = "failed"
             result["error"] = "lease_lost"
+        recovery = await asyncio.to_thread(
+            recover_orphaned_runs, db_path, kernel, 10, run_id,
+        )
+        if isinstance(result, dict):
+            result["lease_lost_recovery"] = recovery
+        if not recovery.get("recovered"):
+            _recovery_audit("lease_lost_unrecovered", {
+                "run_id": run_id,
+                "skipped": recovery.get("skipped") or [],
+                "reason": recovery.get("reason") or "fencing_token superseded",
+            })
     elif guard.suspended.is_set():
         # Am HITL-Gate suspendiert: Run bleibt 'paused' bis zur Entscheidung.
         logger.info("[WorkflowDAG] Run '%s' wurde am HITL-Gate suspendiert.", run_id)
@@ -2649,7 +2874,23 @@ async def resume_workflow_run(
             final_state = _COMPLETED if str(result.get("status", "")).lower() in ("success", "completed") else _FAILED
             kernel.transition(run_id, final_state, token, reason=str(result.get("status", "")))
         except Exception as tr_exc:
-            logger.debug("[WorkflowDAG] Durable-Kernel Transition fehlgeschlagen: %s", tr_exc)
+            # D07/F3: nicht mehr logger.debug — Split-Brain zwischen
+            # workflow_runs und Durable Kernel wird sichtbar + auditiert.
+            detail = f"terminal_transition_failed: {type(tr_exc).__name__}: {tr_exc}"[:500]
+            failed_cancels.append(detail)
+            logger.error(
+                "[WorkflowDAG] Run '%s': Durable-Kernel Transition fehlgeschlagen: %s",
+                run_id, detail, exc_info=tr_exc,
+            )
+            _recovery_audit("terminal_transition_failed", {"run_id": run_id, "detail": detail})
+            if isinstance(result, dict):
+                result["kernel_state"] = "unpersisted"
+
+    # Nach den Transition-Bloecken setzen, damit auch spaeter hinzugefuegte
+    # Fehler im Result sichtbar sind (frueher stand dies vor allem und verlor
+    # genau die hier neu gemeldeten Fehler).
+    if failed_cancels and isinstance(result, dict):
+        result["failed_cancels"] = failed_cancels
 
     # P1: Die Asset-Finalisierung hing bisher nur am decisions.py-Pfad. Wurde
     # derselbe Run ueber den generischen Resume-Endpoint fortgesetzt, blieben

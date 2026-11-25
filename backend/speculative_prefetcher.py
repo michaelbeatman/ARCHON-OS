@@ -16,7 +16,12 @@ import re
 import time
 import sqlite3
 import datetime
+from collections import OrderedDict
 from typing import Dict, Any, List, Optional
+
+# D08/MED: harte Obergrenze des RAM-Caches. Vorher wuchs `_cache` zwischen
+# zwei Prune-Laeufen unbegrenzt (hochkardinale CRM-/ERP-/Learning-Keys).
+_MAX_CACHE_ENTRIES = 1000
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -44,12 +49,21 @@ class SpeculativePrefetcher:
     def __init__(self, ttl_seconds: Optional[int] = None):
         self._ttl_override = ttl_seconds
         self.ttl_seconds = ttl_seconds if ttl_seconds is not None else int(_get_cfg().get("ttl_seconds", 180))
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        # OrderedDict als echte LRU: zuletzt gelesener Key hinten, Eintraege
+        # ueber _MAX_CACHE_ENTRIES werden sofort beim Insert verworfen.
+        self._cache: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
 
     def _prune_expired(self, now: float) -> None:
         expired = [k for k, v in self._cache.items() if now > v.get("expires", 0)]
         for k in expired:
             self._cache.pop(k, None)
+
+    def _cache_put(self, key: str, data: Any, expires: float) -> None:
+        """LRU-Einfuegen mit harter Cap — kein unbegrenztes RAM-Wachstum."""
+        self._cache.pop(key, None)
+        self._cache[key] = {"data": data, "expires": expires}
+        while len(self._cache) > _MAX_CACHE_ENTRIES:
+            self._cache.popitem(last=False)
 
     def prefetch_for_task(
         self,
@@ -95,7 +109,7 @@ class SpeculativePrefetcher:
                 contact = self._lookup_crm_contact(email, tenant_id=tenant_id)
                 if contact:
                     prefetched["crm_contact"] = contact
-                    self._cache[f"{scope}:crm:{email}"] = {"data": contact, "expires": now + ttl}
+                    self._cache_put(f"{scope}:crm:{email}", contact, now + ttl)
 
         # 2. ERP Beleg-Erkennung (z. B. RE-2026, ANG-1001, ART-200)
         if bool(cfg.get("prefetch_erp", True)):
@@ -105,7 +119,7 @@ class SpeculativePrefetcher:
                 doc_data = self._lookup_erp_document(doc_nr, tenant_id=tenant_id)
                 if doc_data:
                     prefetched["erp_doc"] = doc_data
-                    self._cache[f"{scope}:erp:{doc_nr}"] = {"data": doc_data, "expires": now + ttl}
+                    self._cache_put(f"{scope}:erp:{doc_nr}", doc_data, now + ttl)
 
         # 3. Agenten-Learnings & Heuristiken zum Thema vorladen
         if bool(cfg.get("prefetch_learnings", True)):
@@ -114,7 +128,7 @@ class SpeculativePrefetcher:
                 learnings = self._lookup_learnings(keywords[:3], agent_id=agent_id)
                 if learnings:
                     prefetched["cached_learnings"] = learnings
-                    self._cache[f"{scope}:learnings:{keywords[0]}"] = {"data": learnings, "expires": now + ttl}
+                    self._cache_put(f"{scope}:learnings:{keywords[0]}", learnings, now + ttl)
 
         return {
             "status": "prefetched",
@@ -132,6 +146,8 @@ class SpeculativePrefetcher:
         if time.time() > entry.get("expires", 0):
             del self._cache[key]
             return None
+        # LRU: ein Treffer macht den Key zum zuletzt verwendeten.
+        self._cache.move_to_end(key)
         return entry.get("data")
 
     def _get_erp_conn(self, tenant_id: Optional[str] = None) -> Optional[sqlite3.Connection]:
@@ -195,6 +211,7 @@ class SpeculativePrefetcher:
     def _lookup_learnings(self, keywords: List[str], agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if not os.path.exists(DB_PATH):
             return []
+        conn: Optional[sqlite3.Connection] = None
         try:
             conn = sqlite3.connect(DB_PATH, timeout=5.0)
             conn.row_factory = sqlite3.Row
@@ -208,10 +225,15 @@ class SpeculativePrefetcher:
             for k in keywords:
                 params.extend([f"%{k}%", f"%{k}%"])
             rows = conn.execute(query, params).fetchall()
-            conn.close()
             return [dict(r) for r in rows]
-        except Exception:
+        except Exception as exc:
+            _archon_exc_logger.debug("[speculative_prefetcher] Learnings-Lookup: %s", exc)
             return []
+        finally:
+            # D08/MED: vorher war close() nur im Erfolgszweig — bei
+            # 'no such table' / 'database is locked' leakte pro Dispatch ein FD.
+            if conn is not None:
+                conn.close()
 
 
 # Singleton

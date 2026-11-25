@@ -45,6 +45,45 @@ def _get_cfg() -> Dict[str, Any]:
         }
 
 
+def make_dispatcher_coro(
+    prompt: str,
+    model: str,
+    agent_id: str = "hedge_worker",
+    agent_name: str = "HedgeWorker",
+    role: str = "Analyst",
+) -> Callable:
+    """Echte Provider-Coroutine fuer das Hedging (H-01-2/F042).
+
+    Die Coroutine ruft den zentralen Dispatcher mit dem konkreten Modell und
+    liefert dessen echte Response. Blockierte/leere Antworten werden als Fehler
+    geworfen, damit der Hedger keinen synthetischen Gewinner erfindet.
+    Ohne injizierte Coroutines bleibt der Aufruf ein explizit gekennzeichneter
+    Demo-Simulator (``demo_only=True``).
+    """
+    async def _coro() -> str:
+        import core_dispatcher
+
+        res = await core_dispatcher.dispatch_to_omniroute_or_container(
+            agent_id=agent_id,
+            agent_name=agent_name,
+            prompt=prompt,
+            role=role,
+            model=model,
+            task_id=f"hedge-{model.replace('/', '-')}",
+        )
+        if not isinstance(res, dict) or res.get("status") != "success":
+            reason = ""
+            if isinstance(res, dict):
+                reason = str(res.get("error") or res.get("error_code") or res.get("content") or "")[:200]
+            raise RuntimeError(f"dispatcher_blocked: {reason or 'no successful response'}")
+        content = str(res.get("content") or "")
+        if not content.strip():
+            raise RuntimeError("dispatcher returned empty content")
+        return content
+
+    return _coro
+
+
 def _init_db() -> None:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
@@ -96,14 +135,20 @@ class SpeculativeHedger:
 
         async def _run_primary():
             if primary_coro_fn is not None:
-                return await primary_coro_fn()
+                text = await primary_coro_fn()
+                if not str(text or "").strip():
+                    raise RuntimeError("primary_coro_fn returned empty content")
+                return text
             sim_wait = simulate_primary_latency_sec if simulate_primary_latency_sec is not None else 0.04
             await asyncio.sleep(sim_wait)
             return f"[Primary:{primary_model}] Antwort für: {prompt[:100]}"
 
         async def _run_fallback():
             if fallback_coro_fn is not None:
-                return await fallback_coro_fn()
+                text = await fallback_coro_fn()
+                if not str(text or "").strip():
+                    raise RuntimeError("fallback_coro_fn returned empty content")
+                return text
             await asyncio.sleep(simulate_fallback_latency_sec)
             return f"[Hedged-Fallback:{fallback_model}] Schnelle Ersatz-Antwort für: {prompt[:100]}"
 
@@ -155,6 +200,7 @@ class SpeculativeHedger:
         return {
             "call_id": call_id,
             "enabled": enabled,
+            "status": "success" if str(result_text or "").strip() else "failed",
             "demo_only": demo_only,
             "mode": mode,
             "hedge_triggered": hedge_triggered,

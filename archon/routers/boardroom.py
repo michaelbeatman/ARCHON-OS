@@ -541,6 +541,58 @@ def _escalate_boardroom_no_consensus(
         return None
 
 
+def _persist_boardroom_result_sync(
+    hist_entry: Dict[str, Any],
+    *,
+    actor_id: str,
+    task: str,
+    framework: str,
+    dispatch_workflow: bool,
+    workflow_summary: str = "",
+    consensus_status: str = "NO_CONSENSUS",
+    escalate: bool = False,
+    res: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """D08/H-08-5: komplette Persistenzkette im Worker-Thread.
+
+    ``save_boardroom_history_item`` liest die Historie, schreibt sie atomar
+    (mkstemp + json.dump + flush + fsync + os.replace + Verzeichnis-fsync) und
+    spiegelt den Eintrag in die HMAC-Auditkette. ``dispatch_workflow_event``
+    oeffnet SQLite und enqueued Telemetrie. Beides lief vorher direkt im
+    ``async`` Endpoint bzw. SSE-Generator und blockierte genau den SSE-Bus,
+    ueber den diese Debatte gestreamt wurde.
+    """
+    save_boardroom_history_item(hist_entry, actor_id=actor_id)
+    result: Dict[str, Any] = {"history_id": str(hist_entry.get("id") or "")}
+
+    if dispatch_workflow:
+        try:
+            from backend.workflow_scheduler import dispatch_workflow_event
+            dispatch_workflow_event(
+                source="boardroom",
+                event_type="decision",
+                title=str(task or "")[:140],
+                summary=str(workflow_summary or "")[:600],
+                payload={"framework": framework, "history_id": result["history_id"]},
+                correlation_id=result["history_id"],
+            )
+            result["workflow_event"] = True
+        except Exception as wf_err:
+            logger.error("[Boardroom] Workflow-Event fehlgeschlagen: %s", wf_err)
+            result["workflow_event"] = False
+
+    if escalate:
+        _esc = _escalate_boardroom_no_consensus(
+            task_id=result["history_id"],
+            task=str(task or ""),
+            consensus_status=str(consensus_status or "NO_CONSENSUS"),
+            res=dict(res or {}),
+            actor_id=str(actor_id or "boardroom-service"),
+        )
+        result["escalation_id"] = str(_esc.get("id")) if isinstance(_esc, dict) else None
+    return result
+
+
 @router.post("/api/boardroom/run")
 async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
     if request is not None:
@@ -573,7 +625,6 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
     # Speichere finales Protokoll im Obsidian Vault
     try:
         vault_dir = OBSIDIAN_VAULT_DIR
-        os.makedirs(vault_dir, exist_ok=True)
         ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         vault_file = os.path.join(vault_dir, f"boardroom_debatte_{ts_str}.md")
         
@@ -587,6 +638,8 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
         md_content += f"{_vault_heading}\n\n{res.get('synthesis', '')}\n"
         
         def _write_vault_note(path: str, text: str) -> None:
+            # D08/H-08-5: Verzeichnis-Anlegen + open/fsync im selben Worker.
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(text)
         await asyncio.to_thread(_write_vault_note, vault_file, md_content)
@@ -641,37 +694,22 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):
             }
             from archon.routers._rbac import get_session_actor
             hist_entry["_actor_id"] = get_session_actor(request, fallback="boardroom-service")
-            save_boardroom_history_item(hist_entry)
-            res["history_id"] = hist_entry["id"]
-            if _is_final_decision:
-                try:
-                    from backend.workflow_scheduler import dispatch_workflow_event
-                    dispatch_workflow_event(
-                        source="boardroom",
-                        event_type="decision",
-                        title=req.task[:140],
-                        summary=str(res.get("synthesis", ""))[:600],
-                        payload={"framework": req.framework, "history_id": hist_entry["id"]},
-                        correlation_id=hist_entry["id"],
-                    )
-                except Exception as wf_err:
-                    print(f"[Boardroom] Workflow-Event notice: {wf_err}")
-            else:
-                # Kein decision-Event. Stattdessen echte HITL-Eskalation.
-                logger.info(
-                    "[Boardroom] Debatte %s ohne finalen Konsens (%s) — kein Decision-Workflow-Event ausgeloest.",
-                    hist_entry["id"], hist_entry["decision_status"],
-                )
-                _escalation = _escalate_boardroom_no_consensus(
-                    task_id=hist_entry["id"],
-                    task=req.task,
-                    consensus_status=_consensus_status or "NO_CONSENSUS",
-                    res=res,
-                    actor_id=str(hist_entry.get("_actor_id") or "boardroom-service"),
-                )
-                res["no_consensus_escalation_id"] = (
-                    str(_escalation.get("id")) if isinstance(_escalation, dict) else None
-                )
+            # D08/H-08-5: Historie + HMAC-Audit + Workflow-Event + HITL-
+            # Eskalation gebuendelt in einem Worker-Thread (ein SSE-Bus bleibt
+            # responsiv, waehrend die JSON-Datei gefsynt wird).
+            _persisted = await asyncio.to_thread(
+                _persist_boardroom_result_sync, hist_entry,
+                actor_id=str(hist_entry["_actor_id"]),
+                task=req.task, framework=req.framework,
+                dispatch_workflow=bool(_is_final_decision),
+                workflow_summary=str(res.get("synthesis", "")),
+                consensus_status=_consensus_status or "NO_CONSENSUS",
+                escalate=not _is_final_decision,
+                res=res,
+            )
+            res["history_id"] = _persisted["history_id"]
+            if not _is_final_decision:
+                res["no_consensus_escalation_id"] = _persisted.get("escalation_id")
         except Exception as e:
             print(f"Error saving boardroom history item in run: {e}")
     except Exception as e:
@@ -740,7 +778,6 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                     # Save to Obsidian Vault
                     try:
                         vault_dir = OBSIDIAN_VAULT_DIR
-                        os.makedirs(vault_dir, exist_ok=True)
                         ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                         vault_file_name = f"boardroom_debatte_{ts_str}.md"
                         vault_file = os.path.join(vault_dir, vault_file_name)
@@ -757,6 +794,8 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                         md_content += f"{_vault_heading}\n\n{synthesis_text}\n"
 
                         def _write_vault_note_stream(path: str, text: str) -> None:
+                            # D08/H-08-5: makedirs + open im selben Worker-Thread.
+                            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
                             with open(path, "w", encoding="utf-8") as f:
                                 f.write(text)
                         await asyncio.to_thread(_write_vault_note_stream, vault_file, md_content)
@@ -797,21 +836,24 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                         }
                         from archon.routers._rbac import get_session_actor
                         hist_entry["_actor_id"] = get_session_actor(request, fallback="boardroom-service")
-                        save_boardroom_history_item(hist_entry)
-                        ev["history_id"] = hist_entry["id"]
+                        # D08/H-08-5: gleicher gebuendelter Worker wie im
+                        # non-streaming Endpoint — der SSE-Heartbeat darf nicht
+                        # auf den fsync der Historie-Datei warten.
+                        _persisted = await asyncio.to_thread(
+                            _persist_boardroom_result_sync, hist_entry,
+                            actor_id=str(hist_entry["_actor_id"]),
+                            task=req.task, framework=req.framework,
+                            dispatch_workflow=False,
+                            consensus_status=_stream_verdict,
+                            escalate=not _stream_final,
+                            res={"consensus_verdict": _stream_verdict,
+                                 "veto_by": ev.get("veto_by"),
+                                 "critique": ev.get("critique", ""),
+                                 "synthesis": synthesis_text},
+                        )
+                        ev["history_id"] = _persisted["history_id"]
                         if not _stream_final:
-                            _esc = _escalate_boardroom_no_consensus(
-                                task_id=hist_entry["id"], task=req.task,
-                                consensus_status=_stream_verdict,
-                                res={"consensus_verdict": _stream_verdict,
-                                     "veto_by": ev.get("veto_by"),
-                                     "critique": ev.get("critique", ""),
-                                     "synthesis": synthesis_text},
-                                actor_id=str(hist_entry["_actor_id"]),
-                            )
-                            ev["no_consensus_escalation_id"] = (
-                                str(_esc.get("id")) if isinstance(_esc, dict) else None
-                            )
+                            ev["no_consensus_escalation_id"] = _persisted.get("escalation_id")
                     except Exception as e:
                         logger.error("[Boardroom] History-Eintrag fehlgeschlagen: %s", e)
 

@@ -4,6 +4,9 @@ from fastapi import Depends as _ArchonDepends
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import datetime
+import hashlib
+import hmac
+import json
 import logging
 import os
 from typing import Any, Dict, List, Optional
@@ -39,8 +42,26 @@ class MeshDiffPreviewRequest(_MeshRequest):
 
 
 class InboundEventRequest(_MeshRequest):
-    model_config = ConfigDict(extra="allow")  # kompletter Payload geht an event_mesh
-    event_type: str = "generic_event"
+    """W4-B: strikte Allowlist statt ``extra="allow"``.
+
+    ``idempotency_key``/``correlation_id`` duerfen nicht vom Sender kommen
+    (extra="ignore" verwirft sie); der Handler leitet beide serverseitig aus
+    (Mandant, Kanal, Event-Typ, kanonischer Body-Hash) ab.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    event_type: str = Field(default="generic_event", max_length=128)
+    title: str = Field(default="", max_length=500)
+    summary: str = Field(default="", max_length=4000)
+    content: str = Field(default="", max_length=20000)
+    priority: int = Field(default=3, ge=0, le=10)
+    # W3/W4: Trace-Kontext darf ueber die Grenze propagiert werden, ist aber
+    # formatbegrenzt und wird von event_mesh validiert (parse_traceparent).
+    trace_id: str = Field(default="", max_length=64)
+    span_id: str = Field(default="", max_length=32)
+    traceparent: str = Field(default="", max_length=128)
+    tracestate: str = Field(default="", max_length=512)
 
 
 class InboxScanRequest(_MeshRequest):
@@ -210,16 +231,63 @@ def api_approve_skill_proposal(request: Request, proposal_id: str):
 # --- EVENT MESH ---
 
 
-@router.post("/api/events/inbound/{channel}")
-def api_ingest_inbound_event(request: Request, channel: str, payload: InboundEventRequest = Body(...)):
-    _require_admin_or_503(request)
-    payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
-    from backend.event_mesh import event_mesh
+def _verify_inbound_signature(raw_body: bytes, supplied: str) -> bool:
+    """HMAC-SHA256 ueber die exakten Body-Bytes (fail-closed).
 
+    Secret ausschliesslich aus der Umwelt; kein Default, kein Platzhalter.
+    """
+    secret = (os.environ.get("ARCHON_WEBHOOK_HMAC_SECRET") or "").strip()
+    sig = str(supplied or "").strip()
+    if not secret or not sig:
+        return False
+    if sig.lower().startswith("sha256="):
+        sig = sig[7:]
+    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expected)
+
+
+@router.post("/api/events/inbound/{channel}")
+async def api_ingest_inbound_event(request: Request, channel: str):
+    """Inbound-Webhook mit Signaturpruefung und serverseitigen Dedup-Keys."""
+    _require_admin_or_503(request)
+    raw_body = await request.body()
+    if not _verify_inbound_signature(raw_body, request.headers.get("x-archon-webhook-signature", "")):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "WEBHOOK_SIGNATURE_INVALID",
+                "message": "X-Archon-Webhook-Signature fehlt oder ungueltig (HMAC-SHA256).",
+            },
+        )
+    try:
+        inbound = InboundEventRequest.model_validate_json(raw_body or b"{}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_PAYLOAD", "message": str(exc)[:300]}) from exc
+
+    from backend.event_mesh import event_mesh
+    from backend.event_mesh import _current_tenant_id as mesh_tenant_id
+
+    payload = inbound.model_dump()
+    tenant_id = mesh_tenant_id()
+    event_type = str(payload.get("event_type") or "generic_event")
+    body_hash = hashlib.sha256(raw_body or b"").hexdigest()
+    key_material = json.dumps(
+        [tenant_id, str(channel), event_type, body_hash],
+        ensure_ascii=False, separators=(",", ":"),
+    )
+    idempotency_key = hashlib.sha256(key_material.encode("utf-8")).hexdigest()
+    correlation_id = f"inbound-{idempotency_key}"
+    trace_columns = {
+        k: str(payload.get(k) or request.headers.get(k, "") or "")
+        for k in ("trace_id", "span_id", "traceparent", "tracestate")
+    }
     return event_mesh.ingest_inbound_event(
-        channel=channel,
-        event_type=payload.get("event_type", "generic_event"),
+        channel=str(channel),
+        event_type=event_type,
         payload=payload,
+        idempotency_key=idempotency_key,
+        correlation_id=correlation_id,
+        trace_columns=trace_columns,
     )
 
 
@@ -295,13 +363,34 @@ def api_create_handoff(payload: HandoffCreateRequest = Body(...)):
 
 
 @router.post("/api/handoff/{handoff_id}/accept")
-def api_accept_handoff(handoff_id: str, payload: HandoffAcceptRequest = Body(...)):
+def api_accept_handoff(request: Request, handoff_id: str, payload: HandoffAcceptRequest = Body(...)):
     payload = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+    from archon.routers._rbac import require_session_actor
     from backend.handoff_desk import handoff_desk
 
-    return handoff_desk.accept_handoff(
-        handoff_id=handoff_id, receiving_agent=payload.get("receiving_agent", "")
-    )
+    # D11/MED: der Empfänger war self-attestierend (Body == Envelope-Feld).
+    # Identität jetzt aus dem echten Executor (Kanban-assignee) ableiten;
+    # der Request-Actor muss zusätzlich verifiziert sein.
+    require_session_actor(request)
+    envelope = handoff_desk.get_handoff(handoff_id) or {}
+    claimed = str(payload.get("receiving_agent") or "").strip()
+    assignee = ""
+    try:
+        from backend.operations_api import _get_kanban_connection
+        conn = _get_kanban_connection()
+        try:
+            row = conn.execute(
+                "SELECT assignee FROM tasks WHERE id = ?", (str(envelope.get("task_id") or ""),)
+            ).fetchone()
+            assignee = str(row[0] or "") if row else ""
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.error("[Mesh] Handoff-Empfänger nicht aus Kanban-SSOT lesbar: %s", exc)
+        raise HTTPException(status_code=503, detail="executor identity unavailable")
+    if not assignee or claimed != assignee or str(envelope.get("to_agent") or "") != assignee:
+        raise HTTPException(status_code=403, detail="receiving_agent is not the verified executor")
+    return handoff_desk.accept_handoff(handoff_id=handoff_id, receiving_agent=assignee)
 
 
 # --- TASK CONSENSUS & BUDGET ---

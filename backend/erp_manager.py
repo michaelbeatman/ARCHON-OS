@@ -122,6 +122,38 @@ class ERPManager:
 
         return conn, cid
 
+    @staticmethod
+    def _migrate_pocketbase_unique(conn: sqlite3.Connection) -> None:
+        """D03/MED: UNIQUE-Constraint auch in Bestands-DBs durchsetzen.
+
+        Vorher hatte die Spalte keinen UNIQUE und der Sync nahm bei Duplikaten
+        still die erste Zeile. Wir heben doppelte/leere IDs auf (Kontakte selbst
+        bleiben erhalten — kein Datenverlust) und legen dann den eindeutigen
+        Index an. SQLite erlaubt mehrere NULL-Werte, daher ist das sicher.
+        """
+        duplicates = conn.execute("""
+            SELECT pocketbase_id, COUNT(*) AS cnt FROM crm_contacts
+            WHERE pocketbase_id IS NOT NULL
+            GROUP BY pocketbase_id HAVING cnt > 1
+        """).fetchall()
+        for pb_id, count in duplicates:
+            ids = [r[0] for r in conn.execute(
+                "SELECT id FROM crm_contacts WHERE pocketbase_id = ? "
+                "ORDER BY COALESCE(updated_at, created_at), id", (pb_id,)
+            ).fetchall()]
+            for dup_id in ids[1:]:
+                conn.execute(
+                    "UPDATE crm_contacts SET pocketbase_id = NULL WHERE id = ?", (dup_id,)
+                )
+            logger.warning(
+                "[ERP] %d doppelte pocketbase_id-Eintraege (%s) auf NULL gehoben — "
+                "eindeutiger Index wird erzwungen.", count, pb_id,
+            )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_pb_unique "
+            "ON crm_contacts(pocketbase_id)"
+        )
+
     def _init_schema(self, conn: sqlite3.Connection, cid: str, is_new_file: bool):
         with conn:
             # 1. Nummernkreise (DATEV & Belege)
@@ -244,7 +276,7 @@ class ERPManager:
                     tags_json TEXT DEFAULT '[]',
                     gdpr_opt_in_status TEXT DEFAULT 'legitimate_interest',
                     gdpr_opt_in_date TEXT DEFAULT '',
-                    pocketbase_id TEXT,
+                    pocketbase_id TEXT UNIQUE,
                     notes TEXT DEFAULT '',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -254,6 +286,11 @@ class ERPManager:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_contacts_entity ON crm_contacts(entity_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_contacts_email ON crm_contacts(email);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_contacts_pb ON crm_contacts(pocketbase_id);")
+            # D03/MED (F015): pocketbase_id UNIQUE als Duplikatsschutz. CREATE TABLE
+            # IF NOT EXISTS aendert bestehende Tabellen nicht -> Migration mit
+            # Duplikat-Cleanup (nur pocketbase_id auf NULL setzen, KEINE Kontakte
+            # loeschen) + eindeutiger Index fuer alle Bestands-DBs.
+            self._migrate_pocketbase_unique(conn)
 
             # 5. Kommunikations-Timeline (crm_interactions)
             conn.execute("""
@@ -1065,8 +1102,14 @@ class ERPManager:
                 last_name = parts[-1]
                 first_name = " ".join(parts[:-1])
 
-            entity_id = payload.get("entity_id", ex.get("entity_id"))
-            is_primary = 1 if payload.get("is_primary", ex.get("is_primary", 0)) else 0
+            # D03/HIGH (F012): ein explizit NULL gesetztes entity_id darf eine
+            # bestehende Firmenverknuepfung nicht loeschen (PocketBase-Sync!).
+            entity_id = payload.get("entity_id")
+            if entity_id is None or entity_id == "":
+                entity_id = ex.get("entity_id")
+            is_primary_raw = payload.get("is_primary", ex.get("is_primary", 0))
+            # None bleibt None -> COALESCE in SQL behaelt den Bestandswert.
+            is_primary = None if is_primary_raw is None else (1 if is_primary_raw else 0)
             is_billing = 1 if payload.get("is_billing_recipient", ex.get("is_billing_recipient", 0)) else 0
 
             tags = payload.get("tags")
@@ -1091,14 +1134,14 @@ class ERPManager:
                         created_at, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
-                        entity_id=excluded.entity_id,
+                        entity_id=COALESCE(excluded.entity_id, crm_contacts.entity_id),
                         salutation=excluded.salutation,
                         first_name=excluded.first_name,
                         last_name=excluded.last_name,
                         full_name=excluded.full_name,
                         role_title=excluded.role_title,
                         department=excluded.department,
-                        is_primary=excluded.is_primary,
+                        is_primary=COALESCE(excluded.is_primary, crm_contacts.is_primary),
                         is_billing_recipient=excluded.is_billing_recipient,
                         email=excluded.email,
                         phone_direct=excluded.phone_direct,
@@ -3258,9 +3301,14 @@ class ERPManager:
                 if not cnt_row:
                     cnt_row = conn.execute("SELECT id FROM crm_contacts WHERE LOWER(full_name) = LOWER(?)", (full_name,)).fetchone()
 
+                # D03/HIGH (F012): ERP-Spec erlaubt NUR Netzwerk-/Kommunikations-
+                # daten. entity_id/is_primary sind kaufmaennische ERP-Felder und
+                # duerfen vom PocketBase-Sync NIE geschrieben werden — fehlte
+                # 'unternehmen' im PB-Record, wurde die Firma still auf NULL
+                # gesetzt und der Primärkontakt degradiert. Bestehende Werte
+                # bleiben in save_contact() ueber COALESCE erhalten.
                 contact_payload = {
                     "id": cnt_row["id"] if cnt_row else f"cnt-{uuid.uuid4().hex[:8]}",
-                    "entity_id": entity_id,
                     "full_name": full_name,
                     "role_title": role_title,
                     "email": email,
@@ -3270,9 +3318,27 @@ class ERPManager:
                     "rating": rating,
                     "tags": tags,
                     "pocketbase_id": pb_id,
-                    "is_primary": 1 if entity_id else 0
                 }
                 saved_cnt = self.save_contact(contact_payload, company_id=cid)
+                # Nur NEUE Kontakte mit der Firma verknüpfen, die aus
+                # `unternehmen` aufgelöst wurde. Bei BESTEHENDEN Kontakten bleibt
+                # die ERP-Firmenverknüpfung unangetastet (H-03-2).
+                if entity_id and cnt_row is None and saved_cnt.get("id"):
+                    with conn:
+                        has_primary = conn.execute(
+                            "SELECT 1 FROM crm_contacts WHERE entity_id = ? AND is_primary = 1 LIMIT 1",
+                            (entity_id,),
+                        ).fetchone()
+                        conn.execute(
+                            "UPDATE crm_contacts SET entity_id = ? "
+                            "WHERE id = ? AND entity_id IS NULL",
+                            (entity_id, saved_cnt["id"]),
+                        )
+                        if not has_primary:
+                            conn.execute(
+                                "UPDATE crm_contacts SET is_primary = 1 WHERE id = ?",
+                                (saved_cnt["id"],),
+                            )
                 synced_contacts += 1
 
                 # Nachrichtenverlauf importieren

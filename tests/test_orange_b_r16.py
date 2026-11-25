@@ -109,24 +109,67 @@ async def test_reviewer_prose_answer_no_json_fail_closed():
 
 
 @pytest.mark.asyncio
-async def test_explicit_approval_still_works():
-    """Human-in-the-Loop Override (force_verdict) bleibt funktionsfaehig."""
-    from backend.operations_api import QualityReviewRequest
+async def test_body_force_verdict_cannot_approve_and_four_eyes_override_still_works():
+    """W2-C/W5: `force_verdict` ist wirkungslos; Freigabe nur ueber 4 Augen.
+
+    Der alte Test erwartete, dass ein Body-Feld ``force_verdict='approved'``
+    das Review freigibt. Genau das war H-14-2 (faelschbares Vier-Augen-Gate)
+    und wurde entfernt. Der legitime Weg ist der separate Override-Endpunkt
+    mit Session-Actor, zweiter Identitaet und HITL-Proof.
+    """
+    from backend.operations_api import (
+        QualityReviewOverrideRequest,
+        QualityReviewRequest,
+    )
     open_db, db_path = _temp_kanban_db()
     dispatcher = types.SimpleNamespace()
-    async def _unused(**kwargs):
-        raise AssertionError("Override muss keinen LLM rufen")
-    dispatcher.dispatch_to_omniroute_or_container = _unused
 
+    async def _boom(**kwargs):
+        raise RuntimeError("Reviewer-LLM down")
+
+    dispatcher.dispatch_to_omniroute_or_container = _boom
+
+    # 1) Body-Override darf nichts bewirken — das Review bleibt fail-closed.
     req = QualityReviewRequest(force_verdict="approved", comment="Freigegeben")
+    assert not hasattr(req, "force_verdict")
     with mock.patch.object(ops, "_get_kanban_connection", side_effect=open_db), \
+         mock.patch.object(ops, "_load_profiles_map", return_value={}), \
          mock.patch.object(ops, "require_admin_or_503", return_value={"role": "admin"}), \
          mock.patch.dict(sys.modules, {"core_dispatcher": dispatcher}), \
+         mock.patch("backend.agent_aliases.resolve_agent_id", side_effect=lambda a: a), \
          mock.patch("backend.kanban_sidecar.update_kanban_meta", side_effect=lambda m: ({"tasks": {}}, None)):
         res = await ops.trigger_quality_review("t-a", None, req)
+    assert res["quality_review"]["status"] == "changes_requested"
 
-    assert res["quality_review"]["status"] == "approved"
-    assert res["quality_review"]["score"] == 100
+    # 2) Der vorgesehene 4-Augen-Weg funktioniert weiterhin — aber nur mit
+    #    verifiziertem Session-Actor und passkey-gebundenem Einmal-Proof.
+    meta = {"tasks": {"t-a": {"quality_review": {
+        "status": "changes_requested", "reviewer_id": "robert",
+        "reviewer": "robert", "score": 0,
+    }}}}
+
+    def _apply_meta(fn):
+        return fn(meta)
+
+    override_req = QualityReviewOverrideRequest(
+        reason="Zweiter Reviewer hat den Einwand geprueft", passkey_proof_token="proof-token"
+    )
+    with mock.patch.object(ops, "_get_kanban_connection", side_effect=open_db), \
+         mock.patch.object(ops, "require_admin_or_503", return_value=None), \
+         mock.patch.object(ops, "require_session_actor", return_value="supervisor-b"), \
+         mock.patch.object(ops, "_current_quality_review", return_value=dict(meta["tasks"]["t-a"]["quality_review"])), \
+         mock.patch.object(ops, "_task_created_by", return_value="katharina"), \
+         mock.patch("backend.passkey_hitl.consume_hitl_proof_token", return_value=True) as proof, \
+         mock.patch("backend.audit_log._require_audit_event", lambda *a, **k: None), \
+         mock.patch("backend.kanban_sidecar.update_kanban_meta", side_effect=_apply_meta):
+        override = await ops.override_quality_review(None, "t-a", override_req)
+
+    assert override["quality_review"]["status"] == "approved"
+    assert override["quality_review"]["source"] == "four_eyes_override"
+    proof.assert_called_once()
+    assert proof.call_args.args[1:] == ("supervisor-b", "system")
+    assert proof.call_args.kwargs["action"] == "quality_review_override"
+    assert proof.call_args.kwargs["resource"] == "t-a"
     with sqlite3.connect(db_path) as check:
         cur = check.execute("SELECT status FROM tasks WHERE id = 't-a'")
         assert cur.fetchone()[0] == "done"

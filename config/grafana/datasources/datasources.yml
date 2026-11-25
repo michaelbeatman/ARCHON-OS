@@ -2,6 +2,7 @@ apiVersion: 1
 
 datasources:
   - name: Prometheus
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
@@ -9,6 +10,7 @@ datasources:
     editable: true
 
   - name: Loki
+    uid: loki
     type: loki
     access: proxy
     url: http://loki:3100
@@ -16,3 +18,41 @@ datasources:
     editable: true
     jsonData:
       maxLines: 1000
+
+  # H-16-2: Trace-Datasource fuer die kausale Rekonstruktion. Span -> Log
+  # (trace_id-Label aus dem TraceIdFilter/Promtail) und Span -> Metrik
+  # (Prometheus-Exemplare mit trace_id/span_id) sind damit verdrahtet.
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: false
+    editable: true
+    jsonData:
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      tracesToLogs:
+        datasourceUid: loki
+        tags:
+          - trace_id
+        mappedTags:
+          - key: service.name
+            value: service_name
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        filterByTraceID: true
+        filterBySpanID: false
+        customQuery: false
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags:
+          - key: service.name
+            value: service
+        queries:
+          - name: 'Span Rate'
+            query: 'sum(rate(traces_spanmetrics_calls_total[$__range]))'
+          - name: 'Span Latency (p95)'
+            query: 'histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket[$__range])) by (le))'

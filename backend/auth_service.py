@@ -41,12 +41,61 @@ _AUTH_LOCK = threading.RLock()
 _FAILED_LOGINS: Dict[str, List[float]] = {}
 
 
-def _record_failed_login(fail_key: str, now_mono: float) -> None:
+def _audit_auth_event(
+    action: str,
+    username: str,
+    reason: str,
+    *,
+    ip_address: str = "",
+    user_agent: str = "",
+    user_id: str = "",
+    role: str = "",
+) -> None:
+    """H-05-3: signiertes Auth-Event — keine Klartext-Passwörter/Tokens/IPs.
+
+    Unter ARCHON_AUDIT_STRICT=1 (Default) ist ein Schreibfehler ein harter
+    Abbruch (RuntimeError 'audit_write_failed'); otherwise wird er auf ERROR
+    eskaliert, aber die Aktion nicht blockiert.
+    """
+    from backend.audit_log import (
+        _require_audit_event,
+        audit_actor_context,
+        is_audit_strict,
+    )
+
+    payload = {
+        "reason": str(reason)[:200],
+        "user_id": str(user_id or ""),
+        "role": str(role or ""),
+        **audit_actor_context(ip_address=ip_address, user_agent=user_agent),
+    }
+    actor = str(username or "unknown")
+    if is_audit_strict():
+        _require_audit_event("auth", action, actor, payload)
+        return
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event("auth", action, actor, payload)
+    except Exception as exc:
+        logger.error("[Auth] Audit-Event %s nicht schreibbar: %s", action, exc)
+
+
+def _record_failed_login(
+    fail_key: str,
+    now_mono: float,
+    *,
+    username: str = "",
+    ip_address: str = "",
+    user_agent: str = "",
+    reason: str = "credentials_invalid",
+) -> None:
     """Zeichnet einen Fehlversuch auf und begrenzt die Key-Anzahl hart.
 
     C) Wechselnde Username/IP-Kombinationen konnten _FAILED_LOGINS sonst
     unbegrenzt wachsen lassen. Die Dict-Reihenfolge ist die Insertion-Order,
     daher werden bei Ueberlauf die aeltesten Keys zuerst entfernt.
+    H-05-3: zusätzlich dauerhaft signiertes login_failed-Event (das Dict
+    ging bei jedem Neustart verloren).
     """
     with _AUTH_LOCK:
         attempts = _FAILED_LOGINS.get(fail_key)
@@ -58,6 +107,10 @@ def _record_failed_login(fail_key: str, now_mono: float) -> None:
         if overflow > 0:
             for _ in range(overflow):
                 _FAILED_LOGINS.pop(next(iter(_FAILED_LOGINS)), None)
+    _audit_auth_event(
+        "login_failed", username or fail_key.split("|", 1)[0], reason,
+        ip_address=ip_address, user_agent=user_agent,
+    )
 
 
 logger = logging.getLogger("archon.auth")
@@ -365,6 +418,10 @@ class AuthService:
             else:
                 _FAILED_LOGINS.pop(fail_key, None)
             if len(recent) >= _MAX_FAILED_LOGINS:
+                _audit_auth_event(
+                    "login_failed", username, "account_locked",
+                    ip_address=ip_address, user_agent=user_agent,
+                )
                 raise PermissionError("Konto temporär gesperrt: zu viele fehlgeschlagene Anmeldeversuche. Bitte 15 Minuten warten.")
 
         with _get_db() as conn:
@@ -376,14 +433,27 @@ class AuthService:
             user = cur.fetchone()
 
             if not user:
-                _record_failed_login(fail_key, now_mono)
+                _record_failed_login(
+                    fail_key, now_mono, username=username,
+                    ip_address=ip_address, user_agent=user_agent,
+                    reason="unknown_user",
+                )
                 return None
             if not user["is_active"]:
+                _audit_auth_event(
+                    "login_failed", username, "account_inactive",
+                    ip_address=ip_address, user_agent=user_agent,
+                    user_id=str(user["id"]), role=str(user["role"]),
+                )
                 raise PermissionError("Dieses Benutzerkonto ist deaktiviert.")
 
             ok_pw, needs_upgrade = _verify_password_hash(password, user["password_hash"], user["salt"])
             if not ok_pw:
-                _record_failed_login(fail_key, now_mono)
+                _record_failed_login(
+                    fail_key, now_mono, username=username,
+                    ip_address=ip_address, user_agent=user_agent,
+                    reason="wrong_password",
+                )
                 return None
 
             with _AUTH_LOCK:

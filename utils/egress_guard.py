@@ -19,6 +19,12 @@ Regel: **lokal oder explizit erlaubt — sonst blockiert.**
 
 Die Prüfung läuft vor dem Request, nicht danach: ein blockiertes Ziel wird
 nicht angesprochen.
+
+W4-B / DNS-TOCTOU: die Prüfung liefert zusätzlich die **resolvte IP** zurück
+(`ValidatedURL.pinned_ip`). Der HTTP-Client verbindet sich ausschließlich mit
+dieser IP (Host-Header/TLS-SNI bleiben beim Original-Host), sodass ein zweites,
+umgebundenes DNS-Lookup den Request nicht mehr umlenken kann. Bestehende
+Konsumenten sehen weiterhin einen normalen URL-String.
 """
 
 from __future__ import annotations
@@ -31,7 +37,10 @@ from urllib.parse import urlparse
 
 from archon.core.config import config
 
-__all__ = ["EgressBlocked", "check_target_url", "check_public_url", "allowed_targets"]
+__all__ = [
+    "EgressBlocked", "ValidatedURL", "check_target_url", "check_public_url",
+    "check_target_url_with_ip", "check_public_url_with_ip", "allowed_targets",
+]
 
 # Hosts, die per Definition lokal sind (eingebettete UIs im Container).
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
@@ -50,6 +59,22 @@ class EgressBlocked(ValueError):
         super().__init__(reason)
         self.reason = reason
         self.target = target
+
+
+class ValidatedURL(str):
+    """Geprüfte URL + die dabei resolvte IP (str-Subklasse, alt-kompatibel).
+
+    ``str(value)`` ist unverändert die ursprüngliche URL; ``pinned_ip`` /
+    ``validated_ip`` enthalten die Adresse, mit der der HTTP-Client verbinden
+    muss. Leer bedeutet: bewusst ungepinnt (z. B. nicht auflösbarer
+    Loopback-Alias in einer Testumgebung).
+    """
+
+    def __new__(cls, value: str, *, pinned_ip: str = "") -> "ValidatedURL":
+        obj = super().__new__(cls, str(value or ""))
+        obj.pinned_ip = str(pinned_ip or "")
+        obj.validated_ip = obj.pinned_ip
+        return obj
 
 
 def _env_targets() -> Set[str]:
@@ -76,8 +101,34 @@ def _match_allowlist(host: str, port: int, entries: Iterable[str]) -> bool:
     return False
 
 
-def check_target_url(url: str, *, allowed: Optional[Iterable[str]] = None) -> str:
-    """Prüft `url` gegen die Egress-Regeln und gibt sie unverändert zurück.
+def _resolve(host: str, port: int, target: str):
+    try:
+        return socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as err:
+        raise EgressBlocked(
+            f"DNS-Aufloesung fuer '{host}' fehlgeschlagen (Fail-Closed): {err}", target
+        )
+
+
+def _target_ip_allowed(ip: ipaddress._BaseAddress, host: str, port: int, explicit) -> bool:
+    """IP fuer den Proxy-/Webhook-Pfad zulässig? (DNS-Rebinding-Protection.)
+
+    IP-Literale werden vor dieser Funktion geprüft; hier geht es umHostnamen,
+    die nur ueber die Allowlist freigegeben wurden. Eine Umlenkung auf
+    Loopback/Link-Local/RFC1918 bleibt auch bei freigegebenem Hostnamen
+    verboten (DNS-Rebinding / IMDS-Alias).
+    """
+    if _is_never_allowed(ip):
+        return False
+    if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+        return False
+    if ip.is_private and ("." in host and not host.endswith(".internal")):
+        return False
+    return _match_allowlist(host, port, explicit)
+
+
+def check_target_url_with_ip(url: str, *, allowed: Optional[Iterable[str]] = None) -> ValidatedURL:
+    """Prüft `url` gegen die Egress-Regeln und gibt URL **mit geprüfter IP** zurück.
 
     Raises:
         EgressBlocked: wenn Schema, Zugangsdaten, Host oder Zielbereich
@@ -102,8 +153,9 @@ def check_target_url(url: str, *, allowed: Optional[Iterable[str]] = None) -> st
     except ValueError as err:
         raise EgressBlocked(f"Ungültiger Port in URL: {err}", target)
 
+    entries = set(_env_targets() if allowed is None else allowed)
+
     # IP-Literal? Dann ohne DNS direkt bewerten.
-    literal_ip = None
     try:
         literal_ip = ipaddress.ip_address(host)
     except ValueError:
@@ -113,47 +165,51 @@ def check_target_url(url: str, *, allowed: Optional[Iterable[str]] = None) -> st
         if _is_never_allowed(literal_ip):
             raise EgressBlocked(f"Metadaten-/Link-Local-Adresse {literal_ip} ist nie erlaubt", target)
         if literal_ip.is_loopback:
-            return target
-        entries = set(_env_targets() if allowed is None else allowed)
+            return ValidatedURL(target, pinned_ip=str(literal_ip))
         if not _match_allowlist(host, port, entries):
             raise EgressBlocked(
                 f"IP-Ziel {literal_ip} nicht freigegeben (ARCHON_PROXY_ALLOWED_TARGETS)", target
             )
-        return target
+        return ValidatedURL(target, pinned_ip=str(literal_ip))
 
     if host in _LOCAL_HOSTS:
-        return target
-
-    entries = set(_env_targets() if allowed is None else allowed)
-    if _match_allowlist(host, port, entries):
-        # DNS-Rebinding / Metadaten-Alias-Schutz: aufgeloeste IPs gegen verbotene Netze pruefen
+        # Loopback-Aliase bleiben erlaubt; die Resolution dient nur dem Pinning.
+        # In minimalen Testumgebungen ohne host.docker.internal-Eintrag wird
+        # bewusst ungepinnt fortgefahren (alter, dokumentierter Legacy-Pfad).
         try:
             addr_info = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
             for _fam, _type, _proto, _canon, sockaddr in addr_info:
                 resolved_ip = ipaddress.ip_address(sockaddr[0])
-                if (
-                    _is_never_allowed(resolved_ip)
-                    or resolved_ip.is_loopback
-                    or resolved_ip.is_link_local
-                    or resolved_ip.is_multicast
-                    or (resolved_ip.is_private and ("." in host and not host.endswith(".internal")))
-                ):
+                if _is_never_allowed(resolved_ip):
                     raise EgressBlocked(
                         f"Host '{host}' loest auf verbotene IP {resolved_ip} auf", target
                     )
-        except socket.gaierror as err:
-            raise EgressBlocked(
-                f"DNS-Aufloesung fuer '{host}' fehlgeschlagen (Fail-Closed): {err}", target
-            )
-        return target
+            first = ipaddress.ip_address(addr_info[0][4][0]) if addr_info else None
+            return ValidatedURL(target, pinned_ip=str(first) if first else "")
+        except socket.gaierror:
+            return ValidatedURL(target, pinned_ip="")
+
+    if _match_allowlist(host, port, entries):
+        # DNS-Rebinding / Metadaten-Alias-Schutz: aufgeloeste IPs gegen verbotene Netze pruefen
+        addr_info = _resolve(host, port, target)
+        for _fam, _type, _proto, _canon, sockaddr in addr_info:
+            resolved_ip = ipaddress.ip_address(sockaddr[0])
+            if not _target_ip_allowed(resolved_ip, host, port, entries):
+                raise EgressBlocked(
+                    f"Host '{host}' loest auf verbotene IP {resolved_ip} auf", target
+                )
+        first = ipaddress.ip_address(addr_info[0][4][0])
+        return ValidatedURL(target, pinned_ip=str(first))
 
     raise EgressBlocked(
         f"Host '{host}' nicht in der Allowlist (ARCHON_PROXY_ALLOWED_TARGETS)", target
     )
 
 
-def check_public_url(url: str, *, allow_private_targets: Optional[Iterable[str]] = None) -> str:
-    """Prueft eine externe Web-URL gegen SSRF (nur http/https, keine privaten/internen/Metadaten-IPs).
+def check_public_url_with_ip(
+    url: str, *, allow_private_targets: Optional[Iterable[str]] = None,
+) -> ValidatedURL:
+    """Prueft eine externe Web-URL gegen SSRF und gibt URL **mit geprüfter IP** zurück.
 
     Gedacht fuer Web-Browsing-/Scraping-Agenten (z. B. VisualWebAgent), die oeffentliche
     Seiten abrufen duerfen, aber niemals interne Dienste (localhost, Docker-Netz, RFC1918,
@@ -204,14 +260,21 @@ def check_public_url(url: str, *, allow_private_targets: Optional[Iterable[str]]
 
     if literal_ip is not None:
         _reject_if_internal(literal_ip)
-        return target
+        return ValidatedURL(target, pinned_ip=str(literal_ip))
 
-    try:
-        addr_info = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    except socket.gaierror as err:
-        raise EgressBlocked(f"DNS-Aufloesung fuer '{host}' fehlgeschlagen (Fail-Closed): {err}", target)
-
+    addr_info = _resolve(host, port, target)
     for _fam, _type, _proto, _canon, sockaddr in addr_info:
         _reject_if_internal(ipaddress.ip_address(sockaddr[0]))
 
-    return target
+    first = ipaddress.ip_address(addr_info[0][4][0])
+    return ValidatedURL(target, pinned_ip=str(first))
+
+
+def check_target_url(url: str, *, allowed: Optional[Iterable[str]] = None) -> ValidatedURL:
+    """Rueckwaerts-kompatible Fassade: URL-String mit gepruefter IP als Attribut."""
+    return check_target_url_with_ip(url, allowed=allowed)
+
+
+def check_public_url(url: str, *, allow_private_targets: Optional[Iterable[str]] = None) -> ValidatedURL:
+    """Rueckwaerts-kompatible Fassade: URL-String mit gepruefter IP als Attribut."""
+    return check_public_url_with_ip(url, allow_private_targets=allow_private_targets)

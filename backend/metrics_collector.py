@@ -18,19 +18,53 @@ import sys
 import threading
 import time
 from collections import deque
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 START_TIME = time.time()
 
-# D16/HIGH: Prometheus-Exemplare. Der Scrape-Thread hat KEINEN Request-Kontext,
+# D16/MED: Prometheus-Exemplare. Der Scrape-Thread hat KEINEN Request-Kontext,
 # daher wird der aktive W3C-Kontext am Chokepoint (child_span-Hop / Middleware)
 # in einen begrenzten Ringpuffer geschrieben und beim Rendern der Metriken
 # als OpenMetrics-Exemplar angehaengt.
+# Der Puffer ist pro (metric_name, series_labels) getrennt: frueher wurde das
+# letzte Sample unabhaengig von status/route an die OK-Serie gehaengt (falsche
+# Trace-to-Metric-Korrelation bei parallelen Requests).
 _EXEMPLAR_MAX = 128
-_TRACE_EXEMPLARS: Dict[str, "deque[Dict[str, Any]]"] = {}
+_EXEMPLAR_KEY = Tuple[str, Tuple[Tuple[str, str], ...]]
+_TRACE_EXEMPLARS: Dict[_EXEMPLAR_KEY, "deque[Dict[str, Any]]"] = {}
 _EXEMPLAR_LOCK = threading.Lock()
 _EXEMPLAR_RE = re.compile(r"^[0-9a-f]{32}$")
 _SPAN_ID_RE = re.compile(r"^[0-9a-f]{16}$")
+_DISPATCH_METRIC = "archon_agent_dispatches_total"
+
+
+def _normalized_status(value: Any) -> str:
+    """HTTP-Code oder Statuswort auf die Metriken-Serie ``ok``/``error`` mappen."""
+    raw = str(value or "").strip().lower()
+    if raw.isdigit():
+        return "ok" if int(raw) < 400 else "error"
+    if raw in ("ok", "success", "succeeded", "2xx", "3xx"):
+        return "ok"
+    if raw in ("error", "failed", "failure", "blocked", "5xx", "4xx"):
+        return "error"
+    return raw
+
+
+def _series_labels_for(metric_name: str, labels: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """Nur die Labels, die auch Bestandteil der Ziel-Serie sind.
+
+    ``archon_agent_dispatches_total`` hat exakt ein ``status``-Label; Route und
+    Span-Typ bleiben reine Exemplar-Labels. Alle restlichen Metriken sind
+    ungelabelt und landen folglich unter dem leeren Serien-Schluessel.
+    """
+    raw = dict(labels or {})
+    if metric_name == _DISPATCH_METRIC and "status" in raw:
+        return {"status": _normalized_status(raw["status"])}
+    return {}
+
+
+def _series_key(series_labels: Optional[Dict[str, Any]]) -> Tuple[Tuple[str, str], ...]:
+    return tuple(sorted((str(k), str(v)) for k, v in (series_labels or {}).items()))
 
 
 def record_trace_exemplar(
@@ -38,12 +72,15 @@ def record_trace_exemplar(
     trace_id: Optional[str] = None,
     span_id: Optional[str] = None,
     labels: Optional[Dict[str, Any]] = None,
+    series_labels: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Merkt sich trace_id/span_id aus dem aktiven Kontext fuer /metrics.
 
     Ohne explizite IDs wird ``backend.trace_context.current_trace_id()`` /
     ``current_span_id()`` gelesen. Ungueltige oder fehlende IDs werden
     verworfen — ein Exemplar darf niemals eine erfundene Kante zeigen.
+    Der Ringpuffer wird pro Ziel-Serie gefuehrt; ``series_labels`` kann die
+    Ableitung aus ``labels`` explizit ueberschreiben.
     """
     if trace_id is None or span_id is None:
         try:
@@ -60,15 +97,31 @@ def record_trace_exemplar(
         return
     sample = {"trace_id": tid, "span_id": sid, "labels": dict(labels or {})}
     with _EXEMPLAR_LOCK:
-        for name in metric_names or ("archon_agent_dispatches_total",):
-            buf = _TRACE_EXEMPLARS.setdefault(str(name), deque(maxlen=_EXEMPLAR_MAX))
+        for name in metric_names or (_DISPATCH_METRIC,):
+            metric = str(name)
+            key_series = (
+                dict(series_labels)
+                if series_labels is not None
+                else _series_labels_for(metric, labels)
+            )
+            buf = _TRACE_EXEMPLARS.setdefault(
+                (metric, _series_key(key_series)), deque(maxlen=_EXEMPLAR_MAX)
+            )
             buf.append(sample)
 
 
-def _exemplar_line(metric_name: str, value: Any) -> str:
-    """OpenMetrics-Exemplar-Suffix oder leerer String (kein Fake-Exemplar)."""
+def _exemplar_line(
+    metric_name: str, value: Any, series_labels: Optional[Dict[str, Any]] = None
+) -> str:
+    """OpenMetrics-Exemplar-Suffix der PASSENDEN Serie oder leerer String.
+
+    Ohne ``series_labels`` wird die ungelabelte Serie ``()`` gelesen; es wird
+    niemals ein Sample einer fremden Serie (z. B. status=error an status=ok)
+    ausgewaehlt.
+    """
+    key = (metric_name, _series_key(_series_labels_for(metric_name, series_labels)))
     with _EXEMPLAR_LOCK:
-        buf = _TRACE_EXEMPLARS.get(metric_name)
+        buf = _TRACE_EXEMPLARS.get(key)
         sample = dict(buf[-1]) if buf else None
     if not sample:
         return ""
@@ -418,8 +471,13 @@ class MetricsCollector:
             "# HELP archon_agent_dispatches_total Anzahl der durchgefuehrten Agenten-Aufrufe.",
             "# TYPE archon_agent_dispatches_total counter",
             f'archon_agent_dispatches_total{{status="ok"}} {telemetry["successful_dispatches"]}'
-            + _exemplar_line("archon_agent_dispatches_total", telemetry["successful_dispatches"]),
-            f'archon_agent_dispatches_total{{status="error"}} {telemetry["failed_dispatches"]}',
+            + _exemplar_line(
+                _DISPATCH_METRIC, telemetry["successful_dispatches"], {"status": "ok"}
+            ),
+            f'archon_agent_dispatches_total{{status="error"}} {telemetry["failed_dispatches"]}'
+            + _exemplar_line(
+                _DISPATCH_METRIC, telemetry["failed_dispatches"], {"status": "error"}
+            ),
             "",
             "# HELP archon_agent_error_rate_percent Prozentuale Fehlerquote bei Agenten-Aufrufen.",
             "# TYPE archon_agent_error_rate_percent gauge",

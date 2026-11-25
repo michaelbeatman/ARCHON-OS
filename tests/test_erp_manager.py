@@ -12,6 +12,7 @@ Verifiziert die Multi-Tenant ERP-Engine (`backend/erp_manager.py`):
 
 import os
 import shutil
+import sqlite3
 import unittest
 from backend.erp_manager import ERPManager, TENANTS_BASE_DIR
 from backend.corporate_manager import corporate_manager
@@ -183,6 +184,105 @@ class TestERPManager(unittest.TestCase):
         self.assertEqual(len(detail["contacts"]), 1)
         self.assertEqual(detail["contacts"][0]["full_name"], "Julia Neumann")
         self.assertEqual(len(detail["interactions"]), 1)
+
+    def test_pocketbase_record_without_unternehmen_keeps_erp_contact_fields(self):
+        """H-03-2: PB-Sync darf entity_id/is_primary NIE überschreiben."""
+        saved = self.erp.save_entity({
+            "display_name": "Firma Mit Agenda GmbH",
+            "is_customer": 1,
+            "vat_id": "DE123456789",
+        }, company_id=self.TEST_TENANT_A)
+        entity = saved["entity"]
+        contact = self.erp.save_contact({
+            "full_name": "Erika Musterfrau",
+            "entity_id": entity["id"],
+            "is_primary": 1,
+            "pocketbase_id": "pb-erika-1",
+        }, company_id=self.TEST_TENANT_A)
+
+        # PB-Record ohne 'unternehmen', aber mit bekannter pocketbase_id.
+        mock_pb = [{
+            "id": "pb-erika-1",
+            "name": "Erika Musterfrau",
+            "rolle": "Lead",
+            "email": "erika@example.org",
+            "rating": 4,
+        }]
+        res = self.erp.sync_with_pocketbase(
+            company_id=self.TEST_TENANT_A, mock_records=mock_pb
+        )
+        self.assertTrue(res["success"])
+
+        detail = self.erp.get_entity_detail(entity["id"], company_id=self.TEST_TENANT_A)
+        synced = next(c for c in detail["contacts"] if c["id"] == contact["id"])
+        self.assertEqual(synced["entity_id"], entity["id"])
+        self.assertEqual(synced["is_primary"], 1)
+        # Erlaubte Netzwerk-/Kommunikationsfelder wurden dagegen abgeglichen.
+        self.assertEqual(synced["role_title"], "Lead")
+        self.assertEqual(synced["email"], "erika@example.org")
+        self.assertEqual(detail["entity"]["vat_id"], "DE123456789")
+
+    def test_duplicate_pocketbase_id_is_rejected(self):
+        """F015: pocketbase_id UNIQUE verhindert stillen Sync-Lookup auf Zeile 1."""
+        self.erp.save_contact({
+            "full_name": "Erste Person", "pocketbase_id": "pb-duplicate",
+        }, company_id=self.TEST_TENANT_A)
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.erp.save_contact({
+                "full_name": "Zweite Person", "pocketbase_id": "pb-duplicate",
+            }, company_id=self.TEST_TENANT_A)
+
+    def test_legacy_pocketbase_duplicates_are_migrated_to_unique_index(self):
+        """Bestands-DBs bekommen den Unique-Index ohne Kontaktverlust."""
+        from backend.erp_manager import ERPManager, get_tenant_db_path
+        db_path = get_tenant_db_path(self.TEST_TENANT_B)
+
+        # Bestands-DB vor dem Fix: Tabelle OHNE UNIQUE, doppelte pocketbase_id.
+        # sqlite3.Connection.__exit__ schliesst NICHT — explizit schliessen,
+        # sonst haelt Windows die Datei fuer tearDown() fest.
+        from contextlib import closing
+        with closing(sqlite3.connect(db_path)) as conn:
+            conn.execute(
+                "CREATE TABLE crm_contacts ("
+                "id TEXT PRIMARY KEY, entity_id TEXT, last_name TEXT NOT NULL, "
+                "full_name TEXT NOT NULL, is_primary INTEGER DEFAULT 0, "
+                "email TEXT DEFAULT '', pocketbase_id TEXT, "
+                "created_at TIMESTAMP, updated_at TIMESTAMP)"
+            )
+            conn.execute(
+                "CREATE INDEX idx_contacts_pb ON crm_contacts(pocketbase_id)"
+            )
+            conn.executemany(
+                "INSERT INTO crm_contacts (id, last_name, full_name, pocketbase_id) "
+                "VALUES (?, ?, ?, ?)",
+                [
+                    ("cnt-old-1", "Alt", "Alt", "pb-old"),
+                    ("cnt-old-2", "Zweit", "Zweit", "pb-old"),
+                ],
+            )
+            conn.commit()
+
+        # Schema-Migration beim ersten Öffnen der Bestands-DB.
+        fresh = ERPManager()
+        try:
+            conn, _ = fresh._get_conn(self.TEST_TENANT_B)
+            indexes = {
+                r[0] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='crm_contacts'"
+                ).fetchall()
+            }
+            self.assertIn("idx_contacts_pb_unique", indexes)
+            pb_ids = [
+                r[0] for r in conn.execute(
+                    "SELECT pocketbase_id FROM crm_contacts "
+                    "WHERE id IN ('cnt-old-1','cnt-old-2')"
+                ).fetchall()
+            ]
+            self.assertEqual(pb_ids.count("pb-old"), 1)
+            self.assertEqual(len(pb_ids), 2)  # keine Kontakte gelöscht
+        finally:
+            conn.close()
 
     def test_primary_tenant_seed_and_corporate_template_link(self):
         overview = self.erp.get_tenant_overview("archon-systems")

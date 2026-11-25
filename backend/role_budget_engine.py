@@ -37,6 +37,7 @@ logger = logging.getLogger("archon.role_budget_engine")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
+ORG_HIERARCHY_FILE = os.path.join(WORKSPACE_DIR, "config", "org_hierarchy.json")
 USD_TO_EUR_RATE = 0.92
 
 try:
@@ -47,27 +48,104 @@ except Exception:
 
 _BUDGET_LOCK = threading.RLock()
 
-EXECUTIVE_ROLE_IDS = {
-    "default",
-    "executive_decision_architect",
-    "robert",
-    "founder",
-    # D02/MED: 'micha' ist aus der Rollen-SSOT entfernt — kein Tier-Gewicht mehr.
-    "system_architect_orchestrator",
-    "aggregation_lisa",
-    "labor_law_hr_governance",
-}
+_AUTHORITY_CACHE: Dict[str, Any] = {"mtime": 0.0, "exec": frozenset(), "lead": frozenset(), "aliases": {}}
 
-LEAD_ROLE_IDS = {
-    "gtm_launch_strategist",
-    "commercial_jurist_contracts",
-    "construction_project_manager",
-    "logistics_supply_chain_manager",
-    "clinical_medical_advisor",
-    "finance_lead",
-    "agile_scrum_master",
-    "crisis_escalation_lead",
-}
+
+def load_authority_registry() -> Dict[str, Any]:
+    """D14/D15/MED: EINZIGE SSOT für Autoritäts-Tier ist org_hierarchy.json.
+
+    Frueher standen hier hart codierte String-Sets, die dem Organigramm
+    widersprachen (z.B. `labor_law_hr_governance` Tier 3 im Chart, aber
+    `executive` im Konsens). Delegation, Konsens-Gewichte und Budget-Tier
+    lesen jetzt alle diese Datei. Fail-closed: ohne lesbares Chart gibt es
+    keine Executive-/Lead-Rechte.
+    """
+    try:
+        mtime = os.path.getmtime(ORG_HIERARCHY_FILE)
+        if _AUTHORITY_CACHE["mtime"] != mtime:
+            with open(ORG_HIERARCHY_FILE, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            nodes = data.get("nodes") or []
+            exec_ids = frozenset(
+                str(n.get("id") or "").strip().lower()
+                for n in nodes if int(n.get("tier") or 3) == 1 and n.get("id")
+            )
+            lead_ids = frozenset(
+                str(n.get("id") or "").strip().lower()
+                for n in nodes if int(n.get("tier") or 3) == 2 and n.get("id")
+            )
+            aliases = {
+                str(k).strip().lower(): str(v).strip().lower()
+                for k, v in (data.get("aliases") or {}).items()
+                if str(k or "").strip() and str(v or "").strip()
+            }
+            # Alias-Handles erben den Tier ihres kanonischen Ziels, damit
+            # z.B. 'robert' im Boardroom nicht als Spezialist zaehlt.
+            exec_ids = frozenset(set(exec_ids) | {a for a, t in aliases.items() if t in exec_ids})
+            lead_ids = frozenset(set(lead_ids) | {a for a, t in aliases.items() if t in lead_ids})
+            _AUTHORITY_CACHE.update({"mtime": mtime, "exec": exec_ids, "lead": lead_ids, "aliases": aliases})
+    except Exception as exc:
+        logger.error(
+            "[RoleBudget] Autoritäts-SSOT %s nicht lesbar — fail-closed ohne Tier-Rechte: %s",
+            ORG_HIERARCHY_FILE, exc,
+        )
+        return {"exec": frozenset(), "lead": frozenset(), "aliases": {}}
+    return {
+        "exec": _AUTHORITY_CACHE["exec"],
+        "lead": _AUTHORITY_CACHE["lead"],
+        "aliases": _AUTHORITY_CACHE["aliases"],
+    }
+
+
+def canonical_tool_name(raw: str) -> str:
+    """D15/MED: zentrale Legacy-Tool-Normalisierung aus der SSOT.
+
+    `agent_profiles.json`/`roles.json` sind bereits migriert; dieser Resolver
+    funktioniert fuer verbleibende externe/legacy Payloads (z.B. HERMES).
+    """
+    value = str(raw or "").strip()
+    try:
+        with open(ORG_HIERARCHY_FILE, "r", encoding="utf-8") as fh:
+            aliases = (json.load(fh).get("tool_aliases") or {})
+    except Exception:
+        aliases = {"FileSystem_MCP": "filesystem", "Calculator": "execute_code", "WebSearch": "web_search"}
+    return str(aliases.get(value, value))
+
+
+def canonical_agent_id(raw: str, known_ids: Optional[set] = None) -> str:
+    """Zentrale Alias-Auflösung (SSOT org_hierarchy.json) für alle Pfade."""
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    if value in (known_ids or set()):
+        return value
+    aliases = load_authority_registry()["aliases"]
+    mapped = aliases.get(value.lower()) or aliases.get(value.lower().replace("-", "_"))
+    mapped = str(mapped or "").strip()
+    if not mapped:
+        return value
+    if known_ids and mapped not in known_ids:
+        logger.warning("[RoleBudget] Alias '%s' zeigt auf unbekanntes Profil '%s'.", value, mapped)
+        return value
+    return mapped
+
+
+def authority_tier(agent_id: str) -> str:
+    """ executive | lead | specialist — aus der einzigen Autoritäts-SSOT."""
+    registry = load_authority_registry()
+    aid = str(agent_id or "").strip().lower()
+    canonical = registry["aliases"].get(aid, aid)
+    if canonical in registry["exec"] or aid in registry["exec"]:
+        return "executive"
+    if canonical in registry["lead"] or aid in registry["lead"]:
+        return "lead"
+    return "specialist"
+
+
+# Rueckwaerts-kompatible Modulebene-Symbole (consensus_gate importiert sie).
+_REGISTRY = load_authority_registry()
+EXECUTIVE_ROLE_IDS = frozenset(_REGISTRY["exec"])
+LEAD_ROLE_IDS = frozenset(_REGISTRY["lead"])
 
 COMPLEXITY_KEYWORDS_HIGH = (
     "architektur", "architecture", "security", "audit", "refactor", "steuer", "tax",
@@ -210,7 +288,8 @@ def init_budget_tables(db_path: Optional[str] = None) -> None:
 
 def get_default_role_budget(agent_id: str) -> Dict[str, Any]:
     aid = (agent_id or "default").strip().lower()
-    if aid in EXECUTIVE_ROLE_IDS:
+    tier = authority_tier(aid)
+    if tier == "executive":
         return {
             "tier": "executive",
             "daily_token_budget": 500_000,
@@ -219,7 +298,7 @@ def get_default_role_budget(agent_id: str) -> Dict[str, Any]:
             "hard_cap_enabled": True,
             "auto_pause_on_exceed": True,
         }
-    if aid in LEAD_ROLE_IDS:
+    if tier == "lead":
         return {
             "tier": "lead",
             "daily_token_budget": 250_000,
@@ -1200,6 +1279,17 @@ class BudgetBank:
                             return {"allowed": False, "agent_id": aid, "task_id": task_id,
                                     "error_code": "TASK_EUR_BUDGET_EXCEEDED",
                                     "reason": f"Aufgaben-Kostenlimit für Task '{task_id}' überschritten."}
+                    else:
+                        # D13/F032-MED (Querschnitt mit W3-B operations_api.py):
+                        # task_id OHNE Allokationszeile == kein hartes Ticket-Cap.
+                        # Frueher griff nur das Rollen-Tagesbudget; fail-closed.
+                        conn.rollback()
+                        return {
+                            "allowed": False, "agent_id": aid, "task_id": task_id,
+                            "error_code": "TASK_BUDGET_NOT_REGISTERED",
+                            "reason": f"Keine task_budget_allocations-Zeile für Task '{task_id}' — "
+                                      "Reservierung ohne hartes Ticket-Cap verweigert.",
+                        }
                 if policy["hard_cap_enabled"]:
                     if used_tok + res_tok + est_tok > policy["daily_token_budget"]:
                         conn.rollback()

@@ -478,8 +478,15 @@ def _redact_for_fixture(text: Any, trace_id: str) -> str:
         from backend.pii_scrubber import pii_scrubber
         res = pii_scrubber.scrub_text(raw, session_id=f"replay-{trace_id}")
         return str(res.get("scrubbed_text") or "")
-    except Exception:
-        # Fail-closed: ohne Redaktion kein Fixture anlegen.
+    except Exception as exc:
+        # Fail-closed: ohne Redaktion kein Fixture anlegen. Der Fehler darf
+        # nicht still bleiben — er wird im zentralen Trace-Status gezaehlt,
+        # damit wertlose ([REDACTED_UNAVAILABLE])-Fixtures auffallen.
+        try:
+            from backend.trace_context import note_local_trace_error
+            note_local_trace_error("fixture-redaction-unavailable", exc)
+        except Exception:
+            logger.warning("[eval_gates] Redaktion fuer Trace %s fehlgeschlagen: %s", trace_id, exc)
         return "[REDACTED_UNAVAILABLE]"
 
 
@@ -493,7 +500,12 @@ def build_fixture_from_trace(trace_id: str, db_path: Optional[str] = None) -> Op
         return None
     steps: List[Dict[str, Any]] = []
     for span in sorted(tree.get("spans") or [], key=lambda s: str(s.get("start_time") or "")):
-        if str(span.get("span_type") or "") not in ("llm", "agent", "tool"):
+        # D16/MED: die echten Chokepoints produzieren inzwischen auch
+        # delegation-/gate-Spans. Ohne diese Typen fehlen Tool-/Gate-Schritte
+        # still in jeder Replay-Fixture (Produzent existierte, Konsument nicht).
+        if str(span.get("span_type") or "") not in (
+            "llm", "agent", "tool", "delegation", "gate"
+        ):
             continue
         steps.append({
             "name": str(span.get("name") or "step"),

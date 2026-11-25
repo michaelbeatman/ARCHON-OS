@@ -108,15 +108,17 @@ class ApprovalPolicyEngine:
                 );
             """)
 
-            # D (Audit): Die Kette war nur per Docstring "append-only". Ein
-            # DELETE am Tail wurde von verify_audit_integrity() nicht erkannt.
-            # Hash-/Identitaetsspalten duerfen nicht mehr veraendert werden;
-            # inhaltliche Aenderungen (z. B. new_value) bleiben absichtlich
-            # moeglich, damit verify_audit_integrity() sie als Manipulation
-            # erkennen und melden kann (bestehender Pruefpfad).
+            # D05/MED (F013): frueher sperrte der Trigger nur id/prev_hash/
+            # current_hash — timestamp, action, new_value und signature_valid
+            # waren per SQL-UPDATE aenderbar. Die Erkennung in
+            # verify_audit_integrity() war bloss Detektion, keine Verhinderung.
+            # Jetzt blockt BEFORE UPDATE ON (ohne OF-Klausel) JEDE Spalte.
+            # Bestands-DBs muessen den alten Trigger droppen, damit die neue
+            # Definition wirksam wird (CREATE IF NOT EXISTS greift sonst nicht).
+            conn.execute("DROP TRIGGER IF EXISTS approval_chain_no_hash_update")
             conn.execute("""
-                CREATE TRIGGER IF NOT EXISTS approval_chain_no_hash_update
-                BEFORE UPDATE OF id, prev_hash, current_hash ON approval_policy_audit_chain
+                CREATE TRIGGER approval_chain_no_hash_update
+                BEFORE UPDATE ON approval_policy_audit_chain
                 BEGIN
                     SELECT RAISE(ABORT, 'approval_policy_audit_chain is append-only');
                 END
@@ -534,7 +536,8 @@ class ApprovalPolicyEngine:
     # --------------------------------------------------------------------------
     def evaluate_and_enqueue(self, domain: str, title: str, amount: float = 0.0,
                              reference_id: Optional[str] = None, payload: Optional[dict] = None,
-                             requester_id: Optional[str] = None) -> Dict[str, Any]:
+                             requester_id: Optional[str] = None,
+                             force_four_eyes: bool = False) -> Dict[str, Any]:
         # D04/MED: requester_id ist jetzt Teil des Engine-Vertrags. Er wird
         # zusaetzlich signiert im payload_json abgelegt (defense in depth),
         # damit auch Router/Caller ohne Spaltenzugriff den Ersteller pruefen.
@@ -556,7 +559,11 @@ class ApprovalPolicyEngine:
         active_substitute = deleg["substitute_name"] if deleg.get("is_active") else None
 
         # Check conditions
-        requires_four_eyes = 1 if amount >= four_eyes_min else 0
+        # F022/H-14-3: Hoheitsaenderungen (z.B. AI-Act-Downgrades) sind immer
+        # 4-Augen-pflichtig — unabhaengig von einem Geldbetrag. Der Aufrufer
+        # muss den Parameter explizit setzen; Default bleibt rueckwaerts-
+        # kompatibel.
+        requires_four_eyes = 1 if (force_four_eyes or amount >= four_eyes_min) else 0
         expires_at = (now + datetime.timedelta(hours=timeout_hours)).isoformat()
 
         # D04/HIGH: Auto-Freigabe NUR wenn die Invariante auch tatsaechlich
@@ -602,6 +609,14 @@ class ApprovalPolicyEngine:
             "delegated_to": active_substitute,
             "expires_at": expires_at
         }
+
+    def get_request(self, request_id: str) -> Optional[Dict[str, Any]]:
+        """Eine Freigabeanfrage exakt nach ID (kein Listen-Scan, kein stilles Fallback)."""
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM approval_requests WHERE id = ?", (request_id,)
+            ).fetchone()
+            return dict(row) if row else None
 
     def get_requests(self, status: Optional[str] = None, domain: Optional[str] = None) -> List[Dict[str, Any]]:
         self.check_and_escalate_timeouts()

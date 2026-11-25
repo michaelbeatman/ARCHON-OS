@@ -46,6 +46,48 @@ def _get_cfg() -> Dict[str, Any]:
         }
 
 
+def make_dispatcher_worker_fn(
+    agent_id: str = "map_reduce_worker",
+    agent_name: str = "MapReduceWorker",
+    role: str = "Analyst",
+    model: str = "",
+) -> Callable:
+    """Echter Produktiv-Worker: ruft den zentralen LLM-Dispatcher pro Chunk.
+
+    Der zurueckgegebene Callable hat die Signatur ``(index, item, instruction)``
+    und liefert den echten Dispatcher-Text. Blockierte oder leere Responses
+    werden als Fehler geworfen, damit der Executor den Chunk ehrlich als
+    ``failed`` markiert — niemals als erfundenen Erfolg.
+
+    Ohne diese Funktion bleibt ``execute_map_reduce`` ein explizit gekennzeichneter
+    Demo-Lauf (``simulated=True``); die Produktiv-Route injiziert diesen Worker.
+    """
+    async def _worker(index: int, item: Any, instruction: str) -> str:
+        import core_dispatcher
+
+        kwargs: Dict[str, Any] = {
+            "agent_id": agent_id,
+            "agent_name": agent_name,
+            "prompt": f"{instruction}\n\nTeilaufgabe {index + 1}:\n{item}",
+            "role": role,
+            "task_id": f"mr-chunk-{index}",
+        }
+        if model:
+            kwargs["model"] = model
+        res = await core_dispatcher.dispatch_to_omniroute_or_container(**kwargs)
+        if not isinstance(res, dict) or res.get("status") != "success":
+            reason = ""
+            if isinstance(res, dict):
+                reason = str(res.get("error") or res.get("error_code") or res.get("content") or "")[:200]
+            raise RuntimeError(f"dispatcher_blocked: {reason or 'no successful response'}")
+        content = str(res.get("content") or "")
+        if not content.strip():
+            raise RuntimeError("dispatcher returned empty content")
+        return content
+
+    return _worker
+
+
 def _init_db() -> None:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with sqlite3.connect(DB_PATH, timeout=15.0, factory=_ArchonClosingConn) as conn:
@@ -159,7 +201,15 @@ class MapReduceExecutor:
         # Das muss top-level und in der Synthese stehen, nicht nur pro Chunk.
         simulated = all(bool(c.get("simulated")) for c in chunk_results)
         mode = "demo_only" if simulated else "live_worker"
-        status = "simulation" if simulated else "success"
+        # D01/H-01-1: "success" darf nur bei echt abgeschlossenen Chunks stehen.
+        # Ein injizierter worker_fn mit fehlgeschlagenen Chunks ist `partial`
+        # bzw. `failed` — kein erfundener Erfolg.
+        if simulated:
+            status = "simulation"
+        elif failed:
+            status = "partial" if completed else "failed"
+        else:
+            status = "success"
 
         # Reduce-Phase: Synthese aller erfolgreichen Worker-Outputs
         bullet_points = [f"- {r['output']}" for r in chunk_results if r["status"] == "completed"]

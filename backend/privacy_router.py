@@ -88,6 +88,7 @@ def get_privacy_config() -> Dict[str, Any]:
     merged = dict(DEFAULT_PRIVACY_CONFIG)
     merged["sensitive_categories"] = list(DEFAULT_PRIVACY_CONFIG["sensitive_categories"])
 
+    gov_raw: Dict[str, Any] = {}
     if os.path.exists(ROOT_SETTINGS_FILE):
         try:
             with open(ROOT_SETTINGS_FILE, "r", encoding="utf-8") as sf:
@@ -95,6 +96,8 @@ def get_privacy_config() -> Dict[str, Any]:
             priv_block = sdata.get("privacy") if isinstance(sdata, dict) else None
             if isinstance(priv_block, dict) and "zero_egress" in priv_block:
                 merged["zero_egress_strict"] = bool(priv_block.get("zero_egress"))
+            gov = sdata.get("zero_egress_governance") if isinstance(sdata, dict) else None
+            gov_raw = gov if isinstance(gov, dict) else {}
         except (OSError, ValueError) as exc:
             logger.warning(f"[PrivacyRouter] settings.json privacy-Block nicht lesbar: {exc}")
 
@@ -108,6 +111,20 @@ def get_privacy_config() -> Dict[str, Any]:
                     merged.update(data)
         except Exception as e:
             logger.warning(f"Konnte privacy_routing.json nicht lesen: {e}")
+
+    # D04/MED: `zero_egress_governance` ist eine echte zweite Quelle und wird
+    # NACH dem Merge von privacy_routing.json angewendet. Nur VERSTÄRKENDE
+    # Werte zählen: ein false in einer der Quellen darf nie die härtere
+    # Einstellung aufweichen (fail-closed).
+    if bool(gov_raw.get("zero_egress_strict", False)):
+        merged["zero_egress_strict"] = True
+        merged["fallback_to_eu"] = False
+    if bool(gov_raw.get("hard_block_on_local_offline", False)):
+        merged["hard_block_on_local_offline"] = True
+    if bool(gov_raw.get("block_crm_erp_prefetch_on_cloud", False)):
+        merged["block_crm_erp_prefetch_on_cloud"] = True
+    if bool(gov_raw.get("sensitive_local_routing", False)):
+        merged["sensitive_local_routing"] = True
 
     env_ollama = (os.environ.get("OLLAMA_BASE_URL") or "").strip()
     if env_ollama and (
@@ -189,7 +206,9 @@ def save_privacy_config(cfg: Dict[str, Any], operator: str = "operator") -> Dict
     with open(PRIVACY_CFG_FILE, "w", encoding="utf-8") as f:
         json.dump(current, f, indent=2, ensure_ascii=False)
 
-    # Synchronisiere settings.json -> privacy.zero_egress, falls Datei existiert
+    # D04/MED: settings.json -> privacy.zero_egress UND
+    # zero_egress_governance in EINEM read-modify-write-Schritt schreiben,
+    # damit beide Quellen nicht auseinanderlaufen.
     if "zero_egress_strict" in cfg and os.path.exists(ROOT_SETTINGS_FILE):
         try:
             with open(ROOT_SETTINGS_FILE, "r", encoding="utf-8") as sf:
@@ -198,10 +217,22 @@ def save_privacy_config(cfg: Dict[str, Any], operator: str = "operator") -> Dict
                 priv = sdata.get("privacy") if isinstance(sdata.get("privacy"), dict) else {}
                 priv["zero_egress"] = bool(current["zero_egress_strict"])
                 sdata["privacy"] = priv
+                gov = sdata.get("zero_egress_governance")
+                gov = gov if isinstance(gov, dict) else {}
+                for key in (
+                    "zero_egress_strict", "sensitive_local_routing",
+                    "hard_block_on_local_offline", "block_crm_erp_prefetch_on_cloud",
+                    "local_llm_url", "local_llm_model", "fallback_to_eu",
+                ):
+                    if key in current:
+                        gov[key] = current[key]
+                sdata["zero_egress_governance"] = gov
                 with open(ROOT_SETTINGS_FILE, "w", encoding="utf-8") as sf:
                     json.dump(sdata, sf, indent=2, ensure_ascii=False)
         except Exception as sync_err:
-            logger.warning(f"settings.json privacy sync warning: {sync_err}")
+            # Zwei auseinanderlaufende Quellen sind ein Sicherheitsrisiko ->
+            # harter Fehler statt stiller Warnung.
+            raise RuntimeError(f"settings.json privacy sync fehlgeschlagen (fail-closed): {sync_err}") from sync_err
 
     try:
         from backend.audit_log import chained_audit_log

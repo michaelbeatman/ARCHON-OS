@@ -557,16 +557,25 @@ def start_background_watchdog():
         logger.info("[Watchdog] Supervisor-Prozess gestartet (pid=%s)", getattr(proc, "pid", "?"))
         return daemon
     except Exception as exc:
-        # Fallback nur, wenn die Plattform keinen Process-Spawn erlaubt.
-        logger.error("[Watchdog] Prozess-Start fehlgeschlagen, Fallback Thread: %s", exc)
-        import threading
-        t = threading.Thread(
-            target=daemon.run_forever, daemon=True, name="ArchonWatchdogThread"
+        # D07/MED: frueher fiel der Code auf einen in-process daemon-Thread
+        # zurueck — genau die Schwaeche, die der Out-of-Process-Supervisor
+        # beseitigen sollte. Bei Event-Loop-Hang kann dieser Thread nicht
+        # eingreifen, signalisierte aber "alive". Fail-closed: Liveness hart
+        # auf dead setzen, damit /livez (503) und archon_autoheal sofort
+        # alarmieren, und keinen scheinbar aktiven daemon zurueckgeben.
+        logger.error(
+            "[Watchdog] Supervisor-Prozess nicht startbar — kein Fallback-Thread (fail-closed): %s",
+            exc, exc_info=exc,
         )
-        daemon._thread = t
-        _write_watchdog_liveness(0, dead=False)
-        t.start()
-        return daemon
+        daemon._process = None
+        daemon._mp_stop_event = None
+        try:
+            _write_watchdog_liveness(0, dead=True)
+        except Exception as liveness_exc:
+            logger.error("[Watchdog] Dead-Liveness nicht schreibbar: %s", liveness_exc)
+        raise RuntimeError(
+            "Watchdog-Supervisor-Prozess nicht startbar — keine Loop-Überwachung"
+        ) from exc
 
 
 if __name__ == "__main__":

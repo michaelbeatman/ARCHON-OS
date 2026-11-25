@@ -45,5 +45,13 @@ def test_d10_watchdog_is_separate_process():
     assert 'get_context("spawn")' in block
     assert "ArchonWatchdogProcess" in block
     assert "target=_watchdog_process_main" in block
-    # Thread bleibt nur dokumentierter Fallback, nicht mehr Default.
-    assert "Fallback Thread" in block
+
+    # W3-B: der fruehere in-process `threading.Thread`-Fallback wurde bewusst
+    # entfernt. Er konnte bei Event-Loop-Hang nicht eingreifen, signalisierte
+    # aber trotzdem "alive". Fail-closed statt Schein-Ueberwachung.
+    start_fn = block.split("def start_background_watchdog", 1)[1]
+    assert "Fallback Thread" not in block
+    assert "threading.Thread" not in start_fn
+    assert "_write_watchdog_liveness(0, dead=True)" in start_fn
+    assert "raise RuntimeError(" in start_fn
+    assert "keine Loop-Überwachung" in start_fn

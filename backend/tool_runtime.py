@@ -16,11 +16,51 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.delegation_isolation import mark_session_tainted_on_tool_read
 
 logger = logging.getLogger("archon.tool_runtime")
+
+
+def _record_tool_span(
+    tool_name: str,
+    *,
+    status: str = "OK",
+    agent_id: str = "",
+    attributes: Optional[Dict[str, Any]] = None,
+) -> None:
+    """D16/MED: Tool-Calls als eigene Spans im OTel-Baum sichtbar machen.
+
+    Ohne aktiven Trace wird bewusst kein Span erfunden. Fehler beim
+    Schreiben werden ueber die zentrale trace_context-Fehlerzaehlung
+    sichtbar, nie still verschluckt.
+    """
+    try:
+        from backend.trace_context import current_span_id, current_trace_id
+
+        tid = str(current_trace_id() or "")
+        if not tid:
+            return
+        sid = str(current_span_id() or "")
+        from backend.otel_tracer import tracer
+
+        tracer.record_span(
+            trace_id=tid,
+            name=f"tool.{tool_name}",
+            span_type="tool",
+            parent_span_id=sid or None,
+            agent_id=str(agent_id) or None,
+            status=status,
+            attributes={"tool.name": str(tool_name), **(attributes or {})},
+        )
+    except Exception as exc:
+        try:
+            from backend.trace_context import note_local_trace_error
+
+            note_local_trace_error("tool-span", exc)
+        except Exception:
+            logger.warning("[ToolRuntime] Tool-Span nicht geschrieben: %s", exc)
 
 
 def _emit_tool_event(kind: str, payload: Dict[str, Any]) -> bool:
@@ -84,6 +124,16 @@ def enforce_tool_execution(
             "reason": gate.get("reason", "gate_denied"),
             "gate": gate.get("gate"),
         })
+        _record_tool_span(
+            clean_tool,
+            status="ERROR",
+            agent_id=clean_agent,
+            attributes={
+                "tool.gate": str(gate.get("gate") or ""),
+                "tool.block_reason": str(gate.get("reason") or "gate_denied"),
+                "tool.audit_ok": bool(audit_ok),
+            },
+        )
         if not audit_ok:
             # B1: ohne GoBD-Auditnachweis darf kein (auch kein blockierter)
             # Tool-Call unbemerkt durchgereicht werden.
@@ -113,53 +163,151 @@ def enforce_tool_execution(
 
 _GUARDED_TEXT_FIELDS = ("content", "result", "output", "text", "error", "message", "stdout", "stderr")
 
+_ERROR_STATUSES = ("error", "failed", "blocked")
 
-def _guard_text(tool_name: str, text: Any) -> Any:
+
+def _firewall_text(tool_name: str, value: Any) -> tuple[str, Optional[str]]:
+    """Einziger Pfad vom Firewall-Urteil zum LLM-Kontext.
+
+    Liefert ``(text, error_code)``. Bei ``status="error"`` enthält der Text
+    einen *sichtbaren* Marker (D12/H-12-2) statt ``""``. Der Rohtext der
+    Firewall wird nie durchgereicht, wenn die Klassifikation scheiterte
+    (D12/H-12-3, fail-closed in ``tool_output_firewall``).
+    """
     try:
         from backend.tool_output_firewall import guard_tool_output
-        guarded = guard_tool_output(tool_name, text)
-        return guarded.get("output", text)
+        guarded = guard_tool_output(tool_name, value)
+        if str(guarded.get("status") or "").lower() == "error":
+            code = str(
+                guarded.get("error_code") or guarded.get("error") or "TOOL_ERROR"
+            )
+            marker = (
+                f"[TOOL-FEHLER {tool_name}: {code} "
+                "— kein Ergebnis; nicht als Fakt verwenden]"
+            )
+            # firewall-output ist bei Fehlern entweder leer oder ein harmloser
+            # Platzhalter — nie ungepruefter Rohtext.
+            fallback = str(guarded.get("output") or "")
+            return (marker + (" " + fallback if fallback else "")), code
+        return str(guarded.get("output", "")), None
     except Exception as exc:
         # Fail-closed: bei Ausfall des Guards darf kein ungefilterter Output in
         # den LLM-Kontext (Secrets/Prompt-Injection).
         logger.error("[ToolRuntime] Output-Guard fehlgeschlagen: %s", exc)
-        return "[OUTPUT_GUARD_UNAVAILABLE — Inhalt aus Sicherheitsgruenden verworfen]"
+        return (
+            "[OUTPUT_GUARD_UNAVAILABLE — Inhalt aus Sicherheitsgruenden verworfen]",
+            "OUTPUT_GUARD_UNAVAILABLE",
+        )
 
 
-def guard_result(tool_name: str, result: Any) -> Any:
-    """F10: oeffentlicher Pflicht-Chokepoint fuer alle Tool-Resultate.
+def _guard_text(tool_name: str, text: Any) -> Any:
+    """Rueckwaerts-kompatibel: nur der Text (mit sichtbarem Fehlermarker)."""
+    return _firewall_text(tool_name, text)[0]
 
-    Maskiert Secrets/PII, scannt auf Injection und packt externe Outputs in
-    Untrusted-Delimiter. Bei Dict-Results bleiben Struktur und Status erhalten;
-    nur die Textfelder werden gehaertet (DAG-/API-Kompatibilitaet).
+
+def _guard_result_verdict(tool_name: str, result: Any) -> Dict[str, Any]:
+    """D12/H-12-1: vollstaendiges Firewall-Urteil fuer den Tool-Chokepoint.
+
+    Rueckgabe: ``status`` (``ok``/``error``), ``error``/``error_code``,
+    ``result`` (der gehaertete Payload fuer den LLM-Kontext), ``output``
+    (nur bei Text-Results) und ``security``. Der Konsument ``execute_agent_tool``
+    prueft ``status`` und eskaliert — statt ihn zu verwerfen.
     """
+    from backend.tool_output_firewall import is_empty_tool_result
+
+    # Leere Gesamtergebnisse (None/{}/[]/0) gehen unveraendert durch die
+    # Firewall und werden zum sichtbaren Fehler — nie zu einer leeren Luecke.
+    if is_empty_tool_result(result):
+        text, code = _firewall_text(tool_name, result)
+        return {
+            "status": "error", "error": code, "error_code": code,
+            "result": text, "output": text, "security": {},
+        }
+
     if isinstance(result, dict):
         guarded = dict(result)
+        seen = 0
+        guard_errors: List[str] = []
+
         # FRUEHER: nur eine Whitelist von 8 Feldern — MCP/Plugin-Results mit
         # data/body/response/structuredContent/html blieben ungefiltert.
         # Jetzt: alle String-Blätter (mit Tiefe-/Anzahl-Limit) rekursiv haerten.
-        seen = 0
         def _walk(v: Any, depth: int = 0) -> Any:
             nonlocal seen
             if depth > 6 or seen > 200:
-                # D12/HIGH: Fail-Open beseitigt. Strings gehen weiterhin durch
-                # die Firewall, alle anderen Strukturen werden durch einen
-                # Platzhalter ersetzt — nie ungefiltert in den LLM-Kontext.
-                if isinstance(v, str):
-                    return _guard_text(tool_name, v)
+                # D12/HIGH: Strings gehen weiterhin durch die Firewall, alle
+                # anderen Strukturen werden ersetzt — nie ungefiltert in den
+                # LLM-Kontext.
+                if isinstance(v, str) and v:
+                    text, code = _firewall_text(tool_name, v)
+                    if code:
+                        guard_errors.append(code)
+                    return text
                 return "[OUTPUT_OMITTED_LIMIT]"
             if isinstance(v, str):
-                if v:
-                    seen += 1
-                    return _guard_text(tool_name, v)
-                return v
+                if not v:
+                    return v
+                seen += 1
+                text, code = _firewall_text(tool_name, v)
+                if code:
+                    guard_errors.append(code)
+                return text
             if isinstance(v, dict):
                 return {k: _walk(val, depth + 1) for k, val in v.items()}
             if isinstance(v, (list, tuple)):
                 return [_walk(x, depth + 1) for x in v]
             return v
-        return _walk(guarded)
-    return _guard_text(tool_name, result)
+
+        walked = _walk(guarded)
+        # Ein bereits vom Tool gemeldeter Fehler darf nicht durch die Firewall
+        # zu "ok" umgewertet werden (der Plugin-Pfad hatte keinen Pre-Check).
+        tool_status = str(result.get("status") or "").lower()
+        code = (
+            guard_errors[0]
+            if guard_errors
+            else ("TOOL_REPORTED_ERROR" if tool_status in _ERROR_STATUSES else None)
+        )
+        return {
+            "status": "error" if code else "ok",
+            "error": code, "error_code": code,
+            "result": walked, "output": None, "security": {},
+        }
+
+    text, code = _firewall_text(tool_name, result)
+    return {
+        "status": "error" if code else "ok",
+        "error": code, "error_code": code,
+        "result": text, "output": text, "security": {},
+    }
+
+
+def guard_result(tool_name: str, result: Any, *, with_status: bool = False) -> Any:
+    """F10: oeffentlicher Pflicht-Chokepoint fuer alle Tool-Resultate.
+
+    Maskiert Secrets/PII, scannt auf Injection und packt externe Outputs in
+    Untrusted-Delimiter. Bei Dict-Results bleiben Struktur und Status erhalten;
+    nur die Textfelder werden gehaertet (DAG-/API-Kompatibilitaet).
+
+    D12/H-12-1: ``with_status=True`` gibt das unveraenderte Firewall-Urteil
+    (inkl. ``status``/``error_code``) zurueck. Der Default bleibt
+    rueckwaerts kompatibel zu den bestehenden Konsumenten (MCP-Gateway,
+    Plugin-/SysOps-Router, DAG-Node-Plugins), die den gehaerteten Payload
+    direkt erwarten.
+    """
+    verdict = _guard_result_verdict(tool_name, result)
+    # D16/MED: Finalize des Tool-Calls. Das Firewall-Urteil (inkl. sichtbarem
+    # Fehlermarker) ist die Gate-Entscheid, die im Span landet — nie der
+    # Roh-Output (PII/Secrets gehoeren nicht in den Trace).
+    _record_tool_span(
+        tool_name,
+        status="OK" if verdict.get("status") == "ok" else "ERROR",
+        attributes={
+            "tool.result_status": str(verdict.get("status") or "error"),
+            "tool.error_code": str(verdict.get("error_code") or ""),
+            "tool.with_status": bool(with_status),
+        },
+    )
+    return verdict if with_status else verdict["result"]
 
 
 # Rueckwaerts kompatibel zum bisherigen internen Namen.
@@ -189,7 +337,9 @@ def _record_tool_flight_event(
     status: str,
     result: Any,
     flightlog_run_id: Optional[str] = None,
-) -> None:
+    error_code: str = "",
+    tool_ok: Optional[bool] = None,
+) -> bool:
     """D12/BLOCKER: Produzent fuer `flight_events` im echten Tool-Chokepoint.
 
     R-B4 (Re-Audit D13): Der Gruppierungsschluessel muss der sein, mit dem
@@ -197,6 +347,10 @@ def _record_tool_flight_event(
     verwendet (`current_trace_id()`), die pro Request wechselt und mit der
     `rid`/`tid` der Detektoren nichts zu tun hat. Explizite ID > session_id >
     Trace-ID als Fallback.
+
+    D12/MED: Gibt ``False`` zurueck, wenn die Audit-Schreibung scheitert. Der
+    Aufrufer muss daraus einen Fehlerzustand machen — ein nur geloggter
+    Schreibfehler macht den Silent-Failure-Detektor blind.
     """
     try:
         from backend.flightlog_backtester import record_flight_event
@@ -213,12 +367,17 @@ def _record_tool_flight_event(
             agent_id=str(agent_id or "unknown"),
             tool_name=str(tool_name or "unknown"),
             args=args if isinstance(args, dict) else {},
-            tool_ok=str(status).lower() == "success",
+            # D12/H-12-1: tool_ok kommt aus dem Firewall-Status, nicht aus dem
+            # hart codierten _finalize-Parameter.
+            tool_ok=(str(status).lower() == "success" if tool_ok is None else bool(tool_ok)),
             tokens_used=_result_token_estimate(result),
+            error_code=str(error_code or ""),
         )
+        return True
     except Exception as exc:
         # Kein stilles Scheitern: der Detektor darf nicht erneut blind werden.
         logger.error("[ToolRuntime] Flight-Event-Schreibung fehlgeschlagen: %s", exc)
+        return False
 
 
 def record_tool_read_side_effect(session_id: str, tool_name: str) -> None:
@@ -248,8 +407,15 @@ async def execute_agent_tool(
         approval_id=approval_id,
         warrant=warrant,
     )
-    def _finalize(status: str, payload: Dict[str, Any], result: Any) -> Dict[str, Any]:
-        _record_tool_flight_event(
+    def _finalize(
+        status: str,
+        payload: Dict[str, Any],
+        result: Any,
+        *,
+        error_code: str = "",
+        tool_ok: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        written = _record_tool_flight_event(
             tool_name=tool_name,
             args=args,
             agent_id=agent_id,
@@ -257,12 +423,31 @@ async def execute_agent_tool(
             status=status,
             result=result,
             flightlog_run_id=flightlog_run_id,
+            error_code=error_code,
+            tool_ok=tool_ok,
         )
+        if not written:
+            # D12/MED: Audit-Schreibfehler nie verschlucken. Ohne Flight-Event
+            # sieht detect_silent_failures() 0 Events und meldet "kein Fehler".
+            return {
+                **payload,
+                "status": "error",
+                "error_code": "FLIGHTLOG_WRITE_FAILED",
+                "error": "Flight-Event konnte nicht geschrieben werden — "
+                         "Ergebnis nicht verifiziert",
+                "original_status": status,
+            }
         return payload
 
     if not gate.get("allowed"):
-        call_args = args if isinstance(args, dict) else {}
-        return _finalize("blocked", {"status": "blocked", "error": gate.get("reason", "Tool blockiert"), "gate": gate}, gate)
+        reason = str(gate.get("reason") or "Tool blockiert")
+        return _finalize(
+            "blocked",
+            {"status": "blocked", "error": reason, "gate": gate},
+            gate,
+            error_code=str(gate.get("reason") or "TOOL_BLOCKED"),
+            tool_ok=False,
+        )
 
     call_args = args if isinstance(args, dict) else {}
 
@@ -274,24 +459,57 @@ async def execute_agent_tool(
         if tool_name in exported:
             res = await pm.execute_plugin_tool(tool_name, call_args)
             record_tool_read_side_effect(session_id, tool_name)
-            guarded = _guard_tool_result(tool_name, res)
-            return _finalize("success", {"status": "success", "source": "plugin", "result": guarded}, guarded)
+            # D12/H-12-1: Firewall-Urteil unveraendert durchreichen und pruefen.
+            verdict = guard_result(tool_name, res, with_status=True)
+            guarded = verdict.get("result")
+            if str(verdict.get("status") or "").lower() == "error":
+                code = str(verdict.get("error_code") or "TOOL_OUTPUT_SANITIZATION_ERROR")
+                return _finalize("error", {
+                    "status": "error", "source": "plugin",
+                    "error": code, "error_code": code, "result": guarded,
+                }, guarded, error_code=code, tool_ok=False)
+            return _finalize(
+                "success",
+                {"status": "success", "source": "plugin", "result": guarded},
+                guarded,
+                tool_ok=(str(verdict.get("status") or "").lower() == "ok"),
+            )
     except Exception as exc:
-        return _finalize("error", {"status": "error", "source": "plugin", "error": str(exc)}, str(exc))
+        return _finalize("error", {
+            "status": "error", "source": "plugin",
+            "error": str(exc), "error_code": "TOOL_EXECUTION_ERROR",
+        }, str(exc), error_code="TOOL_EXECUTION_ERROR", tool_ok=False)
 
     # 2. Danach ArchonMcpServer
     try:
         from scripts.archon_mcp_server import ArchonMcpServer
         res = ArchonMcpServer().execute_tool(tool_name, call_args)
-        if isinstance(res, dict) and str(res.get("status") or "").lower() in ("error", "failed", "blocked"):
+        if isinstance(res, dict) and str(res.get("status") or "").lower() in _ERROR_STATUSES:
             return _finalize("error", {
                 "status": "error",
                 "source": "mcp",
                 "error": str(res.get("message") or res.get("error") or "MCP-Tool-Fehler"),
+                "error_code": "TOOL_REPORTED_ERROR",
                 "result": res,
-            }, res)
+            }, res, error_code="TOOL_REPORTED_ERROR", tool_ok=False)
         record_tool_read_side_effect(session_id, tool_name)
-        guarded = _guard_tool_result(tool_name, res)
-        return _finalize("success", {"status": "success", "source": "mcp", "result": guarded}, guarded)
+        # D12/H-12-1: auch im MCP-Pfad das Firewall-Urteil pruefen.
+        verdict = guard_result(tool_name, res, with_status=True)
+        guarded = verdict.get("result")
+        if str(verdict.get("status") or "").lower() == "error":
+            code = str(verdict.get("error_code") or "TOOL_OUTPUT_SANITIZATION_ERROR")
+            return _finalize("error", {
+                "status": "error", "source": "mcp",
+                "error": code, "error_code": code, "result": guarded,
+            }, guarded, error_code=code, tool_ok=False)
+        return _finalize(
+            "success",
+            {"status": "success", "source": "mcp", "result": guarded},
+            guarded,
+            tool_ok=(str(verdict.get("status") or "").lower() == "ok"),
+        )
     except Exception as exc:
-        return _finalize("error", {"status": "error", "source": "mcp", "error": str(exc)}, str(exc))
+        return _finalize("error", {
+            "status": "error", "source": "mcp",
+            "error": str(exc), "error_code": "TOOL_EXECUTION_ERROR",
+        }, str(exc), error_code="TOOL_EXECUTION_ERROR", tool_ok=False)

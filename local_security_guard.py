@@ -10,6 +10,11 @@ import logging
 
 _archon_exc_logger = logging.getLogger("local_security_guard")
 
+
+def _audit_strict() -> bool:
+    raw = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off", "none"}
+
 import json
 import os
 import re
@@ -112,7 +117,10 @@ def _enforce_egress_or_block(target_url: str, agent_id: str = "security_guard") 
                 },
             )
         except Exception as exc:
-            _archon_exc_logger.warning("[local_security_guard] Audit-Egress-Bypass nicht schreibbar: %s", exc)
+            # D05/MED: Audit-Schreibfehler nie verschlucken.
+            _archon_exc_logger.error("[local_security_guard] Audit-Egress-Bypass nicht schreibbar: %s", exc)
+            if _audit_strict():
+                raise RuntimeError("audit_write_failed") from exc
         raise ZeroEgressBlockedError(
             "Egress-Firewall ist deaktiviert (bypassed=True) — Dispatch blockiert.",
             error_code="EGRESS_FIREWALL_BYPASSED",

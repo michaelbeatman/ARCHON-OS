@@ -109,6 +109,19 @@ def _receipt_key() -> bytes:
     return _receipt_key_for_block(None)
 
 
+def _receipt_uses_legacy_key() -> bool:
+    """True, wenn kein eigener Receipt-Key konfiguriert ist (D05/MED).
+
+    Der Fallback auf ARCHON_AUDIT_HMAC_KEY darf nie als domain-getrennter
+    Schutz ausgegeben werden: ein kompromittierter Audit-Key würde sonst auch
+    alle Quittungen kompromittieren. Der Verify-Result meldet das ehrlich mit
+    ``hmac_protected=False`` / ``key_source='legacy_audit_key'``.
+    """
+    dedicated_key = bool(os.environ.get(_RECEIPT_KEY_ENV, "").strip())
+    dedicated_epochs = bool(os.environ.get(_RECEIPT_EPOCHS_ENV, "").strip())
+    return not (dedicated_key or dedicated_epochs)
+
+
 def _receipt_digest(canonical: str, block_id=None, *, allow_legacy: bool = False) -> str:
     """D05/MED: ohne HMAC-Key keine neue (ungeschuetzte) Quittung schreiben.
 
@@ -488,17 +501,33 @@ class ExecutionReceiptLedger:
                 tampered_hashes.append(rid)
             expected_prev = r["receipt_hash"]
 
+        legacy_key = _receipt_uses_legacy_key()
+        strict = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower() not in {
+            "0", "false", "no", "off", "none",
+        }
+        production = str(os.environ.get("ENVIRONMENT") or "").strip().lower() in {
+            "production", "prod", "live",
+        }
+        chain_valid = (
+            len(broken_links) == 0 and len(tampered_hashes) == 0
+            and len(sequence_gaps) == 0 and len(bypass_markers) == 0
+            and not bypass_markers_unreadable
+            # D05/MED: eine Kette ohne HMAC-Key ist fuer Pruefer nie "valide",
+            # auch wenn alle (Legacy-)Hashes formal zusammenpassen.
+            and bool(_receipt_key())
+        )
+        # D05/MED: in Produktion ist der Legacy-Fallback auf den Audit-Key
+        # kein wirksamer Domain-Schutz -> fail-closed (ausser explizitem
+        # Strict-Opt-out). In Dev/Test bleibt die Kette formal verifizierbar,
+        # wird aber unmissverstaendlich als nicht domain-getrennt markiert.
+        if legacy_key and production and strict:
+            chain_valid = False
         return {
-            "chain_valid": (
-                len(broken_links) == 0 and len(tampered_hashes) == 0
-                and len(sequence_gaps) == 0 and len(bypass_markers) == 0
-                and not bypass_markers_unreadable
-                # D05/MED: eine Kette ohne HMAC-Key ist fuer Pruefer nie "valide",
-                # auch wenn alle (Legacy-)Hashes formal zusammenpassen.
-                and bool(_receipt_key())
-            ),
+            "chain_valid": chain_valid,
             "bypass_markers_unreadable": bypass_markers_unreadable,
-            "hmac_protected": bool(_receipt_key()),
+            "hmac_protected": bool(_receipt_key()) and not legacy_key,
+            "domain_separated": not legacy_key,
+            "key_source": "legacy_audit_key" if legacy_key else "dedicated_receipt_key",
             "total_receipts": len(rows),
             "broken_links": broken_links,
             "tampered_hashes": tampered_hashes,

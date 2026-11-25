@@ -13,6 +13,7 @@ automatisch in kuenftige Worker-Prompts.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import logging
 import os
 import re
 import secrets
@@ -20,6 +21,7 @@ import sqlite3
 import time
 from typing import Any, Dict, Iterator, List, Optional
 
+logger = logging.getLogger("precedent_log")
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "precedents.db")
 
@@ -61,6 +63,39 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def canonical_tenant_id(value: Any) -> str:
+    """D11/MED: `tenant` (Kanban-Spalte) und `tenant_id` (Präzedenz-Spalte)
+    sind zwei Namen für denselben Mandanten. Ein Default darf niemals einen
+    aktiven Mandanten überschreiben (sonst fremde Rulings im Worker-Prompt).
+    """
+    raw = str(value or "").strip()
+    if raw and raw.lower() not in ("none", "null", "unknown"):
+        return raw
+    try:
+        from backend.tenant_context import tenant_context
+        active = str(tenant_context.get_active_tenant_id() or "").strip()
+        if active:
+            return active
+    except Exception as exc:
+        logger.warning("[PrecedentLog] Tenant-Kontext nicht lesbar: %s", exc)
+    return "default"
+
+
+def resolve_task_tenant_id(task: Any) -> str:
+    """Einziger Kanoniker für den Mandanten eines Kanban-Tasks.
+
+    Für `backend/operations_api.py` (W3-B) bereitgestellt: dort wird heute
+    nur `t_dict.get("tenant_id")` gelesen, die Tabelle heisst aber `tenant`.
+    """
+    if not isinstance(task, dict):
+        return canonical_tenant_id(None)
+    # Die physische Kanban-Spalte `tenant` ist die SSOT; ein mitgeschlepptes
+    # `tenant_id` aus einem Handler-Payload darf sie nicht überschreiben.
+    return canonical_tenant_id(
+        task.get("tenant") or task.get("tenant_id") or task.get("company_id")
+    )
+
+
 def _extract_keywords(text: str) -> List[str]:
     tokens = re.findall(r"[a-zA-Z0-9äöüß_-]{3,}", (text or "").lower())
     seen = []
@@ -80,7 +115,7 @@ def record_precedent(
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Speichert ein neues Ruling strikt unter (tenant_id, project_id)."""
-    t_id = (tenant_id or "default").strip() or "default"
+    t_id = canonical_tenant_id(tenant_id)
     p_id = (project_id or "").strip()
     pid = f"prec-{secrets.token_hex(5)}"
     kw = ",".join(_extract_keywords(f"{question} {ruling_text}"))
@@ -110,7 +145,7 @@ def find_matching_precedents(
     Sucht passende aktive Rulings strikt innerhalb desselben Mandanten & Projekts.
     Kein Uebertrag zwischen Mandanten oder fremden Projekten.
     """
-    t_id = (tenant_id or "default").strip() or "default"
+    t_id = canonical_tenant_id(tenant_id)
     p_id = (project_id or "").strip()
     now = time.time()
     task_kws = set(_extract_keywords(task_text))
@@ -159,7 +194,7 @@ def revoke_precedent(
     tenant_id: str,
     db_path: Optional[str] = None,
 ) -> bool:
-    t_id = (tenant_id or "default").strip() or "default"
+    t_id = canonical_tenant_id(tenant_id)
     with _connect(db_path) as conn:
         cur = conn.execute(
             "UPDATE precedents SET revoked = 1 WHERE id = ? AND tenant_id = ?",
@@ -174,7 +209,7 @@ def list_precedents(
     project_id: Optional[str] = None,
     db_path: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    t_id = (tenant_id or "default").strip() or "default"
+    t_id = canonical_tenant_id(tenant_id)
     with _connect(db_path) as conn:
         if project_id is not None:
             rows = conn.execute(

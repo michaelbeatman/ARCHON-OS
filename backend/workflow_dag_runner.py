@@ -29,7 +29,7 @@ import sqlite3
 import threading
 import time
 from contextlib import contextmanager
-from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional
 
 # D16/M4: zentrale Fehler-Zaehlung ueber die echte API in trace_context
 # (delegiert an tracer.note_local_trace_error). Kein lokaler Fallback mehr.
@@ -1345,97 +1345,46 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         connect=_connect,
     )
 
-    # JSON/Schema-Contract-Validierung zwischen DAG-Nodes (inkl. 1 Repair-Retry)
-    parsed_output: Optional[Any] = None
-    output_schema = node.get("output_schema")
-    if not is_error and content and isinstance(output_schema, dict):
-        def _validate_contract(raw_txt: str, schema: Dict[str, Any]) -> Tuple[bool, Any, str]:
-            _clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_txt.strip(), flags=re.IGNORECASE | re.DOTALL).strip()
-            try:
-                _obj = json.loads(_clean)
-            except Exception as _jerr:
-                return False, None, f"Kein gueltiges JSON: {_jerr}"
-            if not isinstance(_obj, dict):
-                return False, None, "JSON-Root muss ein Objekt sein."
-            req_keys = schema.get("required") if isinstance(schema.get("required"), list) else list(schema.keys())
-            missing = [k for k in req_keys if k not in _obj]  # type: ignore[union-attr]
-            if missing:
-                return False, _obj, f"Fehlende Pflichtfelder: {', '.join(str(m) for m in missing)}"
-            return True, _obj, ""
+    # B5/S2: Cluster 7 (Schema + Repair + Frontier-Eskalation) nach
+    # backend/workflow_nodes/schema_contract.py extrahiert. Reine Delegation,
+    # keine Logikaenderung.
+    from backend.workflow_nodes.schema_contract import validate_and_repair
 
-        _ok_schema, _parsed_obj, _schema_err = _validate_contract(content, output_schema)
-        if not _ok_schema:
-            _repair_prompt = (
-                f"{full_prompt}\n\n[SCHEMA-VALIDIERUNG FEHLGESCHLAGEN]\n"
-                f"Fehler: {_schema_err}\n"
-                f"Erwartetes Schema: {json.dumps(output_schema, ensure_ascii=False)}\n"
-                f"Deine bisherige Ausgabe:\n{content[:3000]}\n\n"
-                "Gib ausschliesslich ein valides JSON-Objekt zurueck, das alle Pflichtfelder erfuellt."
-            )
-            _repair_model_used = _esc_model or model
-            _rep_res, _rep_blocked = await _dispatch_with_node_budget(
-                node, res, model,
-                agent_id=agent_id,
-                agent_name=agent_name,
-                prompt=_repair_prompt,
-                role=role,
-                system_prompt=eff_system_prompt,
-                model=_repair_model_used,
-                reasoning_level=reasoning_level,
-                task_id=str(kanban_task_id or node.get("id") or ""),
-                _phase="schema_repair",
-            )
-            if _rep_blocked:
-                is_error = True
-                res["error"] = str(_rep_res.get("error") or "NODE_TOKEN_BUDGET_EXCEEDED")
-            _repair_in = int(_rep_res.get("input_tokens") or 0)
-            _repair_out = int(_rep_res.get("output_tokens") or 0)
-            res["input_tokens"] = int(res.get("input_tokens") or 0) + _repair_in
-            res["output_tokens"] = int(res.get("output_tokens") or 0) + _repair_out
-            _rep_content = str(_rep_res.get("content") or "").strip()
-            if _rep_content:
-                content = _rep_content
-                _ok_schema, _parsed_obj, _schema_err = _validate_contract(content, output_schema)
-        # Punkt 3.2.6: Frontier-Eskalation, wenn der Repair-Retry am billigen Modell scheitert
-        _esc_in = 0
-        _esc_out = 0
-        if not _ok_schema and not is_error and _esc_model and _esc_model != model:
-            _esc_prompt = (
-                f"{full_prompt}\n\n"
-                f"[SCHEMA-VALIDIERUNG FEHLGESCHLAGEN — FRONTIER-ESKALATION]\n"
-                f"Fehler: {_schema_err}\n"
-                f"Erwartetes Schema: {json.dumps(output_schema, ensure_ascii=False)}\n"
-                f"Vorheriger Versuch:\n{content[:3000]}\n\n"
-                "Liefere ausschliesslich das korrekte JSON-Objekt."
-            )
-            _esc_res, _esc_blocked = await _dispatch_with_node_budget(
-                node, res, model,
-                agent_id=agent_id,
-                agent_name=agent_name,
-                prompt=_esc_prompt,
-                role=role,
-                system_prompt=eff_system_prompt,
-                model=_esc_model,
-                reasoning_level="high",
-                task_id=str(kanban_task_id or node.get("id") or ""),
-                _phase="frontier_escalation",
-            )
-            if _esc_blocked:
-                is_error = True
-                res["error"] = str(_esc_res.get("error") or "NODE_TOKEN_BUDGET_EXCEEDED")
-            _esc_in = int(_esc_res.get("input_tokens") or 0)
-            _esc_out = int(_esc_res.get("output_tokens") or 0)
-            res["input_tokens"] = int(res.get("input_tokens") or 0) + _esc_in
-            res["output_tokens"] = int(res.get("output_tokens") or 0) + _esc_out
-            _esc_content = str(_esc_res.get("content") or "").strip()
-            if _esc_content:
-                content = _esc_content
-                _ok_schema, _parsed_obj, _schema_err = _validate_contract(content, output_schema)
-        if _ok_schema:
-            parsed_output = _parsed_obj
-        else:
-            is_error = True
-            res["error"] = f"Output-Schema-Verletzung: {_schema_err}"
+    output_schema = node.get("output_schema")
+    # VERSTECKTE KOPPLUNG (B5-Fund): der Kosten-Tail liest diese 5 Namen per
+    # locals().get(...) (siehe :1539-1548). Sie MUESSEN in locals() der Facade
+    # stehen bleiben — sonst waere die Semantik stillschweigend veraendert,
+    # auch wenn der D12-except-Zweig das Ergebnis auf cost_usd=None festnagelt.
+    _repair_in = 0
+    _repair_out = 0
+    _esc_in = 0
+    _esc_out = 0
+    _repair_model_used = ""
+    _schema_outcome = await validate_and_repair(
+        node=node,
+        res=res,
+        content=content,
+        is_error=is_error,
+        model=model,
+        escalation_model=_esc_model,
+        agent_id=agent_id,
+        agent_name=agent_name,
+        eff_system_prompt=eff_system_prompt,
+        role=role,
+        reasoning_level=reasoning_level,
+        kanban_task_id=kanban_task_id,
+        full_prompt=full_prompt,
+        dispatch_with_budget=_dispatch_with_node_budget,
+    )
+    content = _schema_outcome.content
+    res = _schema_outcome.res
+    is_error = _schema_outcome.is_error
+    parsed_output = _schema_outcome.parsed_output
+    _repair_in = _schema_outcome.repair_in
+    _repair_out = _schema_outcome.repair_out
+    _esc_in = _schema_outcome.esc_in
+    _esc_out = _schema_outcome.esc_out
+    _repair_model_used = _schema_outcome.repair_model_used
 
     # Self-Critique / Anti-AI-Slop-Revisionsschleife fuer Content- & Quality-Gate-Knoten
     # Wichtig: Bei aktivem output_schema niemals validiertes JSON durch Prosa-Revision ueberschreiben.

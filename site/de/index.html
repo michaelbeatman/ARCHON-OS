@@ -233,6 +233,59 @@ pre{background:var(--code-bg);color:var(--code-fg);border:1px solid var(--line);
 .status{border-left:4px solid var(--accent);padding:var(--space-2) 0 var(--space-2) var(--space-4);color:var(--fg-muted);max-width:52rem;background:var(--accent-soft);border-radius:0 var(--radius-md) var(--radius-md) 0}
 footer{margin-top:var(--space-16);border-top:1px solid var(--line);padding:var(--space-8) 0 var(--space-10);color:var(--fg-subtle);font-size:var(--text-sm)}
 footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:center;text-align:center}
+
+/* Hero Split - Asymmetric Layout */
+.hero-split{
+  display:grid;
+  grid-template-columns:1.25fr 0.75fr;
+  gap:2.5rem;
+  align-items:flex-start;
+  position:relative;
+}
+@media (max-width:992px){
+  .hero-split{
+    grid-template-columns:1fr;
+    gap:1.5rem;
+  }
+}
+.hero-left{
+  position:relative;
+  z-index:2;
+}
+.hero-right{
+  position:relative;
+  z-index:1;
+}
+@media (min-width:993px){
+  .hero-right{
+    position:absolute;
+    top:-40px;
+    right:-10%;
+    width:48%;
+    max-width:600px;
+    pointer-events:none;
+  }
+}
+.asymmetric-blueprint{
+  width:100%;
+  height:auto;
+  display:block;
+  opacity:0.85;
+  mix-blend-mode:screen;
+  filter:contrast(1.1) brightness(0.95);
+  animation:subtleFloat 8s ease-in-out infinite;
+}
+@keyframes subtleFloat{
+  0%,100%{transform:translateY(0px) rotate(0deg);}
+  50%{transform:translateY(-8px) rotate(0.2deg);}
+}
+@media (max-width:992px){
+  .asymmetric-blueprint{
+    max-width:450px;
+    margin:1.5rem auto 0 auto;
+    opacity:0.7;
+  }
+}
 </style>
 </head>
 <body>
@@ -243,6 +296,8 @@ footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:cent
 </div></header>
 
 <section class="hero"><div class="wrap">
+<div class="hero-split">
+<div class="hero-left">
 <h2>Ein DSGVO-konformes, Zero-Egress Multi-Agenten-OS - f&uuml;r Unternehmen und Dich.</h2>
 <p>Archon OS erweitert Hermes Agent zu einem DSGVO-konformen Agentic Operating System: 70 Spezialisten-Profile in 8 Dom&auml;nen, Fail-Closed Zero-Egress-Routing, Atomic BudgetBank, WebAuthn-Passkey-Freigaben, AI-Boardroom-Debatten und GoBD-f&auml;higes SHA-256-Audit-Log.</p>
 <div class="btnrow">
@@ -250,7 +305,12 @@ footer .wrap{display:flex;gap:var(--space-5);flex-wrap:wrap;justify-content:cent
 <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/README.de.md">Deutsche Doku (README)</a>
 <a class="btn" href="#install">Schnellstart</a>
 </div>
-<div class="badges"><span class="badge">v0.5.7.8 &middot; pre-1.0</span><span class="badge">GDPR / DSGVO &amp; EU AI Act ready</span><span class="badge">Fail-closed Zero-Egress</span><span class="badge">MIT license</span><span class="badge">70 specialists &middot; 8 domains</span><span class="badge">55 decision frameworks</span><span class="badge">Docker amd64 / arm64</span><span class="badge">11 languages</span></div>
+<div class="badges"><span class="badge">v0.5.7.8 &middot; pre-1.0</span><span class="badge">GDPR / DSGVO & EU AI Act ready</span><span class="badge">Fail-closed Zero-Egress</span><span class="badge">MIT license</span><span class="badge">70 specialists &middot; 8 domains</span><span class="badge">55 decision frameworks</span><span class="badge">Docker amd64 / arm64</span><span class="badge">11 languages</span></div>
+</div>
+<div class="hero-right">
+<img src="../image_21.png" class="asymmetric-blueprint" alt="Archon OS Governance & Zero-Egress Architecture Sketch" />
+</div>
+</div>
 </div></section>
 
 <div class="wrap">

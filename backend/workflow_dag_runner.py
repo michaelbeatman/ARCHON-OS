@@ -1261,69 +1261,15 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         )
 
     # Nativer Media-Render / Clip-Matrix Knoten (Content-Maschine im DAG)
+    # B2/S2: Cluster 3 nach backend/workflow_nodes/media_nodes.py extrahiert.
+    # Reine Delegation, keine Logikaenderung; Kanban-Sync per DI zur Aufrufzeit.
     if node_type in ("media_render", "clip_matrix"):
-        await asyncio.to_thread(
+        from backend.workflow_nodes.media_nodes import execute_media_node
+
+        return await execute_media_node(
+            node, upstream, node_type, kanban_task_id,
             _update_kanban_task_status,
-            kanban_task_id,
-            "in_progress",
-            event_kind="workflow_node_started",
-            event_payload={"node_id": node.get("id"), "type": node_type},
         )
-        try:
-            from backend.content_machine import generate_video_clip_matrix
-            mcfg = dict(node.get("media_config") or {})
-            up_texts = []
-            for _dv in (upstream or {}).values():
-                if isinstance(_dv, dict):
-                    up_texts.append(str(_dv.get("content") or _dv.get("summary") or ""))
-                elif _dv:
-                    up_texts.append(str(_dv))
-            script_text = str(mcfg.get("script") or "\n\n".join(t for t in up_texts if t) or node.get("prompt") or node.get("title") or "")
-            campaign_id = str(mcfg.get("campaign_id") or node.get("workflow_id") or "wf_media")
-            target_channels = mcfg.get("target_channels")
-            if not isinstance(target_channels, list) or not target_channels:
-                target_channels = [str(mcfg.get("target_platform") or node.get("channel") or "youtube_shorts")]
-            matrix = await generate_video_clip_matrix(
-                campaign_id=campaign_id,
-                script_text=script_text,
-                clip_count=int(mcfg.get("clip_count") or 3),
-                target_channels=target_channels,
-                dry_run=bool(mcfg.get("dry_run", False)),
-            )
-            rendered_md = json.dumps(matrix, ensure_ascii=False, indent=2)
-            await asyncio.to_thread(
-                _update_kanban_task_status,
-                kanban_task_id,
-                "done",
-                result=rendered_md,
-                event_kind="workflow_node_completed",
-                event_payload={"node_id": node.get("id"), "type": node_type, "status": "success"},
-            )
-            return {
-                "status": "success",
-                "node_id": node.get("id"),
-                "agent_id": str(node.get("agent_id") or "media_engine"),
-                "content": rendered_md,
-                "media_matrix": matrix,
-                "kanban_task_id": kanban_task_id,
-            }
-        except Exception as mexc:
-            await asyncio.to_thread(
-                _update_kanban_task_status,
-                kanban_task_id,
-                "blocked",
-                result=str(mexc),
-                block_kind="workflow_error",
-                event_kind="workflow_node_failed",
-                event_payload={"node_id": node.get("id"), "type": node_type, "error": str(mexc)},
-            )
-            return {
-                "status": "error",
-                "node_id": node.get("id"),
-                "error": str(mexc),
-                "content": "",
-                "kanban_task_id": kanban_task_id,
-            }
 
     agent_name = str(prof.get("person_name") or prof.get("name") or agent_id)
     role = str(prof.get("role") or prof.get("category") or "Fach-Spezialist")

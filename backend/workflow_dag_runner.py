@@ -1247,36 +1247,18 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         return await _execute_research_dag_node(node, upstream)
 
     # Standardisierte Node-Plugins ("VST-Schnittstelle": ffmpeg, kinocut, tts, suno, image_gen, calendar_publish, 3rd-Party)
-    from backend.workflow_node_plugins import execute_workflow_node_plugin, is_workflow_node_plugin
+    # B1/S2: Cluster 2 nach backend/workflow_nodes/plugin_nodes.py extrahiert.
+    # Reine Delegation, keine Logikaenderung. Der Kanban-Sync wird zur
+    # AUFRUFZEIT als Callable uebergeben (S3), damit die 7 Patches auf
+    # backend.workflow_dag_runner._update_kanban_task_status weiter greifen.
+    from backend.workflow_node_plugins import is_workflow_node_plugin
     if is_workflow_node_plugin(node_type):
-        await asyncio.to_thread(
+        from backend.workflow_nodes.plugin_nodes import execute_plugin_node
+
+        return await execute_plugin_node(
+            node, upstream, node_type, kanban_task_id,
             _update_kanban_task_status,
-            kanban_task_id,
-            "in_progress",
-            event_kind="workflow_node_started",
-            event_payload={"node_id": node.get("id"), "type": node_type},
         )
-        try:
-            pres = await execute_workflow_node_plugin(node_type, node, upstream)
-        except Exception as pexc:
-            logger.error("[WorkflowDAG] Node-Plugin '%s' abgestuerzt: %s", node_type, pexc, exc_info=pexc)
-            pres = {"status": "error", "error": f"Plugin-Ausfuehrungsfehler: {pexc}", "content": ""}
-        p_err = str(pres.get("status") or "success").lower() in ("error", "failed", "blocked")
-        await asyncio.to_thread(
-            _update_kanban_task_status,
-            kanban_task_id,
-            "blocked" if p_err else "done",
-            result=str(pres.get("content") or pres.get("error") or ""),
-            block_kind="workflow_error" if p_err else None,
-            event_kind="workflow_node_failed" if p_err else "workflow_node_completed",
-            event_payload={"node_id": node.get("id"), "type": node_type, "status": pres.get("status", "success")},
-        )
-        return {
-            **pres,
-            "node_id": node.get("id"),
-            "agent_id": str(node.get("agent_id") or node_type),
-            "kanban_task_id": kanban_task_id,
-        }
 
     # Nativer Media-Render / Clip-Matrix Knoten (Content-Maschine im DAG)
     if node_type in ("media_render", "clip_matrix"):

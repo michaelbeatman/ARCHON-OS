@@ -8,9 +8,9 @@ import logging
 
 _archon_exc_logger = logging.getLogger("egress_firewall")
 
-import os
-import re
-import sqlite3
+import os  # noqa: E402
+import re  # noqa: E402
+import sqlite3  # noqa: E402
 
 
 class _ArchonClosingConn(sqlite3.Connection):
@@ -22,9 +22,9 @@ class _ArchonClosingConn(sqlite3.Connection):
             super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
+from datetime import datetime  # noqa: E402
+from typing import Any, Dict, List, Optional  # noqa: E402
+from urllib.parse import urlparse  # noqa: E402
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -94,19 +94,27 @@ def _active_tenant_id() -> str:
 
 
 def _get_cfg() -> Dict[str, Any]:
+    """Liest die Egress-Firewall-Konfiguration.
+
+    D04-M7: Bei einem Konfigurationsfehler gibt es **keinen** hartcodierten
+    Allowlist-Fallback mehr. Ein solcher Fall würde externe Ziele ohne
+    Operator-Freigabe erlauben (Fail-Open) und wird deshalb als harter
+    `ZeroEgressBlockedError` eskaliert.
+    """
     try:
         from backend.autonomy_settings import get_module_config
         return get_module_config("egress_firewall")
-    except Exception:
-        return {
-            "enabled": True,
-            "default_policy": "allowlist_only",
-            "allowed_domains": [
-                "openrouter.ai", "api.openai.com", "generativelanguage.googleapis.com",
-                "api.anthropic.com", "api.groq.com", "github.com", "localhost", "127.0.0.1"
-            ],
-            "block_raw_ip_egress": True
-        }
+    except Exception as exc:
+        _record_audit_error("egress_firewall_config_unavailable", exc)
+        try:
+            from backend.llm_egress_guard import ZeroEgressBlockedError
+        except Exception as import_exc:  # defensiv: Import darf nicht fail-open machen
+            raise RuntimeError(f"egress_firewall_config_unavailable: {exc}") from import_exc
+        raise ZeroEgressBlockedError(
+            "Egress-Firewall-Konfiguration nicht lesbar — Zugriff fail-closed blockiert "
+            "(kein hartcodierter Allowlist-Fallback).",
+            error_code="EGRESS_FIREWALL_CONFIG_UNAVAILABLE",
+        ) from exc
 
 
 def _init_db() -> None:

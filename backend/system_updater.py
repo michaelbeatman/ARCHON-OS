@@ -569,47 +569,86 @@ def _get_update_status_via_api(
         "push_hint": _CONTAINER_NO_GIT_HINT,
     }
 
-    ok, head, err = _github_api_get(f"/repos/{slug}/commits/{branch}")
+    ok, head, err_head = _github_api_get(f"/repos/{slug}/commits/{branch}")
     if not ok or not isinstance(head, dict):
         return {
             **base,
             "status": "offline_or_error",
-            "update_available": False,
-            "commits_behind": 0,
+            "update_available": None,
+            "commits_behind": None,
             "incoming_commits": [],
-            "message": f"Konnte GitHub nicht abfragen: {err or 'unerwartete API-Antwort'}",
+            "remote_commit": None,
+            "remote_version": None,
+            "verification": {"version": False, "compare": False},
+            "message": f"Konnte GitHub nicht abfragen: {err_head or 'unerwartete API-Antwort'}",
         }
 
     remote_sha = str(head.get("sha") or "")
-    remote_commit = remote_sha[:7] if remote_sha else "unknown"
+    remote_commit: Optional[str] = remote_sha[:7] if remote_sha else None
 
-    remote_version = sys_version
-    ok_v, vtext, _ = _github_api_get(f"/repos/{slug}/contents/config/version.json?ref={branch}", raw=True)
-    if ok_v and vtext:
+    # D12-H4: Jeden Teilabruf einzeln auswerten. Ein fehlgeschlagener Abruf
+    # darf nie als "auf dem neuesten Stand" (update_available=False) quittiert
+    # werden — dann ist der Status unbekannt (None).
+    verification_errors: List[str] = []
+    ok_v, vtext, err_v = _github_api_get(
+        f"/repos/{slug}/contents/config/version.json?ref={branch}", raw=True,
+    )
+    remote_version: Optional[str] = None
+    version_newer: Optional[bool] = None
+    if not ok_v or not vtext:
+        verification_errors.append(f"version.json: {err_v or 'leere Antwort'}")
+    else:
         try:
             rver = str((json.loads(vtext) or {}).get("version") or "").strip()
             if rver:
                 remote_version = rver
+            else:
+                verification_errors.append("version.json: kein version-Feld")
         except Exception as exc:
-            logger.debug(f"[SystemUpdater] Remote-Version (API) nicht lesbar: {exc}")
-    version_newer = _parse_version_tuple(remote_version) > _parse_version_tuple(sys_version)
+            verification_errors.append(f"version.json: {type(exc).__name__}: {exc}")
+    if remote_version is not None:
+        version_newer = _parse_version_tuple(remote_version) > _parse_version_tuple(sys_version)
+        if version_newer:
+            logger.debug(f"[SystemUpdater] Remote-Version (API): {remote_version}")
 
     # Commits seit lokalem Build: bevorzugt exakter Build-Commit, sonst Release-Tag der lokalen Version.
-    commits_behind = 0
+    commits_behind: Optional[int] = None
     incoming: List[str] = []
+    compare_ok = False
     compare_base = build_commit or (sys_version if sys_version.startswith("v") else "")
-    if compare_base:
-        ok_c, cmp_data, _ = _github_api_get(f"/repos/{slug}/compare/{compare_base}...{branch}")
-        if ok_c and isinstance(cmp_data, dict):
+    if not compare_base:
+        verification_errors.append("compare: kein lokaler Build-Commit/Release-Tag als Basis")
+    else:
+        ok_c, cmp_data, err_c = _github_api_get(f"/repos/{slug}/compare/{compare_base}...{branch}")
+        if not ok_c or not isinstance(cmp_data, dict):
+            verification_errors.append(f"compare: {err_c or 'unerwartete API-Antwort'}")
+        else:
+            compare_ok = True
             commits_behind = int(cmp_data.get("ahead_by") or 0)
             for c in list(cmp_data.get("commits") or [])[-10:][::-1]:
                 msg = str(((c.get("commit") or {}).get("message") or "")).splitlines()[0][:120]
                 incoming.append(f"{str(c.get('sha') or '')[:7]} {msg}".strip())
 
-    has_update = version_newer or commits_behind > 0
+    verification = {"version": remote_version is not None, "compare": compare_ok}
+    if verification_errors:
+        return {
+            **base,
+            "status": "partial",
+            "remote_version": remote_version,
+            "version_newer": version_newer,
+            "update_available": None,
+            "remote_commit": remote_commit,
+            "commits_behind": commits_behind,
+            "incoming_commits": incoming,
+            "verification": verification,
+            "verification_errors": verification_errors,
+            "message": "Update-Status nicht verifiziert: " + "; ".join(verification_errors),
+        }
+
+    has_update = bool(version_newer) or int(commits_behind or 0) > 0
     if version_newer:
         message = f"Neue Archon-Version {remote_version} auf GitHub verfügbar (via GitHub-API)."
-    elif commits_behind > 0:
+    elif int(commits_behind or 0) > 0:
         message = f"{commits_behind} neue Commits auf GitHub verfügbar (via GitHub-API)."
     else:
         message = "System ist auf dem neuesten Stand (via GitHub-API)."
@@ -623,6 +662,7 @@ def _get_update_status_via_api(
         "remote_commit": remote_commit,
         "commits_behind": commits_behind,
         "incoming_commits": incoming,
+        "verification": verification,
         "message": message,
     }
 

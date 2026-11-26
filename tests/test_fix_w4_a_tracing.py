@@ -8,10 +8,8 @@ nie gegen ./data — siehe INCIDENT_2026-11-25_LOGIN_OUTAGE.md.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import hmac
-import importlib
 import json
 import os
 import re
@@ -276,22 +274,25 @@ def test_h16_4_media_sync_adds_trace_field_and_headers(monkeypatch, tmp_path):
         def read(self):
             return b'{"id":"media-1"}'
 
-    # W4-A: pb_request() geht ueber den zentralen urllib.request.urlopen-Pfad
-    # (nicht mehr build_opener) — dort wird der Request mit injizierten
-    # Trace-Headern gebaut und muss hier abgefangen werden.
-    def _fake_urlopen(req, timeout=None):
-        captured["req"] = req
-        return _PBResponse()
+    # D06/M2: pb_request() geht jetzt zwingend ueber
+    # utils.safe_http.safe_http_request(..., public_only=True) und respektiert
+    # POCKETBASE_ENABLED. Der Test fängt daher den zentralen HTTP-Helper ab.
+    def _safe_request(url, *, method="GET", headers=None, data=None, **kwargs):
+        captured["url"] = url
+        captured["headers"] = dict(headers or {})
+        captured["data"] = data
+        return 201, {}, b'{"id":"media-1"}'
 
-    monkeypatch.setattr(sync.urllib.request, "urlopen", _fake_urlopen)
+    import utils.safe_http as safe_http
+    monkeypatch.setattr(sync, "_pocketbase_enabled", lambda: True)
+    monkeypatch.setattr(safe_http, "safe_http_request", _safe_request)
     monkeypatch.setattr(sync, "PB_URL", "http://127.0.0.1:8090")
 
     assert sync.upload_file(str(media)) is True
-    req = captured["req"]
-    headers = {k.lower(): v for k, v in req.headers.items()}
+    headers = {k.lower(): v for k, v in captured["headers"].items()}
     assert headers["traceparent"].startswith(f"00-{tid}-")
     assert headers["traceparent"].split("-")[2] != sid
-    body = req.data.decode("utf-8", errors="replace")
+    body = bytes(captured["data"]).decode("utf-8", errors="replace")
     assert f"name=\"trace_id\"\r\n\r\n{tid}\r\n" in body
 
 

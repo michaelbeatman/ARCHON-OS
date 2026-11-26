@@ -1,23 +1,27 @@
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """Sub-Router fuer Feedback, Notifications, MCP, Streaming, Backup, GDPR und Chaos-Testing.
 
 Ausgelagert aus backend/operations_api.py.
 """
-import logging
+import logging  # noqa: E402
+
 logger = logging.getLogger("archon.routers.operations_sysops")
 
-import asyncio
-import json
-import os
-import sys
-import time
-from typing import Any, Dict, List, Optional, Union
-from fastapi import APIRouter, Body, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+import asyncio  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+import time  # noqa: E402
+from typing import Any, Dict, Optional, Union  # noqa: E402
 
-from archon.routers._rbac import require_admin_or_503, get_session_actor
+from fastapi import APIRouter, Body, HTTPException, Query, Request  # noqa: E402
+from fastapi.responses import StreamingResponse  # noqa: E402
+from pydantic import BaseModel, ConfigDict, Field  # noqa: E402
+
+from archon.routers._rbac import get_session_actor, require_admin_or_503  # noqa: E402
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -252,10 +256,15 @@ def api_call_mcp_tool(request: Request, req: McpToolCallRequest):
     """Führt ein Archon MCP-Werkzeug über eine HTTP-REST-Schnittstelle aus."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     try:
-        from scripts.archon_mcp_server import ArchonMcpServer
         # D04/MED: Tool-Output-Firewall im echten Chokepoint (wie in plugins.py,
         # mcp_gateway.py und workflow_node_plugins.py).
-        from backend.tool_runtime import enforce_tool_execution, guard_result, record_tool_read_side_effect
+        from backend.tool_runtime import (
+            enforce_tool_execution,
+            guard_result,
+            guard_result_payload,
+            record_tool_read_side_effect,
+        )
+        from scripts.archon_mcp_server import ArchonMcpServer
         tool_name = req.name
         arguments = req.arguments
         if not tool_name:
@@ -283,7 +292,9 @@ def api_call_mcp_tool(request: Request, req: McpToolCallRequest):
         result = server.execute_tool(tool_name, arguments if isinstance(arguments, dict) else {})
         record_tool_read_side_effect(session_id, tool_name)
         try:
-            guarded = guard_result(tool_name, result)
+            # D12/H1: der Default von guard_result() ist das vollstaendige
+            # Urteil (status/error_code/result). Kein stilles Verwerfen mehr.
+            verdict = guard_result(tool_name, result)
         except Exception as exc:
             # Firewall-Fehler darf NIE den Roh-Output durchlassen.
             logger.error(
@@ -291,7 +302,21 @@ def api_call_mcp_tool(request: Request, req: McpToolCallRequest):
                 tool_name, exc,
             )
             raise HTTPException(status_code=503, detail={"code": "sysops_tool_output_guard_failed", "params": {}})
-        return {"status": "success", "result": guarded}
+        if not isinstance(verdict, dict):
+            return {"status": "success", "result": verdict}
+        if str(verdict.get("status") or "").lower() == "error":
+            # Ein Firewall-Urteil "error" ist kein Erfolg — auch dann nicht,
+            # wenn der MCP-Server selbst status="success" gemeldet hat.
+            code = str(verdict.get("error_code") or verdict.get("error") or "TOOL_OUTPUT_SANITIZATION_ERROR")
+            logger.error(
+                "[SysOps] Firewall-Urteil '%s' fuer Tool '%s' (leere Felder: %s)",
+                code, tool_name, verdict.get("empty_fields") or "-",
+            )
+            raise HTTPException(status_code=502, detail={
+                "status": "error", "code": code, "error_code": code,
+                "params": {"tool": tool_name, "error_code": code},
+            })
+        return {"status": "success", "result": guard_result_payload(verdict)}
     except HTTPException:
         raise
     except Exception as e:

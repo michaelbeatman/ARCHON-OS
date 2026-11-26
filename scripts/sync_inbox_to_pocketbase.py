@@ -8,15 +8,15 @@ media_items-Records. Der Browser-PocketBase-SDK hat denselben Kontext bereits
 ueber `beforeSend`; die Kausalkette ist damit auch serverseitig geschlossen.
 """
 
+import contextlib
+import datetime
+import json
+import logging
+import mimetypes
 import os
 import sys
-import contextlib
-import mimetypes
-import urllib.request
 import urllib.error
-import json
-import datetime
-import logging
+import urllib.request
 
 logger = logging.getLogger("archon.pb_sync")
 
@@ -26,6 +26,11 @@ if _WORKSPACE_ROOT not in sys.path:
 
 PB_URL = os.getenv("POCKETBASE_URL", "http://Pocketbase:8090")
 INBOX_DIR = os.getenv("INBOX_DIR", "/opt/data/video-collection/inbox")
+
+
+def _pocketbase_enabled() -> bool:
+    """D06-M2: der optionale Laptop-Sync bleibt standardmäßig aus."""
+    return os.getenv("POCKETBASE_ENABLED", "false").strip().lower() in ("1", "true", "yes")
 
 
 def _trace_ctx():
@@ -55,9 +60,14 @@ def pb_request(url, *, data=None, headers=None, method="GET", json_payload=None,
                timeout=30):
     """Zentraler PocketBase-Request mit Hop-Span und W3C-Header-Injektion.
 
+    D06-M2: kein rohes ``urlopen`` mehr. Alle Calls laufen ueber
+    ``utils.safe_http.safe_http_request(..., public_only=True)`` — das blockt
+    HTTP-Redirects (IMDS-SSRF), pinnt die gepruefte IP und begrenzt die
+    Antwortgroesse. Zusaetzlich gilt ``POCKETBASE_ENABLED`` als harter Schalter.
+
     Liefert immer ein Dict mit ``status_code``, ``data`` (geparstes JSON oder
-    ``None``), ``raw``, ``error``, ``trace_id`` und ``span_id``. HTTP- und
-    Netzwerkfehler werden nicht als leerer Erfolg zurueckgegeben.
+    ``None``), ``raw``, ``error``, ``error_code``, ``trace_id`` und ``span_id``.
+    HTTP- und Netzwerkfehler werden nicht als leerer Erfolg zurueckgegeben.
     """
     tc = _trace_ctx()
     hdrs = dict(headers or {})
@@ -73,35 +83,52 @@ def pb_request(url, *, data=None, headers=None, method="GET", json_payload=None,
     with span_ctx as (tid, sid, _parent):
         if tc is not None:
             hdrs = tc.inject_headers(hdrs)
-        req = urllib.request.Request(url, data=body, headers=hdrs, method=method)
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
-                try:
-                    parsed = json.loads(raw) if raw.strip() else None
-                except Exception:
-                    parsed = None
-                return {
-                    "status_code": int(getattr(resp, "status", 0) or 0),
-                    "data": parsed,
-                    "raw": raw,
-                    "error": "",
-                    "trace_id": tid,
-                    "span_id": sid,
-                }
-        except urllib.error.HTTPError as exc:
-            err_msg = exc.read().decode("utf-8", errors="ignore")
-            logger.warning("[PB-Sync] HTTP %s von %s: %s", exc.code, url, err_msg[:200])
+        if not _pocketbase_enabled():
             return {
-                "status_code": int(exc.code), "data": None, "raw": err_msg,
-                "error": f"HTTP {exc.code}: {err_msg[:200]}",
+                "status_code": 0, "data": None, "raw": "",
+                "error": "POCKETBASE_ENABLED=false — kein Netzwerkzugriff.",
+                "error_code": "POCKETBASE_DISABLED",
+                "trace_id": tid, "span_id": sid,
+            }
+        try:
+            from utils.safe_http import safe_http_request
+
+            status_code, _resp_headers, raw_bytes = safe_http_request(
+                url, method=method, headers=hdrs, data=body,
+                timeout=timeout, max_bytes=8 * 1024 * 1024, public_only=True,
+            )
+            raw = raw_bytes.decode("utf-8", errors="replace") if isinstance(raw_bytes, bytes) else str(raw_bytes or "")
+            try:
+                parsed = json.loads(raw) if raw.strip() else None
+            except Exception:
+                parsed = None
+            return {
+                "status_code": int(status_code),
+                "data": parsed,
+                "raw": raw,
+                "error": "" if parsed is not None or not raw.strip() else "Antwort kein gültiges JSON",
+                "error_code": "",
+                "trace_id": tid,
+                "span_id": sid,
+            }
+        except urllib.error.HTTPError as exc:
+            err_bytes = exc.read()
+            err_msg = err_bytes.decode("utf-8", errors="ignore") if isinstance(err_bytes, bytes) else str(err_bytes or "")
+            code = int(exc.code)
+            error_code = "REDIRECT_BLOCKED" if code in (301, 302, 303, 307, 308) else "HTTP_ERROR"
+            logger.warning("[PB-Sync] HTTP %s von %s: %s", code, url, err_msg[:200])
+            return {
+                "status_code": code, "data": None, "raw": err_msg,
+                "error": f"HTTP {code}: {err_msg[:200]}", "error_code": error_code,
                 "trace_id": tid, "span_id": sid,
             }
         except Exception as exc:
+            error_code = "EGRESS_BLOCKED" if type(exc).__name__ == "EgressBlocked" else "REQUEST_FAILED"
             logger.warning("[PB-Sync] Request fehlgeschlagen (%s): %s", url, exc)
             return {
                 "status_code": 0, "data": None, "raw": "",
-                "error": str(exc), "trace_id": tid, "span_id": sid,
+                "error": str(exc), "error_code": error_code,
+                "trace_id": tid, "span_id": sid,
             }
 
 
@@ -184,6 +211,9 @@ def upload_file(filepath):
 
 def main():
     init_trace_context()
+    if not _pocketbase_enabled():
+        print("[SKIP] POCKETBASE_ENABLED=false — kein PocketBase-Sync (lokale Daten bleiben autark).")
+        return
     print(f"Scanning inbox: {INBOX_DIR} targeting {PB_URL}...")
     if not os.path.exists(INBOX_DIR):
         print(f"[ERROR] Directory does not exist: {INBOX_DIR}")

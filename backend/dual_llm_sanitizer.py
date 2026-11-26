@@ -7,19 +7,49 @@ an Stufe 2 Werkzeug-Agenten (Robert / Executive).
 Inklusive Trusted-Source-Whitelisting (klickbares [T]-Badge).
 """
 
-import os
-import sys
 import json
-import re
-import time
 import logging
+import os
+import re
 import tempfile
 import threading
 import unicodedata
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("dual_llm_sanitizer")
 _TRUST_LOCK = threading.RLock()
+
+# D04-M2/D12-M5 (W2-C): Audit-Schreibfehler nie verschlucken.
+_AUDIT_ERROR_COUNTS: Dict[str, int] = {}
+
+
+def _audit_strict() -> bool:
+    raw = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off", "none"}
+
+
+def _record_audit_error(action: str, exc: BaseException) -> None:
+    _AUDIT_ERROR_COUNTS[action] = _AUDIT_ERROR_COUNTS.get(action, 0) + 1
+    logger.error(
+        "[dual_llm_sanitizer] Audit-Event '%s' fehlgeschlagen (count=%d): %s",
+        action, _AUDIT_ERROR_COUNTS[action], exc,
+    )
+
+
+class TrustedSources(list):
+    """Whitelist mit Verifikationsnachweis (list-kompatibel für bestehende Konsumenten).
+
+    ``verified=True`` bedeutet ausschließlich: die Registry wurde erfolgreich
+    gelesen und geparst. Bei jedem Lese-/Parsefehler bleibt die Liste LEER und
+    ``trust_verification_error`` ist gesetzt — damit darf keine Quelle als
+    ``VERIFIED_SENDER`` ausgegeben werden (Fail-Closed, §0/§2.5).
+    """
+
+    def __init__(self, sources: List[str], *, verified: bool, trust_verification_error: Optional[str] = None):
+        super().__init__(sources)
+        self.verified = verified
+        self.trust_verification_error = trust_verification_error
+
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRUSTED_SOURCES_FILE = os.path.join(WORKSPACE_DIR, "data", "trusted_sources.json")
@@ -28,7 +58,7 @@ TRUSTED_SOURCES_FILE = os.path.join(WORKSPACE_DIR, "data", "trusted_sources.json
 # `local_security_guard.INJECTION_PATTERNS` (25 Muster inkl. `curl https://`,
 # `wget`, `rm -rf`, `drop table`, `<<SYS>>`). Der Quarantäner importiert die
 # Liste direkt, statt eine eigene, unvollständige 9-Muster-Liste zu pflegen.
-from local_security_guard import INJECTION_PATTERNS
+from local_security_guard import INJECTION_PATTERNS  # noqa: E402
 
 # Die 9 benannten Signaturen bleiben ausschließlich für die Severity-
 # Klassifizierung (threat_level "critical") erhalten. Sie werden mit der
@@ -49,31 +79,73 @@ _NAMED_INJECTION_SIGNATURES = [
 # Vom Quarantäner tatsächlich gescannte Muster: 25 SSOT + 9 benannte Signaturen.
 INJECTION_SIGNATURES = _NAMED_INJECTION_SIGNATURES + list(INJECTION_PATTERNS)
 
-def load_trusted_sources() -> List[str]:
-    """Lädt die Whitelist verifizierter Absender/Quellen."""
-    if os.path.exists(TRUSTED_SOURCES_FILE):
-        try:
-            with open(TRUSTED_SOURCES_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    return [s.lower().strip() for s in data if s]
-        except Exception as e:
-            logger.warning(f"Fehler beim Lesen von trusted_sources.json: {e}")
-    return ["intern@archon.local", "system@archon.os", "micha@archon.os"]
+def load_trusted_sources() -> TrustedSources:
+    """Lädt die Whitelist verifizierter Absender/Quellen (Fail-Closed).
+
+    D12-M5/D04-M2 (W2-C): früher lieferte jeder Registry-Fehler eine
+    hartcodierte Whitelist (``intern@archon.local``, ``system@archon.os``,
+    ``micha@archon.os``) — Quellen wurden damit ohne Verifikation als
+    ``VERIFIED_SENDER`` markiert. Jetzt gilt: nur bei erfolgreich gelesener
+    und geparster Registry werden Einträge zurückgegeben; bei Fehler eine
+    LEERE Liste plus ``trust_verification_error``.
+    """
+    if not os.path.exists(TRUSTED_SOURCES_FILE):
+        err = "trust_registry_missing"
+        logger.error("[dual_llm_sanitizer] %s: keine verifizierte Trust-Registry vorhanden", err)
+        return TrustedSources([], verified=False, trust_verification_error=err)
+    try:
+        with open(TRUSTED_SOURCES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            raise ValueError("trust registry muss eine JSON-Liste sein")
+        sources = [
+            s.lower().strip() for s in data
+            if isinstance(s, str) and s.strip()
+        ]
+        return TrustedSources(sources, verified=True)
+    except Exception as e:
+        err = f"trust_registry_unreadable: {e}"
+        logger.error("[dual_llm_sanitizer] %s: %s", err, TRUSTED_SOURCES_FILE)
+        # Fail-Closed: keine Quelle ist verifiziert.
+        return TrustedSources([], verified=False, trust_verification_error=err)
+
 
 def is_trusted_source(source_id: str) -> bool:
-    """Prüft, ob eine Quelle/Absender als vertrauenswürdig (Trusted [T]) markiert ist."""
+    """Prüft, ob eine Quelle/Absender als vertrauenswürdig (Trusted [T]) markiert ist.
+
+    Bei Registry-Fehler (leere Liste + ``trust_verification_error``) ist keine
+    Quelle verifiziert — auch nicht die früher hartcodierten Absender.
+    """
     if not source_id:
         return False
     trusted = load_trusted_sources()
+    # Explizit gesetzter Registry-Fehler -> keine Vertrauensaussage erlauben.
+    # (`verified` defaultet auf True, damit einfache Listen-Mocks kompatibel
+    # bleiben; die echte Registry setzt es bei Fehler auf False.)
+    if getattr(trusted, "trust_verification_error", None) or getattr(trusted, "verified", True) is False:
+        return False
     sid = source_id.lower().strip()
     return sid in trusted or any(sid.endswith(f"@{t}") or sid.endswith(f".{t}") for t in trusted if "@" not in t)
 
 def toggle_trusted_source(source_id: str, operator: str = "operator") -> Dict[str, Any]:
-    """Schaltet den Trust-Status für einen Absender um und loggt im GoBD Audit-Log."""
+    """Schaltet den Trust-Status um — Audit VOR der Registry-Änderung (W2-C).
+
+    D04-M2/D12-M5: der signierte Audit-Eintrag wird VOR dem Atomar-Schreiben
+    der Whitelist erzeugt. Schlägt er fehl, wird die Änderung gar nicht erst
+    angewandt (strengste Form des „Toggle zurücknehmen") und bei
+    ``ARCHON_AUDIT_STRICT=1`` (Default) mit ``RuntimeError("audit_write_failed")``
+    eskaliert. Eine nicht verifizierbare Registry wird ebenfalls hart
+    abgelehnt, damit ein Toggle nicht eine fehlerhafte Datei überschreibt.
+    """
     sid = source_id.lower().strip()
     with _TRUST_LOCK:
-        trusted = load_trusted_sources()
+        registry = load_trusted_sources()
+        err = getattr(registry, "trust_verification_error", None)
+        # Fehlt die Datei, darf ein Admin sie mit diesem Toggle anlegen.
+        # Existiert sie, aber ist unlesbar/ungültig -> fail-closed.
+        if err and not err.startswith("trust_registry_missing"):
+            raise RuntimeError(f"trust_registry_unverified: {err}")
+        trusted = list(registry)
         is_now_trusted = False
 
         if sid in trusted:
@@ -82,6 +154,27 @@ def toggle_trusted_source(source_id: str, operator: str = "operator") -> Dict[st
         else:
             trusted.append(sid)
             is_now_trusted = True
+
+        # Signierten Nachweis VOR der Zustandsänderung schreiben (§2.5).
+        # Bei Auditfehler bleibt die Registry unverändert; im Strict-Modus
+        # (Default) wird hart abgebrochen.
+        try:
+            from backend.audit_log import chained_audit_log
+            chained_audit_log.record_event(
+                category="security",
+                action="sender_trust_toggled",
+                agent_id=operator,
+                payload={
+                    "source_id": sid,
+                    "is_trusted": is_now_trusted,
+                },
+            )
+        except Exception as e:
+            _record_audit_error("sender_trust_toggled", e)
+            if _audit_strict():
+                raise RuntimeError("audit_write_failed") from e
+            # Expliziter Opt-out (ARCHON_AUDIT_STRICT=0): Fehler bleibt
+            # gezaehlt/gesehen, der Toggle wird wie zuvor angewandt.
 
         target_dir = os.path.dirname(TRUSTED_SOURCES_FILE)
         os.makedirs(target_dir, exist_ok=True)
@@ -99,25 +192,11 @@ def toggle_trusted_source(source_id: str, operator: str = "operator") -> Dict[st
                 logger.debug("[dual_llm_sanitizer] Ignorierte Ausnahme (Z.86): %s", _exc)
             raise
 
-    try:
-        from backend.audit_log import chained_audit_log
-        chained_audit_log.record_event(
-            category="security",
-            action="sender_trust_toggled",
-            agent_id=operator,
-            payload={
-                "source_id": sid,
-                "is_trusted": is_now_trusted
-            }
-        )
-    except Exception as e:
-        logger.warning(f"Audit-Log Fehler bei toggle_trusted_source: {e}")
-
-    return {
-        "source_id": sid,
-        "is_trusted": is_now_trusted,
-        "total_trusted": len(trusted)
-    }
+        return {
+            "source_id": sid,
+            "is_trusted": is_now_trusted,
+            "total_trusted": len(trusted),
+        }
 
 def scan_heuristic_threats(text: str) -> List[str]:
     """Scannt Text (inkl. NFKC-Normalisierung gegen Homoglyphen) auf bekannte Injection-Signaturen."""
@@ -141,7 +220,15 @@ def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_ty
     4. Bei Bedrohung: Blockierung & Eintragung ins revisionssichere GoBD Audit-Log.
     """
     sid = source_id.strip()
-    trusted = is_trusted_source(sid)
+    # D12-M5: `VERIFIED_SENDER` ist eine Verifikationsaussage und darf nur bei
+    # erfolgreich gelesener Registry entstehen. Bei Registry-Fehler (leere
+    # Liste + trust_verification_error) bleibt `trusted` false.
+    registry = load_trusted_sources()
+    registry_verified = bool(
+        getattr(registry, "verified", True)
+        and not getattr(registry, "trust_verification_error", None)
+    )
+    trusted = registry_verified and is_trusted_source(sid)
     normalized_raw = unicodedata.normalize("NFKC", raw_text or "")
 
     # Audit D04/HIGH: zwingende Dual-LLM-Quarantine. Die bisherige Stufe-1-
@@ -220,7 +307,8 @@ def sanitize_external_input(raw_text: str, source_id: str = "unknown", source_ty
                 }
             )
         except Exception as e:
-            logger.warning(f"Audit-Log Fehler bei Injection-Alert: {e}")
+            # §0/§2.5: verschlucktes Audit-Event mindestens sichtbar machen.
+            _record_audit_error("prompt_injection_blocked", e)
 
     return {
         "is_safe": is_safe,

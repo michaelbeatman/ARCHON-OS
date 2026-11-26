@@ -15,12 +15,21 @@ def _audit_strict() -> bool:
     raw = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower()
     return raw not in {"0", "false", "no", "off", "none"}
 
-import json
-import os
-import re
-import urllib.error
-import urllib.request
-from typing import Any, Dict, List, Optional
+import json  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+import urllib.error  # noqa: E402
+import urllib.request  # noqa: E402
+from typing import Any, Dict, List  # noqa: E402
+
+# D05-M1: Auditfehler hart eskalieren. Modulweit gebunden, damit die
+# `except AuditDispatchError`-Klauseln auch bei einem Importfehler des Guards
+# nicht selbst eine NameError auslösen (fail-closed).
+try:
+    from backend.llm_egress_guard import AuditDispatchError
+except ImportError:  # pragma: no cover - defensiver Fail-Closed-Fallback
+    class AuditDispatchError(RuntimeError):  # type: ignore[no-redef]
+        """Audit-Schreibfehler — hart fail-closed."""
 
 # 25 Regex-Muster gegen Prompt Injections
 INJECTION_PATTERNS = [
@@ -130,6 +139,37 @@ def _enforce_egress_or_block(target_url: str, agent_id: str = "security_guard") 
             f"Egress-Firewall hat {target_url} blockiert.", error_code="EGRESS_FIREWALL_BLOCKED"
         )
     return res if isinstance(res, dict) else {}
+
+
+def _audit_classifier_dispatch(
+    *,
+    target_ep: str,
+    model: str,
+    completed: bool,
+    http_status: int = 200,
+    error_code: str = "",
+    reason: str = "",
+    data_category: str = "security_classification",
+) -> None:
+    """D05-H1: signierter ``llm_dispatch``-Proof für Klassifikator/Judge-Calls.
+
+    Erfolg → ``llm_call_dispatched``; Klassifikatorfehler, leere Antwort oder
+    Transportfehler → geblockter Proof („ausgeführt und blockiert"). Auditfehler
+    eskalieren als ``RuntimeError`` (D05-M1) und werden nicht verschluckt.
+    """
+    from backend.llm_egress_guard import audit_dispatch_sync
+
+    audit_dispatch_sync(
+        agent_id="security_guard",
+        provider="omniroute",
+        model=model,
+        target_endpoint=target_ep,
+        http_status=http_status,
+        completed=completed,
+        data_category=data_category,
+        error_code=error_code,
+        reason=reason,
+    )
 
 
 def quarantine_external_text(
@@ -253,7 +293,22 @@ def scan_prompt_injection(
                     llm_verdict = "safe"
                 else:
                     raise RuntimeError(f"INVALID_CLASSIFIER_VERDICT: {llm_reply!r}")
+            # D05-H1: Proof direkt nach der HTTP-Response (Erfolgspfad).
+            _audit_classifier_dispatch(
+                target_ep=target_ep, model=model, completed=True,
+                http_status=200,
+            )
+        except AuditDispatchError:
+            # D05-M1: Audit-Schreibfehler nie verschlucken — hart eskalieren.
+            raise
         except Exception as _exc:
+            # D05-H1: auch der fehlgeschlagene Klassifikator-Call hinterlässt
+            # einen signierten Block-Proof (HTTP/Transport/leere Antwort).
+            _audit_classifier_dispatch(
+                target_ep=target_ep, model=model, completed=False,
+                http_status=0, error_code="LLM_CLASSIFIER_ERROR",
+                reason=str(_exc),
+            )
             # Audit D04/HIGH: Klassifikatorfehler ist HART "blocked" — kein
             # Ingest mit nicht klassifiziertem externen Text.
             _archon_exc_logger.error("[local_security_guard] LLM-Klassifikator fehlgeschlagen (fail-closed): %s", _exc)
@@ -351,7 +406,22 @@ def validate_ai_output(
                     # Minimum. Auf den erlaubten Bereich 0-10 begrenzen.
                     llm_score = max(0, min(10, int(m.group(1))))
                     base_score = round((base_score + llm_score) / 2)
+            # D05-H1: Proof direkt nach der HTTP-Response (Erfolgspfad).
+            _audit_classifier_dispatch(
+                target_ep=target_ep, model=judge_model, completed=True,
+                http_status=200, data_category="security_judge",
+            )
+        except AuditDispatchError:
+            # D05-M1: Audit-Schreibfehler nie verschlucken — hart eskalieren.
+            raise
         except Exception as _exc:
+            # D05-H1: auch der fehlgeschlagene Judge-Call hinterlässt einen
+            # signierten Block-Proof (HTTP/Transport/leere Antwort).
+            _audit_classifier_dispatch(
+                target_ep=target_ep, model=judge_model, completed=False,
+                http_status=0, error_code="LLM_JUDGE_ERROR",
+                reason=str(_exc), data_category="security_judge",
+            )
             # M4: Klassifikatorfehler darf nicht automatisch "TRUST" bedeuten.
             # D15/HIGH (A8): ein fehlgeschlagener oder leerer Judge-Aufruf
             # fuehrt zu evaluation_failed + NEEDS_HUMAN_REVIEW, nie zu TRUST.

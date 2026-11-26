@@ -6,16 +6,15 @@ den direkten Zugriff auf Archon Kern-Werkzeuge (Kanban, CRM, Inbox, Boardroom & 
 Protokoll: MCP 2024-11-05 via JSON-RPC 2.0 (stdio & REST-Brücke).
 """
 
-import os
-import sys
-import json
-import time
-import uuid
-import sqlite3
 import datetime
-from typing import Dict, Any, List, Optional
-import urllib.request
+import json
+import os
+import sqlite3
+import sys
 import urllib.parse
+import urllib.request
+import uuid
+from typing import Any, Dict, List
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -230,7 +229,7 @@ class ArchonMcpServer:
         }
 
     def _create_workflow_template(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        from backend.workflow_templates import save_workflow_template, launch_workflow_run
+        from backend.workflow_templates import launch_workflow_run, save_workflow_template
         tpl = save_workflow_template({
             "id": args.get("id") or "",
             "title": args.get("title") or "",
@@ -337,58 +336,144 @@ class ArchonMcpServer:
         return {"status": "success", "task_id": task_id, "old_status": old_status, "new_status": new_status}
 
     def _search_crm(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        query = args.get("query", "").strip()
-        limit = min(int(args.get("limit", 10)), 50)
-        # PocketBase prüfen
+        """D12-H2: ein PocketBase-Fehler ist kein leeres CRM.
+
+        Strukturierter Vertrag: ``status="ok"|"error"``, ``error_code``,
+        ``attempts`` und ``contacts``. ``count`` wird nur bei ``status="ok"``
+        ausgeliefert, damit Agenten einen leeren Bestand nicht mit einem
+        ausgefallenen CRM verwechseln können.
+        """
+        query = str(args.get("query") or "").strip()
+        try:
+            limit = min(int(args.get("limit", 10)), 50)
+        except (TypeError, ValueError):
+            limit = 10
+
         pb_candidates = [
             os.getenv("POCKETBASE_URL", "http://127.0.0.1:8090"),
-            "http://pocketbase:8090"
+            "http://pocketbase:8090",
         ]
-        results = []
+        attempts: List[Dict[str, Any]] = []
+        results: List[Dict[str, Any]] = []
+        succeeded = False
+        last_error_code = "CRM_ALL_ENDPOINTS_UNREACHABLE"
+
         for base_url in pb_candidates:
+            attempt: Dict[str, Any] = {"url": base_url, "status": "error", "error_code": ""}
             try:
                 filter_q = urllib.parse.quote(f'name ~ "{query}" || firma ~ "{query}" || email ~ "{query}"')
                 url = f"{base_url.rstrip('/')}/api/collections/kontakte/records?filter={filter_q}&perPage={limit}"
                 req = urllib.request.Request(url, headers={"User-Agent": "ArchonMCP/1.0"})
                 with urllib.request.urlopen(req, timeout=2.5) as resp:
-                    if resp.status == 200:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        results = data.get("items", [])
-                        break
-            except Exception:
-                continue
+                    # echtes raise_for_status (Requests-Mocks/neuere urllib),
+                    # otherwise explizite HTTP-Prüfung für http.client-Responses.
+                    raise_for_status = getattr(resp, "raise_for_status", None)
+                    if callable(raise_for_status):
+                        raise_for_status()
+                    elif int(getattr(resp, "status", 0) or 0) >= 400:
+                        raise RuntimeError(f"HTTP {int(resp.status)}")
+                    attempt["http_status"] = int(getattr(resp, "status", 0) or 0)
+                    body = resp.read().decode("utf-8")
+                data = json.loads(body)
+                if not isinstance(data, dict):
+                    attempt["error_code"] = "INVALID_CRM_JSON"
+                    last_error_code = attempt["error_code"]
+                    attempts.append(attempt)
+                    continue
+                items = data.get("items")
+                if not isinstance(items, list):
+                    attempt["error_code"] = "MISSING_CRM_ITEMS"
+                    last_error_code = attempt["error_code"]
+                    attempts.append(attempt)
+                    continue
+                attempt["status"] = "ok"
+                attempt["error_code"] = ""
+                results = items
+                succeeded = True
+                attempts.append(attempt)
+                break
+            except json.JSONDecodeError as exc:
+                attempt["error_code"] = "INVALID_CRM_JSON"
+                attempt["error"] = f"{type(exc).__name__}: {exc}"
+                last_error_code = attempt["error_code"]
+            except Exception as exc:
+                attempt["error_code"] = "CRM_REQUEST_FAILED"
+                attempt["error"] = f"{type(exc).__name__}: {exc}"
+            attempts.append(attempt)
 
-        return {"status": "success", "query": query, "count": len(results), "contacts": results}
+        if not succeeded:
+            return {
+                "status": "error",
+                "error_code": last_error_code,
+                "query": query,
+                "attempts": attempts,
+                "contacts": [],
+            }
+        return {
+            "status": "ok",
+            "error_code": None,
+            "query": query,
+            "count": len(results),
+            "contacts": results,
+            "attempts": attempts,
+        }
 
     def _get_inbox(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        cat = args.get("category", "all")
-        limit = min(int(args.get("limit", 10)), 50)
+        """D12-M4: 'leer', 'Verzeichnis fehlt' und 'Datei nicht lesbar' trennen."""
+        cat = str(args.get("category") or "all")
+        try:
+            limit = min(int(args.get("limit", 10)), 50)
+        except (TypeError, ValueError):
+            limit = 10
         inbox_dir = _resolve_inbox_dir()
-        messages = []
+        messages: List[Dict[str, Any]] = []
+        read_errors: List[Dict[str, str]] = []
+        directory_missing = not os.path.isdir(inbox_dir)
 
-        if os.path.exists(inbox_dir):
+        if not directory_missing:
             for root, dirs, files in os.walk(inbox_dir):
                 if cat != "all" and cat not in root.lower():
                     continue
                 for f in sorted(files, reverse=True):
-                    if f.endswith(".json") or f.endswith(".txt"):
-                        fpath = os.path.join(root, f)
-                        try:
-                            with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
-                                content = fh.read(1000)
-                            messages.append({
-                                "file": f,
-                                "path": fpath,
-                                "preview": content[:300]
-                            })
-                            if len(messages) >= limit:
-                                break
-                        except Exception:
-                            pass
+                    if not (f.endswith(".json") or f.endswith(".txt")):
+                        continue
+                    fpath = os.path.join(root, f)
+                    try:
+                        with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                            content = fh.read(1000)
+                    except Exception as exc:
+                        read_errors.append({"path": fpath, "error": f"{type(exc).__name__}: {exc}"})
+                        continue
+                    messages.append({
+                        "file": f,
+                        "path": fpath,
+                        "preview": content[:300]
+                    })
+                    if len(messages) >= limit:
+                        break
                 if len(messages) >= limit:
                     break
 
-        return {"status": "success", "category": cat, "count": len(messages), "messages": messages}
+        if directory_missing:
+            return {
+                "status": "error",
+                "error_code": "INBOX_DIR_MISSING",
+                "category": cat,
+                "directory_missing": True,
+                "read_errors": [],
+                "skipped_count": 0,
+                "messages": [],
+            }
+        return {
+            "status": "partial" if read_errors else "ok",
+            "error_code": "INBOX_READ_ERRORS" if read_errors else None,
+            "category": cat,
+            "directory_missing": False,
+            "read_errors": read_errors,
+            "skipped_count": len(read_errors),
+            "count": len(messages),
+            "messages": messages,
+        }
 
     def _trigger_boardroom(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """K7: echte Debatte starten — früher wurde nur ein Kanban-Task erzeugt

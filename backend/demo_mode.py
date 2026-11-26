@@ -8,6 +8,7 @@ Designed for safe public hosting (Show HN / Product Hunt / public evaluation on 
 1. Pure pass-through ASGI middleware when `ARCHON_DEMO_MODE` is unset/false.
 2. Hard 403 (`demo_blocked`) on all dangerous execution, container, raw-config,
    updater, and reverse-proxy/egress paths regardless of HTTP method.
+   WebSockets are Default-Deny: only paths in `DEMO_SAFE_WEBSOCKET_PATHS` pass.
 3. Instant deterministic 200 OK simulation (`zero_token_cost=True`) on demo-safe
    interactive preview POST endpoints (QuickChat, Master Chat, Agent Chat,
    AI Boardroom run/stream, Prompt Studio template render).
@@ -43,7 +44,15 @@ DEMO_HARD_BLOCKED_PREFIXES: Tuple[str, ...] = (
     "/n8n-proxy",
     "/omniroute-proxy",
     "/api/proxy",
+    # W2-B/D04-H1: Root-Alias des n8n-Push-WebSockets (archon/routers/proxies.py).
+    # Ohne diesen Eintrag blieb der Egress-Tunnel im oeffentlichen Demo erreichbar.
+    "/rest/push",
 )
+
+# W2-B/D04-H1: WebSockets im Demo-Modus sind Default-Deny. Nur explizit hier
+# gelistete, nachweislich read-only Pfade duerfen den App-Core erreichen.
+# Aktuell existiert kein demo-sicherer WS-Endpunkt — die Liste ist bewusst leer.
+DEMO_SAFE_WEBSOCKET_PATHS: frozenset[str] = frozenset()
 
 # Mutating HTTP verbs blocked by default in read-only demo mode unless explicitly
 # handled by the deterministic zero-token preview simulator below.
@@ -980,7 +989,8 @@ def get_demo_status(lang: str = "en") -> Dict[str, Any]:
             "Docker-Container-Steuerung & Logs (/api/v1/container, /api/docker)",
             "System-Updater & Selbstmodifikation (/api/v1/system/update)",
             "Roh-Konfiguration & API-Schlüssel (/api/hermes/raw_config)",
-            "Reverse-Proxies & externer Netzwerk-Egress (/n8n-proxy, /omniroute-proxy, /api/proxy)",
+            "Reverse-Proxies & externer Netzwerk-Egress (/n8n-proxy, /omniroute-proxy, /api/proxy, /rest/push)",
+            "Alle WebSocket-Verbindungen (Default-Deny, inkl. n8n-Push-Alias /rest/push)",
             "Persistente Datenbank-, Vault- & Datei-Schreibzugriffe (POST/PUT/DELETE/PATCH)",
         ]
         if is_de
@@ -989,7 +999,8 @@ def get_demo_status(lang: str = "en") -> Dict[str, Any]:
             "Docker Container Lifecycle & Logs (/api/v1/container, /api/docker)",
             "System Self-Updater (/api/v1/system/update)",
             "Raw Configuration & Secret Editor (/api/hermes/raw_config)",
-            "Reverse Proxies & External Egress (/n8n-proxy, /omniroute-proxy, /api/proxy)",
+            "Reverse Proxies & External Egress (/n8n-proxy, /omniroute-proxy, /api/proxy, /rest/push)",
+            "All WebSocket connections (default-deny, incl. n8n push alias /rest/push)",
             "Persistent Database, Vault & File Mutations (POST/PUT/DELETE/PATCH)",
         ]
     )
@@ -1307,8 +1318,11 @@ class DemoModeMiddleware:
 
         scope_type = scope.get("type")
         if scope_type == "websocket":
-            ws_path = scope.get("path", "")
-            if _is_hard_blocked_path(ws_path):
+            ws_path = scope.get("path", "") or "/"
+            # D04-H1: Default-Deny fuer ALLE WebSockets. Die harte Blockliste
+            # bleibt zusaetzlich wirksam, falls ein Pfad versehentlich in die
+            # Safe-Liste aufgenommen wird.
+            if ws_path not in DEMO_SAFE_WEBSOCKET_PATHS or _is_hard_blocked_path(ws_path):
                 await send({"type": "websocket.close", "code": 1008})
                 return
             await self.app(scope, receive, send)

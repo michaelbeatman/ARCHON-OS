@@ -5,11 +5,12 @@ Scannt Textausgaben von Modellen und Agenten auf vertrauliche API-Keys,
 Passwörter, JWT-Token oder private Zugangsdaten und maskiert diese vor der Weitergabe.
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("secret_masker")
 
-import os
-import re
-from typing import Tuple
+import os  # noqa: E402
+import re  # noqa: E402
+from typing import Tuple  # noqa: E402
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -75,32 +76,36 @@ def _env_secret_literals() -> list:
 def mask_sensitive_text(text: str) -> Tuple[str, int]:
     """
     Scannt den Eingabetext auf vertrauliche Zugangsdaten und ersetzt sie.
-    Berücksichtigt den Schalter secret_masking_enabled in settings.json.
+
+    D04-H2: Maskierung ist **nicht abschaltbar**. Ein `secret_masking_enabled=false`
+    in settings.json wird bewusst ignoriert: Es gibt keinen Pfad, der Klartext
+    mit `count=0` als „Erfolg" zurückgibt. `count=0` bedeutet ausschließlich,
+    dass der geprüfte Text tatsächlich keine Secrets enthielt.
+
+    D04-H2: Bei einem Maskierungsfehler wird hart abgebrochen (fail-closed),
+    statt den ungeprüften Text an den Aufrufer durchzureichen.
+
     Gibt (bereinigter_text, anzahl_maskierungen) zurück.
     """
     if not text or not isinstance(text, str):
         return text, 0
 
     try:
-        from backend.autonomy_settings import get_module_config
-        cfg = get_module_config("fleet_and_hygiene")
-        if not cfg.get("secret_masking_enabled", True):
-            return text, 0
-    except Exception as _exc:
-        _archon_exc_logger.debug("[secret_masker] Ignorierte Ausnahme (Z.42): %s", _exc)
+        masked_text = text
+        total_replacements = 0
 
-    masked_text = text
-    total_replacements = 0
+        for pattern, replacement in SECRET_PATTERNS:
+            matches = list(re.finditer(pattern, masked_text))
+            if matches:
+                total_replacements += len(matches)
+                masked_text = re.sub(pattern, replacement, masked_text)
 
-    for pattern, replacement in SECRET_PATTERNS:
-        matches = list(re.finditer(pattern, masked_text))
-        if matches:
-            total_replacements += len(matches)
-            masked_text = re.sub(pattern, replacement, masked_text)
-
-    for literal in _env_secret_literals():
-        if literal in masked_text:
-            total_replacements += masked_text.count(literal)
-            masked_text = masked_text.replace(literal, "[GESCHÜTZTER_UMGEBUNG_SECRET]")
+        for literal in _env_secret_literals():
+            if literal in masked_text:
+                total_replacements += masked_text.count(literal)
+                masked_text = masked_text.replace(literal, "[GESCHÜTZTER_UMGEBUNG_SECRET]")
+    except Exception as exc:
+        _archon_exc_logger.error("[secret_masker] Maskierung fehlgeschlagen (fail-closed): %s", exc)
+        raise RuntimeError(f"secret_masking_failed: {exc}") from exc
 
     return masked_text, total_replacements

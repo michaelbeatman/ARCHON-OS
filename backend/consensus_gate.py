@@ -8,17 +8,16 @@ import logging
 
 _archon_exc_logger = logging.getLogger("consensus_gate")
 
-import asyncio
-import json
-import math
-import os
-import sqlite3
-import sys
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
+import asyncio  # noqa: E402
+import json  # noqa: E402
+import math  # noqa: E402
+import os  # noqa: E402
+import sqlite3  # noqa: E402
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union  # noqa: E402
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field  # noqa: E402
 
-from backend.handoff_desk import mark_truncated  # D11: explizite Kürzungs-Marker
+from backend.handoff_desk import mark_truncated  # D11: explizite Kürzungs-Marker  # noqa: E402
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -385,12 +384,17 @@ async def review_task_output(
             # "approved" bedeuten. approved=False ist fail-closed; der
             # Verdict macht sichtbar, dass keine Prüfung stattgefunden hat.
             return {
+                "status": "needs_human_review",
                 "approved": False,
                 "reviewed": False,
-                "score": 0,
+                "score": None,
                 "verdict": "NOT_REVIEWED_DISABLED",
                 "critique": "Konsens-Gate ist deaktiviert — keine Prüfung durchgeführt.",
-                "risks": []
+                # D12/M3: nicht geprueft != "keine Risiken".
+                "risks": None,
+                "needs_human_review": True,
+                "evaluation_failed": True,
+                "unverified_fields": ["score", "risks"],
             }
         min_prio = int(cfg.get("min_priority", 3))
         if not model:
@@ -404,12 +408,16 @@ async def review_task_output(
         # zurueckgegeben — ein Agent konnte sich durch priority=1 selbst
         # freigeben. Jetzt: nicht geprüft => nicht freigegeben.
         return {
+            "status": "needs_human_review",
             "approved": False,
             "reviewed": False,
-            "score": 0,
+            "score": None,
             "verdict": "NOT_REVIEWED_LOW_PRIORITY",
             "critique": f"Prioritaet ({priority}) < Schwellenwert ({min_prio}): keine Pruefung durchgefuehrt.",
-            "risks": []
+            "risks": None,
+            "needs_human_review": True,
+            "evaluation_failed": True,
+            "unverified_fields": ["score", "risks"],
         }
 
     critic_prompt = f"""Du bist der leitende Sicherheits- und Qualitätsrevisor (Chief Quality & Security Officer) von Archon OS.
@@ -455,39 +463,89 @@ Regeln:
         parsed = json.loads(clean_json)
         # D-06: fehlende Felder duerfen NICHT als Zustimmung gelesen werden.
         approved = bool(parsed.get("approved", False))
-        score = int(parsed.get("score", 0))
+        unverified_fields: List[str] = []
+
+        # D12/M3: kein erfundener Score. Fehlt das Feld, bleibt der Wert None
+        # und die Entscheidung muss von einem Menschen nachgeprueft werden.
+        raw_score = parsed.get("score")
+        score = (
+            raw_score
+            if isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool)
+            else None
+        )
+        if score is None:
+            unverified_fields.append("score")
+
         verdict = parsed.get("verdict", "REJECTED_REVISION_REQUIRED")
-        # D12/MED: ein fehlendes Kritik-Feld darf nicht als beruhigende
+
+        # D12/M3: ein fehlendes Kritik-Feld darf nicht als beruhigende
         # "keine Maengel"-Behauptung erfunden und als geprueft persistiert werden.
         _critique_raw = parsed.get("critique")
         critique = str(_critique_raw).strip() if _critique_raw is not None else ""
-        evaluation_failed = not critique
+        if not critique:
+            unverified_fields.append("critique")
+
+        # D12/M3: fehlende `risks` sind "nicht geprueft", nicht "keine Risiken".
+        raw_risks = parsed.get("risks")
+        risks = list(raw_risks) if isinstance(raw_risks, list) else None
+        if risks is None:
+            unverified_fields.append("risks")
+
+        evaluation_failed = bool(unverified_fields)
         if evaluation_failed:
-            critique = "Nicht bewertet (Feld fehlt)"
+            critique = critique or "Nicht bewertet (Pflichtfelder fehlen)"
             approved = False
+            if verdict in ("APPROVED", "APPROVED_WITH_WARNING"):
+                verdict = "NEEDS_HUMAN_REVIEW"
 
-        _record_decision(task_id, task_title, "dual_gate", approved, verdict, score, [parsed], critique)
+        persisted, persist_error = _persistence_outcome(
+            _record_decision(
+                task_id, task_title, "dual_gate", approved, verdict,
+                score, [parsed], critique,
+            )
+        )
 
-        return {
+        result = {
             "task_id": task_id,
+            "status": "needs_human_review" if evaluation_failed else "success",
             "approved": approved,
             "score": score,
             "verdict": verdict,
             "critique": critique,
             "evaluation_failed": evaluation_failed,
-            "risks": parsed.get("risks", [])
+            "needs_human_review": evaluation_failed,
+            "unverified_fields": unverified_fields,
+            "risks": risks,
+            "persisted": persisted,
         }
+        if not persisted:
+            # D12/M2: ohne nachweisbare Persistenz keine Freigabe.
+            result.update({
+                "status": "error",
+                "error_code": persist_error or "CONSENSUS_PERSISTENCE_FAILED",
+                "approved": False,
+                "verdict": "CONSENSUS_PERSISTENCE_FAILED",
+                "evaluation_failed": True,
+                "needs_human_review": True,
+            })
+        return result
     except Exception as e:
         # D-06: Fail-closed — ein ausgefallener Revisor darf die Freigabe nicht
         # erfinden. Vorher: {"approved": True, "score": 7, "APPROVED_WITH_WARNING"}.
+        # `score=0` ist hier ein Fehler-Sentinel, kein erfundener Qualitätswert.
         return {
             "task_id": task_id,
+            "status": "error",
+            "error_code": "REVIEW_FAILED",
             "approved": False,
             "score": 0,
             "verdict": "REVIEW_FAILED",
             "critique": f"Automatisierte Revisor-Prüfung konnte nicht abgeschlossen werden: {e}",
             "evaluation_failed": True,
-            "risks": ["Manueller Check zwingend erforderlich"]
+            "needs_human_review": True,
+            "unverified_fields": ["score", "critique", "risks"],
+            "risks": ["Manueller Check zwingend erforderlich"],
+            "persisted": False,
         }
 
 async def run_tri_agent_council(
@@ -509,6 +567,10 @@ async def run_tri_agent_council(
                 "status": "disabled", "task_id": task_id,
                 "approved": False, "reviewed": False,
                 "verdict": "NOT_REVIEWED_DISABLED",
+                "needs_human_review": True,
+                "evaluation_failed": True,
+                "unverified_fields": ["score", "risks"],
+                "risks": None,
             }
         majority_rule = cfg.get("majority_rule", "two_thirds")
         if not model:
@@ -556,22 +618,58 @@ Antworte NUR mit JSON:
             return json.loads(c)
         except Exception as e:
             # D-06: Ein ausgefallener Juror stimmt NICHT zu (fail-closed).
-            return {"juror": j["role"], "approved": False, "score": 0, "reason": f"Fallback: {e}"}
+            # D12/M3: kein erfundener Score (0/7) fuer eine nicht erfolgte Pruefung.
+            return {
+                "juror": j["role"], "approved": False, "score": None,
+                "reason": f"Fallback: {e}", "evaluation_failed": True,
+            }
 
     votes = await asyncio.gather(*[_get_juror_vote(j) for j in jurors])
-    yes_votes = sum(1 for v in votes if v.get("approved") is True)
+    yes_votes = sum(1 for v in votes if isinstance(v, dict) and v.get("approved") is True)
     total_votes = len(votes)
-    avg_score = round(sum(v.get("score", 7) for v in votes) / total_votes, 1)
+
+    # D12/M3: fehlende Juror-Scores duerfen nicht mit 7 gewichtet werden.
+    unverified_fields: List[str] = []
+    valid_scores: List[float] = []
+    for idx, vote in enumerate(votes):
+        sc = vote.get("score") if isinstance(vote, dict) else None
+        if isinstance(sc, (int, float)) and not isinstance(sc, bool):
+            valid_scores.append(sc)
+        else:
+            unverified_fields.append(f"juror[{idx}].score")
+    for idx, vote in enumerate(votes):
+        if not isinstance(vote, dict) or not str(vote.get("reason") or "").strip():
+            field = f"juror[{idx}].reason"
+            if field not in unverified_fields:
+                unverified_fields.append(field)
+    evaluation_failed = bool(unverified_fields)
+    avg_score = (
+        round(sum(valid_scores) / total_votes, 1)
+        if not evaluation_failed and total_votes
+        else None
+    )
 
     required_votes = 3 if majority_rule == "unanimous" else 2
-    consensus_reached = yes_votes >= required_votes
-    verdict = "COUNCIL_APPROVED" if consensus_reached else "COUNCIL_REJECTED"
-    summary = f"{yes_votes}/{total_votes} Stimmen für Freigabe (Erforderlich: {required_votes}, Schnitt: {avg_score}/10)."
+    # Ohne verifizierte Bewertung darf es keine Freigabe geben.
+    consensus_reached = yes_votes >= required_votes and not evaluation_failed
+    verdict = "COUNCIL_APPROVED" if consensus_reached else (
+        "COUNCIL_NEEDS_HUMAN_REVIEW" if evaluation_failed else "COUNCIL_REJECTED"
+    )
+    score_text = f"{avg_score}/10" if avg_score is not None else "nicht verifiziert"
+    summary = (
+        f"{yes_votes}/{total_votes} Stimmen für Freigabe "
+        f"(Erforderlich: {required_votes}, Schnitt: {score_text})."
+    )
 
-    _record_decision(task_id, task_title, "tri_agent_council", consensus_reached, verdict, avg_score, votes, summary)
+    persisted, persist_error = _persistence_outcome(
+        _record_decision(
+            task_id, task_title, "tri_agent_council", consensus_reached,
+            verdict, avg_score, votes, summary,
+        )
+    )
 
-    return {
-        "status": "success",
+    result = {
+        "status": "needs_human_review" if evaluation_failed else "success",
         "task_id": task_id,
         "mode": "tri_agent_council",
         "majority_rule": majority_rule,
@@ -581,10 +679,46 @@ Antworte NUR mit JSON:
         "total_votes": total_votes,
         "avg_score": avg_score,
         "votes": votes,
-        "summary": summary
+        "summary": summary,
+        "evaluation_failed": evaluation_failed,
+        "needs_human_review": evaluation_failed,
+        "unverified_fields": unverified_fields,
+        "persisted": persisted,
     }
+    if not persisted:
+        # D12/M2: ohne nachweisbare Persistenz keine Freigabe.
+        result.update({
+            "status": "error",
+            "error_code": persist_error or "CONSENSUS_PERSISTENCE_FAILED",
+            "approved": False,
+            "verdict": "CONSENSUS_PERSISTENCE_FAILED",
+            "evaluation_failed": True,
+            "needs_human_review": True,
+        })
+    return result
 
-def _record_decision(task_id, task_title, mode, approved, verdict, avg_score, votes, critique):
+def _persistence_outcome(result: Any) -> Tuple[bool, Optional[str]]:
+    """Interpretiert das Ergebnis von `_record_decision()` fail-closed.
+
+    Ein fehlgeschlagener oder nicht nachweisbarer Schreibvorgang ist NIE eine
+    Freigabe. Legacy-Mocks ohne Rueckgabewert gelten als nicht persistiert.
+    """
+    if isinstance(result, tuple):
+        ok = bool(result[0]) if result else False
+        code = str(result[1]) if len(result) > 1 and result[1] else None
+        return ok, code
+    if isinstance(result, dict):
+        return bool(result.get("persisted")), result.get("error_code")
+    return bool(result), None
+
+
+def _record_decision(task_id, task_title, mode, approved, verdict, avg_score, votes, critique) -> Tuple[bool, Optional[str]]:
+    """D12/M2: Persistenzfehler eskalieren statt nur auf stderr zu drucken.
+
+    Rueckgabe ``(persisted, error_code)``. Ohne nachweisbar persistierte
+    Entscheidung darf der Aufrufer keine Freigabe quittieren.
+    """
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH, timeout=5.0)
         with conn:
@@ -594,12 +728,26 @@ def _record_decision(task_id, task_title, mode, approved, verdict, avg_score, vo
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """, (task_id, task_title, mode, 1 if approved else 0, verdict, avg_score, json.dumps(votes, ensure_ascii=False), critique))
             conn.commit()
-        conn.close()
+        return True, None
     except Exception as e:
-        print(f"[ConsensusGate] Fehler beim Speichern des Konsensentscheids: {e}", file=sys.stderr)
+        _archon_exc_logger.error(
+            "[consensus_gate] Konsensentscheid nicht persistiert (fail-closed): %s", e
+        )
+        return False, "CONSENSUS_PERSISTENCE_FAILED"
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception as exc:
+                _archon_exc_logger.debug("[consensus_gate] DB-Close fehlgeschlagen: %s", exc)
 
-def get_consensus_history(limit: int = 25) -> List[Dict[str, Any]]:
-    """Liefert die Historie der Schiedsgerichts- und Revisor-Beschlüsse."""
+
+def get_consensus_history(limit: int = 25) -> Dict[str, Any]:
+    """D12/M2: Historie oder strukturierter Fehler — nie ein nacktes `[]`.
+
+    "Keine Entscheidungen" muss von "DB nicht lesbar" unterscheidbar sein.
+    """
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH, timeout=5.0)
         conn.row_factory = sqlite3.Row
@@ -609,9 +757,27 @@ def get_consensus_history(limit: int = 25) -> List[Dict[str, Any]]:
         for r in rows:
             try:
                 r["votes_json"] = json.loads(r["votes_json"])
+                r["votes_parse_error"] = False
             except Exception as _exc:
-                _archon_exc_logger.debug("[consensus_gate] Ignorierte Ausnahme (Z.265): %s", _exc)
-        conn.close()
-        return rows
-    except Exception:
-        return []
+                # D12/M2: beschaedigte Votes als Fehler markieren, nicht still
+                # als leere Liste ausgeben.
+                _archon_exc_logger.warning(
+                    "[consensus_gate] votes_json nicht lesbar (id=%s): %s", r.get("id"), _exc
+                )
+                r["votes_parse_error"] = True
+        return {"status": "ok", "count": len(rows), "history": rows}
+    except Exception as exc:
+        _archon_exc_logger.error("[consensus_gate] Konsens-Historie nicht lesbar: %s", exc)
+        return {
+            "status": "error",
+            "error_code": "CONSENSUS_HISTORY_READ_FAILED",
+            "error": str(exc),
+            "count": 0,
+            "history": [],
+        }
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception as exc:
+                _archon_exc_logger.debug("[consensus_gate] DB-Close fehlgeschlagen: %s", exc)

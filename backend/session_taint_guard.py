@@ -13,17 +13,58 @@ geparkt und benoetigen eine explizite HITL-Freigabe.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 import hmac
-import logging
 import json
+import logging
 import os
 import secrets
 import sqlite3
 import time
+from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional
 
 logger = logging.getLogger("archon.session_taint_guard")
+
+
+def _audit_strict() -> bool:
+    """D04-M1 (W2-C): Audit-Fehler sind default-maessig hart (fail-closed)."""
+    raw = str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off", "none"}
+
+
+# B2/D04-M1: verschluckte Audit-Fehler sind messbar (kein stummes pass).
+_AUDIT_ERROR_COUNTS: Dict[str, int] = {}
+
+
+def _record_audit_error(action: str, exc: BaseException) -> None:
+    _AUDIT_ERROR_COUNTS[action] = _AUDIT_ERROR_COUNTS.get(action, 0) + 1
+    logger.error(
+        "[TaintGuard] Audit-Event '%s' fehlgeschlagen (count=%d): %s",
+        action, _AUDIT_ERROR_COUNTS[action], exc,
+    )
+
+
+def _record_taint_audit(action: str, agent_id: str, payload: Dict[str, Any]) -> None:
+    """Pflicht-Audit VOR dem Status-Commit (§0/§2.5: nie verschlucken).
+
+    Bei ARCHON_AUDIT_STRICT=1 (Default) wird ein Schreibfehler als
+    ``RuntimeError("audit_write_failed")`` eskaliert. Der Aufrufer muss den
+    Aufruf VOR ``conn.commit()`` machen, damit die Statusaenderung dann
+    zurueckgerollt wird und die Freigabe nicht einloesbar bleibt.
+    """
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="security",
+            action=action,
+            agent_id=agent_id,
+            payload=payload,
+        )
+    except Exception as exc:
+        _record_audit_error(action, exc)
+        if _audit_strict():
+            raise RuntimeError("audit_write_failed") from exc
+
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "taint_guard.db")
@@ -68,8 +109,8 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
     path = db_path
     if not path:
         try:
-            from backend.tenant_db_registry import resolve_tenant_db_path
             from backend.tenant_context import tenant_context
+            from backend.tenant_db_registry import resolve_tenant_db_path
             path = resolve_tenant_db_path("taint_guard.db", tenant_context.get_active_tenant_id())
         except Exception as exc:
             # D07: fail-closed — kein stillen Fallback auf die globale DB.
@@ -371,29 +412,28 @@ def resolve_taint_approval(
             """,
             (new_status, reviewer, now, approval_id),
         )
-        conn.commit()
         if cur.rowcount == 0:
             return None
+
+        # D04-M1 (W2-C): signiertes Audit-Event mit BEIDEN Actors VOR dem Commit.
+        # Bei Auditfehler eskaliert _record_taint_audit (ARCHON_AUDIT_STRICT=1
+        # default) mit RuntimeError("audit_write_failed"). Die Ausnahme verlaesst
+        # den `with`-Block vor conn.commit(); sqlite3 rollt die UPDATE damit beim
+        # close() zurueck. Die Freigabe bleibt 'pending' und ist nicht einloesbar.
+        _record_taint_audit(
+            action="taint_hitl_resolved",
+            agent_id=reviewer,
+            payload={
+                "approval_id": approval_id,
+                "requested_by": requested_by,
+                "reviewer": reviewer,
+                "approved": approved,
+            },
+        )
+
+        conn.commit()
         result = conn.execute("SELECT * FROM taint_hitl_approvals WHERE approval_id = ?", (approval_id,)).fetchone()
         res = dict(result) if result else None
-
-    # Audit-Event mit BEIDEN Actors (signierte Kette).
-    if res is not None:
-        try:
-            from backend.audit_log import chained_audit_log
-            chained_audit_log.record_event(
-                category="security",
-                action="taint_hitl_resolved",
-                agent_id=reviewer,
-                payload={
-                    "approval_id": approval_id,
-                    "requested_by": requested_by,
-                    "reviewer": reviewer,
-                    "approved": approved,
-                },
-            )
-        except Exception as exc:
-            logger.warning("[TaintGuard] Audit-Event Freigabe fehlgeschlagen: %s", exc)
     return res
 
 

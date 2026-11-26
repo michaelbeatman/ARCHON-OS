@@ -20,7 +20,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import subprocess
 import threading
 import time
@@ -28,8 +27,8 @@ from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-from backend.audit_log import chained_audit_log, sanitize_llm_endpoint
-from backend.privacy_router import (
+from backend.audit_log import chained_audit_log, sanitize_llm_endpoint  # noqa: E402
+from backend.privacy_router import (  # noqa: E402
     check_local_llm_status,
     get_privacy_config,
     is_sensitive_category,
@@ -82,6 +81,15 @@ class ZeroEgressBlockedError(RuntimeError):
         super().__init__(message)
         self.error_code = error_code
         self.audit_event = audit_event or {}
+
+
+class AuditDispatchError(RuntimeError):
+    """D05-M1: Audit-Schreibfehler beim Dispatch-Proof — hart fail-closed.
+
+    Erbt bewusst von ``RuntimeError``, damit bestehende Fail-Closed-Pfade, die
+    bereits ``RuntimeError`` erwarten, unverändert greifen. Wird ausschließlich
+    von ``audit_dispatch_sync`` geworfen und darf NIE nur geloggt werden.
+    """
 
 
 class PromptProvenance(NamedTuple):
@@ -410,6 +418,99 @@ def log_completed_llm_dispatch(
     )
 
 
+def audit_dispatch_sync(
+    *,
+    provider: str,
+    model: str,
+    target_endpoint: str,
+    agent_id: str = "system",
+    http_status: int = 200,
+    data_category: str = "general",
+    zero_egress_active: bool = False,
+    completed: bool = True,
+    error_code: str = "",
+    reason: str = "",
+    task_id: str = "",
+    trace_id: str = "",
+    extra: Optional[Dict[str, Any]] = None,
+    audit_logger: Any = None,
+) -> Dict[str, Any]:
+    """Zentraler, hart fail-closed ``llm_dispatch``-Proof für JEDEN echten Call.
+
+    D05-H1: Jeder Erfolgspfad ruft diesen Helper direkt nach der HTTP-Response.
+    Die Pflichtfelder ``provider``, ``model``, ``target_endpoint``/``target_host``,
+    ``egress_zone`` und ``data_category`` landen atomar im signierten Ledger
+    (Host/Zone deterministisch aus dem Endpunkt abgeleitet).
+
+    D05-M1: Ein Audit-Schreibfehler wird nie verschluckt, sondern als
+    ``AuditDispatchError`` (RuntimeError) eskaliert.
+
+    ``completed=True`` (HTTP 2xx/3xx + verwertbarer Body) → ``llm_call_dispatched``.
+    ``completed=False`` (HTTP-Fehler, Transportfehler, leerer Body) → signierter
+    Block-Proof mit ``error_code``. Damit bleibt auch ein fehlgeschlagener
+    Dispatch im GoBD-Nachweis („ausgeführt und blockiert").
+    """
+    alog = audit_logger or chained_audit_log
+    clean_ep, target_host, egress_zone = sanitize_llm_endpoint(target_endpoint)
+    proof_extra: Dict[str, Any] = {
+        "target_host": target_host,
+        "egress_zone": egress_zone,
+        "provider": provider,
+        "model": model,
+        "data_category": data_category,
+        "http_status_observed": int(http_status or 0),
+    }
+    if extra:
+        proof_extra.update(extra)
+    status = int(http_status or 0)
+    try:
+        if completed and 200 <= status < 400:
+            return log_completed_llm_dispatch(
+                agent_id=agent_id,
+                provider=provider,
+                model=model,
+                target_endpoint=clean_ep,
+                http_status=status,
+                data_category=data_category,
+                zero_egress_active=zero_egress_active,
+                task_id=task_id,
+                trace_id=trace_id,
+                extra=proof_extra,
+                audit_logger=alog,
+            )
+        code = (error_code or "").strip() or (
+            "LLM_EMPTY_RESPONSE" if 200 <= status < 400 else f"LLM_HTTP_{status}"
+        )
+        detail = (reason or "").strip() or (
+            f"LLM-Dispatch ohne verwertbare Antwort (http={status})."
+        )
+        return _record_blocked_proof(
+            alog=alog,
+            agent_id=agent_id or "system",
+            provider=provider or "unspecified-provider",
+            model=model or "unspecified-model",
+            target_endpoint=clean_ep,
+            action=(
+                "llm_dispatch_empty_response" if 200 <= status < 400
+                else "llm_dispatch_failed"
+            ),
+            error_code=code,
+            reason=detail,
+            extra=proof_extra,
+            data_category=data_category,
+        )
+    except AuditDispatchError:
+        raise
+    except Exception as exc:
+        logger.error(
+            "[EgressGuard] Audit-Dispatch-Proof nicht schreibbar (%s/%s): %s",
+            provider, clean_ep, exc,
+        )
+        raise AuditDispatchError(
+            f"audit_write_failed: llm_dispatch ({provider}, {type(exc).__name__})"
+        ) from exc
+
+
 # D08/HIGH: synchrone SQLite-Schreibtransaktionen (BEGIN IMMEDIATE, timeout=30)
 # duerfen nicht direkt im Event-Loop laufen. Ein eigener Lock erhaelt die
 # Reihenfolge der HMAC-Hashkette (threading.Lock, kein Coroutine-Replay).
@@ -417,10 +518,14 @@ _AUDIT_DISPATCH_LOCK = threading.Lock()
 
 
 async def audit_dispatch_async(**kwargs: Any) -> Dict[str, Any]:
-    """Async Variante von `log_completed_llm_dispatch` fuer alle async Caller."""
+    """Async Variante von `audit_dispatch_sync` fuer alle async Caller.
+
+    D05-M1: delegated the audit write to the zentralen Helper, damit auch
+    asynchrone Pfade bei Auditfehlern hart eskalieren (RuntimeError).
+    """
     def _write() -> Dict[str, Any]:
         with _AUDIT_DISPATCH_LOCK:
-            return log_completed_llm_dispatch(**kwargs)
+            return audit_dispatch_sync(**kwargs)
     return await asyncio.to_thread(_write)
 
 

@@ -186,6 +186,29 @@ _GUARDED_TEXT_FIELDS = ("content", "result", "output", "text", "error", "message
 
 _ERROR_STATUSES = ("error", "failed", "blocked")
 
+# D12/H1: `is_empty_tool_result()` gilt auch fuer verschachtelte Werte — aber
+# nur fuer die primaeren Ergebnistraeger. Leere Listen ("keine Treffer"),
+# Zaehler (`count=0`), leere Metadaten und leere Felder innerhalb von
+# Datensätzen (z. B. `tasks[0].body`) sind legitime Daten und keine Silent
+# Failures. Ein `"status": "success", "result": ""` bleibt dagegen ein Fehler.
+_EMPTY_PRIMARY_FIELDS = frozenset({
+    "result", "content", "output", "text", "structuredContent",
+    "stdout", "stderr", "data", "payload", "body", "response", "value",
+})
+
+
+def _is_empty_relevant_leaf(path: str) -> bool:
+    """Prueft, ob ein leeres Blatt der eigentliche Tool-Output ist."""
+    parts = path.split(".")
+    # Listen-Elemente sind Datensätze, keine Ergebnistraeger.
+    if any("[" in part for part in parts):
+        return False
+    # `result.<feld>` und `result.<feld>.<feld>` sind zulaessig; tiefere
+    # Verschachtelungen gehoeren bereits zum Nutzdatenmodell.
+    if len(parts) > 3:
+        return False
+    return parts[-1] in _EMPTY_PRIMARY_FIELDS
+
 
 def _firewall_text(tool_name: str, value: Any) -> tuple[str, Optional[str]]:
     """Einziger Pfad vom Firewall-Urteil zum LLM-Kontext.
@@ -231,8 +254,8 @@ def _guard_result_verdict(tool_name: str, result: Any) -> Dict[str, Any]:
 
     Rueckgabe: ``status`` (``ok``/``error``), ``error``/``error_code``,
     ``result`` (der gehaertete Payload fuer den LLM-Kontext), ``output``
-    (nur bei Text-Results) und ``security``. Der Konsument ``execute_agent_tool``
-    prueft ``status`` und eskaliert — statt ihn zu verwerfen.
+    (nur bei Text-Results), ``security`` und ``empty_fields``. Die Konsumenten
+    pruefen ``status`` und eskalieren — statt ihn zu verwerfen.
     """
     from backend.tool_output_firewall import is_empty_tool_result
 
@@ -243,17 +266,23 @@ def _guard_result_verdict(tool_name: str, result: Any) -> Dict[str, Any]:
         return {
             "status": "error", "error": code, "error_code": code,
             "result": text, "output": text, "security": {},
+            "empty_fields": ["<root>"],
         }
 
     if isinstance(result, dict):
         guarded = dict(result)
         seen = 0
         guard_errors: List[str] = []
+        empty_fields: List[str] = []
 
         # FRUEHER: nur eine Whitelist von 8 Feldern — MCP/Plugin-Results mit
         # data/body/response/structuredContent/html blieben ungefiltert.
         # Jetzt: alle String-Blätter (mit Tiefe-/Anzahl-Limit) rekursiv haerten.
-        def _walk(v: Any, depth: int = 0) -> Any:
+        # D12/H1: `is_empty_tool_result()` wird auf verschachtelte Werte
+        # angewendet — begrenzt auf die primaeren Ergebnisfelder, damit
+        # "keine Treffer" und leere Datensatz-Felder nicht zu Fake-Fehlern
+        # werden (siehe `_is_empty_relevant_leaf`).
+        def _walk(v: Any, depth: int = 0, path: str = "result") -> Any:
             nonlocal seen
             if depth > 6 or seen > 200:
                 # D12/HIGH: Strings gehen weiterhin durch die Firewall, alle
@@ -265,8 +294,12 @@ def _guard_result_verdict(tool_name: str, result: Any) -> Dict[str, Any]:
                         guard_errors.append(code)
                     return text
                 return "[OUTPUT_OMITTED_LIMIT]"
+
             if isinstance(v, str):
-                if not v:
+                if not v.strip():
+                    if _is_empty_relevant_leaf(path):
+                        empty_fields.append(path)
+                        guard_errors.append("EMPTY_TOOL_RESULT_FIELD")
                     return v
                 seen += 1
                 text, code = _firewall_text(tool_name, v)
@@ -274,24 +307,36 @@ def _guard_result_verdict(tool_name: str, result: Any) -> Dict[str, Any]:
                     guard_errors.append(code)
                 return text
             if isinstance(v, dict):
-                return {k: _walk(val, depth + 1) for k, val in v.items()}
+                if is_empty_tool_result(v) and _is_empty_relevant_leaf(path):
+                    empty_fields.append(path)
+                    guard_errors.append("EMPTY_TOOL_RESULT_FIELD")
+                return {k: _walk(val, depth + 1, f"{path}.{k}") for k, val in v.items()}
             if isinstance(v, (list, tuple)):
-                return [_walk(x, depth + 1) for x in v]
+                # Eine leere Liste heisst "keine Treffer" und ist kein
+                # leeres Tool-Ergebnis (der Ingest-Pfad meldet Ausfaelle selbst).
+                return [_walk(x, depth + 1, f"{path}[{i}]") for i, x in enumerate(v)]
+            # Zahlen (inkl. 0) und Booleans sind nur als Gesamtergebnis leer
+            # (siehe `is_empty_tool_result(result)` am Funktionsanfang).
             return v
 
         walked = _walk(guarded)
         # Ein bereits vom Tool gemeldeter Fehler darf nicht durch die Firewall
         # zu "ok" umgewertet werden (der Plugin-Pfad hatte keinen Pre-Check).
         tool_status = str(result.get("status") or "").lower()
+        real_codes = [c for c in guard_errors if c != "EMPTY_TOOL_RESULT_FIELD"]
+        # Ein leeres Ergebnis-Blatt ist der naechste Grund fuer den Fehler —
+        # er darf nicht hinter einem Klassifikatorfehler verschwinden.
         code = (
-            guard_errors[0]
-            if guard_errors
-            else ("TOOL_REPORTED_ERROR" if tool_status in _ERROR_STATUSES else None)
+            "EMPTY_TOOL_RESULT" if empty_fields
+            else (real_codes[0] if real_codes else None)
         )
+        if not code and tool_status in _ERROR_STATUSES:
+            code = "TOOL_REPORTED_ERROR"
         return {
             "status": "error" if code else "ok",
             "error": code, "error_code": code,
             "result": walked, "output": None, "security": {},
+            "empty_fields": empty_fields,
         }
 
     text, code = _firewall_text(tool_name, result)
@@ -299,21 +344,22 @@ def _guard_result_verdict(tool_name: str, result: Any) -> Dict[str, Any]:
         "status": "error" if code else "ok",
         "error": code, "error_code": code,
         "result": text, "output": text, "security": {},
+        "empty_fields": [],
     }
 
 
-def guard_result(tool_name: str, result: Any, *, with_status: bool = False) -> Any:
+def guard_result(tool_name: str, result: Any, *, with_status: bool = True) -> Any:
     """F10: oeffentlicher Pflicht-Chokepoint fuer alle Tool-Resultate.
 
     Maskiert Secrets/PII, scannt auf Injection und packt externe Outputs in
     Untrusted-Delimiter. Bei Dict-Results bleiben Struktur und Status erhalten;
     nur die Textfelder werden gehaertet (DAG-/API-Kompatibilitaet).
 
-    D12/H-12-1: ``with_status=True`` gibt das unveraenderte Firewall-Urteil
-    (inkl. ``status``/``error_code``) zurueck. Der Default bleibt
-    rueckwaerts kompatibel zu den bestehenden Konsumenten (MCP-Gateway,
-    Plugin-/SysOps-Router, DAG-Node-Plugins), die den gehaerteten Payload
-    direkt erwarten.
+    D12/H-12-1: das vollstaendige Firewall-Urteil (``status``/``error_code``/
+    ``result``/``empty_fields``) ist jetzt der **Default-Vertrag**. Ein Aufruf
+    ohne ``with_status`` verwirft das Urteil nicht mehr. ``with_status=False``
+    bleibt nur als expliziter, veralteter Opt-out fuer Legacy-Konsumenten
+    erhalten und darf in neuen Pfaden nicht verwendet werden.
     """
     verdict = _guard_result_verdict(tool_name, result)
     # D16/MED: Finalize des Tool-Calls. Das Firewall-Urteil (inkl. sichtbarem
@@ -329,6 +375,19 @@ def guard_result(tool_name: str, result: Any, *, with_status: bool = False) -> A
         },
     )
     return verdict if with_status else verdict["result"]
+
+
+def guard_result_payload(verdict: Any) -> Any:
+    """Gibt den gehaerteten Payload aus einem Firewall-Urteil zurueck.
+
+    Der Default von ``guard_result()`` ist das Urteil. Konsumenten, die den
+    Payload an Clients/Caches weiterreichen, entpacken ihn ueber diese SSOT.
+    Ein injizierter Legacy-/Mock-Guard ohne ``status`` liefert direkt den
+    Payload und bleibt unveraendert durchgereicht.
+    """
+    if isinstance(verdict, dict) and "status" in verdict and "result" in verdict:
+        return verdict.get("result")
+    return verdict
 
 
 # Rueckwaerts kompatibel zum bisherigen internen Namen.

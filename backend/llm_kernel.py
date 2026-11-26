@@ -187,7 +187,11 @@ def finalize_llm_output(
         from backend.secret_masker import mask_sensitive_text
         s, _ = mask_sensitive_text(s)
     except Exception as exc:
-        logger.warning(f"[LLMKernel] Secret-Masking fehlgeschlagen: {exc}")
+        # D04-M5: Maskierungsfehler dürfen niemals zum unmaskierten Text
+        # zurückfallen. Hart abbrechen statt den Klartext an Linter/Aufrufer
+        # (und damit in Logs/Antworten) durchzureichen.
+        logger.error(f"[LLMKernel] Secret-Masking fehlgeschlagen (fail-closed): {exc}")
+        raise RuntimeError(f"llm_output_masking_failed: {exc}") from exc
     try:
         from backend.output_policy_linter import output_policy_linter
         linted = output_policy_linter.lint_and_clean(s)

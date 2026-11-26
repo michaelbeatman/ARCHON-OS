@@ -40,18 +40,51 @@ def is_configured() -> bool:
     return _checker is not None
 
 
-def get_session_actor(request: Optional[Request], fallback: str = "admin") -> str:
-    """Liest den verifizierten Benutzername aus der Session (nie ungeprüft aus JSON-Bodies)."""
+# W2-B/D04-M4: Keine erfundenen privilegierten Audit-Actors. Ein nicht
+# verifizierbarer Actor wird als "unknown" markiert, niemals als "admin".
+_UNVERIFIED_ACTOR = "unknown"
+_FORBIDDEN_ACTOR_LABELS = frozenset({"admin", "administrator", "root", "superuser"})
+
+
+def _safe_audit_actor(request: Any) -> str:
+    """Nur für Audit-LABELS ohne Sicherheitswirkung (z. B. RBAC-Denials).
+
+    Darf selbst nie eine Exception werfen: der Zugriff ist in diesen Pfaden
+    bereits verweigert, ein fehlgeschlagener Auditaufruf darf die Ablehnung
+    nicht überschatten. Bei fehlender/fehlerhafter Identität -> "unknown".
+    """
     if request is None:
-        return fallback
+        return _UNVERIFIED_ACTOR
     try:
         from archon.routers.auth import get_current_user_from_request
+
         user = get_current_user_from_request(request)
-        if isinstance(user, dict) and user.get("username"):
-            return str(user["username"]).strip()
     except Exception as exc:
-        logger.debug(f"[RBAC] Session-Actor konnte nicht ermittelt werden, nutze Fallback '{fallback}': {exc}")
-    return fallback
+        logger.debug("[RBAC] Audit-Actor nicht verifizierbar: %s", exc)
+        return _UNVERIFIED_ACTOR
+    if isinstance(user, dict):
+        for key in ("username", "user_id", "sub", "email"):
+            val = user.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    return _UNVERIFIED_ACTOR
+
+
+def get_session_actor(request: Optional[Request], fallback: Optional[str] = None) -> str:
+    """Verifizierter Audit-Actor aus der Session — fail-closed (D04-M4).
+
+    Mit Request gilt IMMER der strikte Pfad ``require_session_actor``: bei
+    fehlender Identität 401, bei Prüffehler 503, nie ein stiller Fallback auf
+    eine privilegierte Identität. Ohne Request (Hintergrund-Trigger) ist
+    ``fallback`` ausschließlich ein explizites Audit-Label; privilegierte
+    Werte wie "admin" werden auf "unknown" reduziert.
+    """
+    if request is None:
+        label = str(fallback or "").strip()
+        if not label or label.lower() in _FORBIDDEN_ACTOR_LABELS:
+            return _UNVERIFIED_ACTOR
+        return label
+    return require_session_actor(request)
 
 
 def require_session_actor(request: Request) -> str:
@@ -65,13 +98,13 @@ def require_session_actor(request: Request) -> str:
     Im lokalen Single-User-Modus (auth aus) bleibt der Fallback-Admin
     zulaessig — aber weiterhin NUR aus der Session-Hilfe, nie aus dem Body.
     """
-    from archon.routers.auth import get_current_user_from_request
-
     try:
+        from archon.routers.auth import get_current_user_from_request
+
         user = get_current_user_from_request(request)
     except Exception as exc:
         logger.error("[RBAC] Actor-Pruefung fehlgeschlagen (fail-closed): %s", exc)
-        raise HTTPException(status_code=503, detail="Actor-Pruefung nicht verfuegbar.")
+        raise HTTPException(status_code=503, detail="Actor-Pruefung nicht verfuegbar.") from exc
 
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="Keine verifizierte Identitaet.")
@@ -101,7 +134,7 @@ def _audit_rbac_denial(
     try:
         from backend.audit_log import chained_audit_log
 
-        chain_actor = str(actor or get_session_actor(request, fallback="unknown"))
+        chain_actor = str(actor or _safe_audit_actor(request))
         chained_audit_log.record_event(
             category="rbac",
             action="rbac_denied",

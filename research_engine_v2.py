@@ -21,22 +21,33 @@ import logging
 
 _archon_exc_logger = logging.getLogger("research_engine_v2")
 
-import ipaddress
-import json
-import math
-import os
-import re
-import socket
-import threading
-import time
-import urllib.parse
-from html.parser import HTMLParser
-from typing import Any, Dict, List, Optional, Tuple
+import ipaddress  # noqa: E402
+import json  # noqa: E402
+import math  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+import socket  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+import urllib.parse  # noqa: E402
+from html.parser import HTMLParser  # noqa: E402
+from typing import Any, Dict, List, Optional, Tuple  # noqa: E402
 
-import research_engine as base
+import research_engine as base  # noqa: E402
+
+# D05-H1: zentraler, hart fail-closed Dispatch-Proof für den Reflexions-Call.
+try:
+    from backend.llm_egress_guard import AuditDispatchError, audit_dispatch_sync
+except ImportError:  # pragma: no cover - defensiver Fail-Closed-Fallback
+    class AuditDispatchError(RuntimeError):  # type: ignore[no-redef]
+        """Audit-Schreibfehler — hart fail-closed."""
+
+    def audit_dispatch_sync(**kwargs):  # type: ignore[misc]
+        raise AuditDispatchError("audit_write_failed: llm_egress_guard nicht verfügbar")
+
 
 # Batch C: konservative Rechte-Metadaten fuer jede Research-Quelle.
-from backend.research_sources import (
+from backend.research_sources import (  # noqa: E402
     DEFAULT_LICENSE,
     DEFAULT_RIGHTS,
     apply_rights_defaults,
@@ -350,16 +361,48 @@ def _chat(model: str, system: str, user: str, max_tokens: int, timeout: int = 40
     from urllib.parse import urlparse
     _p = urlparse(base_url)
     _allowed_target = f"{_p.hostname}:{_p.port or 20128}"
-    data = safe_http_json(
-        chat_url,
-        method="POST",
-        headers={"Authorization": f"Bearer {OMNIROUTE_KEY}"},
-        payload=payload,
-        timeout=timeout,
-        public_only=False,
-        allowed=[_allowed_target],
-    )
-    return data["choices"][0]["message"]["content"]
+    try:
+        data = safe_http_json(
+            chat_url,
+            method="POST",
+            headers={"Authorization": f"Bearer {OMNIROUTE_KEY}"},
+            payload=payload,
+            timeout=timeout,
+            public_only=False,
+            allowed=[_allowed_target],
+        )
+        content = data["choices"][0]["message"]["content"]
+        if not str(content or "").strip():
+            raise RuntimeError("EMPTY_REFLECTION_RESPONSE")
+        # D05-H1: Proof direkt nach der HTTP-Response (Erfolgspfad).
+        audit_dispatch_sync(
+            agent_id="research_engine_v2",
+            provider="omniroute",
+            model=model,
+            target_endpoint=chat_url,
+            http_status=200,
+            completed=True,
+            data_category="research_reflection",
+        )
+        return content
+    except AuditDispatchError:
+        # D05-M1: Audit-Schreibfehler nie verschlucken.
+        raise
+    except Exception as exc:
+        # D05-H1: auch HTTP-/Transportfehler und leere Antworten werden
+        # signiert (geblockter Proof) — kein Dispatch ohne Nachweis.
+        audit_dispatch_sync(
+            agent_id="research_engine_v2",
+            provider="omniroute",
+            model=model,
+            target_endpoint=chat_url,
+            http_status=0,
+            completed=False,
+            data_category="research_reflection",
+            error_code="LLM_REFLECTION_ERROR",
+            reason=str(exc),
+        )
+        raise
 
 
 def reflect(query: str, sources: List[Dict[str, Any]], asked: List[str], fast_model: str) -> Dict[str, Any]:
@@ -387,6 +430,9 @@ def reflect(query: str, sources: List[Dict[str, Any]], asked: List[str], fast_mo
             "queries": [str(q) for q in data.get("queries", [])
                         if str(q).strip() and str(q).strip() not in asked][:3],
         }
+    except AuditDispatchError:
+        # D05-M1: Audit-Schreibfehler nie in "Reflexion nicht möglich" verbuchen.
+        raise
     except Exception as e:
         print(f"[ResearchV2] Reflexion nicht moeglich ({e}), beende Schleife.")
         # M3: frueher `sufficient=True` — eine kaputte/manipulierte LLM-Antwort

@@ -11,48 +11,66 @@ Unterstützt etablierte Suchmaschinen:
 6. Perplexity Sonar / OmniRoute (KI-Recherche mit Quellen)
 """
 import logging
+
 _archon_exc_logger = logging.getLogger("research_engine")
 
-import os
-import re
-import json
-import time
-import asyncio
-import hashlib
-import urllib.request
-import urllib.parse
-import urllib.error
-import xml.etree.ElementTree as ET
-from datetime import datetime
-from typing import Dict, Any, List, Optional
-from urllib.parse import urlparse
+import json  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+import time  # noqa: E402
+import urllib.error  # noqa: E402
+import urllib.parse  # noqa: E402
+import urllib.request  # noqa: E402
+import xml.etree.ElementTree as ET  # noqa: E402
+from datetime import datetime  # noqa: E402
+from typing import Any, Dict, List, Optional  # noqa: E402
+from urllib.parse import urlparse  # noqa: E402
+
+# D05-H1: zentraler, hart fail-closed Dispatch-Proof (auch ohne Gate im v1-Pfad).
+try:
+    from backend.llm_egress_guard import AuditDispatchError, audit_dispatch_sync
+except ImportError:  # pragma: no cover - defensiver Fail-Closed-Fallback
+    class AuditDispatchError(RuntimeError):  # type: ignore[no-redef]
+        """Audit-Schreibfehler — hart fail-closed, nie in den Fallback."""
+
+    def audit_dispatch_sync(**kwargs):  # type: ignore[misc]
+        raise AuditDispatchError("audit_write_failed: llm_egress_guard nicht verfügbar")
+
 
 # Import Security Guard für Input-Sanitization & Quality-Gate
 try:
-    from local_security_guard import scan_prompt_injection, sanitize_injection_text, validate_ai_output
+    from local_security_guard import (
+        sanitize_injection_text,
+        scan_prompt_injection,
+        validate_ai_output,
+    )
 except ImportError:
-    def scan_prompt_injection(text, **kwargs):
+    def scan_prompt_injection(text, **kwargs):  # type: ignore[misc]
         return {"verdict": "safe", "is_safe": True, "pattern_matches": []}
-    def sanitize_injection_text(text):
+    def sanitize_injection_text(text):  # type: ignore[misc]
         return text
-    def validate_ai_output(task, result, **kwargs):
+    def validate_ai_output(task, result, **kwargs):  # type: ignore[misc]
         return {"score": 8, "recommendation": "TRUST", "passed": True, "pattern_flags": []}
 
 
 # Import Informationsquellen-Strategie & Vertrauens-Registry
 try:
-    from backend.research_sources import get_domain_reputation, evaluate_triangulation_quality, format_citation
+    from backend.research_sources import (
+        evaluate_triangulation_quality,
+        format_citation,
+        get_domain_reputation,
+    )
 except ImportError:
-    def get_domain_reputation(d):
+    def get_domain_reputation(d):  # type: ignore[misc]
         return {"name": "Web", "level": 2, "weight": 0.8, "badge_color": "sky"}
-    def evaluate_triangulation_quality(sources):
+    def evaluate_triangulation_quality(sources):  # type: ignore[misc]
         unique = set(s.get("domain", "") for s in sources if s.get("domain") and not s.get("ai_generated"))
         if len(unique) >= 3:
             return {"verdict": "HOCH (>=3 unabhängige Domains)", "score": 9, "unique_domains": len(unique)}
         elif len(unique) == 2:
             return {"verdict": "MODERAT (2 unabhängige Domains)", "score": 6, "unique_domains": 2}
         return {"verdict": "GERING (Einzelquelle)", "score": 3, "unique_domains": len(unique)}
-    def format_citation(name, url, d=None):
+    def format_citation(name, url, d=None):  # type: ignore[misc]
         return f"[{name}]({url})"
 
 
@@ -276,8 +294,8 @@ def search_duckduckgo(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
             for topic in data.get("RelatedTopics", [])[:max_results]:
                 if isinstance(topic, dict) and topic.get("Text") and topic.get("FirstURL"):
                     results.append({
-                        "title": topic.get("Text")[:60] + "...",
-                        "snippet": sanitize_injection_text(topic.get("Text")),
+                        "title": topic.get("Text")[:60] + "...",  # type: ignore[index]
+                        "snippet": sanitize_injection_text(topic.get("Text")),  # type: ignore[arg-type]
                         "url": topic.get("FirstURL"),
                         "source": "DuckDuckGo",
                         "domain": urlparse(topic.get("FirstURL")).netloc,
@@ -427,6 +445,7 @@ Welche Schwachstellen, Widersprüche oder offenen Fragen bleiben bestehen?
 Handlungsempfehlung für Archon OS.
 """
 
+    target_ep = f"{omniroute_url.rstrip('/')}/chat/completions"
     try:
         payload = json.dumps({
             "model": model,
@@ -443,15 +462,43 @@ Handlungsempfehlung für Archon OS.
         if _omni_key:
             _headers["Authorization"] = f"Bearer {_omni_key}"
         req = urllib.request.Request(
-            f"{omniroute_url.rstrip('/')}/chat/completions",
+            target_ep,
             data=payload,
             headers=_headers,
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            content = data["choices"][0]["message"]["content"]
+            content = str(data["choices"][0]["message"]["content"] or "").strip()
+            if not content:
+                raise RuntimeError("EMPTY_SYNTHESIS_RESPONSE")
+            # D05-H1: Proof direkt nach der HTTP-Response (Erfolgspfad).
+            audit_dispatch_sync(
+                agent_id="research_engine",
+                provider="omniroute",
+                model=model,
+                target_endpoint=target_ep,
+                http_status=200,
+                completed=True,
+                data_category="research_synthesis",
+            )
             return {"synthesis": content, "model_used": model, "agent_role": agent_role}
+    except AuditDispatchError:
+        # D05-M1: Audit-Schreibfehler hart eskalieren — nie in den
+        # Heuristik-Fallback, der einen fehlgeschlagenen Nachweis verdeckt.
+        raise
     except Exception as e:
+        # D05-H1: HTTP-/Transportfehler oder leere Antwort → Block-Proof.
+        audit_dispatch_sync(
+            agent_id="research_engine",
+            provider="omniroute",
+            model=model,
+            target_endpoint=target_ep,
+            http_status=0,
+            completed=False,
+            data_category="research_synthesis",
+            error_code="LLM_SYNTHESIS_ERROR",
+            reason=str(e),
+        )
         print(f"[ResearchEngine] OmniRoute LLM Synthese nicht erreichbar: {e}")
         # Lokaler Heuristik-Fallback ohne LLM
         fallback = f"""### 1. Kernaussage (Heuristische Zusammenfassung)

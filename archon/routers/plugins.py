@@ -1,29 +1,34 @@
 from fastapi import Depends as _ArchonDepends
+
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+
 """Router /api/v1/plugins — ausgelagerte Routen (Modularisierung main.py -> archon/routers)."""
 
-import asyncio
-import datetime
-import json
-import os
-import re
-import sys
-import time
-from typing import Any, Dict, List, Optional
+import logging  # noqa: E402
 
-import httpx
-import yaml
-from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
+logger = logging.getLogger("archon.routers.plugins")
 
-from archon.routers._rbac import require_admin_or_503, get_session_actor
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, Optional  # noqa: E402
 
-import core_dispatcher  # noqa: F401
-from archon.core.runtime import (  # noqa: F401
-    WORKSPACE_DIR, MEMORY_DIR, DATA_DIR, SETTINGS_FILE, OBSIDIAN_VAULT_DIR, APP_ROOT,
-    add_ticker, broadcast_event, ticker_entries, _load_json, _save_json, atomic_write_json,
+from fastapi import APIRouter, Body, HTTPException, Request  # noqa: E402
+from pydantic import BaseModel, ConfigDict, Field  # noqa: E402
+
+import core_dispatcher  # noqa: F401,E402
+from archon.core.runtime import (  # noqa: F401,E402
+    APP_ROOT,
+    DATA_DIR,
+    MEMORY_DIR,
+    OBSIDIAN_VAULT_DIR,
+    SETTINGS_FILE,
+    WORKSPACE_DIR,
+    _load_json,
+    _save_json,
+    add_ticker,
+    atomic_write_json,
+    broadcast_event,
+    ticker_entries,
 )
+from archon.routers._rbac import get_session_actor, require_admin_or_503  # noqa: E402
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -134,7 +139,12 @@ async def api_execute_plugin_tool(request: Request, payload: PluginToolExecuteRe
     require_admin_or_503(request)
     data = payload.model_dump()  # RBAC: Admin-Sache
     from backend.plugin_manager import get_plugin_manager
-    from backend.tool_runtime import enforce_tool_execution, guard_result, record_tool_read_side_effect
+    from backend.tool_runtime import (
+        enforce_tool_execution,
+        guard_result,
+        guard_result_payload,
+        record_tool_read_side_effect,
+    )
     pm = get_plugin_manager()
     tool_name = str(data.get("tool_name") or "").strip()
     args = data.get("args", {})
@@ -164,7 +174,28 @@ async def api_execute_plugin_tool(request: Request, payload: PluginToolExecuteRe
     try:
         res = await pm.execute_plugin_tool(tool_name, args)
         record_tool_read_side_effect(session_id, tool_name)
-        # F10: Plugin-Output vor der Rueckgabe durch den Firewall-Chokepoint.
-        return {"status": "success", "result": guard_result(tool_name, res)}
+        # F10/D12-H1: Plugin-Output durch den Firewall-Chokepoint. Das Urteil
+        # wird geprueft statt verworfen: bei `status="error"` (Klassifikator-
+        # fehler/leere verschachtelte Felder) hart HTTP-Fehler mit error_code.
+        try:
+            verdict = guard_result(tool_name, res, with_status=True)
+        except Exception as exc:
+            # Firewall-Ausfall darf nie den Roh-Output durchlassen.
+            logger.error("[Plugins] Tool-Output-Firewall fehlgeschlagen (%s: %s)", tool_name, exc)
+            raise HTTPException(status_code=503, detail={"code": "plugin_tool_output_guard_failed", "params": {}}) from exc
+        if not isinstance(verdict, dict):
+            return {"status": "success", "result": verdict}
+        if str(verdict.get("status") or "").lower() == "error":
+            code = str(verdict.get("error_code") or verdict.get("error") or "TOOL_OUTPUT_SANITIZATION_ERROR")
+            logger.error("[Plugins] Firewall-Urteil '%s' fuer Tool '%s'", code, tool_name)
+            raise HTTPException(status_code=502, detail={
+                "status": "error", "code": code, "error_code": code,
+                "params": {"tool": tool_name, "error_code": code},
+            })
+        return {"status": "success", "result": guard_result_payload(verdict)}
+    except HTTPException:
+        # D12/H1: weitergeleitete HTTP-Fehler (403/502/503) nicht durch den
+        # generischen 400er-Handler ersetzen — sonst geht der error_code verloren.
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -703,6 +703,7 @@ class ArchonMcpGateway:
         from backend.tool_runtime import (
             enforce_tool_execution,
             guard_result,
+            guard_result_payload,
             record_tool_read_side_effect,
         )
         rt_session = str(key_info.get("session_id") or key_info.get("name") or "mcp_gateway")
@@ -741,8 +742,30 @@ class ArchonMcpGateway:
 
         if rt_session:
             record_tool_read_side_effect(rt_session, name)
-        # F10: externer Tool-Output gehoert durch den Output-Firewall-Chokepoint.
-        return 0, guard_result(name, res)
+        # F10/D12-H1: externer Tool-Output gehoert durch den
+        # Firewall-Chokepoint. Das Urteil wird NICHT verworfen: ein
+        # `status="error"` (Klassifikatorfehler, leere verschachtelte Felder)
+        # wird als strukturierter Fehler mit error_code durchgereicht und
+        # von tools/call als `isError=True` gemeldet.
+        verdict = guard_result(name, res, with_status=True)
+        if not isinstance(verdict, dict):
+            # Injizierter Legacy-Guard ohne Urteil: unveraendert durchreichen.
+            return 0, verdict
+        if str(verdict.get("status") or "").lower() == "error":
+            code = str(
+                verdict.get("error_code") or verdict.get("error") or "TOOL_OUTPUT_SANITIZATION_ERROR"
+            )
+            logger.error(
+                "[mcp_gateway] Firewall-Urteil '%s' fuer Tool '%s' (leere Felder: %s)",
+                code, name, verdict.get("empty_fields") or "-",
+            )
+            return 0, {
+                "status": "error",
+                "error": code,
+                "error_code": code,
+                "result": guard_result_payload(verdict),
+            }
+        return 0, guard_result_payload(verdict)
 
     # ------------------------------------------------------------------
     # JSON-RPC 2.0 Dispatcher
@@ -834,14 +857,27 @@ class ArchonMcpGateway:
                     "error": {"code": err_code, "message": result.get("message", "Tool-Fehler")},
                 }, session_id
 
-            is_error = result.get("status") == "error"
+            # D12/H1: `status="error"` aus dem Firewall-Urteil darf nicht
+            # laenger als `isError=false` an den MCP-Client gemeldet werden.
+            # String-Results haben kein `.get()` (frueher AttributeError).
+            if isinstance(result, dict):
+                is_error = str(result.get("status") or "").lower() == "error"
+                error_code = str(result.get("error_code") or "") if is_error else ""
+            else:
+                is_error = False
+                error_code = ""
+            content: Dict[str, Any] = {
+                "type": "text", "text": json.dumps(result, ensure_ascii=False),
+            }
+            rpc_result: Dict[str, Any] = {"content": [content], "isError": is_error}
+            if is_error:
+                code = error_code or "TOOL_ERROR"
+                content["error_code"] = code
+                rpc_result["error_code"] = code
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
-                "result": {
-                    "content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}],
-                    "isError": is_error,
-                },
+                "result": rpc_result,
             }, session_id
 
         if method == "resources/list":

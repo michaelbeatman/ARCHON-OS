@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -51,7 +49,11 @@ def test_tool_runtime_finalize_records_tool_span(monkeypatch):
     import backend.otel_tracer as otel
 
     monkeypatch.setattr(otel, "tracer", _FakeTracer())
-    hardened = tr.guard_result("read_file", "harmloser Inhalt")
+    # D12/H1: guard_result() liefert jetzt per Default das VOLLSTAENDIGE Urteil
+    # (status/error_code/result), damit Konsumenten Firewall-Fehler nicht
+    # versehentlich als Erfolg durchreichen.
+    verdict = tr.guard_result("read_file", "harmloser Inhalt")
+    hardened = verdict["result"] if isinstance(verdict, dict) else verdict
     # Der Firewall-Chokepoint haelt den Inhalt in Untrusted-Delimitern —
     # entscheidend ist hier nur, dass der Finalize einen echten tool-Span
     # mit dem richtigen Namen und Urteil geschrieben hat.

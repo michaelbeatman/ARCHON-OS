@@ -9,17 +9,12 @@ Ermöglicht Sprachverarbeitung für mobile Nutzung via Telegram und Dashboard:
    an den Ziel-Agenten übergeben und optional als Sprachnachricht zurücksenden.
 """
 
-import os
-import sys
-import json
 import base64
 import logging
-import asyncio
+import os
 import tempfile
-import urllib.request
-import urllib.error
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Optional, Tuple
 
 logger = logging.getLogger("archon_os.voice")
 
@@ -77,13 +72,53 @@ def _gate_cloud_voice_dispatch(url: str, *, provider: str, model: str,
     ) or {}
 
 
+def _audit_voice_dispatch(
+    url: str,
+    *,
+    provider: str,
+    model: str,
+    http_status: int = 0,
+    text: str = "",
+    error: str = "",
+    error_code: str = "",
+    data_category: str = "voice_transcription",
+) -> None:
+    """D05-H1: signierter ``llm_dispatch``-Proof für jeden Cloud-Audio-Call.
+
+    Erfolg (2xx/3xx + verwertbarer Text) → ``llm_call_dispatched``; HTTP-Fehler,
+    Transportfehler oder leere Antwort → geblockter Proof mit ``error_code``.
+    Auditfehler eskalieren als ``RuntimeError`` (D05-M1) und werden von den
+    Aufrufern bewusst NICHT verschluckt.
+    """
+    from backend.llm_egress_guard import audit_dispatch_sync
+
+    status = int(http_status or 0)
+    completed = bool(text) and 200 <= status < 400
+    audit_dispatch_sync(
+        agent_id="voice_pipeline",
+        provider=provider,
+        model=model,
+        target_endpoint=url,
+        http_status=status,
+        completed=completed,
+        data_category=data_category,
+        error_code=(
+            "" if completed
+            else (error_code or (
+                "LLM_EMPTY_RESPONSE" if 200 <= status < 400 else f"LLM_HTTP_{status}"
+            ))
+        ),
+        reason="" if completed else (error or "Keine verwertbare Audio-Antwort."),
+    )
+
+
 async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", language: str = "de") -> str:
     """
     Transkribiert rohe Audio-Bytes (Zero-Egress-geschuetzt).
     """
     # P0-4: is_zero_egress_active existiert nicht in llm_egress_guard →
     # ImportError; der TypeError mit data_category= liess den Guard nie laufen.
-    from backend.llm_egress_guard import ZeroEgressBlockedError, enforce_egress_firewall_for_url
+    from backend.llm_egress_guard import ZeroEgressBlockedError
     from backend.privacy_router import get_privacy_config
 
     if bool(get_privacy_config().get("zero_egress_strict")):
@@ -103,19 +138,33 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
             )
             async with httpx.AsyncClient(timeout=20.0) as client:
                 resp = await client.post(groq_url, headers=headers, files=files, data=data_fields)
+                txt = ""
                 if resp.status_code == 200:
                     result = resp.json()
-                    txt = result.get("text", "").strip()
-                    if txt:
-                        logger.info(f"[Voice] Transkription via Groq Whisper erfolgreich: {len(txt)} Zeichen")
-                        return txt
+                    txt = str(result.get("text", "") or "").strip()
+                # D05-H1: Proof direkt nach der HTTP-Response. Auch ein
+                # HTTP-Fehler oder leerer Body hinterlässt einen Block-Proof.
+                _audit_voice_dispatch(
+                    groq_url, provider="groq", model="whisper-large-v3",
+                    http_status=resp.status_code, text=txt,
+                )
+                if txt:
+                    logger.info(f"[Voice] Transkription via Groq Whisper erfolgreich: {len(txt)} Zeichen")
+                    return txt
         except ZeroEgressBlockedError:
             # D04/MED: der Block-Proof wurde bereits im Gate signiert
             # (chained_audit_log.record_llm_dispatch). Ein blockierter Dispatch
             # darf NIEMALS zum nächsten Cloud-Provider fallen.
             logger.error("[Voice] Groq-Dispatch durch Egress-Gate blockiert — kein Fallback.")
             raise
+        except RuntimeError:
+            # D05-M1: Audit-Schreibfehler nie verschlucken — hart eskalieren.
+            raise
         except Exception as e:
+            _audit_voice_dispatch(
+                groq_url, provider="groq", model="whisper-large-v3",
+                http_status=0, error=str(e), error_code="LLM_TRANSPORT_ERROR",
+            )
             logger.warning(f"[Voice] Groq Whisper fehlgeschlagen: {e}")
 
     # 2. OpenAI Whisper
@@ -131,16 +180,29 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
             )
             async with httpx.AsyncClient(timeout=25.0) as client:
                 resp = await client.post(openai_url, headers=headers, files=files, data=data_fields)
+                txt = ""
                 if resp.status_code == 200:
                     result = resp.json()
-                    txt = result.get("text", "").strip()
-                    if txt:
-                        logger.info(f"[Voice] Transkription via OpenAI Whisper erfolgreich: {len(txt)} Zeichen")
-                        return txt
+                    txt = str(result.get("text", "") or "").strip()
+                # D05-H1: Proof direkt nach der HTTP-Response.
+                _audit_voice_dispatch(
+                    openai_url, provider="openai", model="whisper-1",
+                    http_status=resp.status_code, text=txt,
+                )
+                if txt:
+                    logger.info(f"[Voice] Transkription via OpenAI Whisper erfolgreich: {len(txt)} Zeichen")
+                    return txt
         except ZeroEgressBlockedError:
             logger.error("[Voice] OpenAI-Dispatch durch Egress-Gate blockiert — kein Fallback.")
             raise
+        except RuntimeError:
+            # D05-M1: Audit-Schreibfehler nie verschlucken — hart eskalieren.
+            raise
         except Exception as e:
+            _audit_voice_dispatch(
+                openai_url, provider="openai", model="whisper-1",
+                http_status=0, error=str(e), error_code="LLM_TRANSPORT_ERROR",
+            )
             logger.warning(f"[Voice] OpenAI Whisper fehlgeschlagen: {e}")
 
     # 3. Google Gemini Audio-Inferenz — nur wenn ausdrücklich freigeschaltet.
@@ -170,15 +232,31 @@ async def transcribe_audio_bytes(data: bytes, filename: str = "audio.ogg", langu
             )
             async with httpx.AsyncClient(timeout=25.0) as client:
                 resp = await client.post(url, json=payload, headers=headers)
+                txt = ""
                 if resp.status_code == 200:
                     res_json = resp.json()
-                    txt = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    txt = str(
+                        res_json["candidates"][0]["content"]["parts"][0]["text"] or ""
+                    ).strip()
+                # D05-H1: Proof direkt nach der HTTP-Response.
+                _audit_voice_dispatch(
+                    url, provider="gemini", model="gemini-1.5-flash",
+                    http_status=resp.status_code, text=txt,
+                )
+                if txt:
                     logger.info(f"[Voice] Transkription via Gemini Flash erfolgreich: {len(txt)} Zeichen")
                     return txt
         except ZeroEgressBlockedError:
             logger.error("[Voice] Gemini-Dispatch durch Egress-Gate blockiert — kein Fallback.")
             raise
+        except RuntimeError:
+            # D05-M1: Audit-Schreibfehler nie verschlucken — hart eskalieren.
+            raise
         except Exception as e:
+            _audit_voice_dispatch(
+                url, provider="gemini", model="gemini-1.5-flash",
+                http_status=0, error=str(e), error_code="LLM_TRANSPORT_ERROR",
+            )
             logger.warning(f"[Voice] Gemini Transkription fehlgeschlagen: {e}")
 
     # 4. Fallback-Meldung, wenn kein Transkriptionsdienst konfiguriert ist
@@ -225,9 +303,22 @@ async def synthesize_speech(text: str, output_path: Optional[str] = None, voice:
         import edge_tts
         communicate = edge_tts.Communicate(safe_text, voice=voice)
         await communicate.save(output_path)
+        # D05-H1: auch die Sprachsynthese ist ein externer Dispatch und braucht
+        # einen signierten Nachweis direkt nach der erfolgreichen Ausführung.
+        _audit_voice_dispatch(
+            tts_endpoint, provider="edge-tts", model=voice,
+            http_status=200, text=safe_text, data_category="voice_tts",
+        )
         logger.info(f"[Voice] Sprachsynthese erfolgreich gespeichert: {output_path} ({os.path.getsize(output_path)} Bytes)")
         return output_path
+    except RuntimeError:
+        # D05-M1: Audit-Schreibfehler nie verschlucken — hart eskalieren.
+        raise
     except Exception as e:
+        _audit_voice_dispatch(
+            tts_endpoint, provider="edge-tts", model=voice,
+            http_status=0, error=str(e), data_category="voice_tts",
+        )
         logger.error(f"[Voice] Fehler bei edge-tts Sprachsynthese: {e}")
         raise
 

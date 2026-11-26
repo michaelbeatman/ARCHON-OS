@@ -711,7 +711,19 @@ async def execute_workflow_node_plugin(
     if handler:
         # F10: auch Core-Node-Handler liefern externe/untrusted Daten.
         res = await handler(resolved_params, node, upstream or {})
-        return guard_result(f"node_plugin:{spec['plugin_id']}", res)
+        verdict = guard_result(f"node_plugin:{spec['plugin_id']}", res)
+        # D12/H1: guard_result() liefert jetzt das Urteil. DAG-Knoten muessen
+        # den gehaerteten Payload entpacken und Firewall-Fehler als blocked
+        # quittieren — sonst wird 'status=ok' des Urteils als Knotenstatus
+        # missverstanden.
+        from backend.tool_runtime import guard_result_payload
+        if isinstance(verdict, dict) and str(verdict.get("status") or "") == "error":
+            return {
+                "status": "blocked",
+                "error": str(verdict.get("error_code") or "TOOL_OUTPUT_BLOCKED"),
+                "content": "",
+            }
+        return guard_result_payload(verdict)
 
     # Generischer 3rd-Party HTTP/MCP-Adapter fuer JSON-Plugins in plugins/workflow_nodes/
     adapter = str(spec.get("adapter") or "http").lower()

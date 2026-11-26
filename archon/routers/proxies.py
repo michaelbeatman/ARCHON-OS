@@ -1,7 +1,5 @@
 """Router fuer Reverse Proxies: OmniRoute & n8n."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes, require_admin_or_503
 
 import asyncio
 import json
@@ -9,11 +7,16 @@ import logging
 import os
 import time
 import weakref
-from typing import Dict, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
 import httpx
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends as _ArchonDepends
+from fastapi.responses import FileResponse
+
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import require_admin_or_503
+from backend.demo_mode import is_demo_mode
 
 logger = logging.getLogger("archon.routers.proxies")
 
@@ -241,7 +244,16 @@ async def n8n_types_proxy(request: Request, path: str = ""):
 
 async def _ws_forward_n8n_push(websocket: WebSocket) -> None:
     """Authentifizierter bidirektionaler WebSocket-Relay fuer n8n `/rest/push`."""
+    # W2-B/D04-H1: Verteidigung in der Tiefe. Der Demo-ASGI-Guard blockt
+    # WebSockets bereits per Default-Deny; der Proxy darf aber auch bei einer
+    # falsch verdrahteten Middleware nie einen Egress-Tunnel aufbauen.
+    if is_demo_mode():
+        logger.warning("[Proxy] n8n /rest/push WebSocket im Demo-Modus blockiert (1008).")
+        await websocket.close(code=1008)
+        return
+
     from urllib.parse import urlparse
+
     from archon.routers.auth import get_current_user_from_request
     from backend.auth_service import auth_service
 

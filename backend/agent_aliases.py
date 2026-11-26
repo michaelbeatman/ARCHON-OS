@@ -62,18 +62,30 @@ def _load_ssot_aliases() -> dict:
 
 ALIASES = _load_ssot_aliases()
 
+# W2-B/D04-M6: Ein eindeutiger, nicht mit einem echten Kader-Profil
+# verwechselbarer Sentinel für nicht auflösbare Ziel-IDs. Aufrufer MÜSSEN ihn
+# als Default-Deny behandeln (z. B. status=blocked, error_code=UNKNOWN_AGENT_ID).
+UNKNOWN_AGENT_ID = "!UNKNOWN_AGENT!"
+
 
 def resolve_agent_id(agent_id: str | None, known_ids: set[str] | None = None) -> str:
     """Übersetzt einen Altnamen in eine gültige Kader-ID.
 
-    Ist der Name bereits gültig, bleibt er unverändert. Unbekannte Namen werden
-    unverändert zurückgegeben, damit der Aufrufer den Fehler sichtbar behandeln
-    kann (kein stiller Fallback auf einen falschen Agenten).
+    Ist der Name bereits gültig, bleibt er unverändert. Ohne ``known_ids``
+    werden unbekannte Namen unverändert zurückgegeben, damit der Aufrufer den
+    Fehler sichtbar behandeln kann (kein stiller Fallback auf einen falschen
+    Agenten).
+
+    D04-M6: Eine leere ID wird NICHT mehr auf "research_scout" gemappt, sondern
+    auf ``UNKNOWN_AGENT_ID``. Wird ``known_ids`` übergeben, erhält der Aufrufer
+    den Sentinel auch bei unbekanntem Ziel. Ohne ``known_ids`` kann der Helper
+    eine unbekannte ID nicht erkennen — die Produktivaufrufer müssen daher zwingend
+    ``known_ids`` übergeben und den Sentinel hart blockieren.
     """
     raw = (agent_id or "").strip()
     if not raw:
-        return "research_scout"
+        return UNKNOWN_AGENT_ID
     mapped = ALIASES.get(raw, raw)
     if known_ids is not None and mapped not in known_ids:
-        return mapped
+        return UNKNOWN_AGENT_ID
     return mapped

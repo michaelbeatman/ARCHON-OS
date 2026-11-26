@@ -5,9 +5,9 @@ Extrahiert, repariert und validiert JSON-Antworten von Sprachmodellen determinis
 Pflichtfeld-/Typ-Schema, damit nachgelagerte Pipelines niemals an fehlerhaftem JSON scheitern.
 """
 
-import re
 import json
-from typing import Dict, Any, Optional
+import re
+from typing import Any, Dict, Optional
 
 
 def _get_cfg() -> Dict[str, Any]:
@@ -69,11 +69,17 @@ class StructuredOutputEnforcer:
         strict_schema = bool(cfg.get("strict_schema_validation", True))
 
         if not enabled:
+            # D12/M1: ein abgeschalteter Validator ist KEINE erfolgreiche
+            # Validierung. Frueher `valid=True, bypassed=True` — der Dispatcher
+            # prueft nur `valid is False` und liess den Bypass als Erfolg in
+            # Cache/Budget/DB laufen. Jetzt fail-closed und mit error_code.
             return {
-                "valid": True,
+                "valid": False,
                 "bypassed": True,
                 "repaired": False,
-                "raw_output": raw_output
+                "error": "structured_output_validation_disabled",
+                "raw_output": raw_output,
+                "data": {},
             }
 
         repaired_used = False

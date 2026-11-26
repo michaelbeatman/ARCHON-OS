@@ -55,6 +55,17 @@ _CANONICAL_SENSITIVE_ALIASES = frozenset({
     "confidential", "strictly_confidential", "vertraulich", "geheim", "secret", "secrets",
 })
 
+# D04-H3: Sicherheitsrelevante Booleans, die aus allen Quellen (Defaults,
+# settings.json, privacy_routing.json, zero_egress_governance, ENV) NUR
+# verstärkt werden dürfen. Ein `false` darf nie eine härtere Einstellung
+# aufweichen (fail-closed).
+_STRENGTHENING_KEYS = (
+    "zero_egress_strict",
+    "sensitive_local_routing",
+    "hard_block_on_local_offline",
+    "block_crm_erp_prefetch_on_cloud",
+)
+
 _LOCAL_PING_CACHE: Dict[str, Any] = {
     "ts": 0.0,
     "available": False,
@@ -80,23 +91,49 @@ def get_privacy_config() -> Dict[str, Any]:
     """
     Lädt und konsolidiert die Zero-Egress- und Datenschutz-Konfiguration aus:
     1. `DEFAULT_PRIVACY_CONFIG`
-    2. `settings.json -> privacy.zero_egress`
+    2. `settings.json -> privacy.zero_egress` / `zero_egress_governance`
     3. `data/privacy_routing.json`
-    4. Umgebungsvariable `PRIVACY_ZERO_EGRESS`
+    4. Umgebungsvariablen (`PRIVACY_ZERO_EGRESS`)
+
+    D04-H3/M3 — Strengthening-Only-Merge: Die sicherheitsrelevanten Booleans
+    (`zero_egress_strict`, `sensitive_local_routing`, `hard_block_on_local_offline`,
+    `block_crm_erp_prefetch_on_cloud`) können aus allen vier Quellen **nur
+    verstärkt** werden. Ein `false` in einer Quelle darf nie eine härtere
+    Einstellung einer anderen Quelle (oder des Defaults) aufweichen.
+    `fallback_to_eu` darf ausschließlich dann aktiv sein, wenn aus keiner Quelle
+    ein strikter Zero-Egress-Modus aktiv ist.
     """
     merged = dict(DEFAULT_PRIVACY_CONFIG)
     merged["sensitive_categories"] = list(DEFAULT_PRIVACY_CONFIG["sensitive_categories"])
+
+    # fallback_to_eu wird erst am Ende aufgelöst, damit ein später (z. B. aus
+    # Governance oder ENV) aktivierter strikter Modus nicht durch eine frühere
+    # `true`-Angabe aus privacy_routing.json unterlaufen werden kann.
+    fallback_requests: List[bool] = [bool(merged.get("fallback_to_eu", False))]
+
+    def _apply_security_source(source: Dict[str, Any]) -> None:
+        """Nur verstärkende Werte aus einer Quelle übernehmen (fail-closed)."""
+        for key in _STRENGTHENING_KEYS:
+            if key in source and bool(source[key]):
+                merged[key] = True
+        if "fallback_to_eu" in source:
+            fallback_requests.append(bool(source["fallback_to_eu"]))
 
     gov_raw: Dict[str, Any] = {}
     if os.path.exists(ROOT_SETTINGS_FILE):
         try:
             with open(ROOT_SETTINGS_FILE, "r", encoding="utf-8") as sf:
                 sdata = json.load(sf)
-            priv_block = sdata.get("privacy") if isinstance(sdata, dict) else None
-            if isinstance(priv_block, dict) and "zero_egress" in priv_block:
-                merged["zero_egress_strict"] = bool(priv_block.get("zero_egress"))
-            gov = sdata.get("zero_egress_governance") if isinstance(sdata, dict) else None
-            gov_raw = gov if isinstance(gov, dict) else {}
+            if isinstance(sdata, dict):
+                priv_block = sdata.get("privacy")
+                if isinstance(priv_block, dict):
+                    # Historischer Name `privacy.zero_egress` == zero_egress_strict;
+                    # auch hier zählt nur ein verstärkendes `true`.
+                    if "zero_egress" in priv_block and bool(priv_block.get("zero_egress")):
+                        merged["zero_egress_strict"] = True
+                    _apply_security_source(priv_block)
+                gov = sdata.get("zero_egress_governance")
+                gov_raw = gov if isinstance(gov, dict) else {}
         except (OSError, ValueError) as exc:
             logger.warning(f"[PrivacyRouter] settings.json privacy-Block nicht lesbar: {exc}")
 
@@ -107,38 +144,16 @@ def get_privacy_config() -> Dict[str, Any]:
                 data = json.load(f)
                 if isinstance(data, dict):
                     has_explicit_local_url = bool(str(data.get("local_llm_url") or "").strip())
-                    _hardening_or_keys = (
-                        "zero_egress_strict",
-                        "sensitive_local_routing",
-                        "hard_block_on_local_offline",
-                        "block_crm_erp_prefetch_on_cloud",
-                    )
-                    for k, v in data.items():
-                        if k in _hardening_or_keys:
-                            if bool(v):
-                                merged[k] = True
-                        elif k == "fallback_to_eu":
-                            # Nur erlauben, wenn kein strikter Zero-Egress-Modus aktiv ist
-                            if bool(v) and not bool(merged.get("zero_egress_strict")):
-                                merged[k] = True
-                        else:
-                            merged[k] = v
+                    _apply_security_source(data)
+                    for key, value in data.items():
+                        if key not in _STRENGTHENING_KEYS and key != "fallback_to_eu":
+                            merged[key] = value
         except Exception as e:
             logger.warning(f"Konnte privacy_routing.json nicht lesen: {e}")
 
-    # D04/MED: `zero_egress_governance` ist eine echte zweite Quelle und wird
-    # NACH dem Merge von privacy_routing.json angewendet. Nur VERSTÄRKENDE
-    # Werte zählen: ein false in einer der Quellen darf nie die härtere
-    # Einstellung aufweichen (fail-closed).
-    if bool(gov_raw.get("zero_egress_strict", False)):
-        merged["zero_egress_strict"] = True
-        merged["fallback_to_eu"] = False
-    if bool(gov_raw.get("hard_block_on_local_offline", False)):
-        merged["hard_block_on_local_offline"] = True
-    if bool(gov_raw.get("block_crm_erp_prefetch_on_cloud", False)):
-        merged["block_crm_erp_prefetch_on_cloud"] = True
-    if bool(gov_raw.get("sensitive_local_routing", False)):
-        merged["sensitive_local_routing"] = True
+    # `zero_egress_governance` ist eine echte zweite Quelle und wird NACH dem
+    # Merge von privacy_routing.json angewendet (ebenfalls nur verstärkend).
+    _apply_security_source(gov_raw)
 
     env_ollama = (os.environ.get("OLLAMA_BASE_URL") or "").strip()
     if env_ollama and (
@@ -150,15 +165,22 @@ def get_privacy_config() -> Dict[str, Any]:
             norm_ollama = f"{norm_ollama}/v1"
         merged["local_llm_url"] = norm_ollama
 
+    # ENV: nur verstärkend (ein "false" in ENV darf nie abschwächen).
     env_ze = (os.environ.get("PRIVACY_ZERO_EGRESS") or "").strip().lower()
     if env_ze in ("1", "true", "yes", "on"):
         merged["zero_egress_strict"] = True
 
-    # Invariante: Im strikten Zero-Egress-Modus darf kein einziger Call das Haus verlassen
+    # Invariante: Im strikten Zero-Egress-Modus darf kein einziger Call das Haus verlassen.
     if bool(merged.get("zero_egress_strict")):
         merged["sensitive_local_routing"] = True
         merged["hard_block_on_local_offline"] = True
-        merged["fallback_to_eu"] = False
+        merged["block_crm_erp_prefetch_on_cloud"] = True
+
+    # fallback_to_eu: nur zulassen, wenn kein strikter Modus aus irgendeiner
+    # Quelle aktiv ist. Qualitative "true"-Requests werden OR-verknüpft.
+    merged["fallback_to_eu"] = (
+        any(fallback_requests) and not bool(merged.get("zero_egress_strict"))
+    )
 
     return merged
 
@@ -206,23 +228,53 @@ def verify_zero_egress_config(cfg: Optional[Dict[str, Any]] = None) -> Dict[str,
 
 
 def save_privacy_config(cfg: Dict[str, Any], operator: str = "operator") -> Dict[str, Any]:
-    """Speichert die Datenschutz-Konfiguration und protokolliert die Änderung im GoBD SHA-256 Audit-Log."""
+    """Speichert die Datenschutz-Konfiguration und protokolliert die Änderung im GoBD SHA-256 Audit-Log.
+
+    D04-M3: Der signierte Audit-Eintrag wird **vor** jeder Datei-Mutation
+    geschrieben. Schlägt er fehl, wird hart abgebrochen — eine sicherheits-
+    relevante Änderung ohne Ketten-Eintrag darf niemals persistiert werden.
+    """
     current = get_privacy_config()
-    current.update(cfg)
+    # Strengthening-Only auch beim Speichern: ein `false` in cfg darf die
+    # bereits aus den Quellen gehärteten Werte nicht aufweichen.
+    for key, value in cfg.items():
+        if key in _STRENGTHENING_KEYS and not bool(value):
+            continue
+        current[key] = value
 
     # Zero-Egress-Invariante beim Speichern durchsetzen
     if bool(current.get("zero_egress_strict")):
         current["sensitive_local_routing"] = True
         current["hard_block_on_local_offline"] = True
+        current["block_crm_erp_prefetch_on_cloud"] = True
         current["fallback_to_eu"] = False
 
-    os.makedirs(os.path.dirname(PRIVACY_CFG_FILE), exist_ok=True)
-    with open(PRIVACY_CFG_FILE, "w", encoding="utf-8") as f:
-        json.dump(current, f, indent=2, ensure_ascii=False)
+    # 1) Audit ZUERST — hart abbrechen vor jeder Mutation (fail-closed).
+    try:
+        from backend.audit_log import chained_audit_log
+        chained_audit_log.record_event(
+            category="config",
+            action="privacy_routing_updated",
+            agent_id=operator,
+            payload={
+                "zero_egress_strict": bool(current.get("zero_egress_strict", False)),
+                "sensitive_local_routing": bool(current.get("sensitive_local_routing", True)),
+                "hard_block_on_local_offline": bool(current.get("hard_block_on_local_offline", True)),
+                "block_crm_erp_prefetch_on_cloud": bool(current.get("block_crm_erp_prefetch_on_cloud", True)),
+                "local_llm_url": current.get("local_llm_url"),
+                "local_llm_model": current.get("local_llm_model"),
+                "fallback_to_eu": bool(current.get("fallback_to_eu", False)),
+                "mistral_configured": bool(current.get("mistral_api_key")),
+            },
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Audit-Log Fehler bei privacy_routing (fail-closed, keine Konfigurationsänderung): {e}"
+        ) from e
 
-    # D04/MED: settings.json -> privacy.zero_egress UND
-    # zero_egress_governance in EINEM read-modify-write-Schritt schreiben,
-    # damit beide Quellen nicht auseinanderlaufen.
+    # 2) settings.json read-modify-write im Speicher vorbereiten, damit ein
+    #    Lese-/Parsefehler ebenfalls VOR jeder Mutation hart abbricht.
+    new_sdata: Optional[Dict[str, Any]] = None
     if "zero_egress_strict" in cfg and os.path.exists(ROOT_SETTINGS_FILE):
         try:
             with open(ROOT_SETTINGS_FILE, "r", encoding="utf-8") as sf:
@@ -242,31 +294,19 @@ def save_privacy_config(cfg: Dict[str, Any], operator: str = "operator") -> Dict
                     if key in current:
                         gov[key] = current[key]
                 sdata["zero_egress_governance"] = gov
-                with open(ROOT_SETTINGS_FILE, "w", encoding="utf-8") as sf:
-                    json.dump(sdata, sf, indent=2, ensure_ascii=False)
+                new_sdata = sdata
         except Exception as sync_err:
             # Zwei auseinanderlaufende Quellen sind ein Sicherheitsrisiko ->
             # harter Fehler statt stiller Warnung.
             raise RuntimeError(f"settings.json privacy sync fehlgeschlagen (fail-closed): {sync_err}") from sync_err
 
-    try:
-        from backend.audit_log import chained_audit_log
-        chained_audit_log.record_event(
-            category="config",
-            action="privacy_routing_updated",
-            agent_id=operator,
-            payload={
-                "zero_egress_strict": bool(current.get("zero_egress_strict", False)),
-                "sensitive_local_routing": bool(current.get("sensitive_local_routing", True)),
-                "hard_block_on_local_offline": bool(current.get("hard_block_on_local_offline", True)),
-                "local_llm_url": current.get("local_llm_url"),
-                "local_llm_model": current.get("local_llm_model"),
-                "fallback_to_eu": bool(current.get("fallback_to_eu", False)),
-                "mistral_configured": bool(current.get("mistral_api_key")),
-            },
-        )
-    except Exception as e:
-        logger.warning(f"Audit-Log Fehler bei privacy_routing: {e}")
+    # 3) Erst jetzt mutieren — Audit und Quellen-Sync sind erfolgreich geprüft.
+    os.makedirs(os.path.dirname(PRIVACY_CFG_FILE), exist_ok=True)
+    with open(PRIVACY_CFG_FILE, "w", encoding="utf-8") as f:
+        json.dump(current, f, indent=2, ensure_ascii=False)
+    if new_sdata is not None:
+        with open(ROOT_SETTINGS_FILE, "w", encoding="utf-8") as sf:
+            json.dump(new_sdata, sf, indent=2, ensure_ascii=False)
 
     _LOCAL_PING_CACHE["ts"] = 0.0
     return current

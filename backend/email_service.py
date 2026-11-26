@@ -6,19 +6,17 @@ Nativer E-Mail-Dienst (IMAP & SMTP) für Archon OS:
 - Versorgt das Archon OS Postfach mit Volltext und Status
 """
 
-import os
-import sys
-import json
-import time
+import datetime
 import email
 import email.utils
 import imaplib
-import smtplib
+import json
 import logging
-import datetime
-from pathlib import Path
+import os
+import smtplib
 from email.header import decode_header
-from typing import Dict, Any, List, Optional, cast
+from pathlib import Path
+from typing import Any, Dict, List, Optional, cast
 
 logger = logging.getLogger("email_service")
 
@@ -60,6 +58,34 @@ def get_email_storage_dirs() -> List[Path]:
     return dirs if dirs else [Path("./data/inbox/emails")]
 
 
+def _get_quarantine_dirs(storage_dirs: List[Path]) -> List[Path]:
+    """D12-H3: untrustworthy Inhalte nie in die normalen Inbox-Pfade schreiben."""
+    dirs: List[Path] = []
+    for sdir in storage_dirs:
+        qdir = sdir.parent / "quarantine"
+        try:
+            qdir.mkdir(parents=True, exist_ok=True)
+            dirs.append(qdir)
+        except Exception as exc:
+            logger.error(f"Quarantäne-Verzeichnis {qdir} nicht erstellbar: {exc}")
+    if not dirs:
+        raise RuntimeError("Kein Quarantäne-Verzeichnis verfügbar — IMAP-Ingest blockiert.")
+    return dirs
+
+
+def _record_imap_ingest_audit(action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """GoBD-Audit der Ingest-Entscheidung; Schreibfehler nie verschluckt."""
+    try:
+        from backend.audit_log import chained_audit_log
+        event = chained_audit_log.record_event(
+            category="email_ingest", action=action, agent_id="email_service", payload=payload,
+        )
+        return {"audit_status": "recorded", "audit_event_id": event.get("event_id")}
+    except Exception as exc:
+        logger.error("[GoBD-Audit] IMAP-Ingest '%s' nicht protokolliert: %s", action, exc)
+        return {"audit_status": "error", "audit_error": f"{type(exc).__name__}: {exc}"}
+
+
 def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
     """
     Holt die neuesten E-Mails via IMAP ab und speichert sie lokal ab.
@@ -84,7 +110,8 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
 
     storage_dirs = get_email_storage_dirs()
     synced_count = 0
-    errors = []
+    quarantined_count = 0
+    errors: List[str] = []
 
     mail = None
     try:
@@ -185,17 +212,20 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
 
                 final_text = body_plain or (body_html if body_html else "")
 
-                # Sicherheitsprüfung auf Prompt Injections (local_security_guard + dual_llm_sanitizer)
+                # D12-H3: Fail-Closed. Ein ausgefallener Injection-Schutz darf
+                # niemals Rohtext als "safe" in Inbox/Vault schreiben.
                 sec_verdict = "safe"
-                sec_flags = []
+                sec_flags: List[str] = []
                 sanitized_text = final_text
+                sanitizer_error = ""
                 try:
                     from local_security_guard import scan_prompt_injection
                     scan_res = scan_prompt_injection(final_text, subject=subject, sender=sender)
                     sec_verdict = scan_res.get("verdict", "safe")
                     sec_flags = list(scan_res.get("pattern_matches", []))
                 except Exception as exc:
-                    logger.debug(f"Security-Scan (IMAP-Mail) fehlgeschlagen, Fallback 'safe': {exc}")
+                    sanitizer_error = f"input_sanitizer_unavailable (rule_scan): {type(exc).__name__}: {exc}"
+                    logger.error(f"Security-Scan (IMAP-Mail) fehlgeschlagen — Quarantäne: {sanitizer_error}")
                 try:
                     from backend.dual_llm_sanitizer import sanitize_external_input
                     dl_res = sanitize_external_input(final_text, source_id=sender, source_type="email")
@@ -207,7 +237,16 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                         sec_flags = sorted(set(sec_flags + list(dl_res.get("detected_patterns", []))))
                         sanitized_text = dl_res.get("clean_summary") or "[INHALT WEGEN SICHERHEITSRISIKEN GEFILTERT]"
                 except Exception as exc:
-                    logger.debug(f"Dual-LLM-Sanitizer fehlgeschlagen, Originaltext übernommen: {exc}")
+                    sanitizer_error = f"input_sanitizer_unavailable (dual_llm): {type(exc).__name__}: {exc}"
+                    logger.error(f"Dual-LLM-Sanitizer fehlgeschlagen — Quarantäne: {sanitizer_error}")
+
+                quarantined = bool(sanitizer_error)
+                if quarantined:
+                    # Unverifiziert: kein Rohtext, nicht "safe", nur Quarantäne.
+                    sec_verdict = "unverified"
+                    sanitized_text = ""
+                    if "input_sanitizer_unavailable" not in sec_flags:
+                        sec_flags.append("input_sanitizer_unavailable")
 
                 doc = {
                     "id": f"mail_imap_{msg_id_str}",
@@ -222,34 +261,61 @@ def sync_imap_inbox(limit: int = 50) -> Dict[str, Any]:
                     "mtime": parsed_ts,
                     "body": sanitized_text,
                     "content": sanitized_text,
-                    "raw_quarantined": sec_verdict == "blocked",
-                    "html": body_html,
+                    "raw_quarantined": sec_verdict in ("blocked", "unverified"),
+                    "html": "" if quarantined else body_html,
                     "preview": (sanitized_text[:160] + "...") if len(sanitized_text) > 160 else sanitized_text,
                     "source": "email",
                     "security_status": sec_verdict,
-                    "security_flags": sec_flags
+                    "security_flags": sec_flags,
+                    "sanitizer_error": sanitizer_error or None,
+                    "quarantined": quarantined,
                 }
 
-                # In alle Speicher-Pfade schreiben
-                for sdir in storage_dirs:
-                    target_file = sdir / f"msg_imap_{msg_id_str}.json"
-                    with open(target_file, "w", encoding="utf-8") as f:
-                        json.dump(doc, f, ensure_ascii=False, indent=2)
-
-                synced_count += 1
+                if quarantined:
+                    audit_info = _record_imap_ingest_audit("inbound_quarantined", {
+                        "imap_id": msg_id_str,
+                        "sender": sender,
+                        "subject": subject,
+                        "reason": "input_sanitizer_unavailable",
+                        "security_status": "unverified",
+                    })
+                    for qdir in _get_quarantine_dirs(storage_dirs):
+                        target_file = qdir / f"msg_imap_{msg_id_str}.json"
+                        with open(target_file, "w", encoding="utf-8") as f:
+                            json.dump(doc, f, ensure_ascii=False, indent=2)
+                    errors.append(f"Mail {msg_id_str}: {sanitizer_error} — in Quarantäne (unverified).")
+                    if audit_info.get("audit_status") == "error":
+                        errors.append(f"Mail {msg_id_str}: Audit-Event fehlgeschlagen ({audit_info['audit_error']}).")
+                    quarantined_count += 1
+                else:
+                    # Nur verifizierte Nachrichten in die regularären Speicher-Pfade.
+                    for sdir in storage_dirs:
+                        target_file = sdir / f"msg_imap_{msg_id_str}.json"
+                        with open(target_file, "w", encoding="utf-8") as f:
+                            json.dump(doc, f, ensure_ascii=False, indent=2)
+                    synced_count += 1
             except Exception as e_inner:
                 errors.append(f"Fehler bei Msg {msg_id_str}: {e_inner}")
 
         return {
-            "status": "success",
+            "status": "error" if errors else "success",
             "synced": synced_count,
+            "failed_count": len(errors),
+            "quarantined_count": quarantined_count,
             "errors": errors,
             "last_sync": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
     except Exception as e:
         logger.error(f"IMAP Fehler: {e}")
-        return {"status": "error", "message": str(e), "synced": synced_count}
+        return {
+            "status": "error",
+            "message": str(e),
+            "synced": synced_count,
+            "failed_count": 1,
+            "quarantined_count": quarantined_count,
+            "errors": [str(e)],
+        }
     finally:
         if mail:
             try:

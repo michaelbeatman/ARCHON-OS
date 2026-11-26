@@ -25,8 +25,6 @@ import logging
 import os
 import re
 import sqlite3
-import urllib.error
-import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Tuple, cast
@@ -3246,17 +3244,31 @@ class ERPManager:
                     "message": "PocketBase-Sync deaktiviert (POCKETBASE_ENABLED=false) – Mandanten-DB arbeitet lokal autark."
                 }
             else:
-                pb_url = cfg["pocketbase_url"]
-                coll = cfg["collection_name"]
+                pb_url = str(cfg["pocketbase_url"]).rstrip("/")
+                coll = str(cfg["collection_name"])
                 url = f"{pb_url}/api/collections/{coll}/records?perPage=500"
                 try:
-                    from utils.egress_guard import check_target_url
-                    check_target_url(url)
-                    req = urllib.request.Request(url, headers={"Accept": "application/json"})
-                    with urllib.request.urlopen(req, timeout=4.0) as resp:
-                        if resp.status == 200:
-                            data = json.loads(resp.read().decode("utf-8"))
-                            pb_records = data.get("items", [])
+                    # D06-M2: niemals rohes urlopen() — das folgt 3xx automatisch
+                    # und könnte eine validierte URL auf IMDS/localhost umlenken.
+                    # safe_http_request blockt Redirects, pinnt die geprüfte IP
+                    # und begrenzt die Antwortgröße.
+                    from utils.safe_http import safe_http_request
+
+                    status_code, _resp_headers, raw = safe_http_request(
+                        url,
+                        method="GET",
+                        headers={"Accept": "application/json"},
+                        timeout=4.0,
+                        max_bytes=2 * 1024 * 1024,
+                        public_only=True,
+                    )
+                    if status_code != 200:
+                        raise RuntimeError(f"HTTP {status_code}")
+                    data = json.loads(raw.decode("utf-8"))
+                    items = data.get("items") if isinstance(data, dict) else None
+                    if not isinstance(items, list):
+                        raise ValueError("PocketBase-Antwort ohne items-Liste")
+                    pb_records = items
                 except Exception as e:
                     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     with conn:
@@ -3265,7 +3277,7 @@ class ERPManager:
                             SET last_sync_at = ?, last_sync_status = 'offline',
                                 last_sync_summary = ?
                             WHERE id = 1
-                        """, (now_str, f"PocketBase unter {pb_url} derzeit nicht erreichbar ({e}). Lokale Mandanten-DB aktiv."))
+                        """, (now_str, f"PocketBase unter {pb_url} nicht erreichbar/blocks (SSRF-geschützt): {e}. Lokale Mandanten-DB aktiv."))
                     return {
                         "success": False,
                         "status": "offline",

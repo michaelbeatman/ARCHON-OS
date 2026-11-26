@@ -1780,7 +1780,9 @@ def apply_soul_mode(
     lang: str | None = None,
     *,
     refresh_pin: bool = False,
+    guardrail_review_note: str = "",
 ) -> Dict[str, Any]:
+    import hashlib
     import tempfile
     mode = normalize_soul_mode(mode)
     resolved_lang = resolve_soul_language(lang)
@@ -1808,6 +1810,10 @@ def apply_soul_mode(
     lengths_full = []
     lengths_pro = []
     lengths_compact = []
+    pending_writes = []
+    old_modes_seen = []
+    old_hash_parts = []
+    new_hash_parts = []
 
     for prof in profiles:
         pid = prof.get("id")
@@ -1815,6 +1821,10 @@ def apply_soul_mode(
             continue
         if target_agent_id and pid != target_agent_id:
             continue
+
+        old_modes_seen.append(str(prof.get("soul_mode") or "compact"))
+        prev_prompt = str(prof.get("prompt") or prof.get("system_prompt") or "").strip()
+        old_hash_parts.append(f"{pid}:{hashlib.sha256(prev_prompt.encode('utf-8')).hexdigest()}")
 
         old_full_de = (old_map_de.get(pid, {}).get("prompt") or "").strip()
         old_persona_de = old_full_de.split("## Messaging other agents")[0].strip() if old_full_de else ""
@@ -1847,6 +1857,8 @@ def apply_soul_mode(
         prof["system_prompt_en"] = active_en.strip()
         prof["soul_mode"] = mode
 
+        new_hash_parts.append(f"{pid}:{hashlib.sha256(active_primary.strip().encode('utf-8')).hexdigest()}")
+
         disk_compact = compact_en if resolved_lang == "en" else compact_de
         disk_pro = pro_en if resolved_lang == "en" else pro_de
         disk_full = full_en if resolved_lang == "en" else full_de
@@ -1857,6 +1869,47 @@ def apply_soul_mode(
         lengths_pro.append(len(disk_pro))
         lengths_compact.append(len(disk_compact))
 
+        pending_writes.append((pid, prof, disk_compact, disk_pro, disk_full, disk_active))
+        updated_count += 1
+
+    # F23 Audit-Pflicht (fail-closed): Beweis VOR jeglicher Persistierung auf Platte.
+    # Scheitert das Schreiben in die Audit-Kette, bleiben agent_profiles.json und
+    # SOUL*.md unveraendert.
+    audit_recorded = False
+    if refresh_pin:
+        from backend.audit_log import _require_audit_event
+
+        old_mode_label = (
+            old_modes_seen[0]
+            if len(set(old_modes_seen)) == 1
+            else ("mixed" if old_modes_seen else "unknown")
+        )
+        old_hash_val = (
+            old_hash_parts[0].split(":", 1)[1]
+            if len(old_hash_parts) == 1
+            else hashlib.sha256("\n".join(old_hash_parts).encode("utf-8")).hexdigest()
+        )
+        new_hash_val = (
+            new_hash_parts[0].split(":", 1)[1]
+            if len(new_hash_parts) == 1
+            else hashlib.sha256("\n".join(new_hash_parts).encode("utf-8")).hexdigest()
+        )
+        _require_audit_event(
+            category="compliance",
+            action="soul_tier_changed",
+            agent_id=target_agent_id or "*",
+            payload={
+                "from": old_mode_label,
+                "to": mode,
+                "old_hash": old_hash_val,
+                "new_hash": new_hash_val,
+                "guardrail_review_note": str(guardrail_review_note or ""),
+                "updated_profiles": updated_count,
+            },
+        )
+        audit_recorded = True
+
+    for pid, prof, disk_compact, disk_pro, disk_full, disk_active in pending_writes:
         for base_dir in prof_dirs:
             pdir = os.path.join(base_dir, pid)
             os.makedirs(pdir, exist_ok=True)
@@ -1869,8 +1922,6 @@ def apply_soul_mode(
             with open(os.path.join(pdir, "SOUL.md"), "w", encoding="utf-8", newline="\n") as fa:
                 fa.write(disk_active)
             write_hermes_profile_yaml(pdir, prof, lang=resolved_lang)
-
-        updated_count += 1
 
     tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(PROFILES_JSON_PATH), suffix=".tmp")
     try:
@@ -1915,6 +1966,7 @@ def apply_soul_mode(
         "lang": resolved_lang,
         "updated_profiles": updated_count,
         "pin_refreshed": bool(pin_info.get("pin_refreshed", False)),
+        "audit_recorded": audit_recorded,
         "avg_active_chars": round(sum(lengths_active) / max(1, len(lengths_active)), 1),
         "avg_full_chars": round(sum(lengths_full) / max(1, len(lengths_full)), 1),
         "avg_pro_chars": round(sum(lengths_pro) / max(1, len(lengths_pro)), 1),

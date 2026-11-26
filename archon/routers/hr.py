@@ -158,11 +158,28 @@ def api_set_soul_mode(request: Request, req: SetSoulModeReq):
             },
         )
 
-    res = apply_soul_mode(
-        mode=req.mode,
-        target_agent_id=req.agent_id,
-        refresh_pin=bool(req.refresh_soul_pin),
-    )
+    try:
+        res = apply_soul_mode(
+            mode=req.mode,
+            target_agent_id=req.agent_id,
+            refresh_pin=bool(req.refresh_soul_pin),
+            guardrail_review_note=req.guardrail_review_note,
+        )
+    except RuntimeError as exc:
+        if "audit_write_failed" in str(exc):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "audit_write_failed",
+                    "code": "AUDIT_WRITE_FAILED",
+                    "agent_id": req.agent_id or "*",
+                    "detail": (
+                        "SOUL-Tier-Wechsel abgebrochen: Pflicht-Audit-Event konnte nicht "
+                        "geschrieben werden (fail-closed)."
+                    ),
+                },
+            ) from exc
+        raise
     invalidate_hermes_profiles_cache()
     if req.agent_id:
         soul_data = api_get_hermes_soul(req.agent_id)

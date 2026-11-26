@@ -47,8 +47,20 @@ def test_f23_soul_mode_switch_with_pin_refresh_passes_refresh_flag(monkeypatch):
 
     captured = {}
 
-    def _fake_apply(mode="compact", target_agent_id=None, lang=None, *, refresh_pin=False):
-        captured.update(mode=mode, target_agent_id=target_agent_id, refresh_pin=refresh_pin)
+    def _fake_apply(
+        mode="compact",
+        target_agent_id=None,
+        lang=None,
+        *,
+        refresh_pin=False,
+        guardrail_review_note="",
+    ):
+        captured.update(
+            mode=mode,
+            target_agent_id=target_agent_id,
+            refresh_pin=refresh_pin,
+            guardrail_review_note=guardrail_review_note,
+        )
         return {"status": "success", "mode": mode, "pin_refreshed": refresh_pin}
 
     monkeypatch.setattr(hr_router, "_require_admin", lambda _req: None)
@@ -64,8 +76,106 @@ def test_f23_soul_mode_switch_with_pin_refresh_passes_refresh_flag(monkeypatch):
             guardrail_review_note="F23 review ok",
         ),
     )
-    assert captured == {"mode": "full", "target_agent_id": "founder", "refresh_pin": True}
+    assert captured == {
+        "mode": "full",
+        "target_agent_id": "founder",
+        "refresh_pin": True,
+        "guardrail_review_note": "F23 review ok",
+    }
     assert res["pin_refreshed"] is True
+
+
+def test_f23_soul_tier_change_audit_write_failure_is_fail_closed_403(monkeypatch, tmp_path):
+    """Negativprobe: scheitert chained_audit_log.record_event -> HTTP 403 audit_write_failed, soul_mode unveraendert."""
+    import json
+    import backend.audit_log as audit_mod
+    import scripts.sync_soul_modes as ssm
+
+    profiles_file = tmp_path / "agent_profiles.json"
+    profiles_file.write_text(
+        json.dumps([{"id": "founder", "name": "Founder", "role": "CEO", "soul_mode": "compact", "prompt": "old"}]),
+        encoding="utf-8",
+    )
+    prof_dir = tmp_path / "profiles"
+    prof_dir.mkdir()
+
+    monkeypatch.setattr(hr_router, "_require_admin", lambda _req: None)
+    monkeypatch.setattr(ssm, "PROFILES_JSON_PATH", str(profiles_file))
+    monkeypatch.setattr(ssm, "get_profile_directories", lambda: [str(prof_dir)])
+    monkeypatch.setattr(ssm, "refresh_soul_pin_for_agents", lambda target_agent_id=None: {"pin_refreshed": True})
+    monkeypatch.setattr(
+        audit_mod.chained_audit_log,
+        "record_event",
+        lambda **_kw: (_ for _ in ()).throw(OSError("simulated audit disk failure")),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        hr_router.api_set_soul_mode(
+            SimpleNamespace(),
+            hr_router.SetSoulModeReq(
+                mode="full",
+                agent_id="founder",
+                refresh_soul_pin=True,
+                guardrail_review_note="audit fail test",
+            ),
+        )
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["error"] == "audit_write_failed"
+    persisted = json.loads(profiles_file.read_text(encoding="utf-8"))
+    assert persisted[0]["soul_mode"] == "compact"
+    assert persisted[0]["prompt"] == "old"
+
+
+def test_f23_soul_tier_change_records_signed_audit_event_with_hashes_and_note(monkeypatch, tmp_path):
+    """Positivprobe: Pin-Refresh schreibt compliance/soul_tier_changed inkl. old_hash, new_hash und note."""
+    import json
+    import backend.audit_log as audit_mod
+    import scripts.sync_soul_modes as ssm
+
+    profiles_file = tmp_path / "agent_profiles.json"
+    profiles_file.write_text(
+        json.dumps([{"id": "founder", "name": "Founder", "role": "CEO", "soul_mode": "compact", "prompt": "old"}]),
+        encoding="utf-8",
+    )
+    prof_dir = tmp_path / "profiles"
+    prof_dir.mkdir()
+    recorded = []
+
+    def _spy_record_event(**kwargs):
+        recorded.append(kwargs)
+        return {"id": "evt-f23-1", **kwargs}
+
+    monkeypatch.setattr(hr_router, "_require_admin", lambda _req: None)
+    monkeypatch.setattr(ssm, "PROFILES_JSON_PATH", str(profiles_file))
+    monkeypatch.setattr(ssm, "get_profile_directories", lambda: [str(prof_dir)])
+    monkeypatch.setattr(ssm, "refresh_soul_pin_for_agents", lambda target_agent_id=None: {"pin_refreshed": True})
+    monkeypatch.setattr(hr_router, "api_get_hermes_soul", lambda _aid: {"markdown": "# SOUL FULL"})
+    monkeypatch.setattr(audit_mod.chained_audit_log, "record_event", _spy_record_event)
+
+    res = hr_router.api_set_soul_mode(
+        SimpleNamespace(),
+        hr_router.SetSoulModeReq(
+            mode="full",
+            agent_id="founder",
+            refresh_soul_pin=True,
+            guardrail_review_note="F23 compliance review signed",
+        ),
+    )
+    assert res["pin_refreshed"] is True
+    assert res["audit_recorded"] is True
+    assert len(recorded) == 1
+    ev = recorded[0]
+    assert ev["category"] == "compliance"
+    assert ev["action"] == "soul_tier_changed"
+    assert ev["agent_id"] == "founder"
+    payload = ev["payload"]
+    assert payload["from"] == "compact"
+    assert payload["to"] == "full"
+    assert payload["old_hash"] and payload["new_hash"]
+    assert payload["old_hash"] != payload["new_hash"]
+    assert payload["guardrail_review_note"] == "F23 compliance review signed"
+    persisted = json.loads(profiles_file.read_text(encoding="utf-8"))
+    assert persisted[0]["soul_mode"] == "full"
 
 
 def test_f23_compliance_engine_blocks_unrefreshed_soul_hash_drift(monkeypatch):

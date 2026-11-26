@@ -890,63 +890,13 @@ async def dispatch_to_openclaw(agent_name: str, prompt: str, timeout: int = 30) 
         timeout=timeout,
     )
 
-def clean_think_tags(text: str) -> str:
-    """
-    Entfernt sauber alle <think>...</think> Abschnitte (sowohl geschlossene als auch offene/abgeschnittene).
-    """
-    if not text:
-        return ""
-    import re
-    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.DOTALL)
-    cleaned = re.sub(r'<think>[\s\S]*$', '', cleaned, flags=re.DOTALL)
-    return cleaned.strip()
-
-def parse_omniroute_response(resp_text: str) -> str:
-    """
-    Parst Antworten von OpenAI-kompatiblen APIs (Groq, OmniRoute).
-
-    D12: Eine leere/ungueltige Antwort ist ein FEHLER, keine leere Erfolgs-
-    antwort. Der Parser wirft ``RuntimeError``; die Provider-Hops muessen das
-    mit ``error_code=EMPTY_OR_INVALID_RESPONSE`` eskalieren.
-    """
-    if not resp_text:
-        raise RuntimeError("EMPTY_OR_INVALID_RESPONSE: leere Provider-Antwort")
-    try:
-        data = json.loads(resp_text) if isinstance(resp_text, str) else resp_text
-        if isinstance(data, dict):
-            if "choices" in data and len(data["choices"]) > 0:
-                choice = data["choices"][0]
-                msg = choice.get("message", {})
-                content = msg.get("content") or choice.get("text") or ""
-                if content:
-                    return clean_think_tags(str(content))
-            if "content" in data and data["content"]:
-                return clean_think_tags(str(data["content"]))
-    except Exception as exc:
-        logger.debug(f"[Dispatcher] JSON-Antwort-Extraktion fehlgeschlagen: {exc}")
-
-    # Server-Sent Events Parsing (data: {...})
-    collected_content = []
-    for line in resp_text.splitlines():
-        line = line.strip()
-        if line.startswith("data: ") and line != "data: [DONE]":
-            json_str = line[6:].strip()
-            try:
-                chunk = json.loads(json_str)
-                choices = chunk.get("choices", [])
-                if choices:
-                    delta = choices[0].get("delta", {})
-                    content_piece = delta.get("content", "")
-                    if content_piece:
-                        collected_content.append(content_piece)
-            except Exception as sse_exc:
-                logger.debug("[Dispatcher] SSE-Chunk nicht parsbar: %s", sse_exc)
-                continue
-
-    if collected_content:
-        return clean_think_tags("".join(collected_content))
-
-    raise RuntimeError("EMPTY_OR_INVALID_RESPONSE: keine Nutzlast in Provider-Antwort")
+from archon.core.dispatch_parsing import (
+    _OMNIROUTE_OPENROUTER_FALLBACK_MAP as _OMNIROUTE_OPENROUTER_FALLBACK_MAP,
+    _extract_tokens_usage as _extract_tokens_usage,
+    _resolve_openrouter_fallback_model as _resolve_openrouter_fallback_model,
+    clean_think_tags as clean_think_tags,
+    parse_omniroute_response as parse_omniroute_response,
+)
 
 # Globaler Concurrency Throttle (Pillar 2 / Prozessmodell)
 # Drosselt gleichzeitige rechenintensive LLM-Tasks zum Schutz vor 99% CPU-Spitzen / Buffer Overflows
@@ -1202,19 +1152,7 @@ def _log_dispatcher_usage_sync(agent_id: str, model: str, in_tok: int, out_tok: 
     except Exception as e:
         print(f"[DISPATCHER] Token telemetry write error: {e}", file=sys.stderr)
 
-def _extract_tokens_usage(resp_text: str, prompt_str: str, reply_str: str):
-    inp, out = max(50, len(prompt_str.split()) * 2), max(20, len(reply_str.split()) * 2)
-    try:
-        import json
-        d = json.loads(resp_text) if isinstance(resp_text, str) else resp_text
-        if isinstance(d, dict):
-            u = d.get("usage", {})
-            if isinstance(u, dict):
-                inp = u.get("prompt_tokens") or u.get("input_tokens") or inp
-                out = u.get("completion_tokens") or u.get("output_tokens") or out
-    except (ValueError, TypeError, AttributeError) as exc:
-        logger.debug(f"[Dispatcher] Token-Usage-Parsing fehlgeschlagen, nutze Schaetzung: {exc}")
-    return int(inp), int(out)
+# _extract_tokens_usage wird oben via `X as X` aus archon.core.dispatch_parsing re-exportiert.
 
 async def dispatch_to_omniroute_or_container(
     agent_id: str, 
@@ -1633,35 +1571,7 @@ async def dispatch_to_omniroute_or_container(
                 logger.warning(f"[Dispatcher] Throttle-Slot {slot_id} konnte nicht freigegeben werden: {th_exc}")
 
 from backend.llm_kernel import AUTO_MODEL_MAP, estimate_model_cost_usd
-
-_OMNIROUTE_OPENROUTER_FALLBACK_MAP = {
-    **AUTO_MODEL_MAP,
-    "omniroute/best-coding": "deepseek/deepseek-chat",
-    "omniroute/best-reasoning": "deepseek/deepseek-r1",
-    "omniroute/best-vision": "google/gemini-2.5-flash",
-    "omniroute/best-fast": "openai/gpt-4o-mini",
-    "omniroute/best-free": "google/gemini-2.5-flash",
-    "omniroute/free-forever": "google/gemini-2.5-flash",
-    "omniroute/deepseek-coder": "deepseek/deepseek-chat",
-}
-
-
-def _resolve_openrouter_fallback_model(model: str) -> str:
-    """Normalizes OmniRoute/auto model aliases to direct OpenRouter model IDs."""
-    raw = (model or "").strip()
-    low = raw.lower()
-    if low in _OMNIROUTE_OPENROUTER_FALLBACK_MAP:
-        return _OMNIROUTE_OPENROUTER_FALLBACK_MAP[low]
-    if low.startswith("omniroute/"):
-        stripped = raw.split("/", 1)[1].strip()
-        if f"auto/{stripped}" in _OMNIROUTE_OPENROUTER_FALLBACK_MAP:
-            return _OMNIROUTE_OPENROUTER_FALLBACK_MAP[f"auto/{stripped}"]
-        if "/" in stripped:
-            return stripped
-        return "deepseek/deepseek-chat"
-    if low.startswith("auto/") or raw in ("", "free-forever"):
-        return "deepseek/deepseek-chat"
-    return raw
+# _OMNIROUTE_OPENROUTER_FALLBACK_MAP & _resolve_openrouter_fallback_model werden oben via `X as X` re-exportiert.
 
 
 async def _dispatch_to_omniroute_or_container_exec(

@@ -398,6 +398,24 @@ async def _cancel_background_tasks() -> None:
                             )
                         except RuntimeError as audit_err:
                             audit_errors.append(audit_err)
+                        continue
+                    # RT1/1B: wait_for verwirft die gather-Results. Tasks, die
+                    # beim Cancel mit einer Exception beendet sind, duerfen nicht
+                    # still verschwinden -- sonst fehlen Audit + Strict-Eskalation.
+                    if task.cancelled():
+                        continue
+                    try:
+                        task_exc = task.exception()
+                    except asyncio.CancelledError:
+                        continue
+                    if task_exc is None:
+                        continue
+                    try:
+                        _record_failed_cancel(
+                            task.get_name(), f"{type(task_exc).__name__}: {task_exc}"
+                        )
+                    except RuntimeError as audit_err:
+                        audit_errors.append(audit_err)
             if results is not None:
                 for task, result in zip(pending, results):
                     if isinstance(result, asyncio.CancelledError):

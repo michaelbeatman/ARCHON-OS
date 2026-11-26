@@ -44,21 +44,27 @@ def test_f34_force_done_audit_is_non_blocking_and_returns_503_on_audit_failure(m
     )
 
     async def _run():
-        t0 = time.perf_counter()
-        loop_latency = None
+        # V06/RT3: Heartbeat muss waehrend des gesamten Calls laufen, sonst
+        # verpasst er einen spaeteren sync-Block und der Test wird zum Theater-Gate.
+        done = asyncio.Event()
+        max_lag = [0.0]
 
         async def _heartbeat():
-            nonlocal loop_latency
-            await asyncio.sleep(0.02)
-            loop_latency = time.perf_counter() - t0
+            prev = time.perf_counter()
+            while not done.is_set():
+                await asyncio.sleep(0.01)
+                now = time.perf_counter()
+                max_lag[0] = max(max_lag[0], now - prev)
+                prev = now
 
         async def _call_update():
             with pytest.raises(HTTPException) as exc_info:
                 await crud.update_task_status_impl("t-f34", "admin_b", req)
             assert exc_info.value.status_code == 503
+            done.set()
 
         await asyncio.gather(_call_update(), _heartbeat())
-        assert loop_latency is not None and loop_latency < 0.12, f"Event-Loop blockiert: {loop_latency:.3f}s"
+        assert max_lag[0] < 0.12, f"Event-Loop blockiert: {max_lag[0]:.3f}s"
 
     asyncio.run(_run())
 

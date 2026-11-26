@@ -40,24 +40,23 @@ class SecurityAuditPlugin(BasePlugin):
                     logger.warning(error_msg)
                     raise PermissionError(error_msg)
 
-        # Prüfe Directory Traversal in Dateipfaden (Workspace-Jail + sensible Ziele)
+        # V06/RT2: Workspace-Jail gilt fuer JEDEN Pfad, nicht nur bei "..".
+        # Ein absoluter Pfad ausserhalb des Workspace ohne ".." muss genauso
+        # blockiert werden wie ein case-variantes .ENV / AUDIT_ANCHOR.
         path = args.get("path") or args.get("Path") or args.get("file_path") or ""
         if isinstance(path, str) and path:
             from pathlib import Path
 
-            norm = path.replace("\\", "/")
-            sensitive_targets = ("/etc", "/root", "Windows/System32", ".env", "audit_anchor")
-            if ".." in norm or any(seg in norm for seg in sensitive_targets):
-                workspace_root = Path(
-                    str(context.get("workspace_root") or self.config.get("workspace_root") or ".")
-                ).resolve()
-                cand = (workspace_root / path).resolve() if not Path(path).is_absolute() else Path(path).resolve()
-                outside_ws = not cand.is_relative_to(workspace_root)
-                touches_sensitive = any(seg.lower() in norm.lower() for seg in sensitive_targets)
-                if outside_ws or touches_sensitive:
-                    error_msg = f"[SecurityAuditPlugin] Blockiert: Unerlaubter Pfadzugriff ({path})"
-                    logger.warning(error_msg)
-                    raise PermissionError(error_msg)
+            norm = path.replace("\\", "/").lower()
+            sensitive_targets = ("/etc", "/root", "windows/system32", ".env", "audit_anchor")
+            workspace_root = Path(
+                str(context.get("workspace_root") or self.config.get("workspace_root") or ".")
+            ).resolve()
+            cand = (workspace_root / path).resolve() if not Path(path).is_absolute() else Path(path).resolve()
+            if not cand.is_relative_to(workspace_root) or any(seg in norm for seg in sensitive_targets):
+                error_msg = f"[SecurityAuditPlugin] Blockiert: Unerlaubter Pfadzugriff ({path})"
+                logger.warning(error_msg)
+                raise PermissionError(error_msg)
 
         return args
 

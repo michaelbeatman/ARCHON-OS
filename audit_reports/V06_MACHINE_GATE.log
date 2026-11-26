@@ -1,0 +1,118 @@
+===== V06 MACHINE GATE 2026-11-26T19:58:42.6802910+01:00 | HEAD=8a69868c | BRANCH=fullscan-d5 =====
+ENV ARCHON_TEST_DB_ISOLATION=1 ARCHON_DATA_DIR=C:\Users\micha\AppData\Local\Temp\opencode\v06-machine-gate-data
+
+=== [19:58:42] 1. ruff(critical E9,F63,F7,F82) ===
+All checks passed!
+--- 1. ruff(critical E9,F63,F7,F82) | EXIT=0 ---
+=== [19:58:42] 2. ruff(changed A/B vs bc31e2dd) ===
+REF_BEFORE=bc31e2dd  REF_AFTER=8a69868c
+FILES=71  MISSING_IN_BEFORE=25
+BEFORE=172  AFTER=166  KEYS=46
+ABWEICHUNGEN=3  NEUE_FUNDE=0  VERBESSERUNGEN=3
+  WENIGER archon/routers/hr.py | I001: 3->2
+  WENIGER core_dispatcher.py | E402: 2->0
+  WENIGER core_dispatcher.py | F401: 3->0
+HARTES KRITERIUM: 0 NEUE FUNDE
+--- 2. ruff(changed A/B vs bc31e2dd) | EXIT=0 ---
+=== [19:58:48] 3. mypy(new D5 --disallow-untyped-defs) ===
+Success: no issues found in 3 source files
+--- 3. mypy(new D5 --disallow-untyped-defs) | EXIT=0 ---
+=== [19:58:52] 4. mypy(full) ===
+Success: no issues found in 439 source files
+--- 4. mypy(full) | EXIT=0 ---
+=== [19:59:05] 5. lint-imports ===
+
+---------
+Contracts
+---------
+
+Analyzed 315 files, 1148 dependencies.
+--------------------------------------
+
+backend darf archon.routers nicht importieren (Layergrenze D09/H-09-2) KEPT
+archon.core darf archon.routers nicht importieren (Invariante #2) KEPT
+
+Contracts: 2 kept, 0 broken.
+--- 5. lint-imports | EXIT=0 ---
+=== [19:59:06] 6. compileall ===
+--- 6. compileall | EXIT=0 ---
+=== [19:59:08] 7. audit_secrets ===
+[Audit-Secrets] OK: 7177 Datei(en) geprueft - keine Secrets gefunden.
+--- 7. audit_secrets | EXIT=0 ---
+=== [20:00:45] 8. bandit ===
+--- 8. bandit | EXIT=0 ---
+=== [20:00:59] 9. pip-audit ===
+No known vulnerabilities found
+--- 9. pip-audit | EXIT=0 ---
+=== [20:01:39] 10. tsc --noEmit (frontend, read-only main node_modules) ===
+--- 10. tsc --noEmit (frontend, read-only main node_modules) | EXIT=0 ---
+=== [11. livez read-only curl 8501] ===
+{"alive":true,"status":"alive","mode":"heartbeat","heartbeat_started":true,"heartbeat_age_s":0.982,"loop_lag_ms":0.67,"max_loop_lag_ms":1787.86,"tick_count":3461,"reason":null,"timestamp":1795719702.4436715,"loops":{"watchdog":{"alive":true,"last_seen":1795719700.220725,"age_s":2.225}}}
+HTTP_STATUS=200
+HTTP_STATUS=200
+--- 11. livez | EXIT=0 ---
+=== [20:01:42] 12. A/B router exact ===
+[db_paths] agentic_memory.db wird aus C:\Users\micha\.hermes\agentic_memory.db geladen (Heimat wõre C:\Users\micha\AppData\Local\Temp\opencode\v06-machine-gate-data\agentic_memory.db). Bitte Datei pr³fen/migrieren, um Split-Brain zu vermeiden.
+Migration last_seen_at uebersprungen (vermutlich bereits vorhanden): duplicate column name: last_seen_at
+[db_paths] state.db wird aus C:\Users\micha\.hermes\state.db geladen (Heimat wõre C:\opt\data\state.db). Bitte Datei pr³fen/migrieren, um Split-Brain zu vermeiden.
+INFO:archon.shutdown_guard:[shutdown_guard] aktiv (grace=5s)
+INFO:archon_os:[i18n] LocaleMiddleware aktiv
+INFO:archon_os:[DemoMode] DemoModeMiddleware aktiv
+INFO:archon.exceptions:[i18n] Exception-Handler registriert (code+params Format, inkl. 500-Catch-All)
+INFO:archon_os:[i18n] Exception-Handler registriert (code+params)
+INFO:archon_os:[RateLimit] aktiv (Standard 600/min, strikt 20/min)
+Operations API mounted successfully.
+A/B: paths=799 routes=91 load_errors=0 rbac=True ABWEICHUNGEN=0
+--- 12. A/B router exact | EXIT=0 ---
+=== [20:01:46] 13. pytest(serial full) ===
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+..........................................................s...s......... [ 11%]
+.....s.................................................................. [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+...............ssss..................................................... [ 25%]
+........................................................................ [ 28%]
+..................s..................................................... [ 30%]
+........................................................................ [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+...........................................ss........................... [ 42%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 64%]
+...........s..s......................................................... [ 67%]
+........................................................................ [ 70%]
+.........................................s.............................. [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 78%]
+........................................................................ [ 81%]
+........................................................................ [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+...........................................................s............ [ 92%]
+...sss.ss.........s..................................................... [ 95%]
+........................................................................ [ 98%]
+......................................                                   [100%]
+============================== warnings summary ===============================
+tests/test_loop_liveness.py::test_livez_returns_503_during_real_event_loop_blockade
+  C:\.Antigravity-projekte\AgenticOS-2026\.ci_venv\Lib\site-packages\httpx2\_client.py:1107: StarletteDeprecationWarning: You should not use the 'timeout' argument with the TestClient. See https://github.com/Kludex/starlette/issues/1108 for more information.
+    return self.request(
+
+tests/test_m48_mcp_gateway.py::TestM48McpGateway::test_05_hitl_gate_blocks_until_approved_then_executes
+  C:\Users\micha\.local\share\opencode\worktree\b1d671\fullscan-d5\scripts\trigger_boardroom_debate.py:147: RuntimeWarning: coroutine 'run_boardroom_debate' was never awaited
+    return {"status": "error", "message": f"Connection and fallback failed: {inner_e}"}
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2538 passed, 20 skipped, 2 warnings in 229.55s (0:03:49)
+--- 13. pytest(serial full) | EXIT=0 ---
+===== V06 MACHINE GATE: ALL 13 CHECKS EXIT=0 =====

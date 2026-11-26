@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -51,6 +52,23 @@ async def test_v06_cost_guard_plugin_persists_atomically(tmp_path):
     assert data["spent_usd"] == pytest.approx(0.125)
     # Keine .tmp-Dateien uebrig
     assert list(tmp_path.glob("*.tmp")) == []
+
+    # Negativprobe gegen den echten Atomicity-Fix: ein abgebrochener
+    # os.replace darf die Datei nicht verfaelschen. Der im RAM akkumulierte
+    # Verbrauch bleibt erhalten und wird beim naechsten sauberen Event
+    # nachpersistiert (kein stillerBudget-Reset).
+    disk_before = burn_file.read_text(encoding="utf-8")
+    with mock.patch("os.replace", side_effect=OSError("simulated replace failure")):
+        await plugin.on_task_completed({"id": "t-2"}, {"tokens_used": 900, "cost_usd": 7.0})
+    assert burn_file.read_text(encoding="utf-8") == disk_before
+    assert plugin.burn_data["total_tokens"] == 1400
+    assert plugin.burn_data["spent_usd"] == pytest.approx(7.125)
+    assert list(tmp_path.glob("*.tmp")) == []
+
+    await plugin.on_task_completed({"id": "t-3"}, {"tokens_used": 1, "cost_usd": 0.01})
+    persisted = json.loads(burn_file.read_text(encoding="utf-8"))
+    assert persisted["total_tokens"] == 1401
+    assert persisted["spent_usd"] == pytest.approx(7.135)
 
 
 def test_v06_pocketbase_compose_binds_loopback_only():

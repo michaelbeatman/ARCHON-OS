@@ -86,3 +86,52 @@ async def test_v06_p2_dag_resume_cleanup_future_is_tracked_and_drainable(monkeyp
             "SELECT status FROM workflow_runs WHERE run_id = ?", (run_id,)
         ).fetchone()[0]
     assert status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_v06_p0_timeout_path_still_records_failed_cancels(monkeypatch):
+    """RT1/1B: wait_for-Timeout verwirft gather-Results; beendete Tasks duerfen nicht still verschwinden."""
+    monkeypatch.setenv("ARCHON_AUDIT_STRICT", "1")
+    bl._BACKGROUND_TASKS.clear()
+    bl._FAILED_CANCELS.clear()
+
+    async def _crash_on_cancel(msg: str) -> None:
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            raise ValueError(msg)
+
+    t1 = asyncio.create_task(_crash_on_cancel("t1_fail"), name="bg_task_1")
+    t2 = asyncio.create_task(_crash_on_cancel("t2_fail"), name="bg_task_2")
+    bl._BACKGROUND_TASKS.extend([t1, t2])
+    await asyncio.sleep(0.01)
+
+    deps = SimpleNamespace(
+        get_rag_sync_process=lambda: None,
+        set_rag_sync_process=lambda _v: None,
+    )
+    monkeypatch.setattr(bl, "_resolve_deps", lambda: deps)
+    monkeypatch.setattr(
+        audit_mod.chained_audit_log,
+        "record_event",
+        lambda **_kw: (_ for _ in ()).throw(OSError("audit db down")),
+    )
+
+    async def _timeout_wait_for(aw, timeout=None):
+        aw.cancel()
+        try:
+            await aw
+        except BaseException:
+            pass
+        await asyncio.sleep(0.02)  # cancelled Children finish their raise
+        raise asyncio.TimeoutError()
+
+    monkeypatch.setattr(asyncio, "wait_for", _timeout_wait_for)
+
+    with pytest.raises(RuntimeError, match="audit_write_failed"):
+        await bl._cancel_background_tasks()
+
+    names = [entry["task"] for entry in bl._FAILED_CANCELS]
+    assert "bg_task_1" in names
+    assert "bg_task_2" in names
+    assert bl._BACKGROUND_TASKS == []

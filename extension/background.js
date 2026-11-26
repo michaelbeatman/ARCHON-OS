@@ -6,7 +6,13 @@
 const POCKETBASE_URL = 'http://127.0.0.1:8090';
 
 function escapePbFilterValue(val) {
-  return String(val || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  // V06/RT2: PocketBase `~` ist LIKE -- `%` und `_` sind Wildcards und
+  // muessen maskiert werden, sonst trifft ein konstruierter Wert einen fremden Datensatz.
+  return String(val || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_');
 }
 
 async function getPbAuthHeaders(extra = {}) {
@@ -48,7 +54,8 @@ async function findExistingContact(linkedinUrl, name) {
         if (data.items && data.items.length > 0) {
           const exact = data.items.find(item => cleanUrl(item.linkedin_url) === normUrl);
           if (exact) return exact;
-          return data.items[0];
+          // Nie einen fremden Kontakt per PATCH ueberschreiben, wenn nur ein LIKE-Treffer vorliegt.
+          return null;
         }
       }
     } catch (e) {
@@ -66,7 +73,7 @@ async function findExistingContact(linkedinUrl, name) {
       if (res.ok) {
         const data = await res.json();
         if (data.items && data.items.length > 0) {
-          return data.items.find(item => (item.name || '').trim().toLowerCase() === cleanName) || data.items[0];
+          return data.items.find(item => (item.name || '').trim().toLowerCase() === cleanName) || null;
         }
       }
     } catch (e) {

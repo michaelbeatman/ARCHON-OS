@@ -382,26 +382,41 @@ async def _cancel_background_tasks() -> None:
         task.cancel()
     if pending:
         results = None
+        audit_errors: List[RuntimeError] = []
         try:
-            results = await asyncio.wait_for(
-                asyncio.gather(*pending, return_exceptions=True), timeout=10.0
+            try:
+                results = await asyncio.wait_for(
+                    asyncio.gather(*pending, return_exceptions=True), timeout=10.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("[Shutdown] %s Task(s) reagierten nicht binnen 10s.", len(pending))
+                for task in pending:
+                    if not task.done():
+                        try:
+                            _record_failed_cancel(
+                                task.get_name(), "timeout_after_cancel(10s): task_possibly_alive"
+                            )
+                        except RuntimeError as audit_err:
+                            audit_errors.append(audit_err)
+            if results is not None:
+                for task, result in zip(pending, results):
+                    if isinstance(result, asyncio.CancelledError):
+                        continue
+                    if isinstance(result, BaseException):
+                        try:
+                            _record_failed_cancel(
+                                task.get_name(), f"{type(result).__name__}: {result}"
+                            )
+                        except RuntimeError as audit_err:
+                            audit_errors.append(audit_err)
+            confirmed = sum(1 for t in pending if t.cancelled())
+            print(
+                f"[Shutdown] {confirmed}/{len(pending)} Hintergrund-Task(s) verifiziert abgebrochen; "
+                f"{len(_FAILED_CANCELS)} fehlgeschlagene Abbruch(e) insgesamt."
             )
-        except asyncio.TimeoutError:
-            logger.warning("[Shutdown] %s Task(s) reagierten nicht binnen 10s.", len(pending))
-            for task in pending:
-                if not task.done():
-                    _record_failed_cancel(
-                        task.get_name(), "timeout_after_cancel(10s): task_possibly_alive"
-                    )
-        if results is not None:
-            for task, result in zip(pending, results):
-                if isinstance(result, asyncio.CancelledError):
-                    continue
-                if isinstance(result, BaseException):
-                    _record_failed_cancel(task.get_name(), f"{type(result).__name__}: {result}")
-        confirmed = sum(1 for t in pending if t.cancelled())
-        print(
-            f"[Shutdown] {confirmed}/{len(pending)} Hintergrund-Task(s) verifiziert abgebrochen; "
-            f"{len(_FAILED_CANCELS)} fehlgeschlagene Abbruch(e) insgesamt."
-        )
-    _BACKGROUND_TASKS[:] = [t for t in _BACKGROUND_TASKS if not t.done()]
+        finally:
+            _BACKGROUND_TASKS[:] = [t for t in _BACKGROUND_TASKS if not t.done()]
+        if audit_errors:
+            raise audit_errors[0]
+    else:
+        _BACKGROUND_TASKS[:] = [t for t in _BACKGROUND_TASKS if not t.done()]

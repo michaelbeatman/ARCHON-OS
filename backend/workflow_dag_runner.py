@@ -2805,6 +2805,18 @@ async def resume_suspended_workflow_run(
     return result
 
 
+_PENDING_RESUME_CLEANUP_FUTURES: "set[asyncio.Future[Any]]" = set()
+
+
+async def drain_pending_resume_cleanups(timeout: float = 5.0) -> int:
+    """Wartet auf laufende Failed-Status-Persistierungen aus _on_resume_done (v0.6 MED-1)."""
+    pending = [f for f in list(_PENDING_RESUME_CLEANUP_FUTURES) if not f.done()]
+    if not pending:
+        return 0
+    await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), timeout=timeout)
+    return len(pending)
+
+
 def schedule_workflow_resume(
     run_id: str,
     gate_approvals: Optional[Dict[str, bool]] = None,
@@ -2850,7 +2862,9 @@ def schedule_workflow_resume(
 
             try:
                 loop = asyncio.get_running_loop()
-                loop.run_in_executor(None, _mark_failed_sync)
+                fut = loop.run_in_executor(None, _mark_failed_sync)
+                _PENDING_RESUME_CLEANUP_FUTURES.add(fut)
+                fut.add_done_callback(_PENDING_RESUME_CLEANUP_FUTURES.discard)
             except RuntimeError:
                 _mark_failed_sync()
 

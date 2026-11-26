@@ -23,6 +23,30 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from archon.core.provider_registry import get_provider
 from backend.handoff_desk import mark_truncated, require_accepted_handoff
+from backend.operations_bulk import (
+    _KANBAN_UNDO_STORE as _KANBAN_UNDO_STORE,
+)
+from backend.operations_bulk import (
+    _KANBAN_UNDO_STORE_MAX_SIZE as _KANBAN_UNDO_STORE_MAX_SIZE,
+)
+from backend.operations_bulk import (
+    BulkActionDeps as _BulkActionDeps,
+)
+from backend.operations_bulk import (
+    KanbanBulkActionRequest as KanbanBulkActionRequest,
+)
+from backend.operations_bulk import (
+    KanbanBulkUndoRequest as KanbanBulkUndoRequest,
+)
+from backend.operations_bulk import (
+    _prune_undo_store as _prune_undo_store,
+)
+from backend.operations_bulk import (
+    execute_kanban_bulk_action as _execute_kanban_bulk_action,
+)
+from backend.operations_bulk import (
+    execute_kanban_bulk_undo as _execute_kanban_bulk_undo,
+)
 from backend.operations_constants import TEAMS_DEFINITION, _get_org_hierarchy_file
 from backend.platform_paths import HERMES_HOME
 from backend.rbac_guards import forbid_viewer_writes, require_admin_or_503, require_session_actor
@@ -2292,297 +2316,31 @@ async def update_task_status(request: Request, task_id: str, req: TaskStatusUpda
 
 
 # In-Memory Store für 10-Minuten Undo-Transaktionen (t-c2b384)
-_KANBAN_UNDO_STORE: Dict[str, Dict[str, Any]] = {}
-_KANBAN_UNDO_STORE_MAX_SIZE = 100
+# D3/2: Bulk-Aktionen & 10-Minuten-Undo-Puffer nach backend/operations_bulk.py ausgelagert.
+# Re-Exports (inkl. identischem _KANBAN_UNDO_STORE-Dict) liegen am Modulkopf.
 
 
-def _prune_undo_store() -> None:
-    """Fix-Sprint Paket A (Punkt 7): raeumt den Undo-Store bei jedem Zugriff auf —
-    TTL-Abfluss + Hartes Maximum von 100 Eintraegen (aelteste werden verworfen)."""
-    now_ts = time.time()
-    for tok in list(_KANBAN_UNDO_STORE.keys()):
-        entry = _KANBAN_UNDO_STORE.get(tok)
-        if not entry or float(entry.get("expires_at") or 0) < now_ts:
-            _KANBAN_UNDO_STORE.pop(tok, None)
-    while len(_KANBAN_UNDO_STORE) > _KANBAN_UNDO_STORE_MAX_SIZE:
-        oldest_tok = min(_KANBAN_UNDO_STORE, key=lambda t: float(_KANBAN_UNDO_STORE[t].get("created_at") or 0.0))
-        _KANBAN_UNDO_STORE.pop(oldest_tok, None)
+def _build_bulk_deps() -> _BulkActionDeps:
+    return _BulkActionDeps(
+        get_kanban_connection=_get_kanban_connection,
+        load_kanban_meta=_load_kanban_meta,
+        sync_to_memory_bridge=_sync_to_memory_bridge,
+        valid_kanban_statuses=VALID_KANBAN_STATUSES,
+    )
 
-class KanbanBulkActionRequest(BaseModel):
-    task_ids: List[str]
-    action: str  # "move", "assign", "tag", "delete"
-    payload: Dict[str, Any] = {}
-    assignee: Optional[str] = None
-
-class KanbanBulkUndoRequest(BaseModel):
-    undo_token: str
 
 @router.post("/kanban/bulk")
 def api_kanban_bulk_action(request: Request, req: KanbanBulkActionRequest):
     """Führt eine Mehrfachaktion auf ausgewählten Kanban-Tasks aus mit 10-Minuten-Undo-Puffer (t-c2b384)."""
     require_admin_or_503(request)
-    task_ids = [tid.strip() for tid in req.task_ids if tid and tid.strip()]
-    if not task_ids:
-        raise HTTPException(status_code=400, detail="Keine Aufgaben übergeben.")
-
-    action = req.action.lower()
-    if action not in ("move", "assign", "tag", "delete"):
-        raise HTTPException(status_code=400, detail=f"Unbekannte Aktion: {action}")
-
-    _prune_undo_store()
-    conn = _get_kanban_connection(maintenance=True)
-    now_iso = datetime.datetime.now().isoformat()
-    now_ts = time.time()
-    undo_token = f"undo_{secrets.token_hex(8)}"
-
-    try:
-        cursor = conn.cursor()
-        # 1. Schnappschuss der betroffenen Tasks sichern
-        placeholders = ",".join("?" for _ in task_ids)
-        cursor.execute(f"SELECT id, title, assignee, status, block_kind, result FROM tasks WHERE id IN ({placeholders})", task_ids)
-        rows = cursor.fetchall()
-        if not rows:
-            raise HTTPException(status_code=404, detail="Keine passenden Aufgaben gefunden.")
-
-        meta = _load_kanban_meta()
-        snapshot = []
-        for r in rows:
-            tid = r["id"]
-            t_tags = list((meta.get("tasks", {}).get(tid, {})).get("tags", []))
-            snapshot.append({
-                "id": tid,
-                "title": r["title"],
-                "status": r["status"],
-                "assignee": r["assignee"],
-                "tags": t_tags,
-                # Fix-Sprint Paket A (Punkt 6): block_kind & result mitichern
-                "block_kind": r["block_kind"] if "block_kind" in r.keys() else None,
-                "result": r["result"] if "result" in r.keys() else None,
-            })
-
-        # 2. Aktion anwenden
-        if action == "move":
-            target_status = (req.payload.get("status") or "todo").lower()
-            if target_status not in VALID_KANBAN_STATUSES:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Ungültiger Status '{target_status}'. Erlaubt sind: {', '.join(sorted(VALID_KANBAN_STATUSES))}"
-                )
-            # Fix-Sprint Paket A (Punkt 5): Cycle-Time/Zombie-Erkennung korrekt
-            # — beim Zurückbewegen Timestamps explizit NULL setzen statt COALESCE.
-            if target_status in ("backlog", "todo"):
-                cursor.execute(f"""
-                    UPDATE tasks
-                    SET status = ?,
-                        started_at = NULL,
-                        completed_at = NULL
-                    WHERE id IN ({placeholders})
-                """, [target_status] + task_ids)
-            elif target_status == "in_progress":
-                cursor.execute(f"""
-                    UPDATE tasks
-                    SET status = ?,
-                        started_at = COALESCE(started_at, ?),
-                        completed_at = NULL
-                    WHERE id IN ({placeholders})
-                """, [target_status, now_iso] + task_ids)
-            elif target_status == "done":
-                cursor.execute(f"""
-                    UPDATE tasks
-                    SET status = ?,
-                        completed_at = ?
-                    WHERE id IN ({placeholders})
-                """, [target_status, now_iso] + task_ids)
-            else:
-                # review/blocked/failed/archived etc.: altes Verhalten (kein Touch der Timestamps)
-                cursor.execute(f"""
-                    UPDATE tasks
-                    SET status = ?,
-                        started_at = COALESCE(NULL, started_at),
-                        completed_at = COALESCE(NULL, completed_at)
-                    WHERE id IN ({placeholders})
-                """, [target_status] + task_ids)
-
-            for s in snapshot:
-                cursor.execute("""
-                    INSERT INTO task_events (task_id, kind, payload, created_at)
-                    VALUES (?, ?, ?, ?)
-                """, (s["id"], "bulk_status_changed", json.dumps({"from": s["status"], "to": target_status}), now_iso))
-                _sync_to_memory_bridge(s["id"], s["title"], s["assignee"], target_status)
-
-        elif action == "assign":
-            target_assignee = req.payload.get("assignee")
-            if target_assignee is None:
-                target_assignee = req.assignee
-            if target_assignee is None:
-                raise HTTPException(status_code=400, detail="Kein Ziel-Agent übergeben.")
-            cursor.execute(f"""
-                UPDATE tasks
-                SET assignee = ?
-                WHERE id IN ({placeholders})
-            """, [target_assignee] + task_ids)
-
-            for s in snapshot:
-                cursor.execute("""
-                    INSERT INTO task_events (task_id, kind, payload, created_at)
-                    VALUES (?, ?, ?, ?)
-                """, (s["id"], "bulk_assignee_changed", json.dumps({"from": s["assignee"], "to": target_assignee}), now_iso))
-                _sync_to_memory_bridge(s["id"], s["title"], target_assignee, s["status"])
-
-        elif action == "tag":
-            tag_name = req.payload.get("tag", "").strip()
-            mode = req.payload.get("tag_mode", "add")  # "add" oder "remove"
-            if tag_name:
-                from backend.kanban_sidecar import update_kanban_meta
-                def _apply_tags(cur_meta):
-                    for tid in task_ids:
-                        cur_meta.setdefault("tasks", {}).setdefault(tid, {})
-                        cur_tags = set(cur_meta["tasks"][tid].get("tags") or [])
-                        if mode == "add":
-                            cur_tags.add(tag_name)
-                        elif mode == "remove":
-                            cur_tags.discard(tag_name)
-                        cur_meta["tasks"][tid]["tags"] = list(cur_tags)
-                    return cur_meta
-                update_kanban_meta(_apply_tags)
-
-        elif action == "delete":
-            # Soft-Delete über 'archived' Status, damit GoBD-konform und 100% undo-fähig
-            cursor.execute(f"""
-                UPDATE tasks
-                SET status = 'archived'
-                WHERE id IN ({placeholders})
-            """, task_ids)
-
-            for s in snapshot:
-                cursor.execute("""
-                    INSERT INTO task_events (task_id, kind, payload, created_at)
-                    VALUES (?, ?, ?, ?)
-                """, (s["id"], "bulk_archived", json.dumps({"from": s["status"]}), now_iso))
-
-        conn.commit()
-        try:
-            from backend.audit_log import chained_audit_log
-            chained_audit_log.record_event(
-                category="kanban",
-                action=f"bulk_{action}",
-                agent_id="operator",
-                payload={"task_ids": task_ids, "action": action, "payload": req.payload, "affected_count": len(task_ids)}
-            )
-        except Exception as exc:
-            print(f"[OperationsAPI] Fallback api_kanban_bulk_action: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-
-        # 3. Snapshot im Undo-Puffer speichern (10 Minuten TTL)
-        _KANBAN_UNDO_STORE[undo_token] = {
-            "snapshot": snapshot,
-            "action": action,
-            "created_at": now_ts,
-            "expires_at": now_ts + 600.0  # 10 Minuten
-        }
-
-        # Abgelaufene Einträge bereinigen + Max-Size durchsetzen (Punkt 7)
-        _prune_undo_store()
-
-        # Broadcast WebSocket Event
-        try:
-            main = get_provider("app_main")
-            if hasattr(main, "broadcast_event"):
-                main.broadcast_event("kanban_updated", {
-                    "action": f"bulk_{action}",
-                    "count": len(task_ids),
-                    "task_ids": task_ids
-                })
-        except Exception as exc:
-            print(f"[OperationsAPI] Fallback api_kanban_bulk_action: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-
-        return {
-            "status": "success",
-            "action": action,
-            "affected_count": len(task_ids),
-            "undo_token": undo_token,
-            "expires_in_seconds": 600
-        }
-    finally:
-        conn.close()
+    return _execute_kanban_bulk_action(req, _build_bulk_deps())
 
 
 @router.post("/kanban/bulk/undo")
 def api_kanban_bulk_undo(request: Request, req: KanbanBulkUndoRequest):
     """Macht eine Mehrfachaktion innerhalb des 10-Minuten-Zeitfensters rückgängig (t-c2b384)."""
     require_admin_or_503(request)
-    _prune_undo_store()
-    token = req.undo_token.strip()
-    entry = _KANBAN_UNDO_STORE.get(token)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Undo-Transaktion nicht gefunden oder bereits abgelaufen.")
-
-    now_ts = time.time()
-    if now_ts > entry["expires_at"]:
-        _KANBAN_UNDO_STORE.pop(token, None)
-        raise HTTPException(status_code=400, detail="Das 10-Minuten-Zeitfenster für diese Aktion ist abgelaufen.")
-
-    snapshot = entry.get("snapshot") or []
-    conn = _get_kanban_connection(maintenance=True)
-    now_iso = datetime.datetime.now().isoformat()
-    try:
-        cursor = conn.cursor()
-        for item in snapshot:
-            tid = item["id"]
-            cursor.execute("""
-                UPDATE tasks
-                SET status = ?, assignee = ?,
-                    block_kind = ?, result = ?
-                WHERE id = ?
-            """, (item["status"], item["assignee"], item.get("block_kind"), item.get("result"), tid))
-            cursor.execute("""
-                INSERT INTO task_events (task_id, kind, payload, created_at)
-                VALUES (?, ?, ?, ?)
-            """, (tid, "bulk_undo_restored", json.dumps({"restored_status": item["status"]}), now_iso))
-            _sync_to_memory_bridge(tid, item["title"], item["assignee"], item["status"])
-
-        conn.commit()
-
-        # Tags im Sidecar wiederherstellen
-        from backend.kanban_sidecar import update_kanban_meta
-        def _restore_tags(cur_meta):
-            for item in snapshot:
-                tid = item["id"]
-                cur_meta.setdefault("tasks", {}).setdefault(tid, {})
-                cur_meta["tasks"][tid]["tags"] = item["tags"]
-            return cur_meta
-        update_kanban_meta(_restore_tags)
-
-        # Transaktion verbraucht
-        _KANBAN_UNDO_STORE.pop(token, None)
-        try:
-            from backend.audit_log import chained_audit_log
-            chained_audit_log.record_event(
-                category="kanban",
-                action="bulk_undo",
-                agent_id="operator",
-                payload={"undo_token": token, "restored_count": len(snapshot)}
-            )
-        except Exception as exc:
-            print(f"[OperationsAPI] FEHLER (HIGH_SECURITY) api_kanban_bulk_undo: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-
-        # Broadcast
-        try:
-            main = get_provider("app_main")
-            if hasattr(main, "broadcast_event"):
-                main.broadcast_event("kanban_updated", {
-                    "action": "bulk_undone",
-                    "count": len(snapshot)
-                })
-        except Exception as exc:
-            print(f"[OperationsAPI] Fallback api_kanban_bulk_undo: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-
-        return {
-            "status": "success",
-            "message": f"{len(snapshot)} Aufgaben wurden auf ihren vorherigen Stand zurückgesetzt.",
-            "restored_count": len(snapshot)
-        }
-    finally:
-        conn.close()
+    return _execute_kanban_bulk_undo(req, _build_bulk_deps())
 
 
 def _approve_kanban_task_db(task_id: str) -> dict:

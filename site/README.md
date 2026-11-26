@@ -30,6 +30,25 @@ pytest tests/test_site_i18n_parity.py -q
 `create_lang_pages.py` im Repo-Root ist nur noch ein Deprecation-Shim und
 delegiert an den Generator.
 
+## README-Übersetzungen (`docs/readme/`)
+
+Die 9 Sprach-Readmes werden ebenfalls generiert – gleicher Grund: Sie waren
+eingefrorene Kurzfassungen von v0.5.2, während `README.md` auf v0.5.7.9
+anwuchs.
+
+```bash
+python scripts/build_readme_i18n.py --dump-keys  # EN-Zeilen als k000… anzeigen
+python scripts/build_readme_i18n.py              # 9 READMEs neu bauen
+python scripts/build_readme_i18n.py --check      # nur prüfen (CI)
+pytest tests/test_readme_i18n_parity.py -q
+```
+
+Quelle: `README.md` (EN-Master, nie generiert) und `README.de.md` (DE-Master,
+handgepflegt). Kataloge: `docs/readme/i18n/<lang>.json` mit positionalen Keys
+`k000…` – ändert sich der EN-Master, schlägt `--check` fehl und erzwingt ein
+Katalog-Update. Versionen kommen aus `config/version.json` (SSOT); die PDFs
+bleiben bewusst als `v0.5.2.1` gekennzeichnet, weil sie nie neu erzeugt wurden.
+
 ## Was bewusst auf Englisch bleibt
 
 * JSON-LD (`SoftwareApplication`, `FAQPage`) und `meta keywords` – maschinenlesbare,
@@ -37,8 +56,9 @@ delegiert an den Generator.
 * Marken- und Produktnamen: Archon OS, Hermes Agent, OmniRoute, BudgetBank,
   Zero-Egress, AI Boardroom, Mission Control, Obsidian, n8n, Passkey/WebAuthn,
   GoBD, EU AI Act, `/livez`, `ops.db`, `BEGIN IMMEDIATE` usw.
-* Shell-Kommandos in `<pre>`-Blöcken, Versions- und Architektur-Badges sowie die
-  Sprachnamen im Umschalter (`EN · English`, `DE · Deutsch`, …).
+* Shell-Kommandos in `<pre>`-Blöcken, das Architektur-Badge sowie die
+  Sprachnamen im Umschalter (`EN · English`, `DE · Deutsch`, …). Das
+  Versions-Badge kommt dagegen aus `config/version.json` (SSOT).
 
 ## Screenshots
 

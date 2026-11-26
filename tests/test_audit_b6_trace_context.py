@@ -35,9 +35,10 @@ def test_middleware_and_audit_wiring():
 
     main_text = (ROOT / "main.py").read_text(encoding="utf-8")
     assert "TraceContextMiddleware" in main_text
-    assert "response_trace_headers" in main_text
-    assert "_response_trace_headers(dict(response.headers))" in main_text
-    assert 'response.headers["X-Trace-Id"]' not in main_text
+    rt_text = (ROOT / "archon" / "services" / "runtime_endpoints.py").read_text(encoding="utf-8")
+    assert "response_trace_headers" in rt_text
+    assert "_response_trace_headers(dict(response.headers))" in rt_text
+    assert 'response.headers["X-Trace-Id"]' not in rt_text
 
     tid, sid = tc.start_trace()
     headers = tc.response_trace_headers({"Content-Type": "application/json"})

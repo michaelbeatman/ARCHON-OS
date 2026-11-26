@@ -38,8 +38,8 @@ def test_d15_inventory_has_71_entries():
 
 
 def test_d10_livez_fails_with_dead_watchdog():
-    src = (ROOT / "main.py").read_text(encoding="utf-8")
-    block = src.split('async def liveness_check()', 1)[1].split('\n@app.', 1)[0]
+    src = (ROOT / "archon" / "services" / "health_probes.py").read_text(encoding="utf-8")
+    block = src.split("async def run_liveness_check(", 1)[1].split("\nasync def ", 1)[0]
     assert 'or not info["loops"]["watchdog"]["alive"]' in block
     heal = (ROOT / "scripts" / "archon_autoheal.py").read_text(encoding="utf-8")
     # A9-Nachlauf: probe() liest den /livez-Body auch bei HTTP 503, damit der

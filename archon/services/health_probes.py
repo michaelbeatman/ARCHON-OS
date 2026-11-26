@@ -122,7 +122,7 @@ async def run_liveness_check() -> Any:
     try:
         from watchdog_daemon import watchdog_liveness
 
-        wd = watchdog_liveness()
+        wd = await asyncio.to_thread(watchdog_liveness)
     except Exception as exc:
         logger.error("[Livez] Watchdog-Liveness nicht lesbar (fail-closed): %s", exc)
         wd = {"alive": False, "last_seen": 0.0, "age_s": None}

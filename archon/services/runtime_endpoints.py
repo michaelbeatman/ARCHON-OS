@@ -264,7 +264,7 @@ async def on_shutdown_graceful() -> None:
     try:
         from backend.audit_log import chained_audit_log
 
-        chained_audit_log.stop_anchor_worker()
+        await asyncio.to_thread(chained_audit_log.stop_anchor_worker)
     except Exception as _anchor_exc:
         logger.debug("[Shutdown] Audit-Anker-Stopp: %s", _anchor_exc)
     try:

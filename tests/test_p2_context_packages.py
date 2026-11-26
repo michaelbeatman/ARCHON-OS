@@ -48,9 +48,24 @@ def test_p2_context_package_list_and_delete(tmp_path, monkeypatch):
 
 
 def test_p2_context_package_router_registered():
-    main_src = (REPO_ROOT / "main.py").read_text(encoding="utf-8")
+    import warnings
+
+    import main
+
     router_src = (REPO_ROOT / "archon" / "routers" / "context_packages.py").read_text(encoding="utf-8")
-    assert "from archon.routers.context_packages import router as _context_packages_router" in main_src
-    assert "app.include_router(_context_packages_router)" in main_src
     assert '@router.post("/api/context-packages")' in router_src
     assert "require_admin_or_503(request)" in router_src
+    # G7-Migration (2d, ANALYSIS §6 #5 / Anhang D.2 „Umstellung auf V, nicht
+    # Loeschen"): die beiden main.py-Quelltext-Strings ('from ... import router
+    # as _context_packages_router' und 'app.include_router(...)') wuerden beim
+    # Router-Split brechen (Handoff-Falle #5). Stattdessen wird die ECHTE
+    # Registrierung in der App geprueft: der Endpunkt muss im OpenAPI-Schema
+    # vorhanden sein. Rot, sobald der Router nicht mehr eingebunden ist —
+    # unabhaengig davon, in welchem Modul include_router steht.
+    # Hinweis: app.routes ist dafuer ungeeignet (FastAPI kapselt include_router
+    # in _IncludedRouter mit leerem .path) -> app.openapi()["paths"].
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        paths = main.app.openapi()["paths"]
+    assert "/api/context-packages" in paths
+    assert "post" in paths["/api/context-packages"]

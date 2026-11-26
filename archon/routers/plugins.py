@@ -141,7 +141,8 @@ async def api_execute_plugin_tool(request: Request, payload: PluginToolExecuteRe
     # Actor/Session/Agent aus der authentifizierten Identität — nie aus dem
     # Body. Ein client-gesteuertes agent_id umgeht agentenbezogene Taint-/RBAC-
     # und Budget-Gates (Audit 23.11.2026).
-    session_id = f"user:{get_session_actor(request)}"
+    actor = get_session_actor(request)
+    session_id = f"user:{actor}"
     agent_id = session_id
     approval_id = data.get("approval_id")
     # Warrant ausschließlich aus dem serverseitigen Registry, nie aus dem Body.
@@ -156,6 +157,7 @@ async def api_execute_plugin_tool(request: Request, payload: PluginToolExecuteRe
         args=args,
         approval_id=approval_id,
         warrant=warrant,
+        requested_by=actor,
     )
     if not gate.get("allowed"):
         raise HTTPException(status_code=403, detail=gate)

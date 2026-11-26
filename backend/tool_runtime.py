@@ -98,11 +98,13 @@ def enforce_tool_execution(
     args: Optional[Dict[str, Any]] = None,
     approval_id: Optional[str] = None,
     warrant: Optional[Dict[str, Any]] = None,
+    requested_by: str = "",
 ) -> Dict[str, Any]:
     """Prueft M75 Isolation, M89 Taint-Guard und optional M90 Tool-Warrant."""
     clean_tool = str(tool_name or "").strip()
     clean_agent = str(agent_id or "").strip()
     clean_session = str(session_id or "default_session").strip()
+    clean_requester = str(requested_by or "").strip()
 
     # Zentrale PolicyEngine: M75 + M89 + M90 + RBAC an EINER Stelle.
     # Dieser Chokepoint enthält keine eigene Policy-Logik mehr.
@@ -115,6 +117,7 @@ def enforce_tool_execution(
         args=args,
         approval_id=approval_id,
         warrant=warrant,
+        requested_by=clean_requester,
     )
     if not gate.get("allowed"):
         audit_ok = _emit_tool_event("tool.blocked", {
@@ -397,6 +400,7 @@ async def execute_agent_tool(
     approval_id: Optional[str] = None,
     warrant: Optional[Dict[str, Any]] = None,
     flightlog_run_id: Optional[str] = None,
+    requested_by: str = "",
 ) -> Dict[str, Any]:
     """Einheitlicher Ausfuehrungspfad fuer Agent- und DAG-Node-Tool-Calls."""
     gate = enforce_tool_execution(
@@ -406,6 +410,7 @@ async def execute_agent_tool(
         args=args,
         approval_id=approval_id,
         warrant=warrant,
+        requested_by=requested_by,
     )
     def _finalize(
         status: str,

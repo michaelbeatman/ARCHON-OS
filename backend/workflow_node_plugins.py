@@ -693,6 +693,7 @@ async def execute_workflow_node_plugin(
         session_id=str(node.get("kanban_task_id") or node.get("id") or "dag_plugin"),
         tool_name=f"node_plugin:{spec['plugin_id']}",
         args=dict(node.get("plugin_params") or {}),
+        requested_by=str(node.get("requested_by") or node.get("created_by") or "workflow_engine"),
     )
     if not gate.get("allowed"):
         return {"status": "error", "error": gate.get("reason", "Node-Plugin durch ToolRuntime blockiert"), "content": ""}

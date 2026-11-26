@@ -308,7 +308,16 @@ class PolicyEngine:
             requested_by=str(requested_by or "").strip(),
         )
         if not gate.get("allowed"):
-            return self._deny(str(gate.get("gate") or "m75_m89"), str(gate.get("reason") or "gate_denied"), base)
+            extra_fields = {
+                k: gate[k]
+                for k in ("approval_id", "requires_approval", "status", "requested_by")
+                if k in gate
+            }
+            return self._deny(
+                str(gate.get("gate") or "m75_m89"),
+                str(gate.get("reason") or "gate_denied"),
+                {**base, **extra_fields},
+            )
 
         # KRITISCH: auch ERLAUBTE privilegierte Calls brauchen einen
         # GoBD-Nachweis. Frueher gab _emit(allowed=True) bedingungslos True

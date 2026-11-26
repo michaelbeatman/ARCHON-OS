@@ -263,7 +263,8 @@ def api_call_mcp_tool(request: Request, req: McpToolCallRequest):
         # Actor/Session und Warrant serverseitig — nie aus dem Request-Body.
         # Ein client-gesteuertes agent_id wuerde die agentenbezogenen Taint-/
         # Warrant-Gates umgehen (identisch zu plugins.py:144-145).
-        session_id = f"user:{get_session_actor(request)}"
+        actor = get_session_actor(request)
+        session_id = f"user:{actor}"
         agent_id = session_id
         from backend.tool_warrants import get_warrant_for_session
         warrant = get_warrant_for_session(session_id, str(tool_name))
@@ -274,6 +275,7 @@ def api_call_mcp_tool(request: Request, req: McpToolCallRequest):
             args=arguments if isinstance(arguments, dict) else {},
             approval_id=req.approval_id,
             warrant=warrant,
+            requested_by=actor,
         )
         if not gate.get("allowed"):
             raise HTTPException(status_code=403, detail=gate)

@@ -707,6 +707,9 @@ class ArchonMcpGateway:
         )
         rt_session = str(key_info.get("session_id") or key_info.get("name") or "mcp_gateway")
         rt_agent = str(key_info.get("agent_id") or "mcp_gateway")
+        rt_actor = str(
+            key_info.get("actor") or key_info.get("name") or key_info.get("key_id") or rt_agent
+        ).strip()
         try:
             from backend.tool_warrants import get_warrant_for_session
             rt_warrant = get_warrant_for_session(rt_session, name)
@@ -716,6 +719,7 @@ class ArchonMcpGateway:
                 tool_name=name,
                 args=arguments if isinstance(arguments, dict) else {},
                 warrant=rt_warrant,
+                requested_by=rt_actor,
             )
         except Exception as exc:
             logger.error("MCPGateway: ToolRuntime-Prüfung fehlgeschlagen — Zugriff verweigert: %s", exc)

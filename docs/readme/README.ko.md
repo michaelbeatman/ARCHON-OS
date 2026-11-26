@@ -70,7 +70,6 @@ Archon OS는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous 
 | **사용자 및 기업 매뉴얼** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97쪽, 1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97쪽, 1.9 MB)* | 설치, 1~19장, 5가지 사용 사례, 암호화/GDPR 개요 및 A–Z 용어집 |
 | **전체 기능 목록 (PDF: v0.5.2.1 — v0.6.0에 대한 CHANGELOG 참조)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | 전체 모듈 카탈로그, 이중 언어 글로벌 에디션, 라이브 데모 모드, 초기 실행 마법사, FinOps 및 보안 |
 | **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | 80가지 구조화된 의사결정 엔진 방법론(EN & DE) 및 색인 전체 |
-*[System Manual](../system/ARCHON_OS_SYSTEM_MANUAL_2026_KO.pdf) · [Complete Feature List](../system/ARCHON_OS_FEATURELISTE_2026_KO.pdf) · [AI Boardroom: 80 Frameworks](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.pdf)*
 
 *추가 기술 및 보안 가이드:* [시스템 아키텍처 및 감사](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [로드맵 (M0–M113)](../system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF 및 멀티 테넌트 가이드 (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [엔터프라이즈 기능 및 플레이북 가이드](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP 서버 (`/mcp`) 가이드](../system/ARCHON_MCP_SERVER_GUIDE.md) · [라이브 데모 모드 가이드](../system/LIVE_DEMO_MODE_GUIDE.md) · [초기 설정 마법사 가이드](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [생태계 및 마이그레이션 가이드](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [보안 정책](../../SECURITY.md) · [변경 로그](../../CHANGELOG.md)
 
@@ -105,7 +104,7 @@ Archon OS는 함께 작동하는 네 가지 필수 구성 요소로 구축되었
 
 | 구성 요소 | Archon OS에서의 역할 | 설치 방법 |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | 기본 7개 컨테이너(Archon OS, OmniRoute, Hermes Agent, AnythingLLM, Chroma, Socket Proxy, Autoheal — 선택 프로필 포함 최대 24개)를 격리 실행 | `winget`(Windows), `brew`(macOS) 또는 `get.docker.com`(Linux)을 통해 **자동 제공** |
+| **1. Docker** *(Desktop / Engine v2)* | Archon OS, Hermes Agent, AnythingLLM, Chroma 및 Socket Proxy를 격리된 컨테이너에서 실행 | `winget`(Windows), `brew`(macOS) 또는 `get.docker.com`(Linux)을 통해 **자동 제공** |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | 핵심 멀티 에이전트 런타임, 세션 게이트웨이(포트 `8644`) 및 Telegram 인터페이스 | Docker Compose에 의해 Archon OS와 함께 **자동으로 풀 및 시작됨** |
 | **3. AnythingLLM + Chroma** *(벡터 RAG)* | 시맨틱 인덱싱을 통해 **Central Library → RAG** (`http://localhost:3001`) 구동 | 기본 `Standard` 스택에서 **자동으로 가져오기 및 시작** |
 | **4. Obsidian** *(데스크톱 앱 + 마운트된 볼트)* | 보고서, HR 파일 및 그래프를 저장하는 영구적인 Markdown 제2의 뇌 (`/opt/data/obsidian`) | 볼트 폴더는 `./obsidian_vault`에 자동 초기화; **Obsidian Desktop** 설치 자동 제안 (`winget` / `brew` / Flatpak) |

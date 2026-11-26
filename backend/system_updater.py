@@ -11,19 +11,19 @@ Verbindet den Entwicklungsrechner und den Homeserver:
 - Bietet Rollback-Fähigkeit bei Fehlern
 """
 
+import datetime
 import glob
-import os
-import sys
 import json
+import logging
+import os
+import shutil
 import signal
 import sqlite3
-import shutil
-import datetime
 import subprocess
-import logging
-from typing import Dict, Any, List, Optional, Tuple
+import sys
+from typing import Any, Dict, List, Optional, Tuple
 
-from archon.core.cache import ttl_cache, invalidate  # noqa: E402
+from archon.core.cache import invalidate, ttl_cache  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -466,6 +466,167 @@ def _read_remote_version_from_origin(branch: str = "main") -> Optional[str]:
     return None
 
 
+GITHUB_API_BASE = "https://api.github.com"
+_CONTAINER_NO_GIT_HINT = (
+    "Dieser Archon-Container laeuft aus dem gebauten Image ohne .git "
+    "(P0-11: kein ./:/app-Mount, read_only). Git-Pull und Release-Push "
+    "laufen auf dem Host im Projektverzeichnis; danach "
+    "`docker compose up -d --build archon-os`."
+)
+
+
+def _has_git_repo() -> bool:
+    """True, wenn WORKSPACE_DIR ein Git-Arbeitsverzeichnis ist (.git Ordner oder Datei)."""
+    return os.path.exists(os.path.join(WORKSPACE_DIR, ".git"))
+
+
+def _get_github_token() -> str:
+    """GitHub-Token aus ENV (GITHUB_TOKEN/GH_TOKEN), Fallback .env im Workspace."""
+    tok = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
+    if tok:
+        return tok
+    env_path = os.path.join(WORKSPACE_DIR, ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("GITHUB_TOKEN=") or line.startswith("GH_TOKEN="):
+                        return line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+        except Exception as exc:
+            logger.error(f"[SystemUpdater] .env-Token-Lesefehler (GitHub-API): {exc}")
+    return ""
+
+
+def _github_repo_slug() -> str:
+    """owner/repo fuer die GitHub-API: ENV ARCHON_GITHUB_REPO > settings.github_sync > Default."""
+    env_slug = (os.environ.get("ARCHON_GITHUB_REPO") or "").strip()
+    if env_slug and "/" in env_slug:
+        return env_slug
+    owner, repo = "michaelbeatman", "ARCHON-OS"
+    settings_path = os.path.join(WORKSPACE_DIR, "settings.json")
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path, "r", encoding="utf-8") as sf:
+                gh_conf = (json.load(sf) or {}).get("github_sync", {}) or {}
+            owner = str(gh_conf.get("owner") or owner)
+            repo = str(gh_conf.get("repo") or repo)
+        except Exception as exc:
+            logger.debug(f"[SystemUpdater] settings.json (github_sync) nicht lesbar: {exc}")
+    return f"{owner}/{repo}"
+
+
+def _github_api_get(path: str, raw: bool = False, timeout: int = 8) -> Tuple[bool, Any, str]:
+    """GET gegen die GitHub-REST-API. Rueckgabe: (ok, daten, fehlertext). Token wird nie geloggt."""
+    import urllib.error
+    import urllib.request
+
+    headers = {
+        "User-Agent": "ArchonOS-SystemUpdater",
+        "Accept": "application/vnd.github.raw" if raw else "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = _get_github_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(f"{GITHUB_API_BASE}{path}", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
+            body = resp.read().decode("utf-8", errors="replace")
+        return True, (body if raw else json.loads(body)), ""
+    except urllib.error.HTTPError as exc:
+        hint = {401: "Token ungueltig", 403: "Rate-Limit oder fehlende Rechte", 404: "Repo/Ref nicht gefunden"}.get(exc.code, "")
+        return False, None, f"GitHub-API HTTP {exc.code} {exc.reason}" + (f" ({hint})" if hint else "")
+    except Exception as exc:
+        return False, None, f"GitHub-API nicht erreichbar: {type(exc).__name__}: {exc}"
+
+
+def _get_update_status_via_api(
+    sys_version: str,
+    sys_codename: str,
+    version_steps: Dict[str, str],
+    next_version: str,
+    auth: Dict[str, Any],
+    branch: str = "main",
+) -> Dict[str, Any]:
+    """Option A: Update-Check ohne lokales .git ueber die GitHub-REST-API (Container-Betrieb)."""
+    slug = _github_repo_slug()
+    build_commit = (os.environ.get("ARCHON_BUILD_COMMIT") or "").strip()
+    current_commit = build_commit[:7] if build_commit else "Image-Build"
+    base = {
+        "source": "github_api",
+        "git_available": False,
+        "version": sys_version,
+        "version_codename": sys_codename,
+        "next_version": next_version,
+        "version_steps": version_steps,
+        "auth": auth,
+        "current_commit": current_commit,
+        "branch": f"{branch} · Remote: {slug}",
+        "last_commit_info": f"Container-Image {sys_version} (kein lokales .git)",
+        "has_local_changes": False,
+        "changed_files_count": 0,
+        "changed_files": [],
+        "push_hint": _CONTAINER_NO_GIT_HINT,
+    }
+
+    ok, head, err = _github_api_get(f"/repos/{slug}/commits/{branch}")
+    if not ok or not isinstance(head, dict):
+        return {
+            **base,
+            "status": "offline_or_error",
+            "update_available": False,
+            "commits_behind": 0,
+            "incoming_commits": [],
+            "message": f"Konnte GitHub nicht abfragen: {err or 'unerwartete API-Antwort'}",
+        }
+
+    remote_sha = str(head.get("sha") or "")
+    remote_commit = remote_sha[:7] if remote_sha else "unknown"
+
+    remote_version = sys_version
+    ok_v, vtext, _ = _github_api_get(f"/repos/{slug}/contents/config/version.json?ref={branch}", raw=True)
+    if ok_v and vtext:
+        try:
+            rver = str((json.loads(vtext) or {}).get("version") or "").strip()
+            if rver:
+                remote_version = rver
+        except Exception as exc:
+            logger.debug(f"[SystemUpdater] Remote-Version (API) nicht lesbar: {exc}")
+    version_newer = _parse_version_tuple(remote_version) > _parse_version_tuple(sys_version)
+
+    # Commits seit lokalem Build: bevorzugt exakter Build-Commit, sonst Release-Tag der lokalen Version.
+    commits_behind = 0
+    incoming: List[str] = []
+    compare_base = build_commit or (sys_version if sys_version.startswith("v") else "")
+    if compare_base:
+        ok_c, cmp_data, _ = _github_api_get(f"/repos/{slug}/compare/{compare_base}...{branch}")
+        if ok_c and isinstance(cmp_data, dict):
+            commits_behind = int(cmp_data.get("ahead_by") or 0)
+            for c in list(cmp_data.get("commits") or [])[-10:][::-1]:
+                msg = str(((c.get("commit") or {}).get("message") or "")).splitlines()[0][:120]
+                incoming.append(f"{str(c.get('sha') or '')[:7]} {msg}".strip())
+
+    has_update = version_newer or commits_behind > 0
+    if version_newer:
+        message = f"Neue Archon-Version {remote_version} auf GitHub verfügbar (via GitHub-API)."
+    elif commits_behind > 0:
+        message = f"{commits_behind} neue Commits auf GitHub verfügbar (via GitHub-API)."
+    else:
+        message = "System ist auf dem neuesten Stand (via GitHub-API)."
+
+    return {
+        **base,
+        "status": "success",
+        "remote_version": remote_version,
+        "version_newer": version_newer,
+        "update_available": has_update,
+        "remote_commit": remote_commit,
+        "commits_behind": commits_behind,
+        "incoming_commits": incoming,
+        "message": message,
+    }
+
+
 @ttl_cache(seconds=60)
 def get_update_status() -> Dict[str, Any]:
     """Prüft, ob auf dem Remote-Repository (GitHub) neue Commits vorliegen."""
@@ -475,6 +636,10 @@ def get_update_status() -> Dict[str, Any]:
     version_steps = _build_version_steps(sys_version)
     next_version = version_steps["subpatch"]
     auth = get_github_auth_info()
+
+    # Option A: Container ohne .git (P0-11) -> GitHub-REST-API statt `git fetch`.
+    if not _has_git_repo():
+        return _get_update_status_via_api(sys_version, sys_codename, version_steps, next_version, auth)
 
     native = _read_git_head_native()
     current_commit = native.get("commit", "unknown")
@@ -670,6 +835,13 @@ def apply_update(make_backup: bool = True) -> Dict[str, Any]:
     2. Führt 'git pull origin main --rebase' aus
     3. Triggert Uvicorn Code-Reload
     """
+    if not _has_git_repo():
+        return {
+            "status": "unsupported_in_container",
+            "step": "git_pull",
+            "message": f"Update im Container nicht moeglich. {_CONTAINER_NO_GIT_HINT}",
+            "snapshot": None,
+        }
     snapshot_info = None
     if make_backup:
         snapshot_info = create_snapshot(tag="pre_update")
@@ -794,6 +966,11 @@ def push_changes(commit_message: Optional[str] = None, custom_version: Optional[
     Sammelt alle lokalen Änderungen ein, wendet die gewünschte Version an,
     prüft Master-Autorisierung, committet und pusht zu GitHub origin/main inklusive Release-Tag.
     """
+    if not _has_git_repo():
+        return {
+            "status": "unsupported_in_container",
+            "message": f"Release-Push im Container nicht moeglich. {_CONTAINER_NO_GIT_HINT}",
+        }
     auth = get_github_auth_info()
     if not auth["can_push"]:
         return {
@@ -878,6 +1055,7 @@ def rollback_snapshot(snapshot_id: str) -> Dict[str, Any]:
         return {"status": "error", "message": f"Snapshot {snapshot_id} existiert nicht."}
 
     import tempfile
+
     from backend import db_backup_manager as _dbbm  # C07: gleicher Gate wie Restore
 
     restored = []

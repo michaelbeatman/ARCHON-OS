@@ -70,7 +70,6 @@ Archon OS 是一个基于 [Hermes Agent](https://github.com/NousResearch/hermes-
 | **用户与公司手册** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 页, 1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 页, 1.9 MB)* | 安装、第 1–19 章、5 个用例、加密/GDPR 概述及 A–Z 术语表 |
 | **完整功能列表 (PDF: v0.5.2.1 — 参见 v0.6.0 的 CHANGELOG)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | 完整模块目录、双语全球版、实时演示模式、首次运行向导、FinOps 与安全性 |
 | **AI 會議廳：80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 80 structured Decision Engine methodologies (EN & DE) & index |
-*[System Manual](../system/ARCHON_OS_SYSTEM_MANUAL_2026_ZH.pdf) · [Complete Feature List](../system/ARCHON_OS_FEATURELISTE_2026_ZH.pdf) · [AI Boardroom: 80 Frameworks](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ZH.pdf)*
 
 *更多技术和安全指南：* [系统架构与审核](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [路线图（M0–M113）](../system/ROADMAP_2026.md) · [EU AI 法律法规、GoBD PDF & 多租户指南（M43/M49）](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [企业功能与playbooks 指南](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP 服务器（/mcp）指南](../system/ARCHON_MCP_SERVER_GUIDE.md) · [实时演示模式指南](../system/LIVE_DEMO_MODE_GUIDE.md) · [首次设置向导指南](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [生态系统与迁移指南](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [安全政策](../../SECURITY.md) · [变更记录](../../CHANGELOG.md)
 
@@ -105,7 +104,7 @@ Archon OS 构建于四个协同工作的核心组件之上。下方的 **Option 
 
 | 组件 | 在 Archon OS 中的角色 | 安装方式 |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | 运行 7 个默认隔离容器（Archon OS、OmniRoute、Hermes Agent、AnythingLLM、Chroma、Socket Proxy 与 Autoheal — 含可选配置最多 24 个） | 通过 `winget` (Windows)、`brew` (macOS) 或 `get.docker.com` (Linux) **自动提供** |
+| **1. Docker** *(Desktop / Engine v2)* | 在隔离容器中运行 Archon OS、Hermes Agent、AnythingLLM、Chroma 和 Socket Proxy | 通过 `winget` (Windows)、`brew` (macOS) 或 `get.docker.com` (Linux) **自动提供** |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | 核心多智能体运行时、会话网关（端口 `8644`）以及 Telegram 接口 | 由 Docker Compose 在 Archon OS 启动时**自动拉取并运行** |
 | **3. AnythingLLM + Chroma** *(Vector RAG)* | 使得 **中央图书馆 → RAG** (`http://localhost:3001`) 具有语义索引 | **自动启动** 在默认的 `Standard` 栈中 |
 | **4. Obsidian** *(Desktop App + Mounted Vault)* | 持久 Markdown 第二大脑 (`/opt/data/obsidian`) 存储报告、HR 文件和图表 | 储物柜文件夹在 `./obsidian_vault` 中自动初始化； **Obsidian Desktop** 安装自动提供 (`winget` / `brew` / Flatpak) |

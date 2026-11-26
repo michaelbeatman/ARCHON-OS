@@ -88,22 +88,36 @@ async def _email_imap_background_loop() -> None:
         await asyncio.sleep(180)
 
 
-def _record_failed_cancel(task_name: str, detail: str) -> None:
-    """Persistiert einen gescheiterten cancel() inkl. Audit (best effort)."""
-    entry = {"task": str(task_name), "detail": str(detail), "ts": time.time()}
+def _record_failed_cancel(task_name: str, detail: str) -> Dict[str, Any]:
+    """Persistiert einen gescheiterten cancel() ueber das signierte Pflicht-Audit (F14)."""
+    entry: Dict[str, Any] = {
+        "task": str(task_name),
+        "detail": str(detail),
+        "ts": time.time(),
+        "audit_status": "pending",
+    }
     _FAILED_CANCELS.append(entry)
     logger.error("[Shutdown] Cancel fehlgeschlagen: %s — %s", task_name, detail)
     try:
-        from backend.audit_log import chained_audit_log
+        from backend.audit_log import _require_audit_event
 
-        chained_audit_log.record_event(
+        _require_audit_event(
             category="recovery",
             action="cancel_failed",
             agent_id="system",
-            payload=entry,
+            payload=dict(entry),
         )
+        entry["audit_status"] = "ok"
+        return entry
     except Exception as audit_exc:
-        logger.warning("[Shutdown] Cancel-Fehler nicht auditierbar: %s", audit_exc)
+        entry["audit_status"] = "error"
+        entry["audit_error"] = f"{type(audit_exc).__name__}: {audit_exc}"
+        logger.error("[Shutdown] Cancel-Fehler nicht auditierbar: %s", audit_exc)
+        from backend.audit_log import _is_audit_strict
+
+        if _is_audit_strict():
+            raise RuntimeError("audit_write_failed") from audit_exc
+        return entry
 
 
 def _spawn_background(coro: Any, name: str = "", priority: int = 1) -> Optional[asyncio.Task[Any]]:

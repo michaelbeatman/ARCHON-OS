@@ -66,27 +66,33 @@ def _record_tool_span(
 def _emit_tool_event(kind: str, payload: Dict[str, Any]) -> bool:
     """Gibt True zurueck, wenn eine erforderliche GoBD-Audit-Schreibung klappte.
 
-    B1: frueher wurden Audit-Fehler verschluckt und der Tool-Call lief trotzdem
-    (oder der Block wurde nicht nachweisbar protokolliert).
+    B1/F14: Sowohl `tool.blocked` als auch `tool.allowed` muessen kryptografisch
+    in die Audit-Kette signiert werden; ein Schreibfehler darf nie still
+    durchgereicht werden.
     """
     try:
         from archon.core.runtime import broadcast_event
         broadcast_event("tool_runtime", {"event": kind, **payload})
     except Exception as exc:
         logger.warning("[ToolRuntime] Event-Broadcast fehlgeschlagen: %s", exc)
-    if kind != "tool.blocked":
+    action_map = {
+        "tool.blocked": "tool_blocked",
+        "tool.allowed": "tool_allowed",
+    }
+    action = action_map.get(kind)
+    if not action:
         return True
     try:
-        from backend.audit_log import chained_audit_log
-        chained_audit_log.record_event(
+        from backend.audit_log import _require_audit_event
+        _require_audit_event(
             category="tool_runtime",
-            action="tool_blocked",
+            action=action,
             agent_id=str(payload.get("agent_id") or "system"),
             payload=payload,
         )
         return True
     except Exception as exc:
-        logger.error("[ToolRuntime] GoBD-Audit-Schreibung fuer tool.blocked fehlgeschlagen: %s", exc)
+        logger.error("[ToolRuntime] GoBD-Audit-Schreibung fuer %s fehlgeschlagen: %s", kind, exc)
         return False
 
 
@@ -149,11 +155,23 @@ def enforce_tool_execution(
             }
         return gate
 
-    _emit_tool_event("tool.allowed", {
+    audit_ok = _emit_tool_event("tool.allowed", {
         "agent_id": clean_agent,
         "session_id": clean_session,
         "tool_name": clean_tool,
+        "privileged": bool(gate.get("privileged")),
+        "requested_by": clean_requester,
     })
+    if not audit_ok:
+        return {
+            "allowed": False,
+            "blocked": True,
+            "gate": "audit_write_failed",
+            "reason": "audit_write_failed",
+            "tool": clean_tool,
+            "agent_id": clean_agent,
+            "session_id": clean_session,
+        }
     return {
         "allowed": True,
         "tool": clean_tool,

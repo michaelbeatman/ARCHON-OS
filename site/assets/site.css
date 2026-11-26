@@ -608,9 +608,31 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   mask-image: none;
   -webkit-mask-image: none;
 }
-.creation-davinci-stage .davinci-plate-img {
-  opacity: var(--davinci-opacity);
-  mix-blend-mode: var(--davinci-blend);
+.creation-davinci-stage .davinci-creation-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: invert(1) brightness(0.84) contrast(1.04);
+  mix-blend-mode: screen;
+  opacity: 0.54;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .creation-davinci-stage .davinci-creation-img {
+    filter: brightness(1.06);
+    mix-blend-mode: multiply;
+    opacity: 0.42;
+  }
+}
+:root[data-theme="light"] .creation-davinci-stage .davinci-creation-img {
+  filter: brightness(1.06);
+  mix-blend-mode: multiply;
+  opacity: 0.42;
+}
+:root[data-theme="dark"] .creation-davinci-stage .davinci-creation-img {
+  filter: invert(1) brightness(0.84) contrast(1.04);
+  mix-blend-mode: screen;
+  opacity: 0.54;
 }
 .creation-spark-wave {
   stroke: var(--silver-bright);

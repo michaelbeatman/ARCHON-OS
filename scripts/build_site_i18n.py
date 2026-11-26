@@ -44,6 +44,8 @@ DEFAULT_BASE_URL = "https://michaelbeatman.github.io/ARCHON-OS/"
 BASE_URL = os.environ.get("ARCHON_SITE_BASE_URL", DEFAULT_BASE_URL).rstrip("/") + "/"
 REPO_URL = "https://github.com/michaelbeatman/ARCHON-OS"
 REPO_BLOB = REPO_URL + "/blob/main/"
+LINKEDIN_URL = "https://www.linkedin.com/in/michael-keller-a43b6611b/"
+CONTACT_EMAIL = "archon.os.system@gmail.com"
 LASTMOD = "2026-11-26"
 
 # code -> (html lang, native label, og:locale)
@@ -234,14 +236,23 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
                     "name": "Michael Keller",
                     "alternateName": "Michael Beatman",
                     "url": "https://github.com/michaelbeatman",
+                    "email": "mailto:" + CONTACT_EMAIL,
                     "sameAs": [
                         "https://github.com/michaelbeatman",
+                        LINKEDIN_URL,
                         REPO_URL,
                     ],
+                },
+                "contactPoint": {
+                    "@type": "ContactPoint",
+                    "email": CONTACT_EMAIL,
+                    "contactType": "technical support",
+                    "url": LINKEDIN_URL,
                 },
                 "sameAs": [
                     REPO_URL,
                     "https://github.com/michaelbeatman",
+                    LINKEDIN_URL,
                 ],
             },
             {
@@ -615,7 +626,8 @@ def build_llms_txt(base_url: str, version: str) -> str:
 - Website (EN): {b}
 - Website (DE): {b}de/
 - Source Code (MIT License): {REPO_URL}
-- Author: Michael Keller (Michael Beatman) — https://github.com/michaelbeatman
+- Author: Michael Keller (Michael Beatman) — https://github.com/michaelbeatman | {LINKEDIN_URL}
+- Contact: {CONTACT_EMAIL}
 - Current Release: {version} (pre-1.0, Docker amd64 / arm64)
 - Updated: {LASTMOD}
 

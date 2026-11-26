@@ -27,6 +27,8 @@ from site_svg_assets import (
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
 REPO_URL = "https://github.com/michaelbeatman/ARCHON-OS"
+LINKEDIN_URL = "https://www.linkedin.com/in/michael-keller-a43b6611b/"
+CONTACT_EMAIL = "archon.os.system@gmail.com"
 VERSION_FILE = ROOT / "config" / "version.json"
 
 SUBPAGE_PAIRS: list[tuple[str, str]] = [
@@ -174,6 +176,10 @@ def _render_shell(
                         "name": "Michael Keller",
                         "alternateName": "Michael Beatman",
                         "url": "https://github.com/michaelbeatman",
+                        "sameAs": [
+                            "https://github.com/michaelbeatman",
+                            LINKEDIN_URL,
+                        ],
                     },
                     "publisher": {
                         "@type": "Organization",
@@ -289,6 +295,8 @@ def _render_shell(
     <a href="{home_href}">Archon OS {home_label}</a>
     <a href="{REPO_URL}">GitHub</a>
     <a href="{REPO_URL}/blob/main/LICENSE">MIT</a>
+    <a href="{LINKEDIN_URL}" rel="noopener me">LinkedIn</a>
+    <a href="mailto:{CONTACT_EMAIL}">{CONTACT_EMAIL}</a>
     <a href="{asset_base}llms.txt">llms.txt</a>
   </div>
 </footer>

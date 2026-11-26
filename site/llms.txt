@@ -5,7 +5,8 @@
 - Website (EN): https://michaelbeatman.github.io/ARCHON-OS/
 - Website (DE): https://michaelbeatman.github.io/ARCHON-OS/de/
 - Source Code (MIT License): https://github.com/michaelbeatman/ARCHON-OS
-- Author: Michael Keller (Michael Beatman) — https://github.com/michaelbeatman
+- Author: Michael Keller (Michael Beatman) — https://github.com/michaelbeatman | https://www.linkedin.com/in/michael-keller-a43b6611b/
+- Contact: archon.os.system@gmail.com
 - Current Release: v0.5.7.9 (pre-1.0, Docker amd64 / arm64)
 - Updated: 2026-11-26
 

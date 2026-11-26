@@ -41,7 +41,7 @@ from typing import Any, List, NamedTuple
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-__all__ = ["register_special_routers", "LateRouterDeps", "register_late_routers"]
+__all__ = ["register_special_routers", "LateRouterDeps", "register_late_routers", "register_router", "naked_router_order"]
 
 
 def register_special_routers(app: FastAPI, load_errors: List[str]) -> None:
@@ -410,3 +410,29 @@ def register_late_routers(
         logger.warning(f"[Router] operations_calendar nicht geladen: {_err_cal}")
 
         load_errors.append("operations_calendar: " + str(_err_cal))
+
+
+_NAKED_ROUTER_ORDER: List[str] = []
+
+
+def naked_router_order() -> List[str]:
+    """Kopie der Registrierungsreihenfolge der 43 nackten Router.
+
+    INVARIANTS #7: Reihenfolge = Pfad-Praezedenz. Die Liste wird beim
+    ``import main`` in exakt der Quelltext-Reihenfolge gefuellt und ist
+    damit die Grundlage fuer den committeten Reihenfolge-Contract
+    (tests/test_d2_router_special_blocks.py::test_v5).
+    """
+    return list(_NAKED_ROUTER_ORDER)
+
+
+def register_router(app: FastAPI, router: Any, name: str) -> None:
+    """Registriert einen nackten Router an seiner urspruenglichen Position.
+
+    Bewusst KEIN Sammelaufruf: die 43 Aufrufe sind mit configure()-
+    Bloecken und direkten @app.get-Endpunkten verwoben. Die Reihenfolge
+    wird protokolliert, NACHDEM include_router erfolgreich war (bei einem
+    fehlschlagenden Router bleibt die Liste unverfaelscht).
+    """
+    app.include_router(router)
+    _NAKED_ROUTER_ORDER.append(name)

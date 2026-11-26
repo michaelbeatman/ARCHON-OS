@@ -38,12 +38,12 @@ from pathlib import Path
 from typing import Any, List, cast
 
 import pytest
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.routing import Mount
 
 import main as app_main
-from archon.routers import register_special_routers
+from archon.routers import naked_router_order, register_router, register_special_routers
 
 _VIEWS_ANCHOR = "/api/views/showroom/tree"
 _OPS_ANCHOR = "/api/operations/kanban/tasks"
@@ -61,6 +61,55 @@ _ORDER_SENTINELS = [
     "/api/crm/contacts",
     "/api/context-packages",
     "/api/v1/calendar/webhooks/push",
+]
+
+# 2d/3: exakte Registrierungsreihenfolge der 43 nackten Router. INVARIANTS #7
+# war „⛔ kein Test" — dieser Contract schliesst das. Bewusst als Liste und
+# nicht als Zaehler: eine Vertauschung zweier Includes muss rot werden.
+_EXPECTED_NAKED_ORDER = [
+    "_telemetry_router",
+    "_core_settings_router",
+    "_oracle_seo_router",
+    "_theme_router",
+    "_docker_services_router",
+    "_agent_chat_router",
+    "_gateway_router",
+    "_watchdog_router",
+    "_quickchat_router",
+    "_ui_router",
+    "_context_meter_router",
+    "_brain_router",
+    "_notebooks_router",
+    "_telegram_router",
+    "_decisions_router",
+    "_hermes_ops_router",
+    "_chat_router",
+    "_guardian_router",
+    "_hermes_config_router",
+    "_context_help_router",
+    "_auth_router",
+    "_marketplace_router",
+    "_memory_ops_router",
+    "_email_settings_router",
+    "_security_scanner_router",
+    "_research_router",
+    "_updater_router",
+    "_documents_router",
+    "_deals_router",
+    "_vault_router",
+    "_kanban_router",
+    "_v2_capabilities_router",
+    "_content_machine_router",
+    "_containers_router",
+    "_container_ops_router",
+    "_hermes_proxy_router",
+    "_hr_router",
+    "_prompts_router",
+    "_proxies_router",
+    "_inbox_tools_router",
+    "_resilience_router",
+    "_mesh_router",
+    "_autonomy_settings_router",
 ]
 
 
@@ -170,10 +219,15 @@ def test_v5_main_call_site_passes_original_load_errors_list() -> None:
 
     Zwei Spione werden VOR ``import main`` auf ``archon.routers`` installiert:
     fuer ``register_special_routers`` (2d/1) und ``register_late_routers``
-    (2d/2). ``main.py:166-168`` liest die Attribute zur Importzeit, die
+    (2d/2). ``main.py:166-169`` liest die Attribute zur Importzeit, die
     Aufrufstellen rufen sie auf. Damit werden BEIDE Aufrufstellen selbst
     geprueft — ohne Source-Text-Assertion (G7) und ohne ``importlib.reload``
     (wuerde ``main.app`` ersetzen und andere Tests beeinflussen).
+
+    Zusaetzlich (2d/3): im selben frischen Prozess wird die exakte
+    Reihenfolge der 43 nackten Router gegen ``_EXPECTED_NAKED_ORDER``
+    geprueft — INVARIANTS #7 („Router-Reihenfolge = Pfad-Praezedenz") war
+    zuvor ungetestet.
     """
     wt = str(Path(__file__).resolve().parents[1])
     code = "\n".join([
@@ -203,6 +257,15 @@ def test_v5_main_call_site_passes_original_load_errors_list() -> None:
         "    pass",
         "else:",
         "    raise AssertionError('NEGATIVPROBE: Kopie wurde als Original akzeptiert')",
+        f"_expected_order = {_EXPECTED_NAKED_ORDER!r}",
+        "assert archon.routers.naked_router_order() == _expected_order, "
+        "'Naked-Router-Reihenfolge gekippt'",
+        "try:",
+        "    assert list(reversed(archon.routers.naked_router_order())) == _expected_order",
+        "except AssertionError:",
+        "    pass",
+        "else:",
+        "    raise AssertionError('NEGATIVPROBE: vertauschte Reihenfolge akzeptiert')",
         "print('IDENTITY_OK')",
     ])
     env = os.environ.copy()
@@ -295,3 +358,49 @@ def test_v8_characterized_module_surface_delta() -> None:
     assert hasattr(app_main, "_ROUTER_LOAD_ERRORS")
     with pytest.raises(AssertionError):
         assert not hasattr(app_main, "_ROUTER_LOAD_ERRORS")
+
+
+def test_v9_register_router_registers_and_records(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """2d/3: echte Logik der delegierenden Funktion — kein Theater-Wrapper."""
+    # Isoliere die Modul-Liste, damit dieser Test den globalen Zustand
+    # (und damit test_v10 / den v5-Subprozess) nicht veraendert.
+    monkeypatch.setattr("archon.routers._NAKED_ROUTER_ORDER", [])
+
+    probe = APIRouter()
+
+    @probe.get("/__2d3_probe__")
+    def _probe_endpoint() -> dict:
+        return {"ok": True}
+
+    app = FastAPI()
+    register_router(app, probe, "_probe_router")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        paths = list(app.openapi()["paths"])
+    assert "/__2d3_probe__" in paths, "Router wurde nicht registriert"
+    assert naked_router_order() == ["_probe_router"], "Reihenfolge nicht protokolliert"
+
+    # Negativproben: beide Assertions sind live.
+    with pytest.raises(AssertionError):
+        assert "/__2d3_probe__" not in paths
+    with pytest.raises(AssertionError):
+        assert naked_router_order() == []
+
+
+def test_v10_real_app_pins_all_43_naked_routers() -> None:
+    """INVARIANTS #7: exakte Reihenfolge, nicht nur ein Pfad-Zaehler."""
+    order = naked_router_order()
+    assert order == _EXPECTED_NAKED_ORDER, "Reihenfolge der 43 Router gekippt"
+    assert len(order) == 43
+
+    # Negativprobe: eine Vertauschung MUSS rot werden — sonst waere der
+    # Vergleich tautologisch (die Review-Lektion aus 2d/1).
+    with pytest.raises(AssertionError):
+        assert list(reversed(order)) == _EXPECTED_NAKED_ORDER
+    swapped = list(order)
+    swapped[0], swapped[1] = swapped[1], swapped[0]
+    with pytest.raises(AssertionError):
+        assert swapped == _EXPECTED_NAKED_ORDER

@@ -165,6 +165,7 @@ from archon.middleware.auth_policy import _check_rag_api_key_config as _check_ra
 from archon.middleware.auth_policy import _get_rag_api_key as _get_rag_api_key
 from archon.routers import LateRouterDeps as _LateRouterDeps
 from archon.routers import register_late_routers as _register_late_routers
+from archon.routers import register_router as _register_router
 from archon.routers import register_special_routers as _register_special_routers
 from archon.routers._rbac import require_admin_or_503
 from archon.routers.agent_chat import DirectAgentChatRequest as DirectAgentChatRequest
@@ -1349,7 +1350,7 @@ def prometheus_metrics():
         return Response(content=f"# Error collecting metrics: {e}\n", status_code=500, media_type="text/plain")
 
 
-app.include_router(_telemetry_router)
+_register_router(app, _telemetry_router, '_telemetry_router')
 
 
 
@@ -1542,21 +1543,21 @@ def save_theme(theme_data: Dict): _save_json(THEME_FILE, theme_data)
 # =====================================================================
 
 
-app.include_router(_core_settings_router)
+_register_router(app, _core_settings_router, '_core_settings_router')
 
 
-app.include_router(_oracle_seo_router)
+_register_router(app, _oracle_seo_router, '_oracle_seo_router')
 
 # --- THEME & DESIGN ROUTER (ausgelagert nach archon.routers.theme) ---
 
-app.include_router(_theme_router)
+_register_router(app, _theme_router, '_theme_router')
 
 
 
-app.include_router(_docker_services_router)
+_register_router(app, _docker_services_router, '_docker_services_router')
 
 
-app.include_router(_agent_chat_router)
+_register_router(app, _agent_chat_router, '_agent_chat_router')
 
 
 def load_boardroom_frameworks():
@@ -1573,7 +1574,7 @@ def load_boardroom_frameworks():
 
 
 
-app.include_router(_gateway_router)
+_register_router(app, _gateway_router, '_gateway_router')
 
 
 # =====================================================================
@@ -1581,7 +1582,7 @@ app.include_router(_gateway_router)
 # =====================================================================
 
 
-app.include_router(_watchdog_router)
+_register_router(app, _watchdog_router, '_watchdog_router')
 
 
 _idle_stop_running = False
@@ -1993,12 +1994,12 @@ async def _cancel_background_tasks():
     _BACKGROUND_TASKS[:] = [t for t in _BACKGROUND_TASKS if not t.done()]
 
 
-app.include_router(_quickchat_router)
-app.include_router(_ui_router)
+_register_router(app, _quickchat_router, '_quickchat_router')
+_register_router(app, _ui_router, '_ui_router')
 
 # Kontext-Meter & Session-Compaction (M73, Teil 1+2)
 
-app.include_router(_context_meter_router)
+_register_router(app, _context_meter_router, '_context_meter_router')
 
 
 # ============================================================================
@@ -2012,11 +2013,11 @@ _brain_configure(
     _RAG_SYNC_LOCK=_RAG_SYNC_LOCK,
     post_docker_container_action=post_docker_container_action,
 )
-app.include_router(_brain_router)
+_register_router(app, _brain_router, '_brain_router')
 
 # --- NOTEBOOKLM STUDIO & GROUNDED RETRIEVAL API (ausgelagert nach archon.routers.notebooks) ---
 
-app.include_router(_notebooks_router)
+_register_router(app, _notebooks_router, '_notebooks_router')
 
 
 def _build_rag_sync_cmd(sync_script: str) -> list:
@@ -2048,7 +2049,7 @@ async def _warm_hermes_skill_caches():
 
 
 
-app.include_router(_telegram_router)
+_register_router(app, _telegram_router, '_telegram_router')
 
 
 
@@ -2056,7 +2057,7 @@ app.include_router(_telegram_router)
 # ZENTRALER ENTSCHEIDUNGS-SERVICE (ausgelagert nach archon.routers.decisions)
 # =========================================================================
 
-app.include_router(_decisions_router)
+_register_router(app, _decisions_router, '_decisions_router')
 _set_decision_factory(create_decision)
 
 # Statik-Guard AST Wrapper fuer tests/test_decision_followup_beleg.py
@@ -2083,7 +2084,7 @@ class ProfileStatusUpdate(BaseModel):
 
 
 
-app.include_router(_hermes_ops_router)
+_register_router(app, _hermes_ops_router, '_hermes_ops_router')
 
 # ============================================================================
 # CHAT ROUTER & DELEGATION (ausgelagert nach archon.routers.chat)
@@ -2092,7 +2093,7 @@ app.include_router(_hermes_ops_router)
 model = "auto/best-coding"
 
 _chat_configure(create_decision=create_decision)
-app.include_router(_chat_router)
+_register_router(app, _chat_router, '_chat_router')
 
 # ============================================================================
 # DELEGATION ENGINE v2 (ausgelagert nach archon.core.delegation)
@@ -2111,17 +2112,17 @@ _delegation_configure(
 _GUARDIAN_STATS_CACHE: Dict[str, Any] = {}
 # --- GUARDIAN ROUTER (ausgelagert nach archon.routers.guardian, 1157 Zeilen) ---
 
-app.include_router(_guardian_router)
+_register_router(app, _guardian_router, '_guardian_router')
 
 # --- HERMES RAW CONFIG & LIVE EDITOR ENDPOINTS ---
 # --- HERMES CONFIG ROUTER (ausgelagert nach archon.routers.hermes_config, 792 Zeilen) ---
 
 _hermes_config_configure(_sync_org_hierarchy_node=_sync_org_hierarchy_node)
-app.include_router(_hermes_config_router)
+_register_router(app, _hermes_config_router, '_hermes_config_router')
 
 # --- KONTEXT-HILFE (ausgelagert nach archon.routers.context_help) ---
 
-app.include_router(_context_help_router)
+_register_router(app, _context_help_router, '_context_help_router')
 
 # --- MEILENSTEIN 4: MULTI-USER & RBAC ENDPOINTS (ausgelagert nach archon.routers.auth) ---
 
@@ -2130,7 +2131,7 @@ _auth_configure(
     _save_json=_save_json,
     _request_has_service_token=_request_has_service_token,
 )
-app.include_router(_auth_router)
+_register_router(app, _auth_router, '_auth_router')
 
 
 _PAPERCLIP_AGENTS_CACHE = None
@@ -2155,19 +2156,19 @@ def api_get_paperclip_agents():
 # --- TALENT- & SKILL-MARKTPLATZ ENDPOINTS (ausgelagert nach archon.routers.marketplace) ---
 
 _marketplace_configure(save_all_agent_profiles=save_all_agent_profiles)
-app.include_router(_marketplace_router)
+_register_router(app, _marketplace_router, '_marketplace_router')
 
 
-app.include_router(_memory_ops_router)
+_register_router(app, _memory_ops_router, '_memory_ops_router')
 
 
-app.include_router(_email_settings_router)
+_register_router(app, _email_settings_router, '_email_settings_router')
 
 
-app.include_router(_security_scanner_router)
+_register_router(app, _security_scanner_router, '_security_scanner_router')
 
 
-app.include_router(_research_router)
+_register_router(app, _research_router, '_research_router')
 
 
 
@@ -2176,7 +2177,7 @@ app.include_router(_research_router)
 
 # --- HERMES AGENT CORE UPDATE (NousResearch/hermes-agent) ---
 
-app.include_router(_updater_router)
+_register_router(app, _updater_router, '_updater_router')
 
 # --- VERTRAGS- & FRISTENMANAGEMENT (t-0a2171) ---
 
@@ -2235,12 +2236,12 @@ async def on_shutdown_graceful():
 
 # --- DOKUMENTEN-PARSING & TABELLENEXTRAKTION (t-539b65) ---
 
-app.include_router(_documents_router)
+_register_router(app, _documents_router, '_documents_router')
 
 
 # --- DEAL-PIPELINE & FORECAST-ENGINE (ausgelagert nach archon.routers.deals) ---
 
-app.include_router(_deals_router)
+_register_router(app, _deals_router, '_deals_router')
 
 
 # --- PLUGIN SYSTEM & EXTENSIBILITY (MEILENSTEIN 5) ---
@@ -2251,7 +2252,7 @@ app.include_router(_deals_router)
 
 # --- OBSIDIAN VAULT ROUTER (ausgelagert nach archon.routers.vault) ---
 
-app.include_router(_vault_router)
+_register_router(app, _vault_router, '_vault_router')
 
 @app.post("/api/sandbox")
 def api_run_python_sandbox(request: Request, payload: Dict = Body(...)):
@@ -2266,13 +2267,13 @@ def api_run_python_sandbox(request: Request, payload: Dict = Body(...)):
 
 # --- KANBAN PERSISTENZ ROUTER (ausgelagert nach archon.routers.kanban) ---
 
-app.include_router(_kanban_router)
+_register_router(app, _kanban_router, '_kanban_router')
 
 # --- ARCHON V2 CAPABILITIES ROUTER (M32-M94) ---
 
-app.include_router(_v2_capabilities_router)
+_register_router(app, _v2_capabilities_router, '_v2_capabilities_router')
 
-app.include_router(_content_machine_router)
+_register_router(app, _content_machine_router, '_content_machine_router')
 
 # --- DOCKER CONTAINER MANAGEMENT ROUTER (ausgelagert nach archon.routers.containers) ---
 
@@ -2280,23 +2281,23 @@ _containers_configure(
     detect_container_port=detect_container_port,
     post_docker_container_action=post_docker_container_action,
 )
-app.include_router(_containers_router)
+_register_router(app, _containers_router, '_containers_router')
 
 
-app.include_router(_container_ops_router)
-
-
-
-app.include_router(_hermes_proxy_router)
+_register_router(app, _container_ops_router, '_container_ops_router')
 
 
 
+_register_router(app, _hermes_proxy_router, '_hermes_proxy_router')
 
 
 
 
 
-app.include_router(_hr_router)
+
+
+
+_register_router(app, _hr_router, '_hr_router')
 
 
 
@@ -2483,11 +2484,11 @@ async def _run_synthesis_cascade(parent_project_id: str):
 
 
 
-app.include_router(_prompts_router)
+_register_router(app, _prompts_router, '_prompts_router')
 
 
 
-app.include_router(_proxies_router)
+_register_router(app, _proxies_router, '_proxies_router')
 
 
 
@@ -2535,13 +2536,13 @@ def debug_db(request: Request):
 
 
 
-app.include_router(_inbox_tools_router)
+_register_router(app, _inbox_tools_router, '_inbox_tools_router')
 
 
 
-app.include_router(_resilience_router)
-app.include_router(_mesh_router)
-app.include_router(_autonomy_settings_router)
+_register_router(app, _resilience_router, '_resilience_router')
+_register_router(app, _mesh_router, '_mesh_router')
+_register_router(app, _autonomy_settings_router, '_autonomy_settings_router')
 
 
 class HealingAttemptPayload(BaseModel):

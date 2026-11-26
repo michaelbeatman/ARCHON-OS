@@ -1,4 +1,3 @@
-import asyncio
 import base64 as base64
 import csv as csv
 import datetime as datetime
@@ -12,7 +11,6 @@ import socket as socket
 import subprocess as subprocess
 import sys
 import tempfile as tempfile
-import threading
 import time
 import uuid as uuid
 from typing import Any, Dict, List, Optional
@@ -25,18 +23,15 @@ from fastapi import File as File
 from fastapi import Form as Form
 from fastapi import Query as Query
 from fastapi import UploadFile as UploadFile
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
     JSONResponse,
     Response,
-    StreamingResponse,
 )
 from fastapi.responses import HTMLResponse as HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field
-from starlette.middleware.base import BaseHTTPMiddleware
+from pydantic import BaseModel
 
 import core_dispatcher
 from archon.core.cache import invalidate as invalidate_ttl_cache
@@ -72,22 +67,7 @@ from archon.core.mission_control import _MC_DATA_LOCK as _MC_DATA_LOCK
 from archon.core.mission_control import _MC_STATE_CACHE as _MC_STATE_CACHE
 from archon.core.mission_control import MISSION_CONTROL_FILE as MISSION_CONTROL_FILE
 from archon.core.orchestration import (
-    _execute_mission_control_task as _orch_execute_mission_control_task,
-)
-from archon.core.orchestration import (
     _fan_in_maybe_start_synthesis as _orch_fan_in_maybe_start_synthesis,
-)
-from archon.core.orchestration import (
-    _finalize_synthesis_after_approval as _orch_finalize_synthesis_after_approval,
-)
-from archon.core.orchestration import (
-    _paperclip_hire_profile_by_id as _orch_paperclip_hire_profile_by_id,
-)
-from archon.core.orchestration import _run_synthesis_cascade as _orch_run_synthesis_cascade
-from archon.core.orchestration import _set_agent_profile_status as _orch_set_agent_profile_status
-from archon.core.orchestration import _tg_ping_synthesis as _orch_tg_ping_synthesis
-from archon.core.orchestration import (
-    _trigger_sandy_staffing_nomination as _orch_trigger_sandy_staffing_nomination,
 )
 from archon.core.paths import _SKILL_INDEX_DISK_PATH as _SKILL_INDEX_DISK_PATH
 from archon.core.paths import (
@@ -141,8 +121,6 @@ from archon.core.runtime import (
     _save_json,
     add_ticker,
     broadcast_event,
-    subscribe_events,
-    unsubscribe_events,
 )
 from archon.core.runtime import atomic_write_json as atomic_write_json
 from archon.core.runtime import resolve_obsidian_vault_path as resolve_obsidian_vault_path
@@ -634,8 +612,77 @@ from archon.services.health_probes import (
 from archon.services.mission_sync import _LIVE_TELEMETRY_CACHE as _LIVE_TELEMETRY_CACHE
 from archon.services.mission_sync import _get_live_telemetry_metrics, _sync_task_to_obsidian
 from archon.services.mission_sync import _slugify as _slugify
+from archon.services.orchestration_bridge import (
+    OrchestrationBridgeDeps as _OrchestrationBridgeDeps,
+)
+from archon.services.orchestration_bridge import (
+    _execute_mission_control_task as _execute_mission_control_task,
+)
+from archon.services.orchestration_bridge import (
+    _fan_in_maybe_start_synthesis as _fan_in_maybe_start_synthesis,
+)
+from archon.services.orchestration_bridge import (
+    _finalize_synthesis_after_approval as _finalize_synthesis_after_approval,
+)
+from archon.services.orchestration_bridge import (
+    _paperclip_hire_profile_by_id as _paperclip_hire_profile_by_id,
+)
+from archon.services.orchestration_bridge import (
+    _run_synthesis_cascade as _run_synthesis_cascade,
+)
+from archon.services.orchestration_bridge import (
+    _set_agent_profile_status as _set_agent_profile_status,
+)
+from archon.services.orchestration_bridge import (
+    _tg_ping_synthesis as _tg_ping_synthesis,
+)
+from archon.services.orchestration_bridge import (
+    _trigger_sandy_staffing_nomination as _trigger_sandy_staffing_nomination,
+)
+from archon.services.orchestration_bridge import (
+    register_orchestration_bridge_deps_provider as _register_orchestration_bridge_deps_provider,
+)
 from archon.services.profiles_service import delete_profile as delete_profile
 from archon.services.profiles_service import save_profile as save_profile
+from archon.services.runtime_endpoints import (
+    HealingAttemptPayload as HealingAttemptPayload,
+)
+from archon.services.runtime_endpoints import (
+    RuntimeEndpointsDeps as _RuntimeEndpointsDeps,
+)
+from archon.services.runtime_endpoints import (
+    TraceContextMiddleware as TraceContextMiddleware,
+)
+from archon.services.runtime_endpoints import (
+    _assert_router_health as _assert_router_health,
+)
+from archon.services.runtime_endpoints import (
+    _cancel_tracked_tasks as _cancel_tracked_tasks,
+)
+from archon.services.runtime_endpoints import (
+    _warm_hermes_skill_caches as _warm_hermes_skill_caches,
+)
+from archon.services.runtime_endpoints import (
+    install_cors_middleware as _install_cors_middleware_impl,
+)
+from archon.services.runtime_endpoints import (
+    install_rate_limit_middleware as _install_rate_limit_middleware_impl,
+)
+from archon.services.runtime_endpoints import (
+    on_shutdown_graceful as on_shutdown_graceful,
+)
+from archon.services.runtime_endpoints import (
+    on_startup_drain_recovery as on_startup_drain_recovery,
+)
+from archon.services.runtime_endpoints import (
+    register_runtime_endpoints_deps_provider as _register_runtime_endpoints_deps_provider,
+)
+from archon.services.runtime_endpoints import (
+    run_task_healing as _run_task_healing,
+)
+from archon.services.runtime_endpoints import (
+    sse_events_stream as sse_events_stream,
+)
 from archon.services.shutdown_clients import (
     _N8N_STARTUP_STATUS as _N8N_STARTUP_STATUS,
 )
@@ -712,9 +759,6 @@ from backend.platform_paths import agent_log_path as agent_log_path
 from backend.platform_paths import profile_dir as profile_dir
 from backend.platform_paths import soul_path as soul_path
 from backend.post_task_pipeline import project_folder_name
-from backend.trace_context import extract_headers as _extract_traceparent
-from backend.trace_context import response_trace_headers as _response_trace_headers
-from backend.trace_context import start_trace as _start_trace
 from dossier_builder import build_dossier_from_report
 from telegram_notify import send_telegram_document, send_telegram_message
 from utils.docker_client import DockerError as DockerError
@@ -830,81 +874,14 @@ _APP_START_TS = time.time()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-# Audit D16/HIGH: W3C Trace Context an der Systemgrenze. Die Klasse wird hier
-# definiert, aber ERST nach allen @app.middleware-Definitionen sowie nach
-# _install_rate_limit_middleware()/_install_cors_middleware() registriert
-# (siehe unten) — nur dann ist sie die äußerste Schicht und setzt den Kontext
-# auch bei 401/403/429/503. Starlette wickelt zuletzt registrierte zuerst aus.
-
-
-
-class TraceContextMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        _start_trace(_extract_traceparent(request.headers))
-        response = await call_next(request)
-        # D16/HIGH: Prometheus-Exemplare am Request-Chokepoint fuettern.
-        # Der Scrape-Thread selbst hat keinen Kontext; der Ringpuffer in
-        # backend/metrics_collector liefert die letzte echte Kausalkante.
-        try:
-            from backend.metrics_collector import record_trace_exemplar
-
-            record_trace_exemplar(
-                "archon_agent_dispatches_total",
-                labels={"route": request.url.path, "status": response.status_code},
-            )
-        except Exception as _exemplar_exc:
-            logger.debug("[Trace] Exemplar nicht aufgezeichnet: %s", _exemplar_exc)
-        # D16: X-Trace-Id + forkbares traceparent/tracestate (Agent I).
-        for key, value in _response_trace_headers(dict(response.headers)).items():
-            response.headers[key] = value
-        return response
-
-
+# M4: TraceContextMiddleware, CORS- & Rate-Limit-Installer liegen in
+# archon/services/runtime_endpoints.py (Re-Export am Modulkopf).
 def _install_cors_middleware() -> None:
-    """CORS muss AUSSERHALB des Auth-Gates liegen.
+    _install_cors_middleware_impl(app)
 
-    Starlette wickelt die zuletzt registrierte Middleware zuerst aus. Wird
-    CORS — wie frueher — direkt nach GZip registriert, liegt es *innen*:
-    OPTIONS-Preflights und alle 401/503/429 des auth_gate kommen ohne
-    Access-Control-Allow-* zurueck und der Browser blockt den Request.
-    Der Aufruf erfolgt deshalb nach allen @app.middleware-Definitionen.
-    """
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[
-            "http://localhost:8501",
-            "http://127.0.0.1:8501",
-            "http://localhost:3005",
-            "http://127.0.0.1:3005",
-            "http://localhost:8787",
-            "http://127.0.0.1:8787",
-        ] + [o.strip() for o in os.environ.get("ARCHON_CORS_ORIGINS", "").split(",") if o.strip()],
-        # LAN-Zugriffe (Handy/Tablet) ohne Wildcard für das ganze Internet
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$",
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],
-    )
 
-# Rate-Limiting (S8 aus dem Audit): bremst teure/gefaehrliche Pfade eng und
-# alles andere grosszuegig. Kein neuer Endpunkt, daher Routen-Paritaet unberuehrt.
-# Notaus: ARCHON_RATE_LIMIT_ENABLED=0
 def _install_rate_limit_middleware() -> None:
-    """Rate-Limit AUSSERHALB des Auth-Gates registrieren.
-
-    Vorher lag der Limiter hinter auth_gate: 401/403 und die DB-Abfrage in
-    verify_session() waren ungedrosselt. Der Aufruf erfolgt zusammen mit
-    _install_cors_middleware() nach allen @app.middleware-Definitionen.
-    """
-    try:
-        from utils.rate_limit import RateLimitMiddleware
-        from utils.rate_limit import _env_int as _rl_env_int
-        app.add_middleware(RateLimitMiddleware)
-        logger.info("[RateLimit] aktiv (Standard %s/min, strikt %s/min)",
-                    _rl_env_int("ARCHON_RATE_LIMIT_DEFAULT", 600),
-                    _rl_env_int("ARCHON_RATE_LIMIT_STRICT", 20))
-    except Exception as _err_rl:
-        logger.warning(f"[RateLimit] nicht aktiv: {_err_rl}")
+    _install_rate_limit_middleware_impl(app)
 
 # --- Locale Middleware (Etappe 4): Accept-Language -> request.state.lang ---
 try:
@@ -1407,23 +1384,7 @@ os.makedirs(HERMES_PROFILES_DIR, exist_ok=True)
 _HERMES_SKILLS_CACHE = None
 _HERMES_SKILLS_CACHE_TIME = 0
 
-
-
-
-async def _warm_hermes_skill_caches():
-    """Skills-Caches VOR dem ersten Request warm machen (Disk -> Memory).
-    Sonst bezahlt der erste Request nach Restart den vollen Kaltbau
-    (gemessen: Walk 10.2s + 850 SKILL.md lesen = ~22s fuer das Panel)."""
-    def _warm():
-        t0 = time.time()
-        try:
-            from archon.routers.skills import api_get_hermes_skills, build_skills_file_index
-            build_skills_file_index()
-            api_get_hermes_skills()
-            print(f"[Skills-Warmup] caches warm after {time.time() - t0:.1f}s")
-        except Exception as e:
-            print(f"[Skills-Warmup] failed: {e}")
-    threading.Thread(target=_warm, daemon=True, name="skills-warmup").start()
+# M4: _warm_hermes_skill_caches liegt in archon/services/runtime_endpoints.py.
 
 
 
@@ -1561,49 +1522,15 @@ _register_router(app, _updater_router, '_updater_router')
 
 
 # --- SAUBERES HERUNTERFAHREN & TASK-DRAINING (t-12113b) ---
-def on_startup_drain_recovery():
-    try:
-        from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-        res = graceful_shutdown_coordinator.auto_resume_on_startup()
-        print(f"[Archon] Startup Recovery: {res}")
-        # D07/MED: ein fehlgeschlagener Resume-Enqueue ist kein Erfolg. Der
-        # Coordinator auditiert/eskaliert bereits; /readyz spiegelt den Fehler.
-        failures = [
-            cp for cp in (res.get("recovered_checkpoints") or [])
-            if not (cp.get("restart") or {}).get("queued")
-            and not (cp.get("restart") or {}).get("duplicate")
-        ]
-        if failures:
-            for cp in failures:
-                _STARTUP_RECOVERY_FAILED.append({
-                    "task_id": cp.get("task_id"),
-                    "reason": (cp.get("restart") or {}).get("reason", "unknown"),
-                    "ts": time.time(),
-                })
-            logger.error(
-                "[Startup] %s Re(sume)-Checkpoint(s) konnten nicht enqueued werden: %s",
-                len(failures), [cp.get("task_id") for cp in failures],
-            )
-    except Exception as e:
-        # Nicht nur stderr: Otherwise bleibt /readyz gruen trotz fehlgeschlagener Recovery.
-        _STARTUP_RECOVERY_FAILED.append({"reason": str(e), "ts": time.time()})
-        logger.error("[Startup] Startup Recovery Fehler: %s", e)
-        print(f"[Archon] Startup Recovery Fehler: {e}", file=sys.stderr)
-
-
-async def on_shutdown_graceful():
-    # W3: Audit-Anker-Thread kontrolliert stoppen, bevor der Prozess stirbt.
-    try:
-        from backend.audit_log import chained_audit_log
-        chained_audit_log.stop_anchor_worker()
-    except Exception as _anchor_exc:
-        logger.debug("[Shutdown] Audit-Anker-Stopp: %s", _anchor_exc)
-    try:
-        from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
-        res = await graceful_shutdown_coordinator.execute_graceful_shutdown(reason="Server shutdown / restart")
-        print(f"[Archon] Graceful Shutdown ausgeführt: {res}")
-    except Exception as e:
-        print(f"[Archon] Graceful Shutdown Fehler: {e}", file=sys.stderr)
+# M4: on_startup_drain_recovery & on_shutdown_graceful liegen in
+# archon/services/runtime_endpoints.py (S3 Call-Time-Deps).
+_register_runtime_endpoints_deps_provider(
+    lambda: _RuntimeEndpointsDeps(
+        startup_recovery_failed=_STARTUP_RECOVERY_FAILED,
+        router_load_errors=_ROUTER_LOAD_ERRORS,
+        reset_loops_started=_reset_loops_started,
+    )
+)
 
 
 # --- EU AI ACT COMPLIANCE & KI-INVENTAR (t-1aa5e9) ---
@@ -1693,167 +1620,41 @@ class OSKanbanTaskStatusUpdate(BaseModel):
 
 
 
-@app.get("/api/v1/events/stream")
-async def sse_events_stream():
-    """
-    Server-Sent Events Stream für Realtime Push-Updates (Kanban, Telegram-Decisions, Ticker).
-    Ersetzt clientseitiges aggressives Polling.
-    """
-    # Frueher: asyncio.Queue() unbegrenzt -> jeder langsame/stdBy-Client
-    # akkumulierte Events bis zum OOM. Die zwischenzeitliche "unbegrenzt"
-    # Loesung verhinderte zwar die Trennung, erzeugte aber ein Memory-Leak.
-    # Jetzt: zentrale, begrenzte Queue aus archon.core.runtime. broadcast_event
-    # verwirft bei Ueberlauf nur einzelne Events (kein Client-Disconnect),
-    # der Client bekommt stattdessen regelmaessig Keepalives.
-    queue = subscribe_events()
-
-    async def event_generator():
-        try:
-            # Begrüßungs-Ping
-            yield f"data: {json.dumps({'type': 'connected', 'timestamp': time.time()})}\n\n"
-            while True:
-                try:
-                    payload = await asyncio.wait_for(queue.get(), timeout=20.0)
-                    yield f"data: {payload}\n\n"
-                except asyncio.TimeoutError:
-                    # Keepalive Heartbeat alle 20s
-                    yield ": keepalive\n\n"
-        except asyncio.CancelledError as cancel_exc:
-            logger.debug(f"[SSE] Event-Stream vom Client geschlossen: {cancel_exc}")
-        finally:
-            unsubscribe_events(queue)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
-
-# F-12/Z-12: Die zweite, tote Cache-Instanz hier ist entfernt. Der Leser
-# (``archon/routers/mission_control.py``) nutzt den Cache aus
-# ``archon.core.mission_control`` — der wird jetzt in ``main.py``
-# importiert (siehe Import-Block oben) und dort auch invalidiert.
+# M4: sse_events_stream und die 8 Orchestration-Wrapper liegen in
+# archon/services/runtime_endpoints.py bzw. archon/services/orchestration_bridge.py.
+app.add_api_route("/api/v1/events/stream", sse_events_stream, methods=["GET"])
 
 
-
-# === Orchestration Wrappers (delegating to archon.core.orchestration) ===
-
-async def _execute_mission_control_task(task_id: str):
-    """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
-    return await _orch_execute_mission_control_task(
-        task_id,
+def _build_orchestration_bridge_deps() -> _OrchestrationBridgeDeps:
+    return _OrchestrationBridgeDeps(
         dispatcher=core_dispatcher,
         load_mc=_load_mission_control_data,
         save_mc=_save_mission_control_data,
-        # Atomares Read-Modify-Write: schreibt nur die Aenderungen DIESES Tasks
-        # zurueck. Ohne diesen Parameter wuerde der ueber den LLM-Call hinweg
-        # gehaltene Snapshot alle parallelen Aenderungen ueberschreiben (B1).
         update_mc=update_mission_control_data,
+        write_mc_atomic=_write_mc_atomic,
+        mc_async_lock=_MC_ASYNC_LOCK,
         ticker=add_ticker,
         get_profiles=api_get_hermes_profiles,
         sync_obsidian=_sync_task_to_obsidian,
-        trigger_sandy=_trigger_sandy_staffing_nomination,
-        fan_in=_fan_in_maybe_start_synthesis,
-    )
-
-
-
-
-def _paperclip_hire_profile_by_id(profile_id: str, profiles: list, current_task_id: str = "") -> bool:
-    """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
-    return _orch_paperclip_hire_profile_by_id(
-        profile_id, profiles, current_task_id,
-        set_status=_set_agent_profile_status,
-        ticker=add_ticker,
-    )
-
-
-def _set_agent_profile_status(profile_id: str, status: str, task_id: str = "") -> bool:
-    """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
-    return _orch_set_agent_profile_status(
-        profile_id, status, task_id,
         rolling_backup=create_rolling_backup,
         invalidate_profiles=invalidate_hermes_profiles_cache,
-    )
-
-
-async def _trigger_sandy_staffing_nomination(parent_task: dict, profiles: list):
-    """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
-    await _orch_trigger_sandy_staffing_nomination(
-        parent_task, profiles,
-        dispatcher=core_dispatcher,
-        load_mc=_load_mission_control_data,
-        save_mc=_save_mission_control_data,
-        update_mc=update_mission_control_data,
-        ticker=add_ticker,
-        get_profiles=api_get_hermes_profiles,
-        paperclip_hire=_paperclip_hire_profile_by_id,
-    )
-
-
-async def _finalize_synthesis_after_approval(parent_pid: str, draft_path: str,
-                                              synthese_text: str, approver_note: str,
-                                              daten: dict = None):  # type: ignore[assignment]
-    """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
-    await _orch_finalize_synthesis_after_approval(
-        parent_pid, draft_path, synthese_text, approver_note, daten,
-        dispatcher=core_dispatcher,
-        load_mc=_load_mission_control_data,
-        save_mc=_save_mission_control_data,
-        update_mc=update_mission_control_data,
-        ticker=add_ticker,
-        paths={"OBSIDIAN_VAULT_DIR": OBSIDIAN_VAULT_DIR, "WORKSPACE_DIR": WORKSPACE_DIR},
-        folder_namer=project_folder_name,
-        set_status=_set_agent_profile_status,
-        tg_ping=_tg_ping_synthesis,
-    )
-
-
-async def _fan_in_maybe_start_synthesis(parent_pid: str):
-    """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
-    await _orch_fan_in_maybe_start_synthesis(
-        parent_pid,
-        load_mc=_load_mission_control_data,
-        write_mc_atomic=_write_mc_atomic,
-        # Atomares Read-Modify-Write verhindert Lost Updates und Audit-Dupes.
-        update_mc=update_mission_control_data,
-        mc_async_lock=_MC_ASYNC_LOCK,
-        run_cascade=_run_synthesis_cascade,
-    )
-
-
-def _tg_ping_synthesis(parent_title, parent_project_id, synthese_text, draft_path,
-                       app_id=None, dossier_dir=None):
-    """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
-    _orch_tg_ping_synthesis(
-        parent_title, parent_project_id, synthese_text, draft_path, app_id, dossier_dir,
-        send_doc=send_telegram_document,  # type: ignore[arg-type]
-        send_msg=send_telegram_message,  # type: ignore[arg-type]
-        build_dossier=build_dossier_from_report,
-    )
-
-
-async def _run_synthesis_cascade(parent_project_id: str):
-    """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
-    await _orch_run_synthesis_cascade(
-        parent_project_id,
-        dispatcher=core_dispatcher,
-        load_mc=_load_mission_control_data,
-        save_mc=_save_mission_control_data,
-        update_mc=update_mission_control_data,
-        ticker=add_ticker,
-        get_profiles=api_get_hermes_profiles,
         paths={"OBSIDIAN_VAULT_DIR": OBSIDIAN_VAULT_DIR, "WORKSPACE_DIR": WORKSPACE_DIR},
         folder_namer=project_folder_name,
         build_dossier=build_dossier_from_report,
         create_decision=create_decision,
-        finalize_approval=_finalize_synthesis_after_approval,
+        send_doc=send_telegram_document,
+        send_msg=send_telegram_message,
+        set_status=_set_agent_profile_status,
+        paperclip_hire=_paperclip_hire_profile_by_id,
+        trigger_sandy=_trigger_sandy_staffing_nomination,
+        fan_in=_fan_in_maybe_start_synthesis,
         tg_ping=_tg_ping_synthesis,
+        finalize_approval=_finalize_synthesis_after_approval,
+        run_cascade=_run_synthesis_cascade,
     )
+
+
+_register_orchestration_bridge_deps_provider(_build_orchestration_bridge_deps)
 
 
 
@@ -1923,49 +1724,10 @@ _register_router(app, _mesh_router, '_mesh_router')
 _register_router(app, _autonomy_settings_router, '_autonomy_settings_router')
 
 
-class HealingAttemptPayload(BaseModel):
-    """D-D7 (A1/A7-DELEGATED): getippter Body statt rohem Dict.
-
-    `apply_patch` ist bewusst KEIN Feld: eine Code-S-Schreibaktion ist eine
-    HITL-Entscheidung und darf nicht vom Client ueber den Body erzwungen
-    werden. `extra="ignore"` verwirft einen mitgelieferten apply_patch-Wert
-    still, ohne die Route zu kippen.
-    """
-
-    model_config = ConfigDict(extra="ignore")
-
-    task_id: str = "heal-task"
-    title: str = "Autonome Fehlerbehebung"
-    failed_code: str = ""
-    error_output: str = ""
-    worker_agent: str = "hermes-coder"
-    affected_file: Optional[str] = None
-    attempt: int = Field(default=1, ge=1)
-    max_attempts: Optional[int] = Field(default=None, ge=1)
-    model: Optional[str] = None
-
-
 @app.post("/api/healing/attempt")
 async def api_attempt_task_healing(request: Request, payload: HealingAttemptPayload):
     require_admin_or_503(request)
-    from backend.task_self_healer import task_self_healer
-
-    # P0-5 / D-D7: Patch-Anwendung nur aus der HITL-Session. Es gibt keinen
-    # repo-weiten HITL-Session-Helper fuer diesen Pfad — daher fail-closed:
-    # ohne explizit gesetztes Flag am Request-State wird nie geschrieben.
-    apply_patch = bool(getattr(request.state, "hitl_apply_patch", False))
-    return await task_self_healer.attempt_self_healing(
-        task_id=payload.task_id,
-        task_title=payload.title,
-        failed_code=payload.failed_code,
-        error_output=payload.error_output,
-        worker_agent=payload.worker_agent,
-        affected_file=payload.affected_file,
-        attempt=payload.attempt,
-        max_attempts=payload.max_attempts,
-        model=payload.model,
-        apply_patch=apply_patch,
-    )
+    return await _run_task_healing(request, payload)
 
 
 # (Features 23-25, Corporate, ERP & CRM in archon/routers/ modularisiert)
@@ -2005,18 +1767,7 @@ def _stop_watchdog_daemon():
         logger.error(f"[Shutdown] Watchdog-Stop fehlgeschlagen: {type(exc).__name__}: {exc}")
 
 
-async def _cancel_tracked_tasks() -> None:
-    """TaskRegistry leeren (Synthese-Kaskaden, Fan-In, Content-DAGs)."""
-    try:
-        from archon.core.task_registry import cancel_all
-        n = await cancel_all()
-        if n:
-            logger.info("[Shutdown] %s registrierte Task(s) abgebrochen.", n)
-    except Exception as exc:
-        logger.debug(f"[Shutdown] TaskRegistry-Hinweis: {exc}")
-    # In-Process-Restart: Guards zurücksetzen, sonst laufen beim 2. Lifespan
-    # keine Hintergrund-Loops mehr (still abgeschaltete Autonomie).
-    _reset_loops_started()
+# M4: _cancel_tracked_tasks liegt in archon/services/runtime_endpoints.py.
 
 
 # Lifespan fuehrt Shutdown-Hooks in REVERSED order aus. Reihenfolge hier:
@@ -2090,35 +1841,7 @@ _late_router_deps = _LateRouterDeps(
 _register_late_routers(app, _ROUTER_LOAD_ERRORS, _late_router_deps)
 
 
-def _assert_router_health() -> None:
-    """Fail-closed: fehlgeschlagene Router-Imports brechen den Start ab.
-
-    F-076: frueher galt die Produktionsbedingung (auth aktiv oder
-    ENVIRONMENT=production). Im Default-Start (ENVIRONMENT=development, lokale
-    Auth aus) genuegte ein ERROR-Log — die Anwendung lief mit still 404-enden
-    Routern weiter. Jeder Eintrag in _ROUTER_LOAD_ERRORS (von den
-    try/except-Bloecken oben) fuehrt jetzt unbedingt zu RuntimeError.
-    Nur fuer lokale Dev-Debugs gibt es den expliziten Opt-Out
-    ARCHON_ALLOW_BROKEN_ROUTERS=true, der laut im Log dokumentiert wird.
-    """
-    if not _ROUTER_LOAD_ERRORS:
-        return
-    detail = "; ".join(_ROUTER_LOAD_ERRORS)
-    opt_out = os.environ.get("ARCHON_ALLOW_BROKEN_ROUTERS", "").strip().lower() in (
-        "1", "true", "yes",
-    )
-    if opt_out:
-        logger.error(
-            "[Router] OPT-OUT ARCHON_ALLOW_BROKEN_ROUTERS=true: %s Router(s) "
-            "nicht geladen: %s",
-            len(_ROUTER_LOAD_ERRORS), detail,
-        )
-        return
-    raise RuntimeError(
-        f"[Router] {len(_ROUTER_LOAD_ERRORS)} Router(s) nicht geladen: {detail}"
-    )
-
-
+# M4: _assert_router_health liegt in archon/services/runtime_endpoints.py.
 _STARTUP_HOOKS.insert(0, _assert_router_health)
 
 # M2: _assert_audit_hmac, _verify_all_audit_chains, _audit_integrity_enforced

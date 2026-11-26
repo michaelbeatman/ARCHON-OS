@@ -251,12 +251,14 @@ def test_v5_main_call_site_passes_original_load_errors_list() -> None:
         "assert _seen_late, 'register_late_routers beim main-Import nicht aufgerufen'",
         "assert _seen_special[0] is main._ROUTER_LOAD_ERRORS, 'special: Kopie/Rebind'",
         "assert _seen_late[0] is main._ROUTER_LOAD_ERRORS, 'late: Kopie/Rebind'",
-        "try:",
-        "    assert list(_seen_special[0]) is main._ROUTER_LOAD_ERRORS",
-        "except AssertionError:",
-        "    pass",
-        "else:",
-        "    raise AssertionError('NEGATIVPROBE: Kopie wurde als Original akzeptiert')",
+        # Echte Negativprobe (Review-Fund 5): die vorherige Variante war
+        # tautologisch — ``list(...) is ...`` ist IMMER False, also immer rot
+        # und damit immer gruen. Stattdessen wird bewiesen, dass der
+        # Identitaetsvergleich zwischen einer Kopie und dem Original
+        # diskriminiert.
+        "_copy = list(_seen_special[0])",
+        "assert _copy is not main._ROUTER_LOAD_ERRORS, "
+        "'NEGATIVPROBE: is-Test diskriminiert eine Kopie nicht'",
         f"_expected_order = {_EXPECTED_NAKED_ORDER!r}",
         "assert archon.routers.naked_router_order() == _expected_order, "
         "'Naked-Router-Reihenfolge gekippt'",

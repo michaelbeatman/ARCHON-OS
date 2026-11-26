@@ -21,6 +21,7 @@ Spion vor dem echten ``import main`` (gilt fuer beide Register-Funktionen).
 
 from __future__ import annotations
 
+import logging
 import sys
 import warnings
 from typing import Any, List, cast
@@ -108,18 +109,29 @@ def test_w1_all_late_routers_present_without_load_errors() -> None:
     real = _paths(app_main.app)
     assert set(isolated) <= set(real), "Pfade der spaeten Gruppe fehlen in der echten App"
 
-    # Negativproben: die Subset-Pruefung und die Leer-Pruefung sind live.
+    # Negativproben (Review-Fund 5): gegen ECHTE Logik, nicht Selbsttests
+    # der eigenen Assertion. Eine leere App muss den Pfad-Schwellenwert
+    # scheitern lassen; ein erfundener Pfad muss das Subset scheitern lassen.
     with pytest.raises(AssertionError):
         assert (set(isolated) | {"/__kein_late_router_pfad__"}) <= set(real)
     with pytest.raises(AssertionError):
-        assert errors != []
+        assert len(_paths(FastAPI())) > 100
 
 
 @pytest.mark.parametrize("module,prefix", _PREFIX_CASES)
 def test_w2_broken_import_appends_exact_prefix(
-    module: str, prefix: str, monkeypatch: pytest.MonkeyPatch
+    module: str,
+    prefix: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """``None`` in sys.modules laesst den from-Import real raisen."""
+    """``None`` in sys.modules laesst den from-Import real raisen.
+
+    Review-Fund 5: zusaetzlich wird der zugehoerige logger.warning-Text
+    gebunden (vorher 0 caplog-Treffer in tests/) und die Negativprobe geht
+    gegen einen fremden Praefix statt gegen die eigene Assertion.
+    """
+    caplog.set_level(logging.WARNING, logger="archon_os")
     errors: List[str] = []
     app = FastAPI()
     monkeypatch.setitem(cast(Any, sys.modules), module, None)
@@ -127,6 +139,9 @@ def test_w2_broken_import_appends_exact_prefix(
 
     assert len(errors) == 1, errors
     assert errors[0].startswith(prefix), (prefix, errors)
+    # Der WARN-Text des sabotierten Blocks muss real geloggt worden sein.
+    block_name = module.rsplit(".", 1)[1]
+    assert f"[Router] {block_name} nicht geladen:" in caplog.text, caplog.text
     # Nur der sabotierte Block darf fehlschlagen — die 28 anderen laufen weiter.
     assert not any(
         e.startswith(other)
@@ -135,8 +150,10 @@ def test_w2_broken_import_appends_exact_prefix(
         for e in errors
     ), "fail-soft-Isolierung gebrochen"
     assert len(_paths(app)) > 100, "uebrige Bloecke muessen weiterlaufen"
+    # Negativprobe: ein fremder Praefix MUSS diskriminiert werden.
+    wrong = "erp: " if prefix != "erp: " else "crm: "
     with pytest.raises(AssertionError):
-        assert len(errors) == 2
+        assert errors[0].startswith(wrong)
 
 
 def test_w3_prefix_ratchet_can_fail(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,8 +167,10 @@ def test_w3_prefix_ratchet_can_fail(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_w4_control_without_sabotage() -> None:
+    """Kontrollprobe: ohne Sabotage bleibt die Fehlerliste leer."""
     errors: List[str] = []
     register_late_routers(FastAPI(), errors, _deps_from_main())
     assert errors == []
+    # Negativprobe gegen echte Logik: eine leere App hat keine Pfade.
     with pytest.raises(AssertionError):
-        assert errors != []
+        assert len(_paths(FastAPI())) > 100

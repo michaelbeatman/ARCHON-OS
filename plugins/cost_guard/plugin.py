@@ -32,11 +32,26 @@ class CostGuardPlugin(BasePlugin):
                 _archon_exc_logger.debug("[plugin] Ignorierte Ausnahme (Z.29): %s", _exc)
 
     def _save_burn(self):
+        import tempfile
+
+        tmp_path = None
         try:
-            with open(self.state_file, "w", encoding="utf-8") as f:
+            parent = os.path.dirname(self.state_file) or "."
+            os.makedirs(parent, exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(dir=parent, suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(self.burn_data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.state_file)
+            tmp_path = None
         except Exception as _exc:
-            _archon_exc_logger.debug("[plugin] Ignorierte Ausnahme (Z.36): %s", _exc)
+            _archon_exc_logger.warning("[cost_guard] Atomares Speichern von daily_burn.json fehlgeschlagen: %s", _exc)
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
     async def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Any:
         if tool_name == "check_token_budget":

@@ -482,6 +482,14 @@ async def execute_agent_tool(
         if tool_name in exported:
             res = await pm.execute_plugin_tool(tool_name, call_args)
             record_tool_read_side_effect(session_id, tool_name)
+            # F24a (D01): echten Plugin-Abschluss-Hook (inkl. on_task_completed / CostGuard)
+            # am ToolRuntime-Chokepoint ausfuehren, bevor guard_result filtert.
+            if callable(getattr(pm, "apply_after_tool_execute", None)):
+                res = await pm.apply_after_tool_execute(
+                    tool_name,
+                    res,
+                    {"agent_id": agent_id, "session_id": session_id, "source": "plugin"},
+                )
             # D12/H-12-1: Firewall-Urteil unveraendert durchreichen und pruefen.
             verdict = guard_result(tool_name, res, with_status=True)
             guarded = verdict.get("result")
@@ -516,6 +524,18 @@ async def execute_agent_tool(
                 "result": res,
             }, res, error_code="TOOL_REPORTED_ERROR", tool_ok=False)
         record_tool_read_side_effect(session_id, tool_name)
+        # F24a (D01): auch im MCP-/DAG-Pfad apply_after_tool_execute (on_task_completed / CostGuard)
+        # ausfuehren, damit CostGuard im DAG-Pfad nicht blind bleibt.
+        try:
+            from backend.plugin_manager import get_plugin_manager
+            pm_mcp = get_plugin_manager()
+            res = await pm_mcp.apply_after_tool_execute(
+                tool_name,
+                res,
+                {"agent_id": agent_id, "session_id": session_id, "source": "mcp"},
+            )
+        except Exception as hook_exc:
+            logger.warning("[ToolRuntime] apply_after_tool_execute (mcp) fehlgeschlagen: %s", hook_exc)
         # D12/H-12-1: auch im MCP-Pfad das Firewall-Urteil pruefen.
         verdict = guard_result(tool_name, res, with_status=True)
         guarded = verdict.get("result")

@@ -147,8 +147,9 @@ def test_b4_proof_prompt_versions_never_unknown_and_handles_zero_canary(monkeypa
         error_code="ZERO_EGRESS_BLOCKED",
         reason="test",
     )
+    assert captured["prompt_version"] == "unverified"
     assert captured["prompt_version"] != "v1-static"
-    assert captured["action"].endswith("_unverified_prompt_proof")
+    assert captured["extra"]["prompt_provenance_verified"] is False
     assert captured["extra"]["effective_prompt_info"]["verified"] is False
     assert captured["extra"]["effective_prompt_info"]["version"] is None
     assert "registry_offline" in captured["extra"]["effective_prompt_info"]["error"]

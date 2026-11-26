@@ -1900,7 +1900,13 @@ def _require_audit_event(
 ) -> Dict[str, Any]:
     """Pflicht-Event: bei Schreibfehler immer RuntimeError('audit_write_failed')."""
     try:
-        return chained_audit_log.record_event(category, action, agent_id, payload, **kwargs)
+        return chained_audit_log.record_event(
+            category=category,
+            action=action,
+            agent_id=agent_id,
+            payload=payload,
+            **kwargs,
+        )
     except Exception as exc:
         logger.error("[Audit] Pflicht-Event %s/%s fehlgeschlagen: %s", category, action, exc)
         raise RuntimeError("audit_write_failed") from exc

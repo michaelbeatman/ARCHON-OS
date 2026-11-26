@@ -163,15 +163,11 @@ def _record_blocked_proof(
     proof_extra: Dict[str, Any] = {
         "error_code": error_code,
         "reason": str(reason),
+        "prompt_provenance_verified": prov.verified,
         "effective_prompt_info": effective_prompt_info,
     }
     if extra:
         proof_extra.update(extra)
-    effective_action = (
-        action
-        if prov.verified or action.endswith("_unverified_prompt_proof")
-        else f"{action}_unverified_prompt_proof"
-    )
     pv_arg = prov.version if prov.verified and prov.version else "unverified"
     cv_arg = prov.canary if prov.verified and prov.canary else "unverified"
     # Ein signierter Proof braucht eine der drei definierten Egress-Zonen;
@@ -186,7 +182,7 @@ def _record_blocked_proof(
             provider=provider or "egress-firewall",
             model=model or "egress-proof",
             target_endpoint=clean_ep,
-            action=effective_action,
+            action=action,
             data_category=data_category,
             http_status=0,
             zero_egress_active=True,
@@ -195,8 +191,8 @@ def _record_blocked_proof(
             extra=proof_extra,
         )
     except Exception as exc:
-        logger.error("[EgressGuard] Audit-Proof %s nicht schreibbar: %s", effective_action, exc)
-        raise RuntimeError(f"audit_write_failed: {effective_action} ({type(exc).__name__})") from exc
+        logger.error("[EgressGuard] Audit-Proof %s nicht schreibbar: %s", action, exc)
+        raise RuntimeError(f"audit_write_failed: {action} ({type(exc).__name__})") from exc
 
 
 def infer_data_category(

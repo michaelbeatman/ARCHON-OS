@@ -70,8 +70,8 @@ waren vorher bei Fix-Ausbau grün (`MUTATED_EXIT=0`), jetzt rot.
 - **`.mcp.json`**: `pay`/`pay-cli`/`canonry` weiterhin ungepinnt (Pre-Flight-MED, nicht in den 3 Härtungs-Commits enthalten).
 - **`tools/migrate_projects_structure.py`**: Dry-Run/Rollback-Manifest offen (Pre-Flight-MED).
 - **RT1 2A/2B** inconclusive (Harness-SQL-Fehler) – nachgebauter PoC mit korrektem Schema steht aus.
-- **Audit-Ketten-Bruch aus DB-Restoration**, `otel_sdk=false`, `~/.hermes`-Fallback, flaky Test
-  `test_stage1_stage3_hardening_and_bus.py:808`, `main.py`-Ratchet: unverändert dokumentiert.
+- **Audit-Kette:** Startup-Blocker behoben; historischer Kettenbruch bewusst archiviert (`data/backups/pre_hmac_archive_2026-11-26/`), nicht re-signiert, Betreiberentscheidung dokumentiert.
+- `otel_sdk=false`, `~/.hermes`-Fallback, flaky Test `test_stage1_stage3_hardening_and_bus.py:808`, `main.py`-Ratchet: unverändert dokumentiert.
 
 ---
 

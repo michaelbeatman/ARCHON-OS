@@ -59,6 +59,7 @@ async def test_r24_reopen_task_clears_completed_and_started_at(tmp_path, monkeyp
     monkeypatch.setattr(ops_mod, "_get_active_kanban_db_path", lambda _cid=None: str(db_path))
     monkeypatch.setattr(ops_mod, "_KANBAN_JOURNAL_INIT", set())
     monkeypatch.setattr(ops_mod, "require_admin_or_503", lambda _r: {"role": "admin"})
+    monkeypatch.setattr(ops_mod, "require_session_actor", lambda _r: "admin")
 
     # Reopen to 'todo'
     req = ops_mod.TaskStatusUpdateRequest(status="todo")

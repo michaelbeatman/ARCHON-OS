@@ -50,9 +50,9 @@ ALL_LANGS = [("en", "English", "🇬🇧"), ("de", "Deutsch", "🇩🇪")] + [
 
 # 3 PDF families exist in 11 languages under docs/system/ (DE uses unsuffixed names).
 LOCAL_PDFS = {
-    "System Manual": lambda l: f"ARCHON_OS_SYSTEM_MANUAL_2026_{l.upper()}.pdf",
-    "Complete Feature List": lambda l: f"ARCHON_OS_FEATURELISTE_2026_{l.upper()}.pdf",
-    "AI Boardroom: 55 Frameworks": lambda l: f"ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_{l.upper()}.pdf",
+    "System Manual": lambda lang: f"ARCHON_OS_SYSTEM_MANUAL_2026_{lang.upper()}.pdf",
+    "Complete Feature List": lambda lang: f"ARCHON_OS_FEATURELISTE_2026_{lang.upper()}.pdf",
+    "AI Boardroom: 55 Frameworks": lambda lang: f"ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_{lang.upper()}.pdf",
 }
 
 PLACEHOLDER_RE = re.compile(r"\{\{[A-Z_]+\}\}")

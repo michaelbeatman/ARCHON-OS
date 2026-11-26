@@ -592,8 +592,8 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0.25rem 0 -0.5rem;
-  padding: 0.4rem 0;
+  margin: 1.1rem 0 0.4rem;
+  padding: 1.1rem 0;
   overflow: visible;
 }
 .creation-davinci-stage {
@@ -669,7 +669,7 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   z-index: 2;
   display: flex;
   justify-content: center;
-  padding: 1.15rem 3.25rem;
+  padding: 2rem 3.25rem;
   border-radius: 999px;
   background: radial-gradient(ellipse 76% 74% at 50% 50%, var(--bg) 38%, transparent 84%);
 }
@@ -681,7 +681,7 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   filter: drop-shadow(0 0 26px var(--bg)) drop-shadow(0 0 12px var(--bg));
 }
 
-.creation-stage-wrap + h2.sec { margin-top: 1.5rem; }
+.creation-stage-wrap + h2.sec { margin-top: 2.65rem; }
 
 /* Section Headings (Semantic H2, Silver Engraving Hairline) */
 h2.sec, h3.sec {

@@ -1719,20 +1719,58 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
         _tg_doss_dir = None
     draft_path = (os.path.join(PROJEKTE_DIR, _fan_ordner, "03_Endprodukte", draft_name)
                   if _fan_ordner else os.path.join(PROJEKTE_DIR, draft_name))
+    critique_section = (
+        f"\n\n---\n\n## Unabhängige Qualitätsprüfung (Kritischer Reviewer)\n\n{reviewer_critique}\n"
+        if reviewer_critique else ""
+    )
+    import hashlib
+    draft_content = f"# Synthese-Entwurf: {parent_title}\n\n{synthesis_reply}{critique_section}"
+    draft_sha256 = hashlib.sha256(draft_content.encode("utf-8")).hexdigest()
+    written_draft_paths: List[str] = []
+    draft_write_errors: List[str] = []
     for d in target_dirs:
         try:
             d_ziel = os.path.join(d, _fan_ordner, "03_Endprodukte") if _fan_ordner else d
             os.makedirs(d_ziel, exist_ok=True)
             p = os.path.join(d_ziel, draft_name)
-            with open(p, "w", encoding="utf-8") as f:
-                critique_section = (
-                    f"\n\n---\n\n## Unabhängige Qualitätsprüfung (Kritischer Reviewer)\n\n{reviewer_critique}\n"
-                    if reviewer_critique else ""
-                )
-                f.write(f"# Synthese-Entwurf: {parent_title}\n\n{synthesis_reply}{critique_section}")
+            if os.path.commonpath([os.path.abspath(p), os.path.abspath(d_ziel)]) != os.path.abspath(d_ziel):
+                raise ValueError(f"Ziel ausserhalb des erlaubten Verzeichnisses: {p}")
+            tmp_p = os.path.join(d_ziel, f".{draft_name}.tmp_{os.getpid()}_{int(time.time() * 1000)}")
+            with open(tmp_p, "w", encoding="utf-8") as f:
+                f.write(draft_content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_p, p)
+            if not (os.path.isfile(p) and os.path.getsize(p) > 0):
+                raise IOError(f"Atomare Verifikation fehlgeschlagen (leer/fehlt): {p}")
+            written_draft_paths.append(p)
             draft_path = p
-        except Exception:
-            continue
+        except Exception as write_exc:
+            draft_write_errors.append(f"{d}: {write_exc}")
+            logger.error("[Synthesis] Atomares Schreiben des Entwurfs nach %s fehlgeschlagen: %s", d, write_exc)
+    if not written_draft_paths:
+        raise RuntimeError(
+            f"blocked: synthesis_draft_write_failed ({'; '.join(draft_write_errors) or 'no target_dirs'})"
+        )
+    # Hash-Manifest atomar neben dem zuletzt geschriebenen Entwurf ablegen (F13)
+    try:
+        m_path = draft_path + ".sync_manifest.json"
+        m_tmp = m_path + f".tmp_{os.getpid()}"
+        manifest = {
+            "task_id": parent_project_id,
+            "authoritative": draft_path,
+            "content_sha256": draft_sha256,
+            "replicas": written_draft_paths[:-1],
+            "status": "partial" if draft_write_errors else "ok",
+            "errors": draft_write_errors,
+        }
+        with open(m_tmp, "w", encoding="utf-8") as mf:
+            json.dump(manifest, mf, indent=2, ensure_ascii=False)
+            mf.flush()
+            os.fsync(mf.fileno())
+        os.replace(m_tmp, m_path)
+    except Exception as m_exc:
+        logger.warning("[Synthesis] Hash-Manifest konnte nicht geschrieben werden: %s", m_exc)
 
     # --- ATOMARER COMMIT: synthesis_draft_path in Parent-Task schreiben ---
     # Wir nutzen update_mc für atomares Merge (nur Parent-Task Update, keine Tasks-Listen-Änderung)

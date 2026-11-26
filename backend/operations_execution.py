@@ -648,20 +648,24 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
         p_rel = deps.resolve_task_obsidian_rel(task_id)
         if p_rel:
             try:
+                from backend.operations_projects import safe_path_within
                 from backend.post_task_pipeline import get_vault_dir
 
                 vault = Path(get_vault_dir()).resolve()
-                p_dir = vault / p_rel
-                proj_context = f"\n\nPROJEKT-ORDNER IM OBSIDIAN VAULT: `{p_rel}`\n"
-                end_dir = p_dir / "03_Endprodukte"
-                if end_dir.is_dir():
-                    files = [f.name for f in end_dir.iterdir() if f.is_file() and not f.name.startswith(".")]
-                    if files:
-                        proj_context += (
-                            "Bereits vorhandene Projektergebnisse in 03_Endprodukte:\n"
-                            + "\n".join(f"- {fn}" for fn in files[:12])
-                            + "\n"
-                        )
+                p_dir = safe_path_within(vault, p_rel)
+                if p_dir is None:
+                    logger.warning("[OperationsAPI] Unsicherer Obsidian-Pfad abgewiesen: %s", p_rel)
+                else:
+                    proj_context = f"\n\nPROJEKT-ORDNER IM OBSIDIAN VAULT: `{p_rel}`\n"
+                    end_dir = p_dir / "03_Endprodukte"
+                    if end_dir.is_dir():
+                        files = [f.name for f in end_dir.iterdir() if f.is_file() and not f.name.startswith(".")]
+                        if files:
+                            proj_context += (
+                                "Bereits vorhandene Projektergebnisse in 03_Endprodukte:\n"
+                                + "\n".join(f"- {fn}" for fn in files[:12])
+                                + "\n"
+                            )
             except Exception as exc:
                 print(
                     f"[OperationsAPI] Fallback _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}",
@@ -829,13 +833,14 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
         )
 
         try:
+            from backend.operations_projects import safe_path_within
             from backend.post_task_pipeline import get_vault_dir
 
             vault = Path(get_vault_dir()).resolve()
             p_rel = deps.resolve_task_obsidian_rel(task_id)
             obs_status_label = "ABGESCHLOSSEN" if target_status == "done" else target_status.upper()
-            if p_rel:
-                p_dir = vault / p_rel
+            p_dir = safe_path_within(vault, p_rel) if p_rel else None
+            if p_dir is not None:
                 end_dir = p_dir / "03_Endprodukte"
                 if end_dir.is_dir():
                     matched = False

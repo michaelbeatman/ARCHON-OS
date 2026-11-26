@@ -46,6 +46,21 @@ class ProjectMetaUpdate(BaseModel):
     archived: Optional[bool] = None
 
 
+def safe_path_within(base: Path, rel: str) -> Optional[Path]:
+    """F13 (D03): Path-Jail via Path.is_relative_to (kein naiver startswith-Bypass)."""
+    rel_clean = str(rel or "").strip()
+    if not rel_clean:
+        return None
+    try:
+        base_resolved = Path(base).resolve()
+        cand = (base_resolved / rel_clean).resolve()
+        if cand.is_relative_to(base_resolved):
+            return cand
+    except Exception:
+        return None
+    return None
+
+
 def resolve_task_obsidian_rel(
     task_id: str,
     deps: ProjectsDeps,
@@ -61,17 +76,20 @@ def resolve_task_obsidian_rel(
     rel: Optional[str] = t_entry.get("obsidian")
     vault = Path(get_vault_dir()).resolve()
     if rel and str(rel).strip():
-        cand = (vault / str(rel).strip()).resolve()
-        if str(cand).startswith(str(vault)) and cand.is_dir():
+        cand = safe_path_within(vault, str(rel).strip())
+        if cand is not None and cand.is_dir():
             return str(rel).strip()
+        # F13: Ungueltiger oder ausserhalb des Vaults liegender Pfad darf nicht
+        # als Rueckgabewert ueberleben.
+        rel = None
 
     # Fallback 1: Pruefe ob in decision ein dossier liegt
     dossier = (t_entry.get("decision") or {}).get("dossier") or ""
     if "01_PROJEKTE/" in dossier:
         try:
             sub = dossier.split("01_PROJEKTE/")[1].split("/")[0]
-            cand = (vault / "01_PROJEKTE" / sub).resolve()
-            if str(cand).startswith(str(vault)) and cand.is_dir():
+            cand = safe_path_within(vault, f"01_PROJEKTE/{sub}")
+            if cand is not None and cand.is_dir():
                 rel = f"01_PROJEKTE/{sub}"
         except Exception as exc:
             print(

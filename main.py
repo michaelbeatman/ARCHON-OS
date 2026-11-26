@@ -543,6 +543,60 @@ from archon.routers.watchdog import (
     trigger_test_watchdog_alarm_endpoint as trigger_test_watchdog_alarm_endpoint,
 )
 from archon.services import profiles_service
+from archon.services.background_loops import (
+    _ANCHOR_WRITE_LOCK as _ANCHOR_WRITE_LOCK,
+)
+from archon.services.background_loops import (
+    _BACKGROUND_TASKS as _BACKGROUND_TASKS,
+)
+from archon.services.background_loops import (
+    _DB_MAINTENANCE_STATUS as _DB_MAINTENANCE_STATUS,
+)
+from archon.services.background_loops import (
+    _FAILED_CANCELS as _FAILED_CANCELS,
+)
+from archon.services.background_loops import (
+    _RAG_SYNC_LOCK as _RAG_SYNC_LOCK,
+)
+from archon.services.background_loops import (
+    _STARTUP_RECOVERY_FAILED as _STARTUP_RECOVERY_FAILED,
+)
+from archon.services.background_loops import (
+    _WATCHDOG_STOP_FAILED as _WATCHDOG_STOP_FAILED,
+)
+from archon.services.background_loops import (
+    BackgroundLoopDeps as _BackgroundLoopDeps,
+)
+from archon.services.background_loops import (
+    _cancel_background_tasks as _cancel_background_tasks,
+)
+from archon.services.background_loops import (
+    _db_maintenance_loop as _db_maintenance_loop,
+)
+from archon.services.background_loops import (
+    _deadlock_supervisor_loop as _deadlock_supervisor_loop,
+)
+from archon.services.background_loops import (
+    _email_imap_background_loop as _email_imap_background_loop,
+)
+from archon.services.background_loops import (
+    _fleet_self_healing_loop as _fleet_self_healing_loop,
+)
+from archon.services.background_loops import (
+    _record_failed_cancel as _record_failed_cancel,
+)
+from archon.services.background_loops import (
+    _spawn_background as _spawn_background,
+)
+from archon.services.background_loops import (
+    _start_gateway_idle_loop as _start_gateway_idle_loop,
+)
+from archon.services.background_loops import (
+    register_background_loop_deps_provider as _register_background_loop_deps_provider,
+)
+from archon.services.background_loops import (
+    reset_loops_started as _reset_loops_started,
+)
 from archon.services.mission_sync import _LIVE_TELEMETRY_CACHE as _LIVE_TELEMETRY_CACHE
 from archon.services.mission_sync import _get_live_telemetry_metrics, _sync_task_to_obsidian
 from archon.services.mission_sync import _slugify as _slugify
@@ -558,7 +612,6 @@ from backend.platform_paths import agent_log_path as agent_log_path
 from backend.platform_paths import profile_dir as profile_dir
 from backend.platform_paths import soul_path as soul_path
 from backend.post_task_pipeline import project_folder_name
-from backend.process_lock import exclusive_loop as _exclusive_loop
 from backend.trace_context import extract_headers as _extract_traceparent
 from backend.trace_context import response_trace_headers as _response_trace_headers
 from backend.trace_context import start_trace as _start_trace
@@ -1585,7 +1638,10 @@ _register_router(app, _gateway_router, '_gateway_router')
 _register_router(app, _watchdog_router, '_watchdog_router')
 
 
+# M1: Hintergrund-Loops, Task-Registry & Shutdown-Abbruch nach
+# archon/services/background_loops.py ausgelagert (S3 Call-Time-Deps).
 _idle_stop_running = False
+_RAG_SYNC_PROCESS = None
 
 
 async def _gateway_idle_stop_loop():
@@ -1601,397 +1657,34 @@ async def _gateway_idle_stop_loop():
         _idle_stop_running = False
 
 
-
-
-@_exclusive_loop("email_imap")
-async def _email_imap_background_loop():
-    await asyncio.sleep(15)
-    while True:
-        try:
-            from backend.email_service import sync_imap_inbox
-            await asyncio.to_thread(sync_imap_inbox, limit=20)
-        except Exception as e:
-            # W3: kein reines stdout mehr — IMAP-Fehler (z. B. abgelaufenes
-            # Token) landen im strukturierten Log und damit in Loki.
-            logger.warning("[EmailService] Background sync error: %s", e)
-        await asyncio.sleep(180)
-
-_BACKGROUND_TASKS: list = []
-_RAG_SYNC_LOCK = asyncio.Lock()
-_RAG_SYNC_PROCESS = None
-
-# D07/MED: fehlgeschlagene Abbrueche duerfen nicht als Erfolg quittiert werden.
-# Die Liste bleibt im Prozess erhalten und geht in /readyz ein, damit ein
-# Zombie-Task nicht still weiterlaeuft, waehrend alles "gruen" meldet.
-_FAILED_CANCELS: list = []
-_WATCHDOG_STOP_FAILED: list = []
-_STARTUP_RECOVERY_FAILED: list = []
-
-
-def _record_failed_cancel(task_name: str, detail: str) -> None:
-    """Persistiert einen gescheiterten cancel() inkl. Audit (best effort)."""
-    entry = {"task": str(task_name), "detail": str(detail), "ts": time.time()}
-    _FAILED_CANCELS.append(entry)
-    logger.error("[Shutdown] Cancel fehlgeschlagen: %s — %s", task_name, detail)
-    try:
-        from backend.audit_log import chained_audit_log
-
-        chained_audit_log.record_event(
-            category="recovery",
-            action="cancel_failed",
-            agent_id="system",
-            payload=entry,
-        )
-    except Exception as audit_exc:
-        logger.warning("[Shutdown] Cancel-Fehler nicht auditierbar: %s", audit_exc)
-
-
 def _is_rag_sync_running() -> bool:
     """Prueft, ob aktuell ein RAG-Sync-Prozess aktiv ist (Re-06)."""
     global _RAG_SYNC_PROCESS
     return _RAG_SYNC_PROCESS is not None and _RAG_SYNC_PROCESS.poll() is None
 
 
-def _spawn_background(coro, name: str = "", priority: int = 1):
-    """Startet einen Background-Task, registriert ihn für Shutdown und loggt unhandled exceptions.
-
-    Audit 23.11.2026 (K-2): `can_start_task()` war nie verdrahtet — während des
-    15-s-Draining-Fensters starteten weiterhin IMAP-Syncs, Scheduler und
-    LLM-Calls. Der zentrale Spawn-Punkt prüft jetzt das Gate. Chats mit
-    Notfall-Prioritaet (>= 3) bleiben erlaubt.
-    """
-    from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator as _coord
-
-    allowed, reason = _coord.can_start_task(name or "background", priority=priority)
-    if not allowed:
-        logger.warning("[BackgroundTask] Start verweigert (%s): %s", name or "background", reason)
-        close = getattr(coro, "close", None)
-        if callable(close):
-            close()  # "coroutine was never awaited" vermeiden
-        return None
-    task = asyncio.create_task(coro, name=name) if name else asyncio.create_task(coro)
-    _BACKGROUND_TASKS.append(task)
-
-    def _done_cb(t):
-        try:
-            _BACKGROUND_TASKS.remove(t)
-        except ValueError as rm_exc:
-            logger.debug(f"[BackgroundTask] Task {t.get_name()} bereits aus Registry entfernt: {rm_exc}")
-        if not t.cancelled():
-            exc = t.exception()
-            if exc:
-                logger.error(f"[BackgroundTask] Unhandled exception in {t.get_name()}: {exc}", exc_info=exc)
-
-    task.add_done_callback(_done_cb)
-    return task
-
-
-# D08/MED: Audit-Schreibpfade im 30-s-Loop laufen in einem Thread und sind
-# zusaetzlich gelockt, damit keine sync SQLite-Schreiboperation den Event-Loop
-# blockiert und keine parallelen Anker-Schreiber die Kette verdrehen.
-_ANCHOR_WRITE_LOCK = threading.Lock()
-
-
-@_exclusive_loop("deadlock_supervisor")
-async def _deadlock_supervisor_loop():
-    """30-Sekunden Watchdog/Deadlock-Loop (Pillar 1): befreit stagnierende Kanban-Tasks."""
-    await asyncio.sleep(15)
-    while True:
-        try:
-            from backend.deadlock_supervisor import deadlock_supervisor
-            res = await asyncio.to_thread(deadlock_supervisor.detect_and_resolve_deadlocks)
-            if isinstance(res, dict) and res.get("resolved_count", 0) > 0:
-                logger.warning(f"[DeadlockSupervisor] {res['resolved_count']} blockierte(r) Task(s) reaktiviert.")
-        except Exception as e:
-            logger.debug(f"[DeadlockSupervisor] Loop-Hinweis: {e}")
-        # Verwaiste Synthese-Cascades wiederbeleben (synthesis_started Latch).
-        # KRITISCH: reset allein reicht nicht — danach muss Fan-in erneut
-        # laufen, sonst bleibt das Projekt im gleichen Sackgassen-Zustand.
-        # to_thread verhindert, dass BEGIN IMMEDIATE den Event-Loop blockiert.
-        try:
-            from archon.core.orchestration import recover_stale_synthesis
-            from archon.core.task_registry import spawn as _tracked_spawn
-            stale = await asyncio.to_thread(  # type: ignore[call-arg]
-                recover_stale_synthesis,
-                _load_mission_control_data,
-                update_mission_control_data,
-                900,
-                lambda pid: _tracked_spawn(
-                    _orch_fan_in_maybe_start_synthesis(
-                        pid,
-                        mc_async_lock=_MC_ASYNC_LOCK,
-                        run_cascade=_run_synthesis_cascade,
-                    ),
-                    name=f"synthesis_restart:{pid}",
-                ),
-            )
-            if stale:
-                logger.warning("[Synthese-Recovery] %s Kaskade(n) neu gestartet.", len(stale))
-        except Exception as e:
-            logger.debug(f"[Synthese-Recovery] Loop-Hinweis: {e}")
-
-        # Alerting unabhaengig vom /metrics-Scrape (sonst schlagen Alarme
-        # nie zu, wenn niemand Prometheus abruft).
-        try:
-            from backend.metrics_collector import check_and_dispatch_alerts_now
-            # W3: die Rohmethode hat KEINE Zeitbremse -> bei anhaltender
-            # Störung alle 30 s erneuter Alert (Alarmmüdigkeit). Die
-            # deduplizierte Variante liegt bereits im selben Modul.
-            alerts = await asyncio.to_thread(check_and_dispatch_alerts_now)
-            if isinstance(alerts, dict) and alerts.get("dispatched"):
-                logger.info("[Alerting] %s Alarm(e) versendet.", alerts["dispatched"])
-        except Exception as e:
-            logger.debug(f"[Alerting] Loop-Hinweis: {e}")
-
-        # F-077: Disk-Backpressure muss auch ohne externen Traffic periodisch
-        # geprueft werden, sonst bleibt der disk_space_critical-Alarm stumm.
-        # via to_thread, damit die sync-Messung den Event-Loop nicht blockiert.
-        try:
-            from backend.resource_backpressure import resource_backpressure_protector
-            bp = await asyncio.to_thread(
-                resource_backpressure_protector.check_health_and_backpressure
-            )
-            if isinstance(bp, dict) and bp.get("disk_critical"):
-                logger.error("[Backpressure] Disk kritisch: %s", bp)
-        except Exception as e:
-            logger.error(f"[Backpressure] Periodischer Check fehlgeschlagen: {e}")
-
-        # B-05 (D05/BLOCKER): Zentrale + alle sechs Nebenketten im 30-s-Loop.
-        # Vorher wurde valid=False nur geloggt — Produktion lief mit manipulier-
-        # ter Kette weiter und /readyz blieb gruen. Jetzt wird AUDIT_COMPROMISED
-        # gesetzt (=> /readyz 503) und der Befund auf ERROR eskaliert.
-        try:
-            results = await asyncio.to_thread(_verify_all_audit_chains)
-            for label, res in results.items():
-                if isinstance(res, dict) and res.get("valid") is False:
-                    _mark_audit_compromised(label, res)
-        except Exception as e:
-            # Audit D: ein Fehler der Ketten-Pruefung ist selbst ein
-            # Integritaetsvorfall und gehoert ins Produktionslog, nicht auf DEBUG.
-            logger.error(f"[Integritaet] Kettenverifikation nicht pruefbar: {e}")
-            _mark_audit_compromised(
-                "Kettenverifikation", {"valid": False, "reason": str(e)}
-            )
-
-        # d05 F-03: signierte Head-Anker fuer alle sechs Nebenketten schreiben.
-        # Audit-Schreibpfad gemaess D08/MED in den Thread verlagern + locken.
-        def _write_chain_anchors() -> Dict[str, Any]:
-            from backend.audit_log import anchor_secondary_chains
-            with _ANCHOR_WRITE_LOCK:
-                return anchor_secondary_chains()
-
-        try:
-            anchors = await asyncio.to_thread(_write_chain_anchors)
-            # D05/HIGH (A2-DELEGATED): ein erkannter Tail-Loeschungs-Versuch
-            # (`violation: True`) ist mindestens so kritisch wie ein Schreibfehler
-            # und darf nicht still durchgewinkt werden.
-            failed = [
-                k for k, v in anchors.items()
-                if isinstance(v, dict)
-                and v.get("written") is False
-                and ("error" in v or v.get("violation") is True)
-            ]
-            if failed:
-                logger.error("[Integritaet] Head-Anker fehlgeschlagen: %s", failed)
-                violations = [k for k in failed if anchors[k].get("violation") is True]
-                if violations:
-                    _mark_audit_compromised(
-                        "Head-Anker",
-                        {"valid": False, "reason": f"Tail-Loeschung/Rollback: {violations}"},
-                    )
-        except Exception as e:
-            logger.error(f"[Integritaet] Head-Anker-Loop fehlgeschlagen: {e}")
-
-        # d14/HIGH: Freigabe-Timeouts muessen periodisch eskaliert werden,
-        # nicht nur wenn ein Benutzer eine Approval-Ansicht oeffnet.
-        try:
-            from backend.approval_policy_engine import approval_engine as _approval_timeout
-            escalated = await asyncio.to_thread(_approval_timeout.check_and_escalate_timeouts)
-            if escalated:
-                logger.warning("[Approval] %s Freigabe(n) automatisch eskaliert.", escalated)
-        except Exception as e:
-            logger.error(f"[Approval] Timeout-Eskalation fehlgeschlagen: {e}")
-
-        await asyncio.sleep(30)
-
-
-# A3-DELEGATED: DB-Wartung darf nicht still im DEBUG verschwinden. Der
-# Status wird zusaetzlich in /readyz gespiegelt (siehe readiness_check).
-_DB_MAINTENANCE_STATUS: Dict[str, Any] = {"status": "not_started", "error": None, "ts": 0.0}
-
-
-@_exclusive_loop("db_maintenance")
-async def _db_maintenance_loop():
-    """Periodische DB-Sicherung & Optimierung (WAL-Truncate, Backup, VACUUM alle 6h)."""
-    await asyncio.sleep(120)
-    while True:
-        try:
-            from backend.db_backup_manager import db_backup_manager
-            from backend.db_optimizer import optimize_all_databases
-            await asyncio.to_thread(db_backup_manager.checkpoint_and_backup)
-            result = await asyncio.to_thread(optimize_all_databases)
-            _DB_MAINTENANCE_STATUS.update(
-                status="error" if isinstance(result, dict) and result.get("status") == "error" else "ok",
-                error=(result or {}).get("error") if isinstance(result, dict) else None,
-                ts=time.time(),
-            )
-            if _DB_MAINTENANCE_STATUS["status"] == "error":
-                logger.error("[DBMaintenance] Optimierung fehlgeschlagen: %s", _DB_MAINTENANCE_STATUS["error"])
-        except Exception as e:
-            _DB_MAINTENANCE_STATUS.update(status="error", error=str(e), ts=time.time())
-            logger.error("[DBMaintenance] Loop fehlgeschlagen: %s", e)
-        await asyncio.sleep(21600)
-
-
-@_exclusive_loop("fleet_self_healing")
-async def _fleet_self_healing_loop():
-    """C13: Core-Dienste periodisch prüfen und ausgefallene Container neu starten.
-
-    Vorher war `check_fleet_and_heal()` nur über eine API-Route erreichbar;
-    `restart: unless-stopped` hilft nicht bei `running`-aber-unhealthy Containern.
-    Der Exclusive-Loop verhindert parallele Restarts bei mehreren Replicas.
-    """
-    await asyncio.sleep(45)
-    while True:
-        try:
-            from backend.fleet_self_healing import check_fleet_and_heal
-            res = await asyncio.to_thread(check_fleet_and_heal)
-            if isinstance(res, dict) and res.get("status") == "ok":
-                missing = res.get("missing_services") or []
-                if missing or res.get("healed_count", 0):
-                    logger.warning(
-                        "[FleetSelfHealing] vermisst/unhealthy=%s, geheilt=%s, übersprungen=%s",
-                        missing, res.get("healed_count", 0), res.get("skipped_not_deployed") or [],
-                    )
-            elif isinstance(res, dict):
-                logger.debug("[FleetSelfHealing] Loop-Hinweis: %s", res.get("error"))
-        except Exception as e:
-            logger.debug(f"[FleetSelfHealing] Loop-Hinweis: {e}")
-        await asyncio.sleep(120)
-
-
-_LOOPS_STARTED = False
-
-
-async def _start_gateway_idle_loop():
-    """Alle Hintergrund-Loops genau einmal starten.
-
-    Vorher hatte nur der Gateway-Idle-Loop einen Guard; bei --reload oder
-    wiederholten Lifespan-Durchlaeufen (Tests) wurden IMAP, Deadlock, DB-
-    Maintenance, Inbox, Internet-Watchdog und Workflow-Scheduler mehrfach
-    gestartet — mit doppelten LLM-Calls, doppelten Mails und DB-Locks.
-    """
-    global _LOOPS_STARTED
-    if _LOOPS_STARTED:
-        logger.warning("[Startup] Hintergrund-Loops laufen bereits — kein zweiter Start.")
-        return
-    _LOOPS_STARTED = True
-    _spawn_background(_gateway_idle_stop_loop())
-    _spawn_background(_email_imap_background_loop())
-    _spawn_background(_deadlock_supervisor_loop(), name="deadlock_supervisor_30s")
-    _spawn_background(_fleet_self_healing_loop(), name="fleet_self_healing_120s")
-    _spawn_background(_db_maintenance_loop(), name="db_maintenance_6h")
-    try:
-        from archon.core.delegation import resume_pending_delegation_watchers
-        _spawn_background(resume_pending_delegation_watchers(), name="delegation_watcher_recovery")
-    except Exception as e:
-        logger.debug(f"[Startup] Delegation-Watcher-Recovery Hinweis: {e}")
-    try:
-        from backend.inbox_watcher import inbox_watcher_background_loop
-        _spawn_background(inbox_watcher_background_loop())
-    except Exception as e:
-        print(f"[Startup] Inbox Watcher init notice: {e}")
-    try:
-        from backend.internet_watchdog import internet_watchdog_background_loop
-        _spawn_background(internet_watchdog_background_loop())
-    except Exception as e:
-        print(f"[Startup] Internet Watchdog init notice: {e}")
-    try:
-        from backend.workflow_scheduler import workflow_scheduler_background_loop
-        _spawn_background(workflow_scheduler_background_loop())
-    except Exception as e:
-        print(f"[Startup] Workflow Scheduler init notice: {e}")
-    # K2: Auth aktiv, aber kein Service-Token -> n8n/Telegram-Adapter erhalten
-    # 401. Laut warnen statt stillem Lockout der Automatisierungen.
-    try:
-        from backend.auth_service import auth_service as _auth_svc
-        if _auth_svc.is_auth_enabled() and not _get_service_token():
-            logger.critical(
-                "[Auth] Auth ist aktiv, aber kein ARCHON_SERVICE_TOKEN konfiguriert — "
-                "interne Automaten (n8n, Adapter) werden mit 401 abgewiesen."
-            )
-    except Exception as e:
-        logger.debug(f"[Startup] Auth-Token-Pruefung Hinweis: {e}")
-
-
-async def _cancel_background_tasks():
-    """Bricht die Endlos-Loops ab.
-
-    Ohne das wartet `uvicorn --reload` beim Code-Wechsel unbegrenzt auf diese
-    Tasks ("Waiting for connections to close") und der Server bleibt hängen.
-    """
-    # H9 (Audit 23.11.2026): der RAG-Sync läuft als Subprocess, nicht als
-    # asyncio-Task. Ohne terminate() überlebt er Reload/Shutdown als Orphan
-    # und schreibt konkurrierend in dieselbe RAG-DB / denselben API-Key.
+def _set_rag_sync_process(proc: Any) -> None:
     global _RAG_SYNC_PROCESS
-    _rag_proc = _RAG_SYNC_PROCESS
-    if _rag_proc is not None and _rag_proc.poll() is None:
-        try:
-            logger.info("[Shutdown] RAG-Sync-Subprocess wird beendet.")
-            _rag_proc.terminate()
-            try:
-                _rag_proc.wait(timeout=5.0)
-            except Exception:
-                # F-043: kill() allein reicht nicht — ohne wait() bleibt der
-                # Prozess als Zombie zurueck, bis der Parent beendet wird.
-                _rag_proc.kill()
-                try:
-                    _rag_proc.wait(timeout=5.0)
-                except Exception:
-                    logger.warning(
-                        "[Shutdown] RAG-Sync bleibt nach kill() unresponsive "
-                        "(Zombie-Risiko)."
-                    )
-        except Exception as exc:
-            logger.warning("[Shutdown] RAG-Sync konnte nicht beendet werden: %s", exc)
-    _RAG_SYNC_PROCESS = None
+    _RAG_SYNC_PROCESS = proc
 
-    pending = [t for t in _BACKGROUND_TASKS if not t.done()]
-    for task in pending:
-        task.cancel()
-    if pending:
-        results = None
-        try:
-            # Timeout: ein Task, der Cancellation in einem blockierenden
-            # finally ignoriert, darf den Shutdown nicht ewig festhalten.
-            results = await asyncio.wait_for(
-                asyncio.gather(*pending, return_exceptions=True), timeout=10.0
-            )
-        except asyncio.TimeoutError:
-            # D07/MED: nicht als Erfolg quittieren. Nicht beendete Tasks
-            # bleiben in der Registry und werden als failed_cancels
-            # persistiert, statt still aus dem Register geloescht zu werden.
-            logger.warning("[Shutdown] %s Task(s) reagierten nicht binnen 10s.", len(pending))
-            for task in pending:
-                if not task.done():
-                    _record_failed_cancel(
-                        task.get_name(), "timeout_after_cancel(10s): task_possibly_alive"
-                    )
-        if results is not None:
-            for task, result in zip(pending, results):
-                # Erwartetes CancelledError ist der Normalfall; alles andere
-                # (inkl. blockierender finally) ist ein fehlgeschlagener Abbruch.
-                if isinstance(result, asyncio.CancelledError):
-                    continue
-                if isinstance(result, BaseException):
-                    _record_failed_cancel(task.get_name(), f"{type(result).__name__}: {result}")
-        confirmed = sum(1 for t in pending if t.cancelled())
-        print(
-            f"[Shutdown] {confirmed}/{len(pending)} Hintergrund-Task(s) verifiziert abgebrochen; "
-            f"{len(_FAILED_CANCELS)} fehlgeschlagene Abbruch(e) insgesamt."
-        )
-    # Nur tatsaechlich beendete Tasks entfernen; Zombies bleiben sichtbar.
-    _BACKGROUND_TASKS[:] = [t for t in _BACKGROUND_TASKS if not t.done()]
+
+def _build_background_loop_deps() -> _BackgroundLoopDeps:
+    return _BackgroundLoopDeps(
+        load_mission_control_data=_load_mission_control_data,
+        update_mission_control_data=update_mission_control_data,
+        mc_async_lock=_MC_ASYNC_LOCK,
+        run_synthesis_cascade=_run_synthesis_cascade,
+        orch_fan_in_maybe_start_synthesis=_orch_fan_in_maybe_start_synthesis,
+        verify_all_audit_chains=_verify_all_audit_chains,
+        mark_audit_compromised=_mark_audit_compromised,
+        get_service_token=_get_service_token,
+        get_rag_sync_process=lambda: _RAG_SYNC_PROCESS,
+        set_rag_sync_process=_set_rag_sync_process,
+        gateway_idle_stop_loop=_gateway_idle_stop_loop,
+    )
+
+
+_register_background_loop_deps_provider(_build_background_loop_deps)
 
 
 _register_router(app, _quickchat_router, '_quickchat_router')
@@ -2696,7 +2389,6 @@ def _stop_watchdog_daemon():
 
 async def _cancel_tracked_tasks() -> None:
     """TaskRegistry leeren (Synthese-Kaskaden, Fan-In, Content-DAGs)."""
-    global _LOOPS_STARTED
     try:
         from archon.core.task_registry import cancel_all
         n = await cancel_all()
@@ -2706,7 +2398,7 @@ async def _cancel_tracked_tasks() -> None:
         logger.debug(f"[Shutdown] TaskRegistry-Hinweis: {exc}")
     # In-Process-Restart: Guards zurücksetzen, sonst laufen beim 2. Lifespan
     # keine Hintergrund-Loops mehr (still abgeschaltete Autonomie).
-    _LOOPS_STARTED = False
+    _reset_loops_started()
 
 
 async def _close_dispatcher_clients() -> None:

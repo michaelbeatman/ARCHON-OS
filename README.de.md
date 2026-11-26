@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release: v0.6.0](https://img.shields.io/badge/Release-v0.6.0-6366f1.svg)](CHANGELOG.md)
 [![Agenten: 71 Profile](https://img.shields.io/badge/Profile-71%20in%208%20Dom%C3%A4nen%20(DE%2FEN)-emerald.svg)](agent_profiles.json)
-[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
+[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](Dockerfile)
 [![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](SECURITY.md)
 
@@ -23,22 +23,21 @@
 
 > **Zuerst die Basis:** Archon OS ist ein Aufsatz auf **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** von **[Nous Research](https://nousresearch.com)** — der autonomen Multi-Agenten-Runtime. Hermes ist die Engine; Archon OS macht daraus ein vollständiges, selbst gehostetes Betriebs-Ökosystem für Unternehmen.
 
-Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehostetes **Agentic Operating System**. Das System koordiniert **71 Agenten-Profile in 8 Fachdomänen**, führt strukturierte **AI-Boardroom-Debatten über 55 Entscheidungs-Frameworks**, routet sensible Daten über einen **Zero-Egress-Privacy-Router** direkt an lokale LLMs, protokolliert Transaktionen in einem **GoBD-/ISO-27001-Audit-Log (HMAC-SHA256, Env-Key)** und verbindet **Obsidian Second Brain**, **n8n**, **Telegram** sowie ein integriertes **CRM- & ERP-Modul *(Alpha)***.
+Archon OS ersetzt isolierte Einzel-Chatbots durch ein persistentes, selbst gehostetes **Agentic Operating System**. Das System koordiniert **71 Agenten-Profile in 8 Fachdomänen**, führt strukturierte **AI-Boardroom-Debatten über 80 Entscheidungs-Frameworks**, routet sensible Daten über einen **Zero-Egress-Privacy-Router** direkt an lokale LLMs, protokolliert Transaktionen in einem **GoBD-/ISO-27001-Audit-Log (HMAC-SHA256, Env-Key)** und verbindet **Obsidian Second Brain**, **n8n**, **Telegram** sowie ein integriertes **CRM- & ERP-Modul *(Alpha)***.
 
 ---
 
-### Aktueller Release-Stand (`v0.6.0`, 26.11.2026)
+### Aktueller Release-Stand (`v0.6.0`, 24.11.2026)
 
-Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen in `v0.6.0` (und seit `v0.5.6.0`):
+Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen seit `v0.5.6.0`:
 
-- **v0.6.0 Security, Isolation & Verifikation:** Gehärteter Workspace-Path-Jail (`security_audit_hook`), PocketBase-Filter-Escaping, atomare Cost-Guard-Persistierung, Async-Loop-Timeout-/Cancel-Drain-Eskalation, MyPy über 439 Dateien fehlerfrei (`0` Fehler), 13/13 Maschinen-Gates, `2538` grüne Tests und 12/12 Red-Team-Mutations-Checks.
 - **M110 Execution Hardening:** Effect-Ledger mit `UNKNOWN` und verpflichtender Reconciliation, Worker-Leases/Heartbeats mit Liveness-Check, Pre-Execution-Validator für DAGs und ein `replan_count`-Deckel.
 - **Governance:** eine zentrale PolicyEngine und eine atomare BudgetBank (`reserve → settle/release`); signierte Warrants sind jetzt für privilegierte Tools wie `pay` / `mcp__*` zwingend.
 - **Zuverlässigkeit:** Idempotency-Keys und eine Outbox mit Retry/DLQ für Events, Webhooks und Scheduler; das Audit-Log nutzt jetzt HMAC mit Env-Key und einen blockierungsfreien Hintergrund-Anker.
 - **Observability & Tooling:** OTel-Traces in LLM-Kernel und DAG, Trace-to-Eval-Replay-Fixtures, Python 3.13, getrennte Test-Requirements.
 - **Workspace:** 5-Stufen-Onboarding-Wizard v2, Operations-Kalender und 11 LinkedIn-Skills.
 
-> **Konfigurations- & Sicherheitshinweis (Audit 23.11.2026):** Die mitgelieferte `settings.json` enthält **keinen `auth`-Block**. Das System läuft daher bei Bindung auf `127.0.0.1` bewusst im **lokalen Single-User-Modus** (Fallback-Admin, kein Login). **Dieser Modus ist ausschließlich für die lokale Desktop-Nutzung gedacht.** Nicht-Loopback-Binds erzwingen Auth bereits über `_must_force_auth()`; vor LAN- oder Produktionsbetrieb muss zusätzlich `"auth": {"enabled": true}` gesetzt werden. Auch die Egress-Flags sind standardmäßig aus (`privacy.zero_egress = false`, `zero_egress_strict = false`; nur `hard_block_on_local_offline = true`). `config/version.json` meldet **v0.6.0** (veröffentlicht 2026-11-26 20:20, Commit `v0.6.0`) und stimmt damit mit dem Badge überein; **PDF basiert weiter auf v0.5.2.1, siehe [CHANGELOG.md](CHANGELOG.md) für v0.6.0**.
+> **Konfigurations- & Sicherheitshinweis (Audit 23.11.2026):** Die mitgelieferte `settings.json` enthält **keinen `auth`-Block**. Das System läuft daher bei Bindung auf `127.0.0.1` bewusst im **lokalen Single-User-Modus** (Fallback-Admin, kein Login). **Dieser Modus ist ausschließlich für die lokale Desktop-Nutzung gedacht.** Nicht-Loopback-Binds erzwingen Auth bereits über `_must_force_auth()`; vor LAN- oder Produktionsbetrieb muss zusätzlich `"auth": {"enabled": true}` gesetzt werden. Auch die Egress-Flags sind standardmäßig aus (`privacy.zero_egress = false`, `zero_egress_strict = false`; nur `hard_block_on_local_offline = true`). `config/version.json` meldet **v0.6.0** (veröffentlicht 2026-11-24 22:25, Commit `v0.6.0`) und stimmt damit mit dem Badge überein; **PDF basiert weiter auf v0.5.2.1, siehe [CHANGELOG.md](CHANGELOG.md) für v0.6.0**.
 
 > **In diesem Checkout gemessene Zahlen:** 71 Einträge in `agent_profiles.json`, 71 Rollen in `roles.json`, 71 synchronisierte Profile in `.hermes/profiles/`, 312 Portrait-Assets in `static/avatars/`, 832 Prompt-Templates und 11 UI-Sprachen. Die PDF-Handbücher wurden für `v0.5.2.1` erzeugt und noch nicht für `v0.6.0` aktualisiert (PDF basiert weiter auf v0.5.2.1, siehe CHANGELOG für v0.6.0).
 
@@ -48,7 +47,7 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen in 
 |---|---|---|---|
 | **Benutzer- & Firmenhandbuch** | [**ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf**](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 S., 1,9 MB)* | [ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 S., 1,9 MB)* | Installation, Kapitel 1–19, 5 Use Cases, IT-Sicherheit/Verschlüsselung/DSGVO & A–Z-Glossar |
 | **Vollständige Featureliste (PDF: v0.5.2.1 — siehe CHANGELOG für v0.6.0)** | [**ARCHON_OS_FEATURELISTE_2026.pdf**](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | [ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | Kompletter System- & Modul-Katalog, Zweisprachige Global Edition, Live-Demo-Modus, Setup-Wizard & FinOps |
-| **AI-Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | Alle 55 strukturierten Decision-Engine-Methodiken (DE & EN) & Index |
+| **AI-Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | Alle 80 strukturierten Decision-Engine-Methodiken (DE & EN) & Index |
 
 *Weitere Technik- & Sicherheitsdokumente:* [Systemarchitektur & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M113)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD-PDF & Multi-Mandanten-Handbuch (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise-Features & Playbooks-Handbuch](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP-Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live-Demo-Modus (`ARCHON_DEMO_MODE`)](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup-Wizard](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ökosystem & Migration](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
@@ -59,7 +58,7 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen in 
 | Merkmal | Klassischer Chat | Einzelner „Super-Agent“ | **Archon Agentic OS** |
 |---|---|---|---|
 | **Spezialisten-Kader** | 1 Generalist | 1 Agent mit Tool-Liste | **71 Profile** (`agent_profiles.json`) mit **3-Stufen-`SOUL.md`** (`Compact` / `Pro` / `Full`) |
-| **Entscheidungen** | Einmalige Antwort | Iterativer Loop | **AI-Boardroom**: getrennte Perspektiven, Kritik-Prompt & Synthese über **55 Frameworks** |
+| **Entscheidungen** | Einmalige Antwort | Iterativer Loop | **AI-Boardroom**: getrennte Perspektiven, Kritik-Prompt & Synthese über **80 Frameworks** |
 | **Langzeitgedächtnis** | Flacher Verlauf | Vektor-Snippets | **Obsidian Vault Sync**, Agenten-Personalakten, SQLite WAL & LRU-K Paging |
 | **Datenschutz** | Cloud-Zwang | Keys in Env | **Zero-Egress-Gate & Privacy-Router Hard-Block** (Fail-Closed für Finanzen/Verträge/CRM bei Offline-Lokalmodell) + **Docker-Worker-Netz ohne Internet-Route (`internal: true`)** + **Dual-LLM Guard** |
 | **Haftung & Kontrolle** | Ungeprüfter Output | Unkontrollierte Tools | **EU AI Act Engine (Art. 4 / Anh. III)**, **1-Klick GoBD-Verfahrensdoku-PDF**, **HITL-Gates** & **HMAC-SHA256 Hash-Kette (Env-Key; inkl. LLM-Dispatch-Nachweis je Call)** |
@@ -74,7 +73,7 @@ Maßgeblich ist der [CHANGELOG.md](CHANGELOG.md). Die wichtigsten Neuerungen in 
 | Prompt Studio (direkt im Chat) | 71-Profil-Flotte (3-Stufen-SOUL) |
 |---|---|
 | ![Prompt Studio](docs/system/screenshots/demo_1_prompt_studio.gif) | ![Agent Fleet](docs/system/screenshots/demo_2_agent_fleet.gif) |
-| **Organisations-Hierarchie & Teams** | **AI-Boardroom-Debatte (55 Frameworks)** |
+| **Organisations-Hierarchie & Teams** | **AI-Boardroom-Debatte (80 Frameworks)** |
 | ![Org Hierarchy](docs/system/screenshots/demo_3_org_hierarchy.gif) | ![AI Boardroom](docs/system/screenshots/demo_4_boardroom.gif) |
 
 ### System-Ansichten
@@ -159,7 +158,7 @@ ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
 flowchart LR
     U["Nutzer / LAN-Browser / Telegram"] -->|HTTP 8501 + RBAC Login| UI["Archon Web-Cockpit (FastAPI + SPA)"]
     UI --> OR["Orchestrator & 71-Profil-Flotte (3-Stufen-SOUL)"]
-    OR --> BR["AI-Boardroom (55 Entscheidungs-Frameworks)"]
+    OR --> BR["AI-Boardroom (80 Entscheidungs-Frameworks)"]
     OR --> PR["Zero-Egress Privacy-Router"]
     PR -->|Sensible Daten| LOC["Ollama / LM Studio (Lokal)"]
     PR -->|Allgemein / Cloud| CLD["OpenRouter / OpenAI / Anthropic / Gemini"]
@@ -200,7 +199,7 @@ flowchart LR
 ### Weiterführende Dokumente & Handbücher (PDF)
 - **Benutzer- & Firmenhandbuch (DE, PDF):** [docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)
 - **Vollständige Featureliste & System-Katalog (PDF: v0.5.2.1 — siehe CHANGELOG für v0.6.0, DE):** [docs/system/ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf)
-- **Decision Engine & 55 Boardroom-Frameworks (DE, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
+- **Decision Engine & 80 Boardroom-Frameworks (DE, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
 - **Entwicklungs-Roadmap (M0–M113):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
 - **Live-Demo-Modus (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](docs/system/LIVE_DEMO_MODE_GUIDE.md)
 - **First-Run Setup-Wizard:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)

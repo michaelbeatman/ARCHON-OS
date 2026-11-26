@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -30,9 +31,58 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5 (gepinnt)
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3 (gepinnt)
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4 (gepinnt)
         with:
           path: site
+      - name: Wait for artifact indexing
+        run: sleep 20
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4 (gepinnt)
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5 (gepinnt)
+
+      # IndexNow ping after successful deploy
+      - name: Ping IndexNow
+        if: success()
+        run: |
+          KEY="ecac6512cb55e5cf2c2cbc128fb011880d31a24bbf3e8fcbda3db80e2ecab3b6"
+          HOST="michaelbeatman.github.io"
+          URLS=(
+            "https://${HOST}/ARCHON-OS/"
+            "https://${HOST}/ARCHON-OS/de/"
+            "https://${HOST}/ARCHON-OS/zh/"
+            "https://${HOST}/ARCHON-OS/ja/"
+            "https://${HOST}/ARCHON-OS/ko/"
+            "https://${HOST}/ARCHON-OS/ru/"
+            "https://${HOST}/ARCHON-OS/fr/"
+            "https://${HOST}/ARCHON-OS/es/"
+            "https://${HOST}/ARCHON-OS/it/"
+            "https://${HOST}/ARCHON-OS/nl/"
+            "https://${HOST}/ARCHON-OS/pt/"
+            "https://${HOST}/ARCHON-OS/architecture/"
+            "https://${HOST}/ARCHON-OS/de/architektur/"
+            "https://${HOST}/ARCHON-OS/gdpr-zero-egress/"
+            "https://${HOST}/ARCHON-OS/de/dsgvo-zero-egress/"
+            "https://${HOST}/ARCHON-OS/compare/"
+            "https://${HOST}/ARCHON-OS/de/vergleich/"
+            "https://${HOST}/ARCHON-OS/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/de/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/es/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/fr/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/it/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/ja/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/ko/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/nl/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/pt/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/ru/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/zh/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/specialists/"
+            "https://${HOST}/ARCHON-OS/de/spezialisten/"
+          )
+          for url in "${URLS[@]}"; do
+            echo "Pinging IndexNow for: $url"
+            curl -s -X POST "https://api.indexnow.org/indexnow" \
+              -H "Content-Type: application/json" \
+              -d "{\"host\":\"${HOST}\",\"key\":\"${KEY}\",\"urlList\":[\"${url}\"]}" \
+              || echo "Warning: ping failed for $url"
+            sleep 0.5
+          done

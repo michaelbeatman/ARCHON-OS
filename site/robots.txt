@@ -1,4 +1,30 @@
 User-agent: *
 Allow: /
 
+# Explicitly allow AI search & answer engine citability crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+# Optional training & grounding crawlers (allowed for open-source discoverability)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
 Sitemap: https://michaelbeatman.github.io/ARCHON-OS/sitemap.xml

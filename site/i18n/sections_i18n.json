@@ -1,0 +1,1487 @@
+{
+  "en": {
+    "nav": {
+      "arch": "Architecture",
+      "gdpr": "GDPR",
+      "compare": "Compare",
+      "frameworks": "Frameworks",
+      "specialists": "Specialists",
+      "home": "Home"
+    },
+    "geo": [
+      [
+        "71",
+        "Specialist Profiles · 8 Domains"
+      ],
+      [
+        "80",
+        "AI Boardroom Frameworks"
+      ],
+      [
+        "0 Bytes",
+        "Fail-Closed Zero-Egress (Local)"
+      ],
+      [
+        "MIT",
+        "100% Open Source · 7 Docker Containers"
+      ]
+    ],
+    "arch": {
+      "title": "Architecture &amp; Zero-Egress Flow",
+      "caption": "Every agent call clears <code>PolicyEngine</code> (HMAC warrant) and transactional <code>BudgetBank</code> before dispatch. Sensitive workloads stay inside the no-internet Docker zone.",
+      "linkArch": "Architecture Deep-Dive",
+      "linkGdpr": "GDPR &amp; EU AI Act",
+      "svg": {
+        "req": "Task / Agent Call",
+        "polSub": "Default-Deny &amp; HMAC Warrant",
+        "budSub": "BEGIN IMMEDIATE Reservation",
+        "sw": "OmniRoute Switch",
+        "swSub": "Fail-Closed Classification",
+        "loc": "ZERO-EGRESS LOCAL",
+        "locSub": "Ollama / LM Studio · No Internet",
+        "cld": "Cloud LLMs (non-sensitive)",
+        "cldSub": "Budget-capped · PII-scrubbed",
+        "hitlSub": "Cryptographic Human Sign-Off",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "Architecture Comparison &amp; Hardware Profile",
+      "hCol": "Enterprise Requirement",
+      "rows": [
+        [
+          "Fail-Closed Zero-Egress Docker Isolation",
+          "Built-in",
+          "Custom infra",
+          "Partial"
+        ],
+        [
+          "Atomic Pre-Dispatch BudgetBank",
+          "BEGIN IMMEDIATE",
+          "No hard cap",
+          "Post-hoc"
+        ],
+        [
+          "Passkey / WebAuthn HITL Sign-Off",
+          "Cryptographic",
+          "Code callback",
+          "Basic UI click"
+        ],
+        [
+          "SHA-256 Audit Chain &amp; EU AI Act / GoBD",
+          "1-Click Export",
+          "Not included",
+          "Basic logs"
+        ],
+        [
+          "Crash-Safe Effect-Ledger &amp; Outbox",
+          "Transactional",
+          "Checkpointer",
+          "Retry nodes"
+        ]
+      ],
+      "hwLabel": "Hardware Baseline (7 Containers + Ollama)",
+      "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; Local LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
+      "linkCmp": "Full Comparison (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "Hardware &amp; Container Specs"
+    },
+    "hub": {
+      "title": "Deep-Dive Guides &amp; Directories",
+      "cards": [
+        [
+          "01 / System",
+          "Architecture &amp; Stack",
+          "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger &amp; 3x SQLite WAL."
+        ],
+        [
+          "02 / Compliance",
+          "GDPR &amp; Zero-Egress",
+          "Fail-closed Docker isolation, EU AI Act registry &amp; GoBD audit exports."
+        ],
+        [
+          "03 / Evaluation",
+          "Framework Comparison",
+          "Archon OS vs. LangGraph, CrewAI, AutoGen, n8n &amp; Dify feature matrix."
+        ],
+        [
+          "04 / Boardroom",
+          "80 Frameworks",
+          "Searchable HTML catalog of structured multi-perspective debate methods."
+        ],
+        [
+          "05 / Fleet",
+          "71 Specialists",
+          "Filterable directory of all specialist agent profiles across 8 domains."
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny &amp; HMAC-SHA256 Warrants",
+      "<strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID HITL",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE Hard Caps"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom: 80 Decision Frameworks in Archon OS",
+      "desc": "Searchable catalog of structured AI Boardroom methodologies in Archon OS: isolated multi-perspective debates with critic cross-examination.",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "Structured multi-perspective debates instead of single-prompt guesses.",
+      "lead": "Archon OS runs strategic decisions through isolated specialist roles, adversarial critic cross-examination, and final synthesis. Browse all 80 decision-engine methodologies across 9 categories below, sorted alphabetically (A–Z).",
+      "placeholder": "Search frameworks (e.g. Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "Visible frameworks:",
+      "allLabel": "All",
+      "ctaGithub": "View on GitHub",
+      "ctaQuickstart": "Quick Start (Docker)",
+      "tagline": "Self-Hosted Agentic OS"
+    }
+  },
+  "de": {
+    "nav": {
+      "arch": "Architektur",
+      "gdpr": "DSGVO",
+      "compare": "Vergleich",
+      "frameworks": "Frameworks",
+      "specialists": "Spezialisten",
+      "home": "Startseite"
+    },
+    "geo": [
+      [
+        "71",
+        "Spezialisten-Profile · 8 Domänen"
+      ],
+      [
+        "80",
+        "AI-Boardroom-Frameworks"
+      ],
+      [
+        "0 Bytes",
+        "Fail-Closed Zero-Egress (Lokal)"
+      ],
+      [
+        "MIT",
+        "100% Open Source · 7 Docker-Container"
+      ]
+    ],
+    "arch": {
+      "title": "Architektur &amp; Zero-Egress-Datenfluss",
+      "caption": "Jede Agenten-Aktion passiert vor dem Dispatch die <code>PolicyEngine</code> (HMAC-Warrant) und die transaktionale <code>BudgetBank</code>. Sensible Kategorien laufen strikt lokal im isolierten Docker-Netz.",
+      "linkArch": "Architektur-Details",
+      "linkGdpr": "DSGVO &amp; EU AI Act",
+      "svg": {
+        "req": "Anfrage / Agent",
+        "polSub": "Default-Deny &amp; HMAC-Warrant",
+        "budSub": "BEGIN IMMEDIATE Reservierung",
+        "sw": "OmniRoute Weiche",
+        "swSub": "Fail-Closed Klassifikation",
+        "loc": "ZERO-EGRESS LOKAL",
+        "locSub": "Ollama / LM Studio · Kein Internet",
+        "cld": "Cloud-LLMs (nur unkritisch)",
+        "cldSub": "Budget-gedeckelt · PII-gefiltert",
+        "hitlSub": "Kryptografische Freigabe",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "Systemvergleich &amp; Hardware-Profil",
+      "hCol": "Enterprise-Kriterium",
+      "rows": [
+        [
+          "Fail-Closed Zero-Egress Docker-Isolation",
+          "Nativ integriert",
+          "Eigenbau nötig",
+          "Teilweise"
+        ],
+        [
+          "Atomic Pre-Dispatch BudgetBank",
+          "BEGIN IMMEDIATE",
+          "Kein Hard-Cap",
+          "Post-hoc"
+        ],
+        [
+          "Passkey / WebAuthn HITL-Signatur",
+          "Kryptografisch",
+          "Callback-Hook",
+          "Form-Klick"
+        ],
+        [
+          "SHA-256 Audit-Chain &amp; GoBD / EU AI Act",
+          "1-Klick-Export",
+          "Nicht enthalten",
+          "Nur Logs"
+        ],
+        [
+          "Crash-sicherer Effect-Ledger &amp; Outbox",
+          "Transaktional",
+          "Checkpointer",
+          "Retry-Nodes"
+        ]
+      ],
+      "hwLabel": "Hardware-Startpunkt (7 Container + Ollama)",
+      "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; Produktiv lokal (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
+      "linkCmp": "Vollständiger Vergleich (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "Hardware- &amp; Container-Specs"
+    },
+    "hub": {
+      "title": "Vertiefende Wissensseiten (HTML)",
+      "cards": [
+        [
+          "01 / System",
+          "Architektur &amp; Stack",
+          "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger &amp; 3× SQLite WAL."
+        ],
+        [
+          "02 / Compliance",
+          "DSGVO &amp; Zero-Egress",
+          "Fail-Closed Docker-Isolation, EU-AI-Act-Register &amp; GoBD-Verfahrensdoku."
+        ],
+        [
+          "03 / Bewertung",
+          "Systemvergleich",
+          "Archon OS vs. LangGraph, CrewAI, AutoGen, n8n &amp; Dify im Direktvergleich."
+        ],
+        [
+          "04 / Boardroom",
+          "80 Frameworks",
+          "Durchsuchbarer Katalog aller Decision-Engine-Methodiken von OKR bis Pre-Mortem."
+        ],
+        [
+          "05 / Flotte",
+          "71 Spezialisten",
+          "Alle Agenten-Profile aus 8 Domänen inkl. Budget-Grenzen &amp; Guardrails."
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny &amp; HMAC-SHA256-Warrants",
+      "<strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID HITL",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE Hard Caps"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom: 80 Entscheidungs-Frameworks in Archon OS",
+      "desc": "Durchsuchbarer Katalog der strukturierten AI-Boardroom-Methodiken in Archon OS: isolierte Multi-Perspektiven-Debatten von OKR bis Pre-Mortem.",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "Strukturierte Multi-Perspektiven-Debatten statt Einzel-Prompt-Antworten.",
+      "lead": "Der AI Boardroom führt strategische Fragen isoliert über mehrere Spezialisten-Rollen mit Kritiker-Kreuzverhör und Synthese durch. Unten findest du alle 80 Decision-Engine-Methodiken aus 9 Kategorien, alphabetisch sortiert (A–Z).",
+      "placeholder": "Framework oder Methode suchen (z. B. Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "Angezeigte Frameworks:",
+      "allLabel": "Alle",
+      "ctaGithub": "Auf GitHub ansehen",
+      "ctaQuickstart": "Schnellstart (Docker)",
+      "tagline": "Selbstgehostetes Multi-Agenten-OS"
+    }
+  },
+  "es": {
+    "nav": {
+      "arch": "Arquitectura",
+      "gdpr": "RGPD",
+      "compare": "Comparativa",
+      "frameworks": "Frameworks",
+      "specialists": "Especialistas",
+      "home": "Inicio"
+    },
+    "geo": [
+      [
+        "71",
+        "Perfiles Especialistas · 8 Dominios"
+      ],
+      [
+        "80",
+        "Marcos AI Boardroom"
+      ],
+      [
+        "0 Bytes",
+        "Zero-Egress Fail-Closed (Local)"
+      ],
+      [
+        "MIT",
+        "100% Open Source · 7 Contenedores Docker"
+      ]
+    ],
+    "arch": {
+      "title": "Arquitectura y Flujo Zero-Egress",
+      "caption": "Cada llamada de agente pasa por <code>PolicyEngine</code> (warrant HMAC) y la <code>BudgetBank</code> transaccional antes de ejecutarse. Los datos sensibles permanecen en la red Docker aislada sin salida a Internet.",
+      "linkArch": "Detalles de Arquitectura",
+      "linkGdpr": "RGPD y EU AI Act",
+      "svg": {
+        "req": "Tarea / Agente",
+        "polSub": "Default-Deny y Warrant HMAC",
+        "budSub": "Reserva BEGIN IMMEDIATE",
+        "sw": "Router OmniRoute",
+        "swSub": "Clasificación Fail-Closed",
+        "loc": "ZERO-EGRESS LOCAL",
+        "locSub": "Ollama / LM Studio · Sin Internet",
+        "cld": "LLMs Cloud (no sensibles)",
+        "cldSub": "Con límite · Sin PII",
+        "hitlSub": "Firma Criptográfica Humana",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "Comparativa de Arquitectura y Hardware",
+      "hCol": "Requisito Empresarial",
+      "rows": [
+        [
+          "Aislamiento Docker Zero-Egress Fail-Closed",
+          "Integrado",
+          "Infraestructura propia",
+          "Parcial"
+        ],
+        [
+          "BudgetBank Atómica Pre-Ejecución",
+          "BEGIN IMMEDIATE",
+          "Sin límite duro",
+          "Post-hoc"
+        ],
+        [
+          "Aprobación Passkey / WebAuthn HITL",
+          "Criptográfica",
+          "Callback en código",
+          "Clic básico"
+        ],
+        [
+          "Cadena de Auditoría SHA-256 y EU AI Act",
+          "Exportación 1 clic",
+          "No incluido",
+          "Solo logs"
+        ],
+        [
+          "Effect-Ledger y Outbox tolerante a fallos",
+          "Transaccional",
+          "Checkpointer",
+          "Reintentos"
+        ]
+      ],
+      "hwLabel": "Hardware Base (7 Contenedores + Ollama)",
+      "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; LLM Local (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
+      "linkCmp": "Comparativa completa (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "Especificaciones de Hardware y Contenedores"
+    },
+    "hub": {
+      "title": "Guías Técnicas y Directorios (HTML)",
+      "cards": [
+        [
+          "01 / Sistema",
+          "Arquitectura y Stack",
+          "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger y 3× SQLite WAL."
+        ],
+        [
+          "02 / Cumplimiento",
+          "RGPD y Zero-Egress",
+          "Aislamiento Docker fail-closed, registro EU AI Act y exportación GoBD."
+        ],
+        [
+          "03 / Evaluación",
+          "Comparativa",
+          "Matriz Archon OS vs. LangGraph, CrewAI, AutoGen, n8n y Dify."
+        ],
+        [
+          "04 / Boardroom",
+          "80 Frameworks",
+          "Catálogo buscable de metodologías de debate multi-perspectiva."
+        ],
+        [
+          "05 / Flota",
+          "71 Especialistas",
+          "Directorio filtrable de los 71 perfiles de agentes en 8 dominios."
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny y Warrants HMAC-SHA256",
+      "<strong>II. PASSKEY LOCK</strong> &middot; Aprobación WebAuthn / Windows Hello / Touch ID",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; Límites estrictos SQLite BEGIN IMMEDIATE"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom: 80 Marcos de Decisión en Archon OS",
+      "desc": "Catálogo buscable de metodologías del AI Boardroom en Archon OS: debates multi-perspectiva aislados con revisión crítica y síntesis.",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "Debates multi-perspectiva estructurados en lugar de respuestas de un solo prompt.",
+      "lead": "AI Boardroom ejecuta decisiones estratégicas mediante roles especialistas aislados, contrainterrogatorio crítico y síntesis final. Explora abajo las 80 metodologías del motor de decisión en 9 categorías, ordenadas alfabéticamente (A–Z).",
+      "placeholder": "Buscar marco o método (p. ej. Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "Marcos visibles:",
+      "allLabel": "Todos",
+      "ctaGithub": "Ver en GitHub",
+      "ctaQuickstart": "Inicio rápido (Docker)",
+      "tagline": "SO Multiagente Autoalojado"
+    }
+  },
+  "fr": {
+    "nav": {
+      "arch": "Architecture",
+      "gdpr": "RGPD",
+      "compare": "Comparatif",
+      "frameworks": "Frameworks",
+      "specialists": "Spécialistes",
+      "home": "Accueil"
+    },
+    "geo": [
+      [
+        "71",
+        "Profils Spécialistes · 8 Domaines"
+      ],
+      [
+        "80",
+        "Cadres AI Boardroom"
+      ],
+      [
+        "0 Octet",
+        "Zero-Egress Fail-Closed (Local)"
+      ],
+      [
+        "MIT",
+        "100% Open Source · 7 Conteneurs Docker"
+      ]
+    ],
+    "arch": {
+      "title": "Architecture et Flux Zero-Egress",
+      "caption": "Chaque appel d'agent passe par <code>PolicyEngine</code> (mandat HMAC) et la <code>BudgetBank</code> transactionnelle avant exécution. Les données sensibles restent dans le réseau Docker isolé sans accès Internet.",
+      "linkArch": "Détails d'Architecture",
+      "linkGdpr": "RGPD &amp; EU AI Act",
+      "svg": {
+        "req": "Tâche / Agent",
+        "polSub": "Default-Deny &amp; Mandat HMAC",
+        "budSub": "Réservation BEGIN IMMEDIATE",
+        "sw": "Routeur OmniRoute",
+        "swSub": "Classification Fail-Closed",
+        "loc": "ZERO-EGRESS LOCAL",
+        "locSub": "Ollama / LM Studio · Hors ligne",
+        "cld": "LLMs Cloud (non sensibles)",
+        "cldSub": "Plafonné · Sans PII",
+        "hitlSub": "Signature Cryptographique",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "Comparatif d'Architecture et Matériel",
+      "hCol": "Exigence Entreprise",
+      "rows": [
+        [
+          "Isolation Docker Zero-Egress Fail-Closed",
+          "Intégré",
+          "À construire",
+          "Partiel"
+        ],
+        [
+          "BudgetBank Atomique Pré-Exécution",
+          "BEGIN IMMEDIATE",
+          "Aucun plafond dur",
+          "Post-hoc"
+        ],
+        [
+          "Validation Passkey / WebAuthn HITL",
+          "Cryptographique",
+          "Callback code",
+          "Simple clic"
+        ],
+        [
+          "Chaîne d'Audit SHA-256 &amp; EU AI Act",
+          "Export 1 clic",
+          "Non inclus",
+          "Journaux simples"
+        ],
+        [
+          "Effect-Ledger &amp; Outbox tolérant aux pannes",
+          "Transactionnel",
+          "Checkpointer",
+          "Réessais"
+        ]
+      ],
+      "hwLabel": "Configuration Matérielle (7 Conteneurs + Ollama)",
+      "hwVal": "Démo : 4 Go RAM / 2 vCPU &middot; LLM Local (7B–14B) : 16–32 Go RAM + 8–12 Go VRAM (amd64 / arm64)",
+      "linkCmp": "Comparatif complet (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "Spécifications Matérielles et Conteneurs"
+    },
+    "hub": {
+      "title": "Guides Techniques et Répertoires (HTML)",
+      "cards": [
+        [
+          "01 / Système",
+          "Architecture &amp; Stack",
+          "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger et 3× SQLite WAL."
+        ],
+        [
+          "02 / Conformité",
+          "RGPD &amp; Zero-Egress",
+          "Isolation Docker fail-closed, registre EU AI Act et exports d'audit GoBD."
+        ],
+        [
+          "03 / Évaluation",
+          "Comparatif",
+          "Matrice Archon OS vs. LangGraph, CrewAI, AutoGen, n8n et Dify."
+        ],
+        [
+          "04 / Boardroom",
+          "80 Frameworks",
+          "Catalogue consultable des méthodologies de débat multi-perspectives."
+        ],
+        [
+          "05 / Flotte",
+          "71 Spécialistes",
+          "Annuaire filtrable des 71 profils d'agents répartis sur 8 domaines."
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny et Mandats HMAC-SHA256",
+      "<strong>II. PASSKEY LOCK</strong> &middot; Validation WebAuthn / Windows Hello / Touch ID",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; Plafonds stricts SQLite BEGIN IMMEDIATE"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom : 80 Cadres de Décision dans Archon OS",
+      "desc": "Catalogue consultable des méthodologies AI Boardroom dans Archon OS : débats multi-perspectives isolés avec contre-examen critique.",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "Des débats multi-perspectives structurés plutôt que des réponses à prompt unique.",
+      "lead": "AI Boardroom mène les décisions stratégiques via des rôles spécialistes isolés, un contre-interrogatoire critique et une synthèse finale. Parcourez ci-dessous les 80 méthodologies du moteur de décision sur 9 catégories, triées de A à Z.",
+      "placeholder": "Rechercher un cadre ou une méthode (ex. Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "Cadres affichés :",
+      "allLabel": "Tous",
+      "ctaGithub": "Voir sur GitHub",
+      "ctaQuickstart": "Démarrage rapide (Docker)",
+      "tagline": "OS Multi-Agents Auto-Hébergé"
+    }
+  },
+  "it": {
+    "nav": {
+      "arch": "Architettura",
+      "gdpr": "GDPR",
+      "compare": "Confronto",
+      "frameworks": "Framework",
+      "specialists": "Specialisti",
+      "home": "Home"
+    },
+    "geo": [
+      [
+        "71",
+        "Profili Specialisti · 8 Domini"
+      ],
+      [
+        "80",
+        "Framework AI Boardroom"
+      ],
+      [
+        "0 Byte",
+        "Zero-Egress Fail-Closed (Locale)"
+      ],
+      [
+        "MIT",
+        "100% Open Source · 7 Container Docker"
+      ]
+    ],
+    "arch": {
+      "title": "Architettura e Flusso Zero-Egress",
+      "caption": "Ogni chiamata di agente supera <code>PolicyEngine</code> (warrant HMAC) e <code>BudgetBank</code> transazionale prima dell'esecuzione. I dati sensibili restano nella rete Docker isolata senza uscita Internet.",
+      "linkArch": "Dettagli Architettura",
+      "linkGdpr": "GDPR &amp; EU AI Act",
+      "svg": {
+        "req": "Task / Agente",
+        "polSub": "Default-Deny &amp; Warrant HMAC",
+        "budSub": "Prenotazione BEGIN IMMEDIATE",
+        "sw": "Router OmniRoute",
+        "swSub": "Classificazione Fail-Closed",
+        "loc": "ZERO-EGRESS LOCALE",
+        "locSub": "Ollama / LM Studio · Senza Rete",
+        "cld": "LLM Cloud (non sensibili)",
+        "cldSub": "Con budget · Senza PII",
+        "hitlSub": "Firma Crittografica Umana",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "Confronto Architettura e Hardware",
+      "hCol": "Requisito Enterprise",
+      "rows": [
+        [
+          "Isolamento Docker Zero-Egress Fail-Closed",
+          "Integrato",
+          "Infrastruttura custom",
+          "Parziale"
+        ],
+        [
+          "BudgetBank Atomica Pre-Esecuzione",
+          "BEGIN IMMEDIATE",
+          "Nessun limite rigido",
+          "Post-hoc"
+        ],
+        [
+          "Approvazione Passkey / WebAuthn HITL",
+          "Crittografica",
+          "Callback da codice",
+          "Click UI"
+        ],
+        [
+          "Audit Chain SHA-256 &amp; EU AI Act",
+          "Export 1 clic",
+          "Non incluso",
+          "Solo log"
+        ],
+        [
+          "Effect-Ledger &amp; Outbox crash-safe",
+          "Transazionale",
+          "Checkpointer",
+          "Retry nodi"
+        ]
+      ],
+      "hwLabel": "Requisiti Hardware (7 Container + Ollama)",
+      "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; LLM Locale (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
+      "linkCmp": "Confronto completo (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "Specifiche Hardware e Container"
+    },
+    "hub": {
+      "title": "Guide Tecniche e Directory (HTML)",
+      "cards": [
+        [
+          "01 / Sistema",
+          "Architettura &amp; Stack",
+          "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger e 3× SQLite WAL."
+        ],
+        [
+          "02 / Conformità",
+          "GDPR &amp; Zero-Egress",
+          "Isolamento Docker fail-closed, registro EU AI Act ed export GoBD."
+        ],
+        [
+          "03 / Valutazione",
+          "Confronto",
+          "Matrice Archon OS vs. LangGraph, CrewAI, AutoGen, n8n e Dify."
+        ],
+        [
+          "04 / Boardroom",
+          "80 Framework",
+          "Catalogo ricercabile di metodologie di dibattito multi-prospettiva."
+        ],
+        [
+          "05 / Flotta",
+          "71 Specialisti",
+          "Directory filtrabile dei 71 profili di agenti in 8 domini."
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny e Warrant HMAC-SHA256",
+      "<strong>II. PASSKEY LOCK</strong> &middot; Approvazione WebAuthn / Windows Hello / Touch ID",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; Limiti rigidi SQLite BEGIN IMMEDIATE"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom: 80 Framework Decisionali in Archon OS",
+      "desc": "Catalogo ricercabile delle metodologie AI Boardroom in Archon OS: dibattiti multi-prospettiva isolati con verifica critica e sintesi.",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "Dibattiti multi-prospettiva strutturati invece di risposte da singolo prompt.",
+      "lead": "AI Boardroom gestisce decisioni strategiche con ruoli specialisti isolati, controesame critico e sintesi finale. Esplora sotto tutte le 80 metodologie del motore decisionale in 9 categorie, ordinate alfabeticamente (A–Z).",
+      "placeholder": "Cerca framework o metodo (es. Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "Framework visibili:",
+      "allLabel": "Tutti",
+      "ctaGithub": "Vedi su GitHub",
+      "ctaQuickstart": "Avvio rapido (Docker)",
+      "tagline": "OS Multi-Agente Self-Hosted"
+    }
+  },
+  "ja": {
+    "nav": {
+      "arch": "アーキテクチャ",
+      "gdpr": "GDPR",
+      "compare": "比較",
+      "frameworks": "フレームワーク",
+      "specialists": "専門家",
+      "home": "ホーム"
+    },
+    "geo": [
+      [
+        "71",
+        "専門家プロファイル · 8領域"
+      ],
+      [
+        "80",
+        "AI Boardroom フレームワーク"
+      ],
+      [
+        "0 Bytes",
+        "Fail-Closed Zero-Egress (ローカル)"
+      ],
+      [
+        "MIT",
+        "100% OSS · 7 Dockerコンテナ"
+      ]
+    ],
+    "arch": {
+      "title": "アーキテクチャと Zero-Egress データフロー",
+      "caption": "すべてのエージェント実行はディスパッチ前に <code>PolicyEngine</code>（HMACワラント）とトランザクション型 <code>BudgetBank</code> を通過します。機密データは外部通信不可の内部Dockerネットワーク内に留まります。",
+      "linkArch": "アーキテクチャ詳細",
+      "linkGdpr": "GDPR・EU AI Act",
+      "svg": {
+        "req": "タスク / エージェント",
+        "polSub": "Default-Deny &amp; HMACワラント",
+        "budSub": "BEGIN IMMEDIATE 事前予約",
+        "sw": "OmniRoute 切替",
+        "swSub": "Fail-Closed 自動分類",
+        "loc": "ZERO-EGRESS ローカル",
+        "locSub": "Ollama / LM Studio · 外部遮断",
+        "cld": "クラウドLLM (非機密のみ)",
+        "cldSub": "予算上限・PII除外",
+        "hitlSub": "暗号署名による人間承認",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "アーキテクチャ比較と推奨ハードウェア",
+      "hCol": "エンタープライズ要件",
+      "rows": [
+        [
+          "Fail-Closed Zero-Egress Docker分離",
+          "標準搭載",
+          "独自構築が必要",
+          "部分的"
+        ],
+        [
+          "実行前アトミック BudgetBank",
+          "BEGIN IMMEDIATE",
+          "ハード上限なし",
+          "事後集計のみ"
+        ],
+        [
+          "Passkey / WebAuthn HITL署名",
+          "暗号署名検証",
+          "コードコールバック",
+          "単純ボタン"
+        ],
+        [
+          "SHA-256監査チェーン &amp; EU AI Act",
+          "1クリック出力",
+          "未搭載",
+          "基本ログのみ"
+        ],
+        [
+          "クラッシュ耐性 Effect-Ledger &amp; Outbox",
+          "トランザクション型",
+          "チェックポイント",
+          "リトライのみ"
+        ]
+      ],
+      "hwLabel": "推奨ハードウェア (6コンテナ + Ollama)",
+      "hwVal": "デモ: 4 GB RAM / 2 vCPU &middot; ローカルLLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
+      "linkCmp": "詳細比較 (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "ハードウェア・コンテナ仕様"
+    },
+    "hub": {
+      "title": "技術ガイド＆ディレクトリ (HTML)",
+      "cards": [
+        [
+          "01 / システム",
+          "アーキテクチャ＆スタック",
+          "OmniRoute、PolicyEngine、Atomic BudgetBank、Effect-Ledger、3× SQLite WAL。"
+        ],
+        [
+          "02 / コンプライアンス",
+          "GDPR &amp; Zero-Egress",
+          "Fail-closed Docker分離、EU AI Actリスク台帳、GoBD監査出力。"
+        ],
+        [
+          "03 / 比較評価",
+          "フレームワーク比較",
+          "Archon OS vs. LangGraph、CrewAI、AutoGen、n8n、Dify の機能比較表。"
+        ],
+        [
+          "04 / Boardroom",
+          "80 フレームワーク",
+          "多視点ディベート手法を検索・フィルタできるHTMLカタログ。"
+        ],
+        [
+          "05 / 艦隊",
+          "71 専門家プロファイル",
+          "8領域にわたる71体の専門エージェント一覧とガードレール。"
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny ＆ HMAC-SHA256 ワラント",
+      "<strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID 承認",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE 厳格予算制御"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom: Archon OS の80意思決定フレームワーク",
+      "desc": "Archon OS の構造化 AI Boardroom 手法カタログ：独立した専門家による多視点議論、批判的検証、最終統合。",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "単一プロンプトではなく、構造化された多視点ディベートで意思決定。",
+      "lead": "AI Boardroom は独立した専門エージェント、批判的検証、最終統合を通じて戦略的意思決定を行います。9カテゴリ全80の意思決定フレームワークをアルファベット・五十音順で検索できます。",
+      "placeholder": "フレームワークを検索 (例: Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "表示中のフレームワーク:",
+      "allLabel": "すべて",
+      "ctaGithub": "GitHub で見る",
+      "ctaQuickstart": "クイックスタート (Docker)",
+      "tagline": "セルフホスト型エージェントOS"
+    }
+  },
+  "ko": {
+    "nav": {
+      "arch": "아키텍처",
+      "gdpr": "GDPR",
+      "compare": "비교",
+      "frameworks": "프레임워크",
+      "specialists": "전문가",
+      "home": "홈"
+    },
+    "geo": [
+      [
+        "71",
+        "전문가 프로필 · 8개 도메인"
+      ],
+      [
+        "80",
+        "AI Boardroom 프레임워크"
+      ],
+      [
+        "0 Bytes",
+        "Fail-Closed Zero-Egress (로컬)"
+      ],
+      [
+        "MIT",
+        "100% 오픈소스 · 7개 Docker 컨테이너"
+      ]
+    ],
+    "arch": {
+      "title": "아키텍처 및 Zero-Egress 데이터 흐름",
+      "caption": "모든 에이전트 호출은 실행 전 <code>PolicyEngine</code>(HMAC 영장)과 트랜잭션 <code>BudgetBank</code>를 통과합니다. 민감 데이터는 외부 인터넷 경로가 없는 내부 Docker 네트워크에만 머뭅니다.",
+      "linkArch": "아키텍처 상세",
+      "linkGdpr": "GDPR 및 EU AI Act",
+      "svg": {
+        "req": "작업 / 에이전트",
+        "polSub": "Default-Deny &amp; HMAC 영장",
+        "budSub": "BEGIN IMMEDIATE 사전 예약",
+        "sw": "OmniRoute 스위치",
+        "swSub": "Fail-Closed 자동 분류",
+        "loc": "ZERO-EGRESS 로컬",
+        "locSub": "Ollama / LM Studio · 외부 차단",
+        "cld": "클라우드 LLM (비민감)",
+        "cldSub": "예산 상한 · PII 제거",
+        "hitlSub": "암호화 서명 인간 승인",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "아키텍처 비교 및 하드웨어 기준",
+      "hCol": "엔터프라이즈 요구사항",
+      "rows": [
+        [
+          "Fail-Closed Zero-Egress Docker 격리",
+          "기본 내장",
+          "직접 구축",
+          "부분 지원"
+        ],
+        [
+          "실행 전 원자적 BudgetBank",
+          "BEGIN IMMEDIATE",
+          "하드 상한 없음",
+          "사후 집계"
+        ],
+        [
+          "Passkey / WebAuthn HITL 서명",
+          "암호화 서명",
+          "코드 콜백",
+          "단순 클릭"
+        ],
+        [
+          "SHA-256 감사 체인 및 EU AI Act",
+          "원클릭 내보내기",
+          "미포함",
+          "기본 로그"
+        ],
+        [
+          "크래시 안전 Effect-Ledger &amp; Outbox",
+          "트랜잭션 보장",
+          "체크포인터",
+          "재시도 노드"
+        ]
+      ],
+      "hwLabel": "하드웨어 기준 (7 컨테이너 + Ollama)",
+      "hwVal": "데모: 4 GB RAM / 2 vCPU &middot; 로컬 LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
+      "linkCmp": "전체 비교 (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "하드웨어 및 컨테이너 사양"
+    },
+    "hub": {
+      "title": "심층 기술 가이드 및 디렉터리 (HTML)",
+      "cards": [
+        [
+          "01 / 시스템",
+          "아키텍처 &amp; 스택",
+          "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger, 3× SQLite WAL."
+        ],
+        [
+          "02 / 컴플라이언스",
+          "GDPR &amp; Zero-Egress",
+          "Fail-closed Docker 격리, EU AI Act 위험 등록부 및 GoBD 감사 내보내기."
+        ],
+        [
+          "03 / 비교 평가",
+          "프레임워크 비교",
+          "Archon OS vs. LangGraph, CrewAI, AutoGen, n8n, Dify 기능 비교표."
+        ],
+        [
+          "04 / Boardroom",
+          "80 프레임워크",
+          "다각도 토론 방법론을 검색·필터링할 수 있는 HTML 카탈로그."
+        ],
+        [
+          "05 / 플릿",
+          "71 전문가 프로필",
+          "8개 도메인의 71개 전문 에이전트 역할과 가드레일 디렉터리."
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny 및 HMAC-SHA256 영장",
+      "<strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID 승인",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE 엄격 예산 상한"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom: Archon OS의 80가지 의사결정 프레임워크",
+      "desc": "Archon OS의 구조화된 AI Boardroom 방법론 카탈로그: 독립 전문가의 다각도 토론, 비판적 교차 검증 및 최종 종합.",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "단일 프롬프트 추측이 아닌 구조화된 다각도 토론.",
+      "lead": "AI Boardroom은 독립된 전문가 역할, 적대적 비평가 교차 검증, 최종 종합을 거쳐 전략적 결정을 수행합니다. 아래에서 9개 카테고리 80개 의사결정 방법론을 가나다·알파벳순으로 탐색하세요.",
+      "placeholder": "프레임워크 검색 (예: Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "표시된 프레임워크:",
+      "allLabel": "전체",
+      "ctaGithub": "GitHub에서 보기",
+      "ctaQuickstart": "빠른 시작 (Docker)",
+      "tagline": "자체 호스팅 에이전트 OS"
+    }
+  },
+  "nl": {
+    "nav": {
+      "arch": "Architectuur",
+      "gdpr": "AVG",
+      "compare": "Vergelijking",
+      "frameworks": "Frameworks",
+      "specialists": "Specialisten",
+      "home": "Home"
+    },
+    "geo": [
+      [
+        "71",
+        "Specialistenprofielen · 8 Domeinen"
+      ],
+      [
+        "80",
+        "AI Boardroom Frameworks"
+      ],
+      [
+        "0 Bytes",
+        "Fail-Closed Zero-Egress (Lokaal)"
+      ],
+      [
+        "MIT",
+        "100% Open Source · 7 Docker-containers"
+      ]
+    ],
+    "arch": {
+      "title": "Architectuur &amp; Zero-Egress Gegevensstroom",
+      "caption": "Elke agent-aanroep passeert vóór uitvoering de <code>PolicyEngine</code> (HMAC-warrant) en de transactionele <code>BudgetBank</code>. Gevoelige workloads blijven strikt binnen het geïsoleerde Docker-netwerk zonder internetroute.",
+      "linkArch": "Architectuurdetails",
+      "linkGdpr": "AVG &amp; EU AI Act",
+      "svg": {
+        "req": "Taak / Agent",
+        "polSub": "Default-Deny &amp; HMAC-warrant",
+        "budSub": "BEGIN IMMEDIATE Reservering",
+        "sw": "OmniRoute Schakelaar",
+        "swSub": "Fail-Closed Classificatie",
+        "loc": "ZERO-EGRESS LOKAAL",
+        "locSub": "Ollama / LM Studio · Geen Internet",
+        "cld": "Cloud-LLM's (niet-gevoelig)",
+        "cldSub": "Budgetlimiet · PII-gefilterd",
+        "hitlSub": "Cryptografische Goedkeuring",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "Systeemvergelijking &amp; Hardwareprofiel",
+      "hCol": "Enterprise-criterium",
+      "rows": [
+        [
+          "Fail-Closed Zero-Egress Docker-isolatie",
+          "Ingebouwd",
+          "Eigen bouw",
+          "Deels"
+        ],
+        [
+          "Atomische Pre-Dispatch BudgetBank",
+          "BEGIN IMMEDIATE",
+          "Geen harde limiet",
+          "Achteraf"
+        ],
+        [
+          "Passkey / WebAuthn HITL-handtekening",
+          "Cryptografisch",
+          "Code-callback",
+          "Simpele klik"
+        ],
+        [
+          "SHA-256 Audit-Chain &amp; EU AI Act / GoBD",
+          "1-klik export",
+          "Niet inbegrepen",
+          "Basislogs"
+        ],
+        [
+          "Crash-veilige Effect-Ledger &amp; Outbox",
+          "Transactioneel",
+          "Checkpointer",
+          "Retry-nodes"
+        ]
+      ],
+      "hwLabel": "Hardware-basis (7 Containers + Ollama)",
+      "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; Lokaal LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
+      "linkCmp": "Volledige vergelijking (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "Hardware- &amp; Containerspecificaties"
+    },
+    "hub": {
+      "title": "Verdiepende Gidsen &amp; Overzichten (HTML)",
+      "cards": [
+        [
+          "01 / Systeem",
+          "Architectuur &amp; Stack",
+          "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger &amp; 3× SQLite WAL."
+        ],
+        [
+          "02 / Compliance",
+          "AVG &amp; Zero-Egress",
+          "Fail-closed Docker-isolatie, EU AI Act-register &amp; GoBD-auditexport."
+        ],
+        [
+          "03 / Evaluatie",
+          "Vergelijking",
+          "Archon OS vs. LangGraph, CrewAI, AutoGen, n8n &amp; Dify functiematrix."
+        ],
+        [
+          "04 / Boardroom",
+          "80 Frameworks",
+          "Doorzoekbare HTML-catalogus van gestructureerde debatmethodieken."
+        ],
+        [
+          "05 / Vloot",
+          "71 Specialisten",
+          "Filterbaar overzicht van alle 71 agentprofielen over 8 domeinen."
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny &amp; HMAC-SHA256-warrants",
+      "<strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID HITL",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE harde limieten"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom: 80 Besluitvormingsframeworks in Archon OS",
+      "desc": "Doorzoekbare catalogus van AI Boardroom-methodieken in Archon OS: geïsoleerde multi-perspectief debatten met kritische toetsing en synthese.",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "Gestructureerde multi-perspectief debatten in plaats van losse prompt-antwoorden.",
+      "lead": "AI Boardroom voert strategische besluiten uit via geïsoleerde specialisten, kritische tegenspraak en eindsyn­these. Bekijk hieronder alle 80 methodieken van de decision engine in 9 categorieën, alfabetisch gesorteerd (A–Z).",
+      "placeholder": "Zoek framework of methode (bijv. Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "Getoonde frameworks:",
+      "allLabel": "Alle",
+      "ctaGithub": "Bekijk op GitHub",
+      "ctaQuickstart": "Snelstart (Docker)",
+      "tagline": "Self-Hosted Multi-Agent OS"
+    }
+  },
+  "pt": {
+    "nav": {
+      "arch": "Arquitetura",
+      "gdpr": "RGPD",
+      "compare": "Comparativo",
+      "frameworks": "Frameworks",
+      "specialists": "Especialistas",
+      "home": "Início"
+    },
+    "geo": [
+      [
+        "71",
+        "Perfis Especialistas · 8 Domínios"
+      ],
+      [
+        "80",
+        "Frameworks AI Boardroom"
+      ],
+      [
+        "0 Bytes",
+        "Zero-Egress Fail-Closed (Local)"
+      ],
+      [
+        "MIT",
+        "100% Open Source · 7 Contêineres Docker"
+      ]
+    ],
+    "arch": {
+      "title": "Arquitetura e Fluxo Zero-Egress",
+      "caption": "Cada chamada de agente passa pela <code>PolicyEngine</code> (warrant HMAC) e pela <code>BudgetBank</code> transacional antes da execução. Dados sensíveis ficam isolados na rede Docker interna sem rota de Internet.",
+      "linkArch": "Detalhes da Arquitetura",
+      "linkGdpr": "RGPD &amp; EU AI Act",
+      "svg": {
+        "req": "Tarefa / Agente",
+        "polSub": "Default-Deny &amp; Warrant HMAC",
+        "budSub": "Reserva BEGIN IMMEDIATE",
+        "sw": "Roteador OmniRoute",
+        "swSub": "Classificação Fail-Closed",
+        "loc": "ZERO-EGRESS LOCAL",
+        "locSub": "Ollama / LM Studio · Sem Internet",
+        "cld": "LLMs Cloud (não sensíveis)",
+        "cldSub": "Com teto · Sem PII",
+        "hitlSub": "Assinatura Criptográfica",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "Comparativo de Arquitetura e Hardware",
+      "hCol": "Requisito Corporativo",
+      "rows": [
+        [
+          "Isolamento Docker Zero-Egress Fail-Closed",
+          "Nativo",
+          "Infra própria",
+          "Parcial"
+        ],
+        [
+          "BudgetBank Atômica Pré-Execução",
+          "BEGIN IMMEDIATE",
+          "Sem teto rígido",
+          "Pós-uso"
+        ],
+        [
+          "Aprovação Passkey / WebAuthn HITL",
+          "Criptográfica",
+          "Callback em código",
+          "Clique simples"
+        ],
+        [
+          "Cadeia de Auditoria SHA-256 &amp; EU AI Act",
+          "Exportação 1 clique",
+          "Não incluído",
+          "Logs básicos"
+        ],
+        [
+          "Effect-Ledger &amp; Outbox resistente a falhas",
+          "Transacional",
+          "Checkpointer",
+          "Retentativas"
+        ]
+      ],
+      "hwLabel": "Hardware Base (7 Contêineres + Ollama)",
+      "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; LLM Local (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
+      "linkCmp": "Comparativo completo (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "Especificações de Hardware e Contêineres"
+    },
+    "hub": {
+      "title": "Guias Técnicos e Diretórios (HTML)",
+      "cards": [
+        [
+          "01 / Sistema",
+          "Arquitetura &amp; Stack",
+          "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger e 3× SQLite WAL."
+        ],
+        [
+          "02 / Conformidade",
+          "RGPD &amp; Zero-Egress",
+          "Isolamento Docker fail-closed, registro EU AI Act e exportação GoBD."
+        ],
+        [
+          "03 / Avaliação",
+          "Comparativo",
+          "Matriz Archon OS vs. LangGraph, CrewAI, AutoGen, n8n e Dify."
+        ],
+        [
+          "04 / Boardroom",
+          "80 Frameworks",
+          "Catálogo pesquisável de metodologias de debate multi-perspectiva."
+        ],
+        [
+          "05 / Frota",
+          "71 Especialistas",
+          "Diretório filtrável dos 71 perfis de agentes em 8 domínios."
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny e Warrants HMAC-SHA256",
+      "<strong>II. PASSKEY LOCK</strong> &middot; Aprovação WebAuthn / Windows Hello / Touch ID",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; Tetos rígidos SQLite BEGIN IMMEDIATE"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom: 80 Frameworks de Decisão no Archon OS",
+      "desc": "Catálogo pesquisável das metodologias do AI Boardroom no Archon OS: debates multi-perspectiva isolados com revisão crítica e síntese.",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "Debates multi-perspectiva estruturados em vez de respostas de prompt único.",
+      "lead": "O AI Boardroom conduz decisões estratégicas com especialistas isolados, sabatina crítica e síntese final. Explore abaixo todas as 80 metodologias do motor de decisão em 9 categorias, ordenadas de A a Z.",
+      "placeholder": "Buscar framework ou método (ex. Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "Frameworks visíveis:",
+      "allLabel": "Todos",
+      "ctaGithub": "Ver no GitHub",
+      "ctaQuickstart": "Início rápido (Docker)",
+      "tagline": "SO Multiagente Auto-hospedado"
+    }
+  },
+  "ru": {
+    "nav": {
+      "arch": "Архитектура",
+      "gdpr": "GDPR",
+      "compare": "Сравнение",
+      "frameworks": "Фреймворки",
+      "specialists": "Специалисты",
+      "home": "Главная"
+    },
+    "geo": [
+      [
+        "71",
+        "Профилей специалистов · 8 доменов"
+      ],
+      [
+        "80",
+        "Фреймворков AI Boardroom"
+      ],
+      [
+        "0 Байт",
+        "Fail-Closed Zero-Egress (Локально)"
+      ],
+      [
+        "MIT",
+        "100% Open Source · 7 контейнеров Docker"
+      ]
+    ],
+    "arch": {
+      "title": "Архитектура и поток данных Zero-Egress",
+      "caption": "Каждый вызов агента проходит через <code>PolicyEngine</code> (HMAC-ордер) и транзакционный <code>BudgetBank</code> до запуска. Чувствительные данные остаются в изолированной Docker-сети без выхода в интернет.",
+      "linkArch": "Детали архитектуры",
+      "linkGdpr": "GDPR и EU AI Act",
+      "svg": {
+        "req": "Задача / Агент",
+        "polSub": "Default-Deny и HMAC-ордер",
+        "budSub": "Резерв BEGIN IMMEDIATE",
+        "sw": "Шлюз OmniRoute",
+        "swSub": "Классификация Fail-Closed",
+        "loc": "ZERO-EGRESS ЛОКАЛЬНО",
+        "locSub": "Ollama / LM Studio · Без сети",
+        "cld": "Облачные LLM (некритично)",
+        "cldSub": "Лимит бюджета · Без PII",
+        "hitlSub": "Криптографическая подпись",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "Сравнение систем и требования к железу",
+      "hCol": "Корпоративный критерий",
+      "rows": [
+        [
+          "Изоляция Docker Zero-Egress Fail-Closed",
+          "Встроено",
+          "Своя инфра",
+          "Частично"
+        ],
+        [
+          "Атомарный BudgetBank до запуска",
+          "BEGIN IMMEDIATE",
+          "Нет жесткого лимита",
+          "Постфактум"
+        ],
+        [
+          "Подтверждение Passkey / WebAuthn HITL",
+          "Криптографическое",
+          "Callback в коде",
+          "Клик в UI"
+        ],
+        [
+          "Цепочка аудита SHA-256 и EU AI Act",
+          "Экспорт в 1 клик",
+          "Нет",
+          "Обычные логи"
+        ],
+        [
+          "Отказоустойчивый Effect-Ledger и Outbox",
+          "Транзакционный",
+          "Чекпоинты",
+          "Повторы узлов"
+        ]
+      ],
+      "hwLabel": "Базовое железо (7 контейнеров + Ollama)",
+      "hwVal": "Демо: 4 ГБ RAM / 2 vCPU &middot; Локальная LLM (7B–14B): 16–32 ГБ RAM + 8–12 ГБ VRAM (amd64 / arm64)",
+      "linkCmp": "Полное сравнение (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "Требования к серверу и контейнерам"
+    },
+    "hub": {
+      "title": "Технические руководства и каталоги (HTML)",
+      "cards": [
+        [
+          "01 / Система",
+          "Архитектура и стек",
+          "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger и 3× SQLite WAL."
+        ],
+        [
+          "02 / Комплаенс",
+          "GDPR и Zero-Egress",
+          "Изоляция Docker fail-closed, реестр EU AI Act и экспорт аудита GoBD."
+        ],
+        [
+          "03 / Оценка",
+          "Сравнение платформ",
+          "Матрица Archon OS против LangGraph, CrewAI, AutoGen, n8n и Dify."
+        ],
+        [
+          "04 / Boardroom",
+          "80 фреймворков",
+          "Каталог методик многосторонних дебатов с поиском и фильтрами."
+        ],
+        [
+          "05 / Флот",
+          "71 специалистов",
+          "Справочник всех 71 профилей агентов в 8 бизнес-доменах."
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; Default-Deny и HMAC-SHA256 ордера",
+      "<strong>II. PASSKEY LOCK</strong> &middot; Подтверждение WebAuthn / Windows Hello / Touch ID",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; Жесткие лимиты SQLite BEGIN IMMEDIATE"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom: 80 фреймворков решений в Archon OS",
+      "desc": "Каталог структурированных методик AI Boardroom в Archon OS: изолированные дебаты экспертов, критическая проверка и итоговый синтез.",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "Структурированные многосторонние дебаты вместо ответов одного промпта.",
+      "lead": "AI Boardroom проводит стратегические решения через изолированных профильных агентов, перекрёстную критику и итоговый синтез. Ниже представлены все 80 методик движка решений в 9 категориях в алфавитном порядке.",
+      "placeholder": "Поиск фреймворка (напр. Pre-Mortem, OKR, Six Sigma, Porter)...",
+      "countLabel": "Показано фреймворков:",
+      "allLabel": "Все",
+      "ctaGithub": "Открыть на GitHub",
+      "ctaQuickstart": "Быстрый старт (Docker)",
+      "tagline": "Локальная мультиагентная ОС"
+    }
+  },
+  "zh": {
+    "nav": {
+      "arch": "系统架构",
+      "gdpr": "GDPR合规",
+      "compare": "框架对比",
+      "frameworks": "决策框架",
+      "specialists": "专家团队",
+      "home": "首页"
+    },
+    "geo": [
+      [
+        "71",
+        "专家智能体角色 · 8 大领域"
+      ],
+      [
+        "80",
+        "AI Boardroom 决策框架"
+      ],
+      [
+        "0 Bytes",
+        "Fail-Closed Zero-Egress 本地隔离"
+      ],
+      [
+        "MIT",
+        "100% 开源 · 7 个 Docker 容器"
+      ]
+    ],
+    "arch": {
+      "title": "系统架构与 Zero-Egress 数据流",
+      "caption": "每次智能体调用在分发前均经过 <code>PolicyEngine</code>（HMAC 凭证）与事务型 <code>BudgetBank</code> 校验。敏感业务严格运行在无外网路由的 Docker 内部隔离网络中。",
+      "linkArch": "查看架构详情",
+      "linkGdpr": "GDPR 与欧盟 AI 法案",
+      "svg": {
+        "req": "任务 / 智能体",
+        "polSub": "默认拒绝与 HMAC 凭证",
+        "budSub": "BEGIN IMMEDIATE 预留",
+        "sw": "OmniRoute 路由",
+        "swSub": "Fail-Closed 敏感分级",
+        "loc": "ZERO-EGRESS 本地推理",
+        "locSub": "Ollama / LM Studio · 断网隔离",
+        "cld": "云端 LLM (仅非敏感)",
+        "cldSub": "预算封顶 · 脱敏过滤",
+        "hitlSub": "加密硬件 Passkey 审批",
+        "audSub": "GoBD · EU AI Act · Effect-Ledger"
+      }
+    },
+    "compare": {
+      "title": "架构对比与硬件配置基线",
+      "hCol": "企业级核心能力",
+      "rows": [
+        [
+          "Fail-Closed Zero-Egress Docker 隔离",
+          "原生内置",
+          "需自行搭建",
+          "部分支持"
+        ],
+        [
+          "执行前原子级 BudgetBank 预算控制",
+          "BEGIN IMMEDIATE",
+          "无硬性上限",
+          "事后统计"
+        ],
+        [
+          "Passkey / WebAuthn 人工加密审批",
+          "密码学签名",
+          "代码回调",
+          "普通按钮"
+        ],
+        [
+          "SHA-256 哈希审计链与合规导出",
+          "一键导出",
+          "不包含",
+          "仅基础日志"
+        ],
+        [
+          "防崩溃 Effect-Ledger 与 Outbox",
+          "事务幂等",
+          "状态快照",
+          "节点重试"
+        ]
+      ],
+      "hwLabel": "硬件参考基线 (7 容器 + Ollama)",
+      "hwVal": "演示模式: 4 GB RAM / 2 vCPU &middot; 本地模型 (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
+      "linkCmp": "完整对比矩阵 (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
+      "linkHw": "硬件与容器规格详情"
+    },
+    "hub": {
+      "title": "深度技术指南与索引目录 (HTML)",
+      "cards": [
+        [
+          "01 / 系统",
+          "架构与技术栈",
+          "OmniRoute、PolicyEngine、Atomic BudgetBank、Effect-Ledger 与 3× SQLite WAL。"
+        ],
+        [
+          "02 / 合规",
+          "GDPR 与 Zero-Egress",
+          "Fail-closed Docker 网络隔离、欧盟 AI 法案风险台账与 GoBD 审计导出。"
+        ],
+        [
+          "03 / 评估",
+          "主流框架对比",
+          "Archon OS 与 LangGraph、CrewAI、AutoGen、n8n、Dify 全维度对比。"
+        ],
+        [
+          "04 / Boardroom",
+          "80 决策框架",
+          "可搜索筛选的多视角结构化辩论方法论 HTML 目录。"
+        ],
+        [
+          "05 / 舰队",
+          "71 专家角色",
+          "覆盖 8 大企业领域的 71 个智能体角色与安全护栏索引。"
+        ]
+      ]
+    },
+    "pillars": [
+      "<strong>I. POLICY ENGINE</strong> &middot; 默认拒绝策略与 HMAC-SHA256 工具凭证",
+      "<strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID 加密审批",
+      "<strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE 原子预算封顶"
+    ],
+    "fwPage": {
+      "title": "AI Boardroom：Archon OS 的 80 套结构化决策框架",
+      "desc": "可搜索的 Archon OS AI Boardroom 方法论目录：通过隔离专家角色、对抗式批判质询与综合研判提升企业决策质量。",
+      "eyebrow": "AI Boardroom Frameworks",
+      "h1": "用结构化多视角辩论，取代单一提示词的盲目猜测。",
+      "lead": "AI Boardroom 通过隔离的专家角色、对抗式批评质询与最终综合来推进战略决策。下方按名称顺序汇集 9 大类别全部 80 套决策引擎方法论，支持即时搜索与筛选。",
+      "placeholder": "搜索框架或方法论（如 Pre-Mortem、OKR、Six Sigma、Porter）...",
+      "countLabel": "当前显示框架：",
+      "allLabel": "全部",
+      "ctaGithub": "在 GitHub 查看",
+      "ctaQuickstart": "快速开始 (Docker)",
+      "tagline": "自托管多智能体操作系统"
+    }
+  }
+}

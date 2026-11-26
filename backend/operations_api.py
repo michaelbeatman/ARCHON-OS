@@ -46,6 +46,33 @@ from backend.operations_bulk import (
     execute_kanban_bulk_undo as _execute_kanban_bulk_undo,
 )
 from backend.operations_constants import TEAMS_DEFINITION, _get_org_hierarchy_file
+from backend.operations_kanban_meta import (
+    KanbanMetaDeps as _KanbanMetaDeps,
+)
+from backend.operations_kanban_meta import (
+    KanbanMetaSaveRequest as KanbanMetaSaveRequest,
+)
+from backend.operations_kanban_meta import (
+    KanbanPaletteUpdate as KanbanPaletteUpdate,
+)
+from backend.operations_kanban_meta import (
+    compute_kanban_stats as _compute_kanban_stats,
+)
+from backend.operations_kanban_meta import (
+    fetch_task_details as _fetch_task_details,
+)
+from backend.operations_kanban_meta import (
+    insert_task_comment as _insert_task_comment,
+)
+from backend.operations_kanban_meta import (
+    load_kanban_palette as _load_kanban_palette,
+)
+from backend.operations_kanban_meta import (
+    persist_kanban_meta as _persist_kanban_meta,
+)
+from backend.operations_kanban_meta import (
+    persist_kanban_palette as _persist_kanban_palette,
+)
 from backend.operations_projects import (
     _PROJECTS_META_ALLOWED as _PROJECTS_META_ALLOWED,
 )
@@ -2801,9 +2828,7 @@ KANBAN_PALETTE_DEFAULTS = {
     "done":        {"header": "#4A6D88", "text": "#ffffff"}
 }
 
-class KanbanPaletteUpdate(BaseModel):
-    columns: Optional[Dict[str, Dict[str, str]]] = None
-    reset: bool = False
+# D3/4: KanbanPaletteUpdate nach backend/operations_kanban_meta.py ausgelagert (Re-Export am Kopf).
 
 # D3/3: Projekt-Zentrale, Projekt-Meta-Sidecar und Vault-/Projektdatei-Zugriff
 # nach backend/operations_projects.py ausgelagert (S3 Call-Time-Deps).
@@ -2898,51 +2923,32 @@ def get_kanban_project_file(request: Request, task_id: str, path: str):
     return _read_kanban_project_file_text(task_id, path, _build_projects_deps())
 
 
+# D3/4: Kanban-Palette, Sidecar-Meta, Board-Stats, Task-Details & Kommentare
+# nach backend/operations_kanban_meta.py ausgelagert (S3 Call-Time-Deps).
+def _build_kanban_meta_deps() -> _KanbanMetaDeps:
+    return _KanbanMetaDeps(
+        get_kanban_connection=_get_kanban_connection,
+        load_kanban_meta=_load_kanban_meta,
+        parse_kanban_ts=_parse_kanban_ts,
+        load_profiles_map=_load_profiles_map,
+        get_fallback_avatar=_get_fallback_avatar,
+        resolve_task_obsidian_rel=_resolve_task_obsidian_rel,
+        palette_file=_KANBAN_PALETTE_FILE,
+        palette_defaults=KANBAN_PALETTE_DEFAULTS,
+    )
+
+
 @router.get("/kanban/palette")
 def get_kanban_palette():
     """Liefert die Kanban-Spaltenfarben (Gespeicherte, mit Posteo-Standard gemischt)."""
-    if os.path.exists(_KANBAN_PALETTE_FILE):
-        try:
-            with open(_KANBAN_PALETTE_FILE, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-            # Merge: Standard + gespeicherte Überschreibungen (gespeichert gewinnt)
-            merged = {}
-            for col_id, defaults in KANBAN_PALETTE_DEFAULTS.items():
-                merged[col_id] = {**defaults, **(saved.get(col_id) or {})}
-            return {"status": "ok", "custom": True, "columns": merged}
-        except Exception as e:
-            print(f"[OperationsAPI] Palette load error: {e}", file=sys.stderr)
-    return {"status": "ok", "custom": False, "columns": KANBAN_PALETTE_DEFAULTS}
+    return _load_kanban_palette(_KANBAN_PALETTE_FILE, KANBAN_PALETTE_DEFAULTS)
+
 
 @router.post("/kanban/palette")
 def save_kanban_palette(request: Request, req: KanbanPaletteUpdate):
     """Speichert die Kanban-Farbpalette (oder setzt mit reset=true auf Standard zurück)."""
     require_admin_or_503(request)
-    if req.reset:
-        if os.path.exists(_KANBAN_PALETTE_FILE):
-            try:
-                os.remove(_KANBAN_PALETTE_FILE)
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Reset fehlgeschlagen: {e}")
-        return {"status": "ok", "reset": True, "columns": KANBAN_PALETTE_DEFAULTS}
-    if not req.columns:
-        raise HTTPException(status_code=400, detail="columns erforderlich")
-    # Sanitize: nur gültige Hex-Farben und bekannte Spalten-IDs
-    cleaned = {}
-    for col_id, colors in req.columns.items():
-        if col_id not in KANBAN_PALETTE_DEFAULTS:
-            continue
-        entry = {}
-        for key in ("header", "text"):
-            val = str(colors.get(key, "")).strip()
-            if re.fullmatch(r"#[0-9a-fA-F]{6}", val):
-                entry[key] = val
-        if entry:
-            cleaned[col_id] = entry
-    os.makedirs(os.path.dirname(_KANBAN_PALETTE_FILE), exist_ok=True)
-    with open(_KANBAN_PALETTE_FILE, "w", encoding="utf-8") as f:
-        json.dump(cleaned, f, indent=2)
-    return {"status": "ok", "saved": True, "columns": cleaned}
+    return _persist_kanban_palette(req, _KANBAN_PALETTE_FILE, KANBAN_PALETTE_DEFAULTS)
 
 
 @router.get("/kanban/meta")
@@ -2951,262 +2957,30 @@ def get_kanban_meta():
     return {"status": "ok", **_load_kanban_meta()}
 
 
-class KanbanMetaSaveRequest(BaseModel):
-    """Bekannte Sidecar-Felder; unbekannte Felder werden ignoriert (Kompatibilitaet)."""
-    model_config = ConfigDict(extra="ignore")
-    kind: str = Field(default="task", max_length=32)
-    limits: Dict[str, Any] = Field(default_factory=dict)
-    task_id: Optional[str] = Field(default=None, max_length=200)
-    due: Optional[str] = Field(default=None, max_length=32)
-    clear_due: bool = False
-    tags: Optional[List[str]] = Field(default=None, max_length=50)
-    obsidian: Optional[str] = Field(default=None, max_length=500)
-    clear_obsidian: bool = False
-    decision: Optional[Dict[str, Any]] = None
-    tokens: Optional[Any] = None
-    cost: Optional[Any] = None
-    soul_mode: Optional[str] = Field(default=None, max_length=100)
-    reasoning_effort: Optional[str] = Field(default=None, max_length=100)
-    tool_preset: Optional[str] = Field(default=None, max_length=100)
-    cron_schedule: Optional[str] = Field(default=None, max_length=200)
-    depends_on: Optional[str] = Field(default=None, max_length=200)
-    token_budget: Optional[Any] = None
-    cost_limit_usd: Optional[Any] = None
-    require_hitl: Optional[bool] = None
-
-
 @router.post("/kanban/meta")
 def save_kanban_meta(request: Request, body: KanbanMetaSaveRequest):
     """Due/Tags (kind=task) oder WIP-Limits (kind=wip) speichern. Engine-DB bleibt unberuehrt."""
     require_admin_or_503(request)
-    # Nur tatsaechlich gesendete Felder: die Logik unten prueft per `"key" in payload`
-    # auf Presence (z. B. clear_due, tokens) — model_dump(exclude_unset=True) erhält das.
-    payload = body.model_dump(exclude_unset=True)
-    # 12.10.2026 (Fix Punkt 1, Datenrisiko): die GESAMTE Load-Aendern-Speichern-
-    # Sequenz laeuft unter EINER Sperre (backend.kanban_sidecar.update_kanban_meta),
-    # sonst verliert paralleler Fan-in Entscheidungs-Metadaten. Validierung VORHER
-    # (ohne Datei), damit kein Lock auf Fehlerpfaden gehalten wird.
-    from backend.kanban_sidecar import update_kanban_meta
-    kind = str(payload.get("kind") or "task")
-    if kind == "wip":
-        limits = payload.get("limits") or {}
-        cleaned: Dict[str, int] = {}
-        for col, n in limits.items():
-            try:
-                v = int(n)
-            except (TypeError, ValueError):
-                continue
-            if v > 0:
-                cleaned[str(col)] = v
-
-        def _apply_wip(meta):
-            meta["wip"] = cleaned
-
-        update_kanban_meta(_apply_wip)
-        return {"status": "ok", "wip": cleaned}
-    task_id = str(payload.get("task_id") or "").strip()
-    if not task_id:
-        raise HTTPException(status_code=400, detail="task_id erforderlich")
-    due_in = payload.get("due")
-    if due_in and not payload.get("clear_due"):
-        try:
-            datetime.date.fromisoformat(str(due_in)[:10])
-        except ValueError:
-            raise HTTPException(status_code=400, detail="due muss YYYY-MM-DD sein")
-    tags_in = payload.get("tags")
-
-    def _apply_task(meta):
-        tmeta = meta["tasks"].setdefault(task_id, {})
-        if payload.get("clear_due"):
-            tmeta.pop("due", None)
-        elif due_in:
-            tmeta["due"] = str(due_in)[:10]
-        if tags_in is not None:
-            tags = [str(t).strip()[:24] for t in tags_in if str(t).strip()][:8]
-            if tags:
-                tmeta["tags"] = tags
-            else:
-                tmeta.pop("tags", None)
-        # 12.10.2026 (Decision-Service): Entscheidungs-Metadaten je Task.
-        # kanban.db bleibt die Wahrheit (Status), der Sidecar traegt nur Kontext.
-        obs_in = payload.get("obsidian")
-        if obs_in is not None and str(obs_in).strip() != "":
-            tmeta["obsidian"] = str(obs_in).strip()
-        elif payload.get("clear_obsidian"):
-            tmeta.pop("obsidian", None)
-        dec_in = payload.get("decision")
-        if isinstance(dec_in, dict):
-            if dec_in.get("clear"):
-                tmeta.pop("decision", None)
-            else:
-                dec = tmeta.setdefault("decision", {})
-                for k in ("typ", "ref_id", "titel", "kurzfassung", "dossier", "body",
-                          "assignee", "status", "entschieden_von", "entschieden_am", "kanal"):
-                    if k in dec_in:
-                        dec[k] = dec_in[k]
-                tg = dec_in.get("telegram")
-                if isinstance(tg, dict):
-                    dec.setdefault("telegram", {}).update(tg)
-                dec.setdefault("erstellt", datetime.datetime.now().isoformat())
-        # Tokens & Cost (User-Erweiterung Punkt 5)
-        if "tokens" in payload:
-            tmeta["tokens"] = payload["tokens"]
-        if "cost" in payload:
-            tmeta["cost"] = payload["cost"]
-        # Pro-Task Aufwand & Governance (SOUL, Reasoning, Tools, Budget, HITL, Cron)
-        for mk in ("soul_mode", "reasoning_effort", "tool_preset", "cron_schedule", "depends_on"):
-            if mk in payload:
-                val = str(payload[mk] or "").strip()
-                if val:
-                    tmeta[mk] = val
-                else:
-                    tmeta.pop(mk, None)
-        if "token_budget" in payload:
-            tb = payload["token_budget"]
-            if tb is not None and str(tb).strip() != "":
-                try:
-                    tmeta["token_budget"] = int(tb)
-                except (TypeError, ValueError) as exc:
-                    print(f"[OperationsAPI] FEHLER (HIGH_SECURITY) save_kanban_meta: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-            else:
-                tmeta.pop("token_budget", None)
-        if "cost_limit_usd" in payload:
-            cl = payload["cost_limit_usd"]
-            if cl is not None and str(cl).strip() != "":
-                try:
-                    tmeta["cost_limit_usd"] = float(cl)
-                except (TypeError, ValueError) as exc:
-                    print(f"[OperationsAPI] Fallback save_kanban_meta: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-            else:
-                tmeta.pop("cost_limit_usd", None)
-        if "require_hitl" in payload:
-            if payload["require_hitl"]:
-                tmeta["require_hitl"] = True
-            else:
-                tmeta.pop("require_hitl", None)
-        if not tmeta:
-            meta["tasks"].pop(task_id, None)
-        return dict(meta["tasks"].get(task_id, {}))
-
-    _, saved = update_kanban_meta(_apply_task)
-    try:
-        main = get_provider("app_main")
-        if hasattr(main, "broadcast_event"):
-            main.broadcast_event("kanban_updated", {"action": "meta_update", "task_id": task_id})
-    except Exception as exc:
-        print(f"[OperationsAPI] WARNUNG (MEDIUM) save_kanban_meta: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-    return {"status": "ok", "task": saved}
+    return _persist_kanban_meta(body)
 
 
 @router.get("/kanban/stats")
 def kanban_stats():
     """Board-Kennzahlen: Spaltenverteilung, Durchlaufzeit, 7-Tage-Flows."""
-    conn = _get_kanban_connection()
-    try:
-        cur = conn.cursor()
-        per_status: Dict[str, int] = {}
-        for st, n in cur.execute("SELECT status, count(*) FROM tasks GROUP BY status"):
-            per_status[st or "todo"] = n
-        active = {k: v for k, v in per_status.items() if k != "archived"}
-        cycles = []
-        for s, e in cur.execute(
-            "SELECT started_at, completed_at FROM tasks WHERE started_at IS NOT NULL AND completed_at IS NOT NULL"
-        ):
-            s_ts = _parse_kanban_ts(s)
-            e_ts = _parse_kanban_ts(e)
-            if s_ts is not None and e_ts is not None:
-                cycles.append((e_ts - s_ts) / 3600.0)
-        avg_cycle = round(sum(cycles) / len(cycles), 1) if cycles else None
-        now = datetime.datetime.now()
-        created_7d = cur.execute(
-            "SELECT count(*) FROM tasks WHERE created_at >= ?", ((now - datetime.timedelta(days=7)).isoformat(),)
-        ).fetchone()[0]
-        epoch_7d = (now - datetime.timedelta(days=7)).timestamp()
-        done_7d = 0
-        for (e,) in cur.execute("SELECT completed_at FROM tasks WHERE completed_at IS NOT NULL"):
-            e_ts = _parse_kanban_ts(e)
-            if e_ts is not None and e_ts >= epoch_7d:
-                done_7d += 1
-        return {
-            "status": "ok",
-            "active_total": sum(active.values()),
-            "per_status": active,
-            "archived_total": per_status.get("archived", 0),
-            "blocked": per_status.get("blocked", 0),
-            "done_7d": done_7d,
-            "created_7d": created_7d,
-            "avg_cycle_hours": avg_cycle,
-        }
-    finally:
-        conn.close()
+    return _compute_kanban_stats(_build_kanban_meta_deps())
 
 
 @router.get("/kanban/tasks/{task_id}")
 def get_task_details(task_id: str):
     """Gibt Detailinformationen, Kommentare und Event-Logs eines Tasks zurück."""
-    conn = _get_kanban_connection()
-    profiles = _load_profiles_map()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT rowid AS task_num, * FROM tasks WHERE id = ?", (task_id,))
-        task_row = cursor.fetchone()
-        if not task_row:
-            raise HTTPException(status_code=404, detail="Task nicht gefunden.")
-            
-        task = dict(task_row)
-        assignee_id = task.get("assignee")
-        prof = profiles.get(assignee_id, {})  # type: ignore[arg-type]
-        task["assignee_name"] = prof.get("name") or assignee_id or "Nicht zugewiesen"
-        task["assignee_avatar"] = prof.get("avatar") or _get_fallback_avatar(assignee_id)  # type: ignore[arg-type]
-
-        # Obsidian-Projekt-Bruecke (Sidecar config/kanban_meta.json, Option A 11.10.2026)
-        _meta_all = _load_kanban_meta()
-        task["obsidian"] = _resolve_task_obsidian_rel(task_id, _meta_all)
-        # 2b (12.10.2026): Entscheidungs-Kontext mitliefern (Sidecar-Block), damit der
-        # Detail-Dialog Typ, Status, Kurzfassung und das Bericht-Dossier anzeigen kann.
-        task["decision"] = ((_meta_all.get("tasks") or {}).get(task_id) or {}).get("decision") or None
-        
-        cursor.execute("SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at ASC", (task_id,))
-        comments = [dict(r) for r in cursor.fetchall()]
-        
-        cursor.execute("SELECT * FROM task_events WHERE task_id = ? ORDER BY created_at ASC", (task_id,))
-        events = [dict(r) for r in cursor.fetchall()]
-        
-        cursor.execute("""
-            SELECT l.parent_id, l.child_id, t.title 
-            FROM task_links l 
-            JOIN tasks t ON l.child_id = t.id 
-            WHERE l.parent_id = ?
-        """, (task_id,))
-        children = [dict(r) for r in cursor.fetchall()]
-        
-        return {
-            "status": "success",
-            "task": task,
-            "comments": comments,
-            "events": events,
-            "subtasks": children
-        }
-    finally:
-        conn.close()
+    return _fetch_task_details(task_id, _build_kanban_meta_deps())
 
 
 @router.post("/kanban/tasks/{task_id}/comments")
 def add_task_comment(request: Request, task_id: str, author: str = Body(..., embed=True), body: str = Body(..., embed=True)):
     """Fügt einem Task einen Kommentar hinzu (Timestamp als integer Unix-Epoch für Hermes-Kompatibilität)."""
     require_admin_or_503(request)
-    conn = _get_kanban_connection(maintenance=True)
-    try:
-        now_ts = int(time.time())
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO task_comments (task_id, author, body, created_at)
-            VALUES (?, ?, ?, ?)
-        """, (task_id, author, body, now_ts))
-        conn.commit()
-        return {"status": "success", "task_id": task_id, "created_at": now_ts}
-    finally:
-        conn.close()
+    return _insert_task_comment(task_id, author, body, _build_kanban_meta_deps())
 
 
 # =========================================================================

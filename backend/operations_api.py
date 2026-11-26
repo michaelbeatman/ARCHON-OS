@@ -118,6 +118,39 @@ from backend.operations_projects import (
 from backend.operations_projects import (
     update_project_meta_entry as _update_project_meta_entry,
 )
+from backend.operations_review import (
+    QualityReviewOverrideRequest as QualityReviewOverrideRequest,
+)
+from backend.operations_review import (
+    QualityReviewRequest as QualityReviewRequest,
+)
+from backend.operations_review import (
+    QualityReviewVerdict as QualityReviewVerdict,
+)
+from backend.operations_review import (
+    ReviewDeps as _ReviewDeps,
+)
+from backend.operations_review import (
+    _identity_tokens as _identity_tokens,
+)
+from backend.operations_review import (
+    current_quality_review as _current_quality_review_impl,
+)
+from backend.operations_review import (
+    require_four_eyes_override as _require_four_eyes_override,
+)
+from backend.operations_review import (
+    run_quality_review as _run_quality_review,
+)
+from backend.operations_review import (
+    run_quality_review_override as _run_quality_review_override,
+)
+from backend.operations_review import (
+    task_created_by as _task_created_by_impl,
+)
+from backend.operations_review import (
+    task_status as _task_status_impl,
+)
 from backend.platform_paths import HERMES_HOME
 from backend.rbac_guards import forbid_viewer_writes, require_admin_or_503, require_session_actor
 
@@ -134,16 +167,7 @@ logger = logging.getLogger("archon_os.operations_api")
 # Korrelation erneut durch eine model_dump()-Projektion verlieren.
 
 
-class QualityReviewVerdict(BaseModel):
-    """Fail-closed-Schema der Reviewer-Antwort (R-16)."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    verdict: str = "changes_requested"
-    score: int = 0
-    summary: str = ""
-    critique_points: List[str] = Field(default_factory=list)
-    actionable_next_steps: List[str] = Field(default_factory=list)
+# D3/5: QualityReviewVerdict nach backend/operations_review.py ausgelagert (Re-Export am Kopf).
 
 
 def _load_kanban_delegation_payload(raw_payload: Any, task_id: str = "") -> Optional[Any]:
@@ -720,158 +744,33 @@ class TaskStatusUpdateRequest(BaseModel):
     approval_id: Optional[str] = None
 
 
-class QualityReviewRequest(BaseModel):
-    """H-14-2/F022: kein Body-Actor und kein erzwungenes Verdict mehr.
-
-    `force_verdict` und `reviewer_id` waren direkt aus dem Body faehig, das
-    Vier-Augen-Gate zu faelschen (hartcodierter Reviewer `operator`). Die
-    Verifikation läuft jetzt immer ueber den Reviewer-Agenten; eine manuelle
-    Aufhebung von `changes_requested` nur ueber
-    ``POST /kanban/tasks/{id}/quality-review/override`` mit Session-Actor,
-    zweiter Identitaet und HITL-Proof.
-    """
-
-    model_config = ConfigDict(extra="ignore")
-
-    comment: Optional[str] = Field(default=None, max_length=4000)
+# D3/5: QualityReviewRequest, QualityReviewOverrideRequest, _identity_tokens
+# und _require_four_eyes_override liegen in backend/operations_review.py
+# (X-as-X Re-Exports am Kopf).
 
 
-class QualityReviewOverrideRequest(BaseModel):
-    """Expliziter 4-Augen-Override eines `changes_requested`-Reviews."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    reason: str = Field(min_length=10, max_length=4000)
-    passkey_proof_token: Optional[str] = None
-    approval_id: Optional[str] = None
-
-
-# --- H-14-2/F022: gemeinsame Hoheits-Gates (4 Augen + HITL + Audit) ----------
-
-def _identity_tokens(actor: str) -> set:
-    """Normalisierte Identitaets-Tokens (wie in approval_policy_engine)."""
-    s = str(actor or "").strip().lower()
-    if not s:
-        return set()
-    tokens = {s}
-    if " (i.v. " in s:
-        main_p, sub_p = s.split(" (i.v. ", 1)
-        tokens.add(main_p.strip())
-        sub_clean = sub_p.rstrip(")").strip()
-        if sub_clean:
-            tokens.add(sub_clean)
-            tokens.add(sub_clean.split(" ")[0])
-    else:
-        tokens.add(s.split(" ")[0])
-    return {t for t in tokens if t}
+def _build_review_deps() -> _ReviewDeps:
+    return _ReviewDeps(
+        get_kanban_connection=_get_kanban_connection,
+        load_kanban_meta=_load_kanban_meta,
+        load_profiles_map=_load_profiles_map,
+        current_quality_review=_current_quality_review,
+        task_created_by=_task_created_by,
+        task_status=_task_status,
+        require_four_eyes_override=_require_four_eyes_override,
+    )
 
 
 def _current_quality_review(task_id: str) -> Dict[str, Any]:
-    """Liest das Review aus der Sidecar-SSOT (fail-closed bei Fehlern)."""
-    try:
-        meta = _load_kanban_meta()
-        return dict(((meta.get("tasks") or {}).get(task_id) or {}).get("quality_review") or {})
-    except Exception as exc:
-        logger.error("[4-Augen] Review-Sidecar nicht lesbar (fail-closed): %s", exc)
-        raise HTTPException(status_code=503, detail="quality_review_state_unavailable")
+    return _current_quality_review_impl(task_id, _build_review_deps())
 
 
 def _task_created_by(task_id: str) -> str:
-    conn = _get_kanban_connection(maintenance=True)
-    try:
-        row = conn.execute("SELECT created_by FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        return str((row["created_by"] if row else "") or "")
-    finally:
-        conn.close()
+    return _task_created_by_impl(task_id, _build_review_deps())
 
 
 def _task_status(task_id: str) -> str:
-    conn = _get_kanban_connection(maintenance=True)
-    try:
-        row = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        return str((row["status"] if row else "") or "")
-    finally:
-        conn.close()
-
-
-def _require_four_eyes_override(
-    *,
-    task_id: str,
-    actor: str,
-    review: Dict[str, Any],
-    reason: str,
-    proof_token: Optional[str],
-    action: str,
-    created_by: str = "",
-    approval_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Prueft die Hoheits-Kette fuer `done`-Overrides (fail-closed).
-
-    Rueckgabe: signierfaehiger Evidence-Block. Jede Verletzung fuehrt zu 403;
-    nicht verfuegbare HITL-Konfiguration zu 503. Der Actor stammt ausschliesslich
-    aus ``require_session_actor(request)``.
-    """
-    who = str(actor or "").strip()
-    why = str(reason or "").strip()
-    if not who:
-        raise HTTPException(status_code=401, detail="Keine verifizierte Session-Identitaet.")
-    if len(why) < 10:
-        raise HTTPException(400, detail="Begruendung des 4-Augen-Overrides fehlt oder zu kurz (min. 10 Zeichen).")
-
-    actor_tokens = _identity_tokens(who)
-    other_ids = [
-        str(review.get("reviewer_id") or ""),
-        str(review.get("reviewer") or ""),
-        str(created_by or ""),
-    ]
-    for other in other_ids:
-        if other and actor_tokens & _identity_tokens(other):
-            raise HTTPException(
-                status_code=403,
-                detail="Vier-Augen-Prinzip: der Override muss durch eine andere Person erfolgen "
-                       "als der Reviewer oder der Ersteller des Tasks.",
-            )
-
-    from backend.passkey_hitl import consume_hitl_proof_token
-
-    # Hoheitsakt: der Passkey-Proof ist IMMER zwingend und an action+resource
-    # gebunden. `is_passkey_required()` darf hier nicht zum Freigang fuehren —
-    # auch im Single-User-Modus ohne Passkey-Config bleibt der Akt gesperrt.
-    token = str(proof_token or "").strip()
-    try:
-        ok = consume_hitl_proof_token(
-            token, who, "system", action=action, resource=task_id, consume=True
-        )
-    except Exception as exc:
-        logger.error("[4-Augen] HITL-Pruefung fehlgeschlagen (fail-closed): %s", exc)
-        raise HTTPException(status_code=503, detail="hitl_proof_check_unavailable")
-    if not ok:
-        raise HTTPException(
-            status_code=403,
-            detail="Passkey-Proof erforderlich/ungueltig fuer diesen 4-Augen-Override "
-                   "(action/resource nicht gebunden).",
-        )
-
-    evidence = {
-        "actor": who,
-        "reason": why,
-        "action": action,
-        "resource": task_id,
-        "approval_id": str(approval_id or "").strip() or None,
-        "first_reviewer_id": str(review.get("reviewer_id") or ""),
-        "previous_review_status": str(review.get("status") or ""),
-        "hitl_proof_verified": True,
-        "verified_at": datetime.datetime.now().isoformat(),
-    }
-    try:
-        from backend.audit_log import _require_audit_event
-        _require_audit_event(
-            "governance", "four_eyes_override_verified", who,
-            {"task_id": task_id, **evidence},
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-    return evidence
+    return _task_status_impl(task_id, _build_review_deps())
 
 
 @router.get("/kanban/tasks")
@@ -2474,289 +2373,18 @@ async def trigger_quality_review(task_id: str, request: Request, req: QualityRev
     prüft das Arbeitsergebnis objektiv gegen den ursprünglichen Auftrag.
     """
     require_admin_or_503(request)
-    # H-14-2/F022: der ausloesende Mensch kommt aus der Session, nicht aus dem
-    # Body. Er wird als `requested_by` im Review dokumentiert.
     actor = require_session_actor(request)
-    def _fetch_task_sync() -> dict:
-        conn = _get_kanban_connection(maintenance=True)
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT id, title, body, assignee, status, result FROM tasks WHERE id = ?", (task_id,))
-            row = cur.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="Task nicht gefunden.")
-            return dict(row)
-        finally:
-            conn.close()
-
-    t_dict = await asyncio.to_thread(_fetch_task_sync)
-    title = t_dict.get("title") or "Aufgabe"
-    body = t_dict.get("body") or title
-    from backend.agent_aliases import resolve_agent_id
-    raw_assignee = (t_dict.get("assignee") or "").strip()
-    if not raw_assignee:
-        # Kein Profil manuell zugewiesen -> automatisch an den Root-Orchestrator ('default') uebergeben
-        raw_assignee = "default"
-
-        def _auto_assign_sync() -> None:
-            try:
-                c_asgn = _get_kanban_connection(maintenance=True)
-                try:
-                    now_asgn_iso = datetime.datetime.now().isoformat()
-                    c_asgn.execute("UPDATE tasks SET assignee = ? WHERE id = ?", (raw_assignee, task_id))
-                    c_asgn.execute(
-                        "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'auto_assigned_orchestrator', ?, ?)",
-                        (task_id, json.dumps({"assignee": raw_assignee, "reason": "Kein Profil gesetzt — automatische Zuweisung an Orchestrator"}), now_asgn_iso),
-                    )
-                    c_asgn.commit()
-                finally:
-                    c_asgn.close()
-            except Exception as exc:
-                print(f"[OperationsAPI] WARNUNG (MEDIUM) trigger_quality_review: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-
-        await asyncio.to_thread(_auto_assign_sync)
-    assignee = resolve_agent_id(raw_assignee)
-    result = t_dict.get("result") or ""
-    now_iso = datetime.datetime.now().isoformat()
-
-    if not result:
-        raise HTTPException(status_code=400, detail="Aufgabe hat noch kein Arbeitsergebnis zur Prüfung hinterlegt.")
-
-    # H-14-2/F022: es gibt KEINEN Body-Override mehr. `force_verdict` und
-    # `reviewer_id` wurden aus dem Request-Modell entfernt. Das Verdict stammt
-    # ausschliesslich aus dem Reviewer-Dispatch; eine Aufhebung von
-    # `changes_requested` nur ueber den separaten, 4-Augen-gesicherten
-    # Override-Endpoint (siehe unten).
-    # Autonomer Reviewer-Agent (Katharina Völk für QM/Compliance oder Robert für CEO/Strategie)
-    profiles = await asyncio.to_thread(_load_profiles_map)
-    if assignee in ("katharina", "katharina-voelk", "katharina_voelk"):
-        reviewer_id = "robert"
-    else:
-        reviewer_id = "katharina"
-
-    prof = profiles.get(reviewer_id, {})
-    reviewer_name = prof.get("name") or ("Katharina Völk" if reviewer_id == "katharina" else "Robert")
-    reviewer_role = prof.get("category") or prof.get("role") or "Qualitäts- & Compliance-Auditor"
-
-    audit_prompt = f"""Du bist unabhängiger Qualitätsprüfer im 4-Augen-Review-Gate von Archon OS.
-Prüfe das vorgelegte Teilergebnis für die folgende Projektaufgabe unbestechlich und sachlich:
-
-TITEL: {title}
-BRIEFING / AUFGABENSTELLUNG:
-{body}
-
-BEARBEITER: {assignee}
-ERGEBNIS ZUR BEWERTUNG:
-{result}
-
-PRÜF-KRITERIEN:
-1. Vollständigkeit: Wurde der Auftrag vollumfänglich und ohne Auslassungen beantwortet?
-2. Substanz & Evidenz: Gibt es Platzhalter, vage Floskeln oder unplausible Annahmen?
-3. Handlungsfähigkeit: Enthält das Ergebnis klare, anwendbare nächste Schritte oder konkrete Resultate?
-
-Liefere deine Bewertung AUSSCHLIESSLICH als valides JSON in exakt folgendem Schema (ohne Begleittext, ohne Markdown):
-{{
-    "verdict": "approved",
-    "score": 88,
-    "summary": "1-2 prägnante Sätze zur Qualität",
-    "critique_points": ["Punkt 1", "Punkt 2"],
-    "actionable_next_steps": ["Schritt 1", "Schritt 2"]
-}}
-(Wähle "changes_requested" als verdict, falls wesentliche Aspekte fehlen oder unvollständig sind, andernfalls "approved".)
-"""
-    try:
-        import core_dispatcher
-        res = await core_dispatcher.dispatch_to_omniroute_or_container(
-            agent_id=reviewer_id,
-            agent_name=reviewer_name,
-            prompt=audit_prompt,
-            role=reviewer_role,
-            system_prompt="Du bist ein strikter QM-Auditor. Gib ausschließlich reines JSON ohne Markdown-Ticks aus.",
-            model="deepseek/deepseek-chat",
-            task_id=task_id
-        )
-        content = res.get("content", "").strip()
-        json_match = re.search(r"\{.*\}", content, re.DOTALL)
-        if json_match:
-            parsed = QualityReviewVerdict.model_validate(json.loads(json_match.group(0)))
-        else:
-            # Fail-closed (R-16): liefert der Reviewer kein JSON, darf das Gate
-            # NICHT freigeben — sonst gilt ein Timeout/Prosa-Antwort als Quality-Pass.
-            parsed = QualityReviewVerdict(
-                verdict="changes_requested",
-                score=0,
-                summary="Reviewer-Antwort enthielt kein auswertbares JSON — Review gilt als nicht bestanden, Nachfassung erforderlich.",
-                critique_points=["Reviewer-Lauf lieferte keine strukturierte Bewertung."],
-                actionable_next_steps=["Review erneut anstoßen."],
-            )
-    except Exception as e:
-        # Fail-closed (R-16): Fehler im Review-Dispatch darf die Freigabe nicht
-        # erfinden — der Task bleibt in 'review', damit kein ungeprüftes Ergebnis
-        # als done verbucht wird.
-        parsed = QualityReviewVerdict(
-            verdict="changes_requested",
-            score=0,
-            summary=f"Reviewer-Prüfung konnte nicht abgeschlossen werden ({e}).",
-            critique_points=["Reviewer-Lauf fehlgeschlagen."],
-            actionable_next_steps=["Review erneut anstoßen."],
-        )
-
-    verdict = parsed.verdict
-    if verdict not in ("approved", "changes_requested"):
-        verdict = "changes_requested"
-
-    review_data = {
-        "status": verdict,
-        # H-14-2/F022: Reviewer-Identitaet stammt aus dem verifizierten Profil
-        # (nicht aus dem Body); der ausloesende Mensch ist separat dokumentiert.
-        "reviewer": reviewer_name,
-        "reviewer_id": reviewer_id,
-        "requested_by": actor,
-        "score": parsed.score,
-        "summary": parsed.summary,
-        "critique_points": parsed.critique_points,
-        "actionable_next_steps": parsed.actionable_next_steps,
-        "reviewed_at": now_iso,
-        "source": "reviewer_agent",
-    }
-
-    # In Sidecar-Metadaten speichern
-    from backend.kanban_sidecar import update_kanban_meta
-    def _apply_meta(meta):
-        meta.setdefault("tasks", {})
-        meta["tasks"].setdefault(task_id, {})
-        meta["tasks"][task_id]["quality_review"] = review_data
-        return meta
-    await asyncio.to_thread(update_kanban_meta, _apply_meta)
-
-    # In task_events und DB vermerken
-    def _record_review_sync() -> None:
-        c = _get_kanban_connection(maintenance=True)
-        try:
-            c.execute(
-                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
-                (task_id, f"quality_review_{verdict}", json.dumps(review_data), now_iso)
-            )
-            if verdict == "approved" and t_dict.get("status") == "review":
-                c.execute("UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?", (now_iso, task_id))
-            elif verdict == "changes_requested":
-                c.execute("UPDATE tasks SET status = 'review' WHERE id = ?", (task_id,))
-            c.commit()
-        finally:
-            c.close()
-    await asyncio.to_thread(_record_review_sync)
-
-    try:
-        from backend.audit_log import _require_audit_event
-        _require_audit_event(
-            "governance", "quality_review_completed", actor,
-            {
-                "task_id": task_id, "verdict": verdict, "reviewer_id": reviewer_id,
-                "requested_by": actor, "score": parsed.score,
-            },
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-
-    try:
-        main = get_provider("app_main")
-        if hasattr(main, "broadcast_event"):
-            main.broadcast_event("kanban_updated", {
-                "action": "quality_review",
-                "task_id": task_id,
-                "review": review_data
-            })
-            main.broadcast_event("ticker_update", {
-                "agent": review_data.get("reviewer", "Reviewer"),
-                "message": f"4-Augen-Review ({verdict.upper()}): {review_data.get('summary', '')[:40]}",  # type: ignore[index]
-                "time": datetime.datetime.now().strftime("%H:%M:%S")
-            })
-    except Exception as exc:
-        print(f"[OperationsAPI] Fallback trigger_quality_review: Exception im Fehler-/Fallback-Pfad: {exc}", file=sys.stderr)
-
-    return {
-        "status": "success",
-        "task_id": task_id,
-        "quality_review": review_data
-    }
+    return await _run_quality_review(task_id, actor, _build_review_deps())
 
 
 @router.post("/kanban/tasks/{task_id}/quality-review/override")
 async def override_quality_review(
     request: Request, task_id: str, req: QualityReviewOverrideRequest
 ):
-    """H-14-2/F022: einziger erlaubter Weg, `changes_requested` aufzuheben.
-
-    Der zweite Approver kommt aus der verifizierten Session (nie aus dem Body),
-    muss sich von Reviewer und Task-Ersteller unterscheiden und einen an
-    ``action`` + ``resource=task_id`` gebundenen Einmal-Passkey-Proof vorlegen.
-    Jede Verletzung bricht mit 403 ab, ohne Review oder Status zu veraendern.
-    """
+    """H-14-2/F022: einziger erlaubter Weg, `changes_requested` aufzuheben."""
     require_admin_or_503(request)
     actor = require_session_actor(request)
-    review = await asyncio.to_thread(_current_quality_review, task_id)
-    if not review:
-        raise HTTPException(status_code=409, detail="Kein Quality-Review vorhanden — Override nicht zulaessig.")
-
-    created_by = await asyncio.to_thread(_task_created_by, task_id)
-    old_status = await asyncio.to_thread(_task_status, task_id)
-    evidence = _require_four_eyes_override(
-        task_id=task_id, actor=actor, review=review, reason=req.reason,
-        proof_token=req.passkey_proof_token, action="quality_review_override",
-        created_by=created_by, approval_id=req.approval_id,
-    )
-    now_iso = datetime.datetime.now().isoformat()
-    override_review: Dict[str, Any] = {
-        "status": "approved",
-        "reviewer": actor,
-        "reviewer_id": actor,
-        "requested_by": review.get("requested_by") or review.get("reviewer_id") or "",
-        "score": 100,
-        "summary": str(req.reason or "").strip(),
-        "critique_points": [],
-        "actionable_next_steps": [],
-        "reviewed_at": now_iso,
-        "source": "four_eyes_override",
-        "four_eyes_evidence": evidence,
-        "overrides": {
-            "previous_status": review.get("status"),
-            "previous_reviewer_id": review.get("reviewer_id"),
-        },
-    }
-    from backend.kanban_sidecar import update_kanban_meta
-
-    def _apply_meta(meta):
-        meta.setdefault("tasks", {}).setdefault(task_id, {})["quality_review"] = override_review
-        return meta
-
-    await asyncio.to_thread(update_kanban_meta, _apply_meta)
-
-    def _record_sync() -> None:
-        c = _get_kanban_connection(maintenance=True)
-        try:
-            c.execute(
-                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
-                (task_id, "quality_review_override", json.dumps(override_review, ensure_ascii=False), now_iso),
-            )
-            c.execute(
-                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
-                (task_id, "status_changed", json.dumps({
-                    "from": old_status, "to": "done", "actor": actor, "force": True,
-                    "reason": req.reason, "four_eyes_evidence": evidence,
-                    "previous_review": review,
-                }, ensure_ascii=False), now_iso),
-            )
-            if old_status == "review":
-                c.execute(
-                    "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ? AND status = 'review'",
-                    (now_iso, task_id),
-                )
-            c.commit()
-        finally:
-            c.close()
-
-    await asyncio.to_thread(_record_sync)
-    return {"status": "success", "task_id": task_id, "quality_review": override_review}
+    return await _run_quality_review_override(task_id, actor, req, _build_review_deps())
 
 
 class ResetZombieTasksRequest(BaseModel):

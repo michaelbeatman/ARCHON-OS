@@ -5,6 +5,25 @@
 
 const POCKETBASE_URL = 'http://127.0.0.1:8090';
 
+function escapePbFilterValue(val) {
+  return String(val || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+async function getPbAuthHeaders(extra = {}) {
+  const headers = { ...extra };
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      const stored = await chrome.storage.local.get(['pb_auth_token']);
+      if (stored && typeof stored.pb_auth_token === 'string' && stored.pb_auth_token.trim()) {
+        headers['Authorization'] = `Bearer ${stored.pb_auth_token.trim()}`;
+      }
+    }
+  } catch (e) {
+    console.warn('[Archon Background] Auth token lookup failed:', e);
+  }
+  return headers;
+}
+
 function cleanUrl(url) {
   if (!url) return '';
   let u = url.trim().toLowerCase();
@@ -16,10 +35,14 @@ function cleanUrl(url) {
 
 async function findExistingContact(linkedinUrl, name) {
   const normUrl = cleanUrl(linkedinUrl);
+  const authHeaders = await getPbAuthHeaders();
 
   if (normUrl) {
     try {
-      const res = await fetch(`${POCKETBASE_URL}/api/collections/kontakte/records?filter=${encodeURIComponent(`linkedin_url ~ "${normUrl}"`)}&perPage=5`);
+      const safeUrl = escapePbFilterValue(normUrl);
+      const res = await fetch(`${POCKETBASE_URL}/api/collections/kontakte/records?filter=${encodeURIComponent(`linkedin_url ~ "${safeUrl}"`)}&perPage=5`, {
+        headers: authHeaders
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.items && data.items.length > 0) {
@@ -36,7 +59,10 @@ async function findExistingContact(linkedinUrl, name) {
   if (name && name.trim()) {
     try {
       const cleanName = name.trim().toLowerCase();
-      const res = await fetch(`${POCKETBASE_URL}/api/collections/kontakte/records?filter=${encodeURIComponent(`name ~ "${cleanName}"`)}&perPage=5`);
+      const safeName = escapePbFilterValue(cleanName);
+      const res = await fetch(`${POCKETBASE_URL}/api/collections/kontakte/records?filter=${encodeURIComponent(`name ~ "${safeName}"`)}&perPage=5`, {
+        headers: authHeaders
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.items && data.items.length > 0) {
@@ -73,9 +99,10 @@ async function saveProfile(data) {
     if (newTags.length !== existingTags.length) patchPayload.tags = newTags;
 
     if (Object.keys(patchPayload).length > 0) {
+      const patchHeaders = await getPbAuthHeaders({ 'Content-Type': 'application/json' });
       const res = await fetch(`${POCKETBASE_URL}/api/collections/kontakte/records/${existing.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: patchHeaders,
         body: JSON.stringify(patchPayload)
       });
       if (!res.ok) {
@@ -104,9 +131,10 @@ async function saveProfile(data) {
       vernetzt_am: ''
     };
 
+    const postHeaders = await getPbAuthHeaders({ 'Content-Type': 'application/json' });
     const res = await fetch(`${POCKETBASE_URL}/api/collections/kontakte/records`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: postHeaders,
       body: JSON.stringify(postPayload)
     });
 
@@ -119,11 +147,28 @@ async function saveProfile(data) {
   }
 }
 
+function isAuthorizedSender(sender) {
+  if (!sender || sender.id !== chrome.runtime.id) return false;
+  if (sender.tab && sender.tab.url) {
+    return /^https:\/\/([a-z0-9-]+\.)?linkedin\.com\/in\//i.test(sender.tab.url);
+  }
+  return true;
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'SAVE_PROFILE') {
+  if (!isAuthorizedSender(sender)) {
+    sendResponse({ success: false, message: 'Unauthorized message sender' });
+    return false;
+  }
+  if (request && request.action === 'SAVE_PROFILE') {
+    if (!request.data || typeof request.data !== 'object' || Array.isArray(request.data)) {
+      sendResponse({ success: false, message: 'Invalid profile payload' });
+      return false;
+    }
     saveProfile(request.data)
       .then(result => sendResponse({ success: true, message: result.message }))
       .catch(err => sendResponse({ success: false, message: err.message }));
     return true;
   }
+  return false;
 });

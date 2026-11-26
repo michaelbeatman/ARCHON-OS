@@ -65,7 +65,8 @@ fi
 
 # 6. Berechtigungen setzen
 echo "[5/6] Setze Datei- und Docker-Socket Berechtigungen..."
-chmod -R u+rwX,go+rX data pocketbase pocketbase-media static manifests 2>/dev/null || true
+chmod -R u+rwX,go-rwx data pocketbase pocketbase-media 2>/dev/null || true
+chmod -R u+rwX,go+rX static manifests 2>/dev/null || true
 chmod +x export_state.sh setup_new_machine.sh 2>/dev/null || true
 
 # 7. Starten der Container im Entwicklermodus mit Hot-Reloading

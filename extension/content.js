@@ -208,20 +208,28 @@
     });
   }
 
-  // Observe DOM for Contact Info modal openings
+  // Observe DOM for Contact Info modal openings (debounced + deduplicated)
   function setupModalObserver() {
+    let modalDebounceTimer = null;
+    let lastModalKey = '';
     const observer = new MutationObserver(() => {
-      const contactData = extractContactModalData();
-      if (contactData) {
+      clearTimeout(modalDebounceTimer);
+      modalDebounceTimer = setTimeout(() => {
+        const contactData = extractContactModalData();
+        if (!contactData) return;
         const baseData = extractProfileData() || {};
         const fullPayload = { ...baseData, ...contactData };
+        const key = JSON.stringify([fullPayload.linkedin_url || '', contactData]);
+        if (key === lastModalKey) return;
+        lastModalKey = key;
 
         chrome.runtime.sendMessage({ action: 'SAVE_PROFILE', data: fullPayload }, (response) => {
+          if (chrome.runtime.lastError) return;
           if (response && response.success) {
             showToast(`⚡ Archon CRM: Kontaktdaten (E-Mail / Tel) ergänzt!`, true);
           }
         });
-      }
+      }, 400);
     });
 
     observer.observe(document.body, { childList: true, subtree: true });

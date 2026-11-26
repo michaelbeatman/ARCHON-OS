@@ -1,11 +1,9 @@
 import shutil, os
 
 src_dir = r'.'
-targets = [
-    r'/path/to/archon-os OS-Dist 0.1',
-    r'/path/to/archon-os OS-Dist 0.1 ink. knoledgeDB'
-]
-dirs_to_copy = ['backend', 'static', 'scripts', 'config', 'docs']
+_env_targets = [t.strip() for t in os.environ.get("ARCHON_DIST_TARGETS", "").split(os.pathsep) if t.strip()]
+targets = _env_targets
+dirs_to_copy = ['archon', 'backend', 'static', 'scripts', 'config', 'docs']
 files_to_copy = [
     'main.py',
     'docker-compose.yml',

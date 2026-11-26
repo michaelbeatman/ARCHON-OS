@@ -9,7 +9,7 @@ services:
     container_name: CRM
     restart: unless-stopped
     ports:
-      - "3002:3002"
+      - "127.0.0.1:3002:3002"
     environment:
       - PORT=3002
 
@@ -18,7 +18,7 @@ services:
     container_name: Pocketbase
     restart: unless-stopped
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
     volumes:
       - ./pb_data:/pb_data
       - ./pb_hooks:/pb_hooks

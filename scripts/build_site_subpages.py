@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Generate Phase 3 indexable SEO/GEO HTML subpages (5 EN + 5 DE) from real repo data.
+"""Generate Phase 3 indexable SEO/GEO HTML subpages from real repo data.
 
-Pages generated:
-  - architecture/            <-> de/architektur/
-  - gdpr-zero-egress/        <-> de/dsgvo-zero-egress/
-  - compare/                 <-> de/vergleich/
-  - boardroom-frameworks/    <-> de/boardroom-frameworks/
-  - specialists/             <-> de/spezialisten/
+Pages generated (19 HTML subpages total):
+  - 4 EN <-> DE deep-dive guides (8 pages):
+      architecture/       <-> de/architektur/
+      gdpr-zero-egress/   <-> de/dsgvo-zero-egress/
+      compare/            <-> de/vergleich/
+      specialists/        <-> de/spezialisten/
+  - 11 fully localized AI Boardroom Frameworks catalogs (11 pages):
+      boardroom-frameworks/          (EN)
+      <lang>/boardroom-frameworks/   (de, es, fr, it, ja, ko, nl, pt, ru, zh)
 """
 from __future__ import annotations
 
@@ -14,6 +17,8 @@ import ast
 import html as html_lib
 import json
 import re
+import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -27,10 +32,76 @@ from site_svg_assets import (
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
+I18N = SITE / "i18n"
+DOCS_SYS = ROOT / "docs" / "system"
 REPO_URL = "https://github.com/michaelbeatman/ARCHON-OS"
 LINKEDIN_URL = "https://www.linkedin.com/in/michael-keller-a43b6611b/"
 CONTACT_EMAIL = "archon.os.system@gmail.com"
 VERSION_FILE = ROOT / "config" / "version.json"
+
+LANGS: dict[str, tuple[str, str]] = {
+    "en": ("en", "EN · English"),
+    "de": ("de", "DE · Deutsch"),
+    "es": ("es", "ES · Español"),
+    "fr": ("fr", "FR · Français"),
+    "it": ("it", "IT · Italiano"),
+    "ja": ("ja", "JA · 日本語"),
+    "ko": ("ko", "KO · 한국어"),
+    "nl": ("nl", "NL · Nederlands"),
+    "pt": ("pt", "PT · Português"),
+    "ru": ("ru", "RU · Русский"),
+    "zh": ("zh-CN", "ZH · 中文"),
+}
+
+OG_LOCALES: dict[str, str] = {
+    "en": "en_US",
+    "de": "de_DE",
+    "es": "es_ES",
+    "fr": "fr_FR",
+    "it": "it_IT",
+    "ja": "ja_JP",
+    "ko": "ko_KR",
+    "nl": "nl_NL",
+    "pt": "pt_PT",
+    "ru": "ru_RU",
+    "zh": "zh_CN",
+}
+
+COPY_LABELS: dict[str, tuple[str, str]] = {
+    "en": ("Copy", "Copied"),
+    "de": ("Kopieren", "Kopiert"),
+    "es": ("Copiar", "Copiado"),
+    "fr": ("Copier", "Copié"),
+    "it": ("Copia", "Copiato"),
+    "ja": ("コピー", "コピー済み"),
+    "ko": ("복사", "복사됨"),
+    "nl": ("Kopiëren", "Gekopieerd"),
+    "pt": ("Copiar", "Copiado"),
+    "ru": ("Копировать", "Скопировано"),
+    "zh": ("复制", "已复制"),
+}
+
+DOCX_FILES: dict[str, str] = {
+    "de": "ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.docx",
+    "en": "ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.docx",
+    "fr": "ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_FR.docx",
+    "it": "ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_IT.docx",
+    "ko": "ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.docx",
+    "pt": "ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_PT.docx",
+    "ru": "ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.docx",
+}
+
+CATEGORY_RANGES: list[tuple[int, int]] = [
+    (1, 7),
+    (8, 13),
+    (14, 19),
+    (20, 25),
+    (26, 31),
+    (32, 36),
+    (37, 41),
+    (42, 47),
+    (48, 55),
+]
 
 SUBPAGE_PAIRS: list[tuple[str, str]] = [
     ("architecture/", "de/architektur/"),
@@ -39,6 +110,9 @@ SUBPAGE_PAIRS: list[tuple[str, str]] = [
     ("boardroom-frameworks/", "de/boardroom-frameworks/"),
     ("specialists/", "de/spezialisten/"),
 ]
+
+_SECTIONS_CACHE: dict[str, dict[str, Any]] | None = None
+_FW_OVERRIDES_CACHE: dict[str, Any] | None = None
 
 
 def _esc(text: Any) -> str:
@@ -50,8 +124,141 @@ def _load_version() -> tuple[str, str]:
     return v, v.lstrip("v")
 
 
-def _load_boardroom_frameworks() -> list[tuple[str, list[tuple[str, str]]]]:
-    """Load real categorized frameworks from build_mastermind_v2.py (fallback: frameworks.json)."""
+def _load_sections_i18n() -> dict[str, dict[str, Any]]:
+    global _SECTIONS_CACHE
+    if _SECTIONS_CACHE is None:
+        raw: dict[str, dict[str, Any]] = json.loads(
+            (I18N / "sections_i18n.json").read_text(encoding="utf-8")
+        )
+        _SECTIONS_CACHE = raw
+    return _SECTIONS_CACHE
+
+
+def _load_fw_overrides() -> dict[str, Any]:
+    global _FW_OVERRIDES_CACHE
+    if _FW_OVERRIDES_CACHE is None:
+        raw: dict[str, Any] = json.loads(
+            (I18N / "boardroom_frameworks_overrides.json").read_text(encoding="utf-8")
+        )
+        _FW_OVERRIDES_CACHE = raw
+    return _FW_OVERRIDES_CACHE
+
+
+def _cap_first(text: str) -> str:
+    s = text.strip()
+    if not s:
+        return s
+    if s[0].islower():
+        return s[0].upper() + s[1:]
+    return s
+
+
+def _clean_fw_desc(raw: str, lang: str) -> str:
+    s = re.sub(r"\s+", " ", raw).strip()
+    # Strip leading [METHODIK-FRAMEWORK: ...] prompt tags
+    s = re.sub(r"^\s*\[[^\]]+\]\s*", "", s)
+    # Strip redundant leading "Core Methodology:" / localized equivalent
+    s = re.sub(
+        r"^(?:Kern-Methodik|Core\s+[Mm]ethodology|Méthodologie\s+centrale|Metodologia\s+di\s+base|"
+        r"핵심\s*방법론|Metodologia\s+central|Основная\s+методология)\s*[:：]\s*",
+        "",
+        s,
+        flags=re.I,
+    )
+    # Strip trailing output-format prompt boilerplate
+    s = re.sub(
+        r"\s*(?:AUSGABE-FORMAT|Strict\s+output\s+format|Output[\s-]*format|Format\s+de\s+sortie|"
+        r"Formato\s+di\s+(?:output|uscita)|출력\s*형식|Formato\s+de\s+saída|Формат\s+вывода)\s*[:：].*$",
+        "",
+        s,
+        flags=re.I,
+    ).strip()
+    # Replace verbose "Phases & review steps:" separator cleanly
+    s = re.sub(
+        r"[:：]?\s*(?:Phasen\s*&\s*Prüfschritte|Phases\s*&\s*(?:review|verification)\s*steps|"
+        r"Phases\s+et\s+étapes\s+de\s+contrôle|Fase\s+e\s+fasi\s+di\s+(?:verifica|prova)|"
+        r"단계\s*및\s*검토\s*절차|Fases\s*&\s*etapas\s+de\s+verificação|"
+        r"Фазы\s+и\s+этапы\s+[^:：]{2,40})\s*[:：]\s*",
+        " — ",
+        s,
+        flags=re.I,
+    )
+    # Unwrap any remaining inline [Phase] brackets so zero raw brackets remain
+    s = re.sub(r"\[([^\]]+)\]", r"\1", s)
+    s = s.replace("[", "").replace("]", "")
+    if lang == "ko":
+        s = re.sub(r"\bHYPOTHESE\b", "가설", s)
+    s = re.sub(r"\s*•\s*", " · ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    s = _cap_first(s)
+    if len(s) > 225:
+        cut = s[:222].rstrip(" ,;:-·")
+        # Avoid cutting in the middle of a Latin/Cyrillic word
+        if " " in cut and len(cut) > 160:
+            last_sp = cut.rfind(" ")
+            if last_sp > 160:
+                cut = cut[:last_sp].rstrip(" ,;:-·")
+        s = cut + "..."
+    return s
+
+
+def _extract_docx_frameworks(docx_path: Path) -> dict[int, tuple[str, str]]:
+    """Extract numbered frameworks (1..55) from a localized Boardroom DOCX (body paragraphs only)."""
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    with zipfile.ZipFile(docx_path) as zf:
+        root = ET.fromstring(zf.read("word/document.xml"))
+    body = root.find("w:body", ns)
+    if body is None:
+        return {}
+
+    paras: list[str] = []
+    for p in body.findall("w:p", ns):
+        txt = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+        if txt:
+            paras.append(txt)
+
+    items: dict[int, tuple[str, str]] = {}
+    cur_id: int | None = None
+    cur_name = ""
+    cur_lines: list[str] = []
+    started = False
+
+    fw_re = re.compile(r"^[^:：\d]{1,42}\s*([1-5][0-9]|0?[1-9])\s*[:：]\s*(.+)$")
+    cat_re = re.compile(
+        r"^(?:Kategorie|Category|Catégorie|Categoria|Категория|카테고리)\s*[1-9]\b",
+        re.I,
+    )
+
+    for line in paras:
+        if cat_re.match(line):
+            started = True
+            if cur_id is not None:
+                items[cur_id] = (cur_name, " ".join(cur_lines))
+                cur_id = None
+                cur_lines = []
+            continue
+        if not started:
+            continue
+        m = fw_re.match(line)
+        if m:
+            fid = int(m.group(1))
+            if 1 <= fid <= 55 and fid not in items:
+                if cur_id is not None:
+                    items[cur_id] = (cur_name, " ".join(cur_lines))
+                cur_id = fid
+                cur_name = m.group(2).strip()
+                cur_lines = []
+                continue
+        if cur_id is not None:
+            cur_lines.append(line)
+
+    if cur_id is not None:
+        items[cur_id] = (cur_name, " ".join(cur_lines))
+    return items
+
+
+def _load_boardroom_frameworks_fallback() -> list[tuple[str, list[tuple[str, str]]]]:
+    """Fallback loader from build_mastermind_v2.py / frameworks.json if DOCX is absent."""
     mm = ROOT / "scripts" / "build_mastermind_v2.py"
     if mm.is_file():
         src = mm.read_text(encoding="utf-8", errors="ignore")
@@ -64,7 +271,7 @@ def _load_boardroom_frameworks() -> list[tuple[str, list[tuple[str, str]]]]:
                             raw = ast.literal_eval(node.value)
                             out: list[tuple[str, list[tuple[str, str]]]] = []
                             for cat, fw_map in raw.items():
-                                items = []
+                                items: list[tuple[str, str]] = []
                                 if isinstance(fw_map, dict):
                                     for name, desc in fw_map.items():
                                         d = desc if isinstance(desc, str) else str(desc)
@@ -87,6 +294,39 @@ def _load_boardroom_frameworks() -> list[tuple[str, list[tuple[str, str]]]]:
             out.append((str(cat), items))
         return out
     return []
+
+
+def _load_localized_frameworks(lang: str) -> list[tuple[str, list[tuple[str, str]]]]:
+    """Load 55 clean native-language frameworks grouped into 9 localized categories."""
+    ov_data = _load_fw_overrides()
+    cat_titles: list[str] = ov_data["categories"].get(lang, ov_data["categories"]["en"])
+    lang_ov: dict[str, list[str]] = ov_data["overrides"].get(lang, {})
+
+    by_id: dict[int, tuple[str, str]] = {}
+    if lang in DOCX_FILES:
+        docx_path = DOCS_SYS / DOCX_FILES[lang]
+        if docx_path.is_file():
+            by_id = _extract_docx_frameworks(docx_path)
+
+    for k, pair in lang_ov.items():
+        by_id[int(k)] = (pair[0], pair[1])
+
+    if len(by_id) < 55:
+        return _load_boardroom_frameworks_fallback()
+
+    grouped: list[tuple[str, list[tuple[str, str]]]] = []
+    for idx, (lo, hi) in enumerate(CATEGORY_RANGES):
+        cat_label = cat_titles[idx] if idx < len(cat_titles) else f"Category {idx + 1}"
+        items: list[tuple[str, str]] = []
+        for fid in range(lo, hi + 1):
+            raw_name, raw_desc = by_id[fid]
+            name = _cap_first(raw_name.replace("[", "").replace("]", "").strip())
+            if lang == "ko":
+                name = name.replace("Analyse", "Analysis")
+            desc = _clean_fw_desc(raw_desc, lang)
+            items.append((name, desc))
+        grouped.append((cat_label, items))
+    return grouped
 
 
 def _load_specialists() -> list[dict[str, Any]]:
@@ -112,36 +352,76 @@ def _render_shell(
     schema_type: str,
     base_url: str,
     lastmod: str,
+    hreflang_map: dict[str, str] | None = None,
 ) -> str:
     b = base_url.rstrip("/") + "/"
     depth = len([p for p in rel_path.strip("/").split("/") if p])
     asset_base = "../" * depth
-    home_href = asset_base if lang == "en" else ("../" * (depth - 1))
+    home_href = asset_base if lang == "en" else (asset_base + lang + "/")
     can_url = b + rel_path
-    en_url = b + alt_en_rel
-    de_url = b + alt_de_rel
     og_img = b + "assets/img/og-card.png"
     version, version_bare = _load_version()
 
+    html_lang = LANGS.get(lang, (lang, lang))[0]
+    og_locale = OG_LOCALES.get(lang, "en_US")
+    copy_lbl, copied_lbl = COPY_LABELS.get(lang, ("Copy", "Copied"))
+
+    secs = _load_sections_i18n()
+    sec = secs.get(lang, secs["en"])
+    nav = sec["nav"]
+    fw_meta = sec["fwPage"]
+
     is_de = lang == "de"
-    og_locale = "de_DE" if is_de else "en_US"
-    copy_lbl = "Kopieren" if is_de else "Copy"
-    copied_lbl = "Kopiert" if is_de else "Copied"
-    other_href = (asset_base + alt_en_rel) if is_de else (asset_base + alt_de_rel)
-    other_label = "EN · English" if is_de else "DE · Deutsch"
-    home_label = "Startseite" if is_de else "Home"
+    arch_href = asset_base + ("de/architektur/" if is_de else "architecture/")
+    gdpr_href = asset_base + ("de/dsgvo-zero-egress/" if is_de else "gdpr-zero-egress/")
+    cmp_href = asset_base + ("de/vergleich/" if is_de else "compare/")
+    fw_href = asset_base + ("boardroom-frameworks/" if lang == "en" else f"{lang}/boardroom-frameworks/")
+    spec_href = asset_base + ("de/spezialisten/" if is_de else "specialists/")
+
+    if hreflang_map:
+        hreflang_lines = [
+            f'<link rel="alternate" hreflang="{code}" href="{b + rel}">'
+            for code, rel in hreflang_map.items()
+        ]
+        hreflang_lines.append(
+            f'<link rel="alternate" hreflang="x-default" href="{b + hreflang_map["en"]}">'
+        )
+        hreflang_html = "\n".join(hreflang_lines)
+        opts = []
+        for code, (_, label) in LANGS.items():
+            target = asset_base + hreflang_map[code]
+            sel = " selected" if code == lang else ""
+            opts.append(f'<option value="{target}"{sel}>{label}</option>')
+        switcher_html = (
+            '<select class="lang-switch" aria-label="Language" '
+            'onchange="if(this.value)window.location.href=this.value">'
+            + "".join(opts)
+            + "</select>"
+        )
+    else:
+        en_url = b + alt_en_rel
+        de_url = b + alt_de_rel
+        hreflang_html = (
+            f'<link rel="alternate" hreflang="en" href="{en_url}">\n'
+            f'<link rel="alternate" hreflang="de" href="{de_url}">\n'
+            f'<link rel="alternate" hreflang="x-default" href="{en_url}">'
+        )
+        other_href = (asset_base + alt_en_rel) if is_de else (asset_base + alt_de_rel)
+        other_label = "EN · English" if is_de else "DE · Deutsch"
+        switcher_html = f'<a href="{other_href}" class="lang-switch">{other_label}</a>'
 
     nav_links = (
-        f'<a href="{home_href}">{home_label}</a>'
-        f'<a href="{asset_base}{"de/architektur/" if is_de else "architecture/"}">{"Architektur" if is_de else "Architecture"}</a>'
-        f'<a href="{asset_base}{"de/dsgvo-zero-egress/" if is_de else "gdpr-zero-egress/"}">{"DSGVO" if is_de else "GDPR"}</a>'
-        f'<a href="{asset_base}{"de/vergleich/" if is_de else "compare/"}">{"Vergleich" if is_de else "Compare"}</a>'
-        f'<a href="{asset_base}{"de/boardroom-frameworks/" if is_de else "boardroom-frameworks/"}">Frameworks</a>'
-        f'<a href="{asset_base}{"de/spezialisten/" if is_de else "specialists/"}">{"Spezialisten" if is_de else "Specialists"}</a>'
-        f'<a href="{other_href}" class="lang-switch">{other_label}</a>'
+        f'<a href="{home_href}">{_esc(nav["home"])}</a>'
+        f'<a href="{arch_href}">{_esc(nav["arch"])}</a>'
+        f'<a href="{gdpr_href}">{_esc(nav["gdpr"])}</a>'
+        f'<a href="{cmp_href}">{_esc(nav["compare"])}</a>'
+        f'<a href="{fw_href}">{_esc(nav["frameworks"])}</a>'
+        f'<a href="{spec_href}">{_esc(nav["specialists"])}</a>'
+        f"{switcher_html}"
         '<button type="button" class="theme-btn" data-theme-toggle>Light</button>'
     )
 
+    home_can = b if lang == "en" else (b + lang + "/")
     json_ld = json.dumps(
         {
             "@context": "https://schema.org",
@@ -153,7 +433,7 @@ def _render_shell(
                             "@type": "ListItem",
                             "position": 1,
                             "name": "Archon OS",
-                            "item": b if not is_de else b + "de/",
+                            "item": home_can,
                         },
                         {
                             "@type": "ListItem",
@@ -168,7 +448,7 @@ def _render_shell(
                     "headline": h1,
                     "name": title,
                     "description": description,
-                    "inLanguage": lang,
+                    "inLanguage": html_lang,
                     "url": can_url,
                     "dateModified": lastmod,
                     "image": og_img,
@@ -200,7 +480,7 @@ def _render_shell(
     )
 
     return f"""<!doctype html>
-<html lang="{lang}">
+<html lang="{html_lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -209,9 +489,7 @@ def _render_shell(
 <meta name="author" content="Michael Keller (Michael Beatman)">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <link rel="canonical" href="{can_url}">
-<link rel="alternate" hreflang="en" href="{en_url}">
-<link rel="alternate" hreflang="de" href="{de_url}">
-<link rel="alternate" hreflang="x-default" href="{en_url}">
+{hreflang_html}
 <link rel="icon" type="image/png" href="{asset_base}archon_hand.png">
 <link rel="preload" href="{asset_base}assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{asset_base}assets/site.css">
@@ -232,7 +510,7 @@ def _render_shell(
 {json_ld}
 </script>
 </head>
-<body data-copy="{copy_lbl}" data-copied="{copied_lbl}">
+<body data-copy="{_esc(copy_lbl)}" data-copied="{_esc(copied_lbl)}">
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
     <div class="davinci-layer-under">{build_davinci_vertical_underlayer_svg()}</div>
@@ -250,7 +528,7 @@ def _render_shell(
       <img class="hand-avatar" src="{asset_base}archon_hand.png" width="40" height="40" alt="Archon OS">
       <span>
         <span class="brand-name">Archon OS</span>
-        <span class="tag">{version} &middot; {"Selbstgehostetes Multi-Agenten-OS" if is_de else "Self-Hosted Agentic OS"}</span>
+        <span class="tag">{version} &middot; {_esc(fw_meta["tagline"])}</span>
       </span>
     </a>
     <nav aria-label="Main navigation">{nav_links}</nav>
@@ -268,8 +546,8 @@ def _render_shell(
         <h1>{_esc(h1)}</h1>
         <p class="hero-lead">{_esc(lead)}</p>
         <div class="btnrow">
-          <a class="btn primary" href="{REPO_URL}">{"Auf GitHub ansehen" if is_de else "View on GitHub"}</a>
-          <a class="btn" href="{home_href}#install">{"Schnellstart (Docker)" if is_de else "Quick Start (Docker)"}</a>
+          <a class="btn primary" href="{REPO_URL}">{_esc(fw_meta["ctaGithub"])}</a>
+          <a class="btn" href="{home_href}#install">{_esc(fw_meta["ctaQuickstart"])}</a>
         </div>
       </div>
     </div>
@@ -293,7 +571,7 @@ def _render_shell(
 
 <footer>
   <div class="wrap">
-    <a href="{home_href}">Archon OS {home_label}</a>
+    <a href="{home_href}">Archon OS {_esc(nav["home"])}</a>
     <a href="{REPO_URL}">GitHub</a>
     <a href="{REPO_URL}/blob/main/LICENSE">MIT</a>
     <a href="{LINKEDIN_URL}" rel="noopener me">LinkedIn</a>
@@ -308,7 +586,9 @@ def _render_shell(
 
 
 def _page_architecture(lang: str) -> tuple[str, str, str, str, str, str]:
-    svg = build_zero_egress_diagram_svg(lang)
+    secs = _load_sections_i18n()
+    svg_labels = secs.get(lang, secs["en"])["arch"]["svg"]
+    svg = build_zero_egress_diagram_svg(lang, svg_labels)
     if lang == "de":
         title = "Archon OS Architektur: PolicyEngine, BudgetBank & Docker-Stack"
         desc = "Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & Hardware-Specs."
@@ -523,60 +803,49 @@ def _page_compare(lang: str) -> tuple[str, str, str, str, str, str]:
 
 
 def _page_frameworks(lang: str) -> tuple[str, str, str, str, str, str]:
-    cats = _load_boardroom_frameworks()
+    cats = _load_localized_frameworks(lang)
     total_loaded = sum(len(items) for _, items in cats)
-    is_de = lang == "de"
+    secs = _load_sections_i18n()
+    fw_meta = secs.get(lang, secs["en"])["fwPage"]
 
-    pills = [f'<button type="button" class="filter-pill is-active" data-dir-cat="all">{"Alle" if is_de else "All"} ({total_loaded})</button>']
-    cards = []
+    all_label = fw_meta["allLabel"]
+    pills = [
+        f'<button type="button" class="filter-pill is-active" data-dir-cat="all">{_esc(all_label)} ({total_loaded})</button>'
+    ]
+    cards: list[str] = []
     for idx, (cat_name, items) in enumerate(cats):
         cid = f"cat-{idx}"
         short = cat_name.split(":", 1)[-1].strip() if ":" in cat_name else cat_name
-        pills.append(f'<button type="button" class="filter-pill" data-dir-cat="{cid}">{_esc(short)} ({len(items)})</button>')
+        pills.append(
+            f'<button type="button" class="filter-pill" data-dir-cat="{cid}">{_esc(short)} ({len(items)})</button>'
+        )
         for fw_name, fw_desc in items:
-            clean_desc = re.sub(r"\s+", " ", fw_desc).strip()
-            # Remove leading duplicate [METHODIK-FRAMEWORK: ...] prompt header
-            clean_desc = re.sub(r"^\s*\[[^\]]+\]\s*", "", clean_desc)
-            # Trim raw prompt output-format boilerplate (e.g. AUSGABE-FORMAT: ### ...)
-            clean_desc = re.sub(r"\s*AUSGABE-FORMAT:.*$", "", clean_desc, flags=re.I).strip()
-            # Unwrap any remaining inline [Phase] brackets so no raw prompt brackets appear in cards
-            clean_desc = re.sub(r"\[([^\]]+)\]", r"\1", clean_desc).strip()
-            if len(clean_desc) > 220:
-                clean_desc = clean_desc[:217].rstrip() + "..."
             cards.append(
                 f'<div class="feat" data-dir-item data-cat="{cid}">'
                 f'<span class="hub-kicker" style="display:block;font-family:var(--font-mono);font-size:0.68rem;color:var(--fg-subtle);margin-bottom:0.3rem">{_esc(short)}</span>'
-                f'<h3>{_esc(fw_name)}</h3>'
-                f'<p>{_esc(clean_desc)}</p>'
-                f'</div>'
+                f"<h3>{_esc(fw_name)}</h3>"
+                f"<p>{_esc(fw_desc)}</p>"
+                f"</div>"
             )
 
-    if is_de:
-        title = "AI Boardroom: 80 Entscheidungs-Frameworks in Archon OS"
-        desc = "Durchsuchbarer Katalog der strukturierten AI-Boardroom-Methodiken in Archon OS: isolierte Multi-Perspektiven-Debatten von OKR bis Pre-Mortem."
-        eyebrow = "AI Boardroom Frameworks"
-        h1 = "Strukturierte Multi-Perspektiven-Debatten statt Einzel-Prompt-Antworten."
-        lead = f"Der AI Boardroom führt strategische Fragen isoliert über mehrere Spezialisten-Rollen mit Kritiker-Kreuzverhör und Synthese durch. Unten findest du {total_loaded} Kern-Methodiken direkt aus der Decision Engine (Gesamtkatalog: 80 Frameworks inkl. domänenspezifischer Erweiterungen im PDF-Kompendium)."
-        ph = "Framework oder Methode suchen (z. B. Pre-Mortem, OKR, Six Sigma, Porter)..."
-        cnt_lbl = "Angezeigte Frameworks:"
-    else:
-        title = "AI Boardroom: 80 Decision Frameworks in Archon OS"
-        desc = "Searchable catalog of structured AI Boardroom methodologies in Archon OS: isolated multi-perspective debates with critic cross-examination."
-        eyebrow = "AI Boardroom Frameworks"
-        h1 = "Structured multi-perspective debates instead of single-prompt guesses."
-        lead = f"Archon OS runs strategic decisions through isolated specialist roles, adversarial critic cross-examination, and final synthesis. Browse {total_loaded} core decision-engine methodologies below (80 total frameworks including domain modules in the full PDF compendium)."
-        ph = "Search frameworks (e.g. Pre-Mortem, OKR, Six Sigma, Porter)..."
-        cnt_lbl = "Visible frameworks:"
-
+    ph = fw_meta["placeholder"]
+    cnt_lbl = fw_meta["countLabel"]
     body = f"""
 <div class="filter-bar">
   <input type="search" class="filter-input" placeholder="{_esc(ph)}" data-dir-search aria-label="{_esc(ph)}">
-  <span style="font-family:var(--font-mono);font-size:0.8rem;color:var(--fg-muted)">{cnt_lbl} <strong data-dir-count>{total_loaded}</strong></span>
+  <span style="font-family:var(--font-mono);font-size:0.8rem;color:var(--fg-muted)">{_esc(cnt_lbl)} <strong data-dir-count>{total_loaded}</strong></span>
 </div>
 <div class="filter-pills" style="margin-bottom:1.5rem">{''.join(pills)}</div>
 <div class="feats">{''.join(cards)}</div>
 """
-    return title, desc, eyebrow, h1, lead, body
+    return (
+        fw_meta["title"],
+        fw_meta["desc"],
+        fw_meta["eyebrow"],
+        fw_meta["h1"],
+        fw_meta["lead"],
+        body,
+    )
 
 
 def _page_specialists(lang: str) -> tuple[str, str, str, str, str, str]:
@@ -585,29 +854,40 @@ def _page_specialists(lang: str) -> tuple[str, str, str, str, str, str]:
 
     by_cat: dict[str, list[dict[str, Any]]] = {}
     for p in profiles:
-        c = str(p.get("category") or "Other")
+        if is_de:
+            c = str(p.get("category") or "Sonstige")
+        else:
+            c = str(p.get("category_en") or p.get("category") or "Other")
         by_cat.setdefault(c, []).append(p)
 
-    pills = [f'<button type="button" class="filter-pill is-active" data-dir-cat="all">{"Alle Domänen" if is_de else "All Domains"} ({len(profiles)})</button>']
-    cards = []
+    pills = [
+        f'<button type="button" class="filter-pill is-active" data-dir-cat="all">{"Alle Domänen" if is_de else "All Domains"} ({len(profiles)})</button>'
+    ]
+    cards: list[str] = []
     for idx, (cat_name, items) in enumerate(sorted(by_cat.items())):
         cid = f"dom-{idx}"
-        pills.append(f'<button type="button" class="filter-pill" data-dir-cat="{cid}">{_esc(cat_name)} ({len(items)})</button>')
+        pills.append(
+            f'<button type="button" class="filter-pill" data-dir-cat="{cid}">{_esc(cat_name)} ({len(items)})</button>'
+        )
         for p in items:
             pid = p.get("id", "")
-            name = p.get("name", pid)
-            desc = p.get("description", "")
-            neg = p.get("negative_scope" if is_de else "negative_scope_en") or p.get("negative_scope", "")
+            name = (p.get("name") if is_de else (p.get("name_en") or p.get("name"))) or pid
+            desc = (p.get("description") if is_de else (p.get("description_en") or p.get("description"))) or ""
+            neg = (p.get("negative_scope") if is_de else (p.get("negative_scope_en") or p.get("negative_scope"))) or ""
             cap = p.get("daily_cost_limit_eur")
             cap_str = f" · Limit {cap:.2f} EUR/d" if isinstance(cap, (int, float)) else ""
-            neg_html = f'<p style="margin-top:0.45rem;font-size:0.78rem;color:var(--silver)">Guardrail: {_esc(neg[:160])}</p>' if neg else ""
+            neg_html = (
+                f'<p style="margin-top:0.45rem;font-size:0.78rem;color:var(--silver)">Guardrail: {_esc(neg[:160])}</p>'
+                if neg
+                else ""
+            )
             cards.append(
                 f'<div class="feat" data-dir-item data-cat="{cid}">'
                 f'<span style="display:block;font-family:var(--font-mono);font-size:0.68rem;color:var(--fg-subtle);margin-bottom:0.25rem">@{_esc(pid)}{_esc(cap_str)}</span>'
-                f'<h3>{_esc(name)}</h3>'
-                f'<p>{_esc(desc)}</p>'
-                f'{neg_html}'
-                f'</div>'
+                f"<h3>{_esc(name)}</h3>"
+                f"<p>{_esc(desc)}</p>"
+                f"{neg_html}"
+                f"</div>"
             )
 
     if is_de:
@@ -639,15 +919,14 @@ def _page_specialists(lang: str) -> tuple[str, str, str, str, str, str]:
 
 
 def build_all(base_url: str, lastmod: str) -> list[tuple[str, str]]:
-    """Build all 10 DE/EN Phase 3 HTML subpages and return (en_rel, de_rel) pairs for sitemap."""
-    builders = [
+    """Build 4 DE/EN Phase 3 HTML guides + 11 localized Boardroom-Frameworks catalogs."""
+    bilingual_builders = [
         ("architecture/", "de/architektur/", _page_architecture, "TechArticle"),
         ("gdpr-zero-egress/", "de/dsgvo-zero-egress/", _page_gdpr, "TechArticle"),
         ("compare/", "de/vergleich/", _page_compare, "TechArticle"),
-        ("boardroom-frameworks/", "de/boardroom-frameworks/", _page_frameworks, "CollectionPage"),
         ("specialists/", "de/spezialisten/", _page_specialists, "CollectionPage"),
     ]
-    for en_rel, de_rel, fn, schema_type in builders:
+    for en_rel, de_rel, fn, schema_type in bilingual_builders:
         for lang, rel in (("en", en_rel), ("de", de_rel)):
             title, desc, eyebrow, h1, lead, body_html = fn(lang)
             html_out = _render_shell(
@@ -669,4 +948,33 @@ def build_all(base_url: str, lastmod: str) -> list[tuple[str, str]]:
             out_file.parent.mkdir(parents=True, exist_ok=True)
             out_file.write_text(html_out, encoding="utf-8")
             print(f"  sub {lang:>2} -> {out_file.relative_to(ROOT)} ({len(html_out)} Bytes)")
+
+    # Build all 11 localized AI Boardroom Frameworks catalogs
+    fw_hreflang_map = {
+        code: ("boardroom-frameworks/" if code == "en" else f"{code}/boardroom-frameworks/")
+        for code in LANGS
+    }
+    for lang, rel in fw_hreflang_map.items():
+        title, desc, eyebrow, h1, lead, body_html = _page_frameworks(lang)
+        html_out = _render_shell(
+            lang=lang,
+            rel_path=rel,
+            alt_en_rel="boardroom-frameworks/",
+            alt_de_rel="de/boardroom-frameworks/",
+            title=title,
+            description=desc,
+            eyebrow=eyebrow,
+            h1=h1,
+            lead=lead,
+            body_html=body_html,
+            schema_type="CollectionPage",
+            base_url=base_url,
+            lastmod=lastmod,
+            hreflang_map=fw_hreflang_map,
+        )
+        out_file = SITE / rel / "index.html"
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        out_file.write_text(html_out, encoding="utf-8")
+        print(f"  fw  {lang:>2} -> {out_file.relative_to(ROOT)} ({len(html_out)} Bytes)")
+
     return SUBPAGE_PAIRS

@@ -18,7 +18,7 @@
 - [DSGVO & Zero-Egress (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/dsgvo-zero-egress/): Datenresidenz ohne Cloud-Abfluss, EU AI Act Art. 50/Annex III & GoBD-Dokumentation
 - [Framework Comparison (EN)](https://michaelbeatman.github.io/ARCHON-OS/compare/): Archon OS vs. LangGraph, CrewAI, AutoGen, n8n & Dify
 - [Systemvergleich (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/vergleich/): Objektiver Enterprise-Vergleich (Archon OS vs. LangGraph, CrewAI, AutoGen, n8n, Dify)
-- [AI Boardroom — 80 Frameworks (EN)](https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/): Structured multi-perspective debate frameworks catalog
+- [AI Boardroom — 80 Frameworks (EN)](https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/): Structured multi-perspective debate frameworks catalog (also localized in DE, ES, FR, IT, JA, KO, NL, PT, RU, ZH at `/<lang>/boardroom-frameworks/`)
 - [AI Boardroom — 80 Frameworks (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/): Alle strukturierten Decision-Engine-Methodiken durchsuchbar
 - [70 Specialist Profiles (EN)](https://michaelbeatman.github.io/ARCHON-OS/specialists/): Filterable directory of all specialist agent roles across 8 domains
 - [70 Spezialisten-Profile (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/spezialisten/): Alle Agenten-Rollen aus 8 Domänen inkl. Guardrails

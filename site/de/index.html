@@ -283,7 +283,7 @@
     <nav aria-label="Main navigation">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       <a href="#install">Installation</a>
-      <a href="architektur/">Architektur</a><a href="dsgvo-zero-egress/">DSGVO</a><a href="vergleich/">Vergleich</a>
+      <a href="architektur/">Architektur</a><a href="dsgvo-zero-egress/">DSGVO</a><a href="vergleich/">Vergleich</a><a href="boardroom-frameworks/">Frameworks</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Änderungen</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Sicherheit</a>
       <select class="lang-switch" aria-label="Sprache" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/" selected>DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
@@ -404,7 +404,7 @@
   <g class="arch-node arch-node-silver">
     <rect x="196" y="88" width="146" height="58" rx="10"/>
     <text class="arch-node-title" x="269" y="114" text-anchor="middle">PolicyEngine</text>
-    <text class="arch-node-sub" x="269" y="132" text-anchor="middle">Default-Deny & HMAC-Warrant</text>
+    <text class="arch-node-sub" x="269" y="132" text-anchor="middle">Default-Deny &amp; HMAC-Warrant</text>
   </g>
   <g class="arch-node arch-node-silver">
     <rect x="196" y="160" width="146" height="58" rx="10"/>
@@ -475,7 +475,7 @@
       <tr><td><strong>Fail-Closed Zero-Egress Docker-Isolation</strong></td><td class="cmp-yes">Nativ integriert</td><td class="cmp-no">Eigenbau nötig</td><td class="cmp-part">Teilweise</td></tr>
       <tr><td><strong>Atomic Pre-Dispatch BudgetBank</strong></td><td class="cmp-yes">BEGIN IMMEDIATE</td><td class="cmp-no">Kein Hard-Cap</td><td class="cmp-no">Post-hoc</td></tr>
       <tr><td><strong>Passkey / WebAuthn HITL-Signatur</strong></td><td class="cmp-yes">Kryptografisch</td><td class="cmp-no">Callback-Hook</td><td class="cmp-no">Form-Klick</td></tr>
-      <tr><td><strong>SHA-256 Audit-Chain &amp; GoBD / EU AI Act</strong></td><td class="cmp-yes">1-Klick-Export</td><td class="cmp-no">Nicht enthalten</td><td class="cmp-no">Logs only</td></tr>
+      <tr><td><strong>SHA-256 Audit-Chain &amp; GoBD / EU AI Act</strong></td><td class="cmp-yes">1-Klick-Export</td><td class="cmp-no">Nicht enthalten</td><td class="cmp-no">Nur Logs</td></tr>
       <tr><td><strong>Crash-sicherer Effect-Ledger &amp; Outbox</strong></td><td class="cmp-yes">Transaktional</td><td class="cmp-part">Checkpointer</td><td class="cmp-part">Retry-Nodes</td></tr>
       <tr><td><strong>Hardware-Startpunkt (6 Container + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; Produktiv lokal (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
     </tbody>
@@ -521,7 +521,7 @@ docker compose -f docker-compose.demo.yml up --build -d
       <div class="governance-copy">
         <p><strong>Gebaut für kommerzielle Verantwortung und DSGVO-Konformität, nicht für Spielzeug-Demos.</strong> Im Gegensatz zu Prompt-Chaining-Bibliotheken, die Kostenlimits, Datenabfluss und Compliance-Grenzen an individuellen Klebecode delegieren, setzt Archon OS Fail-Closed Zero-Egress lokales Routing, Atomic-BudgetBank-Reservierungen, WebAuthn-Passkey-Freigaben, EU-AI-Act-/GoBD-Dokumentation und SHA-256-Audit-Trails out of the box durch - auf 3 konsolidierten SQLite-WAL-Datenbanken (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>).</p>
         <ul class="governance-pillars">
-          <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny &amp; HMAC-SHA256 Warrants</li>
+          <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny &amp; HMAC-SHA256-Warrants</li>
           <li><strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID HITL</li>
           <li><strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE Hard Caps</li>
         </ul>

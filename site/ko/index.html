@@ -283,7 +283,7 @@
     <nav aria-label="Main navigation">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       <a href="#install">설치</a>
-      <a href="../architecture/">Architecture</a><a href="../gdpr-zero-egress/">GDPR</a><a href="../compare/">Compare</a>
+      <a href="../architecture/">아키텍처</a><a href="../gdpr-zero-egress/">GDPR</a><a href="../compare/">비교</a><a href="boardroom-frameworks/">프레임워크</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">변경 이력</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">보안</a>
       <select class="lang-switch" aria-label="언어" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/" selected>KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
@@ -316,7 +316,7 @@
         </div>
       </div>
 
-      <div class="geo-strip"><div class="geo-kpi"><strong>70</strong><span>Specialist Profiles · 8 Domains</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom Frameworks</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (Local)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% Open Source · 6 Docker Containers</span></div></div>
+      <div class="geo-strip"><div class="geo-kpi"><strong>70</strong><span>전문가 프로필 · 8개 도메인</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom 프레임워크</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (로컬)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% 오픈소스 · 6개 Docker 컨테이너</span></div></div>
     </div>
   </section>
 
@@ -359,7 +359,7 @@
       <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="../assets/img/org.webp" width="200" height="109" alt=""><span>조직 계층</span></button>
     </div>
 
-    <h2 class="sec" id="architecture">Architecture &amp; Zero-Egress Flow</h2>
+    <h2 class="sec" id="architecture">아키텍처 및 Zero-Egress 데이터 흐름</h2>
 <div class="arch-box" data-reveal>
 <svg class="arch-flow-svg" viewBox="0 0 980 310" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Archon OS Zero-Egress Architecture Flow">
   <defs>
@@ -397,43 +397,43 @@
 
   <g class="arch-node">
     <rect x="16" y="116" width="132" height="72" rx="10"/>
-    <text class="arch-node-title" x="82" y="148" text-anchor="middle">Task / Agent Call</text>
+    <text class="arch-node-title" x="82" y="148" text-anchor="middle">작업 / 에이전트</text>
     <text class="arch-node-sub" x="82" y="168" text-anchor="middle">70 Profiles · MCP</text>
   </g>
 
   <g class="arch-node arch-node-silver">
     <rect x="196" y="88" width="146" height="58" rx="10"/>
     <text class="arch-node-title" x="269" y="114" text-anchor="middle">PolicyEngine</text>
-    <text class="arch-node-sub" x="269" y="132" text-anchor="middle">Default-Deny & HMAC Warrant</text>
+    <text class="arch-node-sub" x="269" y="132" text-anchor="middle">Default-Deny &amp; HMAC 영장</text>
   </g>
   <g class="arch-node arch-node-silver">
     <rect x="196" y="160" width="146" height="58" rx="10"/>
     <text class="arch-node-title" x="269" y="186" text-anchor="middle">Atomic BudgetBank</text>
-    <text class="arch-node-sub" x="269" y="204" text-anchor="middle">BEGIN IMMEDIATE Reservation</text>
+    <text class="arch-node-sub" x="269" y="204" text-anchor="middle">BEGIN IMMEDIATE 사전 예약</text>
   </g>
 
   <g class="arch-node arch-node-silver">
     <rect x="388" y="112" width="110" height="80" rx="10"/>
-    <text class="arch-node-title" x="443" y="146" text-anchor="middle">OmniRoute Switch</text>
-    <text class="arch-node-sub" x="443" y="166" text-anchor="middle">Fail-Closed Classification</text>
+    <text class="arch-node-title" x="443" y="146" text-anchor="middle">OmniRoute 스위치</text>
+    <text class="arch-node-sub" x="443" y="166" text-anchor="middle">Fail-Closed 자동 분류</text>
   </g>
 
   <g class="arch-node arch-node-emerald">
     <rect x="550" y="52" width="190" height="72" rx="10"/>
-    <text class="arch-node-title" x="645" y="83" text-anchor="middle">ZERO-EGRESS LOCAL</text>
-    <text class="arch-node-sub" x="645" y="103" text-anchor="middle">Ollama / LM Studio · No Internet</text>
+    <text class="arch-node-title" x="645" y="83" text-anchor="middle">ZERO-EGRESS 로컬</text>
+    <text class="arch-node-sub" x="645" y="103" text-anchor="middle">Ollama / LM Studio · 외부 차단</text>
   </g>
 
   <g class="arch-node">
     <rect x="550" y="192" width="190" height="72" rx="10"/>
-    <text class="arch-node-title" x="645" y="223" text-anchor="middle">Cloud LLMs (non-sensitive)</text>
-    <text class="arch-node-sub" x="645" y="243" text-anchor="middle">Budget-capped · PII-scrubbed</text>
+    <text class="arch-node-title" x="645" y="223" text-anchor="middle">클라우드 LLM (비민감)</text>
+    <text class="arch-node-sub" x="645" y="243" text-anchor="middle">예산 상한 · PII 제거</text>
   </g>
 
   <g class="arch-node arch-node-silver">
     <rect x="798" y="76" width="166" height="68" rx="10"/>
     <text class="arch-node-title" x="881" y="106" text-anchor="middle">Passkey / WebAuthn HITL</text>
-    <text class="arch-node-sub" x="881" y="125" text-anchor="middle">Cryptographic Human Sign-Off</text>
+    <text class="arch-node-sub" x="881" y="125" text-anchor="middle">암호화 서명 인간 승인</text>
   </g>
 
   <g class="arch-node arch-node-silver">
@@ -442,7 +442,7 @@
     <text class="arch-node-sub" x="881" y="235" text-anchor="middle">GoBD · EU AI Act · Effect-Ledger</text>
   </g>
 </svg>
-<p style="margin:0.9rem 0 0;font-size:0.86rem;color:var(--fg-muted)">Every agent call clears <code>PolicyEngine</code> (HMAC warrant) and transactional <code>BudgetBank</code> before dispatch. Sensitive workloads stay inside the no-internet Docker zone. <a href="../architecture/">Architecture Deep-Dive &rarr;</a> &middot; <a href="../gdpr-zero-egress/">GDPR &amp; EU AI Act &rarr;</a></p></div>
+<p style="margin:0.9rem 0 0;font-size:0.86rem;color:var(--fg-muted)">모든 에이전트 호출은 실행 전 <code>PolicyEngine</code>(HMAC 영장)과 트랜잭션 <code>BudgetBank</code>를 통과합니다. 민감 데이터는 외부 인터넷 경로가 없는 내부 Docker 네트워크에만 머뭅니다. <a href="../architecture/">아키텍처 상세 &rarr;</a> &middot; <a href="../gdpr-zero-egress/">GDPR 및 EU AI Act &rarr;</a></p></div>
 
     <h2 class="sec">주요 기능</h2>
     <div class="feats" data-reveal>
@@ -460,28 +460,28 @@
       <div class="feat"><h3>충돌 안전 Effect-Ledger</h3><p>외부 부작용은 멱등성 키와 알 수 없는 상태 이후의 필수 재조정을 갖춘 트랜잭션 원장에서 추적되어 중복 실행을 막습니다.</p></div>
     </div>
 
-    <h2 class="sec" id="compare">Architecture Comparison &amp; Hardware Profile</h2>
+    <h2 class="sec" id="compare">아키텍처 비교 및 하드웨어 기준</h2>
 <div class="table-wrap" data-reveal>
   <table>
     <thead>
       <tr>
-        <th>Enterprise Requirement</th>
+        <th>엔터프라이즈 요구사항</th>
         <th>Archon OS</th>
         <th>CrewAI / LangGraph</th>
         <th>n8n / Dify</th>
       </tr>
     </thead>
     <tbody>
-      <tr><td><strong>Fail-Closed Zero-Egress Docker Isolation</strong></td><td class="cmp-yes">Built-in</td><td class="cmp-no">Custom infra</td><td class="cmp-part">Partial</td></tr>
-      <tr><td><strong>Atomic Pre-Dispatch BudgetBank</strong></td><td class="cmp-yes">BEGIN IMMEDIATE</td><td class="cmp-no">No hard cap</td><td class="cmp-no">Post-hoc</td></tr>
-      <tr><td><strong>Passkey / WebAuthn HITL Sign-Off</strong></td><td class="cmp-yes">Cryptographic</td><td class="cmp-no">Code callback</td><td class="cmp-no">Basic UI click</td></tr>
-      <tr><td><strong>SHA-256 Audit Chain &amp; EU AI Act / GoBD</strong></td><td class="cmp-yes">1-Click Export</td><td class="cmp-no">Not included</td><td class="cmp-no">Basic logs</td></tr>
-      <tr><td><strong>Crash-Safe Effect-Ledger &amp; Outbox</strong></td><td class="cmp-yes">Transactional</td><td class="cmp-part">Checkpointer</td><td class="cmp-part">Retry nodes</td></tr>
-      <tr><td><strong>Hardware Baseline (6 Containers + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; Local LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
+      <tr><td><strong>Fail-Closed Zero-Egress Docker 격리</strong></td><td class="cmp-yes">기본 내장</td><td class="cmp-no">직접 구축</td><td class="cmp-part">부분 지원</td></tr>
+      <tr><td><strong>실행 전 원자적 BudgetBank</strong></td><td class="cmp-yes">BEGIN IMMEDIATE</td><td class="cmp-no">하드 상한 없음</td><td class="cmp-no">사후 집계</td></tr>
+      <tr><td><strong>Passkey / WebAuthn HITL 서명</strong></td><td class="cmp-yes">암호화 서명</td><td class="cmp-no">코드 콜백</td><td class="cmp-no">단순 클릭</td></tr>
+      <tr><td><strong>SHA-256 감사 체인 및 EU AI Act</strong></td><td class="cmp-yes">원클릭 내보내기</td><td class="cmp-no">미포함</td><td class="cmp-no">기본 로그</td></tr>
+      <tr><td><strong>크래시 안전 Effect-Ledger &amp; Outbox</strong></td><td class="cmp-yes">트랜잭션 보장</td><td class="cmp-part">체크포인터</td><td class="cmp-part">재시도 노드</td></tr>
+      <tr><td><strong>하드웨어 기준 (6 컨테이너 + Ollama)</strong></td><td colspan="3">데모: 4 GB RAM / 2 vCPU &middot; 로컬 LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
     </tbody>
   </table>
 </div>
-<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="../compare/">Full Comparison (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify) &rarr;</a> &middot; <a href="../architecture/#hardware">Hardware &amp; Container Specs &rarr;</a></p>
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="../compare/">전체 비교 (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify) &rarr;</a> &middot; <a href="../architecture/#hardware">하드웨어 및 컨테이너 사양 &rarr;</a></p>
 
     <h2 class="sec">70개 전문가 함대 - 8개 도메인</h2>
     <div class="table-wrap" data-reveal>
@@ -500,8 +500,8 @@
       </table>
     </div>
 
-    <h2 class="sec">Deep-Dive Guides &amp; Directories</h2>
-<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/"><span class="hub-kicker">01 / System</span><strong>Architecture &amp; Stack</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger &amp; 3x SQLite WAL.</span></a><a class="hub-card" href="../gdpr-zero-egress/"><span class="hub-kicker">02 / Compliance</span><strong>GDPR &amp; Zero-Egress</strong><span>Fail-closed Docker isolation, EU AI Act registry &amp; GoBD audit exports.</span></a><a class="hub-card" href="../compare/"><span class="hub-kicker">03 / Evaluation</span><strong>Framework Comparison</strong><span>Archon OS vs. LangGraph, CrewAI, AutoGen, n8n &amp; Dify feature matrix.</span></a><a class="hub-card" href="../boardroom-frameworks/"><span class="hub-kicker">04 / Boardroom</span><strong>80 Frameworks</strong><span>Searchable HTML catalog of structured multi-perspective debate methods.</span></a><a class="hub-card" href="../specialists/"><span class="hub-kicker">05 / Fleet</span><strong>70 Specialists</strong><span>Filterable directory of all specialist agent profiles across 8 domains.</span></a></div>
+    <h2 class="sec">심층 기술 가이드 및 디렉터리 (HTML)</h2>
+<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/"><span class="hub-kicker">01 / 시스템</span><strong>아키텍처 &amp; 스택</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger, 3× SQLite WAL.</span></a><a class="hub-card" href="../gdpr-zero-egress/"><span class="hub-kicker">02 / 컴플라이언스</span><strong>GDPR &amp; Zero-Egress</strong><span>Fail-closed Docker 격리, EU AI Act 위험 등록부 및 GoBD 감사 내보내기.</span></a><a class="hub-card" href="../compare/"><span class="hub-kicker">03 / 비교 평가</span><strong>프레임워크 비교</strong><span>Archon OS vs. LangGraph, CrewAI, AutoGen, n8n, Dify 기능 비교표.</span></a><a class="hub-card" href="boardroom-frameworks/"><span class="hub-kicker">04 / Boardroom</span><strong>80 프레임워크</strong><span>다각도 토론 방법론을 검색·필터링할 수 있는 HTML 카탈로그.</span></a><a class="hub-card" href="../specialists/"><span class="hub-kicker">05 / 플릿</span><strong>70 전문가 프로필</strong><span>8개 도메인의 70개 전문 에이전트 역할과 가드레일 디렉터리.</span></a></div>
 
     <h2 class="sec" id="install">설치</h2>
     <div class="install" data-reveal>
@@ -521,9 +521,9 @@ docker compose -f docker-compose.demo.yml up --build -d
       <div class="governance-copy">
         <p><strong>장난감 데모가 아니라 상업적 책임과 GDPR 준수를 위해 만들어졌습니다.</strong> 비용 상한, 데이터 유출, 컴플라이언스 경계를 맞춤 접착 코드에 맡기는 프롬프트 체이닝 라이브러리와 달리, Archon OS는 페일 클로즈 로컬 Zero-Egress 라우팅, Atomic BudgetBank 예약, WebAuthn 패스키 승인, EU AI Act / GoBD 문서화, SHA-256 감사 추적을 기본으로 강제합니다 - 3개의 통합 SQLite WAL 데이터베이스(<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>) 위에서.</p>
         <ul class="governance-pillars">
-          <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny &amp; HMAC-SHA256 Warrants</li>
-          <li><strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID HITL</li>
-          <li><strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE Hard Caps</li>
+          <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny 및 HMAC-SHA256 영장</li>
+          <li><strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID 승인</li>
+          <li><strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE 엄격 예산 상한</li>
         </ul>
       </div>
       <div class="governance-visual">

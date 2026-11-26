@@ -186,9 +186,7 @@ docker compose -f docker-compose.demo.yml up --build -d
       <div class="governance-copy">
         <p>{{why.text}}</p>
         <ul class="governance-pillars">
-          <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny &amp; HMAC-SHA256 Warrants</li>
-          <li><strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID HITL</li>
-          <li><strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE Hard Caps</li>
+          {{GOV_PILLARS_HTML}}
         </ul>
       </div>
       <div class="governance-visual">

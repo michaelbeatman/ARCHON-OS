@@ -219,20 +219,6 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/compare/"/>
   </url>
   <url>
-    <loc>https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/</loc>
-    <lastmod>2026-11-26</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
-  </url>
-  <url>
-    <loc>https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/</loc>
-    <lastmod>2026-11-26</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
-  </url>
-  <url>
     <loc>https://michaelbeatman.github.io/ARCHON-OS/specialists/</loc>
     <lastmod>2026-11-26</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/specialists/"/>
@@ -245,5 +231,181 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/specialists/"/>
     <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/spezialisten/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/specialists/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+  </url>
+  <url>
+    <loc>https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/</loc>
+    <lastmod>2026-11-26</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://michaelbeatman.github.io/ARCHON-OS/es/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://michaelbeatman.github.io/ARCHON-OS/fr/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://michaelbeatman.github.io/ARCHON-OS/it/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://michaelbeatman.github.io/ARCHON-OS/ja/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://michaelbeatman.github.io/ARCHON-OS/ko/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/"/>
   </url>
 </urlset>

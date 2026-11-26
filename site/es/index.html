@@ -283,7 +283,7 @@
     <nav aria-label="Main navigation">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       <a href="#install">Instalación</a>
-      <a href="../architecture/">Architecture</a><a href="../gdpr-zero-egress/">GDPR</a><a href="../compare/">Compare</a>
+      <a href="../architecture/">Arquitectura</a><a href="../gdpr-zero-egress/">RGPD</a><a href="../compare/">Comparativa</a><a href="boardroom-frameworks/">Frameworks</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Novedades</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Seguridad</a>
       <select class="lang-switch" aria-label="Idioma" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/" selected>ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
@@ -316,7 +316,7 @@
         </div>
       </div>
 
-      <div class="geo-strip"><div class="geo-kpi"><strong>70</strong><span>Specialist Profiles · 8 Domains</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom Frameworks</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (Local)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% Open Source · 6 Docker Containers</span></div></div>
+      <div class="geo-strip"><div class="geo-kpi"><strong>70</strong><span>Perfiles Especialistas · 8 Dominios</span></div><div class="geo-kpi"><strong>80</strong><span>Marcos AI Boardroom</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Zero-Egress Fail-Closed (Local)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% Open Source · 6 Contenedores Docker</span></div></div>
     </div>
   </section>
 
@@ -359,7 +359,7 @@
       <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="../assets/img/org.webp" width="200" height="109" alt=""><span>Organigrama</span></button>
     </div>
 
-    <h2 class="sec" id="architecture">Architecture &amp; Zero-Egress Flow</h2>
+    <h2 class="sec" id="architecture">Arquitectura y Flujo Zero-Egress</h2>
 <div class="arch-box" data-reveal>
 <svg class="arch-flow-svg" viewBox="0 0 980 310" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Archon OS Zero-Egress Architecture Flow">
   <defs>
@@ -397,43 +397,43 @@
 
   <g class="arch-node">
     <rect x="16" y="116" width="132" height="72" rx="10"/>
-    <text class="arch-node-title" x="82" y="148" text-anchor="middle">Task / Agent Call</text>
+    <text class="arch-node-title" x="82" y="148" text-anchor="middle">Tarea / Agente</text>
     <text class="arch-node-sub" x="82" y="168" text-anchor="middle">70 Profiles · MCP</text>
   </g>
 
   <g class="arch-node arch-node-silver">
     <rect x="196" y="88" width="146" height="58" rx="10"/>
     <text class="arch-node-title" x="269" y="114" text-anchor="middle">PolicyEngine</text>
-    <text class="arch-node-sub" x="269" y="132" text-anchor="middle">Default-Deny & HMAC Warrant</text>
+    <text class="arch-node-sub" x="269" y="132" text-anchor="middle">Default-Deny y Warrant HMAC</text>
   </g>
   <g class="arch-node arch-node-silver">
     <rect x="196" y="160" width="146" height="58" rx="10"/>
     <text class="arch-node-title" x="269" y="186" text-anchor="middle">Atomic BudgetBank</text>
-    <text class="arch-node-sub" x="269" y="204" text-anchor="middle">BEGIN IMMEDIATE Reservation</text>
+    <text class="arch-node-sub" x="269" y="204" text-anchor="middle">Reserva BEGIN IMMEDIATE</text>
   </g>
 
   <g class="arch-node arch-node-silver">
     <rect x="388" y="112" width="110" height="80" rx="10"/>
-    <text class="arch-node-title" x="443" y="146" text-anchor="middle">OmniRoute Switch</text>
-    <text class="arch-node-sub" x="443" y="166" text-anchor="middle">Fail-Closed Classification</text>
+    <text class="arch-node-title" x="443" y="146" text-anchor="middle">Router OmniRoute</text>
+    <text class="arch-node-sub" x="443" y="166" text-anchor="middle">Clasificación Fail-Closed</text>
   </g>
 
   <g class="arch-node arch-node-emerald">
     <rect x="550" y="52" width="190" height="72" rx="10"/>
     <text class="arch-node-title" x="645" y="83" text-anchor="middle">ZERO-EGRESS LOCAL</text>
-    <text class="arch-node-sub" x="645" y="103" text-anchor="middle">Ollama / LM Studio · No Internet</text>
+    <text class="arch-node-sub" x="645" y="103" text-anchor="middle">Ollama / LM Studio · Sin Internet</text>
   </g>
 
   <g class="arch-node">
     <rect x="550" y="192" width="190" height="72" rx="10"/>
-    <text class="arch-node-title" x="645" y="223" text-anchor="middle">Cloud LLMs (non-sensitive)</text>
-    <text class="arch-node-sub" x="645" y="243" text-anchor="middle">Budget-capped · PII-scrubbed</text>
+    <text class="arch-node-title" x="645" y="223" text-anchor="middle">LLMs Cloud (no sensibles)</text>
+    <text class="arch-node-sub" x="645" y="243" text-anchor="middle">Con límite · Sin PII</text>
   </g>
 
   <g class="arch-node arch-node-silver">
     <rect x="798" y="76" width="166" height="68" rx="10"/>
     <text class="arch-node-title" x="881" y="106" text-anchor="middle">Passkey / WebAuthn HITL</text>
-    <text class="arch-node-sub" x="881" y="125" text-anchor="middle">Cryptographic Human Sign-Off</text>
+    <text class="arch-node-sub" x="881" y="125" text-anchor="middle">Firma Criptográfica Humana</text>
   </g>
 
   <g class="arch-node arch-node-silver">
@@ -442,7 +442,7 @@
     <text class="arch-node-sub" x="881" y="235" text-anchor="middle">GoBD · EU AI Act · Effect-Ledger</text>
   </g>
 </svg>
-<p style="margin:0.9rem 0 0;font-size:0.86rem;color:var(--fg-muted)">Every agent call clears <code>PolicyEngine</code> (HMAC warrant) and transactional <code>BudgetBank</code> before dispatch. Sensitive workloads stay inside the no-internet Docker zone. <a href="../architecture/">Architecture Deep-Dive &rarr;</a> &middot; <a href="../gdpr-zero-egress/">GDPR &amp; EU AI Act &rarr;</a></p></div>
+<p style="margin:0.9rem 0 0;font-size:0.86rem;color:var(--fg-muted)">Cada llamada de agente pasa por <code>PolicyEngine</code> (warrant HMAC) y la <code>BudgetBank</code> transaccional antes de ejecutarse. Los datos sensibles permanecen en la red Docker aislada sin salida a Internet. <a href="../architecture/">Detalles de Arquitectura &rarr;</a> &middot; <a href="../gdpr-zero-egress/">RGPD y EU AI Act &rarr;</a></p></div>
 
     <h2 class="sec">Qué hace</h2>
     <div class="feats" data-reveal>
@@ -460,28 +460,28 @@
       <div class="feat"><h3>Effect-Ledger a prueba de fallos</h3><p>Los efectos externos se registran en un ledger transaccional con claves de idempotencia y reconciliación obligatoria tras estados desconocidos - evita acciones duplicadas.</p></div>
     </div>
 
-    <h2 class="sec" id="compare">Architecture Comparison &amp; Hardware Profile</h2>
+    <h2 class="sec" id="compare">Comparativa de Arquitectura y Hardware</h2>
 <div class="table-wrap" data-reveal>
   <table>
     <thead>
       <tr>
-        <th>Enterprise Requirement</th>
+        <th>Requisito Empresarial</th>
         <th>Archon OS</th>
         <th>CrewAI / LangGraph</th>
         <th>n8n / Dify</th>
       </tr>
     </thead>
     <tbody>
-      <tr><td><strong>Fail-Closed Zero-Egress Docker Isolation</strong></td><td class="cmp-yes">Built-in</td><td class="cmp-no">Custom infra</td><td class="cmp-part">Partial</td></tr>
-      <tr><td><strong>Atomic Pre-Dispatch BudgetBank</strong></td><td class="cmp-yes">BEGIN IMMEDIATE</td><td class="cmp-no">No hard cap</td><td class="cmp-no">Post-hoc</td></tr>
-      <tr><td><strong>Passkey / WebAuthn HITL Sign-Off</strong></td><td class="cmp-yes">Cryptographic</td><td class="cmp-no">Code callback</td><td class="cmp-no">Basic UI click</td></tr>
-      <tr><td><strong>SHA-256 Audit Chain &amp; EU AI Act / GoBD</strong></td><td class="cmp-yes">1-Click Export</td><td class="cmp-no">Not included</td><td class="cmp-no">Basic logs</td></tr>
-      <tr><td><strong>Crash-Safe Effect-Ledger &amp; Outbox</strong></td><td class="cmp-yes">Transactional</td><td class="cmp-part">Checkpointer</td><td class="cmp-part">Retry nodes</td></tr>
-      <tr><td><strong>Hardware Baseline (6 Containers + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; Local LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
+      <tr><td><strong>Aislamiento Docker Zero-Egress Fail-Closed</strong></td><td class="cmp-yes">Integrado</td><td class="cmp-no">Infraestructura propia</td><td class="cmp-part">Parcial</td></tr>
+      <tr><td><strong>BudgetBank Atómica Pre-Ejecución</strong></td><td class="cmp-yes">BEGIN IMMEDIATE</td><td class="cmp-no">Sin límite duro</td><td class="cmp-no">Post-hoc</td></tr>
+      <tr><td><strong>Aprobación Passkey / WebAuthn HITL</strong></td><td class="cmp-yes">Criptográfica</td><td class="cmp-no">Callback en código</td><td class="cmp-no">Clic básico</td></tr>
+      <tr><td><strong>Cadena de Auditoría SHA-256 y EU AI Act</strong></td><td class="cmp-yes">Exportación 1 clic</td><td class="cmp-no">No incluido</td><td class="cmp-no">Solo logs</td></tr>
+      <tr><td><strong>Effect-Ledger y Outbox tolerante a fallos</strong></td><td class="cmp-yes">Transaccional</td><td class="cmp-part">Checkpointer</td><td class="cmp-part">Reintentos</td></tr>
+      <tr><td><strong>Hardware Base (6 Contenedores + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; LLM Local (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
     </tbody>
   </table>
 </div>
-<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="../compare/">Full Comparison (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify) &rarr;</a> &middot; <a href="../architecture/#hardware">Hardware &amp; Container Specs &rarr;</a></p>
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="../compare/">Comparativa completa (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify) &rarr;</a> &middot; <a href="../architecture/#hardware">Especificaciones de Hardware y Contenedores &rarr;</a></p>
 
     <h2 class="sec">La flota de 70 especialistas - 8 dominios</h2>
     <div class="table-wrap" data-reveal>
@@ -500,8 +500,8 @@
       </table>
     </div>
 
-    <h2 class="sec">Deep-Dive Guides &amp; Directories</h2>
-<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/"><span class="hub-kicker">01 / System</span><strong>Architecture &amp; Stack</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger &amp; 3x SQLite WAL.</span></a><a class="hub-card" href="../gdpr-zero-egress/"><span class="hub-kicker">02 / Compliance</span><strong>GDPR &amp; Zero-Egress</strong><span>Fail-closed Docker isolation, EU AI Act registry &amp; GoBD audit exports.</span></a><a class="hub-card" href="../compare/"><span class="hub-kicker">03 / Evaluation</span><strong>Framework Comparison</strong><span>Archon OS vs. LangGraph, CrewAI, AutoGen, n8n &amp; Dify feature matrix.</span></a><a class="hub-card" href="../boardroom-frameworks/"><span class="hub-kicker">04 / Boardroom</span><strong>80 Frameworks</strong><span>Searchable HTML catalog of structured multi-perspective debate methods.</span></a><a class="hub-card" href="../specialists/"><span class="hub-kicker">05 / Fleet</span><strong>70 Specialists</strong><span>Filterable directory of all specialist agent profiles across 8 domains.</span></a></div>
+    <h2 class="sec">Guías Técnicas y Directorios (HTML)</h2>
+<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/"><span class="hub-kicker">01 / Sistema</span><strong>Arquitectura y Stack</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger y 3× SQLite WAL.</span></a><a class="hub-card" href="../gdpr-zero-egress/"><span class="hub-kicker">02 / Cumplimiento</span><strong>RGPD y Zero-Egress</strong><span>Aislamiento Docker fail-closed, registro EU AI Act y exportación GoBD.</span></a><a class="hub-card" href="../compare/"><span class="hub-kicker">03 / Evaluación</span><strong>Comparativa</strong><span>Matriz Archon OS vs. LangGraph, CrewAI, AutoGen, n8n y Dify.</span></a><a class="hub-card" href="boardroom-frameworks/"><span class="hub-kicker">04 / Boardroom</span><strong>80 Frameworks</strong><span>Catálogo buscable de metodologías de debate multi-perspectiva.</span></a><a class="hub-card" href="../specialists/"><span class="hub-kicker">05 / Flota</span><strong>70 Especialistas</strong><span>Directorio filtrable de los 70 perfiles de agentes en 8 dominios.</span></a></div>
 
     <h2 class="sec" id="install">Instalación</h2>
     <div class="install" data-reveal>
@@ -521,9 +521,9 @@ docker compose -f docker-compose.demo.yml up --build -d
       <div class="governance-copy">
         <p><strong>Creado para la responsabilidad comercial y el cumplimiento del RGPD, no para demos de juguete.</strong> A diferencia de las bibliotecas de encadenamiento de prompts que delegan los límites de coste, la salida de datos y las fronteras de cumplimiento a código ad hoc, Archon OS aplica de serie enrutamiento local Zero-Egress a prueba de fallos, reservas Atomic BudgetBank, aprobaciones con Passkey WebAuthn, documentación EU AI Act / GoBD y trazas de auditoría SHA-256 - sobre 3 bases de datos SQLite WAL consolidadas (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>).</p>
         <ul class="governance-pillars">
-          <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny &amp; HMAC-SHA256 Warrants</li>
-          <li><strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID HITL</li>
-          <li><strong>III. ATOMIC BUDGETBANK</strong> &middot; SQLite BEGIN IMMEDIATE Hard Caps</li>
+          <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny y Warrants HMAC-SHA256</li>
+          <li><strong>II. PASSKEY LOCK</strong> &middot; Aprobación WebAuthn / Windows Hello / Touch ID</li>
+          <li><strong>III. ATOMIC BUDGETBANK</strong> &middot; Límites estrictos SQLite BEGIN IMMEDIATE</li>
         </ul>
       </div>
       <div class="governance-visual">

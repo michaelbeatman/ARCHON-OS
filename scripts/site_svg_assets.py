@@ -366,24 +366,25 @@ def build_hero_clockwork_svg() -> str:
 </svg>"""
 
 
-def build_zero_egress_diagram_svg(lang: str = "en") -> str:
-    """Monochrome Silver Zero-Egress & Governance Architecture Circuit Diagram."""
+def build_zero_egress_diagram_svg(lang: str = "en", labels: dict[str, str] | None = None) -> str:
+    """Monochrome Silver Zero-Egress & Governance Architecture Circuit Diagram (all 11 languages)."""
     is_de = lang == "de"
-    t_req = "Anfrage / Agent" if is_de else "Task / Agent Call"
+    lb = labels or {}
+    t_req = lb.get("req") or ("Anfrage / Agent" if is_de else "Task / Agent Call")
     t_pol = "PolicyEngine"
-    t_pol_sub = "Default-Deny & HMAC-Warrant" if is_de else "Default-Deny & HMAC Warrant"
+    t_pol_sub = lb.get("polSub") or ("Default-Deny &amp; HMAC-Warrant" if is_de else "Default-Deny &amp; HMAC Warrant")
     t_bud = "Atomic BudgetBank"
-    t_bud_sub = "BEGIN IMMEDIATE Reservierung" if is_de else "BEGIN IMMEDIATE Reservation"
-    t_sw = "OmniRoute Weiche" if is_de else "OmniRoute Switch"
-    t_sw_sub = "Fail-Closed Klassifikation" if is_de else "Fail-Closed Classification"
-    t_loc = "ZERO-EGRESS LOKAL" if is_de else "ZERO-EGRESS LOCAL"
-    t_loc_sub = "Ollama / LM Studio · Kein Internet" if is_de else "Ollama / LM Studio · No Internet"
-    t_cld = "Cloud-LLMs (nur unkritisch)" if is_de else "Cloud LLMs (non-sensitive)"
-    t_cld_sub = "Budget-gedeckelt · PII-gefiltert" if is_de else "Budget-capped · PII-scrubbed"
+    t_bud_sub = lb.get("budSub") or ("BEGIN IMMEDIATE Reservierung" if is_de else "BEGIN IMMEDIATE Reservation")
+    t_sw = lb.get("sw") or ("OmniRoute Weiche" if is_de else "OmniRoute Switch")
+    t_sw_sub = lb.get("swSub") or ("Fail-Closed Klassifikation" if is_de else "Fail-Closed Classification")
+    t_loc = lb.get("loc") or ("ZERO-EGRESS LOKAL" if is_de else "ZERO-EGRESS LOCAL")
+    t_loc_sub = lb.get("locSub") or ("Ollama / LM Studio · Kein Internet" if is_de else "Ollama / LM Studio · No Internet")
+    t_cld = lb.get("cld") or ("Cloud-LLMs (nur unkritisch)" if is_de else "Cloud LLMs (non-sensitive)")
+    t_cld_sub = lb.get("cldSub") or ("Budget-gedeckelt · PII-gefiltert" if is_de else "Budget-capped · PII-scrubbed")
     t_hitl = "Passkey / WebAuthn HITL"
-    t_hitl_sub = "Kryptografische Freigabe" if is_de else "Cryptographic Human Sign-Off"
+    t_hitl_sub = lb.get("hitlSub") or ("Kryptografische Freigabe" if is_de else "Cryptographic Human Sign-Off")
     t_aud = "SHA-256 Audit-Chain"
-    t_aud_sub = "GoBD · EU AI Act · Effect-Ledger"
+    t_aud_sub = lb.get("audSub") or "GoBD · EU AI Act · Effect-Ledger"
 
     return f"""<svg class="arch-flow-svg" viewBox="0 0 980 310" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Archon OS Zero-Egress Architecture Flow">
   <defs>

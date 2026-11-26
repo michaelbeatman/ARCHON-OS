@@ -113,6 +113,7 @@ STRUCTURAL_VARS = {
     "ARCH_SECTION_HTML",
     "COMPARE_SECTION_HTML",
     "HUB_SECTION_HTML",
+    "GOV_PILLARS_HTML",
     "SHOT_TAB_1",
     "SHOT_TAB_2",
     "SHOT_TAB_3",
@@ -305,8 +306,24 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
     return f'<script type="application/ld+json">\n{raw}\n</script>'
 
 
-def _subpage_prefix(lang: str) -> tuple[str, str, str, str, str, str]:
-    """Return (arch, gdpr, compare, frameworks, specialists, label_lang) relative hrefs."""
+_SECTIONS_CACHE: dict[str, dict[str, object]] | None = None
+
+
+def load_sections_i18n() -> dict[str, dict[str, object]]:
+    global _SECTIONS_CACHE
+    if _SECTIONS_CACHE is None:
+        raw = json.loads((I18N / "sections_i18n.json").read_text(encoding="utf-8"))
+        _SECTIONS_CACHE = raw
+    return _SECTIONS_CACHE
+
+
+def _sec_for(lang: str) -> dict[str, object]:
+    secs = load_sections_i18n()
+    return secs.get(lang, secs["en"])
+
+
+def _subpage_prefix(lang: str) -> tuple[str, str, str, str, str]:
+    """Return (arch, gdpr, compare, frameworks, specialists) relative hrefs."""
     if lang == "de":
         return (
             "architektur/",
@@ -314,153 +331,125 @@ def _subpage_prefix(lang: str) -> tuple[str, str, str, str, str, str]:
             "vergleich/",
             "boardroom-frameworks/",
             "spezialisten/",
-            "de",
         )
-    pre = "" if lang == "en" else "../"
+    if lang == "en":
+        return (
+            "architecture/",
+            "gdpr-zero-egress/",
+            "compare/",
+            "boardroom-frameworks/",
+            "specialists/",
+        )
+    # Non-EN/DE languages have their own native boardroom-frameworks/ subpage locally!
     return (
-        pre + "architecture/",
-        pre + "gdpr-zero-egress/",
-        pre + "compare/",
-        pre + "boardroom-frameworks/",
-        pre + "specialists/",
-        "en",
+        "../architecture/",
+        "../gdpr-zero-egress/",
+        "../compare/",
+        "boardroom-frameworks/",
+        "../specialists/",
     )
 
 
 def build_nav_subpages(lang: str) -> str:
-    arch, gdpr, cmp_url, fw_url, sp_url, mode = _subpage_prefix(lang)
-    if mode == "de":
-        return (
-            f'<a href="{arch}">Architektur</a>'
-            f'<a href="{gdpr}">DSGVO</a>'
-            f'<a href="{cmp_url}">Vergleich</a>'
-        )
+    arch, gdpr, cmp_url, fw_url, _ = _subpage_prefix(lang)
+    nav = _sec_for(lang)["nav"]
+    assert isinstance(nav, dict)
     return (
-        f'<a href="{arch}">Architecture</a>'
-        f'<a href="{gdpr}">GDPR</a>'
-        f'<a href="{cmp_url}">Compare</a>'
+        f'<a href="{arch}">{nav["arch"]}</a>'
+        f'<a href="{gdpr}">{nav["gdpr"]}</a>'
+        f'<a href="{cmp_url}">{nav["compare"]}</a>'
+        f'<a href="{fw_url}">{nav["frameworks"]}</a>'
     )
 
 
 def build_geo_strip(lang: str) -> str:
-    if lang == "de":
-        items = [
-            ("70", "Spezialisten-Profile · 8 Domänen"),
-            ("80", "AI-Boardroom-Frameworks"),
-            ("0 Bytes", "Fail-Closed Zero-Egress (Lokal)"),
-            ("MIT", "100% Open Source · 6 Docker-Container"),
-        ]
-    else:
-        items = [
-            ("70", "Specialist Profiles · 8 Domains"),
-            ("80", "AI Boardroom Frameworks"),
-            ("0 Bytes", "Fail-Closed Zero-Egress (Local)"),
-            ("MIT", "100% Open Source · 6 Docker Containers"),
-        ]
+    items = _sec_for(lang)["geo"]
+    assert isinstance(items, list)
     cards = "".join(f'<div class="geo-kpi"><strong>{k}</strong><span>{v}</span></div>' for k, v in items)
     return f'<div class="geo-strip">{cards}</div>'
 
 
 def build_arch_section(lang: str) -> str:
-    arch, gdpr, _, _, _, mode = _subpage_prefix(lang)
-    svg = build_zero_egress_diagram_svg(mode)
-    if mode == "de":
-        return (
-            '<h2 class="sec" id="architektur">Architektur &amp; Zero-Egress-Datenfluss</h2>\n'
-            '<div class="arch-box" data-reveal>\n'
-            f"{svg}\n"
-            '<p style="margin:0.9rem 0 0;font-size:0.86rem;color:var(--fg-muted)">'
-            'Jede Agenten-Aktion passiert vor dem Dispatch die <code>PolicyEngine</code> (HMAC-Warrant) und '
-            'die transaktionale <code>BudgetBank</code>. Sensible Kategorien laufen strikt lokal im isolierten Docker-Netz. '
-            f'<a href="{arch}">Architektur-Details &rarr;</a> &middot; <a href="{gdpr}">DSGVO &amp; EU AI Act &rarr;</a>'
-            "</p></div>"
-        )
+    arch, gdpr, _, _, _ = _subpage_prefix(lang)
+    arch_cfg = _sec_for(lang)["arch"]
+    assert isinstance(arch_cfg, dict)
+    svg_labels = arch_cfg["svg"]
+    assert isinstance(svg_labels, dict)
+    svg = build_zero_egress_diagram_svg(lang, svg_labels)
+    sec_id = "architektur" if lang == "de" else "architecture"
     return (
-        '<h2 class="sec" id="architecture">Architecture &amp; Zero-Egress Flow</h2>\n'
+        f'<h2 class="sec" id="{sec_id}">{arch_cfg["title"]}</h2>\n'
         '<div class="arch-box" data-reveal>\n'
         f"{svg}\n"
         '<p style="margin:0.9rem 0 0;font-size:0.86rem;color:var(--fg-muted)">'
-        'Every agent call clears <code>PolicyEngine</code> (HMAC warrant) and transactional <code>BudgetBank</code> before dispatch. '
-        'Sensitive workloads stay inside the no-internet Docker zone. '
-        f'<a href="{arch}">Architecture Deep-Dive &rarr;</a> &middot; <a href="{gdpr}">GDPR &amp; EU AI Act &rarr;</a>'
+        f'{arch_cfg["caption"]} '
+        f'<a href="{arch}">{arch_cfg["linkArch"]} &rarr;</a> &middot; <a href="{gdpr}">{arch_cfg["linkGdpr"]} &rarr;</a>'
         "</p></div>"
     )
 
 
 def build_compare_section(lang: str) -> str:
-    arch, _, cmp_url, _, _, mode = _subpage_prefix(lang)
-    if mode == "de":
-        return f"""<h2 class="sec" id="vergleich">Systemvergleich &amp; Hardware-Profil</h2>
+    arch, _, cmp_url, _, _ = _subpage_prefix(lang)
+    cmp_cfg = _sec_for(lang)["compare"]
+    assert isinstance(cmp_cfg, dict)
+    rows = cmp_cfg["rows"]
+    assert isinstance(rows, list)
+    cls_map = [
+        ("cmp-yes", "cmp-no", "cmp-part"),
+        ("cmp-yes", "cmp-no", "cmp-no"),
+        ("cmp-yes", "cmp-no", "cmp-no"),
+        ("cmp-yes", "cmp-no", "cmp-no"),
+        ("cmp-yes", "cmp-part", "cmp-part"),
+    ]
+    body_rows = []
+    for idx, row in enumerate(rows):
+        c1, c2, c3 = cls_map[idx]
+        body_rows.append(
+            f'      <tr><td><strong>{row[0]}</strong></td>'
+            f'<td class="{c1}">{row[1]}</td>'
+            f'<td class="{c2}">{row[2]}</td>'
+            f'<td class="{c3}">{row[3]}</td></tr>'
+        )
+    sec_id = "vergleich" if lang == "de" else "compare"
+    rows_html = "\n".join(body_rows)
+    return f"""<h2 class="sec" id="{sec_id}">{cmp_cfg["title"]}</h2>
 <div class="table-wrap" data-reveal>
   <table>
     <thead>
       <tr>
-        <th>Enterprise-Kriterium</th>
+        <th>{cmp_cfg["hCol"]}</th>
         <th>Archon OS</th>
         <th>CrewAI / LangGraph</th>
         <th>n8n / Dify</th>
       </tr>
     </thead>
     <tbody>
-      <tr><td><strong>Fail-Closed Zero-Egress Docker-Isolation</strong></td><td class="cmp-yes">Nativ integriert</td><td class="cmp-no">Eigenbau nötig</td><td class="cmp-part">Teilweise</td></tr>
-      <tr><td><strong>Atomic Pre-Dispatch BudgetBank</strong></td><td class="cmp-yes">BEGIN IMMEDIATE</td><td class="cmp-no">Kein Hard-Cap</td><td class="cmp-no">Post-hoc</td></tr>
-      <tr><td><strong>Passkey / WebAuthn HITL-Signatur</strong></td><td class="cmp-yes">Kryptografisch</td><td class="cmp-no">Callback-Hook</td><td class="cmp-no">Form-Klick</td></tr>
-      <tr><td><strong>SHA-256 Audit-Chain &amp; GoBD / EU AI Act</strong></td><td class="cmp-yes">1-Klick-Export</td><td class="cmp-no">Nicht enthalten</td><td class="cmp-no">Logs only</td></tr>
-      <tr><td><strong>Crash-sicherer Effect-Ledger &amp; Outbox</strong></td><td class="cmp-yes">Transaktional</td><td class="cmp-part">Checkpointer</td><td class="cmp-part">Retry-Nodes</td></tr>
-      <tr><td><strong>Hardware-Startpunkt (6 Container + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; Produktiv lokal (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
+{rows_html}
+      <tr><td><strong>{cmp_cfg["hwLabel"]}</strong></td><td colspan="3">{cmp_cfg["hwVal"]}</td></tr>
     </tbody>
   </table>
 </div>
-<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="{cmp_url}">Vollständiger Vergleich (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify) &rarr;</a> &middot; <a href="{arch}#hardware">Hardware- &amp; Container-Specs &rarr;</a></p>"""
-    return f"""<h2 class="sec" id="compare">Architecture Comparison &amp; Hardware Profile</h2>
-<div class="table-wrap" data-reveal>
-  <table>
-    <thead>
-      <tr>
-        <th>Enterprise Requirement</th>
-        <th>Archon OS</th>
-        <th>CrewAI / LangGraph</th>
-        <th>n8n / Dify</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td><strong>Fail-Closed Zero-Egress Docker Isolation</strong></td><td class="cmp-yes">Built-in</td><td class="cmp-no">Custom infra</td><td class="cmp-part">Partial</td></tr>
-      <tr><td><strong>Atomic Pre-Dispatch BudgetBank</strong></td><td class="cmp-yes">BEGIN IMMEDIATE</td><td class="cmp-no">No hard cap</td><td class="cmp-no">Post-hoc</td></tr>
-      <tr><td><strong>Passkey / WebAuthn HITL Sign-Off</strong></td><td class="cmp-yes">Cryptographic</td><td class="cmp-no">Code callback</td><td class="cmp-no">Basic UI click</td></tr>
-      <tr><td><strong>SHA-256 Audit Chain &amp; EU AI Act / GoBD</strong></td><td class="cmp-yes">1-Click Export</td><td class="cmp-no">Not included</td><td class="cmp-no">Basic logs</td></tr>
-      <tr><td><strong>Crash-Safe Effect-Ledger &amp; Outbox</strong></td><td class="cmp-yes">Transactional</td><td class="cmp-part">Checkpointer</td><td class="cmp-part">Retry nodes</td></tr>
-      <tr><td><strong>Hardware Baseline (6 Containers + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; Local LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
-    </tbody>
-  </table>
-</div>
-<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="{cmp_url}">Full Comparison (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify) &rarr;</a> &middot; <a href="{arch}#hardware">Hardware &amp; Container Specs &rarr;</a></p>"""
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="{cmp_url}">{cmp_cfg["linkCmp"]} &rarr;</a> &middot; <a href="{arch}#hardware">{cmp_cfg["linkHw"]} &rarr;</a></p>"""
 
 
 def build_hub_section(lang: str) -> str:
-    arch, gdpr, cmp_url, fw_url, sp_url, mode = _subpage_prefix(lang)
-    if mode == "de":
-        cards = [
-            (arch, "01 / System", "Architektur &amp; Stack", "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger &amp; 3× SQLite WAL."),
-            (gdpr, "02 / Compliance", "DSGVO &amp; Zero-Egress", "Fail-Closed Docker-Isolation, EU-AI-Act-Register &amp; GoBD-Verfahrensdoku."),
-            (cmp_url, "03 / Bewertung", "Systemvergleich", "Archon OS vs. LangGraph, CrewAI, AutoGen, n8n &amp; Dify im Direktvergleich."),
-            (fw_url, "04 / Boardroom", "80 Frameworks", "Durchsuchbarer Katalog aller Decision-Engine-Methodiken von OKR bis Pre-Mortem."),
-            (sp_url, "05 / Flotte", "70 Spezialisten", "Alle Agenten-Profile aus 8 Domänen inkl. Budget-Grenzen &amp; Guardrails."),
-        ]
-        heading = "Vertiefende Wissensseiten (HTML)"
-    else:
-        cards = [
-            (arch, "01 / System", "Architecture &amp; Stack", "OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger &amp; 3x SQLite WAL."),
-            (gdpr, "02 / Compliance", "GDPR &amp; Zero-Egress", "Fail-closed Docker isolation, EU AI Act registry &amp; GoBD audit exports."),
-            (cmp_url, "03 / Evaluation", "Framework Comparison", "Archon OS vs. LangGraph, CrewAI, AutoGen, n8n &amp; Dify feature matrix."),
-            (fw_url, "04 / Boardroom", "80 Frameworks", "Searchable HTML catalog of structured multi-perspective debate methods."),
-            (sp_url, "05 / Fleet", "70 Specialists", "Filterable directory of all specialist agent profiles across 8 domains."),
-        ]
-        heading = "Deep-Dive Guides &amp; Directories"
+    arch, gdpr, cmp_url, fw_url, sp_url = _subpage_prefix(lang)
+    hrefs = [arch, gdpr, cmp_url, fw_url, sp_url]
+    hub_cfg = _sec_for(lang)["hub"]
+    assert isinstance(hub_cfg, dict)
+    cards = hub_cfg["cards"]
+    assert isinstance(cards, list)
     html_cards = "".join(
-        f'<a class="hub-card" href="{href}"><span class="hub-kicker">{k}</span><strong>{t}</strong><span>{d}</span></a>'
-        for href, k, t, d in cards
+        f'<a class="hub-card" href="{hrefs[i]}"><span class="hub-kicker">{c[0]}</span><strong>{c[1]}</strong><span>{c[2]}</span></a>'
+        for i, c in enumerate(cards)
     )
-    return f'<h2 class="sec">{heading}</h2>\n<div class="hub-grid" data-reveal>{html_cards}</div>'
+    return f'<h2 class="sec">{hub_cfg["title"]}</h2>\n<div class="hub-grid" data-reveal>{html_cards}</div>'
+
+
+def build_gov_pillars(lang: str) -> str:
+    pillars = _sec_for(lang)["pillars"]
+    assert isinstance(pillars, list)
+    return "\n          ".join(f"<li>{p}</li>" for p in pillars)
 
 
 def validate_catalog_values(catalogs: dict[str, dict[str, str]]) -> list[str]:
@@ -529,6 +518,7 @@ def render(template: str, lang: str, cat: dict[str, str], base_url: str | None =
         "ARCH_SECTION_HTML": build_arch_section(lang),
         "COMPARE_SECTION_HTML": build_compare_section(lang),
         "HUB_SECTION_HTML": build_hub_section(lang),
+        "GOV_PILLARS_HTML": build_gov_pillars(lang),
         "SHOT_TAB_1": tabs[0],
         "SHOT_TAB_2": tabs[1],
         "SHOT_TAB_3": tabs[2],
@@ -602,6 +592,8 @@ def build_sitemap_xml(base_url: str, subpage_pairs: list[tuple[str, str]]) -> st
 
     # Phase 3 bilingual deep-dive HTML pages (EN <-> DE hreflang pairs)
     for en_rel, de_rel in subpage_pairs:
+        if en_rel == "boardroom-frameworks/":
+            continue  # handled as full 11-language hreflang cluster below
         en_url = b + en_rel
         de_url = b + de_rel
         for loc in (en_url, de_url):
@@ -612,6 +604,20 @@ def build_sitemap_xml(base_url: str, subpage_pairs: list[tuple[str, str]]) -> st
             lines.append(f'    <xhtml:link rel="alternate" hreflang="de" href="{de_url}"/>')
             lines.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{en_url}"/>')
             lines.append("  </url>")
+
+    # All 11 localized Boardroom-Frameworks HTML pages (full 11-way hreflang cluster)
+    fw_urls = {
+        code: (b + "boardroom-frameworks/" if code == "en" else b + f"{code}/boardroom-frameworks/")
+        for code in LANGS
+    }
+    for code, loc in fw_urls.items():
+        lines.append("  <url>")
+        lines.append(f"    <loc>{loc}</loc>")
+        lines.append(f"    <lastmod>{LASTMOD}</lastmod>")
+        for alt_code, alt_url in fw_urls.items():
+            lines.append(f'    <xhtml:link rel="alternate" hreflang="{alt_code}" href="{alt_url}"/>')
+        lines.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{fw_urls["en"]}"/>')
+        lines.append("  </url>")
 
     lines.append("</urlset>\n")
     return "\n".join(lines)
@@ -639,7 +645,7 @@ def build_llms_txt(base_url: str, version: str) -> str:
 - [DSGVO & Zero-Egress (DE)]({b}de/dsgvo-zero-egress/): Datenresidenz ohne Cloud-Abfluss, EU AI Act Art. 50/Annex III & GoBD-Dokumentation
 - [Framework Comparison (EN)]({b}compare/): Archon OS vs. LangGraph, CrewAI, AutoGen, n8n & Dify
 - [Systemvergleich (DE)]({b}de/vergleich/): Objektiver Enterprise-Vergleich (Archon OS vs. LangGraph, CrewAI, AutoGen, n8n, Dify)
-- [AI Boardroom — 80 Frameworks (EN)]({b}boardroom-frameworks/): Structured multi-perspective debate frameworks catalog
+- [AI Boardroom — 80 Frameworks (EN)]({b}boardroom-frameworks/): Structured multi-perspective debate frameworks catalog (also localized in DE, ES, FR, IT, JA, KO, NL, PT, RU, ZH at `/<lang>/boardroom-frameworks/`)
 - [AI Boardroom — 80 Frameworks (DE)]({b}de/boardroom-frameworks/): Alle strukturierten Decision-Engine-Methodiken durchsuchbar
 - [70 Specialist Profiles (EN)]({b}specialists/): Filterable directory of all specialist agent roles across 8 domains
 - [70 Spezialisten-Profile (DE)]({b}de/spezialisten/): Alle Agenten-Rollen aus 8 Domänen inkl. Guardrails

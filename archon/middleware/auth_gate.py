@@ -10,6 +10,7 @@ Reine Extraktion nach dem S3-Muster (Call-Time-Dependency-Injection):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any, Callable, NamedTuple, Set, Tuple
@@ -75,7 +76,7 @@ async def run_tenant_context_middleware(
             known = False
             try:
                 mgr = tenant_context._get_corporate_manager()
-                companies = mgr.list_companies() or []
+                companies = (await asyncio.to_thread(mgr.list_companies)) or []
                 known = any(
                     str(c.get("id") or "").strip().lower() == hdr_tid.lower()
                     for c in companies
@@ -143,7 +144,7 @@ async def run_auth_gate_middleware(
         token = request.cookies.get("archon_session", "").strip()
 
     try:
-        session_user = _auth.verify_session(token) if token else None
+        session_user = (await asyncio.to_thread(_auth.verify_session, token)) if token else None
         if session_user:
             session_user["auth_enabled"] = True
             request.state.user = session_user

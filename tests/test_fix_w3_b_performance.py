@@ -390,15 +390,44 @@ def test_watchdog_spawn_failure_is_fail_closed(monkeypatch):
     assert states == [True]
 
 
-def test_usage_log_errors_are_escalated():
+def test_usage_log_errors_are_escalated(monkeypatch, tmp_path, caplog):
+    """G7-Migration (D5-C3): echtes Eskalationsverhalten fuer _audit_dispatch_failure und 0-row session_update."""
+    import logging
+    import sqlite3
+    import backend.audit_log as audit_mod
+    import backend.db_paths as dbp_mod
+    import backend.execution_receipt_ledger as erl_mod
     import core_dispatcher as cd
 
-    helper = inspect.getsource(cd._audit_dispatch_failure)
-    assert 'category="recovery"' in helper
-    assert "logger.error" in helper
-    inner = inspect.getsource(cd._log_dispatcher_usage_sync)
-    assert "_audit_dispatch_failure" in inner
-    assert "cur_upd.rowcount" in inner
+    recorded = []
+    monkeypatch.setattr(
+        audit_mod.chained_audit_log,
+        "record_event",
+        lambda **kw: recorded.append(kw) or {"id": "evt-w3b"},
+    )
+    with caplog.at_level(logging.ERROR):
+        cd._audit_dispatch_failure("usage_log_failed", "simulated db failure", stage="unit")
+    assert len(recorded) == 1
+    assert recorded[0]["category"] == "recovery"
+    assert recorded[0]["action"] == "usage_log_failed"
+    assert any(rec.levelno >= logging.ERROR and "usage_log_failed" in rec.getMessage() for rec in caplog.records)
+
+    # 0-row UPDATE auf sessions (z. B. fehlgeschlagener INSERT bei fehlender Spalte) -> _audit_dispatch_failure gerufen
+    db_file = tmp_path / "broken_state.db"
+    with sqlite3.connect(db_file) as conn:
+        conn.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, input_tokens INT, output_tokens INT, estimated_cost_usd REAL)")
+        conn.execute(
+            "CREATE TABLE session_model_usage (session_id TEXT, model TEXT, billing_provider TEXT, "
+            "billing_base_url TEXT, billing_mode TEXT, task TEXT, api_call_count INT, input_tokens INT, "
+            "output_tokens INT, cache_read_tokens INT, cache_write_tokens INT, reasoning_tokens INT, "
+            "estimated_cost_usd REAL, actual_cost_usd REAL, first_seen REAL, last_seen REAL, "
+            "PRIMARY KEY (session_id, model, billing_provider, billing_base_url, billing_mode, task))"
+        )
+    monkeypatch.setattr(dbp_mod, "resolve_db", lambda _name: str(db_file))
+    monkeypatch.setattr(erl_mod.execution_receipt_ledger, "issue_receipt", lambda **_kw: {})
+    recorded.clear()
+    cd._log_dispatcher_usage_sync("coder", "deepseek/deepseek-chat", 10, 20, "t-0row")
+    assert any(ev["action"] == "usage_log_failed" for ev in recorded)
 
 
 def test_mission_control_cockpit_has_no_parallel_15s_poll():

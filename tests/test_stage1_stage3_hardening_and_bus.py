@@ -151,19 +151,43 @@ def test_agent_router_streaming_empty_choices_guard():
 
 
 def test_core_dispatcher_single_write_token_accounting(tmp_path):
+    """G7-Migration (D5-C3): echtes Single-Write-Accounting auf erster Session-Zeile."""
+    import backend.db_paths as dbp_mod
+    import backend.execution_receipt_ledger as erl_mod
     import core_dispatcher as cd
 
     db_file = str(tmp_path / "usage.db")
     with sqlite3.connect(db_file) as con:
-        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, total_tokens INTEGER DEFAULT 0, estimated_cost_usd REAL DEFAULT 0.0, updated_at TEXT)")
-        con.execute("CREATE TABLE token_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, agent_id TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER, cost_usd REAL, created_at TEXT)")
+        con.execute(
+            "CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, display_name TEXT, title TEXT, "
+            "model TEXT, profile_name TEXT, started_at REAL, message_count INT, input_tokens INT, "
+            "output_tokens INT, estimated_cost_usd REAL, actual_cost_usd REAL)"
+        )
+        con.execute(
+            "CREATE TABLE session_model_usage (session_id TEXT, model TEXT, billing_provider TEXT, "
+            "billing_base_url TEXT, billing_mode TEXT, task TEXT, api_call_count INT, input_tokens INT, "
+            "output_tokens INT, cache_read_tokens INT, cache_write_tokens INT, reasoning_tokens INT, "
+            "estimated_cost_usd REAL, actual_cost_usd REAL, first_seen REAL, last_seen REAL, "
+            "PRIMARY KEY (session_id, model, billing_provider, billing_base_url, billing_mode, task))"
+        )
         con.commit()
 
-    with patch.object(cd, "USAGE_DB_PATH", db_file, create=True):
-        # Test direkt gegen _log_dispatcher_usage falls DB-Pfad injizierbar, sonst Source-Check
-        pass
-    src = Path(cd.__file__).read_text(encoding="utf-8")
-    assert "if not inserted_session:" in src
+    with patch.object(dbp_mod, "resolve_db", return_value=db_file), patch.object(
+        erl_mod.execution_receipt_ledger, "issue_receipt", return_value={}
+    ):
+        cd._log_dispatcher_usage_sync("coder", "deepseek/deepseek-chat", 100, 50, "t-single")
+        with sqlite3.connect(db_file) as con:
+            row1 = con.execute(
+                "SELECT input_tokens, output_tokens FROM sessions WHERE id = 'task_t-single'"
+            ).fetchone()
+        assert row1 == (100, 50)
+
+        cd._log_dispatcher_usage_sync("coder", "deepseek/deepseek-chat", 40, 10, "t-single")
+        with sqlite3.connect(db_file) as con:
+            row2 = con.execute(
+                "SELECT input_tokens, output_tokens FROM sessions WHERE id = 'task_t-single'"
+            ).fetchone()
+        assert row2 == (140, 60)
 
 
 def test_role_budget_engine_single_and_subtask_ids(tmp_path):

@@ -55,13 +55,46 @@ def test_p08_cost_estimation_is_model_specific():
     assert expensive > cheap * 10, (cheap, expensive)
 
 
-def test_p08_no_hardcoded_flat_rate_in_usage_log():
-    src = (REPO_ROOT / "core_dispatcher.py").read_text(encoding="utf-8")
-    # Die Modell-preis-Funktion muss die primäre Berechnung sein; der alte
-    # Einheitstarif darf nur noch als Notfall-Fallback im except stehen.
-    assert "estimate_model_cost_usd(model, in_tok, out_tok)" in src
-    assert "estimated_cost_eur=est_cost_eur" in src
-    assert "estimated_cost_eur=0.0" not in src
+def test_p08_no_hardcoded_flat_rate_in_usage_log(tmp_path):
+    """G7-Migration (D5-C3): modellabhaengige Kostenberechnung im echten Usage-Log."""
+    import sqlite3
+    import backend.db_paths as dbp_mod
+    import backend.execution_receipt_ledger as erl_mod
+    import core_dispatcher as cd
+
+    combined = (
+        (REPO_ROOT / "core_dispatcher.py").read_text(encoding="utf-8")
+        + "\n"
+        + (REPO_ROOT / "archon" / "core" / "dispatch_budget_cache.py").read_text(encoding="utf-8")
+    )
+    assert "estimate_model_cost_usd(model, in_tok, out_tok)" in combined
+    assert "estimated_cost_eur=est_cost_eur" in combined
+    assert "estimated_cost_eur=0.0" not in combined
+
+    db_file = str(tmp_path / "p08_state.db")
+    with sqlite3.connect(db_file) as con:
+        con.execute(
+            "CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, display_name TEXT, title TEXT, "
+            "model TEXT, profile_name TEXT, started_at REAL, message_count INT, input_tokens INT, "
+            "output_tokens INT, estimated_cost_usd REAL, actual_cost_usd REAL)"
+        )
+        con.execute(
+            "CREATE TABLE session_model_usage (session_id TEXT, model TEXT, billing_provider TEXT, "
+            "billing_base_url TEXT, billing_mode TEXT, task TEXT, api_call_count INT, input_tokens INT, "
+            "output_tokens INT, cache_read_tokens INT, cache_write_tokens INT, reasoning_tokens INT, "
+            "estimated_cost_usd REAL, actual_cost_usd REAL, first_seen REAL, last_seen REAL, "
+            "PRIMARY KEY (session_id, model, billing_provider, billing_base_url, billing_mode, task))"
+        )
+        con.commit()
+    with patch.object(dbp_mod, "resolve_db", return_value=db_file), patch.object(
+        erl_mod.execution_receipt_ledger, "issue_receipt", return_value={}
+    ):
+        cd._log_dispatcher_usage_sync("coder", "anthropic/claude-3-opus", 1_000_000, 1_000_000, "t-opus")
+    with sqlite3.connect(db_file) as con:
+        cost = con.execute(
+            "SELECT estimated_cost_usd FROM sessions WHERE id = 'task_t-opus'"
+        ).fetchone()[0]
+    assert cost > 10.0, f"Erwartete Opus-Tarif > 10 USD statt Einheitstarif, erhalten: {cost}"
 
 
 # ---------------------------------------------------------------- P0-9

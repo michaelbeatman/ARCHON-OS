@@ -602,6 +602,72 @@ from archon.services.mission_sync import _get_live_telemetry_metrics, _sync_task
 from archon.services.mission_sync import _slugify as _slugify
 from archon.services.profiles_service import delete_profile as delete_profile
 from archon.services.profiles_service import save_profile as save_profile
+from archon.services.shutdown_clients import (
+    _N8N_STARTUP_STATUS as _N8N_STARTUP_STATUS,
+)
+from archon.services.shutdown_clients import (
+    _close_all_http_clients as _close_all_http_clients,
+)
+from archon.services.shutdown_clients import (
+    _close_dispatcher_clients as _close_dispatcher_clients,
+)
+from archon.services.shutdown_clients import (
+    _close_proxy_clients as _close_proxy_clients,
+)
+from archon.services.shutdown_clients import (
+    _ensure_zero_egress_worker_networks as _ensure_zero_egress_worker_networks,
+)
+from archon.services.shutdown_clients import (
+    _harden_secret_permissions as _harden_secret_permissions,
+)
+from archon.services.shutdown_clients import (
+    _import_n8n_workflows_on_startup as _import_n8n_workflows_on_startup,
+)
+from archon.services.startup_security import (
+    _AUDIT_COMPROMISED as _AUDIT_COMPROMISED,
+)
+from archon.services.startup_security import (
+    _AUDIT_COMPROMISED_LOCK as _AUDIT_COMPROMISED_LOCK,
+)
+from archon.services.startup_security import (
+    _LOCAL_BINDS as _LOCAL_BINDS,
+)
+from archon.services.startup_security import (
+    AUDIT_COMPROMISED as AUDIT_COMPROMISED,
+)
+from archon.services.startup_security import (
+    StartupSecurityDeps as _StartupSecurityDeps,
+)
+from archon.services.startup_security import (
+    _assert_api_key_pepper as _assert_api_key_pepper,
+)
+from archon.services.startup_security import (
+    _assert_audit_hmac as _assert_audit_hmac,
+)
+from archon.services.startup_security import (
+    _assert_audit_integrity as _assert_audit_integrity,
+)
+from archon.services.startup_security import (
+    _assert_auth_on_nonloopback_bind as _assert_auth_on_nonloopback_bind,
+)
+from archon.services.startup_security import (
+    _audit_integrity_enforced as _audit_integrity_enforced,
+)
+from archon.services.startup_security import (
+    _mark_audit_compromised as _mark_audit_compromised,
+)
+from archon.services.startup_security import (
+    _must_force_auth as _must_force_auth,
+)
+from archon.services.startup_security import (
+    _nonloopback_bind_detected as _nonloopback_bind_detected,
+)
+from archon.services.startup_security import (
+    _verify_all_audit_chains as _verify_all_audit_chains,
+)
+from archon.services.startup_security import (
+    register_startup_security_deps_provider as _register_startup_security_deps_provider,
+)
 from backend.auth_service import auth_service as auth_service
 from backend.platform_paths import HERMES_HOME as HERMES_HOME
 from backend.platform_paths import OBSIDIAN_VAULT as OBSIDIAN_VAULT
@@ -671,13 +737,6 @@ _ROUTER_LOAD_ERRORS: List[str] = []
 _STARTUP_HOOKS: List[Any] = []
 _SHUTDOWN_HOOKS: List[Any] = []
 
-# D06-Nachlauf (A7): ehrlicher Status fuer den optionalen n8n-Import beim
-# Startup. Default `not_configured` — der Import ist opt-in, weil die Scripts
-# `docker exec`/`docker cp` ausfuehren und ein Service-Token in Temp-Dateien
-# schreiben. Ein automatisches `deploy_n8n_routines.run()` (restartet n8n und
-# beschreibt das versionierte Bundle) bleibt bewusst DELEGATED.
-_N8N_STARTUP_STATUS: Dict[str, Any] = {"status": "not_configured", "detail": "opt-in via ARCHON_N8N_STARTUP_IMPORT=1"}
-
 # KRITISCH (Audit 23.11.2026): Sicherheits-Hooks duerfen niemals nur geloggt
 # werden. Ein fehlgeschlagener Router-Health- oder Audit-HMAC-Check muss den
 # Start abbrechen — sonst laeuft die Anwendung mit fälschbarer Revisionskette
@@ -689,139 +748,18 @@ _FAIL_FAST_HOOKS = {
     "_assert_auth_on_nonloopback_bind",
     "_assert_api_key_pepper",
 }
-
-# B-05 (D05/BLOCKER): globaler, thread-sicherer Integritätsstatus. Wird vom
-# Startup-Hook und vom 30-s-Loop gesetzt. /readyz antwortet 503, sobald eine
-# Manipulation zur Laufzeit erkannt wurde (sticky — nur Operator-Reset).
-_AUDIT_COMPROMISED: Dict[str, Any] = {
-    "compromised": False,
-    "reason": "",
-    "chains": [],
-    "ts": 0.0,
-}
-# Öffentlicher Name laut Auftrag (AUDIT_COMPROMISED-Flag).
-AUDIT_COMPROMISED = _AUDIT_COMPROMISED
-_AUDIT_COMPROMISED_LOCK = threading.Lock()
-
-
-def _mark_audit_compromised(label: str, result: Dict[str, Any]) -> None:
-    """Loggt den Befund immer auf ERROR; setzt das 503-Flag im Produktivpfad.
-
-    In isolierter Dev/Test-Umgebung mit historischen Legacy-Blöcken bleibt der
-    Befund sichtbar, aber /readyz wird nicht dauerhaft gekillt (sonst würde
-    jede langlebige Test-Session nach dem 30-s-Loop 503 liefern).
-    """
-    if not isinstance(result, dict) or result.get("valid") is not False:
-        return
-    reason = str(
-        result.get("reason") or result.get("message") or "Integritätsprüfung fehlgeschlagen"
+# M2: _N8N_STARTUP_STATUS, _AUDIT_COMPROMISED/AUDIT_COMPROMISED und die
+# Startup-Sicherheits-Gates liegen in archon/services/startup_security.py bzw.
+# archon/services/shutdown_clients.py (X-as-X Re-Exports am Modulkopf).
+_register_startup_security_deps_provider(
+    lambda: _StartupSecurityDeps(
+        verify_all_audit_chains=_verify_all_audit_chains,
+        audit_integrity_enforced=_audit_integrity_enforced,
+        mark_audit_compromised=_mark_audit_compromised,
+        must_force_auth=_must_force_auth,
+        nonloopback_bind_detected=_nonloopback_bind_detected,
     )
-    corrupted = str(result.get("corrupted_id") or "")
-    if corrupted:
-        reason = f"{reason} (corrupted_id={corrupted})"
-    logger.error("[Audit][Integritaet] %s INVALID: %s", label, result)
-    if not _audit_integrity_enforced():
-        return
-    with _AUDIT_COMPROMISED_LOCK:
-        _AUDIT_COMPROMISED["compromised"] = True
-        _AUDIT_COMPROMISED["reason"] = f"{label}: {reason}"
-        chains = list(_AUDIT_COMPROMISED.get("chains") or [])
-        if label not in chains:
-            chains.append(label)
-        _AUDIT_COMPROMISED["chains"] = chains
-        _AUDIT_COMPROMISED["ts"] = time.time()
-
-
-_LOCAL_BINDS = {"127.0.0.1", "localhost", "::1", "[::1]"}
-
-
-def _nonloopback_bind_detected() -> bool:
-    """Erkennt einen Nicht-Loopback-Bind aus ENV *und* Prozess-Kommandozeile.
-
-    Dockerfile:57 und docker-compose.dev.yml:13 starten uvicorn hart mit
-    ``--host 0.0.0.0``, ohne ``ARCHON_BIND_IP`` zu setzen. auth_service sah
-    dadurch keinen Bind und liess Auth aus (Fail-Open). Diese Funktion
-    schliesst die Luecke — ENV bleibt erhalten, sys.argv kommt hinzu.
-    """
-    for var in ("ARCHON_BIND_IP", "UVICORN_HOST", "HOST"):
-        val = str(os.environ.get(var) or "").strip().strip("[]")
-        if val and val not in _LOCAL_BINDS:
-            return True
-    argv = list(sys.argv or [])
-    for idx, arg in enumerate(argv):
-        val = ""
-        if arg == "--host" and idx + 1 < len(argv):
-            val = str(argv[idx + 1] or "").strip()
-        elif arg.startswith("--host="):
-            val = arg.split("=", 1)[1].strip()
-        val = val.strip("[]")
-        if val and val not in _LOCAL_BINDS:
-            return True
-    return False
-
-
-def _must_force_auth() -> bool:
-    """Erweitert auth_service._must_force_auth() um den echten uvicorn-Bind.
-
-    Bei jeder Unklarheit (Modul/Attribut nicht lesbar) fail-closed True.
-    """
-    try:
-        from backend.auth_service import auth_service
-        if auth_service._must_force_auth():
-            return True
-    except Exception as exc:
-        logger.error(f"[Auth] _must_force_auth nicht lesbar (fail-closed): {exc}")
-        return True
-    return _nonloopback_bind_detected()
-
-
-def _assert_auth_on_nonloopback_bind() -> None:
-    """Nicht-Loopback-Bind ohne Auth ist Fail-Open -> Start hart abbrechen.
-
-    D04/MED: `is_auth_enabled()` enthält denselben Force-Pfad wie
-    `_must_force_auth()` und liefert deshalb immer True. Der Hook muss die
-    *echte Konfiguration* ohne Force lesen (`_read_auth_enabled()`).
-    """
-    if not _must_force_auth():
-        return  # lokaler 127.0.0.1-Single-User-Modus bleibt doku-konform erlaubt
-    try:
-        from backend.auth_service import AuthService
-        auth_enabled = AuthService._read_auth_enabled()
-    except Exception as exc:
-        logger.error(f"[Auth] Auth-Konfiguration bei Nicht-Loopback-Bind nicht pruefbar: {exc}")
-        raise RuntimeError("[Auth] Auth-Konfiguration nicht pruefbar — Start abgebrochen (fail-closed).") from exc
-    if not auth_enabled:
-        raise RuntimeError(
-            "[Auth] Nicht-Loopback-Bind (z. B. 0.0.0.0) oder Produktion erkannt, aber "
-            "auth.enabled ist in settings.json nicht explizit aktiviert — "
-            "Start abgebrochen (fail-closed). Auth aktivieren oder an 127.0.0.1 binden."
-        )
-
-
-def _assert_api_key_pepper() -> None:
-    """D04/H-04-2: Produktion ohne ARCHON_API_KEY_PEPPER darf nicht starten.
-
-    Kein hartcodierter Salt, kein Legacy-Fallback. Der Hook läuft im
-    Fail-Fast-Pfad des Lifespans und beendet den Start bei fehlendem Secret.
-    """
-    env_name = str(
-        os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
-    ).strip().lower()
-    if env_name not in ("production", "prod", "live"):
-        return
-    pepper = str(os.environ.get("ARCHON_API_KEY_PEPPER") or "").strip()
-    if not pepper:
-        raise RuntimeError(
-            "[Security] ARCHON_API_KEY_PEPPER fehlt in Produktion — "
-            "Start abgebrochen (fail-closed). Bitte sicheres Secret setzen und "
-            "alle bestehenden API-Keys rotieren."
-        )
-    # Kurze/triviale Pepper sind kein Schutz — hart ablehnen.
-    if len(pepper) < 16 or pepper.lower() in ("changeme", "secret", "password", "pepper"):
-        raise RuntimeError(
-            "[Security] ARCHON_API_KEY_PEPPER ist zu kurz oder ein Platzhalter — "
-            "Start abgebrochen (fail-closed)."
-        )
+)
 
 
 async def _archon_lifespan(_app_instance):
@@ -2290,73 +2228,6 @@ async def api_attempt_task_healing(request: Request, payload: HealingAttemptPayl
 # LIFESPAN-REGISTRIERUNG (ersetzt die frueheren @app.on_event-Handler)
 # Reihenfolge ist explizit und damit reproduzierbar.
 # =========================================================================
-def _harden_secret_permissions():
-    """Setzt 600 auf Secret-Dateien (.env, Tokens) und meldet Verstoss-Funde.
-
-    Fund im Review: .env.backup_pre_v02 war 755, profiles/telegram_bot/.env im
-    Container ebenfalls 755 -> Bot-Token war fuer jeden Prozess lesbar.
-    """
-    try:
-        from utils.secret_files import audit_known_secrets, harden_known_secrets
-        _offenders = audit_known_secrets()
-        _fixed = harden_known_secrets()
-        if _fixed:
-            logger.warning(f"[Secrets] Rechte gehaertet (600): {', '.join(_fixed[:6])}"
-                           + (" ..." if len(_fixed) > 6 else ""))
-        if _offenders:
-            add_ticker("Security", f"{len(_offenders)} Secret-Datei(en) waren zu offen - Rechte korrigiert")
-        else:
-            logger.info("[Secrets] Alle Secret-Dateien haben korrekte Rechte (600).")
-    except Exception as e:
-        logger.warning(f"[Secrets] Rechte-Pruefung fehlgeschlagen: {e}")
-
-
-def _ensure_zero_egress_worker_networks():
-    """Stellt beim Start sicher, dass die isolierten Worker-/Sandbox-Docker-Netzwerke (`Internal=true`, ohne Internet-Route) bereitstehen."""
-    try:
-        from backend.llm_egress_guard import ensure_worker_zero_egress_network
-        ensure_worker_zero_egress_network("archon-worker-zero-egress_net")
-        ensure_worker_zero_egress_network("archon-sandbox_net")
-    except Exception as e:
-        # Kein stilles Debug: wenn die isolierten Netze fehlen, laufen Worker
-        # moeglicherweise mit Internet-Route (Zero-Egress-Garantie weg).
-        logger.warning(f"[ZeroEgress] Worker-Netzwerk-Init fehlgeschlagen: {e}")
-
-
-async def _import_n8n_workflows_on_startup() -> None:
-    """D06-Nachlauf (A7): opt-in n8n-Import/Aktivierung im Lifespan.
-
-    Default `not_configured`: die Scripts nutzen `docker exec`/`docker cp` und
-    schreiben einen Service-Token in 0600-Tempdateien. Nur mit
-    `ARCHON_N8N_STARTUP_IMPORT=1` laeuft der Importer (inkl. Webhook-
-    Aktivierung via activate_n8n_workflows.js) in einem Worker-Thread.
-    `deploy_n8n_routines.run()` wird bewusst NICHT automatisch gerufen: es
-    restarted den n8n-Container und beschreibt das versionierte Bundle
-    (siehe Fix-Log — DELEGATED).
-    """
-    enabled = os.getenv("ARCHON_N8N_STARTUP_IMPORT", "").strip().lower() in ("1", "true", "yes")
-    if not enabled:
-        _N8N_STARTUP_STATUS.update(status="not_configured", detail="opt-in via ARCHON_N8N_STARTUP_IMPORT=1")
-        return
-    try:
-        from scripts.import_n8n_workflows import main as _n8n_import_main
-        rc = await asyncio.to_thread(_n8n_import_main)
-        _N8N_STARTUP_STATUS.update(
-            status="ok" if rc == 0 else "error",
-            detail="import+activation ok" if rc == 0 else f"exit_code={rc}",
-            ts=time.time(),
-        )
-        if rc != 0:
-            logger.error("[Startup] n8n-Import/Aktivierung fehlgeschlagen (exit=%s).", rc)
-        else:
-            logger.info("[Startup] n8n-Import/Aktivierung erfolgreich.")
-    except Exception as exc:
-        _N8N_STARTUP_STATUS.update(
-            status="error", detail=f"{type(exc).__name__}: {exc}", ts=time.time()
-        )
-        logger.error("[Startup] n8n-Import/Aktivierung fehlgeschlagen: %s", exc)
-
-
 _STARTUP_HOOKS.extend([
     _start_watchdog_daemon,      # 1. Watchdog/Supervisor
     on_startup_drain_recovery,   # 2. Task-Recovery nach Absturz
@@ -2399,98 +2270,6 @@ async def _cancel_tracked_tasks() -> None:
     # In-Process-Restart: Guards zurücksetzen, sonst laufen beim 2. Lifespan
     # keine Hintergrund-Loops mehr (still abgeschaltete Autonomie).
     _reset_loops_started()
-
-
-async def _close_dispatcher_clients() -> None:
-    try:
-        import core_dispatcher
-        result = await core_dispatcher.close_dispatcher_clients()
-        if isinstance(result, dict):
-            closed = int(result.get("closed", 0) or 0)
-            failed = int(result.get("failed_closes", 0) or 0)
-            if closed:
-                logger.info("[Shutdown] %s Dispatcher-HTTP-Client(s) geschlossen.", closed)
-            if failed:
-                # D08/MED: fehlgeschlagene Closes bleiben sichtbar statt als
-                # Erfolg quittiert zu werden (gleicher Report wie Failed-Cancels).
-                from core_dispatcher import _record_failed_cancel
-                for detail in result.get("failed_clients") or []:
-                    _record_failed_cancel("dispatcher_http_client_close", str(detail))
-                logger.error("[Shutdown] %s Dispatcher-Client-Close(s) fehlgeschlagen.", failed)
-        elif result:
-            logger.info("[Shutdown] %s Dispatcher-HTTP-Client(s) geschlossen.", result)
-    except Exception as exc:
-        logger.error(f"[Shutdown] Dispatcher-Client-Close fehlgeschlagen: {exc}")
-
-
-async def _close_all_http_clients() -> None:
-    """D08/S-8.2 (A5/A9-DELEGATED): alle langlebigen Client-Pools schliessen.
-
-    `agent_router.router_instance.close_http_clients()` existiert bereits.
-    Die drei anderen Module haben (Stand Audit) KEINE close_all*-Funktion —
-    deshalb werden ihre echten Modul-Attribute direkt geschlossen. Es wird
-    bewusst kein nicht existierender Helfer aufgerufen.
-    """
-    closed = 0
-    # 1. AgentRouter: vorhandener Helfer, idempotent.
-    try:
-        from backend import agent_router
-        await agent_router.router_instance.close_http_clients()
-    except Exception as exc:
-        logger.debug("[Shutdown] AgentRouter-Client-Close-Hinweis: %s", exc)
-
-    # 2./4. Loop-keyed Pools (echte Modulattribute, Snapshot vor clear()).
-    for module_path, pool_name in (
-        ("archon.routers.hermes_proxy", "_HERMES_CLIENTS_BY_LOOP"),
-        ("utils.reverse_proxy", "_PROXY_CLIENTS"),
-    ):
-        try:
-            if module_path.startswith("archon"):
-                from archon.routers import hermes_proxy as _pool_module
-            else:
-                from utils import reverse_proxy as _pool_module  # type: ignore[no-redef]
-            pool = getattr(_pool_module, pool_name, None)
-            clients = list(pool.values()) if pool is not None else []
-            for client in clients:
-                try:
-                    if not client.is_closed:
-                        await client.aclose()
-                        closed += 1
-                except Exception as exc:
-                    logger.debug("[Shutdown] %s Client-Close-Hinweis: %s", pool_name, exc)
-            if pool is not None:
-                try:
-                    pool.clear()
-                except Exception as exc:
-                    logger.debug("[Shutdown] %s Dict-Clear-Hinweis: %s", pool_name, exc)
-        except Exception as exc:
-            logger.debug("[Shutdown] %s Pool-Close-Hinweis: %s", pool_name, exc)
-
-    # 3. system.py: einzelner globaler Client (kein Loop-Key).
-    try:
-        from archon.routers import system as _system_module
-        client = getattr(_system_module, "_SYSTEM_HTTP_CLIENT", None)
-        if client is not None:
-            if not client.is_closed:
-                await client.aclose()
-                closed += 1
-            setattr(_system_module, "_SYSTEM_HTTP_CLIENT", None)
-    except Exception as exc:
-        logger.debug("[Shutdown] System-Client-Close-Hinweis: %s", exc)
-
-    if closed:
-        logger.info("[Shutdown] %s HTTP-Client(s) zentral geschlossen.", closed)
-
-
-async def _close_proxy_clients() -> None:
-    """F-054: id(loop)-HTTP-Clients der Proxy-Router sauber schliessen."""
-    try:
-        from archon.routers.proxies import close_proxy_clients
-        n = await close_proxy_clients()
-        if n:
-            logger.info("[Shutdown] %s Proxy-HTTP-Client(s) geschlossen.", n)
-    except Exception as exc:
-        logger.debug("[Shutdown] Proxy-Client-Close-Hinweis: %s", exc)
 
 
 # Lifespan fuehrt Shutdown-Hooks in REVERSED order aus. Reihenfolge hier:
@@ -2595,150 +2374,9 @@ def _assert_router_health() -> None:
 
 _STARTUP_HOOKS.insert(0, _assert_router_health)
 
-
-def _assert_audit_hmac() -> None:
-    """GoBD/ISO27001: ohne HMAC-Key ist die Audit-Kette ab Block 1 fälschbar.
-
-    In Produktion (oder wenn bereits HMAC-Blöcke existieren) ist der Key
-    zwingend. In Development ohne bestehende HMAC-Blöcke genügt eine laute
-    Warnung.
-    """
-    key = str(os.environ.get("ARCHON_AUDIT_HMAC_KEY") or "").strip()
-    if key:
-        return
-    env_name = str(
-        os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
-    ).strip().lower()
-    prod = env_name in ("production", "prod", "live")
-    # Die mitgelieferte Compose-Datei setzt ENVIRONMENT=development. Ohne
-    # Einbeziehung des Auth-/Bind-Status greift der Schutz im Default-Deployment
-    # nie — genau dort muss der Key aber zwingend vorhanden sein.
-    try:
-        from backend.auth_service import auth_service
-        prod = prod or bool(auth_service.is_auth_enabled()) or bool(auth_service._must_force_auth())
-    except Exception:
-        prod = True  # fail-closed: keine Konfiguration lesbar → kein Start ohne Key
-    has_hmac_blocks = False
-    try:
-        import sqlite3
-
-        from backend.db_paths import resolve_db
-        with sqlite3.connect(f"file:{resolve_db('agentic_memory.db')}?mode=ro", uri=True, timeout=3) as conn:
-            has_hmac_blocks = conn.execute(
-                "SELECT 1 FROM audit_log WHERE current_hash LIKE 'hmac-sha256:%' LIMIT 1"
-            ).fetchone() is not None
-    except Exception as exc:
-        # Ein lesbarer HMAC-Block ist nicht nachweisbar → nicht als "kein Block"
-        # interpretieren. In Produktion wird ohnehin abgebrochen; in Development
-        # bleibt es bei einer lauten Warnung.
-        logger.warning("[Audit] HMAC-Block-Pruefung nicht moeglich: %s", exc)
-        has_hmac_blocks = False
-    if prod or has_hmac_blocks:
-        raise RuntimeError(
-            "[Audit] ARCHON_AUDIT_HMAC_KEY fehlt — Revisionskette ist manipulierbar (GoBD/ISO27001). "
-            "Key aus ENV setzen (z.B. secrets.token_hex(32))."
-        )
-    logger.warning("[Audit] ARCHON_AUDIT_HMAC_KEY nicht gesetzt — Audit-Kette ist NICHT manipulationssicher (Development).")
-
-
+# M2: _assert_audit_hmac, _verify_all_audit_chains, _audit_integrity_enforced
+# und _assert_audit_integrity liegen in archon/services/startup_security.py.
 _STARTUP_HOOKS.insert(0, _assert_audit_hmac)
-
-
-def _verify_all_audit_chains() -> Dict[str, Dict[str, Any]]:
-    """Zentrale + alle sechs Nebenketten verifizieren (sync, für Hook + Loop).
-
-    Einzelfehler werden als ``valid=False`` normalisiert (fail-closed): eine
-    nicht ausführbare Verifikation ist kein Grund, den Start fortzusetzen.
-    """
-    from backend.api_key_manager import api_key_manager as _api_key_chain
-    from backend.approval_policy_engine import approval_engine as _approval_chain
-    from backend.audit_log import chained_audit_log as _audit_chain
-    from backend.email_draft_engine import verify_email_draft_chain
-    from backend.execution_receipt_ledger import execution_receipt_ledger
-    from backend.gdpr_compliance_engine import verify_gdpr_audit_chain
-    from backend.treasury_engine import verify_treasury_chain
-
-    verifiers = (
-        ("Zentrale Audit-Kette", _audit_chain.verify_integrity),
-        ("Approval-Kette", _approval_chain.verify_audit_integrity),
-        ("API-Key-Kette", _api_key_chain.verify_integrity),
-        ("Receipt-Kette", execution_receipt_ledger.verify_chain_integrity),
-        ("Treasury-Kette", verify_treasury_chain),
-        ("Email-Draft-Kette", verify_email_draft_chain),
-        ("DSGVO-Audit-Kette", verify_gdpr_audit_chain),
-    )
-    results: Dict[str, Dict[str, Any]] = {}
-    for label, verify_fn in verifiers:
-        try:
-            res = verify_fn()
-            if isinstance(res, dict):
-                if "valid" not in res and "chain_valid" in res:
-                    res = dict(res)
-                    res["valid"] = res["chain_valid"]
-                results[label] = res
-            else:
-                results[label] = {"valid": False, "reason": "Kein Verify-Result."}
-        except Exception as exc:
-            logger.error("[Integritaet] %s nicht pruefbar (fail-closed): %s", label, exc)
-            results[label] = {
-                "valid": False,
-                "corrupted_id": label,
-                "reason": f"Verifikation nicht ausfuehrbar: {type(exc).__name__}: {exc}",
-            }
-    return results
-
-
-def _audit_integrity_enforced() -> bool:
-    """§2.5: Fail-Fast nur im produktiven Pfad ('Produktion startet nicht').
-
-    Produktiv = ENVIRONMENT production/prod/live, erzwungene Auth oder
-    Non-Loopback-Bind. Explizites ARCHON_AUDIT_INTEGRITY_FAIL_FAST=1 erlaubt
-    denselben Gate auch in abweichenden Deployment-Profilen. In isolierter
-    Dev/Test-Umgebung mit historischen Legacy-Blöcken bleibt der Start möglich;
-    der 30-s-Loop markiert AUDIT_COMPROMISED jedoch unabhängig davon.
-    """
-    env_name = str(
-        os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
-    ).strip().lower()
-    if env_name in ("production", "prod", "live"):
-        return True
-    if str(os.environ.get("ARCHON_AUDIT_INTEGRITY_FAIL_FAST", "") or "").strip().lower() in (
-        "1", "true", "yes",
-    ):
-        return True
-    try:
-        return bool(_must_force_auth())
-    except Exception:
-        return True  # fail-closed: Konfiguration nicht lesbar
-
-
-def _assert_audit_integrity() -> None:
-    """B-05 (D05/BLOCKER): Fail-Fast bei Manipulation der Audit-Ketten.
-
-    Ruft verify_integrity() der Zentralkette und alle Nebenketten-Verifizierer.
-    Bei ``valid=False`` wird AUDIT_COMPROMISED gesetzt und der Start hart
-    abgebrochen (der Lifespan re-raist Fail-Fast-Hooks bereits).
-    """
-    if not _audit_integrity_enforced():
-        return
-    results = _verify_all_audit_chains()
-    broken = {
-        label: res for label, res in results.items()
-        if isinstance(res, dict) and res.get("valid") is False
-    }
-    if not broken:
-        return
-    for label, res in broken.items():
-        _mark_audit_compromised(label, res)
-    detail = "; ".join(
-        f"{label}: {res.get('reason') or res.get('message') or 'unbekannt'}"
-        for label, res in broken.items()
-    )
-    raise RuntimeError(
-        f"[Audit] Kettenintegritaet verletzt — Start abgebrochen (fail-closed): {detail}"
-    )
-
-
 _STARTUP_HOOKS.insert(0, _assert_audit_integrity)
 
 # B (Auth-Fail-Open): Nicht-Loopback-Bind ohne Auth muss den Start abbrechen.

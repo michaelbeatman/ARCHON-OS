@@ -30,7 +30,6 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
     JSONResponse,
-    RedirectResponse,
     Response,
     StreamingResponse,
 )
@@ -157,6 +156,11 @@ from archon.core.settings_state import (
 from archon.core.state_db import STATE_DB_PATH, _get_state_db
 from archon.core.state_db import ClosingConnection as ClosingConnection
 from archon.core.state_db import _get_profile_state_db as _get_profile_state_db
+from archon.middleware.auth_gate import AuthGateDeps as _AuthGateDeps
+from archon.middleware.auth_gate import run_auth_gate_middleware as _run_auth_gate_middleware
+from archon.middleware.auth_gate import (
+    run_tenant_context_middleware as _run_tenant_context_middleware,
+)
 from archon.middleware.auth_policy import _AUTH_PUBLIC_EXACT as _AUTH_PUBLIC_EXACT
 from archon.middleware.auth_policy import RAG_API_KEY_ENV as RAG_API_KEY_ENV
 from archon.middleware.auth_policy import MissingRagApiKeyError as MissingRagApiKeyError
@@ -597,6 +601,36 @@ from archon.services.background_loops import (
 from archon.services.background_loops import (
     reset_loops_started as _reset_loops_started,
 )
+from archon.services.health_probes import (
+    _DEPENDENCY_PROBE_CACHE as _DEPENDENCY_PROBE_CACHE,
+)
+from archon.services.health_probes import (
+    _DEPENDENCY_PROBE_TTL as _DEPENDENCY_PROBE_TTL,
+)
+from archon.services.health_probes import (
+    _READINESS_PROBE_READY as _READINESS_PROBE_READY,
+)
+from archon.services.health_probes import (
+    HealthProbeDeps as _HealthProbeDeps,
+)
+from archon.services.health_probes import (
+    _probe_external_dependency as _probe_external_dependency,
+)
+from archon.services.health_probes import (
+    _readiness_probe_targets as _readiness_probe_targets,
+)
+from archon.services.health_probes import (
+    init_readiness_probe_table as _init_readiness_probe_table_impl,
+)
+from archon.services.health_probes import (
+    run_liveness_check as _run_liveness_check,
+)
+from archon.services.health_probes import (
+    run_readiness_check as _run_readiness_check,
+)
+from archon.services.health_probes import (
+    run_readiness_sync_checks as _run_readiness_sync_checks,
+)
 from archon.services.mission_sync import _LIVE_TELEMETRY_CACHE as _LIVE_TELEMETRY_CACHE
 from archon.services.mission_sync import _get_live_telemetry_metrics, _sync_task_to_obsidian
 from archon.services.mission_sync import _slugify as _slugify
@@ -953,166 +987,27 @@ def _request_has_service_token(request: Request) -> bool:
     return hmac.compare_digest(provided, expected)
 
 
+def _build_auth_gate_deps() -> _AuthGateDeps:
+    return _AuthGateDeps(
+        request_has_service_token=_request_has_service_token,
+        auth_unavailable_response=_auth_unavailable_response,
+        auth_public_exact=_AUTH_PUBLIC_EXACT,
+        auth_public_prefixes=_AUTH_PUBLIC_PREFIXES,
+        auth_api_prefixes=_AUTH_API_PREFIXES,
+        auth_protected_prefixes=_AUTH_PROTECTED_PREFIXES,
+    )
+
+
 @app.middleware("http")
 async def tenant_context_middleware(request: Request, call_next):
-    """Bindet optionalen Mandanten-Header (X-Tenant-Id / X-Company-Id) request-lokal via ContextVar.
-
-    Autorisierung (Audit v3 Welle 4): Nur formatgueltige, bekannte Mandanten
-    UND nur verifizierte Admins bzw. Service-Tokens duerfen den Mandanten per
-    Header wechseln. Die Rolle aus request.state stammt aus dem auth_gate
-    (der vor dieser Middleware laeuft). Ein Viewer konnte sonst per Header fremde
-    Mandanten-DBs lesen (IDOR).
-    """
-    response = None
-    hdr_tid = (request.headers.get("X-Tenant-Id") or request.headers.get("X-Company-Id") or "").strip()
-    if not hdr_tid:
-        # Immer einen Mandanten-Kontext setzen — auch ohne Header. Sonst
-        # faellt archon/core/cache._tenant_prefix() auf 'default' zurueck und
-        # gecachte Requests landen im falschen Namespace.
-        from backend.tenant_context import reset_request_tenant, set_request_tenant
-        from backend.tenant_context import tenant_context as _tc
-        _tok = set_request_tenant(_tc.get_active_tenant_id())
-        try:
-            response = await call_next(request)
-        finally:
-            reset_request_tenant(_tok)
-    else:
-        import re as _re
-        if not _re.fullmatch(r"[A-Za-z0-9_-]{1,64}", hdr_tid):
-            return JSONResponse(
-                status_code=400,
-                content={"error": "invalid_tenant_id", "detail": "X-Tenant-Id ist ungueltig."},
-            )
-        _user = getattr(request.state, "user", None) or {}
-        _role = str(_user.get("role", "")).strip().lower()
-        # KRITISCH: frueher genuegte das blosse Vorhandensein des Headers.
-        # Damit konnte jeder Viewer (oder bei deaktiviertem Auth jeder
-        # Anrufer) mit einem beliebigen Müll-Wert in den Mandantenwechsel
-        # Schlüssel invalidate machen. Jetzt: echte HMAC-Prüfung wie im
-        # auth_gate (main.py:_request_has_service_token).
-        _is_service = _request_has_service_token(request)
-        if not _is_service and _role != "admin":
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "error": "tenant_forbidden",
-                    "detail": "Mandantenwechsel per Header ist nur Admins und Service-Tokens erlaubt.",
-                },
-            )
-        try:
-            from backend.tenant_context import (
-                reset_request_tenant,
-                set_request_tenant,
-                tenant_context,
-            )
-            known = False
-            try:
-                mgr = tenant_context._get_corporate_manager()
-                companies = mgr.list_companies() or []
-                known = any(str(c.get("id") or "").strip().lower() == hdr_tid.lower() for c in companies if isinstance(c, dict))
-            except Exception:
-                known = False
-            if not known and hdr_tid.lower() != "default":
-                return JSONResponse(
-                    status_code=403,
-                    content={"error": "tenant_not_found", "detail": "X-Tenant-Id referenziert keinen bekannten Mandanten."},
-                )
-            tok = set_request_tenant(hdr_tid)
-            try:
-                response = await call_next(request)
-            finally:
-                reset_request_tenant(tok)
-        except Exception as err:
-            # Fail-closed: kein Tenant-Kontext darf ohne gueltige Setzung durchgereicht werden.
-            logger.error(f"[Tenant] Kontext konnte nicht gesetzt werden: {err}")
-            return _auth_unavailable_response()
-    if response is None:
-        response = await call_next(request)
-    if request.url.path == "/static/sw_calendar.js":
-        response.headers["Service-Worker-Allowed"] = "/"
-    return response
+    """Bindet optionalen Mandanten-Header (X-Tenant-Id / X-Company-Id) request-lokal via ContextVar."""
+    return await _run_tenant_context_middleware(request, call_next, _build_auth_gate_deps())
 
 
 @app.middleware("http")
 async def auth_gate(request: Request, call_next):
-    """Blockt API-Aufrufe ohne gültige Session, sobald Multi-User aktiv ist.
-
-    Die HTML-Hülle und /api/auth/* bleiben erreichbar, damit das Frontend den
-    Login zeigen kann. Interne Automaten (n8n, Telegram-Adapter) weisen sich
-    über den Header X-Archon-Service-Token aus.
-
-    Fail-closed (R-08): schlaegt die Prüfung selbst fehl (Importfehler, kaputte
-    ``settings.json``, DB-Fehler), antwortet das Gate mit 503 statt
-    durchzulassen. Ein Gate, das bei einem Fehler öffnet, ist keines.
-    """
-    try:
-        from backend.auth_service import auth_service as _auth
-        auth_enabled = _auth.is_auth_enabled()
-    except Exception as err:  # noqa: BLE001 - Fail-closed ist hier die Absicht
-        logger.error(f"[Auth] Gate kann die Konfiguration nicht lesen: {err}")
-        return _auth_unavailable_response()
-
-    if not auth_enabled:
-        return await call_next(request)
-
-    path = request.url.path
-    # API-Pfade unter einem oeffentlichen Prefix (F1/R-34) werden wie /api/
-    # behandelt: sie reichen an fremde Admin-Oberflaechen durch und dürfen
-    # nicht ungeprüft bleiben.
-    is_forced_api = path.startswith(_AUTH_API_PREFIXES)
-    # /mcp* (ausser /mcp/info) authentifiziert sich direkt per archon_live_-API-Key
-    # in mcp_gateway._authenticate_mcp_request — auth_gate darf es nicht auf /login umleiten.
-    if path == "/mcp" or (path.startswith("/mcp/") and path != "/mcp/info"):
-        return await call_next(request)
-    if not is_forced_api and (path in _AUTH_PUBLIC_EXACT or path.startswith(_AUTH_PUBLIC_PREFIXES)):
-        return await call_next(request)
-
-    if _request_has_service_token(request):
-        return await call_next(request)
-
-    token = ""
-    auth_header = request.headers.get("authorization", "")
-    if auth_header.lower().startswith("bearer "):
-        token = auth_header[7:].strip()
-    elif "x-archon-session" in request.headers:
-        token = request.headers.get("x-archon-session", "").strip()
-    elif "archon_session" in request.cookies:
-        token = request.cookies.get("archon_session", "").strip()
-
-    try:
-        session_user = _auth.verify_session(token) if token else None
-        if session_user:
-            # _rbac.require_session_actor() prueft `auth_enabled` am User-Objekt.
-            # Ohne dieses Flag greift der Viewer-Schutz im Session-Pfad nie.
-            session_user["auth_enabled"] = True
-            request.state.user = session_user
-            user_role = str(session_user.get("role", "")).strip().lower()
-            if (
-                request.method in ("POST", "PUT", "DELETE", "PATCH")
-                and user_role in ("viewer", "anonymous", "")
-                and not path.startswith("/api/auth/")
-            ):
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "error": "forbidden",
-                        "detail": f"Nur Administratoren oder Operatoren duerfen schreibende Aktionen ausfuehren (erkannte Rolle: {user_role or 'anonymous'}).",
-                    },
-                )
-            return await call_next(request)
-    except Exception as err:  # noqa: BLE001 - Fail-closed auch beim Prüfen
-        logger.error(f"[Auth] Session-Prüfung fehlgeschlagen: {err}")
-        return _auth_unavailable_response()
-
-    if path.startswith("/api/") or is_forced_api:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "unauthorized", "detail": "Login erforderlich", "login_url": "/login"},
-        )
-    if path.startswith(_AUTH_PROTECTED_PREFIXES):
-        # Eingebettete Admin-UIs: zur Login-Seite umleiten statt JSON zu liefern
-        return RedirectResponse(url=f"/login?next={path}", status_code=307)
-    return RedirectResponse(url=f"/login?next={path}", status_code=307)
+    """Blockt API-Aufrufe ohne gültige Session, sobald Multi-User aktiv ist (fail-closed)."""
+    return await _run_auth_gate_middleware(request, call_next, _build_auth_gate_deps())
 
 
 # CORS und Rate-Limit MUESSEN nach allen @app.middleware-Definitionen
@@ -1127,189 +1022,41 @@ _install_cors_middleware()
 app.add_middleware(TraceContextMiddleware)
 
 
-@app.get("/livez")
-async def liveness_check():
-    """Liveness: Event-Loop-Heartbeat, Loop-Lag + Watchdog-Thread (503 bei blockiertem Loop)."""
-    from backend.loop_liveness import check_loop_liveness
-    info = await check_loop_liveness()
-    # D10: Watchdog-Thread wird sonst von niemandem ueberwacht. Quelle ist die
-    # atomare Liveness-Datei des Daemons (watchdog_daemon.watchdog_liveness),
-    # die auch scripts/archon_autoheal.py::probe() liest.
-    try:
-        from watchdog_daemon import watchdog_liveness
-        wd = watchdog_liveness()
-    except Exception as exc:
-        logger.error("[Livez] Watchdog-Liveness nicht lesbar (fail-closed): %s", exc)
-        wd = {"alive": False, "last_seen": 0.0, "age_s": None}
-    info["loops"] = {
-        "watchdog": {
-            "alive": bool(wd.get("alive")),
-            "last_seen": wd.get("last_seen", 0.0),
-            "age_s": wd.get("age_s"),
-        }
-    }
-    # D10/HIGH: ein toter Watchdog-Thread muss `/livez` auf 503 setzen,
-    # sonst greift der externe Autoheal wegen des Docker-Health-Gates nicht.
-    if not info.get("alive", True) or not info["loops"]["watchdog"]["alive"]:
-        return JSONResponse(status_code=503, content=info)
-    return info
-
-
-# H10: Dependency-Probes gecacht, damit /readyz nicht bei jedem Scrape
-# blockierende HTTP-Calls auslöst.
-_DEPENDENCY_PROBE_CACHE: dict = {"ts": 0.0, "problems": []}
-_DEPENDENCY_PROBE_TTL = 10.0
-
-
-def _readiness_probe_targets() -> list:
-    """Konfigurierbare externe Probes (H-10-1/F043).
-
-    Default ist AUSSCHLIESSLICH OmniRoute: es ist per ``depends_on``
-    Pflichtbestandteil des Stacks. n8n ist optional (Compose-Profil
-    ``automation``/``full``) und wird nicht mehr hart probiert — sonst bleibt
-    der Ansible-Deploy-Gate im Default-Profil dauerhaft rot.
-
-    Format: ``name=url,name2=url2``. Ein explizit leerer Wert deaktiviert die
-    externen Probes vollständig.
-    """
-    raw = os.getenv("ARCHON_READINESS_PROBE_URLS")
-    if raw is None:
-        omniroute = os.getenv("OMNIROUTE_URL", "http://omniroute:20128/v1").rstrip("/")
-        raw = f"omniroute={omniroute}/models"
-    targets: list = []
-    for entry in raw.split(","):
-        entry = entry.strip()
-        if not entry:
-            continue
-        if "=" in entry:
-            name, url = entry.split("=", 1)
-        else:
-            name, url = entry, entry
-        name, url = name.strip() or url.strip(), url.strip()
-        if url:
-            targets.append((name, url))
-    return targets
-
-
-def _probe_external_dependency(name: str, url: str) -> str:
-    """Synchrone URL-Probe — ausschliesslich aus asyncio.to_thread gerufen.
-
-    D10/HIGH: vorher blockierte urlopen(timeout=1.5) direkt im Event-Loop und
-    konnte bei zwei ausgefallenen Dependencies den Loop spürbar festhalten.
-    """
-    import urllib.request
-
-    try:
-        with urllib.request.urlopen(url, timeout=1.5) as resp:
-            if resp.status >= 400:
-                return f"{name}: HTTP {resp.status}"
-    except Exception as exc:
-        return f"{name}: {exc}"
-    return ""
-
-
-_READINESS_PROBE_READY = {"ok": False}
-
-
 def _init_readiness_probe_table() -> None:
     """DDL einmalig (Lifespan) — nicht mehr pro Healthcheck-Scrape."""
-    with _get_state_db() as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS _readiness_probe (id INTEGER)")
-    _READINESS_PROBE_READY["ok"] = True
+    _init_readiness_probe_table_impl(_get_state_db)
 
 
 def _readiness_sync_checks() -> list:
-    """Alle blockierenden Readiness-Checks gebuendelt im Worker-Thread.
+    """Alle blockierenden Readiness-Checks gebuendelt im Worker-Thread."""
+    return _run_readiness_sync_checks(_get_state_db)
 
-    D08/H-08-2: SQLite-Schreibprobe (frueher DDL pro Scrape), die synchrone
-    Config-Validierung (≥8 Dateien) und der Lock-Failure-Check liefen direkt
-    im Event-Loop und konnten genau den Healthcheck blockieren, der einen
-    Stall melden soll. Der Aufrufer nutzt ausschliesslich asyncio.to_thread.
-    """
-    problems: list = []
-    if not _READINESS_PROBE_READY["ok"]:
-        # Fallback fuer TestClients ohne Lifespan: auch dann nur EINMAL.
-        try:
-            _init_readiness_probe_table()
-        except Exception as exc:
-            problems.append(f"state_db: {exc}")
-    if _READINESS_PROBE_READY["ok"]:
-        try:
-            with _get_state_db() as conn:
-                conn.execute("INSERT OR IGNORE INTO _readiness_probe (id) VALUES (1)")
-        except Exception as exc:
-            problems.append(f"state_db: {exc}")
-    try:
-        from backend.config_validator import validator
-        res = validator.validate_all(strict=False)
-        if not res.get("valid", True):
-            problems.append(f"config: {res.get('error_count', '?')} Fehler")
-    except Exception as exc:
-        problems.append(f"config_check: {exc}")
-    try:
-        from backend.process_lock import get_loop_lock_failures
-        _lock_failures = get_loop_lock_failures()
-        if _lock_failures:
-            problems.append(f"loop_lock_unavailable: {len(_lock_failures)}")
-    except Exception as exc:
-        problems.append(f"loop_lock_check: {exc}")
-    return problems
+
+def _build_health_probe_deps() -> _HealthProbeDeps:
+    return _HealthProbeDeps(
+        get_state_db=_get_state_db,
+        router_load_errors=_ROUTER_LOAD_ERRORS,
+        audit_compromised=_AUDIT_COMPROMISED,
+        failed_cancels=_FAILED_CANCELS,
+        watchdog_stop_failed=_WATCHDOG_STOP_FAILED,
+        startup_recovery_failed=_STARTUP_RECOVERY_FAILED,
+        n8n_startup_status=_N8N_STARTUP_STATUS,
+        db_maintenance_status=_DB_MAINTENANCE_STATUS,
+        probe_external_dependency=_probe_external_dependency,
+        readiness_sync_checks=_readiness_sync_checks,
+    )
+
+
+@app.get("/livez")
+async def liveness_check():
+    """Liveness: Event-Loop-Heartbeat, Loop-Lag + Watchdog-Thread (503 bei blockiertem Loop)."""
+    return await _run_liveness_check()
 
 
 @app.get("/readyz")
 async def readiness_check():
     """Readiness: echte Dependency-Pruefung. Liefert 503, solange nicht bereit."""
-    problems: list = []
-    # D08/H-08-2: samt SQLite/Config/Lock-Checks in einem Worker-Thread.
-    problems.extend(await asyncio.to_thread(_readiness_sync_checks))
-    # Router-Importfehler
-    if _ROUTER_LOAD_ERRORS:
-        problems.append(f"router_imports: {len(_ROUTER_LOAD_ERRORS)}")
-    # B-05: zur Laufzeit erkannte Audit-Kettenmanipulation → 503.
-    if _AUDIT_COMPROMISED.get("compromised"):
-        problems.append(f"audit_compromised: {_AUDIT_COMPROMISED.get('reason')}")
-    # Externe Dependencies (H10/H-10-1): nur in Produktion oder explizit
-    # aktiviert. Die Probe-Ziele sind konfigurierbar; Default ist nur
-    # OmniRoute (zwingend per depends_on). n8n ist optional und wird nicht
-    # mehr hart probiert. In Docker übernimmt zusätzlich depends_on:
-    # service_healthy.
-    _probe_enabled = (
-        os.getenv("ARCHON_READINESS_PROBES", "").strip().lower() in ("1", "true", "yes")
-        or os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod", "live")
-    )
-    probes = _readiness_probe_targets() if _probe_enabled else []
-    if probes:
-        now = time.time()
-        if now - _DEPENDENCY_PROBE_CACHE["ts"] > _DEPENDENCY_PROBE_TTL:
-            # Blockierendes I/O in den Threadpool, nicht in den Event-Loop.
-            dep_problems = await asyncio.gather(
-                *(
-                    asyncio.to_thread(_probe_external_dependency, name, url)
-                    for name, url in probes
-                )
-            )
-            dep_problems = [p for p in dep_problems if p]
-            _DEPENDENCY_PROBE_CACHE.update(ts=now, problems=dep_problems)
-        problems.extend(_DEPENDENCY_PROBE_CACHE["problems"])
-    # D07/MED: verifizierte Shutdown-/Recovery-Fehler duerfen nicht gruen gemeldet werden.
-    if _FAILED_CANCELS:
-        problems.append(f"failed_cancels: {len(_FAILED_CANCELS)}")
-    if _WATCHDOG_STOP_FAILED:
-        problems.append(f"watchdog_stop: {len(_WATCHDOG_STOP_FAILED)}")
-    if _STARTUP_RECOVERY_FAILED:
-        problems.append(f"startup_recovery: {len(_STARTUP_RECOVERY_FAILED)}")
-    # D07/D06-Nachlauf: ein fehlgeschlagener Startup-Import und eine nicht
-    # verfuegbare Prozess-Lock-Sackgasse duerfen nicht gruen gemeldet werden.
-    if _N8N_STARTUP_STATUS.get("status") == "error":
-        problems.append(f"n8n_startup_import: {_N8N_STARTUP_STATUS.get('detail')}")
-    if _DB_MAINTENANCE_STATUS.get("status") == "error":
-        problems.append(f"db_maintenance: {_DB_MAINTENANCE_STATUS.get('error')}")
-    if problems:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "not_ready", "timestamp": time.time(), "problems": problems},
-        )
-    return {"status": "ready", "timestamp": time.time()}
+    return await _run_readiness_check(_build_health_probe_deps(), _readiness_probe_targets())
 
 
 @app.get("/health")

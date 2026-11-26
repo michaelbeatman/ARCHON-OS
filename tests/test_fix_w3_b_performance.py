@@ -171,11 +171,12 @@ async def test_trajectory_reserve_helper_blocks_on_denied_hop(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_readiness_sync_checks_are_offloaded():
+    import archon.services.health_probes as health_probes
     import main
 
-    src = _src("main.py")
-    readiness = inspect.getsource(main.readiness_check)
-    assert "await asyncio.to_thread(_readiness_sync_checks)" in readiness
+    src = _src("archon/services/health_probes.py")
+    readiness = inspect.getsource(health_probes.run_readiness_check)
+    assert "await asyncio.to_thread(deps.readiness_sync_checks)" in readiness
     assert "CREATE TABLE" not in readiness
     assert "await readiness_check()" not in inspect.getsource(main.health_check)
     assert "await liveness_check()" in inspect.getsource(main.health_check)
@@ -448,12 +449,12 @@ def test_dispatch_history_uses_dropped_marker():
 
 
 def test_budget_allocation_failure_blocks_task():
-    import backend.operations_api as ops
+    import backend.operations_kanban_crud as ops_crud
 
-    helper = inspect.getsource(ops._block_task_budget_allocation_failed_sync)
+    helper = inspect.getsource(ops_crud._block_task_budget_allocation_failed_sync)
     assert "block_kind = 'budget_allocation_failed'" in helper
     assert "budget_allocation_failed" in helper
-    src = _src("backend/operations_api.py")
+    src = _src("backend/operations_kanban_crud.py")
     assert "except Exception as alloc_err:" in src
     assert '# D13/MED: ohne Allokationszeile' in src
     assert '"status": "blocked", "task_id": task_id' in src

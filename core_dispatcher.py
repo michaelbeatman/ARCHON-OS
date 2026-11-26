@@ -253,9 +253,10 @@ async def _guard_silent_failures(res: dict, agent_id: str, task_id: str) -> dict
                     },
                 )
         except Exception as audit_exc:
-            # D05/S-5.4: GoBD-relevanter Audit-Schreibfehler darf nie nur als
-            # WARNING verschwinden, während der Dispatch als Erfolg gilt.
+            # F10c / D12 §2.5: GoBD-relevanter Audit-Schreibfehler darf nie nur
+            # geloggt und geschluckt werden — fail-closed abbrechen.
             logger.error("[Dispatcher] Silent-Failure-Audit fehlgeschlagen: %s", audit_exc)
+            raise RuntimeError("audit_write_failed") from audit_exc
 
     await asyncio.to_thread(_write_audit)
     return res

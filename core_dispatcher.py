@@ -126,7 +126,8 @@ def _attach_guardrail_result(res: dict) -> dict:
     """
     if not isinstance(res, dict):
         return res
-    existing = res.get("guardrail_result") if isinstance(res.get("guardrail_result"), dict) else {}
+    raw_gr = res.get("guardrail_result")
+    existing: Dict[str, Any] = raw_gr if isinstance(raw_gr, dict) else {}
     policy_v = bool(existing.get("policy_violation") or res.get("policy_violation"))
     guardrail_v = bool(existing.get("guardrail_violation") or res.get("guardrail_violation"))
     severity = existing.get("severity") or res.get("severity") or None

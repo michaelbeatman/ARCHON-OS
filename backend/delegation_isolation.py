@@ -308,7 +308,7 @@ class PolicyEngine:
             requested_by=str(requested_by or "").strip(),
         )
         if not gate.get("allowed"):
-            extra_fields = {
+            extra_fields: Dict[str, Any] = {
                 k: gate[k]
                 for k in ("approval_id", "requires_approval", "status", "requested_by")
                 if k in gate

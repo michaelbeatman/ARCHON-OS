@@ -152,7 +152,7 @@ async def _finalize_synthesis_after_approval(
     draft_path: str,
     synthese_text: str,
     approver_note: str,
-    daten: Optional[dict[str, Any]] = None,
+    daten: Any = None,
 ) -> None:
     """Wrapper: delegiert an archon.core.orchestration mit echten Dependencies."""
     d = _deps()

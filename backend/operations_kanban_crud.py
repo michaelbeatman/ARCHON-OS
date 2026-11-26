@@ -610,7 +610,8 @@ async def update_task_status_impl(
         review = await asyncio.to_thread(d.current_quality_review, task_id)
         created_by = await asyncio.to_thread(d.task_created_by, task_id)
         old_status_before_force = await asyncio.to_thread(d.task_status, task_id)
-        override_evidence = d.require_four_eyes_override(
+        override_evidence = await asyncio.to_thread(
+            d.require_four_eyes_override,
             task_id=task_id,
             actor=actor,
             review=review,
@@ -623,7 +624,8 @@ async def update_task_status_impl(
         try:
             from backend.audit_log import _require_audit_event
 
-            _require_audit_event(
+            await asyncio.to_thread(
+                _require_audit_event,
                 "governance",
                 "status_forced",
                 actor,

@@ -2717,7 +2717,9 @@ async def resume_workflow_run(
         # WICHTIG: nur ein explizites Dict mit True am Editorial-Gate zaehlt.
         # `gate_approvals: true` aus dem Request-Body darf die Freigabe nicht
         # erzwingen (Single-Admin-Self-Approval / HITL-Bypass).
-        finalized = finalize_assets_for_workflow_run(run_id, approved=approved)
+        finalized = await asyncio.to_thread(
+            lambda: finalize_assets_for_workflow_run(run_id, approved=approved)
+        )
         if finalized.get("updated"):
             logger.info(
                 "[WorkflowDAG] Content-Assets fuer Run '%s' finalisiert: %s (%s)",
@@ -2749,7 +2751,7 @@ async def resume_suspended_workflow_run(
     """
     from backend.durable_execution_kernel import SUSPENDED, durable_kernel
 
-    ctx = durable_kernel.resume_context(run_id)
+    ctx = await asyncio.to_thread(durable_kernel.resume_context, run_id)
     if not ctx:
         raise KeyError(f"Kein Durable-Checkpoint fuer Run '{run_id}' vorhanden.")
     if ctx["state"] != SUSPENDED:
@@ -2760,12 +2762,16 @@ async def resume_suspended_workflow_run(
             "reason": "Nur SUSPENDED-Runs koennen ueber dieses Portal fortgesetzt werden.",
         }
 
-    # Persistierte Node-States pruefen: jeder 'completed' muss einen Output haben.
-    with _connect(db_path) as conn:
-        node_rows = conn.execute(
-            "SELECT node_id, status, output_json FROM workflow_node_states WHERE run_id = ?",
-            (run_id,),
-        ).fetchall()
+    # Persistierte Node-States pruefen: jeder 'completed' muss einen Output haben (F34: to_thread).
+    def _load_node_rows_sync() -> List[Dict[str, Any]]:
+        with _connect(db_path) as conn:
+            rows = conn.execute(
+                "SELECT node_id, status, output_json FROM workflow_node_states WHERE run_id = ?",
+                (run_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    node_rows = await asyncio.to_thread(_load_node_rows_sync)
     missing: List[str] = []
     completed = 0
     for row in node_rows:
@@ -2782,7 +2788,9 @@ async def resume_suspended_workflow_run(
             "missing_outputs": missing[:20],
         }
 
-    resumed = durable_kernel.resume_suspended(run_id, ctx.get("fencing_token"))
+    resumed = await asyncio.to_thread(
+        durable_kernel.resume_suspended, run_id, ctx.get("fencing_token")
+    )
     logger.info(
         "[WorkflowDAG] Run '%s' von Schritt %s fortgesetzt (%s Node-Outputs uebernommen).",
         run_id, resumed["resume_from_step"], completed,
@@ -2825,18 +2833,26 @@ def schedule_workflow_resume(
             logger.debug(f"[WorkflowDAG] Resume-Task fuer Run '{run_id}' wurde abgebrochen.")
         except Exception as exc:
             logger.error(f"[WorkflowDAG] Resume-Task fuer Run '{run_id}' fehlgeschlagen: {exc}", exc_info=exc)
-            try:
-                with _connect(db_path) as conn:
-                    conn.execute(
-                        "UPDATE workflow_runs SET status = 'failed', updated_at = ? WHERE run_id = ?",
-                        (time.time(), run_id),
+
+            def _mark_failed_sync() -> None:
+                try:
+                    with _connect(db_path) as conn:
+                        conn.execute(
+                            "UPDATE workflow_runs SET status = 'failed', updated_at = ? WHERE run_id = ?",
+                            (time.time(), run_id),
+                        )
+                        conn.commit()
+                except Exception as persist_exc:
+                    logger.error(
+                        f"[WorkflowDAG] Failed-Status fuer Run '{run_id}' konnte nicht persistiert werden: {persist_exc}",
+                        exc_info=persist_exc,
                     )
-                    conn.commit()
-            except Exception as persist_exc:
-                logger.error(
-                    f"[WorkflowDAG] Failed-Status fuer Run '{run_id}' konnte nicht persistiert werden: {persist_exc}",
-                    exc_info=persist_exc,
-                )
+
+            try:
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(None, _mark_failed_sync)
+            except RuntimeError:
+                _mark_failed_sync()
 
     task = asyncio.create_task(_resume_runner())
     task.add_done_callback(_on_resume_done)

@@ -120,14 +120,16 @@ def test_p4_agent_router_chat_completion_uses_deterministic_guard(monkeypatch):
             "backend.execution_routing_guard.classify_execution_layer",
             return_value={"layer": "deterministic_script", "requires_hitl": False},
         ):
-            out = await router.chat_completion(
-                messages=[{"role": "user", "content": "run script"}],
-                provider="openrouter",
-                model="deepseek/deepseek-chat",
-                api_keys={"OPENROUTER_API_KEY": "sk-dummy"},
-                task_id="t-det-2",
-            )
-            assert "0 Tokens" in out
+            # F22 (D02): deterministic_script ohne registrierten Executor darf
+            # keinen Schein-Erfolgstext liefern, sondern muss fail-closed blockieren.
+            with pytest.raises(SilentFailureBlockedError, match="DETERMINISTIC_SCRIPT_NO_EXECUTOR"):
+                await router.chat_completion(
+                    messages=[{"role": "user", "content": "run script"}],
+                    provider="openrouter",
+                    model="deepseek/deepseek-chat",
+                    api_keys={"OPENROUTER_API_KEY": "sk-dummy"},
+                    task_id="t-det-2",
+                )
 
     asyncio.run(_run())
 

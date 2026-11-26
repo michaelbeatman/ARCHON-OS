@@ -1142,7 +1142,8 @@ class AgentRouter:
             raise SilentFailureBlockedError(tid, ["EXECUTION_ROUTING_GUARD_UNAVAILABLE"]) from _route_exc
         if _det is not None:
             if _det.get("blocked"):
-                raise SilentFailureBlockedError(tid, ["DETERMINISTIC_HITL_REQUIRED"])
+                code = str(_det.get("error_code") or "DETERMINISTIC_HITL_REQUIRED")
+                raise SilentFailureBlockedError(tid, [code])
             return str(_det.get("text") or "")
         reservation, tokens, eur, hop_tid = await self._reserve_task_budget(
             agent_id, tid, messages, model, provider, max_tokens

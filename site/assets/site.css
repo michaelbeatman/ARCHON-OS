@@ -591,22 +591,21 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(230px, 34vw, 390px);
-  margin: 1.25rem 0 0.5rem;
-  padding: 2rem 0;
+  min-height: clamp(280px, 40vw, 480px);
+  margin: 0.75rem 0 0.25rem;
+  padding: 2.5rem 0;
+  overflow: visible;
 }
 .creation-davinci-stage {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 48%;
   transform: translate(-50%, -50%);
-  width: min(100%, 900px);
+  width: min(98vw, 1140px);
   aspect-ratio: 1024 / 686;
   z-index: 1;
   pointer-events: none;
   user-select: none;
-  mask-image: radial-gradient(ellipse 84% 78% at 50% 50%, rgba(0, 0, 0, 0.96) 44%, rgba(0, 0, 0, 0.38) 78%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse 84% 78% at 50% 50%, rgba(0, 0, 0, 0.96) 44%, rgba(0, 0, 0, 0.38) 78%, transparent 100%);
 }
 .creation-davinci-stage .davinci-layer-plate,
 .creation-davinci-stage .davinci-layer-over {
@@ -618,26 +617,23 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   height: 100%;
   object-fit: contain;
   display: block;
-  filter: invert(1) brightness(0.84) contrast(1.04);
-  mix-blend-mode: screen;
-  opacity: 0.56;
+  /* Keep 1:1 original cutout tone without invert(); gently lower brightness/opacity so logo stays dominant */
+  filter: brightness(0.82);
+  opacity: 0.46;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) .creation-davinci-stage .davinci-creation-img {
-    filter: brightness(1.06);
-    mix-blend-mode: multiply;
-    opacity: 0.42;
+    filter: brightness(1);
+    opacity: 0.34;
   }
 }
 :root[data-theme="light"] .creation-davinci-stage .davinci-creation-img {
-  filter: brightness(1.06);
-  mix-blend-mode: multiply;
-  opacity: 0.42;
+  filter: brightness(1);
+  opacity: 0.34;
 }
 :root[data-theme="dark"] .creation-davinci-stage .davinci-creation-img {
-  filter: invert(1) brightness(0.84) contrast(1.04);
-  mix-blend-mode: screen;
-  opacity: 0.56;
+  filter: brightness(0.82);
+  opacity: 0.46;
 }
 .creation-spark-wave {
   stroke: var(--silver-bright);
@@ -672,16 +668,16 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   z-index: 2;
   display: flex;
   justify-content: center;
-  padding: 1.25rem 2.25rem;
+  padding: 2.2rem 3.5rem;
   border-radius: 999px;
-  background: radial-gradient(ellipse 68% 66% at 50% 50%, var(--bg) 28%, transparent 76%);
+  background: radial-gradient(ellipse 76% 74% at 50% 50%, var(--bg) 38%, transparent 84%);
 }
 .logo-showcase img {
-  max-width: 620px;
+  max-width: 580px;
   width: 100%;
   height: auto;
-  opacity: 0.96;
-  filter: drop-shadow(0 0 18px var(--bg)) drop-shadow(0 0 6px var(--bg));
+  opacity: 0.98;
+  filter: drop-shadow(0 0 26px var(--bg)) drop-shadow(0 0 12px var(--bg));
 }
 
 /* Section Headings (Semantic H2, Silver Engraving Hairline) */

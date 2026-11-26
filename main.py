@@ -163,6 +163,7 @@ from archon.middleware.auth_policy import MissingRagApiKeyError as MissingRagApi
 from archon.middleware.auth_policy import _auth_unavailable_response as _auth_unavailable_response
 from archon.middleware.auth_policy import _check_rag_api_key_config as _check_rag_api_key_config
 from archon.middleware.auth_policy import _get_rag_api_key as _get_rag_api_key
+from archon.routers import register_special_routers as _register_special_routers
 from archon.routers._rbac import require_admin_or_503
 from archon.routers.agent_chat import DirectAgentChatRequest as DirectAgentChatRequest
 from archon.routers.agent_chat import RunRequest as RunRequest
@@ -2488,24 +2489,12 @@ app.include_router(_proxies_router)
 
 
 
-try:
-    from views_core import get_apps_dir
-    from views_core import router as views_core_router
-    app.include_router(views_core_router)
-    apps_static_dir = get_apps_dir()
-    if os.path.exists(apps_static_dir):
-        app.mount("/builds/apps", StaticFiles(directory=apps_static_dir), name="builds_apps")
-except Exception as e_views:
-    _ROUTER_LOAD_ERRORS.append("views_core: " + str(e_views))
-    print(f"Error mounting views_core: {e_views}")
-
-try:
-    from archon.routers.operations import router as operations_router
-    app.include_router(operations_router)
-    print("Operations API mounted successfully.")
-except Exception as e_ops:
-    _ROUTER_LOAD_ERRORS.append("operations_api: " + str(e_ops))
-    print(f"Error mounting operations_api: {e_ops}")
+# 2d/1: die zwei Sonderbloecke (views_core + operations) sind 1:1 nach
+# archon/routers/__init__.py gewandert. Die Aufrufstelle bleibt exakt hier,
+# damit die Registrierungsreihenfolge (Pfad-Praezedenz, INVARIANTS #7)
+# unveraendert ist. _ROUTER_LOAD_ERRORS wird als IDENTISCHE Liste
+# uebergeben — kein Rebind, _assert_router_health() liest das Original.
+_register_special_routers(app, _ROUTER_LOAD_ERRORS)
 
 # Avatare: eigener Lesezugriff VOR dem /static-Mount (Registration Order = Match
 # Order). Die Laufzeit-Avatare liegen ausserhalb des Repos (avatars_dir, z. B.

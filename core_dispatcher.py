@@ -101,10 +101,71 @@ def _prompt_version_fallback(agent_id: str, model: str = "") -> Dict[str, Any]:
     }
 
 
-def _with_prompt_info(res: dict, info: Optional[Dict[str, Any]] = None) -> dict:
-    """Hängt effective_prompt_info/prompt_version_info an JEDEN Return."""
+_POLICY_VETO_ERROR_PREFIXES = (
+    "ZERO_EGRESS",
+    "EGRESS_",
+    "PROMPT_INJECTION",
+    "POLICY_",
+    "COMPLIANCE_",
+    "GOVERNANCE_",
+    "SILENT_FAILURE",
+    "HITL_",
+    "BUDGET_GATE",
+    "CONCURRENCY_GATE",
+    "AGENT_NOT_COMPLIANT",
+    "SOUL_SHA256_MISMATCH",
+    "SOUL_PIN_REFRESH_REQUIRED",
+    "AUDIT_WRITE_FAILED",
+)
+
+
+def _attach_guardrail_result(res: dict) -> dict:
+    """F21 (D14): Kanonischer Produzent fuer ``res['guardrail_result']`` am Dispatch-Chokepoint.
+
+    Stellt sicher, dass jeder Return aus ``dispatch_to_omniroute_or_container``
+    einen strukturierten Policy-Veto-Kanal traegt (nie aus Freitext, nicht nur
+    bei ``status == 'blocked'``).
+    """
     if not isinstance(res, dict):
         return res
+    existing = res.get("guardrail_result") if isinstance(res.get("guardrail_result"), dict) else {}
+    policy_v = bool(existing.get("policy_violation") or res.get("policy_violation"))
+    guardrail_v = bool(existing.get("guardrail_violation") or res.get("guardrail_violation"))
+    severity = existing.get("severity") or res.get("severity") or None
+
+    status_l = str(res.get("status") or "").strip().lower()
+    err_code = str(res.get("error_code") or "").strip().upper()
+    has_policy_err = bool(err_code and any(err_code.startswith(p) for p in _POLICY_VETO_ERROR_PREFIXES))
+    has_silent_flags = bool(res.get("silent_failure_flags"))
+
+    if status_l == "blocked" or has_policy_err or (status_l == "needs_human" and has_silent_flags):
+        policy_v = True
+        guardrail_v = True
+        severity = str(severity or "high")
+
+    trace_id = existing.get("source_trace_id") or res.get("source_trace_id") or res.get("trace_id")
+    if not trace_id:
+        try:
+            from backend.trace_context import current_trace_id
+            trace_id = str(current_trace_id() or "") or None
+        except Exception:
+            trace_id = None
+
+    res["guardrail_result"] = {
+        "policy_violation": policy_v,
+        "guardrail_violation": guardrail_v,
+        "severity": str(severity) if severity else None,
+        "source_trace_id": str(trace_id) if trace_id else None,
+        "error_code": err_code or None,
+    }
+    return res
+
+
+def _with_prompt_info(res: dict, info: Optional[Dict[str, Any]] = None) -> dict:
+    """Hängt effective_prompt_info/prompt_version_info und guardrail_result an JEDEN Return."""
+    if not isinstance(res, dict):
+        return res
+    _attach_guardrail_result(res)
     if info is not None:
         ref = dict(info)
         res["effective_prompt_info"] = ref

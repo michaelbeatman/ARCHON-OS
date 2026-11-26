@@ -32,8 +32,11 @@ TAG_RE = re.compile(r"<[^>]+>")
 SHOT_KEYS = tuple(k for k in build.load_catalogs()["en"] if k.startswith("shots.") and k != "shots.title")
 
 
+Ctx = tuple[str, dict[str, dict[str, str]], dict[str, str]]
+
+
 @pytest.fixture(scope="module")
-def ctx():
+def ctx() -> Ctx:
     template = build.TEMPLATE.read_text(encoding="utf-8")
     catalogs = build.load_catalogs()
     rendered = {lang: build.render(template, lang, catalogs[lang]) for lang in build.LANGS}
@@ -44,7 +47,7 @@ def plain(text: str) -> str:
     return html.unescape(TAG_RE.sub("", text)).strip()
 
 
-def test_catalogs_have_identical_keys(ctx):
+def test_catalogs_have_identical_keys(ctx: Ctx) -> None:
     _, catalogs, _ = ctx
     reference = set(catalogs["en"])
     assert reference, "EN-Katalog ist leer"
@@ -52,19 +55,19 @@ def test_catalogs_have_identical_keys(ctx):
         assert set(cat) == reference, f"{lang}: Keys weichen von EN ab"
 
 
-def test_no_empty_catalog_values(ctx):
+def test_no_empty_catalog_values(ctx: Ctx) -> None:
     _, catalogs, _ = ctx
     for lang, cat in catalogs.items():
         for key, value in cat.items():
             assert isinstance(value, str) and value.strip(), f"{lang}:{key} ist leer"
 
 
-def test_generator_validation_is_clean(ctx):
+def test_generator_validation_is_clean(ctx: Ctx) -> None:
     template, catalogs, _ = ctx
     assert build.validate(template, catalogs) == []
 
 
-def test_every_string_is_localized(ctx):
+def test_every_string_is_localized(ctx: Ctx) -> None:
     """Der ursprüngliche Bug: ~90 % der Texte waren noch identisch mit EN."""
     _, catalogs, _ = ctx
     en = catalogs["en"]
@@ -78,7 +81,7 @@ def test_every_string_is_localized(ctx):
     assert not leftovers, f"Nicht übersetzte Strings: {leftovers}"
 
 
-def test_screenshot_captions_and_alts_are_localized(ctx):
+def test_screenshot_captions_and_alts_are_localized(ctx: Ctx) -> None:
     """Regressionstest für die gemeldeten englischen Screenshots."""
     _, catalogs, _ = ctx
     en = catalogs["en"]
@@ -90,7 +93,7 @@ def test_screenshot_captions_and_alts_are_localized(ctx):
             assert cat[key] != en[key], f"{lang}:{key} (Screenshot) ist noch englisch"
 
 
-def test_no_english_prose_leaks_into_translated_pages(ctx):
+def test_no_english_prose_leaks_into_translated_pages(ctx: Ctx) -> None:
     _, catalogs, rendered = ctx
     english_prose = {
         key: plain(value)
@@ -105,7 +108,7 @@ def test_no_english_prose_leaks_into_translated_pages(ctx):
             assert text not in page, f"{lang}: EN-Fließtext von {key} ist noch enthalten"
 
 
-def test_generated_pages_are_current(ctx):
+def test_generated_pages_are_current(ctx: Ctx) -> None:
     _, _, rendered = ctx
     for lang, expected in rendered.items():
         path = build.output_path(lang)
@@ -115,14 +118,14 @@ def test_generated_pages_are_current(ctx):
         )
 
 
-def test_no_unresolved_placeholders(ctx):
+def test_no_unresolved_placeholders(ctx: Ctx) -> None:
     _, _, rendered = ctx
     for lang, page in rendered.items():
         # Nicht auf "}}" prüfen: CSS enthält legitime geschachtelte Regelenden.
         assert not build.PLACEHOLDER_RE.search(page), f"{lang}: Platzhalter übrig"
 
 
-def test_html_metadata_per_language(ctx):
+def test_html_metadata_per_language(ctx: Ctx) -> None:
     _, _, rendered = ctx
     for lang, page in rendered.items():
         html_lang, label = build.LANGS[lang]

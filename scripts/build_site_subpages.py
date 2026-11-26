@@ -21,7 +21,6 @@ from site_svg_assets import (
     build_davinci_underlayer_svg,
     build_davinci_vertical_overlay_svg,
     build_davinci_vertical_underlayer_svg,
-    build_hero_clockwork_svg,
     build_zero_egress_diagram_svg,
 )
 

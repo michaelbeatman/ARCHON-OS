@@ -92,7 +92,7 @@
 - **17. Spezial-Feature: Multi-Channel Content-Maschine v2, SQLite-Konsolidierung (`28 → 3`) & Next.js 16 Cockpits (M106–M108)**
 - **Anhang I: 5 Praxis-Use-Cases**
 - **Anhang II: Archon OS Komplett-Glossar (118 Module + Upgrades)**
-- **Anhang III: Decision Engine & Boardroom (55 Lösungs-Frameworks)**
+- **Anhang III: Decision Engine & Boardroom (80 Lösungs-Frameworks)**
 - **Anhang IV: Spezial-Leitfäden: IT-Sicherheit & Compliance (Volltext)**
   - IV.1 DSGVO / GDPR Compliance für Agenten-Systeme
   - IV.2 GoBD & ISO 27001 Revisionssicheres Audit-Logging
@@ -474,7 +474,7 @@ Die Decision Engine (AI Mastermind) ermöglicht strukturierte Vorstandssitzungen
 - Suche nach vergangenen Entscheidungsbegründungen zur Wahrung unternehmerischer Kontinuität.
 
 ### 8.2 Debatte
-- Auswahl aus 55 vordefinierten Denkframeworks (z. B. Pre-Mortem Analysis, 6 Thinking Hats, Red Team vs. Blue Team, Cynefin).
+- Auswahl aus 80 vordefinierten Denkframeworks (z. B. Pre-Mortem Analysis, 6 Thinking Hats, Red Team vs. Blue Team, Cynefin).
 - Festlegung von Fragestellung, Anhängen, Chairman und teilnehmenden C-Suite Spezialisten.
 
 ### 8.3 Live
@@ -638,7 +638,7 @@ Die 36 Autonomie-, Resilienz- und Enterprise-Module sind in der **Erweiterungen 
 - Siehe [Anhang IV.5: Secrets Management & Rotation](#iv5-secrets-management--key-rotation).
 
 ### 14.6 Methodik
-- Aktivierung und Anpassung der 55 Lösungs-Frameworks für die Decision Engine.
+- Aktivierung und Anpassung der 80 Lösungs-Frameworks für die Decision Engine.
 - Definition standardisierter Argumentationsschemata.
 
 ### 14.7 Plugins
@@ -3293,11 +3293,11 @@ In `.github/workflows/ci.yml` ist der automatisierte Ablauf für Pull Requests u
 # AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.2.1, historischer Audit-Stand)
 
 *Stand: 13. November 2026 | Audit-Release: v0.5.2.1 (Global Release Edition)*  
-*Aktueller Code-Stand: **v0.5.7.8** (`config/version.json`, 25.11.2026).*  
-*Hinweis: Dieses eingebettete Audit-Kapitel und die PDF-Manuale basieren weiter auf v0.5.2.1 — siehe [CHANGELOG.md](../CHANGELOG.md) für v0.5.7.8.*  
+*Aktueller Code-Stand: **v0.5.7.9** (`config/version.json`, 25.11.2026).*  
+*Hinweis: Dieses eingebettete Audit-Kapitel und die PDF-Manuale basieren weiter auf v0.5.2.1 — siehe [CHANGELOG.md](../CHANGELOG.md) für v0.5.7.9.*  
 *Maschinenlesbares Gegenstück:* [`docs/system/system_architecture_spec.json`](system_architecture_spec.json)  
 *Endbenutzer-Handbuch (PDF):* [`docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf`](ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)  
-*Vollständige Featureliste (PDF):* [`docs/system/ARCHON_OS_FEATURELISTE_2026.pdf`](ARCHON_OS_FEATURELISTE_2026.pdf) | *55 Boardroom-Frameworks:* [`docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf`](ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
+*Vollständige Featureliste (PDF):* [`docs/system/ARCHON_OS_FEATURELISTE_2026.pdf`](ARCHON_OS_FEATURELISTE_2026.pdf) | *80 Boardroom-Frameworks:* [`docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf`](ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
 
 ---
 
@@ -3338,7 +3338,7 @@ Das System nutzt SQLite (WAL-Modus) als durchgängige Single Source of Truth:
 2. **JSON-Deklarationen & Sidecar-Dateien:**
    - [`agent_profiles.json`](../../agent_profiles.json): **71 vollständige Agenten-Profile** mit zweisprachigen System-Prompts (DE/EN), 3-Stufen-`SOUL.md` (`Compact`, `Pro / Skills+`, `Full-SOUL`), Tool-Scopes, Fähigkeiten (`skills`), Avataren und Modell-Routings.
    - [`prompt_studio_catalog.json`](../../prompt_studio_catalog.json): **832 zweisprachige Prompt-Vorlagen** (DE/EN) mit verifizierter 100 % Variablen-Parität für das Archon Prompt Studio.
-   - [`core_dispatcher.py`](../../core_dispatcher.py): **55 Boardroom-Frameworks** (DE/EN) für mehrperspektivische Exekutiv-Debatten.
+   - [`core_dispatcher.py`](../../core_dispatcher.py): **80 Boardroom-Frameworks** (DE/EN) für mehrperspektivische Exekutiv-Debatten.
    - [`backend/onboarding_wizard.py`](../../backend/onboarding_wizard.py): **Web-Setup-Wizard (M30)** für geführtes 4-Schritte-First-Run-Onboarding.
    - [`backend/demo_mode.py`](../../backend/demo_mode.py): **Zero-Install Live-Demo-Modus (`ARCHON_DEMO_MODE`, M47)** für sichere, öffentliche Showcase-Instanzen.
    - [`backend/mcp_gateway.py`](../../backend/mcp_gateway.py): **Nativer MCP-Server (`/mcp` Gateway, M48)** mit Streamable HTTP/SSE, Scoped API-Keys & HITL-Gate.
@@ -3468,7 +3468,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 | **28** | **ERP-Modul zum vollwertigen Kernsystem ausbauen** | Kritisch | Abgeschlossen | EN 16931 / XRechnung-3.0-UBL-XML (`/xrechnung.xml`), ZUGFeRD-2.2 / Factur-X Hybrid-PDF (`/zugferd.pdf`), DATEV-EXTF-SKR03-CSV (`/export/datev.csv`), `leitweg_id`, atomare Lagerbestands-Abbuchung (`stock_deducted`) sowie Bank-Import (`CAMT.053` / `MT940` / `CSV`) & OPOS-Abgleich (`/api/erp/bank/*`) |
 | **29** | **Visueller Formular- & Beleg-Editor (im ERP-Modul)** | Hoch | Abgeschlossen | WYSIWYG-/Block-Editor (System Control Center → `CORPORATE & MANDANT`, `corporate_controller.js`) für 6 Belegtypen (Brief, Angebot, AB, Rechnung, Mahnung 1–3, NDA) inkl. Live-§ 14-UStG-Prüfung, Platzhaltern (`{{customer.*}}`/`{{doc.*}}`), DIN-5008-Falzmarken, Pure-Python EPC-QR GiroCode (`backend/qr_girocode.py`), Layout-Persistenz & direktem A4-PDF-Download (`/api/corporate/render-pdf`) |
 | **30** | **Interaktiver Setup-Wizard & Installationsprogramm** | Kritisch | Abgeschlossen | Geführter First-Run-Installer (GUI & CLI) mit Abfrage von Firmendaten, Mandantenstamm, API-Keys, lokalen LLM-Pfaden, IMAP/SMTP und Telegram-Bot-Setup |
-| **31** | **Vollständige Englische Version (Global Edition)** | Kritisch | Abgeschlossen | Durchgehende Übersetzung aller 71 Spezialisten-Profile (`SOUL.md`), 832 Prompt-Templates, 55 Boardroom-Frameworks, UI-Masken und Dokumentation auf Englisch |
+| **31** | **Vollständige Englische Version (Global Edition)** | Kritisch | Abgeschlossen | Durchgehende Übersetzung aller 71 Spezialisten-Profile (`SOUL.md`), 832 Prompt-Templates, 80 Boardroom-Frameworks, UI-Masken und Dokumentation auf Englisch |
 | **32** | **Telegram-Kommunikation & Gateway-Härtung** | Hoch | Abgeschlossen | Konfliktfreies Session-Keying, Slash-Command-Routing, Inline-HITL-Buttons & Live-Status-Formatter (`backend/telegram_gateway_v2.py`) |
 | **33** | **Watchdog & Internet-Radar 2.0** | Hoch | Abgeschlossen | Semantisches Relevanz-Scoring, SHA-256-Dubletten-Sperre & Auto-Fallback-Selbstheilung (`backend/watchdog_radar_v2.py`) |
 | **34** | **Android-App (Mobile Command & Receipt Scanner)** | Mittel | Geplant | Mobile App für Direkt-Chat, Push-Freigaben (Approval Gates), Sprachnotizen und Kamera-Beleg-Scan direkt in die ERP-Buchhaltung |
@@ -3708,7 +3708,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
   4. *Domänen-Auswahl:* Auswahl, welche der 8 Fachdomänen (71 Profile) sofort aktiv geschaltet werden sollen.
 
 ### Meilenstein 31: Vollständige Englische Version – Global Release Edition (Abgeschlossen)
-- **Systemweite Zweisprachigkeit (DE / EN):** Vollständige Übersetzung aller 71 Spezialisten-Profile (`SOUL_COMPACT.md`, `SOUL_PRO.md`, `SOUL_FULL.md`), der 832 Prompt-Studio-Vorlagen und der 55 Boardroom-Frameworks ins Englische.
+- **Systemweite Zweisprachigkeit (DE / EN):** Vollständige Übersetzung aller 71 Spezialisten-Profile (`SOUL_COMPACT.md`, `SOUL_PRO.md`, `SOUL_FULL.md`), der 832 Prompt-Studio-Vorlagen und der 80 Boardroom-Frameworks ins Englische.
 - **Internationale Rechts- & Steuer-Adaption:** Umschaltbare Normen-Profile für den englischsprachigen Raum (z. B. US-GAAP/IFRS, GDPR/CCPA, FDA/OSHA statt reinem HGB/BauGB/StBerG).
 - **Englisches Systemhandbuch:** Vollständige englische Ausgabe des 218-seitigen Archon-OS-Handbuchs (`ARCHON_OS_SYSTEM_MANUAL_2026_EN.docx` / PDF).
 

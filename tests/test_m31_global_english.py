@@ -72,8 +72,8 @@ def test_boardroom_frameworks_all_55_bilingual() -> None:
     fws_en = core_dispatcher.CATEGORIZED_FRAMEWORKS_EN
     total_de = sum(len(items) for items in fws_de.values())
     total_en = sum(len(items) for items in fws_en.values())
-    assert total_de >= 55, f"Expected >= 55 frameworks DE, found {total_de}"
-    assert total_en >= 55, f"Expected >= 55 frameworks EN, found {total_en}"
+    assert total_de >= 80, f"Expected >= 80 frameworks DE, found {total_de}"
+    assert total_en >= 80, f"Expected >= 80 frameworks EN, found {total_en}"
     assert len(fws_de) == len(fws_en), f"Expected same category count: {len(fws_de)} vs {len(fws_en)}"
 
 

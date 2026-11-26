@@ -2,6 +2,15 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [v0.5.7.9] — 2026-11-26 (AI Boardroom Expansion: 55 → 80 Frameworks & Landingpage)
+
+### Added
+- **AI Boardroom (55 → 80 zweisprachige Frameworks in 9 Kategorien, `core_dispatcher.py`):**
+  - **Strategie & Entscheidungsanalyse (+10):** *Playing to Win (Lafley/Martin)*, *Good Strategy Kernel (Rumelt)*, *Three Horizons of Growth (H1/H2/H3)*, *Business Model Canvas (Osterwalder)*, *Balanced Scorecard*, *GE-McKinsey 9-Felder-Matrix*, *Porter's Value Chain*, *TOWS-Strategiematrix*, *Pareto-Analyse (80/20)* sowie *RAPID Entscheidungsrollen & Decision Quality Audit (Spetzler)*.
+  - **Neue Kategorie 8 — Kommunikation, Verhandlung & Krise (+8):** *Harvard-Verhandlungskonzept (BATNA & ZOPA)*, *Difficult Conversations (Third Story)*, *Gewaltfreie Kommunikation (GFK)*, *SBI / SBII Feedback*, *Message House*, *OASIS Kommunikationsstrategie*, *SCCT Krisenkommunikation* und *CERC Akutkommunikation*.
+  - **Neue Kategorie 9 — Finanzen, Liquidität & Performance-Steuerung (+7):** *Business Case Builder & Kapitalwert (NPV/IRR)*, *13-Wochen-Liquiditätsplanung & Cash Runway*, *Treiberbasierte Budgetplanung & Rolling Forecast*, *Working-Capital-Analyse (CCC/DSO/DPO)*, *SaaS Unit Economics (CAC/LTV/NRR)*, *KPI-Treiberbaum & Abweichungsanalyse* sowie *Nutzwertanalyse (Multi-Criteria Scoring)*.
+- **Dokumentation & Landingpage:** `README.md`, `README.de.md`, alle 11 Sprach-READMEs, `docs/SYSTEM_HANDBUCH.md` und `site/` auf **80 Frameworks** aktualisiert; Tests in `tests/test_m31_global_english.py` erweitert.
+
 ## [Remediation 25.11.2026] — v0.5.7.8 (Final-Re-Audit)
 
 ### Fixed

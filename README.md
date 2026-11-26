@@ -27,7 +27,7 @@ Archon OS is a self-hosted multi-agent workspace built on [Hermes Agent](https:/
 
 What that means in practice:
 
-- **Structured decisions, not one-shot answers.** An AI Boardroom runs isolated multi-perspective debates with a critique prompt and synthesis across 55 frameworks (OKR, Pre-Mortem, Six Thinking Hats, …).
+- **Structured decisions, not one-shot answers.** An AI Boardroom runs isolated multi-perspective debates with a critique prompt and synthesis across 80 frameworks (OKR, Pre-Mortem, Six Thinking Hats, …).
 - **Cost control per model and per task.** OmniRoute routes each request to local (Ollama, LM Studio) or cloud providers and attributes cost before dispatch (`cost_estimator.py` checks budgets).
 - **Data sovereignty.** Zero-Egress routing keeps finance, contract and CRM work on local models; worker containers run in an `internal: true` Docker network without an internet route.
 - **Tamper-evident audit trail.** An HMAC-SHA256 hash-chained audit log (external anchor + startup key check) records every dispatch, including provider, model and host.
@@ -56,7 +56,7 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 | Prompt Studio (opened in chat) | 71-Profile Agent Fleet (3-tier SOUL) |
 |---|---|
 | ![Prompt Studio](docs/system/screenshots/demo_1_prompt_studio.gif) | ![Agent Fleet](docs/system/screenshots/demo_2_agent_fleet.gif) |
-| **Org Hierarchy & Teams** | **AI Boardroom Debate (55 frameworks)** |
+| **Org Hierarchy & Teams** | **AI Boardroom Debate (80 frameworks)** |
 | ![Org Hierarchy](docs/system/screenshots/demo_3_org_hierarchy.gif) | ![AI Boardroom](docs/system/screenshots/demo_4_boardroom.gif) |
 
 [![Star History](https://api.star-history.com/svg?repos=michaelbeatman/ARCHON-OS&type=Date)](https://star-history.com/#michaelbeatman/ARCHON-OS&Date)
@@ -69,7 +69,7 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 |---|---|---|---|
 | **User & Company Manual** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 pp., 1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 pp., 1.9 MB)* | Installation, Chapters 1–19, 5 Use Cases, Encryption/GDPR Overview & A–Z Glossary |
 | **Complete Feature List (PDF: v0.5.2.1 — see CHANGELOG for v0.5.7.9)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](docs/system/ARCHON_OS_FEATURELISTE_2026.pdf) | Full module catalog, Bilingual Global Edition, Live Demo Mode, First-Run Wizard, FinOps & Security |
-| **AI Boardroom: 55 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 55 structured Decision Engine methodologies (EN & DE) & index |
+| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 55 structured Decision Engine methodologies (EN & DE) & index |
 
 *More technical & security guides:* [System Architecture & Audit](docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M113)](docs/system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF & Multi-Tenant Guide (M43/M49)](docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise Features & Playbooks Guide](docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP Server (`/mcp`) Guide](docs/system/ARCHON_MCP_SERVER_GUIDE.md) · [Live Demo Mode Guide](docs/system/LIVE_DEMO_MODE_GUIDE.md) · [First-Run Setup Wizard Guide](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosystem & Migration Guide](docs/system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
@@ -80,7 +80,7 @@ The authoritative release state is [CHANGELOG.md](CHANGELOG.md). Key additions s
 | Capability | Classic AI Chat | Single "Super-Agent" | **Archon Agentic OS** |
 |---|---|---|---|
 | **Agent Roster** | 1 generic assistant | 1 generalist with tool plugins | **71 distinct profiles** (`agent_profiles.json`) with **3-tier `SOUL.md`** (`Compact` / `Pro` / `Full`) |
-| **Strategic Decisions** | One-shot answer | Iterative tool loop | **AI Boardroom**: isolated multi-perspective debate, critique prompt & synthesis across **55 frameworks** |
+| **Strategic Decisions** | One-shot answer | Iterative tool loop | **AI Boardroom**: isolated multi-perspective debate, critique prompt & synthesis across **80 frameworks** |
 | **Long-Term Memory** | Flat chat history | Vector store snippets | **Obsidian Vault sync**, per-agent HR scorecards (`Personalakten/`), WAL SQLite DBs & LRU-K paging |
 | **Privacy & Egress** | All data to cloud APIs | API keys in runtime env | **Zero-Egress Gate & Privacy-Router Hard-Block** (fail-closed for finance/contracts/CRM when local LLM is offline) + **`internal: true` Worker Network (no internet route)** + **Dual-LLM Guard** |
 | **Governance & Liability** | Blind output | Unchecked tool calls | **EU AI Act Engine (Art. 4 / Annex III)**, **1-Click GoBD Procedural PDF**, **HITL Gates** & **HMAC-SHA256 Audit Chain (Env-Key; incl. per-call LLM-Dispatch provider/model/host proof)** |
@@ -168,7 +168,7 @@ ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d
 flowchart LR
     U["User / LAN Browser / Telegram"] -->|HTTP 8501 + RBAC Auth| UI["Archon Web Cockpit (FastAPI + SPA)"]
     UI --> OR["Orchestrator & 71-Profile Fleet (3-Tier SOUL · EN/DE)"]
-    OR --> BR["AI Boardroom (55 Decision Frameworks)"]
+    OR --> BR["AI Boardroom (80 Decision Frameworks)"]
     OR --> OM["OmniRoute Switchboard (Port 20128)"]
     OM -->|Local / Zero-Egress| LOC["Ollama / LM Studio (On-Premise)"]
     OM -->|Cloud Providers| CLD["OpenRouter / OpenAI / Anthropic / Gemini"]
@@ -180,7 +180,7 @@ flowchart LR
 
 ### The 4 Navigation Pillars
 1. **Command & Operations:** Operations Command Center, Master Chat, Triage Inbox (Webhooks, Email, Messenger, Approvals), **71-Profile Agent Fleet** (incl. Bot Screen PbD & 3-tier SOUL), **832-Template Prompt Studio**, Showroom Sandbox.
-2. **Cognition & Knowledge:** Internet-Watchdog (RSS/Web Radar), Research Lab (multi-source triangulation & dossiers), Central Library (Obsidian Vault + AnythingLLM RAG), AI Boardroom (4-phase debate + optional MoA across 55 frameworks).
+2. **Cognition & Knowledge:** Internet-Watchdog (RSS/Web Radar), Research Lab (multi-source triangulation & dossiers), Central Library (Obsidian Vault + AnythingLLM RAG), AI Boardroom (4-phase debate + optional MoA across 80 frameworks).
 3. **Economy & ERP *(Alpha)*:** CRM (addresses, contacts, pipeline), ERP suite (offers, contracts, invoices, receivables/dunning, receipts), OmniRoute token FinOps with per-model cost control.
 4. **Infrastructure & Governance:** Org-Chart & Teams, Guardian (Concurrency, Sessions, Rate Limits), System Control Center (First-Run Wizard, API Keys, Routing, Kernel Watchdog, Updates), Tamper-Evident Audit Log Stream.
 
@@ -239,7 +239,7 @@ ARCHON-OS/
 
 - **User & Company Manual (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(German: [DE PDF](docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
 - **Complete Feature List & System Catalog (PDF: v0.5.2.1 — see CHANGELOG for v0.5.7.9, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
-- **Decision Engine & 55 Boardroom Frameworks (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
+- **Decision Engine & 80 Boardroom Frameworks (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
 - **Detailed Roadmap (M0–M113):** [docs/system/ROADMAP_2026.md](docs/system/ROADMAP_2026.md)
 - **Live Demo Mode Guide (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](docs/system/LIVE_DEMO_MODE_GUIDE.md)
 - **First-Run Setup Wizard Guide:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)

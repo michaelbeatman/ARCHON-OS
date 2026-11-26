@@ -157,6 +157,12 @@ from archon.core.settings_state import (
 from archon.core.state_db import STATE_DB_PATH, _get_state_db
 from archon.core.state_db import ClosingConnection as ClosingConnection
 from archon.core.state_db import _get_profile_state_db as _get_profile_state_db
+from archon.middleware.auth_policy import _AUTH_PUBLIC_EXACT as _AUTH_PUBLIC_EXACT
+from archon.middleware.auth_policy import RAG_API_KEY_ENV as RAG_API_KEY_ENV
+from archon.middleware.auth_policy import MissingRagApiKeyError as MissingRagApiKeyError
+from archon.middleware.auth_policy import _auth_unavailable_response as _auth_unavailable_response
+from archon.middleware.auth_policy import _check_rag_api_key_config as _check_rag_api_key_config
+from archon.middleware.auth_policy import _get_rag_api_key as _get_rag_api_key
 from archon.routers._rbac import require_admin_or_503
 from archon.routers.agent_chat import DirectAgentChatRequest as DirectAgentChatRequest
 from archon.routers.agent_chat import RunRequest as RunRequest
@@ -907,19 +913,12 @@ async def add_no_cache_for_avatars(request: Request, call_next):
 
 
 # --- Auth-Gate (wirkt nur, wenn settings.auth.enabled = true) --------------
-_AUTH_PUBLIC_EXACT = {
-    "/", "/health", "/livez", "/readyz", "/metrics", "/favicon.ico", "/openapi.json",
-    "/login", "/docs", "/redoc",
-    # Randluecken: exakt /static (ohne Slash) wurde vom Prefix "/static/"
-    # nicht erfasst und lief in einen Login-Redirect. /mcp/info ist
-    # bewusst oeffentlich, wird aber vom Protected-Prefix "/m" erfasst.
-    "/static", "/static_v2", "/mcp/info",
-    # Kalender-Push (Google/Graph) kommt ohne Session-Token. Absicherung
-    # AUSSCHLIESSLICH ueber clientState/watch_id per hmac.compare_digest in
-    # backend/operations_calendar.py — bewusst NUR dieser exakte Pfad, kein
-    # Prefix, damit kein weiterer /api/-Pfad geoeffnet wird.
-    "/api/v1/calendar/webhooks/push",
-}
+# 2c/S2: _AUTH_PUBLIC_EXACT, RAG_API_KEY_ENV, MissingRagApiKeyError,
+# _get_rag_api_key, _check_rag_api_key_config und _auth_unavailable_response
+# liegen jetzt in archon/middleware/auth_policy.py und werden oben per
+# X-as-X re-exportiert. Bewusst IN main.py belassen: _SERVICE_TOKEN_CACHE,
+# _get_service_token (nutzt __file__ fuer den Repo-Root) und
+# _request_has_service_token (stabiler Contract D2 §295).
 
 # Nicht-/api-Pfade, die trotzdem geschuetzt sein muessen: eingebettete
 # Admin-Oberflaechen (n8n-Editor, OmniRoute-Konsole) und App-Shells.
@@ -950,51 +949,6 @@ def _get_service_token() -> str:
     return tok
 
 
-# --- RAG-Sync-Zugang: Env statt Klartext, fail-fast ------------------------
-# Der Vault->RAG-Sync braucht einen AnythingLLM-API-Key. Bis 07.11.2026 stand
-# er als Literal im Code (hier und in mehreren tools/-Skripten); jetzt kommt er
-# ausschliesslich aus der Umgebung. Variablenname bewusst identisch mit
-# backend/rag_bridge.py — ein Secret, ein Name, kein zweites Schema.
-RAG_API_KEY_ENV = "ANYTHINGLLM_API_KEY"
-
-
-class MissingRagApiKeyError(RuntimeError):
-    """Der RAG-Sync hat keinen API-Key — es wird kein Request abgesetzt."""
-
-
-def _get_rag_api_key() -> str:
-    """Liefert den RAG-API-Key aus der Umgebung.
-
-    Kein stiller Fallback auf einen Default: ein leerer Key endet downstream
-    als Auth-Fehler oder als Sync, der nichts tut. Deshalb Exception am
-    Nutzungspunkt, damit kein subprocess mit leerem Key startet.
-    """
-    key = (os.environ.get(RAG_API_KEY_ENV) or "").strip()
-    if not key:
-        raise MissingRagApiKeyError(
-            f"{RAG_API_KEY_ENV} fehlt in der Umgebung. Der Vault->RAG-Sync "
-            "startet nicht (kein Fallback-Key, kein Request mit leerem Key)."
-        )
-    return key
-
-
-def _check_rag_api_key_config() -> bool:
-    """Startcheck: fehlender RAG-Key ist als ERROR sichtbar, kippt den Start nicht.
-
-    Der Key wird nur im Hintergrund-Trigger nach einem Library-Upload mit
-    auto_ingest gebraucht. Ein harter Startabbruch wuerde einen Dienst
-    verweigern, der ohne die RAG-Funktion voll funktionsfaehig ist — deshalb
-    fail-fast am Nutzungspunkt (Exception + ERROR dort) plus diese Zeile.
-    """
-    try:
-        _get_rag_api_key()
-    except MissingRagApiKeyError as err:
-        logger.error(f"[RAG-Sync] {err}")
-        return False
-    logger.info(f"[RAG-Sync] API-Key aus {RAG_API_KEY_ENV} geladen.")
-    return True
-
-
 def _request_has_service_token(request: Request) -> bool:
     expected = _get_service_token()
     provided = request.headers.get("x-archon-service-token", "")
@@ -1002,17 +956,6 @@ def _request_has_service_token(request: Request) -> bool:
         return False
     import hmac
     return hmac.compare_digest(provided, expected)
-
-
-def _auth_unavailable_response() -> JSONResponse:
-    """Einheitliche 503-Antwort des Gates, wenn die Prüfung selbst ausfällt.
-
-    Fail-closed: lieber eine ehrliche 503 als ein stilles Durchlassen.
-    """
-    return JSONResponse(
-        status_code=503,
-        content={"error": "auth_unavailable", "detail": "Auth unavailable"},
-    )
 
 
 @app.middleware("http")

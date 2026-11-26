@@ -7,7 +7,7 @@ Archon OS stellt einen vollwertigen, dem MCP-Standard (`2024-11-05` & `2025-03-2
 
 Damit können externe Clients wie **Claude Desktop**, **Cursor**, **VS Code**, **Antigravity** oder **Hermes** direkt auf die Kernfähigkeiten des Betriebssystems zugreifen (inkl. Scoped API-Keys `read_only` / `kanban_rw` / `agent_execute` / `admin_full` und HITL-Freigabe-Gate):
 - Erstellen und Verwalten von Kanban-Aufgaben
-- Auflisten und Delegieren an die 70 Fachspezialisten (`archon__list_specialists`, `archon__ask_specialist`)
+- Auflisten und Delegieren an die 71 Agenten-Profile (`archon__list_specialists`, `archon__ask_specialist`)
 - Durchsuchen des lokalen Obsidian-Vaults (`archon__search_vault`)
 - CRM- und Kontaktrecherche in PocketBase
 - Auslesen der Triage-Inbox (E-Mails, Telegram, Systemmeldungen)

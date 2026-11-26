@@ -8,9 +8,9 @@ Archon OS is designed as a **sovereign, self-hosted alternative** to cloud-locke
 
 | Capability | Single Chatbots (ChatGPT / Claude Web) | Code-Only Frameworks (CrewAI / AutoGen / LangGraph) | Cloud Agent SaaS (Relevance AI / Lindy) | **Archon OS (Self-Hosted)** |
 |---|---|---|---|---|
-| **Ready-to-Run Specialists** | 0 (blank prompt box) | 0 (write Python boilerplate first) | Paid templates | **70 Specialists in 8 Domains (EN & DE)** |
+| **Ready-to-Run Specialists** | 0 (blank prompt box) | 0 (write Python boilerplate first) | Paid templates | **71 Agent Profiles in 8 Domains (EN & DE)** |
 | **Token-Smart Persona Scaling** | Manual | Manual | Fixed | **3-Stage `SOUL.md` (`compact` / `pro` / `full`)** |
-| **Structured Multi-Agent Debate** | No | Custom graph coding | Limited | **6-Phase AI Boardroom + 55 Frameworks** |
+| **Structured Multi-Agent Debate** | No | Custom graph coding | Limited | **6-Phase AI Boardroom + 80 Frameworks** |
 | **Parametric Prompt Library** | No | No | Partial | **832 Bilingual Enterprise Templates** |
 | **Operations Cockpit (UI)** | Chat only | CLI / paid cloud studio | Cloud only | **Full Web OS: Kanban, CRM, ERP, Inbox, Showroom** |
 | **Human-in-the-Loop & Audit** | None | DIY | Basic | **4-Eyes Gates + SHA-256 GoBD Merkle Audit Log** |
@@ -22,7 +22,7 @@ Archon OS is designed as a **sovereign, self-hosted alternative** to cloud-locke
 ## 2. Migrating to Archon OS
 
 ### A. From CrewAI / AutoGen Python Scripts
-1. **Map Roles to the 70-Agent Roster:** Check `agent_profiles.json` — most corporate roles (`senior_fullstack_engineer`, `commercial_jurist_contracts`, `finance_lead`, `research_scout`, `red_team_challenger`) already exist with 3-stage `SOUL.md` directives.
+1. **Map Roles to the 71-Profile Roster:** Check `agent_profiles.json` — most corporate roles (`senior_fullstack_engineer`, `commercial_jurist_contracts`, `finance_lead`, `research_scout`, `red_team_challenger`) already exist with 3-stage `SOUL.md` directives.
 2. **Import Custom Personas:** Place custom domain instructions in `profiles_src/<agent_id>/persona.en.md` (or `persona.de.md`) and run:
    ```bash
    docker compose exec archon-os python scripts/sync_soul_modes.py --mode compact --lang en

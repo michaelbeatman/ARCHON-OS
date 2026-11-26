@@ -44,14 +44,14 @@ Summarize Phase 1 in 3–4 short lines, then ask these **6 mandatory questions**
 - **Obsidian Vault:** Path to an existing Vault, or create & initialize `./obsidian_vault`?
 
 ### Question 2 — Language & Localization Scope (*Sprache & Frameworks*)
-- **Primary UI Language:** `en`, `de`, `es`, `fr`, `pt`, `ru`, `ja`, `ko`, `zh`.
-- **Specialist `SOUL.md` & 55 Boardroom Frameworks:** Inform the user honestly whether their target language still uses German `SOUL.md` / methodology files and ask whether to translate them now or keep defaults.
+- **Primary UI Language:** `en`, `de`, `es`, `fr`, `it`, `ja`, `ko`, `nl`, `pt`, `ru`, `zh` (11 locales).
+- **Agent `SOUL.md` & 80 Boardroom Frameworks:** Inform the user honestly whether their target language uses EN/DE `SOUL.md` / methodology files (all 80 Boardroom frameworks are bilingual DE/EN in `core_dispatcher.py` and cataloged across 11 languages on the landing page) and ask whether to translate them now or keep defaults.
 
 ### Question 3 — Stack Profile (*Framework / Umfang*)
-*(All container tiers include `archon-os`, `hermes`, and `docker-socket-proxy`!)*
-1. **`Standard` (~4 GB RAM, Recommended Default):** `archon-os` + `hermes` (Hermes Agent) + `anything-llm` + `chroma` (Vector RAG) + `docker-socket-proxy`
-2. **`Full Automation` (~7 GB RAM):** `Standard` + `n8n` Automation + `ollama-embed`
-3. **`Minimal Core` (Low-RAM ~2 GB):** `archon-os` + `hermes` + `docker-socket-proxy` *(without AnythingLLM RAG)*
+*(All container tiers include `archon-os`, `omniroute`, `hermes`, and `docker-socket-proxy`!)*
+1. **`Standard` (~4 GB RAM, Recommended Default — 7 Containers):** `archon-os` + `omniroute` + `hermes` (Hermes Agent) + `anything-llm` + `chroma` (Vector RAG) + `docker-socket-proxy` + `archon-autoheal`
+2. **`Full Automation` (~7 GB RAM):** `Standard` + `n8n` Automation + `ollama-embed` (expandable up to 24 services via optional profiles)
+3. **`Minimal Core` (Low-RAM ~2 GB):** `archon-os` + `omniroute` + `hermes` + `docker-socket-proxy` *(without AnythingLLM RAG)*
 4. **`Bare-Metal Dev`:** `.venv` Python 3.13+ alongside containerized `hermes` + `anything-llm` + `chroma`
 
 ### Question 4 — Cloud LLM Keys & Local AI Integration (*API-Keys & Lokale KI*)
@@ -77,11 +77,11 @@ Summarize Phase 1 in 3–4 short lines, then ask these **6 mandatory questions**
    ```
 3. **Write `.env` from `.env.example` (mode `600`):** Set `ARCHON_BIND_IP`, `ARCHON_LANGUAGE`, `ARCHON_STACK_PROFILE`, `ARCHON_HERMES_DIR`, `ARCHON_OBSIDIAN_DIR`, `PRIVACY_ZERO_EGRESS`, provider keys, random 32-byte hex secrets (`HERMES_DASHBOARD_SESSION_TOKEN`, `N8N_USER_MANAGEMENT_JWT_SECRET`, `OMNIROUTE_INITIAL_PASSWORD`), and optional Telegram credentials.
 4. **Pull Multi-Arch Images (`amd64` / `arm64`) + Start Selected Stack:**
-   - **Standard (Recommended):** `docker compose up -d --build archon-os docker-socket-proxy omniroute hermes anything-llm chroma`
-   - **Full Automation:** `docker compose up -d --build archon-os docker-socket-proxy omniroute hermes anything-llm chroma n8n ollama-embed`
+   - **Standard (Recommended — 7 Default Containers):** `docker compose up -d --build archon-os docker-socket-proxy omniroute hermes anything-llm chroma archon-autoheal`
+   - **Full Automation:** `docker compose up -d --build archon-os docker-socket-proxy omniroute hermes anything-llm chroma archon-autoheal n8n ollama-embed`
    - **Minimal Core:** `docker compose up -d --build archon-os docker-socket-proxy omniroute hermes`
    - **Zero-Key Read-Only Demo:** `ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d`
-5. **Sync 70 Specialist `SOUL.md` & `profile.yaml` Configurations (`--lang en` or `--lang de`):**
+5. **Sync 71 Agent `SOUL.md` & `profile.yaml` Configurations (`--lang en` or `--lang de`):**
    ```bash
    docker compose exec -T archon-os python scripts/sync_soul_modes.py --mode compact --lang "${ARCHON_LANGUAGE:-en}"
    ```
@@ -93,5 +93,5 @@ Summarize Phase 1 in 3–4 short lines, then ask these **6 mandatory questions**
 Confirm all 4 checks before finishing:
 1. `GET http://127.0.0.1:8501/health` returns `HTTP 200`.
 2. `docker ps` shows `ARCHON-OS`, `hermes`, and `docker-socket-proxy` running cleanly.
-3. `${ARCHON_HERMES_DIR}/profiles` contains all **70 synced specialist `SOUL.md` profiles**.
+3. `${ARCHON_HERMES_DIR}/profiles` contains all **71 synced agent `SOUL.md` profiles**.
 4. Remind the user to open `${ARCHON_OBSIDIAN_DIR}` via **"Open folder as vault"** in Obsidian Desktop, and state the regulatory disclaimer (advisory domains 3/4/8 are not licensed professional advice).

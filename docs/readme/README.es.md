@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Release: v0.5.7.9](https://img.shields.io/badge/Release-v0.5.7.9-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
-[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
+[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
 [![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](../../SECURITY.md)
 
@@ -69,7 +69,7 @@ El estado de la versión oficial es [CHANGELOG.md](../../CHANGELOG.md). Adicione
 |---|---|---|---|
 | **Manual de usuario y empresa** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 págs., 1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 págs., 1.9 MB)* | Instalación, capítulos 1–19, 5 casos de uso, resumen de cifrado/RGPD y glosario de la A a la Z |
 | **Lista completa de funciones (PDF: v0.5.2.1 — ver CHANGELOG para v0.5.7.9)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Catálogo completo de módulos, edición global bilingüe, modo de demostración en vivo, asistente de configuración inicial, FinOps y seguridad |
-| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Las 55 metodologías estructuradas de Decision Engine (EN y DE) e índice |
+| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Las 80 metodologías estructuradas de Decision Engine (EN y DE) e índice |
 *[System Manual](../system/ARCHON_OS_SYSTEM_MANUAL_2026_ES.pdf) · [Complete Feature List](../system/ARCHON_OS_FEATURELISTE_2026_ES.pdf) · [AI Boardroom: 80 Frameworks](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ES.pdf)*
 
 *Más guías técnicas y de seguridad:* [Arquitectura del sistema y auditoría](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Hoja de ruta (M0–M113)](../system/ROADMAP_2026.md) · [Guía de cumplimiento de EU AI Act, GoBD PDF y multiinquilino (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Guía de funciones empresariales y manuales](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [Guía del servidor MCP (`/mcp`)](../system/ARCHON_MCP_SERVER_GUIDE.md) · [Guía del modo de demostración en vivo](../system/LIVE_DEMO_MODE_GUIDE.md) · [Guía del asistente de configuración inicial](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Guía de ecosistema y migración](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Política de seguridad](../../SECURITY.md) · [Registro de cambios](../../CHANGELOG.md)
@@ -105,7 +105,7 @@ Archon OS está construido sobre cuatro componentes esenciales que trabajan junt
 
 | Componente | Rol en Archon OS | Cómo se instala |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | Ejecuta Archon OS, Hermes Agent, AnythingLLM, Chroma y Socket Proxy en contenedores aislados | **Ofrecido automáticamente** mediante `winget` (Windows), `brew` (macOS) o `get.docker.com` (Linux) |
+| **1. Docker** *(Desktop / Engine v2)* | Ejecuta 7 contenedores por defecto (Archon OS, OmniRoute, Hermes Agent, AnythingLLM, Chroma, Socket Proxy y Autoheal — hasta 24 con perfiles) | **Ofrecido automáticamente** mediante `winget` (Windows), `brew` (macOS) o `get.docker.com` (Linux) |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | Entorno de ejecución multi-agente central, pasarela de sesión (puerto `8644`) e interfaz de Telegram | **Descargado e iniciado automáticamente** por Docker Compose junto con Archon OS |
 | **3. AnythingLLM + Chroma** *(RAG vectorial)* | Potencia **Central Library → RAG** (`http://localhost:3001`) con indexación semántica | **Descargado e iniciado automáticamente** en la pila `Standard` predeterminada |
 | **4. Obsidian** *(App de escritorio + Bóveda montada)* | Segundo cerebro en Markdown persistente (`/opt/data/obsidian`) que almacena informes, archivos de RR. HH. y gráficos | Carpetas de la bóveda inicializadas automáticamente en `./obsidian_vault`; instalación de **Obsidian Desktop** ofrecida automáticamente (`winget` / `brew` / Flatpak) |

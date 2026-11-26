@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Release: v0.5.7.9](https://img.shields.io/badge/Release-v0.5.7.9-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
-[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
+[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
 [![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](../../SECURITY.md)
 
@@ -27,7 +27,7 @@ Archon OS는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous 
 
 실제로 의미하는 바는 다음과 같습니다:
 
-- **단발성 답변이 아닌 구조화된 의사결정.** AI Boardroom은 55개의 프레임워크(OKR, Pre-Mortem, Six Thinking Hats 등)를 활용하여 비판적 프롬프트와 종합을 거치는 독립적인 다각적 토론을 실행합니다.
+- **단발성 답변이 아닌 구조화된 의사결정.** AI Boardroom은 80개의 프레임워크(OKR, Pre-Mortem, Six Thinking Hats 등)를 활용하여 비판적 프롬프트와 종합을 거치는 독립적인 다각적 토론을 실행합니다.
 - **모델 및 작업별 비용 제어.** OmniRoute는 각 요청을 로컬(Ollama, LM Studio) 또는 클라우드 제공업체로 라우팅하며, 발송 전 비용을 산정합니다(`cost_estimator.py`가 예산을 확인).
 - **데이터 주권.** Zero-Egress 라우팅은 재무, 계약 및 CRM 작업을 로컬 모델에서 유지하며, 워커 컨테이너는 인터넷 경로가 없는 `internal: true` Docker 네트워크에서 실행됩니다.
 - **위변조 방지 감사 추적.** HMAC-SHA256 해시 체인 감사 로그(외부 앵커 + 시작 키 확인)는 제공업체, 모델, 호스트를 포함한 모든 발송 기록을 저장합니다.
@@ -56,7 +56,7 @@ Archon OS는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous 
 | Prompt Studio (채팅에서 열림) | 71-Profile Agent Fleet (3계층 SOUL) |
 |---|---|
 | ![Prompt Studio](../system/screenshots/demo_1_prompt_studio.gif) | ![Agent Fleet](../system/screenshots/demo_2_agent_fleet.gif) |
-| **조직 계층 및 팀** | **AI Boardroom 토론 (55개 프레임워크)** |
+| **조직 계층 및 팀** | **AI Boardroom 토론 (80개 프레임워크)** |
 | ![Org Hierarchy](../system/screenshots/demo_3_org_hierarchy.gif) | ![AI Boardroom](../system/screenshots/demo_4_boardroom.gif) |
 
 [![Star History](https://api.star-history.com/svg?repos=michaelbeatman/ARCHON-OS&type=Date)](https://star-history.com/#michaelbeatman/ARCHON-OS&Date)
@@ -69,7 +69,7 @@ Archon OS는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous 
 |---|---|---|---|
 | **사용자 및 기업 매뉴얼** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97쪽, 1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97쪽, 1.9 MB)* | 설치, 1~19장, 5가지 사용 사례, 암호화/GDPR 개요 및 A–Z 용어집 |
 | **전체 기능 목록 (PDF: v0.5.2.1 — v0.5.7.9에 대한 CHANGELOG 참조)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | 전체 모듈 카탈로그, 이중 언어 글로벌 에디션, 라이브 데모 모드, 초기 실행 마법사, FinOps 및 보안 |
-| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | 55가지 구조화된 의사결정 엔진 방법론(EN & DE) 및 색인 전체 |
+| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | 80가지 구조화된 의사결정 엔진 방법론(EN & DE) 및 색인 전체 |
 *[System Manual](../system/ARCHON_OS_SYSTEM_MANUAL_2026_KO.pdf) · [Complete Feature List](../system/ARCHON_OS_FEATURELISTE_2026_KO.pdf) · [AI Boardroom: 80 Frameworks](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.pdf)*
 
 *추가 기술 및 보안 가이드:* [시스템 아키텍처 및 감사](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [로드맵 (M0–M113)](../system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF 및 멀티 테넌트 가이드 (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [엔터프라이즈 기능 및 플레이북 가이드](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP 서버 (`/mcp`) 가이드](../system/ARCHON_MCP_SERVER_GUIDE.md) · [라이브 데모 모드 가이드](../system/LIVE_DEMO_MODE_GUIDE.md) · [초기 설정 마법사 가이드](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [생태계 및 마이그레이션 가이드](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [보안 정책](../../SECURITY.md) · [변경 로그](../../CHANGELOG.md)
@@ -81,7 +81,7 @@ Archon OS는 [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous 
 | 기능 | 클래식 AI 채팅 | 단일 "슈퍼 에이전트" | **Archon Agentic OS** |
 |---|---|---|---|
 | **에이전트 목록** | 범용 어시스턴트 1개 | 도구 플러그인이 포함된 제너럴리스트 1개 | **71개의 개별 프로필** (`agent_profiles.json`) 및 **3단계 `SOUL.md`** (`Compact` / `Pro` / `Full`) |
-| **전략적 의사결정** | 일회성 답변 | 반복적인 도구 루프 | **AI Boardroom**: 격리된 다각적 토론, 비판 프롬프트 및 **55개 프레임워크** 전반의 종합 |
+| **전략적 의사결정** | 일회성 답변 | 반복적인 도구 루프 | **AI Boardroom**: 격리된 다각적 토론, 비판 프롬프트 및 **80개 프레임워크** 전반의 종합 |
 | **장기 기억** | 평면적 채팅 기록 | 벡터 저장소 스니펫 | **Obsidian Vault 동기화**, 에이전트별 인사 성과표(`Personalakten/`), WAL SQLite DB 및 LRU-K 페이징 |
 | **개인정보 보호 및 데이터 유출** | 모든 데이터를 클라우드 API로 전송 | 런타임 환경의 API 키 | **Zero-Egress 게이트 및 개인정보 보호 라우터 하드 블록** (로컬 LLM 오프라인 시 금융/계약/CRM에 대해 fail-closed) + **`internal: true` 워커 네트워크 (인터넷 경로 없음)** + **듀얼 LLM 가드** |
 | **거버넌스 및 책임** | 맹목적 출력 | 검증되지 않은 도구 호출 | **EU AI Act 엔진 (제4조 / 부속서 III)**, **원클릭 GoBD 절차 PDF**, **HITL 게이트** 및 **HMAC-SHA256 감사 체인 (Env-Key; 호출별 LLM-Dispatch 제공자/모델/호스트 증명 포함)** |
@@ -105,7 +105,7 @@ Archon OS는 함께 작동하는 네 가지 필수 구성 요소로 구축되었
 
 | 구성 요소 | Archon OS에서의 역할 | 설치 방법 |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | Archon OS, Hermes Agent, AnythingLLM, Chroma 및 Socket Proxy를 격리된 컨테이너에서 실행 | `winget`(Windows), `brew`(macOS) 또는 `get.docker.com`(Linux)을 통해 **자동 제공** |
+| **1. Docker** *(Desktop / Engine v2)* | 기본 7개 컨테이너(Archon OS, OmniRoute, Hermes Agent, AnythingLLM, Chroma, Socket Proxy, Autoheal — 선택 프로필 포함 최대 24개)를 격리 실행 | `winget`(Windows), `brew`(macOS) 또는 `get.docker.com`(Linux)을 통해 **자동 제공** |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | 핵심 멀티 에이전트 런타임, 세션 게이트웨이(포트 `8644`) 및 Telegram 인터페이스 | Docker Compose에 의해 Archon OS와 함께 **자동으로 풀 및 시작됨** |
 | **3. AnythingLLM + Chroma** *(벡터 RAG)* | 시맨틱 인덱싱을 통해 **Central Library → RAG** (`http://localhost:3001`) 구동 | 기본 `Standard` 스택에서 **자동으로 가져오기 및 시작** |
 | **4. Obsidian** *(데스크톱 앱 + 마운트된 볼트)* | 보고서, HR 파일 및 그래프를 저장하는 영구적인 Markdown 제2의 뇌 (`/opt/data/obsidian`) | 볼트 폴더는 `./obsidian_vault`에 자동 초기화; **Obsidian Desktop** 설치 자동 제안 (`winget` / `brew` / Flatpak) |
@@ -181,7 +181,7 @@ flowchart LR
 
 ### 4가지 탐색 기둥
 1. **명령 및 운영:** 운영 명령 센터, 마스터 채팅, 트리아지 받은 편지함(웹훅, 이메일, 메신저, 승인), **71개 프로필 에이전트 플릿**(Bot Screen PbD 및 3계층 SOUL 포함), **832개 템플릿 프롬프트 스튜디오**, 쇼룸 샌드박스.
-2. **인지 및 지식:** 인터넷 감시자(RSS/웹 레이더), 연구소(다중 소스 삼각측량 및 도서), 중앙 라이브러리(Obsidian Vault + AnythingLLM RAG), AI Boardroom(55개 프레임워크에 걸친 4단계 토론 + 선택적 MoA).
+2. **인지 및 지식:** 인터넷 감시자(RSS/웹 레이더), 연구소(다중 소스 삼각측량 및 도서), 중앙 라이브러리(Obsidian Vault + AnythingLLM RAG), AI Boardroom(80개 프레임워크에 걸친 4단계 토론 + 선택적 MoA).
 3. **경제 및 ERP *(알파)*:** CRM(주소, 연락처, 파이프라인), ERP 제품군(제안서, 계약서, 송장, 미수금/독촉, 영수증), 모델별 비용 제어가 포함된 OmniRoute 토큰 FinOps.
 4. **인프라 및 거버넌스:** 조직도 및 팀, 가디언(동시성, 세션, 속도 제한), 시스템 제어 센터(초기 실행 마법사, API 키, 라우팅, 커널 감시자, 업데이트), 변조 방지 감사 로그 스트림.
 
@@ -240,7 +240,7 @@ ARCHON-OS/
 
 - **사용자 및 회사 매뉴얼 (영문, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(독일어: [DE PDF](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
 - **전체 기능 목록 및 시스템 카탈로그 (PDF: v0.5.2.1 — v0.5.7.9에 대한 CHANGELOG 참조, 영문):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
-- **의사결정 엔진 및 55개 이사회 프레임워크 (영문, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
+- **의사결정 엔진 및 80개 이사회 프레임워크 (영문, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
 - **상세 로드맵 (M0–M113):** [docs/system/ROADMAP_2026.md](../system/ROADMAP_2026.md)
 - **라이브 데모 모드 가이드 (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](../system/LIVE_DEMO_MODE_GUIDE.md)
 - **초기 설정 마법사 가이드:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)

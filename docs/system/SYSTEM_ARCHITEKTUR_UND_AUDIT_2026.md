@@ -1,9 +1,9 @@
-# AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.7)
+# AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.7.9)
 
-*Stand: 22. November 2026 | Release: v0.5.7 (Execution Hardening, PolicyEngine/BudgetBank, Idempotenz & OTel)*  
+*Stand: 26. November 2026 | Release: v0.5.7.9 (Re-Audit Hardening, Execution Hardening, PolicyEngine/BudgetBank, Idempotenz & OTel)*  
 *Maschinenlesbares Gegenstück:* [`docs/system/system_architecture_spec.json`](system_architecture_spec.json)  
-*Endbenutzer-Handbuch (PDF):* [`docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf`](ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)  
-*Vollständige Featureliste (PDF):* [`docs/system/ARCHON_OS_FEATURELISTE_2026.pdf`](ARCHON_OS_FEATURELISTE_2026.pdf) | *55 Boardroom-Frameworks:* [`docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf`](ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
+*Endbenutzer-Handbuch (PDF, v0.5.2.1):* [`docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf`](ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)  
+*Vollständige Featureliste (PDF, v0.5.2.1):* [`docs/system/ARCHON_OS_FEATURELISTE_2026.pdf`](ARCHON_OS_FEATURELISTE_2026.pdf) | *80 Boardroom-Frameworks (Online-Katalog & PDF):* [`docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf`](ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)
 
 ---
 
@@ -45,7 +45,7 @@ Das System nutzt SQLite (WAL-Modus) als durchgängige Single Source of Truth:
 2. **JSON-Deklarationen & Sidecar-Dateien:**
    - [`agent_profiles.json`](../../agent_profiles.json): **71 vollständige Agenten-Profile** mit zweisprachigen System-Prompts (DE/EN), 3-Stufen-`SOUL.md` (`Compact`, `Pro / Skills+`, `Full-SOUL`), Tool-Scopes, Fähigkeiten (`skills`), Avataren und Modell-Routings.
    - [`prompt_studio_catalog.json`](../../prompt_studio_catalog.json): **832 zweisprachige Prompt-Vorlagen** (DE/EN) mit verifizierter 100 % Variablen-Parität für das Archon Prompt Studio.
-   - [`core_dispatcher.py`](../../core_dispatcher.py): **55 Boardroom-Frameworks** (DE/EN) für mehrperspektivische Exekutiv-Debatten.
+   - [`core_dispatcher.py`](../../core_dispatcher.py): **80 Boardroom-Frameworks** in 9 Kategorien (DE/EN) für mehrperspektivische Exekutiv-Debatten.
    - [`backend/onboarding_wizard.py`](../../backend/onboarding_wizard.py): **Web-Setup-Wizard (M30)** für geführtes 4-Schritte-First-Run-Onboarding.
    - [`backend/demo_mode.py`](../../backend/demo_mode.py): **Zero-Install Live-Demo-Modus (`ARCHON_DEMO_MODE`, M47)** für sichere, öffentliche Showcase-Instanzen.
    - [`backend/mcp_gateway.py`](../../backend/mcp_gateway.py): **Nativer MCP-Server (`/mcp` Gateway, M48)** mit Streamable HTTP/SSE, Scoped API-Keys & HITL-Gate.

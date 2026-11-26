@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Release: v0.5.7.9](https://img.shields.io/badge/Release-v0.5.7.9-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
-[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
+[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
 [![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](../../SECURITY.md)
 
@@ -69,7 +69,7 @@ De officiële release-status staat in [CHANGELOG.md](../../CHANGELOG.md). Belang
 |---|---|---|---|
 | **Gebruikers- & Bedrijfshandleiding** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 pag., 1,9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 pag., 1,9 MB)* | Installatie, Hoofdstukken 1–19, 5 Use Cases, Overzicht Versleuteling/AVG & A–Z Woordenlijst |
 | **Volledige Functielijst (PDF: v0.5.2.1 — zie CHANGELOG voor v0.5.7.9)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Volledige modulecatalogus, Tweetalige Global Edition, Live Demo-modus, First-Run Wizard, FinOps & Beveiliging |
-| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Alle 55 gestructureerde Decision Engine-methodologieën (EN & DE) & index |
+| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Alle 80 gestructureerde Decision Engine-methodologieën (EN & DE) & index |
 *[System Manual](../system/ARCHON_OS_SYSTEM_MANUAL_2026_NL.pdf) · [Complete Feature List](../system/ARCHON_OS_FEATURELISTE_2026_NL.pdf) · [AI Boardroom: 80 Frameworks](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_NL.pdf)*
 
 *Meer technische & beveiligingshandleidingen:* [Systeemarchitectuur & Audit](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M113)](../system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF & Multi-Tenant Gids (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise Functies & Playbooks Gids](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP Server (`/mcp`) Gids](../system/ARCHON_MCP_SERVER_GUIDE.md) · [Live Demo Modus Gids](../system/LIVE_DEMO_MODE_GUIDE.md) · [Eerste Installatie Wizard Gids](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosysteem & Migratie Gids](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Beveiligingsbeleid](../../SECURITY.md) · [Wijzigingslogboek](../../CHANGELOG.md)
@@ -105,7 +105,7 @@ Archon OS is gebouwd op vier essentiële componenten die samenwerken. Zowel **Op
 
 | Component | Rol in Archon OS | Hoe het wordt geïnstalleerd |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | Draait Archon OS, Hermes Agent, AnythingLLM, Chroma en Socket Proxy in geïsoleerde containers | **Automatisch aangeboden** via `winget` (Windows), `brew` (macOS) of `get.docker.com` (Linux) |
+| **1. Docker** *(Desktop / Engine v2)* | Draait 7 standaardcontainers (Archon OS, OmniRoute, Hermes Agent, AnythingLLM, Chroma, Socket Proxy en Autoheal — tot 24 met profielen) | **Automatisch aangeboden** via `winget` (Windows), `brew` (macOS) of `get.docker.com` (Linux) |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | Kern multi-agent runtime, sessie-gateway (poort `8644`) en Telegram-interface | **Automatisch opgehaald & gestart** door Docker Compose naast Archon OS |
 | **3. AnythingLLM + Chroma** *(Vector RAG)* | Voedt **Central Library → RAG** (`http://localhost:3001`) met semantische indexering | **Automatisch opgehaald & gestart** in de standaard `Standard` stack |
 | **4. Obsidian** *(Desktop App + Gekoppelde Vault)* | Persistente Markdown Second Brain (`/opt/data/obsidian`) voor het opslaan van rapporten, HR-bestanden en grafieken | Vault-mappen automatisch geïnitialiseerd in `./obsidian_vault`; **Obsidian Desktop** installatie automatisch aangeboden (`winget` / `brew` / Flatpak) |

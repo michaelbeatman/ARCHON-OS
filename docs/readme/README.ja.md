@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Release: v0.5.7.9](https://img.shields.io/badge/Release-v0.5.7.9-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
-[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
+[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
 [![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](../../SECURITY.md)
 
@@ -27,7 +27,7 @@ Archon OSは、[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nou
 
 実際には何を意味するのか：
 
-- **単発の回答ではなく、構造化された意思決定。** AI Boardroomは、批判的プロンプトと55のフレームワーク（OKR、プレモーテム、6つの思考帽子など）を横断した統合を用いて、分離された多角的な議論を実行します。
+- **単発の回答ではなく、構造化された意思決定。** AI Boardroomは、批判的プロンプトと80のフレームワーク（OKR、プレモーテム、6つの思考帽子など）を横断した統合を用いて、分離された多角的な議論を実行します。
 - **モデルおよびタスクごとのコスト管理。** OmniRouteは各リクエストをローカル（Ollama、LM Studio）またはクラウドプロバイダーにルーティングし、ディスパッチ前にコストを割り当てます（`cost_estimator.py`が予算をチェックします）。
 - **データ主権。** Zero-Egressルーティングにより、財務、契約、CRMの作業はローカルモデルに保持されます。ワーカーコンテナは、インターネットルートを持たない`internal: true`のDockerネットワーク内で実行されます。
 - **改ざん検知可能な監査証跡。** HMAC-SHA256ハッシュチェーン監査ログ（外部アンカー + 起動キーチェック）が、プロバイダー、モデル、ホストを含むすべてのディスパッチを記録します。
@@ -56,7 +56,7 @@ Archon OSは、[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nou
 | Prompt Studio (チャットで開く) | 71-Profile Agent Fleet (3層 SOUL) |
 |---|---|
 | ![Prompt Studio](../system/screenshots/demo_1_prompt_studio.gif) | ![Agent Fleet](../system/screenshots/demo_2_agent_fleet.gif) |
-| **組織階層とチーム** | **AI Boardroom 討論 (55のフレームワーク)** |
+| **組織階層とチーム** | **AI Boardroom 討論 (80のフレームワーク)** |
 | ![Org Hierarchy](../system/screenshots/demo_3_org_hierarchy.gif) | ![AI Boardroom](../system/screenshots/demo_4_boardroom.gif) |
 
 [![Star History](https://api.star-history.com/svg?repos=michaelbeatman/ARCHON-OS&type=Date)](https://star-history.com/#michaelbeatman/ARCHON-OS&Date)
@@ -69,7 +69,7 @@ Archon OSは、[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nou
 |---|---|---|---|
 | **ユーザーおよび企業向けマニュアル** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97ページ、1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97ページ、1.9 MB)* | インストール、第1章～第19章、5つのユースケース、暗号化/GDPRの概要およびA–Z用語集 |
 | **完全な機能リスト (PDF: v0.5.2.1 — v0.5.7.9 の CHANGELOG を参照)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | 全モジュールカタログ、バイリンガルグローバル版、ライブデモモード、初回実行ウィザード、FinOpsおよびセキュリティ |
-| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | 55種類の構造化された意思決定エンジン手法（英語・ドイツ語）およびインデックス |
+| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | 80種類の構造化された意思決定エンジン手法（英語・ドイツ語）およびインデックス |
 *[System Manual](../system/ARCHON_OS_SYSTEM_MANUAL_2026_JA.pdf) · [Complete Feature List](../system/ARCHON_OS_FEATURELISTE_2026_JA.pdf) · [AI Boardroom: 80 Frameworks](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_JA.pdf)*
 
 *その他の技術・セキュリティガイド:* [システムアーキテクチャと監査](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [ロードマップ (M0–M113)](../system/ROADMAP_2026.md) · [EU AI Act、GoBD PDFおよびマルチテナントガイド (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [エンタープライズ機能とプレイブックガイド](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCPサーバー (`/mcp`) ガイド](../system/ARCHON_MCP_SERVER_GUIDE.md) · [ライブデモモードガイド](../system/LIVE_DEMO_MODE_GUIDE.md) · [初回セットアップウィザードガイド](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [エコシステムと移行ガイド](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [セキュリティポリシー](../../SECURITY.md) · [変更履歴](../../CHANGELOG.md)
@@ -81,7 +81,7 @@ Archon OSは、[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nou
 | 機能 | 従来のAIチャット | 単一の「スーパーエージェント」 | **Archon Agentic OS** |
 |---|---|---|---|
 | **エージェント名簿** | 汎用アシスタント1体 | ツールプラグインを備えた汎用型1体 | **71種類の個別プロファイル** (`agent_profiles.json`)、**3段階の `SOUL.md`** (`Compact` / `Pro` / `Full`) |
-| **戦略的決定** | 一問一答 | 反復的なツールループ | **AI Boardroom**: 分離された多角的な議論、批判的プロンプト、**55のフレームワーク**による統合 |
+| **戦略的決定** | 一問一答 | 反復的なツールループ | **AI Boardroom**: 分離された多角的な議論、批判的プロンプト、**80のフレームワーク**による統合 |
 | **長期記憶** | フラットなチャット履歴 | ベクターストアの断片 | **Obsidian Vault同期**、エージェントごとの人事スコアカード (`Personalakten/`)、WAL SQLite DBおよびLRU-Kページング |
 | **プライバシーと外部送信** | すべてのデータをクラウドAPIへ | 実行環境内のAPIキー | **Zero-Egressゲートとプライバシー・ルーターによるハードブロック**（ローカルLLMがオフライン時の財務/契約/CRMのフェイルクローズ）+ **`internal: true` ワーカーネットワーク（インターネット経路なし）** + **デュアルLLMガード** |
 | **ガバナンスと責任** | ブラインド出力 | 未チェックのツール呼び出し | **EU AI Actエンジン (第4条 / 附属書III)**、**ワンクリックGoBD手順PDF**、**HITLゲート**および**HMAC-SHA256監査チェーン (環境キー; 呼び出しごとのLLMディスパッチプロバイダー/モデル/ホスト証明を含む)** |
@@ -105,7 +105,7 @@ Archon OSは、連携して動作する4つの不可欠なコンポーネント�
 
 | コンポーネント | Archon OSにおける役割 | インストール方法 |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | Archon OS、Hermes Agent、AnythingLLM、Chroma、Socket Proxyを分離されたコンテナ内で実行 | `winget` (Windows)、`brew` (macOS)、または `get.docker.com` (Linux) 経由で**自動提案** |
+| **1. Docker** *(Desktop / Engine v2)* | 標準7コンテナ（Archon OS、OmniRoute、Hermes Agent、AnythingLLM、Chroma、Socket Proxy、Autoheal — オプションプロファイルで最大24）を分離実行 | `winget` (Windows)、`brew` (macOS)、または `get.docker.com` (Linux) 経由で**自動提案** |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | コアマルチエージェントランタイム、セッションゲートウェイ (ポート `8644`)、Telegramインターフェース | Docker ComposeによりArchon OSと併せて**自動的にプルおよび起動** |
 | **3. AnythingLLM + Chroma** *(Vector RAG)* | **Central Library → RAG** (`http://localhost:3001`) をセマンティックインデックスで強化 | デフォルトの `Standard` スタックで **自動的にプルおよび起動** |
 | **4. Obsidian** *(デスクトップアプリ + マウント済みVault)* | レポート、人事ファイル、グラフを保存する永続的なMarkdownセカンドブレイン (`/opt/data/obsidian`) | Vaultフォルダは `./obsidian_vault` に自動初期化。**Obsidian Desktop** のインストールを自動提案 (`winget` / `brew` / Flatpak) |
@@ -181,7 +181,7 @@ flowchart LR
 
 ### 4つのナビゲーションの柱
 1. **コマンド＆オペレーション:** オペレーションコマンドセンター、マスターチャット、トリアージインボックス（Webhooks、メール、メッセンジャー、承認）、**71プロファイルのエージェントフリート**（Bot Screen PbD および 3層 SOUL を含む）、**832テンプレートのプロンプトスタジオ**、ショールームサンドボックス。
-2. **認知＆知識:** インターネットウォッチドッグ（RSS/Web レーダー）、リサーチラボ（マルチソースの三角測量とドキュメント）、中央ライブラリ（Obsidian Vault + AnythingLLM RAG）、AI Boardroom（55のフレームワークにわたる4フェーズの討論 + オプションの MoA）。
+2. **認知＆知識:** インターネットウォッチドッグ（RSS/Web レーダー）、リサーチラボ（マルチソースの三角測量とドキュメント）、中央ライブラリ（Obsidian Vault + AnythingLLM RAG）、AI Boardroom（80のフレームワークにわたる4フェーズの討論 + オプションの MoA）。
 3. **経済＆ERP *(Alpha)*:** CRM（住所、連絡先、パイプライン）、ERP スイート（見積書、契約書、請求書、売掛金/督促、領収書）、モデルごとのコスト管理を備えた OmniRoute トークン FinOps。
 4. **インフラストラクチャ＆ガバナンス:** 組織図＆チーム、ガーディアン（同時実行、セッション、レート制限）、システムコントロールセンター（初回実行ウィザード、API キー、ルーティング、カーネルウォッチドッグ、アップデート）、改ざん検知監査ログストリーム。
 
@@ -240,7 +240,7 @@ ARCHON-OS/
 
 - **ユーザーおよび会社マニュアル (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(ドイツ語: [DE PDF](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
 - **完全な機能リストおよびシステムカタログ (PDF: v0.5.2.1 — v0.5.7.9 の CHANGELOG を参照, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
-- **意思決定エンジンおよび55のボードルームフレームワーク (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
+- **意思決定エンジンおよび80のボードルームフレームワーク (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
 - **詳細ロードマップ (M0–M113):** [docs/system/ROADMAP_2026.md](../system/ROADMAP_2026.md)
 - **ライブデモモードガイド (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](../system/LIVE_DEMO_MODE_GUIDE.md)
 - **初回セットアップウィザードガイド:** [docs/system/FIRST_RUN_SETUP_WIZARD_GUIDE.md](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md)

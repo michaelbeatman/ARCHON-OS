@@ -8,7 +8,7 @@ Archon OS is committed to open-source transparency, intellectual property compli
 
 - **Author / Copyright**: Michael Keller / Archon OS Project
 - **License**: MIT License (see `LICENSE`)
-- **Description**: The 824+ parametric prompt templates in `prompt_studio_catalog.json` and the 70 specialist `SOUL.md` directives are clean-room prompt architectures developed for Archon OS.
+- **Description**: The 832 parametric prompt templates in `prompt_studio_catalog.json` and the 71 agent `SOUL.md` directives are clean-room prompt architectures developed for Archon OS.
 
 ---
 
@@ -54,7 +54,7 @@ copies or substantial portions of the Software.
 
 ## 5. Regulatory & Professional Liability Notice (RDG / StBerG / WpHG / EU-MDR)
 
-The 70 specialist agent profiles in Archon OS (including legal, tax, financial, real-estate, medical, pharmaceutical, and chemical personas) operate strictly as **AI-assisted analysis, structuring, and drafting tools (Decision Support)**.
+The 71 agent profiles in Archon OS (including legal, tax, financial, real-estate, medical, pharmaceutical, and chemical personas) operate strictly as **AI-assisted analysis, structuring, and drafting tools (Decision Support)**.
 - They do **not** provide binding legal services (§ 3 RDG), tax consultancy (§ 5 StBerG), financial/investment advice (§ 2 WpHG), or clinical medical diagnosis/treatment (Art. 2 EU MDR 2017/745).
 - Regulated profiles automatically display an interactive compliance notice in the Archon OS UI upon selection.
 

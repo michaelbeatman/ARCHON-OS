@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Release: v0.5.7.9](https://img.shields.io/badge/Release-v0.5.7.9-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
-[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
+[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
 [![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](../../SECURITY.md)
 
@@ -27,7 +27,7 @@ Archon OS 是一个基于 [Hermes Agent](https://github.com/NousResearch/hermes-
 
 这在实践中的意义：
 
-- **结构化决策，而非一次性回答。** AI Boardroom 通过批判性提示词和跨 55 种框架（OKR、事前验尸、六顶思考帽等）的综合分析，运行隔离的多视角辩论。
+- **结构化决策，而非一次性回答。** AI Boardroom 通过批判性提示词和跨 80 种框架（OKR、事前验尸、六顶思考帽等）的综合分析，运行隔离的多视角辩论。
 - **按模型和任务进行成本控制。** OmniRoute 将每个请求路由至本地（Ollama、LM Studio）或云端提供商，并在分发前核算成本（`cost_estimator.py` 会检查预算）。
 - **数据主权。** Zero-Egress 路由将财务、合同和 CRM 工作保留在本地模型上；工作容器运行在 `internal: true` 的 Docker 网络中，且没有互联网路由。
 - **防篡改审计追踪。** HMAC-SHA256 哈希链审计日志（外部锚点 + 启动密钥检查）记录了每一次分发，包括提供商、模型和主机。
@@ -56,7 +56,7 @@ Archon OS 是一个基于 [Hermes Agent](https://github.com/NousResearch/hermes-
 | Prompt Studio (在聊天中打开) | 71-Profile Agent Fleet (3层 SOUL) |
 |---|---|
 | ![Prompt Studio](../system/screenshots/demo_1_prompt_studio.gif) | ![Agent Fleet](../system/screenshots/demo_2_agent_fleet.gif) |
-| **组织架构与团队** | **AI Boardroom 辩论 (55 个框架)** |
+| **组织架构与团队** | **AI Boardroom 辩论 (80 个框架)** |
 | ![Org Hierarchy](../system/screenshots/demo_3_org_hierarchy.gif) | ![AI Boardroom](../system/screenshots/demo_4_boardroom.gif) |
 
 [![Star History](https://api.star-history.com/svg?repos=michaelbeatman/ARCHON-OS&type=Date)](https://star-history.com/#michaelbeatman/ARCHON-OS&Date)
@@ -69,7 +69,7 @@ Archon OS 是一个基于 [Hermes Agent](https://github.com/NousResearch/hermes-
 |---|---|---|---|
 | **用户与公司手册** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 页, 1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 页, 1.9 MB)* | 安装、第 1–19 章、5 个用例、加密/GDPR 概述及 A–Z 术语表 |
 | **完整功能列表 (PDF: v0.5.2.1 — 参见 v0.5.7.9 的 CHANGELOG)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | 完整模块目录、双语全球版、实时演示模式、首次运行向导、FinOps 与安全性 |
-| **AI 會議廳：80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 55 structured Decision Engine methodologies (EN & DE) & index |
+| **AI 會議廳：80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 80 structured Decision Engine methodologies (EN & DE) & index |
 *[System Manual](../system/ARCHON_OS_SYSTEM_MANUAL_2026_ZH.pdf) · [Complete Feature List](../system/ARCHON_OS_FEATURELISTE_2026_ZH.pdf) · [AI Boardroom: 80 Frameworks](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ZH.pdf)*
 
 *更多技术和安全指南：* [系统架构与审核](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [路线图（M0–M113）](../system/ROADMAP_2026.md) · [EU AI 法律法规、GoBD PDF & 多租户指南（M43/M49）](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [企业功能与playbooks 指南](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP 服务器（/mcp）指南](../system/ARCHON_MCP_SERVER_GUIDE.md) · [实时演示模式指南](../system/LIVE_DEMO_MODE_GUIDE.md) · [首次设置向导指南](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [生态系统与迁移指南](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [安全政策](../../SECURITY.md) · [变更记录](../../CHANGELOG.md)
@@ -105,7 +105,7 @@ Archon OS 构建于四个协同工作的核心组件之上。下方的 **Option 
 
 | 组件 | 在 Archon OS 中的角色 | 安装方式 |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | 在隔离容器中运行 Archon OS、Hermes Agent、AnythingLLM、Chroma 和 Socket Proxy | 通过 `winget` (Windows)、`brew` (macOS) 或 `get.docker.com` (Linux) **自动提供** |
+| **1. Docker** *(Desktop / Engine v2)* | 运行 7 个默认隔离容器（Archon OS、OmniRoute、Hermes Agent、AnythingLLM、Chroma、Socket Proxy 与 Autoheal — 含可选配置最多 24 个） | 通过 `winget` (Windows)、`brew` (macOS) 或 `get.docker.com` (Linux) **自动提供** |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | 核心多智能体运行时、会话网关（端口 `8644`）以及 Telegram 接口 | 由 Docker Compose 在 Archon OS 启动时**自动拉取并运行** |
 | **3. AnythingLLM + Chroma** *(Vector RAG)* | 使得 **中央图书馆 → RAG** (`http://localhost:3001`) 具有语义索引 | **自动启动** 在默认的 `Standard` 栈中 |
 | **4. Obsidian** *(Desktop App + Mounted Vault)* | 持久 Markdown 第二大脑 (`/opt/data/obsidian`) 存储报告、HR 文件和图表 | 储物柜文件夹在 `./obsidian_vault` 中自动初始化； **Obsidian Desktop** 安装自动提供 (`winget` / `brew` / Flatpak) |

@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Release: v0.5.7.9](https://img.shields.io/badge/Release-v0.5.7.9-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
-[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2055%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
+[![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
 [![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust%20Socket%20Proxy-10b981.svg)](../../SECURITY.md)
 
@@ -27,7 +27,7 @@ O Archon OS é um espaço de trabalho multiagente auto-hospedado construído sob
 
 O que isso significa na prática:
 
-- **Decisões estruturadas, não respostas únicas.** Um AI Boardroom executa debates isolados de múltiplas perspectivas com um prompt de crítica e síntese em 55 estruturas (OKR, Pre-Mortem, Seis Chapéus do Pensamento, …).
+- **Decisões estruturadas, não respostas únicas.** Um AI Boardroom executa debates isolados de múltiplas perspectivas com um prompt de crítica e síntese em 80 estruturas (OKR, Pre-Mortem, Seis Chapéus do Pensamento, …).
 - **Controle de custos por modelo e por tarefa.** O OmniRoute encaminha cada solicitação para provedores locais (Ollama, LM Studio) ou em nuvem e atribui o custo antes do envio (`cost_estimator.py` verifica orçamentos).
 - **Soberania de dados.** O roteamento Zero-Egress mantém o trabalho financeiro, de contratos e de CRM em modelos locais; os contêineres de trabalho são executados em uma rede Docker `internal: true` sem rota para a internet.
 - **Trilha de auditoria à prova de violação.** Um log de auditoria encadeado por hash HMAC-SHA256 (âncora externa + verificação de chave de inicialização) registra cada envio, incluindo provedor, modelo e host.
@@ -69,7 +69,7 @@ O estado oficial da versão está em [CHANGELOG.md](../../CHANGELOG.md). Princip
 |---|---|---|---|
 | **Manual do Usuário e da Empresa** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 págs., 1,9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 págs., 1,9 MB)* | Instalação, Capítulos 1–19, 5 Casos de Uso, Visão Geral de Criptografia/GDPR e Glossário de A a Z |
 | **Lista Completa de Recursos (PDF: v0.5.2.1 — veja o CHANGELOG para v0.5.7.9)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Catálogo completo de módulos, Edição Global Bilíngue, Modo de Demonstração ao Vivo, Assistente de Primeira Execução, FinOps e Segurança |
-| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Todas as 55 metodologias estruturadas de Motor de Decisão (EN & DE) & índice |
+| **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Todas as 80 metodologias estruturadas de Motor de Decisão (EN & DE) & índice |
 *[System Manual](../system/ARCHON_OS_SYSTEM_MANUAL_2026_PT.pdf) · [Complete Feature List](../system/ARCHON_OS_FEATURELISTE_2026_PT.pdf) · [AI Boardroom: 80 Frameworks](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_PT.pdf)*
 
 *Mais guias técnicos & de segurança:* [Arquitetura de Sistema & Auditoria](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roteiro (M0–M113)](../system/ROADMAP_2026.md) · [EU AI Act, Guia GoBD PDF & Multi-Tenant (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Guia de Recursos Corporativos & Playbooks](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [Guia do Servidor MCP (`/mcp`)](../system/ARCHON_MCP_SERVER_GUIDE.md) · [Guia do Modo de Demonstração ao Vivo](../system/LIVE_DEMO_MODE_GUIDE.md) · [Guia do Assistente de Configuração Inicial](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Guia de Ecossistema & Migração](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Política de Segurança](../../SECURITY.md) · [Registro de Alterações](../../CHANGELOG.md)
@@ -105,7 +105,7 @@ O Archon OS é construído sobre quatro componentes essenciais que trabalham em 
 
 | Componente | Função no Archon OS | Como é Instalado |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | Executa o Archon OS, Hermes Agent, AnythingLLM, Chroma e Socket Proxy em contêineres isolados | **Oferecido automaticamente** via `winget` (Windows), `brew` (macOS) ou `get.docker.com` (Linux) |
+| **1. Docker** *(Desktop / Engine v2)* | Executa 7 contentores padrão (Archon OS, OmniRoute, Hermes Agent, AnythingLLM, Chroma, Socket Proxy e Autoheal — até 24 com perfis) | **Oferecido automaticamente** via `winget` (Windows), `brew` (macOS) ou `get.docker.com` (Linux) |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | Runtime multi-agente principal, gateway de sessão (porta `8644`) e interface Telegram | **Baixado & iniciado automaticamente** pelo Docker Compose junto com o Archon OS |
 | **3. AnythingLLM + Chroma** *(RAG Vetorial)* | Potencializa a **Central Library → RAG** (`http://localhost:3001`) com indexação semântica | **Baixado e iniciado automaticamente** na stack `Standard` padrão |
 | **4. Obsidian** *(App Desktop + Vault Montado)* | Segundo Cérebro em Markdown persistente (`/opt/data/obsidian`) armazenando relatórios, arquivos de RH e gráficos | Pastas do Vault inicializadas automaticamente em `./obsidian_vault`; instalação do **Obsidian Desktop** oferecida automaticamente (`winget` / `brew` / Flatpak) |

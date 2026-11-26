@@ -27,7 +27,7 @@ Translate descriptive prose into natural technical English, **but keep code path
 | Infrastruktur & Governance | Infrastructure & Governance | Pillar 4 |
 | Agenten-Kader (71 Profile) | Specialist Fleet (71 Profiles) | Keep 8 + 5b domain numbering |
 | 3-Stufen-SOUL-Mechanik | 3-Tier SOUL Architecture | Keep `SOUL_COMPACT.md`, `SOUL_PRO.md`, `SOUL_FULL.md` |
-| AI-Boardroom (55 Frameworks) | AI Boardroom (55 Frameworks) | Keep 4-phase structure (+ optional MoA) |
+| AI-Boardroom (80 Frameworks) | AI Boardroom (80 Frameworks) | Keep 4-phase structure (+ optional MoA) |
 | Eingang / Triage | Inbox & Event Triage | View #2 |
 | Zentralbibliothek / Wissensvault | Central Library & Obsidian Vault | Keep `Personalakten/` / file paths exact |
 | Freigabe-Gate (HITL) | Human-in-the-Loop (HITL) Approval Gate | Keep `[T]` trusted badge naming |
@@ -43,7 +43,7 @@ Translate descriptive prose into natural technical English, **but keep code path
 | **Vorwort & `( ? )` Guide** | System philosophy, 4 pillars, context help | Cleaned (`v0.6.0-rc1`) |
 | **0. Installationshinweise** | Hardware, DAU Installer (`setup.bat`/`install.sh`), `INSTALL_AGENT.md` | Updated |
 | **1. – 19. Hauptkapitel** | All 19 UI views, 71 profiles in 8 domains, ERP *(Alpha)*, Guardian, Control Center | Clean master |
-| **Anhang I – IV** | Practical use cases, full glossary, 55 frameworks, Security & Compliance guides | Clean master |
+| **Anhang I – IV** | Practical use cases, full glossary, 80 frameworks, Security & Compliance guides | Clean master |
 | **Anhang V (V.1 – V.22)** | DevOps, MCP drivers, Observability, Architecture Audit, **44-Milestone Roadmap (V.21)**, ERP Spec (V.22) | Updated |
 
 ---
@@ -51,5 +51,5 @@ Translate descriptive prose into natural technical English, **but keep code path
 ## 4. Parallel Localization Coordination (Server vs. Docs)
 
 When localizing Archon OS across multiple contributors/models:
-- **Server / Code Localization:** Focuses on `agent_profiles.json`, `scripts/sync_soul_modes.py`, `SOUL.md` files under `.hermes/profiles/`, and 55 Boardroom framework prompts.
+- **Server / Code Localization:** Focuses on `agent_profiles.json`, `scripts/sync_soul_modes.py`, `SOUL.md` files under `.hermes/profiles/`, and 80 Boardroom framework prompts.
 - **Documentation Localization:** Translates `ARCHON_OS_SYSTEM_HANDBUCH_2026.docx` $\rightarrow$ `ARCHON_OS_SYSTEM_MANUAL_2026_EN.docx` using this terminology mapping table so UI strings, agent IDs, and handbook chapters match 1:1.

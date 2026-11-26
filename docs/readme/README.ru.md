@@ -9,7 +9,7 @@
 [![Лицензия: MIT](https://img.shields.io/badge/License-MIT-синий.svg)](../../LICENSE)
 [![Выпуск: v0.5.7.9](https://img.shields.io/badge/Выпуск-v0.5.7.9-6366f1.svg)](../../CHANGELOG.md)
 [![Агенты: 71 Профили](https://img.shields.io/badge/Профили-71%20в%208%20Доменах%20(EN%2FDE)-емerald.svg)](../../agent_profiles.json)
-[![Повестки & Фреймворки](https://img.shields.io/badge/Повестки-832%20%7C%2055%20Фреймворки-0ea5e9.svg)](../../prompt_studio_catalog.json)
+[![Повестки & Фреймворки](https://img.shields.io/badge/Повестки-832%20%7C%2080%20Фреймворки-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Многоплатформенность](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
 [![Безопасность: Нулевая Вера](https://img.shields.io/badge/Безопасность-Нулевая%20Вера%20Сокет%20Прокси-10b981.svg)](../../SECURITY.md)
 
@@ -69,7 +69,7 @@ Archon OS — это самохостируемое мультиагентное
 |---|---|---|---|
 | **Руководство пользователя и компании** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 стр., 1.9 МБ)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 стр., 1.9 МБ)* | Установка, главы 1–19, 5 вариантов использования, обзор шифрования/GDPR и глоссарий от А до Я |
 | **Полный список функций (PDF: v0.5.2.1 — см. CHANGELOG для v0.5.7.9)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Полный каталог модулей, двуязычное глобальное издание, режим живой демонстрации, мастер первого запуска, FinOps и безопасность |
-| **Бортовая комната AI: 80 фреймворков** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Все 55 структурированные методологии Decision Engine (EN & DE) и индекс |
+| **Бортовая комната AI: 80 фреймворков** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Все 80 структурированные методологии Decision Engine (EN & DE) и индекс |
 *[System Manual](../system/ARCHON_OS_SYSTEM_MANUAL_2026_RU.pdf) · [Complete Feature List](../system/ARCHON_OS_FEATURELISTE_2026_RU.pdf) · [AI Boardroom: 80 Frameworks](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf)*
 
 *Более технические и безопасные руководства:* [Системная архитектура и аудит](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Маршрут (M0–M113)](../system/ROADMAP_2026.md) · [Европейское законодательство о ИИ, GoBD PDF и руководство по мульти-тенинту (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Руководство по функциям предприятия и игрокам](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [Гuide к серверу MCP (`/mcp`)](../system/ARCHON_MCP_SERVER_GUIDE.md) · [Руководство по режиму живой демонстрации](../system/LIVE_DEMO_MODE_GUIDE.md) · [Руководство по первому запуску визарда](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Руководство по экосистеме и миграции](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Безопасность](../../SECURITY.md) · [Журнал изменений](../../CHANGELOG.md)
@@ -105,7 +105,7 @@ Archon OS построена на четырех ключевых компоне
 
 | Компонент | Роль в Archon OS | Способ установки |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | Запускает Archon OS, Hermes Agent, AnythingLLM, Chroma и Socket Proxy в изолированных контейнерах | **Автоматически предлагается** через `winget` (Windows), `brew` (macOS) или `get.docker.com` (Linux) |
+| **1. Docker** *(Desktop / Engine v2)* | Запускает 7 базовых контейнеров (Archon OS, OmniRoute, Hermes Agent, AnythingLLM, Chroma, Socket Proxy и Autoheal — до 24 с профилями) | **Автоматически предлагается** через `winget` (Windows), `brew` (macOS) или `get.docker.com` (Linux) |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | Основная среда выполнения мультиагентной системы, шлюз сессий (порт `8644`) и интерфейс Telegram | **Автоматически загружается и запускается** через Docker Compose вместе с Archon OS |
 | **3. AnythingLLM + Chroma** *(Вектор RAG)* | Питает **Центральную библиотеку → RAG** (`http://localhost:3001`) с семантическим индексированием | **Автоматически запущен и запущен** в стандартной стопке `Standard` |
 | **4. Obsidian** *(Десктопное приложение + Монтированный хранилище)* | Persistent Markdown Вторая голова (`/opt/data/obsidian`) хранит отчеты, файлы HR и графики | Фolders хранилища автоматически инициализируются в `./obsidian_vault`; **Obsidian Desktop** установка автоматически предлагается (`winget` / `brew` / Flatpak) |
@@ -181,7 +181,7 @@ flowchart LR
 
 ### Четыре столпа навигации
 1. **Команда и операции:** Центр операций, Мастер чат, Тriage Inbox (Вебhooks, Email, Messenger, Approvals), **флот агентов 71 профиля** (включая экран бота PbD и 3-уровневый SOUL), **студия prompt 832-шаблон**, Sandbox Showroom.
-2. **Знание и когнитив:** Интернет-наблюдатель (RSS/Web Radar), Лаборатория исследований (многосource-триангуляция и досье), Центральная библиотека (Vault Obsidian + RAG AnythingLLM), AI Boardroom (4-фазный дебат + необязательный MoA по 55-ти фреймворкам).
+2. **Знание и когнитив:** Интернет-наблюдатель (RSS/Web Radar), Лаборатория исследований (многосource-триангуляция и досье), Центральная библиотека (Vault Obsidian + RAG AnythingLLM), AI Boardroom (4-фазный дебат + необязательный MoA по 80-ти фреймворкам).
 3. **Экономика и ERP *(Alpha)*:** CRM (адреса, контакты, трубка), пакет ERP (предложения, контракты, счета, требований/дunning, приходы), OmniRoute токен FinOps с контролем стоимости модели.
 4. **Инфраструктура и управление:** Орг-диagram и команды, Guardian (Concurrency, Sessions, Rate Limits), Центр управления системой (Первый-Рун-Узел, API-ключи, маршрутизация, Kernel Watchdog, обновления), поток журнала аудита с доказательством.
 

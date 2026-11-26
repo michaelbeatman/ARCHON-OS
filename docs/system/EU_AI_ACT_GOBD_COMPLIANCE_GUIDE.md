@@ -7,7 +7,7 @@ Dieses Handbuch beschreibt die Architektur, Bedienung und REST-Endpunkte der **M
 ## 1. Multi-Mandanten-Umschalter & Physische SQLite-DB-Isolation (M43)
 
 ### 1.1 Zielsetzung (DSGVO-Trennungsgebot & GoBD Z3-Prüfungssicherheit)
-Unternehmensgruppen (Holding, operative GmbHs, Immobilien-/Projekt-SPVs) benötigen in einer gemeinsamen Archon-OS-Instanz eine strikte rechtliche, steuerliche und datenschutzrechtliche Trennung aller Bewegungsdaten bei gleichzeitigem Zugriff auf die gemeinsame 70-köpfige Spezialisten-Flotte.
+Unternehmensgruppen (Holding, operative GmbHs, Immobilien-/Projekt-SPVs) benötigen in einer gemeinsamen Archon-OS-Instanz eine strikte rechtliche, steuerliche und datenschutzrechtliche Trennung aller Bewegungsdaten bei gleichzeitigem Zugriff auf die gemeinsame 71-köpfige Agenten-Flotte.
 
 ### 1.2 Isolierte Datenbanken je Gesellschaft (`data/tenants/<company_id>/`)
 Der zentrale `TenantContextManager` (`backend/tenant_context.py`) isoliert für jede Gesellschaft fünf eigenständige SQLite-WAL-Datenbanken:
@@ -37,7 +37,7 @@ Zusätzlich verwaltet jeder Mandant unter `data/tenants/<company_id>/number_rang
 ## 2. EU AI Act Compliance-Engine & Art.-4-KI-Kompetenzregister (M49)
 
 ### 2.1 Präzise Risikoklassifizierung nach Verordnung (EU) 2024/1689
-`backend/eu_ai_act_inventory.py` stuft alle **70 Spezialisten** anhand wortgrenzen- und rollenbasierter Regeln in die drei relevanten Regulierungsstufen der EU-KI-Verordnung ein und berechnet für jeden Spezialisten den kryptografischen **SHA-256-Hash seines aktiven `SOUL.md`-Systemprompts** (`soul_sha256`):
+`backend/eu_ai_act_inventory.py` stuft alle **71 Agenten-Profile** anhand wortgrenzen- und rollenbasierter Regeln in die drei relevanten Regulierungsstufen der EU-KI-Verordnung ein und berechnet für jeden Spezialisten den kryptografischen **SHA-256-Hash seines aktiven `SOUL.md`-Systemprompts** (`soul_sha256`):
 
 | Risikoklasse | Rechtsgrundlage | Beispiele im Kader | Pflicht-Guardrails |
 |---|---|---|---|
@@ -67,7 +67,7 @@ Der abhängigkeitsfreie Pure-Python-PDF-1.4-Generator (`WinAnsiEncoding` / volle
 2. **Kapitel 1 — Allgemeine Beschreibung & Unternehmensstamm (GoBD Rz. 151–153):** Anschrift, Handelsregister, Geschäftsführung, Steuernummer/USt-IdNr. und Bankverbindung.
 3. **Kapitel 2 — Technische Systemdokumentation & Mandantentrennung (M43):** Live-Tabelle aller 5 Mandanten-SQLite-Datenbanken (Modus, Status, Dateigröße, Pfad) sowie die aktiven Beleg-Nummernkreise.
 4. **Kapitel 3 — Internes Kontrollsystem (IKS), Zero-Egress & GoBD-Hashkette (M21/M22/M23):** Live-Prüfergebnis der kryptografischen SHA-256-Merkle-Kette (Gesamtanzahl verifizierter Blöcke, Anzahl signierter `llm_dispatch`-Nachweise mit Provider/Modell/Ziel-Host/Endpunkt, aktueller Head-Hash), aktiver Privacy-Router **Fail-Closed Hard-Block** bei Offline-Lokalmodell für Finanzen/Verträge/CRM, **Docker-Worker-Netzwerk-Isolation** (`archon-worker-zero-egress_net`, `Internal=true` ohne Internet-Route) und Prompt-Injection-Schutz.
-5. **Kapitel 4 — EU AI Act KI-Systemregister (VO 2024/1689):** Vollständige Tabelle aller 70 Spezialisten mit Risikoklasse, Aufsichts-Gate und `SOUL`-SHA-256-Prüfsumme.
+5. **Kapitel 4 — EU AI Act KI-Systemregister (VO 2024/1689):** Vollständige Tabelle aller 71 Agenten-Profile mit Risikoklasse, Aufsichts-Gate und `SOUL`-SHA-256-Prüfsumme.
 6. **Kapitel 5 — Art. 4 KI-Kompetenznachweis-Register & Unterschriftsblock:** Eingewiesene Funktionsträger inkl. Zertifikats-Hash sowie Zeichnungsfelder für Geschäftsführung und Wirtschaftsprüfer/Datenschutz.
 
 Jeder PDF-Abruf wird mit Dokument-ID und `pdf_sha256` im GoBD-Audit-Log (`verfahrensdokumentation_pdf_exported`) festgehalten.

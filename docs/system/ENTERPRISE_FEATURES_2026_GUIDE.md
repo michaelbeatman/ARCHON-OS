@@ -33,7 +33,7 @@ Dieses Handbuch-Kapitel beschreibt die neu ergänzten Module, API-Endpunkte, UI-
 
 ## 3b. EU AI Act Compliance-Engine & 1-Klick GoBD-Verfahrensdokumentation PDF (M49)
 - **UI (Operations):** Kachel `AI Act / GoBD` (`openComplianceStudio()` in `static/js/eu_ai_act_studio.js`) mit 3 Reitern (Risikoregister & SOUL-Hashes, Art.-4-Kompetenznachweis, Verfahrensdokumentation & GoBD-Prüfung).
-- **Risikoklassifizierung & Guardrails:** Wortgrenzen- und rollenbasierte Klassifizierung aller 70 Spezialisten nach Verordnung (EU) 2024/1689 (`HIGH_RISK` Anhang III Nr. 4/5, `SPECIFIC_TRANSPARENCY` Art. 50, `MINIMAL_RISK` Art. 95) inkl. `SOUL.md`-SHA-256-Hash und Vorab-Aktivierungsprüfung (`check_activation_allowed`).
+- **Risikoklassifizierung & Guardrails:** Wortgrenzen- und rollenbasierte Klassifizierung aller 71 Agenten-Profile nach Verordnung (EU) 2024/1689 (`HIGH_RISK` Anhang III Nr. 4/5, `SPECIFIC_TRANSPARENCY` Art. 50, `MINIMAL_RISK` Art. 95) inkl. `SOUL.md`-SHA-256-Hash und Vorab-Aktivierungsprüfung (`check_activation_allowed`).
 - **Art. 4 KI-Kompetenzregister:** Revisionssicheres Verzeichnis eingewiesener Bediener (`data/ai_act_literacy_register.json`), jede Änderung wird automatisch in die GoBD-SHA-256-Hashkette (`audit_log.py`) geschrieben.
 - **1-Klick PDF-Export:** Mehrseitiges DIN-A4-PDF-1.4-Dokument (`backend/compliance_pdf.py`) aus realem Systemzustand (Mandantenstamm, M43-DB-Isolation, Nummernkreise, M22-Zero-Egress, M21-Merkle-Root-Verifikation, 70er-KI-Inventar, Art.-4-Register).
 - **Endpunkte:** `GET/POST/DELETE /api/v1/governance/ai-act/literacy-register`, `GET /api/v1/governance/ai-act/guardrails`, `GET /api/v1/governance/compliance/snapshot`, `GET /api/v1/governance/compliance/verfahrensdokumentation.pdf`.

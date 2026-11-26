@@ -68,8 +68,8 @@ Configures optional external bridges:
 - **Email (IMAP / SMTP):** Stores host, port, and username metadata in `settings.json` while keeping `SMTP_PASSWORD` strictly in `.env` (`0600`).
 - **Telegram Executive Bridge:** Stores `TELEGRAM_BOT_TOKEN` in `.env` (`0600`), `TELEGRAM_CHAT_ID`, and supports an optional live `getMe` verification check.
 
-#### Step 4: Specialist Domain Activation (8 Domains / 70 Specialists)
-Lets you enable all 8 specialist departments (70 specialists) or focus on selected domains:
+#### Step 4: Specialist Domain Activation (8 Domains / 71 Agent Profiles)
+Lets you enable all 8 specialist departments (71 agent profiles) or focus on selected domains:
 1. Strategy, Leadership & Executive Planning (12)
 2. Commerce, Procurement & Supply Chain (7)
 3. Legal, Tax, Finance & Compliance (11)
@@ -158,7 +158,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -NonInteractive
 4. **n8n & externe Zugänge:**
    - Hinterlegt die n8n-Basis-URL (Loopback bzw. `host.docker.internal`) und den Webhook-Secret (nur in `.env`, `0600`). Der Verbindungstest ist SSRF-geschützt und erlaubt für HTTP ausschließlich lokale Hosts.
    - Aktiviert optionale externe Kanäle (z. B. GitHub-Webhooks) und prüft deren Erreichbarkeit mit 5-s-Timeout.
-5. **Spezialisten-Domänen (8 Domänen / 70 Spezialisten):**
+5. **Spezialisten-Domänen (8 Domänen / 71 Agenten-Profile):**
    - Aktiviert alle oder ausgewählte Fachbereiche und synchronisiert fehlertolerant die kompakten Direktiven über `sync_soul_modes.apply_soul_mode(mode="compact", lang=language)`.
 
 ---

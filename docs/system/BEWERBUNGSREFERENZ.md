@@ -1,6 +1,6 @@
 # Archon OS — Produkt- und Funktionsbeschreibung (Bewerbungsreferenz)
 
-**Archon OS** ist ein selbstgehostetes **Agentic Operating System**: eine lokale Control-Plane, die auf dem Hermes-Agenten-Runtime von Nous Research aufbaut und aus einzelnen Chat-Assistenten ein durchgängiges Business-Betriebssystem macht. Die Anwendung läuft vollständig auf der eigenen Infrastruktur, orchestriert **70 Fachexperten-Profile** (plus 3 Systemprofile) über 8 Domänen und verbindet Agenten-Orchestrierung, Wissensverwaltung, Business-Operations und Governance in einer Oberfläche.
+**Archon OS** ist ein selbstgehostetes **Agentic Operating System**: eine lokale Control-Plane, die auf dem Hermes-Agenten-Runtime von Nous Research aufbaut und aus einzelnen Chat-Assistenten ein durchgängiges Business-Betriebssystem macht. Die Anwendung läuft vollständig auf der eigenen Infrastruktur, orchestriert **71 Agenten-Profile** über 8 Domänen und verbindet Agenten-Orchestrierung, Wissensverwaltung, Business-Operations und Governance in einer Oberfläche.
 
 ---
 
@@ -8,8 +8,8 @@
 
 ### Produktprofil
 
-- **Multi-Agenten-Orchestrierung:** 70 spezialisierte Agentenprofile mit dreistufigen `SOUL.md`-Prompts (Compact / Pro / Full), sodass Tokens nur für die tatsächlich benötigte Domäne aufgewendet werden. Aufgaben laufen als strukturierte Workflows mit Delegation, Fan-in/Synthese, HITL-Gates und persistenten Checkpoints — nicht als Einmal-Antworten.
-- **AI Boardroom:** 55 strukturierte Entscheidungsframeworks (OKR, Pre-Mortem, Six Thinking Hats, …) für isolierte Multi-Perspektiven-Debatten mit Kritik-Runde und Synthesis. Ergebnisse werden revisionssicher im Obsidian-Vault und in der Decision-Engine archiviert.
+- **Multi-Agenten-Orchestrierung:** 71 Agentenprofile mit dreistufigen `SOUL.md`-Prompts (Compact / Pro / Full), sodass Tokens nur für die tatsächlich benötigte Domäne aufgewendet werden. Aufgaben laufen als strukturierte Workflows mit Delegation, Fan-in/Synthese, HITL-Gates und persistenten Checkpoints — nicht als Einmal-Antworten.
+- **AI Boardroom:** 80 strukturierte Entscheidungsframeworks über 9 Kategorien (OKR, Pre-Mortem, Six Thinking Hats, …) für isolierte Multi-Perspektiven-Debatten mit Kritik-Runde und Synthesis. Ergebnisse werden revisionssicher im Obsidian-Vault und in der Decision-Engine archiviert.
 - **Kosten- und Provider-Steuerung:** Model-Routing zwischen lokalen Modellen (Ollama, LM Studio) und Cloud-Providern (OpenRouter, OmniRoute, Groq, OpenAI, Anthropic, Mistral), Vorab-Kostenabschätzung und Budget-Limits pro Rolle/Task, Bandit-basiertes Modell-Feedback und semantischer Cache.
 - **Datensouveränität:** Zero-Egress-Gate und Privacy-Router mit Fail-Closed-Hard-Block für Finanz-, Vertrags- und CRM-Daten, wenn das lokale Modell offline ist; isolierte Worker-Container ohne Internet-Route; lokale RAG-Indexierung über Obsidian-Vault sowie AnythingLLM/Chroma.
 - **Business-Operations:** Kanban mit Vier-Augen-Freigaben, E-Mail-Triage, CRM und ERP-Suite (Angebote, Verträge, Rechnungen, Forderungen), Treasury, Kalender, Zeiterfassung und n8n-/Telegram-Integration.
@@ -34,8 +34,8 @@ Python 3.12/3.13 · FastAPI · Pydantic v2 · asyncio · SQLite (WAL, CAS, Lease
 
 ### Product Profile
 
-- **Multi-agent orchestration:** 70 specialist profiles with three-tier `SOUL.md` prompts (Compact / Pro / Full) so tokens are spent only where domain expertise is needed. Work runs as structured workflows with delegation, fan-in/synthesis, HITL gates and persistent checkpoints — not one-shot answers.
-- **AI Boardroom:** 55 structured decision frameworks (OKR, Pre-Mortem, Six Thinking Hats, …) for isolated multi-perspective debates with a critique prompt and deterministic synthesis; results are archived tamper-evidently in the Obsidian vault and the decision engine.
+- **Multi-agent orchestration:** 71 agent profiles with three-tier `SOUL.md` prompts (Compact / Pro / Full) so tokens are spent only where domain expertise is needed. Work runs as structured workflows with delegation, fan-in/synthesis, HITL gates and persistent checkpoints — not one-shot answers.
+- **AI Boardroom:** 80 structured decision frameworks across 9 categories (OKR, Pre-Mortem, Six Thinking Hats, …) for isolated multi-perspective debates with a critique prompt and deterministic synthesis; results are archived tamper-evidently in the Obsidian vault and the decision engine.
 - **Cost & provider control:** routing between local models (Ollama, LM Studio) and cloud providers (OpenRouter, OmniRoute, Groq, OpenAI, Anthropic, Mistral), upfront cost estimation, per-role/per-task budgets, bandit-based model feedback and a semantic cache.
 - **Data sovereignty:** zero-egress gate and privacy router with fail-closed hard block for finance, contract and CRM data when the local model is offline; worker containers on an internal Docker network with no internet route; local RAG indexing via Obsidian vault and AnythingLLM/Chroma.
 - **Business operations:** Kanban with four-eyes approvals, email triage, CRM and an ERP suite (offers, contracts, invoices, receivables), treasury, calendar, time tracking and n8n/Telegram integration.
@@ -60,11 +60,12 @@ Python 3.12/3.13 · FastAPI · Pydantic v2 · asyncio · SQLite (WAL, CAS, lease
 
 | Merkmal | Wert |
 |---|---|
-| Agentenprofile | 70 (+3 Systemprofile) |
-| Boardroom-Frameworks | 55 |
+| Agentenprofile | 71 (in 8 Domänen) |
+| Boardroom-Frameworks | 80 (in 9 Kategorien) |
 | Prompt-Templates | 832 |
 | UI-Sprachen | 11 |
 | Domänen | 8 |
-| Isolierte Mandanten-DBs | 5 je Gesellschaft |
+| Konsolidierte WAL-DBs | 3 (`ops.db`, `business.db`, `memory.db`) |
+| Docker-Services | 7 Standard-Container (bis 24 mit Profilen) |
 
 **Technische Detaildokumentation:** `docs/system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md` · `docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md` · `README.md`

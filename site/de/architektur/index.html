@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Archon OS Architektur: PolicyEngine, BudgetBank &amp; Docker-Stack</title>
-<meta name="description" content="Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; Hardware-Specs.">
+<meta name="description" content="Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; 7-Container-Docker-Stack.">
 <meta name="author" content="Michael Keller (Michael Beatman)">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <link rel="canonical" href="https://michaelbeatman.github.io/ARCHON-OS/de/architektur/">
@@ -19,13 +19,13 @@
 <meta property="og:locale" content="de_DE">
 <meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/de/architektur/">
 <meta property="og:title" content="Archon OS Architektur: PolicyEngine, BudgetBank &amp; Docker-Stack">
-<meta property="og:description" content="Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; Hardware-Specs.">
+<meta property="og:description" content="Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; 7-Container-Docker-Stack.">
 <meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Archon OS Architektur: PolicyEngine, BudgetBank &amp; Docker-Stack">
-<meta name="twitter:description" content="Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; Hardware-Specs.">
+<meta name="twitter:description" content="Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; 7-Container-Docker-Stack.">
 <meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
 <script type="application/ld+json">
 {
@@ -52,7 +52,7 @@
       "@type": "TechArticle",
       "headline": "Systemarchitektur für verlässliche Multi-Agenten-Flotten.",
       "name": "Archon OS Architektur: PolicyEngine, BudgetBank & Docker-Stack",
-      "description": "Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & Hardware-Specs.",
+      "description": "Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & 7-Container-Docker-Stack.",
       "inLanguage": "de",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/de/architektur/",
       "dateModified": "2026-11-26",
@@ -298,7 +298,7 @@
   <div class="feat"><h3>3. OmniRoute Fail-Closed Switchboard</h3><p>Die zentrale Routing-Weiche trennt sensible Datenklassen (Finanzen, Verträge, HR, CRM, DSGVO) hardwareseitig auf lokale Modelle (Ollama, LM Studio) in einem internen Docker-Netz ohne Internet-Gateway. Bei Ausfall greift Fail-Closed statt Cloud-Fallback.</p></div>
   <div class="feat"><h3>4. Crash-sicherer Effect-Ledger &amp; Outbox</h3><p>Externe Seiteneffekte (E-Mails, Webhooks, ERP-Buchungen) werden über Zustände (<code>PENDING &rarr; COMMITTED / FAILED / UNKNOWN</code>) und Idempotency-Keys protokolliert. Nach einem Absturz erzwingt die Reconciliation eine Prüfung statt doppelter Ausführung.</p></div>
   <div class="feat"><h3>5. 3 konsolidierte SQLite-WAL-Datenbanken</h3><p>Kein schweres Postgres/Redis-Cluster nötig: <code>ops.db</code> (Tasks, Budgets, Warrants, Audit-Chain), <code>business.db</code> (CRM, Verträge, ERP-Alpha) und <code>memory.db</code> (Wissen, Learnings) laufen im Write-Ahead-Logging-Modus und lassen sich per Litestream replizieren.</p></div>
-  <div class="feat"><h3>6. 6-Container-Docker-Stack (amd64 / arm64)</h3><p>Der Standard-Stack besteht aus Archon OS Core, Hermes Agent, OmniRoute, AnythingLLM, ChromaDB (lokales Vektor-RAG auf deinem Obsidian Vault) und einem gehärteten Docker Socket Proxy.</p></div>
+  <div class="feat"><h3>6. 7 Standard-Container (bis 24 mit Profilen)</h3><p>Der Default-Docker-Stack (amd64 / arm64) umfasst Archon OS Core, Hermes Agent, OmniRoute, AnythingLLM, ChromaDB, Docker Socket Proxy und <code>archon-autoheal</code> — optional erweiterbar um bis zu 17 Profil-Services (n8n, Grafana, Prometheus, Loki, Litestream, Authelia, DocuSeal u. a.).</p></div>
 </div>
 
 <h2 class="sec" id="hardware">Hardware- &amp; Ressourcen-Empfehlungen</h2>

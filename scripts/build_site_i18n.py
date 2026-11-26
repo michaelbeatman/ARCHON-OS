@@ -645,25 +645,25 @@ def build_llms_txt(base_url: str, version: str) -> str:
 - [DSGVO & Zero-Egress (DE)]({b}de/dsgvo-zero-egress/): Datenresidenz ohne Cloud-Abfluss, EU AI Act Art. 50/Annex III & GoBD-Dokumentation
 - [Framework Comparison (EN)]({b}compare/): Archon OS vs. LangGraph, CrewAI, AutoGen, n8n & Dify
 - [Systemvergleich (DE)]({b}de/vergleich/): Objektiver Enterprise-Vergleich (Archon OS vs. LangGraph, CrewAI, AutoGen, n8n, Dify)
-- [AI Boardroom — 80 Frameworks (EN)]({b}boardroom-frameworks/): Structured multi-perspective debate frameworks catalog (also localized in DE, ES, FR, IT, JA, KO, NL, PT, RU, ZH at `/<lang>/boardroom-frameworks/`)
-- [AI Boardroom — 80 Frameworks (DE)]({b}de/boardroom-frameworks/): Alle strukturierten Decision-Engine-Methodiken durchsuchbar
-- [70 Specialist Profiles (EN)]({b}specialists/): Filterable directory of all specialist agent roles across 8 domains
-- [70 Spezialisten-Profile (DE)]({b}de/spezialisten/): Alle Agenten-Rollen aus 8 Domänen inkl. Guardrails
+- [AI Boardroom — 80 Frameworks (EN)]({b}boardroom-frameworks/): Structured multi-perspective debate frameworks catalog — all 80 methodologies sorted A–Z (also localized in DE, ES, FR, IT, JA, KO, NL, PT, RU, ZH at `/<lang>/boardroom-frameworks/`)
+- [AI Boardroom — 80 Frameworks (DE)]({b}de/boardroom-frameworks/): Alle 80 strukturierten Decision-Engine-Methodiken alphabetisch durchsuchbar
+- [71 Agent Profiles (EN)]({b}specialists/): Alphabetical, filterable directory of all 71 agent profiles across 8 domains
+- [71 Agenten-Profile (DE)]({b}de/spezialisten/): Alle 71 Agenten-Profile aus 8 Domänen inkl. Guardrails
 
 ## Core Architecture & Differentiators
 
-- **70 Specialist Agent Profiles across 8 Domains:** Strategy & Leadership, Law/Tax/Finance, Sales/CRM/Marketing, Creation/Media, Tech/Software/QA, Commerce/Procurement, Real Estate/Construction, and Medicine/Chemistry/Engineering.
+- **71 Agent Profiles across 8 Domains:** Strategy & Leadership (13), Law/Tax/Finance (11), Sales/CRM/Marketing (11), Creation/Media (8), Tech/Software/QA (8), Commerce/Procurement (7), Real Estate/Construction (7), and Medicine/Chemistry/Engineering (6).
 - **PolicyEngine & Signed Tool Warrants:** Default-deny tool access. Privileged tools require HMAC-SHA256 signed, time-limited warrants with parameter bounds. Delegated sub-agents never inherit privileged tools.
 - **Atomic BudgetBank:** Pre-execution transactional budget reservations (`BEGIN IMMEDIATE`) prevent parallel agents from exceeding daily or per-task cost caps.
 - **Passkey / WebAuthn HITL:** High-risk approvals (payments, budget overruns, destructive actions) require cryptographic verification via Windows Hello, Touch ID, Face ID, or hardware keys.
 - **Fail-Closed Zero-Egress Routing:** OmniRoute sends finance, HR, contract, CRM, and GDPR workloads exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route.
 - **Crash-Safe Execution (Effect-Ledger):** Transactional Effect-Ledger (`PENDING -> COMMITTED / FAILED / UNKNOWN`) with Outbox idempotency keys and mandatory reconciliation prevents duplicate external side effects.
 - **Auditability & Compliance:** SHA-256 hash-chained audit log, 3 consolidated SQLite WAL databases (`ops.db`, `business.db`, `memory.db`), EU AI Act risk registry, and 1-click GoBD procedural documentation export.
-- **AI Boardroom & Knowledge Base:** 80 structured multi-perspective decision frameworks, local Obsidian Markdown vault + AnythingLLM/Chroma RAG, and embedded n8n webhook automation.
+- **AI Boardroom & Knowledge Base:** 80 structured multi-perspective decision frameworks across 9 categories, 832 Prompt Studio templates, local Obsidian Markdown vault + AnythingLLM/Chroma RAG, and embedded n8n webhook automation.
 
 ## Quick Start
 
-- Full stack (6 containers): `git clone {REPO_URL}.git && cd ARCHON-OS && docker compose up -d`
+- Full stack (7 default containers, expandable to 24 with optional profiles): `git clone {REPO_URL}.git && cd ARCHON-OS && docker compose up -d`
 - Zero-key demo mode: `ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d`
 
 ## PDF Documentation & Changelog

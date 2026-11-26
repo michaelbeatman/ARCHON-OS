@@ -83,6 +83,67 @@ ROUTING_MATRIX: List[Dict[str, Any]] = [
     },
 ]
 
+# D02/M2: Negativ-Kontext. "Analysiere die USt-Split-Logik" ist eine kognitive
+# Aufgabe — ein Keyword-Treffer (z. B. "ust-split") darf daraus keinen
+# 0-Token-Skript-Dispatch machen, nur weil das Wort im Text vorkommt.
+_ANALYSIS_DIRECTIVE_RE = re.compile(
+    r"\b(?:analysier\w*|beschreib\w*|(?:erklär|erklaer)\w*|interpretier\w*|beurteil\w*)\b",
+    re.IGNORECASE,
+)
+
+# Rollen-Präfixe sind Transport-Metadaten, kein Auftragstext.
+_ROLE_PREFIX_RE = re.compile(
+    r"^\s*(?:system|developer|assistant|user)\s*:\s*", re.IGNORECASE
+)
+
+
+def canonical_routing_text(
+    messages: Optional[List[Any]] = None, prompt: Optional[str] = None
+) -> str:
+    """D02/M2: EIN kanonischer, ungekürzter Auftragstext für beide Chokepoints.
+
+    Der Router liefert ``messages`` (System-Direktiven + alle Nutzer-Turns,
+    rollenbereinigt), der Dispatcher den vollständigen ``prompt``. Es wird
+    bewusst NICHT gekürzt (früher: ``messages[-4:]`` / 160 Zeichen) — eine
+    Deterministik-Direktive in einem älteren Turn darf nicht verloren gehen.
+    """
+    if messages is None:
+        return str(prompt or "").strip()
+    parts: List[str] = []
+    for message in messages:
+        if isinstance(message, dict):
+            role = str(message.get("role") or "user").strip().lower()
+            if role not in ("system", "developer", "user"):
+                continue
+            content = message.get("content")
+            if isinstance(content, (list, tuple)):
+                # Multimodal: nur die Text-Blöcke zählen für die Klassifikation.
+                content = " ".join(
+                    str(block.get("text") or "")
+                    for block in content
+                    if isinstance(block, dict)
+                )
+            value = str(content or "").strip()
+        else:
+            value = str(message or "").strip()
+        value = _ROLE_PREFIX_RE.sub("", value).strip()
+        if value:
+            parts.append(value)
+    return "\n".join(parts).strip()
+
+
+def classify_execution_request(
+    messages: Optional[List[Any]] = None, prompt: Optional[str] = None
+) -> Dict[str, Any]:
+    """D02/M2: kanonischer Klassifikations-Chokepoint.
+
+    Router UND Dispatcher rufen ausschließlich diese Funktion; damit gibt es
+    für denselben Auftrag keine pfadabhängigen Routing-Entscheidungen mehr.
+    """
+    return classify_execution_layer(
+        canonical_routing_text(messages=messages, prompt=prompt)
+    )
+
 
 def classify_execution_layer(title: str, body: str = "") -> Dict[str, Any]:
     """
@@ -97,7 +158,12 @@ def classify_execution_layer(title: str, body: str = "") -> Dict[str, Any]:
     # Check explicit directive tags first (Leerzeichen um ':' tolerant —
     # "ACTION: WEBHOOK_CRM" muss genauso greifen wie "action:webhook_crm").
     compact = re.sub(r"\s+", "", text)
-    if "layer:n8n" in compact or "action:webhook_" in compact or "action:publish_" in compact:
+    explicit_directive = (
+        "layer:n8n" in compact
+        or "action:webhook_" in compact
+        or "action:publish_" in compact
+    )
+    if explicit_directive:
         return {
             "layer": "deterministic_n8n",
             "rule_id": "explicit_n8n_directive",
@@ -108,9 +174,19 @@ def classify_execution_layer(title: str, body: str = "") -> Dict[str, Any]:
             "rationale": "Explizite n8n-Webhook-Direktive im Auftrag erkannt.",
         }
 
+    # D02/M2: "analysiere/beschreibe ..." ist ein kognitiver Auftrag. Solche
+    # Texte dürfen nicht allein wegen eines enthaltenen Keywords als 0-Token-
+    # Skript/Workflow klassifiziert werden. Explizite Direktiven (oben) haben
+    # Vorrang; analysierte Hybrid-/Probabilistik-Regeln bleiben erreichbar.
+    analysis_context = bool(_ANALYSIS_DIRECTIVE_RE.search(text))
     for rule in ROUTING_MATRIX:
         matched = [kw for kw in rule["keywords"] if kw in text]
         if matched:
+            if (
+                analysis_context
+                and rule["layer"] in ("deterministic_n8n", "deterministic_script")
+            ):
+                continue
             is_det = rule["layer"] in ("deterministic_n8n", "deterministic_script")
             return {
                 "layer": rule["layer"],

@@ -15,6 +15,31 @@ import httpx
 
 logger = logging.getLogger("agent_router")
 
+
+def _audit_strict() -> bool:
+    """D05/M: Schreibfehler im GoBD-Nachweis sind default fail-closed."""
+    return str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower() not in {
+        "0", "false", "no", "off",
+    }
+
+
+def _issue_execution_receipt(**kwargs: Any) -> None:
+    """D05/M: kein LLM-Erfolg ohne Execution-Receipt-Ketteneintrag.
+
+    Vorher wurde ein fehlgeschlagener Receipt-Schreibvorgang nur gewarnt und
+    der Antworttext trotzdem zurückgegeben. Bei ``ARCHON_AUDIT_STRICT=1``
+    (Default) wird der Aufruf jetzt hart abgebrochen; nur der explizite
+    Opt-out (``=0``) lässt den Fehler sichtbar markiert passieren.
+    """
+    try:
+        from backend.execution_receipt_ledger import execution_receipt_ledger
+        execution_receipt_ledger.issue_receipt(**kwargs)
+    except Exception as exc:
+        logger.error("[AgentRouter] Audit-Logging (execution receipt) fehlgeschlagen: %s", exc)
+        if _audit_strict():
+            raise RuntimeError("audit_write_failed") from exc
+
+
 from backend.llm_kernel import AUTO_MODEL_MAP  # noqa: E402
 
 # D13/MED (W3-D): gezählte Wiederholungen liegen persistiert in
@@ -1081,18 +1106,24 @@ class AgentRouter:
         self, messages: List[Dict], agent_id: str, tid: str
     ) -> Optional[Dict[str, Any]]:
         """D02: Gemeinsamer 0-Token-Deterministik-Check fuer Stream- und Non-Stream-Calls."""
-        from backend.execution_routing_guard import classify_execution_layer
-
-        _prompt_text = " ".join(
-            str(m.get("content", "")) for m in messages[-4:]
-            if isinstance(m, dict)
+        # D02/M2: kein lokales Fenster (messages[-4:], 160 Zeichen) mehr —
+        # Router und Dispatcher klassifizieren ueber denselben kanonischen Helper.
+        # `classify_execution_layer` wird bewusst nicht direkt gerufen: der
+        # Chokepoint `classify_execution_request` baut den vollständigen
+        # Auftragstext und delegiert erst dann an den Guard.
+        from backend.execution_routing_guard import (
+            canonical_routing_text,
+            classify_execution_request,
         )
-        _erg = classify_execution_layer(_prompt_text[:160], _prompt_text)
+
+        _prompt_text = canonical_routing_text(messages=messages)
+        _erg = classify_execution_request(messages=messages)
         if _erg.get("layer") not in ("deterministic_n8n", "deterministic_script"):
             return None
         if _erg.get("requires_hitl"):
             return {
                 "blocked": True,
+                "error_code": "DETERMINISTIC_HITL_REQUIRED",
                 "text": "ERROR: DETERMINISTIC_HITL_REQUIRED — kein LLM-Dispatch ohne Freigabe.",
             }
         if _erg.get("layer") == "deterministic_n8n":
@@ -1106,6 +1137,21 @@ class AgentRouter:
                 content=_prompt_text[:2000],
                 target_action=str(_erg.get("webhook_action") or "none"),
             )
+            # D02/H1: identisch zum kanonischen Dispatch-Pfad
+            # (core_dispatcher.py:1640-1654). `unconfirmed`/`blocked` ist
+            # kein Erfolg — nie `blocked=False` und nie "ausgeführt".
+            n8n_ok = _res.get("status") == "success"  # type: ignore[attr-defined]
+            if not n8n_ok:
+                return {
+                    "blocked": True,
+                    "error_code": str(
+                        _res.get("error_code") or "N8N_DELIVERY_UNCONFIRMED"  # type: ignore[attr-defined]
+                    ),
+                    "text": (
+                        "ERROR: N8N_DELIVERY_UNCONFIRMED — n8n-Ausführung nicht "
+                        "bestätigt, HITL/Outbox erforderlich."
+                    ),
+                }
             return {
                 "blocked": False,
                 "text": f"Deterministisch via n8n ausgeführt (0 Tokens): {_res.get('status')}",  # type: ignore[attr-defined]
@@ -1379,21 +1425,19 @@ class AgentRouter:
                         # D12: nie 0.0 als realen Preis signieren — konservative
                         # Fallback-Schätzung und Unverifiziert-Marker in der Receipt.
                         est_cost = round((p_toks * 0.00000015) + (c_toks * 0.00000030), 6)
-                    try:
-                        from backend.execution_receipt_ledger import execution_receipt_ledger
-                        execution_receipt_ledger.issue_receipt(
-                            task_id=hop_sid,
-                            agent_role=agent_id or "router",
-                            model_used=m_try,
-                            prompt_tokens=p_toks,
-                            completion_tokens=c_toks,
-                            cost_usd=est_cost,
-                            tools_invoked=["agent_router.chat_completion"] + (
-                                ["cost_unverified"] if est_cost_unverified else []
-                            ),
-                        )
-                    except Exception as log_exc:
-                        logger.warning(f"[AgentRouter] Audit-Logging (chat_completion) fehlgeschlagen: {log_exc}")
+                    # D05/M: Receipt ist Pflicht — bei ARCHON_AUDIT_STRICT=1
+                    # (Default) abbrechen, kein Erfolg ohne Ketteneintrag.
+                    _issue_execution_receipt(
+                        task_id=hop_sid,
+                        agent_role=agent_id or "router",
+                        model_used=m_try,
+                        prompt_tokens=p_toks,
+                        completion_tokens=c_toks,
+                        cost_usd=est_cost,
+                        tools_invoked=["agent_router.chat_completion"] + (
+                            ["cost_unverified"] if est_cost_unverified else []
+                        ),
+                    )
                     return raw_text
                 except ZeroEgressBlockedError:
                     raise
@@ -1428,6 +1472,15 @@ class AgentRouter:
         try:
             _det = await self._check_deterministic_execution_layer(messages, agent_id, tid)
             if _det is not None:
+                if _det.get("blocked"):
+                    # D02/H1: ein blockierter Deterministik-Pfad darf im Stream
+                    # nicht als normaler Antworttext quittiert werden. Der
+                    # Chat-Konsument behandelt "ERROR: " als Provider-Fehler.
+                    code = str(
+                        _det.get("error_code") or "DETERMINISTIC_HITL_REQUIRED"
+                    )
+                    yield f"ERROR: {code} — deterministische Ausführung blockiert."
+                    return
                 yield str(_det.get("text") or "")
                 return
         except Exception as _route_exc:
@@ -1711,23 +1764,19 @@ class AgentRouter:
                                     "[AgentRouter] Stream-Kostenberechnung fehlgeschlagen: %s", _cost_exc
                                 )
                                 _stream_cost = round((_p_toks * 0.00000015) + (_c_toks * 0.00000030), 6)
-                            try:
-                                from backend.execution_receipt_ledger import (
-                                    execution_receipt_ledger,
-                                )
-                                execution_receipt_ledger.issue_receipt(
-                                    task_id=hop_sid,
-                                    agent_role=agent_id or "router",
-                                    model_used=m_try,
-                                    prompt_tokens=_p_toks,
-                                    completion_tokens=_c_toks,
-                                    cost_usd=_stream_cost,
-                                    tools_invoked=["agent_router.stream_chat_completion"] + (
-                                        ["cost_unverified"] if _stream_cost_unverified else []
-                                    ),
-                                )
-                            except Exception as log_exc:
-                                logger.error(f"[AgentRouter] Audit-Logging (stream) fehlgeschlagen: {log_exc}")
+                            # D05/M: auch im Stream-Pfad kein Erfolg ohne
+                            # signierten Receipt (STRICT fail-closed).
+                            _issue_execution_receipt(
+                                task_id=hop_sid,
+                                agent_role=agent_id or "router",
+                                model_used=m_try,
+                                prompt_tokens=_p_toks,
+                                completion_tokens=_c_toks,
+                                cost_usd=_stream_cost,
+                                tools_invoked=["agent_router.stream_chat_completion"] + (
+                                    ["cost_unverified"] if _stream_cost_unverified else []
+                                ),
+                            )
                             return
             except TimeoutError as timeout_err:
                 # D07: Ketten-Deadline ist erreichte Obergrenze, kein Provider-

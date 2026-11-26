@@ -266,22 +266,35 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
     model_to_use = prof.get("model") or "deepseek/deepseek-chat"
     provider_to_use = prof.get("provider") or "openrouter"
 
-    start_t = time.time()
+    # D13-H1: der Direct-Chat hatte keinen task_id-Root und erzeugte damit
+    # pro Turn eine neue Trajectory. Session-/Trace-Korrelation ist stabil.
+    from backend.trajectory_budget import trajectory_root, trajectory_root_scope
     try:
-        res = await core_dispatcher.dispatch_to_omniroute_or_container(
-            agent_id=prof["id"],
-            agent_name=str(agent_name or prof.get("id") or "agent"),
-            prompt=user_msg,
-            role=prof.get("name", "Spezialist"),
-            system_prompt=system_prompt,
-            model=model_to_use,
-            provider=provider_to_use,
-            history=history_payload,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail={
-            "status": "error", "code": "DISPATCH_FAILED", "message": str(e)
-        })
+        from backend.trace_context import current_trace_id
+        correlation = str(current_trace_id() or "").strip()
+    except Exception:
+        correlation = ""
+    root = trajectory_root(
+        "agent-chat", req.agent_id, correlation or f"{req.message[:160]}:{len(history_payload)}"
+    )
+
+    start_t = time.time()
+    with trajectory_root_scope(root):
+        try:
+            res = await core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=prof["id"],
+                agent_name=str(agent_name or prof.get("id") or "agent"),
+                prompt=user_msg,
+                role=prof.get("name", "Spezialist"),
+                system_prompt=system_prompt,
+                model=model_to_use,
+                provider=provider_to_use,
+                history=history_payload,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=502, detail={
+                "status": "error", "code": "DISPATCH_FAILED", "message": str(e)
+            })
 
     # D12/HIGH: `blocked`/`error` ist keine Agenten-Antwort. Fehlertexte
     # duerfen nie als Assistant-Reply ausgegeben werden.

@@ -1371,6 +1371,33 @@ async def _execute_research_dag_node(node: Dict[str, Any], upstream: Dict[str, A
     }
 
 
+def _estimate_dag_node_cost_eur(node: Dict[str, Any], model: str) -> float:
+    """D02/M1: konservative Kostenprognose VOR dem ersten Dispatch.
+
+    Ein Node ohne eigenes ``max_budget_eur`` lieferte bisher die Schaetzung 0.
+    Damit griff der Run-Cap erst NACH dem ersten (unerbezifferten) Call — ein
+    einziger Dispatch konnte den Run-Cap sprengen. Die Prognose nutzt die
+    deklarierten Token-Schaetzungen des Nodes und sonst einen konservativen
+    Default. Ist keine Prognose moeglich, bleibt der Run-Rest zusaetzlich
+    ueber ``_dag_run_cap_remaining_eur`` in ``_node_budget_ok`` erzwungen.
+    """
+    declared = float(node.get("max_budget_eur") or 0.0)
+    if declared > 0.0:
+        return declared
+    projected_in = max(0, int(float(node.get("estimated_input_tokens") or node.get("token_budget") or 0)))
+    projected_out = max(0, int(float(node.get("estimated_output_tokens") or node.get("estimated_tokens") or 0)))
+    if projected_in <= 0 and projected_out <= 0:
+        projected_in, projected_out = 4096, 1024
+    try:
+        from backend.llm_kernel import estimate_model_cost_usd
+        from backend.role_budget_engine import USD_TO_EUR_RATE
+        return float(estimate_model_cost_usd(
+            model or "deepseek/deepseek-chat", projected_in, projected_out,
+        )) * USD_TO_EUR_RATE
+    except Exception:
+        return 0.0
+
+
 def _node_budget_ok(node: Dict[str, Any], res: Dict[str, Any], model: str, phase: str) -> bool:
     """D13/MED: kumulierter Node-Verbrauch vor JEDEM Folge-Dispatch pruefen."""
     used = max(0, int(res.get("input_tokens") or 0) + int(res.get("output_tokens") or 0))
@@ -1378,7 +1405,14 @@ def _node_budget_ok(node: Dict[str, Any], res: Dict[str, Any], model: str, phase
     if tok_cap > 0 and used > tok_cap:
         logger.error("[WorkflowDAG] Node-Budget %s: %s/%s Tokens (%s)", phase, used, tok_cap, node.get("id"))
         return False
-    cap = node.get("max_budget_eur") or node.get("_dag_max_budget_eur")
+    # D02/M1: der verbleibende Run-Rest ist der effektive Cap, sobald der Node
+    # keinen eigenen hat — nicht der volle Run-Cap. Sonst koennen Tool-Loop-
+    # Folgedispatche den bereits verbrauchten Betrag erneut ausgeben.
+    cap = (
+        node.get("max_budget_eur")
+        or node.get("_dag_run_cap_remaining_eur")
+        or node.get("_dag_max_budget_eur")
+    )
     if cap:
         try:
             from backend.llm_kernel import estimate_model_cost_usd
@@ -1586,15 +1620,30 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
         from archon.core.profiles import api_get_hermes_profiles
         profiles = await asyncio.to_thread(api_get_hermes_profiles) or []
         prof = next((p for p in profiles if p.get("id") == agent_id), {})
-    except Exception:
+    except Exception as exc:
+        # D02-H3 (HIGH): eine gestoerte Profil-SSOT darf NEVER zu einem
+        # Generik-Prompt unter ungepruefter Identitaet fuehren. Sichtbar
+        # eskalieren statt still `prof={}` zu setzen; der Fail-Closed-Guard
+        # unten blockiert den Node unabhaengig von der SSOT-Verfuegbarkeit.
+        logger.error(
+            "[WorkflowDAG] Profil-SSOT nicht verfuegbar (Node '%s', agent_id '%s'): %s",
+            node.get("id"), agent_id, exc,
+        )
+        _recovery_audit("profile_ssot_unavailable", {
+            "node_id": str(node.get("id") or ""),
+            "agent_id": str(agent_id or ""),
+            "detail": str(exc)[:300],
+        })
         prof = {}
 
     node_type = str(node.get("type") or "agent").strip().lower()
     kanban_task_id = node.get("kanban_task_id")
 
-    # F22 (D02): explizit angeforderte, aber unbekannte agent_id darf nicht mit
-    # leerem Profil + Generik-Prompt laufen (fail-closed fuer Agent-Nodes).
-    if node_type == "agent" and explicit_agent and explicit_agent.lower() != "default" and profiles and not prof:
+    # F22 (D02) / D02-H3: explizit angeforderte, aber unbekannte agent_id darf
+    # nicht mit leerem Profil + Generik-Prompt laufen. Die fruehere Klausel
+    # `and profiles` war fail-open: bei leerer/gescheiterter SSOT lief der Node
+    # unter ungepruefter Identitaet weiter. Jetzt IMMER blockieren.
+    if node_type == "agent" and explicit_agent and explicit_agent.lower() != "default" and not prof:
         logger.error("[WorkflowDAG] Unbekannte agent_id '%s' (Node '%s') — fail-closed.", agent_id, node.get("id"))
         return {
             "status": "blocked",
@@ -1910,7 +1959,19 @@ async def _exec_with_retry_and_timeout(
                         if isinstance(cached, dict) and cached.get("status") != "error":
                             return cached
                 except Exception as _idem_exc:
-                    logger.debug("[WorkflowDAG] Idempotency-Check uebersprungen: %s", _idem_exc)
+                    # D07/M4: kein Executor-Aufruf ohne erfolgreichen Check,
+                    # wenn ein idempotency_key gesetzt ist. Sonst wird der
+                    # Seiteneffekt bei Retry/Resume erneut ausgefuehrt.
+                    logger.error(
+                        "[WorkflowDAG] Idempotency-Check nicht verfuegbar (Node '%s'): %s",
+                        node.get("id"), _idem_exc,
+                    )
+                    _recovery_audit("idempotency_check_failed", {
+                        "node_id": str(node.get("id") or ""),
+                        "idempotency_key": str(idempotency_key or ""),
+                        "detail": str(_idem_exc)[:300],
+                    })
+                    return _blocked_node_result(node, "IDEMPOTENCY_UNAVAILABLE")
             res = await asyncio.wait_for(executor_fn(node, upstream), timeout=timeout_sec)
             if isinstance(res, dict):
                 out = res
@@ -1932,7 +1993,28 @@ async def _exec_with_retry_and_timeout(
                         from backend.idempotency_guard import idempotency_guard
                         idempotency_guard.record_execution_result(idempotency_key, out)
                     except Exception as _idem_exc:
-                        logger.debug("[WorkflowDAG] Idempotency-Record fehlgeschlagen: %s", _idem_exc)
+                        # D07/M4: ohne erfolgreich persistiertes Result ist der
+                        # naechste Retry nicht dedupliziert. Node als Fehler
+                        # markieren + Audit statt still `success` zu quittieren.
+                        logger.error(
+                            "[WorkflowDAG] Idempotency-Record fehlgeschlagen (Node '%s'): %s",
+                            node.get("id"), _idem_exc,
+                        )
+                        _recovery_audit("idempotency_record_failed", {
+                            "node_id": str(node.get("id") or ""),
+                            "idempotency_key": str(idempotency_key or ""),
+                            "detail": str(_idem_exc)[:300],
+                        })
+                        return {
+                            "status": "error",
+                            "error": "IDEMPOTENCY_RECORD_FAILED",
+                            "block_kind": "idempotency",
+                            "needs_human": True,
+                            "failure_reason": "IDEMPOTENCY_RECORD_FAILED",
+                            "node_id": node.get("id"),
+                            "content": "",
+                            "cost_usd": 0.0,
+                        }
                 return out
             last_err = str(out.get("error") or "node_returned_error")
             if attempt == max_retries:
@@ -2259,12 +2341,17 @@ async def _run_workflow_dag_locked(
         # D13/HIGH + F22: harte Laufzeit-Obergrenze VOR jedem Node-Dispatch
         # (auch fuer unbezifferte Nodes, sobald _spent >= _run_cap).
         _run_cap = float(dag_def.get("max_budget_eur") or 0.0)
+        _remaining_cap = _run_cap
         if _run_cap > 0.0:
             _spent = sum(
                 float((v or {}).get("cost_usd") or 0.0)
                 for v in outputs.values() if isinstance(v, dict)
             )
+            _remaining_cap = max(0.0, _run_cap - _spent)
             _node_est = float(node.get("max_budget_eur") or 0.0)
+            if _node_est <= 0.0:
+                # D02/M1: vor dem Dispatch prognostizieren statt 0 annehmen.
+                _node_est = _estimate_dag_node_cost_eur(node, str(node.get("model") or ""))
             if _spent >= _run_cap - 1e-6 or (_spent + _node_est > _run_cap + 1e-6):
                 budget_blocked = True
                 statuses[nid] = "blocked"
@@ -2319,6 +2406,8 @@ async def _run_workflow_dag_locked(
             # Checkpoints), damit auch Folge-Schreiber tenant-scoped arbeiten.
             "_dag_tenant_id": tenant_id,
             "_trajectory_id": _tid, "_dag_max_budget_eur": dag_def.get("max_budget_eur"),
+            # D02/M1: effektiver Node-Cap = restliches Run-Budget (fail-closed).
+            "_dag_run_cap_remaining_eur": _remaining_cap if _run_cap > 0.0 else None,
             "_root_ticket_id": _root_ticket,
         }
 

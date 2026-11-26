@@ -319,23 +319,10 @@ async def _execute_mission_control_task(
         trigger_sandy = _trigger_sandy_staffing_nomination
     if fan_in is None:
         fan_in = _fan_in_maybe_start_synthesis
-    # F30 (HIGH H-C): synchrones SQLite-/Store-Laden aus dem async Hot-Path in to_thread
-    data = await asyncio.to_thread(load_mc)
-    tasks = data.get("tasks", [])
-    # R-18: Schnappschuss der Task-IDs VOR dem LLM-await — nur waerend des Laufs
-    # neu erzeugte Tasks duerfen im Merge wieder eingefuegt werden.
-    orig_task_ids = {t.get("id") for t in tasks}
-    # Das finally greift auf parent_ok/parent_pid zu — auch dann, wenn der
-    # Dispatch bei Fehler/blocked/leerer Antwort vor der Zuweisung zurueckkehrt.
-    # Ohne Defaults: UnboundLocalError statt der eigentlichen Fehlerbehandlung.
-    parent_ok = False
-    parent_pid = None
-    task = next((t for t in tasks if t.get("id") == task_id), None)
-    if not task:
-        return
-
-    # Zentrale Cancel-Propagation: Mission Control bricht 'dispatch:<task_id>'
-    # ab; der Check direkt vor dem LLM-Call verhindert[kostspielige] Folgecalls.
+    # D02-H2 (HIGH): Cancel-Token VOR dem ersten await registieren. Der
+    # aeussere CancelledError-Handler am Ende dieser Funktion persistiert
+    # 'cancelled' in ALLEN Phasen — auch in der Lease-/Idempotency-Phase, die
+    # frueher ausserhalb des try/finally lag und Geistertasks produzierte.
     from backend.cancellation import get_token as _get_cancel_token
     cancel_token = _get_cancel_token(f"dispatch:{task_id}")
     # Damit cancel_scope() den laufenden LLM-Call wirklich abbricht (nicht nur
@@ -343,7 +330,18 @@ async def _execute_mission_control_task(
     _current_task = asyncio.current_task()
     if _current_task is not None:
         cancel_token.register_task(_current_task)
-    cancel_token.check()
+
+    # Zustand, den der aeussere Cancel-Handler zum Persistieren braucht.
+    data: dict = {}
+    tasks: list = []
+    orig_task_ids: set = set()
+    task: dict = None
+    parent_ok = False
+    parent_pid = None
+    lease_token = None
+    idem_key = None
+    heartbeat_task = None
+    deadlock_supervisor = None
 
     def _commit_sync() -> None:
         """Schreibt die Aenderungen dieses Tasks (wird via asyncio.to_thread gerufen).
@@ -364,350 +362,390 @@ async def _execute_mission_control_task(
     async def _commit_async() -> None:
         await asyncio.to_thread(_commit_sync)
 
-    agent_id = task.get("agent_id", "founder")
-    agent_name = task.get("agent_name") or agent_id or "Founder"
-    task_title = task.get("title", "Aufgabe")
-    prompt_text = task.get("capture_input") or task_title
-
-    profiles = get_profiles() if get_profiles else []
-    prof = next((p for p in profiles if p.get("id") == agent_id or p.get("person_name") == agent_name), None)
-    if not prof:
-        # KRITISCH (Audit 23.11.2026): niemals unter der Identität eines
-        # beliebigen fremden Profils laufen (falscher Prompt, falsches Budget,
-        # falsche EU-AI-Act-Klasse). Nur der explizite Root-Orchestrator ist
-        # ein zulässiger Fallback.
-        prof = next((p for p in profiles if p.get("id") in ("default", "orchestrator")), None)
-
-    from archon.core.profiles import append_negative_scope
-
-    system_prompt = (prof.get("system_prompt") if prof else None) or (prof.get("prompt") if prof else None) or (
-        f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
-    )
-    system_prompt = append_negative_scope(system_prompt, prof)
-    model = (prof.get("model") if prof else None) or task.get("model") or "deepseek/deepseek-v4-flash-0731"
-
-    ticker(agent_name, f"Startet Bearbeitung von Task #{task_id}: '{task_title[:35]}...'")
-
-    # P0-6: Lease + Idempotency waren implementiert, aber nie im Hot Path
-    # verdrahtet — parallele Worker konnten denselben Task doppelt ausfuehren.
-    lease_token = None
-    idem_key = None
-    heartbeat_task = None
-    deadlock_supervisor = None
     try:
-        from backend.deadlock_supervisor import deadlock_supervisor as _supervisor
-        deadlock_supervisor = _supervisor
-        lease = await asyncio.to_thread(_supervisor.acquire_lease, str(task_id), ttl_seconds=300)
-        if lease.get("acquired"):
-            lease_token = lease.get("lease_token")
-        elif lease.get("task_exists", True):
-            # Nur ein real existierender, bereits geclaimter Task ist ein
-            # Duplikat. Fehlt die Zeile (isolierter Store/Test), laufen wir
-            # ohne Lease weiter statt den Task faelschlich zu ueberspringen.
-            ticker(agent_name, f"Task #{task_id} laeuft bereits in einem anderen Worker — uebersprungen.")
-            return
-    except Exception as lease_exc:
-        # KRITISCH (Audit 23.11.2026): ein nicht auswertbarer Lease-Claim darf
-        # nicht bedeuten „kein anderer Worker" — sonst laufen Tasks doppelt.
-        # Expliziter Opt-out nur für isolierte Tests/Entwicklung.
-        if str(os.environ.get("ARCHON_LEASE_FAIL_OPEN", "")).strip().lower() not in ("1", "true", "yes"):
-            task["status"] = "blocked"
-            task["result_summary"] = f"Lease-Claim nicht verfügbar: {lease_exc}"
-            ticker(agent_name, f"Task #{task_id} blockiert — Lease-Claim nicht verfügbar.")
-            await _commit_async()
-            return
-        logger.warning(f"[MissionControl] Lease nicht verfuegbar ({lease_exc}) — Dispatch ohne Claim (FAIL_OPEN aktiv).")
-
-    # Der Guard schuetzt nur echte, per Lease geclaimte Tasks. Ohne Lease
-    # (isolierter Store / Tests) gibt es keinen verlaesslichen Lauf-Kontext —
-    # ein task_id-basierter Key wuerde dort wiederholte Laeufe faelschlich
-    # als Duplikat blockieren.
-    if lease_token:
-        try:
-            from backend.idempotency_guard import idempotency_guard
-
-            def _idem_claim_sync():
-                return idempotency_guard.check_or_register(
-                    "mission_control_task",
-                    {"task_id": str(task_id),
-                     "prompt": mark_truncated(prompt_text, 2000, artifact=f"tasks.capture_input/{task_id}")},
-                    explicit_key=f"mct-{task_id}",
-                )
-
-            idem = await asyncio.to_thread(_idem_claim_sync)
-            if idem.get("blocked"):
-                cached = idem.get("cached_result") or {}
-                task["status"] = "completed"
-                task["result_summary"] = cached.get(
-                    "result_summary", "Bereits ausgefuehrt (Idempotency-Cache)."
-                )
-                ticker(agent_name, f"Task #{task_id} war bereits ausgefuehrt — Duplicate geblockt.")
-                await _commit_async()
-                return
-            idem_key = idem.get("idempotency_key")
-        except Exception as idem_exc:
-            logger.warning(f"[MissionControl] Idempotency-Guard nicht verfuegbar ({idem_exc}).")
-
-    if lease_token:
-        async def _lease_heartbeat():
-            while True:
-                await asyncio.sleep(60.0)
-                try:
-                    if deadlock_supervisor is not None:
-                        ok = await asyncio.to_thread(
-                            deadlock_supervisor.heartbeat, str(task_id), lease_token, ttl_seconds=300
-                        )
-                        if ok is False:
-                            cancel_token.cancel("lease_lost")
-                            return
-                except Exception as hb_exc:
-                    # Heartbeat-Verlust darf nicht unbemerkt zum Ablauf der
-                    # Lease führen, während der Task weiterläuft (Audit).
-                    logger.error("[MissionControl] Lease-Heartbeat %s fehlgeschlagen: %s", task_id, hb_exc)
-                    cancel_token.cancel("lease_heartbeat_failed")
-                    return
-
-        heartbeat_task = asyncio.create_task(_lease_heartbeat())
-
-    try:
-        task["active_tool"] = "Tool: web_search & archon_core"
-        await _commit_async()
-
-        # Echter LLM-Dispatch — vorher Cancel-Token pruefen.
+        # F30 (HIGH H-C): synchrones SQLite-/Store-Laden aus dem async Hot-Path in to_thread
+        data = await asyncio.to_thread(load_mc)
+        tasks = data.get("tasks", [])
+        # R-18: Schnappschuss der Task-IDs VOR dem LLM-await — nur waerend des Laufs
+        # neu erzeugte Tasks duerfen im Merge wieder eingefuegt werden.
+        orig_task_ids = {t.get("id") for t in tasks}
+        task = next((t for t in tasks if t.get("id") == task_id), None)  # type: ignore[arg-type]
+        # D02-H2: Check direkt NACH dem Lade-await. Der Task ist jetzt bekannt,
+        # damit auch ein vorab abgebrochener Scope 'cancelled' persistiert.
         cancel_token.check()
-        res = await dispatcher.dispatch_to_omniroute_or_container(
-            agent_id=prof.get("id", agent_id) if prof else agent_id,
-            agent_name=agent_name,
-            prompt=f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\n{prompt_text}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte.",
-            role=prof.get("name", "Spezialist") if prof else "Spezialist",
-            system_prompt=system_prompt,
-            model=model,
-            # Audit v3 2.1.3: task_id mitgeben — sonst wird das Task-Budget nie abgebucht
-            task_id=str(task_id or ""),
-        )
-
-        reply = res.get("content", "").strip()
-        if res.get("status") in ("error", "blocked") or not reply or reply.startswith(("Fehler:", "Fehler ", "[Fehler")):
-            # Dispatcher meldet Fehler -> Task als failed markieren
-            task["status"] = "failed"
-            task["result_summary"] = "Dispatcher-Fehler: " + (
-                mark_truncated(reply, 200, artifact=f"dispatcher/{task_id}") if reply else "leere Antwort"
-            )
-            ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {reply[:100]}")
+        if not task:
             return
 
-        # Aktualisiere Task
-        task["status"] = "completed"
-        task["result_summary"] = reply
-        # F033/H-14-1: echte strukturierte Hoheits-/Guardrail-Felder aus dem
-        # Dispatch-Result am Kind persistieren (nicht nur result_summary=reply).
-        task.update(extract_dispatch_verdict(res))
-        task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        from archon.core.runtime import run_io_bound
-        obs_path = await run_io_bound(sync_obsidian, task)
-        task["artifact_path"] = obs_path
+        agent_id = task.get("agent_id", "founder")
+        agent_name = task.get("agent_name") or agent_id or "Founder"
+        task_title = task.get("title", "Aufgabe")
+        prompt_text = task.get("capture_input") or task_title
 
-        ticker("Obsidian", f"Dokumentation {os.path.basename(obs_path)} für Task #{task_id} abgelegt")
-        ticker("Mission Control", f"Task #{task_id} erfolgreich abgeschlossen")
+        profiles = get_profiles() if get_profiles else []
+        prof = next((p for p in profiles if p.get("id") == agent_id or p.get("person_name") == agent_name), None)
+        if not prof:
+            # KRITISCH (Audit 23.11.2026): niemals unter der Identität eines
+            # beliebigen fremden Profils laufen (falscher Prompt, falsches Budget,
+            # falsche EU-AI-Act-Klasse). Nur der explizite Root-Orchestrator ist
+            # ein zulässiger Fallback.
+            prof = next((p for p in profiles if p.get("id") in ("default", "orchestrator")), None)
 
-        # --- AUTO-STAFFING / DISPATCH-KETTE (MUSTER B) ---
-        # Prüfe, ob die Antwort eine Nominierungsmatrix (nominated_agents) enthält
+        from archon.core.profiles import append_negative_scope
+
+        system_prompt = (prof.get("system_prompt") if prof else None) or (prof.get("prompt") if prof else None) or (
+            f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
+        )
+        system_prompt = append_negative_scope(system_prompt, prof)
+        model = (prof.get("model") if prof else None) or task.get("model") or "deepseek/deepseek-v4-flash-0731"
+
+        ticker(agent_name, f"Startet Bearbeitung von Task #{task_id}: '{task_title[:35]}...'")
+
+        # P0-6: Lease + Idempotency waren implementiert, aber nie im Hot Path
+        # verdrahtet — parallele Worker konnten denselben Task doppelt ausfuehren.
+        lease_token = None
+        idem_key = None
+        heartbeat_task = None
+        deadlock_supervisor = None
         try:
-            candidate_blocks = _extract_nominated_json_blocks(reply)
-            for jm in candidate_blocks:
-                parsed_dispatch = _parse_nomination_batch(jm)
-                if parsed_dispatch is None:
-                    continue
-                nominated = parsed_dispatch.nominated_agents
-                if len(nominated) > 0:
-                    # KRITISCH (Audit 23.11.2026): Delegations-Rekursion und
-                    # Fan-out hart begrenzen — sonst kann ein LLM, das sich
-                    # selbst nominiert, unbegrenzt kostenpflichtige Calls
-                    # auslösen.
-                    max_depth = 3
-                    max_fanout = 5
-                    depth = int(task.get("delegation_depth", 0) or 0) + 1
-                    if depth > max_depth:
-                        logger.warning(
-                            "[Delegation] Tiefe %s > %s bei Task %s — weitere Nominierung abgelehnt.",
-                            depth, max_depth, task_id,
-                        )
-                        ticker("Delegation", f"Task #{task_id}: maximale Delegationstiefe erreicht — keine weiteren Sub-Tasks.")
-                        continue
-                    nominated = _fanout_cap_guard(nominated, max_fanout, str(task_id), ticker)
-                    proj_title = parsed_dispatch.project_title or task_title
-                    batch_subtasks = []
-                    for idx, nom in enumerate(nominated):
-                        sub_agent_id = nom.agent_id.strip()
-                        sub_role = nom.role or "Spezialist"
-                        sub_mandate = nom.mandate.strip()
-                        if not sub_agent_id or sub_agent_id.startswith("<"):
-                            continue
+            from backend.deadlock_supervisor import deadlock_supervisor as _supervisor
+            deadlock_supervisor = _supervisor
+            lease = await asyncio.to_thread(_supervisor.acquire_lease, str(task_id), ttl_seconds=300)
+            cancel_token.check()
+            if lease.get("acquired"):
+                lease_token = lease.get("lease_token")
+            elif lease.get("task_exists", True):
+                # Nur ein real existierender, bereits geclaimter Task ist ein
+                # Duplikat. Fehlt die Zeile (isolierter Store/Test), laufen wir
+                # ohne Lease weiter statt den Task faelschlich zu ueberspringen.
+                ticker(agent_name, f"Task #{task_id} laeuft bereits in einem anderen Worker — uebersprungen.")
+                return
+        except Exception as lease_exc:
+            # KRITISCH (Audit 23.11.2026): ein nicht auswertbarer Lease-Claim darf
+            # nicht bedeuten „kein anderer Worker" — sonst laufen Tasks doppelt.
+            # Expliziter Opt-out nur für isolierte Tests/Entwicklung.
+            if str(os.environ.get("ARCHON_LEASE_FAIL_OPEN", "")).strip().lower() not in ("1", "true", "yes"):
+                task["status"] = "blocked"
+                task["result_summary"] = f"Lease-Claim nicht verfügbar: {lease_exc}"
+                ticker(agent_name, f"Task #{task_id} blockiert — Lease-Claim nicht verfügbar.")
+                await _commit_async()
+                cancel_token.check()
+                return
+            logger.warning(f"[MissionControl] Lease nicht verfuegbar ({lease_exc}) — Dispatch ohne Claim (FAIL_OPEN aktiv).")
 
-                        # Passenden Namen und Profil suchen
-                        sub_prof = next((p for p in profiles if p.get("id") == sub_agent_id), None)
-                        sub_name = sub_prof.get("person_name", sub_agent_id) if sub_prof else sub_role
-                        sub_task_id = f"task-{int(time.time() * 1000)}-{idx}"
-                        sub_task_title = f"AP{idx+1}: {sub_role} - {proj_title}"
-
-                        sub_task = {
-                            "id": sub_task_id,
-                            "delegation_depth": depth,
-                            "parent_task_id": task_id,
-                            "title": sub_task_title,
-                            "capture_input": f"MANDAT VON STAFFING-DIRECTORIN ({agent_name}):\n\n{sub_mandate}\n\nProjekt-Kontext: {proj_title}",
-                            "mandate": sub_mandate,
-                            "role": sub_role,
-                            "plan": [
-                                f"Empfangen von Mandat durch {agent_name}",
-                                f"Fachliche Ausarbeitung durch {sub_name} ({sub_agent_id})",
-                                "Dokumentation und Ablage in Obsidian"
-                            ],
-                            "agent_id": sub_agent_id,
-                            "agent_name": sub_name,
-                            "trace_id": nom.trace_id or str(task.get("trace_id") or ""),
-                            "session_id": nom.session_id or str(task.get("session_id") or ""),
-                            "correlation_id": nom.correlation_id or f"task:{task_id}",
-                            "model": (sub_prof.get("model") if sub_prof else None) or "auto/best-free",
-                            "estimated_tokens": 60000,
-                            "estimated_cost_eur": 0.08,
-                            "subagents_count": 0,  # F-007: noch keine eigenen Subtasks
-
-                            "status": "approval",
-                            "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                            "result_summary": "",
-                            "artifact_path": "",
-                            # F033: deklarierte Felder von Anfang an — der
-                            # Produzent füllt sie bei Abschluss aus dem echten
-                            # Dispatch-Result (siehe `_run_task`).
-                            "consensus_verdict": "",
-                            "verdict": "",
-                            "decision_status": "",
-                            "policy_violation": False,
-                            "guardrail_violation": False,
-                            "verdict_source": "",
-                            "source_trace_id": str(task.get("trace_id") or ""),
-                            "parent_project_id": task.get("parent_project_id") or task_id,
-                            "target_action": task.get("target_action", "none"),
-                            "phase": "execution"
-                        }
-                        batch_subtasks.append(sub_task)
-
-                    # Komplexitätsgewichteter Budget-Split (Paperclip Governance)
-                    try:
-                        from backend.role_budget_engine import allocate_task_budget_to_subagents
-                        # D13: kein Budget-Minting aus der Subtask-Anzahl.
-                        # Fehlt das Elternbudget, muss die Engine fail-closed
-                        # `NO_PARENT_BUDGET` liefern.
-                        parent_tok_budget = int(task.get("token_budget") or 0)
-                        parent_eur_budget = float(task.get("cost_limit_eur") or 0.0)
-                        allocate_task_budget_to_subagents(
-                            parent_task_id=task_id,
-                            total_token_budget=parent_tok_budget,
-                            subtasks=batch_subtasks,
-                            total_cost_limit_eur=parent_eur_budget,
-                        )
-                    except Exception as _bg_err:
-                        logger.debug(f"[Auto-Staffing] Budget-Split Fallback: {_bg_err}")
-
-                    for sub_task in batch_subtasks:
-                        sub_task_id = sub_task["id"]
-                        sub_agent_id = sub_task["agent_id"]
-                        sub_name = sub_task["agent_name"]
-                        data.setdefault("tasks", []).insert(0, sub_task)
-                        task.setdefault("subtask_ids", []).append(sub_task_id)
-                        task["phase"] = "staffing"
-                        ticker("Approval Gate", f"Neuer Sub-Task #{sub_task_id} ({sub_name}) wartet auf Freigabe!")
-                        logger.info(f"[Auto-Staffing] Sub-Task #{sub_task_id} für {sub_name} im Approval Gate angelegt.")
-                        # --- AUTO-HIRE HOOK ---
-                        try:
-                            _paperclip_hire_profile_by_id(sub_agent_id, profiles, current_task_id=sub_task_id)
-                        except Exception as _hire_err:
-                            logger.warning(f"[AutoHire/MusterB] {_hire_err}")
-
-                    # D01/MED: nach dem Fan-out die Prognose durch die echte
-                    # Subtask-Anzahl ersetzen. Der Task wird in `_commit()` (finally)
-                    # atomar in den Task-Store gemergt.
-                    if task.get("subtask_ids"):
-                        task["subagents_count"] = len(task["subtask_ids"])
-                        task["subagents_count_source"] = "actual"
-                        task["subagents_count_estimated"] = False
-        except Exception as parse_err:
-            logger.warning(f"[Auto-Staffing] Fehler beim Parsen der Nominierungsmatrix: {parse_err}")
-
-        # Cascade-Loop Schritt A: Hat Robert strategisch vorgelegt ohne direkte Nominierung? -> Sandy beauftragen
-        # D02/MED: 'micha' ist aus der SSOT entfernt — nie wieder als Sonderfall.
-        if agent_id in ("executive_decision_architect", "robert", "default") and not task.get("parent_project_id"):
-            if not task.get("subtask_ids"):
-                _spawn_tracked(trigger_sandy(task, profiles), name="sandy_staffing")
-
-        # Cascade-Loop Schritt B: Ist ein Sub-Task fertig und alle Geschwister-Tasks abgeschlossen? -> Synthese starten
-        parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
-        parent_ok = bool(parent_pid and parent_pid != task_id)
-
-    except asyncio.CancelledError:
-        # CancelledError erbt BaseException — vorher blieb der Task in
-        # 'approval'/'in_progress' und wurde vom Deadlock-Supervisor reaktiviert.
-        logger.info("[MissionControl] Task %s durch Cancel abgebrochen.", task_id)
-        parent_ok = False
-        task["status"] = "cancelled"
-        task["result_summary"] = "Aufgabe durch Operator abgebrochen"
-        ticker("Mission Control", f"Task #{task_id} abgebrochen")
-        raise
-    except Exception as ex:
-        logger.error(f"[Execution Error] _execute_mission_control_task {task_id}: {ex}")
-        parent_ok = False
-        task["status"] = "failed"
-        task["result_summary"] = f"Fehler bei Aufgabenausführung: {ex}"
-        ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {ex}")
-    finally:
-        # P0-6: Heartbeat stoppen, Lease freigeben, Idempotency-Key abschliessen.
-        if heartbeat_task is not None:
-            heartbeat_task.cancel()
-        if lease_token and deadlock_supervisor is not None:
-            try:
-                def _lease_release_sync():
-                    return deadlock_supervisor.release_lease(str(task_id), lease_token)
-
-                await asyncio.shield(asyncio.to_thread(_lease_release_sync))
-            except asyncio.CancelledError:
-                logger.warning("[MissionControl] Cancel während Lease-Release; Cleanup läuft weiter.")
-            except Exception as rel_exc:
-                logger.warning(f"[MissionControl] Lease-Release fehlgeschlagen: {rel_exc}")
-        if idem_key:
+        # Der Guard schuetzt nur echte, per Lease geclaimte Tasks. Ohne Lease
+        # (isolierter Store / Tests) gibt es keinen verlaesslichen Lauf-Kontext —
+        # ein task_id-basierter Key wuerde dort wiederholte Laeufe faelschlich
+        # als Duplikat blockieren.
+        if lease_token:
             try:
                 from backend.idempotency_guard import idempotency_guard
 
-                def _idem_finish_sync():
-                    if task.get("status") == "completed":
-                        idempotency_guard.record_execution_result(
-                            idem_key,
-                            {
-                                "status": "completed",
-                                "result_summary": mark_truncated(
-                                    task.get("result_summary", ""), 300,
-                                    artifact=f"tasks.result/{task_id}",
-                                ),
-                            },
-                        )
-                    else:
-                        # Fehlgeschlagener Lauf darf den Key nicht als "erledigt"
-                        # markerieren — sonst wird der naechste Retry geblockt.
-                        idempotency_guard.invalidate_key(idem_key)
+                def _idem_claim_sync():
+                    return idempotency_guard.check_or_register(
+                        "mission_control_task",
+                        {"task_id": str(task_id),
+                         "prompt": mark_truncated(prompt_text, 2000, artifact=f"tasks.capture_input/{task_id}")},
+                        explicit_key=f"mct-{task_id}",
+                    )
 
-                await asyncio.shield(asyncio.to_thread(_idem_finish_sync))
-            except asyncio.CancelledError:
-                logger.warning("[MissionControl] Cancel während Idempotency-Abschluss; Cleanup läuft weiter.")
-            except Exception as idem_fin_exc:
-                logger.warning(f"[MissionControl] Idempotency-Abschluss fehlgeschlagen: {idem_fin_exc}")
+                idem = await asyncio.to_thread(_idem_claim_sync)
+                cancel_token.check()
+                if idem.get("blocked"):
+                    cached = idem.get("cached_result") or {}
+                    task["status"] = "completed"
+                    task["result_summary"] = cached.get(
+                        "result_summary", "Bereits ausgefuehrt (Idempotency-Cache)."
+                    )
+                    ticker(agent_name, f"Task #{task_id} war bereits ausgefuehrt — Duplicate geblockt.")
+                    await _commit_async()
+                    cancel_token.check()
+                    return
+                idem_key = idem.get("idempotency_key")
+            except Exception as idem_exc:
+                logger.warning(f"[MissionControl] Idempotency-Guard nicht verfuegbar ({idem_exc}).")
+
+        if lease_token:
+            async def _lease_heartbeat():
+                while True:
+                    await asyncio.sleep(60.0)
+                    try:
+                        if deadlock_supervisor is not None:
+                            ok = await asyncio.to_thread(
+                                deadlock_supervisor.heartbeat, str(task_id), lease_token, ttl_seconds=300
+                            )
+                            if ok is False:
+                                cancel_token.cancel("lease_lost")
+                                return
+                    except Exception as hb_exc:
+                        # Heartbeat-Verlust darf nicht unbemerkt zum Ablauf der
+                        # Lease führen, während der Task weiterläuft (Audit).
+                        logger.error("[MissionControl] Lease-Heartbeat %s fehlgeschlagen: %s", task_id, hb_exc)
+                        cancel_token.cancel("lease_heartbeat_failed")
+                        return
+
+            heartbeat_task = asyncio.create_task(_lease_heartbeat())
+
         try:
-            await asyncio.shield(_commit_async())
+            task["active_tool"] = "Tool: web_search & archon_core"
+            await _commit_async()
+            cancel_token.check()
+
+            # Echter LLM-Dispatch — vorher Cancel-Token pruefen.
+            cancel_token.check()
+            res = await dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=prof.get("id", agent_id) if prof else agent_id,
+                agent_name=agent_name,
+                prompt=f"Führe bitte folgende Projektaufgabe in Archon OS durch:\n\n{prompt_text}\n\nLiefere eine klare, fundierte Ausarbeitung sowie die wichtigsten Handlungsschritte.",
+                role=prof.get("name", "Spezialist") if prof else "Spezialist",
+                system_prompt=system_prompt,
+                model=model,
+                # Audit v3 2.1.3: task_id mitgeben — sonst wird das Task-Budget nie abgebucht
+                task_id=str(task_id or ""),
+            )
+            cancel_token.check()
+
+            reply = res.get("content", "").strip()
+            if res.get("status") in ("error", "blocked") or not reply or reply.startswith(("Fehler:", "Fehler ", "[Fehler")):
+                # Dispatcher meldet Fehler -> Task als failed markieren
+                task["status"] = "failed"
+                task["result_summary"] = "Dispatcher-Fehler: " + (
+                    mark_truncated(reply, 200, artifact=f"dispatcher/{task_id}") if reply else "leere Antwort"
+                )
+                ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {reply[:100]}")
+                return
+
+            # Aktualisiere Task
+            task["status"] = "completed"
+            task["result_summary"] = reply
+            # F033/H-14-1: echte strukturierte Hoheits-/Guardrail-Felder aus dem
+            # Dispatch-Result am Kind persistieren (nicht nur result_summary=reply).
+            task.update(extract_dispatch_verdict(res))
+            task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            from archon.core.runtime import run_io_bound
+            obs_path = await run_io_bound(sync_obsidian, task)
+            cancel_token.check()
+            task["artifact_path"] = obs_path
+
+            ticker("Obsidian", f"Dokumentation {os.path.basename(obs_path)} für Task #{task_id} abgelegt")
+            ticker("Mission Control", f"Task #{task_id} erfolgreich abgeschlossen")
+
+            # --- AUTO-STAFFING / DISPATCH-KETTE (MUSTER B) ---
+            # Prüfe, ob die Antwort eine Nominierungsmatrix (nominated_agents) enthält
+            try:
+                candidate_blocks = _extract_nominated_json_blocks(reply)
+                for jm in candidate_blocks:
+                    parsed_dispatch = _parse_nomination_batch(jm)
+                    if parsed_dispatch is None:
+                        continue
+                    nominated = parsed_dispatch.nominated_agents
+                    if len(nominated) > 0:
+                        # KRITISCH (Audit 23.11.2026): Delegations-Rekursion und
+                        # Fan-out hart begrenzen — sonst kann ein LLM, das sich
+                        # selbst nominiert, unbegrenzt kostenpflichtige Calls
+                        # auslösen.
+                        max_depth = 3
+                        max_fanout = 5
+                        depth = int(task.get("delegation_depth", 0) or 0) + 1
+                        if depth > max_depth:
+                            logger.warning(
+                                "[Delegation] Tiefe %s > %s bei Task %s — weitere Nominierung abgelehnt.",
+                                depth, max_depth, task_id,
+                            )
+                            ticker("Delegation", f"Task #{task_id}: maximale Delegationstiefe erreicht — keine weiteren Sub-Tasks.")
+                            continue
+                        nominated = _fanout_cap_guard(nominated, max_fanout, str(task_id), ticker)
+                        proj_title = parsed_dispatch.project_title or task_title
+                        batch_subtasks = []
+                        for idx, nom in enumerate(nominated):
+                            sub_agent_id = nom.agent_id.strip()
+                            sub_role = nom.role or "Spezialist"
+                            sub_mandate = nom.mandate.strip()
+                            if not sub_agent_id or sub_agent_id.startswith("<"):
+                                continue
+
+                            # Passenden Namen und Profil suchen
+                            sub_prof = next((p for p in profiles if p.get("id") == sub_agent_id), None)
+                            sub_name = sub_prof.get("person_name", sub_agent_id) if sub_prof else sub_role
+                            sub_task_id = f"task-{int(time.time() * 1000)}-{idx}"
+                            sub_task_title = f"AP{idx+1}: {sub_role} - {proj_title}"
+
+                            sub_task = {
+                                "id": sub_task_id,
+                                "delegation_depth": depth,
+                                "parent_task_id": task_id,
+                                "title": sub_task_title,
+                                "capture_input": f"MANDAT VON STAFFING-DIRECTORIN ({agent_name}):\n\n{sub_mandate}\n\nProjekt-Kontext: {proj_title}",
+                                "mandate": sub_mandate,
+                                "role": sub_role,
+                                "plan": [
+                                    f"Empfangen von Mandat durch {agent_name}",
+                                    f"Fachliche Ausarbeitung durch {sub_name} ({sub_agent_id})",
+                                    "Dokumentation und Ablage in Obsidian"
+                                ],
+                                "agent_id": sub_agent_id,
+                                "agent_name": sub_name,
+                                "trace_id": nom.trace_id or str(task.get("trace_id") or ""),
+                                "session_id": nom.session_id or str(task.get("session_id") or ""),
+                                "correlation_id": nom.correlation_id or f"task:{task_id}",
+                                "model": (sub_prof.get("model") if sub_prof else None) or "auto/best-free",
+                                "estimated_tokens": 60000,
+                                "estimated_cost_eur": 0.08,
+                                "subagents_count": 0,  # F-007: noch keine eigenen Subtasks
+
+                                "status": "approval",
+                                "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                "result_summary": "",
+                                "artifact_path": "",
+                                # F033: deklarierte Felder von Anfang an — der
+                                # Produzent füllt sie bei Abschluss aus dem echten
+                                # Dispatch-Result (siehe `_run_task`).
+                                "consensus_verdict": "",
+                                "verdict": "",
+                                "decision_status": "",
+                                "policy_violation": False,
+                                "guardrail_violation": False,
+                                "verdict_source": "",
+                                "source_trace_id": str(task.get("trace_id") or ""),
+                                "parent_project_id": task.get("parent_project_id") or task_id,
+                                "target_action": task.get("target_action", "none"),
+                                "phase": "execution"
+                            }
+                            batch_subtasks.append(sub_task)
+
+                        # Komplexitätsgewichteter Budget-Split (Paperclip Governance)
+                        try:
+                            from backend.role_budget_engine import allocate_task_budget_to_subagents
+                            # D13: kein Budget-Minting aus der Subtask-Anzahl.
+                            # Fehlt das Elternbudget, muss die Engine fail-closed
+                            # `NO_PARENT_BUDGET` liefern.
+                            parent_tok_budget = int(task.get("token_budget") or 0)
+                            parent_eur_budget = float(task.get("cost_limit_eur") or 0.0)
+                            allocate_task_budget_to_subagents(
+                                parent_task_id=task_id,
+                                total_token_budget=parent_tok_budget,
+                                subtasks=batch_subtasks,
+                                total_cost_limit_eur=parent_eur_budget,
+                            )
+                        except Exception as _bg_err:
+                            logger.debug(f"[Auto-Staffing] Budget-Split Fallback: {_bg_err}")
+
+                        for sub_task in batch_subtasks:
+                            sub_task_id = sub_task["id"]
+                            sub_agent_id = sub_task["agent_id"]
+                            sub_name = sub_task["agent_name"]
+                            data.setdefault("tasks", []).insert(0, sub_task)
+                            task.setdefault("subtask_ids", []).append(sub_task_id)
+                            task["phase"] = "staffing"
+                            ticker("Approval Gate", f"Neuer Sub-Task #{sub_task_id} ({sub_name}) wartet auf Freigabe!")
+                            logger.info(f"[Auto-Staffing] Sub-Task #{sub_task_id} für {sub_name} im Approval Gate angelegt.")
+                            # --- AUTO-HIRE HOOK ---
+                            try:
+                                _paperclip_hire_profile_by_id(sub_agent_id, profiles, current_task_id=sub_task_id)
+                            except Exception as _hire_err:
+                                logger.warning(f"[AutoHire/MusterB] {_hire_err}")
+
+                        # D01/MED: nach dem Fan-out die Prognose durch die echte
+                        # Subtask-Anzahl ersetzen. Der Task wird in `_commit()` (finally)
+                        # atomar in den Task-Store gemergt.
+                        if task.get("subtask_ids"):
+                            task["subagents_count"] = len(task["subtask_ids"])
+                            task["subagents_count_source"] = "actual"
+                            task["subagents_count_estimated"] = False
+            except Exception as parse_err:
+                logger.warning(f"[Auto-Staffing] Fehler beim Parsen der Nominierungsmatrix: {parse_err}")
+
+            # Cascade-Loop Schritt A: Hat Robert strategisch vorgelegt ohne direkte Nominierung? -> Sandy beauftragen
+            # D02/MED: 'micha' ist aus der SSOT entfernt — nie wieder als Sonderfall.
+            if agent_id in ("executive_decision_architect", "robert", "default") and not task.get("parent_project_id"):
+                if not task.get("subtask_ids"):
+                    _spawn_tracked(trigger_sandy(task, profiles), name="sandy_staffing")
+
+            # Cascade-Loop Schritt B: Ist ein Sub-Task fertig und alle Geschwister-Tasks abgeschlossen? -> Synthese starten
+            parent_pid = task.get("parent_project_id") or task.get("parent_task_id")
+            parent_ok = bool(parent_pid and parent_pid != task_id)
+
         except asyncio.CancelledError:
-            logger.warning("[MissionControl] Cancel während Status-Commit; Commit läuft weiter.")
-        # Audit v3 2.1.3: fan_in erst NACH dem Commit starten — sonst liest die Synthese
-        # den alten Geschwister-Status aus der letzten Persistierung.
-        if parent_ok:
-            _spawn_tracked(fan_in(parent_pid), name=f"fan_in:{parent_pid}")
+            # CancelledError erbt BaseException — vorher blieb der Task in
+            # 'approval'/'in_progress' und wurde vom Deadlock-Supervisor reaktiviert.
+            logger.info("[MissionControl] Task %s durch Cancel abgebrochen.", task_id)
+            parent_ok = False
+            task["status"] = "cancelled"
+            task["result_summary"] = "Aufgabe durch Operator abgebrochen"
+            ticker("Mission Control", f"Task #{task_id} abgebrochen")
+            raise
+        except Exception as ex:
+            logger.error(f"[Execution Error] _execute_mission_control_task {task_id}: {ex}")
+            parent_ok = False
+            task["status"] = "failed"
+            task["result_summary"] = f"Fehler bei Aufgabenausführung: {ex}"
+            ticker(agent_name or "Mission Control", f"Task #{task_id} fehlgeschlagen: {ex}")
+        finally:
+            # P0-6: Heartbeat stoppen, Lease freigeben, Idempotency-Key abschliessen.
+            if heartbeat_task is not None:
+                heartbeat_task.cancel()
+            if lease_token and deadlock_supervisor is not None:
+                try:
+                    def _lease_release_sync():
+                        return deadlock_supervisor.release_lease(str(task_id), lease_token)
+
+                    await asyncio.shield(asyncio.to_thread(_lease_release_sync))
+                except asyncio.CancelledError:
+                    logger.warning("[MissionControl] Cancel während Lease-Release; Cleanup läuft weiter.")
+                except Exception as rel_exc:
+                    logger.warning(f"[MissionControl] Lease-Release fehlgeschlagen: {rel_exc}")
+            if idem_key:
+                try:
+                    from backend.idempotency_guard import idempotency_guard
+
+                    def _idem_finish_sync():
+                        if task.get("status") == "completed":
+                            idempotency_guard.record_execution_result(
+                                idem_key,
+                                {
+                                    "status": "completed",
+                                    "result_summary": mark_truncated(
+                                        task.get("result_summary", ""), 300,
+                                        artifact=f"tasks.result/{task_id}",
+                                    ),
+                                },
+                            )
+                        else:
+                            # Fehlgeschlagener Lauf darf den Key nicht als "erledigt"
+                            # markerieren — sonst wird der naechste Retry geblockt.
+                            idempotency_guard.invalidate_key(idem_key)
+
+                    await asyncio.shield(asyncio.to_thread(_idem_finish_sync))
+                except asyncio.CancelledError:
+                    logger.warning("[MissionControl] Cancel während Idempotency-Abschluss; Cleanup läuft weiter.")
+                except Exception as idem_fin_exc:
+                    logger.warning(f"[MissionControl] Idempotency-Abschluss fehlgeschlagen: {idem_fin_exc}")
+            try:
+                await asyncio.shield(_commit_async())
+            except asyncio.CancelledError:
+                logger.warning("[MissionControl] Cancel während Status-Commit; Commit läuft weiter.")
+            # Audit v3 2.1.3: fan_in erst NACH dem Commit starten — sonst liest die Synthese
+            # den alten Geschwister-Status aus der letzten Persistierung.
+            if parent_ok:
+                _spawn_tracked(fan_in(parent_pid), name=f"fan_in:{parent_pid}")
+    except asyncio.CancelledError:
+        # D02-H2: CancelledError erbt BaseException — ohne diesen aeusseren
+        # Zweig blieb der Task in 'approval'/'in_progress' und wurde vom
+        # Deadlock-Supervisor als kostenpflichtiger Geistertask reaktiviert.
+        logger.info("[MissionControl] Task %s durch Cancel abgebrochen (aeussere Phase).", task_id)
+        parent_ok = False
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+        if task is not None:
+            task["status"] = "cancelled"
+            task["result_summary"] = "Aufgabe durch Operator abgebrochen"
+            ticker("Mission Control", f"Task #{task_id} abgebrochen")
+            try:
+                await asyncio.shield(_commit_async())
+            except asyncio.CancelledError:
+                logger.warning(
+                    "[MissionControl] Cancel waehrend Cancel-Commit; Status 'cancelled' bleibt im Store gesetzt."
+                )
+        raise
 
 
 def _paperclip_hire_profile_by_id(

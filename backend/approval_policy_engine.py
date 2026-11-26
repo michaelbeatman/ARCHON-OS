@@ -10,7 +10,6 @@ Revisionssicheres Freigabesystem mit:
 """
 
 import datetime
-import hashlib
 import json
 import os
 import sqlite3
@@ -25,6 +24,14 @@ try:
 except Exception:
     DB_FILE = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# D14/M4: Domains, deren Antraege grundsaetzlich HITL-pflichtig sind. Bei
+# diesen Domains ist ein Antrag ohne zuordenbaren Ersteller wirkungslos und
+# wird bei der Freigabe hart abgelehnt (kein Self-Approval durch den Admin).
+HITL_REQUIRED_DOMAINS = frozenset({
+    "agent_dispatch", "boardroom", "workflow_authoring",
+    "context_hygiene", "system", "governance",
+})
 
 # D04/HIGH (A4-Handoff): harter Mindestabstand zwischen der Auto-Freigabe- und
 # der Vier-Augen-Schwelle. Die blosse Ungleichung `auto_max < four_eyes_min`
@@ -536,7 +543,8 @@ class ApprovalPolicyEngine:
     def evaluate_and_enqueue(self, domain: str, title: str, amount: float = 0.0,
                              reference_id: Optional[str] = None, payload: Optional[dict] = None,
                              requester_id: Optional[str] = None,
-                             force_four_eyes: bool = False) -> Dict[str, Any]:
+                             force_four_eyes: bool = False,
+                             requester_required: bool = False) -> Dict[str, Any]:
         # D04/MED: requester_id ist jetzt Teil des Engine-Vertrags. Er wird
         # zusaetzlich signiert im payload_json abgelegt (defense in depth),
         # damit auch Router/Caller ohne Spaltenzugriff den Ersteller pruefen.
@@ -544,6 +552,18 @@ class ApprovalPolicyEngine:
         requester = str(requester_id or "").strip()
         if requester:
             stored_payload.setdefault("_requester_id", requester)
+        # D14/M4: HITL-pflichtige Antraege markieren die Erstellerpflicht
+        # explizit im signierten Payload. `approve_request()` leert damit nicht
+        # still laufen, falls die requester_id-Spalte aus einem Legacy-Pfad
+        # leer bleibt.
+        requires_requester = bool(
+            requester
+            or requester_required
+            or force_four_eyes
+            or str(domain or "").strip().lower() in HITL_REQUIRED_DOMAINS
+        )
+        if requires_requester:
+            stored_payload.setdefault("_requester_required", True)
         policies = {p["policy_key"]: p["policy_value"] for p in self.get_policies(domain)}
         now = datetime.datetime.now(datetime.timezone.utc)
         now_iso = now.isoformat()
@@ -650,18 +670,28 @@ class ApprovalPolicyEngine:
                 # D04/MED: Ersteller-Sperre zentral im Engine — nicht nur im
                 # Router. Jeder Aufrufer (u. a. MCP-Pfad) ist damit gebunden.
                 # Quelle: eigene Spalte -> signiertes Payload -> created_by.
+                pl = req["payload_json"]
+                if isinstance(pl, str):
+                    try:
+                        pl = json.loads(pl)
+                    except (TypeError, ValueError):
+                        pl = {}
+                if not isinstance(pl, dict):
+                    pl = {}
                 requester = str(req["requester_id"] or "").strip()
                 if not requester:
-                    pl = req["payload_json"]
-                    if isinstance(pl, str):
-                        try:
-                            pl = json.loads(pl)
-                        except (TypeError, ValueError):
-                            pl = {}
-                    if isinstance(pl, dict):
-                        requester = str(pl.get("_requester_id") or pl.get("requester_id") or "").strip()
+                    requester = str(pl.get("_requester_id") or pl.get("requester_id") or "").strip()
                 if not requester and "created_by" in req.keys():
                     requester = str(req["created_by"] or "").strip()
+                # D14/M4: bei HITL-pflichtigen Antraegen darf ein leerer
+                # Ersteller nicht still durchgewinkt werden — sonst ist die
+                # Ersteller-Sperre wirkungslos und eine identifizierte Person
+                # kann sich selbst freigeben.
+                if not requester and bool(pl.get("_requester_required")):
+                    raise ValueError(
+                        "Vier-Augen-Prinzip: Ersteller der Freigabeanfrage nicht verifizierbar "
+                        "— Freigabe verweigert (fail-closed)."
+                    )
                 if requester and bool(
                     _actor_identity_tokens(approver_id) & _actor_identity_tokens(requester)
                 ):
@@ -740,7 +770,7 @@ class ApprovalPolicyEngine:
             if req["status"] in ("approved", "rejected"):
                 raise ValueError(f"Anfrage kann nicht abgelehnt werden (aktueller Status: {req['status']}).")
 
-            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()  # noqa: F841
             cur.execute("""
                 UPDATE approval_requests
                 SET status = 'rejected', rejected_by = ?, rejected_reason = ?

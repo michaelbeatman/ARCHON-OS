@@ -226,6 +226,14 @@ def resolve_debate_consensus(
     vetoet bei Gegenmehrheit hart (``NO_CONSENSUS_BY_AUTHORITY``). Ein geteiltes
     hoechstes Tier bleibt ohne Flip -> NO_CONSENSUS + HITL.
     """
+    # D14/M1: `tie_break` ist kein dekorativer Parameter mehr. Nur die
+    # dokumentierte Autoritätsregel und die harte "no_consensus"-Regel sind
+    # erlaubt; alles andere ist ein Konfigurationsfehler (fail-closed).
+    tie_break = str(tie_break or _DEFAULT_TIE_BREAK_RULE).strip().lower()
+    if tie_break not in (_DEFAULT_TIE_BREAK_RULE, "no_consensus"):
+        raise ValueError(f"Unbekannte tie_break-Regel: {tie_break}")
+    authority_enabled = tie_break == _DEFAULT_TIE_BREAK_RULE
+
     parsed = validate_debate_statements(statements)
     yes_votes = 0
     total_votes = 0
@@ -260,6 +268,7 @@ def resolve_debate_consensus(
                 "veto_by": agent_id,
                 "evidence": evidence + [ConsensusEvidence(agent_id, veto_marker or "POLICY_VIOLATION")],
                 "tie_break_rule": tie_break,
+                "applied_tie_break": "policy_veto",
                 "authority_weights": dict(_TIER_WEIGHTS),
                 "severity": statement.severity or "high",
             }
@@ -301,7 +310,8 @@ def resolve_debate_consensus(
     weighted_tie = weighted_yes == weighted_no and weighted_total > 0
     weighted_required = max(2, math.ceil(2 * weighted_total / 3))
     if (
-        majority_rule != "unanimous"
+        authority_enabled
+        and majority_rule != "unanimous"
         and total_votes >= 2
         and weighted_total > 0
         and weighted_yes > weighted_no
@@ -312,14 +322,20 @@ def resolve_debate_consensus(
         applied_tie_break = "authority_weight_majority"
         consensus_reached = True
 
-    # D14/HIGH: hartes Veto des hoechsten ANWESENDEN Tiers bei Gegenmehrheit —
-    # auch wenn die rohe/gewichtete Stimmenzahl sonst Konsens ergaebe. Ein
-    # untergeordnetes Tier darf keine hoehere Instanz ueberstimmen.
+    # D14/M1: die Hoechst-Tier-Schleife darf NUR beendet werden, wenn das
+    # aktuelle Tier tatsaechlich entschieden hat (Veto oder Tie-Break). Ein
+    # intern gespaltenes Tier uebt kein Veto aus — dort wird zum naechsten
+    # Tier fortgesetzt, damit ein klares Veto eines nachgelagerten Tiers
+    # nicht verloren geht.
+    unresolved_splits: List[str] = []
+    tier_decided = False
     for tier in ("executive", "lead", "specialist"):
         tally = tier_tallies[tier]
         if tally["yes"] + tally["no"] == 0:
             continue
         if tally["no"] > tally["yes"]:
+            # Hartes Veto des hoechsten ANWESENDEN Tiers bei Gegenmehrheit —
+            # auch wenn die rohe/gewichtete Stimmenzahl sonst Konsens ergaebe.
             consensus_reached = False
             verdict = "NO_CONSENSUS_BY_AUTHORITY"
             applied_tie_break = f"highest_tier:{tier}:no"
@@ -335,19 +351,39 @@ def resolve_debate_consensus(
                 ),
                 None,
             )
-        elif (
-            weighted_tie
+            tier_decided = True
+            break
+        if tally["no"] > 0 and tally["yes"] > 0:
+            # Gespaltenes Tier: kein Veto, kein Tie-Break -> naechstes Tier.
+            unresolved_splits.append(tier)
+            continue
+        # Einstimmiges Ja des hoechsten anwesenden Tiers ist eine
+        # entscheidende Instanz und beendet die Suche. Bei exaktem
+        # Gewichts-Gleichstand wirkt zusaetzlich die Autoritaetsregel.
+        if (
+            authority_enabled
+            and weighted_tie
             and not consensus_reached
-            and tally["no"] == 0
-            and tally["yes"] > 0
         ):
-            # Exakter Gleichstand: hoechstes anwesendes Tier entscheidet,
-            # aber nur wenn es dort intern einstimmig ist. Sonst HITL.
             consensus_reached = True
             verdict = "CONSENSUS_REACHED_BY_AUTHORITY"
             applied_tie_break = f"highest_tier:{tier}:yes"
-        # geteiltes hoechstes Tier -> kein Flip, NO_CONSENSUS bleibt (HITL).
+        elif unresolved_splits and not applied_tie_break:
+            # Ein hoheres Tier war gespalten; dieses Tier hat den Konflikt
+            # entschieden — die Regel muss im Beweisobjekt stehen.
+            applied_tie_break = f"highest_tier:{tier}:yes"
+        tier_decided = True
         break
+
+    if unresolved_splits and not tier_decided and not applied_tie_break:
+        # Keine entscheidende Instanz: kein Konsens, HITL (fail-closed).
+        consensus_reached = False
+        verdict = "NO_CONSENSUS"
+        applied_tie_break = (
+            "no_consensus"
+            if not authority_enabled
+            else f"tier_conflict:unresolved:{unresolved_splits[0]}"
+        )
 
     return {
         "consensus_reached": consensus_reached,

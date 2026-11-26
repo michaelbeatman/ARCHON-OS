@@ -1,7 +1,5 @@
 """Router fuer Prompt Studio Upload und Prompt-Optimierung."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import asyncio
 import csv
@@ -9,12 +7,14 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import Depends as _ArchonDepends
 from pydantic import BaseModel
 
 from archon.core.paths import OPT_DATA_DIR
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 logger = logging.getLogger("archon.routers.prompts")
 
@@ -180,15 +180,26 @@ async def optimize_prompt_endpoint(req: PromptOptimizeRequest):
         "WICHTIG: Gib AUSSCHLIESSLICH den 5-Felder-Prompt aus, ohne jegliches Vorgeplänkel oder Nachwort!"
     )
 
+    # D13-H1: Prompt-Optimizer hatte keinen task_id-Root; die Korrelation
+    # kommt jetzt aus Trace-/Eingabe-Kontext statt aus time.time_ns().
+    from backend.trajectory_budget import trajectory_root, trajectory_root_scope
     try:
-        res = await app_main.core_dispatcher.dispatch_to_omniroute_or_container(
-            agent_id="prompt_optimizer",
-            agent_name="Prompt Optimizer",
-            prompt=f"Transformiere folgende Benutzereingabe:\n\n{raw_input}",
-            role="Prompt Architect",
-            system_prompt=optimizer_system_prompt,
-            model="auto/best-fast",
-        )
+        from backend.trace_context import current_trace_id
+        correlation = str(current_trace_id() or "").strip()
+    except Exception:
+        correlation = ""
+    root = trajectory_root("prompt-optimizer", correlation or raw_input[:200])
+
+    try:
+        with trajectory_root_scope(root):
+            res = await app_main.core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id="prompt_optimizer",
+                agent_name="Prompt Optimizer",
+                prompt=f"Transformiere folgende Benutzereingabe:\n\n{raw_input}",
+                role="Prompt Architect",
+                system_prompt=optimizer_system_prompt,
+                model="auto/best-fast",
+            )
         opt_text = res.get("content", "").strip()
         if not opt_text or len(opt_text) < 30:
             opt_text = (

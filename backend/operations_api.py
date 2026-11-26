@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Literal, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from archon.core.provider_registry import get_provider
 from backend.operations_bulk import (
     _KANBAN_UNDO_STORE as _KANBAN_UNDO_STORE,
 )
@@ -270,13 +269,16 @@ logger = logging.getLogger("archon_os.operations_api")
 # D3/5: QualityReviewVerdict nach backend/operations_review.py ausgelagert (Re-Export am Kopf).
 
 
-def _load_kanban_delegation_payload(raw_payload: Any, task_id: str = "") -> Optional[Any]:
-    """Konsumentenseite des kanonischen Handoffs (F030).
+def _load_kanban_delegation_payload(
+    raw_payload: Any, task_id: str = "", *, require_signature: bool = False
+) -> Optional[Any]:
+    """Konsumentenseite des kanonischen Handoffs (F030, D11-H1/H2).
 
     Ein einziger Aufruf der SSOT-Funktion in `archon.core.delegation`:
-    Legacy-Aliase -> extra="forbid"-Validierung -> Server-Kontext
-    (Tenant/Projekt/Cancel/Taint/Budget/Soul) -> HMAC-Signatur. Kein lokales
-    Schema, keine zweite model_dump()-Projektion, kein stiller Fallback.
+    HMAC-Verifikation **vor** jeder Kanonisierung -> bei signierten Payloads
+    unveraenderte Uebernahme des gespeicherten Objekts -> extra="forbid"-
+    Validierung. Kein lokales Schema, keine zweite model_dump()-Projektion,
+    kein stiller Fallback.
     """
     if raw_payload is None:
         return None
@@ -284,14 +286,24 @@ def _load_kanban_delegation_payload(raw_payload: Any, task_id: str = "") -> Opti
     from archon.core.delegation import (
         HandoffDelegationPayload,
         canonicalize_delegation_payload,
+        is_signed_delegation_payload,
+        load_verified_delegation_payload,
     )
     try:
-        data = canonicalize_delegation_payload(
-            raw_payload, task_id=str(task_id or "")
-        )
+        if is_signed_delegation_payload(raw_payload):
+            # Signierte SSOT: Verify vor Kanonisierung, unveränderte Daten.
+            data = load_verified_delegation_payload(
+                raw_payload, task_id=str(task_id or ""), require_signature=True
+            )
+        elif require_signature:
+            logger.error("[KanbanWorker] Signatur fehlt — Payload abgewiesen.")
+            return None
+        else:
+            # Unsignierte Legacy-Created-Events: dokumentierter Kanonisierungspfad.
+            data = canonicalize_delegation_payload(raw_payload, task_id=str(task_id or ""))
         return HandoffDelegationPayload.model_validate(data)
     except (ValidationError, TypeError, ValueError) as exc:
-        logger.error("[KanbanWorker] Delegations-Payloadschema ungueltig: %s", exc)
+        logger.error("[KanbanWorker] Delegations-Payload/HMAC ungueltig: %s", exc)
         return None
 
 
@@ -360,25 +372,49 @@ def _maybe_auto_reset_zombie_tasks(conn: sqlite3.Connection) -> int:
 
     try:
         from backend.trajectory_budget import zombie_eligible
-    except Exception:
-        zombie_eligible = None  # type: ignore[assignment]
+    except Exception as exc:
+        # D07-H1: kein fail-open. Ohne verifizierten Liveness-Guard darf
+        # ueberhaupt kein Task zurueckgesetzt werden (sonst doppelte
+        # Seiteneffects laufender Agenten).
+        logger.error(
+            "[OperationsAPI] Zombie-Liveness-Guard nicht verfuegbar — kein Reset: %s", exc
+        )
+        try:
+            from backend.audit_log import _require_audit_event
+
+            _require_audit_event(
+                "recovery",
+                "zombie_guard_unavailable",
+                "system",
+                {"error": str(exc)[:300], "candidates": len(candidates)},
+            )
+        except Exception as audit_exc:
+            logger.error(
+                "[OperationsAPI] Audit zombie_guard_unavailable fehlgeschlagen: %s", audit_exc
+            )
+        return 0
 
     eligible_ids = []
     for row in candidates:
         row_dict = {"id": row[0], "status": row[1]}
         for idx, col_name in enumerate(extra_cols, start=2):
             row_dict[col_name] = row[idx]
-        if zombie_eligible is None or zombie_eligible(row_dict, now=now):
+        if zombie_eligible(row_dict, now=now):
             eligible_ids.append(row[0])
 
     if not eligible_ids:
         return 0
 
     reset_count = 0
+    # Zustaetzlicher CAS: nur Tasks ohne aktive Lease duerfen zurueckgesetzt
+    # werden — auch wenn der Guard zwischen Lesen und Schreiben veraltet.
+    _cas = " AND (claim_expires IS NULL OR CAST(claim_expires AS REAL) <= ?)" if "claim_expires" in extra_cols else ""
+    _cas_args = (now,) if _cas else ()
     for tid in eligible_ids:
         cur = conn.execute(
-            "UPDATE tasks SET status = 'todo', started_at = NULL WHERE id = ? AND status = 'in_progress'",
-            (tid,),
+            "UPDATE tasks SET status = 'todo', started_at = NULL "
+            "WHERE id = ? AND status = 'in_progress'" + _cas,
+            (tid, *_cas_args),
         )
         reset_count += cur.rowcount
     if reset_count:

@@ -850,6 +850,35 @@ def _audit_dispatch_failure(action: str, detail: str, **extra: Any) -> None:
     _audit_dispatch_failure_with_lock(_AUDIT_WRITE_LOCK, action, detail, **extra)
 
 
+def _mark_cache_store_failed(res: dict, detail: Any) -> None:
+    """D12/M6: ein Cache-Schreibfehler darf nicht unsichtbar bleiben."""
+    logger.warning(
+        "[Dispatcher] Semantic-Cache Store nicht verfuegbar (cache_unverified): %s",
+        detail,
+    )
+    res["cache_unverified"] = True
+
+
+def _mark_budget_settlement_failed(res: dict, detail: Any, agent_id: str = "system") -> None:
+    """D12/M6: Settlement-Fehler nie als Erfolg quittieren.
+
+    Ohne Settle ist der echte Verbrauch unbekannt — harte Caps würden nur bis
+    zum ersten DB-Fehler wirken. Der Dispatch wird daher als ``error`` mit
+    ``BUDGET_SETTLEMENT_FAILED`` markiert, die Rolle fail-closed als
+    ``paused_budget`` und der Vorfall zusätzlich signiert auditiert.
+    """
+    logger.error(
+        "[Dispatcher] Budget-Settlement fehlgeschlagen (fail-closed): %s", detail
+    )
+    _audit_dispatch_failure(
+        "budget_settlement_failed", str(detail), agent_id=agent_id
+    )
+    res["status"] = "error"
+    res["error_code"] = "BUDGET_SETTLEMENT_FAILED"
+    res["error"] = f"budget_settlement_failed: {detail}"
+    res["budget_status"] = "paused_budget"
+
+
 async def _log_dispatcher_usage(agent_id: str, model: str, in_tok: int, out_tok: int, task_id: str = "") -> None:
     """Audit-/Budget-Logging nie direkt im Event-Loop."""
     try:
@@ -1189,7 +1218,8 @@ async def dispatch_to_omniroute_or_container(
                         prompt, str(res["content"]), model=used_model, scope_key=cache_scope,
                     )
                 except Exception as cache_store_exc:
-                    logger.debug(f"[Dispatcher] Semantic-Cache Store nicht verfuegbar: {cache_store_exc}")
+                    # D12/M6: sichtbar markieren statt DEBUG-Swallower.
+                    _mark_cache_store_failed(res, cache_store_exc)
 
             if budget_reservation_id:
                 try:
@@ -1209,9 +1239,10 @@ async def dispatch_to_omniroute_or_container(
                         )
                     budget_reservation_id = None
                 except Exception as rec_exc:
-                    # Kein stilles Verlieren von Verbrauch: sonst faellt sich das
-                    # Budget nie und harte Caps wirken nur bis zum ersten DB-Fehler.
-                    logger.error(f"[Dispatcher] Budget-Settlement fehlgeschlagen: {rec_exc}")
+                    # Kein stilles Verlieren von Verbrauch: kein Erfolg ohne
+                    # erfolgreiches Settle (D12/M6).
+                    _mark_budget_settlement_failed(res, rec_exc, agent_id=agent_id)
+                    is_ok = False
 
             if tr_id:
                 try:
@@ -1491,7 +1522,7 @@ async def _dispatch_to_omniroute_or_container_impl(
         else:
             learnings = []
         if learnings:
-            lines = [f"- [{l.get('category', 'Allgemein')}] {l.get('summary')}" for l in learnings if l.get('summary')]
+            lines = [f"- [{l.get('category', 'Allgemein')}] {l.get('summary')}" for l in learnings if l.get('summary')]  # noqa: E741
             if lines:
                 memory_context_addon = "\n\n### [RELEVANTE ERKENNTNISSE AUS DEINEM LANGZEITGEDÄCHTNIS]:\n" + "\n".join(lines)
     except Exception as mem_err:
@@ -1505,7 +1536,7 @@ async def _dispatch_to_omniroute_or_container_impl(
     system_prompt = _ctx["system_prompt"]
     model = _ctx["model"]
     prefetch_addon = _ctx["prefetch_addon"]
-    effective_prompt_info = _ctx["effective_prompt_info"]
+    effective_prompt_info = _ctx["effective_prompt_info"]  # noqa: F841
     prompt_version_info = _ctx["prompt_version_info"]
     core_mem_addon = _ctx["core_mem_addon"]
 
@@ -1563,7 +1594,7 @@ async def _dispatch_to_omniroute_or_container_impl(
     groq_api_key = os.getenv("GROQ_API_KEY") or collected_keys.get("GROQ_API_KEY") or ""
     openai_api_key = os.getenv("OPENAI_API_KEY") or collected_keys.get("OPENAI_API_KEY") or ""
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY") or collected_keys.get("ANTHROPIC_API_KEY") or ""
-    gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or collected_keys.get("GEMINI_API_KEY") or ""
+    gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or collected_keys.get("GEMINI_API_KEY") or ""  # noqa: F841
 
     if isinstance(provider, (int, float)):
         timeout = int(provider)
@@ -1609,8 +1640,10 @@ async def _dispatch_to_omniroute_or_container_impl(
         }
 
     try:
-        from backend.execution_routing_guard import classify_execution_layer
-        _erg = classify_execution_layer((prompt or "")[:160], prompt or "")
+        # D02/M2: kanonischer Chokepoint — exakt dieselbe Klassifikation wie
+        # im Router (kein 160-Zeichen-Fenster, keine pfadabhängige Direktive).
+        from backend.execution_routing_guard import classify_execution_request
+        _erg = classify_execution_request(prompt=prompt or "")
         if _erg.get("layer") in ("deterministic_n8n", "deterministic_script"):
             # F-009: Klassifikation ist KEIN Hinweis mehr, sondern ein echter
             # 0-Token-Effekt. Deterministische Arbeit darf niemals durch ein
@@ -2524,7 +2557,7 @@ async def _stream_boardroom_debate_inner(
         return
     
     framework_info = get_framework_info(framework)
-    framework_instruction = framework_info["system_instruction"]
+    framework_instruction = framework_info["system_instruction"]  # noqa: F841
 
     # Chairman ist das erste Element, alle weiteren Elemente sind die Experten-Slots
     chairman = active_agents[0]

@@ -15,12 +15,16 @@ from typing import Any, Dict, List, NamedTuple, Optional
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi import Depends as _ArchonDepends
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from archon.core.runtime import broadcast_event, subscribe_events, unsubscribe_events
 from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 from archon.routers._rbac import require_admin_or_503
 from backend.operations_constants import TEAMS_DEFINITION, _get_org_hierarchy_file
+from backend.role_budget_engine import (
+    TASK_BUDGET_COST_CEILING_EUR,
+    TASK_BUDGET_TOKEN_CEILING,
+)
 
 _archon_exc_logger = logging.getLogger("operations_org")
 
@@ -859,8 +863,14 @@ class RoleBudgetPolicyUpdateRequest(BaseModel):
 class TaskBudgetAllocateRequest(BaseModel):
     title: Optional[str] = ""
     body: Optional[str] = ""
-    total_token_budget: Optional[int] = 120000
-    total_cost_limit_eur: Optional[float] = None
+    # D13-M1: kein Default, keine unbegrenzten Werte. Ohne Angabe MUSS
+    # `_resolve_parent_budget()` konsultiert werden (kein Budget-Minting).
+    total_token_budget: Optional[int] = Field(
+        default=None, ge=1, le=TASK_BUDGET_TOKEN_CEILING
+    )
+    total_cost_limit_eur: Optional[float] = Field(
+        default=None, ge=0.01, le=TASK_BUDGET_COST_CEILING_EUR
+    )
     allow_autonomous_hiring: Optional[bool] = False
     subtasks: Optional[List[Dict[str, Any]]] = None
 
@@ -904,13 +914,25 @@ def api_allocate_task_budget(request: Request, task_id: str, req: TaskBudgetAllo
         allocate_task_budget_to_subagents,
         plan_and_decompose_task_with_budgets,
     )
+    from backend.trajectory_budget import normalize_trajectory_id
+
+    # D13-H1/M1: stabile Trajectory-Korrelation aus dem Root-Ticket, damit
+    # Allokation und spaetere Dispatches dieselbe Budget-Invariante sehen.
+    traj_id = normalize_trajectory_id(None, root_ticket_id=task_id)
     if req.subtasks:
         plan = allocate_task_budget_to_subagents(
             parent_task_id=task_id,
-            total_token_budget=req.total_token_budget or 120000,
+            total_token_budget=req.total_token_budget,  # type: ignore[arg-type]
             subtasks=req.subtasks,
             total_cost_limit_eur=req.total_cost_limit_eur,
+            trajectory_id=traj_id,
         )
+        if str(plan.get("status") or "") == "blocked":
+            raise HTTPException(status_code=409, detail={
+                "status": "blocked",
+                "code": plan.get("failure_reason") or "NO_PARENT_BUDGET",
+                "budget_plan": plan,
+            })
         return {"status": "success", "budget_plan": plan}
     res = plan_and_decompose_task_with_budgets(
         parent_task_id=task_id,
@@ -919,7 +941,14 @@ def api_allocate_task_budget(request: Request, task_id: str, req: TaskBudgetAllo
         total_token_budget=req.total_token_budget,
         total_cost_limit_eur=req.total_cost_limit_eur,
         allow_autonomous_hiring=bool(req.allow_autonomous_hiring),
+        trajectory_id=traj_id,
     )
+    if str(res.get("status") or "") == "blocked":
+        raise HTTPException(status_code=409, detail={
+            "status": "blocked",
+            "code": res.get("failure_reason") or "NO_PARENT_BUDGET",
+            "budget_plan": res.get("budget_plan"),
+        })
     return {"status": "success", **res}
 
 

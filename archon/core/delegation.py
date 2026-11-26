@@ -22,9 +22,9 @@ import sqlite3
 import sys
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.constants import DELEGATION_PROTOCOL_PROMPT
 from backend.handoff_desk import mark_truncated
@@ -98,6 +98,15 @@ class HandoffDelegationPayload(BaseModel):
     soul_mode: str = "compact"
     payload_signature: str = ""
 
+    # D11/W3-C: serverseitig gesetzte, signierte Kontextfelder des Kindes.
+    # Ohne diese Felder verliert der Subagent Trace, Warrant und sein
+    # komplexitätsgewichtiges Teilbudget (M1/M5).
+    trace_id: str = ""  # type: ignore[no-redef]
+    warrant_id: str = ""
+    complexity_weight: float = 1.0
+    budget_share_pct: float = 0.0
+    token_budget: int = 0
+
     # D14/F033: strukturierte Hoheits-/Guardrail-Felder (vom Dispatch-Result)
     consensus_verdict: str = ""
     verdict: str = ""
@@ -119,6 +128,10 @@ _SIGNED_DELEGATION_FIELDS = (
     "ziel_agent", "auftrag", "tenant_id", "project_id", "cancel_scope",
     "taint_status", "budget_remaining_tokens", "soul_mode", "task_id",
     "trajectory_id", "delegation_chain",
+    # W3-C/M1/M5: Trace, Warrant-Referenz und Budget-Gewichtung sind
+    # sicherheitsrelevant und gehoeren in den signierten Teil der Übergabe.
+    "trace_id", "warrant_id", "complexity_weight", "budget_share_pct",
+    "token_budget",
 )
 _DELEGATION_HMAC_PREFIX = "dlg-hmac-sha256:"
 _DELEGATION_HMAC_ENV = "ARCHON_DELEGATION_HMAC_KEY"
@@ -171,6 +184,98 @@ def verify_delegation_payload(payload: Dict[str, Any]) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
+def is_signed_delegation_payload(raw: Any) -> bool:
+    """Erkennt die vom Produzenten signierte Übergabe (SSOT im created-Event).
+
+    Nur rational für die Klassifikation: echte Prüfung ist immer
+    :func:`verify_delegation_payload` **vor** jeder Kanonisierung.
+    """
+    if isinstance(raw, HandoffDelegationPayload):
+        raw = raw.model_dump()
+    if isinstance(raw, (str, bytes)):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return False
+    return (
+        isinstance(raw, dict)
+        and str(raw.get("payload_signature") or "").startswith(_DELEGATION_HMAC_PREFIX)
+    )
+
+
+def _delegation_dict(raw: Any) -> Dict[str, Any]:
+    """Einzige Dict-Konvertierung an der Übergabekante (kein zweites Schema)."""
+    if raw is None:
+        raise ValueError("Delegations-Payload fehlt (None)")
+    if isinstance(raw, (str, bytes)):
+        data = json.loads(raw)
+    elif isinstance(raw, HandoffDelegationPayload):
+        data = raw.model_dump()
+    elif isinstance(raw, dict):
+        data = dict(raw)
+    else:
+        raise ValueError("Delegations-Payload muss JSON-String oder Dict sein")
+    if not isinstance(data, dict):
+        raise ValueError("Delegations-Payload muss ein JSON-Objekt sein")
+    return data
+
+
+def load_verified_delegation_payload(
+    raw: Any,
+    *,
+    require_signature: bool = False,
+    task_id: str = "",
+) -> Dict[str, Any]:
+    """D11-H1/H2: Signatur **vor** jeder Kanonisierung prüfen.
+
+    Für signierte Übergaben (Produzent → ``task_events.created``) wird das
+    exakt gespeicherte Payload nach der HMAC-Prüfung nur schema-validiert und
+    **unverändert** zurückgegeben — keine Server-Neuberechnung, keine
+    ``model_dump()``-Projektion, keine zweite Signatur. Unsignierte Legacy-
+    Events behalten den dokumentierten Kanonisierungspfad.
+    """
+    data = _delegation_dict(raw)
+    signed = str(data.get("payload_signature") or "").startswith(_DELEGATION_HMAC_PREFIX)
+    if require_signature and not signed:
+        raise ValueError("Delegations-Signatur fehlt (require_signature=True)")
+    if signed and not verify_delegation_payload(data):
+        raise ValueError("Delegations-Signatur ungueltig (Manipulation oder falscher ENV-Key)")
+    if signed:
+        # SSOT: das gespeicherte, signierte Objekt unverändert konsumieren.
+        return HandoffDelegationPayload.model_validate(data).model_dump()
+    return canonicalize_delegation_payload(data, task_id=task_id)
+
+
+def _server_budget_allocation(task_id: str) -> Dict[str, Any]:
+    """D11-H5: Gewichtung/Teilbudget aus der SSOT, nie aus dem LLM-Payload."""
+    defaults = {"complexity_weight": 1.0, "budget_share_pct": 0.0, "token_budget": 0}
+    tid = str(task_id or "").strip()
+    if not tid:
+        return defaults
+    try:
+        from backend.db_paths import resolve_db
+
+        conn = sqlite3.connect(resolve_db("agentic_memory.db"), timeout=5.0)
+        try:
+            row = conn.execute(
+                "SELECT complexity_weight, budget_share_pct, token_budget "
+                "FROM task_budget_allocations WHERE task_id = ?",
+                (tid,),
+            ).fetchone()
+        finally:
+            conn.close()
+        if not row:
+            return defaults
+        return {
+            "complexity_weight": float(row[0] or 1.0),
+            "budget_share_pct": float(row[1] or 0.0),
+            "token_budget": int(row[2] or 0),
+        }
+    except Exception as exc:
+        logger.error("[Delegation] Budget-Zuweisung nicht lesbar — fail-closed: %s", exc)
+        return defaults
+
+
 def _server_tenant_id() -> str:
     """Mandant ausschließlich aus dem verifizierten Kontext, nie aus dem Body."""
     try:
@@ -217,6 +322,13 @@ def resolve_server_delegation_context(
 ) -> Dict[str, Any]:
     """Überschreibt client gelieferte Kontextfelder mit Server-Werten."""
     tid = trajectory_id or str(payload.get("trajectory_id") or "")
+    allocation = _server_budget_allocation(task_id)
+    try:
+        from backend.trace_context import current_trace_id
+
+        active_trace = str(current_trace_id() or "")
+    except Exception:
+        active_trace = ""
     return {
         "tenant_id": _server_tenant_id(),
         "project_id": str(
@@ -227,6 +339,10 @@ def resolve_server_delegation_context(
         "taint_status": _server_taint_status(session_id or str(payload.get("origin_session_id") or "")),
         "budget_remaining_tokens": _server_budget_remaining_tokens(tid),
         "soul_mode": str(payload.get("soul_mode") or "compact"),
+        # W3-C/M1/M5: Trace, Warrant und Budget-Gewichtung serverseitig.
+        "trace_id": active_trace or str(payload.get("trace_id") or ""),
+        "warrant_id": str(payload.get("warrant_id") or ""),
+        **allocation,
     }
 
 
@@ -250,18 +366,14 @@ def canonicalize_delegation_payload(
     Aufruf dieser Funktion ersetzt werden — ohne zweite ``model_dump()``-
     Projektion.
     """
-    if raw is None:
-        raise ValueError("Delegations-Payload fehlt (None)")
-    if isinstance(raw, (str, bytes)):
-        data = json.loads(raw)
-    elif isinstance(raw, HandoffDelegationPayload):
-        data = raw.model_dump()
-    elif isinstance(raw, dict):
-        data = dict(raw)
-    else:
-        raise ValueError("Delegations-Payload muss JSON-String oder Dict sein")
-    if not isinstance(data, dict):
-        raise ValueError("Delegations-Payload muss ein JSON-Objekt sein")
+    data = _delegation_dict(raw)
+    # D11-H1: Verify VOR der Kanonisierung. Die bisherige Prüfung nach dem
+    # Ueberschreiben der Signatur war wirkungsloses Signaturentheater.
+    if require_signature and not (
+        str(data.get("payload_signature") or "").startswith(_DELEGATION_HMAC_PREFIX)
+        and verify_delegation_payload(data)
+    ):
+        raise ValueError("Delegations-Signatur konnte nicht verifiziert werden")
 
     # Legacy-Aliase kanonisch benennen, bevor extra="forbid" greift.
     _aliases = {
@@ -296,30 +408,28 @@ def canonicalize_delegation_payload(
         validated, trajectory_id=trajectory_id, task_id=task_id, session_id=session_id,
     ))
     validated["payload_signature"] = sign_delegation_payload(validated)
-    if require_signature and not verify_delegation_payload(validated):
-        raise ValueError("Delegations-Signatur konnte nicht verifiziert werden")
     return validated
-from archon.core.mission_control import (
+from archon.core.mission_control import (  # noqa: E402
     mc_get_parent_context_sqlite,
     mc_link_subtask_sqlite,
     mc_update_task_sqlite,
     update_mission_control_data,
 )
-from archon.core.orchestration import _fan_in_maybe_start_synthesis, _run_synthesis_cascade
-from archon.core.paths import OPT_DATA_DIR
-from archon.core.profiles import api_get_hermes_profiles
-from archon.core.runtime import (
+from archon.core.orchestration import _fan_in_maybe_start_synthesis, _run_synthesis_cascade  # noqa: E402
+from archon.core.paths import OPT_DATA_DIR  # noqa: E402
+from archon.core.profiles import api_get_hermes_profiles  # noqa: E402
+from archon.core.runtime import (  # noqa: E402
     WORKSPACE_DIR,
     broadcast_event,
     logger,
     subscribe_events,
     unsubscribe_events,
 )
-from archon.core.state_db import _get_state_db
-from backend.platform_paths import OBSIDIAN_VAULT, PROJEKTE_DIR
+from archon.core.state_db import _get_state_db  # noqa: E402
+from backend.platform_paths import PROJEKTE_DIR  # noqa: E402
 
 # Batch D/4: Supervisor-Rollover aus der Org-Hierarchie (links bleiben SSOT).
-from backend.supervisor_rollover import on_supervisor_failure, resolve_supervisor
+from backend.supervisor_rollover import on_supervisor_failure, resolve_supervisor  # noqa: E402
 
 _DEPS: Dict[str, Any] = {}
 
@@ -1775,7 +1885,7 @@ async def _watch_delegated_task(
                     # Legacy-Fallback bleibt `correlation_id=f"task:{task_id}"`,
                     # greift aber nur ohne verfuegbaren Trace. Die reply_to-Kette
                     # kommt aus SQLite statt aus einem RAM-Dict.
-                    correlation_id = f"task:{task_id}"
+                    correlation_id = f"task:{task_id}"  # noqa: F841
                     envelope = handoff_desk.create_handoff(
                         task_id=str(task_id),
                         from_agent=str(prof_id or "unknown"),
@@ -2083,7 +2193,7 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     # 3. Compute-optimierte Modell-Zuweisung für den Ziel-Agenten:
     # Verhindert, dass Subagenten unreflektiert teure Flaggschiff-Modelle (wie Opus) erben.
     if not modell:
-        cat = (t_prof.get("category") or "").lower()
+        cat = (t_prof.get("category") or "").lower()  # noqa: F841
         role = (t_prof.get("role") or t_prof.get("name") or "").lower()
         t_id = ziel.lower()
         if any(w in t_id or w in role for w in ["vision", "design", "frontend", "ui", "ux"]):
@@ -2142,6 +2252,29 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     # F030: EIN kanonisches Schema, EINmal validiert, serverseitig aufgelöst
     # und HMAC-signiert. acceptance_criteria/reply_to/chain/memory_scope/
     # soul_mode/tenant/budget/cancel_scope gehen nicht an der Kante verloren.
+    # D11/W3-C: Warrant des Parents an die Kind-Session vererben und die
+    # Referenz signiert mitfuehren, statt das Kind still fail-closed zu denials
+    # zu zwingen.
+    _warrant_id = ""
+    try:
+        from backend.tool_warrants import inherit_warrant_for_session
+
+        _warrant_id = inherit_warrant_for_session(
+            str(origin_session_id or ""), tgt_sess,
+            allowed_tools=list(isolated_scope.get("allowed_tools") or []),
+        )
+    except Exception as _warrant_exc:
+        logger.error("[Delegation] Warrant-Vererbung fehlgeschlagen (fail-closed): %s", _warrant_exc)
+    try:
+        from backend.trace_context import current_trace_id
+
+        _active_trace_id = str(current_trace_id() or "")
+    except Exception:
+        _active_trace_id = ""
+
+    # D11-H2: EIN kanonisches, signiertes Payload als SSOT. Alle Felder, die
+    # der Worker und der Watcher brauchen, gehen hier hinein; das created-Event
+    # erhaelt danach exakt dieses Objekt (keine zweite, verarmte Rekonstruktion).
     _handoff_payload = {
         **{k: v for k, v in payload.items() if k != "extensions"},
         "ziel_agent": ziel,
@@ -2153,6 +2286,20 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         "memory_scope": memory_scope,
         "soul_mode": str(isolated_scope.get("soul_mode") or "compact"),
         "extensions": dict(payload.get("extensions") or {}),
+        "via": "delegation_engine_v2",
+        "delegator": delegator_id,
+        "tgt_session_id": tgt_sess,
+        "origin_session_id": str(origin_session_id or ""),
+        "root_ticket_id": _root_ticket,
+        "hops_used": int(_hop.get("hops_used") or 0),
+        "reasoning_level": reasoning_lvl,
+        "isolated": True,
+        "allowed_tools": isolated_scope["allowed_tools"],
+        "allowed_skills": isolated_scope["allowed_skills"],
+        "memory_acl": memory_acl,
+        "memory_ttl_seconds": memory_ttl_seconds,
+        "trace_id": _active_trace_id,
+        "warrant_id": _warrant_id,
     }
     try:
         _handoff_payload = canonicalize_delegation_payload(
@@ -2242,45 +2389,52 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
                  # er ging vorher nur in state.db.messages verloren und fehlte bei der Ausfuehrung.
                  f"Delegation von @{delegator_id} an @{ziel}:\n{isolation_header}\n{auftrag}", ziel, "in_progress", prio_num, delegator_id, now_iso, now_iso, t_model, parent_pid, _block_kind)
             )
+            # D11-H2: EXAKT das signierte Objekt (unverändert) als SSOT. Der
+            # Worker liest dieses JSON und injiziert es ohne Re-Kanonisierung.
             kconn.execute(
                 "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
-                (new_task_id, "created", json.dumps({
-                    "title": auftrag[:80],
-                    "assignee": ziel,
-                    "via": "delegation_engine_v2",
-                    "delegator": delegator_id,
-                    "tgt_session_id": tgt_sess,
-                    "origin_session_id": origin_session_id,
-                    # I: RAM-Kette persistieren, damit resume_pending_delegation_watchers()
-                    # Zyklus-/Tiefenschranke nach einem Neustart wiederherstellen kann.
-                    "delegation_chain": list(_persisted_chain),
-                    "trajectory_id": _tid,
-                    "root_ticket_id": _root_ticket,
-                    "hops_used": int(_hop.get("hops_used") or 0),
-                    "reasoning_level": reasoning_lvl,
-                    "isolated": True,
-                    "allowed_tools": isolated_scope["allowed_tools"],
-                    "allowed_skills": isolated_scope["allowed_skills"],
-                    "memory_scope": memory_scope,
-                    "memory_acl": memory_acl,
-                    "memory_ttl_seconds": memory_ttl_seconds,
-                    "acceptance_criteria": acceptance_criteria,
-                    "reply_to": reply_to,
-                    # H-11-1/F030: Kind-Task trägt den kanonischen Kontext und
-                    # den verifizierten Child-Cancel-Scope (SSOT: task:<id>).
-                    "tenant_id": _handoff_payload.get("tenant_id", ""),
-                    "project_id": _handoff_payload.get("project_id", ""),
-                    "cancel_scope": _cancel_scope,
-                    "taint_status": _handoff_payload.get("taint_status", "unknown"),
-                    "budget_remaining_tokens": _handoff_payload.get("budget_remaining_tokens"),
-                    "soul_mode": _handoff_payload.get("soul_mode", "compact"),
-                    "payload_signature": _handoff_payload.get("payload_signature", ""),
-                }), now_iso)
+                (new_task_id, "created", _handoff_json, now_iso)
             )
             kconn.commit()
             task_id = new_task_id
         finally:
             kconn.close()
+        # D11-H3: Annahme-Envelope VOR dem Dispatch anlegen. Der Gate im Worker
+        # darf nicht mehr durch `no_handoff_for_task` freigeschaltet werden.
+        try:
+            from backend.handoff_desk import handoff_desk
+
+            _envelope = handoff_desk.create_handoff(
+                task_id=new_task_id,
+                from_agent=str(delegator_id or ""),
+                to_agent=str(ziel or ""),
+                deliverables={
+                    "result": auftrag,
+                    "status": "delegated",
+                    "artifact_path": "",
+                },
+                acceptance_criteria=acceptance_criteria or (
+                    "Auftrag unverändert gemäß signiertem Übergabe-Payload ausführen"
+                ),
+                trace_id=str(_handoff_payload.get("trace_id") or ""),
+                session_id=tgt_sess,
+                correlation_id=(
+                    f"trace:{_handoff_payload.get('trace_id')}"
+                    if _handoff_payload.get("trace_id") else f"task:{new_task_id}"
+                ),
+            )
+            _envelope_id = str(_envelope.get("handoff_id") or "")
+            if not _envelope_id or not handoff_desk.verify_payload_hash(_envelope_id):
+                raise RuntimeError(f"Handoff-Envelope nicht verifiziert: {_envelope_id}")
+        except Exception as _env_exc:
+            delegation_error = f"Handoff-Envelope nicht verfügbar: {_env_exc}"
+            logger.error("[Delegation] %s — Dispatch verweigert (fail-closed)", delegation_error)
+            _mark_delegation_blocked(new_task_id, delegation_error)
+            _enqueue_delegation_failure(new_task_id, ziel, "blocked", delegation_error)
+            return _block_receipt(
+                _tid, ziel, list(_persisted_chain), "HANDOFF_ENVELOPE_UNAVAILABLE",
+                str(_env_exc),
+            )
         try:
             from backend.operations_api import _execute_kanban_task_async
             worker_task = _spawn_background(

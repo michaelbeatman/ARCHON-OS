@@ -142,23 +142,34 @@ async def api_telegram_relay(
         "Telegram-Relay",
         f"Nachricht an {agent_name} weitergeleitet ({len(msg)} Z)",
     )
-    res = None
+    # D13-H1: stabile Trajectory-Root-Korrelation (Telegram-Relay hatte
+    # vorher keinen task_id und damit pro Call eine neue anonyme ID).
+    from backend.trajectory_budget import trajectory_root, trajectory_root_scope
     try:
-        res = await app_main.core_dispatcher.dispatch_to_omniroute_or_container(
-            agent_id=ziel,
-            agent_name=agent_name,
-            prompt=relay_prompt,
-            role=prof.get("category", "Relay-Ziel"),
-            system_prompt=system_prompt,
-            model=model,
-        )
-        antwort = (res.get("content") or "").strip()
-    except Exception as rel_err:
-        logger.error(f"[Relay] Dispatch an {ziel} fehlgeschlagen: {rel_err}")
-        antwort = ""
-        dispatch_error = str(rel_err)
-    else:
-        dispatch_error = ""
+        from backend.trace_context import current_trace_id
+        correlation = str(current_trace_id() or "").strip()
+    except Exception:
+        correlation = ""
+    root = trajectory_root("telegram-relay", ziel, correlation or msg[:200])
+
+    res = None
+    with trajectory_root_scope(root):
+        try:
+            res = await app_main.core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=ziel,
+                agent_name=agent_name,
+                prompt=relay_prompt,
+                role=prof.get("category", "Relay-Ziel"),
+                system_prompt=system_prompt,
+                model=model,
+            )
+            antwort = (res.get("content") or "").strip()
+        except Exception as rel_err:
+            logger.error(f"[Relay] Dispatch an {ziel} fehlgeschlagen: {rel_err}")
+            antwort = ""
+            dispatch_error = str(rel_err)
+        else:
+            dispatch_error = ""
 
     if not antwort:
         grund = dispatch_error or (

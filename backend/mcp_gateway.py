@@ -34,6 +34,27 @@ logger = logging.getLogger("archon.mcp_gateway")
 class HITLVerificationUnavailable(RuntimeError):
     """D04/H-04-5: HITL-Verbrauchsstatus nicht verifizierbar -> hart deny."""
 
+
+def _mcp_requester_identity(key_info: Dict[str, Any]) -> str:
+    """D14/M4: verifizierter Principal des aufrufenden API-Keys.
+
+    Der API-Key wurde vor dem Tool-Call kryptografisch validiert; `key_id`
+    bzw. `name` sind daher serverseitig und nicht Body-steuerbar. Ein
+    expliziter ``actor``/``service_principal`` der Authentifizierung hat
+    Vorrang. Ohne Identitaet darf kein HITL-Antrag angelegt werden.
+    """
+    explicit = str(
+        key_info.get("actor") or key_info.get("service_principal") or ""
+    ).strip()
+    if explicit:
+        return explicit
+    key_id = str(key_info.get("key_id") or "").strip()
+    if not key_id:
+        return ""
+    name = str(key_info.get("name") or "").strip()
+    return f"mcp-key:{key_id}" + (f" ({name})" if name else "")
+
+
 SUPPORTED_PROTOCOL_VERSIONS = ("2025-03-26", "2024-11-05")
 DEFAULT_PROTOCOL_VERSION = "2025-03-26"
 
@@ -538,11 +559,27 @@ class ArchonMcpGateway:
                     }
 
         domain = policy.get("domain", "agent_dispatch")
+        # D14/M4: der Ersteller stammt aus der verifizierten Key-Identitaet,
+        # nie aus den Tool-Argumenten. Ohne zuordenbaren Principal bleibt der
+        # HITL-Antrag wirkungslos (Self-Approval) — daher hart deny.
+        requester_id = _mcp_requester_identity(key_info)
+        if not requester_id:
+            return False, {
+                "status": "pending_hitl_approval",
+                "message": "HITL-Antrag ohne verifizierten Principal (API-Key) — Anlage verweigert (fail-closed).",
+            }
         eval_res = approval_engine.evaluate_and_enqueue(
             domain=domain,
             title=f"MCP Tool-Aufruf: {tool_name}",
             reference_id=expected_ref,
-            payload={"tool": tool_name, "arguments": clean_args, "key_name": key_info.get("name")},
+            requester_id=requester_id,
+            payload={
+                "tool": tool_name,
+                "arguments": clean_args,
+                "key_name": key_info.get("name"),
+                "_requester_id": requester_id,
+                "_requester_required": True,
+            },
         )
         if eval_res.get("status") == "auto_approved":
             return True, None

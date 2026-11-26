@@ -142,21 +142,28 @@ async def api_quickchat_send(req: QuickchatSendRequest):
             f"```\n{req.attachment_content[:6000]}\n```\n\n{req.message}"
         )
 
+    # D13-H1: stabile Trajectory-Root-Korrelation aus der Session statt einer
+    # frischen `traj-anonymous:<time_ns>` pro Call. Der Scope greift auch fuer
+    # den via asyncio.to_thread() ausgelagerten Trajectory-Gate.
+    from backend.trajectory_budget import trajectory_root, trajectory_root_scope
+
     start_t = time.time()
-    try:
-        res = await app_main.core_dispatcher.dispatch_to_omniroute_or_container(
-            agent_id=prof["id"],
-            agent_name=str(agent_name or prof.get("id") or "agent"),
-            prompt=user_msg,
-            role=role_title,
-            system_prompt=system_prompt,
-            model=model,
-            provider=provider,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail={
-            "status": "error", "code": "DISPATCH_FAILED", "message": str(e)
-        })
+    root = trajectory_root("quickchat", state_sid)
+    with trajectory_root_scope(root):
+        try:
+            res = await app_main.core_dispatcher.dispatch_to_omniroute_or_container(
+                agent_id=prof["id"],
+                agent_name=str(agent_name or prof.get("id") or "agent"),
+                prompt=user_msg,
+                role=role_title,
+                system_prompt=system_prompt,
+                model=model,
+                provider=provider,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=502, detail={
+                "status": "error", "code": "DISPATCH_FAILED", "message": str(e)
+            })
 
     # D12/HIGH: nur echte Erfolge werden als Assistant-Nachricht persistiert.
     st = str(res.get("status") or "").lower()

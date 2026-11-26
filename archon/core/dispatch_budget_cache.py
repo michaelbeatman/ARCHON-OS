@@ -24,6 +24,37 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 logger = logging.getLogger("core_dispatcher")
 
+# D13-H1: Zaehler fuer Dispatches ohne expliziten Trajectory-Root (task_id).
+# Der Fallback ueber Trace-ID/Session ist stabil, aber er muss sichtbar sein —
+# sonst bleibt eine Umgehung der Hop-/Zyklus-Caps unbemerkt.
+_DISPATCH_WITHOUT_ROOT_LOCK = threading.Lock()
+_DISPATCH_WITHOUT_ROOT: Dict[str, int] = {}
+
+
+def note_dispatch_without_root(source: str, agent_id: str = "") -> None:
+    """Zaehlt einen Dispatch, der keinen task_id-Root hatte."""
+    label = str(source or "unrooted")
+    with _DISPATCH_WITHOUT_ROOT_LOCK:
+        _DISPATCH_WITHOUT_ROOT[label] = _DISPATCH_WITHOUT_ROOT.get(label, 0) + 1
+    logger.warning(
+        "[Dispatcher] dispatch_without_trajectory_root source=%s agent=%s "
+        "(stabile Korrelation ueber Fallback; Root empfohlen)",
+        label, str(agent_id or "")[:80],
+    )
+    try:
+        from archon.core.runtime import broadcast_event
+        broadcast_event("dispatch_without_trajectory_root", {
+            "source": label, "agent_id": str(agent_id or "")[:80],
+        })
+    except Exception:
+        pass
+
+
+def get_dispatch_without_root_metrics() -> Dict[str, int]:
+    """Snapshot fuer /metrics bzw. Diagnose (Schreibzugriff bleibt intern)."""
+    with _DISPATCH_WITHOUT_ROOT_LOCK:
+        return dict(_DISPATCH_WITHOUT_ROOT)
+
 
 def _dispatch_cache_scope(
     agent_id: str = "",
@@ -165,16 +196,28 @@ def _reserve_trajectory_budget_sync(
     reason: str = "",
 ) -> Dict[str, Any]:
     """D13/H-13-1: ticketweite Hop-/Token-Invariante im LLM-Chokepoint."""
+    # Achtung: nur die drei historischen Symbole importieren — bestehende
+    # Charakterisierungstests ersetzen dieses Modul durch ein Minimal-Fake.
     from backend.trajectory_budget import (
         normalize_trajectory_id,
         reserve_hop,
         reserve_tokens,
     )
 
-    tid = normalize_trajectory_id(None, root_ticket_id=str(task_id or ""))
+    root = str(task_id or "").strip()
+    if not root:
+        source = "unrooted"
+        try:
+            from backend.trace_context import current_trace_id
+            if str(current_trace_id() or "").strip():
+                source = "trace"
+        except Exception:
+            pass
+        note_dispatch_without_root(source, str(agent_id or ""))
+    tid = normalize_trajectory_id(None, root_ticket_id=root)
     hop_reason = str(reason or "").strip() or f"llm_call:{agent_id}"
     hop = reserve_hop(
-        tid, str(agent_id or ""), hop_reason, root_ticket_id=str(task_id or "")
+        tid, str(agent_id or ""), hop_reason, root_ticket_id=root
     )
     if not hop.get("allowed", False):
         return {
@@ -183,7 +226,15 @@ def _reserve_trajectory_budget_sync(
             "stage": "hop",
             "reason": str(hop.get("reason") or "TRAJECTORY_CAP_BLOCKED"),
         }
-    tokens = reserve_tokens(tid, int(estimated_tokens or 0), reason="llm_dispatch_estimate")
+    estimate = max(0, int(estimated_tokens or 0))
+    # BudgetBank normalisiert eine leere Rolle auf "default" — identischer
+    # source_key verknuepft beide Reservierungen eindeutig.
+    bank_agent = str(agent_id or "default").strip() or "default"
+    source_key = f"{bank_agent}:{estimate}"
+    tokens = reserve_tokens(
+        tid, estimate, reason="llm_dispatch_estimate",
+        reservation_id=None, source_key=source_key, agent_id=bank_agent,
+    )
     if not tokens.get("allowed", False):
         return {
             "allowed": False,
@@ -196,6 +247,10 @@ def _reserve_trajectory_budget_sync(
         "trajectory_id": tid,
         "hop": hop,
         "tokens": tokens,
+        "estimated_tokens": estimate,
+        "reservation_id": tokens.get("reservation_id") or "",
+        "source_key": source_key,
+        "root_present": bool(root),
     }
 
 

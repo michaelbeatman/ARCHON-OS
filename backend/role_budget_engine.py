@@ -40,6 +40,12 @@ PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
 ORG_HIERARCHY_FILE = os.path.join(WORKSPACE_DIR, "config", "org_hierarchy.json")
 USD_TO_EUR_RATE = 0.92
 
+# D13-M1: globale Ceilings als einzige Wahrheit fuer Pydantic-Grenzen UND
+# serverseitige Pruefung. Es gibt keinen legitimen Weg, darüber ein Budget zu
+# "minten" — auch nicht ueber den Admin-Endpoint.
+TASK_BUDGET_TOKEN_CEILING = 2_000_000
+TASK_BUDGET_COST_CEILING_EUR = 1_000.0
+
 try:
     from backend.db_paths import resolve_db
     BUDGET_DB_PATH = resolve_db("agentic_memory.db")
@@ -255,6 +261,7 @@ def init_budget_tables(db_path: Optional[str] = None) -> None:
                     agent_id TEXT NOT NULL,
                     task_id TEXT,
                     node_id TEXT,
+                    trajectory_id TEXT NOT NULL DEFAULT '',
                     tokens_reserved INTEGER NOT NULL DEFAULT 0,
                     cost_eur_reserved REAL NOT NULL DEFAULT 0.0,
                     status TEXT NOT NULL DEFAULT 'reserved',
@@ -282,6 +289,13 @@ def init_budget_tables(db_path: Optional[str] = None) -> None:
                 );
                 """
             )
+            # Additive Migration: bestehende DBs ohne trajectory_id haben
+            # historysche Reservierungen mit leerem Root (kein Replay noetig).
+            cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(budget_reservations)").fetchall()}
+            if "trajectory_id" not in cols:
+                conn.execute(
+                    "ALTER TABLE budget_reservations ADD COLUMN trajectory_id TEXT NOT NULL DEFAULT ''"
+                )
             conn.commit()
             _INITIALIZED_BUDGET_DBS.add(target)
 
@@ -616,6 +630,51 @@ def _no_parent_budget_result(parent_task_id: str) -> Dict[str, Any]:
     return result
 
 
+def _budget_ceiling_block(parent_task_id: str, reason: str) -> Dict[str, Any]:
+    try:
+        from backend.trajectory_budget import _audit
+        _audit(str(parent_task_id), f"BUDGET_CEILING_EXCEEDED: {reason}", str(parent_task_id))
+    except Exception:
+        pass
+    return {
+        "status": "blocked", "block_kind": "budget_ceiling_exceeded",
+        "failure_reason": "BUDGET_CEILING_EXCEEDED", "parent_task_id": parent_task_id,
+        "reason": reason, "total_token_budget": 0, "total_cost_limit_eur": 0.0,
+        "orchestrator_reserve_tokens": 0, "orchestrator_reserve_eur": 0.0,
+        "allocations": [],
+    }
+
+
+def _finalize_bank_trajectory_tokens(
+    reservation_row: Any,
+    actual_tokens: int,
+    outcome: str,
+    reason: str,
+) -> Optional[Dict[str, Any]]:
+    """D13-M3: BudgetBank-Settle/Release schliesst die Trajectory-Reservierung ab.
+
+    `core_dispatcher.py` (gehoert einem anderen Agenten) ruft settle/release
+    bereits im Erfolgs- bzw. finally-Pfad auf; der Abschluss der Trajectory-
+    Reservierung haengt hier — damit gibt es keinen dead code und keine
+    fremde Datei muss angefasst werden.
+    """
+    traj = str(reservation_row["trajectory_id"] or "").strip() if reservation_row else ""
+    if not traj:
+        return None
+    try:
+        from backend.trajectory_budget import finalize_tokens
+        source_key = f"{str(reservation_row['agent_id'] or '').strip()}:{int(reservation_row['tokens_reserved'] or 0)}"
+        return finalize_tokens(
+            traj, source_key=source_key, actual_tokens=int(actual_tokens or 0),
+            outcome=outcome, reason=reason,
+        )
+    except Exception as exc:
+        # Kein stilles Verlieren: der Audit-Pfad in finalize_tokens ist
+        # bereits gefail-closed; hier nur sichtbar machen.
+        logger.error("[BudgetBank] Trajectory-Token-Abschluss fehlgeschlagen: %s", exc)
+        return None
+
+
 def allocate_task_budget_to_subagents(
     parent_task_id: str,
     total_token_budget: int,
@@ -650,6 +709,19 @@ def allocate_task_budget_to_subagents(
         tot_eur = round((tot_tokens / 100_000.0) * 1.25, 2)
     else:
         tot_eur = round(tot_eur_given, 2)
+
+    # D13-M1: harte Obergrenze — auch direkte Python-Aufrufer duerfen das
+    # Budget nicht ueber den globalen Ceiling anheben.
+    if tot_tokens > TASK_BUDGET_TOKEN_CEILING:
+        return _budget_ceiling_block(
+            parent_task_id,
+            f"token_budget={tot_tokens} > ceiling={TASK_BUDGET_TOKEN_CEILING}",
+        )
+    if tot_eur > TASK_BUDGET_COST_CEILING_EUR:
+        return _budget_ceiling_block(
+            parent_task_id,
+            f"cost_limit_eur={tot_eur} > ceiling={TASK_BUDGET_COST_CEILING_EUR}",
+        )
 
     if not subtasks:
         now_iso = datetime.datetime.now().isoformat()
@@ -928,6 +1000,50 @@ def ceo_autonomous_hire_specialist(
     }
 
 
+def revoke_autonomous_hire(
+    agent_id: str,
+    parent_task_id: str = "",
+    db_path: Optional[str] = None,
+) -> bool:
+    """D13-M1: transaktionaler Rollback eines temporären Hire-Profils.
+
+    Markiert den Eintrag `revoked` und setzt die Tages-/Monatspolicies auf 0,
+    damit kein verwaistes `hired_*`-Profil mit aktivem Budget zurueckbleibt.
+    """
+    aid = str(agent_id or "").strip()
+    if not aid:
+        return False
+    init_budget_tables(db_path)
+    with _BUDGET_LOCK:
+        with _get_conn(db_path) as conn:
+            now_iso = datetime.datetime.now().isoformat()
+            if parent_task_id:
+                cur = conn.execute(
+                    "UPDATE autonomous_hired_agents SET status = 'revoked', dissolved_at = ? "
+                    "WHERE agent_id = ? AND parent_task_id = ?",
+                    (now_iso, aid, parent_task_id),
+                )
+            else:
+                cur = conn.execute(
+                    "UPDATE autonomous_hired_agents SET status = 'revoked', dissolved_at = ? "
+                    "WHERE agent_id = ?",
+                    (now_iso, aid),
+                )
+            conn.commit()
+            if not int(cur.rowcount or 0):
+                return False
+        set_role_budget_policy(
+            agent_id=aid,
+            daily_token_budget=0,
+            daily_cost_limit_eur=0.0,
+            monthly_cost_limit_eur=0.0,
+            hard_cap_enabled=True,
+            auto_pause_on_exceed=True,
+            db_path=db_path,
+        )
+    return True
+
+
 def plan_and_decompose_task_with_budgets(
     parent_task_id: str,
     title: str,
@@ -984,25 +1100,26 @@ def plan_and_decompose_task_with_budgets(
         })
 
     hired_specialist: Optional[Dict[str, Any]] = None
+    custom_role_title = ""
+    custom_mandate = ""
+    placeholder_id = ""
     if allow_autonomous_hiring:
-        # CEO hires a dedicated project specialist tailored specifically to this task's niche
         custom_role_title = f"Ad-hoc Task-Force Specialist: {title[:42]}"
         custom_mandate = (
             f"Spezialmandat (CEO Autonomous Hiring) für Aufgabe '{title}':\n"
             f"Bearbeite die spezifischen Fach- und Qualitätsanforderungen von '{body or title}' "
             f"und liefere ein direkt umsetzbares Spezial-Artefakt für die Endsynthese."
         )
-        # Preliminary budget estimate for hired agent (will be refined by allocate_task_budget_to_subagents)
-        hired_specialist = ceo_autonomous_hire_specialist(
-            parent_task_id=parent_task_id,
-            role_title=custom_role_title,
-            mandate=custom_mandate,
-            db_path=db_path,
-        )
+        # Der spaetere Hire bekommt seinen exakten, bereits allokierten Anteil.
+        # Bis dahin steht nur ein Platzhalter in der Allokation — es gibt
+        # damit KEIN `hired_*`-Profil ohne Elternbudget.
+        placeholder_id = "hired_placeholder_" + hashlib.sha256(
+            f"{parent_task_id}:{title}".encode("utf-8")
+        ).hexdigest()[:8]
         nominated.append({
-            "agent_id": hired_specialist["agent_id"],
-            "person_name": hired_specialist["person_name"],
-            "role": hired_specialist["role"],
+            "id": placeholder_id,
+            "agent_id": placeholder_id,
+            "role": custom_role_title,
             "mandate": custom_mandate,
             "complexity": "high",
             "is_autonomously_hired": True,
@@ -1018,24 +1135,78 @@ def plan_and_decompose_task_with_budgets(
         trajectory_id=trajectory_id,
     )
     if str(budget_plan.get("status") or "") == "blocked":
+        # Kein Hiring, kein Profil, keine Policy — transaktional sauber.
         return {
-            "status": "blocked", "block_kind": "no_parent_budget",
-            "failure_reason": "NO_PARENT_BUDGET", "parent_task_id": parent_task_id,
+            "status": "blocked",
+            "block_kind": budget_plan.get("block_kind") or "no_parent_budget",
+            "failure_reason": budget_plan.get("failure_reason") or "NO_PARENT_BUDGET",
+            "parent_task_id": parent_task_id,
             "subtasks": [], "hired_specialist": None, "budget_plan": budget_plan,
         }
 
-    # Update hired specialist's budget policy to match its exact complexity-weighted share
-    if hired_specialist:
-        alloc = next((a for a in budget_plan["allocations"] if a["agent_id"] == hired_specialist["agent_id"]), None)
-        if alloc:
-            set_role_budget_policy(
-                agent_id=hired_specialist["agent_id"],
-                daily_token_budget=alloc["token_budget"],
-                daily_cost_limit_eur=alloc["cost_limit_eur"],
+    # Erst NACH erfolgreicher Parent-Allokation wird der temporäre Spezialist
+    # angelegt — mit exakt dem Anteil, den die Allokation bereits reserviert.
+    if placeholder_id:
+        alloc = next(
+            (a for a in budget_plan.get("allocations", []) if a.get("agent_id") == placeholder_id),
+            None,
+        )
+        if not alloc:
+            return {
+                "status": "blocked", "block_kind": "hiring_allocation_missing",
+                "failure_reason": "HIRING_ALLOCATION_MISSING", "parent_task_id": parent_task_id,
+                "subtasks": [], "hired_specialist": None, "budget_plan": budget_plan,
+            }
+        try:
+            hired_specialist = ceo_autonomous_hire_specialist(
+                parent_task_id=parent_task_id,
+                role_title=custom_role_title,
+                mandate=custom_mandate,
+                token_budget=int(alloc["token_budget"]),
+                cost_limit_eur=float(alloc["cost_limit_eur"]),
+                subtask_id=str(alloc.get("subtask_id") or ""),
                 db_path=db_path,
             )
-            hired_specialist["token_budget"] = alloc["token_budget"]
-            hired_specialist["cost_limit_eur"] = alloc["cost_limit_eur"]
+            now_iso = datetime.datetime.now().isoformat()
+            with _BUDGET_LOCK:
+                with _get_conn(db_path) as conn:
+                    conn.execute(
+                        "UPDATE task_budget_allocations SET agent_id = ?, updated_at = ? "
+                        "WHERE task_id = ? AND agent_id = ?",
+                        (hired_specialist["agent_id"], now_iso,
+                         alloc.get("subtask_id") or parent_task_id, placeholder_id),
+                    )
+                    conn.commit()
+            placeholder_entry = next(
+                (s for s in nominated if s.get("agent_id") == placeholder_id), None
+            )
+            if placeholder_entry:
+                nominated.remove(placeholder_entry)
+                hired_entry = dict(placeholder_entry)
+                hired_entry.update({
+                    "agent_id": hired_specialist["agent_id"],
+                    "person_name": hired_specialist["person_name"],
+                    "role": hired_specialist["role"],
+                    "mandate": custom_mandate,
+                    "is_autonomously_hired": True,
+                })
+                nominated.append(hired_entry)
+            for a in budget_plan.get("allocations", []):
+                if a.get("agent_id") == placeholder_id:
+                    a["agent_id"] = hired_specialist["agent_id"]
+                    a["role"] = custom_role_title
+        except Exception as hire_exc:
+            if hired_specialist:
+                revoke_autonomous_hire(
+                    str(hired_specialist["agent_id"]), parent_task_id, db_path=db_path
+                )
+            logger.error("[Budget] CEO-Hiring nach Allokationsfehler zurueckgerollt: %s", hire_exc)
+            return {
+                "status": "blocked", "block_kind": "hiring_rolled_back",
+                "failure_reason": "HIRING_ROLLED_BACK", "parent_task_id": parent_task_id,
+                "reason": str(hire_exc)[:300], "subtasks": [],
+                "hired_specialist": None, "budget_plan": budget_plan,
+            }
 
     return {
         "parent_task_id": parent_task_id,
@@ -1245,8 +1416,16 @@ class BudgetBank:
         ).isoformat()
 
         conn = _get_conn(self.db_path)
+        expired_rows: List[sqlite3.Row] = []
         try:
             conn.execute("BEGIN IMMEDIATE")
+            # D13-M3: vor dem Expiry die Zeilen mit Trajectory-Korrelation
+            # sichern, damit deren Token-Reservierung gegengebucht wird.
+            expired_rows = conn.execute(
+                "SELECT * FROM budget_reservations "
+                "WHERE status = 'reserved' AND expires_at <= ? AND trajectory_id != ''",
+                (now,),
+            ).fetchall()
             conn.execute(
                 "UPDATE budget_reservations SET status = 'expired', settled_at = ? "
                 "WHERE status = 'reserved' AND expires_at <= ?",
@@ -1341,17 +1520,33 @@ class BudgetBank:
                             "error_code": "GLOBAL_DAILY_EUR_BUDGET_EXCEEDED",
                             "reason": f"Globales Tagesbudget von {global_cap_eur:.2f} EUR überschritten.",
                         }
+            # D13-M3/H1: dieselbe stabile Trajectory-Korrelation wie der
+            # zentrale Gate-Helfer. Sie wird am Reservierungszeugnis
+            # mitgefuehrt, damit settle/release die Token-Reservierung
+            # exakt gegen den echten Verbrauch abschliessen koennen.
+            try:
+                from backend.trajectory_budget import normalize_trajectory_id
+                traj_id = normalize_trajectory_id(None, root_ticket_id=str(task_id or ""))
+            except Exception as traj_exc:
+                logger.error("[BudgetBank] Trajectory-Korrelation nicht verfuegbar: %s", traj_exc)
+                traj_id = ""
             reservation_id = f"res-{uuid.uuid4().hex[:12]}"
             conn.execute(
                 "INSERT INTO budget_reservations "
-                "(reservation_id, agent_id, task_id, node_id, tokens_reserved, cost_eur_reserved, status, created_at, expires_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, 'reserved', ?, ?)",
-                (reservation_id, aid, task_id or None, node_id or None, est_tok, est_eur, now, expires),
+                "(reservation_id, agent_id, task_id, node_id, trajectory_id, tokens_reserved, "
+                " cost_eur_reserved, status, created_at, expires_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 'reserved', ?, ?)",
+                (reservation_id, aid, task_id or None, node_id or None, traj_id,
+                 est_tok, est_eur, now, expires),
             )
             conn.commit()
+            # D13-M3: TTL-Expiry der Trajectory-Reservierung, wenn auch die
+            # BudgetBank-Reservierung ablaeuft (kein residualer Schätzwert).
+            for expired in expired_rows:
+                _finalize_bank_trajectory_tokens(expired, 0, "expired", "reservation_ttl")
             return {
                 "allowed": True, "reservation_id": reservation_id,
-                "agent_id": aid, "task_id": task_id,
+                "agent_id": aid, "task_id": task_id, "trajectory_id": traj_id,
                 "tokens_reserved": est_tok, "cost_eur_reserved": est_eur,
             }
         except Exception as exc:
@@ -1451,6 +1646,13 @@ class BudgetBank:
                     (now, reservation_id),
                 )
             conn.commit()
+            # D13-M3: Actual-Token-Abschluss auf der Trajectory. Der
+            # Dispatcher ruft settle() im Erfolgspfad — damit wird hier der
+            # geschaetzte Wert durch den echten ersetzt (kein Doppelbuchung).
+            if reservation_id:
+                _finalize_bank_trajectory_tokens(
+                    row, tok, "settled", "dispatch_success"
+                )
             if late_settlement:
                 # D13/MED: trotz Ablauf REAL gebuchten Verbrauch melden.
                 logger.warning("[BudgetBank] late_settlement %s agent=%s task=%s tokens=%s",
@@ -1505,18 +1707,30 @@ class BudgetBank:
             conn.close()
 
     def release(self, reservation_id: str, reason: str = "") -> Dict[str, Any]:
-        """Gibt eine nicht ausgeführte Reservierung frei (z. B. bei Dispatch-Fehler)."""
+        """Gibt eine nicht ausgeführte Reservierung frei (z. B. bei Dispatch-Fehler).
+
+        D13-M3: die zugehoerige Trajectory-Token-Reservierung wird
+        gegengebucht, damit `blocked`/`error` keine Restlast hinterlaesst.
+        """
         init_budget_tables(self.db_path)
         conn = _get_conn(self.db_path)
+        row: Optional[sqlite3.Row] = None
         try:
             conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM budget_reservations WHERE reservation_id = ? AND status = 'reserved'",
+                (reservation_id,),
+            ).fetchone()
             cur = conn.execute(
                 "UPDATE budget_reservations SET status = 'released', settled_at = ? "
                 "WHERE reservation_id = ? AND status = 'reserved'",
                 (datetime.datetime.now().isoformat(), reservation_id),
             )
+            released = bool(int(cur.rowcount or 0))
             conn.commit()
-            return {"status": "released" if cur.rowcount else "not_found",
+            if released and row is not None:
+                _finalize_bank_trajectory_tokens(row, 0, "released", reason or "dispatch_failed")
+            return {"status": "released" if released else "not_found",
                     "reservation_id": reservation_id, "reason": reason}
         finally:
             conn.close()

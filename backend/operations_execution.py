@@ -29,6 +29,22 @@ from backend.handoff_desk import mark_truncated, require_accepted_handoff
 
 logger = logging.getLogger("archon_os.operations_api")
 
+# W3-C/M1: explizite Positiv-Feldliste fuer den Child-Kontext.
+# `model_dump(exclude_defaults=True)` liess gerade die Default-Werte
+# (taint=unknown, soul=compact, leere ACLs) und trace/warrant/budget im Kind
+# verschwinden. Diese Liste ist die verbindliche Minimal-Hydrierung.
+_DELEGATION_CHILD_FIELDS = (
+    "task_id", "ziel_agent", "auftrag", "trace_id", "correlation_id",
+    "tenant_id", "project_id", "cancel_scope", "taint_status",
+    "budget_remaining_tokens", "soul_mode", "reasoning_level",
+    "delegation_chain", "session_id", "origin_session_id", "tgt_session_id",
+    "isolated", "allowed_tools", "allowed_skills", "memory_scope",
+    "memory_acl", "memory_ttl_seconds", "acceptance_criteria", "reply_to",
+    "trajectory_id", "root_ticket_id", "hops_used", "via", "delegator",
+    "warrant_id", "complexity_weight", "budget_share_pct", "token_budget",
+    "extensions", "payload_signature",
+)
+
 _CONSECUTIVE_FAILURES_MIGRATED_DBS: Set[str] = set()
 
 
@@ -84,7 +100,9 @@ def _accept_loaded_handoff(conn: Any, task_id: str, model: Any) -> None:
     try:
         from backend.handoff_desk import handoff_desk
 
-        h_id = str(handoff_desk.latest_handoff_id_for_task(task_id) or "").strip()
+        h_id = str(handoff_desk.latest_handoff_id_for_task(
+            task_id, to_agent=str(getattr(model, "ziel_agent", "") or "")
+        ) or "").strip()
         if not h_id:
             return
         row = handoff_desk.get_handoff(h_id) or {}
@@ -183,10 +201,25 @@ def _kanban_load_task_sync(task_id: str) -> Optional[Dict[str, Any]]:
         ).fetchone()
         if ev is not None:
             raw_payload = ev["payload"] if hasattr(ev, "keys") else ev[0]
-            model = deps.load_kanban_delegation_payload(raw_payload, task_id=task_id)
-            if model is not None:
+            # D11-H1/H2: signierte Übergaben werden vor jeder Kanonisierung
+            # geprüft und unverändert konsumiert. Manipulation → harter Block.
+            from archon.core.delegation import is_signed_delegation_payload
+
+            signed = is_signed_delegation_payload(raw_payload)
+            model = deps.load_kanban_delegation_payload(
+                raw_payload, task_id=task_id, require_signature=signed
+            )
+            if signed and model is None:
+                task["_delegation_signature_invalid"] = True
+                logger.error(
+                    "[KanbanWorker] Signatur des created-Events fuer %s ungueltig — Dispatch gesperrt.",
+                    task_id,
+                )
+            elif model is not None:
+                # Unverändert: genau die signierte Fassung, kein neues Dict.
                 task["_delegation_payload"] = model.model_dump()
                 task["_delegation_payload_model"] = model
+                task["_delegation_signed"] = signed
                 _accept_loaded_handoff(conn, task_id, model)
         return task
     finally:
@@ -385,58 +418,72 @@ async def _execute_kanban_task_async(task_id: str) -> Any:
 
         claim = await asyncio.to_thread(deadlock_supervisor.acquire_lease, task_id)
         if not claim.get("acquired"):
-            if claim.get("task_exists"):
-                logger.debug(
-                    "[KanbanWorker] Lease fuer '%s' nicht erworben (anderer Worker aktiv) — Skip.",
-                    task_id,
-                )
-                return {"skipped": "lease_held", "task_id": task_id}
-        else:
-            lease_token = str(claim.get("lease_token") or "")
-
-            from backend.cancellation import get_token as _get_cancel_token
-
-            cancel_token = _get_cancel_token(f"task:{task_id}")
-
-            async def _hb() -> None:
-                while True:
-                    await asyncio.sleep(30)
-                    try:
-                        ok = await asyncio.to_thread(
-                            deadlock_supervisor.heartbeat, task_id, lease_token
-                        )
-                        if not ok:
-                            logger.warning(
-                                "[KanbanWorker] Lease '%s' verloren — Ausfuehrung wird abgebrochen.",
-                                task_id,
-                            )
-                            if cancel_token is not None:
-                                cancel_token.cancel("lease_lost")
-                            return
-                    except Exception as exc:
-                        logger.warning(
-                            "[KanbanWorker] Heartbeat fehlgeschlagen — Task %s wird abgebrochen: %s",
-                            task_id,
-                            exc,
-                        )
-                        if cancel_token is not None:
-                            cancel_token.cancel("lease_heartbeat_failed")
-                        return
-
-            heartbeat_task = asyncio.create_task(_hb(), name=f"kanban_lease_{task_id}")
-    except Exception as exc:
-        if os.environ.get("ARCHON_LEASE_FAIL_OPEN", "").strip().lower() in ("1", "true", "yes"):
+            # D07-H2: auch `task_exists=False` ist fail-closed. Ein Fallthrough
+            # mit leerem Lease-Token wuerde einen Dispatch ohne Fencing erlauben.
+            reason = "lease_held" if claim.get("task_exists") else "lease_unavailable"
             logger.warning(
-                "[KanbanWorker] Lease-Claim fehlgeschlagen (%s) — ARCHON_LEASE_FAIL_OPEN aktiv, Ausfuehrung ohne Claim.",
-                exc,
+                "[KanbanWorker] Lease fuer '%s' nicht erworben (%s) — Skip (fail-closed).",
+                task_id, reason,
             )
-        else:
-            logger.warning(
-                "[KanbanWorker] Lease-Claim fehlgeschlagen (%s) — Task %s wird nicht ausgefuehrt (fail-closed).",
-                exc,
-                task_id,
+            return {"skipped": reason, "task_id": task_id}
+        lease_token = str(claim.get("lease_token") or "")
+        if not lease_token:
+            # Nie ohne Gueltigkeitsnachweis dispatchen (CAS/Heartbeat waeren tot).
+            logger.error(
+                "[KanbanWorker] Lease-Claim fuer '%s' ohne Token — Skip (fail-closed).", task_id
             )
             return {"skipped": "lease_unavailable", "task_id": task_id}
+        from backend.cancellation import get_token as _get_cancel_token
+
+        cancel_token = _get_cancel_token(f"task:{task_id}")
+
+        async def _hb() -> None:
+            while True:
+                await asyncio.sleep(30)
+                try:
+                    ok = await asyncio.to_thread(
+                        deadlock_supervisor.heartbeat, task_id, lease_token
+                    )
+                    if not ok:
+                        logger.warning(
+                            "[KanbanWorker] Lease '%s' verloren — Ausfuehrung wird abgebrochen.",
+                            task_id,
+                        )
+                        if cancel_token is not None:
+                            cancel_token.cancel("lease_lost")
+                        return
+                except Exception as exc:
+                    logger.warning(
+                        "[KanbanWorker] Heartbeat fehlgeschlagen — Task %s wird abgebrochen: %s",
+                        task_id,
+                        exc,
+                    )
+                    if cancel_token is not None:
+                        cancel_token.cancel("lease_heartbeat_failed")
+                    return
+
+        heartbeat_task = asyncio.create_task(_hb(), name=f"kanban_lease_{task_id}")
+    except Exception as exc:
+        # D07-H2: ARCHON_LEASE_FAIL_OPEN entfernt. Jeder Claim-Fehler ist
+        # fail-closed: kein Dispatch ohne CAS-gesicherte Lease.
+        logger.error(
+            "[KanbanWorker] Lease-Claim fehlgeschlagen (%s) — Task %s wird nicht ausgefuehrt (fail-closed).",
+            exc, task_id,
+        )
+        try:
+            from backend.audit_log import _require_audit_event
+
+            _require_audit_event(
+                "recovery", "lease_unavailable", "system",
+                {"task_id": task_id, "error": str(exc)[:300]},
+            )
+        except Exception as audit_exc:
+            logger.error("[KanbanWorker] Audit lease_unavailable fehlgeschlagen: %s", audit_exc)
+        return {"skipped": "lease_unavailable", "task_id": task_id}
+
+    if not lease_token:
+        # Letzte Barriere: nie mit leerem Token in den Dispatch laufen.
+        return {"skipped": "lease_unavailable", "task_id": task_id}
 
     try:
         return await _execute_kanban_task_inner(task_id, lease_token=lease_token)
@@ -509,6 +556,24 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
     if not t_dict:
         return None
 
+    if t_dict.get("_delegation_signature_invalid"):
+        # D11-H1: manipuliertes created-Event → kein LLM-Call, harter Block.
+        reason = "delegation_signature_invalid"
+        logger.error("[KanbanWorker] %s fuer Task %s — Dispatch verweigert.", reason, task_id)
+        await asyncio.to_thread(
+            _persist_kanban_result_sync,
+            task_id,
+            mode="result",
+            target_status="blocked",
+            verdict={
+                "block_kind": reason,
+                "hitl_options": ["retry", "abort"],
+                "reason": "Signatur der Delegationsuebergabe ungueltig",
+            },
+            reply=f"Dispatch verweigert: {reason}"[:500],
+        )
+        return {"blocked": reason, "task_id": task_id}
+
     if t_dict["id"].startswith("dag-") and not any(
         t_dict["id"].endswith(f"-{s}") for s in ["1", "2", "3", "4", "syn"]
     ):
@@ -538,8 +603,15 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
             file=sys.stderr,
         )
 
-    from backend.agent_aliases import resolve_agent_id
+    from backend.agent_aliases import UNKNOWN_AGENT_ID, resolve_agent_id
 
+    profiles = await asyncio.to_thread(deps.load_profiles_map)
+    # W2-B: leere/unbekannte Ziel-IDs muessen hart blockiert werden. known_ids
+    # kommt aus der Profil-SSOT; nur wenn sie (degradiert) leer ist, bleibt der
+    # Legacy-Alias-Pfad fuer unsignierte Kanban-Tasks erhalten.
+    _known_ids = {
+        str(p.get("id") or "") for p in profiles.values() if isinstance(p, dict)
+    } or None
     raw_assignee = (t_dict.get("assignee") or "").strip()
     if not raw_assignee:
         raw_assignee = "default"
@@ -550,14 +622,45 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
                 f"[OperationsAPI] WARNUNG (MEDIUM) _execute_kanban_task_async: Exception im Fehler-/Fallback-Pfad: {exc}",
                 file=sys.stderr,
             )
-    assignee = resolve_agent_id(raw_assignee)
+    assignee = resolve_agent_id(raw_assignee, known_ids=_known_ids)
     title = t_dict.get("title") or "Aufgabe"
     body = t_dict.get("body") or title
 
+    async def _block_unknown_agent(reason: str) -> None:
+        logger.error("[KanbanWorker] %s — Task %s wird nicht dispatched.", reason, task_id)
+        await asyncio.to_thread(
+            _persist_kanban_result_sync,
+            task_id,
+            mode="result",
+            target_status="blocked",
+            verdict={
+                "block_kind": "UNKNOWN_AGENT_ID",
+                "hitl_options": ["retry", "abort"],
+                "reason": reason,
+            },
+            reply=f"Dispatch verweigert: {reason}"[:500],
+        )
+
+    if assignee == UNKNOWN_AGENT_ID or (
+        t_dict.get("_delegation_signed") and _known_ids is None
+    ):
+        await _block_unknown_agent(
+            f"UNKNOWN_AGENT_ID: {raw_assignee or '(leer)'} nicht in der Profil-SSOT"
+        )
+        return {"blocked": "UNKNOWN_AGENT_ID", "task_id": task_id}
+
     async def _handoff_gate_ok() -> bool:
-        """F030/W3-A: harter Konsument-Gate vor jedem kostenpflichtigen Dispatch."""
+        """F030/W3-A: harter Konsument-Gate vor jedem kostenpflichtigen Dispatch.
+
+        D11-H3: signierte Delegations-Kinder brauchen zwingend den vor dem
+        Dispatch angelegten Envelope (``require_envelope=True``).
+        """
+        _require_envelope = bool(t_dict.get("_delegation_signed"))
         try:
-            gate = await asyncio.to_thread(require_accepted_handoff, task_id, assignee)
+            gate = await asyncio.to_thread(
+                require_accepted_handoff, task_id, assignee,
+                require_envelope=_require_envelope,
+            )
         except Exception as gate_exc:
             logger.error(
                 "[KanbanWorker] Handoff-Gate nicht auswertbar — Dispatch verweigert: %s",
@@ -584,7 +687,6 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
         )
         return False
 
-    profiles = await asyncio.to_thread(deps.load_profiles_map)
     prof = profiles.get(assignee, {})
     model = (t_dict.get("model_override") or "").strip()
     provider_override = (t_dict.get("provider_override") or "").strip()
@@ -614,10 +716,22 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
     _delegation_model = t_dict.get("_delegation_payload_model")
     _dispatch_reasoning = "medium"
     if _delegation_model is not None:
-        structured = _delegation_model.model_dump(exclude_defaults=True)
+        structured = {
+            k: v for k, v in _delegation_model.model_dump().items()
+            if k in _DELEGATION_CHILD_FIELDS
+        }
         structured.setdefault("task_id", task_id)
+        try:
+            from backend.trace_context import current_trace_id
+
+            _active_trace = str(current_trace_id() or "")
+        except Exception:
+            _active_trace = ""
+        structured["trace_id"] = str(
+            structured.get("trace_id") or _active_trace or f"task:{task_id}"
+        )
         structured.setdefault(
-            "correlation_id", str(structured.get("correlation_id") or f"task:{task_id}")
+            "correlation_id", str(structured.get("correlation_id") or f"trace:{structured['trace_id']}")
         )
         _dispatch_reasoning = str(_delegation_model.reasoning_level or "medium")
         system_prompt = (
@@ -625,6 +739,25 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
             + json.dumps(structured, sort_keys=True, ensure_ascii=False)
             + "\n[/STRUKTURIERTE_DELEGATION_JSON]"
         )
+        # W3-C/M2: der signierte soul_mode wird produktiv konsumiert, statt
+        # nur als tote System-Nachricht in state.db zu landen.
+        try:
+            from archon.core.delegation import active_soul_tier_text
+
+            _soul_mode = str(structured.get("soul_mode") or "compact")
+            _soul_text = active_soul_tier_text(assignee, _soul_mode)
+            if _soul_text:
+                system_prompt += (
+                    f"\n\n[AKTIVER_SOUL_TIER: {_soul_mode.upper()}]\n{_soul_text}\n"
+                    "[/AKTIVER_SOUL_TIER]"
+                )
+            elif _soul_mode in ("pro", "full"):
+                logger.error(
+                    "[KanbanWorker] SOUL-Tier '%s' fuer %s nicht gefunden — kompakter Fallback sichtbar.",
+                    _soul_mode, assignee,
+                )
+        except Exception as _soul_exc:
+            logger.error("[KanbanWorker] SOUL-Tier nicht konsumierbar: %s", _soul_exc)
 
     try:
         try:

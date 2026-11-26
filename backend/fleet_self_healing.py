@@ -6,19 +6,26 @@ Stellt ein Container-Ausfall fest, führt das Modul einen gezielten Neustart aus
 und alarmiert das System über den Notification Hub und das Audit-Log.
 """
 
-import os
-import sys
-import time
-import json
 import datetime
+import json
 import logging
+import os
+import time
 import urllib.request
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from archon.core.cache import ttl_cache  # noqa: E402
 from utils.docker_client import DockerClient, DockerError, validate_container_name
 
 logger = logging.getLogger("archon.fleet_self_healing")
+
+
+def _audit_strict() -> bool:
+    """D05/M: GoBD-Nachweisfehler sind default fail-closed."""
+    return str(os.environ.get("ARCHON_AUDIT_STRICT", "1") or "1").strip().lower() not in {
+        "0", "false", "no", "off",
+    }
+
 
 # Re-Audit D05/M: verschluckte GoBD-Audit-Fehler sind messbar zu machen
 # (Vorbild backend/egress_firewall.py:_AUDIT_ERROR_COUNTS).
@@ -260,6 +267,11 @@ def restart_service_container(service_name: str) -> Dict[str, Any]:
         # GoBD-Nachweis der Selbstheilung war damit unsichtbar verschwunden.
         audit_write_failed = True
         _record_audit_error("FLEET_SELF_HEALING_RESTART", exc)
+
+    if audit_write_failed and _audit_strict():
+        # D05/M: kein Erfolg ohne Ketteneintrag. Der Aufrufer (check_fleet_and_heal)
+        # faellt damit auf status="error" zurueck statt eine Heilung zu quittieren.
+        raise RuntimeError("audit_write_failed")
 
     try:
         from backend.notification_hub import notification_hub

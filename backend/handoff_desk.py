@@ -429,23 +429,34 @@ class HandoffDesk:
                 "message": f"Übergabe von '{receiving_agent}' quittiert. Bearbeitung freigegeben."
             }
 
-    def latest_handoff_id_for_task(self, task_id: Optional[str]) -> str:
+    def latest_handoff_id_for_task(
+        self, task_id: Optional[str], *, to_agent: Optional[str] = None
+    ) -> str:
         """D11/MED: reply_to-Kette aus SQLite lesen (SSOT), nicht aus einem RAM-Dict.
 
         Der Key ist immer dieselbe Aufgabe-/Projekt-ID, unter der auch
         ``create_handoff`` den Envelope ablegt. Ein Prozess-Reload verliert
-        damit keine Kante mehr.
+        damit keine Kante mehr. ``to_agent`` erlaubt die gezielte Auswahl des
+        Annahme-Envelope einer bestimmten Empfaengerkante (z. B. wenn der
+        Ruecklauf-Envelope spaeter unter derselben task_id liegt).
         """
         key = str(task_id or "").strip()
         if not key:
             return ""
         try:
             with self._get_conn() as conn:
-                row = conn.execute(
-                    "SELECT id FROM agent_handoffs WHERE task_id = ? "
-                    "ORDER BY created_at DESC, rowid DESC LIMIT 1",
-                    (key,),
-                ).fetchone()
+                if to_agent:
+                    row = conn.execute(
+                        "SELECT id FROM agent_handoffs WHERE task_id = ? AND to_agent = ? "
+                        "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+                        (key, str(to_agent).strip()),
+                    ).fetchone()
+                else:
+                    row = conn.execute(
+                        "SELECT id FROM agent_handoffs WHERE task_id = ? "
+                        "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+                        (key,),
+                    ).fetchone()
                 return str(row[0]) if row else ""
         except Exception as exc:
             logger.warning("[HandoffDesk] reply_to-Lookup fehlgeschlagen: %s", exc)
@@ -495,6 +506,7 @@ def require_accepted_handoff(
     executor_agent: str,
     *,
     desk: Optional[HandoffDesk] = None,
+    require_envelope: bool = False,
 ) -> Dict[str, Any]:
     """D11/MED: HARD GATE vor jedem kostenpflichtigen Dispatch.
 
@@ -506,7 +518,9 @@ def require_accepted_handoff(
       signierten Envelope (keine Self-Attestation);
     * HMAC/Schema werden erneut geprüft;
     * ohne gültige, akzeptierte Übergabe → ``allowed=False`` (Task muss
-      `blocked` + HITL/DLQ werden, kein LLM-Call).
+      `blocked` + HITL/DLQ werden, kein LLM-Call);
+    * ``require_envelope=True`` (Delegations-Kinder): fehlender Envelope ist
+      ein harter Block, kein ``no_handoff_for_task``-Freischein.
 
     Für `backend/operations_api.py` (W3-B) bereitgestellt: direkt vor
     `dispatch_to_omniroute_or_container()` aufrufen und bei ``allowed=False``
@@ -517,11 +531,20 @@ def require_accepted_handoff(
     executor = str(executor_agent or "").strip()
     if not tid or not executor:
         return {"allowed": False, "reason": "task_id/executor_agent fehlt"}
-    handoff_id = desk.latest_handoff_id_for_task(tid)
+    # Bevorzugt den Annahme-Envelope dieser Empfaengerkante: nach Abschluss
+    # legt der Watcher einen Ruecklauf-Envelope unter derselben task_id an.
+    handoff_id = desk.latest_handoff_id_for_task(tid, to_agent=executor) or desk.latest_handoff_id_for_task(tid)
     if not handoff_id:
-        # Keine A2A-Übergabe an dieser Kante: z. B. direkte Kanban-Tasks ohne
-        # Delegation. Das ist erlaubt; der Gate greift nur bei vorhandener
-        # Übergabe (kein erfundener Envelope).
+        # D11-H3: fuer Delegations-Kinder ist der Envelope Pflicht. Ohne
+        # vor dem Dispatch angelegten, signierten Envelope darf kein
+        # kostenpflichtiger LLM-Call stattfinden.
+        if require_envelope:
+            return {
+                "allowed": False, "handoff_id": "",
+                "reason": "missing_handoff_envelope",
+            }
+        # Direkte Kanban-Tasks ohne Delegation bleiben erlaubt (kein erfundener
+        # Envelope). Diese Einstellung ist NUR fuer Nicht-Delegationen gedacht.
         return {"allowed": True, "handoff_id": "", "reason": "no_handoff_for_task"}
     with desk._get_conn() as conn:
         row = conn.execute(

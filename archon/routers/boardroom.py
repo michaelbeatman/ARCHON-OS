@@ -4,24 +4,21 @@ from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 """Router /api/boardroom — ausgelagerte Routen (Modularisierung main.py -> archon/routers)."""
 
-import asyncio
-import datetime
-import json
-import os
-import re
-import sys
-import time
-import uuid
-from typing import Any, Dict, List, Optional, cast
+import asyncio  # noqa: E402
+import datetime  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+import time  # noqa: E402
+import uuid  # noqa: E402
+from typing import Any, Dict, List, Optional, cast  # noqa: E402
 
-import httpx
-import yaml
-from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile  # noqa: E402
+from fastapi.responses import StreamingResponse  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
 
-import core_dispatcher  # noqa: F401
-from archon.core.runtime import (  # noqa: F401
+import core_dispatcher  # noqa: F401,E402
+from archon.core.runtime import (  # noqa: F401,E402
     APP_ROOT,
     DATA_DIR,
     MEMORY_DIR,
@@ -36,8 +33,8 @@ from archon.core.runtime import (  # noqa: F401
     logger,
     ticker_entries,
 )
-from archon.routers._rbac import require_admin_or_503
-from backend.cancellation import clear_scope, get_child_token
+from archon.routers._rbac import require_admin_or_503  # noqa: E402
+from backend.cancellation import clear_scope, get_child_token  # noqa: E402
 
 # --------------------------------------------------
 # Dependency-Injektion statt Kopie
@@ -53,9 +50,9 @@ def configure(**deps: Any) -> None:
     if _missing:
         logger.warning(f"[Router] boardroom: fehlende Dependencies {sorted(_missing)}")
 
-from copy import deepcopy as _deepcopy
+from copy import deepcopy as _deepcopy  # noqa: E402
 
-from archon.routers._validated_body import PassthroughBody, as_payload
+from archon.routers._validated_body import PassthroughBody, as_payload  # noqa: E402
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
 
@@ -150,6 +147,11 @@ def save_boardroom_history_item(item: dict, actor_id: str = "system"):
         "timestamp": entry.get("timestamp"),
         "decision_status": entry.get("decision_status"),
         "consensus_verdict": entry.get("consensus_verdict"),
+        # D14/M3: die Begründung gehoert in die signierte Kette, nicht nur
+        # in die History-JSON-Datei.
+        "consensus": entry.get("consensus") or _consensus_audit_object(entry),
+        "storm_panel": entry.get("storm_panel"),
+        "requires_human_gate": bool(entry.get("requires_human_gate")),
         "cancel_reason": entry.get("cancel_reason") or "",
         "cancel_scope": entry.get("cancel_scope") or "",
     })
@@ -347,6 +349,68 @@ def _conflict_analysis_synthesis(text: Any) -> str:
     return cleaned
 
 
+def _consensus_audit_object(res: Dict[str, Any]) -> Dict[str, Any]:
+    """D14/M3: vollstaendige, revisionssichere Konsens-Begruendung.
+
+    Die Felder stammen aus dem ``done``-Event des Boardroom-Dispatches. Felder,
+    die der Dispatcher (noch) nicht mitliefert, werden explizit als ``None``
+    bzw. aus der Rollen-SSOT abgeleitet — nie still erfunden.
+    """
+    verdict = str(
+        res.get("consensus_verdict") or res.get("consensus_status") or "NO_CONSENSUS"
+    ).upper()
+    evidence: List[Dict[str, Any]] = []
+    for item in (res.get("evidence") or []):
+        if isinstance(item, dict):
+            rec = {k: item.get(k) for k in ("agent_id", "marker", "tier", "weight") if k in item}
+        elif isinstance(item, (list, tuple)):
+            rec = {
+                "agent_id": str(item[0]) if len(item) > 0 else "",
+                "marker": str(item[1]) if len(item) > 1 else "",
+            }
+        elif hasattr(item, "_asdict"):
+            rec = {k: v for k, v in dict(item._asdict()).items() if k in ("agent_id", "marker", "tier", "weight")}
+        else:
+            rec = {"agent_id": "", "marker": str(item)[:200]}
+        rec.setdefault("agent_id", "")
+        rec.setdefault("marker", "")
+        if not rec.get("tier") and rec["agent_id"]:
+            rec["tier"] = _verified_tier(str(rec["agent_id"])) or None
+        evidence.append(rec)
+
+    applied = str(res.get("applied_tie_break") or "")
+    veto_by = res.get("veto_by")
+    if not applied and verdict == "NO_CONSENSUS_BY_AUTHORITY":
+        tier = str(res.get("veto_tier") or "")
+        if not tier and veto_by:
+            tier = _verified_tier(str(veto_by))
+        applied = f"highest_tier:{tier}:no" if tier else "authority_no"
+
+    try:
+        from backend.consensus_gate import _DEFAULT_TIE_BREAK_RULE, _TIER_WEIGHTS
+
+        rule = str(res.get("tie_break_rule") or _DEFAULT_TIE_BREAK_RULE)
+        weights = dict(res.get("authority_weights") or _TIER_WEIGHTS)
+    except Exception:
+        rule = str(res.get("tie_break_rule") or "executive>lead>specialist>no_consensus")
+        weights = dict(res.get("authority_weights") or {})
+
+    return {
+        "verdict": verdict,
+        "consensus_reached": bool(res.get("consensus_reached")),
+        "yes_votes": res.get("yes_votes"),
+        "total_votes": res.get("total_votes"),
+        "required_votes": res.get("required_votes"),
+        "evidence": evidence,
+        "applied_tie_break": applied or None,
+        "tie_break_rule": rule,
+        "authority_weights": weights,
+        "severity": res.get("severity"),
+        "veto_by": str(veto_by) if veto_by else None,
+        "critique_error": bool(res.get("critique_error")),
+    }
+
+
 def _verified_tier(agent_id: str) -> str:
     """Tier aus der Rollen-SSOT, nie aus einem frei waehlbaren Body-Wert."""
     try:
@@ -355,6 +419,68 @@ def _verified_tier(agent_id: str) -> str:
     except Exception as exc:
         logger.warning("[Boardroom] Tier-SSOT nicht verfuegbar (%s) — kein Tier-Gewicht.", exc)
         return ""
+
+
+async def _run_no_consensus_storm_panel(
+    res: Dict[str, Any],
+    all_debate_agents: List[Dict[str, Any]],
+    chairman_agent: Dict[str, Any],
+) -> Dict[str, Any]:
+    """D14/M2: STORM-Panel M94 im echten NO_CONSENSUS-Pfad konsumieren.
+
+    Die Seats sind die registrierten Debatten-Teilnehmer, ihre Perspektiven
+    stammen aus deren echten ``agent_response``-Events der gerade beendeten
+    Debatte; der Judge ist der Chairman-Synthese-Dispatch. Damit entstehen
+    keine erfundenen Meinungen und keine zusaetzlichen LLM-Kosten — das Panel
+    verdichtet die bereits produzierten, multiperspektiven Ergebnisse und
+    sein ``requires_human_gate`` wird von den Routern als HITL-Eskalation
+    konsumiert (Produzent + Konsument + Effekt + Test).
+    """
+    from backend.lossless_session_dag import run_storm_panel
+
+    by_agent: Dict[str, str] = {}
+    for ev in (res.get("events") or []):
+        if str(ev.get("type") or "") == "agent_response" and ev.get("agent_id"):
+            by_agent[str(ev["agent_id"])] = str(ev.get("content") or "")
+    chairman_id = str(chairman_agent.get("id") or "")
+    seats = [
+        str(a.get("id") or "")
+        for a in (all_debate_agents or [])
+        if a.get("id") and str(a["id"]) != chairman_id
+    ]
+    if not seats:
+        seats = [f"seat-{i}" for i in range(1, 3)]
+    judge_text = str(res.get("synthesis") or "")
+
+    async def _seat_runner(seat: str, question: str) -> str:
+        # Keine neue LLM-Anfrage: die Perspektive ist das reale Ergebnis des
+        # Seats aus dieser Debatte (fallback: explizit leerer Beleg).
+        return by_agent.get(seat, "")[:1500]
+
+    async def _judge_runner(question: str, perspectives: Dict[str, str]) -> str:
+        return judge_text[:1500]
+
+    try:
+        panel = await run_storm_panel(
+            str(res.get("task") or "Boardroom-Konflikt"), seats,
+            _seat_runner, _judge_runner,
+        )
+    except Exception as exc:
+        # Fehler im Panel darf niemals eine finale Entscheidung erlauben.
+        logger.error("[Boardroom] STORM-Panel fehlgeschlagen (fail-closed): %s", exc)
+        panel = {
+            "question": str(res.get("task") or ""),
+            "perspectives": {},
+            "synthesis": "",
+            "requires_human_gate": True,
+            "error": str(exc)[:500],
+        }
+    panel["human_gate_consumed"] = bool(panel.get("requires_human_gate"))
+    panel["perspectives"] = {
+        str(k): str(v)[:500] for k, v in (panel.get("perspectives") or {}).items()
+    }
+    panel["synthesis"] = str(panel.get("synthesis") or "")[:1500]
+    return panel
 
 
 def _prepare_boardroom_agents(req: BoardroomRequest):
@@ -502,6 +628,11 @@ def _escalate_boardroom_no_consensus(
         "veto_by": res.get("veto_by"),
         "critique": str(res.get("critique") or "")[:1500],
         "synthesis": str(res.get("synthesis") or "")[:1500],
+        # D14/M2+M3: Panel-Ergebnis und Konsens-Begruendung sind Teil der
+        # HITL-Eskalation (nachvollziehbar, nicht nur ein Freitext).
+        "consensus": res.get("consensus") or _consensus_audit_object(res),
+        "storm_panel": res.get("storm_panel"),
+        "requires_human_gate": bool(res.get("requires_human_gate")),
     }
     kurzfassung = (
         f"Boardroom ohne Konsens ({consensus_status}). "
@@ -531,6 +662,9 @@ def _escalate_boardroom_no_consensus(
                 "consensus_status": consensus_status,
                 "decision_id": dec.get("id"),
                 "reason_code": "boardroom_no_consensus",
+                "consensus": extra.get("consensus"),
+                "storm_panel": extra.get("storm_panel"),
+                "requires_human_gate": bool(extra.get("requires_human_gate")),
             })
         else:
             logger.error("[Boardroom] HITL-Eskalation fehlgeschlagen (kein Decision-Task angelegt).")
@@ -561,6 +695,14 @@ def _persist_boardroom_result_sync(
     ``async`` Endpoint bzw. SSE-Generator und blockierte genau den SSE-Bus,
     ueber den diese Debatte gestreamt wurde.
     """
+    # D14/M3: kein Archiv-Eintrag ohne Konsens-Begruendung — auch wenn ein
+    # Aufrufer ein hist_entry ohne `consensus` baut.
+    if not isinstance(hist_entry.get("consensus"), dict):
+        _fallback = dict(res or {})
+        _fallback["consensus_verdict"] = (
+            hist_entry.get("consensus_verdict") or hist_entry.get("consensus_status") or ""
+        )
+        hist_entry["consensus"] = _consensus_audit_object(_fallback)
     save_boardroom_history_item(hist_entry, actor_id=actor_id)
     result: Dict[str, Any] = {"history_id": str(hist_entry.get("id") or "")}
 
@@ -620,6 +762,15 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):  # 
     _has_consensus = _has_final_consensus(res)
     if not _has_consensus:
         res["synthesis"] = _conflict_analysis_synthesis(res.get("synthesis", ""))
+        # D14/M2: M94-STORM-Panel ist im Produktivpfad verdrahtet. Seats sind
+        # die echten Debattenbeiträge, der Judge die Chairman-Synthese. Das
+        # Human-Gate des Panels wird unten als HITL-Eskalation konsumiert.
+        res["storm_panel"] = await _run_no_consensus_storm_panel(
+            res, all_debate_agents, chairman_agent
+        )
+        res["requires_human_gate"] = bool(
+            res["storm_panel"].get("human_gate_consumed")
+        )
 
     # Speichere finales Protokoll im Obsidian Vault
     try:
@@ -676,6 +827,11 @@ async def api_run_boardroom(req: BoardroomRequest, request: Request = None):  # 
                 "rounds": req.rounds,
                 "consensus_status": _consensus_status or "NO_CONSENSUS",
                 "consensus_verdict": str(res.get("consensus_verdict") or _consensus_status or "NO_CONSENSUS"),
+                # D14/M3: komplette Begründung (Evidence, Tier, Veto, Regel)
+                # revisionssicher im Archiv UND in der HMAC-Kette.
+                "consensus": _consensus_audit_object(res),
+                "storm_panel": res.get("storm_panel") if not _has_consensus else None,
+                "requires_human_gate": bool(res.get("requires_human_gate")),
                 "decision_status": _decision_status,
                 "slots_count": max(0, len(all_debate_agents) - 1),
                 "slots": [
@@ -731,6 +887,9 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
     async def sse_generator():
         running_transcript = ""
         synthesis_text = ""
+        # D14/M2: echte Seat-Perspektiven aus dem Stream sammeln, damit das
+        # NO_CONSENSUS-STORM-Panel nicht mit leeren Belegen arbeitet.
+        running_perspectives: Dict[str, str] = {}
         # KRITISCH (Audit 23.11.2026): clear_scope() muss auch bei
         # Client-Disconnect / Exception laufen, sonst bleibt der Token in der
         # Registry und der Killswitch wirkt auf verwaiste Scopes.
@@ -751,6 +910,8 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                     print("[AI Boardroom] Client disconnected. Beende Debatten-Stream vorzeitig.")
                     cancel_token.cancel("client_disconnect")
                     break
+                if str(ev.get("type") or "") == "agent_response" and ev.get("agent_id"):
+                    running_perspectives[str(ev["agent_id"])] = str(ev.get("content") or "")
                 if ev.get("type") == "done":
                     running_transcript = ev.get("transcript", "")
                     _stream_verdict = str(
@@ -773,6 +934,23 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                     if not _stream_final:
                         synthesis_text = _conflict_analysis_synthesis(synthesis_text)
                         ev["synthesis"] = synthesis_text
+                        # D14/M2: auch im Stream konsumiert das NO_CONSENSUS-
+                        # Panel sein Human-Gate (HITL-Eskalation statt Finale).
+                        _panel = await _run_no_consensus_storm_panel(
+                            {
+                                "task": req.task,
+                                "events": ev.get("events") or [
+                                    {"type": "agent_response", "agent_id": k, "content": v}
+                                    for k, v in running_perspectives.items()
+                                ],
+                                "synthesis": synthesis_text,
+                                "consensus_verdict": _stream_verdict,
+                            },
+                            all_debate_agents, chairman_agent,
+                        )
+                        cancel_token.check()
+                        ev["storm_panel"] = _panel
+                        ev["requires_human_gate"] = bool(_panel.get("human_gate_consumed"))
                     vault_file_name = ""
                     # Save to Obsidian Vault
                     try:
@@ -818,6 +996,9 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                             "rounds": req.rounds,
                             "consensus_status": _stream_verdict,
                             "consensus_verdict": _stream_verdict,
+                            "consensus": _consensus_audit_object(ev),
+                            "storm_panel": ev.get("storm_panel") if not _stream_final else None,
+                            "requires_human_gate": bool(ev.get("requires_human_gate")),
                             "decision_status": (
                                 "approved" if _stream_final else
                                 ("incomplete" if _stream_verdict.startswith("CONSENSUS_REACHED") else "no_consensus")
@@ -848,7 +1029,10 @@ async def api_stream_boardroom(req: BoardroomRequest, request: Request):
                             res={"consensus_verdict": _stream_verdict,
                                  "veto_by": ev.get("veto_by"),
                                  "critique": ev.get("critique", ""),
-                                 "synthesis": synthesis_text},
+                                 "synthesis": synthesis_text,
+                                 "consensus": ev.get("consensus"),
+                                 "storm_panel": ev.get("storm_panel"),
+                                 "requires_human_gate": ev.get("requires_human_gate")},
                         )
                         ev["history_id"] = _persisted["history_id"]
                         if not _stream_final:

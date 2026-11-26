@@ -20,7 +20,7 @@ import re
 import sqlite3
 import time
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -60,11 +60,37 @@ def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
         columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(flight_events)").fetchall()}
         if "error_code" not in columns:
             conn.execute("ALTER TABLE flight_events ADD COLUMN error_code TEXT DEFAULT ''")
+        # D13-M2: Trajektorien-Korrelation für zyklische Wiederholungen
+        # ueber Agentgrenzen hinweg (A -> tool_x -> B -> tool_y -> A).
+        if "trajectory_id" not in columns:
+            conn.execute("ALTER TABLE flight_events ADD COLUMN trajectory_id TEXT DEFAULT ''")
+        if "hop_index" not in columns:
+            conn.execute("ALTER TABLE flight_events ADD COLUMN hop_index INTEGER NOT NULL DEFAULT -1")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_flight_run ON flight_events(run_id)")
         conn.commit()
         yield conn
     finally:
         conn.close()
+
+
+def _flight_trajectory_context(run_id: str) -> Tuple[str, int]:  # noqa: F821  # type: ignore[name-definedname-definedname-defined]
+    """Ermittelt Trajectory-ID/Hop-Index, falls der Produzent sie nicht reicht.
+
+    Kein Schema-Replay: beide Werte sind additive Spalten und werden nur
+    gefuellt, wenn der Chokepoint sie nicht explizit mitgibt.
+    """
+    tid = str(run_id or "").strip()
+    hop = -1
+    try:
+        from backend.trajectory_budget import get_trajectory, normalize_trajectory_id
+        if not tid.startswith("traj-"):
+            tid = normalize_trajectory_id(None, root_ticket_id=tid)
+        row = get_trajectory(tid)
+        if row:
+            hop = int(row.get("hops_used") or 0)
+    except Exception:
+        pass
+    return tid, hop
 
 
 def record_flight_event(
@@ -76,17 +102,26 @@ def record_flight_event(
     tokens_used: int = 0,
     db_path: Optional[str] = None,
     error_code: str = "",
+    trajectory_id: str = "",
+    hop_index: int = -1,
 ) -> None:
     args_str = json.dumps(args or {}, sort_keys=True, ensure_ascii=False)
     args_hash = hashlib.sha256(f"{tool_name}:{args_str}".encode("utf-8")).hexdigest()[:16]
+    if not str(trajectory_id or "").strip() or int(hop_index or -1) < 0:
+        derived_tid, derived_hop = _flight_trajectory_context(run_id)
+        trajectory_id = str(trajectory_id or "").strip() or derived_tid
+        hop_index = int(hop_index) if int(hop_index or -1) >= 0 else derived_hop
     with _connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO flight_events (run_id, agent_id, tool_name, args_json, args_hash, tool_ok, tokens_used, created_at, error_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO flight_events (
+                run_id, agent_id, tool_name, args_json, args_hash, tool_ok, tokens_used,
+                created_at, error_code, trajectory_id, hop_index
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (run_id, agent_id, tool_name, args_str, args_hash, 1 if tool_ok else 0,
-             int(tokens_used), time.time(), str(error_code or "")),
+             int(tokens_used), time.time(), str(error_code or ""),
+             str(trajectory_id or ""), int(hop_index)),
         )
         conn.commit()
 
@@ -129,6 +164,8 @@ def mirror_flight_event_to_trace(
     session_id: str = "",
     db_path: Optional[str] = None,
     error_code: str = "",
+    trajectory_id: str = "",
+    hop_index: int = -1,
 ) -> List[str]:
     """Spiegelt ein bereits geschriebenes Flight-Event unter der Trace-ID.
 
@@ -146,10 +183,85 @@ def mirror_flight_event_to_trace(
         record_flight_event(
             run_id=rid, agent_id=agent_id, tool_name=tool_name, args=args,
             tool_ok=tool_ok, tokens_used=tokens_used, db_path=db_path,
-            error_code=error_code,
+            error_code=error_code, trajectory_id=trajectory_id, hop_index=hop_index,
         )
         written.append(rid)
     return written
+
+
+LOOP_WINDOW = 8
+LOOP_MIN_REPEAT = 3
+
+
+def _loop_evidence(event: Dict[str, Any]) -> str:
+    """Trajectory-ID/Hop-Index als nachvollziehbaren Befund im Flag."""
+    suffix = ""
+    tid = str(event.get("trajectory_id") or "").strip()
+    hop = int(event.get("hop_index") or -1)
+    if tid:
+        suffix += f"@{tid}"
+    if hop >= 0:
+        suffix += f":hop-{hop}"
+    return suffix
+
+
+def _detect_tool_loops(events: List[Dict[str, Any]]) -> Tuple[List[str], List[Dict[str, Any]]]:  # noqa: F821  # type: ignore[name-definedname-definedname-defined]
+    """D13-M2: Loop-Erkennung unabhaengig von identischen args_hash.
+
+    Regeln (ein Flag pro Tool, Prefix `tool_loop` bleibt kompatibel zum
+    Dispatcher-Guard):
+      1. args_hash-Streak >= 3 (altes Signal, behalten),
+      2. tool_name >= 3 im gleitenden Fenster von ``LOOP_WINDOW`` Events,
+      3. zyklische Wiederholung eines `(agent_id, tool_name)`-Musters der
+         Laenge 2..4 — auch ueber Agentgrenzen hinweg (A->x->B->y->A).
+    """
+    found: Dict[str, Dict[str, Any]] = {}
+    n = len(events)
+
+    def _add(key: str, event: Dict[str, Any], rule: str) -> None:
+        if key not in found:
+            found[key] = {
+                "flag": f"{key}{_loop_evidence(event)}",
+                "rule": rule,
+                "trajectory_id": str(event.get("trajectory_id") or ""),
+                "hop_index": int(event.get("hop_index") or -1),
+                "tool_name": str(event.get("tool_name") or ""),
+            }
+
+    streak = 1
+    for i in range(1, n):
+        same = (
+            events[i]["args_hash"] == events[i - 1]["args_hash"]
+            and events[i]["tool_name"] == events[i - 1]["tool_name"]
+        )
+        streak = streak + 1 if same else 1
+        if streak >= LOOP_MIN_REPEAT:
+            _add(f"tool_loop:{events[i]['tool_name']}", events[i], "args_hash_streak")
+
+    for i, event in enumerate(events):
+        window = events[max(0, i - LOOP_WINDOW + 1): i + 1]
+        count = sum(1 for e in window if e.get("tool_name") == event.get("tool_name"))
+        if count >= LOOP_MIN_REPEAT:
+            _add(f"tool_loop:{event['tool_name']}", event, "tool_name_frequency")
+
+    pairs = [
+        (str(e.get("agent_id") or ""), str(e.get("tool_name") or ""))
+        for e in events
+    ]
+    for length in range(2, min(4, n // 2) + 1):
+        for end in range(2 * length, n + 1):
+            pattern = pairs[end - length:end]
+            previous = pairs[end - 2 * length:end - length]
+            if pattern == previous and len(set(pattern)) >= 2:
+                idx = end - 1
+                key = "tool_loop:cycle:" + "/".join(tool for _, tool in pattern)
+                _add(key, events[idx], "cyclic_agent_tool_pattern")
+                break
+        if any(d["rule"] == "cyclic_agent_tool_pattern" for d in found.values()):
+            break
+
+    details = list(found.values())
+    return [str(d["flag"]) for d in details], details
 
 
 def detect_silent_failures(
@@ -162,8 +274,8 @@ def detect_silent_failures(
     """Analysiert einen Run auf versteckte Fehler trotz 'success'-Status."""
     with _connect(db_path) as conn:
         rows = conn.execute(
-            "SELECT tool_name, args_hash, tool_ok, tokens_used, error_code "
-            "FROM flight_events WHERE run_id = ? ORDER BY id ASC",
+            "SELECT tool_name, agent_id, args_hash, tool_ok, tokens_used, error_code, "
+            "trajectory_id, hop_index FROM flight_events WHERE run_id = ? ORDER BY id ASC",
             (run_id,),
         ).fetchall()
 
@@ -186,16 +298,10 @@ def detect_silent_failures(
     if empty_results > 0 and final_status == "success":
         flags.append(f"empty_tool_result:{empty_results}")
 
-    # Loop detection (>= 3 identische aufeinanderfolgende Tool-Calls)
-    streak = 1
-    for i in range(1, len(events)):
-        if events[i]["args_hash"] == events[i - 1]["args_hash"]:
-            streak += 1
-            if streak >= 3:
-                flags.append(f"tool_loop:{events[i]['tool_name']}")
-                break
-        else:
-            streak = 1
+    # D13-M2: Loop-Erkennung mit tool_name-Frequenz und zyklischem Muster —
+    # identische args_hash bleiben nur eines von drei Signalen.
+    loop_flags, loop_details = _detect_tool_loops(events)
+    flags.extend(loop_flags)
 
     total_tokens = sum(int(e["tokens_used"] or 0) for e in events)
     if baseline_tokens > 0 and total_tokens > baseline_tokens * 3:
@@ -218,6 +324,7 @@ def detect_silent_failures(
         "event_count": len(events),
         "empty_tool_results": empty_results,
         "total_tokens": total_tokens,
+        "loop_details": loop_details,
     }
 
 

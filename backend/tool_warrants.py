@@ -131,6 +131,67 @@ def get_warrant_for_session(session_id: str, tool_name: Optional[str] = None) ->
     return None
 
 
+def latest_warrant_payload_for_session(session_id: str) -> Optional[Dict[str, Any]]:
+    """D11/W3-C: gueltiges Parent-Warrant lesen (ohne Tool-Filter).
+
+    ``get_warrant_for_session()`` verlangt einen konkreten Tool-Namen und
+    wuerde ein Parent-Warrant mit ``allowed_tools``-Whitelist hier ablehnen.
+    Diese Variante prueft nur Signatur + Ablauf + Session-Bindung und liefert
+    das signierte Payload zur kontrollierten Vererbung an die Kind-Session.
+    """
+    sid = str(session_id or "").strip()
+    if not sid:
+        return None
+    with _REGISTRY_LOCK:
+        entries = list(reversed(_WARRANT_REGISTRY.get(sid, [])))
+    for w in entries:
+        payload = w.get("payload") if isinstance(w, dict) else None
+        if not isinstance(payload, dict):
+            continue
+        if float(payload.get("expires_at") or 0) <= time.time():
+            continue
+        try:
+            if not hmac.compare_digest(
+                str(w.get("signature") or ""), _sign_payload(payload, _get_warrant_secret())
+            ):
+                continue
+        except Exception:
+            continue
+        return dict(payload)
+    return None
+
+
+def inherit_warrant_for_session(
+    source_session_id: str,
+    target_session_id: str,
+    *,
+    allowed_tools: Optional[List[str]] = None,
+    constraints: Optional[Dict[str, Any]] = None,
+    ttl_seconds: int = 900,
+) -> str:
+    """D11/W3-C: Warrant des Parents an die Kind-Session vererben.
+
+    Gibt die ``warrant_id`` des neu ausgestellten, an die Kind-Session
+    gebundenen Warrants zurueck (wird signiert in der Delegationsuebergabe
+    mitgefuehrt). Ohne Parent-Warrant bleibt die ID leer — das Kind erhaelt
+    keine stillen Zusatzrechte.
+    """
+    source = latest_warrant_payload_for_session(source_session_id)
+    if not source:
+        return ""
+    tools = list(allowed_tools or source.get("allowed_tools") or [])
+    if not tools:
+        return ""
+    inherited = issue_warrant(
+        str(target_session_id),
+        tools,
+        dict(constraints or source.get("constraints") or {}),
+        ttl_seconds=ttl_seconds,
+    )
+    register_warrant(inherited)
+    return str(inherited["payload"]["warrant_id"])
+
+
 def issue_warrant(
     session_id: str,
     allowed_tools: List[str],

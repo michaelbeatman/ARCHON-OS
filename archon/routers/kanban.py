@@ -9,20 +9,19 @@ Verwaltet /api/kanban Endpunkte (Karten lesen und synchronisieren in kanban.db u
 Extrahiert aus main.py zur Modularisierung.
 """
 
-import asyncio
-import json
-import os
-import sqlite3
-import sys
-from typing import Any, Dict, List, Optional
+import json  # noqa: E402
+import os  # noqa: E402
+import sqlite3  # noqa: E402
+import sys  # noqa: E402
+from typing import Any, Optional  # noqa: E402
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Request  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
 
-from archon.core.paths import KANBAN_CARDS_FILE, KANBAN_DB_PATH
-from archon.core.runtime import atomic_write_json, logger, run_io_bound
-from backend.db_paths import get_db_connection
-from backend.platform_paths import HERMES_HOME
+from archon.core.paths import KANBAN_CARDS_FILE, KANBAN_DB_PATH  # noqa: E402
+from archon.core.runtime import atomic_write_json, logger, run_io_bound  # noqa: E402
+from backend.db_paths import get_db_connection  # noqa: E402
+from backend.platform_paths import HERMES_HOME  # noqa: E402
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)], tags=["kanban"])
 
@@ -194,6 +193,10 @@ def _load_hitl_creator(kanban_db: str, task_id: str) -> str:
         return ""
     kconn = get_db_connection(kanban_db, timeout=5.0)
     try:
+        # D14/H1: get_db_connection() setzt KEINEN row_factory — ohne diese
+        # Zeile scheitert der Ersteller-Abgleich an `tuple['created_by']`
+        # und der Hoheitsakt waere nicht vier Augen geprueft.
+        kconn.row_factory = sqlite3.Row
         row = kconn.execute(
             "SELECT created_by FROM tasks WHERE id = ?", (task_id,)
         ).fetchone()
@@ -212,70 +215,89 @@ async def api_kanban_task_hitl(request: Request, task_id: str):
     payload = await request.json()
     action = str(payload.get("action") or "").strip()
     old_budget = int(payload.get("current_budget") or 0)
+    # D14/H1: nur das Einmal-Token kommt aus dem Request. `result_text`,
+    # `proof_command`, `primary_model` und `diff_text` werden bewusst NICHT
+    # aus dem Body gelesen — sie kommen aus dem Task-Kontext.
+    proof_token = str(
+        payload.get("hitl_proof_token") or payload.get("proof_token") or ""
+    ).strip()
 
     # Ersteller aus der DB — nie aus dem Body.
     created_by = ""
+    kanban_db = ""
     try:
         kanban_db = _resolve_active_kanban_db()
         created_by = await run_io_bound(_load_hitl_creator, kanban_db, task_id)
     except Exception as exc:
         logger.warning("[Kanban] HITL-Ersteller nicht lesbar: %s", exc)
 
-    from backend.kanban_verifier import resolve_card_hitl_decision
+    from backend.kanban_verifier import resolve_card_hitl_decision_verified
     try:
-        decision = resolve_card_hitl_decision(
+        decision = await resolve_card_hitl_decision_verified(
             action,
+            task_id,
             current_budget=old_budget,
             override_budget=payload.get("token_budget"),
             actor=actor,
             created_by=created_by,
-            result_text=str(payload.get("result_text") or ""),
-            proof_command=payload.get("proof_command"),
-            primary_model=str(payload.get("primary_model") or ""),
-            diff_text=str(payload.get("diff_text") or ""),
+            proof_token=proof_token,
+            kanban_db=kanban_db,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
 
-    # D14/MED: Der Verifier hat einen Env-Fail-Open
-    # (ARCHON_KANBAN_HITL_ALLOW_UNVERIFIED_OVERRIDE). Im Router wird die
-    # Reverifikationspflicht hart durchgesetzt: ohne erfolgreichen Proof gibt
-    # es keinen Uebergang nach 'todo' — unabhaengig von der Env-Variable.
+    # D14/H1: Verteidigung in der Tiefe. Selbst ein fehlerhafter Verifier darf
+    # ohne Passkey-Proof, echten Proof (Exit 0, skipped=False) und echten
+    # Cross-Modell-Call keine Freigabe nach 'todo' erzeugen.
     if (
         action in ("override", "override_budget")
         and decision.get("next_status") == "todo"
-        and not decision.get("verified")
+        and not (
+            decision.get("verified") is True
+            and decision.get("block_kind") == "approval_granted"
+            and decision.get("passkey_verified") is True
+            and isinstance(decision.get("cross_model"), dict)
+            and decision.get("cross_model", {}).get("model_call") is True
+            and isinstance(decision.get("proof"), dict)
+            and decision.get("proof", {}).get("skipped") is False
+            and decision.get("proof", {}).get("exit_code") == 0
+        )
     ):
         decision["next_status"] = "blocked"
         decision["reason"] = (
-            "Override ohne erfolgreiche Reverifikation gesperrt "
-            "(Vier-Augen-Prinzip; Env-Fail-Open ist wirkungslos)."
+            "Override ohne vollstaendigen Hoheits-Nachweis gesperrt "
+            "(Passkey-Proof, echtes Proof-Command und Cross-Modell-Call erforderlich)."
         )
 
-    # Signiertes Audit-Event mit Resolution, Actor und alter/neuer Budgetwert.
+    # Signiertes Audit-Event VOR dem Statuswechsel. Ein Schreibfehler ist
+    # hart: ohne Audit-Kette kein Uebergang nach 'todo' (§2.5).
     try:
-        from backend.audit_log import chained_audit_log
+        from backend.audit_log import _require_audit_event
         # D08/MED: signierte HMAC-Kette (BEGIN IMMEDIATE, timeout=30) nie im
         # Event-Loop. audit_log.py:604 serialisiert die Kettenreihenfolge.
         await run_io_bound(
-            chained_audit_log.record_event,
-            category="security",
-            action="kanban_hitl_resolution",
-            agent_id=actor,
-            payload={
+            _require_audit_event,
+            "security",
+            "kanban_hitl_resolution",
+            actor,
+            {
                 "task_id": task_id,
                 "resolution": decision.get("resolution") or action,
                 "actor": actor,
                 "created_by": created_by,
                 "old_budget": decision.get("old_budget", old_budget),
                 "new_budget": decision.get("token_budget", old_budget),
-                "verified": bool(decision.get("verified")),
+                "verified": decision.get("verified") is True,
+                "hitl_proof_verified": bool(decision.get("passkey_verified")),
+                "proof": decision.get("proof"),
+                "cross_model": decision.get("cross_model"),
+                "proof_context": decision.get("proof_context"),
             },
         )
-    except Exception as exc:
-        logger.warning("[Kanban] HITL-Audit-Event fehlgeschlagen: %s", exc)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
     if decision.get("next_status") == "blocked":
         raise HTTPException(status_code=403, detail=decision.get("reason") or "Reverifikation fehlgeschlagen.")

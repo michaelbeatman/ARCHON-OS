@@ -186,16 +186,51 @@ def test_dispatch_cost_fallback_is_marked_unverified():
     assert "0.00000015" in block  # nur noch letzte Fallback-Schätzung
 
 
-def test_audit_and_receipt_errors_use_error_level():
-    src = _src("core_dispatcher.py")
+def test_audit_and_receipt_errors_use_error_level(monkeypatch, tmp_path, caplog):
+    """G7-Migration (D5-C3): prueft ERROR-Level sowohl fuer core_dispatcher als auch real fuer Usage-Audit-Log."""
+    import logging
+    import sqlite3
+    import backend.db_paths as dbp_mod
+    import backend.execution_receipt_ledger as erl_mod
+    import core_dispatcher
+
+    combined = _src("core_dispatcher.py") + "\n" + _src("archon/core/dispatch_budget_cache.py")
     for marker in (
         "Silent-Failure-Audit fehlgeschlagen",
         "Receipt fehlgeschlagen",
         "Usage-Audit-Log fehlgeschlagen",
         "Cache-Content-Cleanup fehlgeschlagen",
     ):
-        line = next(l for l in src.splitlines() if marker in l)
+        line = next(l for l in combined.splitlines() if marker in l)
         assert "logger.error" in line
+
+    # Echte Verhaltensprobe fuer _log_dispatcher_usage_sync bei Receipt-Fehler -> ERROR-Log
+    db_file = tmp_path / "state.db"
+    with sqlite3.connect(db_file) as conn:
+        conn.execute(
+            "CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, display_name TEXT, title TEXT, "
+            "model TEXT, profile_name TEXT, started_at REAL, message_count INT, input_tokens INT, "
+            "output_tokens INT, estimated_cost_usd REAL, actual_cost_usd REAL)"
+        )
+        conn.execute(
+            "CREATE TABLE session_model_usage (session_id TEXT, model TEXT, billing_provider TEXT, "
+            "billing_base_url TEXT, billing_mode TEXT, task TEXT, api_call_count INT, input_tokens INT, "
+            "output_tokens INT, cache_read_tokens INT, cache_write_tokens INT, reasoning_tokens INT, "
+            "estimated_cost_usd REAL, actual_cost_usd REAL, first_seen REAL, last_seen REAL, "
+            "PRIMARY KEY (session_id, model, billing_provider, billing_base_url, billing_mode, task))"
+        )
+    monkeypatch.setattr(dbp_mod, "resolve_db", lambda _name: str(db_file))
+    monkeypatch.setattr(
+        erl_mod.execution_receipt_ledger,
+        "issue_receipt",
+        lambda **_kw: (_ for _ in ()).throw(RuntimeError("receipt disk fail")),
+    )
+    with caplog.at_level(logging.ERROR):
+        core_dispatcher._log_dispatcher_usage_sync("coder", "deepseek/deepseek-chat", 10, 20, "t-err")
+    assert any(
+        rec.levelno >= logging.ERROR and "Usage-Audit-Log fehlgeschlagen" in rec.getMessage()
+        for rec in caplog.records
+    )
 
 
 def test_cache_cleanup_failure_does_not_return_success():

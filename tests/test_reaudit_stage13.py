@@ -131,8 +131,40 @@ def test_d08_audit_dispatch_is_async():
         assert "await audit_dispatch_async(" in src, rel
 
 
-def test_d02_cache_respects_policy():
-    src = (ROOT / "core_dispatcher.py").read_text(encoding="utf-8")
-    assert "ARCHON_POLICY_VERSION" in src
-    assert "def _validate_cache_hit_gate(" in src
-    assert "get_privacy_config()" in src.split("def _validate_cache_hit_gate(", 1)[0][-800:]
+def test_d02_cache_respects_policy(monkeypatch):
+    """G7-Migration (D5-C3): echtes Verhalten fuer Policy-Scope, Privacy-Config und Cache-Hit-Gate."""
+    import pytest
+    import backend.compliance_engine as ce_mod
+    import backend.llm_egress_guard as egress_mod
+    import backend.privacy_router as pr_mod
+    import core_dispatcher
+
+    # 1. ARCHON_POLICY_VERSION trennt Cache-Scopes echt
+    monkeypatch.setenv("ARCHON_POLICY_VERSION", "pol-v1")
+    scope_v1 = core_dispatcher._dispatch_cache_scope("coder")
+    monkeypatch.setenv("ARCHON_POLICY_VERSION", "pol-v2")
+    scope_v2 = core_dispatcher._dispatch_cache_scope("coder")
+    assert scope_v1 != scope_v2
+    assert "pol-v1" in scope_v1 and "pol-v2" in scope_v2
+
+    # 2. _cache_policy_context liest get_privacy_config() echt
+    monkeypatch.setattr(pr_mod, "get_privacy_config", lambda: {"zero_egress_strict": True})
+    _, zero_on = core_dispatcher._cache_policy_context("coder", prompt="Hallo")
+    monkeypatch.setattr(pr_mod, "get_privacy_config", lambda: {"zero_egress_strict": False})
+    _, zero_off = core_dispatcher._cache_policy_context("coder", prompt="Hallo")
+    assert zero_on is True
+    assert zero_off is False
+
+    # 3. _validate_cache_hit_gate blockiert fail-closed bei Compliance-Ablehnung
+    monkeypatch.setattr(
+        ce_mod.compliance_engine,
+        "check_activation_allowed",
+        lambda *_a, **_kw: {"allowed": False, "error_code": "COMPLIANCE_BLOCKED", "reason": "test block"},
+    )
+    with pytest.raises(egress_mod.ZeroEgressBlockedError):
+        core_dispatcher._validate_cache_hit_gate(
+            agent_id="coder",
+            provider="openrouter",
+            model="deepseek/deepseek-chat",
+            prompt="Hallo",
+        )

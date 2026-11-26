@@ -260,6 +260,7 @@ header,.hero,.wrap,footer{position:relative;z-index:1}
   .blueprint-stage{transform:none}
 }
 header nav{align-items:center}.lang-switch{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius-sm);padding:0.2rem 0.45rem;font-size:var(--text-sm);font-family:inherit;cursor:pointer;line-height:1.3}.lang-switch:hover,.lang-switch:focus{border-color:var(--accent);outline:none}
+.bottom-bg-blueprint{position:absolute;bottom:7.5rem;right:-10%;width:clamp(520px,52vw,860px);transform:translateY(-70%);z-index:0;pointer-events:none;user-select:none}@media (max-width:767px){.bottom-bg-blueprint{bottom:10rem;right:-24%;width:92%;opacity:0.28}}
 </style>
 </head>
 <body>
@@ -366,6 +367,7 @@ docker compose -f docker-compose.demo.yml up --build -d
 </table>
 </div>
 
+<div class="bottom-bg-blueprint" aria-hidden="true"><picture><source srcset="../archon_blueprint_bottom_dark.png" media="(prefers-color-scheme: dark)"><img src="../archon_blueprint_bottom_light.png" class="asymmetric-blueprint" alt="" loading="lazy"></picture></div>
 <footer><div class="wrap">
 <span>Aufgebaut auf <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> von Nous Research</span>
 <a href="https://github.com/michaelbeatman/ARCHON-OS">Code-Repository</a>

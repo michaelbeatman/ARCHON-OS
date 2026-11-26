@@ -106,6 +106,40 @@ async def _close_dispatcher_clients() -> None:
         logger.error(f"[Shutdown] Dispatcher-Client-Close fehlgeschlagen: {exc}")
 
 
+def _record_client_close_failure(pool_name: str, exc: BaseException) -> None:
+    """D07-M6: Client-Close-Fehler als ERROR + signiertes Audit, nie nur DEBUG."""
+    detail = f"{pool_name}: {type(exc).__name__}: {exc}"
+    logger.error("[Shutdown] %s", detail)
+    entry: dict[str, Any] = {
+        "task": f"client_close:{pool_name}",
+        "detail": str(exc),
+        "ts": time.time(),
+        "audit_status": "pending",
+    }
+    try:
+        from archon.services.background_loops import _FAILED_CANCELS
+
+        _FAILED_CANCELS.append(entry)
+    except Exception:
+        logger.debug("[Shutdown] _FAILED_CANCELS-Spiegelung nicht verfügbar: %s", pool_name)
+
+    from backend.audit_log import _is_audit_strict, _require_audit_event
+
+    try:
+        _require_audit_event(
+            category="shutdown",
+            action="client_close_failed",
+            agent_id="system",
+            payload={"pool": pool_name, "detail": detail, "ts": time.time()},
+        )
+        entry["audit_status"] = "ok"
+    except RuntimeError:
+        entry["audit_status"] = "error"
+        if _is_audit_strict():
+            raise
+        logger.error("[Shutdown] Client-Close-Audit fehlgeschlagen (Strict aus): %s", pool_name)
+
+
 async def _close_all_http_clients() -> None:
     """D08/S-8.2: alle langlebigen Client-Pools schliessen."""
     closed = 0
@@ -114,7 +148,7 @@ async def _close_all_http_clients() -> None:
 
         await agent_router.router_instance.close_http_clients()
     except Exception as exc:
-        logger.debug("[Shutdown] AgentRouter-Client-Close-Hinweis: %s", exc)
+        _record_client_close_failure("agent_router", exc)
 
     for module_path, pool_name in (
         ("archon.routers.hermes_proxy", "_HERMES_CLIENTS_BY_LOOP"),
@@ -133,14 +167,14 @@ async def _close_all_http_clients() -> None:
                         await client.aclose()
                         closed += 1
                 except Exception as exc:
-                    logger.debug("[Shutdown] %s Client-Close-Hinweis: %s", pool_name, exc)
+                    _record_client_close_failure(pool_name, exc)
             if pool is not None:
                 try:
                     pool.clear()
                 except Exception as exc:
-                    logger.debug("[Shutdown] %s Dict-Clear-Hinweis: %s", pool_name, exc)
+                    _record_client_close_failure(f"{pool_name}.clear", exc)
         except Exception as exc:
-            logger.debug("[Shutdown] %s Pool-Close-Hinweis: %s", pool_name, exc)
+            _record_client_close_failure(f"{pool_name}.pool", exc)
 
     try:
         from archon.routers import system as _system_module
@@ -152,7 +186,7 @@ async def _close_all_http_clients() -> None:
                 closed += 1
             setattr(_system_module, "_SYSTEM_HTTP_CLIENT", None)
     except Exception as exc:
-        logger.debug("[Shutdown] System-Client-Close-Hinweis: %s", exc)
+        _record_client_close_failure("system", exc)
 
     if closed:
         logger.info("[Shutdown] %s HTTP-Client(s) zentral geschlossen.", closed)

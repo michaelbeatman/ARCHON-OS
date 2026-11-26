@@ -23,7 +23,6 @@ F011 / W1 / BLOCKER B-11 (Remediation 25.11.2026):
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
 import hashlib
 import hmac
 import json
@@ -34,6 +33,7 @@ import secrets
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional
 
 logger = logging.getLogger("archon.lossless_session_dag")
@@ -169,12 +169,20 @@ def derive_tenant_id(messages: Optional[List[Dict[str, Any]]]) -> str:
     return _effective_tenant()
 
 
-def derive_session_id(messages: Optional[List[Dict[str, Any]]]) -> str:
+def derive_session_id(
+    messages: Optional[List[Dict[str, Any]]],
+    *,
+    tenant_id: Optional[str] = None,
+) -> str:
     """Deterministische Session-ID einer Nachrichtenkette (idempotent).
 
-    Explizite Korrelationsfelder haben Vorrang. Ohne diese Felder wird ein
-    stabiler Fingerprint aus System-Prompt + erstem User-Turn gebildet, damit
-    wiederholte Dispatches derselben Konversation denselben Knoten treffen.
+    Explizite Korrelationsfelder haben Vorrang und behalten den stabilen
+    Vertrag ``session:<id>``. Ohne diese Felder wird der Fingerprint ueber die
+    GESAMTE Kette inklusive Mandanten-Salz gebildet. Frueher wurden nur
+    System-Prompt und erster User-Turn gehasht — zwei verschiedene Sessions
+    mit gleichem Anfang wurden dadurch zusammengefuehrt (Cross-Session-Bleed,
+    D11-M3). ``tenant_id`` ist optional, damit die vorhandenen Aufrufer
+    unverändert funktionieren.
     """
     for msg in messages or []:
         if not isinstance(msg, dict):
@@ -183,19 +191,38 @@ def derive_session_id(messages: Optional[List[Dict[str, Any]]]) -> str:
             value = msg.get(key)
             if value:
                 return f"session:{value}"
-    system_text, anchor_text = "", ""
+
+    salt = str(tenant_id or "")
+    if not salt:
+        for msg in messages or []:
+            if not isinstance(msg, dict):
+                continue
+            tenant = msg.get("tenant_id") or msg.get("company_id")
+            if tenant:
+                salt = str(tenant)
+                break
+    if not salt:
+        salt = str(_effective_tenant() or "")
+
+    parts: List[str] = [f"tenant:{salt}"]
     for msg in messages or []:
         if not isinstance(msg, dict):
             continue
         role = str(msg.get("role") or "")
-        if role == "system" and not system_text:
-            system_text = str(_content_to_text(msg.get("content")))
-        if role == "user" and not anchor_text:
-            anchor_text = str(_content_to_text(msg.get("content")))
-    base = f"{system_text[:2000]}|{anchor_text[:2000]}"
+        content = str(_content_to_text(msg.get("content")))
+        parts.append(f"{role}:{content[:2000]}")
+        # Explizite Chaos-/Lauf-Korrelation zusaetzlich salzen. Eine
+        # message_id taucht hier bewusst NICHT auf: sie wechselt pro Turn
+        # und wuerde die Idempotenz zerstoeren.
+        for key in ("turn_id", "task_id", "run_id", "request_id"):
+            value = msg.get(key)
+            if value:
+                parts.append(f"{key}={value}")
+                break
+    base = "|".join(parts)
     if not base.strip("|"):
         base = "agent-router:default"
-    return "ar-" + hashlib.sha256(base.encode("utf-8", "replace")).hexdigest()[:16]
+    return "ar-" + hashlib.sha256(base.encode("utf-8", "replace")).hexdigest()[:24]
 
 
 def _content_to_text(content: Any) -> str:
@@ -330,7 +357,7 @@ def record_turns(
     tenant = _effective_tenant(tenant_id)
     ids: List[str] = []
     with _connect(db_path) as conn:
-        for msg in messages or []:
+        for idx, msg in enumerate(messages or []):
             if not isinstance(msg, dict):
                 ids.append("")
                 continue
@@ -339,8 +366,19 @@ def record_turns(
             if not text.strip():
                 ids.append("")
                 continue
+            # D11-M3: Position und explizite Turn-Korrelation gehoeren in den
+            # Key. ``tenant|session|role|text`` liess zwei inhaltlich identische
+            # Turns derselben Session zu einem Knoten kollabieren. Die exakte
+            # wiederholte Dispatch derselben Kette bleibt idempotent (gleicher
+            # idx), waehrend echte Wiederholungen eigenstaendige Turns werden.
+            explicit = ""
+            for key in ("turn_id", "message_id", "id"):
+                value = msg.get(key)
+                if value:
+                    explicit = str(value)
+                    break
             dedup = hashlib.sha256(
-                f"{tenant}|{session_id}|{role}|{text}".encode("utf-8", "replace")
+                f"{tenant}|{session_id}|{idx}|{explicit}|{role}|{text}".encode("utf-8", "replace")
             ).hexdigest()[:24]
             existing = conn.execute(
                 "SELECT id FROM lcm_turns WHERE tenant_id = ? AND session_id = ? AND dedup_key = ?",

@@ -120,6 +120,56 @@ def _record_failed_cancel(task_name: str, detail: str) -> Dict[str, Any]:
         return entry
 
 
+# D07-M4: aufeinanderfolgende Fehler der 30-s-Recovery-Loops. Ein erfolgreicher
+# Durchlauf setzt den Zaehler zurueck; ab dem dritten Fehler geht ein externer
+# Alarm an die gemeinsame Dedup-Kette (metrics_collector).
+_LOOP_FAILURE_COUNTS: Dict[str, int] = {}
+_LOOP_ALARM_THRESHOLD = 3
+
+
+def _reset_loop_failures(loop_name: str) -> None:
+    """Erfolgreicher Loop-Durchlauf: Fehlerzaehler dieses Loops leeren."""
+    _LOOP_FAILURE_COUNTS[loop_name] = 0
+
+
+def _record_loop_failure(loop_name: str, exc: BaseException) -> None:
+    """D07-M4: Recovery-Fehler sind ERROR + signiertes Pflicht-Event, nie DEBUG."""
+    count = _LOOP_FAILURE_COUNTS.get(loop_name, 0) + 1
+    _LOOP_FAILURE_COUNTS[loop_name] = count
+    detail = f"{loop_name}: {type(exc).__name__}: {exc}"
+    logger.error(
+        "[RecoveryLoop] %s (aufeinanderfolgend %s/%s)",
+        detail, count, _LOOP_ALARM_THRESHOLD,
+    )
+    from backend.audit_log import _require_audit_event
+
+    _require_audit_event(
+        category="recovery",
+        action=f"{loop_name}_loop_failed",
+        agent_id="system",
+        payload={
+            "loop": loop_name,
+            "error": detail,
+            "consecutive_failures": count,
+            "ts": time.time(),
+        },
+    )
+    if count < _LOOP_ALARM_THRESHOLD:
+        return
+    try:
+        from backend.metrics_collector import report_external_alert
+
+        report_external_alert(f"{loop_name}_loop_failed", "CRITICAL", "archon-os", detail)
+        _require_audit_event(
+            category="recovery",
+            action="loop_external_alarm",
+            agent_id="system",
+            payload={"loop": loop_name, "consecutive_failures": count, "ts": time.time()},
+        )
+    except Exception as alarm_exc:
+        logger.error("[RecoveryLoop] Externer Alarm fehlgeschlagen: %s", alarm_exc)
+
+
 def _spawn_background(coro: Any, name: str = "", priority: int = 1) -> Optional[asyncio.Task[Any]]:
     """Startet einen Background-Task, registriert ihn fuer Shutdown und loggt unhandled exceptions."""
     from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator as _coord
@@ -160,8 +210,9 @@ async def _deadlock_supervisor_loop() -> None:
             res = await asyncio.to_thread(deadlock_supervisor.detect_and_resolve_deadlocks)
             if isinstance(res, dict) and res.get("resolved_count", 0) > 0:
                 logger.warning(f"[DeadlockSupervisor] {res['resolved_count']} blockierte(r) Task(s) reaktiviert.")
+            _reset_loop_failures("deadlock_supervisor")
         except Exception as e:
-            logger.debug(f"[DeadlockSupervisor] Loop-Hinweis: {e}")
+            _record_loop_failure("deadlock_supervisor", e)
 
         try:
             from archon.core.orchestration import recover_stale_synthesis
@@ -189,8 +240,9 @@ async def _deadlock_supervisor_loop() -> None:
             )
             if stale:
                 logger.warning("[Synthese-Recovery] %s Kaskade(n) neu gestartet.", len(stale))
+            _reset_loop_failures("synthesis_recovery")
         except Exception as e:
-            logger.error("[Synthese-Recovery] Fehler in recover_stale_synthesis: %s", e, exc_info=True)
+            _record_loop_failure("synthesis_recovery", e)
 
         try:
             from backend.metrics_collector import check_and_dispatch_alerts_now
@@ -198,8 +250,9 @@ async def _deadlock_supervisor_loop() -> None:
             alerts = await asyncio.to_thread(check_and_dispatch_alerts_now)
             if isinstance(alerts, dict) and alerts.get("dispatched"):
                 logger.info("[Alerting] %s Alarm(e) versendet.", alerts["dispatched"])
+            _reset_loop_failures("alerting")
         except Exception as e:
-            logger.debug(f"[Alerting] Loop-Hinweis: {e}")
+            _record_loop_failure("alerting", e)
 
         try:
             from backend.resource_backpressure import resource_backpressure_protector

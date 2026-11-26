@@ -35,6 +35,7 @@ from archon.core.runtime import (  # noqa: F401,E402
 )
 from archon.routers._rbac import require_admin_or_503  # noqa: E402
 from backend.cancellation import clear_scope, get_child_token  # noqa: E402
+from backend.handoff_desk import mark_truncated  # D11-M4: nie still kuerzen  # noqa: E402
 
 # --------------------------------------------------
 # Dependency-Injektion statt Kopie
@@ -452,13 +453,22 @@ async def _run_no_consensus_storm_panel(
         seats = [f"seat-{i}" for i in range(1, 3)]
     judge_text = str(res.get("synthesis") or "")
 
+    _boardroom_task = str(res.get("task") or "unknown")
+
     async def _seat_runner(seat: str, question: str) -> str:
         # Keine neue LLM-Anfrage: die Perspektive ist das reale Ergebnis des
         # Seats aus dieser Debatte (fallback: explizit leerer Beleg).
-        return by_agent.get(seat, "")[:1500]
+        # D11-M4: jede Kuerzung traegt Marker + Artefaktpfad.
+        return mark_truncated(
+            by_agent.get(seat, ""), 1500,
+            artifact=f"boardroom.debate/{_boardroom_task}/agent/{seat}",
+        )
 
     async def _judge_runner(question: str, perspectives: Dict[str, str]) -> str:
-        return judge_text[:1500]
+        return mark_truncated(
+            judge_text, 1500,
+            artifact=f"boardroom.debate/{_boardroom_task}/synthesis",
+        )
 
     try:
         panel = await run_storm_panel(
@@ -479,7 +489,10 @@ async def _run_no_consensus_storm_panel(
     panel["perspectives"] = {
         str(k): str(v)[:500] for k, v in (panel.get("perspectives") or {}).items()
     }
-    panel["synthesis"] = str(panel.get("synthesis") or "")[:1500]
+    panel["synthesis"] = mark_truncated(
+        panel.get("synthesis"), 1500,
+        artifact=f"boardroom.panel/{_boardroom_task}/synthesis",
+    )
     return panel
 
 
@@ -626,8 +639,12 @@ def _escalate_boardroom_no_consensus(
         "consensus_status": consensus_status,
         "consensus_verdict": str(res.get("consensus_verdict") or consensus_status),
         "veto_by": res.get("veto_by"),
-        "critique": str(res.get("critique") or "")[:1500],
-        "synthesis": str(res.get("synthesis") or "")[:1500],
+        "critique": mark_truncated(
+            res.get("critique"), 1500, artifact=f"boardroom.hitl/{task_id}/critique"
+        ),
+        "synthesis": mark_truncated(
+            res.get("synthesis"), 1500, artifact=f"boardroom.hitl/{task_id}/synthesis"
+        ),
         # D14/M2+M3: Panel-Ergebnis und Konsens-Begruendung sind Teil der
         # HITL-Eskalation (nachvollziehbar, nicht nur ein Freitext).
         "consensus": res.get("consensus") or _consensus_audit_object(res),

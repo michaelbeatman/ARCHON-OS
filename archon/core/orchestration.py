@@ -420,17 +420,16 @@ async def _execute_mission_control_task(
                 ticker(agent_name, f"Task #{task_id} laeuft bereits in einem anderen Worker — uebersprungen.")
                 return
         except Exception as lease_exc:
-            # KRITISCH (Audit 23.11.2026): ein nicht auswertbarer Lease-Claim darf
-            # nicht bedeuten „kein anderer Worker" — sonst laufen Tasks doppelt.
-            # Expliziter Opt-out nur für isolierte Tests/Entwicklung.
-            if str(os.environ.get("ARCHON_LEASE_FAIL_OPEN", "")).strip().lower() not in ("1", "true", "yes"):
-                task["status"] = "blocked"
-                task["result_summary"] = f"Lease-Claim nicht verfügbar: {lease_exc}"
-                ticker(agent_name, f"Task #{task_id} blockiert — Lease-Claim nicht verfügbar.")
-                await _commit_async()
-                cancel_token.check()
-                return
-            logger.warning(f"[MissionControl] Lease nicht verfuegbar ({lease_exc}) — Dispatch ohne Claim (FAIL_OPEN aktiv).")
+            # KRITISCH (Audit 23.11.2026 / W3-Rest): ein nicht auswertbarer
+            # Lease-Claim darf nie „kein anderer Worker" bedeuten — sonst
+            # laufen Tasks doppelt. Der frühere Opt-out
+            # ARCHON_LEASE_FAIL_OPEN wurde bewusst entfernt (siehe D07-H2).
+            task["status"] = "blocked"
+            task["result_summary"] = f"Lease-Claim nicht verfügbar: {lease_exc}"
+            ticker(agent_name, f"Task #{task_id} blockiert — Lease-Claim nicht verfügbar.")
+            await _commit_async()
+            cancel_token.check()
+            return
 
         # Der Guard schuetzt nur echte, per Lease geclaimte Tasks. Ohne Lease
         # (isolierter Store / Tests) gibt es keinen verlaesslichen Lauf-Kontext —

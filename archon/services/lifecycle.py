@@ -17,12 +17,38 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable, List, Set
 
 logger = logging.getLogger("archon_os")
 
 __all__ = ["lifespan_context"]
+
+# D07-M7: Gesamtbudget fuer den kompletten Shutdown (Hooks + Liveness-Stop).
+_SHUTDOWN_BUDGET_SECONDS = 10.0
+
+
+def _audit_shutdown_hook(name: str, status: str, duration_ms: float) -> None:
+    """D07-M7: Hook-Name und Dauer im signierten Pflicht-Audit festhalten."""
+    from backend.audit_log import _is_audit_strict, _require_audit_event
+
+    try:
+        _require_audit_event(
+            category="shutdown",
+            action="shutdown_hook",
+            agent_id="system",
+            payload={
+                "hook": name,
+                "status": status,
+                "duration_ms": round(duration_ms, 3),
+                "ts": time.time(),
+            },
+        )
+    except RuntimeError:
+        if _is_audit_strict():
+            raise
+        logger.error("[Lifespan] Shutdown-Hook-Audit fehlgeschlagen: %s", name)
 
 
 @asynccontextmanager
@@ -75,19 +101,46 @@ async def lifespan_context(
     try:
         yield
     finally:
-        for hook in reversed(list(shutdown_hooks)):
-            name = getattr(hook, "__name__", repr(hook))
-            try:
-                if asyncio.iscoroutinefunction(hook):
-                    await hook()
-                else:
-                    result = await asyncio.to_thread(hook)
-                    if asyncio.iscoroutine(result):
-                        await result
-            except Exception as e:
-                logger.warning(f"[Lifespan] Shutdown-Hook '{name}' fehlgeschlagen: {e}")
-        if stop_loop_heartbeat is not None:
-            try:
-                await stop_loop_heartbeat()
-            except Exception as _ll_stop_err:
-                logger.warning(f"[Lifespan] Loop-Liveness-Stop fehlgeschlagen: {_ll_stop_err}")
+        # D07-M7: ein haengender Hook darf den Prozess nicht unbegrenzt
+        # blockieren. Ein einziges Budget gilt fuer ALLE Hooks; der
+        # Liveness-Stop laeuft in einem inneren finally immer weiter.
+        _deadline = time.monotonic() + _SHUTDOWN_BUDGET_SECONDS
+        try:
+            for hook in reversed(list(shutdown_hooks)):
+                name = getattr(hook, "__name__", repr(hook))
+                _started = time.monotonic()
+                _remaining = _deadline - time.monotonic()
+                if _remaining <= 0:
+                    logger.error(f"[Lifespan] Shutdown-Budget erschöpft — Hook '{name}' übersprungen")
+                    _audit_shutdown_hook(name, "budget_exhausted", 0.0)
+                    continue
+                try:
+                    if asyncio.iscoroutinefunction(hook):
+                        _awaited = hook()
+                    else:
+
+                        def _invoke() -> Any:
+                            result = hook()
+                            return result if asyncio.iscoroutine(result) else None
+
+                        _awaited = asyncio.to_thread(_invoke)
+                    await asyncio.wait_for(_awaited, timeout=_remaining)
+                    _audit_shutdown_hook(
+                        name, "ok", (time.monotonic() - _started) * 1000.0
+                    )
+                except Exception as e:
+                    _duration_ms = (time.monotonic() - _started) * 1000.0
+                    logger.error(f"[Lifespan] Shutdown-Hook '{name}' fehlgeschlagen: {e}")
+                    _audit_shutdown_hook(
+                        name, f"failed: {type(e).__name__}", _duration_ms
+                    )
+        finally:
+            if stop_loop_heartbeat is not None:
+                try:
+                    # Der Stop darf NIE entfallen (finally immer ausfuehren).
+                    # Ist das Hook-Budget aufgebraucht, bekommt er eine kleine
+                    # eigene Restfrist statt still übersprungen zu werden.
+                    _remaining = max(0.05, _deadline - time.monotonic())
+                    await asyncio.wait_for(stop_loop_heartbeat(), timeout=_remaining)
+                except Exception as _ll_stop_err:
+                    logger.warning(f"[Lifespan] Loop-Liveness-Stop fehlgeschlagen: {_ll_stop_err}")

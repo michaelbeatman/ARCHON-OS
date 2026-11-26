@@ -259,6 +259,21 @@ def on_startup_drain_recovery() -> None:
         print(f"[Archon] Startup Recovery Fehler: {e}", file=sys.stderr)
 
 
+def _audit_shutdown_failure(action: str, detail: str, **extra: Any) -> None:
+    """D07-M6: Shutdown-Fehler signiert melden; Strict-Modus bricht hart ab."""
+    from backend.audit_log import _is_audit_strict, _require_audit_event
+
+    payload: dict[str, Any] = {"detail": detail, "ts": time.time(), **extra}
+    try:
+        _require_audit_event(
+            category="shutdown", action=action, agent_id="system", payload=payload
+        )
+    except RuntimeError:
+        if _is_audit_strict():
+            raise
+        logger.error("[Shutdown] Pflicht-Event %s nicht geschrieben (Strict aus)", action)
+
+
 async def on_shutdown_graceful() -> None:
     """W3: Audit-Anker-Thread kontrolliert stoppen und Graceful Shutdown ausfuehren."""
     try:
@@ -266,7 +281,8 @@ async def on_shutdown_graceful() -> None:
 
         await asyncio.to_thread(chained_audit_log.stop_anchor_worker)
     except Exception as _anchor_exc:
-        logger.debug("[Shutdown] Audit-Anker-Stopp: %s", _anchor_exc)
+        logger.error("[Shutdown] Audit-Anker-Stopp fehlgeschlagen: %s", _anchor_exc)
+        _audit_shutdown_failure("anchor_stop_failed", str(_anchor_exc))
     try:
         from backend.graceful_shutdown_coordinator import graceful_shutdown_coordinator
 
@@ -275,7 +291,9 @@ async def on_shutdown_graceful() -> None:
         )
         print(f"[Archon] Graceful Shutdown ausgeführt: {res}")
     except Exception as e:
+        logger.error("[Shutdown] Graceful Shutdown fehlgeschlagen: %s", e)
         print(f"[Archon] Graceful Shutdown Fehler: {e}", file=sys.stderr)
+        _audit_shutdown_failure("graceful_shutdown_failed", str(e))
 
 
 async def _cancel_tracked_tasks() -> None:

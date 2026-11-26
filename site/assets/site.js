@@ -96,23 +96,34 @@
     });
   }
 
-  // 5. Multi-Layer Depth Parallax for Da-Vinci Silver Copperplate Stage
+  // 5. Multi-Layer Depth Parallax for Da-Vinci Silver Copperplate Stage & Creation Hands
   var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!reduced) {
     var stage = document.querySelector(".davinci-layers");
-    if (stage) {
+    var creationStage = document.querySelector(".creation-davinci-stage");
+    if (stage || creationStage) {
       var ticking = false;
-      window.addEventListener("scroll", function () {
-        if (ticking) return;
-        ticking = true;
-        requestAnimationFrame(function () {
-          var sy = window.scrollY || 0;
+      var updateParallax = function () {
+        var sy = window.scrollY || 0;
+        if (stage) {
           var yMain = Math.min(sy * 0.16, 180);
           var yDeep = Math.min(sy * 0.08, 90);
           stage.style.setProperty("--parallax-y", yMain.toFixed(1) + "px");
           stage.style.setProperty("--parallax-deep", (-yDeep).toFixed(1) + "px");
-          ticking = false;
-        });
+        }
+        if (creationStage) {
+          var r = creationStage.getBoundingClientRect();
+          var centerDelta = (r.top + r.height * 0.5) - (window.innerHeight * 0.5);
+          var cShift = Math.max(-56, Math.min(56, centerDelta * -0.14));
+          creationStage.style.setProperty("--creation-parallax", cShift.toFixed(1) + "px");
+        }
+        ticking = false;
+      };
+      updateParallax();
+      window.addEventListener("scroll", function () {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(updateParallax);
       }, { passive: true });
     }
 

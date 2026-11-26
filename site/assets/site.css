@@ -257,11 +257,6 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   z-index: 1;
   pointer-events: none;
   user-select: none;
-  mask-image:
-    linear-gradient(to left, rgba(0,0,0,0.98) 46%, rgba(0,0,0,0.22) 78%, transparent 100%),
-    linear-gradient(to bottom, rgba(0,0,0,0.98) 78%, transparent 100%);
-  mask-composite: intersect;
-  -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,0.98) 46%, rgba(0,0,0,0.22) 78%, transparent 100%);
 }
 .davinci-layers {
   position: relative;
@@ -277,6 +272,12 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   inset: 0;
   width: 100%;
   height: 100%;
+  /* Apply edge fade on each moving layer itself so parallax transforms never clip against a static outer mask box */
+  mask-image:
+    linear-gradient(to left, rgba(0,0,0,0.98) 46%, rgba(0,0,0,0.22) 78%, transparent 100%),
+    linear-gradient(to bottom, rgba(0,0,0,0.98) 82%, transparent 100%);
+  mask-composite: intersect;
+  -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,0.98) 46%, rgba(0,0,0,0.22) 78%, transparent 100%);
 }
 .davinci-layer-under {
   z-index: 1;
@@ -325,6 +326,15 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   position: relative;
   width: min(100%, 440px);
   aspect-ratio: 1024 / 764;
+}
+.faq-davinci-frame .davinci-layer-under,
+.faq-davinci-frame .davinci-layer-plate,
+.faq-davinci-frame .davinci-layer-over,
+.subpage-wheel-wrap .davinci-layer-under,
+.subpage-wheel-wrap .davinci-layer-plate,
+.subpage-wheel-wrap .davinci-layer-over {
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 .faq-davinci-frame .davinci-layer-under { opacity: 0.62; transform: none; }
 .faq-davinci-frame .davinci-plate-img { opacity: 0.82; }
@@ -385,7 +395,7 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   stroke-dasharray: 28 240;
   stroke-linecap: round;
   opacity: 0.56;
-  animation: cw-dash-orbit 12s linear infinite;
+  animation: cw-dash-orbit 24s linear infinite;
 }
 .eng-telemetry-orbit-rev {
   stroke: var(--silver);
@@ -393,14 +403,14 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   stroke-dasharray: 22 220;
   stroke-linecap: round;
   opacity: 0.48;
-  animation: cw-dash-orbit 14s linear infinite reverse;
+  animation: cw-dash-orbit 28s linear infinite reverse;
 }
 .eng-telemetry-trace {
   stroke: var(--silver);
   stroke-width: 1;
   stroke-dasharray: 10 38;
   opacity: 0.38;
-  animation: cw-dash-orbit 10s linear infinite;
+  animation: cw-dash-orbit 20s linear infinite;
 }
 .eng-labels text {
   font-family: var(--font-mono);
@@ -411,32 +421,32 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
 .eng-labels line { stroke: var(--silver-line); stroke-width: 0.9; }
 .eng-label-muted { fill: var(--fg-muted) !important; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; }
 
-/* Mechanically meshing rotation ratios — Vertical S-Curve Hero (10 gears + 2 hands) */
-.cw-v-a { animation: cw-spin-cw 28s linear infinite; }
-.cw-v-b { animation: cw-spin-ccw 37.33s linear infinite; }
-.cw-v-b2 { animation: cw-spin-cw 18.67s linear infinite; }
-.cw-v-dial { animation: cw-spin-ccw 58s linear infinite; }
-.cw-v-d { animation: cw-spin-cw 34.2s linear infinite; }
-.cw-v-d2 { animation: cw-spin-ccw 18.67s linear infinite; }
-.cw-v-e { animation: cw-spin-cw 28s linear infinite; }
-.cw-v-h { animation: cw-spin-ccw 37.33s linear infinite; }
-.cw-v-h2 { animation: cw-spin-cw 18.67s linear infinite; }
-.cw-v-i { animation: cw-spin-cw 24.9s linear infinite; }
-.cw-hand-sweep { animation: cw-spin-cw 18s linear infinite; }
-.cw-hand-slow { animation: cw-spin-cw 108s linear infinite; }
-.cw-tumbler-rev { animation: cw-tumbler-rock 20s ease-in-out infinite reverse; }
+/* Mechanically meshing rotation ratios — Vertical S-Curve Hero (10 gears + 2 hands, 50% slower) */
+.cw-v-a { animation: cw-spin-cw 56s linear infinite; }
+.cw-v-b { animation: cw-spin-ccw 74.66s linear infinite; }
+.cw-v-b2 { animation: cw-spin-cw 37.34s linear infinite; }
+.cw-v-dial { animation: cw-spin-ccw 116s linear infinite; }
+.cw-v-d { animation: cw-spin-cw 68.4s linear infinite; }
+.cw-v-d2 { animation: cw-spin-ccw 37.34s linear infinite; }
+.cw-v-e { animation: cw-spin-cw 56s linear infinite; }
+.cw-v-h { animation: cw-spin-ccw 74.66s linear infinite; }
+.cw-v-h2 { animation: cw-spin-cw 37.34s linear infinite; }
+.cw-v-i { animation: cw-spin-cw 49.8s linear infinite; }
+.cw-hand-sweep { animation: cw-spin-cw 36s linear infinite; }
+.cw-hand-slow { animation: cw-spin-cw 216s linear infinite; }
+.cw-tumbler-rev { animation: cw-tumbler-rock 40s ease-in-out infinite reverse; }
 
-/* Circular Da-Vinci Sovereign Wheel (FAQ section) */
-.cw-dv-main { animation: cw-spin-cw 64s linear infinite; }
-.cw-dv-upper { animation: cw-spin-ccw 34s linear infinite; }
-.cw-dv-lower { animation: cw-spin-ccw 28s linear infinite; }
+/* Circular Da-Vinci Sovereign Wheel (FAQ section, 50% slower) */
+.cw-dv-main { animation: cw-spin-cw 128s linear infinite; }
+.cw-dv-upper { animation: cw-spin-ccw 68s linear infinite; }
+.cw-dv-lower { animation: cw-spin-ccw 56s linear infinite; }
 
-/* Governance Showcase Vector Clockwork */
-.cw-g1 { animation: cw-spin-cw 48s linear infinite; }
-.cw-g2 { animation: cw-spin-ccw 29.33s linear infinite; }
-.cw-g3 { animation: cw-spin-ccw 26.67s linear infinite; }
-.cw-g4 { animation: cw-spin-cw 21.33s linear infinite; }
-.cw-tumbler { animation: cw-tumbler-rock 18s ease-in-out infinite; }
+/* Governance Showcase Vector Clockwork (50% slower) */
+.cw-g1 { animation: cw-spin-cw 96s linear infinite; }
+.cw-g2 { animation: cw-spin-ccw 58.66s linear infinite; }
+.cw-g3 { animation: cw-spin-ccw 53.34s linear infinite; }
+.cw-g4 { animation: cw-spin-cw 42.66s linear infinite; }
+.cw-tumbler { animation: cw-tumbler-rock 36s ease-in-out infinite; }
 
 @keyframes cw-spin-cw { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes cw-spin-ccw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
@@ -472,7 +482,7 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   border-radius: 50%;
   background: var(--emerald);
   box-shadow: 0 0 8px var(--emerald);
-  animation: pulse-beacon 2.4s ease-in-out infinite;
+  animation: pulse-beacon 4.8s ease-in-out infinite;
 }
 @keyframes pulse-beacon {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -665,7 +675,7 @@ h2.sec::before, h3.sec::before {
   background: #0a0a0c;
 }
 .cockpit-stage figure { margin: 0; display: none; }
-.cockpit-stage figure.is-active { display: block; animation: fadeIn 240ms var(--ease-out); }
+.cockpit-stage figure.is-active { display: block; animation: fadeIn 480ms var(--ease-out); }
 .cockpit-stage img {
   display: block;
   width: 100%;
@@ -728,7 +738,7 @@ h2.sec::before, h3.sec::before {
 .arch-zone-local { fill: rgba(16, 185, 129, 0.05); stroke: rgba(16, 185, 129, 0.42); stroke-width: 1.2; stroke-dasharray: 6 4; }
 .arch-zone-tag { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; fill: var(--emerald); }
 .arch-rail { stroke: var(--line-strong); stroke-width: 1.7; }
-.arch-pulse { stroke-width: 2; stroke-dasharray: 16 44; stroke-linecap: round; animation: arch-flow 3.2s linear infinite; }
+.arch-pulse { stroke-width: 2; stroke-dasharray: 16 44; stroke-linecap: round; animation: arch-flow 6.4s linear infinite; }
 .arch-pulse-silver { stroke: var(--silver-bright); }
 .arch-pulse-em { stroke: var(--emerald); }
 @keyframes arch-flow { from { stroke-dashoffset: 120; } to { stroke-dashoffset: 0; } }
@@ -989,7 +999,7 @@ footer a { color: var(--fg-muted); }
 footer a:hover { color: var(--fg); }
 
 /* Subtle Scroll Reveal */
-[data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out); }
+[data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity 840ms var(--ease-out), transform 840ms var(--ease-out); }
 [data-reveal].is-visible { opacity: 1; transform: translateY(0); }
 
 /* Responsive Breakpoints */

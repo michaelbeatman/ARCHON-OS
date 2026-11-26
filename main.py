@@ -163,6 +163,8 @@ from archon.middleware.auth_policy import MissingRagApiKeyError as MissingRagApi
 from archon.middleware.auth_policy import _auth_unavailable_response as _auth_unavailable_response
 from archon.middleware.auth_policy import _check_rag_api_key_config as _check_rag_api_key_config
 from archon.middleware.auth_policy import _get_rag_api_key as _get_rag_api_key
+from archon.routers import LateRouterDeps as _LateRouterDeps
+from archon.routers import register_late_routers as _register_late_routers
 from archon.routers import register_special_routers as _register_special_routers
 from archon.routers._rbac import require_admin_or_503
 from archon.routers.agent_chat import DirectAgentChatRequest as DirectAgentChatRequest
@@ -2838,301 +2840,35 @@ try:
     )
 except Exception as _e_rbac:
     logger.error(f"[RBAC] Rollenzaun nicht verdrahtet — geschuetzte Routen sperren: {_e_rbac}")
-try:
-    from archon.routers.crm import router as _crm_router
-    app.include_router(_crm_router)
-except Exception as _e_crm:
-    logger.warning(f"[Router] crm nicht geladen: {_e_crm}")
-
-    _ROUTER_LOAD_ERRORS.append("crm: " + str(_e_crm))
-try:
-    from archon.routers.erp import router as _erp_router
-    app.include_router(_erp_router)
-except Exception as _e_erp:
-    logger.warning(f"[Router] erp nicht geladen: {_e_erp}")
-
-    _ROUTER_LOAD_ERRORS.append("erp: " + str(_e_erp))
-try:
-    from archon.routers.corporate import router as _corporate_router
-    app.include_router(_corporate_router)
-except Exception as _e_corporate:
-    logger.warning(f"[Router] corporate nicht geladen: {_e_corporate}")
-
-    _ROUTER_LOAD_ERRORS.append("corporate: " + str(_e_corporate))
-try:
-    from archon.routers.security import router as _security_router
-    app.include_router(_security_router)
-except Exception as _e_security:
-    logger.warning(f"[Router] security nicht geladen: {_e_security}")
-
-    _ROUTER_LOAD_ERRORS.append("security: " + str(_e_security))
-try:
-    from archon.routers.execution import router as _execution_router
-    app.include_router(_execution_router)
-except Exception as _e_execution:
-    logger.warning(f"[Router] execution nicht geladen: {_e_execution}")
-
-    _ROUTER_LOAD_ERRORS.append("execution: " + str(_e_execution))
-try:
-    from archon.routers.memory import router as _memory_router
-    app.include_router(_memory_router)
-except Exception as _e_memory:
-    logger.warning(f"[Router] memory nicht geladen: {_e_memory}")
-
-    _ROUTER_LOAD_ERRORS.append("memory: " + str(_e_memory))
-try:
-    from archon.routers.context_packages import router as _context_packages_router
-    app.include_router(_context_packages_router)
-except Exception as _e_context_packages:
-    logger.warning(f"[Router] context_packages nicht geladen: {_e_context_packages}")
-
-    _ROUTER_LOAD_ERRORS.append("context_packages: " + str(_e_context_packages))
-try:
-    from archon.routers.routergate import router as _routergate_router
-    app.include_router(_routergate_router)
-except Exception as _e_routergate:
-    logger.warning(f"[Router] routergate nicht geladen: {_e_routergate}")
-
-    _ROUTER_LOAD_ERRORS.append("routergate: " + str(_e_routergate))
-try:
-    from archon.routers.voice import router as _voice_router
-    app.include_router(_voice_router)
-except Exception as _e_voice:
-    logger.warning(f"[Router] voice nicht geladen: {_e_voice}")
-
-    _ROUTER_LOAD_ERRORS.append("voice: " + str(_e_voice))
-try:
-    from archon.routers.swarm import router as _swarm_router
-    app.include_router(_swarm_router)
-except Exception as _e_swarm:
-    logger.warning(f"[Router] swarm nicht geladen: {_e_swarm}")
-
-    _ROUTER_LOAD_ERRORS.append("swarm: " + str(_e_swarm))
-try:
-    from archon.routers.contracts import router as _contracts_router
-    app.include_router(_contracts_router)
-except Exception as _e_contracts:
-    logger.warning(f"[Router] contracts nicht geladen: {_e_contracts}")
-
-    _ROUTER_LOAD_ERRORS.append("contracts: " + str(_e_contracts))
-
-
-# --- Weitere ausgelagerte Router (Stufe 2) ---
-try:
-    from archon.routers.plugins import router as _plugins_router2
-    app.include_router(_plugins_router2)
-except Exception as _e2_plugins:
-    logger.warning(f"[Router] plugins nicht geladen: {_e2_plugins}")
-
-    _ROUTER_LOAD_ERRORS.append("plugins: " + str(_e2_plugins))
-try:
-    from archon.routers.governance import (
-        configure as _governance_configure,
-    )
-    from archon.routers.governance import (
-        router as _governance_router2,
-    )
-    _governance_configure(
-        _load_mission_control_data=_load_mission_control_data,
-        _save_mission_control_data=_save_mission_control_data,
-        api_get_hermes_profiles=api_get_hermes_profiles,
-    )
-    app.include_router(_governance_router2)
-except Exception as _e2_governance:
-    logger.warning(f"[Router] governance nicht geladen: {_e2_governance}")
-
-    _ROUTER_LOAD_ERRORS.append("governance: " + str(_e2_governance))
-try:
-    from archon.routers.templates import router as _templates_router2
-    app.include_router(_templates_router2)
-except Exception as _e2_templates:
-    logger.warning(f"[Router] templates nicht geladen: {_e2_templates}")
-
-    _ROUTER_LOAD_ERRORS.append("templates: " + str(_e2_templates))
-try:
-    from archon.routers.boardroom import (
-        configure as _boardroom_configure,
-    )
-    from archon.routers.boardroom import (
-        router as _boardroom_router2,
-    )
-    _boardroom_configure(
-        load_boardroom_frameworks=load_boardroom_frameworks,
-        load_roles=load_roles,
-        api_get_hermes_profiles=api_get_hermes_profiles,
-    )
-    app.include_router(_boardroom_router2)
-except Exception as _e2_boardroom:
-    logger.warning(f"[Router] boardroom nicht geladen: {_e2_boardroom}")
-
-    _ROUTER_LOAD_ERRORS.append("boardroom: " + str(_e2_boardroom))
-
-try:
-    from archon.routers.llm_providers import router as _llm_providers_r
-    app.include_router(_llm_providers_r)
-except Exception as _err_llmp:
-    logger.warning(f"[Router] llm_providers nicht geladen: {_err_llmp}")
-
-    _ROUTER_LOAD_ERRORS.append("llm_providers: " + str(_err_llmp))
-
-try:
-    from archon.routers.hermes_profiles import (
-        configure as _hp_configure,
-    )
-    from archon.routers.hermes_profiles import (
-        router as _hermes_profiles_r,
-    )
-    _hp_configure(
-        save_all_agent_profiles=save_all_agent_profiles,
-        _sync_org_hierarchy_node=_sync_org_hierarchy_node,
-        invalidate_paperclip_agents_cache=invalidate_paperclip_agents_cache,
-    )
-    app.include_router(_hermes_profiles_r)
-except Exception as _err_hp:
-    logger.warning(f"[Router] hermes_profiles nicht geladen: {_err_hp}")
-
-    _ROUTER_LOAD_ERRORS.append("hermes_profiles: " + str(_err_hp))
-
-# Der Profil-Service traegt nur den Organigramm-Sync als echte Abhaengigkeit.
-# Bewusst ausserhalb des Router-try: der Gate-Pfad braucht ihn auch dann.
-try:
-    profiles_service.configure(org_sync_node=_sync_org_hierarchy_node)
-except Exception as _err_ps:
-    logger.warning(f"[Services] profiles_service.configure fehlgeschlagen: {_err_ps}")
-
-try:
-    from archon.routers.system import (
-        configure as _system_configure,
-    )
-    from archon.routers.system import (
-        router as _system_r,
-    )
-    _system_configure(
-        _load_json=_load_json,
-        _save_json=_save_json,
-        broadcast_event=broadcast_event,
-        require_admin=require_admin,
-    )
-    app.include_router(_system_r)
-except Exception as _err_sys:
-    logger.warning(f"[Router] system nicht geladen: {_err_sys}")
-
-    _ROUTER_LOAD_ERRORS.append("system: " + str(_err_sys))
-
-try:
-    from archon.routers.skills import (
-        configure as _skills_configure,
-    )
-    from archon.routers.skills import (
-        router as _skills_r,
-    )
-    _skills_configure(
-        skills_engine=skills_engine,
-        api_get_hermes_profiles=api_get_hermes_profiles,
-    )
-    app.include_router(_skills_r)
-except Exception as _err_sk:
-    logger.warning(f"[Router] skills nicht geladen: {_err_sk}")
-
-    _ROUTER_LOAD_ERRORS.append("skills: " + str(_err_sk))
-
-try:
-    from archon.routers.mission_control import (
-        configure as _mc_configure,
-    )
-    from archon.routers.mission_control import (
-        router as _mc_router,
-    )
-    # Nur die Original-Funktionen aus main.py injizieren: die Kopien in
-    # archon/core/runtime.py sind NICHT verhaltensgleich (Telemetrie filtert
-    # dort 15 Minuten statt Tagesbeginn, _sync_task_to_obsidian nutzt eine
-    # eigene _slugify()-Hilfe und erzeugt andere Dateinamen).
-    _mc_configure(
-        telemetry=_get_live_telemetry_metrics,
-        sync_obsidian=_sync_task_to_obsidian,
-        execute=_execute_mission_control_task,
-        finalize_approval=_finalize_synthesis_after_approval,
-        fan_in=_fan_in_maybe_start_synthesis,
-    )
-    app.include_router(_mc_router)
-except Exception as _err_mc:
-    logger.warning(f"[Router] mission_control nicht geladen: {_err_mc}")
-
-    _ROUTER_LOAD_ERRORS.append("mission_control: " + str(_err_mc))
-
-try:
-    from archon.routers.onboarding import router as _onboarding_r
-    app.include_router(_onboarding_r)
-except Exception as _err_onb:
-    logger.warning(f"[Router] onboarding nicht geladen: {_err_onb}")
-
-    _ROUTER_LOAD_ERRORS.append("onboarding: " + str(_err_onb))
-
-try:
-    from archon.routers.demo import router as _demo_r
-    app.include_router(_demo_r)
-except Exception as _err_demo:
-    logger.warning(f"[Router] demo nicht geladen: {_err_demo}")
-
-    _ROUTER_LOAD_ERRORS.append("demo: " + str(_err_demo))
-
-try:
-    from archon.routers.mcp_gateway import router as _mcp_gateway_r
-    app.include_router(_mcp_gateway_r)
-except Exception as _err_mcp_gw:
-    logger.warning(f"[Router] mcp_gateway nicht geladen: {_err_mcp_gw}")
-
-    _ROUTER_LOAD_ERRORS.append("mcp_gateway: " + str(_err_mcp_gw))
-
-try:
-    from archon.routers.squad_packs import router as _squad_packs_r
-    app.include_router(_squad_packs_r)
-except Exception as _err_sp:
-    logger.warning(f"[Router] squad_packs nicht geladen: {_err_sp}")
-
-    _ROUTER_LOAD_ERRORS.append("squad_packs: " + str(_err_sp))
-
-try:
-    from archon.routers.tenants import router as _tenants_r
-    app.include_router(_tenants_r)
-except Exception as _err_ten:
-    logger.warning(f"[Router] tenants nicht geladen: {_err_ten}")
-
-    _ROUTER_LOAD_ERRORS.append("tenants: " + str(_err_ten))
-
-try:
-    from archon.routers.playbooks import router as _playbooks_r
-    app.include_router(_playbooks_r)
-except Exception as _err_pb:
-    logger.warning(f"[Router] playbooks nicht geladen: {_err_pb}")
-
-    _ROUTER_LOAD_ERRORS.append("playbooks: " + str(_err_pb))
-
-try:
-    from archon.routers.preflight_shadow import router as _preflight_r
-    app.include_router(_preflight_r)
-except Exception as _err_pf:
-    logger.warning(f"[Router] preflight_shadow nicht geladen: {_err_pf}")
-
-    _ROUTER_LOAD_ERRORS.append("preflight_shadow: " + str(_err_pf))
-
-try:
-    from archon.routers.epistemic_hygiene import router as _hygiene_r
-    app.include_router(_hygiene_r)
-except Exception as _err_hyg:
-    logger.warning(f"[Router] epistemic_hygiene nicht geladen: {_err_hyg}")
-
-    _ROUTER_LOAD_ERRORS.append("epistemic_hygiene: " + str(_err_hyg))
-
-try:
-    from archon.routers.operations_calendar import router as _cal_r
-    from archon.routers.operations_calendar import ws_router as _cal_ws_r
-    app.include_router(_cal_r)
-    app.include_router(_cal_ws_r)
-except Exception as _err_cal:
-    logger.warning(f"[Router] operations_calendar nicht geladen: {_err_cal}")
-
-    _ROUTER_LOAD_ERRORS.append("operations_calendar: " + str(_err_cal))
+# 2d/2: 29 try/except-Router-Bloecke (30 include_router) sind 1:1 nach
+# archon/routers/__init__.py gewandert. Die Aufrufstelle bleibt exakt hier
+# (nach dem RBAC-Rollenzaun, vor _assert_router_health), damit die
+# Registrierungsreihenfolge = Pfad-Praezedenz erhalten bleibt (INVARIANTS #7).
+# Die 19 Abhaengigkeiten werden als Callables zur Aufrufzeit uebergeben —
+# kein Rueckimport auf main (S3-Muster, Kartierung §6c). Der
+# profiles_service.configure-Block liegt bewusst weiterhin im Span.
+_late_router_deps = _LateRouterDeps(
+    load_mission_control_data=_load_mission_control_data,
+    save_mission_control_data=_save_mission_control_data,
+    api_get_hermes_profiles=api_get_hermes_profiles,
+    load_boardroom_frameworks=load_boardroom_frameworks,
+    load_roles=load_roles,
+    save_all_agent_profiles=save_all_agent_profiles,
+    sync_org_hierarchy_node=_sync_org_hierarchy_node,
+    invalidate_paperclip_agents_cache=invalidate_paperclip_agents_cache,
+    profiles_service=profiles_service,
+    load_json=_load_json,
+    save_json=_save_json,
+    broadcast_event=broadcast_event,
+    require_admin=require_admin,
+    skills_engine=skills_engine,
+    get_live_telemetry_metrics=_get_live_telemetry_metrics,
+    sync_task_to_obsidian=_sync_task_to_obsidian,
+    execute_mission_control_task=_execute_mission_control_task,
+    finalize_approval=_finalize_synthesis_after_approval,
+    fan_in=_fan_in_maybe_start_synthesis,
+)
+_register_late_routers(app, _ROUTER_LOAD_ERRORS, _late_router_deps)
 
 
 def _assert_router_health() -> None:

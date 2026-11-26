@@ -58,7 +58,9 @@ _ORDER_SENTINELS = [
     _VIEWS_ANCHOR,
     _OPS_ANCHOR,
     "/static/avatars/{filename}",
+    "/api/crm/contacts",
     "/api/context-packages",
+    "/api/v1/calendar/webhooks/push",
 ]
 
 
@@ -166,28 +168,37 @@ def test_v4_real_app_pins_special_block_position() -> None:
 def test_v5_main_call_site_passes_original_load_errors_list() -> None:
     """Schliesst den Review-Fund: Identitaet gegen den ECHTEN main-Import.
 
-    Ein Spion wird VOR ``import main`` auf ``archon.routers`` installiert.
-    ``main.py:166`` liest das Attribut zur Importzeit, ``main.py:2497`` ruft
-    es auf. Damit wird die Aufrufstelle selbst geprueft — ohne Source-Text-
-    Assertion (G7) und ohne ``importlib.reload`` (wuerde ``main.app``
-    ersetzen und andere Tests beeinflussen).
+    Zwei Spione werden VOR ``import main`` auf ``archon.routers`` installiert:
+    fuer ``register_special_routers`` (2d/1) und ``register_late_routers``
+    (2d/2). ``main.py:166-168`` liest die Attribute zur Importzeit, die
+    Aufrufstellen rufen sie auf. Damit werden BEIDE Aufrufstellen selbst
+    geprueft — ohne Source-Text-Assertion (G7) und ohne ``importlib.reload``
+    (wuerde ``main.app`` ersetzen und andere Tests beeinflussen).
     """
     wt = str(Path(__file__).resolve().parents[1])
     code = "\n".join([
         "import sys",
         f"sys.path.insert(0, {wt!r})",
         "import archon.routers",
-        "_seen = []",
-        "_orig = archon.routers.register_special_routers",
-        "def _spy(app, load_errors):",
-        "    _seen.append(load_errors)",
-        "    return _orig(app, load_errors)",
-        "archon.routers.register_special_routers = _spy",
+        "_seen_special = []",
+        "_seen_late = []",
+        "_orig_special = archon.routers.register_special_routers",
+        "_orig_late = archon.routers.register_late_routers",
+        "def _spy_special(app, load_errors):",
+        "    _seen_special.append(load_errors)",
+        "    return _orig_special(app, load_errors)",
+        "def _spy_late(app, load_errors, deps):",
+        "    _seen_late.append(load_errors)",
+        "    return _orig_late(app, load_errors, deps)",
+        "archon.routers.register_special_routers = _spy_special",
+        "archon.routers.register_late_routers = _spy_late",
         "import main",
-        "assert _seen, 'register_special_routers beim main-Import nicht aufgerufen'",
-        "assert _seen[0] is main._ROUTER_LOAD_ERRORS, 'Kopie/Rebind statt Original-Liste'",
+        "assert _seen_special, 'register_special_routers beim main-Import nicht aufgerufen'",
+        "assert _seen_late, 'register_late_routers beim main-Import nicht aufgerufen'",
+        "assert _seen_special[0] is main._ROUTER_LOAD_ERRORS, 'special: Kopie/Rebind'",
+        "assert _seen_late[0] is main._ROUTER_LOAD_ERRORS, 'late: Kopie/Rebind'",
         "try:",
-        "    assert list(_seen[0]) is main._ROUTER_LOAD_ERRORS",
+        "    assert list(_seen_special[0]) is main._ROUTER_LOAD_ERRORS",
         "except AssertionError:",
         "    pass",
         "else:",

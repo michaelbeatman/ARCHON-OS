@@ -59,34 +59,124 @@ def test_d11_parser_schema_validates_before_dispatch():
     assert any("DelegationPayload" in str(i.get("error", "")) for i in invalid)
 
 
-def test_d11_no_dead_import_fallback():
+def test_d11_no_dead_import_fallback(tmp_path, monkeypatch):
     # G7/D3-6: Ausfuehrungsteil liegt in backend/operations_execution.py;
-    # beide Module gemeinsam muessen den D11-Contract erfuellen.
+    # keine toten Import-Fallbacks mehr + echter Verhaltens-Gate-Aufruf.
     api_src = (ROOT / "backend" / "operations_api.py").read_text(encoding="utf-8")
     exec_src = (ROOT / "backend" / "operations_execution.py").read_text(encoding="utf-8")
     combined = api_src + "\n" + exec_src
     assert "DelegationPayload = None" not in combined
     assert "class KanbanDelegationPayload" not in combined
-    assert "from archon.core.delegation import DelegationPayload" not in combined
-    assert "HandoffDelegationPayload" in api_src
-    assert "canonicalize_delegation_payload" in api_src
-    assert "require_accepted_handoff" in exec_src
-    assert "resolve_task_tenant_id" in exec_src
+
+    import backend.operations_api as ops_api
+    import backend.operations_execution as ops_exec
+    from backend.handoff_desk import HandoffDesk, require_accepted_handoff
+
+    monkeypatch.setenv("ARCHON_DELEGATION_HMAC_KEY", "f00-stage7-delegation-key")
+    monkeypatch.setenv("ARCHON_HANDOFF_HMAC_KEY", "f00-stage7-handoff-key")
+
+    # Echter Aufruf der Kanban-Payload-Konsumentenseite (kein toter Fallback)
+    loaded = ops_api._load_kanban_delegation_payload(
+        {"ziel_agent": "coder", "auftrag": "Fix F00"}, task_id="task-f00-load"
+    )
+    assert isinstance(loaded, HandoffDelegationPayload)
+    assert loaded.ziel_agent == "coder"
+    assert ops_api._load_kanban_delegation_payload({"ziel_agent": ""}, task_id="task-f00-bad") is None
+    assert ops_exec.require_accepted_handoff is require_accepted_handoff
+
+    desk = HandoffDesk(db_path=str(tmp_path / "handoffs.db"))
+
+    # Positivprobe: gueltige signierte Uebergabe wird akzeptiert.
+    created = desk.create_handoff(
+        task_id="task-f00-ok",
+        from_agent="orchestrator",
+        to_agent="coder",
+        deliverables={"result": "ready", "status": "ok"},
+        acceptance_criteria="Tests gruen",
+    )
+    ok_gate = require_accepted_handoff("task-f00-ok", "coder", desk=desk)
+    assert ok_gate["allowed"] is True
+    assert ok_gate["reason"] == "accepted"
+
+    # Negativprobe 1: falscher Executor wird abgewiesen (keine Self-Attestation).
+    wrong_exec = require_accepted_handoff("task-f00-ok", "reviewer", desk=desk)
+    assert wrong_exec["allowed"] is False
+    assert "executor_mismatch" in wrong_exec["reason"]
+
+    # Negativprobe 2: manipulierter Payload in DB bricht HMAC -> abgewiesen.
+    with desk._get_conn() as conn:
+        conn.execute(
+            "UPDATE agent_handoffs SET deliverables_json = ? WHERE id = ?",
+            (json.dumps({"result": "TAMPERED", "status": "ok"}), created["handoff_id"]),
+        )
+        conn.commit()
+    tampered_gate = require_accepted_handoff("task-f00-ok", "coder", desk=desk)
+    assert tampered_gate["allowed"] is False
+    assert tampered_gate["reason"] == "handoff_hmac_invalid"
+
+    # Negativprobe 3: unsignierter Payload (leerer payload_hash) -> abgewiesen.
+    unsigned = desk.create_handoff(
+        task_id="task-f00-unsigned",
+        from_agent="orchestrator",
+        to_agent="coder",
+        deliverables={"result": "raw", "status": "ok"},
+        acceptance_criteria="Signaturpflicht",
+    )
+    with desk._get_conn() as conn:
+        conn.execute(
+            "UPDATE agent_handoffs SET payload_hash = '' WHERE id = ?",
+            (unsigned["handoff_id"],),
+        )
+        conn.commit()
+    unsigned_gate = require_accepted_handoff("task-f00-unsigned", "coder", desk=desk)
+    assert unsigned_gate["allowed"] is False
+    assert unsigned_gate["reason"] == "handoff_hmac_invalid"
 
 
-def test_d11_structured_handoff_and_hmac_consumer():
-    src = (ROOT / "archon" / "core" / "delegation.py").read_text(encoding="utf-8")
-    assert "STRUKTURIERTE ÜBERGABE (DelegationPayload v1, signiert)" in src
-    assert "verify_payload_hash(handoff_id)" in src
-    assert "mark_truncated(result, 4000" in src
-    assert '"result": str(result or ""),' in src
-    # Neues Schema + Signaturhelfer sind die Produzentenseite der Kante.
-    assert "class HandoffDelegationPayload(BaseModel)" in src
-    assert 'model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)' in src
-    assert "def canonicalize_delegation_payload(" in src
-    assert "payload = canonicalize_delegation_payload(raw)" in src
-    assert "def sign_delegation_payload(" in src
-    assert "def verify_delegation_payload(" in src
+def test_d11_structured_handoff_and_hmac_consumer(tmp_path, monkeypatch):
+    from archon.core.delegation import sign_delegation_payload
+    from backend.handoff_desk import HandoffDesk, mark_truncated
+
+    monkeypatch.setenv("ARCHON_DELEGATION_HMAC_KEY", "f00-delegation-hmac-key")
+    monkeypatch.setenv("ARCHON_HANDOFF_HMAC_KEY", "f00-handoff-hmac-key")
+
+    # 1. Signatur-Roundtrip + Manipulations-Negativprobe
+    canon = canonicalize_delegation_payload(
+        {"ziel_agent": "coder", "auftrag": "Implement F00"},
+        task_id="task-f00-sig",
+    )
+    assert canon["payload_signature"] == sign_delegation_payload(canon)
+    assert verify_delegation_payload(canon) is True
+
+    tampered = dict(canon, auftrag="Manipulierter Auftrag")
+    assert verify_delegation_payload(tampered) is False
+
+    unsigned = dict(canon, payload_signature="")
+    assert verify_delegation_payload(unsigned) is False
+
+    # 2. Kuerzung markiert explizit statt still abzuschneiden
+    long_text = "A" * 5000
+    truncated = mark_truncated(long_text, 4000, artifact="test_artifact")
+    assert len(truncated) <= 4000
+    assert "gekürzt:" in truncated and "test_artifact" in truncated
+
+    # 3. HandoffDesk.verify_payload_hash prueft echten HMAC und erkennt Manipulation
+    desk = HandoffDesk(db_path=str(tmp_path / "verify.db"))
+    created = desk.create_handoff(
+        task_id="task-f00-verify",
+        from_agent="orchestrator",
+        to_agent="coder",
+        deliverables={"result": "clean", "status": "ok"},
+        acceptance_criteria="HMAC intakt",
+    )
+    assert desk.verify_payload_hash(created["handoff_id"]) is True
+    with desk._get_conn() as conn:
+        conn.execute(
+            "UPDATE agent_handoffs SET acceptance_criteria = 'TAMPERED' WHERE id = ?",
+            (created["handoff_id"],),
+        )
+        conn.commit()
+    assert desk.verify_payload_hash(created["handoff_id"]) is False
 
 
 def test_d11_stream_prompt_ref_is_resolved():

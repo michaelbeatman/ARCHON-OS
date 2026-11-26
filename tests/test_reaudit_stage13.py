@@ -37,18 +37,87 @@ def test_d15_inventory_has_71_entries():
     assert "micha" not in ids and "alpha" not in ids
 
 
-def test_d10_livez_fails_with_dead_watchdog():
-    src = (ROOT / "archon" / "services" / "health_probes.py").read_text(encoding="utf-8")
-    block = src.split("async def run_liveness_check(", 1)[1].split("\nasync def ", 1)[0]
-    assert 'or not info["loops"]["watchdog"]["alive"]' in block
-    heal = (ROOT / "scripts" / "archon_autoheal.py").read_text(encoding="utf-8")
-    # A9-Nachlauf: probe() liest den /livez-Body auch bei HTTP 503, damit der
-    # watchdog_stale-Pfad erreichbar bleibt. Die statische Zeichenkette
-    # `not result.get("watchdog_stale")` ist weiterhin der Bergungszweig.
-    assert 'not result.get("watchdog_stale")' in heal
-    assert 'except urllib.error.HTTPError as exc' in heal
-    assert 'exc.read(' in heal
-    assert '_watchdog_stale_from_body(raw)' in heal
+def test_d10_livez_fails_with_dead_watchdog(monkeypatch):
+    import asyncio
+    import io
+    import time
+    import urllib.error
+    import urllib.request
+
+    from fastapi.responses import JSONResponse
+
+    import archon.services.health_probes as health_probes
+    import backend.loop_liveness as loop_liveness
+    import scripts.archon_autoheal as autoheal
+    import watchdog_daemon
+
+    async def _healthy_loop():
+        return {"alive": True, "lag_ms": 1.0}
+
+    monkeypatch.setattr(loop_liveness, "check_loop_liveness", _healthy_loop)
+
+    # 1. Negativfall: Event-Loop gesund, aber Watchdog tot -> HTTP 503 + alive=False
+    monkeypatch.setattr(
+        watchdog_daemon,
+        "watchdog_liveness",
+        lambda: {"alive": False, "last_seen": 100.0, "age_s": 999.0},
+    )
+    dead_res = asyncio.run(health_probes.run_liveness_check())
+    assert isinstance(dead_res, JSONResponse)
+    assert dead_res.status_code == 503
+    dead_body = json.loads(dead_res.body.decode("utf-8"))
+    assert dead_body["loops"]["watchdog"]["alive"] is False
+
+    # 2. Fail-Closed-Fall: watchdog_liveness wirft Exception -> HTTP 503 + alive=False
+    def _broken_watchdog():
+        raise RuntimeError("watchdog_file_unreadable")
+
+    monkeypatch.setattr(watchdog_daemon, "watchdog_liveness", _broken_watchdog)
+    err_res = asyncio.run(health_probes.run_liveness_check())
+    assert isinstance(err_res, JSONResponse)
+    assert err_res.status_code == 503
+    err_body = json.loads(err_res.body.decode("utf-8"))
+    assert err_body["loops"]["watchdog"]["alive"] is False
+
+    # 3. Positivfall: Event-Loop und Watchdog gesund -> 200-Dict + alive=True
+    now = time.time()
+    monkeypatch.setattr(
+        watchdog_daemon,
+        "watchdog_liveness",
+        lambda: {"alive": True, "last_seen": now, "age_s": 0.2},
+    )
+    ok_res = asyncio.run(health_probes.run_liveness_check())
+    assert isinstance(ok_res, dict)
+    assert ok_res["loops"]["watchdog"]["alive"] is True
+
+    # 4. Autoheal-Konsument: liest den echten 503-Body aus HTTPError und meldet watchdog_stale
+    def _urlopen_503(url, timeout=5):
+        raise urllib.error.HTTPError(
+            url, 503, "Service Unavailable", hdrs={}, fp=io.BytesIO(dead_res.body)
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen_503)
+    stale_probe = autoheal.probe()
+    assert stale_probe["ok"] is False
+    assert stale_probe["watchdog_stale"] is True
+
+    # 5. Autoheal-Positivprobe: HTTP 200 mit lebendem Watchdog -> ok=True, watchdog_stale=False
+    class _OkResp:
+        status = 200
+
+        def read(self, _n=-1):
+            return json.dumps(ok_res).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda url, timeout=5: _OkResp())
+    healthy_probe = autoheal.probe()
+    assert healthy_probe["ok"] is True
+    assert healthy_probe["watchdog_stale"] is False
 
 
 def test_d08_audit_dispatch_is_async():

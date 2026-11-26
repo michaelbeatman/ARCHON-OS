@@ -448,6 +448,48 @@ def test_dispatch_history_uses_dropped_marker():
     assert "GEKÜRZT" in impl
 
 
+def test_f20_agent_chat_does_not_silently_slice_history_before_dispatcher(monkeypatch):
+    """F20 (D11): 10 Turns in agent_chat erreichen den Dispatcher ungesliced,
+    sodass history_with_dropped_marker genau einen System-Streifen mit dropped>=2 erzeugt.
+    """
+    import asyncio
+
+    import archon.core.profiles as core_profiles
+    import archon.routers.agent_chat as agent_chat
+    from archon.routers.chat import history_with_dropped_marker
+
+    captured = {}
+
+    async def _fake_dispatch(**kwargs):
+        captured["history"] = kwargs.get("history")
+        return {"status": "success", "content": "Antwort OK", "model": "test-model"}
+
+    monkeypatch.setattr(agent_chat.core_dispatcher, "dispatch_to_omniroute_or_container", _fake_dispatch)
+    monkeypatch.setattr(
+        core_profiles,
+        "api_get_hermes_profiles",
+        lambda: [{"id": "robert", "name": "Robert", "prompt": "Test", "model": "test-model", "provider": "openrouter"}],
+    )
+    monkeypatch.setattr(agent_chat, "add_ticker", lambda *_a, **_kw: None)
+
+    req_model = agent_chat.DirectAgentChatRequest(
+        agent_id="robert",
+        message="Aktuelle Frage",
+        history=[
+            {"role": "user" if i % 2 == 0 else "assistant", "content": f"Turn {i}"}
+            for i in range(10)
+        ],
+    )
+    res = asyncio.run(agent_chat.api_direct_agent_chat(req_model))
+    assert res["status"] == "success"
+    assert len(captured["history"]) == 10
+
+    kept = history_with_dropped_marker(captured["history"], 8, artifact="dispatch.history/robert")
+    markers = [m for m in kept if m.get("role") == "system" and "GEKÜRZT" in str(m.get("content", ""))]
+    assert len(markers) == 1
+    assert "2" in str(markers[0]["content"])
+
+
 def test_budget_allocation_failure_blocks_task():
     import backend.operations_kanban_crud as ops_crud
 

@@ -258,9 +258,10 @@ async def api_direct_agent_chat(req: DirectAgentChatRequest):
         )
         user_msg = f"[Angehängte Datei: {req.attachment_name or 'Dokument'}]\n```\n{attachment}\n```\n\n{req.message}"
 
-    # D11/MED: strukturierte History direkt an den Dispatcher (der filtert auf
-    # user/assistant). Tote lokale `messages`-Liste entfernt.
-    history_payload = [m.model_dump() for m in (req.history or [])[-8:]]
+    # F20 (D11): kein stiller [-8:]-Slice an der Router-Kante — der Dispatcher
+    # kuerzt zentral via history_with_dropped_marker() und setzt den Marker
+    # mit der exakten Anzahl verworfener Turns.
+    history_payload = [m.model_dump() for m in (req.history or [])]
 
     model_to_use = prof.get("model") or "deepseek/deepseek-chat"
     provider_to_use = prof.get("provider") or "openrouter"

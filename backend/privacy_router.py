@@ -8,16 +8,15 @@ Steuert:
    (`hard_block_on_local_offline = True`), sobald das lokale Modell offline ist — kein stiller Cloud-Abfluss!
 """
 
-import os
-import sys
 import json
-import time
-import socket
-import urllib.request
-import urllib.error
-from urllib.parse import urlparse
 import logging
-from typing import Dict, Any, List, Optional
+import os
+import socket
+import time
+import urllib.error
+import urllib.request
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from backend.audit_log import sanitize_llm_endpoint
 
@@ -108,7 +107,22 @@ def get_privacy_config() -> Dict[str, Any]:
                 data = json.load(f)
                 if isinstance(data, dict):
                     has_explicit_local_url = bool(str(data.get("local_llm_url") or "").strip())
-                    merged.update(data)
+                    _hardening_or_keys = (
+                        "zero_egress_strict",
+                        "sensitive_local_routing",
+                        "hard_block_on_local_offline",
+                        "block_crm_erp_prefetch_on_cloud",
+                    )
+                    for k, v in data.items():
+                        if k in _hardening_or_keys:
+                            if bool(v):
+                                merged[k] = True
+                        elif k == "fallback_to_eu":
+                            # Nur erlauben, wenn kein strikter Zero-Egress-Modus aktiv ist
+                            if bool(v) and not bool(merged.get("zero_egress_strict")):
+                                merged[k] = True
+                        else:
+                            merged[k] = v
         except Exception as e:
             logger.warning(f"Konnte privacy_routing.json nicht lesen: {e}")
 

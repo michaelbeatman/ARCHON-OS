@@ -167,24 +167,30 @@ async def _deadlock_supervisor_loop() -> None:
             from archon.core.orchestration import recover_stale_synthesis
             from archon.core.task_registry import spawn as _tracked_spawn
 
-            stale = await asyncio.to_thread(  # type: ignore[call-arg]
-                recover_stale_synthesis,
-                deps.load_mission_control_data,
-                deps.update_mission_control_data,
-                900,
-                lambda pid: _tracked_spawn(
+            _loop = asyncio.get_running_loop()
+
+            def _schedule_synthesis_restart(pid: str) -> None:
+                _loop.call_soon_threadsafe(
+                    _tracked_spawn,
                     deps.orch_fan_in_maybe_start_synthesis(
                         pid,
                         mc_async_lock=deps.mc_async_lock,
                         run_cascade=deps.run_synthesis_cascade,
                     ),
-                    name=f"synthesis_restart:{pid}",
-                ),
+                    f"synthesis_restart:{pid}",
+                )
+
+            stale = await asyncio.to_thread(
+                recover_stale_synthesis,
+                deps.load_mission_control_data,
+                deps.update_mission_control_data,
+                ttl_seconds=900,
+                restart=_schedule_synthesis_restart,
             )
             if stale:
                 logger.warning("[Synthese-Recovery] %s Kaskade(n) neu gestartet.", len(stale))
         except Exception as e:
-            logger.debug(f"[Synthese-Recovery] Loop-Hinweis: {e}")
+            logger.error("[Synthese-Recovery] Fehler in recover_stale_synthesis: %s", e, exc_info=True)
 
         try:
             from backend.metrics_collector import check_and_dispatch_alerts_now

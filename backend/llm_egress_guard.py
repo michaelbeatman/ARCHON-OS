@@ -24,7 +24,7 @@ import os
 import subprocess
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -84,13 +84,28 @@ class ZeroEgressBlockedError(RuntimeError):
         self.audit_event = audit_event or {}
 
 
-def _proof_prompt_versions(agent_id: str = "") -> Tuple[str, str]:
-    """Prompt-/Canary-Version des aktiven Prompts fuer den signierten Block-Proof (d05 F-04)."""
+class PromptProvenance(NamedTuple):
+    """Strukturierte Prompt-Provenienz fuer signierte Block-Proofs (F10a/D12)."""
+
+    version: Optional[str]
+    canary: Optional[str]
+    verified: bool
+    error: Optional[str] = None
+
+
+def _proof_prompt_versions(agent_id: str = "") -> PromptProvenance:
+    """Prompt-/Canary-Version des aktiven Prompts fuer den signierten Block-Proof (d05 F-04 / F10a).
+
+    Erfindet niemals eine statische Version (`v1-static`), wenn kein aktiver
+    Registry-Eintrag vorliegt oder die Registry fehlschlaegt.
+    """
     try:
         from backend.prompt_registry import prompt_registry
         for v in prompt_registry.list_versions(agent_id or "default"):
             if v.get("is_active"):
-                pv = str(v.get("version") or v.get("version_num") or "v1-static").strip() or "v1-static"
+                pv = str(v.get("version") or v.get("version_num") or "").strip()
+                if not pv:
+                    continue
                 cv_raw = v.get("canary")
                 if cv_raw is None:
                     cv_raw = v.get("canary_version")
@@ -100,12 +115,21 @@ def _proof_prompt_versions(agent_id: str = "") -> Tuple[str, str]:
                     cv = "stable"
                 else:
                     cv = str(cv_raw).strip()
-                return pv, cv
+                return PromptProvenance(version=pv, canary=cv, verified=True, error=None)
     except Exception as exc:
-        logger.debug("[EgressGuard] Prompt-Registry nicht lesbar, nutze statischen Proof-Fallback: %s", exc)
-    # Fallback fuer statische Agent-Prompts ohne aktiven Registry-Eintrag:
-    # niemals Platzhalter ("unknown"), damit Produktions-Dispatches nicht abbrechen.
-    return "v1-static", "stable"
+        logger.warning("[EgressGuard] Prompt-Registry nicht lesbar (unverified proof): %s", exc)
+        return PromptProvenance(
+            version=None,
+            canary=None,
+            verified=False,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+    return PromptProvenance(
+        version=None,
+        canary=None,
+        verified=False,
+        error="no_active_prompt_version",
+    )
 
 
 def _record_blocked_proof(
@@ -125,15 +149,31 @@ def _record_blocked_proof(
 
     d05 F-02: auch Fail-Closed-Blockpfade ohne Netzwerk-Byte brauchen einen
     Beweis. d05 F-05: ein Schreibfehler wird nie verschluckt (ERROR + Eskalation).
+    F10a: keine erfundene `v1-static`-Provenienz im signierten Payload.
     """
-    pv, cv = _proof_prompt_versions(agent_id)
+    prov = _proof_prompt_versions(agent_id)
+    effective_prompt_info: Dict[str, Any] = {
+        "version": prov.version,
+        "canary": prov.canary,
+        "verified": prov.verified,
+        "agent_id": agent_id,
+    }
+    if prov.error:
+        effective_prompt_info["error"] = prov.error
     proof_extra: Dict[str, Any] = {
         "error_code": error_code,
         "reason": str(reason),
-        "effective_prompt_info": {"version": pv, "canary": cv, "agent_id": agent_id},
+        "effective_prompt_info": effective_prompt_info,
     }
     if extra:
         proof_extra.update(extra)
+    effective_action = (
+        action
+        if prov.verified or action.endswith("_unverified_prompt_proof")
+        else f"{action}_unverified_prompt_proof"
+    )
+    pv_arg = prov.version if prov.verified and prov.version else "unverified"
+    cv_arg = prov.canary if prov.verified and prov.canary else "unverified"
     # Ein signierter Proof braucht eine der drei definierten Egress-Zonen;
     # markerhafte Endpunkte wie "(outbound-payload)" liefern sonst "UNKNOWN"
     # und wuerden verify_integrity() fail-closed rot faerben.
@@ -146,17 +186,17 @@ def _record_blocked_proof(
             provider=provider or "egress-firewall",
             model=model or "egress-proof",
             target_endpoint=clean_ep,
-            action=action,
+            action=effective_action,
             data_category=data_category,
             http_status=0,
             zero_egress_active=True,
-            prompt_version=pv,
-            canary_version=cv,
+            prompt_version=pv_arg,
+            canary_version=cv_arg,
             extra=proof_extra,
         )
     except Exception as exc:
-        logger.error("[EgressGuard] Audit-Proof %s nicht schreibbar: %s", action, exc)
-        raise RuntimeError(f"audit_write_failed: {action} ({type(exc).__name__})") from exc
+        logger.error("[EgressGuard] Audit-Proof %s nicht schreibbar: %s", effective_action, exc)
+        raise RuntimeError(f"audit_write_failed: {effective_action} ({type(exc).__name__})") from exc
 
 
 def infer_data_category(

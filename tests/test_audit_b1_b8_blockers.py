@@ -118,38 +118,105 @@ def test_b4_proof_prompt_versions_never_unknown_and_handles_zero_canary(monkeypa
     from backend import llm_egress_guard
     from backend.prompt_registry import prompt_registry
 
+    # F10a: Ohne aktiven Registry-Eintrag wird KEIN `v1-static` erfunden.
     monkeypatch.setattr(prompt_registry, "list_versions", lambda _aid: [])
-    pv, cv = llm_egress_guard._proof_prompt_versions("robert")
-    assert pv == "v1-static"
-    assert cv == "stable"
+    prov = llm_egress_guard._proof_prompt_versions("robert")
+    assert prov.verified is False
+    assert prov.version is None
+    assert prov.canary is None
 
+    # Negativprobe: Registry-Fehler liefert verified=False und kein `v1-static` im Proof
+    def _boom(_aid):
+        raise RuntimeError("registry_offline")
+
+    monkeypatch.setattr(prompt_registry, "list_versions", _boom)
+    captured = {}
+
+    class _FakeAuditLog:
+        def record_llm_dispatch(self, **kwargs):
+            captured.update(kwargs)
+            return {"ok": True}
+
+    llm_egress_guard._record_blocked_proof(
+        alog=_FakeAuditLog(),
+        agent_id="robert",
+        provider="openai",
+        model="gpt-4o",
+        target_endpoint="https://api.openai.com/v1/chat/completions",
+        action="zero_egress_blocked",
+        error_code="ZERO_EGRESS_BLOCKED",
+        reason="test",
+    )
+    assert captured["prompt_version"] != "v1-static"
+    assert captured["action"].endswith("_unverified_prompt_proof")
+    assert captured["extra"]["effective_prompt_info"]["verified"] is False
+    assert captured["extra"]["effective_prompt_info"]["version"] is None
+    assert "registry_offline" in captured["extra"]["effective_prompt_info"]["error"]
+
+    # Positivprobe: gueltige aktive Registry-Version mit canary_percentage=0 -> verified=True
     monkeypatch.setattr(
         prompt_registry,
         "list_versions",
         lambda _aid: [{"is_active": True, "version": "v2", "canary_percentage": 0}],
     )
-    pv2, cv2 = llm_egress_guard._proof_prompt_versions("robert")
-    assert pv2 == "v2"
-    assert cv2 == "stable"
+    prov2 = llm_egress_guard._proof_prompt_versions("robert")
+    assert prov2.verified is True
+    assert prov2.version == "v2"
+    assert prov2.canary == "stable"
 
 
 def test_b5_local_security_guard_empty_http_200_fails_closed(monkeypatch):
+    import backend.llm_egress_guard as egress_guard
     import local_security_guard as lsg
 
-    class _FakeResp:
-        def read(self):
-            return json.dumps({"choices": [{"message": {"content": "   "}}]}).encode("utf-8")
+    # Egress-Gate im Unit-Test durchlassen, damit wirklich urlopen + Token-Parser
+    # ausgefuehrt werden (die Positivprobe "SAFE" beweist, dass urlopen erreicht wird).
+    monkeypatch.setattr(
+        egress_guard,
+        "evaluate_and_gate_llm_dispatch",
+        lambda **_kw: {"routed_to_local": True, "allowed": True},
+    )
+    monkeypatch.setattr(lsg, "_enforce_egress_or_block", lambda *_a, **_kw: None)
 
-        def __enter__(self):
-            return self
+    def _mock_reply(content: str):
+        class _FakeResp:
+            def read(self):
+                return json.dumps({"choices": [{"message": {"content": content}}]}).encode("utf-8")
 
-        def __exit__(self, *args):
-            return False
+            def __enter__(self):
+                return self
 
-    monkeypatch.setattr(lsg.urllib.request, "urlopen", lambda *a, **kw: _FakeResp())
-    out = lsg.scan_prompt_injection("harmless looking text", sensitivity="strict", use_llm=True)
+            def __exit__(self, *args):
+                return False
+
+        monkeypatch.setattr(lsg.urllib.request, "urlopen", lambda *a, **kw: _FakeResp())
+
+    local_url = "http://127.0.0.1:20128/v1"
+    _mock_reply("   ")
+    out = lsg.scan_prompt_injection(
+        "harmless looking text", sensitivity="strict", use_llm=True, omniroute_url=local_url
+    )
     assert out["llm_verdict"] == "error"
     assert out["verdict"] == "blocked"
+
+    # F10a Negativproben: UNSAFE / NOT SAFE duerfen nicht per Substring als SAFE durchgehen
+    for bad_reply in ("UNSAFE", "NOT SAFE", "SAFE? NO"):
+        _mock_reply(bad_reply)
+        res = lsg.scan_prompt_injection(
+            "harmless looking text", sensitivity="strict", use_llm=True, omniroute_url=local_url
+        )
+        assert res["llm_verdict"] == "error", bad_reply
+        assert res["verdict"] == "blocked", bad_reply
+        assert res["is_safe"] is False, bad_reply
+
+    # Positivprobe: exaktes SAFE-Token wird weiterhin akzeptiert (beweist, dass urlopen erreicht wird)
+    _mock_reply("SAFE")
+    ok = lsg.scan_prompt_injection(
+        "harmless looking text", sensitivity="strict", use_llm=True, omniroute_url=local_url
+    )
+    assert ok["llm_verdict"] == "safe"
+    assert ok["verdict"] == "safe"
+    assert ok["is_safe"] is True
 
 
 def test_b6_trajectory_budget_tool_hops_do_not_trigger_cycle_detected(tmp_path):

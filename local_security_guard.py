@@ -239,17 +239,20 @@ def scan_prompt_injection(
             with urllib.request.urlopen(req, timeout=3) as resp:
                 res = json.loads(resp.read().decode("utf-8"))
                 llm_reply = res.get("choices", [{}])[0].get("message", {}).get("content", "").strip().upper()
-                if "BLOCKED" in llm_reply:
+                # F10a (D12): Exakte Token-Pruefung statt Substring-Match,
+                # damit "UNSAFE" / "NOT SAFE" niemals als "SAFE" freigegeben wird.
+                llm_token = llm_reply.strip(" \t\r\n.,:;!\"'`")
+                if llm_token == "BLOCKED":
                     llm_verdict = "blocked"
                     verdict = "blocked"
-                elif "SUSPICIOUS" in llm_reply:
+                elif llm_token == "SUSPICIOUS":
                     llm_verdict = "suspicious"
                     if verdict == "safe":
                         verdict = "suspicious"
-                elif "SAFE" in llm_reply:
+                elif llm_token == "SAFE":
                     llm_verdict = "safe"
                 else:
-                    raise RuntimeError(f"Ungueltige/leere Klassifikator-Antwort: {llm_reply!r}")
+                    raise RuntimeError(f"INVALID_CLASSIFIER_VERDICT: {llm_reply!r}")
         except Exception as _exc:
             # Audit D04/HIGH: Klassifikatorfehler ist HART "blocked" — kein
             # Ingest mit nicht klassifiziertem externen Text.

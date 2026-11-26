@@ -261,12 +261,14 @@ def cleanup_orphaned_sidecars(root_dir: Optional[str] = None) -> Dict[str, Any]:
 
 
 def _audit_backup_restore(metadata: Dict[str, Any]) -> Dict[str, Any]:
-    """D5/F-08: Restore signiert in die Zentralkette (append-only).
+    """D5/F-08 / D03-M4: Restore signiert in die Zentralkette (append-only).
 
-    Fail-closed: der Restore ist zum Zeitpunkt dieses Aufrufs bereits
-    abgeschlossen (oder fehlgeschlagen). Ein Audit-Schreibfehler darf keine
-    Exception in die Restore-Transaktion werfen; er wird geloggt und im
-    Result-Feld sichtbar gemacht. Nur IDs/Status/Metadaten, keine Inhalte.
+    Der Restore ist zum Zeitpunkt dieses Aufrufs bereits abgeschlossen (oder
+    fehlgeschlagen). Ein Audit-Schreibfehler darf keine Exception in die
+    bereits committete Restore-Transaktion werfen — er wird aber auch NICHT
+    verschluckt: bei Fehler fehlt ``audit_event_id`` und der Aufrufer muss
+    den Restore fail-closed als ``blocked`` melden (kein ``restored=true``
+    ohne GoBD-Auditnachweis). Nur IDs/Status/Metadaten, keine Inhalte.
     """
     try:
         from backend.audit_log import chained_audit_log
@@ -858,10 +860,10 @@ class DBBackupManager:
             audit_status = "success"
             return result
         finally:
-            # D5/F-08: Auch Dry-Runs und fehlgeschlagene Restores werden
-            # protokolliert. Der Helper verschluckt Audit-Fehler absichtlich
-            # (siehe _audit_backup_restore), damit die Restore-Transaktion
-            # nicht durch einen Audit-Ausfall zerstoert wird.
+            # D03-M4: Auch Dry-Runs und fehlgeschlagene Restores werden
+            # protokolliert. Audit-Fehler werden NICHT mehr verschluckt:
+            # ohne audit_event_id ist der Restore nicht GoBD-konform und
+            # wird nachtraeglich fail-closed als "blocked" gemeldet.
             _meta = dict(audit_meta)
             _meta["status"] = audit_status
             if result is not None:
@@ -871,10 +873,28 @@ class DBBackupManager:
                     "rollback_ok": result.get("rollback_ok"),
                     "verified": result.get("verified"),
                 })
+            proof = _audit_backup_restore(_meta)
             if result is not None:
-                result.update(_audit_backup_restore(_meta))
-            else:
-                _audit_backup_restore(_meta)
+                result.update(proof)
+                if (
+                    audit_status != "dry_run"
+                    and (
+                        proof.get("audit_status") != "recorded"
+                        or not proof.get("audit_event_id")
+                    )
+                ):
+                    logger.error(
+                        "[DBBackup][ALARM][GoBD] Restore ohne Auditnachweis "
+                        "blockiert: %s (audit_status=%s, audit_event_id fehlt)",
+                        result.get("target"), proof.get("audit_status"),
+                    )
+                    # Ehrlich ausweisen, dass die Datei ausgetauscht wurde,
+                    # aber KEIN bestaetigter (GoBD-konformer) Restore vorliegt.
+                    result["restore_applied"] = bool(result.get("restored"))
+                    result["restored"] = False
+                    result["status"] = "blocked"
+                    result["audit_status"] = "failed"
+                    result["failure_reason"] = "GoBD_AUDIT_PROOF_MISSING"
             # F-016: SQLite legt beim Öffnen des Tempfiles WAL/SHM-Sidecars an.
             # Ohne Cleanup bleiben verwaiste Artefakte zurück (real beobachtet:
             # .memory.db.restore.*.tmp-shm/-wal in data/).

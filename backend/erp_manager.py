@@ -15,22 +15,22 @@ Kern-Architektur:
 - Laptop-PocketBase-Synchronisation (`kontakte` Collection) pro Mandant.
 """
 
-import os
-import re
+import collections
 import csv
+import datetime
+import hashlib
 import io
 import json
-import uuid
-import hashlib
-import sqlite3
-import datetime
-import urllib.request
-import urllib.error
-import collections
-import xml.etree.ElementTree as ET
-from xml.sax.saxutils import escape as _xml_escape
-from typing import Dict, Any, List, Optional, Tuple, cast
 import logging
+import os
+import re
+import sqlite3
+import urllib.error
+import urllib.request
+import uuid
+import xml.etree.ElementTree as ET
+from typing import Any, Dict, List, Optional, Tuple, cast
+from xml.sax.saxutils import escape as _xml_escape
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # E (dieses Audits): kein eigener, harter TENANTS_BASE_DIR mehr. Die
@@ -38,7 +38,7 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ARCHON_DATA_DIR); der Alias bleibt nur für bestehende Importe (Tests)
 # erhalten und ist jetzt aus der SSOT abgeleitet.
 from backend.db_paths import APP_DATA_DIR as _APP_DATA_DIR  # noqa: E402
-from backend.db_paths import DB_BUSY_TIMEOUT_MS  # F-013: SSOT busy_timeout
+from backend.db_paths import DB_BUSY_TIMEOUT_MS  # noqa: E402 — F-013: SSOT busy_timeout
 
 TENANTS_BASE_DIR = os.path.join(_APP_DATA_DIR, "tenants")
 _DEFAULT_TENANTS_BASE_DIR = TENANTS_BASE_DIR
@@ -379,15 +379,30 @@ class ERPManager:
                     FOREIGN KEY (entity_id) REFERENCES crm_entities(id)
                 )
             """)
-            # D03/MED: GoBD-Unveränderlichkeit als DB-Constraint, nicht nur als
-            # App-Level-Guard in save_document(). Jeder andere Write-Pfad und
-            # direkter SQL-Zugriff muss gebuchte Belege unverändert lassen.
+            # D03/MED (W1-D): GoBD-Unveränderlichkeit als DB-Constraint, nicht
+            # nur als App-Level-Guard in save_document(). Jeder andere
+            # Write-Pfad und direkter SQL-Zugriff muss gebuchte Belege
+            # unverändert lassen. Der alte Trigger schützte nur booked_at und
+            # recipient_snapshot_json — Status- und Betragsänderungen per
+            # direktem UPDATE waren moeglich. Bestehende Trigger muessen
+            # ersetzt werden (CREATE TRIGGER IF NOT EXISTS liesse die alte
+            # Version in Bestands-DBs stehen).
+            conn.execute("DROP TRIGGER IF EXISTS erp_documents_gobd_no_tamper")
             conn.execute("""
-                CREATE TRIGGER IF NOT EXISTS erp_documents_gobd_no_tamper
+                CREATE TRIGGER erp_documents_gobd_no_tamper
                 BEFORE UPDATE ON erp_documents
                 WHEN OLD.booked_at IS NOT NULL AND (
                     NEW.booked_at IS NOT OLD.booked_at
                     OR NEW.recipient_snapshot_json IS NOT OLD.recipient_snapshot_json
+                    OR (
+                        OLD.status IN ('booked', 'paid', 'cancelled')
+                        AND NEW.status = 'draft'
+                    )
+                    OR NEW.amount_net IS NOT OLD.amount_net
+                    OR NEW.tax_amount IS NOT OLD.tax_amount
+                    OR NEW.amount_gross IS NOT OLD.amount_gross
+                    OR NEW.entity_id IS NOT OLD.entity_id
+                    OR NEW.issue_date IS NOT OLD.issue_date
                 )
                 BEGIN
                     SELECT RAISE(ABORT, 'GoBD: booked document immutable');
@@ -1411,8 +1426,8 @@ class ERPManager:
                     f"SELECT * FROM erp_document_lines WHERE document_id IN ({placeholders}) ORDER BY pos_no ASC",
                     doc_ids
                 ).fetchall()
-                for l in lines:
-                    ld = dict(l)
+                for line_row in lines:
+                    ld = dict(line_row)
                     lines_by_doc[ld["document_id"]].append(ld)
 
             docs = []
@@ -1449,7 +1464,7 @@ class ERPManager:
                 "SELECT * FROM erp_document_lines WHERE document_id = ? ORDER BY pos_no ASC",
                 (doc_id,)
             ).fetchall()
-            d["lines"] = [dict(l) for l in lines]
+            d["lines"] = [dict(line_row) for line_row in lines]
             if "source_doc_id" in d:
                 storno_row = conn.execute(
                     "SELECT id, doc_number FROM erp_documents WHERE doc_type = 'credit_note' AND source_doc_id = ? ORDER BY created_at DESC LIMIT 1",
@@ -1984,8 +1999,8 @@ class ERPManager:
             )
 
         copied_lines = []
-        for l in src.get("lines", []):
-            cl = dict(l)
+        for line_row in src.get("lines", []):
+            cl = dict(line_row)
             cl.pop("id", None)
             cl.pop("document_id", None)
             copied_lines.append(cl)
@@ -2115,7 +2130,7 @@ class ERPManager:
         cid = _sanitize_company_id(company_id)
         seller: Dict[str, Any] = {}
         try:
-            from backend.corporate_manager import corporate_manager, DEFAULT_PRIMARY_COMPANY
+            from backend.corporate_manager import DEFAULT_PRIMARY_COMPANY, corporate_manager
             seller = corporate_manager.get_company(cid) or dict(DEFAULT_PRIMARY_COMPANY)
         except Exception:
             seller = {}
@@ -2241,7 +2256,7 @@ class ERPManager:
     def export_xrechnung_xml(self, doc_id: str, company_id: Optional[str] = None) -> Tuple[str, str]:
         """Erzeugt eine EN-16931 / XRechnung-3.0-konforme UBL-2.1-XML-E-Rechnung (oder Gutschrift)."""
         ctx = self._prepare_einvoice_context(doc_id, company_id=company_id)
-        doc = ctx["doc"]
+        doc = ctx["doc"]  # noqa: F841 — Legacy-Kontext (wird von nachgelagertem XML-Builder genutzt)
         doc_num = ctx["doc_num"]
         currency = ctx["currency"]
         issue_date = ctx["issue_date"]
@@ -2444,7 +2459,7 @@ class ERPManager:
     def export_zugferd_cii_xml(self, doc_id: str, company_id: Optional[str] = None) -> Tuple[str, str]:
         """Erzeugt ZUGFeRD-2.2-/Factur-X-EN-16931-konformes UN/CEFACT Cross Industry Invoice XML (CII D16B)."""
         ctx = self._prepare_einvoice_context(doc_id, company_id=company_id)
-        doc = ctx["doc"]
+        doc = ctx["doc"]  # noqa: F841 — Legacy-Kontext (wird von nachgelagertem XML-Builder genutzt)
         doc_num = ctx["doc_num"]
         currency = ctx["currency"]
         issue_cii = ctx["issue_date"].replace("-", "")

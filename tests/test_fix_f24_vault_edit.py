@@ -13,17 +13,20 @@ from __future__ import annotations
 import os
 
 import pytest
+from archon_security_support import ADMIN, OPERATOR, import_main, make_request
 from fastapi import HTTPException
 
-from archon_security_support import ADMIN, OPERATOR, import_main, make_request
+from backend.tenant_context import tenant_context
 
 
 @pytest.fixture()
 def vault_root(monkeypatch, tmp_path):
     main = import_main()
-    vault = tmp_path / "vault"
-    vault.mkdir()
-    monkeypatch.setattr(main, "OBSIDIAN_VAULT_DIR", str(vault))
+    # D03-H1: der Vault-Router verlangt jetzt <root>/<tenant>; die Fixture
+    # muss den Testordner correspondingly anlegen.
+    vault = tmp_path / "vault" / str(tenant_context.get_active_tenant_id())
+    vault.mkdir(parents=True)
+    monkeypatch.setattr(main, "OBSIDIAN_VAULT_DIR", str(tmp_path / "vault"))
     monkeypatch.setattr(main, "_VAULT_FILES_CACHE", {"ts": 0.0, "data": None})
     return main, vault
 

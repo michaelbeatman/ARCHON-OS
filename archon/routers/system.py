@@ -1,17 +1,9 @@
-from fastapi import Depends as _ArchonDepends
-
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
-from archon.routers._rbac import require_admin_or_503
-
 """/api/system/* — Health, Recovery, Drain, Backups, Diagnose."""
 
 import asyncio
 import json
 import os
-import socket
 import sqlite3
-import subprocess
-import sys
 import time
 from typing import Any, Dict, List, Optional
 
@@ -21,19 +13,19 @@ from fastapi import (
     BackgroundTasks,
     Body,
     Depends,
-    File,
     HTTPException,
-    Query,
     Request,
-    UploadFile,
 )
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi import Depends as _ArchonDepends
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.cache import ttl_cache
 from archon.core.config import config
-from archon.core.runtime import MEMORY_DIR, SETTINGS_FILE, WORKSPACE_DIR, add_ticker, logger
-from archon.core.state_db import STATE_DB_PATH, get_state_db_dep
+from archon.core.runtime import SETTINGS_FILE, add_ticker, logger
+from archon.core.state_db import get_state_db_dep
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
+from archon.routers._rbac import require_admin_or_503
 
 # --------------------------------------------------
 # Dependency-Injektion statt Kopie
@@ -596,7 +588,11 @@ def api_list_db_backups():
 
 @router.post("/api/system/backup-db/restore")
 def api_restore_db_backup(request: Request, body: DbRestoreRequest):
-    """Getesteter Restore-Pfad: dry_run erst pruefen, dann mit Confirmed-Flag ausführen."""
+    """Getesteter Restore-Pfad: dry_run erst pruefen, dann mit Confirmed-Flag ausführen.
+
+    D03-M4: Ohne GoBD-Auditnachweis (``audit_event_id``) ist ein Restore kein
+    Erfolg — er wird als ``blocked`` mit HTTP 503 und ERROR-Alarm gemeldet.
+    """
     _require_admin(request)
     from backend.db_backup_manager import db_backup_manager
     file_name = body.file_name
@@ -605,7 +601,26 @@ def api_restore_db_backup(request: Request, body: DbRestoreRequest):
     confirmed = body.confirmed
     try:
         result = db_backup_manager.restore_backup(file_name, dry_run=not confirmed)
+        if result.get("status") == "blocked" or (
+            confirmed and result.get("restored") and not result.get("audit_event_id")
+        ):
+            detail = {
+                "detail": "Restore ohne GoBD-Auditnachweis blockiert",
+                "audit_status": result.get("audit_status"),
+                "failure_reason": result.get(
+                    "failure_reason", "GoBD_AUDIT_PROOF_MISSING"
+                ),
+                "backup": result.get("backup"),
+                "target": result.get("target"),
+            }
+            logger.error(
+                "[System][ALARM][GoBD] DB-Restore ohne Auditnachweis "
+                "blockiert (HTTP 503): %s", detail,
+            )
+            raise HTTPException(status_code=503, detail=detail)
         return {"status": "success", **result}
+    except HTTPException:
+        raise
     except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

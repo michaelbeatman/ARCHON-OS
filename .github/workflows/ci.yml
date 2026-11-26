@@ -166,6 +166,122 @@ jobs:
       - name: Python Syntax Check (compileall)
         run: python -m compileall -q archon backend scripts tools utils core_dispatcher.py main.py
 
+      - name: SQLite busy_timeout SSOT (D03/M2 — HARTES GATE, Ratchet bis 2026-12-31)
+        # D03/M2: audit_busy_timeout_ssot()/CLI existierten, waren aber nicht
+        # in CI verdrahtet (= Theater nach §0). Dieser Schritt ist HART —
+        # KEIN continue-on-error. Bekannte Altlasten (Stand 2026-11-26)
+        # stehen im datierten Ratchet; JEDER neue Drift und jede Zunahme der
+        # Altlasten macht den Gate rot. Nach 2026-12-31: --allow-drift
+        # entfernen und die Literale auf DB_BUSY_TIMEOUT_S migrieren.
+        run: |
+          set -euo pipefail
+          cat > /tmp/archon_busy_timeout_allowlist.txt <<'ARCHON_BUSY_TIMEOUT_ALLOWLIST'
+          archon/routers/chat.py
+          archon/routers/hermes_ops.py
+          archon/routers/telemetry.py
+          backend/agent_eval_arena.py
+          backend/agent_router.py
+          backend/agent_scorecard_engine.py
+          backend/api_key_manager.py
+          backend/approval_policy_engine.py
+          backend/audit_log.py
+          backend/bandit_model_router.py
+          backend/client_approval_portal.py
+          backend/consensus_gate.py
+          backend/contract_manager.py
+          backend/core_memory_manager.py
+          backend/db_backup_manager.py
+          backend/dead_letter_queue.py
+          backend/deal_pipeline.py
+          backend/dry_run_simulator.py
+          backend/dunning_engine.py
+          backend/durable_checkpoint_manager.py
+          backend/egress_firewall.py
+          backend/email_draft_engine.py
+          backend/ephemeral_team_spawner.py
+          backend/eval_gates.py
+          backend/eval_regression_runner.py
+          backend/execution_receipt_ledger.py
+          backend/flightlog_backtester.py
+          backend/graceful_shutdown_coordinator.py
+          backend/handoff_desk.py
+          backend/human_feedback_engine.py
+          backend/hybrid_search_engine.py
+          backend/idempotency_guard.py
+          backend/knowledge_graph_store.py
+          backend/map_reduce_executor.py
+          backend/mcp_gateway.py
+          backend/memory_consolidator.py
+          backend/metrics_collector.py
+          backend/model_benchmarker.py
+          backend/notification_hub.py
+          backend/operations_api.py
+          backend/operations_calendar.py
+          backend/operations_projects.py
+          backend/otel_tracer.py
+          backend/precedent_log.py
+          backend/process_lock.py
+          backend/prompt_optimizer.py
+          backend/role_budget_engine.py
+          backend/self_evolving_tooling.py
+          backend/semantic_cache.py
+          backend/session_taint_guard.py
+          backend/skill_synthesizer.py
+          backend/sla_contract_enforcer.py
+          backend/speculative_hedger.py
+          backend/system_updater.py
+          backend/task_self_healer.py
+          backend/tenant_context.py
+          backend/time_tracking_invoice.py
+          backend/time_travel_debugger.py
+          backend/tool_permission_manager.py
+          backend/trajectory_budget.py
+          backend/treasury_engine.py
+          backend/war_room_simulator.py
+          backend/watchdog_radar_v2.py
+          backend/workflow_dag_runner.py
+          backend/workflow_scheduler.py
+          backend/workflow_templates.py
+          local_memory_bridge.py
+          oracle_news_radar.py
+          scripts/deploy_v036_and_backup.py
+          scripts/deploy_v038_and_backup.py
+          scripts/litestream_manager.py
+          scripts/migrate_tenant_dbs.py
+          tests/test_med2_e_services.py
+          tests/test_p2_shared_queue.py
+          ARCHON_BUSY_TIMEOUT_ALLOWLIST
+          mapfile -t ALLOW < /tmp/archon_busy_timeout_allowlist.txt
+          args=()
+          for f in "${ALLOW[@]}"; do
+            args+=(--allow-drift "$f")
+          done
+          python -m backend.db_paths --audit-busy-timeout "${args[@]}" > busy_timeout_report.json
+          python - <<'PY'
+          import json
+          import sys
+
+          with open("busy_timeout_report.json", encoding="utf-8") as fh:
+              report = json.load(fh)
+          unexpected = report.get("unexpected") or []
+          if unexpected:
+              sys.exit(
+                  "Neuer busy_timeout-Drift ausserhalb des datierten Ratchets: "
+                  + repr(unexpected[:20])
+              )
+          known = len(report.get("offenders") or [])
+          BASELINE = 133  # Stand 2026-11-26
+          if known > BASELINE:
+              sys.exit(
+                  f"busy_timeout-Altlasten gewachsen: {known} > {BASELINE} "
+                  "(Ratchet verletzt)"
+              )
+          print(
+              f"busy_timeout-SSOT OK: {known} bekannte Altlasten, 0 neue "
+              "(Ratchet bis 2026-12-31)"
+          )
+          PY
+
       - name: YAML-Parse-Gate (yaml.safe_load)
         # F-070: harter Gate für alle Workflow-/Compose-YAMLs (kein `|| true`).
         run: |

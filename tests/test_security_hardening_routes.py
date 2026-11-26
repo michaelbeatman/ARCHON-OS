@@ -158,8 +158,10 @@ def test_upload_service_token_passes(client, upload_env):
 def vault_env(tmp_path, monkeypatch):
     """Vault-Wurzel in tmp_path und ein gefaktes HOME fuer ~/.hermes."""
     m = _app()
-    vault_dir = tmp_path / "vault"
-    vault_dir.mkdir()
+    from backend.tenant_context import tenant_context
+    # D03-H1: Vault-Ziele liegen jetzt unter <root>/<tenant>.
+    vault_dir = tmp_path / "vault" / str(tenant_context.get_active_tenant_id())
+    vault_dir.mkdir(parents=True)
     note = vault_dir / "notiz.md"
     note.write_text("inhalt", encoding="utf-8")
 
@@ -168,7 +170,7 @@ def vault_env(tmp_path, monkeypatch):
     config = fake_home / ".hermes" / "config.yaml"
     config.write_text("secret_paths: []\n", encoding="utf-8")
 
-    monkeypatch.setattr(m, "OBSIDIAN_VAULT_DIR", str(vault_dir))
+    monkeypatch.setattr(m, "OBSIDIAN_VAULT_DIR", str(tmp_path / "vault"))
     monkeypatch.setenv("HOME", str(fake_home))
     return {"vault_dir": vault_dir, "note": note, "config": config}
 

@@ -16,22 +16,23 @@ backend.core_memory_manager (kein Import, um dessen DB-Init beim Import zu verme
 """
 
 from __future__ import annotations
-import logging
-_archon_exc_logger = logging.getLogger("offline_memory_vault")
 
-from contextlib import contextmanager
 import hashlib
 import hmac
 import json
+import logging
 import math
 import os
 import re
 import secrets
 import sqlite3
 import time
+from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+_archon_exc_logger = logging.getLogger("offline_memory_vault")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "compartment_vault.db")
@@ -46,14 +47,26 @@ SCOPE_PROJECT = "project"
 SCOPE_GLOBAL = "global"
 VALID_MEMORY_SCOPES = (SCOPE_PRIVATE, SCOPE_SHARED, SCOPE_PROJECT, SCOPE_GLOBAL)
 
+# D03/L1 (W1-D): "default" ist eine gueltige Primaermandanten-ID
+# (tenant_context.PRIMARY_TENANT_IDS) und wird hier bewusst zugelassen. Die
+# Isolation bleibt erhalten: eigene Vault-DB, eigener Key und eigenes AAD
+# ("default|<namespace>") — kein gemeinsamer Vault, kein Fallback auf einen
+# fremden Mandanten. Nur echte Platzhalter werden fail-closed abgelehnt.
+try:
+    from backend.tenant_context import PRIMARY_TENANT_IDS as _PRIMARY_TENANT_IDS
+except Exception:  # pragma: no cover - Modul wird standalone importiert
+    _PRIMARY_TENANT_IDS = frozenset({"archon-systems", "default"})
+_INVALID_TENANT_IDS = frozenset({"", "none", "null", "undefined"})
+
 
 def _active_tenant_id() -> str:
     """Aktiver Mandant aus dem Request-Kontext — strikt fail-closed (D03/MED).
 
     Vorher fiel jeder Resolverfehler auf "default" zurueck: Memories eines
     fremden Mandanten landeten in der Default-Tenant-DB unter AAD
-    ``default|...`` (Cross-Tenant-Kontamination, still). Jetzt wird ohne
-    gueltigen Kontext hart abgebrochen; "default" ist kein zulaessiger Wert.
+    ``default|...`` (Cross-Tenant-Kontamination, still). Ein Resolverfehler
+    bricht weiterhin hart ab. D03/L1: "default" ist jedoch eine gueltige
+    Primaermandanten-ID und darf mit eigener Isolation verwendet werden.
     """
     try:
         from backend.tenant_context import tenant_context
@@ -63,9 +76,14 @@ def _active_tenant_id() -> str:
             f"[offline_memory_vault] Kein gueltiger Tenant-Kontext verfuegbar — "
             f"Vault-Zugriff abgebrochen: {exc}"
         ) from exc
-    if not tenant or tenant.lower() in ("default", "none", "null"):
+    normalized = tenant.lower()
+    # D03/L1: Primaermandanten (inkl. "default") sind explizit erlaubt —
+    # weiterhin mit eigenem Key/AAD, also ohne gemeinsamen Vault-Zugriff.
+    if normalized in {str(t).lower() for t in _PRIMARY_TENANT_IDS}:
+        return tenant
+    if not tenant or normalized in _INVALID_TENANT_IDS:
         raise RuntimeError(
-            "[offline_memory_vault] Tenant-Kontext leer oder 'default' — "
+            "[offline_memory_vault] Tenant-Kontext leer oder Platzhalter — "
             "Vault-Zugriff ohne explizite tenant_id abgebrochen."
         )
     return tenant
@@ -187,7 +205,9 @@ def load_or_create_vault_key(
     env_hex = (os.environ.get("COMPARTMENT_VAULT_KEY") or "").strip()
     if env_hex:
         tid = str(tenant_id or "").strip()
-        if not tid or tid.lower() in ("default", "none", "null"):
+        # D03/L1: "default" ist ein zulaessiger Primaermandant und erhaelt
+        # HMAC-SHA256(master, "default") als eigenen Key — kein globaler Key.
+        if not tid or tid.lower() in _INVALID_TENANT_IDS:
             raise RuntimeError(
                 "[offline_memory_vault] COMPARTMENT_VAULT_KEY erfordert eine "
                 "explizite tenant_id — kein globaler Vault-Key."

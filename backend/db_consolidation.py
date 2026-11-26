@@ -32,7 +32,9 @@ import sqlite3
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from backend.db_paths import (  # F-013/F015: SSOT busy_timeout
-    APP_DATA_DIR, DB_BUSY_TIMEOUT_MS, DB_BUSY_TIMEOUT_S,
+    APP_DATA_DIR,
+    DB_BUSY_TIMEOUT_MS,
+    DB_BUSY_TIMEOUT_S,
 )
 
 logger = logging.getLogger("archon.db_consolidation")
@@ -511,8 +513,27 @@ def run_consolidation(
     dry_run: bool = False,
     create_backup: bool = True,
     activate: bool = False,
+    deactivate: bool = False,
+    confirm_deactivate: bool = False,
 ) -> Dict[str, Any]:
-    """Fuehrt die Konsolidierung aller Legacy-DBs in ops.db, business.db und memory.db aus."""
+    """Fuehrt die Konsolidierung aller Legacy-DBs in ops.db, business.db und memory.db aus.
+
+    D03-H3: Das Manifest ist ein *Zustand*, kein Migrations-Log. Ein normaler
+    ``--migrate`` (``activate=False, deactivate=False``) aendert ihn nicht —
+    ein bestehendes ``active=true`` bleibt byte-identisch erhalten. Nur die
+    expliziten Flags ``--activate``/``--deactivate`` schreiben das Manifest;
+    ``--deactivate`` zusaetzlich nur mit Bestaetigung, Audit und Backup des
+    alten Manifests.
+    """
+    # Validierung VOR jeder migration (kein Teilstand bei abgelehntem Flag).
+    if activate and deactivate:
+        raise ValueError("--activate und --deactivate schliessen sich aus.")
+    if deactivate and not confirm_deactivate:
+        raise ValueError(
+            "--deactivate erfordert explizite Bestaetigung "
+            "(confirm_deactivate=True)."
+        )
+
     plan = plan_consolidation(source_dirs=source_dirs, target_dir=target_dir)
     if dry_run:
         return {"status": "dry_run", **plan}
@@ -769,22 +790,86 @@ def run_consolidation(
         )
 
     shutil.rmtree(rollback_dir, ignore_errors=True)
-    manifest_data = {
-        "active": bool(activate),
-        "version": 1,
-        "migrated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "backup_dir": backup_dir,
-        "domains": {d: migration_report[d]["path"] for d in CONSOLIDATED_DOMAINS},
-        "domain_map": CONSOLIDATION_DOMAIN_MAP,
-    }
-    manifest_path = get_manifest_path(tgt_dir)
-    tmp_manifest = f"{manifest_path}.tmp.{os.getpid()}"
-    with open(tmp_manifest, "w", encoding="utf-8") as fh:
-        json.dump(manifest_data, fh, indent=2, ensure_ascii=False)
-    os.replace(tmp_manifest, manifest_path)
 
-    # Cache in db_paths leeren, falls Konsolidierung aktiviert wurde
-    if activate:
+    # D03-H3: Manifest NUR bei expliziter, tatsaechlicher Zustandsaenderung
+    # schreiben. `--migrate` ohne Flags laesst ein bestehendes active=true
+    # unberuehrt (byte-identisch) — frueher wurde es still auf false gesetzt
+    # und die 28->3-Konsolidierung damit deaktiviert.
+    manifest_path = get_manifest_path(tgt_dir)
+    existing_active = _manifest_active(manifest_path)
+    requested_active = True if activate else (False if deactivate else None)
+    manifest_state_changed = (
+        requested_active is not None and requested_active != existing_active
+    )
+    manifest_written = False
+    manifest_backup_path: Optional[str] = None
+    audit_event_id: Optional[str] = None
+
+    if manifest_state_changed:
+        # D03-H3: Backup des ALTEN Manifests vor jeder Deaktivierung. Der
+        # fruehere Zustand muss wiederherstellbar bleiben (GoBD/Revisionssicherheit).
+        if deactivate and os.path.isfile(manifest_path):
+            manifest_backup_path = f"{manifest_path}.pre_deactivate.{ts}.bak"
+            with open(manifest_path, "rb") as old_fh:
+                old_bytes = old_fh.read()
+            tmp_backup = f"{manifest_backup_path}.tmp.{os.getpid()}"
+            with open(tmp_backup, "wb") as bak_fh:
+                bak_fh.write(old_bytes)
+                bak_fh.flush()
+                os.fsync(bak_fh.fileno())
+            os.replace(tmp_backup, manifest_backup_path)
+
+        audit_payload = {
+            "manifest_path": os.path.abspath(manifest_path),
+            "previous_active": existing_active,
+            "requested_active": requested_active,
+            "action": "activate" if activate else "deactivate",
+            "manifest_backup": manifest_backup_path,
+            "migrated_domains": list(CONSOLIDATED_DOMAINS),
+        }
+        try:
+            from backend.audit_log import chained_audit_log
+
+            audit_event = chained_audit_log.record_event(
+                category="db_consolidation",
+                action=(
+                    "consolidation_activated" if activate
+                    else "consolidation_deactivated"
+                ),
+                agent_id="system",
+                payload=audit_payload,
+            )
+            audit_event_id = audit_event.get("event_id")
+        except Exception as exc:
+            logger.error(
+                "[DBConsolidation][ALARM] Audit der Manifest-Zustaenderung "
+                "fehlgeschlagen: %s", exc,
+            )
+            # Deaktivierung ist destruktiv: ohne Auditnachweis KEIN Schreiben.
+            if deactivate:
+                raise RuntimeError(
+                    "Deaktivierung der Konsolidierung verweigert: "
+                    f"Auditnachweis fehlt ({exc})."
+                ) from exc
+
+        manifest_data = {
+            "active": bool(requested_active),
+            "version": 1,
+            "migrated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "backup_dir": backup_dir,
+            "domains": {d: migration_report[d]["path"] for d in CONSOLIDATED_DOMAINS},
+            "domain_map": CONSOLIDATION_DOMAIN_MAP,
+        }
+        tmp_manifest = f"{manifest_path}.tmp.{os.getpid()}"
+        with open(tmp_manifest, "w", encoding="utf-8") as fh:
+            json.dump(manifest_data, fh, indent=2, ensure_ascii=False)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_manifest, manifest_path)
+        manifest_written = True
+
+    # Cache in db_paths leeren, sobald sich der konsolidierte Zustand geaendert hat.
+    if manifest_state_changed:
         try:
             from backend import db_paths
             db_paths._RESOLVED_DB_CACHE.clear()
@@ -794,6 +879,12 @@ def run_consolidation(
     return {
         "status": "success",
         "activated": bool(activate),
+        "deactivated": bool(deactivate),
+        "manifest_written": manifest_written,
+        "manifest_state_changed": manifest_state_changed,
+        "manifest_active": bool(requested_active) if manifest_written else existing_active,
+        "manifest_backup_path": manifest_backup_path,
+        "audit_event_id": audit_event_id,
         "backup_dir": backup_dir,
         "manifest_path": manifest_path,
         "report": migration_report,
@@ -805,13 +896,28 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Archon OS SQLite DB-Konsolidierung (28 -> 3)")
     parser.add_argument("--plan", action="store_true", help="Nur Dry-Run-Plan anzeigen")
-    parser.add_argument("--migrate", action="store_true", help="Migration ausfuehren")
+    parser.add_argument("--migrate", action="store_true", help="Migration ausfuehren (Manifest-Zustand bleibt unberuehrt)")
     parser.add_argument("--activate", action="store_true", help="Konsolidierte 3-DB-Aufloesung aktivieren")
+    parser.add_argument(
+        "--deactivate", action="store_true",
+        help="Konsolidierung deaktivieren (nur mit --confirm-deactivate; Audit + Manifest-Backup)",
+    )
+    parser.add_argument(
+        "--confirm-deactivate", action="store_true",
+        help="Bestaetigung fuer --deactivate",
+    )
     parser.add_argument("--target-dir", default=DEFAULT_DATA_DIR, help="Zielverzeichnis fuer ops/business/memory.db")
     args = parser.parse_args()
 
-    if args.migrate:
-        res = run_consolidation(target_dir=args.target_dir, dry_run=False, create_backup=True, activate=args.activate)
+    if args.migrate or args.activate or args.deactivate:
+        res = run_consolidation(
+            target_dir=args.target_dir,
+            dry_run=False,
+            create_backup=True,
+            activate=args.activate,
+            deactivate=args.deactivate,
+            confirm_deactivate=args.confirm_deactivate,
+        )
     else:
         res = plan_consolidation(target_dir=args.target_dir)
     print(json.dumps(res, indent=2, ensure_ascii=False))

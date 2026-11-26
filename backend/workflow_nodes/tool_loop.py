@@ -117,15 +117,28 @@ async def run_tool_loop(
             _ckpt_db = node.get("_dag_db_path")
             if _ckpt_rid and node.get("id"):
                 try:
-                    with connect(_ckpt_db) as conn:
+                    # D03/H2: das Ledger hat PK (tenant_id, run_id, node_id) — der
+                    # Checkpoint-Schreiber muss denselben Mandanten verwenden und
+                    # tenant_id explizit mitgeben ( sonst NOT NULL / falscher
+                    # ON-CONFLICT-Target ).
+                    _ckpt_tid = str(node.get("_dag_tenant_id") or "").strip()
+                    if not _ckpt_tid:
+                        from backend.tenant_context import sanitize_tenant_id, tenant_context
+                        _ckpt_tid = sanitize_tenant_id(tenant_context.get_active_tenant_id())
+                    try:
+                        _conn_ctx = connect(_ckpt_db, tenant_id=_ckpt_tid)
+                    except TypeError:
+                        _conn_ctx = connect(_ckpt_db)
+                    with _conn_ctx as conn:
                         conn.execute(
                             """
-                            INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
-                            VALUES (?, ?, ?, 'running', ?, ?)
-                            ON CONFLICT(run_id, node_id) DO UPDATE SET
+                            INSERT INTO workflow_node_states (tenant_id, run_id, node_id, fingerprint, status, output_json, updated_at)
+                            VALUES (?, ?, ?, ?, 'running', ?, ?)
+                            ON CONFLICT(tenant_id, run_id, node_id) DO UPDATE SET
                                 status='running', output_json=excluded.output_json, updated_at=excluded.updated_at
                             """,
                             (
+                                _ckpt_tid,
                                 _ckpt_rid,
                                 str(node["id"]),
                                 "running_checkpoint",

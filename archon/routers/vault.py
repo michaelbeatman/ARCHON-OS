@@ -1,7 +1,3 @@
-from fastapi import Depends as _ArchonDepends
-
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
-
 """
 Obsidian Vault Router fuer Archon OS.
 Verwaltet /api/vault/ Endpunkte (Dateiliste, Lesen, Bearbeiten, Loeschen, Index).
@@ -13,11 +9,13 @@ import os
 import sys
 import tempfile
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi import Depends as _ArchonDepends
 
 from archon.core.runtime import OBSIDIAN_VAULT_DIR, logger
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 from archon.routers._rbac import require_admin_or_503
 from archon.routers._validated_body import PassthroughBody, as_payload
 from utils.path_jail import PathJailError, safe_path, safe_path_within
@@ -112,36 +110,64 @@ def _atomic_write_text(
         lock.release()
 
 
+def _checked_tenant_id(tid: Any) -> str:
+    """D03-H1: Mandanten-ID validieren, bevor sie Teil eines Vault-Pfads wird."""
+    if not isinstance(tid, str) or not tid.strip():
+        raise RuntimeError("Vault: aktiver Mandant ist leer — Vault-Zugriff verweigert.")
+    cleaned = tid.strip()
+    if cleaned in (".", "..") or "/" in cleaned or "\\" in cleaned or "\x00" in cleaned:
+        raise RuntimeError(f"Vault: ungueltige Mandanten-ID {tid!r} — Zugriff verweigert.")
+    return cleaned
+
+
 def _active_tenant_id() -> str:
+    """D03-H1: aktiver Mandant, fail-closed.
+
+    Frueher fiel ein Resolverfehler still auf ``"default"`` zurueck; damit landete
+    ein Mandant im Vault eines anderen bzw. im gemeinsamen Vault. Ein Fehler oder
+    eine leere/ungueltige ID ist jetzt ein harter Fehler ohne jeden Fallback.
+    """
     try:
         from backend.tenant_context import tenant_context
-        return tenant_context.get_active_tenant_id() or "default"
-    except Exception:
-        return "default"
+        tid = tenant_context.get_active_tenant_id()
+    except Exception as exc:
+        raise RuntimeError(f"Vault: aktiver Mandant nicht aufloesbar: {exc}") from exc
+    return _checked_tenant_id(tid)
 
 
-def _get_vault_dir() -> str:
+def _get_vault_dir(tenant_id: Optional[str] = None) -> str:
     """Einzige, tenant-bewusste Vault-Wurzel für ALLE Vault-Endpunkte.
 
-    G (dieses Audits): vorher war nur die Liste tenant-aware (nur als
-    Cache-Key), Lese-/Schreib-/Löschpfade nutzten stets die globale Wurzel.
-    Fail-closed: existiert <vault_root>/<tenant_id>, wird ausschliesslich
-    dieser Mandantenordner verwendet. Andernfalls gilt der bewusst geteilte
-    Vault; dann werden Mutationen zwingend auditiert (_audit_vault_mutation).
+    D03-H1: immer ``<vault_root>/<tenant_id>``. Auch die Primärmandanten
+    (``default``, ``archon-systems``) erhalten ihren eigenen Ordner; die globale
+    Wurzel wird nie als Vault-Ziel zurueckgegeben. Ein Resolverfehler ist ein
+    harter Fehler, kein stiller Fallback auf ``default``.
     """
     main_mod = sys.modules.get("main")
     if main_mod and hasattr(main_mod, "OBSIDIAN_VAULT_DIR"):
         root = getattr(main_mod, "OBSIDIAN_VAULT_DIR")
     else:
         root = OBSIDIAN_VAULT_DIR
-    tid = _active_tenant_id()
+    tid = _checked_tenant_id(tenant_id if tenant_id is not None else _active_tenant_id())
     tenant_dir = os.path.join(root, tid)
-    if tid not in ("default", "archon-systems"):
-        os.makedirs(tenant_dir, exist_ok=True)
-        return tenant_dir
-    if os.path.isdir(tenant_dir):
-        return tenant_dir
-    return root
+    os.makedirs(tenant_dir, exist_ok=True)
+    return tenant_dir
+
+
+def _tenant_vault_context() -> tuple[str, str]:
+    """D03-H1: (Mandant, Vault-Pfad) fuer Endpunkte; Resolverfehler => HTTP 500.
+
+    Der Resolver wird VOR jeder Cache-Pruefung aufgerufen, damit ein zwischenzeitlich
+    fehlgeschlagener Resolver nicht aus dem Cache heraus trotzdem Vault-Daten liefert.
+    """
+    try:
+        tid = _active_tenant_id()
+        return tid, _get_vault_dir(tid)
+    except (RuntimeError, OSError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Vault-Mandant nicht aufloesbar — Zugriff verweigert: {exc}",
+        ) from exc
 
 
 def _audit_vault_mutation(action: str, path: str, tenant_id: str) -> None:
@@ -153,7 +179,7 @@ def _audit_vault_mutation(action: str, path: str, tenant_id: str) -> None:
         agent_id=tenant_id,
         payload={
             "tenant_id": tenant_id,
-            "vault_root": _get_vault_dir(),
+            "vault_root": _get_vault_dir(tenant_id),
             "path": path,
         },
     )
@@ -169,16 +195,17 @@ def _get_vault_cache() -> Dict[str, Any]:
 @router.get("/api/vault/files")
 def api_get_vault_files(request: Request):
     require_admin_or_503(request)
+    # D03-H1: Resolver zuerst — kein gecachter Treffer bei fehlgeschlagener
+    # Mandantenauflösung, kein Zugriff auf die globale Vault-Wurzel.
+    _tenant_id, vault_dir = _tenant_vault_context()
     cache = _get_vault_cache()
     now = time.time()
-    _tenant_id = _active_tenant_id()
     if (
         cache.get("tenant") == _tenant_id
         and cache.get("data")
         and (now - cache.get("ts", 0.0)) < 300.0
     ):
         return cache["data"]
-    vault_dir = _get_vault_dir()
     if not os.path.exists(vault_dir):
         return []
     files = []
@@ -213,7 +240,7 @@ def api_get_vault_list(request: Request):
 def api_read_vault_file_direct(path: str = Query(...), request: Request = None):  # type: ignore[assignment]
     if request is not None:
         require_admin_or_503(request)
-    vault_dir = _get_vault_dir()
+    _tid, vault_dir = _tenant_vault_context()
     try:
         real_path = safe_path_within(
             path, [vault_dir], must_exist=True, allow_dirs=False,
@@ -234,7 +261,7 @@ def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body
     content = data.get("content", "")
     if not path:
         raise HTTPException(status_code=400, detail="Pfad fehlt.")
-    vault_dir = _get_vault_dir()
+    _tid, vault_dir = _tenant_vault_context()
     try:
         real_path = safe_path_within(
             path, [vault_dir], allow_write=True, allow_dirs=False,
@@ -271,7 +298,7 @@ def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body
             pass
     # G: Audit vor der Mutation; ohne Auditnachweis wird abgelehnt.
     try:
-        _audit_vault_mutation("vault_file_edited", real_path, _active_tenant_id())
+        _audit_vault_mutation("vault_file_edited", real_path, _tid)
     except Exception as exc:
         logger.warning("[Vault] Audit fehlgeschlagen, Edit abgelehnt: %s", exc)
         raise HTTPException(status_code=500, detail="Audit-Log nicht verfügbar — Vault-Aenderung abgelehnt.")
@@ -290,7 +317,7 @@ def api_edit_vault_file_direct(request: Request, payload: PassthroughBody = Body
 @router.delete("/api/vault")
 def api_delete_vault_file_direct(request: Request, path: str = Query(...)):
     require_admin_or_503(request)
-    vault_dir = _get_vault_dir()
+    _tid, vault_dir = _tenant_vault_context()
     try:
         real_path = safe_path(path, must_exist=True, allow_write=True, allow_dirs=False,
                               extra_roots=[vault_dir])
@@ -306,7 +333,7 @@ def api_delete_vault_file_direct(request: Request, path: str = Query(...)):
         raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
     # G: Audit vor der Mutation; ohne Auditnachweis wird abgelehnt.
     try:
-        _audit_vault_mutation("vault_file_deleted", real_path, _active_tenant_id())
+        _audit_vault_mutation("vault_file_deleted", real_path, _tid)
     except Exception as exc:
         logger.warning("[Vault] Audit fehlgeschlagen, Delete abgelehnt: %s", exc)
         raise HTTPException(status_code=500, detail="Audit-Log nicht verfügbar — Vault-Löschung abgelehnt.")

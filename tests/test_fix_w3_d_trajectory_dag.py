@@ -51,7 +51,10 @@ def test_no_runtime_widener_left_in_dag_source():
     assert "AND max_hops < ?" not in src, "Der 50er-Expand-Pfad muss ersatzlos entfernt sein."
     assert "max_hops=(_max_hops_cfg or None)" in src
     assert "min(50" in src  # Rueckwaertskompatibler Parser-Guard (stale source test)
-    assert "asyncio.to_thread(_persist_run_cancelled_sync" in src
+    # D03/H2: der Aufruf ist mehrzeilig (tenant_id als Keyword) — regex statt
+    # starrer String-Gleichheit, damit der Nachweis robust bleibt.
+    import re
+    assert re.search(r"asyncio\.to_thread\(\s*_persist_run_cancelled_sync", src)
     assert "_finalize_run_sync, db_path, rid, wf_id" in src
     assert "_persist_node_state_sync, db_path, rid, nid" in src
 

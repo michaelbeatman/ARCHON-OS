@@ -1135,26 +1135,61 @@ async def _finalize_synthesis_after_approval(
             _fan_ordner = ""
         final_obs_path = (os.path.join(PROJEKTE_DIR, _fan_ordner, "03_Endprodukte", final_name)
                           if _fan_ordner else os.path.join(PROJEKTE_DIR, final_name))
+        # D03-M1: derselbe atomare, verifizierte Writer wie im Entwurfspfad
+        # (_run_synthesis_cascade, Z. ~1762-1769): commonpath-Jail, Temp im
+        # selben Verzeichnis, fsync, os.replace, size>0 und SHA-256 gegen den
+        # erwarteten Inhalt. Teilfehler werden gesammelt und fuehren zum Block.
+        import hashlib
+
+        final_sha256 = hashlib.sha256(final_body.encode("utf-8")).hexdigest()
         written = False
+        final_write_errors: List[str] = []
         for d in target_dirs:
+            d_ziel = ""
+            tmp_p = ""
             try:
                 d_ziel = os.path.join(d, _fan_ordner, "03_Endprodukte") if _fan_ordner else d
-                os.makedirs(d_ziel, exist_ok=True)
                 p = os.path.join(d_ziel, final_name)
-                with open(p, "w", encoding="utf-8") as f:
+                if os.path.commonpath([os.path.abspath(p), os.path.abspath(d_ziel)]) != os.path.abspath(d_ziel):
+                    raise ValueError(f"Ziel ausserhalb des erlaubten Verzeichnisses: {p}")
+                os.makedirs(d_ziel, exist_ok=True)
+                tmp_p = os.path.join(d_ziel, f".{final_name}.tmp_{os.getpid()}_{int(time.time() * 1000)}")
+                # newline="" verhindert auf Windows die CRLF-Uebersetzung, sonst
+                # weicht die Datei (und ihr SHA-256) vom erwarteten Inhalt ab.
+                with open(tmp_p, "w", encoding="utf-8", newline="") as f:
                     f.write(final_body)
-                # F-040: nur eine tatsaechlich vorhandene, nicht leere Datei
-                # berechtigt zum Erfolgsstatus.
-                if os.path.isfile(p) and os.path.getsize(p) > 0:
-                    final_obs_path = p
-                    written = True
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_p, p)
+                tmp_p = ""
+                if not (os.path.isfile(p) and os.path.getsize(p) > 0):
+                    raise IOError(f"Atomare Verifikation fehlgeschlagen (leer/fehlt): {p}")
+                with open(p, "rb") as fh:
+                    if hashlib.sha256(fh.read()).hexdigest() != final_sha256:
+                        raise IOError(f"SHA-256-Verifikation fehlgeschlagen: {p}")
+                written = True
+                final_obs_path = p
             except Exception as we:
-                logger.warning(f"[Synthese] Konnte finalen Bericht nicht nach {d} schreiben: {we}")
+                final_write_errors.append(f"{d}: {we}")
+                logger.error(
+                    "[Synthese] Atomares Schreiben des Finalberichts nach %s fehlgeschlagen: %s",
+                    d, we,
+                )
+            finally:
+                if tmp_p:
+                    try:
+                        os.unlink(tmp_p)
+                    except OSError:
+                        pass
 
-        if not written:
+        # D03-M1: JEDER Ziel-Fehler blockiert, auch bei mindestens einem Erfolg.
+        if not written or final_write_errors:
             # F-040: fehlgeschlagene Verifikation darf NIE `completed`+"finalisiert"
             # ergeben. Stattdessen terminal blockieren und eskalieren.
-            reason = "Synthese-Artefakt konnte in keinem Zielverzeichnis abgelegt werden"
+            reason = (
+                "Synthese-Artefakt konnte nicht atomar in allen Zielverzeichnissen abgelegt werden"
+                + (f": {'; '.join(final_write_errors)}" if final_write_errors else "")
+            )
             logger.error(f"[Synthese] {reason} (parent={parent_pid})")
             parent_task["status"] = "blocked"
             parent_task["phase"] = "blocked"

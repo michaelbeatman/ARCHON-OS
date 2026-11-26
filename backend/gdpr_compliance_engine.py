@@ -6,17 +6,20 @@ Implementiert Betroffenenrechte nach:
 - Art. 17 DSGVO: Recht auf Löschung / Recht auf Vergessenwerden (Audit-sichere Anonymisierung/Löschung)
 - Art. 30 DSGVO: Manipulationssicheres Verzeichnis von Verarbeitungstätigkeiten & Löschquittungen
 """
-import logging
-
-_archon_exc_logger = logging.getLogger("gdpr_compliance_engine")
-
+import datetime
 import glob
+import hashlib
 import json
+import logging
 import os
 import re
 import sqlite3
 import sys
-import time
+import urllib.parse
+import urllib.request
+from typing import Any, Dict, List, Optional, Tuple
+
+_archon_exc_logger = logging.getLogger("gdpr_compliance_engine")
 
 
 class _ArchonClosingConn(sqlite3.Connection):
@@ -28,11 +31,6 @@ class _ArchonClosingConn(sqlite3.Connection):
             super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
-import datetime
-import hashlib
-import urllib.parse
-import urllib.request
-from typing import Any, Dict, List, Optional, Tuple
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # D03/HIGH: APP_DATA_DIR aus db_paths ist die kanonische Datenwurzel
@@ -113,8 +111,35 @@ def _pocketbase_db_files() -> List[str]:
     )
 
 
+def _db_copy_kind(name: str) -> Optional[str]:
+    """D03/M3 (W1-D): Klassifiziert DB-Dateien fuer die gemeinsame SSOT-Liste.
+
+    Erlaubt: ``<basis>.db``, ``<basis>.db.bak``, ``<basis>.db.before_<tag>``,
+    ``<basis>.db-wal``, ``<basis>.db-shm``. Alles andere (``.db-journal``,
+    ``.db.json``, ``*.json.bak``, …) wird bewusst abgelehnt, damit Art.15/17
+    keine Fremddateien als SQLite oeffnet.
+
+    ``-wal``/``-shm`` sind keine eigenen SQLite-Datenbanken; sie werden in
+    Art.15/17 ueber ihre Basis-DB mitbehandelt (WAL-Checkpoint).
+    """
+    low = name.lower()
+    if low.endswith("-wal") or low.endswith("-shm"):
+        return "sidecar" if ".db" in low else None
+    if low.endswith(".bak") or ".before_" in low:
+        return "db" if ".db" in low else None
+    if low.endswith(".db"):
+        return "db"
+    return None
+
+
 def _tenant_roots() -> List[str]:
-    """D03/HIGH: kanonischer Tenant-Root + Workspace-Legacy-Zweig."""
+    """D03/HIGH + D03/M3: kanonischer Tenant-Root + Workspace-Legacy-Zweig
+    + ehemalige Root-DB-Verzeichnisse (``_legacy_root_dbs_*``).
+
+    Die Datenwurzel selbst ist keine "Tenant-Wurzel"; Root-Alt-Kopien
+    (``ops.db.before_*``) werden in ``_tenant_db_files()`` ueber das Eltern-
+    verzeichnis dieser Wurzeln erfasst.
+    """
     # Dynamisch lesen, damit monkeypatch/ARCHON_DATA_DIR zur Laufzeit wirkt.
     try:
         from backend.db_paths import APP_DATA_DIR as canonical
@@ -124,25 +149,70 @@ def _tenant_roots() -> List[str]:
     # Workspace-Pfad zur Laufzeit ersetzen (Legacy-Zweig darf nicht hart am
     # Import-Zeitpunkt haengen).
     workspace = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    roots = [os.path.join(canonical, "tenants")]
-    legacy = os.path.join(workspace, "data", "tenants")
-    if os.path.abspath(legacy) != os.path.abspath(roots[0]):
-        roots.append(legacy)
+    data_roots = [os.path.abspath(canonical)]
+    legacy_data = os.path.abspath(os.path.join(workspace, "data"))
+    if legacy_data not in data_roots:
+        data_roots.append(legacy_data)
+
+    roots: List[str] = []
+    for data_root in data_roots:
+        tenant_root = os.path.abspath(os.path.join(data_root, "tenants"))
+        if tenant_root not in roots:
+            roots.append(tenant_root)
+        # D03/M3: ehemalige Root-DBs liegen unter _legacy_root_dbs_<ts>/ direkt
+        # im Datenroot — als weitere, gleichberechtigte Wurzel aufnehmen.
+        for legacy_dir in sorted(glob.glob(os.path.join(data_root, "_legacy_root_dbs_*"))):
+            abs_legacy = os.path.abspath(legacy_dir)
+            if os.path.isdir(abs_legacy) and abs_legacy not in roots:
+                roots.append(abs_legacy)
     return roots
 
 
 def _tenant_db_files() -> List[str]:
-    """Alle physisch vorhandenen Mandanten-DBs — unter jeder bekannten Wurzel."""
+    """D03/M3 (W1-D): gemeinsame SSOT-Liste aller physisch vorhandenen
+    DB-Dateien — inklusive Alt-Kopien und WAL/SHM-Sidecars.
+
+    Vorher glomm diese Funktion nur ``root/*/*.db`` und uebersah damit
+    ``*.db.bak``, ``ops.db.before_*`` sowie die Legacy-Wurzeln. Eine Art.17-
+    Quittung konnte Erfolg melden, während vollstaendige Kopien ungeschwaerzt
+    blieben. Alle Konsumenten (Art.15, Art.17, Backup, Restore-Test) muessen
+    sich auf diese Liste stuetzen.
+    """
     seen: set = set()
     found: List[str] = []
-    for root in _tenant_roots():
-        for path in sorted(glob.glob(os.path.join(root, "*", "*.db"))):
-            full = os.path.abspath(path)
-            if full in seen or not os.path.isfile(full) or os.path.getsize(full) == 0:
-                continue
-            seen.add(full)
-            found.append(full)
+
+    def _add(path: str) -> None:
+        full = os.path.abspath(path)
+        if full in seen or not os.path.isfile(full) or os.path.getsize(full) == 0:
+            return
+        if _db_copy_kind(os.path.basename(full)) is None:
+            return
+        seen.add(full)
+        found.append(full)
+
+    roots = _tenant_roots()
+    for root in roots:
+        # Tenant-DBs eine Ebene tief + DBs direkt im Root (Legacy-Root-Verzeichnis).
+        for pattern in ("*.db*", os.path.join("*", "*.db*")):
+            for path in sorted(glob.glob(os.path.join(root, pattern))):
+                _add(path)
+    # D03/M3: Root-Alt-Kopien (ops.db.before_*) liegen direkt im Datenroot,
+    # ausserhalb der Tenant-Verzeichnisse. Live-DBs (*.db) werden hier bewusst
+    # nicht erneut gescannt — die erreicht Art.15/17 ueber resolve_db().
+    for parent in sorted({os.path.dirname(r) for r in roots}):
+        for pattern in ("*.db.bak", "*.db.before_*", "*.db-wal", "*.db-shm"):
+            for path in sorted(glob.glob(os.path.join(parent, pattern))):
+                _add(path)
     return found
+
+
+def _maskable_db_files() -> List[str]:
+    """D03/M3: aus der SSOT-Liste die als SQLite oeffnenden Ziele (ohne
+    ``-wal``/``-shm`` — deren Inhalt wird ueber die Basis-DB mitbehandelt)."""
+    return [
+        p for p in _tenant_db_files()
+        if _db_copy_kind(os.path.basename(p)) == "db"
+    ]
 
 
 def _tenant_resolution_errors() -> List[str]:
@@ -571,9 +641,14 @@ class GDPRComplianceEngine:
         # D03/HIGH: PocketBase-Bestand unabhaengig vom POCKETBASE_ENABLED-Flag
         # in Art.15/17 einbeziehen (die DBs liegen physisch im Repo und werden
         # auch gesichert — "deaktiviert" darf nicht "unloeschbar" bedeuten).
-        tenant_db_files += _pocketbase_db_files()
+        # D03/M3: SQL-Ziele aus der gemeinsamen SSOT-Liste; -wal/-shm sind
+        # keine DBs und werden ueber ihre Basis-DB (WAL-Checkpoint) behandelt.
+        mask_targets = [
+            p for p in tenant_db_files
+            if _db_copy_kind(os.path.basename(p)) == "db"
+        ] + _pocketbase_db_files()
         like_pat = f"%{term}%"
-        for tdb in tenant_db_files:
+        for tdb in mask_targets:
             tenant_name = os.path.basename(os.path.dirname(tdb))
             db_name = os.path.basename(tdb)
             try:
@@ -867,10 +942,16 @@ class GDPRComplianceEngine:
         results["tenant_db_files_scanned"] = len(tenant_db_files)
         results["tenant_roots"] = _tenant_roots()
         errors.extend(_tenant_resolution_errors())
+        # D03/M3: SQL-Ziele aus der gemeinsamen SSOT-Liste; -wal/-shm sind
+        # keine DBs und werden ueber ihre Basis-DB (WAL-Checkpoint) behandelt.
+        mask_targets = [
+            p for p in tenant_db_files
+            if _db_copy_kind(os.path.basename(p)) == "db"
+        ]
         # W1-B: die lossless Session-DAG liegt in memory.db/lcm_sessions.db —
         # sowohl pro Tenant als auch in der zentralen (konsolidierten) memory.db.
         dag_db_files = [
-            p for p in tenant_db_files
+            p for p in mask_targets
             if os.path.basename(p) in ("memory.db", "lcm_sessions.db")
         ]
         if os.path.isfile(self.memory_db) and self.memory_db not in dag_db_files:
@@ -878,9 +959,9 @@ class GDPRComplianceEngine:
         # D03/HIGH: PocketBase-Bestand unabhaengig vom POCKETBASE_ENABLED-Flag
         # in Art.15/17 einbeziehen (die DBs liegen physisch im Repo und werden
         # auch gesichert — "deaktiviert" darf nicht "unloeschbar" bedeuten).
-        tenant_db_files += _pocketbase_db_files()
+        mask_targets += _pocketbase_db_files()
         like_pat = f"%{term}%"
-        for tdb in tenant_db_files:
+        for tdb in mask_targets:
             try:
                 with self._get_conn(tdb, readonly=dry_run) as conn:
                     cur = conn.cursor()
@@ -971,6 +1052,18 @@ class GDPRComplianceEngine:
                                 cur.execute(upd_sql, vals + [rid])
                     if not dry_run:
                         conn.commit()
+                        # D03/M3: -wal/-shm-Sidecars sind keine SQL-Ziele. Ein
+                        # TRUNCATE-Checkpoint schreibt die (geschwaerzten)
+                        # Seiten zurueck in die DB und leert das WAL, damit
+                        # keine unmaskierte PII im Sidecar zurueckbleibt.
+                        try:
+                            mode = conn.execute("PRAGMA journal_mode;").fetchone()[0]
+                            if str(mode).lower() == "wal":
+                                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                        except sqlite3.Error as exc:
+                            errors.append(
+                                f"WAL-Checkpoint({os.path.basename(tdb)}): {exc}"
+                            )
             except Exception as e:
                 print(f"[GDPR] Fehler bei Tenant-DB {os.path.basename(tdb)}: {e}", file=sys.stderr)
                 errors.append(f"Tenant({os.path.basename(tdb)}): {e}")
@@ -1300,7 +1393,6 @@ def _verify_gdpr_audit_chain_raw(db_path: Optional[str] = None) -> Dict[str, Any
     wie der Vorgaenger signiert wurde — der Uebergang ist daher bruchfrei.
     """
     from backend.audit_log import HMAC_PREFIX, _hmac_epochs, _verify_hash
-
     from backend.db_paths import DB_BUSY_TIMEOUT_S
     conn = sqlite3.connect(db_path or _resolve_db("agentic_memory.db"), timeout=DB_BUSY_TIMEOUT_S)
     conn.row_factory = sqlite3.Row

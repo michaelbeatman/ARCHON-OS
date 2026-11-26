@@ -17,6 +17,7 @@ Unterstuetzt:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import datetime
 import hashlib
 import json
@@ -30,6 +31,9 @@ import threading
 import time
 from contextlib import contextmanager
 from typing import Any, Awaitable, Callable, Dict, Iterator, List, Optional, Tuple
+
+# D03/H2: SQLite-SSOT fuer busy_timeout (frueher lokales timeout=10.0 = Drift).
+from backend.db_paths import DB_BUSY_TIMEOUT_MS, DB_BUSY_TIMEOUT_S
 
 # D16/M4: zentrale Fehler-Zaehlung ueber die echte API in trace_context
 # (delegiert an tracer.note_local_trace_error). Kein lokaler Fallback mehr.
@@ -97,17 +101,24 @@ def _recovery_audit(action: str, payload: Dict[str, Any]) -> None:
         note_local_trace_error(f"DAG-Audit {action} fehlgeschlagen", exc)
 
 
-def _persist_run_cancelled_sync(db_path: Optional[str], rid: str) -> Dict[str, Any]:
+def _persist_run_cancelled_sync(
+    db_path: Optional[str], rid: str, tenant_id: Optional[str] = None
+) -> Dict[str, Any]:
     """Cancelled-Pfad: Status 'cancelled' atomar persistieren (sync, to_thread)."""
     updated = False
     try:
-        with _connect(db_path) as conn:
+        with _connect(db_path, tenant_id=tenant_id) as conn:
             cur = conn.execute(
-                "UPDATE workflow_runs SET status = 'cancelled', updated_at = ? WHERE run_id = ?",
-                (time.time(), rid),
+                "UPDATE workflow_runs SET status = 'cancelled', updated_at = ? "
+                "WHERE tenant_id = ? AND run_id = ?",
+                (time.time(), _ledger_tenant(), rid),
             )
             updated = int(cur.rowcount or 0) > 0
             conn.commit()
+    except RuntimeError:
+        # D03/H2: Tenant-/Pfad-Auflösung ist fail-closed — kein Error-Dict,
+        # kein stilles Weitermachen mit fremdem Kontext.
+        raise
     except Exception as exc:
         return {"updated": False, "error": f"{type(exc).__name__}: {exc}"}
     return {"updated": updated, "error": "" if updated else "run_row_not_found"}
@@ -115,15 +126,17 @@ def _persist_run_cancelled_sync(db_path: Optional[str], rid: str) -> Dict[str, A
 
 def _persist_run_status_sync(
     db_path: Optional[str], rid: str, wf_id: str, status: str,
-    dag_json_text: str, now: float,
+    dag_json_text: str, now: float, tenant_id: Optional[str] = None,
 ) -> None:
     """Einheitlicher Terminal-/Zwischenstatus-Schreibblock (sync, to_thread)."""
-    with _connect(db_path) as conn:
+    with _connect(db_path, tenant_id=tenant_id) as conn:
         conn.execute(
-            "INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(run_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at",
-            (rid, wf_id, status, dag_json_text, now, now),
+            "INSERT INTO workflow_runs "
+            "(tenant_id, run_id, workflow_id, status, dag_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(tenant_id, run_id) DO UPDATE SET "
+            "status = excluded.status, updated_at = excluded.updated_at",
+            (_ledger_tenant(), rid, wf_id, status, dag_json_text, now, now),
         )
         conn.commit()
 
@@ -131,18 +144,22 @@ def _persist_run_status_sync(
 def _load_run_gate_state_sync(
     db_path: Optional[str], rid: str, wf_id: str,
     gate_approvals: Optional[Dict[str, bool]],
-    now: float, dag_json_text: str,
+    now: float, dag_json_text: str, tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Gate-Freigaben lesen + Run auf 'running' setzen + Node-Cache lesen.
 
     Ein Parsefehler der Freigaben darf NIE zum Ueberschreiben mit einem leeren
     Dict fuehren — deshalb der CASE-Guard beim UPDATE (unveraendert).
+    D03/H2: alle drei Zugriffe auf tenant_id eingeschraenkt — fremde
+    Gate-Freigaben und fremde Node-Caches duerfen nie gelesen werden.
     """
     approvals: Dict[str, bool] = {}
     parse_failed = False
-    with _connect(db_path) as conn:
+    with _connect(db_path, tenant_id=tenant_id) as conn:
+        tid = _ledger_tenant()
         prev = conn.execute(
-            "SELECT gate_approvals_json FROM workflow_runs WHERE run_id = ?", (rid,)
+            "SELECT gate_approvals_json FROM workflow_runs "
+            "WHERE tenant_id = ? AND run_id = ?", (tid, rid)
         ).fetchone()
         if prev and prev["gate_approvals_json"]:
             try:
@@ -159,21 +176,23 @@ def _load_run_gate_state_sync(
             approvals.update({str(k): bool(v) for k, v in gate_approvals.items()})
         conn.execute(
             """
-            INSERT INTO workflow_runs (run_id, workflow_id, status, dag_json, gate_approvals_json, created_at, updated_at)
-            VALUES (?, ?, 'running', ?, ?, ?, ?)
-            ON CONFLICT(run_id) DO UPDATE SET
+            INSERT INTO workflow_runs
+            (tenant_id, run_id, workflow_id, status, dag_json, gate_approvals_json, created_at, updated_at)
+            VALUES (?, ?, ?, 'running', ?, ?, ?, ?)
+            ON CONFLICT(tenant_id, run_id) DO UPDATE SET
                 status='running',
                 dag_json=CASE WHEN excluded.dag_json != '{}' THEN excluded.dag_json ELSE workflow_runs.dag_json END,
                 gate_approvals_json=CASE WHEN ? THEN workflow_runs.gate_approvals_json ELSE excluded.gate_approvals_json END,
                 updated_at=excluded.updated_at
             """,
-            (rid, wf_id, dag_json_text, json.dumps(approvals, ensure_ascii=False),
+            (tid, rid, wf_id, dag_json_text, json.dumps(approvals, ensure_ascii=False),
              now, now, int(parse_failed)),
         )
         conn.commit()
         cached_rows = conn.execute(
-            "SELECT node_id, fingerprint, status, output_json FROM workflow_node_states WHERE run_id = ?",
-            (rid,),
+            "SELECT node_id, fingerprint, status, output_json FROM workflow_node_states "
+            "WHERE tenant_id = ? AND run_id = ?",
+            (tid, rid),
         ).fetchall()
         cached = {r["node_id"]: dict(r) for r in cached_rows}
     return {"approvals": approvals, "parse_failed": parse_failed, "cached": cached}
@@ -181,30 +200,35 @@ def _load_run_gate_state_sync(
 
 def _persist_node_state_sync(
     db_path: Optional[str], rid: str, nid: str, fingerprint: str,
-    status: str, output_json: str, now: float, *, preserve_fingerprint: bool = False,
+    status: str, output_json: str, now: float, *,
+    preserve_fingerprint: bool = False, tenant_id: Optional[str] = None,
 ) -> None:
     """Node-State (running/terminal/skipped) atomar schreiben (sync, to_thread)."""
-    with _connect(db_path) as conn:
+    with _connect(db_path, tenant_id=tenant_id) as conn:
+        tid = _ledger_tenant()
         if preserve_fingerprint:
             conn.execute(
                 """
-                INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(run_id, node_id) DO UPDATE SET
-                    status=excluded.status, output_json=excluded.output_json, updated_at=excluded.updated_at
+                INSERT INTO workflow_node_states
+                (tenant_id, run_id, node_id, fingerprint, status, output_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(tenant_id, run_id, node_id) DO UPDATE SET
+                    status=excluded.status, output_json=excluded.output_json,
+                    updated_at=excluded.updated_at
                 """,
-                (rid, nid, fingerprint, status, output_json, now),
+                (tid, rid, nid, fingerprint, status, output_json, now),
             )
         else:
             conn.execute(
                 """
-                INSERT INTO workflow_node_states (run_id, node_id, fingerprint, status, output_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(run_id, node_id) DO UPDATE SET
+                INSERT INTO workflow_node_states
+                (tenant_id, run_id, node_id, fingerprint, status, output_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(tenant_id, run_id, node_id) DO UPDATE SET
                     fingerprint=excluded.fingerprint, status=excluded.status,
                     output_json=excluded.output_json, updated_at=excluded.updated_at
                 """,
-                (rid, nid, fingerprint, status, output_json, now),
+                (tid, rid, nid, fingerprint, status, output_json, now),
             )
         conn.commit()
 
@@ -212,7 +236,7 @@ def _persist_node_state_sync(
 def _finalize_run_sync(
     db_path: Optional[str], rid: str, wf_id: str,
     final_status: str, cycle_error: Optional[str], tid: str,
-    outputs: Dict[str, Any],
+    outputs: Dict[str, Any], tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Kosten/Tokens, Flightlog, Trajectory-Abschluss und Run-Finalstatus.
 
@@ -223,10 +247,12 @@ def _finalize_run_sync(
     total_cost = 0.0
     total_tokens = 0
     strict_abort: Optional[BaseException] = None
-    with _connect(db_path) as conn:
+    with _connect(db_path, tenant_id=tenant_id) as conn:
+        ledger_tenant = _ledger_tenant()
         try:
             for row in conn.execute(
-                "SELECT output_json FROM workflow_node_states WHERE run_id = ?", (rid,)
+                "SELECT output_json FROM workflow_node_states "
+                "WHERE tenant_id = ? AND run_id = ?", (ledger_tenant, rid)
             ).fetchall():
                 try:
                     total_cost += float((json.loads(row[0] or "{}").get("cost_usd") or 0.0))
@@ -235,7 +261,8 @@ def _finalize_run_sync(
         except sqlite3.OperationalError:
             pass
         for row in conn.execute(
-            "SELECT output_json FROM workflow_node_states WHERE run_id = ?", (rid,)
+            "SELECT output_json FROM workflow_node_states "
+            "WHERE tenant_id = ? AND run_id = ?", (ledger_tenant, rid)
         ).fetchall():
             try:
                 parsed = json.loads(row[0] or "{}")
@@ -312,8 +339,9 @@ def _finalize_run_sync(
         except Exception as traj_exc:
             logger.error("[WorkflowDAG] Trajectory-Abschluss nicht persistiert: %s", traj_exc)
         conn.execute(
-            "UPDATE workflow_runs SET status = ?, updated_at = ?, total_cost_usd = ? WHERE run_id = ?",
-            (final_status, time.time(), round(total_cost, 6), rid),
+            "UPDATE workflow_runs SET status = ?, updated_at = ?, total_cost_usd = ? "
+            "WHERE tenant_id = ? AND run_id = ?",
+            (final_status, time.time(), round(total_cost, 6), ledger_tenant, rid),
         )
         conn.commit()
     return {"final_status": final_status, "cycle_error": cycle_error,
@@ -321,7 +349,7 @@ def _finalize_run_sync(
 
 
 def _recover_one_orphan(kernel: Any, run_id: str, db_path: Optional[str],
-                        reason: str = "lease_lost") -> Dict[str, Any]:
+                        reason: str = "lease_lost", tenant_id: Optional[str] = None) -> Dict[str, Any]:
     """Einzelner Orphan-Recovery: frischer Claim + harte FAILED-Transition."""
     from backend.durable_execution_kernel import FAILED
 
@@ -348,7 +376,8 @@ def _recover_one_orphan(kernel: Any, run_id: str, db_path: Optional[str],
         })
         return {"run_id": run_id, "terminated": False,
                 "reason": f"transition_failed: {type(exc).__name__}: {exc}"}
-    _persist_run_status_sync(db_path, run_id, "", "failed", "{}", time.time())
+    _persist_run_status_sync(db_path, run_id, "", "failed", "{}", time.time(),
+                             tenant_id=tenant_id)
     return {"run_id": run_id, "terminated": True, "fencing_token": token}
 
 
@@ -686,6 +715,7 @@ def request_dag_replan(
     reason: str,
     db_path: Optional[str] = None,
     trajectory_id: Optional[str] = None,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Kontrollierter Replan-Pfad — Cap pro TRAJECTORY, nicht pro run_id.
 
@@ -693,7 +723,7 @@ def request_dag_replan(
     ein neuer run_id erbt den Zaehler ueber-root_ticket_id. Replan #3 liefert
     `replan_cap_reached` + `blocked` + Audit-Event.
     """
-    existing = get_workflow_run(run_id, db_path=db_path)
+    existing = get_workflow_run(run_id, db_path=db_path, tenant_id=tenant_id)
     if not existing:
         return {"allowed": False, "reason": "run_not_found"}
     from backend.trajectory_budget import (
@@ -718,10 +748,11 @@ def request_dag_replan(
     except Exception as _meta_exc:
         logger.debug("[WorkflowDAG] Replan-Task-Meta nicht gespiegelt: %s", _meta_exc)
     if not reservation.get("allowed", False):
-        with _connect(db_path) as conn:
+        with _connect(db_path, tenant_id=tenant_id) as conn:
             conn.execute(
-                "UPDATE workflow_runs SET status = 'blocked', updated_at = ? WHERE run_id = ?",
-                (time.time(), run_id),
+                "UPDATE workflow_runs SET status = 'blocked', updated_at = ? "
+                "WHERE tenant_id = ? AND run_id = ?",
+                (time.time(), _ledger_tenant(), run_id),
             )
             conn.commit()
         try:
@@ -743,10 +774,12 @@ def request_dag_replan(
     if not validation["valid"]:
         return {"allowed": False, "reason": "invalid_plan",
                 "errors": validation["errors"], "trajectory_id": tid}
-    with _connect(db_path) as conn:
+    with _connect(db_path, tenant_id=tenant_id) as conn:
         conn.execute(
-            "UPDATE workflow_runs SET dag_json = ?, updated_at = ? WHERE run_id = ?",
-            (json.dumps(candidate, ensure_ascii=False), time.time(), run_id),
+            "UPDATE workflow_runs SET dag_json = ?, updated_at = ? "
+            "WHERE tenant_id = ? AND run_id = ?",
+            (json.dumps(candidate, ensure_ascii=False), time.time(),
+             _ledger_tenant(), run_id),
         )
         conn.commit()
     return {"allowed": True, "replan_count": int(reservation["replan_count"]),
@@ -785,69 +818,259 @@ def _get_run_lock(run_id: str) -> asyncio.Lock:
         return lock
 
 
+# ---------------------------------------------------------------------------
+# D03/H2 — Mandantenisoliertes DAG-Ledger
+# ---------------------------------------------------------------------------
+# Das Ledger frueher lief in der globalen ops.db: workflow_runs/workflow_node_states
+# hatten keine tenant_id, gate_approvals_json/output_json waren mandantenuebergreifend
+# lesbar und identische run_ids ueberschrieben sich. Jetzt:
+#   * Pfad ueber tenant_context.resolve_active_db("ops.db") (kein Fallback bei Fehler)
+#   * tenant_id NOT NULL in BEIDEN Tabellen, PK (tenant_id, run_id[, node_id])
+#   * Bestandszeilen werden additiv dem Primärmandanten zugeordnet
+#   * JEDER Zugriff filtert nach tenant_id (siehe _ledger_tenant())
+_LEGACY_TENANT_ID = "default"  # Primärmandant für Bestandszeilen ohne tenant_id
+
+_RUN_COLUMNS: Tuple[str, ...] = (
+    "tenant_id", "run_id", "workflow_id", "status", "dag_json",
+    "gate_approvals_json", "total_cost_usd", "created_at", "updated_at",
+)
+_NODE_COLUMNS: Tuple[str, ...] = (
+    "tenant_id", "run_id", "node_id", "fingerprint", "status", "output_json", "updated_at",
+)
+
+# __DAG_TENANT__ wird beim Schema-Aufbau durch den AKTIVEN PRIMÄRMANDANTEN
+# ersetzt. Damit bleiben Bestandszeilen und Legacy-Inserts (ohne tenant_id)
+# für genau den Mandanten sichtbar, in dessen DB sie liegen — nicht in einem
+# fremden "default"-Mandanten.
+_DAG_TENANT_PLACEHOLDER = "__DAG_TENANT__"
+
+_WORKFLOW_RUNS_DDL = """
+CREATE TABLE workflow_runs (
+    tenant_id TEXT NOT NULL DEFAULT '__DAG_TENANT__',
+    run_id TEXT NOT NULL,
+    workflow_id TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    dag_json TEXT DEFAULT '{}',
+    gate_approvals_json TEXT DEFAULT '{}',
+    total_cost_usd REAL DEFAULT 0.0,
+    created_at REAL NOT NULL DEFAULT 0.0,
+    updated_at REAL NOT NULL DEFAULT 0.0,
+    PRIMARY KEY (tenant_id, run_id)
+)
+"""
+
+_WORKFLOW_NODE_STATES_DDL = """
+CREATE TABLE workflow_node_states (
+    tenant_id TEXT NOT NULL DEFAULT '__DAG_TENANT__',
+    run_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    output_json TEXT DEFAULT '{}',
+    updated_at REAL NOT NULL DEFAULT 0.0,
+    PRIMARY KEY (tenant_id, run_id, node_id)
+)
+"""
+
+# ALTER TABLE ADD COLUMN verlangt bei NOT NULL-Spalten einen DEFAULT. Die
+# finalen DDLs oben behalten die ursprünglichen NOT NULL-Garantien.
+_ADD_COLUMN_DEFS: Dict[str, Dict[str, str]] = {
+    "workflow_runs": {
+        "tenant_id": "TEXT NOT NULL DEFAULT '__DAG_TENANT__'",
+        "run_id": "TEXT NOT NULL DEFAULT ''",
+        "workflow_id": "TEXT NOT NULL DEFAULT ''",
+        "status": "TEXT NOT NULL DEFAULT ''",
+        "dag_json": "TEXT DEFAULT '{}'",
+        "gate_approvals_json": "TEXT DEFAULT '{}'",
+        "total_cost_usd": "REAL DEFAULT 0.0",
+        "created_at": "REAL NOT NULL DEFAULT 0.0",
+        "updated_at": "REAL NOT NULL DEFAULT 0.0",
+    },
+    "workflow_node_states": {
+        "tenant_id": "TEXT NOT NULL DEFAULT '__DAG_TENANT__'",
+        "run_id": "TEXT NOT NULL DEFAULT ''",
+        "node_id": "TEXT NOT NULL DEFAULT ''",
+        "fingerprint": "TEXT NOT NULL DEFAULT ''",
+        "status": "TEXT NOT NULL DEFAULT ''",
+        "output_json": "TEXT DEFAULT '{}'",
+        "updated_at": "REAL NOT NULL DEFAULT 0.0",
+    },
+}
+
+_DAG_SCHEMA_LOCK = threading.Lock()
+_DAG_TENANT_VAR: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "archon_dag_ledger_tenant", default=_LEGACY_TENANT_ID
+)
+
+
+def _ledger_tenant() -> str:
+    """tenant_id der aktuellen Ledger-Verbindung (von _connect gesetzt)."""
+    return _DAG_TENANT_VAR.get()
+
+
+def _dag_tenant_id(tenant_id: Optional[str] = None) -> str:
+    """Aktive Mandanten-ID — strikt fail-closed (D03/H2).
+
+    Ein Resolverfehler oder eine leere ID bricht hart ab. Es gibt bewusst
+    KEINEN stillen Fallback auf einen globalen/gemeinsamen Mandanten: sonst
+    landen Gate-Freigaben und Node-Outputs wieder in fremden Ledgern.
+    """
+    try:
+        from backend.tenant_context import sanitize_tenant_id, tenant_context
+        if tenant_id:
+            tid = sanitize_tenant_id(tenant_id)
+        else:
+            tid = sanitize_tenant_id(tenant_context.get_active_tenant_id())
+    except Exception as exc:
+        raise RuntimeError(
+            f"[WorkflowDAG] Kein gueltiger Tenant-Kontext — DAG-Ledger-Zugriff abgebrochen: {exc}"
+        ) from exc
+    tid = str(tid or "").strip()
+    if not tid:
+        raise RuntimeError("[WorkflowDAG] Tenant-Kontext leer — DAG-Ledger-Zugriff abgebrochen.")
+    return tid
+
+
+def _dag_primary_tenant_id() -> str:
+    """Aktiver Primärmandant für Spalten-Default und Bestandszeilen.
+
+    `_dag_tenant_id()` ist vor diesem Aufruf bereits fail-closed gelaufen,
+    daher darf hier der aktive Mandant (z. B. 'archon-systems') als
+    Primärmandant für Legacy-Zeilen dienen. `_LEGACY_TENANT_ID` ist nur der
+    letzte Reservewert, falls der Resolver ausnahmslos nicht erreichbar ist.
+    """
+    try:
+        from backend.tenant_context import tenant_context
+        tid = tenant_context.get_active_tenant_id()
+        tid = str(tid or "").strip()
+        if tid:
+            from backend.tenant_context import sanitize_tenant_id
+            return sanitize_tenant_id(tid)
+    except Exception as exc:
+        logger.warning("[WorkflowDAG] Primärmandant nicht auflösbar (%s); nutze Kontext-Tenant",
+                       exc)
+    return _ledger_tenant() or _LEGACY_TENANT_ID
+
+
+def _ddl_for_tenant(template: str, tenant_id: str) -> str:
+    """Ersetzt den Tenant-Platzhalter in DDL/ADD-COLUMN (SQL-quoted)."""
+    safe = str(tenant_id).replace("'", "''")
+    return template.replace(_DAG_TENANT_PLACEHOLDER, safe)
+
+
+def _schema_has_tenant_pk(info: List[Any], pk_cols: Tuple[str, ...]) -> bool:
+    positions = {str(row[1]): int(row[5] or 0) for row in info}
+    return all(positions.get(col, 0) > 0 for col in pk_cols)
+
+
+def _rebuild_tenant_table(
+    conn: sqlite3.Connection, table: str, ddl: str, columns: Tuple[str, ...]
+) -> None:
+    """SQLite-PK-Wechsel via Table-Rebuild (ALTER TABLE kennt kein PK-UPDATE)."""
+    legacy = f"{table}__tenant_legacy"
+    if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (legacy,)
+    ).fetchone():
+        raise RuntimeError(
+            f"[WorkflowDAG] Rueckstand aus fehlgeschlagener Migration: {legacy} — "
+            "DAG-Ledger-Zugriff abgebrochen (Datenverlust verhindert)."
+        )
+    conn.execute(f"ALTER TABLE {table} RENAME TO {legacy}")
+    conn.execute(ddl)
+    present = {str(r[1]) for r in conn.execute(f"PRAGMA table_info({legacy})").fetchall()}
+    keep = [c for c in columns if c in present]
+    cols_sql = ", ".join(f'"{c}"' for c in keep)
+    conn.execute(f"INSERT INTO {table} ({cols_sql}) SELECT {cols_sql} FROM {legacy}")
+    conn.execute(f"DROP TABLE {legacy}")
+
+
+def _migrate_dag_schema(conn: sqlite3.Connection, primary_tenant_id: str) -> None:
+    """Additive Migration + PK auf (tenant_id, run_id[, node_id]) — bestandskompatibel."""
+    for table, ddl_template, columns, pk_cols in (
+        ("workflow_runs", _WORKFLOW_RUNS_DDL, _RUN_COLUMNS, ("tenant_id", "run_id")),
+        ("workflow_node_states", _WORKFLOW_NODE_STATES_DDL, _NODE_COLUMNS,
+         ("tenant_id", "run_id", "node_id")),
+    ):
+        ddl = _ddl_for_tenant(ddl_template, primary_tenant_id)
+        info = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        if not info:
+            conn.execute(ddl)
+            continue
+        existing = {str(r[1]) for r in info}
+        for col, definition in _ADD_COLUMN_DEFS[table].items():
+            if col not in existing:
+                conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {col} "
+                    f"{_ddl_for_tenant(definition, primary_tenant_id)}"
+                )
+        now_info = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        if not _schema_has_tenant_pk(now_info, pk_cols):
+            _rebuild_tenant_table(conn, table, ddl, columns)
+
+
+def _ensure_dag_schema(conn: sqlite3.Connection, primary_tenant_provider: Callable[[], str]) -> None:
+    """Fastpath ohne Schreiblock; Migration atomar unter BEGIN IMMEDIATE.
+
+    Der Primärmandant wird nur bei echter Migration aufgelöst (kein
+    wiederholtes Laden der Firma im DAG-Hotpath).
+    """
+    runs = conn.execute("PRAGMA table_info(workflow_runs)").fetchall()
+    nodes = conn.execute("PRAGMA table_info(workflow_node_states)").fetchall()
+    if (runs and _schema_has_tenant_pk(runs, ("tenant_id", "run_id"))
+            and nodes and _schema_has_tenant_pk(nodes, ("tenant_id", "run_id", "node_id"))):
+        return
+    with _DAG_SCHEMA_LOCK:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            _migrate_dag_schema(conn, primary_tenant_provider())
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+
 def _resolve_dag_db_path(db_path: Optional[str] = None) -> str:
+    """D03/H2: DAG-Ledger liegt in der mandantenisolierten ops.db.
+
+    Vorher: ``resolve_db("workflow_dags.db")`` → globale ``data/ops.db`` ohne
+    Tenant-Dimension. Jetzt: ``tenant_context.resolve_active_db("ops.db")`` →
+    ``data/tenants/<tid>/ops.db``. Bei Auflösungsfehler HART abbrechen —
+    kein Fallback auf die globale ``DEFAULT_DB_PATH``.
+    """
     if db_path:
         return db_path
     if DEFAULT_DB_PATH != _INITIAL_DEFAULT_DB_PATH:
+        # Bewusster Test-/Operator-Override, KEIN Fehler-Fallback.
         return DEFAULT_DB_PATH
     try:
-        from backend.db_paths import resolve_db
-        return resolve_db("workflow_dags.db")
-    except Exception:
-        return DEFAULT_DB_PATH
+        from backend.tenant_context import tenant_context
+        return tenant_context.resolve_active_db("ops.db")
+    except Exception as exc:
+        raise RuntimeError(
+            f"[WorkflowDAG] Tenant-DB-Auflösung für ops.db fehlgeschlagen — "
+            f"DAG-Ledger nicht verfügbar (kein Fallback auf globale DB): {exc}"
+        ) from exc
 
 
 @contextmanager
-def _connect(db_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
+def _connect(
+    db_path: Optional[str] = None, *, tenant_id: Optional[str] = None
+) -> Iterator[sqlite3.Connection]:
     path = _resolve_dag_db_path(db_path)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    conn = sqlite3.connect(path, timeout=10.0)
+    tid = _dag_tenant_id(tenant_id)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    conn = sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_S)
+    token = None
     try:
+        token = _DAG_TENANT_VAR.set(tid)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA busy_timeout=5000;")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS workflow_runs (
-                run_id TEXT PRIMARY KEY,
-                workflow_id TEXT NOT NULL,
-                status TEXT NOT NULL,
-                dag_json TEXT DEFAULT '{}',
-                gate_approvals_json TEXT DEFAULT '{}',
-                created_at REAL NOT NULL,
-                updated_at REAL NOT NULL
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS workflow_node_states (
-                run_id TEXT PRIMARY KEY,
-                node_id TEXT NOT NULL,
-                fingerprint TEXT NOT NULL,
-                status TEXT NOT NULL,
-                output_json TEXT DEFAULT '{}',
-                updated_at REAL NOT NULL
-            )
-        """) if False else conn.execute("""
-            CREATE TABLE IF NOT EXISTS workflow_node_states (
-                run_id TEXT NOT NULL,
-                node_id TEXT NOT NULL,
-                fingerprint TEXT NOT NULL,
-                status TEXT NOT NULL,
-                output_json TEXT DEFAULT '{}',
-                updated_at REAL NOT NULL,
-                PRIMARY KEY (run_id, node_id)
-            )
-        """)
-        # Sichere Migration fuer bestehende workflow_dags.db ohne dag_json / gate_approvals_json
-        run_cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_runs)").fetchall()}
-        if "dag_json" not in run_cols:
-            conn.execute("ALTER TABLE workflow_runs ADD COLUMN dag_json TEXT DEFAULT '{}'")
-        if "gate_approvals_json" not in run_cols:
-            conn.execute("ALTER TABLE workflow_runs ADD COLUMN gate_approvals_json TEXT DEFAULT '{}'")
-        if "total_cost_usd" not in run_cols:
-            conn.execute("ALTER TABLE workflow_runs ADD COLUMN total_cost_usd REAL DEFAULT 0.0")
-        conn.commit()
+        conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};")
+        _ensure_dag_schema(conn, _dag_primary_tenant_id)
         yield conn
     finally:
+        if token is not None:
+            _DAG_TENANT_VAR.reset(token)
         conn.close()
 
 
@@ -1016,21 +1239,26 @@ def _register_hitl_gate_decision(
     node: Dict[str, Any],
     upstream: Dict[str, Any],
     db_path: Optional[str] = None,
+    tenant_id: Optional[str] = None,
 ) -> Optional[str]:
     node_id = str(node.get("id") or "")
     # Doppelte HITL-Decisions verhindern: falls fuer (run_id, node_id) bereits
     # eine Decision existiert, diese wiederverwenden statt neu anzulegen.
     try:
-        with _connect(db_path) as conn:
+        with _connect(db_path, tenant_id=tenant_id) as conn:
             row = conn.execute(
-                "SELECT output_json FROM workflow_node_states WHERE run_id = ? AND node_id = ?",
-                (run_id, node_id),
+                "SELECT output_json FROM workflow_node_states "
+                "WHERE tenant_id = ? AND run_id = ? AND node_id = ?",
+                (_ledger_tenant(), run_id, node_id),
             ).fetchone()
         if row:
             prev_out = json.loads(row["output_json"] or "{}")
             prev_id = prev_out.get("decision_id")
             if prev_id:
                 return str(prev_id)
+    except RuntimeError:
+        # D03/H2: Tenant-/Pfad-Auflösung nie als "kein Duplikat" fehlinterpretieren.
+        raise
     except Exception as exc:
         logger.debug(f"[WorkflowDAG] HITL-Decision-Dedupe-Check fehlgeschlagen: {exc}")
     try:
@@ -1732,6 +1960,7 @@ async def run_workflow_dag(
     fencing_token: str = "",
     lease_guard: Optional[_LeaseGuard] = None,
     kernel: Optional[Any] = None,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Wrapper: persistiert 'cancelled' auch bei CancelledError (BaseException)."""
     try:
@@ -1739,7 +1968,7 @@ async def run_workflow_dag(
             dag_def, executor_fn=executor_fn, run_id=run_id,
             gate_approvals=gate_approvals, db_path=db_path,
             cancel_token=cancel_token, fencing_token=fencing_token,
-            lease_guard=lease_guard, kernel=kernel,
+            lease_guard=lease_guard, kernel=kernel, tenant_id=tenant_id,
         )
     except asyncio.CancelledError:
         rid = run_id or ""
@@ -1748,7 +1977,9 @@ async def run_workflow_dag(
             # Re-raise. D07/F1: Persistenzfehler auf ERROR + Audit/DLQ statt
             # logger.debug (frueher blieb der Run sichtbar 'running').
             try:
-                outcome = await asyncio.to_thread(_persist_run_cancelled_sync, db_path, rid)
+                outcome = await asyncio.to_thread(
+                    _persist_run_cancelled_sync, db_path, rid, tenant_id
+                )
                 if not outcome.get("updated"):
                     from backend.durable_execution_kernel import CANCELLED
 
@@ -1780,6 +2011,7 @@ async def _run_workflow_dag_impl(
     fencing_token: str = "",
     lease_guard: Optional[_LeaseGuard] = None,
     kernel: Optional[Any] = None,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Fuehrt einen Workflow-DAG aus (mit Per-run_id-Lock gegen Doppel-Ausfuehrung).
@@ -1790,13 +2022,19 @@ async def _run_workflow_dag_impl(
     }
     """
     rid = run_id or f"wfrun-{secrets.token_hex(5)}"
+    # D03/H2: Tenant einmal fail-closed auflösen. Der Lock-Key ist
+    # tenant-skopiert (gleiche run_id in zwei Mandanten darf sich nicht
+    # gegenseitig als "already_running" blockieren), alle Ledger-Schreib-
+    # zugriffe erhalten die explizite tenant_id.
+    ledger_tenant = _dag_tenant_id(tenant_id)
+    tenant_id = ledger_tenant
     # Zentrale Cancel-Propagation: Run-Token oder explizit übergebener Token
     # (Mission Control → Dispatch → DAG). Ohne Token unveraendertes Verhalten.
     from backend.cancellation import get_token as _get_cancel_token
     cancel_token = cancel_token or _get_cancel_token(f"run:{rid}")
     # Per-run_id-Lock: nur EINE Ausfuehrung pro Run. Falls belegt, laufende
     # Ausfuehrung nicht stoeren, sondern sofort melden.
-    run_lock = _get_run_lock(rid)
+    run_lock = _get_run_lock(f"{ledger_tenant}:{rid}")
     if run_lock.locked():
         logger.warning(f"[WorkflowDAG] Run '{rid}' laeuft bereits — keine zweite Ausfuehrung gestartet.")
         return {
@@ -1860,6 +2098,7 @@ async def _run_workflow_dag_impl(
         result = await _run_workflow_dag_locked(
             dag_def, executor_fn, rid, gate_approvals, db_path, cancel_token=cancel_token,
             fencing_token=fencing_token, lease_guard=lease_guard, kernel=kernel,
+            tenant_id=ledger_tenant,
         )
         if lease_guard is not None and lease_guard.lost.is_set() and isinstance(result, dict):
             result = dict(result)
@@ -1885,8 +2124,12 @@ async def _run_workflow_dag_locked(
     fencing_token: str = "",
     lease_guard: Optional[_LeaseGuard] = None,
     kernel: Optional[Any] = None,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Eigentliche DAG-Ausfuehrung; Per-run_id-Lock wird von run_workflow_dag gehalten."""
+    # D03/H2: alle Ledger-Zugriffe dieser Ebene nutzen denselben aufgeloesten
+    # Mandanten (fail-closed im aufrufenden _run_workflow_dag_impl).
+    tenant_id = tenant_id or _dag_tenant_id()
     eff_executor = executor_fn or default_agent_node_executor
     wf_id = str(dag_def.get("id") or "workflow")
     nodes = dag_def.get("nodes") or []
@@ -1939,7 +2182,7 @@ async def _run_workflow_dag_locked(
                      rid, _tid, _traj_row.get("state"), dag_def["_replan_count"])
         await asyncio.to_thread(
             _persist_run_status_sync, db_path, rid, wf_id, "blocked",
-            json.dumps(dag_def, ensure_ascii=False), now,
+            json.dumps(dag_def, ensure_ascii=False), now, tenant_id=tenant_id,
         )
         return {
             "run_id": rid, "workflow_id": wf_id, "status": "blocked",
@@ -1956,7 +2199,7 @@ async def _run_workflow_dag_locked(
         logger.error(f"[WorkflowDAG] Run '{rid}' von Plan-Validator abgelehnt: {err_msg}")
         await asyncio.to_thread(
             _persist_run_status_sync, db_path, rid, wf_id, "failed",
-            json.dumps(dag_def, ensure_ascii=False), now,
+            json.dumps(dag_def, ensure_ascii=False), now, tenant_id=tenant_id,
         )
         return {
             "run_id": rid,
@@ -1976,6 +2219,7 @@ async def _run_workflow_dag_locked(
                 logger.error(f"[WorkflowDAG] Run '{rid}': {_err_msg}")
                 await asyncio.to_thread(
                     _persist_run_status_sync, db_path, rid, wf_id, "failed", "{}", now,
+                    tenant_id=tenant_id,
                 )
                 return {
                     "run_id": rid,
@@ -1994,7 +2238,7 @@ async def _run_workflow_dag_locked(
     # Threadpool-Aufruf (frueher > 5 sync SQLite-Zugriffe im Event-Loop).
     _gate_state = await asyncio.to_thread(
         _load_run_gate_state_sync, db_path, rid, wf_id, gate_approvals, now,
-        json.dumps(dag_def, ensure_ascii=False),
+        json.dumps(dag_def, ensure_ascii=False), tenant_id=tenant_id,
     )
     approvals: Dict[str, bool] = _gate_state["approvals"]
     cached: Dict[str, Dict[str, Any]] = _gate_state["cached"]
@@ -2056,6 +2300,7 @@ async def _run_workflow_dag_locked(
         # via Threadpool — /livez bleibt auch bei Write-Lock responsiv).
         await asyncio.to_thread(
             _persist_node_state_sync, db_path, rid, nid, fp, "running", "{}", time.time(),
+            tenant_id=tenant_id,
         )
 
         try:
@@ -2070,6 +2315,9 @@ async def _run_workflow_dag_locked(
         requires_gate = ntype == "gate" or bool(node.get("require_hitl"))
         node_ctx = {
             **node, "workflow_id": wf_id, "_dag_run_id": rid, "_dag_db_path": db_path,
+            # D03/H2: Mandant an Node-Executoren durchreichen (inkl. Tool-
+            # Checkpoints), damit auch Folge-Schreiber tenant-scoped arbeiten.
+            "_dag_tenant_id": tenant_id,
             "_trajectory_id": _tid, "_dag_max_budget_eur": dag_def.get("max_budget_eur"),
             "_root_ticket_id": _root_ticket,
         }
@@ -2084,7 +2332,10 @@ async def _run_workflow_dag_locked(
                 st = "rejected"
                 await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Gate abgelehnt.", block_kind="hitl_rejected")
             else:
-                deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream, db_path)
+                deci_id = await asyncio.to_thread(
+                    _register_hitl_gate_decision, rid, wf_id, node, upstream, db_path,
+                    tenant_id=tenant_id,
+                )
                 out = {"awaiting_gate": True, "decision_id": deci_id}
                 st = "awaiting_gate"
                 await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe.", block_kind="hitl_gate")
@@ -2094,7 +2345,10 @@ async def _run_workflow_dag_locked(
                 st = "rejected"
                 await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="HITL-Freigabe abgelehnt.", block_kind="hitl_rejected")
             else:
-                deci_id = await asyncio.to_thread(_register_hitl_gate_decision, rid, wf_id, node, upstream, db_path)
+                deci_id = await asyncio.to_thread(
+                    _register_hitl_gate_decision, rid, wf_id, node, upstream, db_path,
+                    tenant_id=tenant_id,
+                )
                 out = {"awaiting_gate": True, "decision_id": deci_id}
                 st = "awaiting_gate"
                 await asyncio.to_thread(_update_kanban_task_status, node.get("kanban_task_id"), "blocked", result="Wartet auf HITL-Freigabe vor Ausfuehrung.", block_kind="hitl_gate")
@@ -2287,7 +2541,7 @@ async def _run_workflow_dag_locked(
             )
         await asyncio.to_thread(
             _persist_node_state_sync, db_path, rid, nid, fp, st,
-            json.dumps(out, ensure_ascii=False), time.time(),
+            json.dumps(out, ensure_ascii=False), time.time(), tenant_id=tenant_id,
         )
         try:
             from archon.core.runtime import broadcast_event
@@ -2362,7 +2616,7 @@ async def _run_workflow_dag_locked(
             await asyncio.to_thread(
                 _persist_node_state_sync, db_path, rid, nid, "skipped",
                 "skipped_condition", json.dumps(outputs[nid], ensure_ascii=False),
-                time.time(), preserve_fingerprint=True,
+                time.time(), preserve_fingerprint=True, tenant_id=tenant_id,
             )
 
         if budget_blocked:
@@ -2448,7 +2702,7 @@ async def _run_workflow_dag_locked(
     # dort nicht mehr verschluckt.
     _final = await asyncio.to_thread(
         _finalize_run_sync, db_path, rid, wf_id,
-        final_status, cycle_error, _tid, outputs,
+        final_status, cycle_error, _tid, outputs, tenant_id=tenant_id,
     )
     final_status = _final["final_status"]
     cycle_error = _final["cycle_error"]
@@ -2474,19 +2728,26 @@ async def _run_workflow_dag_locked(
     return result
 
 
-def get_workflow_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    with _connect(db_path) as conn:
+def get_workflow_run(
+    run_id: str, db_path: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    with _connect(db_path, tenant_id=tenant_id) as conn:
+        ledger_tenant = _ledger_tenant()
         run_cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_runs)").fetchall()}
         cost_col = ", total_cost_usd" if "total_cost_usd" in run_cols else ""
         run_row = conn.execute(
-            f"SELECT run_id, workflow_id, status, dag_json, created_at, updated_at{cost_col} FROM workflow_runs WHERE run_id = ?",
-            (run_id,),
+            f"SELECT run_id, workflow_id, status, dag_json, created_at, updated_at{cost_col} "
+            "FROM workflow_runs WHERE tenant_id = ? AND run_id = ?",
+            (ledger_tenant, run_id),
         ).fetchone()
         if not run_row:
             return None
         node_rows = conn.execute(
-            "SELECT node_id, fingerprint, status, output_json, updated_at FROM workflow_node_states WHERE run_id = ? ORDER BY updated_at ASC",
-            (run_id,),
+            "SELECT node_id, fingerprint, status, output_json, updated_at "
+            "FROM workflow_node_states "
+            "WHERE tenant_id = ? AND run_id = ? ORDER BY updated_at ASC",
+            (ledger_tenant, run_id),
         ).fetchall()
     nodes = {}
     for nr in node_rows:
@@ -2506,6 +2767,7 @@ def get_workflow_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dic
         dag_parsed = {}
     return {
         "run_id": run_row["run_id"],
+        "tenant_id": ledger_tenant,
         "workflow_id": run_row["workflow_id"],
         "status": run_row["status"],
         "dag": dag_parsed,
@@ -2516,13 +2778,17 @@ def get_workflow_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dic
     }
 
 
-def list_workflow_runs(limit: int = 50, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    with _connect(db_path) as conn:
+def list_workflow_runs(
+    limit: int = 50, db_path: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    with _connect(db_path, tenant_id=tenant_id) as conn:
         run_cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_runs)").fetchall()}
         cost_col = ", total_cost_usd" if "total_cost_usd" in run_cols else ""
         rows = conn.execute(
-            f"SELECT run_id, workflow_id, status, created_at, updated_at{cost_col} FROM workflow_runs ORDER BY updated_at DESC LIMIT ?",
-            (max(1, min(200, int(limit))),),
+            f"SELECT run_id, tenant_id, workflow_id, status, created_at, updated_at{cost_col} "
+            "FROM workflow_runs WHERE tenant_id = ? ORDER BY updated_at DESC LIMIT ?",
+            (_ledger_tenant(), max(1, min(200, int(limit)))),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -2534,8 +2800,9 @@ async def resume_workflow_run(
     db_path: Optional[str] = None,
     *,
     fencing_token: Optional[str] = None,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    existing = get_workflow_run(run_id, db_path=db_path)
+    existing = get_workflow_run(run_id, db_path=db_path, tenant_id=tenant_id)
     if not existing:
         raise KeyError(f"Workflow run '{run_id}' not found")
     dag_def = existing.get("dag") or {}
@@ -2600,6 +2867,7 @@ async def resume_workflow_run(
             fencing_token=token,
             lease_guard=guard,
             kernel=kernel,
+            tenant_id=tenant_id,
         )
     except Exception as run_exc:
         if not guard.suspended.is_set():
@@ -2738,6 +3006,7 @@ async def resume_suspended_workflow_run(
     executor_fn: ExecutorFn = None,  # type: ignore[assignment]
     db_path: Optional[str] = None,
     max_missing_outputs: int = 0,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """P2: SUSPENDED → RUNNING pragmatisch ueber Checkpoints + Node-States.
 
@@ -2764,10 +3033,11 @@ async def resume_suspended_workflow_run(
 
     # Persistierte Node-States pruefen: jeder 'completed' muss einen Output haben (F34: to_thread).
     def _load_node_rows_sync() -> List[Dict[str, Any]]:
-        with _connect(db_path) as conn:
+        with _connect(db_path, tenant_id=tenant_id) as conn:
             rows = conn.execute(
-                "SELECT node_id, status, output_json FROM workflow_node_states WHERE run_id = ?",
-                (run_id,),
+                "SELECT node_id, status, output_json FROM workflow_node_states "
+                "WHERE tenant_id = ? AND run_id = ?",
+                (_ledger_tenant(), run_id),
             ).fetchall()
             return [dict(r) for r in rows]
 
@@ -2797,7 +3067,7 @@ async def resume_suspended_workflow_run(
     )
     result = await resume_workflow_run(
         run_id=run_id, executor_fn=executor_fn, db_path=db_path,
-        fencing_token=resumed["fencing_token"],
+        fencing_token=resumed["fencing_token"], tenant_id=tenant_id,
     )
     result["resume"] = resumed
     result["resumed_from_step"] = resumed["resume_from_step"]
@@ -2822,6 +3092,7 @@ def schedule_workflow_resume(
     gate_approvals: Optional[Dict[str, bool]] = None,
     executor_fn: Optional[ExecutorFn] = None,
     db_path: Optional[str] = None,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Feuert einen Fire-and-Forget-Resume-Task ab (fire-and-sauber-vergessen).
 
@@ -2836,6 +3107,7 @@ def schedule_workflow_resume(
             gate_approvals=gate_approvals,
             executor_fn=executor_fn,
             db_path=db_path,
+            tenant_id=tenant_id,
         )
 
     def _on_resume_done(task: "asyncio.Task[Dict[str, Any]]") -> None:
@@ -2848,10 +3120,17 @@ def schedule_workflow_resume(
 
             def _mark_failed_sync() -> None:
                 try:
-                    with _connect(db_path) as conn:
+                    # D03/H2: expliziter Mandant; Injections-/Test-Doubles mit
+                    # altem Callable-Signaturvertrag bleiben kompatibel.
+                    try:
+                        _conn_ctx = _connect(db_path, tenant_id=tenant_id)
+                    except TypeError:
+                        _conn_ctx = _connect(db_path)
+                    with _conn_ctx as conn:
                         conn.execute(
-                            "UPDATE workflow_runs SET status = 'failed', updated_at = ? WHERE run_id = ?",
-                            (time.time(), run_id),
+                            "UPDATE workflow_runs SET status = 'failed', updated_at = ? "
+                            "WHERE tenant_id = ? AND run_id = ?",
+                            (time.time(), _ledger_tenant(), run_id),
                         )
                         conn.commit()
                 except Exception as persist_exc:

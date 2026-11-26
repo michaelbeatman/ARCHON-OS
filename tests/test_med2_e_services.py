@@ -8,7 +8,6 @@ TenantDB-Konsolidierungscheck und HITL-/Approval-Schwellen.
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 import sqlite3
 import sys
@@ -75,19 +74,24 @@ def test_d03_erp_resolver_fail_closed_under_full_isolation(monkeypatch):
 def test_d03_gobd_trigger_blocks_tampering():
     src = _src("backend/erp_manager.py")
     assert "erp_documents_gobd_no_tamper" in src
+    # D03/M5: der Trigger wird bewusst per DROP+CREATE erneuert — IF NOT EXISTS
+    # würde die alte, unvollständige Version stehen lassen.
     m = re.search(
-        r"CREATE TRIGGER IF NOT EXISTS erp_documents_gobd_no_tamper.*?END",
+        r"CREATE TRIGGER(?:\s+IF\s+NOT\s+EXISTS)?\s+erp_documents_gobd_no_tamper\b.*?\bEND\b",
         src, re.DOTALL,
     )
     assert m is not None
 
     conn = sqlite3.connect(":memory:")
     conn.execute("""CREATE TABLE erp_documents (
-        id TEXT PRIMARY KEY, doc_number TEXT, recipient_snapshot_json TEXT, booked_at TEXT
+        id TEXT PRIMARY KEY, doc_number TEXT, recipient_snapshot_json TEXT, booked_at TEXT,
+        status TEXT, amount_net REAL, tax_amount REAL, amount_gross REAL,
+        entity_id TEXT, issue_date TEXT
     )""")
     conn.execute(m.group(0))
     conn.execute(
-        "INSERT INTO erp_documents VALUES ('d1', 'RE-1', '{}', '2026-01-01 10:00:00')"
+        "INSERT INTO erp_documents VALUES ('d1', 'RE-1', '{}', '2026-01-01 10:00:00', "
+        "'booked', 1.0, 0.0, 1.0, 'e1', '2026-01-01')"
     )
     with pytest.raises(sqlite3.IntegrityError, match="GoBD"):
         conn.execute(

@@ -88,5 +88,5 @@ Read INSTALL_AGENT.md and set up Archon OS on my machine. Run the pre-flight che
 
 ### Manuals & Documentation (PDF)
 - **User & Company Manual:** [日本語 PDF (2.9 MB)](../system/ARCHON_OS_SYSTEM_MANUAL_2026_JA.pdf) | [English PDF (97 pp., 1.9 MB)](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) | [Deutsch PDF (97 S., 1.9 MB)](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)
-- **Complete Feature List (PDF: v0.5.2.1 — see CHANGELOG for v0.5.7.8):** [日本語 PDF (1.4 MB)](../system/ARCHON_OS_FEATURELISTE_2026_JA.pdf) | [English PDF (31 pp., 0.7 MB)](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [Deutsch PDF (34 S., 0.7 MB)](../system/ARCHON_OS_FEATURELISTE_2026.pdf)
+- **Complete Feature List (PDF: v0.5.2.1 — see CHANGELOG for v0.6.0):** [日本語 PDF (1.4 MB)](../system/ARCHON_OS_FEATURELISTE_2026_JA.pdf) | [English PDF (31 pp., 0.7 MB)](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [Deutsch PDF (34 S., 0.7 MB)](../system/ARCHON_OS_FEATURELISTE_2026.pdf)
 - **AI Boardroom (55 Frameworks):** [日本語 PDF (1.1 MB)](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_JA.pdf) | [English PDF (31 pp., 0.7 MB)](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [Deutsch PDF (32 S., 0.7 MB)](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)

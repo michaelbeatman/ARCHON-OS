@@ -2,6 +2,18 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [v0.6.0] — 2026-11-26 (Full-Scan Hardening, Red-Team Verification & Operational Resilience)
+
+### Added & Hardened
+- **Security & Workspace Isolation:** Gehärteter Workspace-Path-Jail in `plugins/security_audit_hook/plugin.py` (Case-Normalisierung, Traversal-, Symlink- und Sensitive-File-Schutz), PocketBase-Filter-Escaping in `extension/background.js` und atomare Cost-Guard-Persistierung in `plugins/cost_guard/plugin.py`.
+- **Runtime & Shutdown Resilience:** Timeout-Record-Erfassung und Cancel-Drain-Eskalation in `archon/core/background_loops.py`; `SOUL`-Pinning und fehlertolerantes Shutdown-Handling gehärtet.
+- **Audit-Kette & Produktivbetrieb:** Fail-Closed-HMAC-Startup-Gate aktiv (`auth.enabled=true`); historischer Kettenbruch aus DB-Restoration bewusst Read-Only nach GoBD archiviert (`data/backups/pre_hmac_archive_2026-11-26/`), nicht re-signiert, Betreiberentscheidung dokumentiert.
+- **Qualität & Gates:** MyPy über 439 Dateien fehlerfrei (`0` Fehler, `--disallow-untyped-defs` auf neuen D5-Modulen), 13/13 Maschinen-Gates grün, `pytest tests/` **2538 passed / 20 skipped / 0 failed**, 12/12 Red-Team-Mutations-Checks rot (`audit_reports/V06_CERTIFICATION.md`, `audit_reports/V06_OPEN_POINTS_REVIEW.md`).
+- **Dokumentation & Landing Page:** `config/version.json`, `README.md`, `README.de.md`, alle Sprach-Readmes, `docs/SYSTEM_HANDBUCH.md` und `site/index.html` auf **v0.6.0** aktualisiert (PDF-Manuale basieren weiterhin auf **v0.5.2.1**).
+
+### Known Backlog (`v0.6.x`)
+- `D5` bleibt bewusst partiell (C4 Boardroom-Orchestrierung & C5 Dispatch-Core offen), `D4` (Telegram-Adapter) außerhalb Ownership; `.mcp.json`-Pinning und `tools/migrate_projects_structure.py` Dry-Run/Rollback auf `v0.6.x` verschoben.
+
 ## [Remediation 25.11.2026] — v0.5.7.8 (Final-Re-Audit)
 
 ### Fixed

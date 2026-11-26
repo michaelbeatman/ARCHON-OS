@@ -1351,7 +1351,9 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
     kanban_task_id = node.get("kanban_task_id")
 
     # Agenten-Profil laden
+    explicit_agent = str(node.get("agent_id") or "").strip()
     prof: Dict[str, Any] = {}
+    profiles: List[Dict[str, Any]] = []
     try:
         from archon.core.profiles import api_get_hermes_profiles
         profiles = await asyncio.to_thread(api_get_hermes_profiles) or []
@@ -1361,6 +1363,17 @@ async def default_agent_node_executor(node: Dict[str, Any], upstream: Dict[str, 
 
     node_type = str(node.get("type") or "agent").strip().lower()
     kanban_task_id = node.get("kanban_task_id")
+
+    # F22 (D02): explizit angeforderte, aber unbekannte agent_id darf nicht mit
+    # leerem Profil + Generik-Prompt laufen (fail-closed fuer Agent-Nodes).
+    if node_type == "agent" and explicit_agent and explicit_agent.lower() != "default" and profiles and not prof:
+        logger.error("[WorkflowDAG] Unbekannte agent_id '%s' (Node '%s') — fail-closed.", agent_id, node.get("id"))
+        return {
+            "status": "blocked",
+            "error_code": "UNKNOWN_AGENT_ID",
+            "error": f"Unbekannte agent_id '{agent_id}' — kein Profil im Agenten-Kader.",
+            "content": "",
+        }
 
     # P1/Content B1: nativer Research-Knoten mit echter Quellen-Triangulation.
     if node_type == "research":
@@ -1999,7 +2012,8 @@ async def _run_workflow_dag_locked(
         nonlocal budget_blocked
         node_started = time.perf_counter()
         node = node_map[nid]
-        # D13/HIGH: harte Laufzeit-Obergrenze VOR jedem Node-Dispatch.
+        # D13/HIGH + F22: harte Laufzeit-Obergrenze VOR jedem Node-Dispatch
+        # (auch fuer unbezifferte Nodes, sobald _spent >= _run_cap).
         _run_cap = float(dag_def.get("max_budget_eur") or 0.0)
         if _run_cap > 0.0:
             _spent = sum(
@@ -2007,7 +2021,7 @@ async def _run_workflow_dag_locked(
                 for v in outputs.values() if isinstance(v, dict)
             )
             _node_est = float(node.get("max_budget_eur") or 0.0)
-            if _spent + _node_est > _run_cap + 1e-6:
+            if _spent >= _run_cap - 1e-6 or (_spent + _node_est > _run_cap + 1e-6):
                 budget_blocked = True
                 statuses[nid] = "blocked"
                 outputs[nid] = {

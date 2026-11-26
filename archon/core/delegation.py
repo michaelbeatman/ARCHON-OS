@@ -2008,10 +2008,6 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     if len(_chain) >= _hard_depth:
         return _block_receipt(_tid, ziel, _chain, "DEPTH_EXCEEDED",
                               f"maximale Delegationstiefe ({_hard_depth}) erreicht.")
-    _hop = reserve_hop(_tid, ziel, "delegation_switch", root_ticket_id=_root_ticket)
-    if not _hop.get("allowed", False):
-        return _block_receipt(_tid, ziel, _chain, str(_hop.get("reason") or "HOP_CAP_REACHED"),
-                              f"hops_used={_hop.get('hops_used')}/{_hop.get('max_hops')}")
 
     allowed, reason = _check_delegation_permission(delegator_id, ziel)
     if not allowed:
@@ -2031,6 +2027,13 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     if not gate_ok:
         logger.warning(f"[Delegation] Eval-Gate blockiert Delegation an {ziel}: {gate_reason}")
         return f"❌ DELEGATION ABGELEHNT — Eval-/Promotion-Gate für {ziel} nicht bestanden: {gate_reason}"
+
+    # F22 (D02): Hop-Budget erst NACH allen Autorisierungs-, Profil- und Eval-Gates
+    # reservieren, damit abgelehnte Delegationen keine Hops verbrauchen.
+    _hop = reserve_hop(_tid, ziel, "delegation_switch", root_ticket_id=_root_ticket)
+    if not _hop.get("allowed", False):
+        return _block_receipt(_tid, ziel, _chain, str(_hop.get("reason") or "HOP_CAP_REACHED"),
+                              f"hops_used={_hop.get('hops_used')}/{_hop.get('max_hops')}")
 
     # 3. Compute-optimierte Modell-Zuweisung für den Ziel-Agenten:
     # Verhindert, dass Subagenten unreflektiert teure Flaggschiff-Modelle (wie Opus) erben.

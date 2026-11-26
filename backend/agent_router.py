@@ -1110,9 +1110,11 @@ class AgentRouter:
                 "blocked": False,
                 "text": f"Deterministisch via n8n ausgeführt (0 Tokens): {_res.get('status')}",  # type: ignore[attr-defined]
             }
+        # F22 (D02): Kein Schein-Erfolgstext ohne echten deterministischen Executor.
         return {
-            "blocked": False,
-            "text": "Deterministische Aufgabe (0 Tokens) — kein LLM-Dispatch erforderlich.",
+            "blocked": True,
+            "error_code": "DETERMINISTIC_SCRIPT_NO_EXECUTOR",
+            "text": "Deterministisches Skript blockiert (DETERMINISTIC_SCRIPT_NO_EXECUTOR): kein Executor konfiguriert.",
         }
 
     async def chat_completion(

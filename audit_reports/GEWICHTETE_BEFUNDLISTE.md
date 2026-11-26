@@ -35,7 +35,7 @@
 | 8 | D05-H2 | HIGH | 9 | W1 | `.env:18`; `docker-compose.yml:124,171-172` | „Externer" Audit-Anker liegt im selben DB-Mount | **Behoben (8a2cb037)** |
 | 9 | D06-H1 | HIGH | 9 | W5 | `backend/workflow_scheduler.py:1586-1625` | 30-s-Outbox-Drainer ohne `tenant_id` → Sekundärmandanten nie zugestellt | Offen |
 | 10 | D07-H1 | HIGH | 9 | W3 | `backend/operations_api.py:361-372` | Zombie-Reset bei Importfehler fail-open → Duplikat-Side-Effects | **Behoben (eb308bb5)** |
-| 11 | D07-H2 | HIGH | 9 | W3 | `backend/operations_execution.py:427-439` | `ARCHON_LEASE_FAIL_OPEN` / `task_exists=False` → Dispatch ohne CAS | **Behoben (eb308bb5)** |
+| 11 | D07-H2 | HIGH | 9 | W3 | `backend/operations_execution.py:427-439`; `archon/core/orchestration.py:426` | `ARCHON_LEASE_FAIL_OPEN` / `task_exists=False` → Dispatch ohne CAS | **Behoben (eb308bb5; Rest eb25d51e)** |
 | 12 | D10-H1 | HIGH | 9 | W5 | `scripts/chaos_tester.py:182-218,329-338` | Restart-SLA < 15 s nie gemessen (real ≥ 150 s), Dry-Run = `passed` | Offen |
 | 13 | D11-H1 | HIGH | 9 | W3 | `archon/core/delegation.py:298-299` | Delegations-HMAC produktiv nie geprüft, Signatur vor Prüfung überschrieben | **Behoben (eb308bb5)** |
 | 14 | D11-H2 | HIGH | 9 | W3 | `delegation.py:2145-2191` vs `operations_execution.py:179-191` | Zwei Payloads: volle signierte Fassung tote Daten, Kind erhält `auftrag[:80]` | **Behoben (eb308bb5)** |
@@ -92,8 +92,8 @@
 | 65 | D04-M5 | MED | 6 | W2 | `backend/llm_kernel.py:186-190` | Output-Masking-Fehler → Klartext im Antworttext | **Behoben (4c7344bd)** |
 | 66 | D04-M6 | MED | 6 | W2 | `backend/agent_aliases.py:73-75` | Leere `agent_id` still auf `research_scout` abgebildet | **Behoben (4c7344bd)** |
 | 67 | D05-M2 | MED | 6 | W2 | `break_glass_recovery.py:303-313`; `secret_files.py:123-167` | Break-Glass-Key auf Windows nicht per DACL gehärtet | **Behoben (4c7344bd)** |
-| 68 | D07-M4 | MED | 6 | W3 | `background_loops.py:163-164,186-187,195-196` | Deadlock-/Synthese-/Alert-Loop-Fehler nur DEBUG | Offen |
-| 69 | D07-M7 | MED | 6 | W3 | `archon/services/lifecycle.py:78-88` | Shutdown-Hooks ohne `wait_for`, hängender `aclose()` blockiert | Offen |
+| 68 | D07-M4 | MED | 6 | W3 | `background_loops.py:163-164,186-187,195-196` | Deadlock-/Synthese-/Alert-Loop-Fehler nur DEBUG | **Behoben (eb25d51e)** |
+| 69 | D07-M7 | MED | 6 | W3 | `archon/services/lifecycle.py:78-88` | Shutdown-Hooks ohne `wait_for`, hängender `aclose()` blockiert | **Behoben (eb25d51e)** |
 | 70 | D08-M1 | MED | 6 | W6 | `archon/core/delegation.py:1142,1197,1279` | Fan-in/Synthese-Trigger liest DB + schreibt Vault synchron im Event-Loop | Offen |
 | 71 | D08-M8 | MED | 6 | W4 | `delegation.py:548,2181`; `core_dispatcher.py:1338-1422` | 3-Tier-SOUL nur im Delegations-Handoff, nicht im zentralen Dispatch | Offen |
 | 72 | D10-M4 | MED | 6 | W5 | `docker-compose.yml:147`; `alerts.yml:40-65` | Dead-Man-Switch ohne Konsument im Default-Stack | Offen |
@@ -101,7 +101,7 @@
 | 74 | D10-M7 | MED | 6 | W5 | `lifecycle.py:75-93`; `graceful_shutdown_coordinator.py:433-446` | Shutdown-Hooks ohne globales Zeitbudget (nur Background-Tasks 10 s) | Offen |
 | 75 | D10-M8 | MED | 6 | W5 | `docker-compose.yml:338`; `haproxy.cfg:175` | `NETWORKS=0` → Worker-Netz-Isolation nicht prüfbar | Offen |
 | 76 | D11-M2 | MED | 6 | W3 | `delegation.py:2181-2190` | SOUL-Tier als System-Nachricht gespeichert, kein Konsument | **Behoben (eb308bb5)** |
-| 77 | D11-M3 | MED | 6 | W3 | `lossless_session_dag.py:342-363,179-198` | Dedup-Key ohne Sequenz + Session-Fingerprint kollidiert | Teilweise (W3) |
+| 77 | D11-M3 | MED | 6 | W3 | `lossless_session_dag.py:342-363,179-198` | Dedup-Key ohne Sequenz + Session-Fingerprint kollidiert | **Behoben (eb25d51e)** |
 | 78 | D12-M3 | MED | 6 | W2 | `consensus_gate.py:462-478,564` | Fehlender Juror-Score → Default 7, fehlende risks → `[]` | **Behoben (4c7344bd)** |
 | 79 | D12-M4 | MED | 6 | W2 | `scripts/archon_mcp_server.py:363-391` | Inbox-Lesefehler still übersprungen → `success, count=0` | **Behoben (4c7344bd)** |
 | 80 | D13-M2 | MED | 6 | W3 | `flightlog_backtester.py:189-198` | Loop-Erkennung nur bei ≥3 identischen `args_hash` | **Behoben (eb308bb5)** |
@@ -117,7 +117,7 @@
 | 90 | D02-M2 | MED | 5 | W3 | `agent_router.py:1086-1090` | Router/Dispatcher füttern Routing-Guard mit unterschiedlichem Text | **Behoben (eb308bb5)** |
 | 91 | D03-M1 | MED | 5 | W1 | `orchestration.py:1139-1152` | Finalbericht nicht-atomar, Teilfehler nur `logger.warning` | **Behoben (8a2cb037)** |
 | 92 | D03-M2 | MED | 5 | W1 | `db_paths.py:244-351`; `ci.yml` | `busy_timeout`-Gate implementiert, aber nicht in CI verdrahtet | **Behoben (8a2cb037)** |
-| 93 | D07-M6 | MED | 5 | W3 | `runtime_endpoints.py:264-278` | Audit-Anker-Stopp-/Shutdown-Fehler auf DEBUG/stderr | Offen |
+| 93 | D07-M6 | MED | 5 | W3 | `runtime_endpoints.py:264-278`; `shutdown_clients.py:117-155` | Audit-Anker-Stopp-/Shutdown-Fehler auf DEBUG/stderr | **Behoben (eb25d51e)** |
 | 94 | D08-M2 | MED | 5 | W6 | `delegation.py:1886-1901` | Watcher-Cancel schreibt `cancelled`-Event synchron in SQLite | Offen |
 | 95 | D08-M3 | MED | 5 | W6 | `workflow_scheduler.py:1628-1645` | DLQ-Replay liest Task-Status synchron aus `kanban.db` | Offen |
 | 96 | D08-M4 | MED | 5 | W6 | `task_self_healer.py:209-241` | Self-Healing schreibt Datei-Backup + SQLite-Log synchron im Loop | Offen |
@@ -126,7 +126,7 @@
 | 99 | D09-M1 | MED | 5 | W6 | `mypy.ini:7` vs `ruff.toml:7` | MyPy prüft gegen Python 3.11, Runtime/CI auf 3.13 | Offen |
 | 100 | D09-M5 | MED | 5 | W6 | `ci.yml:167,452`; `Dockerfile:38` | `compileall`/`bandit` erfassen Root-Monolithen nicht | Offen |
 | 101 | D09-M6 | MED | 5 | W6 | `operations_bulk.py:25-51,273` | Modulglobaler Undo-Token-Store ohne Lock | Offen |
-| 102 | D11-M4 | MED | 5 | W3 | `boardroom.py:498-505` | `critique`/`synthesis` mit `[:1500]` gekappt ohne `mark_truncated` | Teilweise (W3) |
+| 102 | D11-M4 | MED | 5 | W3 | `boardroom.py:498-505` | `critique`/`synthesis` mit `[:1500]` gekappt ohne `mark_truncated` | **Behoben (eb25d51e)** |
 | 103 | D11-M5 | MED | 5 | W3 | `role_budget_engine.py:733-776` | `complexity_weight`/`budget_share_pct` nicht im Kind-Prompt | **Behoben (eb308bb5)** |
 | 104 | D16-M1 | MED | 5 | W5 | `runtime_endpoints.py:107-113` | CORS erlaubt/exponiert `traceparent`/`tracestate`/`X-Trace-Id` nicht | Offen |
 | 105 | D16-M4 | MED | 5 | W5 | `trace_log_filter.py:29-47`; `promtail-config.yml:25-29` | Log-Brücke/Promtail nur `trace_id`, kein `span_id` | Offen |

@@ -13,6 +13,7 @@ from __future__ import annotations
 import ast
 import html as html_lib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -533,7 +534,13 @@ def _page_frameworks(lang: str) -> tuple[str, str, str, str, str, str]:
         short = cat_name.split(":", 1)[-1].strip() if ":" in cat_name else cat_name
         pills.append(f'<button type="button" class="filter-pill" data-dir-cat="{cid}">{_esc(short)} ({len(items)})</button>')
         for fw_name, fw_desc in items:
-            clean_desc = fw_desc.replace("\n", " ").strip()
+            clean_desc = re.sub(r"\s+", " ", fw_desc).strip()
+            # Remove leading duplicate [METHODIK-FRAMEWORK: ...] prompt header
+            clean_desc = re.sub(r"^\s*\[[^\]]+\]\s*", "", clean_desc)
+            # Trim raw prompt output-format boilerplate (e.g. AUSGABE-FORMAT: ### ...)
+            clean_desc = re.sub(r"\s*AUSGABE-FORMAT:.*$", "", clean_desc, flags=re.I).strip()
+            # Unwrap any remaining inline [Phase] brackets so no raw prompt brackets appear in cards
+            clean_desc = re.sub(r"\[([^\]]+)\]", r"\1", clean_desc).strip()
             if len(clean_desc) > 220:
                 clean_desc = clean_desc[:217].rstrip() + "..."
             cards.append(

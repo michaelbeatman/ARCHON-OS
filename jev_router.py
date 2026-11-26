@@ -86,15 +86,17 @@ def match_local_fast_path(prompt: str) -> Optional[dict]:
                     "command": item["command"],
                     "description": item["description"],
                     "confidence": 1.0,
-                    "tokens_saved": 4000
+                    "tokens_saved": None,
+                    "tokens_saved_estimated": False,
                 }
     return None
 
 def classify_prompt(prompt: str) -> dict:
     """
     Klassifiziert die Benutzeranfrage.
-    Prüft zuerst lokale Schnellmuster. Falls kein Treffer, wird bei aktiviertem JEV
-    der Remote-Entscheidungsendpunkt konsultiert.
+    Aktiv ist nur die lokale Fast-Path-Mustererkennung; ohne lokalen Treffer
+    wird kein Remote-JEV-Call ausgefuehrt, sondern explizit
+    ``demo_only=True`` / ``mode="heuristic_demo"`` zurueckgegeben.
     """
     cfg = get_jev_config()
     if not cfg["enabled"]:

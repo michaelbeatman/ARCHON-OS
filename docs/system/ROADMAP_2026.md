@@ -28,8 +28,8 @@
 | **23** | **Dual-LLM Guard gegen Prompt Injection** | Kritisch | Abgeschlossen | 2-Stufen Quarantäne-Filterung externer Daten vor Übergabe an Werkzeug-Agenten & interaktiver `[T]`-Trusted Source Toggle |
 | **24** | **Verschlüsselter Notfallzugang (Break-Glass Protocol)** | Kritisch | Abgeschlossen | Zero-Dependency PBKDF2-200k/HMAC verschlüsselter Tresor (`break_glass_vault.enc`) für Katastrophen-Wiederherstellung bei Betreiberausfall |
 | **25** | **Operativer Operations-Kalender (ERP, Kanban & Agenten)** | Hoch | Abgeschlossen | Aggregations-API (`/api/v1/calendar/events`) + Enterprise-Kalender-Engine & UI (`backend/enterprise_calendar.py`, `static/js/enterprise_calendar_ui.js`) |
-| **26** | **Autonomous Computer-Use & PbD (Demo-to-Skill)** | Kritisch | Abgeschlossen | Vormachen & Lernen per Bot-Screen, Ghost-Cursor Anti-Detection (Bézier-Pfade, Bounding-Box Jitter), SoM-Visual-Grounding und a11y Observation-Pruning |
-| **27** | **MCTS Action Trajectories & Deep Reasoning Gate** | Mittel | Abgeschlossen | Optionale Monte-Carlo-Baumsuche in Autonomie-Settings zur Voraus-Simulation heikler Handlungsstränge vor Ausführung |
+| **26** | **Autonomous Computer-Use & PbD (Demo-to-Skill)** | Kritisch | Demo / Simulation (nicht produktiv verdrahtet) | Bot-Screen & PbD-UI laufen ohne angebundene Computer-Use-Runtime im Simulationsmodus (`status="simulated"`); Bézier-/a11y-Helfer liegen als Bausteine vor |
+| **27** | **MCTS Action Trajectories & Deep Reasoning Gate** | Mittel | Demo / Simulation (nicht produktiv verdrahtet) | Manuell aufrufbarer Heuristik-Endpunkt (`/autonomy/mcts-simulate`, `backend/mcts_engine.py`); nicht automatisch in den Dispatcher-/Tool-Call-Hot-Path verdrahtet |
 | **28** | **ERP-Modul zum vollwertigen Kernsystem ausbauen** | Kritisch | Abgeschlossen | EN 16931 / XRechnung-3.0-UBL-XML (`/xrechnung.xml`), ZUGFeRD-2.2 / Factur-X Hybrid-PDF (`/zugferd.pdf`), DATEV-EXTF-SKR03-CSV (`/export/datev.csv`), `leitweg_id`, atomare Lagerbestands-Abbuchung (`stock_deducted`) sowie Bank-Import (`CAMT.053` / `MT940` / `CSV`) & OPOS-Abgleich (`/api/erp/bank/*`) |
 | **29** | **Visueller Formular- & Beleg-Editor (im ERP-Modul)** | Hoch | Abgeschlossen | WYSIWYG-/Block-Editor (`view_corporate.html`, `corporate_controller.js`) für 6 Belegtypen (Brief, Angebot, AB, Rechnung, Mahnung 1–3, NDA) inkl. Live-§ 14-UStG-Prüfung, Platzhaltern (`{{customer.*}}`/`{{doc.*}}`), DIN-5008-Falzmarken, Pure-Python EPC-QR GiroCode (`backend/qr_girocode.py`), Layout-Persistenz & direktem A4-PDF-Download (`/api/corporate/render-pdf`) |
 | **30** | **Interaktiver Setup-Wizard & Installationsprogramm** | Kritisch | Abgeschlossen | Geführter First-Run-Installer (GUI & CLI) mit Abfrage von Firmendaten, Mandantenstamm, API-Keys, lokalen LLM-Pfaden, IMAP/SMTP und Telegram-Bot-Setup |
@@ -256,14 +256,13 @@
 - **Reallife-Termine & Kontaktpflege:** Integration wichtiger Termine und Geburtstage aus dem CRM für automatisierte Gratulationen und Beziehungspflege.
 - **Externer Sync:** Optionale ICS/CalDAV-Synchronisation mit Mobilgeräten.
 
-### Meilenstein 26: Autonomous Computer-Use Engine & PbD (Abgeschlossen)
-- **Programming by Demonstration (PbD):** Aufnahme-Button im Bot-Screen (`[ 🔴 Vormachen & Aufnehmen ]`) zeichnet Bediener-Aktionen und Sprach-/Absichts-Kommentare live auf und synthetisiert sie vollautomatisch in wiederverwendbare Skills (`.agents/skills/<name>/SKILL.md`) und Python-Automationsskripte (`scripts/dynamic_tools/`).
-- **Anti-Bot Trajektorien (Ghost-Cursor):** Biomechanische Bézier-Trajektorien (Cubic Bézier mit Fitts's Law Verzögerung), Gauss-verteilter Bounding-Box Jitter (gegen starre Pixelklicks) und menschliche Tasten-Kadenzen (50-180ms variierend) zur Umgehung von Anti-Bot WAFs und Fingerprinting.
-- **Visual Grounding & a11y Observation Pruning:** Kompakte Extraktion des semantischen Accessibility-Trees mit bis zu 85-92% Token-Reduktion und Chat-/Screen-Toggle (`[ 🌲 a11y Pruning: Aktiv ]`).
+### Meilenstein 26: Autonomous Computer-Use Engine & PbD (Demo / Simulation – nicht produktiv verdrahtet)
+- **Status-Hinweis:** Ohne angebundene Browser-/Desktop-Computer-Use-Runtime liefert der Bot-Screen explizit `status="simulated"` zurück; eine autonome Produktiv-Steuerung fremder Anwendungen ist bewusst nicht aktiv verdrahtet.
+- **Vorhandene Bausteine (PbD & Hilfsmodule):** Aufnahme-UI im Bot-Screen (`[ 🔴 Vormachen & Aufnehmen ]`), Skill-Synthese-Entwurf (`.agents/skills/<name>/SKILL.md`), Bézier-/Jitter-Trajektorien-Helfer und a11y-Pruning-Logik liegen als experimentelle Module vor.
 
-### Meilenstein 27: MCTS & Heuristik-Tree-Search (Abgeschlossen)
-- **Gedankliche Voraus-Simulation:** Monte-Carlo-Baumsuche (`backend/mcts_engine.py`) mit UCB1-Exploration, Risiko-Penalties und Rollout-Simulation für hochriskante Aufgaben vor der ersten Tool-Ausführung.
-- **Konfigurierbar:** Verwaltet in `settings.json` (`mcts_reasoning.enabled: false` als Standard) zur Schonung von Token-Credits bei Routine-Tasks.
+### Meilenstein 27: MCTS & Heuristik-Tree-Search (Demo / Simulation – nicht produktiv verdrahtet)
+- **Status-Hinweis:** Die Monte-Carlo-Baumsuche (`backend/mcts_engine.py`) steht als manuell aufrufbarer Heuristik-Endpunkt (`/autonomy/mcts-simulate`) zur Verfügung, ist jedoch **nicht** automatisch als Gate in den produktiven Dispatcher-/Tool-Call-Hot-Path eingebunden.
+- **Konfigurierbar:** Verwaltet in `settings.json` (`mcts_reasoning.enabled: false` als Standard).
 
 ---
 

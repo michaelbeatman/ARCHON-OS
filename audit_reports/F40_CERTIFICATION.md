@@ -80,3 +80,6 @@
 **VOTUM: GO (für Merge / Push nach expliziter Owner-Freigabe).**
 
 Alle 4 historischen HIGHs (H-A…H-D), beide Phase-1-HIGHs (SOUL-Pin-API, Shielded-Cancel-Cleanup), alle 13 empirischen Maschinen-Gates (inkl. `mypy(full) 439/0`, `pytest 2530/20/0`, `A/B=0`, `livez HTTP 200`) und alle Red-Team-PoCs sind grün und code-belegt. **Kein Push ausgeführt.**
+
+> **Nachtrag (26.11.2026):** Diese Zertifizierung gilt fuer `6ae04559`/`7a580e95`.
+> Finaler Stand nach v0.6-Re-Zertifizierung: `5f5c0bb8` — siehe `audit_reports/V06_CERTIFICATION.md`.

@@ -762,55 +762,24 @@ def _assert_api_key_pepper() -> None:
 
 
 async def _archon_lifespan(_app_instance):
-    try:
-        from backend.loop_liveness import start_loop_heartbeat, stop_loop_heartbeat
-        await start_loop_heartbeat()
-    except Exception as _ll_start_err:
-        stop_loop_heartbeat = None  # type: ignore[assignment]
-        logger.warning(f"[Lifespan] Loop-Liveness-Start fehlgeschlagen: {_ll_start_err}")
+    # 2b/S2: der Startup-/Shutdown-Pfad ist 1:1 nach
+    # archon/services/lifecycle.py gewandert. Die Facade bleibt bewusst ein
+    # asynchroner Generator mit yield (gleiche Form fuer FastAPI).
+    #
+    # Alle stabilen Contracts bleiben PHYSISCH in dieser Datei und werden zur
+    # AUFRUFZEIT uebergeben (S3, kein Modul-Level-Rueckimport):
+    # _STARTUP_HOOKS inkl. der 5 insert(0, ...)-Stellen, _SHUTDOWN_HOOKS
+    # (reversed() im Modul), _FAIL_FAST_HOOKS (raise statt Log),
+    # _init_readiness_probe_table (D08/H-08-2).
+    from archon.services.lifecycle import lifespan_context
 
-    # D08/H-08-2: die Readiness-Schreibprobe wird EINMAL im Lifespan angelegt,
-    # nicht bei jedem Healthcheck-Scrape (vorher CREATE TABLE pro /readyz).
-    try:
-        await asyncio.to_thread(_init_readiness_probe_table)
-    except Exception as _probe_err:
-        # Kein Fail-Fast: /readyz meldet den Fehler ueber _readiness_sync_checks.
-        logger.warning(f"[Lifespan] Readiness-Probe-Tabelle nicht anlegbar: {_probe_err}")
-    for hook in list(_STARTUP_HOOKS):
-        name = getattr(hook, "__name__", repr(hook))
-        try:
-            if asyncio.iscoroutinefunction(hook):
-                await hook()
-            else:
-                result = await asyncio.to_thread(hook)
-                if asyncio.iscoroutine(result):
-                    await result
-        except Exception as e:  # ein defekter Hook darf den Start nicht kippen
-            # KRITISCH: der Router-Health-Hook ist KEIN normaler Hook — sein
-            # Scheitern muss den Start abbrechen (sonst 404 beihealthy /health).
-            if name in _FAIL_FAST_HOOKS:
-                logger.error(f"[Lifespan] KRITISCH: {e}")
-                raise
-            logger.warning(f"[Lifespan] Startup-Hook '{name}' fehlgeschlagen: {e}")
-    try:
+    async with lifespan_context(
+        startup_hooks=list(_STARTUP_HOOKS),
+        shutdown_hooks=list(_SHUTDOWN_HOOKS),
+        fail_fast_hooks=_FAIL_FAST_HOOKS,
+        init_readiness_probe_table=_init_readiness_probe_table,
+    ):
         yield
-    finally:
-        for hook in reversed(list(_SHUTDOWN_HOOKS)):
-            name = getattr(hook, "__name__", repr(hook))
-            try:
-                if asyncio.iscoroutinefunction(hook):
-                    await hook()
-                else:
-                    result = await asyncio.to_thread(hook)
-                    if asyncio.iscoroutine(result):
-                        await result
-            except Exception as e:
-                logger.warning(f"[Lifespan] Shutdown-Hook '{name}' fehlgeschlagen: {e}")
-        if stop_loop_heartbeat is not None:
-            try:
-                await stop_loop_heartbeat()
-            except Exception as _ll_stop_err:
-                logger.warning(f"[Lifespan] Loop-Liveness-Stop fehlgeschlagen: {_ll_stop_err}")
 
 # Begrenzter Graceful-Shutdown: sonst blockiert uvicorn --reload bei jeder
 # Code-Änderung unbegrenzt auf offene Streams und der Server friert ein.

@@ -180,7 +180,40 @@ def test_readiness_sync_checks_are_offloaded():
     assert "await readiness_check()" not in inspect.getsource(main.health_check)
     assert "await liveness_check()" in inspect.getsource(main.health_check)
     assert "CREATE TABLE IF NOT EXISTS _readiness_probe" in src
-    assert "await asyncio.to_thread(_init_readiness_probe_table)" in src
+    # G7-Migration (2b, ANALYSIS §6 #5 / Anhang D.2: „Umstellung auf V, nicht
+    # Loeschen"): der Source-String wanderte mit dem Lifespan nach
+    # archon/services/lifecycle.py. Statt Text wird jetzt das VERHALTEN
+    # festgenagelt: der Probe-Aufbau muss beim Lifespan-Start in einem
+    # Worker-Thread laufen und darf nicht im Event-Loop blockieren (D08/H-08-2).
+    # Rot, sobald asyncio.to_thread durch einen direkten Aufruf ersetzt wird —
+    # unabhaengig davon, in welchem Modul der Code steht.
+    import asyncio
+    import threading
+    from contextlib import suppress
+    from unittest.mock import AsyncMock, patch
+
+    seen: dict = {}
+
+    def _probe() -> None:
+        seen["thread"] = threading.current_thread().name
+
+    async def _drive() -> None:
+        gen = main._archon_lifespan(None)
+        with patch.object(main, "_STARTUP_HOOKS", []), \
+             patch.object(main, "_SHUTDOWN_HOOKS", []), \
+             patch.object(main, "_FAIL_FAST_HOOKS", set()), \
+             patch.object(main, "_init_readiness_probe_table", _probe), \
+             patch("backend.loop_liveness.start_loop_heartbeat", new=AsyncMock()), \
+             patch("backend.loop_liveness.stop_loop_heartbeat", new=AsyncMock()):
+            await gen.__anext__()
+            with suppress(StopAsyncIteration):
+                await gen.__anext__()
+            await gen.aclose()
+
+    main_thread = threading.current_thread().name
+    asyncio.run(_drive())
+    assert seen.get("thread"), "Readiness-Probe wurde im Lifespan nicht ausgefuehrt"
+    assert seen["thread"] != main_thread, "Readiness-Probe lief im Event-Loop statt im Worker-Thread"
 
 
 # ---------------------------------------------------------------------------

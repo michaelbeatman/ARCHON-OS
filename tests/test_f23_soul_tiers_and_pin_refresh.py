@@ -88,6 +88,7 @@ def test_f23_soul_mode_switch_with_pin_refresh_passes_refresh_flag(monkeypatch):
 def test_f23_soul_tier_change_audit_write_failure_is_fail_closed_403(monkeypatch, tmp_path):
     """Negativprobe: scheitert chained_audit_log.record_event -> HTTP 403 audit_write_failed, soul_mode unveraendert."""
     import json
+
     import backend.audit_log as audit_mod
     import scripts.sync_soul_modes as ssm
 
@@ -129,6 +130,7 @@ def test_f23_soul_tier_change_audit_write_failure_is_fail_closed_403(monkeypatch
 def test_f23_soul_tier_change_records_signed_audit_event_with_hashes_and_note(monkeypatch, tmp_path):
     """Positivprobe: Pin-Refresh schreibt compliance/soul_tier_changed inkl. old_hash, new_hash und note."""
     import json
+
     import backend.audit_log as audit_mod
     import scripts.sync_soul_modes as ssm
 

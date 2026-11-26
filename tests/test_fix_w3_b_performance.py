@@ -394,6 +394,7 @@ def test_usage_log_errors_are_escalated(monkeypatch, tmp_path, caplog):
     """G7-Migration (D5-C3): echtes Eskalationsverhalten fuer _audit_dispatch_failure und 0-row session_update."""
     import logging
     import sqlite3
+
     import backend.audit_log as audit_mod
     import backend.db_paths as dbp_mod
     import backend.execution_receipt_ledger as erl_mod

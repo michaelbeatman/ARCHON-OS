@@ -4,8 +4,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 import core_dispatcher
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

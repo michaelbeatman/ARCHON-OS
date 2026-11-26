@@ -15,7 +15,6 @@ from __future__ import annotations
 import ast
 import copy
 from pathlib import Path
-import pytest
 
 import core_dispatcher
 

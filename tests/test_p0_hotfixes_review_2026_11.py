@@ -58,6 +58,7 @@ def test_p08_cost_estimation_is_model_specific():
 def test_p08_no_hardcoded_flat_rate_in_usage_log(tmp_path):
     """G7-Migration (D5-C3): modellabhaengige Kostenberechnung im echten Usage-Log."""
     import sqlite3
+
     import backend.db_paths as dbp_mod
     import backend.execution_receipt_ledger as erl_mod
     import core_dispatcher as cd

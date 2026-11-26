@@ -1764,9 +1764,11 @@ def sync_single_agent_capabilities_to_soul(
 
 def refresh_soul_pin_for_agents(target_agent_id: str | None = None) -> Dict[str, Any]:
     """F23 (D15): Aktualisiert den SOUL-SHA-256-Pin im EU-AI-Act-Inventar nach Tier-Wechsel."""
-    from backend.eu_ai_act_inventory import sync_inventory
+    # F40: `sync_inventory` existiert nicht — der echte Regenerationspfad ist
+    # generate_inventory(save=True) und schreibt dabei den aktuellen soul_sha256.
+    from backend.eu_ai_act_inventory import eu_ai_act_inventory_manager
 
-    inv_res = sync_inventory()
+    inv_res = eu_ai_act_inventory_manager.generate_inventory(save=True)
     return {
         "pin_refreshed": True,
         "target_agent_id": target_agent_id or "*",

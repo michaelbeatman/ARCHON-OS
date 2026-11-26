@@ -1,12 +1,11 @@
 """F24b (D01): Ehrliche Doku- & Demo-Kennzeichnung fuer M26/M27 und jev_router."""
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 import jev_router
 from scripts.check_doc_version_sync import check_doc_version_sync
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

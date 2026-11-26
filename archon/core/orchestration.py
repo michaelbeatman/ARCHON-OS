@@ -669,7 +669,9 @@ async def _execute_mission_control_task(
                 def _lease_release_sync():
                     return deadlock_supervisor.release_lease(str(task_id), lease_token)
 
-                await asyncio.to_thread(_lease_release_sync)
+                await asyncio.shield(asyncio.to_thread(_lease_release_sync))
+            except asyncio.CancelledError:
+                logger.warning("[MissionControl] Cancel während Lease-Release; Cleanup läuft weiter.")
             except Exception as rel_exc:
                 logger.warning(f"[MissionControl] Lease-Release fehlgeschlagen: {rel_exc}")
         if idem_key:
@@ -693,10 +695,15 @@ async def _execute_mission_control_task(
                         # markerieren — sonst wird der naechste Retry geblockt.
                         idempotency_guard.invalidate_key(idem_key)
 
-                await asyncio.to_thread(_idem_finish_sync)
+                await asyncio.shield(asyncio.to_thread(_idem_finish_sync))
+            except asyncio.CancelledError:
+                logger.warning("[MissionControl] Cancel während Idempotency-Abschluss; Cleanup läuft weiter.")
             except Exception as idem_fin_exc:
                 logger.warning(f"[MissionControl] Idempotency-Abschluss fehlgeschlagen: {idem_fin_exc}")
-        await _commit_async()
+        try:
+            await asyncio.shield(_commit_async())
+        except asyncio.CancelledError:
+            logger.warning("[MissionControl] Cancel während Status-Commit; Commit läuft weiter.")
         # Audit v3 2.1.3: fan_in erst NACH dem Commit starten — sonst liest die Synthese
         # den alten Geschwister-Status aus der letzten Persistierung.
         if parent_ok:

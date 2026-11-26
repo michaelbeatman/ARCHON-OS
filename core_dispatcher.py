@@ -7,8 +7,6 @@ import json
 import logging
 import os
 import random
-import sqlite3
-import sys
 import threading
 import time
 import weakref
@@ -341,7 +339,7 @@ async def _provider_backoff(response=None, *, provider: str = "") -> None:
     await asyncio.sleep(delay * (0.75 + random.random() * 0.5))
 
 
-from archon.core.dispatch_budget_cache import (
+from archon.core.dispatch_budget_cache import (  # noqa: E402, I001 - INVARIANTS §3: bewusster später Re-Export/Patch-Punkt
     _DispClosingConn as _DispClosingConn,
     _audit_dispatch_failure_with_lock as _audit_dispatch_failure_with_lock,
     _cache_policy_context as _cache_policy_context,
@@ -774,7 +772,7 @@ async def dispatch_to_openclaw(agent_name: str, prompt: str, timeout: int = 30) 
         timeout=timeout,
     )
 
-from archon.core.dispatch_parsing import (
+from archon.core.dispatch_parsing import (  # noqa: E402, I001 - INVARIANTS §3: bewusster später Re-Export/Patch-Punkt
     _OMNIROUTE_OPENROUTER_FALLBACK_MAP as _OMNIROUTE_OPENROUTER_FALLBACK_MAP,
     _extract_tokens_usage as _extract_tokens_usage,
     _resolve_openrouter_fallback_model as _resolve_openrouter_fallback_model,
@@ -1289,7 +1287,7 @@ async def dispatch_to_omniroute_or_container(
             except Exception as th_exc:
                 logger.warning(f"[Dispatcher] Throttle-Slot {slot_id} konnte nicht freigegeben werden: {th_exc}")
 
-from backend.llm_kernel import AUTO_MODEL_MAP, estimate_model_cost_usd
+from backend.llm_kernel import AUTO_MODEL_MAP, estimate_model_cost_usd as estimate_model_cost_usd  # noqa: E402, I001 - INVARIANTS §3: Re-Export
 # _OMNIROUTE_OPENROUTER_FALLBACK_MAP & _resolve_openrouter_fallback_model werden oben via `X as X` re-exportiert.
 
 
@@ -1586,7 +1584,6 @@ async def _dispatch_to_omniroute_or_container_impl(
     from backend.llm_egress_guard import (
         ZeroEgressBlockedError,
         evaluate_and_gate_llm_dispatch,
-        log_completed_llm_dispatch,
     )
     from backend.privacy_router import get_privacy_config
 
@@ -2324,9 +2321,9 @@ async def dispatch_to_external_agent(
         task_id=task_id,
     )
 
-import copy
+import copy  # noqa: E402, I001 - INVARIANTS §3: bewusster später Re-Export/Patch-Punkt
 
-from archon.core.dispatcher_frameworks import (
+from archon.core.dispatcher_frameworks import (  # noqa: E402 - INVARIANTS §3: Re-Export
     DEFAULT_CATEGORIZED_FRAMEWORKS as DEFAULT_CATEGORIZED_FRAMEWORKS,
     DEFAULT_CATEGORIZED_FRAMEWORKS_EN as DEFAULT_CATEGORIZED_FRAMEWORKS_EN,
     UNIVERSAL_METHODOLOGY_HEADER as UNIVERSAL_METHODOLOGY_HEADER,

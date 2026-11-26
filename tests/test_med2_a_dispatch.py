@@ -190,6 +190,7 @@ def test_audit_and_receipt_errors_use_error_level(monkeypatch, tmp_path, caplog)
     """G7-Migration (D5-C3): prueft ERROR-Level sowohl fuer core_dispatcher als auch real fuer Usage-Audit-Log."""
     import logging
     import sqlite3
+
     import backend.db_paths as dbp_mod
     import backend.execution_receipt_ledger as erl_mod
     import core_dispatcher

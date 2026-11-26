@@ -134,6 +134,7 @@ def test_d08_audit_dispatch_is_async():
 def test_d02_cache_respects_policy(monkeypatch):
     """G7-Migration (D5-C3): echtes Verhalten fuer Policy-Scope, Privacy-Config und Cache-Hit-Gate."""
     import pytest
+
     import backend.compliance_engine as ce_mod
     import backend.llm_egress_guard as egress_mod
     import backend.privacy_router as pr_mod

@@ -10,7 +10,7 @@ import logging
 import os
 import sys
 import weakref
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi import Depends as _ArchonDepends
@@ -39,16 +39,16 @@ _COMM_BRIDGE_TASKS = weakref.WeakKeyDictionary()  # type: ignore[var-annotated]#
 
 
 async def _comm_feed_bridge_loop():
-    _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, _, _, _ = _get_ops_deps()
+    deps = _get_ops_deps()
     last_seen_time = datetime.datetime.now().isoformat()
     while True:
         try:
             last_seen_time, items = await asyncio.to_thread(
                 _poll_comm_feed_sync,
                 last_seen_time,
-                _get_kanban_connection,
-                _load_profiles_map,
-                _get_fallback_avatar,
+                deps.get_kanban_connection,
+                deps.load_profiles_map,
+                deps.get_fallback_avatar,
             )
             for item in items:
                 broadcast_event("comm_message", item)
@@ -69,7 +69,24 @@ async def _ensure_comm_bridge() -> None:
     _COMM_BRIDGE_TASKS[loop] = task
 
 
-def _get_ops_deps():
+class OpsDeps(NamedTuple):
+    """Benannte Operations-Abhaengigkeiten (abwaertskompatibles 6-Tupel).
+
+    Ersetzt das anonyme positionale 6-Tupel, ohne bestehende positionale
+    Entpacker oder Index-Zugriffe ([0]..[5]) zu brechen. Die Aufloesung
+    bleibt bewusst zur Aufrufzeit, damit Monkeypatches auf
+    ``backend.operations_api.*`` (z. B. ``_get_kanban_connection``) greifen.
+    """
+
+    load_profiles_map: Any
+    get_fallback_avatar: Any
+    get_kanban_connection: Any
+    profiles_file: Any
+    workspace_dir: Any
+    profiles_map_cache: Any
+
+
+def _get_ops_deps() -> OpsDeps:
     from backend.operations_api import (
         _PROFILES_MAP_CACHE,
         PROFILES_FILE,
@@ -78,7 +95,14 @@ def _get_ops_deps():
         _get_kanban_connection,
         _load_profiles_map,
     )
-    return _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, PROFILES_FILE, WORKSPACE_DIR, _PROFILES_MAP_CACHE
+    return OpsDeps(
+        load_profiles_map=_load_profiles_map,
+        get_fallback_avatar=_get_fallback_avatar,
+        get_kanban_connection=_get_kanban_connection,
+        profiles_file=PROFILES_FILE,
+        workspace_dir=WORKSPACE_DIR,
+        profiles_map_cache=_PROFILES_MAP_CACHE,
+    )
 
 
 # =========================================================================
@@ -90,12 +114,12 @@ def _get_ops_deps():
 @router.get("/org-chart")
 def get_org_chart():
     """Gibt das vollständige hierarchische Organigramm mit den 3 Ebenen zurück."""
-    _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, _, _, _ = _get_ops_deps()
-    profiles = _load_profiles_map()
+    deps = _get_ops_deps()
+    profiles = deps.load_profiles_map()
 
     task_counts = {}
     try:
-        conn = _get_kanban_connection()
+        conn = deps.get_kanban_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT assignee, count(*) as cnt FROM tasks WHERE status != 'done' GROUP BY assignee")
         for row in cursor.fetchall():
@@ -126,7 +150,7 @@ def get_org_chart():
             "name": p.get("name") or agent_id,
             "category": p.get("category") or "Spezialist",
             "role": p.get("role") or p.get("category") or "Experte",
-            "avatar": p.get("avatar") or _get_fallback_avatar(agent_id),
+            "avatar": p.get("avatar") or deps.get_fallback_avatar(agent_id),
             "model": p.get("model") or "deepseek/deepseek-chat",
             "provider": p.get("provider") or "omniroute",
             "is_lead": is_lead,
@@ -177,8 +201,8 @@ class CommBroadcastRequest(BaseModel):
 @router.post("/comm-feed/broadcast")
 def broadcast_comm_message(req: CommBroadcastRequest):
     """Sendet eine Funkmeldung oder Agenten-Kommunikation in den Feed."""
-    _, _, _get_kanban_connection, _, _, _ = _get_ops_deps()
-    conn = _get_kanban_connection()
+    deps = _get_ops_deps()
+    conn = deps.get_kanban_connection()
     try:
         now_iso = datetime.datetime.now().isoformat()
         cur = conn.cursor()
@@ -219,8 +243,8 @@ async def get_communication_feed(limit: int = Query(50), agent_filter: Optional[
     await _ensure_comm_bridge()
 
     def _load_feed_sync():
-        _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, _, _, _ = _get_ops_deps()
-        conn = _get_kanban_connection()
+        deps = _get_ops_deps()
+        conn = deps.get_kanban_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -235,7 +259,7 @@ async def get_communication_feed(limit: int = Query(50), agent_filter: Optional[
         events = cursor.fetchall()
         conn.close()
 
-        profiles = _load_profiles_map()
+        profiles = deps.load_profiles_map()
         feed_items = []
 
         for r in events:
@@ -252,7 +276,7 @@ async def get_communication_feed(limit: int = Query(50), agent_filter: Optional[
 
             prof = profiles.get(author_id, {})
             author_name = prof.get("name") or author_id
-            author_avatar = prof.get("avatar") or _get_fallback_avatar(author_id)
+            author_avatar = prof.get("avatar") or deps.get_fallback_avatar(author_id)
 
             target_prof = profiles.get(target_id, {}) if target_id else {}
             target_name = target_prof.get("name") or target_id
@@ -446,14 +470,14 @@ async def stream_comm_feed(request: Request):
 
 
 def _generate_default_hierarchy():
-    _load_profiles_map, _get_fallback_avatar, _get_kanban_connection, _, _, _ = _get_ops_deps()
-    profiles = _load_profiles_map()
+    deps = _get_ops_deps()
+    profiles = deps.load_profiles_map()
     nodes = []
     links = []
 
     task_counts = {}
     try:
-        conn = _get_kanban_connection()
+        conn = deps.get_kanban_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT assignee, count(*) as cnt FROM tasks WHERE status != 'done' GROUP BY assignee")
         for row in cursor.fetchall():
@@ -474,7 +498,7 @@ def _generate_default_hierarchy():
             "name": p.get("name") or agent_id,
             "role": p.get("role") or p.get("category") or "Experte",
             "category": p.get("category") or "Spezialist",
-            "avatar": p.get("avatar") or _get_fallback_avatar(agent_id),
+            "avatar": p.get("avatar") or deps.get_fallback_avatar(agent_id),
             "model": p.get("model") or "deepseek/deepseek-chat",
             "active_tasks": task_counts.get(agent_id, 0),
             "status": "active",
@@ -539,8 +563,8 @@ def get_org_hierarchy():
         try:
             with open(org_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                _load_profiles_map, _, _, _, _, _ = _get_ops_deps()
-                profiles = _load_profiles_map()
+                deps = _get_ops_deps()
+                profiles = deps.load_profiles_map()
                 for node in data.get("nodes", []):
                     nid = node.get("id")
                     if nid in profiles:
@@ -576,7 +600,7 @@ def save_org_hierarchy(request: Request, req: OrgHierarchySaveRequest):
     """Speichert die vom Nutzer interaktiv erstellten Verbindungen und Positionen."""
     require_admin_or_503(request)  # RBAC: Admin-Sache
     org_file = _get_org_hierarchy_file()
-    _, _, _, profiles_file, _, _profiles_map_cache = _get_ops_deps()
+    deps = _get_ops_deps()
     try:
         os.makedirs(os.path.dirname(org_file), exist_ok=True)
         payload = {
@@ -590,8 +614,8 @@ def save_org_hierarchy(request: Request, req: OrgHierarchySaveRequest):
             json.dump(payload, f, indent=2, ensure_ascii=False)
 
         try:
-            if os.path.exists(profiles_file):
-                with open(profiles_file, "r", encoding="utf-8") as pf:
+            if os.path.exists(deps.profiles_file):
+                with open(deps.profiles_file, "r", encoding="utf-8") as pf:
                     plist = json.load(pf)
                 nodes_by_id = {n.get("id"): n for n in (req.nodes or []) if isinstance(n, dict) and n.get("id")}
                 changed_any = False
@@ -604,9 +628,9 @@ def save_org_hierarchy(request: Request, req: OrgHierarchySaveRequest):
                                 p[k] = nd[k]
                                 changed_any = True
                 if changed_any:
-                    with open(profiles_file, "w", encoding="utf-8") as pf:
+                    with open(deps.profiles_file, "w", encoding="utf-8") as pf:
                         json.dump(plist, pf, indent=2, ensure_ascii=False)
-                    _profiles_map_cache["mtime"] = 0.0
+                    deps.profiles_map_cache["mtime"] = 0.0
         except Exception as sync_e:
             print(f"[OperationsAPI] Profile sync notice: {sync_e}", file=sys.stderr)
         return {"status": "success", "message": "Organigramm-Hierarchie gespeichert."}
@@ -850,8 +874,8 @@ class RoutingClassifyRequest(BaseModel):
 def api_get_all_role_budgets():
     """Liefert Tages- und Monats-Token-/Euro-Budgets sowie den Live-Verbrauch aller Rollen im Organigramm."""
     from backend.role_budget_engine import list_all_role_budgets
-    _load_profiles_map, _, _, _, _, _ = _get_ops_deps()
-    profiles = list(_load_profiles_map().values())
+    deps = _get_ops_deps()
+    profiles = list(deps.load_profiles_map().values())
     return {"status": "success", **list_all_role_budgets(profiles=profiles)}
 
 

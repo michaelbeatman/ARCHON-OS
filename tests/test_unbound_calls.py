@@ -22,10 +22,23 @@ gefunden haette. Ein Treffer ist immer ein Fehler.
 
 import ast
 import builtins
+import glob
 import os
+
+import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAIN_PY = os.path.join(REPO, "main.py")
+
+
+def _extracted_module_paths():
+    """Sammelt alle aus main.py extrahierten Service- und Middleware-Module (F01)."""
+    paths = []
+    for subdir in ("archon/services", "archon/middleware"):
+        pattern = os.path.join(REPO, subdir, "*.py")
+        for full in sorted(glob.glob(pattern)):
+            paths.append(os.path.relpath(full, REPO).replace("\\", "/"))
+    return paths
 
 
 class _Binder(ast.NodeVisitor):
@@ -122,3 +135,20 @@ def test_main_py_ruft_nur_gebundene_namen_auf():
     assert not treffer, (
         "main.py ruft Namen auf, die es nirgends bindet (NameError zur Laufzeit): "
         "%s" % ", ".join("%s in Zeile(n) %s" % (n, z[:5]) for n, z in sorted(treffer.items())))
+
+
+@pytest.mark.parametrize("rel_path", _extracted_module_paths())
+def test_extrahierte_module_rufen_nur_gebundene_namen_auf(rel_path):
+    full_path = os.path.join(REPO, rel_path)
+    treffer = _unbound_calls(full_path)
+    assert not treffer, (
+        "%s ruft Namen auf, die es nirgends bindet (NameError zur Laufzeit): "
+        "%s" % (rel_path, ", ".join("%s in Zeile(n) %s" % (n, z[:5]) for n, z in sorted(treffer.items())))
+    )
+
+
+def test_unbound_calls_erkennt_ungebundenen_aufruf_negativprobe(tmp_path):
+    sample = tmp_path / "broken_service.py"
+    sample.write_text("def run():\n    return definitely_unbound_helper()\n", encoding="utf-8")
+    treffer = _unbound_calls(str(sample))
+    assert treffer == {"definitely_unbound_helper": [2]}

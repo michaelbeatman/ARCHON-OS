@@ -20,12 +20,11 @@ import logging
 import os
 import secrets
 import sqlite3
-import sys
 from typing import Any, Dict, Iterator, List, Optional
 
-logger = logging.getLogger("archon.handoff_desk")
-
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+logger = logging.getLogger("archon.handoff_desk")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -177,6 +176,9 @@ class HandoffDesk:
         self._init_db()
 
     def _get_conn(self):
+        parent = os.path.dirname(self.db_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         conn = sqlite3.connect(self.db_path, timeout=10.0)
         conn.execute("PRAGMA busy_timeout=5000;")
         conn.row_factory = sqlite3.Row

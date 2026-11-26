@@ -215,8 +215,10 @@ def test_s1_full_include_sequence_is_pinned() -> None:
         "print('SEQUENCE_OK')",
     ])
     env = os.environ.copy()
+    seq_dir = Path(tempfile.gettempdir()) / "archon-2d-sequence"
+    seq_dir.mkdir(parents=True, exist_ok=True)
     env["ARCHON_TEST_DB_ISOLATION"] = "1"
-    env["ARCHON_DATA_DIR"] = str(Path(tempfile.gettempdir()) / "archon-2d-sequence")
+    env["ARCHON_DATA_DIR"] = str(seq_dir)
     env.setdefault("ARCHON_AUDIT_HMAC_KEY", "probe-only-" + "a" * 64)
     proc = subprocess.run(
         [sys.executable, "-c", code], cwd=wt, env=env,

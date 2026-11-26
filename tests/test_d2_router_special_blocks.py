@@ -271,8 +271,10 @@ def test_v5_main_call_site_passes_original_load_errors_list() -> None:
         "print('IDENTITY_OK')",
     ])
     env = os.environ.copy()
+    id_dir = Path(tempfile.gettempdir()) / "archon-2d-identity"
+    id_dir.mkdir(parents=True, exist_ok=True)
     env["ARCHON_TEST_DB_ISOLATION"] = "1"
-    env["ARCHON_DATA_DIR"] = str(Path(tempfile.gettempdir()) / "archon-2d-identity")
+    env["ARCHON_DATA_DIR"] = str(id_dir)
     env.setdefault("ARCHON_AUDIT_HMAC_KEY", "probe-only-" + "a" * 64)
     proc = subprocess.run(
         [sys.executable, "-c", code], cwd=wt, env=env,

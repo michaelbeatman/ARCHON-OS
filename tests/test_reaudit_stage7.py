@@ -60,17 +60,18 @@ def test_d11_parser_schema_validates_before_dispatch():
 
 
 def test_d11_no_dead_import_fallback():
-    src = (ROOT / "backend" / "operations_api.py").read_text(encoding="utf-8")
-    assert "DelegationPayload = None" not in src
-    # W3-A: kein lokales Zweitschema und kein Alter Import mehr. Die Kante
-    # konsumiert das kanonische Schema ueber genau einen Helfer-Aufruf.
-    assert "class KanbanDelegationPayload" not in src
-    assert "from archon.core.delegation import DelegationPayload" not in src
-    assert "HandoffDelegationPayload" in src
-    assert "canonicalize_delegation_payload" in src
-    # Kanonische Konsumenten: akzeptierte Uebergabe + Mandant aus SSOT.
-    assert "require_accepted_handoff" in src
-    assert "resolve_task_tenant_id" in src
+    # G7/D3-6: Ausfuehrungsteil liegt in backend/operations_execution.py;
+    # beide Module gemeinsam muessen den D11-Contract erfuellen.
+    api_src = (ROOT / "backend" / "operations_api.py").read_text(encoding="utf-8")
+    exec_src = (ROOT / "backend" / "operations_execution.py").read_text(encoding="utf-8")
+    combined = api_src + "\n" + exec_src
+    assert "DelegationPayload = None" not in combined
+    assert "class KanbanDelegationPayload" not in combined
+    assert "from archon.core.delegation import DelegationPayload" not in combined
+    assert "HandoffDelegationPayload" in api_src
+    assert "canonicalize_delegation_payload" in api_src
+    assert "require_accepted_handoff" in exec_src
+    assert "resolve_task_tenant_id" in exec_src
 
 
 def test_d11_structured_handoff_and_hmac_consumer():

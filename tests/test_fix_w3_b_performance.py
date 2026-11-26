@@ -135,7 +135,7 @@ def test_trajectory_gate_is_hard_blocked_before_provider_call():
 async def test_trajectory_reserve_helper_blocks_on_denied_hop(monkeypatch):
     import core_dispatcher as cd
 
-    calls = []
+    calls: list[tuple] = []
 
     def _normalize(_tid, root_ticket_id=None):
         calls.append(("normalize", root_ticket_id))
@@ -233,8 +233,8 @@ def test_kanban_terminal_status_uses_single_worker_helper():
 
 
 def test_kanban_cancel_import_is_fail_closed():
-    # Modulquelltext (Funktion allein reicht nicht: Import block liegt davor).
-    module_src = _src("backend/operations_api.py")
+    # G7/D3-6: Ausfuehrungslogik liegt jetzt in backend/operations_execution.py.
+    module_src = _src("backend/operations_execution.py")
     assert "except ImportError as cancel_import_exc" in module_src
     assert "raise RuntimeError(\"cancellation unavailable\")" in module_src
     assert "cancellation_unavailable" in module_src
@@ -302,7 +302,7 @@ async def test_prefetcher_closes_connection_on_error_and_caps_lru(monkeypatch):
         def close(self):
             closed.append(True)
 
-    closed = []
+    closed: list[bool] = []
     monkeypatch.setattr(sp.os.path, "exists", lambda path: True)
     monkeypatch.setattr(sp.sqlite3, "connect", lambda *_a, **_k: _Conn())
     pf = sp.SpeculativePrefetcher()
@@ -369,9 +369,9 @@ async def test_failed_client_close_is_reported_and_kept(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_watchdog_spawn_failure_is_fail_closed(monkeypatch):
-    import watchdog_daemon as wd
-
     import sys
+
+    import watchdog_daemon as wd
 
     states = []
     monkeypatch.setattr(wd, "_write_watchdog_liveness",
@@ -423,7 +423,8 @@ def test_canonical_handoff_schema_is_consumed_not_duplicated():
 
 
 def test_accepted_handoff_is_a_hard_gate_before_dispatch():
-    src = _src("backend/operations_api.py")
+    # G7/D3-6: Ausfuehrungslogik liegt jetzt in backend/operations_execution.py.
+    src = _src("backend/operations_execution.py")
     assert "require_accepted_handoff" in src
     assert src.count("_handoff_gate_ok()") >= 2
     assert "handoff_not_accepted" in src
@@ -431,7 +432,8 @@ def test_accepted_handoff_is_a_hard_gate_before_dispatch():
 
 
 def test_task_tenant_uses_canonical_resolver():
-    src = _src("backend/operations_api.py")
+    # G7/D3-6: Ausfuehrungslogik liegt jetzt in backend/operations_execution.py.
+    src = _src("backend/operations_execution.py")
     assert "resolve_task_tenant_id(t_dict)" in src
     assert '_tenant_id = str(t_dict.get("tenant_id") or "default")' not in src
 

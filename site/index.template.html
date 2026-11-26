@@ -91,9 +91,18 @@
   </section>
 
   <div class="wrap">
-    <div class="logo-showcase" data-reveal>
-      <img class="img-dark-only" src="{{BASE}}assets/img/archon_banner_dark.webp" width="924" height="146" alt="{{banner.alt}}" loading="eager">
-      <img class="img-light-only" src="{{BASE}}assets/img/archon_banner_light.webp" width="924" height="146" alt="{{banner.alt}}" loading="eager">
+    <div class="creation-stage-wrap">
+      <div class="creation-davinci-stage" aria-hidden="true">
+        <div class="davinci-layer-plate">
+          <img class="davinci-plate-img img-dark-only" src="{{BASE}}assets/img/davinci_creation_dark.webp" width="1024" height="686" alt="" loading="eager">
+          <img class="davinci-plate-img img-light-only" src="{{BASE}}assets/img/davinci_creation_light.webp" width="1024" height="686" alt="" loading="eager">
+        </div>
+        <div class="davinci-layer-over">{{DAVINCI_CREATION_OVERLAY_SVG}}</div>
+      </div>
+      <div class="logo-showcase" data-reveal>
+        <img class="img-dark-only" src="{{BASE}}assets/img/archon_banner_dark.webp" width="924" height="146" alt="{{banner.alt}}" loading="eager">
+        <img class="img-light-only" src="{{BASE}}assets/img/archon_banner_light.webp" width="924" height="146" alt="{{banner.alt}}" loading="eager">
+      </div>
     </div>
 
     {{shots.title}}

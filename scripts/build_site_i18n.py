@@ -27,6 +27,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from site_svg_assets import (  # noqa: E402
+    build_davinci_creation_overlay_svg,
     build_davinci_overlay_svg,
     build_davinci_underlayer_svg,
     build_davinci_vertical_overlay_svg,
@@ -107,6 +108,7 @@ STRUCTURAL_VARS = {
     "DAVINCI_VERT_OVERLAY_SVG",
     "DAVINCI_WHEEL_UNDERLAYER_SVG",
     "DAVINCI_WHEEL_OVERLAY_SVG",
+    "DAVINCI_CREATION_OVERLAY_SVG",
     "HERO_CLOCKWORK_SVG",
     "NAV_SUBPAGES",
     "GEO_STRIP_HTML",
@@ -512,6 +514,7 @@ def render(template: str, lang: str, cat: dict[str, str], base_url: str | None =
         "DAVINCI_VERT_OVERLAY_SVG": build_davinci_vertical_overlay_svg(),
         "DAVINCI_WHEEL_UNDERLAYER_SVG": build_davinci_underlayer_svg(),
         "DAVINCI_WHEEL_OVERLAY_SVG": build_davinci_overlay_svg(),
+        "DAVINCI_CREATION_OVERLAY_SVG": build_davinci_creation_overlay_svg(),
         "HERO_CLOCKWORK_SVG": build_hero_clockwork_svg(),
         "NAV_SUBPAGES": build_nav_subpages(lang),
         "GEO_STRIP_HTML": build_geo_strip(lang),

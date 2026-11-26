@@ -251,6 +251,16 @@ def build_davinci_overlay_svg() -> str:
 </svg>"""
 
 
+def build_davinci_creation_overlay_svg() -> str:
+    """Animated impulse rings & Da-Vinci compass arc at the human->agent fingertip contact (495, 348)."""
+    return """<svg class="davinci-overlay-svg" viewBox="0 0 1024 686" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <circle class="creation-spark-wave" cx="495" cy="348" r="18" style="transform-origin:495px 348px"/>
+  <circle class="creation-spark-wave creation-spark-wave-2" cx="495" cy="348" r="18" style="transform-origin:495px 348px"/>
+  <circle class="creation-spark-arc" cx="495" cy="348" r="42" style="transform-origin:495px 348px"/>
+  <circle class="creation-spark-core" cx="495" cy="348" r="3.6" style="transform-origin:495px 348px"/>
+</svg>"""
+
+
 def build_hero_clockwork_svg() -> str:
     """Standalone precision animated Vector Silver Clockwork & Passkey Vault Lock SVG (Governance Showcase)."""
     g1_path = gear_path(410, 310, 173, 157, 36, tooth_ratio=0.45)

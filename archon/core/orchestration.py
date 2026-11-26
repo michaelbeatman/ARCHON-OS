@@ -319,7 +319,8 @@ async def _execute_mission_control_task(
         trigger_sandy = _trigger_sandy_staffing_nomination
     if fan_in is None:
         fan_in = _fan_in_maybe_start_synthesis
-    data = load_mc()
+    # F30 (HIGH H-C): synchrones SQLite-/Store-Laden aus dem async Hot-Path in to_thread
+    data = await asyncio.to_thread(load_mc)
     tasks = data.get("tasks", [])
     # R-18: Schnappschuss der Task-IDs VOR dem LLM-await — nur waerend des Laufs
     # neu erzeugte Tasks duerfen im Merge wieder eingefuegt werden.
@@ -344,8 +345,8 @@ async def _execute_mission_control_task(
         cancel_token.register_task(_current_task)
     cancel_token.check()
 
-    def _commit() -> None:
-        """Schreibt die Aenderungen dieses Tasks.
+    def _commit_sync() -> None:
+        """Schreibt die Aenderungen dieses Tasks (wird via asyncio.to_thread gerufen).
 
         Mit update_mc: gezieltes Merge in den frisch geladenen Store, damit
         parallele Aenderungen an anderen Tasks nicht ueberschrieben werden.
@@ -359,6 +360,9 @@ async def _execute_mission_control_task(
                 "main.py injiziert update_mission_control_data; Aufrufer muessen die "
                 "Abhaengigkeit explizit uebergeben."
             )
+
+    async def _commit_async() -> None:
+        await asyncio.to_thread(_commit_sync)
 
     agent_id = task.get("agent_id", "founder")
     agent_name = task.get("agent_name") or agent_id or "Founder"
@@ -393,7 +397,7 @@ async def _execute_mission_control_task(
     try:
         from backend.deadlock_supervisor import deadlock_supervisor as _supervisor
         deadlock_supervisor = _supervisor
-        lease = _supervisor.acquire_lease(str(task_id), ttl_seconds=300)
+        lease = await asyncio.to_thread(_supervisor.acquire_lease, str(task_id), ttl_seconds=300)
         if lease.get("acquired"):
             lease_token = lease.get("lease_token")
         elif lease.get("task_exists", True):
@@ -410,7 +414,7 @@ async def _execute_mission_control_task(
             task["status"] = "blocked"
             task["result_summary"] = f"Lease-Claim nicht verfügbar: {lease_exc}"
             ticker(agent_name, f"Task #{task_id} blockiert — Lease-Claim nicht verfügbar.")
-            _commit()
+            await _commit_async()
             return
         logger.warning(f"[MissionControl] Lease nicht verfuegbar ({lease_exc}) — Dispatch ohne Claim (FAIL_OPEN aktiv).")
 
@@ -421,12 +425,16 @@ async def _execute_mission_control_task(
     if lease_token:
         try:
             from backend.idempotency_guard import idempotency_guard
-            idem = idempotency_guard.check_or_register(
-                "mission_control_task",
-                {"task_id": str(task_id),
-                 "prompt": mark_truncated(prompt_text, 2000, artifact=f"tasks.capture_input/{task_id}")},
-                explicit_key=f"mct-{task_id}",
-            )
+
+            def _idem_claim_sync():
+                return idempotency_guard.check_or_register(
+                    "mission_control_task",
+                    {"task_id": str(task_id),
+                     "prompt": mark_truncated(prompt_text, 2000, artifact=f"tasks.capture_input/{task_id}")},
+                    explicit_key=f"mct-{task_id}",
+                )
+
+            idem = await asyncio.to_thread(_idem_claim_sync)
             if idem.get("blocked"):
                 cached = idem.get("cached_result") or {}
                 task["status"] = "completed"
@@ -434,7 +442,7 @@ async def _execute_mission_control_task(
                     "result_summary", "Bereits ausgefuehrt (Idempotency-Cache)."
                 )
                 ticker(agent_name, f"Task #{task_id} war bereits ausgefuehrt — Duplicate geblockt.")
-                _commit()
+                await _commit_async()
                 return
             idem_key = idem.get("idempotency_key")
         except Exception as idem_exc:
@@ -446,7 +454,9 @@ async def _execute_mission_control_task(
                 await asyncio.sleep(60.0)
                 try:
                     if deadlock_supervisor is not None:
-                        ok = deadlock_supervisor.heartbeat(str(task_id), lease_token, ttl_seconds=300)
+                        ok = await asyncio.to_thread(
+                            deadlock_supervisor.heartbeat, str(task_id), lease_token, ttl_seconds=300
+                        )
                         if ok is False:
                             cancel_token.cancel("lease_lost")
                             return
@@ -461,7 +471,7 @@ async def _execute_mission_control_task(
 
     try:
         task["active_tool"] = "Tool: web_search & archon_core"
-        _commit()
+        await _commit_async()
 
         # Echter LLM-Dispatch — vorher Cancel-Token pruefen.
         cancel_token.check()
@@ -656,30 +666,37 @@ async def _execute_mission_control_task(
             heartbeat_task.cancel()
         if lease_token and deadlock_supervisor is not None:
             try:
-                deadlock_supervisor.release_lease(str(task_id), lease_token)
+                def _lease_release_sync():
+                    return deadlock_supervisor.release_lease(str(task_id), lease_token)
+
+                await asyncio.to_thread(_lease_release_sync)
             except Exception as rel_exc:
                 logger.warning(f"[MissionControl] Lease-Release fehlgeschlagen: {rel_exc}")
         if idem_key:
             try:
                 from backend.idempotency_guard import idempotency_guard
-                if task.get("status") == "completed":
-                    idempotency_guard.record_execution_result(
-                        idem_key,
-                        {
-                            "status": "completed",
-                            "result_summary": mark_truncated(
-                                task.get("result_summary", ""), 300,
-                                artifact=f"tasks.result/{task_id}",
-                            ),
-                        },
-                    )
-                else:
-                    # Fehlgeschlagener Lauf darf den Key nicht als "erledigt"
-                    # markerieren — sonst wird der naechste Retry geblockt.
-                    idempotency_guard.invalidate_key(idem_key)
+
+                def _idem_finish_sync():
+                    if task.get("status") == "completed":
+                        idempotency_guard.record_execution_result(
+                            idem_key,
+                            {
+                                "status": "completed",
+                                "result_summary": mark_truncated(
+                                    task.get("result_summary", ""), 300,
+                                    artifact=f"tasks.result/{task_id}",
+                                ),
+                            },
+                        )
+                    else:
+                        # Fehlgeschlagener Lauf darf den Key nicht als "erledigt"
+                        # markerieren — sonst wird der naechste Retry geblockt.
+                        idempotency_guard.invalidate_key(idem_key)
+
+                await asyncio.to_thread(_idem_finish_sync)
             except Exception as idem_fin_exc:
                 logger.warning(f"[MissionControl] Idempotency-Abschluss fehlgeschlagen: {idem_fin_exc}")
-        _commit()
+        await _commit_async()
         # Audit v3 2.1.3: fan_in erst NACH dem Commit starten — sonst liest die Synthese
         # den alten Geschwister-Status aus der letzten Persistierung.
         if parent_ok:

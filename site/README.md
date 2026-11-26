@@ -1,78 +1,33 @@
-# Landingpage & Übersetzungen
+# Archon OS Landing Page & SEO/GEO Hub (`site/`)
 
-Die GitHub-Pages-Seiten unter `site/` werden **generiert**. Bitte nie die
-`index.html`-Dateien direkt editieren – Änderungen an `index.html` oder an
-`site/<sprache>/index.html` werden beim nächsten Build überschrieben.
+Static GitHub Pages site generated from a single source of truth:
 
-## Aufbau
+- `site/index.template.html` — Landing page template (11 languages)
+- `site/i18n/<lang>.json` — Localized translation catalogs (`en`, `de`, `es`, `fr`, `it`, `ja`, `ko`, `nl`, `pt`, `ru`, `zh`)
+- `site/assets/site.css` & `site/assets/site.js` — Horological Copperplate × Enterprise Telemetry design system, self-hosted `Geist` / `Geist Mono` fonts, interactive Cockpit switcher, dark/light theme toggle
+- `scripts/site_svg_assets.py` — Mathematically meshing animated Copperplate Clockwork, Vault Lock & Zero-Egress circuit SVGs
+- `scripts/build_site_i18n.py` — Main build & validation script
+- `scripts/build_site_subpages.py` — Phase 3 indexable HTML deep-dive guides & filterable directories (`architecture/`, `gdpr-zero-egress/`, `compare/`, `boardroom-frameworks/`, `specialists/` in EN & DE)
 
-| Datei | Zweck |
-|---|---|
-| `index.template.html` | Einzige HTML-Quelle mit `{{key}}`-Platzhaltern |
-| `i18n/en.json` | EN-Quelltexte (Referenz) |
-| `i18n/<lang>.json` | Übersetzungen: `de, es, fr, it, ja, ko, nl, pt, ru, zh` |
-| `../scripts/build_site_i18n.py` | Generator + Validierung |
-| `../tests/test_site_i18n_parity.py` | Parity-/Regressionstests |
-
-Jeder Katalog muss **dieselben 89 Keys** enthalten. Werte dürfen Inline-HTML
-enthalten (`<h3>`, `<h4>`, `<p>`, `<tr>`, `<td>`, `<th>`, `<strong>`, `<code>`,
-`<a>`) – dann muss das Markup in jeder Sprache erhalten bleiben. Ein `&` in
-HTML-Text muss als `&amp;` geschrieben werden; der Generator prüft das.
-
-## Neu bauen
+## Regenerate Site
 
 ```bash
-python scripts/build_site_i18n.py          # schreibt alle 11 Seiten
-python scripts/build_site_i18n.py --check  # nur prüfen (für CI)
-pytest tests/test_site_i18n_parity.py -q
+python scripts/build_site_i18n.py
+python scripts/build_site_i18n.py --check
+pytest tests/test_site_i18n_parity.py
 ```
 
-`create_lang_pages.py` im Repo-Root ist nur noch ein Deprecation-Shim und
-delegiert an den Generator.
+## Phase 3 Custom Domain Migration (1-Command Switch)
 
-## README-Übersetzungen (`docs/readme/`)
+When switching from `michaelbeatman.github.io/ARCHON-OS/` to a custom domain (e.g. `archon-os.dev`):
 
-Die 9 Sprach-Readmes werden ebenfalls generiert – gleicher Grund: Sie waren
-eingefrorene Kurzfassungen von v0.5.2, während `README.md` auf v0.5.7.9
-anwuchs.
+1. Add `site/CNAME` containing your domain (`archon-os.dev`) and configure GitHub Pages DNS records.
+2. Regenerate all canonicals, `hreflang`, JSON-LD, `sitemap.xml`, `robots.txt`, and `llms.txt`:
 
 ```bash
-python scripts/build_readme_i18n.py --dump-keys  # EN-Zeilen als k000… anzeigen
-python scripts/build_readme_i18n.py              # 9 READMEs neu bauen
-python scripts/build_readme_i18n.py --check      # nur prüfen (CI)
-pytest tests/test_readme_i18n_parity.py -q
+python scripts/build_site_i18n.py --base-url https://archon-os.dev/
 ```
 
-Quelle: `README.md` (EN-Master, nie generiert) und `README.de.md` (DE-Master,
-handgepflegt). Kataloge: `docs/readme/i18n/<lang>.json` mit positionalen Keys
-`k000…` – ändert sich der EN-Master, schlägt `--check` fehl und erzwingt ein
-Katalog-Update. Versionen kommen aus `config/version.json` (SSOT); die PDFs
-bleiben bewusst als `v0.5.2.1` gekennzeichnet, weil sie nie neu erzeugt wurden.
+## Fallback Backup
 
-## Was bewusst auf Englisch bleibt
-
-* JSON-LD (`SoftwareApplication`, `FAQPage`) und `meta keywords` – maschinenlesbare,
-  kanonische Metadaten.
-* Marken- und Produktnamen: Archon OS, Hermes Agent, OmniRoute, BudgetBank,
-  Zero-Egress, AI Boardroom, Mission Control, Obsidian, n8n, Passkey/WebAuthn,
-  GoBD, EU AI Act, `/livez`, `ops.db`, `BEGIN IMMEDIATE` usw.
-* Shell-Kommandos in `<pre>`-Blöcken, das Architektur-Badge sowie die
-  Sprachnamen im Umschalter (`EN · English`, `DE · Deutsch`, …). Das
-  Versions-Badge kommt dagegen aus `config/version.json` (SSOT).
-
-## Screenshots
-
-Die Bilddateien selbst liegen unter `docs/system/screenshots/` und werden für
-alle Sprachen als dieselben PNGs von `raw.githubusercontent.com` geladen. Sie
-zeigen daher weiterhin die englische UI. **Bildunterschriften und `alt`-Texte
-sind übersetzt** (Keys `shots.*`). Echte lokalisierte Screenshots bräuchten neue
-Aufnahmen mit auf die jeweilige Locale gestellter UI (`static/locales/*.json`).
-
-## Text ändern
-
-1. `i18n/en.json` anpassen (neuer EN-Text).
-2. Alle 10 anderen Kataloge nachziehen.
-3. Falls die HTML-Struktur selbst geändert werden soll: `index.template.html`
-   anpassen und die Platzhalter-Menge mit den Katalogen abgleichen
-   (`--check` meldet fehlende/überzählige Keys).
-4. Generator ausführen, Tests laufen lassen.
+The previous site snapshot before the Phase 1–3 upgrade is stored at `backups/site_fallback_20261126/`.

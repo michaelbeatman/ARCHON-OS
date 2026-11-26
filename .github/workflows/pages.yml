@@ -58,6 +58,16 @@ jobs:
             "https://${HOST}/ARCHON-OS/it/"
             "https://${HOST}/ARCHON-OS/nl/"
             "https://${HOST}/ARCHON-OS/pt/"
+            "https://${HOST}/ARCHON-OS/architecture/"
+            "https://${HOST}/ARCHON-OS/de/architektur/"
+            "https://${HOST}/ARCHON-OS/gdpr-zero-egress/"
+            "https://${HOST}/ARCHON-OS/de/dsgvo-zero-egress/"
+            "https://${HOST}/ARCHON-OS/compare/"
+            "https://${HOST}/ARCHON-OS/de/vergleich/"
+            "https://${HOST}/ARCHON-OS/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/de/boardroom-frameworks/"
+            "https://${HOST}/ARCHON-OS/specialists/"
+            "https://${HOST}/ARCHON-OS/de/spezialisten/"
           )
           for url in "${URLS[@]}"; do
             echo "Pinging IndexNow for: $url"

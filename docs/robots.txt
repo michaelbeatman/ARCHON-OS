@@ -1,17 +1,24 @@
 User-agent: *
 Allow: /
 
-# Explicitly allow AI search & answer engine crawlers (GEO)
-User-agent: GPTBot
+# Explicitly allow AI search & answer engine citability crawlers
+User-agent: Googlebot
 Allow: /
 
 User-agent: OAI-SearchBot
 Allow: /
 
-User-agent: ChatGPT-User
+User-agent: Claude-SearchBot
 Allow: /
 
 User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+# Optional training & grounding crawlers (allowed for open-source discoverability)
+User-agent: GPTBot
 Allow: /
 
 User-agent: ClaudeBot

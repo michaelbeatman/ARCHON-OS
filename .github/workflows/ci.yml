@@ -498,6 +498,9 @@ jobs:
         # Diese Klassen bedeuten kaputten Code, nicht Style – null Toleranz.
         run: ruff check --select E9,F63,F7,F82 --output-format=concise archon backend scripts tools utils core_dispatcher.py main.py
 
+      - name: Doku-Versionsabgleich gegen config/version.json (HARTES GATE, F12)
+        run: python scripts/check_doc_version_sync.py
+
       - name: Changed-Files-Ratchet – Diff-Bereich bestimmen
         id: changed
         shell: bash

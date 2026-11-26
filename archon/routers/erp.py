@@ -89,8 +89,12 @@ class ErpMatchBankTransactionRequest(BaseModel):
 
 
 class ErpSyncPocketbaseRequest(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
     company_id: Optional[str] = None
+    pocketbase_url: Optional[str] = None
+    collection_name: Optional[str] = None
+    sync_enabled: Optional[bool] = None
+    auto_sync: Optional[bool] = None
 
 @router.get("/api/erp/documents/{doc_id}/print", response_class=HTMLResponse)
 def api_erp_document_print(
@@ -477,9 +481,12 @@ def api_erp_match_bank_transaction(request: Request, tx_id: str, payload: ErpMat
 
 
 @router.post("/api/erp/sync/pocketbase")
-def api_erp_sync_pocketbase(request: Request, payload: ErpSyncPocketbaseRequest = Body(default=ErpSyncPocketbaseRequest())):
+def api_erp_sync_pocketbase(
+    request: Request,
+    payload: ErpSyncPocketbaseRequest = Body(default_factory=ErpSyncPocketbaseRequest),
+):
     require_admin_or_503(request)  # RBAC: Rollenzaun
-    data = payload.model_dump()
+    data = payload.model_dump(exclude_none=True)
     from backend.erp_manager import erp_manager
     company_id = _authorized_company_id(data.get("company_id"))
     if "pocketbase_url" in data or "collection_name" in data:

@@ -285,18 +285,26 @@ class TestERPManager(unittest.TestCase):
             conn.close()
 
     def test_primary_tenant_seed_and_corporate_template_link(self):
-        overview = self.erp.get_tenant_overview("archon-systems")
-        self.assertEqual(overview["company_id"], "archon-systems")
-        self.assertGreaterEqual(overview["counts"]["entities"], 3)
-        self.assertGreaterEqual(overview["counts"]["items"], 4)
+        old_demo = os.environ.get("ARCHON_DEMO_MODE")
+        os.environ["ARCHON_DEMO_MODE"] = "true"
+        try:
+            overview = self.erp.get_tenant_overview("archon-systems")
+            self.assertEqual(overview["company_id"], "archon-systems")
+            self.assertGreaterEqual(overview["counts"]["entities"], 3)
+            self.assertGreaterEqual(overview["counts"]["items"], 4)
 
-        rendered = corporate_manager.render_template(
-            template_type="letterhead",
-            company_id="archon-systems",
-            custom={"entity_id": "ent-nordstern"}
-        )
-        self.assertIn("Nordstern Digital AG", rendered["html"])
-        self.assertIn("Dr. Lukas Bergmann", rendered["html"])
+            rendered = corporate_manager.render_template(
+                template_type="letterhead",
+                company_id="archon-systems",
+                custom={"entity_id": "ent-nordstern"}
+            )
+            self.assertIn("Nordstern Digital AG", rendered["html"])
+            self.assertIn("Dr. Lukas Bergmann", rendered["html"])
+        finally:
+            if old_demo is None:
+                os.environ.pop("ARCHON_DEMO_MODE", None)
+            else:
+                os.environ["ARCHON_DEMO_MODE"] = old_demo
 
 
 if __name__ == "__main__":

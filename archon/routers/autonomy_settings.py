@@ -220,7 +220,7 @@ def api_optimize_role_prompt(request: Request, payload: PassthroughBody = Body(.
 @router.post("/api/evolution/eval-suite/run")
 def api_run_eval_regression_suite(
     request: Request,
-    payload: PassthroughBody = Body(default={}),
+    payload: PassthroughBody = Body(default_factory=PassthroughBody),
     simulation: bool = Query(False),
 ):
     # Audit D01/D12: dieser Endpoint konnte clientseitige simulated_outputs als

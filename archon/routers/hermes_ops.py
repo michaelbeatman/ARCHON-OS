@@ -209,7 +209,10 @@ def _purge_state_memory(purge_options: Dict) -> Dict:
 
 
 @router.post("/api/hermes/memory/purge")
-def api_hermes_memory_purge(request: Request, purge_options: PassthroughBody = Body(default={})):
+def api_hermes_memory_purge(
+    request: Request,
+    purge_options: PassthroughBody = Body(default_factory=PassthroughBody),
+):
     """Cleans sessions and chat messages while strictly preserving session_model_usage."""
     _require_admin(request)
     purge_options = as_payload(purge_options)  # type: ignore[assignment]

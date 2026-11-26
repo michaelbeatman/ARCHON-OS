@@ -40,7 +40,7 @@ class GatewayAutostartRequest(_GatewayRequest):
 
 
 class GatewayConfigRequest(_GatewayRequest):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
     idle_timeout_minutes: Optional[int] = None
     autostart: Optional[Dict[str, Any]] = None
 

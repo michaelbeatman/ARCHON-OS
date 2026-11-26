@@ -450,9 +450,10 @@ class ERPManager:
             if "stock_deducted" not in doc_cols:
                 conn.execute("ALTER TABLE erp_documents ADD COLUMN stock_deducted INTEGER DEFAULT 0")
 
-        # Seed initial basis data ONLY for primary company if completely empty
-        # (Default ist "default"; "archon-systems" ist der Legacy-Alias).
-        if cid in ("default", "archon-systems"):
+        # F12 (D09): fiktive Demo-Seeds NUR im expliziten ARCHON_DEMO_MODE=true.
+        # Im Produktiv-Default bleiben GoBD-Tabellen (crm_entities) leer.
+        _demo_mode = os.environ.get("ARCHON_DEMO_MODE", "").strip().lower() in ("1", "true", "yes")
+        if _demo_mode and cid in ("default", "archon-systems"):
             count_ent = conn.execute("SELECT COUNT(*) FROM crm_entities").fetchone()[0]
             if count_ent == 0:
                 self._seed_primary_tenant(conn, cid)

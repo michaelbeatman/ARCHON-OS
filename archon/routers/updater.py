@@ -22,7 +22,10 @@ def api_hermes_update_check(force: bool = False):
 
 
 @router.post("/api/v1/hermes/update/apply")
-def api_hermes_update_apply(request: Request, payload: PassthroughBody = Body(default={})):
+def api_hermes_update_apply(
+    request: Request,
+    payload: PassthroughBody = Body(default_factory=PassthroughBody),
+):
     data = as_payload(payload)
     from archon.core.provider_registry import get_provider
     app_main = get_provider("app_main")

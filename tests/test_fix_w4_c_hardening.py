@@ -292,6 +292,81 @@ def test_starters_and_ansible_force_compose_file():
     assert "archon-chaos-resilience-test" in ansible
 
 
+def test_f15_compose_forwards_readiness_probe_urls_and_readyz_enforces_503(monkeypatch):
+    """F15 (HIGH): docker-compose.yml reicht ARCHON_READINESS_PROBE_URLS an den
+    Container durch (ohne stillen Leer-Default) und /readyz meldet 503 bei
+    unerreichbarer konfigurierter Pflicht-Dependency.
+    """
+    import asyncio
+
+    import yaml
+    from fastapi.responses import JSONResponse
+
+    import archon.services.health_probes as hp
+
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    env_entries = compose["services"]["archon-os"]["environment"]
+    if isinstance(env_entries, list):
+        forwarded = [
+            e for e in env_entries
+            if e == "ARCHON_READINESS_PROBE_URLS"
+            or str(e).startswith("ARCHON_READINESS_PROBE_URLS=")
+        ]
+        assert forwarded, "ARCHON_READINESS_PROBE_URLS fehlt in archon-os.environment"
+        # Kein `${ARCHON_READINESS_PROBE_URLS:-}`-Leerstring-Fallback, der Default deaktiviert
+        assert not any(str(e).endswith(":-}") for e in forwarded)
+    else:
+        assert "ARCHON_READINESS_PROBE_URLS" in env_entries
+
+    assert "ARCHON_READINESS_PROBE_URLS" in _src(".env.example")
+
+    # Verhaltensprobe: gesetzte Pflicht-URL unerreichbar -> /readyz 503
+    monkeypatch.setenv("ARCHON_READINESS_PROBES", "1")
+    monkeypatch.setenv(
+        "ARCHON_READINESS_PROBE_URLS",
+        "required_dep=http://unreachable.invalid:9999/health",
+    )
+    targets = hp._readiness_probe_targets()
+    assert targets == [("required_dep", "http://unreachable.invalid:9999/health")]
+
+    monkeypatch.setitem(hp._DEPENDENCY_PROBE_CACHE, "ts", 0.0)
+    monkeypatch.setitem(hp._DEPENDENCY_PROBE_CACHE, "problems", [])
+
+    def _deps_with_probe(probe_fn):
+        return hp.HealthProbeDeps(
+            get_state_db=lambda: None,
+            router_load_errors=[],
+            audit_compromised={},
+            failed_cancels=[],
+            watchdog_stop_failed=[],
+            startup_recovery_failed=[],
+            n8n_startup_status={},
+            db_maintenance_status={},
+            probe_external_dependency=probe_fn,
+            readiness_sync_checks=lambda: [],
+        )
+
+    res_503 = asyncio.run(
+        hp.run_readiness_check(
+            _deps_with_probe(lambda name, url: f"{name}: connection refused"),
+            targets,
+        )
+    )
+    assert isinstance(res_503, JSONResponse)
+    assert res_503.status_code == 503
+    body = json.loads(res_503.body.decode("utf-8"))
+    assert any("required_dep" in p for p in body["problems"])
+
+    # Positivprobe: Pflicht-URL erreichbar -> 200 ready
+    monkeypatch.setitem(hp._DEPENDENCY_PROBE_CACHE, "ts", 0.0)
+    monkeypatch.setitem(hp._DEPENDENCY_PROBE_CACHE, "problems", [])
+    res_200 = asyncio.run(
+        hp.run_readiness_check(_deps_with_probe(lambda name, url: ""), targets)
+    )
+    assert isinstance(res_200, dict)
+    assert res_200["status"] == "ready"
+
+
 # ---------------------------------------------------------------------------
 # MED D10 — Chaos-Suite: SLA + echte Schreibtransaktionen
 # ---------------------------------------------------------------------------

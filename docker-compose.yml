@@ -71,6 +71,10 @@ services:
       # Erzwingt die externen Dependency-Probes auch bei bewusst gesetztem
       # ENVIRONMENT=development (isolierte Lokalentwicklung).
       - ARCHON_READINESS_PROBES=${ARCHON_READINESS_PROBES:-1}
+      # Audit D10/F15: Konfigurierbare Pflicht-Dependency-Probes an den Container
+      # durchreichen. Ohne `=` bleibt der Key im Container unset (None), wenn der
+      # Host ihn nicht setzt, sodass der OmniRoute-Default in health_probes.py greift.
+      - ARCHON_READINESS_PROBE_URLS
       # K2/C01: auf `true` setzen, sobald ARCHON_SERVICE_TOKEN hinterlegt und
       # die n8n-Workflows damit deployt sind. Production erzwingt Auth bereits
       # ueber ENVIRONMENT; dieser Schalter deckt zusaetzlich Mesh-Deployments

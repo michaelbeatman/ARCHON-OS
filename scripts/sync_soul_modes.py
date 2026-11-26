@@ -1762,7 +1762,25 @@ def sync_single_agent_capabilities_to_soul(
     return active_md.strip()
 
 
-def apply_soul_mode(mode: str = "compact", target_agent_id: str | None = None, lang: str | None = None) -> Dict[str, Any]:
+def refresh_soul_pin_for_agents(target_agent_id: str | None = None) -> Dict[str, Any]:
+    """F23 (D15): Aktualisiert den SOUL-SHA-256-Pin im EU-AI-Act-Inventar nach Tier-Wechsel."""
+    from backend.eu_ai_act_inventory import sync_inventory
+
+    inv_res = sync_inventory()
+    return {
+        "pin_refreshed": True,
+        "target_agent_id": target_agent_id or "*",
+        "inventory_count": len(inv_res) if isinstance(inv_res, list) else int(inv_res.get("count", 0)) if isinstance(inv_res, dict) else 0,
+    }
+
+
+def apply_soul_mode(
+    mode: str = "compact",
+    target_agent_id: str | None = None,
+    lang: str | None = None,
+    *,
+    refresh_pin: bool = False,
+) -> Dict[str, Any]:
     import tempfile
     mode = normalize_soul_mode(mode)
     resolved_lang = resolve_soul_language(lang)
@@ -1887,11 +1905,16 @@ def apply_soul_mode(mode: str = "compact", target_agent_id: str | None = None, l
         if logger_debug:
             logger_debug.debug("[sync_soul_modes] Profil-Cache-Invalidierung übersprungen: %s", exc)
 
+    pin_info: Dict[str, Any] = {"pin_refreshed": False}
+    if refresh_pin:
+        pin_info = refresh_soul_pin_for_agents(target_agent_id=target_agent_id)
+
     return {
         "status": "success",
         "mode": mode,
         "lang": resolved_lang,
         "updated_profiles": updated_count,
+        "pin_refreshed": bool(pin_info.get("pin_refreshed", False)),
         "avg_active_chars": round(sum(lengths_active) / max(1, len(lengths_active)), 1),
         "avg_full_chars": round(sum(lengths_full) / max(1, len(lengths_full)), 1),
         "avg_pro_chars": round(sum(lengths_pro) / max(1, len(lengths_pro)), 1),

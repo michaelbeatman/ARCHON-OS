@@ -35,6 +35,8 @@ class SaveSoulReq(BaseModel):
 class SetSoulModeReq(BaseModel):
     mode: str = "compact"
     agent_id: Optional[str] = None
+    refresh_soul_pin: bool = False
+    guardrail_review_note: str = ""
 
 
 class LogActivityReq(BaseModel):
@@ -130,12 +132,37 @@ def api_get_soul_mode():
 
 @router.post("/api/v1/hermes/soul-mode")
 def api_set_soul_mode(request: Request, req: SetSoulModeReq):
-    """Schaltet global oder pro Agent zwischen 'full' (Original/Voll-Experte) und 'compact' (Token-Spar) um."""
-    _require_admin(request)
-    from scripts.sync_soul_modes import apply_soul_mode
-    from archon.core.profiles import invalidate_hermes_profiles_cache
+    """Schaltet global oder pro Agent zwischen 'full', 'pro' und 'compact' um.
 
-    res = apply_soul_mode(mode=req.mode, target_agent_id=req.agent_id)
+    F23 (D15): Ein Tier-Wechsel fuer HIGH_RISK-Agenten (oder global) aendert
+    den SOUL-SHA-256-Hash und erfordert zwingend ``refresh_soul_pin=True`` nach
+    fachlichem Guardrail-Review — sonst fail-closed HTTP 403.
+    """
+    _require_admin(request)
+    from archon.core.profiles import invalidate_hermes_profiles_cache
+    from backend.eu_ai_act_inventory import HIGH_RISK_AGENT_IDS
+    from scripts.sync_soul_modes import apply_soul_mode
+
+    is_high_risk_scope = (req.agent_id is None) or (str(req.agent_id).strip() in HIGH_RISK_AGENT_IDS)
+    if is_high_risk_scope and not req.refresh_soul_pin:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "agent_not_compliant",
+                "code": "SOUL_PIN_REFRESH_REQUIRED",
+                "agent_id": req.agent_id or "*",
+                "detail": (
+                    "SOUL-Tier-Wechsel fuer HIGH_RISK-Agenten erfordert zwingend "
+                    "refresh_soul_pin=True nach fachlichem Guardrail-Review."
+                ),
+            },
+        )
+
+    res = apply_soul_mode(
+        mode=req.mode,
+        target_agent_id=req.agent_id,
+        refresh_pin=bool(req.refresh_soul_pin),
+    )
     invalidate_hermes_profiles_cache()
     if req.agent_id:
         soul_data = api_get_hermes_soul(req.agent_id)

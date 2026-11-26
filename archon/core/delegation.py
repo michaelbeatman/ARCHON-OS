@@ -545,6 +545,51 @@ _SOUL_TIER_FILES = {
 }
 
 
+def resolve_effective_soul_mode(agent_id: str, profile_soul_mode: str = "") -> str:
+    """F23 (D15): Produktive 3-Tier-Aufloesung (HIGH_RISK -> full, LEAD -> pro, Spezialist -> compact).
+
+    Ein explizites Profil-Setting ('pro'/'full') bleibt vorrangig; bei Standard-
+    'compact' oder leerem Wert wird die Rolle aus EU-AI-Act-Risikoklasse und
+    Organigramm-Tier (config/org_hierarchy.json) aufgeloest.
+    """
+    explicit = str(profile_soul_mode or "").strip().lower()
+    if explicit in ("pro", "full"):
+        return explicit
+    aid = str(agent_id or "").strip()
+    if not aid:
+        return "compact"
+    try:
+        from backend.eu_ai_act_inventory import HIGH_RISK_AGENT_IDS
+
+        if aid in HIGH_RISK_AGENT_IDS:
+            return "full"
+    except Exception:
+        pass
+    try:
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        org_path = os.path.join(repo_root, "config", "org_hierarchy.json")
+        if os.path.isfile(org_path):
+            with open(org_path, "r", encoding="utf-8") as fh:
+                org = json.load(fh)
+            nodes = org.get("nodes") or {}
+            node = None
+            if isinstance(nodes, dict):
+                node = nodes.get(aid)
+            elif isinstance(nodes, list):
+                node = next(
+                    (
+                        n for n in nodes
+                        if isinstance(n, dict) and (n.get("id") == aid or n.get("agent_id") == aid)
+                    ),
+                    None,
+                )
+            if isinstance(node, dict) and int(node.get("tier") or 3) in (1, 2):
+                return "pro"
+    except Exception:
+        pass
+    return "compact"
+
+
 def active_soul_tier_text(agent_id: str, soul_mode: str, max_chars: int = 6000) -> str:
     """D15/MED: `soul_mode` wird im Dispatch tatsaechlich konsumiert.
 
@@ -2133,13 +2178,14 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
     # praependierte User-Nachricht — sonst kann der Subagent sie als Inhalt
     # der Aufgabe interpretieren und die Negativ-Grenze verwaessern.
     _save_message_to_db(tgt_sess, "system", isolation_header)
-    _soul_tier_text = active_soul_tier_text(
-        ziel, isolated_scope.get("soul_mode") or "compact"
+    _effective_soul_mode = resolve_effective_soul_mode(
+        ziel, isolated_scope.get("soul_mode") or ""
     )
+    _soul_tier_text = active_soul_tier_text(ziel, _effective_soul_mode)
     if _soul_tier_text:
         _save_message_to_db(
             tgt_sess, "system",
-            f"[AKTIVER SOUL-TIER: {str(isolated_scope.get('soul_mode') or 'compact').upper()}]\n"
+            f"[AKTIVER SOUL-TIER: {_effective_soul_mode.upper()}]\n"
             f"{_soul_tier_text}",
         )
     _save_message_to_db(tgt_sess, "user", msg_text)

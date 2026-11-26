@@ -1,23 +1,29 @@
-# 00 — SOLL-SPEZIFIKATION (Archon OS V5.0 SYSTEM-AUDIT)
+# 00 — SOLL-SPEZIFIKATION (Archon OS System-Audit)
 
 > **Phase 0 — Sollzustand-Extraktion.** Diese Datei wurde **ausschließlich** aus der
-> Systemdokumentation erstellt (READMEs, `SECURITY.md`, Architektur-Specs, ADR-/Guide-Dateien,
-> Audit-Abschlussberichte). Es wurde **kein Implementierungscode** gelesen.
+> Systemdokumentation erstellt (READMEs, `SECURITY.md`, Architektur-Specs, ADR-/Guide-
+> Dateien, Audit-Abschlussberichte). **Es wurde kein Implementierungscode gelesen.**
 >
-> Quellen (verbindlich): `README.md`, `README.de.md`, `SECURITY.md`, `INSTALL_AGENT.md`,
-> `docs/SYSTEM_HANDBUCH.md`, `docs/ARCHITECTURE_N8N_VS_AGENT_ROUTING.md`,
-> `docs/AUDIT_FINDINGS_REGISTER.md`, `docs/system/ARCHON_ERP_ARCHITECTURE_SPEC.md`,
+> **Verbindliche Quellen:** `README.md`, `README.de.md`, `SECURITY.md`, `INSTALL_AGENT.md`,
+> `CHANGELOG.md`, `DISCLAIMER.md`, `docs/SYSTEM_HANDBUCH.md`,
+> `docs/ARCHITECTURE_N8N_VS_AGENT_ROUTING.md`, `docs/AUDIT_FINDINGS_REGISTER.md`,
+> `docs/system/ARCHON_ERP_ARCHITECTURE_SPEC.md`,
 > `docs/system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md`,
-> `docs/system/SYSTEM_AUDIT_2026_KONSOLIDIERT.md`, `docs/system/AUDIT_ABSCHLUSS_2026_11_23.md`,
-> `docs/system/WIRING_AUDIT_2026.md`, `docs/system/NEVER_DO_LIST.md`,
-> `docs/system/ORCHESTRATION_GOVERNANCE_V2_GUIDE.md`, `docs/system/APPROVAL_POLICIES_GUIDE.md`,
-> `docs/system/CHAOS_RESILIENCE_GUIDE.md`, `docs/system/EVENT_BUS_GOVERNANCE_GUIDE.md`,
-> `docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md`, `docs/security/*.md`,
-> `docs/system/ROADMAP_2026.md`.
+> `docs/system/SYSTEM_AUDIT_2026_KONSOLIDIERT.md`,
+> `docs/system/AUDIT_ABSCHLUSS_2026_11_23.md`, `docs/system/WIRING_AUDIT_2026.md`,
+> `docs/system/NEVER_DO_LIST.md`, `docs/system/ROADMAP_2026.md`,
+> `docs/system/ORCHESTRATION_GOVERNANCE_V2_GUIDE.md`,
+> `docs/system/APPROVAL_POLICIES_GUIDE.md`, `docs/system/CHAOS_RESILIENCE_GUIDE.md`,
+> `docs/system/EVENT_BUS_GOVERNANCE_GUIDE.md`, `docs/system/ENTERPRISE_FEATURES_2026_GUIDE.md`,
+> `docs/system/LLM_TRACING_LANGFUSE_GUIDE.md`, `docs/security/*.md`.
 >
-> **Vorrang-Regel:** `NEVER_DO_LIST.md` hat Vorrang vor allen anderen Dokumenten.
-> Bei Widersprüchen gilt die neueste datierte Quelle; die Versionsbasis ist
-> `v0.5.7.8` / `config/version.json` (PDF-Manuale hinken bei `v0.5.2.1` hinterher).
+> **Vorrangregeln:**
+> 1. `NEVER_DO_LIST.md` hat Vorrang vor allen anderen Dokumenten (Benutzerentscheidung 22.11.2026).
+> 2. Bei Widersprüchen gilt die neueste datierte/quellhare Quelle.
+> 3. Versionsbasis: `config/version.json` = **v0.6.0** (Release 24.11.2026, `CHANGELOG.md`).
+>    PDF-Manuale hinken bei **v0.5.2.1** hinterher — nie als Ist-Nachweis verwenden.
+> 4. Bohrklausel für alle Audits: Die Doku beschreibt den **Soll**, nicht den **Ist**.
+>    Jede Behauptung „behoben" ist unabhängig gegen Code zu verifizieren.
 
 ---
 
@@ -31,13 +37,14 @@ Eine Mechanik gilt **nur dann als wirksam**, wenn alle vier Glieder im **Produkt
 4. **Verifikation** – Test oder Metrik, die Scheitern sichtbar macht.
 
 Fehlt ein Glied → „Theater" / verdrahteter Schein → Befund. Analoge Prüffelder:
-Gates blockieren Freigabe (nicht nur Score); Outbox/DLQ mit echtem Drainer (CAS + Retry + Dead-Letter);
-Cancel-Token nach jedem `await` geprüft + Status `cancelled` persistiert; `synthesis_started`
-mit Timestamp + Watchdog rücksetzbar; Tool-Output-Firewall im echten Chokepoint; Secret-Masking
-vor **jedem** externen LLM-Dispatch; Egress-Firewall auch für als „lokal" klassifizierte Zonen;
-Tenant-Scope in Cache/Idempotency/Ledger/GDPR-Löschung; Audit-Schreibfehler nie verschluckt;
-UI-Controls mit echtem Handler + existierendem Ziel-Endpunkt; SSE hört auf echte Events;
-Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
+Gates blockieren Freigabe (nicht nur Score); Outbox/DLQ mit echtem Drainer (CAS + Retry +
+Dead-Letter); Cancel-Token nach jedem `await` geprüft + Status `cancelled` persistiert;
+`synthesis_started` mit Timestamp + Watchdog rücksetzbar; Tool-Output-Firewall im echten
+Chokepoint; Secret-Masking vor **jedem** externen LLM-Dispatch; Egress-Firewall auch für als
+„lokal" klassifizierte Zonen; Tenant-Scope in Cache/Idempotency/Ledger/GDPR-Löschung;
+Audit-Schreibfehler nie verschluckt; UI-Controls mit echtem Handler + existierendem
+Ziel-Endpunkt; SSE hört auf echte Events; Status-Maps vollständig (inkl. `queued` /
+`awaiting_gate` / `cancelled` / `paused` / `blocked`).
 
 ---
 
@@ -46,16 +53,24 @@ Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
 ### 1.1 Kernkette (Task → Workflow → Agent → Gate → Artefakt)
 - Zentrale Steuerung: FastAPI auf `:8501` (`main.py` + `archon/routers/*`), SPA/Next.js-Cockpit.
 - 71 Agentenprofile in `agent_profiles.json` / `roles.json` / `.hermes/profiles/`, 8 Domänen,
-  dreistufige `SOUL.md` (Compact / Pro / Full), 832 Prompt-Templates, 55 Boardroom-Frameworks.
+  dreistufige `SOUL.md` (Compact / Pro / Full), 832 Prompt-Templates, 80 Boardroom-Frameworks
+  (Doku-Info: README sagt 80, alters Cache 55 — neueste Quelle zählt).
 - Delegation über `archon/core/delegation.py`; Parent/Child via `task_links` + `project_id` in `ops.db`.
+  Rollen-/Tool-Isolation (`backend/delegation_isolation.py`, M75): Subagenten erben **keine**
+  privilegierten Tools des Parents; fail-closed Fallback `["web_search"]`.
 - Fan-in-Synchronisation: Synthese startet automatisch, wenn alle Kinder `completed`/`done`
-  (Sperrschutz `_MC_ASYNC_LOCK` + `_MC_DATA_LOCK`).
+  (Sperrschutz `_MC_ASYNC_LOCK` + `_MC_DATA_LOCK`); `synthesis_started` watchdog-rücksetzbar.
 - Konsens-Auflösung via `resolve_debate_consensus()`; Finalisierung über HITL-Gate-Kaskade.
 - **Hartes Budget**: `role_budget_policies` + `role_daily_budget_ledger`, Tages-/Monatslimit in
-  Tokens und EUR; Überschreitung → Rolle `paused_budget`. 15 % Reserve für Triage/Synthese,
-  85 % komplexitätsgewichtet (`complexity_weight` 0.7–2.0) auf Subagenten.
+  Tokens und EUR; Überschreitung → Rolle `paused_budget`. 15 % Reserve für Triage/Synthese
+  (Lisa), 85 % komplexitätsgewichtet (`complexity_weight` 0.7–2.0) auf Subagenten.
+  Atomare `BudgetBank` (`reserve → settle/release`), keine Budget-Aliase.
 - Autonomes CEO-Hiring nur explizit freigeschaltet (`allow_autonomous_hiring`), temporäre
   `hired_<slug>_<hash>`-Profile mit eigenem Teilbudget, Auflösung nach Projektabschluss.
+- DAG-Runner (M77, `backend/workflow_dag_runner.py`): Fan-Out/Quorum/Gates, Fingerprint-Resume
+  (`skipped_cached`), Persistenz `data/workflow_dags.db`.
+- Pre-Execution-DAG-Validator + `replan_count`-Cap, Worker-Leases/Heartbeats mit Liveness-Check,
+  Effect-Ledger mit `UNKNOWN` + Pflicht-Reconciliation (M110).
 
 ### 1.2 Deterministisch vs. probabilistisch (`ARCHITECTURE_N8N_VS_AGENT_ROUTING.md`)
 - Grundregel: **„Deterministisch vor Probabilistisch"**. Kein LLM für Aufgabe mit fester
@@ -66,31 +81,35 @@ Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
   Publishing (nach Freigabe) = n8n + HITL; Content/Boardroom/Strategie = budgetierte Agenten.
 - Endpunkte: `GET /api/operations/routing/matrix`, `POST /api/operations/routing/classify`,
   `GET|POST /api/operations/org/budgets`, `POST /api/operations/tasks/{id}/allocate-budget`.
+- Quality-Gate vor Außenwirkung: `config/voice.md` + 5-Punkte-Human-Score (`li-human` /
+  `anti-ai-slop`), Score < 70 oder KI-Floskeln/Unicode-Wasserzeichen → markiert/bereinigt.
 
-### 1.3 Persistenz & Datenbanken
+### 1.3 Persistenz, Datenbank & Vault-Integrität
 - SQLite WAL als Single Source of Truth; Konsolidierung **28 → 3** domänenisolierte DBs:
   `data/ops.db` (Steuerung/Workflows/Security), `data/business.db` (ERP/CRM/Verträge/Treasury/
   Content), `data/memory.db` (Agentengedächtnis/Sessions). `busy_timeout=5000`,
-  Kollisions-Präfixe `<legacy_stem>__<table>`, Pre-Consolidation-Backups, transparenter
-  Pfad-Adapter `resolve_db()` + `TenantContextManager.resolve_active_db()` + `DBBackupManager`.
+  Kollisions-Präfixe `<legacy_stem>__<table>`, transparenter Pfad-Adapter `resolve_db()` +
+  `TenantContextManager.resolve_active_db()` + `DBBackupManager`.
 - **Mandanten-Isolation (M43)**: pro `company_id` fünf physisch getrennte WAL-DBs unter
   `data/tenants/{company_id}/`: `erp.db`, `kanban.db`, `crm.db`, `contracts.db`, `deals.db`.
   Keine Vermischung personenbezogener Daten/Belege zwischen Rechtseinheiten. Atomare
   Nummernkreise: Debitoren ab 10001, Kreditoren ab 70001, Artikel `ART-1001`,
   `ANG|AB|RE-{YYYY}-{0001}`.
 - Obsidian-Vault als Second Brain (`01_PROJEKTE`, `02_Research`, HR-Personalakten), atomare
-  Sidecars (`kanban_sidecar.py`), Litestream-WAL-Replikation (5–10 s), Restore-Tests.
-- PocketBase auf `:8090` optionaler Laptop-CRM-Sync (in Archon standardmäßig deaktiviert,
+  Sidecars (`kanban_sidecar.py`), Litestream-WAL-Replikation (5–10 s), Restore-Tests
+  (`AUTOMATED_RESTORE_TEST_GUIDE.md`), Zip-Slip-Pfad-Jail + WAL-Sidecar-Entfernung beim Restore.
+- PocketBase auf `:8090` optionaler Laptop-CRM-Sync (standardmäßig deaktiviert,
   `POCKETBASE_ENABLED=false`); Sync gleicht nur Netzwerk-/Kommunikationsdaten ab,
   überschreibt **nie** kaufmännische ERP-Felder.
-- ERP-Schema: `crm_entities`, `crm_contacts`, `crm_interactions`, `erp_items`,
-  `erp_documents`, `erp_document_lines` mit GoBD-unveränderlichem `recipient_snapshot_json`,
-  Statusmodell `draft→approved→booked/sent→paid|cancelled`, `external_msg_id UNIQUE`
-  (Duplikatsschutz), `pocketbase_id UNIQUE`.
+- ERP-Schema: `crm_entities`, `crm_contacts`, `crm_interactions`, `erp_items`, `erp_documents`,
+  `erp_document_lines` mit GoBD-unveränderlichem `recipient_snapshot_json`, Statusmodell
+  `draft→approved→booked/sent→paid|cancelled`, `external_msg_id UNIQUE` (Duplikatsschutz),
+  `pocketbase_id UNIQUE`.
 - GoBD: `booked`/`paid` → `draft` ist gesperrt; Art. 15 paginierter Export, Art. 17
-  case-insensitive Schwärzung inkl. `memory.db` (kein stiller Fallback).
+  case-insensitive Schwärzung inkl. `memory.db` (kein stiller Fallback). Datenverlust bricht
+  Migration hart ab.
 
-### 1.4 Integrationen
+### 1.4 Integrationen, Webhooks & API-Routing
 - OmniRoute `:20128` (OpenAI/Anthropic/Gemini/Groq/DeepSeek + lokale Ollama/LM Studio),
   Cost-Estimator vor Dispatch, Budget-Attribution.
 - n8n `:5678` als Event-Trigger-/Automatisierungsschicht; Webhook `/webhook/archon-execution`.
@@ -101,7 +120,7 @@ Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
 - Idempotency-Keys + Outbox mit Retry/DLQ für Events, Webhooks, Scheduler; Dead-Outbox → DLQ;
   Replay echt (kein Fake-Success), `next_try_at`-Backoff.
 - MCP-Server `/mcp` (M48): Streamable HTTP/SSE, scoped Keys
-  (`read_only`|`kanban_rw`|`agent_execute`|`admin_full`), HITL-Gate für
+  (`read_only` | `kanban_rw` | `agent_execute` | `admin_full`), HITL-Gate für
   `archon__trigger_boardroom_debate` / `archon__ask_specialist`.
 
 ---
@@ -110,7 +129,7 @@ Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
 
 ### 2.1 Netzwerk & Container
 - Localhost-First: Bind `127.0.0.1:8501` default; `ARCHON_BIND_IP=0.0.0.0` nur mit
-  `auth.enabled=true`. Aktuell: `settings.json` hat **keinen `auth`-Block** → bewusster
+  `auth.enabled=true`. Shipped `settings.json` hat **keinen `auth`-Block** → bewusster
   Single-User-Localhost-Modus, **nicht** für LAN/Produktion. `_must_force_auth()` erzwingt
   Auth bei Non-Loopback-Bind.
 - Zero-Trust Docker Socket Proxy über isoliertes `archon-admin_net` (Allowlist), nie roher
@@ -129,7 +148,7 @@ Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
   (keine Fail-Open-`_require_admin`-Fallbacks). Kein Body-Actor in Freigabe-/Versandpfaden
   (`require_session_actor`), Vier-Augen-Prinzip nicht fälschbar.
 - Echte FIDO2/WebAuthn-Signaturprüfung (ES256/RS256, `rpIdHash`, `signCount`-Replay-Schutz);
-  Passkey-Proof zwingend an `action` + `resource` gebunden.
+  Passkey-Proof zwingend an `action` + `resource` gebunden (`backend/passkey_hitl.py`).
 - API-Keys in Runtime-Env / Credential-Vault `.env` (0600), nie im Code; Missing-Key →
   harter Fehler (fail-closed), kein Platzhalter-Fallback. Windows: echtes `icacls`-Härten
   + DACL-Verifikation (`secret_files.py`).
@@ -138,36 +157,41 @@ Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
 ### 2.3 Egress, Prompt-Injection, Taint
 - Zero-Egress-Gate + Privacy-Router: sensible Kategorien (`finance`, `contracts`, `crm`, `hr`,
   `gdpr`) **nur** zu verifizierten `LOCAL_ON_PREM`-Endpunkten; harter Fail-Closed-Block
-  (`LOCAL_LLM_OFFLINE_HARD_BLOCK`) bei offline lokalem Modell. `zero_egress_strict`
-  weitet Lock systemweit aus. `explicit_category` darf Klassifikation **nicht** abschwächen;
-  Klassifikationsfehler → fail-closed `confidential`.
+  (`LOCAL_LLM_OFFLINE_HARD_BLOCK`) bei offline lokalem Modell. `zero_egress_strict` weitet
+  Lock systemweit aus. `explicit_category` darf Klassifikation **nicht** abschwägen;
+  Klassifikationsfehler → fail-closed `confidential`. Egress-Firewall auch für „lokale" Zonen.
 - Egress-Firewall `enforce_egress_firewall_for_url()` + `sanitize_outbound_llm_payload()`
-  (secret_masker + pii_scrubber) vor **jedem** externen Dispatch, auch für „lokale" Zonen.
+  (secret_masker + pii_scrubber) vor **jedem** externen Dispatch.
 - Dual-LLM-Quarantine-Sanitizer (`backend/dual_llm_sanitizer.py`), 25 Prompt-Injection-Muster
-  (`local_security_guard.py`), 8 standardisierte Angriffs-Szenarien (`injection_range.py`).
-- Information-Flow-Taint-Tracking (M89): nach untrusted Content werden kritische Ausgänge
-  (`send_email`, `pay`, `pay-cli`, `git_push`, `deploy`, `memory_write`, `execute_shell`,
-  `webhook_post`, `telegram_send`, `terminal`, `execute_code`, `computer_use`, `mcp__*`,
-  `node_plugin:*`, unbekannte Tools) über HITL geparkt. Default-Deny; nur explizit harmlose
-  Tools (`read_file`, `web_search`, …) ausgenommen. Einmal-Tokens (`ta-...`) werden verbraucht
-  (`consumed=1`), CAS-UPDATE `AND consumed=0`.
+  (`local_security_guard.py`), 8 standardisierte Angriffs-Szenarien (`injection_range.py`, M84).
+- Information-Flow-Taint-Tracking (M89, `backend/session_taint_guard.py`): nach untrusted
+  Content werden kritische Ausgänge (`send_email`, `pay`, `pay-cli`, `git_push`, `deploy`,
+  `memory_write`, `execute_shell`, `webhook_post`, `telegram_send`, `terminal`,
+  `execute_code`, `computer_use`, `mcp__*`, `node_plugin:*`, unbekannte Tools) über HITL
+  geparkt. Default-Deny; nur explizit harmlose Tools (`read_file`, `web_search`, …) ausgenommen.
+  Einmal-Tokens (`ta-...`) werden verbraucht (`consumed=1`), CAS-UPDATE `AND consumed=0`.
 - Sandbox: `python -I`, `TemporaryDirectory`, ohne Host-Env-Secrets, POSIX-`rlimit`,
   AST-Sperre gefährlicher Module (`os`, `subprocess`, `socket`, `ctypes`, `urllib`), SSRF-Schutz
-  (`check_public_url`) für `visual_web_agent.py`.
+  (`check_public_url`) für `visual_web_agent.py` / `test-connection`.
+- Tool-Output-Firewall (M93, `backend/tool_output_firewall.py`): `guard_result()` /
+  `guard_tool_output()` im echten Chokepoint (MCP/Plugins/DAG) kappt übergroße Outputs.
 
 ### 2.4 HITL, Approvals, Warrants
-- Vier-Augen-Prinzip ab 500 €, Auto-Freigabe bis 50 €, 24 h Eskalationsfrist;
-  Kommunikation: Freigabepflicht für KI-Antwortentwürfe, 12 h, Domain-Whitelist.
+- Vier-Augen-Prinzip ab 500 €, Auto-Freigabe bis 50 €, 24 h Eskalationsfrist; Kommunikation:
+  Freigabepflicht für KI-Antwortentwürfe, 12 h, Domain-Whitelist.
 - Jede Regel-/Statusänderung append-only in `approval_policy_audit_chain` SHA-256-Hashkette.
-- Signierte Tool-Warrants (M90): HMAC-SHA256, Ablaufzeit, Parameter-Constraints
-  (`max_amount`, `allowed_path_prefixes`); **alle** Pfad-Aliase (`file_path`, `uri`, `target`,
-  …) gegen Prefixes prüfen; fehlendes Pfad-Argument bei Pfad-Constraint → deny.
-  Pflicht für `pay` / `mcp__*`.
+- Signierte Tool-Warrants (M90, `backend/tool_warrants.py`): HMAC-SHA256, Ablaufzeit,
+  Parameter-Constraints (`max_amount`, `allowed_path_prefixes`); **alle** Pfad-Aliase
+  (`file_path`, `uri`, `target`, …) gegen Prefixes prüfen; fehlendes Pfad-Argument bei
+  Pfad-Constraint → deny. Pflicht für `pay` / `mcp__*`.
 - Kanban-Verifier (M76/M81): Token-Budget, Ergebnis-Integrität, `proof_command` (Exit 0);
-  Retry einmal, dann `blocked` (`budget_exceeded_hitl`/`proof_failed_hitl`) → Mensch
-  (`override_budget`|`retry`|`abort`). Cross-Modell-Verifier anderer Modellfamilie,
+  Retry einmal, dann `blocked` (`budget_exceeded_hitl` / `proof_failed_hitl`) → Mensch
+  (`override_budget` | `retry` | `abort`). Cross-Modell-Verifier anderer Modellfamilie,
   `detect_deleted_test_assertions()` blockt entfernte Test-Assertions.
-- Präzedenzfälle (M91) strikt isoliert pro `(tenant_id, project_id)`, kein Mandanten-Transfer.
+- Präzedenzfälle (M91, `data/precedents.db`) strikt isoliert pro `(tenant_id, project_id)`,
+  kein Mandanten-Transfer; Injektion als `[PRECEDENT RULINGS]` in den Task-Prompt.
+- Flugschreiber (M83, `backend/flightlog_backtester.py`): `detect_silent_failures` erkennt
+  „grün fehlgeschlagene" Runs (versteckte Tool-Errors, Loops ≥ 3, Token-Spikes, Effort-Collapse).
 
 ### 2.5 Audit-Trail & Kryptografie
 - Lückenlose HMAC-SHA256-Hashkette (Env-Key `ARCHON_AUDIT_HMAC_KEY`) in `backend/audit_log.py`:
@@ -183,14 +207,17 @@ Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
   Append-only-Trigger gegen UPDATE/DELETE, `hmac_protected` im Verify-Result,
   `verify_chain_integrity()` prüft alle SHA-256-Zeilenhashes.
 - Break-Glass-Notfallkey unter `data/security/`, Modus 600, getrennt vom verschlüsselten
-  Vault und HMAC-Key; Zip-Slip-Pfad-Jail + WAL-Sidecar-Entfernung beim Restore.
+  Vault und HMAC-Key; `BREAK_GLASS_RECOVERY_GUIDE.md`.
 
-### 2.6 Mandanten- & Rollen-Grenzen
+### 2.6 Mandanten-, Rollen- & Compliance-Grenzen
 - Tenant-Scope in **allen** Caches, Idempotency, Ledger, Taint-Guard, Egress-Log, PII-Vault,
-  Offline-Vault (DB+Key+AAD), GDPR-Löschung; kein globaler Vault/Key.
+  Offline-Vault (DB+Key+AAD, `backend/offline_memory_vault.py`), GDPR-Löschung; kein
+  globaler Vault/Key.
 - EU AI Act: Default-Deny + zentrale Alias-Auflösung für unbekannte Agenten; Klassifizierung
   HIGH_RISK (Anh. III 4/5), SPECIFIC_TRANSPARENCY (Art. 50), MINIMAL_RISK (Art. 95) mit
   `SOUL.md`-SHA-256-Hash; Art.-4-Kompetenzregister revisionssicher.
+- Productmodell: **keine eigene Content-Domäne / kein `/content-studio`**; Content ist
+  Task → Workflow → Agent → Gate → Artefakt. Backend-Module bleiben interne Bausteine.
 
 ---
 
@@ -234,27 +261,26 @@ Status-Maps vollständig (inkl. `queued`/`awaiting_gate`/`cancelled`/`paused`).
 
 ---
 
-## 5. Verbindliche Negativ-Constraints (NEVER_DO_LIST — Vorrang)
+## 5. Verbindliche Negativ-Constraints (NEVER_DO_LIST — Vorrang vor allem)
 
 1. **Kein echtes Coroutine-Replay** im Durable Kernel. Akzeptiert: persistierte Node-States
    + Checkpoints. Kein Event-Sourcing/Snapshotting/Replay-Framework, auch nicht als „Folgearbeit".
 2. **Keine PostgreSQL-Migration**. SQLite bleibt; Konsolidierung 28 → 3 + physisch isolierte
    Mandanten-DBs ist Endarchitektur. Keine DSN, kein Migrationstool, keine Empfehlung.
+3. **Keine eigene Content-Domäne / kein `/content-studio`** (Produktmodell-Korrektur 23.11.2026).
 
-Zusätzlich (Produktmodell-Korrektur 23.11.2026): **keine eigene Content-Domäne / kein
-`/content-studio`**; Content ist Task → Workflow → Agent → Gate → Artefakt. Backend-Module
-bleiben interne Bausteine, keine Produktfläche.
+> Diese Punkte dürfen in Phase 2 **nicht** als „Verbesserung" empfohlen werden.
 
 ---
 
-## 6. Dokumentierte Risikolandschaft (Soll ↔ behaupteter Ist; zu verifizieren)
+## 6. Dokumentierte Risikolandschaft (Soll ↔ behaupteter Ist; unabhängig zu verifizieren)
 
-Die Audit-Dokumente behaupten若干 Punkte als „behoben", andere als „teilweise offen".
+Die Audit-Dokumente behaupten einzelne Punkte als „behoben", andere als „teilweise offen".
 Diese Liste ist **kein Freibrief**, sondern Priorisierungshinweis für die Domänen-Audits:
 
-|_cluster | Dokumentierte Rest-Risiken (Quelle: `SYSTEM_AUDIT_2026_KONSOLIDIERT.md`, `AUDIT_ABSCHLUSS_2026_11_23.md`) |
+| Cluster | Dokumentierte Rest-Risiken (Quelle: `SYSTEM_AUDIT_2026_KONSOLIDIERT.md`, `AUDIT_ABSCHLUSS_2026_11_23.md`) |
 |---|---|
-| Auth/RBAC | Passkey-Bindung teils offen (laut Abschluss behoben — verifizieren); ~136 rohe `dict = Body` in `archon/routers/**`; `extra="allow"`-Reste |
+| Auth/RBAC | ~136 rohe `dict = Body` in `archon/routers/**`; `extra="allow"`-Reste; Passkey-Bindung teils offen (laut Abschluss behoben — verifizieren) |
 | Tenant | Vault/Taint teils offen (laut Abschluss tenant-scoped — verifizieren); Cache/Idempotency-Scope |
 | Orchestrierung | Cancel nach `await`, Lease/Fencing, DLQ-Scheinconsumer, Boardroom-Killswitch (teils offen laut konsolidiertem Audit) |
 | Audit/Krypto | HMAC im Break-Glass, Receipt-Kette nacktes SHA-256, verschluckte Audit-Errors, Anker nie verifiziert (teils offen) |
@@ -262,6 +288,7 @@ Diese Liste ist **kein Freibrief**, sondern Priorisierungshinweis für die Domä
 | Performance | 50-ms-Event-Loop-Block, 300-s-Slot-Block, DDL pro Budget-Call, Loop-Keyed Clients (teils offen) |
 | Doku | PDF-Manuale bei v0.5.2.1, Versionsdrift, „100 % verdrahtet" nur Einschätzung (Frontend-Build lokal nicht verifiziert) |
 | Betrieb | `settings.json` ohne `auth`-Block; `zero_egress=false`, `zero_egress_strict=false`; kein LAN/Produktions-Default |
+| Tests | 1765 passed / 16 skipped (Stand 24.11.2026), Frontend-Build in CI nicht lokal verifiziert |
 
 > **Wichtiger Hinweis an alle Subagenten:** Die Doku behauptet einen weitgehend sanierten
 > Zustand. Euer Auftrag ist eine **unabhängige, skeptische Verifikation gegen den Code**,
@@ -286,7 +313,7 @@ Diese Liste ist **kein Freibrief**, sondern Priorisierungshinweis für die Domä
 | 10 System-Härtung/24-7 | §3, §2.1 |
 | 11 Context Drift/Handoff | §1.1, §4 (Pydantic-Schema an Übergaben) |
 | 12 Silent Failures/Hallucination | §0, §2.3, §2.5, §4 (kein Platzhalter-Fallback) |
-| 13 Trajectory/Loop-Prevention | §1.1 (MAX_DELEGATION_DEPTH=3, MAX_FANOUT=5), §2.4 (Budget), §1.4 (Loop-Dedup) |
+| 13 Trajectory/Loop-Prevention | §1.1 (MAX_DELEGATION_DEPTH, MAX_FANOUT, replan_count), §2.4 (Budget), §1.4 (Loop-Dedup) |
 | 14 Entscheidungs-Hoheit | §1.1 (Konsens/HITL), §2.4 (Vier-Augen, Warrants), §2.6 |
 | 15 Rollen-/Prompt-Trennschärfe | §1.1 (71 Profile/3-Tier SOUL), §2.6 (EU AI Act Guardrails), §5 |
 | 16 Distributed Tracing | §3 (OTel `trace_id`/`span_id` über alle Grenzen), §2.5 (Audit-Kette) |

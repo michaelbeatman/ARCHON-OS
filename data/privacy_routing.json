@@ -1,0 +1,19 @@
+{
+  "zero_egress_strict": false,
+  "sensitive_local_routing": true,
+  "hard_block_on_local_offline": true,
+  "block_crm_erp_prefetch_on_cloud": true,
+  "local_llm_url": "http://127.0.0.1:11434/v1",
+  "local_llm_model": "llama3.2",
+  "fallback_to_eu": false,
+  "mistral_api_key": "",
+  "mistral_model": "mistral-large-latest",
+  "worker_isolation_network": "archon-worker-zero-egress_net",
+  "sensitive_categories": [
+    "finance", "finanzen", "receipts", "buchhaltung", "erp", "invoices",
+    "contracts", "verträge", "vertraege", "legal",
+    "crm", "kunden", "contacts",
+    "gdpr", "dsgvo", "personalakte", "hr",
+    "confidential", "strictly_confidential", "vertraulich", "geheim"
+  ]
+}

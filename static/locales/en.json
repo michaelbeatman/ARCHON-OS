@@ -299,7 +299,8 @@
       "passkey_devices_label": "Registered Passkeys",
       "passkey_test_btn": "Test",
       "passkey_add_btn": "+ Register Passkey",
-      "passkey_none": "No passkey registered yet."
+      "passkey_none": "No passkey registered yet.",
+      "change_own_pw_btn": "Change password"
     },
     "routing": {
       "active_label": "active",

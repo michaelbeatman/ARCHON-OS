@@ -125,9 +125,14 @@ def mock_fan_in():
 
 
 @pytest.fixture
-def mock_paths():
-    """Pfad-Konfiguration für Tests."""
-    return {"OBSIDIAN_VAULT_DIR": "/fake/obsidian", "WORKSPACE_DIR": "/fake/workspace"}
+def mock_paths(tmp_path):
+    """Pfad-Konfiguration für Tests (beschreibbar — der Finalisierungspfad
+    schreibt das Artefakt atomar und verifiziert SHA-256, vgl. D03-M1/F-040)."""
+    vault = tmp_path / "obsidian"
+    workspace = tmp_path / "workspace"
+    vault.mkdir(exist_ok=True)
+    workspace.mkdir(exist_ok=True)
+    return {"OBSIDIAN_VAULT_DIR": str(vault), "WORKSPACE_DIR": str(workspace)}
 
 
 @pytest.fixture

@@ -355,6 +355,15 @@ SETTINGS_MODAL_EXCEPTIONS = {
     "DEUTDEDDBER": "Beispiel-BIC im Placeholder corp-input-bic",
     "/static/img/logo.png": "Pfad-Identifier im Placeholder corp-input-logo",
     "Vollbild": "Schalter-Label btn-corp-template-fullscreen-label, wird per JS umgeschaltet",
+    # Nachtraeglich hinzugekommene technische Beschriftungen (kein Prosa-Text)
+    "CREDENTIALS": "Technischer Button-Identifier im allgemeinen Einstellungs-Tab",
+    "Archon Context-Compactor (M99)": "Produkt-/Modulname mit Meilenstein-ID (Glossar: unuebersetzt)",
+    "Dynamisches Fenster (128k / 200k / 1M · Fallback 32k)": "Technische Spezifikation mit Einheiten und Laufzeitwerten",
+    "Compactor speichern": "Fachbegriff 'Compactor' gemaess I18N_GLOSSAR (unuebersetzt)",
+    "Compactor aktiv": "Status-Badge aus JS (settings_compactor.js)",
+    "Trigger-Schwelle (Tokens)": "Fachbegriff 'Tokens' gemaess I18N_GLOSSAR",
+    "Auto-Compact ab (%)": "Fachbegriff 'Auto-Compact' mit Einheit (%) gemaess Glossar",
+    "Letzte Turns behalten": "Fachbegriff 'Turns' gemaess I18N_GLOSSAR (unuebersetzt)",
 }
 
 ATTRIBUTE_SECTIONS = SETTINGS_MODAL_DONE
@@ -468,7 +477,11 @@ VIEWS_DONE = frozenset({
 # weiterhin eine Zuordnung jeder Datei - eine neue View muss also entweder
 # fertig annotiert in ``VIEWS_DONE`` stehen oder hier bewusst als Tranche
 # eingetragen werden.
-VIEWS_PENDING = frozenset()  # type: ignore[var-annotated]
+VIEWS_PENDING = frozenset({  # type: ignore[var-annotated]
+    # Neu hinzugekommene View, noch nicht vollstaendig annotiert (bewusst als
+    # offene Tranche gefuehrt, damit sie nicht stillschweigend ungeprueft bleibt).
+    "api_credentials_view.html",
+})
 
 # Nicht uebersetzbare Knoten je View: Laufzeitwerte aus JS/Backend, technische
 # Identifier, Einheiten, Beispielwerte. Textgleichheit ist eindeutig genug.

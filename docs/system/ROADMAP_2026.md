@@ -1,6 +1,6 @@
 # Archon OS – Offene Entwicklungs-Roadmap
 
-> **Hinweis:** Abgeschlossene Meilensteine (Stand `v0.6.0.1`, u. a. Execution Hardening, PolicyEngine/BudgetBank, Effect-Ledger, SQLite-WAL-Konsolidierung, Multi-Agent-Orchestrierung, Content-Maschine v2, Passkey-HITL und Audit-Sanierung W0–W7) sind in [`CHANGELOG.md`](../../CHANGELOG.md) dokumentiert. Diese Datei listet ausschließlich **aktuell offene bzw. geplante** Vorhaben.
+> **Hinweis:** Abgeschlossene Meilensteine (Stand `v0.6.0.1`, u. a. Execution Hardening, PolicyEngine/BudgetBank, Effect-Ledger, SQLite-WAL-Konsolidierung, Multi-Agent-Orchestrierung, Content-Maschine v2, Passkey-HITL und Audit-Sanierung W0–W7) sind in [`CHANGELOG.md`](../../CHANGELOG.md) dokumentiert. Diese Datei listet ausschließlich **aktuell offene bzw. geplante** Vorhaben. **Produktmodell-Korrektur (23.11.2026):** Keine eigene Content-Domäne — Content läuft durchgängig als `Task → Workflow → Agent → Gate → Artefakt`.
 
 | ID | Offenes Vorhaben | Priorität | Status | Kernfokus |
 |---|---|---|---|---|

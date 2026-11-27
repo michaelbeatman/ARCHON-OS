@@ -703,7 +703,7 @@ jobs:
           # Task -> Workflow -> Agent -> Gate -> Artefakt. Erlaubt sind nur
           # (a) normative/ HISTORISCHE Audit-Dokumente, die das VERBOT benennen,
           # (b) der kommentierte LEGACY-ALIAS in static/index.html.
-          WHITELIST='00_SOLL_SPEC\.md|domain_09\.md|HANDOFF_W4_W7\.md|GEWICHTETE_BEFUNDLISTE\.md|MASTER_PLAN\.md|AUDIT_ABSCHLUSS_2026_11_23\.md|fix_w1_d_tenant_ledger\.md|SYSTEM_AUDIT_2026_KONSOLIDIERT\.md|SYSTEM_ARCHITEKTUR_UND_AUDIT_2026\.md|w7_[a-z]_report\.md'
+          WHITELIST='00_SOLL_SPEC\.md|domain_09\.md|HANDOFF_W4_W7\.md|GEWICHTETE_BEFUNDLISTE\.md|MASTER_PLAN\.md|AUDIT_ABSCHLUSS_2026_11_23\.md|fix_w1_d_tenant_ledger\.md|SYSTEM_AUDIT_2026_KONSOLIDIERT\.md|SYSTEM_ARCHITEKTUR_UND_AUDIT_2026\.md|w7_[a-z]+_report\.md'
           HITS=$(grep -rnF '/content-studio' CHANGELOG.md docs audit_reports static/index.html \
             --exclude-dir=node_modules \
             | grep -vE "$WHITELIST" \

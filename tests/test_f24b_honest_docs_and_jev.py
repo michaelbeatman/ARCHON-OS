@@ -12,16 +12,19 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def test_f24b_milestones_26_and_27_not_claimed_abgeschlossen_in_docs():
     doc_paths = [
-        REPO_ROOT / "docs" / "SYSTEM_HANDBUCH.md",
-        REPO_ROOT / "docs" / "system" / "ROADMAP_2026.md",
+        (REPO_ROOT / "docs" / "SYSTEM_HANDBUCH.md", True),
+        # ROADMAP_2026.md wurde auf offen/geplante Vorhaben gekuerzt; falls M26/M27
+        # dort wieder auftauchen, muessen sie ehrlich als Demo / Simulation markiert sein.
+        (REPO_ROOT / "docs" / "system" / "ROADMAP_2026.md", False),
     ]
-    for path in doc_paths:
+    for path, require_present in doc_paths:
         text = path.read_text(encoding="utf-8")
         # Tabelleneintraege 26 & 27 duerfen nicht mehr "Abgeschlossen" behaupten
         for ms in ("26", "27"):
             row_pattern = re.compile(rf"^\|\s*\*\*{ms}\*\*\s*\|.*$", re.MULTILINE)
             rows = row_pattern.findall(text)
-            assert rows, f"Meilenstein-{ms}-Zeile fehlt in {path.name}"
+            if require_present:
+                assert rows, f"Meilenstein-{ms}-Zeile fehlt in {path.name}"
             for row in rows:
                 assert "Abgeschlossen" not in row, (
                     f"Meilenstein {ms} in {path.name} noch als Abgeschlossen markiert: {row}"
@@ -32,7 +35,8 @@ def test_f24b_milestones_26_and_27_not_claimed_abgeschlossen_in_docs():
 
             header_pattern = re.compile(rf"^###\s+Meilenstein\s+{ms}:.*$", re.MULTILINE)
             headers = header_pattern.findall(text)
-            assert headers, f"Meilenstein-{ms}-Ueberschrift fehlt in {path.name}"
+            if require_present:
+                assert headers, f"Meilenstein-{ms}-Ueberschrift fehlt in {path.name}"
             for hdr in headers:
                 assert "(Abgeschlossen)" not in hdr, (
                     f"Meilenstein-{ms}-Header in {path.name} noch (Abgeschlossen): {hdr}"

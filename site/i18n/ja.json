@@ -57,7 +57,7 @@
   "fleet.realestate": "<tr><td>不動産 &amp; 建設</td><td>7</td><td>DCF 評価、用途地域/BauGB、ESG/KfW、建設プロジェクト管理</td></tr>",
   "fleet.medicine": "<tr><td>医学、化学、科学 &amp; エンジニアリング</td><td>6</td><td>臨床アドバイザー、EU-MDR、REACH、医薬品 - 規制ドメイン向けガードレール</td></tr>",
   "install.title": "<h2 class=\"sec\" id=\"install\">インストール</h2>",
-  "install.fullstack": "<h3>フルスタック</h3><p>標準7コンテナ：Archon OS、Hermes Agent、AnythingLLM、Chroma、OmniRoute、Docker socket proxy、Autoheal（任意プロファイルで最大24構成に拡張可能）。</p>",
+  "install.fullstack": "<h3>フルスタック</h3><p>標準8コンテナ：Archon OS、OmniRoute、Hermes Agent、AnythingLLM、ChromaDB、Litestream、Docker socket proxy、Autoheal（任意プロファイルで最大24構成）。</p>",
   "install.demo": "<h3>キー不要デモ</h3><p>API キーもトークンコストも不要の読み取り専用ショーケース。まずはこちらから。</p>",
   "install.interactive": "<h3>対話型インストーラー</h3><p>Windows 用 <code>setup.ps1</code>、Linux/macOS 用 <code>install.sh</code>、または AI コーディングエージェント向けの構造化オンボーディングプロンプト（<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md\">INSTALL_AGENT.md</a>）。</p>",
   "install.codeComment": "# http://localhost:8501 を開く",
@@ -87,5 +87,8 @@
   "footer.thirdParty": "サードパーティライセンス",
   "nav.languageLabel": "言語",
   "js.copy": "コピー",
-  "js.copied": "コピーしました"
+  "js.copied": "コピーしました",
+  "features.stackOps": "<h3>Autoheal・Chroma・Litestream</h3><p>標準8コンテナ構成：<code>archon-autoheal</code>が<code>/livez</code>監視で自動復旧し、<code>ChromaDB</code>がローカルRAG、<code>Litestream</code>がSQLite WALを複製します。</p>",
+  "features.observability": "<h3>Alertmanager と統合監視</h3><p>任意プロファイルで<code>Prometheus</code>、<code>Alertmanager</code>、<code>Grafana</code>、<code>Loki</code>、<code>OTel</code>/<code>Tempo</code>、<code>Uptime Kuma</code>、<code>Caddy</code>/<code>Authelia</code> SSO、<code>Metabase</code>、<code>DocuSeal</code>を追加できます。</p>",
+  "features.enterprise": "<h3>832プロンプト・マルチテナント</h3><p>832のPrompt Studioテンプレート、39スキル、6 MCPサーバー、法人別DB分離、GDPR第17条消去、音声同意ゲート、オフラインAEAD Vaultを備えます。</p>"
 }

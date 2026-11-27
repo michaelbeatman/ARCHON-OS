@@ -55,7 +55,7 @@
       "description": "Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & 7-container Docker stack.",
       "inLanguage": "en",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/architecture/",
-      "dateModified": "2026-11-26",
+      "dateModified": "2026-11-27",
       "image": "https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png",
       "author": {
         "@type": "Person",
@@ -75,7 +75,7 @@
       "about": {
         "@type": "SoftwareApplication",
         "name": "Archon OS",
-        "softwareVersion": "0.6.0"
+        "softwareVersion": "0.6.0.1"
       }
     }
   ]
@@ -181,7 +181,7 @@
       <img class="hand-avatar" src="../archon_hand.png" width="40" height="40" alt="Archon OS">
       <span>
         <span class="brand-name">Archon OS</span>
-        <span class="tag">v0.6.0 &middot; Self-Hosted Agentic OS</span>
+        <span class="tag">v0.6.0.1 &middot; Self-Hosted Agentic OS</span>
       </span>
     </a>
     <nav aria-label="Main navigation"><a href="../">Home</a><a href="../architecture/">Architecture</a><a href="../gdpr-zero-egress/">GDPR</a><a href="../compare/">Compare</a><a href="../boardroom-frameworks/">Frameworks</a><a href="../specialists/">Specialists</a><a href="../de/architektur/" class="lang-switch">DE · Deutsch</a><button type="button" class="theme-btn" data-theme-toggle>Light</button></nav>
@@ -195,7 +195,7 @@
         <a href="../">Archon OS</a><span>/</span><span>Architecture &amp; Stack</span>
       </nav>
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>Architecture &amp; Stack &middot; v0.6.0</span></div>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>Architecture &amp; Stack &middot; v0.6.0.1</span></div>
         <h1>System architecture built for accountable multi-agent fleets.</h1>
         <p class="hero-lead">Archon OS decouples agent reasoning from governance, cost control, and external side effects. Every model and tool invocation clears deterministic safety gates backed by 3 consolidated SQLite WAL databases.</p>
         <div class="btnrow">
@@ -298,7 +298,7 @@
   <div class="feat"><h3>3. OmniRoute Fail-Closed Switchboard</h3><p>Routes sensitive domains (finance, contracts, HR, CRM, GDPR) exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route. Fails closed rather than falling back to cloud APIs.</p></div>
   <div class="feat"><h3>4. Crash-Safe Effect-Ledger &amp; Outbox</h3><p>External side effects track explicit state transitions (<code>PENDING &rarr; COMMITTED / FAILED / UNKNOWN</code>) with idempotency keys and mandatory reconciliation after crashes, eliminating duplicate webhooks or payouts.</p></div>
   <div class="feat"><h3>5. Three Consolidated SQLite WAL Databases</h3><p>No bloated database cluster required: <code>ops.db</code> (tasks, budgets, warrants, audit hash-chain), <code>business.db</code> (CRM, contracts, ERP alpha), and <code>memory.db</code> (learnings) run in WAL mode with optional Litestream replication.</p></div>
-  <div class="feat"><h3>6. 7 Default Containers (up to 24 with Profiles)</h3><p>The default Docker Compose stack (amd64 / arm64) runs Archon OS Core, Hermes Agent, OmniRoute, AnythingLLM, ChromaDB, Docker Socket Proxy, and <code>archon-autoheal</code> — expandable with 17 optional profile services (n8n, Grafana, Prometheus, Loki, Litestream, Authelia, DocuSeal, and more).</p></div>
+  <div class="feat"><h3>6. 8 Default Containers (up to 24 with Profiles)</h3><p>The default Docker Compose stack (amd64 / arm64) runs Archon OS Core, Hermes Agent, OmniRoute, AnythingLLM, ChromaDB (local vector RAG), Litestream (WAL replication), Docker Socket Proxy, and <code>archon-autoheal</code> — expandable with 16 optional profile services (Prometheus, Alertmanager, Grafana, Loki, OTel/Tempo, Uptime Kuma, Caddy, Authelia, n8n, Metabase, DocuSeal, and more).</p></div>
 </div>
 
 <h2 class="sec" id="hardware">Hardware &amp; Sizing Baseline</h2>

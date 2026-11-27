@@ -47,7 +47,7 @@ REPO_URL = "https://github.com/michaelbeatman/ARCHON-OS"
 REPO_BLOB = REPO_URL + "/blob/main/"
 LINKEDIN_URL = "https://www.linkedin.com/in/michael-keller-a43b6611b/"
 CONTACT_EMAIL = "archon.os.system@gmail.com"
-LASTMOD = "2026-11-26"
+LASTMOD = "2026-11-27"
 
 # code -> (html lang, native label, og:locale)
 LANGS: dict[str, tuple[str, str]] = {
@@ -661,12 +661,14 @@ def build_llms_txt(base_url: str, version: str) -> str:
 - **Passkey / WebAuthn HITL:** High-risk approvals (payments, budget overruns, destructive actions) require cryptographic verification via Windows Hello, Touch ID, Face ID, or hardware keys.
 - **Fail-Closed Zero-Egress Routing:** OmniRoute sends finance, HR, contract, CRM, and GDPR workloads exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route.
 - **Crash-Safe Execution (Effect-Ledger):** Transactional Effect-Ledger (`PENDING -> COMMITTED / FAILED / UNKNOWN`) with Outbox idempotency keys and mandatory reconciliation prevents duplicate external side effects.
-- **Auditability & Compliance:** SHA-256 hash-chained audit log, 3 consolidated SQLite WAL databases (`ops.db`, `business.db`, `memory.db`), EU AI Act risk registry, and 1-click GoBD procedural documentation export.
-- **AI Boardroom & Knowledge Base:** 80 structured multi-perspective decision frameworks across 9 categories, 832 Prompt Studio templates, local Obsidian Markdown vault + AnythingLLM/Chroma RAG, and embedded n8n webhook automation.
+- **Auditability & Compliance:** SHA-256 hash-chained audit log, 3 consolidated SQLite WAL databases (`ops.db`, `business.db`, `memory.db`) with Litestream replication, EU AI Act risk registry, GDPR Art. 17 erasure, § 201 StGB audio consent gate, physical multi-tenant DB isolation (Holding/GmbH/SPV), and 1-click GoBD procedural documentation export.
+- **Security Hardening (v0.6.0.1):** Workspace path-jail, Delegation Isolation, Session Taint Guard (HITL), Offline AEAD Vault, and Flightlog policy backtester.
+- **AI Boardroom & Knowledge Base:** 80 structured multi-perspective decision frameworks across 9 categories, 832 Prompt Studio templates, 39 skills, 6 MCP servers, local Obsidian Markdown vault + AnythingLLM/ChromaDB vector RAG, and embedded n8n webhook automation.
+- **Self-Healing & Observability Stack:** `archon-autoheal` 24/7 `/livez` container recovery plus optional Docker Compose profiles for `Prometheus`, `Alertmanager`, `Grafana`, `Loki`/`Promtail`, `OTel`/`Tempo`, `Uptime Kuma`, `Caddy`/`Authelia` SSO, `Metabase` BI, and `DocuSeal` e-signature.
 
 ## Quick Start
 
-- Full stack (7 default containers, expandable to 24 with optional profiles): `git clone {REPO_URL}.git && cd ARCHON-OS && docker compose up -d`
+- Full stack (8 default containers, expandable to 24 with optional profiles): `git clone {REPO_URL}.git && cd ARCHON-OS && docker compose up -d`
 - Zero-key demo mode: `ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d`
 
 ## PDF Documentation & Changelog

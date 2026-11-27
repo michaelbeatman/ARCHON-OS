@@ -57,7 +57,7 @@
   "fleet.realestate": "<tr><td>Inmobiliario &amp; Construcción</td><td>7</td><td>Valoración DCF, normativa urbanística, ESG/KfW, gestión de obra</td></tr>",
   "fleet.medicine": "<tr><td>Medicina, Química, Ciencia &amp; Ingeniería</td><td>6</td><td>Asesor clínico, EU-MDR, REACH, farmacéutico - barreras para dominios regulados</td></tr>",
   "install.title": "<h2 class=\"sec\" id=\"install\">Instalación</h2>",
-  "install.fullstack": "<h3>Stack completo</h3><p>Siete contenedores por defecto: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy y Autoheal (ampliable hasta 24 mediante perfiles).</p>",
+  "install.fullstack": "<h3>Stack completo</h3><p>Ocho contenedores por defecto: Archon OS, OmniRoute, Hermes Agent, AnythingLLM, ChromaDB, Litestream, Docker socket proxy y Autoheal (hasta 24 con perfiles).</p>",
   "install.demo": "<h3>Demo sin claves</h3><p>Showcase de solo lectura sin claves API ni coste de tokens, para un primer vistazo.</p>",
   "install.interactive": "<h3>Instaladores interactivos</h3><p><code>setup.ps1</code> para Windows, <code>install.sh</code> para Linux/macOS o un prompt de onboarding estructurado para tu agente de codificación IA (<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md\">INSTALL_AGENT.md</a>).</p>",
   "install.codeComment": "# abre http://localhost:8501",
@@ -87,5 +87,8 @@
   "footer.thirdParty": "Licencias de terceros",
   "nav.languageLabel": "Idioma",
   "js.copy": "Copiar",
-  "js.copied": "Copiado"
+  "js.copied": "Copiado",
+  "features.stackOps": "<h3>Autoheal, Chroma y Litestream</h3><p>8 contenedores base: <code>archon-autoheal</code> reinicia servicios bloqueados vía <code>/livez</code>, <code>ChromaDB</code> ejecuta RAG vectorial local y <code>Litestream</code> replica SQLite WAL.</p>",
+  "features.observability": "<h3>Alertmanager y Observabilidad</h3><p>Perfiles opcionales añaden <code>Prometheus</code>, <code>Alertmanager</code>, <code>Grafana</code>, <code>Loki</code>/<code>Promtail</code>, <code>OTel</code>/<code>Tempo</code>, <code>Uptime Kuma</code>, <code>Caddy</code>/<code>Authelia</code> SSO, <code>Metabase</code> y <code>DocuSeal</code>.</p>",
+  "features.enterprise": "<h3>832 Prompts, Multitenant y Vault</h3><p>832 plantillas Prompt Studio, 39 skills, 6 servidores MCP, aislamiento físico por sociedad, borrado RGPD Art. 17, consentimiento de audio y AEAD Vault offline.</p>"
 }

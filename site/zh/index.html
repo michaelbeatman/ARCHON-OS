@@ -96,8 +96,8 @@
       "inLanguage": "zh-CN",
       "applicationCategory": "DeveloperApplication, BusinessApplication",
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
-      "softwareVersion": "0.6.0",
-      "dateModified": "2026-11-26",
+      "softwareVersion": "0.6.0.1",
+      "dateModified": "2026-11-27",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/zh/",
       "codeRepository": "https://github.com/michaelbeatman/ARCHON-OS",
@@ -296,7 +296,7 @@
   <section class="hero">
     <div class="wrap">
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0 &middot; Zero-Egress &middot; MIT Open Source</span></div>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.1 &middot; Zero-Egress &middot; MIT Open Source</span></div>
         <h1>符合 GDPR 的 Zero-Egress 多智能体操作系统，为企业而生，也为你而生。</h1>
         <p class="hero-lead">Archon OS 将 Hermes Agent 扩展为符合 GDPR 的智能体操作系统：8 大领域的 71 个专家档案、故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 成本上限、WebAuthn 通行密钥审批、结构化的 AI Boardroom 辩论，以及符合 GoBD 的 SHA-256 审计日志。你的文档、你的 Obsidian 知识库、你的模型。</p>
         <div class="btnrow">
@@ -305,7 +305,7 @@
           <a class="btn" href="#install">快速开始</a>
         </div>
         <div class="badges">
-          <span class="badge">v0.6.0 &middot; pre-1.0</span>
+          <span class="badge">v0.6.0.1 &middot; pre-1.0</span>
           <span class="badge">GDPR &amp; EU AI Act 就绪</span>
           <span class="badge">故障关闭 Zero-Egress</span>
           <span class="badge">MIT 许可证</span>
@@ -316,7 +316,7 @@
         </div>
       </div>
 
-      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>专家智能体角色 · 8 大领域</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom 决策框架</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress 本地隔离</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% 开源 · 7 个 Docker 容器</span></div></div>
+      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>专家智能体角色 · 8 大领域</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom 决策框架</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress 本地隔离</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% 开源 · 8 个 Docker 容器</span></div></div>
     </div>
   </section>
 
@@ -471,6 +471,9 @@
       <div class="feat"><h3>通行密钥 / WebAuthn HITL</h3><p>高风险审批（付款、预算超支、破坏性操作）需要 Windows Hello、Touch ID 或硬件密钥的加密签名。模型无法伪造审批。</p></div>
       <div class="feat"><h3>Atomic BudgetBank &amp; 签名 Warrant</h3><p>令牌与成本预算在执行前以事务方式预留（<code>BEGIN IMMEDIATE</code>）。特权工具需要有时限的 HMAC-SHA256 Warrant。</p></div>
       <div class="feat"><h3>崩溃安全的 Effect-Ledger</h3><p>外部副作用由带幂等键的事务账本跟踪，并在未知状态后强制对账，避免重复操作。</p></div>
+      <div class="feat"><h3>Autoheal、Chroma 与 Litestream</h3><p>8 个默认容器：<code>archon-autoheal</code> 通过 <code>/livez</code> 心跳自动重启自愈，<code>ChromaDB</code> 驱动本地向量 RAG，<code>Litestream</code> 持续复制 SQLite WAL。</p></div>
+      <div class="feat"><h3>Alertmanager 与全栈可观测性</h3><p>可选 Docker 配置支持 <code>Prometheus</code>、<code>Alertmanager</code>、<code>Grafana</code>、<code>Loki</code>/<code>Promtail</code>、<code>OTel</code>/<code>Tempo</code>、<code>Uptime Kuma</code>、<code>Caddy</code>/<code>Authelia</code> SSO、<code>Metabase</code> 与 <code>DocuSeal</code>。</p></div>
+      <div class="feat"><h3>832 提示词、多租户与加密金库</h3><p>内置 832 个 Prompt Studio 模板、39 项技能、6 个 MCP 服务、物理级多主体数据库隔离、GDPR 第 17 条擦除、录音同意门控与离线 AEAD 金库。</p></div>
     </div>
 
     <h2 class="sec" id="compare">架构对比与硬件配置基线</h2>
@@ -490,7 +493,7 @@
       <tr><td><strong>Passkey / WebAuthn 人工加密审批</strong></td><td class="cmp-yes">密码学签名</td><td class="cmp-no">代码回调</td><td class="cmp-no">普通按钮</td></tr>
       <tr><td><strong>SHA-256 哈希审计链与合规导出</strong></td><td class="cmp-yes">一键导出</td><td class="cmp-no">不包含</td><td class="cmp-no">仅基础日志</td></tr>
       <tr><td><strong>防崩溃 Effect-Ledger 与 Outbox</strong></td><td class="cmp-yes">事务幂等</td><td class="cmp-part">状态快照</td><td class="cmp-part">节点重试</td></tr>
-      <tr><td><strong>硬件参考基线 (7 容器 + Ollama)</strong></td><td colspan="3">演示模式: 4 GB RAM / 2 vCPU &middot; 本地模型 (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
+      <tr><td><strong>硬件参考基线 (8 容器 + Ollama)</strong></td><td colspan="3">演示模式: 4 GB RAM / 2 vCPU &middot; 本地模型 (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
     </tbody>
   </table>
 </div>
@@ -518,7 +521,7 @@
 
     <h2 class="sec" id="install">安装部署</h2>
     <div class="install" data-reveal>
-      <div class="card"><h3>完整堆栈</h3><p>七个默认容器：Archon OS、Hermes Agent、AnythingLLM、Chroma、OmniRoute、Docker socket proxy 与 Autoheal（可通过可选配置扩展至 24 个服务）。</p>
+      <div class="card"><h3>完整堆栈</h3><p>八个默认容器：Archon OS、OmniRoute、Hermes Agent、AnythingLLM、ChromaDB、Litestream、Docker socket proxy 与 Autoheal（可选配置最多 24 个服务）。</p>
 <pre data-lang="bash">git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
 docker compose up -d</pre></div>

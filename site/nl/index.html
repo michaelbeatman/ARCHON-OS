@@ -96,8 +96,8 @@
       "inLanguage": "nl",
       "applicationCategory": "DeveloperApplication, BusinessApplication",
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
-      "softwareVersion": "0.6.0",
-      "dateModified": "2026-11-26",
+      "softwareVersion": "0.6.0.1",
+      "dateModified": "2026-11-27",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/nl/",
       "codeRepository": "https://github.com/michaelbeatman/ARCHON-OS",
@@ -296,7 +296,7 @@
   <section class="hero">
     <div class="wrap">
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0 &middot; Zero-Egress &middot; MIT Open Source</span></div>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.1 &middot; Zero-Egress &middot; MIT Open Source</span></div>
         <h1>Een AVG-conform, Zero-Egress multi-agentbesturingssysteem voor bedrijven - en voor jou.</h1>
         <p class="hero-lead">Archon OS breidt Hermes Agent uit tot een AVG-conform Agentic Operating System: 71 specialistprofielen in 8 domeinen, fail-closed lokale Zero-Egress-routing, Atomic BudgetBank kostenplafonds, WebAuthn-Passkey-goedkeuringen, gestructureerde AI Boardroom-debatten en een GoBD-klaar SHA-256-auditlog. Jouw documenten, jouw Obsidian-vault, jouw modellen.</p>
         <div class="btnrow">
@@ -305,7 +305,7 @@
           <a class="btn" href="#install">Snelstart</a>
         </div>
         <div class="badges">
-          <span class="badge">v0.6.0 &middot; pre-1.0</span>
+          <span class="badge">v0.6.0.1 &middot; pre-1.0</span>
           <span class="badge">AVG &amp; EU AI Act klaar</span>
           <span class="badge">Zero-Egress met gesloten faalmodus</span>
           <span class="badge">MIT-licentie</span>
@@ -316,7 +316,7 @@
         </div>
       </div>
 
-      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>Specialistenprofielen · 8 Domeinen</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom Frameworks</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (Lokaal)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% Open Source · 7 Docker-containers</span></div></div>
+      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>Specialistenprofielen · 8 Domeinen</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom Frameworks</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (Lokaal)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% Open Source · 8 Docker-containers</span></div></div>
     </div>
   </section>
 
@@ -471,6 +471,9 @@
       <div class="feat"><h3>Passkey / WebAuthn HITL</h3><p>Goedkeuringen met hoog risico (betalingen, budgetoverschrijdingen, destructieve acties) vereisen cryptografische handtekeningen via Windows Hello, Touch ID of hardware-passkeys. Modellen kunnen goedkeuringen niet vervalsen.</p></div>
       <div class="feat"><h3>Atomic BudgetBank &amp; ondertekende Warrants</h3><p>Token- en kostenbudgets worden transactioneel vóór uitvoering gereserveerd (<code>BEGIN IMMEDIATE</code>). Bevoorrechte tools vereisen tijdsgebonden HMAC-SHA256-warrants.</p></div>
       <div class="feat"><h3>Crashbestendige Effect-Ledger</h3><p>Externe neveneffecten worden bijgehouden in een transactioneel grootboek met idempotency-sleutels en verplichte reconciliatie na onbekende toestanden - voorkomt dubbele acties.</p></div>
+      <div class="feat"><h3>Autoheal, Chroma &amp; Litestream</h3><p>8 standaardcontainers: <code>archon-autoheal</code> herstart via <code>/livez</code>, <code>ChromaDB</code> draait lokale vector-RAG en <code>Litestream</code> repliceert SQLite WAL.</p></div>
+      <div class="feat"><h3>Alertmanager &amp; Observability</h3><p>Optionele profielen bieden <code>Prometheus</code>, <code>Alertmanager</code>, <code>Grafana</code>, <code>Loki</code>/<code>Promtail</code>, <code>OTel</code>/<code>Tempo</code>, <code>Uptime Kuma</code>, <code>Caddy</code>/<code>Authelia</code> SSO, <code>Metabase</code> en <code>DocuSeal</code>.</p></div>
+      <div class="feat"><h3>832 Prompts, Multi-Tenant &amp; Vault</h3><p>832 Prompt Studio-sjablonen, 39 skills, 6 MCP-servers, fysieke DB-isolatie per entiteit, AVG Art. 17-wissing, audiotoestemming en Offline AEAD Vault.</p></div>
     </div>
 
     <h2 class="sec" id="compare">Systeemvergelijking &amp; Hardwareprofiel</h2>
@@ -490,7 +493,7 @@
       <tr><td><strong>Passkey / WebAuthn HITL-handtekening</strong></td><td class="cmp-yes">Cryptografisch</td><td class="cmp-no">Code-callback</td><td class="cmp-no">Simpele klik</td></tr>
       <tr><td><strong>SHA-256 Audit-Chain &amp; EU AI Act / GoBD</strong></td><td class="cmp-yes">1-klik export</td><td class="cmp-no">Niet inbegrepen</td><td class="cmp-no">Basislogs</td></tr>
       <tr><td><strong>Crash-veilige Effect-Ledger &amp; Outbox</strong></td><td class="cmp-yes">Transactioneel</td><td class="cmp-part">Checkpointer</td><td class="cmp-part">Retry-nodes</td></tr>
-      <tr><td><strong>Hardware-basis (7 Containers + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; Lokaal LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
+      <tr><td><strong>Hardware-basis (8 Containers + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; Lokaal LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
     </tbody>
   </table>
 </div>
@@ -518,7 +521,7 @@
 
     <h2 class="sec" id="install">Installatie</h2>
     <div class="install" data-reveal>
-      <div class="card"><h3>Volledige stack</h3><p>Zeven standaardcontainers: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy en Autoheal (uitbreidbaar tot 24 via profielen).</p>
+      <div class="card"><h3>Volledige stack</h3><p>Acht standaardcontainers: Archon OS, OmniRoute, Hermes Agent, AnythingLLM, ChromaDB, Litestream, Docker socket proxy en Autoheal (tot 24 via profielen).</p>
 <pre data-lang="bash">git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
 docker compose up -d</pre></div>

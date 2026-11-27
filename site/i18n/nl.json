@@ -57,7 +57,7 @@
   "fleet.realestate": "<tr><td>Vastgoed &amp; Bouw</td><td>7</td><td>DCF-waardering, bestemmingsplannen/BauGB, ESG/KfW, bouwprojectmanagement</td></tr>",
   "fleet.medicine": "<tr><td>Geneeskunde, Chemie, Wetenschap &amp; Engineering</td><td>6</td><td>Klinisch adviseur, EU-MDR, REACH, farma - guardrails voor gereguleerde domeinen</td></tr>",
   "install.title": "<h2 class=\"sec\" id=\"install\">Installatie</h2>",
-  "install.fullstack": "<h3>Volledige stack</h3><p>Zeven standaardcontainers: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy en Autoheal (uitbreidbaar tot 24 via profielen).</p>",
+  "install.fullstack": "<h3>Volledige stack</h3><p>Acht standaardcontainers: Archon OS, OmniRoute, Hermes Agent, AnythingLLM, ChromaDB, Litestream, Docker socket proxy en Autoheal (tot 24 via profielen).</p>",
   "install.demo": "<h3>Demo zonder sleutels</h3><p>Read-only showcase zonder API-sleutels en tokenkosten, voor een eerste blik.</p>",
   "install.interactive": "<h3>Interactieve installers</h3><p><code>setup.ps1</code> voor Windows, <code>install.sh</code> voor Linux/macOS of een gestructureerde onboarding-prompt voor je AI-codeeragent (<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md\">INSTALL_AGENT.md</a>).</p>",
   "install.codeComment": "# open http://localhost:8501 in de browser",
@@ -87,5 +87,8 @@
   "footer.thirdParty": "Licenties van derden",
   "nav.languageLabel": "Taal",
   "js.copy": "Kopiëren",
-  "js.copied": "Gekopieerd"
+  "js.copied": "Gekopieerd",
+  "features.stackOps": "<h3>Autoheal, Chroma &amp; Litestream</h3><p>8 standaardcontainers: <code>archon-autoheal</code> herstart via <code>/livez</code>, <code>ChromaDB</code> draait lokale vector-RAG en <code>Litestream</code> repliceert SQLite WAL.</p>",
+  "features.observability": "<h3>Alertmanager &amp; Observability</h3><p>Optionele profielen bieden <code>Prometheus</code>, <code>Alertmanager</code>, <code>Grafana</code>, <code>Loki</code>/<code>Promtail</code>, <code>OTel</code>/<code>Tempo</code>, <code>Uptime Kuma</code>, <code>Caddy</code>/<code>Authelia</code> SSO, <code>Metabase</code> en <code>DocuSeal</code>.</p>",
+  "features.enterprise": "<h3>832 Prompts, Multi-Tenant &amp; Vault</h3><p>832 Prompt Studio-sjablonen, 39 skills, 6 MCP-servers, fysieke DB-isolatie per entiteit, AVG Art. 17-wissing, audiotoestemming en Offline AEAD Vault.</p>"
 }

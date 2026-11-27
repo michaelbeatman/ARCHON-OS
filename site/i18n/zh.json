@@ -57,7 +57,7 @@
   "fleet.realestate": "<tr><td>房地产 &amp; 建筑</td><td>7</td><td>DCF 估值、分区规划/BauGB、ESG/KfW、工程项目管理</td></tr>",
   "fleet.medicine": "<tr><td>医学、化学、科学 &amp; 工程</td><td>6</td><td>临床顾问、EU-MDR、REACH、制药 - 受监管领域的护栏</td></tr>",
   "install.title": "<h2 class=\"sec\" id=\"install\">安装部署</h2>",
-  "install.fullstack": "<h3>完整堆栈</h3><p>七个默认容器：Archon OS、Hermes Agent、AnythingLLM、Chroma、OmniRoute、Docker socket proxy 与 Autoheal（可通过可选配置扩展至 24 个服务）。</p>",
+  "install.fullstack": "<h3>完整堆栈</h3><p>八个默认容器：Archon OS、OmniRoute、Hermes Agent、AnythingLLM、ChromaDB、Litestream、Docker socket proxy 与 Autoheal（可选配置最多 24 个服务）。</p>",
   "install.demo": "<h3>零密钥演示</h3><p>无需 API 密钥与令牌成本的只读展示，适合初次了解。</p>",
   "install.interactive": "<h3>交互式安装器</h3><p>Windows 用 <code>setup.ps1</code>，Linux/macOS 用 <code>install.sh</code>，或为你的 AI 编码智能体准备结构化引导提示（<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md\">INSTALL_AGENT.md</a>）。</p>",
   "install.codeComment": "# 打开 http://localhost:8501",
@@ -87,5 +87,8 @@
   "footer.thirdParty": "第三方许可证",
   "nav.languageLabel": "语言",
   "js.copy": "复制",
-  "js.copied": "已复制"
+  "js.copied": "已复制",
+  "features.stackOps": "<h3>Autoheal、Chroma 与 Litestream</h3><p>8 个默认容器：<code>archon-autoheal</code> 通过 <code>/livez</code> 心跳自动重启自愈，<code>ChromaDB</code> 驱动本地向量 RAG，<code>Litestream</code> 持续复制 SQLite WAL。</p>",
+  "features.observability": "<h3>Alertmanager 与全栈可观测性</h3><p>可选 Docker 配置支持 <code>Prometheus</code>、<code>Alertmanager</code>、<code>Grafana</code>、<code>Loki</code>/<code>Promtail</code>、<code>OTel</code>/<code>Tempo</code>、<code>Uptime Kuma</code>、<code>Caddy</code>/<code>Authelia</code> SSO、<code>Metabase</code> 与 <code>DocuSeal</code>。</p>",
+  "features.enterprise": "<h3>832 提示词、多租户与加密金库</h3><p>内置 832 个 Prompt Studio 模板、39 项技能、6 个 MCP 服务、物理级多主体数据库隔离、GDPR 第 17 条擦除、录音同意门控与离线 AEAD 金库。</p>"
 }

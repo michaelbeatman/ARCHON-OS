@@ -96,8 +96,8 @@
       "inLanguage": "pt",
       "applicationCategory": "DeveloperApplication, BusinessApplication",
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
-      "softwareVersion": "0.6.0",
-      "dateModified": "2026-11-26",
+      "softwareVersion": "0.6.0.1",
+      "dateModified": "2026-11-27",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/pt/",
       "codeRepository": "https://github.com/michaelbeatman/ARCHON-OS",
@@ -296,7 +296,7 @@
   <section class="hero">
     <div class="wrap">
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0 &middot; Zero-Egress &middot; MIT Open Source</span></div>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.1 &middot; Zero-Egress &middot; MIT Open Source</span></div>
         <h1>Um SO multiagente conforme ao RGPD e Zero-Egress, feito para empresas - e para si.</h1>
         <p class="hero-lead">O Archon OS transforma o Hermes Agent num Sistema Operativo Agentístico conforme ao RGPD: 71 perfis especialistas em 8 domínios, roteamento local Zero-Egress fail-closed, limites de custo Atomic BudgetBank, aprovações com Passkey WebAuthn, debates estruturados no AI Boardroom e um registo de auditoria SHA-256 pronto para GoBD. Os seus documentos, o seu cofre Obsidian, os seus modelos.</p>
         <div class="btnrow">
@@ -305,7 +305,7 @@
           <a class="btn" href="#install">Início rápido</a>
         </div>
         <div class="badges">
-          <span class="badge">v0.6.0 &middot; pre-1.0</span>
+          <span class="badge">v0.6.0.1 &middot; pre-1.0</span>
           <span class="badge">RGPD &amp; EU AI Act pronto</span>
           <span class="badge">Zero-Egress fail-closed</span>
           <span class="badge">Licença MIT</span>
@@ -316,7 +316,7 @@
         </div>
       </div>
 
-      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>Perfis Especialistas · 8 Domínios</span></div><div class="geo-kpi"><strong>80</strong><span>Frameworks AI Boardroom</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Zero-Egress Fail-Closed (Local)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% Open Source · 7 Contêineres Docker</span></div></div>
+      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>Perfis Especialistas · 8 Domínios</span></div><div class="geo-kpi"><strong>80</strong><span>Frameworks AI Boardroom</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Zero-Egress Fail-Closed (Local)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% Open Source · 8 Contêineres Docker</span></div></div>
     </div>
   </section>
 
@@ -471,6 +471,9 @@
       <div class="feat"><h3>Passkey / WebAuthn HITL</h3><p>Aprovações de alto risco (pagamentos, ultrapassagens de orçamento, ações destrutivas) exigem assinaturas criptográficas via Windows Hello, Touch ID ou passkeys de hardware. Os modelos não podem falsificar aprovações.</p></div>
       <div class="feat"><h3>Atomic BudgetBank &amp; Warrants assinados</h3><p>Os orçamentos de tokens e custos são reservados transacionalmente antes da execução (<code>BEGIN IMMEDIATE</code>). Ferramentas privilegiadas exigem warrants HMAC-SHA256 com prazo limitado.</p></div>
       <div class="feat"><h3>Effect-Ledger resistente a falhas</h3><p>Os efeitos externos são registados num livro transacional com chaves de idempotência e reconciliação obrigatória após estados desconhecidos - evita ações duplicadas.</p></div>
+      <div class="feat"><h3>Autoheal, Chroma &amp; Litestream</h3><p>8 contentores padrão: <code>archon-autoheal</code> reinicia serviços via <code>/livez</code>, <code>ChromaDB</code> executa RAG vetorial local e <code>Litestream</code> replica o SQLite WAL.</p></div>
+      <div class="feat"><h3>Alertmanager e Observabilidade</h3><p>Perfis opcionais incluem <code>Prometheus</code>, <code>Alertmanager</code>, <code>Grafana</code>, <code>Loki</code>/<code>Promtail</code>, <code>OTel</code>/<code>Tempo</code>, <code>Uptime Kuma</code>, <code>Caddy</code>/<code>Authelia</code> SSO, <code>Metabase</code> e <code>DocuSeal</code>.</p></div>
+      <div class="feat"><h3>832 Prompts, Multi-Tenant &amp; Vault</h3><p>832 modelos Prompt Studio, 39 skills, 6 servidores MCP, isolamento físico por empresa, eliminação RGPD Art. 17, consentimento de áudio e AEAD Vault offline.</p></div>
     </div>
 
     <h2 class="sec" id="compare">Comparativo de Arquitetura e Hardware</h2>
@@ -490,7 +493,7 @@
       <tr><td><strong>Aprovação Passkey / WebAuthn HITL</strong></td><td class="cmp-yes">Criptográfica</td><td class="cmp-no">Callback em código</td><td class="cmp-no">Clique simples</td></tr>
       <tr><td><strong>Cadeia de Auditoria SHA-256 &amp; EU AI Act</strong></td><td class="cmp-yes">Exportação 1 clique</td><td class="cmp-no">Não incluído</td><td class="cmp-no">Logs básicos</td></tr>
       <tr><td><strong>Effect-Ledger &amp; Outbox resistente a falhas</strong></td><td class="cmp-yes">Transacional</td><td class="cmp-part">Checkpointer</td><td class="cmp-part">Retentativas</td></tr>
-      <tr><td><strong>Hardware Base (7 Contêineres + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; LLM Local (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
+      <tr><td><strong>Hardware Base (8 Contêineres + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; LLM Local (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
     </tbody>
   </table>
 </div>
@@ -518,7 +521,7 @@
 
     <h2 class="sec" id="install">Instalação</h2>
     <div class="install" data-reveal>
-      <div class="card"><h3>Stack completa</h3><p>Sete contentores padrão: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, proxy de socket Docker e Autoheal (expansível até 24 via perfis).</p>
+      <div class="card"><h3>Stack completa</h3><p>Oito contentores padrão: Archon OS, OmniRoute, Hermes Agent, AnythingLLM, ChromaDB, Litestream, proxy de socket Docker e Autoheal (até 24 via perfis).</p>
 <pre data-lang="bash">git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
 docker compose up -d</pre></div>

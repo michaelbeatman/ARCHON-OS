@@ -23,7 +23,7 @@
       ],
       [
         "MIT",
-        "100% Open Source · 7 Docker Containers"
+        "100% Open Source · 8 Docker Containers"
       ]
     ],
     "arch": {
@@ -80,7 +80,7 @@
           "Retry nodes"
         ]
       ],
-      "hwLabel": "Hardware Baseline (7 Containers + Ollama)",
+      "hwLabel": "Hardware Baseline (8 Containers + Ollama)",
       "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; Local LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
       "linkCmp": "Full Comparison (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "Hardware &amp; Container Specs"
@@ -158,7 +158,7 @@
       ],
       [
         "MIT",
-        "100% Open Source · 7 Docker-Container"
+        "100% Open Source · 8 Docker-Container"
       ]
     ],
     "arch": {
@@ -215,7 +215,7 @@
           "Retry-Nodes"
         ]
       ],
-      "hwLabel": "Hardware-Startpunkt (7 Container + Ollama)",
+      "hwLabel": "Hardware-Startpunkt (8 Container + Ollama)",
       "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; Produktiv lokal (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
       "linkCmp": "Vollständiger Vergleich (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "Hardware- &amp; Container-Specs"
@@ -293,7 +293,7 @@
       ],
       [
         "MIT",
-        "100% Open Source · 7 Contenedores Docker"
+        "100% Open Source · 8 Contenedores Docker"
       ]
     ],
     "arch": {
@@ -350,7 +350,7 @@
           "Reintentos"
         ]
       ],
-      "hwLabel": "Hardware Base (7 Contenedores + Ollama)",
+      "hwLabel": "Hardware Base (8 Contenedores + Ollama)",
       "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; LLM Local (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
       "linkCmp": "Comparativa completa (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "Especificaciones de Hardware y Contenedores"
@@ -428,7 +428,7 @@
       ],
       [
         "MIT",
-        "100% Open Source · 7 Conteneurs Docker"
+        "100% Open Source · 8 Conteneurs Docker"
       ]
     ],
     "arch": {
@@ -485,7 +485,7 @@
           "Réessais"
         ]
       ],
-      "hwLabel": "Configuration Matérielle (7 Conteneurs + Ollama)",
+      "hwLabel": "Configuration Matérielle (8 Conteneurs + Ollama)",
       "hwVal": "Démo : 4 Go RAM / 2 vCPU &middot; LLM Local (7B–14B) : 16–32 Go RAM + 8–12 Go VRAM (amd64 / arm64)",
       "linkCmp": "Comparatif complet (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "Spécifications Matérielles et Conteneurs"
@@ -563,7 +563,7 @@
       ],
       [
         "MIT",
-        "100% Open Source · 7 Container Docker"
+        "100% Open Source · 8 Container Docker"
       ]
     ],
     "arch": {
@@ -620,7 +620,7 @@
           "Retry nodi"
         ]
       ],
-      "hwLabel": "Requisiti Hardware (7 Container + Ollama)",
+      "hwLabel": "Requisiti Hardware (8 Container + Ollama)",
       "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; LLM Locale (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
       "linkCmp": "Confronto completo (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "Specifiche Hardware e Container"
@@ -698,7 +698,7 @@
       ],
       [
         "MIT",
-        "100% OSS · 7 Dockerコンテナ"
+        "100% OSS · 8 Dockerコンテナ"
       ]
     ],
     "arch": {
@@ -833,7 +833,7 @@
       ],
       [
         "MIT",
-        "100% 오픈소스 · 7개 Docker 컨테이너"
+        "100% 오픈소스 · 8개 Docker 컨테이너"
       ]
     ],
     "arch": {
@@ -890,7 +890,7 @@
           "재시도 노드"
         ]
       ],
-      "hwLabel": "하드웨어 기준 (7 컨테이너 + Ollama)",
+      "hwLabel": "하드웨어 기준 (8 컨테이너 + Ollama)",
       "hwVal": "데모: 4 GB RAM / 2 vCPU &middot; 로컬 LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
       "linkCmp": "전체 비교 (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "하드웨어 및 컨테이너 사양"
@@ -968,7 +968,7 @@
       ],
       [
         "MIT",
-        "100% Open Source · 7 Docker-containers"
+        "100% Open Source · 8 Docker-containers"
       ]
     ],
     "arch": {
@@ -1025,7 +1025,7 @@
           "Retry-nodes"
         ]
       ],
-      "hwLabel": "Hardware-basis (7 Containers + Ollama)",
+      "hwLabel": "Hardware-basis (8 Containers + Ollama)",
       "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; Lokaal LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
       "linkCmp": "Volledige vergelijking (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "Hardware- &amp; Containerspecificaties"
@@ -1103,7 +1103,7 @@
       ],
       [
         "MIT",
-        "100% Open Source · 7 Contêineres Docker"
+        "100% Open Source · 8 Contêineres Docker"
       ]
     ],
     "arch": {
@@ -1160,7 +1160,7 @@
           "Retentativas"
         ]
       ],
-      "hwLabel": "Hardware Base (7 Contêineres + Ollama)",
+      "hwLabel": "Hardware Base (8 Contêineres + Ollama)",
       "hwVal": "Demo: 4 GB RAM / 2 vCPU &middot; LLM Local (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
       "linkCmp": "Comparativo completo (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "Especificações de Hardware e Contêineres"
@@ -1238,7 +1238,7 @@
       ],
       [
         "MIT",
-        "100% Open Source · 7 контейнеров Docker"
+        "100% Open Source · 8 контейнеров Docker"
       ]
     ],
     "arch": {
@@ -1295,7 +1295,7 @@
           "Повторы узлов"
         ]
       ],
-      "hwLabel": "Базовое железо (7 контейнеров + Ollama)",
+      "hwLabel": "Базовое железо (8 контейнеров + Ollama)",
       "hwVal": "Демо: 4 ГБ RAM / 2 vCPU &middot; Локальная LLM (7B–14B): 16–32 ГБ RAM + 8–12 ГБ VRAM (amd64 / arm64)",
       "linkCmp": "Полное сравнение (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "Требования к серверу и контейнерам"
@@ -1373,7 +1373,7 @@
       ],
       [
         "MIT",
-        "100% 开源 · 7 个 Docker 容器"
+        "100% 开源 · 8 个 Docker 容器"
       ]
     ],
     "arch": {
@@ -1430,7 +1430,7 @@
           "节点重试"
         ]
       ],
-      "hwLabel": "硬件参考基线 (7 容器 + Ollama)",
+      "hwLabel": "硬件参考基线 (8 容器 + Ollama)",
       "hwVal": "演示模式: 4 GB RAM / 2 vCPU &middot; 本地模型 (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)",
       "linkCmp": "完整对比矩阵 (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify)",
       "linkHw": "硬件与容器规格详情"

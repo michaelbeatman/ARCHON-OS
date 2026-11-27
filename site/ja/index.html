@@ -96,8 +96,8 @@
       "inLanguage": "ja",
       "applicationCategory": "DeveloperApplication, BusinessApplication",
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
-      "softwareVersion": "0.6.0",
-      "dateModified": "2026-11-26",
+      "softwareVersion": "0.6.0.1",
+      "dateModified": "2026-11-27",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/ja/",
       "codeRepository": "https://github.com/michaelbeatman/ARCHON-OS",
@@ -296,7 +296,7 @@
   <section class="hero">
     <div class="wrap">
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0 &middot; Zero-Egress &middot; MIT Open Source</span></div>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.1 &middot; Zero-Egress &middot; MIT Open Source</span></div>
         <h1>GDPR準拠・Zero-Egress のマルチエージェントOS。ビジネスのため、そしてあなたのために。</h1>
         <p class="hero-lead">Archon OS は Hermes Agent を GDPR準拠のエージェントOSへと拡張します：8ドメイン・71の専門家プロファイル、フェイルクローズ型ローカル Zero-Egress ルーティング、Atomic BudgetBank によるコスト上限、WebAuthn パスキー承認、構造化された AI Boardroom ディベート、GoBD 対応の SHA-256 監査ログ。あなたの文書、あなたの Obsidian Vault、あなたのモデル。</p>
         <div class="btnrow">
@@ -305,7 +305,7 @@
           <a class="btn" href="#install">クイックスタート</a>
         </div>
         <div class="badges">
-          <span class="badge">v0.6.0 &middot; pre-1.0</span>
+          <span class="badge">v0.6.0.1 &middot; pre-1.0</span>
           <span class="badge">GDPR &amp; EU AI Act 対応</span>
           <span class="badge">フェイルクローズ Zero-Egress</span>
           <span class="badge">MIT ライセンス</span>
@@ -316,7 +316,7 @@
         </div>
       </div>
 
-      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>専門家プロファイル · 8領域</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom フレームワーク</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (ローカル)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% OSS · 7 Dockerコンテナ</span></div></div>
+      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>専門家プロファイル · 8領域</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom フレームワーク</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (ローカル)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% OSS · 8 Dockerコンテナ</span></div></div>
     </div>
   </section>
 
@@ -471,6 +471,9 @@
       <div class="feat"><h3>パスキー / WebAuthn HITL</h3><p>高リスク承認（支払い、予算超過、破壊的操作）には Windows Hello、Touch ID、ハードウェアパスキーによる暗号署名が必要です。モデルは承認を偽造できません。</p></div>
       <div class="feat"><h3>Atomic BudgetBank &amp; 署名付き Warrant</h3><p>トークンとコストの予算は実行前にトランザクションで確保されます（<code>BEGIN IMMEDIATE</code>）。特権ツールには期限付き HMAC-SHA256 Warrant が必要です。</p></div>
       <div class="feat"><h3>クラッシュ安全な Effect-Ledger</h3><p>外部副作用は、冪等キーと未知状態後の必須リコンシリエーションを備えたトランザクション台帳で追跡され、重複実行を防ぎます。</p></div>
+      <div class="feat"><h3>Autoheal・Chroma・Litestream</h3><p>標準8コンテナ構成：<code>archon-autoheal</code>が<code>/livez</code>監視で自動復旧し、<code>ChromaDB</code>がローカルRAG、<code>Litestream</code>がSQLite WALを複製します。</p></div>
+      <div class="feat"><h3>Alertmanager と統合監視</h3><p>任意プロファイルで<code>Prometheus</code>、<code>Alertmanager</code>、<code>Grafana</code>、<code>Loki</code>、<code>OTel</code>/<code>Tempo</code>、<code>Uptime Kuma</code>、<code>Caddy</code>/<code>Authelia</code> SSO、<code>Metabase</code>、<code>DocuSeal</code>を追加できます。</p></div>
+      <div class="feat"><h3>832プロンプト・マルチテナント</h3><p>832のPrompt Studioテンプレート、39スキル、6 MCPサーバー、法人別DB分離、GDPR第17条消去、音声同意ゲート、オフラインAEAD Vaultを備えます。</p></div>
     </div>
 
     <h2 class="sec" id="compare">アーキテクチャ比較と推奨ハードウェア</h2>
@@ -518,7 +521,7 @@
 
     <h2 class="sec" id="install">インストール</h2>
     <div class="install" data-reveal>
-      <div class="card"><h3>フルスタック</h3><p>標準7コンテナ：Archon OS、Hermes Agent、AnythingLLM、Chroma、OmniRoute、Docker socket proxy、Autoheal（任意プロファイルで最大24構成に拡張可能）。</p>
+      <div class="card"><h3>フルスタック</h3><p>標準8コンテナ：Archon OS、OmniRoute、Hermes Agent、AnythingLLM、ChromaDB、Litestream、Docker socket proxy、Autoheal（任意プロファイルで最大24構成）。</p>
 <pre data-lang="bash">git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
 docker compose up -d</pre></div>

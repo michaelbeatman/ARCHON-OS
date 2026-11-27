@@ -57,7 +57,7 @@
   "fleet.realestate": "<tr><td>Недвижимость &amp; строительство</td><td>7</td><td>DCF-оценка, зонирование/BauGB, ESG/KfW, управление стройкой</td></tr>",
   "fleet.medicine": "<tr><td>Медицина, химия, наука &amp; инженерия</td><td>6</td><td>Клинический консультант, EU-MDR, REACH, фарма — ограничения для регулируемых доменов</td></tr>",
   "install.title": "<h2 class=\"sec\" id=\"install\">Установка</h2>",
-  "install.fullstack": "<h3>Полный стек</h3><p>Семь базовых контейнеров: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy и Autoheal (расширяется до 24 через профили).</p>",
+  "install.fullstack": "<h3>Полный стек</h3><p>Восемь базовых контейнеров: Archon OS, OmniRoute, Hermes Agent, AnythingLLM, ChromaDB, Litestream, Docker socket proxy и Autoheal (до 24 через профили).</p>",
   "install.demo": "<h3>Демо без ключей</h3><p>Витрина только для чтения без API-ключей и затрат на токены, для первого знакомства.</p>",
   "install.interactive": "<h3>Интерактивные установщики</h3><p><code>setup.ps1</code> для Windows, <code>install.sh</code> для Linux/macOS либо структурированный onboarding-промпт для вашего ИИ-агента-кодера (<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/INSTALL_AGENT.md\">INSTALL_AGENT.md</a>).</p>",
   "install.codeComment": "# откройте http://localhost:8501",
@@ -87,5 +87,8 @@
   "footer.thirdParty": "Лицензии третьих лиц",
   "nav.languageLabel": "Язык",
   "js.copy": "Копировать",
-  "js.copied": "Скопировано"
+  "js.copied": "Скопировано",
+  "features.stackOps": "<h3>Autoheal, Chroma и Litestream</h3><p>8 базовых контейнеров: <code>archon-autoheal</code> перезапускает сбои по <code>/livez</code>, <code>ChromaDB</code> обеспечивает локальный RAG, <code>Litestream</code> реплицирует SQLite WAL.</p>",
+  "features.observability": "<h3>Alertmanager и наблюдаемость</h3><p>Опциональные профили включают <code>Prometheus</code>, <code>Alertmanager</code>, <code>Grafana</code>, <code>Loki</code>/<code>Promtail</code>, <code>OTel</code>/<code>Tempo</code>, <code>Uptime Kuma</code>, <code>Caddy</code>/<code>Authelia</code> SSO, <code>Metabase</code> и <code>DocuSeal</code>.</p>",
+  "features.enterprise": "<h3>832 промпта, мультитенант и Vault</h3><p>832 шаблона Prompt Studio, 39 навыков, 6 MCP-серверов, физическая изоляция БД компаний, удаление по GDPR Art. 17 и офлайн-хранилище AEAD Vault.</p>"
 }

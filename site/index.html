@@ -96,8 +96,8 @@
       "inLanguage": "en",
       "applicationCategory": "DeveloperApplication, BusinessApplication",
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
-      "softwareVersion": "0.6.0",
-      "dateModified": "2026-11-26",
+      "softwareVersion": "0.6.0.1",
+      "dateModified": "2026-11-27",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/",
       "codeRepository": "https://github.com/michaelbeatman/ARCHON-OS",
@@ -316,7 +316,7 @@
         </div>
       </div>
 
-      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>Specialist Profiles · 8 Domains</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom Frameworks</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (Local)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% Open Source · 7 Docker Containers</span></div></div>
+      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>Specialist Profiles · 8 Domains</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom Frameworks</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (Local)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% Open Source · 8 Docker Containers</span></div></div>
     </div>
   </section>
 
@@ -471,6 +471,9 @@
       <div class="feat"><h3>Passkey / WebAuthn HITL</h3><p>High-risk approvals (payments, budget overruns, destructive actions) require cryptographic signatures via Windows Hello, Touch ID, or hardware passkeys. Models cannot forge approvals.</p></div>
       <div class="feat"><h3>Atomic BudgetBank &amp; Signed Warrants</h3><p>Token and cost budgets are reserved transactionally before execution (<code>BEGIN IMMEDIATE</code>). Privileged tools require time-bound HMAC-SHA256 warrants.</p></div>
       <div class="feat"><h3>Crash-Safe Effect-Ledger</h3><p>External side effects are tracked in a transactional ledger with idempotency keys and mandatory reconciliation after unknown states - preventing duplicate actions.</p></div>
+      <div class="feat"><h3>Autoheal, Chroma &amp; Litestream</h3><p>8 default containers: <code>archon-autoheal</code> restarts stalled services via <code>/livez</code>, <code>ChromaDB</code> runs local vector RAG, and <code>Litestream</code> replicates SQLite WAL.</p></div>
+      <div class="feat"><h3>Alertmanager &amp; Full Observability</h3><p>Optional Docker profiles add <code>Prometheus</code>, <code>Alertmanager</code>, <code>Grafana</code>, <code>Loki</code>/<code>Promtail</code>, <code>OTel</code>/<code>Tempo</code>, <code>Uptime Kuma</code>, <code>Caddy</code>/<code>Authelia</code> SSO, <code>Metabase</code> &amp; <code>DocuSeal</code>.</p></div>
+      <div class="feat"><h3>832 Prompts, Multi-Tenant &amp; Vault</h3><p>832 Prompt Studio templates, 39 skills, 6 MCP servers, physical Holding/GmbH/SPV DB isolation, GDPR Art. 17 erasure, § 201 StGB consent &amp; Offline AEAD Vault.</p></div>
     </div>
 
     <h2 class="sec" id="compare">Architecture Comparison &amp; Hardware Profile</h2>
@@ -490,7 +493,7 @@
       <tr><td><strong>Passkey / WebAuthn HITL Sign-Off</strong></td><td class="cmp-yes">Cryptographic</td><td class="cmp-no">Code callback</td><td class="cmp-no">Basic UI click</td></tr>
       <tr><td><strong>SHA-256 Audit Chain &amp; EU AI Act / GoBD</strong></td><td class="cmp-yes">1-Click Export</td><td class="cmp-no">Not included</td><td class="cmp-no">Basic logs</td></tr>
       <tr><td><strong>Crash-Safe Effect-Ledger &amp; Outbox</strong></td><td class="cmp-yes">Transactional</td><td class="cmp-part">Checkpointer</td><td class="cmp-part">Retry nodes</td></tr>
-      <tr><td><strong>Hardware Baseline (7 Containers + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; Local LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
+      <tr><td><strong>Hardware Baseline (8 Containers + Ollama)</strong></td><td colspan="3">Demo: 4 GB RAM / 2 vCPU &middot; Local LLM (7B–14B): 16–32 GB RAM + 8–12 GB VRAM (amd64 / arm64)</td></tr>
     </tbody>
   </table>
 </div>
@@ -518,7 +521,7 @@
 
     <h2 class="sec" id="install">Install</h2>
     <div class="install" data-reveal>
-      <div class="card"><h3>Full stack</h3><p>Seven default containers: Archon OS, Hermes Agent, AnythingLLM, Chroma, OmniRoute, Docker socket proxy, and Autoheal (expandable to 24 via optional profiles).</p>
+      <div class="card"><h3>Full stack</h3><p>Eight default containers: Archon OS, OmniRoute, Hermes Agent, AnythingLLM, ChromaDB, Litestream, Docker socket proxy, and Autoheal (up to 24 via optional profiles).</p>
 <pre data-lang="bash">git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
 docker compose up -d</pre></div>

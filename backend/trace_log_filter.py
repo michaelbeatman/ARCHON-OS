@@ -1,12 +1,17 @@
-"""Re-Audit D16/H7: Bruecke vom W3C-Trace-Kontext in Python-Logs (Loki/Promtail).
+"""Re-Audit D16/H7 + W5-F/M4: Bruecke vom W3C-Trace-Kontext in Python-Logs (Loki/Promtail).
 
 ``TraceIdFilter`` injiziert die aktive ``current_trace_id()`` als Attribut
-``trace_id`` in jeden Log-Record und markiert die Nachricht zusaetzlich mit
-einem stabilen Prefix ``[trace_id=<32-hex>]``. Promtail liest dieses Feld ueber
-die ``(?P<trace_id>[0-9a-f]{32})``-Gruppe und setzt daraus das Loki-Label.
+``trace_id`` und die aktive ``current_span_id()`` als Attribut ``span_id`` in
+jeden Log-Record. Die Nachricht traegt zusaetzlich einen stabilen Prefix
+``[trace_id=<32-hex> span_id=<16-hex>]`` (``span_id`` nur, wenn vorhanden).
+
+Promtail liest beide Gruppen und setzt daraus die Loki-Labels ``trace_id``
+und ``span_id``. Damit ist nicht nur Trace→Log, sondern auch Span→Log direkt
+(ohne Join ueber otel_spans) rekonstruierbar.
 
 Ohne aktiven Trace-Kontext bleibt die Nachricht unveraendert; ``record.trace_id``
-ist dann leer (aber immer vorhanden, damit Formatter nicht scheitern).
+und ``record.span_id`` sind dann leer (aber immer vorhanden, damit Formatter
+nicht scheitern).
 """
 
 from __future__ import annotations
@@ -16,11 +21,16 @@ import re
 from typing import Optional
 
 _TRACE_ID_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
-_PREFIX_RE = re.compile(r"^\[trace_id=[0-9a-f]{32}\]\s*", re.IGNORECASE)
+_SPAN_ID_RE = re.compile(r"^[0-9a-f]{16}$", re.IGNORECASE)
+# Auch den neuen Prefix mit Span-Anteil erkennen, damit ein wiederholter
+# Filter-Durchlauf nicht doppelt praepenziert (alte Form weiterhin akzeptiert).
+_PREFIX_RE = re.compile(
+    r"^\[trace_id=[0-9a-f]{32}(?:\s+span_id=[0-9a-f]{16})?\]\s*", re.IGNORECASE
+)
 
 
 class TraceIdFilter(logging.Filter):
-    """Logging-Filter: trace_id aus dem ContextVar in Log-Records injizieren."""
+    """Logging-Filter: trace_id und span_id aus den ContextVars injizieren."""
 
     def __init__(self, name: str = "", *, inject_message: bool = True) -> None:
         super().__init__(name)
@@ -28,21 +38,27 @@ class TraceIdFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         try:
-            from backend.trace_context import current_trace_id
+            from backend.trace_context import current_span_id, current_trace_id
 
             trace_id = str(current_trace_id() or "").strip().lower()
+            span_id = str(current_span_id() or "").strip().lower()
         except Exception:
             trace_id = ""
+            span_id = ""
         if not _TRACE_ID_RE.fullmatch(trace_id):
             trace_id = ""
+        if not _SPAN_ID_RE.fullmatch(span_id):
+            span_id = ""
         record.trace_id = trace_id
+        record.span_id = span_id
 
         if trace_id and self.inject_message:
             text = record.getMessage()
             if not _PREFIX_RE.match(text):
                 # Args auflösen, sonst formatiert der Handler erneut und haengt
                 # das Prefix doppelt an.
-                record.msg = f"[trace_id={trace_id}] {text}"
+                span_part = f" span_id={span_id}" if span_id else ""
+                record.msg = f"[trace_id={trace_id}{span_part}] {text}"
                 record.args = ()
         return True
 

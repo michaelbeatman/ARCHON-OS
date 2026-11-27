@@ -14,13 +14,52 @@ Dossier; wer es verschickt (Telegram) und wo es abgelegt wird, entscheidet der
 Aufrufer.
 """
 
+import datetime
+import html
+import json
+import logging
 import os
 import re
-import html
-import logging
-import datetime
 
 logger = logging.getLogger("archon_os")
+
+# D16/M5: Nur validierte W3C-IDs duerfen in das Vault-Frontmatter. Ungueltige
+# Werte werden verworfen (kein erfundener zweiter Root an der Dateisystemgrenze).
+_TRACE_ID_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
+_SPAN_ID_RE = re.compile(r"^[0-9a-f]{16}$", re.IGNORECASE)
+_TRACEPARENT_RE = re.compile(
+    r"^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$", re.IGNORECASE
+)
+
+
+def _yaml_value(value: str) -> str:
+    """YAML-konform (und injektionssicher) quotierter String-Wert."""
+    return json.dumps(str(value), ensure_ascii=False)
+
+
+def _trace_frontmatter(
+    trace_id: str = "", span_id: str = "", traceparent: str = ""
+) -> str:
+    """D16/M5: YAML-Frontmatter fuer das Vault-Artefakt (oder leer)."""
+    tid = str(trace_id or "").strip().lower()
+    sid = str(span_id or "").strip().lower()
+    tp = str(traceparent or "").strip().lower()
+    if not _TRACE_ID_RE.fullmatch(tid):
+        tid = ""
+    if not _SPAN_ID_RE.fullmatch(sid):
+        sid = ""
+    if not _TRACEPARENT_RE.fullmatch(tp):
+        tp = ""
+    lines = []
+    if tid:
+        lines.append(f"trace_id: {_yaml_value(tid)}")
+    if sid:
+        lines.append(f"span_id: {_yaml_value(sid)}")
+    if tp:
+        lines.append(f"traceparent: {_yaml_value(tp)}")
+    if not lines:
+        return ""
+    return "---\n" + "\n".join(lines) + "\n---\n"
 
 
 def _inline(s: str) -> str:
@@ -151,23 +190,49 @@ def build_dossier_html(title, body_text, target_dir, base_name, meta_pairs=None)
         return None
 
 
-def build_dossier_from_report(title, body_text, target_dir, base_name, ref_id="", quelle=""):
+def build_dossier_from_report(
+    title, body_text, target_dir, base_name, ref_id="", quelle="",
+    trace_id="", span_id="", traceparent="",
+):
     """Bequemlichkeits-Wrapper mit Standard-Metazeile (Zeit/Referenz/Quelle).
-    Erzeugt primär ein HTML-Dossier und versucht zusätzlich ein PDF via reportlab zu bauen.
+
+    D16/M5: Mit ``trace_id``/``span_id``/``traceparent`` schreibt der Wrapper
+    zusaetzlich ein Obsidian-Sidecar ``<base>.trace.md`` mit YAML-Frontmatter
+    und zeigt die IDs in der HTML-Metazeile. Ohne Trace-Parameter bleibt das
+    Verhalten unveraendert (kein leeres Sidecar).
     """
     meta = [
         ("Erstellt", datetime.datetime.now().strftime("%d.%m.%Y %H:%M")),
         ("Referenz", ref_id),
         ("Quelle", quelle),
+        ("Trace-ID", trace_id),
+        ("Span-ID", span_id),
     ]
     html_path = build_dossier_html(title, body_text, target_dir, base_name, meta_pairs=meta)
+
+    frontmatter = _trace_frontmatter(trace_id, span_id, traceparent)
+    if frontmatter:
+        try:
+            sidecar_path = os.path.join(
+                target_dir, _safe_name(base_name) + ".trace.md"
+            )
+            with open(sidecar_path, "w", encoding="utf-8") as f:
+                f.write(
+                    frontmatter
+                    + f"# {title}\n\n"
+                    + f"Quelldossier: [[{_safe_name(base_name)}.html]]\n"
+                    + f"Referenz: {ref_id} | Quelle: {quelle}\n"
+                )
+            logger.info(f"[Dossier] Trace-Sidecar erstellt: {sidecar_path}")
+        except Exception as exc:
+            logger.warning(f"[Dossier] Trace-Sidecar nicht schreibbar: {exc}")
     
     # Optional PDF-Erzeugung via reportlab
     try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
 
         pdf_path = os.path.join(target_dir, _safe_name(base_name) + ".pdf")
         doc = SimpleDocTemplate(
@@ -207,7 +272,11 @@ def build_dossier_from_report(title, body_text, target_dir, base_name, ref_id=""
         story = [
             Paragraph(html.escape(str(title or "Dossier")), title_style),
             Spacer(1, 4),
-            Paragraph(f"Referenz: {ref_id} • Erstellt: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')} • Quelle: {quelle}", meta_style),
+            Paragraph(
+                f"Referenz: {ref_id} • Erstellt: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')} • Quelle: {quelle}"
+                + (f" • Trace: {trace_id}" if trace_id else ""),
+                meta_style,
+            ),
             Spacer(1, 8),
             HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cbd5e1'), spaceBefore=4, spaceAfter=12)
         ]

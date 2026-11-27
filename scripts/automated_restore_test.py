@@ -16,10 +16,11 @@ import json
 import os
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 try:
     import yaml  # PyYAML 6.x ist im Archon-Container verfügbar
@@ -50,6 +51,32 @@ BACKUP_DIRS = (
     BACKUP_DIR,
     os.path.join(WORKSPACE_DIR, "data", "backups"),  # nur Legacy-Ziel, niemals Live-Quelle
 )
+
+# D10-M2: Litestream-Replikate sind eine ZWEITE, unabhaengige Quelle. Der
+# fruehere Test pruefte nur die Konfigurationspraesenz von `dir: /app/data/tenants`
+# und meldete "PASSED" — ohne je ein Replikat materialisiert zu haben. Jetzt
+# wird `litestream restore` in der Sandbox ausgefuehrt und die Frische gegen
+# den juengsten Replikat-Timestamp geprueft. Ohne Artefakt: FAILED (nie SKIPPED).
+LITESTREAM_REPLICA_DIR = os.getenv(
+    "ARCHON_LITESTREAM_REPLICA_DIR", os.path.join(WORKSPACE_DIR, "dr_replicas")
+).strip()
+LITESTREAM_BIN = os.getenv("ARCHON_LITESTREAM_BIN", "litestream").strip()
+LITESTREAM_CONFIG = os.getenv(
+    "ARCHON_LITESTREAM_CONFIG", os.path.join(WORKSPACE_DIR, "config", "litestream.yml")
+).strip()
+LITESTREAM_MAX_AGE_S = max(30.0, float(os.getenv("ARCHON_LITESTREAM_MAX_AGE_S", "120")))
+LITESTREAM_RESTORE_TIMEOUT_S = max(
+    10.0, float(os.getenv("ARCHON_LITESTREAM_RESTORE_TIMEOUT_S", "120"))
+)
+
+# Bekannte Replikat-Ziele aus config/litestream.yml (SSOT der Quellpfade).
+_LITESTREAM_SOURCE_PATHS = {
+    "ops.db": "/app/data/ops.db",
+    "business.db": "/app/data/business.db",
+    "memory.db": "/app/data/memory.db",
+    "kanban.db": "/opt/data/kanban.db",
+    "state.db": "/opt/data/state.db",
+}
 
 
 def find_latest_backup(name: str) -> str:
@@ -128,6 +155,136 @@ def _litestream_covers_tenants() -> bool:
         if (candidate.startswith("path:") or candidate.startswith("dir:")) and "/tenants" in candidate:
             return True
     return False
+
+
+def _find_litestream_replicas() -> List[str]:
+    """Alle Replikat-Kandidaten unter ``ARCHON_LITESTREAM_REPLICA_DIR``.
+
+    Litestream legt Datei-Replikate als Verzeichnisse ``<name>.db`` an; in
+    Wegwerf-/Test-Setups koennen es auch ".db"-Dateien sein. Tenant-Replikate
+    liegen unter ``<dir>/tenants/<tid>/<db>``. Beides wird erfasst.
+    """
+    found: List[str] = []
+    if not os.path.isdir(LITESTREAM_REPLICA_DIR):
+        return found
+    for root, dirs, files in os.walk(LITESTREAM_REPLICA_DIR):
+        for name in dirs:
+            if name.endswith(".db"):
+                found.append(os.path.join(root, name))
+        for name in files:
+            if name.endswith(".db") or name.endswith(".db.gz"):
+                found.append(os.path.join(root, name))
+    return sorted(found)
+
+
+def _litestream_source_path(replica: str) -> str:
+    """Konfigurierten DB-Quellpfad aus ``config/litestream.yml`` ableiten.
+
+    ``litestream restore`` braucht den in der Config registrierten DB-Pfad,
+    nicht das Replikat-Verzeichnis. Die Config ist SSOT; die eingebaute Tabelle
+    ist nur Fallback fuer defektes YAML (und deckt die 5 Bestandseintraege ab).
+    """
+    normalized = replica.replace("\\", "/")
+    base = os.path.basename(replica.rstrip("/").rstrip(os.sep))
+    if "/tenants/" in normalized:
+        return "/app/data/tenants/" + normalized.split("/tenants/", 1)[1].rstrip("/")
+    if yaml is not None:
+        try:
+            with open(LITESTREAM_CONFIG, "r", encoding="utf-8") as fh:
+                cfg = yaml.safe_load(fh) or {}
+            for db in cfg.get("dbs") or []:
+                if isinstance(db, dict) and str(db.get("path") or "").endswith("/" + base):
+                    return str(db["path"])
+        except Exception:
+            pass  # defektes YAML -> Fallback-Tabelle
+    return _LITESTREAM_SOURCE_PATHS.get(base, f"/app/data/{base}")
+
+
+def _litestream_replica_age_s(replica: str) -> Optional[float]:
+    """Alter des juengsten Replikat-Artefakts (WAL-Segment/Snapshot)."""
+    newest = 0.0
+    if os.path.isfile(replica):
+        newest = os.path.getmtime(replica)
+    elif os.path.isdir(replica):
+        for root, dirs, files in os.walk(replica):
+            for name in dirs + files:
+                path = os.path.join(root, name)
+                try:
+                    newest = max(newest, os.path.getmtime(path))
+                except OSError:
+                    pass
+    if newest <= 0.0:
+        return None
+    return max(0.0, time.time() - newest)
+
+
+def _restore_litestream_replica(replica: str, dest_path: str) -> Dict[str, Any]:
+    """Fuehrt den echten ``litestream restore`` in die Sandbox aus."""
+    db_path = _litestream_source_path(replica)
+    cmd = [LITESTREAM_BIN, "restore", "-o", dest_path, "-config", LITESTREAM_CONFIG, db_path]
+    completed = subprocess.run(
+        cmd, capture_output=True, text=True,
+        timeout=LITESTREAM_RESTORE_TIMEOUT_S, check=False,
+    )
+    return {
+        "cmd": cmd,
+        "returncode": int(completed.returncode),
+        "stderr": str(completed.stderr or "").strip()[:500],
+    }
+
+
+def _verify_sqlite_snapshot(path: str, req_table: Any, db_report: Dict[str, Any]) -> bool:
+    """PRAGMA integrity/FK + Smoke auf einer wiederhergestellten SQLite-Datei.
+
+    Dieselbe Verifikation wie beim Backup-Artefakt-Pfad — nur ausgelagert,
+    damit der Litestream-Pfad nicht hinter einer Getrennt-Nachweis-Pruefung
+    zurueckbleibt.
+    """
+    dest_conn = sqlite3.connect(path, timeout=DB_BUSY_TIMEOUT_S)
+    try:
+        cur = dest_conn.cursor()
+        cur.execute("PRAGMA integrity_check;")
+        int_res = str(cur.fetchone()[0])
+        db_report["integrity_check"] = int_res
+
+        cur.execute("PRAGMA foreign_key_check;")
+        fk_res = cur.fetchall()
+        db_report["foreign_key_check"] = "OK" if len(fk_res) == 0 else f"{len(fk_res)} Fehler"
+
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [r[0] for r in cur.fetchall()]
+        db_report["tables_found"] = len(tables)
+
+        candidates = req_table if isinstance(req_table, (tuple, list)) else (req_table,)
+        candidates = [c for c in candidates if c]
+        smoke_table = (
+            tables[0] if tables else None
+        ) if not candidates else next((t for t in candidates if t in tables), None)
+        if smoke_table:
+            cur.execute(f'SELECT COUNT(*) FROM "{smoke_table}";')
+            cnt = cur.fetchone()[0]
+            db_report["record_count"] = cnt
+            db_report["smoke_test"] = f"OK ({cnt} Einträge in {smoke_table})"
+        else:
+            db_report["smoke_test"] = (
+                f"FEHLER (keine Pflichttabelle {candidates} vorhanden, "
+                f"tabellen: {len(tables)})"
+            )
+    finally:
+        dest_conn.close()
+
+    if fk_res:
+        db_report["error"] = f"Foreign-Key-Check fehlgeschlagen: {len(fk_res)} Verletzung(en)."
+        return False
+    if candidates and (smoke_table is None or not db_report.get("record_count")):
+        db_report["error"] = (
+            f"Smoke-Test fehlgeschlagen: keine Pflichttabelle {candidates} vorhanden oder leer."
+        )
+        return False
+    if int_res.lower() != "ok":
+        db_report["error"] = f"Integritätsprüfung fehlgeschlagen: {int_res}"
+        return False
+    return True
 
 
 def resolve_db_path(name: str) -> str:
@@ -347,16 +504,107 @@ class AutomatedRestoreTester:
 
                 results["details"].append(db_report)  # type: ignore[attr-defined]
 
-        # Audit D / v0.5-Härtung: Tenant-DBs liegen bei FULL_TENANT_ISOLATION=1
-        # unter data/tenants/<tid>/*.db. `_litestream_covers_tenants()` akzeptiert
-        # explizite Pfade ODER einen `dir:`-Eintrag (Directory Replication).
-        # Nur wenn beides fehlt, ist das ein harter FAIL — kein SKIPPED, kein
-        # stilles Grün. Bei vorhandener Abdeckung wird das jetzt explizit als
-        # OK ausgewiesen. Die Versionsnummer der Image-Konfiguration ist hier
-        # irrelevant: geprüft wird ausschliesslich die Config-Datei.
+            # ------------------------------------------------------------------
+            # D10-M2: echter Litestream-Replikat-Restore in derselben Sandbox.
+            # Der fruehere Check las nur config/litestream.yml und meldete
+            # "via Litestream abgedeckt", ohne je ein Replikat zu beruehren.
+            # Jetzt: `litestream restore -config ... -o <sandbox> <db-path>`,
+            # danach integrity/FK/Smoke und Frische gegen den Timestamp.
+            # Fehlt das Artefakt -> FAILED, nie SKIPPED (Pflichtquelle).
+            # ------------------------------------------------------------------
+            replicas = _find_litestream_replicas()
+            results["litestream_replicas_found"] = len(replicas)
+            for replica in replicas:
+                rep_name = os.path.basename(replica.rstrip("/").rstrip(os.sep))
+                rreport: Dict[str, Any] = {
+                    "database": f"LITESTREAM_RESTORE:{rep_name}",
+                    "source_path": replica,
+                    "source_exists": True,
+                    "source_size_bytes": 0,
+                    "integrity_check": "FAILED",
+                    "foreign_key_check": "FAILED",
+                    "smoke_test": "FAILED",
+                    "source_kind": "litestream_replica",
+                    "status": "FAILED",
+                    "error": None,
+                }
+                try:
+                    age_s = _litestream_replica_age_s(replica)
+                    rreport["replica_age_sec"] = round(age_s, 1) if age_s is not None else None
+                    dest = os.path.join(
+                        sandbox_dir,
+                        "litestream_restored_" + rep_name.replace(":", "_").replace("/", "_"),
+                    )
+                    cmd_result = _restore_litestream_replica(replica, dest)
+                    rreport["restore_command"] = " ".join(cmd_result["cmd"][:5])
+                    rreport["restore_returncode"] = cmd_result["returncode"]
+                    if cmd_result["returncode"] != 0:
+                        raise RuntimeError(
+                            f"litestream restore exit {cmd_result['returncode']}: "
+                            f"{cmd_result['stderr'][:200]}"
+                        )
+                    if not os.path.isfile(dest) or os.path.getsize(dest) == 0:
+                        raise RuntimeError("litestream restore erzeugte keine Datenbankdatei")
+                    verified = _verify_sqlite_snapshot(dest, (), rreport)
+                    if age_s is None:
+                        raise RuntimeError(
+                            "Replikat-Alter nicht bestimmbar (keine Timestamp-Evidenz)"
+                        )
+                    if age_s > LITESTREAM_MAX_AGE_S:
+                        raise RuntimeError(
+                            f"Replikat veraltet: {age_s:.1f}s > "
+                            f"{LITESTREAM_MAX_AGE_S:.0f}s (sync-interval 5-10 s erwartet)"
+                        )
+                    if not verified:
+                        raise RuntimeError(
+                            str(rreport.get("error") or "Sandbox-Verifikation fehlgeschlagen")
+                        )
+                    rreport["status"] = "PASSED"
+                    results["databases_checked"] += 1  # type: ignore[operator]
+                except Exception as exc:
+                    rreport["status"] = "FAILED"
+                    rreport["error"] = str(exc)
+                    results["databases_failed"] += 1  # type: ignore[operator]
+                results["details"].append(rreport)  # type: ignore[attr-defined]
+
+            if not replicas:
+                results["details"].append({  # type: ignore[attr-defined]
+                    "database": "LITESTREAM_REPLICA_SOURCE",
+                    "source_path": LITESTREAM_REPLICA_DIR,
+                    "source_exists": False,
+                    "source_size_bytes": 0,
+                    "integrity_check": "FAILED",
+                    "foreign_key_check": "FAILED",
+                    "smoke_test": "FAILED",
+                    "source_kind": "litestream_replica",
+                    "status": "FAILED",
+                    "error": (
+                        f"Keine Litestream-Replikate unter {LITESTREAM_REPLICA_DIR} gefunden. "
+                        "ARCHON_LITESTREAM_REPLICA_DIR auf das Replikat-Volume setzen; "
+                        "Konfigurationspraesenz allein ist kein Restore-Beweis."
+                    ),
+                })
+                results["databases_failed"] += 1  # type: ignore[operator]
+
+        # Audit D / v0.5-Härtung + D10-M2: Tenant-DBs liegen bei
+        # FULL_TENANT_ISOLATION=1 unter data/tenants/<tid>/*.db. DieConfig-
+        # abdeckung (`dir:`/`path:`) ist nur noch eine Teilbedingung; PASSED
+        # verlangt zusaetzlich den oben verifizierten echten Replikat-Restore.
+        # Kein SKIPPED, kein stilles Gruen. Die Image-Versionsnummer ist
+        # irrelevant: geprueft werden Config und Replikat-Artefakte.
         tenant_dbs = _tenant_dbs_present()
         if tenant_dbs:
             tenant_covered = _litestream_covers_tenants()
+            # D10-M2: Config-Praesenz allein ist kein Restore-Beweis. Der Check
+            # ist PASSED nur, wenn zusaetzlich mindestens ein echtes Tenant-
+            # Replikat in der Sandbox wiederhergestellt und verifiziert wurde.
+            tenant_restored = any(
+                str(d.get("database", "")).startswith("LITESTREAM_RESTORE:")
+                and d.get("status") == "PASSED"
+                and "/tenants/" in str(d.get("source_path", "")).replace("\\", "/")
+                for d in results["details"]  # type: ignore[attr-defined]
+            )
+            tenant_ok = tenant_covered and tenant_restored
             results["details"].append({  # type: ignore[attr-defined]
                 "database": "TENANT_REPLICATION",
                 "source_path": os.path.join(WORKSPACE_DIR, "data", "tenants"),
@@ -365,21 +613,22 @@ class AutomatedRestoreTester:
                 "integrity_check": "N/A",
                 "foreign_key_check": "N/A",
                 "smoke_test": (
-                    f"OK ({len(tenant_dbs)} Tenant-DBs via Litestream abgedeckt)"
-                    if tenant_covered else
-                    f"FEHLER ({len(tenant_dbs)} Tenant-DBs ohne Litestream-Abdeckung)"
+                    f"OK ({len(tenant_dbs)} Tenant-DBs: Config vorhanden, "
+                    "echtes Replikat in Sandbox restore-verifiziert)"
+                    if tenant_ok else
+                    f"FEHLER ({len(tenant_dbs)} Tenant-DBs ohne verifizierten Replikat-Restore)"
                 ),
-                "source_kind": "configured" if tenant_covered else "unreplicated",
-                "status": "PASSED" if tenant_covered else "FAILED",
-                "error": None if tenant_covered else (
-                    f"{len(tenant_dbs)} Tenant-DBs vorhanden, aber config/litestream.yml "
-                    "enthält weder einen expliziten Tenant-`path:` noch einen `dir:`-Eintrag "
-                    "für /app/data/tenants. Bitte Directory Replication konfigurieren "
-                    "(dir: /app/data/tenants, pattern: \"*.db\", recursive: true) oder "
-                    "die Tenant-DBs einzeln unter dbs: aufführen."
+                "source_kind": "litestream_replica" if tenant_ok else "unreplicated",
+                "litestream_config_present": tenant_covered,
+                "litestream_restore_verified": tenant_restored,
+                "status": "PASSED" if tenant_ok else "FAILED",
+                "error": None if tenant_ok else (
+                    f"{len(tenant_dbs)} Tenant-DBs vorhanden, aber kein Tenant-Replikat "
+                    "wurde via `litestream restore` in der Sandbox verifiziert. "
+                    "Config-Praesenz (`dir: /app/data/tenants`) allein genuegt nicht."
                 ),
             })
-            if not tenant_covered:
+            if not tenant_ok:
                 results["databases_failed"] += 1  # type: ignore[operator]
 
         # D03/MED: Secret-Restores waren bisher gar nicht getestet. Dry-run gegen ein

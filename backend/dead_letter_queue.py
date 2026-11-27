@@ -6,14 +6,15 @@ Payload und Traceback in SQLite (`dead_letter_queue`) auf und ermöglicht Einzel
 mit exponentiellem Backoff.
 """
 
-import os
-import json
-import uuid
-import inspect
 import asyncio
-import sqlite3
+import inspect
+import json
 import logging
-from typing import Callable
+import os
+import sqlite3
+import uuid
+from datetime import datetime
+from typing import Any, Callable, Coroutine, Dict, List, Optional, cast
 
 logger = logging.getLogger("archon_os.dead_letter_queue")
 
@@ -26,8 +27,6 @@ class _ArchonClosingConn(sqlite3.Connection):
             super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
-from datetime import datetime
-from typing import Coroutine, Dict, Any, List, Optional, cast
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -152,13 +151,26 @@ def _trace_fields(
 _INITIALIZED_PATHS: set[str] = set()
 
 
-def _ensure_db() -> str:
-    """Stellt das DLQ-Schema fuer den jeweils aktiven Mandanten-Pfad sicher."""
-    path = _db_path()
-    if path not in _INITIALIZED_PATHS:
-        _init_db(path)
-        _INITIALIZED_PATHS.add(path)
-    return path
+def _ensure_db(tenant_id: Optional[str] = None) -> str:
+    """D06-H1: DLQ-Schema im EXPLIZITEN Mandanten-Pfad sicherstellen.
+
+    ``_db_path()`` löst über den Request-Mandanten auf. Ohne tenant_id bleibt
+    das historische Verhalten (aktiver Mandant) unverändert; mit tenant_id
+    wird der Kontext nur für die Pfadauflösung gebunden und sofort restored.
+    """
+    token: Any = None
+    if tenant_id:
+        from backend.tenant_context import reset_request_tenant, set_request_tenant
+        token = set_request_tenant(tenant_id)
+    try:
+        path = _db_path()
+        if path not in _INITIALIZED_PATHS:
+            _init_db(path)
+            _INITIALIZED_PATHS.add(path)
+        return path
+    finally:
+        if token is not None:
+            reset_request_tenant(token)
 
 
 def _init_db(db_path: Optional[str] = None) -> str:
@@ -328,7 +340,7 @@ class DeadLetterQueueManager:
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         trace = _trace_fields(trace_id, span_id, traceparent, tracestate, payload)
 
-        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(tenant_id), timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.execute("""
                 INSERT INTO dead_letter_queue
                 (dlq_id, job_type, source_module, payload_json, error_message,
@@ -366,7 +378,7 @@ class DeadLetterQueueManager:
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
-        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(tenant_id), timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 f"SELECT * FROM dead_letter_queue WHERE dlq_id = ? AND {tenant_sql}",
@@ -404,7 +416,7 @@ class DeadLetterQueueManager:
             # (insbesondere 'queued') geschrieben werden.
             claim_worker = f"{os.getpid()}:{uuid.uuid4().hex[:8]}"
             now_ts = datetime.now().timestamp()
-            with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
+            with sqlite3.connect(_ensure_db(tenant_id), timeout=15.0, factory=_ArchonClosingConn) as conn:
                 conn.execute("BEGIN IMMEDIATE")
                 cur = conn.execute(
                     "UPDATE dead_letter_queue SET claimed_by = ?, claim_expires = ? "
@@ -444,7 +456,7 @@ class DeadLetterQueueManager:
             datetime.now().timestamp() + max(1, int(next_backoff or 0))
             if new_status == "queued" else 0.0
         )
-        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(tenant_id), timeout=15.0, factory=_ArchonClosingConn) as conn:
             set_sql = (
                 "retry_count = ?, status = ?, next_backoff_seconds = ?, next_try_at = ?, "
                 "last_replay_at = ?, error_message = ?"
@@ -494,7 +506,7 @@ class DeadLetterQueueManager:
         tid = str(tenant_id or _current_tenant_id())
         key = _tenant_key(tid, str(idempotency_key or ""))
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(tenant_id), timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             if key:
                 existing = conn.execute(
@@ -540,7 +552,7 @@ class DeadLetterQueueManager:
         Grenze). Ein gesetzter tenant_id schraenkt den Claim hart ein.
         """
         now = datetime.now().timestamp()
-        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(tenant_id), timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             conn.execute("BEGIN IMMEDIATE")
             sql = (
@@ -584,7 +596,7 @@ class DeadLetterQueueManager:
     ) -> bool:
         """Erfolgreich verarbeiteten Job abschliessen und Lease freigeben."""
         tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
-        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(tenant_id), timeout=15.0, factory=_ArchonClosingConn) as conn:
             cur = conn.execute(
                 "UPDATE dead_letter_queue SET status = 'completed', claimed_by = '', "
                 f"claim_expires = 0, error_message = ? WHERE dlq_id = ? AND status != 'completed' AND {tenant_sql}",
@@ -598,7 +610,7 @@ class DeadLetterQueueManager:
     ) -> Dict[str, Any]:
         """Fehlgeschlagenen Job zaehlen; nach max_retries Dead-Letter."""
         tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
-        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(tenant_id), timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT retry_count, max_retries, attempt, next_backoff_seconds "
@@ -631,7 +643,7 @@ class DeadLetterQueueManager:
     ) -> Dict[str, Any]:
         """F014: DLQ-Read ist immer auf den aktiven Mandanten begrenzt."""
         tenant_sql, tenant_params = _tenant_sql(str(tenant_id or _current_tenant_id()))
-        with sqlite3.connect(_ensure_db(), timeout=15.0, factory=_ArchonClosingConn) as conn:
+        with sqlite3.connect(_ensure_db(tenant_id), timeout=15.0, factory=_ArchonClosingConn) as conn:
             conn.row_factory = sqlite3.Row
             if status_filter:
                 total = conn.execute(

@@ -923,7 +923,9 @@ def _run_workflow_events_retention(conn: sqlite3.Connection, now: datetime) -> N
 # W4-B / D06: zentrale 14-Tage-Retention fuer alle Integrations-Tabellen.
 # Der 30-s-Drainer raeumt mit (gedrosselt wie _run_workflow_events_retention).
 # ---------------------------------------------------------------------------
-_INTEGRATION_RETENTION_LAST_TS: Optional[datetime] = None
+# D06-H1: pro Mandant — ein globaler Timestamp hat alle weiteren Tenants
+# im 30-s-Loop als "throttled" verworfen.
+_INTEGRATION_RETENTION_LAST_TS: Dict[str, datetime] = {}
 _INTEGRATION_RETENTION_INTERVAL_MIN = 30
 _INTEGRATION_RETENTION_DELETED_TOTAL: Dict[str, int] = {}
 _INTEGRATION_RETENTION_LOCK = threading.Lock()
@@ -935,11 +937,26 @@ def integration_retention_deleted_total() -> Dict[str, int]:
         return dict(_INTEGRATION_RETENTION_DELETED_TOTAL)
 
 
+def _integration_db_path(filename: str, tenant_id: Optional[str], fallback) -> str:
+    """D06-H1: explizite Mandanten-DB auflösen.
+
+    Ohne ``tenant_id`` bleibt der historische Resolver (inkl. monkeypatchbarer
+    DB_PATH in Bestands-/Legacy-Tests) unverändert. Mit ``tenant_id`` wird die
+    SSOT ``db_paths.resolve_tenant_db`` herangezogen — nie die DB des aktiven
+    Mandanten.
+    """
+    if not tenant_id:
+        return fallback()
+    from backend.db_paths import resolve_tenant_db
+    return resolve_tenant_db(filename, str(tenant_id))
+
+
 def purge_integration_retention(
     days: int = _RETENTION_DAYS,
     now: Optional[datetime] = None,
     *,
     force: bool = False,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Loescht veraltete Integrations-Zeilen (nur abgeschlossene Zustaende).
 
@@ -949,12 +966,14 @@ def purge_integration_retention(
     """
     global _INTEGRATION_RETENTION_LAST_TS
     cur = now or datetime.now(timezone.utc)
+    tkey = str(tenant_id or _current_tenant_id())
+    last = _INTEGRATION_RETENTION_LAST_TS.get(tkey)
     if (
-        not force and _INTEGRATION_RETENTION_LAST_TS is not None
-        and (cur - _INTEGRATION_RETENTION_LAST_TS) < timedelta(minutes=_INTEGRATION_RETENTION_INTERVAL_MIN)
+        not force and last is not None
+        and (cur - last) < timedelta(minutes=_INTEGRATION_RETENTION_INTERVAL_MIN)
     ):
         return {"status": "throttled", "deleted": {}}
-    _INTEGRATION_RETENTION_LAST_TS = cur
+    _INTEGRATION_RETENTION_LAST_TS[tkey] = cur
     cutoff_dt = (cur - timedelta(days=max(1, int(days)))).replace(tzinfo=None)
     cutoff_iso = cutoff_dt.isoformat()
     cutoff_space = cutoff_dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -977,7 +996,7 @@ def purge_integration_retention(
     try:
         from backend import event_mesh as _em
 
-        _purge_db(_em._db_path(), [
+        _purge_db(_integration_db_path("memory.db", tenant_id, _em._db_path), [
             ("event_mesh_log", "created_at", None, ()),
             ("event_mesh_outbox", "created_at", "status IN ('delivered', 'dead')", ()),
             ("event_mesh_dedup", "first_seen", None, ()),
@@ -989,7 +1008,7 @@ def purge_integration_retention(
     try:
         from backend import dead_letter_queue as _dlq
 
-        _purge_db(_dlq._db_path(), [
+        _purge_db(_integration_db_path("memory.db", tenant_id, _dlq._db_path), [
             ("dead_letter_queue", "created_at", "status = 'completed'", ()),
         ])
     except Exception as exc:
@@ -1583,6 +1602,112 @@ def approve_and_replay_hitl_event(
     return replay_workflow_event(event_id, bypass_hitl=True, tenant_id=tenant_id)
 
 
+def _integration_tenant_ids() -> List[str]:
+    """D06-H1: alle Mandanten mit physisch isolierten DBs (SSOT: tenant_context).
+
+    Die Verzeichnisse unter ``tenants_base_dir`` sind die autoritative Menge
+    der Mandanten, die tatsächlich eine eigene DB besitzen (auch Sekundär-
+    mandanten ohne Company-Eintrag). Sind noch keine Verzeichnisse vorhanden,
+    wird der aktive Mandant als Default gewartet.
+    """
+    ids: Set[str] = set()
+    try:
+        from backend.tenant_context import sanitize_tenant_id, tenant_context
+        base = tenant_context.tenants_base_dir
+        for name in os.listdir(base):
+            if os.path.isdir(os.path.join(base, name)):
+                tid = sanitize_tenant_id(name)
+                if tid:
+                    ids.add(tid)
+        if not ids:
+            ids.add(sanitize_tenant_id(tenant_context.get_active_tenant_id()) or "default")
+    except Exception as exc:
+        logger.warning("[WorkflowScheduler] Mandanten-Aufzaehlung fehlgeschlagen: %s", exc)
+        ids.add("default")
+    return sorted(ids)
+
+
+def _metric_int(result: Dict[str, Any], key: str) -> int:
+    """Telemetrie-Zaehler tolerant lesen (Fehler-Dicts enthalten Strings)."""
+    try:
+        return int((result or {}).get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+async def _run_integration_maintenance_for_tenant(tenant_id: str) -> Dict[str, Any]:
+    """Outbox → DLQ → Retention für GENAU diesen Mandanten.
+
+    Der Request-Mandantenkontext wird für die gesamte Koroutine gebunden;
+    ``asyncio.to_thread`` kopiert ihn in die Worker-Threads. Zusätzlich
+    erhalten alle drei Konsumenten den tenant_id explizit. Ein Fehler in einer
+    Stufe darf die anderen Stufen und andere Mandanten nicht blockieren.
+    """
+    from backend.tenant_context import reset_request_tenant, set_request_tenant
+
+    token: Any = set_request_tenant(tenant_id)
+    result: Dict[str, Any] = {
+        "tenant_id": tenant_id, "outbox": {}, "dlq": {}, "retention": {},
+    }
+    try:
+        # Outbox-Retry: fehlgeschlagene Webhooks werden im Hintergrund
+        # erneut zugestellt (Idempotency-Key, nach 5 Versuchen → DLQ).
+        try:
+            from backend.event_mesh import event_mesh
+            outbox = await asyncio.to_thread(event_mesh.process_outbox, tenant_id=tenant_id)
+            result["outbox"] = outbox
+            if _metric_int(outbox, "processed") or _metric_int(outbox, "dead"):
+                logger.info("[WorkflowScheduler] Outbox(%s): %s", tenant_id, outbox)
+        except Exception as exc:
+            logger.warning("[WorkflowScheduler] Outbox-Retry (%s) fehlgeschlagen: %s", tenant_id, exc)
+            result["outbox"] = {"error": str(exc)[:300]}
+
+        # Shared Queue: echter Konsument für fehlgeschlagene Delegationen.
+        try:
+            result["dlq"] = await _drain_shared_queue(tenant_id=tenant_id)
+        except Exception as exc:
+            logger.warning("[WorkflowScheduler] DLQ-Drain (%s) fehlgeschlagen: %s", tenant_id, exc)
+            result["dlq"] = {"error": str(exc)[:300]}
+
+        # W4-B: 14-Tage-Retention der Integrations-Tabellen (pro Mandant gedrosselt).
+        try:
+            result["retention"] = await asyncio.to_thread(
+                purge_integration_retention, tenant_id=tenant_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "[WorkflowScheduler] Integrations-Retention (%s) fehlgeschlagen: %s", tenant_id, exc
+            )
+            result["retention"] = {"error": str(exc)[:300]}
+    finally:
+        reset_request_tenant(token)
+    return result
+
+
+async def run_integration_maintenance_cycle() -> Dict[str, Any]:
+    """Ein Zyklus des 30-s-Drainers über ALLE Mandanten (Produktivpfad)."""
+    tenant_ids = await asyncio.to_thread(_integration_tenant_ids)
+    per_tenant: Dict[str, Dict[str, Any]] = {}
+    for tid in tenant_ids:
+        per_tenant[tid] = await _run_integration_maintenance_for_tenant(tid)
+
+    telemetry = {
+        "outbox_processed": sum(
+            _metric_int(v["outbox"], "processed") for v in per_tenant.values()
+        ),
+        "outbox_dead": sum(_metric_int(v["outbox"], "dead") for v in per_tenant.values()),
+        "dlq_handled": sum(_metric_int(v["dlq"], "handled") for v in per_tenant.values()),
+        "dlq_failed": sum(_metric_int(v["dlq"], "failed") for v in per_tenant.values()),
+        "dlq_unhandled": sum(_metric_int(v["dlq"], "unhandled") for v in per_tenant.values()),
+        "integration_retention_deleted": sum(
+            sum((v["retention"].get("deleted") or {}).values())
+            for v in per_tenant.values()
+        ),
+        "tenant_ids": tenant_ids,
+    }
+    return {"tenant_count": len(tenant_ids), "tenants": per_tenant, "telemetry": telemetry}
+
+
 async def workflow_scheduler_background_loop() -> None:
     await asyncio.sleep(8)
     while True:
@@ -1590,38 +1715,9 @@ async def workflow_scheduler_background_loop() -> None:
             await asyncio.to_thread(evaluate_due_schedules)
         except Exception as exc:
             logger.error(f"[WorkflowScheduler] Loop-Fehler: {exc}")
-        # Outbox-Retry: fehlgeschlagene Webhooks werden im Hintergrund
-        # erneut zugestellt (mit Idempotency-Key, nach 5 Versuchen → DLQ).
-        outbox: Dict[str, Any] = {}
-        try:
-            from backend.event_mesh import event_mesh
-            outbox = await asyncio.to_thread(event_mesh.process_outbox)
-            if outbox.get("processed") or outbox.get("dead"):
-                logger.info(f"[WorkflowScheduler] Outbox: {outbox}")
-        except Exception as exc:
-            logger.warning(f"[WorkflowScheduler] Outbox-Retry fehlgeschlagen: {exc}")
-        # Shared Queue: frueher gab es fuer die DLQ keinen produktiven
-        # Consumer — fehlgeschlagene Delegationen blieben ewig 'queued'.
-        dlq_result: Dict[str, Any] = {}
-        try:
-            dlq_result = await _drain_shared_queue()
-        except Exception as exc:
-            logger.warning(f"[WorkflowScheduler] DLQ-Drain fehlgeschlagen: {exc}")
-            dlq_result = {"error": str(exc)[:300]}
-        # W4-B: 14-Tage-Retention der Integrations-Tabellen (intern gedrosselt).
-        retention: Dict[str, Any] = {}
-        try:
-            retention = await asyncio.to_thread(purge_integration_retention)
-        except Exception as exc:
-            logger.warning(f"[WorkflowScheduler] Integrations-Retention fehlgeschlagen: {exc}")
-        _enqueue_telemetry("scheduler_cycle", {
-            "outbox_processed": outbox.get("processed", 0),
-            "outbox_dead": outbox.get("dead", 0),
-            "dlq_handled": dlq_result.get("handled", 0),
-            "dlq_failed": dlq_result.get("failed", 0),
-            "dlq_unhandled": dlq_result.get("unhandled", 0),
-            "integration_retention_deleted": sum((retention.get("deleted") or {}).values()),
-        })
+        # D06-H1: Outbox/DLQ/Retention für JEDEN Mandanten — nicht nur den aktiven.
+        cycle = await run_integration_maintenance_cycle()
+        _enqueue_telemetry("scheduler_cycle", cycle["telemetry"])
         await asyncio.sleep(30)
 
 
@@ -1690,13 +1786,19 @@ _SHARED_QUEUE_HANDLERS: Dict[str, Callable[[Dict[str, Any], Dict[str, Any]], Awa
 }
 
 
-async def _drain_shared_queue(max_jobs: int = 5) -> Dict[str, Any]:
-    """Claimt und bearbeitet faellige DLQ-Jobs (CAS + Lease, echter Handler je job_type)."""
+async def _drain_shared_queue(max_jobs: int = 5, tenant_id: Optional[str] = None) -> Dict[str, Any]:
+    """Claimt und bearbeitet faellige DLQ-Jobs (CAS + Lease, echter Handler je job_type).
+
+    D06-H1: der explizite Mandant geht an ALLE DLQ-Zugriffe (claim/complete/
+    fail). Ohne Angabe bleibt der aktive Mandant der Default (Bestandsvertrag).
+    """
     from backend.dead_letter_queue import dead_letter_queue_manager as dlq
 
     handled = failed = unhandled = 0
     for _ in range(max_jobs):
-        item = await asyncio.to_thread(dlq.claim_next, "workflow_scheduler", lease_seconds=120)
+        item = await asyncio.to_thread(
+            dlq.claim_next, "workflow_scheduler", lease_seconds=120, tenant_id=tenant_id
+        )
         if not item:
             break
         job_type = str(item.get("job_type") or "")
@@ -1720,7 +1822,7 @@ async def _drain_shared_queue(max_jobs: int = 5) -> Dict[str, Any]:
                 # wird nach Backoff erneut versucht bzw. nach max_retries dead.
                 unhandled += 1
                 await asyncio.to_thread(
-                    dlq.fail, item["dlq_id"], f"unhandled_job_type:{job_type}"
+                    dlq.fail, item["dlq_id"], f"unhandled_job_type:{job_type}", tenant_id=tenant_id
                 )
                 logger.warning("[WorkflowScheduler] Kein Handler fuer DLQ-Job-Typ '%s' (dlq=%s).", job_type, item.get("dlq_id"))
                 continue
@@ -1730,10 +1832,11 @@ async def _drain_shared_queue(max_jobs: int = 5) -> Dict[str, Any]:
                 dlq.complete,
                 item["dlq_id"],
                 {"handled_by": "workflow_scheduler", "handler": job_type, "result": result},
+                tenant_id=tenant_id,
             )
             handled += 1
         except Exception as exc:
             failed += 1
             logger.warning("[WorkflowScheduler] DLQ-Job %s fehlgeschlagen: %s", item.get("dlq_id"), exc)
-            await asyncio.to_thread(dlq.fail, item["dlq_id"], str(exc)[:500])
+            await asyncio.to_thread(dlq.fail, item["dlq_id"], str(exc)[:500], tenant_id=tenant_id)
     return {"handled": handled, "failed": failed, "unhandled": unhandled}

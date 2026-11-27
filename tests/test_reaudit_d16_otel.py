@@ -8,7 +8,6 @@ import io
 import json
 import logging
 import re
-import sqlite3
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -154,14 +153,20 @@ def test_h7_trace_filter_injects_trace_id_and_promtail_matches():
     log.info("dispatch done %s", 7)
 
     line = stream.getvalue().strip()
-    assert f"[trace_id={tid}] dispatch done 7" in line
-    assert handler.filters[0].inject_message is True
+    # D16-M4: der Prefix traegt jetzt trace_id UND span_id (Promtail-Label).
+    assert re.search(
+        rf"\[trace_id={re.escape(tid)} span_id=[0-9a-f]{{16}}\] dispatch done 7", line
+    ), line
+    assert getattr(handler.filters[0], "inject_message", False) is True
 
     promtail = (ROOT / "config" / "promtail" / "promtail-config.yml").read_text(encoding="utf-8")
-    expression = re.search(r"expression:\s*'(.+)'", promtail).group(1)
+    expression_match = re.search(r"expression:\s*'(.+)'", promtail)
+    assert expression_match is not None
+    expression = expression_match.group(1)
     match = re.search(expression, line)
     assert match is not None
     assert match.group("trace_id") == tid
+    assert re.fullmatch(r"[0-9a-f]{16}", match.group("span_id"))
 
 
 def test_h7_static_config_bridge_and_honest_langfuse(monkeypatch):

@@ -544,6 +544,7 @@ def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt:
         ZeroEgressBlockedError,
         enforce_egress_firewall_for_url,
         evaluate_and_gate_llm_dispatch,
+        sanitize_llm_endpoint,
     )
     aid = agent_name or provider
     try:
@@ -613,7 +614,18 @@ def _gate_container_dispatch(agent_name: str, provider: str, model: str, prompt:
         intended_url=url,
     )
     enforce_egress_firewall_for_url(url, agent_id=aid)
-    return gate
+    # D06-M1: is_local AUSSCHLIESSLICH aus der SSOT ableiten — identisch zu
+    # _audited_post(). Ein Container auf einem internen Gateway ist NICHT
+    # "lokal": dort muss der Payload zwingend maskiert werden. Umgekehrt bleibt
+    # ein echtes Loopback-/On-Prem-Modell unmaskiert (kein logischer Widerspruch
+    # zur Firewall-Prüfung, die für beide Fälle unverändert läuft).
+    _, _, ep_zone = sanitize_llm_endpoint(url)
+    is_local_hop = (
+        bool(gate.get("routed_to_local"))
+        or ep_zone == "LOCAL_ON_PREM"
+        or (provider or "").strip().lower() in ("local", "ollama", "lmstudio", "vllm")
+    )
+    return {**gate, "is_local": is_local_hop}
 
 
 async def _dispatch_to_container_endpoint(
@@ -630,7 +642,7 @@ async def _dispatch_to_container_endpoint(
     system_prompt: str = "",
     task_id: str = "",
 ) -> dict:
-    from backend.llm_egress_guard import ZeroEgressBlockedError
+    from backend.llm_egress_guard import ZeroEgressBlockedError, sanitize_outbound_llm_payload
     aid = agent_name or provider
     try:
         gate = _gate_container_dispatch(agent_name, provider, model, prompt, url, system_prompt=system_prompt)
@@ -639,6 +651,27 @@ async def _dispatch_to_container_endpoint(
             "status": "blocked", "error_code": ze.error_code,
             "content": f"🛑 [ZERO-EGRESS HARD-BLOCK]: {ze}",
         })
+
+    # D06-M1: gleiche zwei Prüfungen wie _audited_post() — Firewall (im Gate)
+    # UND sanitize_outbound_llm_payload() vor JEDEM Container-POST. Der
+    # Sanitizer kennt 'system'/'prompt'/'input'/'messages'; OpenClaw sendet
+    # 'task', daher vorher unter 'prompt' spiegeln und danach zurückführen.
+    # Eine Kopie verhindert, dass der Aufrufer-Payload mutiert wird.
+    sanitize_input = dict(payload) if isinstance(payload, dict) else payload
+    has_task_field = isinstance(sanitize_input, dict) and isinstance(sanitize_input.get("task"), str)
+    if has_task_field:
+        sanitize_input["prompt"] = sanitize_input["task"]
+    safe_payload = sanitize_outbound_llm_payload(
+        sanitize_input,
+        agent_id=aid,
+        session_id=task_id or aid,
+        is_local=bool(gate.get("is_local")),
+    )
+    if has_task_field and isinstance(safe_payload, dict):
+        safe_payload["task"] = safe_payload["prompt"]
+        if not (isinstance(payload, dict) and "prompt" in payload):
+            safe_payload.pop("prompt", None)
+    secret_mask_applied = not bool(gate.get("is_local"))
 
     try:
         # D16/H3: Trace-Kontext ueber die Grenze Dispatcher -> Provider/n8n.
@@ -651,7 +684,7 @@ async def _dispatch_to_container_endpoint(
         except Exception as tr_exc:
             logger.warning("[Dispatcher] Trace-Injektion am Container-Hop (%s) fehlgeschlagen: %s", provider, tr_exc)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload, headers=headers)
+            resp = await client.post(url, json=safe_payload, headers=headers)
             await _audit_log_async(
                 agent_id=aid,
                 provider=provider,
@@ -661,7 +694,10 @@ async def _dispatch_to_container_endpoint(
                 data_category=gate["data_category"],
                 zero_egress_active=gate["zero_egress_active"],
                 task_id=task_id,
-                extra={"effective_prompt_info": _PROMPT_VERSION_CTX.get()} if _PROMPT_VERSION_CTX.get() else None,
+                extra={
+                    "effective_prompt_info": _PROMPT_VERSION_CTX.get(),
+                    "secret_mask_applied": secret_mask_applied,
+                },
             )
             if resp.status_code == 200:
                 data = resp.json()
@@ -1861,12 +1897,21 @@ async def _dispatch_to_omniroute_or_container_impl(
             is_local=is_local_hop,
         )
         active_trace_id = ""
+        active_span_id = ""
         try:
-            from backend.trace_context import child_span, current_trace_id, inject_headers
+            from backend.trace_context import (
+                child_span,
+                current_span_id,
+                current_trace_id,
+                inject_headers,
+            )
             with child_span():
                 # D16/H2: NEUE Span-ID im traceparent, keine Self-Parent-Kante.
                 headers = inject_headers(headers)
                 active_trace_id = current_trace_id()
+                # D16-M3: der Audit-Block muss genau DIESEN Hop-Span tragen,
+                # nicht den Eltern-Span aus dem umgebenden Kontext.
+                active_span_id = current_span_id()
         except Exception as tr_exc:
             logger.warning("[Dispatcher] Trace-Injektion am LLM-Hop (%s) fehlgeschlagen: %s", provider_id, tr_exc)
         post_kwargs: dict[str, Any] = {"headers": headers, "json": safe_body}
@@ -1888,6 +1933,7 @@ async def _dispatch_to_omniroute_or_container_impl(
                 zero_egress_active=hop_gate["zero_egress_active"],
                 task_id=task_id,
                 trace_id=active_trace_id,
+                span_id=active_span_id,
                 extra={"effective_prompt_info": prompt_version_info} if prompt_version_info else None,
             )
 
@@ -1916,6 +1962,7 @@ async def _dispatch_to_omniroute_or_container_impl(
             zero_egress_active=hop_gate["zero_egress_active"],
             task_id=task_id,
             trace_id=active_trace_id,
+            span_id=active_span_id,
             extra={"effective_prompt_info": prompt_version_info} if prompt_version_info else None,
         )
         return r

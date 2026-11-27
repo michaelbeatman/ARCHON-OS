@@ -9,6 +9,7 @@ Extrahiert aus main.py zur Modularisierung.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import hashlib
 import hmac
@@ -102,6 +103,11 @@ class HandoffDelegationPayload(BaseModel):
     # Ohne diese Felder verliert der Subagent Trace, Warrant und sein
     # komplexitätsgewichtiges Teilbudget (M1/M5).
     trace_id: str = ""  # type: ignore[no-redef]
+    # D16/M2: der vollstaendige W3C-Kontext der signierten Übergabekante.
+    # Ohne span_id/traceparent kann ein Resume nach Neustart/Cross-Prozess
+    # nur eine neue Root-Span starten (Kette bricht an der Orchestrator→Child-Grenze).
+    span_id: str = ""
+    traceparent: str = ""
     warrant_id: str = ""
     complexity_weight: float = 1.0
     budget_share_pct: float = 0.0
@@ -132,6 +138,9 @@ _SIGNED_DELEGATION_FIELDS = (
     # sicherheitsrelevant und gehoeren in den signierten Teil der Übergabe.
     "trace_id", "warrant_id", "complexity_weight", "budget_share_pct",
     "token_budget",
+    # D16/M2: Trace-Kontext ist sicherheitsrelevant (Resume-Korrelation) und
+    # gehoert in den signierten Teil — Manipulation muss die HMAC-Prüfung brechen.
+    "span_id", "traceparent",
 )
 _DELEGATION_HMAC_PREFIX = "dlg-hmac-sha256:"
 _DELEGATION_HMAC_ENV = "ARCHON_DELEGATION_HMAC_KEY"
@@ -157,7 +166,14 @@ def _delegation_hmac_key() -> bytes:
 
 
 def _delegation_signed_bytes(payload: Dict[str, Any]) -> bytes:
-    canonical = {k: payload.get(k) for k in _SIGNED_DELEGATION_FIELDS}
+    # D16/M2: Bestandskompatibilität für Delegationen, die vor diesem Fix
+    # signiert wurden (ohne span_id/traceparent). Sind beide Felder leer,
+    # wird der alte, unveränderte Feldumfang signiert. Ein Entfernen eines
+    # zuvor gesetzten Wertes bleibt dagegen erkennbar (Signatur bricht).
+    fields: Tuple[str, ...] = _SIGNED_DELEGATION_FIELDS
+    if not payload.get("span_id") and not payload.get("traceparent"):
+        fields = tuple(f for f in fields if f not in ("span_id", "traceparent"))
+    canonical = {k: payload.get(k) for k in fields}
     return json.dumps(
         canonical, sort_keys=True, ensure_ascii=False, separators=(",", ":"),
         default=str,
@@ -313,6 +329,74 @@ def _server_taint_status(session_id: str) -> str:
         return "unknown"
 
 
+def _server_delegation_trace_context(payload: Dict[str, Any]) -> Dict[str, str]:
+    """D16/M2: EIN zentraler, serverseitiger W3C-Kontext für die Übergabe.
+
+    Der aktive Kontext (ContextVar des Dispatchers) hat Vorrang. Nur wenn dort
+    kein Trace läuft, werden validierte Upstream-Werte übernommen — das ist der
+    Cross-Prozess-/Resume-Fall. Es werden nie IDs erfunden; ungültige Werte
+    werden verworfen (fail-closed), damit kein zweiter Root entsteht.
+    """
+    try:
+        from backend.trace_context import (
+            current_span_id,
+            current_trace_id,
+            format_traceparent,
+            parse_traceparent,
+            should_sample,
+        )
+
+        _parse_tp, _format_tp = parse_traceparent, format_traceparent
+        tid = str(current_trace_id() or "").strip().lower()
+        sid = str(current_span_id() or "").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{32}", tid):
+            tid = ""
+        if not re.fullmatch(r"[0-9a-f]{16}", sid):
+            sid = ""
+        traceparent = _format_tp(tid, sid, should_sample()) if tid and sid else ""
+    except Exception as exc:
+        logger.error("[Delegation] Trace-Kontext nicht lesbar — kein Root erfunden: %s", exc)
+        tid, sid, traceparent = "", "", ""
+        _parse_tp, _format_tp = None, None
+
+    # Fallback ausschliesslich fuer Cross-Prozess-Handoffs ohne aktiven Kontext.
+    client_tid = str(payload.get("trace_id") or "").strip().lower()
+    client_sid = str(payload.get("span_id") or "").strip().lower()
+    client_tp = str(payload.get("traceparent") or "").strip().lower()
+    parsed_client = _parse_tp(client_tp) if (client_tp and _parse_tp) else None
+    if parsed_client:
+        if not tid:
+            tid = parsed_client[0]
+        if not sid and (not client_tid or client_tid == parsed_client[0]):
+            sid = parsed_client[1]
+        if not traceparent:
+            traceparent = client_tp
+    else:
+        if not tid and re.fullmatch(r"[0-9a-f]{32}", client_tid):
+            tid = client_tid
+        if not sid and re.fullmatch(r"[0-9a-f]{16}", client_sid):
+            sid = client_sid
+        if not traceparent and tid and sid and _format_tp:
+            traceparent = _format_tp(tid, sid, should_sample())
+    return {"trace_id": tid, "span_id": sid, "traceparent": traceparent}
+
+
+def _resume_trace_context(meta: Dict[str, Any]):
+    """D16/M2: SSOT für den Resume-Pfad (created-Event → alter W3C-Kontext).
+
+    Gibt einen Kontext-Manager zurück. Ohne persistierten Trace bleibt der
+    aktuelle Kontext unverändert (``nullcontext``) — es wird kein Root erfunden.
+    """
+    tid = str(meta.get("trace_id") or "").strip()
+    sid = str(meta.get("span_id") or "").strip()
+    tp = str(meta.get("traceparent") or "").strip()
+    if not tid and not tp:
+        return contextlib.nullcontext()
+    from backend.trace_context import use_trace_context
+
+    return use_trace_context(trace_id=tid, span_id=sid, traceparent=tp)
+
+
 def resolve_server_delegation_context(
     payload: Dict[str, Any],
     *,
@@ -323,12 +407,7 @@ def resolve_server_delegation_context(
     """Überschreibt client gelieferte Kontextfelder mit Server-Werten."""
     tid = trajectory_id or str(payload.get("trajectory_id") or "")
     allocation = _server_budget_allocation(task_id)
-    try:
-        from backend.trace_context import current_trace_id
-
-        active_trace = str(current_trace_id() or "")
-    except Exception:
-        active_trace = ""
+    active_trace = _server_delegation_trace_context(payload)
     return {
         "tenant_id": _server_tenant_id(),
         "project_id": str(
@@ -339,8 +418,9 @@ def resolve_server_delegation_context(
         "taint_status": _server_taint_status(session_id or str(payload.get("origin_session_id") or "")),
         "budget_remaining_tokens": _server_budget_remaining_tokens(tid),
         "soul_mode": str(payload.get("soul_mode") or "compact"),
-        # W3-C/M1/M5: Trace, Warrant und Budget-Gewichtung serverseitig.
-        "trace_id": active_trace or str(payload.get("trace_id") or ""),
+        # W3-C/M1/M5: Warrant und Budget-Gewichtung serverseitig.
+        # D16/M2: kompletter W3C-Kontext (trace_id/span_id/traceparent) aus der SSOT.
+        **active_trace,
         "warrant_id": str(payload.get("warrant_id") or ""),
         **allocation,
     }
@@ -536,15 +616,43 @@ def _save_message_to_db(session_id: str, role: str, content: str, token_count: O
         logger.error(f"[Delegation] Fehler beim Speichern der Nachricht: {e}")
 
 
-def _register_decision(*args: Any, **kwargs: Any) -> Any:
+def _register_decision(
+    *args: Any,
+    trace_id: str = "",
+    span_id: str = "",
+    traceparent: str = "",
+    **kwargs: Any,
+) -> Any:
+    """Entscheidungs-Registrierung + D16/M5: Trace am Artefakt persistieren.
+
+    Die Signatur des konsumierenden ``main.register_decision`` bleibt unverändert
+    (nicht in diesem Dateibesitz); der Trace-Kontext geht über den eigenen
+    Kanban-Sidecar an dieselbe task_id. Damit ist das Vault-/Entscheidungs-
+    Artefakt ohne SQLite-Join einem Span zuordenbar.
+    """
     fn = _DEPS.get("register_decision")
-    if fn:
-        return fn(*args, **kwargs)
-    main_mod = sys.modules.get("main")
-    if main_mod and hasattr(main_mod, "register_decision"):
-        return main_mod.register_decision(*args, **kwargs)
-    logger.warning("[Delegation] register_decision nicht verfuegbar.")
-    return None
+    if not fn:
+        main_mod = sys.modules.get("main")
+        if main_mod and hasattr(main_mod, "register_decision"):
+            fn = main_mod.register_decision
+    result = fn(*args, **kwargs) if fn else None
+    if fn is None:
+        logger.warning("[Delegation] register_decision nicht verfuegbar.")
+    if trace_id or span_id or traceparent:
+        try:
+            from backend.kanban_sidecar import set_task_trace_context
+
+            ref_task = str(args[0] if args else kwargs.get("task_id") or "")
+            set_task_trace_context(
+                ref_task,
+                trace_id=trace_id,
+                span_id=span_id,
+                traceparent=traceparent,
+                source="delegation_review",
+            )
+        except Exception as exc:
+            logger.warning("[Delegation] Trace-Kontext im Sidecar nicht gespeichert: %s", exc)
+    return result
 
 
 _ORG_HIERARCHY_CACHE = {"mtime": 0.0, "nodes": {}, "aliases": {}, "loaded": False}
@@ -2082,6 +2190,10 @@ async def _watch_delegated_task(
                 except Exception:
                     _doss_dir = None
             if status in ("review", "blocked"):
+                # D16/M5: Vault ist die letzte Systemgrenze der Propagation.
+                # Der Trace-Kontext kommt aus derselben SSOT wie die signierte
+                # Übergabe — kein zweiter Root an der Dateisystemgrenze.
+                _vault_trace = _server_delegation_trace_context({})
                 _doss = None
                 if _doss_dir and (result or "").strip():
                     try:
@@ -2089,13 +2201,19 @@ async def _watch_delegated_task(
                         _doss = build_dossier_from_report(
                             f"{'Review' if status == 'review' else 'Blockiert'}: {final_title}",
                             result, _doss_dir, f"{clean_tid}_{status}",
-                            ref_id=task_id, quelle="Archon-Delegation")
+                            ref_id=task_id, quelle="Archon-Delegation",
+                            trace_id=_vault_trace["trace_id"],
+                            span_id=_vault_trace["span_id"],
+                            traceparent=_vault_trace["traceparent"])
                     except Exception as _de:
                         logger.warning(f"[Delegation] Dossier fehlgeschlagen: {_de}")
                 await asyncio.to_thread(
                     _register_decision, task_id, "delegation_review",
                     final_title, result, task_id, _doss, "", None,
-                    f"01_PROJEKTE/{obsidian_rel}" if obsidian_rel else None)
+                    f"01_PROJEKTE/{obsidian_rel}" if obsidian_rel else None,
+                    trace_id=_vault_trace["trace_id"],
+                    span_id=_vault_trace["span_id"],
+                    traceparent=_vault_trace["traceparent"])
             else:
                 from telegram_notify import notify_task_status
                 notify_task_status(task_id, status, final_title, result, obsidian_rel or "",
@@ -2218,14 +2336,18 @@ async def resume_pending_delegation_watchers() -> int:
                 except Exception:
                     _visited = []
                 _put_chain(_tid, tuple(str(x) for x in (_visited or [assignee]) if x), task_id=tid)
-            _spawn_background(
-                _watch_delegated_task(
-                    tid, tgt_sess, assignee or "default", origin_sess, delegator, project_id or None,
-                    acceptance_criteria=meta.get("acceptance_criteria"),
-                    reply_to=meta.get("reply_to"),
-                ),
-                name=f"bg_watch_{tid}",
-            )
+            # D16/M2: Der created-Event ist die einzige Quelle für den Trace
+            # nach einem Neustart. Der Kontext muss VOR dem Spawn stehen,
+            # damit asyncio.create_task() ihn in den Watcher kopiert.
+            with _resume_trace_context(meta):
+                _spawn_background(
+                    _watch_delegated_task(
+                        tid, tgt_sess, assignee or "default", origin_sess, delegator, project_id or None,
+                        acceptance_criteria=meta.get("acceptance_criteria"),
+                        reply_to=meta.get("reply_to"),
+                    ),
+                    name=f"bg_watch_{tid}",
+                )
             restarted += 1
         if restarted:
             logger.info(f"[Delegation] {restarted} offene(r) Delegations-Watcher nach Neustart fortgesetzt.")
@@ -2389,12 +2511,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         )
     except Exception as _warrant_exc:
         logger.error("[Delegation] Warrant-Vererbung fehlgeschlagen (fail-closed): %s", _warrant_exc)
-    try:
-        from backend.trace_context import current_trace_id
-
-        _active_trace_id = str(current_trace_id() or "")
-    except Exception:
-        _active_trace_id = ""
+    # D16/M2: kompletter W3C-Kontext aus der SSOT (nicht nur die Trace-ID),
+    # damit der created-Event den Resume nach Neustart/Cross-Prozess trägt.
+    _trace_ctx = _server_delegation_trace_context(payload)
 
     # D11-H2: EIN kanonisches, signiertes Payload als SSOT. Alle Felder, die
     # der Worker und der Watcher brauchen, gehen hier hinein; das created-Event
@@ -2422,7 +2541,9 @@ def _execute_delegation(delegator_id, payload, provider, all_keys, origin_sessio
         "allowed_skills": isolated_scope["allowed_skills"],
         "memory_acl": memory_acl,
         "memory_ttl_seconds": memory_ttl_seconds,
-        "trace_id": _active_trace_id,
+        "trace_id": _trace_ctx["trace_id"],
+        "span_id": _trace_ctx["span_id"],
+        "traceparent": _trace_ctx["traceparent"],
         "warrant_id": _warrant_id,
     }
     try:

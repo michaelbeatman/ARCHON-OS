@@ -117,6 +117,22 @@ export function getArchonTracestate(): string | null {
 }
 
 /**
+ * D16-M1: X-Trace-Id aus der Antwort uebernehmen. Der Header wird serverseitig
+ * ueber CORS exponiert; ohne diese Uebernahme bricht die Korrelation bei
+ * direkten Cross-Origin-Calls ab.
+ */
+let activeTraceId: string | null = null;
+
+export function setArchonTraceId(value: string | null | undefined): void {
+  const raw = (value || '').trim();
+  activeTraceId = /^[0-9a-f]{32}$/i.test(raw) ? raw.toLowerCase() : null;
+}
+
+export function getArchonTraceId(): string | null {
+  return activeTraceId;
+}
+
+/**
  * Zentraler Fetch-Wrapper: injiziert traceparent (+ tracestate, falls vorhanden),
  * ohne bereits gesetzte Header zu ueberschreiben. Ein vom Aufrufer mitgegebener
  * traceparent gewinnt immer (existierender Kontext darf nicht gekappt werden).
@@ -150,6 +166,7 @@ export async function tracedFetch(url: string, init?: RequestInit): Promise<Resp
   // Der Proxy gibt den fortgefuehrten Kontext zurueck -> naechster Hop erbt ihn.
   setArchonTraceparent(res.headers.get('traceparent'));
   setArchonTracestate(res.headers.get('tracestate'));
+  setArchonTraceId(res.headers.get('X-Trace-Id'));
   return res;
 }
 

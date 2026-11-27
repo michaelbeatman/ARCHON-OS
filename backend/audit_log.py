@@ -17,9 +17,7 @@ import json
 import logging
 import os
 import sqlite3
-import sys
 import threading
-import time
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -425,6 +423,39 @@ def _trace_id_from_event_context(payload: Any, _depth: int = 0) -> str:
     return ""
 
 
+def _span_id_from_event_context(
+    payload: Any, expected_trace_id: str = "", _depth: int = 0
+) -> str:
+    """D16/M3: Span-ID aus Receipt-/Event-Kontext — nie neu erfinden.
+
+    Analog zu :func:`_trace_id_from_event_context`. Ein ``traceparent`` wird
+    nur übernommen, wenn seine Trace-ID zum schon aufgelösten Trace passt;
+    sonst entstünde eine Schein-Kante in einen fremden Trace.
+    """
+    if not isinstance(payload, dict) or _depth > 2:
+        return ""
+    direct = str(payload.get("span_id") or "").strip()
+    if direct:
+        return direct
+    tp = str(payload.get("traceparent") or "").strip()
+    if tp:
+        try:
+            from backend.trace_context import parse_traceparent
+
+            parsed = parse_traceparent(tp)
+            if parsed and (not expected_trace_id or parsed[0] == expected_trace_id):
+                return parsed[1]
+        except Exception:
+            pass
+    for key in _TRACE_CONTEXT_KEYS:
+        nested = payload.get(key)
+        if isinstance(nested, dict):
+            found = _span_id_from_event_context(nested, expected_trace_id, _depth + 1)
+            if found:
+                return found
+    return ""
+
+
 class ChainedAuditLog:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
@@ -549,6 +580,7 @@ class ChainedAuditLog:
                         target_endpoint TEXT DEFAULT '',
                         egress_zone TEXT DEFAULT '',
                         trace_id TEXT DEFAULT '',
+                        span_id TEXT DEFAULT '',
                         session_id TEXT DEFAULT '',
                         correlation_id TEXT DEFAULT '',
                         payload_json TEXT NOT NULL,
@@ -583,7 +615,7 @@ class ChainedAuditLog:
 
                 for dispatch_col in (
                     "provider", "model", "target_host", "target_endpoint", "egress_zone",
-                    "trace_id", "session_id", "correlation_id",
+                    "trace_id", "span_id", "session_id", "correlation_id",
                 ):
                     if dispatch_col not in existing_cols:
                         conn.execute(f"ALTER TABLE audit_log ADD COLUMN {dispatch_col} TEXT DEFAULT ''")
@@ -592,6 +624,8 @@ class ChainedAuditLog:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_target_host ON audit_log(target_host)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_company_id ON audit_log(company_id)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_trace_id ON audit_log(trace_id)")
+                # D16/M3: Span→Audit direkt (ohne Join über otel_spans).
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_span_id ON audit_log(span_id)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_session_id ON audit_log(session_id)")
 
                 # P1: Append-only. Ohne Trigger konnte jemand mit DB-Schreibzugriff
@@ -627,6 +661,7 @@ class ChainedAuditLog:
         payload: Dict[str, Any],
         *,
         trace_id: str = "",
+        span_id: str = "",
         session_id: str = "",
         correlation_id: str = "",
     ) -> Dict[str, Any]:
@@ -641,20 +676,42 @@ class ChainedAuditLog:
         # Audit D16: ohne expliziten Parameter den aktiven W3C-Trace aus
         # contextvars übernehmen — damit Audit-Eintrag und OTel-/HTTP-Trace
         # dieselbe Korrelations-ID tragen.
-        from backend.trace_context import current_trace_id as _current_trace_id
+        from backend.trace_context import (
+            current_span_id as _current_span_id,
+        )
+        from backend.trace_context import (
+            current_trace_id as _current_trace_id,
+        )
 
         # D16: Reihenfolge — expliziter Parameter > Receipt-/Event-Kontext >
         # aktiver Request-Kontext. Kein Fallback auf neu generierte IDs.
+        _active_trace_id = str(_current_trace_id() or "").strip()
         trace_id_val = str(
             trace_id
             or _trace_id_from_event_context(safe_payload)
-            or _current_trace_id()
+            or _active_trace_id
+            or ""
+        ).strip()
+        # D16/M3: dieselbe Reihenfolge für die Span-ID. Explizit gesetzt
+        # (vom geforkten Hop-Span) > Event-Kontext > aktiver Span. Ein
+        # fremder aktiver Span wird nie an einen Event-Trace gehängt.
+        _active_span_id = str(_current_span_id() or "").strip()
+        if _active_trace_id and trace_id_val and _active_trace_id != trace_id_val:
+            _active_span_id = ""
+        span_id_val = str(
+            span_id
+            or _span_id_from_event_context(safe_payload, trace_id_val)
+            or _active_span_id
             or ""
         ).strip()
         session_id_val = str(session_id or safe_payload.get("session_id") or "").strip()
         correlation_id_val = str(correlation_id or safe_payload.get("correlation_id") or "").strip()
         if trace_id_val and "trace_id" not in safe_payload:
             safe_payload["trace_id"] = trace_id_val
+        # Im signierten payload_json — damit ist span_id im HMAC-Input
+        # (raw_str enthält payload_str) und nicht bloss in einer Index-Spalte.
+        if span_id_val and "span_id" not in safe_payload:
+            safe_payload["span_id"] = span_id_val
         if session_id_val and "session_id" not in safe_payload:
             safe_payload["session_id"] = session_id_val
         if correlation_id_val and "correlation_id" not in safe_payload:
@@ -730,6 +787,7 @@ class ChainedAuditLog:
                     "target_endpoint": target_ep_val,
                     "egress_zone": egress_zone_val,
                     "trace_id": trace_id_val,
+                    "span_id": span_id_val,
                     "session_id": session_id_val,
                     "correlation_id": correlation_id_val,
                     "payload_json": payload_str,
@@ -794,6 +852,7 @@ class ChainedAuditLog:
         prompt_tokens: Optional[int] = None,
         completion_tokens: Optional[int] = None,
         trace_id: str = "",
+        span_id: str = "",
         session_id: str = "",
         correlation_id: str = "",
     ) -> Dict[str, Any]:
@@ -895,6 +954,7 @@ class ChainedAuditLog:
             agent_id=str(agent_id or "system"),
             payload=payload,
             trace_id=trace_id,
+            span_id=span_id,
             session_id=session_id,
             correlation_id=correlation_id,
         )
@@ -927,10 +987,10 @@ class ChainedAuditLog:
                     select_cols.extend(["provider", "model", "target_host", "target_endpoint", "egress_zone"])
                 has_correlation_cols = all(
                     c in getattr(self, "cols", set())
-                    for c in ("trace_id", "session_id", "correlation_id")
+                    for c in ("trace_id", "span_id", "session_id", "correlation_id")
                 )
                 if has_correlation_cols:
-                    select_cols.extend(["trace_id", "session_id", "correlation_id"])
+                    select_cols.extend(["trace_id", "span_id", "session_id", "correlation_id"])
 
                 # F-08: Append-only Trigger-Existenz pruefen.
                 existing_triggers = {

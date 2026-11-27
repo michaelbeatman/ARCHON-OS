@@ -111,6 +111,17 @@ def run_readiness_sync_checks(get_state_db: Callable[[], Any]) -> List[str]:
             problems.append(f"loop_lock_unavailable: {len(_lock_failures)}")
     except Exception as exc:
         problems.append(f"loop_lock_check: {exc}")
+    try:
+        # D10-M8: NETWORKS=0 oder Internal=false darf nicht still als Erfolg
+        # durchgehen — der Startup-Hook meldet den Fehler hier an /readyz.
+        from archon.services.shutdown_clients import _ZERO_EGRESS_NETWORK_STATUS
+
+        if _ZERO_EGRESS_NETWORK_STATUS.get("status") == "failed":
+            problems.append(
+                f"zero_egress_worker_net: {_ZERO_EGRESS_NETWORK_STATUS.get('detail')}"
+            )
+    except Exception as exc:
+        problems.append(f"zero_egress_net_check: {exc}")
     return problems
 
 

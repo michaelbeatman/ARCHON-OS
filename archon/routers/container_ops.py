@@ -1,7 +1,5 @@
 """Router fuer Container Execution & Agent Kill-Switch."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import logging
 import os
@@ -12,7 +10,10 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 from pydantic import BaseModel
+
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 logger = logging.getLogger("archon.routers.container_ops")
 
@@ -159,7 +160,6 @@ def send_prompt_to_agent(
 
     last_err = ""
     ai_resp = None
-    used_url = ""
     for url in urls:
         try:
             # P0-4/PII: falsche Keyword-Argumente fuehrten zu TypeError; die
@@ -180,24 +180,28 @@ def send_prompt_to_agent(
                 "stream": False,
             }
             req_headers = dict(headers)
-            try:
-                from backend.trace_context import inject_headers as _inject_trace_headers
-                req_headers = _inject_trace_headers(req_headers)
-            except Exception:
-                pass
-            with httpx.Client(timeout=40.0) as client:
-                res = client.post(url, json=payload, headers=req_headers)
-                log_completed_llm_dispatch(
-                    agent_id=agent_name,
-                    provider=str(gate.get("provider") or "omniroute"),
-                    model=target_model,
-                    target_endpoint=url,
-                    http_status=res.status_code,
-                    data_category=gate.get("data_category", "general"),
-                    zero_egress_active=bool(gate.get("zero_egress_active")),
-                )
+            # D16-H1 (Re-Audit): inject_headers() ausserhalb eines Child-Spans
+            # traegt die Span-ID des Senders in den traceparent (Self-Parenting).
+            # Fork wie in api_provider.py:256-258; HTTP-Call und Audit laufen im
+            # Child-Kontext, danach stellt child_span() den Parent wieder her.
+            from backend.trace_context import child_span, inject_headers
+
+            with child_span() as (hop_tid, hop_sid, parent_sid):
+                req_headers = inject_headers(req_headers)
+                with httpx.Client(timeout=40.0) as client:
+                    res = client.post(url, json=payload, headers=req_headers)
+                    log_completed_llm_dispatch(
+                        agent_id=agent_name,
+                        provider=str(gate.get("provider") or "omniroute"),
+                        model=target_model,
+                        target_endpoint=url,
+                        http_status=res.status_code,
+                        data_category=gate.get("data_category", "general"),
+                        zero_egress_active=bool(gate.get("zero_egress_active")),
+                        trace_id=hop_tid,
+                        extra={"span_id": hop_sid, "parent_span_id": parent_sid or ""},
+                    )
                 if res.status_code == 200:
-                    used_url = url
                     try:
                         data = res.json()
                         if isinstance(data, dict) and "choices" in data and len(data["choices"]) > 0:
@@ -255,9 +259,9 @@ class ContainerExecRequest(BaseModel):
 @router.post("/api/v1/container/exec")
 def exec_container_command_api(req: ContainerExecRequest, request: Request):
     _require_admin(request)
+    from archon.core.provider_registry import get_provider
     from backend.llm_egress_guard import ZeroEgressBlockedError
 
-    from archon.core.provider_registry import get_provider
     app_main = get_provider("app_main")
 
     load_agent_configs_fn = getattr(app_main, "load_agent_configs", None)

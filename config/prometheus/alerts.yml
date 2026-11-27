@@ -22,13 +22,22 @@
 # Die In-App-Alarmierung (metrics_collector.py: Dedup + Auto-Resolve) bleibt
 # zusaetzlich aktiv. Prometheus-Retention: 30d (--storage.tsdb.retention.time=30d).
 #
-# Audit D10/F043 — Chaos-Suite: ES GIBT KEINE Prometheus-Metrik
-# `chaos_db_lock_errors` / `chaos_restart_sla_violations`; metrics_collector.py
-# exportiert sie nicht. Statt einen erfundenen Metriknamen zu alarmieren,
-# laeuft die Suite als harter CI-Gate und 6-h-Cron (Ansible archon_node):
-# scripts/chaos_tester.py exit 1 bei SLA-Bruch (>= 15 s) oder Lock-Fehler.
-# Die echten Werte stehen unter GET /api/operations/chaos/results und in
-# data/chaos_test_results.json. Bitte hier keine Schein-Alerts ergaenzen.
+# Audit D10/F043 + W5-B — Chaos-Suite / Gate-Vertrag:
+# ES GIBT KEINE Prometheus-Metrik `chaos_db_lock_errors` /
+# `chaos_restart_sla_violations`; metrics_collector.py exportiert sie nicht.
+# Statt einen erfundenen Metriknamen zu alarmieren, ist der Gate der
+# Exit-Code der Skripte (Details: docs/system/AUTOMATED_RESTORE_TEST_GUIDE.md §6):
+#   * scripts/chaos_tester.py -> exit 0 NUR wenn tests_failed == 0 UND
+#     tests_skipped == 0. Die SLA wird vom simulierten Ausfall (t_fail) bis
+#     zum ersten /livez-200 (t_recovered) gemessen; Bruch bei >= 15 s.
+#     Ein Dry-Run ist 'skipped' und bricht den Gate (exit 1).
+#   * scripts/automated_restore_test.py -> exit 0 NUR bei overall_status=PASSED,
+#     inklusive echtem `litestream restore` je Replikat und Frische-Gate.
+# REALITAET: .github/workflows/ci.yml ruft derzeit NUR automated_restore_test.py;
+# chaos_tester.py ist dort NICHT verdrahtet (fruehere Behauptung "harter CI-Gate"
+# war falsch). Der Chaos-Lauf muss ueber den Ansible-6-h-Cron bzw. einen
+# expliziten CI-Step getriggert werden. Bis dahin darf kein Bericht einen
+# bereits aktiven CI-Gate behaupten. Bitte hier keine Schein-Alerts ergaenzen.
 
 groups:
   - name: archon-heartbeat

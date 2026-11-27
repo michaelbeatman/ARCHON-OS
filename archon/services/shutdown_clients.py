@@ -23,6 +23,13 @@ _N8N_STARTUP_STATUS: Dict[str, Any] = {
     "detail": "opt-in via ARCHON_N8N_STARTUP_IMPORT=1",
 }
 
+# D10-M8: Status der Zero-Egress-Worker-Netze fuer /readyz (identisches Objekt).
+_ZERO_EGRESS_NETWORK_STATUS: Dict[str, Any] = {
+    "status": "not_checked",
+    "detail": "",
+    "networks": [],
+}
+
 
 def _harden_secret_permissions() -> None:
     """Setzt 600 auf Secret-Dateien (.env, Tokens) und meldet Verstoss-Funde."""
@@ -46,13 +53,22 @@ def _harden_secret_permissions() -> None:
 
 def _ensure_zero_egress_worker_networks() -> None:
     """Stellt beim Start sicher, dass die isolierten Worker-/Sandbox-Docker-Netzwerke bereitstehen."""
-    try:
-        from backend.llm_egress_guard import ensure_worker_zero_egress_network
+    from backend.llm_egress_guard import ensure_worker_zero_egress_network
 
-        ensure_worker_zero_egress_network("archon-worker-zero-egress_net")
-        ensure_worker_zero_egress_network("archon-sandbox_net")
+    checked: list[str] = []
+    try:
+        for name in ("archon-worker-zero-egress_net", "archon-sandbox_net"):
+            status = ensure_worker_zero_egress_network(name)
+            checked.append(f"{name}:internal={status.get('internal_no_internet_route')}")
+        _ZERO_EGRESS_NETWORK_STATUS.update(
+            status="ok", detail="; ".join(checked), networks=checked
+        )
     except Exception as e:
-        logger.warning(f"[ZeroEgress] Worker-Netzwerk-Init fehlgeschlagen: {e}")
+        _ZERO_EGRESS_NETWORK_STATUS.update(
+            status="failed", detail=f"{type(e).__name__}: {e}", networks=checked
+        )
+        logger.error(f"[ZeroEgress] Worker-Netzwerk-Init fehlgeschlagen: {e}")
+        raise
 
 
 async def _import_n8n_workflows_on_startup() -> None:

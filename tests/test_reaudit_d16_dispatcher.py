@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """Re-Audit D16 (R-B6 / H2, H3, H5): Trace-Kontext im Dispatcher-/Provider-Pfad.
 
-Statische Pruefung: jeder ausgehende httpx-/urllib-Call in den drei
+Statische Pruefung: jeder ausgehende httpx-/urllib-Call in den vier
 Produktivdateien hat eine inject_headers()-Quelle innerhalb eines
 child_span()-Blocks. Dynamische Pruefung: der Fehlerpfad von record_span()
-meldet ueber note_local_trace_error().
+meldet ueber note_local_trace_error(). W5-E ergaenzt container_ops.py:
+der OmniRoute-/Lokal-LLM-Fallback-Dispatch war der einzige Hop ohne
+Child-Span (Self-Parenting).
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ OWNED_FILES = (
     "core_dispatcher.py",
     "backend/agent_router.py",
     "api_provider.py",
+    "archon/routers/container_ops.py",
 )
 
 OUTBOUND_METHODS = {"post", "put", "patch", "request", "urlopen"}
@@ -66,10 +69,22 @@ def _is_descendant(node: ast.AST, ancestor: ast.AST) -> bool:
 def test_every_outbound_call_has_inject_headers_inside_child_span(relative_path):
     """Jeder httpx-/urllib-Call muss im selben Scope injizieren, und zwar im Block."""
     _source, tree, parents = _parse(relative_path)
+    # FastAPI-Router-Dekoratoren (@router.post(...)) sind keine outbound Calls.
+    # container_ops.py enthaelt zwei davon; ohne diesen Filter wuerden die
+    # Endpoint-Funktionen faelschlich als HTTP-Hops geprueft.
+    decorators = {
+        dec
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        for dec in node.decorator_list
+        if isinstance(dec, ast.Call)
+    }
     outbound = [
         node
         for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and _call_name(node) in OUTBOUND_METHODS
+        if isinstance(node, ast.Call)
+        and node not in decorators
+        and _call_name(node) in OUTBOUND_METHODS
     ]
     assert outbound, f"Kein outbound Call in {relative_path} gefunden (Test veraltet?)"
 
@@ -153,8 +168,13 @@ def test_child_span_injects_new_span_id_not_parent():
 def test_dispatch_trace_close_error_calls_note_local_trace_error(monkeypatch):
     """H5 dynamisch: record_span() wirft -> note_local_trace_error() wird gerufen."""
     import core_dispatcher as cd
-    from backend import concurrency_throttle, otel_tracer, role_budget_engine
-    from backend import semantic_cache, trace_context
+    from backend import (
+        concurrency_throttle,
+        otel_tracer,
+        role_budget_engine,
+        semantic_cache,
+        trace_context,
+    )
 
     recorded: list[tuple[str, BaseException]] = []
 
@@ -209,6 +229,13 @@ def test_dispatch_trace_close_error_calls_note_local_trace_error(monkeypatch):
     )
     assert result["status"] == "success"
     assert recorded, "note_local_trace_error wurde bei record_span-Fehler nicht gerufen"
-    stage, exc = recorded[0]
-    assert stage == "dispatch-trace-close"
+    # W5-E: der Dispatcher oeffnet inzwischen weitere Child-Spans; ein
+    # vorausgegangener ``child-span-hop``-Fehler darf die Pruefung des
+    # Abschlussfehlers nicht verdecken. relevant ist, dass der Stage
+    # ``dispatch-trace-close`` mit derselben Ausnahme gezaehlt wurde.
+    stages = [stage for stage, _ in recorded]
+    assert "dispatch-trace-close" in stages, (
+        f"dispatch-trace-close nicht gezaehlt (Stages: {stages})"
+    )
+    exc = next(exc for stage, exc in recorded if stage == "dispatch-trace-close")
     assert isinstance(exc, RuntimeError) and str(exc) == "export-down"

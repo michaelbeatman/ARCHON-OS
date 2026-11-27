@@ -389,6 +389,7 @@ def log_completed_llm_dispatch(
     zero_egress_active: bool = False,
     task_id: str = "",
     trace_id: str = "",
+    span_id: str = "",
     extra: Optional[Dict[str, Any]] = None,
     audit_logger: Any = None,
 ) -> Dict[str, Any]:
@@ -401,6 +402,15 @@ def log_completed_llm_dispatch(
             resolved_tid = current_trace_id()
         except Exception:
             resolved_tid = ""
+    # D16-M3: der Hop-Span muss explizit mitgehen, sonst korreliert der Audit
+    # den Eltern- statt den tatsaechlich ausgeführten LLM-Span.
+    resolved_sid = (span_id or "").strip()
+    if not resolved_sid:
+        try:
+            from backend.trace_context import current_span_id
+            resolved_sid = current_span_id()
+        except Exception:
+            resolved_sid = ""
     merged_extra: Dict[str, Any] = dict(extra) if isinstance(extra, dict) else {}
     if task_id:
         merged_extra["task_id"] = task_id
@@ -414,6 +424,7 @@ def log_completed_llm_dispatch(
         http_status=int(http_status),
         zero_egress_active=zero_egress_active,
         trace_id=resolved_tid,
+        span_id=resolved_sid,
         extra=merged_extra,
     )
 
@@ -578,6 +589,10 @@ def ensure_worker_zero_egress_network(network_name: str = ZERO_EGRESS_WORKER_NET
     """Legt das isolierte Worker-Docker-Netzwerk (`--internal`, ohne Internet-Route) idempotent an."""
     status = inspect_worker_network_isolation(network_name)
     if status.get("exists"):
+        if not status.get("internal_no_internet_route"):
+            raise RuntimeError(
+                f"worker_zero_egress_network_not_internal: {network_name} ({status})"
+            )
         return status
     try:
         from utils.docker_client import docker_cli_host_args
@@ -588,7 +603,14 @@ def ensure_worker_zero_egress_network(network_name: str = ZERO_EGRESS_WORKER_NET
         subprocess.run(cmd, capture_output=True, text=True, timeout=10)
     except Exception as _exc:
         logger.debug("[llm_egress_guard] Ignorierte Ausnahme (Z.316): %s", _exc)
-    return inspect_worker_network_isolation(network_name)
+    status = inspect_worker_network_isolation(network_name)
+    # D10-M8: fehlendes oder nicht-internes Netz ist KEIN „erfolgreicher Hook" —
+    # der Startup-Hook bekommt einen harten Fehler und /readyz wird 503.
+    if not status.get("exists") or not status.get("internal_no_internet_route"):
+        raise RuntimeError(
+            f"worker_zero_egress_network_unavailable: {network_name} ({status})"
+        )
+    return status
 
 
 def audit_zero_egress_posture(audit_logger: Any = None) -> Dict[str, Any]:

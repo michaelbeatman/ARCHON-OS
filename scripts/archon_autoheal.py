@@ -28,12 +28,22 @@ import urllib.request
 
 TARGET = os.environ.get("AUTOHEAL_TARGET_URL", "http://archon-os:8501/livez").strip()
 CONTAINER = os.environ.get("AUTOHEAL_CONTAINER", "ARCHON-OS").strip()
-INTERVAL = max(5.0, float(os.environ.get("AUTOHEAL_INTERVAL_S", "30")))
-FAILURES = max(2, int(os.environ.get("AUTOHEAL_FAILURES", "5")))
+# D10-H1: Restart-SLA < 15 s. Der alte Default (30 s Intervall × 5
+# Fehlschlaege = 150 s nur fuer die Erkennung) hat die SLA unmoeglich gemacht.
+# 5 s × 2 Fehlschlaege = 10 s Erkennung, plus maximal 2 s Probe-Timeout.
+INTERVAL = max(1.0, float(os.environ.get("AUTOHEAL_INTERVAL_S", "5")))
+FAILURES = max(2, int(os.environ.get("AUTOHEAL_FAILURES", "2")))
 COOLDOWN = max(60.0, float(os.environ.get("AUTOHEAL_COOLDOWN_S", "900")))
-PROBE_TIMEOUT = max(1.0, float(os.environ.get("AUTOHEAL_PROBE_TIMEOUT_S", "5")))
-HEALTH_GATE = os.environ.get("AUTOHEAL_HEALTH_GATE", "1").strip() not in ("0", "false", "no")
-WATCHDOG_MAX_AGE = max(30.0, float(os.environ.get("AUTOHEAL_WATCHDOG_MAX_AGE_S", "120")))
+PROBE_TIMEOUT = max(1.0, float(os.environ.get("AUTOHEAL_PROBE_TIMEOUT_S", "2")))
+# Der Docker-Healthcheck braucht ~90 s (interval 30 s × 3 retries). Ein zusaetz-
+# liches Abwarten auf `unhealthy` wuerde die SLA zerstören. /livez 503 ist der
+# autoritative Gesundheitsbeweis; der Gate ist bewusst Opt-in fuer Betreiber,
+# die eine langsamere, aber konservativere Erkennung wollen.
+HEALTH_GATE = os.environ.get("AUTOHEAL_HEALTH_GATE", "0").strip() not in ("0", "false", "no")
+WATCHDOG_MAX_AGE = max(30.0, float(os.environ.get("AUTOHEAL_WATCHDOG_MAX_AGE_S", "60")))
+# Kurzes SIGTERM-Fenster: Docker wartet ohne ?t bis zu 10 s, das allein wuerde
+# das SLA-Budget aufbrauchen. Der Socket-Proxy erlaubt stop mit Query-String.
+STOP_GRACE_S = max(1, int(os.environ.get("AUTOHEAL_STOP_GRACE_S", "2")))
 
 _DOCKER_HOST = os.environ.get("DOCKER_HOST", "tcp://docker-socket-proxy:2375")
 _DOCKER_BASE = "http://" + _DOCKER_HOST.replace("tcp://", "").replace("http://", "").rstrip("/")
@@ -129,9 +139,15 @@ def container_state() -> dict:
 
 
 def _do_restart() -> bool:
-    """stop+start ueber den Proxy; nur bei Erfolg Cooldown/Zaehler zuruecksetzen."""
+    """stop+start ueber den Proxy; nur bei Erfolg Cooldown/Zaehler zuruecksetzen.
+
+    D10-H1: ``stop?t=<n>`` begrenzt das SIGTERM-Fenster. Ohne Query-String wartet
+    Docker bis zu 10 s, bevor es SIGKILL sendet — damit ist die 15-s-SLA kaum
+    noch erreichbar. Der Proxy gibt ``POST /containers/<name>/stop?t=<n>`` frei
+    (siehe utils/docker_client.py:_ADMIN_ALLOWED).
+    """
     try:
-        docker_request("POST", f"/containers/{CONTAINER}/stop")
+        docker_request("POST", f"/containers/{CONTAINER}/stop?t={STOP_GRACE_S}")
         docker_request("POST", f"/containers/{CONTAINER}/start")
         log("Neustart ausgeloest; Cooldown aktiv")
         return True
@@ -143,7 +159,7 @@ def _do_restart() -> bool:
 def main() -> None:
     log(f"gestartet: target={TARGET} container={CONTAINER} "
         f"failures={FAILURES} interval={INTERVAL}s cooldown={COOLDOWN}s health_gate={HEALTH_GATE} "
-        f"watchdog_max_age={WATCHDOG_MAX_AGE}s")
+        f"watchdog_max_age={WATCHDOG_MAX_AGE}s stop_grace={STOP_GRACE_S}s")
     consecutive = 0
     last_action = 0.0
     time.sleep(15.0)  # Startphase des Ziels nicht als Hang fehlinterpretieren

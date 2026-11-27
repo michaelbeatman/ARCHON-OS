@@ -19,14 +19,15 @@ scrape_configs:
           __path__: /opt/data/logs/*.log
     pipeline_stages:
       - regex:
-          # Re-Audit H7: "timestamp - logger - level - [trace_id=<32hex>] message".
-          # backend/trace_log_filter.py setzt das Prefix aus current_trace_id().
-          # Ohne Kontext bleibt trace_id leer und die Zeile trotzdem lesbar.
-          expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:,\d+)?)\s*-\s*(?P<logger>[^\s]+)\s*-\s*(?P<level>[A-Z]+)\s*-\s*(?:\[trace_id=(?P<trace_id>[0-9a-f]{32})\]\s*)?(?P<message>.*)$'
+          # W5-F/M4: "timestamp - logger - level - [trace_id=<32hex> span_id=<16hex>] message".
+          # backend/trace_log_filter.py setzt das Prefix aus current_trace_id()/current_span_id().
+          # span_id ist optional (Kontext ohne Span); ohne Kontext bleibt beides leer.
+          expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:,\d+)?)\s*-\s*(?P<logger>[^\s]+)\s*-\s*(?P<level>[A-Z]+)\s*-\s*(?:\[trace_id=(?P<trace_id>[0-9a-f]{32})(?:\s+span_id=(?P<span_id>[0-9a-f]{16}))?\]\s*)?(?P<message>.*)$'
       - labels:
           level:
           logger:
           trace_id:
+          span_id:
 
   - job_name: docker-containers
     docker_sd_configs:

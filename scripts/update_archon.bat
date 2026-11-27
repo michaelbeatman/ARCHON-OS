@@ -6,6 +6,17 @@ echo ===========================================================================
 echo.
 cd /d "%~dp0\.."
 
+echo.
+echo [0/3] Compose-Vertrag pruefen (Audit D10-M6: kein Override-Bypass)...
+docker compose -f docker-compose.yml config --quiet
+if errorlevel 1 (
+  echo.
+  echo [FEHLER] docker-compose.yml ungueltig oder Pflicht-Env fehlt.
+  echo Bitte .env pruefen; Abbruch ohne Container-Aenderung.
+  pause
+  exit /b 1
+)
+
 echo [1/3] Pruefe System und erstelle Sicherheits-Snapshot...
 python backend\system_updater.py --apply
 if errorlevel 1 (
@@ -21,7 +32,7 @@ echo [2/3] Synchronisiere Docker Container...
 docker restart ARCHON-OS 2>nul
 if errorlevel 1 (
   echo [INFO] ARCHON-OS laeuft lokal oder Docker Compose wird genutzt:
-  docker compose up -d --remove-orphans archon-os 2>nul
+  docker compose -f docker-compose.yml up -d --remove-orphans archon-os 2>nul
 )
 
 echo.

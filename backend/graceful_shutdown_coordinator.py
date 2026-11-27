@@ -3,19 +3,20 @@ backend/graceful_shutdown_coordinator.py
 Sauberes Herunterfahren mit Task-Draining & Durable Checkpointing (t-12113b, Pillar 1 & 2).
 - Verwaltet Draining-Zustand des Systems (RUNNING -> DRAINING -> CHECKPOINTING -> FLUSHING_WAL -> TERMINATED).
 - Verhindert neue Hintergrund-Jobs während des Draining-Fensters.
-- Lässt aktive Kurzläufer innerhalb einer Grace-Period (Standard: 15s) geordnet auslaufen.
+- Lässt aktive Kurzläufer innerhalb einer Grace-Period (Standard: 5s, D10-M7) geordnet auslaufen.
 - Sichert noch laufende Langläufer als transaktionale Checkpoints in SQLite (`durable_workflow_checkpoints`).
 - Flusht alle SQLite WAL-Logs (`PRAGMA wal_checkpoint(TRUNCATE)`) und den Async-Write-Batcher vor dem Exit.
 - Stellt unterbrochene Tasks beim Systemstart automatisch wieder her.
 """
 
-import json
+import asyncio
+import datetime
 import logging
 import os
-import signal
 import sqlite3
 import sys
 import time
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +54,16 @@ class _ArchonClosingConn(sqlite3.Connection):
             super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
-import asyncio
-import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
+
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# D10-M7: das Drain-Fenster und die beiden Folgephasen dürfen den
+# Lifespan-Shutdown nicht unbegrenzt blockieren (früher 15 s Drain ohne
+# Phase-Limit). Die Phasen laufen in to_thread; wait_for begrenzt nur das
+# Warten, nicht den Worker-Thread — der Shutdown macht aber weiter.
+_MAX_DRAIN_GRACE_SECONDS = 5.0
+_SHUTDOWN_PHASE_TIMEOUT_SECONDS = 5.0
 
 
 class GracefulShutdownCoordinator:
@@ -65,7 +71,7 @@ class GracefulShutdownCoordinator:
         self._is_draining = False
         self._draining_reason = ""
         self._draining_started_at: Optional[float] = None
-        self._default_grace_seconds = 15.0
+        self._default_grace_seconds = _MAX_DRAIN_GRACE_SECONDS
         self._active_tasks: Dict[str, Dict[str, Any]] = {}
         self._lock = asyncio.Lock() if sys.version_info >= (3, 7) else None
         # D07/MED: gescheiterte Checkpoints/Resumes bleiben nachvollziehbar.
@@ -82,7 +88,15 @@ class GracefulShutdownCoordinator:
         self._draining_reason = reason
         self._draining_started_at = time.time()
         if grace_seconds is not None:
-            self._default_grace_seconds = float(grace_seconds)
+            requested = float(grace_seconds)
+            # D10-M7: AUC ein explizit uebergebenes Fenster darf die Obergrenze
+            # nicht durchbrechen (sonst waere der Lifespan wieder 60 s blockiert).
+            self._default_grace_seconds = min(requested, _MAX_DRAIN_GRACE_SECONDS)
+            if requested > _MAX_DRAIN_GRACE_SECONDS:
+                logger.warning(
+                    "[GracefulShutdown] Grace-Period %.1fs auf %.1fs begrenzt (D10-M7).",
+                    requested, _MAX_DRAIN_GRACE_SECONDS,
+                )
 
         print(f"[GracefulShutdown] Draining aktiviert: '{reason}' (Grace-Period: {self._default_grace_seconds}s)")
         return {
@@ -431,11 +445,47 @@ class GracefulShutdownCoordinator:
         }
 
     async def execute_graceful_shutdown(self, reason: str = "Server shutdown", grace_seconds: Optional[float] = None) -> Dict[str, Any]:
-        """Vollständige asynchrone Orchestrierung: Draining -> Grace Wait -> Checkpointing -> WAL-Flush."""
+        """Vollständige asynchrone Orchestrierung: Draining -> Grace Wait -> Checkpointing -> WAL-Flush.
+
+        D10-M7: jede Phase hat ein eigenes Zeitfenster (Drain <= 5 s,
+        Checkpoint/WAL-Flush je <= 5 s) und meldet einen Timeout als Audit,
+        statt den Lifespan-Shutdown zu blockieren.
+        """
         self.start_draining(reason=reason, grace_seconds=grace_seconds)
-        drain_result = await self.drain_active_tasks(timeout_seconds=grace_seconds)
-        checkpoints = await asyncio.to_thread(self.checkpoint_remaining_tasks)
-        flush_result = await asyncio.to_thread(self.flush_all_databases)
+        drain_result = await asyncio.wait_for(
+            self.drain_active_tasks(timeout_seconds=self._default_grace_seconds),
+            timeout=_MAX_DRAIN_GRACE_SECONDS + 0.5,
+        )
+
+        try:
+            checkpoints = await asyncio.wait_for(
+                asyncio.to_thread(self.checkpoint_remaining_tasks),
+                timeout=_SHUTDOWN_PHASE_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError as exc:
+            checkpoints = []
+            logger.error("[GracefulShutdown] Checkpoint-Phase Timeout: %s", exc)
+            _audit_recovery("shutdown_phase_timeout", {
+                "phase": "checkpoint",
+                "timeout_seconds": _SHUTDOWN_PHASE_TIMEOUT_SECONDS,
+            })
+
+        try:
+            flush_result = await asyncio.wait_for(
+                asyncio.to_thread(self.flush_all_databases),
+                timeout=_SHUTDOWN_PHASE_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError as exc:
+            flush_result = {
+                "status": "error",
+                "flushed_databases": [],
+                "errors": [f"phase_timeout: {exc}"],
+            }
+            logger.error("[GracefulShutdown] WAL-Flush-Phase Timeout: %s", exc)
+            _audit_recovery("shutdown_phase_timeout", {
+                "phase": "wal_flush",
+                "timeout_seconds": _SHUTDOWN_PHASE_TIMEOUT_SECONDS,
+            })
 
         return {
             "status": "shutdown_ready",

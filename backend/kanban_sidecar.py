@@ -14,15 +14,15 @@ Regeln:
 - Die Engine-DB (kanban.db) bleibt unberuehrt — nur der Sidecar.
 - Dieses Modul importiert NICHTS aus backend (Blatt-Modul, keine Zyklen).
 """
-import logging
-
-_archon_exc_logger = logging.getLogger("kanban_sidecar")
-
 import json
+import logging
 import os
+import re
 import tempfile
 import threading
 from contextlib import contextmanager
+
+_archon_exc_logger = logging.getLogger("kanban_sidecar")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KANBAN_META_FILE = os.path.join(WORKSPACE_DIR, "config", "kanban_meta.json")
@@ -139,3 +139,59 @@ def update_kanban_meta(mutator):
             )
         _write_atomic(meta)
         return meta, result
+
+
+# D16/M5: Der Kanban-Sidecar ist die letzte Systemgrenze, an der ein
+# Vault-/Entscheidungs-Artefakt ohne SQLite-Join einem Span zugeordnet werden
+# kann. Nur validierte W3C-IDs — nie erfundene Roots.
+_TRACE_ID_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
+_SPAN_ID_RE = re.compile(r"^[0-9a-f]{16}$", re.IGNORECASE)
+_TRACEPARENT_RE = re.compile(
+    r"^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$", re.IGNORECASE
+)
+
+
+def set_task_trace_context(
+    task_id,
+    *,
+    trace_id="",
+    span_id="",
+    traceparent="",
+    source="",
+):
+    """D16/M5: Trace-Kontext an `meta["tasks"][task_id]["trace"]` anhaengen.
+
+    Idempotent (skippt leere/ungueltige Werte), bestandskompatibel (bestehende
+    Task-Eintraege und bereits gespeicherte Trace-Felder bleiben erhalten) und
+    laeuft ueber den einzigen Besitzer des Sidecars (`update_kanban_meta`).
+    """
+    tid = str(task_id or "").strip()
+    if not tid:
+        return None
+    trace: dict = {}
+    v_tid = str(trace_id or "").strip().lower()
+    v_sid = str(span_id or "").strip().lower()
+    v_tp = str(traceparent or "").strip().lower()
+    if _TRACE_ID_RE.fullmatch(v_tid):
+        trace["trace_id"] = v_tid
+    if _SPAN_ID_RE.fullmatch(v_sid):
+        trace["span_id"] = v_sid
+    if _TRACEPARENT_RE.fullmatch(v_tp):
+        trace["traceparent"] = v_tp
+    if source:
+        trace["source"] = str(source)[:80]
+    if not trace:
+        return None
+
+    def _mutator(meta):
+        tasks = meta.setdefault("tasks", {})
+        entry = tasks.get(tid)
+        if not isinstance(entry, dict):
+            entry = {} if entry in (None, "") else {"value": entry}
+        existing = entry.get("trace")
+        entry["trace"] = {**(existing if isinstance(existing, dict) else {}), **trace}
+        tasks[tid] = entry
+        return entry["trace"]
+
+    _meta, result = update_kanban_meta(_mutator)
+    return result

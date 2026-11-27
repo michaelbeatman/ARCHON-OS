@@ -141,10 +141,13 @@ services:
       # im Code und umgehen damit die Ratio. Keine echten Keys/Endpunkte hier.
       - OTEL_TRACES_SAMPLER=${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
       - OTEL_TRACES_SAMPLER_ARG=${OTEL_TRACES_SAMPLER_ARG:-1.0}
-      # Audit D10: OPTIONALE, vom Betreiber in .env zu setzende Dead-Man-URL.
-      # Kein erfundenes externes Ziel. Ohne Wert bleibt der Selbstheilungs-
-      # Report bewusst `dead_man_switch_configured: false`.
-      - ARCHON_HEARTBEAT_WEBHOOK_URL=${ARCHON_HEARTBEAT_WEBHOOK_URL:-}
+      # W5-C/D10-M4: Pflicht-Env. Ohne echten Empfaenger ist der Dead-Man-
+      # Switch wirkungslos (fleet_self_healing.py setzt
+      # dead_man_switch_configured nur bei erreichbarem Ziel). `${VAR:?...}`
+      # laesst `docker compose config/up` hart abbrechen — kein stilles
+      # `dead_man_switch_configured: false` im Produktiv-Deploy.
+      # Kein erfundenes Ziel: der Betreiber traegt die URL in .env ein.
+      - ARCHON_HEARTBEAT_WEBHOOK_URL=${ARCHON_HEARTBEAT_WEBHOOK_URL:?ARCHON_HEARTBEAT_WEBHOOK_URL muss in .env gesetzt sein (Dead-Man-Switch ohne Empfaenger wirkungslos, Audit D10-M4)}
       # Audit D10 / E2E 24.11.2026: Liveness-Schwellen an den 3-s-Healthcheck-
       # Timeout angleichen (mit 15 s/5000 ms blieb /livez bei 4-s-Haengern 200).
       - ARCHON_LIVEZ_MAX_HEARTBEAT_AGE_S=${ARCHON_LIVEZ_MAX_HEARTBEAT_AGE_S:-8}
@@ -327,6 +330,12 @@ services:
     logging:
       <<: *default-logging
     restart: unless-stopped
+    init: true
+    # W5-C/D10-M5: das privilege-rteste Element im Stack (roher Docker-Socket)
+    # war das EINZIGE ohne Container-Haertung. HAProxy bindet nur an Port
+    # 2375 (>1024) und braucht kein root — nicht-root ist mit dem Image
+    # kompatibel; pidfile/state-file liegen auf den tmpfs-Mounts unten.
+    user: "${SOCKET_PROXY_UID:-1000}:${SOCKET_PROXY_GID:-1000}"
     networks:
       - archon-admin_net
     environment:
@@ -335,7 +344,11 @@ services:
       - INFO=1
       - PING=1
       - VERSION=1
-      - NETWORKS=0
+      # W5-C/D10-M8: lesender Netzwerk-Inspect ist die Voraussetzung fuer
+      # die Fail-Closed-Zero-Egress-Pruefung (ephemeral_sandbox.py). Die
+      # haproxy.cfg verengt den Zugriff auf GET /networks/<name>/json mit
+      # festen Netzwerknamen — kein Subtree-Zugriff auf /networks.
+      - NETWORKS=1
       - SERVICES=0
       - TASKS=0
       - VOLUMES=0
@@ -359,6 +372,16 @@ services:
     # eigenes /tmp/haproxy.cfg-Template startet (siehe docker-compose.dev.yml).
     # Ohne diesen Override greifen POST=1/EXEC=0/DELETE=0 nicht.
     command: ["haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+    # W5-C/D10-M5: Container-Haertung analog archon-os / archon-autoheal.
+    read_only: true
+    tmpfs:
+      - /run:rw,nosuid,size=8m
+      - /tmp:rw,nosuid,size=8m
+      - /var/lib/haproxy:rw,nosuid,size=8m
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:2375/version >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -370,6 +393,7 @@ services:
         limits:
           memory: 256M
           cpus: "0.5"
+          pids: 128
 
   # -------------------------------------------------------------
   # HERMES AGENT ORCHESTRATOR (Pinned v0.23.1 Multi-Arch)
@@ -578,7 +602,12 @@ services:
     logging:
       <<: *default-logging
     restart: unless-stopped
-    profiles: ["backup", "replication", "all", "full"]
+    # W5-C/D10-M3: KEIN profiles:-Gate mehr. Replikation ist 24/7-Betrieb
+    # und laeuft auch bei archon_observability=off / ohne COMPOSE_PROFILES.
+    # Ansible steuert das Opt-out ueber archon_dr_enabled: false (dann wird
+    # dieser Dienst mit `--scale litestream=0` ausgeschaltet) und plant die
+    # beiden 6-h-Cronjobs nur bei aktivem DR. Ohne ARCHON_LITESTREAM_REPLICA_DIR
+    # wird bewusst das lokale ./dr_replicas-Ziel benutzt (Entwicklung).
     networks:
       - agentic_mesh
     volumes:
@@ -1021,9 +1050,9 @@ services:
     environment:
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - AUTOHEAL_TARGET_URL=${AUTOHEAL_TARGET_URL:-http://archon-os:8501/livez}
-      # Audit D10: optionaler Dead-Man-Webhook (Betreiber setzt ihn in .env;
-      # ohne Wert bleibt dead_man_switch_configured=false — kein erfundenes Ziel).
-      - ARCHON_HEARTBEAT_WEBHOOK_URL=${ARCHON_HEARTBEAT_WEBHOOK_URL:-}
+      # W5-C/D10-M4: gleicher Pflicht-Env-Vertrag wie in archon-os. Der
+      # externe Autoheal darf nicht ohne Dead-Man-Empfaenger starten.
+      - ARCHON_HEARTBEAT_WEBHOOK_URL=${ARCHON_HEARTBEAT_WEBHOOK_URL:?ARCHON_HEARTBEAT_WEBHOOK_URL muss in .env gesetzt sein (Dead-Man-Switch ohne Empfaenger wirkungslos, Audit D10-M4)}
       - AUTOHEAL_CONTAINER=${ARCHON_CONTAINER_NAME:-ARCHON-OS}
       - AUTOHEAL_INTERVAL_S=${AUTOHEAL_INTERVAL_S:-30}
       - AUTOHEAL_FAILURES=${AUTOHEAL_FAILURES:-5}

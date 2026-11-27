@@ -4,27 +4,139 @@ Archon OS Chaos & Resilience Testing Suite
 Simulates container disruptions, database concurrency spikes, and watchdog supervisor recovery.
 """
 
-import os
-import sys
-import time
+import argparse
 import json
+import os
 import shutil
 import sqlite3
+import sys
 import tempfile
-import argparse
-import subprocess
 import threading
-from typing import Dict, Any, List
+import time
+import urllib.error
+import urllib.request
+from typing import Any, Callable, Dict, List, Optional
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.getenv("DATA_DIR", "/opt/data" if os.path.exists("/opt/data") else os.path.join(os.path.expanduser("~"), ".hermes"))
 
-# D10/MED: harter Restart-Recovery-SLA. Die Suite darf nicht "passed" melden,
-# wenn die Wiederherstellung laenger als 15 s dauert.
+# D10-H1 / D08-M6: harter Restart-Recovery-SLA. Gemessen wird jetzt die
+# End-to-End-Zeit vom simulierten Ausfall (t_fail) bis zum ersten wieder
+# HTTP-200-antwortenden /livez (t_recovered) — nicht mehr nur die Dauer des
+# Docker-API-Aufrufs. Die Suite darf nicht "passed" melden, wenn diese Zeit
+# laenger als 15 s dauert oder wenn ein Pfad nur "skipped" ist.
 RESTART_SLA_S = 15.0
+LIVEZ_URL = os.getenv("CHAOS_LIVEZ_URL", "http://archon-os:8501/livez").strip()
+LIVEZ_POLL_INTERVAL_S = max(0.05, float(os.getenv("CHAOS_LIVEZ_POLL_INTERVAL_S", "0.5")))
+LIVEZ_WAIT_TIMEOUT_S = max(RESTART_SLA_S, float(os.getenv("CHAOS_LIVEZ_WAIT_TIMEOUT_S", str(RESTART_SLA_S))))
+# Kurzes SIGTERM-Fenster fuer stop+start — sonst kostet der Docker-Default
+# (~10 s) allein fast das gesamte SLA-Budget. Der Proxy erlaubt `?t=<n>`.
+RESTART_STOP_GRACE_S = max(1, int(os.getenv("CHAOS_RESTART_STOP_GRACE_S", "2")))
+
+# D10-M1: der Watchdog schreibt keine Logdatei, sondern die atomare
+# Liveness-Datei (watchdog_daemon.py:76-110,459-511). Evidenz ist ausschliesslich
+# diese Datei; zwei Proben im Abstand > CHECK_INTERVAL_SEC (30 s) muessen einen
+# erhoehten loop_count und ein frisches last_seen zeigen.
+WATCHDOG_SAMPLE_INTERVAL_S = max(30.0, float(os.getenv("CHAOS_WATCHDOG_SAMPLE_INTERVAL_S", "31")))
+WATCHDOG_MAX_LIVENESS_AGE_S = max(30.0, float(os.getenv("CHAOS_WATCHDOG_MAX_LIVENESS_AGE_S", "60")))
+WATCHDOG_LIVENESS_CANDIDATES = (
+    os.path.join(DATA_DIR, "watchdog_liveness.json"),
+    os.path.join(WORKSPACE_DIR, "data", "watchdog_liveness.json"),
+    "/app/data/watchdog_liveness.json",
+    os.path.join(WORKSPACE_DIR, "watchdog_liveness.json"),
+)
 
 RESULTS_FILE = os.path.join(WORKSPACE_DIR, "data", "chaos_test_results.json")
 os.makedirs(os.path.dirname(RESULTS_FILE), exist_ok=True)
+
+# Der Probe-Timeout gilt nur fuer EINEN HTTP-Poll, nicht das Gesamtfenster
+# (LIVEZ_WAIT_TIMEOUT_S).
+PROBE_TIMEOUT = max(1.0, float(os.getenv("CHAOS_LIVEZ_PROBE_TIMEOUT_S", "2")))
+
+
+def livez_ok(url: str = LIVEZ_URL) -> bool:
+    """Ein einziger /livez-Probe. Nur HTTP 200 zaehlt als 'wieder gesund'.
+
+    503 (Event-Loop- oder Watchdog-Tot), Timeouts und ConnectionRefused sind
+    bewusst ``False`` — der Aufrufer pollt weiter, bis das SLA-Fenster abgelaufen
+    ist. Das ist der Produktivkonsument derselben Probe, die auch
+    ``scripts/archon_autoheal.py`` verwendet.
+    """
+    try:
+        with urllib.request.urlopen(url, timeout=PROBE_TIMEOUT) as response:
+            return int(response.status) == 200
+    except urllib.error.HTTPError:
+        return False
+    except Exception:
+        return False
+
+
+def trigger_restart(client, container_name: str) -> None:
+    """stop+start ueber den Proxy, mit kurzem SIGTERM-Fenster.
+
+    ``DockerAdminClient.restart_container()`` ruft ``stop`` ohne ``?t`` auf;
+    Docker wartet dann bis zu ~10 s. Das sprengt das 15-s-SLA-Budget. Der
+    direkte Proxy-Aufruf mit ``?t=2`` ist der echte, freigegebene Pfad
+    (utils/docker_client.py:_ADMIN_ALLOWED erlaubt ``stop(\\?.*)?``).
+    Fuer gemockte/aeltere Clients ohne ``request()`` bleibt der Helper
+    ``restart_container()`` als kompatibler Fallback erhalten.
+    """
+    if hasattr(client, "request"):
+        client.request("POST", f"/containers/{container_name}/stop?t={RESTART_STOP_GRACE_S}", timeout=20.0)
+        client.request("POST", f"/containers/{container_name}/start", timeout=20.0)
+        return
+    client.restart_container(container_name)
+
+
+def wait_for_livez(
+    clock: Callable[[], float],
+    probe: Callable[[], bool],
+    timeout_s: float = LIVEZ_WAIT_TIMEOUT_S,
+    interval_s: float = LIVEZ_POLL_INTERVAL_S,
+) -> Optional[float]:
+    """Pollt bis zum ersten HTTP-200 und liefert die Uhrzeit t_recovered.
+
+    ``None`` bedeutet: innerhalb des Fensters nie gesund geworden. Der erste
+    Probe findet sofort statt (kein unnoetiges Warten bei bereits gesundem Ziel).
+    """
+    deadline = clock() + timeout_s
+    while True:
+        if probe():
+            return clock()
+        if clock() >= deadline:
+            return None
+        time.sleep(interval_s)
+
+
+def find_watchdog_liveness() -> Optional[str]:
+    """Findet die atomare Liveness-Datei des externen Watchdog-Prozesses."""
+    for candidate in WATCHDOG_LIVENESS_CANDIDATES:
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def read_watchdog_liveness(path: str, clock: Callable[[], float]) -> Dict[str, Any]:
+    """Liest loop_count/last_seen/alive aus der Liveness-Datei (fail-closed)."""
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not isinstance(data, dict):
+            raise ValueError("no dict")
+        last_seen = float(data.get("last_seen", 0.0))
+        loop_count = int(data.get("loop_count", 0))
+    except Exception as exc:
+        return {"usable": False, "error": f"unreadable: {type(exc).__name__}",
+                "last_seen": 0.0, "loop_count": -1, "alive": False, "age_s": None}
+    age_s = max(0.0, clock() - last_seen) if last_seen > 0 else None
+    return {
+        "usable": True,
+        "last_seen": last_seen,
+        "loop_count": loop_count,
+        "alive": bool(data.get("alive", True)),
+        "age_s": age_s,
+        "path": path,
+    }
 
 
 class ArchonChaosTester:
@@ -179,42 +291,80 @@ class ArchonChaosTester:
         except Exception as e:
             return {"status": "failed", "error": str(e)}
 
-    def test_simulated_container_restart(self, container_name: str = "hermes-dashboard-proxy") -> Dict[str, Any]:
-        """Simuliert den Ausfall und automatischen Neustart eines Proxy-/Hilfsdienstes über DockerAdminClient."""
+    def test_simulated_container_restart(
+        self,
+        container_name: str = "hermes-dashboard-proxy",
+        clock: Optional[Callable[[], float]] = None,
+        probe: Optional[Callable[[], bool]] = None,
+    ) -> Dict[str, Any]:
+        """Misst die echte Restart-Recovery-SLA vom Ausfall bis `/livez` 200.
+
+        D10-H1: frueher startete die Uhr erst beim Docker-Call und ein Dry-Run
+        meldete ``passed``, ohne die SLA ueberhaupt zu messen. Jetzt:
+
+        * ``t_fail`` = Zeitpunkt unmittelbar vor dem ausgeloesten Ausfall,
+        * ``t_recovered`` = erster erfolgreicher ``/livez``-200 nach dem Neustart,
+        * ``passed`` nur bei ``(t_recovered - t_fail) < 15 s`` **und**
+          ``running``-Status,
+        * ein Dry-Run ist ``skipped`` (nie ``passed``) und macht die Suite rot.
+
+        ``clock``/``probe`` sind Injektionspunkte fuer Regressionstests; im
+        Produktivpfad sind es ``time.time`` und ``livez_ok``.
+        """
         if self.dry_run:
             return {
-                "status": "passed",
+                "status": "skipped",
                 "mode": "dry_run",
                 "container": container_name,
                 "restart_sla_s": RESTART_SLA_S,
-                "message": f"Simulierter Neustart von '{container_name}' übersprungen (dry_run=True); SLA nicht messbar."
+                "reason": "dry_run_sla_not_measurable",
+                "message": (
+                    f"Simulierter Neustart von '{container_name}' nicht ausgefuehrt "
+                    "(dry_run=True); SLA ist nicht messbar und wird nicht als Erfolg "
+                    "gewertet."
+                ),
             }
 
+        now = clock or time.time
+        check = probe or (lambda: livez_ok(LIVEZ_URL))
         try:
             from utils.docker_client import DockerAdminClient
             client = DockerAdminClient()
-            t0 = time.time()
-            client.restart_container(container_name)
-            restart_time = time.time() - t0
+
+            # t_fail ist der Ausfall — nicht der Beginn der Docker-Antwortzeit.
+            t_fail = now()
+            trigger_restart(client, container_name)
 
             info = json.loads(client.container_json(container_name).decode("utf-8"))
             current_status = str((info.get("State") or {}).get("Status") or "")
 
-            # D10/MED: SLA<15 s ist hart — "running" allein genuegt nicht.
-            sla_violation = restart_time >= RESTART_SLA_S
+            t_recovered = wait_for_livez(now, check)
+            elapsed = (t_recovered - t_fail) if t_recovered is not None else (now() - t_fail)
+            sla_violation = t_recovered is None or elapsed >= RESTART_SLA_S
             passed = current_status == "running" and not sla_violation
             result = {
                 "status": "passed" if passed else "failed",
                 "container": container_name,
-                "recovery_time_sec": round(restart_time, 2),
+                "t_fail": round(t_fail, 3),
+                "t_recovered": round(t_recovered, 3) if t_recovered is not None else None,
+                "recovery_time_sec": round(elapsed, 2),
                 "restart_sla_s": RESTART_SLA_S,
-                "sla_violation": sla_violation,
+                "sla_violation": bool(sla_violation),
                 "current_status": current_status,
+                "livez_url": LIVEZ_URL,
+                "measured_from": "simulated_failure_to_livez_200",
             }
-            if sla_violation:
+            if t_recovered is None:
                 result["reason"] = (
-                    f"restart_sla_exceeded: {restart_time:.2f}s >= {RESTART_SLA_S:.1f}s"
+                    f"livez_not_recovered_within_{LIVEZ_WAIT_TIMEOUT_S:.0f}s "
+                    f"(mindestens {elapsed:.2f}s >= {RESTART_SLA_S:.1f}s)"
                 )
+            elif sla_violation:
+                result["reason"] = (
+                    f"restart_sla_exceeded: {elapsed:.2f}s >= {RESTART_SLA_S:.1f}s"
+                )
+            elif current_status != "running":
+                result["reason"] = f"container_not_running: {current_status!r}"
             return result
         except Exception as e:
             return {
@@ -224,54 +374,77 @@ class ArchonChaosTester:
                 "error": str(e)
             }
 
-    def test_watchdog_supervisor_responsiveness(self) -> Dict[str, Any]:
-        """Prüft, ob der Watchdog Supervisor aktiv Warnungen und Grenzwerte überprüft."""
-        log_candidates = [
-            os.path.join(DATA_DIR, "logs", "watchdog_daemon.log"),
-            os.path.join(DATA_DIR, "logs", "watchdog.log"),
-            os.path.join(WORKSPACE_DIR, "data", "logs", "watchdog_daemon.log"),
-            "/opt/data/logs/watchdog_daemon.log"
-        ]
-        found_log = None
-        for p in log_candidates:
-            if os.path.exists(p):
-                found_log = p
-                break
+    def test_watchdog_supervisor_responsiveness(
+        self,
+        sample_interval_s: Optional[float] = None,
+        clock: Optional[Callable[[], float]] = None,
+    ) -> Dict[str, Any]:
+        """Prueft die echte Watchdog-Liveness ueber zwei Proben.
 
-        # Prüfe Uptime / Alarme
-        alarms_candidates = [
-            os.path.join(WORKSPACE_DIR, "data", "archon_alarms.json"),
-            os.path.join(DATA_DIR, "archon_alarms.json"),
-            "/app/data/archon_alarms.json"
-        ]
-        alarms_found = any(os.path.exists(a) for a in alarms_candidates)
-
-        # Audit 23.11.2026 (K-4): frueher wurde hier unbedingt "passed"
-        # zurueckgegeben, ohne dass der Watchdog je beruehrt wurde. Status jetzt
-        # aus echter Evidenz ableiten: keine Logdatei = nicht pruefbar,
-        # alte Logdatei = fehlgeschlagen.
-        log_age_sec = None
-        if found_log:
-            try:
-                log_age_sec = max(0.0, time.time() - os.path.getmtime(found_log))
-            except OSError:
-                log_age_sec = None
-        if found_log is None:
-            status, reason = "skipped", "no_watchdog_log_evidence"
-        elif log_age_sec is None or log_age_sec > 120:
-            status, reason = "failed", "watchdog_log_stale_or_unreadable"
-        else:
-            status, reason = "passed", None
-
-        return {
-            "status": status,
-            "reason": reason,
-            "log_file_present": found_log is not None,
-            "log_path": found_log,
-            "log_age_sec": log_age_sec,
-            "alarms_file_active": alarms_found,
-            "supervisor_interval_sec": 30
+        D10-M1: der Watchdog schreibt **keine** Logdatei (logging.basicConfig
+        ohne ``filename=`` in watchdog_daemon.py:22-26), sondern die atomare
+        ``watchdog_liveness.json``. Der fruehere Test las eine nie entstehende
+        Logdatei und war im Produktivpfad immer ``skipped`` — die Suite blieb
+        trotzdem gruen. Jetzt: ``loop_count`` muss steigen, ``last_seen`` darf
+        nicht zurueckgehen und darf hoechstens 60 s alt sein. Fehlende Evidenz
+        ist ``failed`` (Exit 1), niemals ``skipped``.
+        """
+        now = clock or time.time
+        interval = (
+            WATCHDOG_SAMPLE_INTERVAL_S
+            if sample_interval_s is None else max(0.0, float(sample_interval_s))
+        )
+        path = find_watchdog_liveness()
+        base: Dict[str, Any] = {
+            "evidence_file": "watchdog_liveness.json",
+            "evidence_path": path,
+            "supervisor_interval_sec": 30,
+            "sample_interval_sec": interval,
+            "max_age_s": WATCHDOG_MAX_LIVENESS_AGE_S,
+            "alarms_file_active": any(
+                os.path.exists(a) for a in (
+                    os.path.join(WORKSPACE_DIR, "data", "archon_alarms.json"),
+                    os.path.join(DATA_DIR, "archon_alarms.json"),
+                    "/app/data/archon_alarms.json",
+                )
+            ),
         }
+        if path is None:
+            base.update({
+                "status": "failed",
+                "reason": "watchdog_liveness_evidence_missing",
+                "first": None, "second": None,
+            })
+            return base
+
+        first = read_watchdog_liveness(path, now)
+        time.sleep(interval)
+        second = read_watchdog_liveness(path, now)
+        base["first"] = first
+        base["second"] = second
+
+        if not first.get("usable") or not second.get("usable"):
+            base.update({"status": "failed", "reason": "watchdog_liveness_unreadable"})
+            return base
+
+        loop_advanced = second["loop_count"] > first["loop_count"]
+        last_seen_advanced = second["last_seen"] >= first["last_seen"]
+        age_s = second["age_s"]
+        fresh = age_s is not None and age_s <= WATCHDOG_MAX_LIVENESS_AGE_S
+        alive = bool(second["alive"])
+        passed = loop_advanced and last_seen_advanced and fresh and alive
+        base.update({
+            "status": "passed" if passed else "failed",
+            "reason": None if passed else (
+                "watchdog_loop_stalled_or_stale: "
+                f"loop_count {first['loop_count']}->{second['loop_count']}, "
+                f"last_seen_age={age_s}s, alive={alive}"
+            ),
+            "loop_advanced": loop_advanced,
+            "last_seen_advanced": last_seen_advanced,
+            "last_seen_age_s": age_s,
+        })
+        return base
 
     def run_all(self) -> Dict[str, Any]:
         """Führt die gesamte Chaos- & Resilienz-Testsuite aus."""
@@ -335,7 +508,9 @@ def main():
     dry_run = not args.live
     tester = ArchonChaosTester(dry_run=dry_run)
     res = tester.run_all()
-    sys.exit(0 if res["tests_failed"] == 0 else 1)
+    # D10-H1 / D08-M6: "nicht pruefbar" ist kein Erfolg. Ein Dry-Run und ein
+    # fehlender Watchdog-Beweis muessen den CI-Gate (Exit 1) ausloesen.
+    sys.exit(0 if (res["tests_failed"] == 0 and res["tests_skipped"] == 0) else 1)
 
 
 if __name__ == "__main__":

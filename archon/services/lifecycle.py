@@ -27,6 +27,67 @@ __all__ = ["lifespan_context"]
 
 # D07-M7: Gesamtbudget fuer den kompletten Shutdown (Hooks + Liveness-Stop).
 _SHUTDOWN_BUDGET_SECONDS = 10.0
+# D10-M7: zusaetzlich zum Gesamtbudget ein Einzelfenster je Hook, damit ein
+# einzelner Hook nicht das gesamte Budget auffressen kann.
+_HOOK_TIMEOUT_SECONDS = 3.0
+
+# D10-M7: die Hook-Liste kommt aus main.py (dort in REVERSED order gedacht).
+# main.py gehoert nicht zu dieser Partition — die Reihenfolge-Korrektur
+# "Background-Loops vor HTTP-Pool-Close" wird daher hier am Injektionspunkt
+# erzwungen. Alle uebrigen Hooks behalten ihre relative Reihenfolge.
+_LOOP_STOP_HOOK_NAMES = frozenset({
+    "_cancel_background_tasks",
+    "cancel_background_tasks",
+})
+_POOL_CLOSE_HOOK_NAMES = frozenset({
+    "_close_all_http_clients",
+    "_close_dispatcher_clients",
+    "_close_proxy_clients",
+    "close_all_http_clients",
+    "close_dispatcher_clients",
+    "close_proxy_clients",
+})
+
+
+def _order_shutdown_hooks(hooks: List[Any]) -> List[Any]:
+    """D10-M7: Loop-Stop-Hooks vor Pool-Close-Hooks, sonst stabil."""
+    ordered = list(hooks)
+    loop_indices = {
+        i for i, hook in enumerate(ordered)
+        if getattr(hook, "__name__", repr(hook)) in _LOOP_STOP_HOOK_NAMES
+    }
+    if not loop_indices:
+        return ordered
+    pool_indices = [
+        i for i, hook in enumerate(ordered)
+        if getattr(hook, "__name__", repr(hook)) in _POOL_CLOSE_HOOK_NAMES
+    ]
+    if not pool_indices or min(loop_indices) < min(pool_indices):
+        return ordered
+    loop_hooks = [hook for i, hook in enumerate(ordered) if i in loop_indices]
+    rest = [hook for i, hook in enumerate(ordered) if i not in loop_indices]
+    insert_at = min(
+        i for i, hook in enumerate(rest)
+        if getattr(hook, "__name__", repr(hook)) in _POOL_CLOSE_HOOK_NAMES
+    )
+    return rest[:insert_at] + loop_hooks + rest[insert_at:]
+
+
+def _audit_hook_timeout(name: str, duration_ms: float) -> None:
+    """D10-M7: Hook-Timeout auch ins cancel_failed-Audit spiegeln."""
+    try:
+        from archon.services.background_loops import _record_failed_cancel
+
+        _record_failed_cancel(
+            f"shutdown_hook:{name}",
+            f"timeout_after_{duration_ms:.1f}ms: hook_still_running",
+        )
+    except Exception as exc:
+        # Ein Audit-Fehler darf den Shutdown nicht erneut blockieren.
+        logger.error(
+            "[Lifespan] Cancel-Failed-Audit fuer Hook '%s' fehlgeschlagen: %s",
+            name, exc,
+        )
 
 
 def _audit_shutdown_hook(name: str, status: str, duration_ms: float) -> None:
@@ -62,8 +123,9 @@ async def lifespan_context(
     """Einziger geordneter Startup/Shutdown-Pfad der App.
 
     Fail-Fast-Hooks raisen (Start bricht ab); alle uebrigen Hook-Fehler werden
-    nur geloggt. Shutdown laeuft in ``reversed()`` und ist durch ``finally``
-    auch bei GeneratorExit/Exceptions garantiert.
+    nur geloggt. Shutdown laeuft in ``reversed()`` (mit der D10-M7-Korrektur
+    Loops vor Pools) und ist durch ``finally`` auch bei GeneratorExit/
+    Exceptions garantiert.
     """
     try:
         from backend.loop_liveness import start_loop_heartbeat, stop_loop_heartbeat
@@ -106,7 +168,10 @@ async def lifespan_context(
         # Liveness-Stop laeuft in einem inneren finally immer weiter.
         _deadline = time.monotonic() + _SHUTDOWN_BUDGET_SECONDS
         try:
-            for hook in reversed(list(shutdown_hooks)):
+            # D10-M7: main.py registriert die Pools VOR den Loops; reversed()
+            # wuerde daher die Pools zuerst schliessen. Am Injektionspunkt
+            # korrigieren (Loops zuerst), ohne main.py anzufassen.
+            for hook in _order_shutdown_hooks(list(reversed(shutdown_hooks))):
                 name = getattr(hook, "__name__", repr(hook))
                 _started = time.monotonic()
                 _remaining = _deadline - time.monotonic()
@@ -124,10 +189,25 @@ async def lifespan_context(
                             return result if asyncio.iscoroutine(result) else None
 
                         _awaited = asyncio.to_thread(_invoke)
-                    await asyncio.wait_for(_awaited, timeout=_remaining)
+                    # D10-M7: Gesamt- UND Einzelfenster; bei to_thread laeuft
+                    # der Worker-Thread weiter, der Shutdown wartet nicht mehr.
+                    await asyncio.wait_for(
+                        _awaited, timeout=min(_remaining, _HOOK_TIMEOUT_SECONDS)
+                    )
                     _audit_shutdown_hook(
                         name, "ok", (time.monotonic() - _started) * 1000.0
                     )
+                except asyncio.TimeoutError as e:
+                    _duration_ms = (time.monotonic() - _started) * 1000.0
+                    logger.error(
+                        f"[Lifespan] Shutdown-Hook '{name}' Timeout nach {_duration_ms:.0f}ms"
+                    )
+                    # Statusformat aus W3 beibehalten (bestehende Tests),
+                    # zusaetzlich cancel_failed-Audit laut D10-M7.
+                    _audit_shutdown_hook(
+                        name, f"failed: {type(e).__name__}", _duration_ms
+                    )
+                    _audit_hook_timeout(name, _duration_ms)
                 except Exception as e:
                     _duration_ms = (time.monotonic() - _started) * 1000.0
                     logger.error(f"[Lifespan] Shutdown-Hook '{name}' fehlgeschlagen: {e}")

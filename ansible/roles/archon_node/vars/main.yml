@@ -74,6 +74,19 @@ archon_watchdog_max_last_seen_age_s: "120"
 # Normal-Start (identisch zu start.bat / install.sh).
 archon_observability: "off"
 
+# Audit D10/M3 (W5-C): DR ist VON OBSERVABILITY ENTKOPPELT. Die Replikation
+# und die beiden 6-h-Cronjobs (Restore, Chaos) sind 24/7-Betriebsmittel,
+# keine Monitoring-Option. Default true — auch bei archon_observability=off
+# (Normal-Start) laeuft Litestream und werden beide Cronjobs geplant.
+# Bewusstes Opt-out nur auf isolierten Entwicklungs-Hosts: archon_dr_enabled: false.
+archon_dr_enabled: true
+
+# Audit D10/M4 (W5-C): externer Dead-Man-Switch. Der Cron-Heartbeat wird
+# unabhaengig vom ueberwachten 30-s-In-App-Loop geschrieben und braucht einen
+# echten Empfaenger (ARCHON_HEARTBEAT_WEBHOOK_URL in .env, von Compose
+# erzwungen). Ohne Empfaenger bricht der Deploy am config-Gate ab.
+archon_deadman_enabled: true
+
 # Audit D10/DR: Das Litestream-Replikat liegt auf einem vom DB-Volumen
 # GETRENNTEN Ziel. Der Betreiber mountet /mnt/archon-dr (NAS/externes Volume)
 # und passt den Pfad an; der Deploy bricht ab, wenn das Ziel nicht existiert.

@@ -110,6 +110,17 @@ def install_cors_middleware(app: FastAPI) -> None:
             "X-Requested-With",
             "Accept",
             "Origin",
+            # D16-M1: Trace-Kontext muss auch die Browser-Grenze ueberqueren.
+            # Ohne diese Eintraege scheitert die Preflight an traceparent/
+            # tracestate/X-Trace-Id und der Antwortkontext bleibt fuer JS unsichtbar.
+            "traceparent",
+            "tracestate",
+            "X-Trace-Id",
+        ],
+        expose_headers=[
+            "traceparent",
+            "tracestate",
+            "X-Trace-Id",
         ],
     )
 

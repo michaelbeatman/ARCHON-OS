@@ -38,13 +38,14 @@ datasources:
         datasourceUid: loki
         tags:
           - trace_id
+          - span_id
         mappedTags:
           - key: service.name
             value: service_name
         spanStartTimeShift: '-5m'
         spanEndTimeShift: '5m'
         filterByTraceID: true
-        filterBySpanID: false
+        filterBySpanID: true
         customQuery: false
       tracesToMetrics:
         datasourceUid: prometheus

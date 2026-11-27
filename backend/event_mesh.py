@@ -5,20 +5,19 @@ Ermöglicht externen Systemen (n8n, GitHub, Webhook-Dienste),
 Ereignisse direkt einzuspeisen und autonome Workflows zu triggern.
 """
 
-import os
-import sys
 import asyncio
 import contextlib
-import json
-import uuid
-import sqlite3
 import datetime
 import hashlib
-import time
-import urllib.request
+import json
 import logging
+import os
 import random
-from typing import Dict, Any, List, Optional
+import sqlite3
+import sys
+import time
+import uuid
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("archon_os.event_mesh")
 
@@ -1072,6 +1071,26 @@ class EventMesh:
     def process_outbox(
         self, limit: int = 25, max_attempts: int = 5, tenant_id: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """D06-H1: Outbox für EINEN expliziten Mandanten drainieren.
+
+        Der Ledger-Pfad wird in ``_db_path()`` über den Request-Mandanten
+        aufgelöst. Ohne gebundenen Kontext läuft der Drainer ausschließlich im
+        aktiven Mandanten; Sekundärmandanten blieben dauerhaft unzugestellt.
+        Der Kontext wird für die gesamte Laufzeit gebunden — das umfasst
+        EffectLedger, Outbox-Claims und den DLQ-Enqueue für 'dead'-Zeilen.
+        """
+        if not tenant_id:
+            return self._process_outbox_impl(limit, max_attempts, tenant_id)
+        from backend.tenant_context import reset_request_tenant, set_request_tenant
+        token: Any = set_request_tenant(tenant_id)
+        try:
+            return self._process_outbox_impl(limit, max_attempts, tenant_id)
+        finally:
+            reset_request_tenant(token)
+
+    def _process_outbox_impl(
+        self, limit: int = 25, max_attempts: int = 5, tenant_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Zuerst UNKNOWN-Effekte reconcilen, dann retrybare Einträge zustellen."""
         reconciled = 0
         worker_id = f"{os.getpid()}:{uuid.uuid4().hex[:8]}"
@@ -1212,6 +1231,7 @@ class EventMesh:
                         },
                         priority=2,
                         idempotency_key=str(r["idempotency_key"] or f"outbox-dead-{r['id']}"),
+                        tenant_id=tid,
                     )
                 except Exception as exc:
                     logger.warning("[EventMesh] DLQ-Enqueue fuer dead-Outbox %s fehlgeschlagen: %s", r["id"], exc)

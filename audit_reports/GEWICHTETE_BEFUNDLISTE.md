@@ -52,14 +52,14 @@
 | 25 | D03-H3 | HIGH | 8 | W1 | `backend/db_consolidation.py:772-784` | `--migrate` ohne `--activate` deaktiviert Konsolidierung still | **Behoben (8a2cb037)** |
 | 26 | D04-M7 | MED | 8 | W2 | `backend/egress_firewall.py:96-110` | Config-Fehler → hartcodierte Allowlist, External erlaubt (fail-open) | **Behoben (4c7344bd)** |
 | 27 | D05-H1 | HIGH | 8 | W2 | `voice_pipeline.py:100-172`; `local_security_guard.py:219-340` | Echte LLM-Calls ohne `llm_dispatch`-Proof (nur Blockpfade signiert) | **Behoben (4c7344bd)** |
-| 28 | D08-H1 | HIGH | 8 | W6 | `backend/workflow_dag_runner.py:1645,1675,1705` | Sync-Idempotency (`timeout=15`) im `async`-Retry blockiert Event-Loop | Offen |
+| 28 | D08-H1 | HIGH | 8 | W6 | `backend/workflow_dag_runner.py:1645,1675,1705` | Sync-Idempotency (`timeout=15`) im `async`-Retry blockiert Event-Loop | **Behoben (5ee96345)** |
 | 29 | D12-H2 | HIGH | 8 | W2 | `scripts/archon_mcp_server.py:347-361` | Jeder PocketBase-Fehler → `success, count=0` | **Behoben (4c7344bd)** |
 | 30 | D15-H1 | HIGH | 8 | W4 | `delegation.py:2181-2191`; `operations_execution.py:608-612` | 3-Tier-SOUL erzeugt+gespeichert, Worker nutzt nur `prof["prompt"]` | **Behoben (204470e4)** |
 | 31 | D15-H2 | HIGH | 8 | W4 | `eu_ai_act_inventory.py:151-176`; `hr.py:291-320` | SOUL-Pin hasht `souls/<id>/SOUL.md`, Dispatch nutzt abweichenden Prompt | **Behoben (204470e4)** |
 | 32 | D15-H3 | HIGH | 8 | W4 | `agent_profiles.js:990-1163`; `profiles.py:827-846` | Pflicht-Warn-Dialoge nur Legacy-UI, wegklickbar, Domain 4 nur 2/7 | **Behoben (204470e4)** |
 | 33 | D15-H4 | HIGH | 8 | W4 | `data/ai_act_literacy_register.json:2-18` | Einziger HIGH_RISK-Bediener: `certificate_sha256: null`, Bootstrap | **Behoben (204470e4)** |
 | 34 | D16-H1 | HIGH | 8 | W5 | `archon/routers/container_ops.py:184-185` | `inject_headers()` ohne `child_span()` → Self-Parenting, nicht im AST-Test | **Behoben (0a8fcf8a)** |
-| 35 | D09-H1 | HIGH | 7 | W6 | God-Objects + `docker-compose.yml:409` | 4 Monolithen bis 161 KB + 11.232-Zeilen-Patch im Produktivmount | Offen |
+| 35 | D09-H1 | HIGH | 7 | W6 | God-Objects + `docker-compose.yml:409` | 4 Monolithen bis 161 KB + 11.232-Zeilen-Patch im Produktivmount | **Behoben (5ee96345)** |
 | 36 | D03-M3 | MED | 7 | W1 | `gdpr_compliance_engine.py:139` | `*.db.bak`-Alt-Kopien außerhalb Art.15/17 + Backup + Restore-Test | **Behoben (8a2cb037)** |
 | 37 | D03-M5 | MED | 7 | W1 | `backend/erp_manager.py:382-395` | GoBD-Trigger schützt nur 2 Spalten, Status/Betrag per SQL änderbar | **Behoben (8a2cb037)** |
 | 38 | D04-M1 | MED | 7 | W2 | `backend/session_taint_guard.py:380-396` | HITL-Freigabe bleibt `approved`, Auditfehler nur gewarnt | **Behoben (4c7344bd)** |
@@ -68,7 +68,7 @@
 | 41 | D06-M1 | MED | 7 | W5 | `core_dispatcher.py:541-654` | Container-Hop ruft Firewall, aber nicht `sanitize_outbound_llm_payload` | **Behoben (0a8fcf8a)** |
 | 42 | D06-M2 | MED | 7 | W2 | `erp_manager.py:3238-3241`; `sync_inbox_to_pocketbase.py:54-105` | `urlopen` folgt Redirects → IMDS-SSRF-Pfad | **Behoben (4c7344bd)** |
 | 43 | D07-M1 | MED | 7 | W3 | `workflow_dag_runner.py:1672-1685` | Idempotency-Check-/Record-Fehler nur DEBUG → Seiteneffekt erneut | **Behoben (eb308bb5)** |
-| 44 | D08-M6 | MED | 7 | W6 | `scripts/chaos_tester.py:184-191,331-338` | Dry-Run liefert `passed`, SLA nie gemessen, Exit 0 | Offen |
+| 44 | D08-M6 | MED | 7 | W6 | `scripts/chaos_tester.py:184-191,331-338` | Dry-Run liefert `passed`, SLA nie gemessen, Exit 0 | **Behoben (5ee96345)** |
 | 45 | D10-M1 | MED | 7 | W5 | `scripts/chaos_tester.py:227-274` | Watchdog-Test liest nie erstellte Logdatei → immer `skipped` | **Behoben (0a8fcf8a)** |
 | 46 | D10-M2 | MED | 7 | W5 | `automated_restore_test.py:88-130,357-383` | Restore-Test prüft nur Config-Präsenz, nie echtes Litestream-Replikat | **Behoben (0a8fcf8a)** |
 | 47 | D10-M3 | MED | 7 | W5 | `ansible/vars/main.yml:75`; `tasks/main.yml:232-249` | DR/Chaos-Cron im Default-Deploy (`archon_observability: off`) abgeschaltet | **Behoben (0a8fcf8a)** |
@@ -94,7 +94,7 @@
 | 67 | D05-M2 | MED | 6 | W2 | `break_glass_recovery.py:303-313`; `secret_files.py:123-167` | Break-Glass-Key auf Windows nicht per DACL gehärtet | **Behoben (4c7344bd)** |
 | 68 | D07-M4 | MED | 6 | W3 | `background_loops.py:163-164,186-187,195-196` | Deadlock-/Synthese-/Alert-Loop-Fehler nur DEBUG | **Behoben (eb25d51e)** |
 | 69 | D07-M7 | MED | 6 | W3 | `archon/services/lifecycle.py:78-88` | Shutdown-Hooks ohne `wait_for`, hängender `aclose()` blockiert | **Behoben (eb25d51e)** |
-| 70 | D08-M1 | MED | 6 | W6 | `archon/core/delegation.py:1142,1197,1279` | Fan-in/Synthese-Trigger liest DB + schreibt Vault synchron im Event-Loop | Offen |
+| 70 | D08-M1 | MED | 6 | W6 | `archon/core/delegation.py:1142,1197,1279` | Fan-in/Synthese-Trigger liest DB + schreibt Vault synchron im Event-Loop | **Behoben (5ee96345)** |
 | 71 | D08-M8 | MED | 6 | W4 | `delegation.py:548,2181`; `core_dispatcher.py:1338-1422` | 3-Tier-SOUL nur im Delegations-Handoff, nicht im zentralen Dispatch | **Behoben (204470e4)** |
 | 72 | D10-M4 | MED | 6 | W5 | `docker-compose.yml:147`; `alerts.yml:40-65` | Dead-Man-Switch ohne Konsument im Default-Stack | **Behoben (0a8fcf8a)** |
 | 73 | D10-M6 | MED | 6 | W5 | `archon-os-rebuild.bat:12,21`; `update_archon.bat:24` | Drei `.bat` ohne `-f docker-compose.yml` → Override-Bypass | **Behoben (0a8fcf8a)** |
@@ -118,14 +118,14 @@
 | 91 | D03-M1 | MED | 5 | W1 | `orchestration.py:1139-1152` | Finalbericht nicht-atomar, Teilfehler nur `logger.warning` | **Behoben (8a2cb037)** |
 | 92 | D03-M2 | MED | 5 | W1 | `db_paths.py:244-351`; `ci.yml` | `busy_timeout`-Gate implementiert, aber nicht in CI verdrahtet | **Behoben (8a2cb037)** |
 | 93 | D07-M6 | MED | 5 | W3 | `runtime_endpoints.py:264-278`; `shutdown_clients.py:117-155` | Audit-Anker-Stopp-/Shutdown-Fehler auf DEBUG/stderr | **Behoben (eb25d51e)** |
-| 94 | D08-M2 | MED | 5 | W6 | `delegation.py:1886-1901` | Watcher-Cancel schreibt `cancelled`-Event synchron in SQLite | Offen |
-| 95 | D08-M3 | MED | 5 | W6 | `workflow_scheduler.py:1628-1645` | DLQ-Replay liest Task-Status synchron aus `kanban.db` | Offen |
-| 96 | D08-M4 | MED | 5 | W6 | `task_self_healer.py:209-241` | Self-Healing schreibt Datei-Backup + SQLite-Log synchron im Loop | Offen |
-| 97 | D08-M5 | MED | 5 | W6 | `content_machine.py:271-279` | Campaign-Failure-Update sync + nacktes `except: pass` | Offen |
-| 98 | D08-M7 | MED | 5 | W6 | `operations_api.py:438-445`; `mission_control.py:248` | Fehlender Index `task_events(task_id,kind,id)` → Full Scan | Offen |
-| 99 | D09-M1 | MED | 5 | W6 | `mypy.ini:7` vs `ruff.toml:7` | MyPy prüft gegen Python 3.11, Runtime/CI auf 3.13 | Offen |
-| 100 | D09-M5 | MED | 5 | W6 | `ci.yml:167,452`; `Dockerfile:38` | `compileall`/`bandit` erfassen Root-Monolithen nicht | Offen |
-| 101 | D09-M6 | MED | 5 | W6 | `operations_bulk.py:25-51,273` | Modulglobaler Undo-Token-Store ohne Lock | Offen |
+| 94 | D08-M2 | MED | 5 | W6 | `delegation.py:1886-1901` | Watcher-Cancel schreibt `cancelled`-Event synchron in SQLite | **Behoben (5ee96345)** |
+| 95 | D08-M3 | MED | 5 | W6 | `workflow_scheduler.py:1628-1645` | DLQ-Replay liest Task-Status synchron aus `kanban.db` | **Behoben (5ee96345)** |
+| 96 | D08-M4 | MED | 5 | W6 | `task_self_healer.py:209-241` | Self-Healing schreibt Datei-Backup + SQLite-Log synchron im Loop | **Behoben (5ee96345)** |
+| 97 | D08-M5 | MED | 5 | W6 | `content_machine.py:271-279` | Campaign-Failure-Update sync + nacktes `except: pass` | **Behoben (5ee96345)** |
+| 98 | D08-M7 | MED | 5 | W6 | `operations_api.py:438-445`; `mission_control.py:248` | Fehlender Index `task_events(task_id,kind,id)` → Full Scan | **Behoben (5ee96345)** |
+| 99 | D09-M1 | MED | 5 | W6 | `mypy.ini:7` vs `ruff.toml:7` | MyPy prüft gegen Python 3.11, Runtime/CI auf 3.13 | **Behoben (5ee96345)** |
+| 100 | D09-M5 | MED | 5 | W6 | `ci.yml:167,452`; `Dockerfile:38` | `compileall`/`bandit` erfassen Root-Monolithen nicht | **Behoben (5ee96345)** |
+| 101 | D09-M6 | MED | 5 | W6 | `operations_bulk.py:25-51,273` | Modulglobaler Undo-Token-Store ohne Lock | **Behoben (5ee96345)** |
 | 102 | D11-M4 | MED | 5 | W3 | `boardroom.py:498-505` | `critique`/`synthesis` mit `[:1500]` gekappt ohne `mark_truncated` | **Behoben (eb25d51e)** |
 | 103 | D11-M5 | MED | 5 | W3 | `role_budget_engine.py:733-776` | `complexity_weight`/`budget_share_pct` nicht im Kind-Prompt | **Behoben (eb308bb5)** |
 | 104 | D16-M1 | MED | 5 | W5 | `runtime_endpoints.py:107-113` | CORS erlaubt/exponiert `traceparent`/`tracestate`/`X-Trace-Id` nicht | **Behoben (0a8fcf8a)** |
@@ -135,16 +135,16 @@
 | 108 | D01-M6 | MED | 4 | W7 | `backend/docker_services.py:271-279` | Immer `{"status":"success"}` auch ohne `save_services` | Offen |
 | 109 | D01-M7 | MED | 4 | W7 | `orchestration.py:1099-1100,1447-1448` | `folder_namer(x) -> ""` Fallback ohne Fehler/Log | Offen |
 | 110 | D01-M8 | MED | 4 | W7 | `audit_log.py:252-257`; `autonomy_settings.py:404-412` | Zwei hartcodierte `return True`-Audit-Flags ohne Rückkopplung | Offen |
-| 111 | D08-M9 | MED | 4 | W6 | `role_budget_engine.py:49,1182` | Globaler `_BUDGET_LOCK` serialisiert alle Preflight-Checks | Offen |
-| 112 | D09-M2 | MED | 4 | W6 | `.importlinter:51-58` | Zweiter Import-Contract + Transitivität ungeprüft, `import-linter` fehlt im CI | Offen |
-| 113 | D09-M3 | MED | 4 | W6 | `auth_service.py:142` u. a. (~100) | Implizite Optionals per `# type: ignore[assignment]` unterdrückt | Offen |
+| 111 | D08-M9 | MED | 4 | W6 | `role_budget_engine.py:49,1182` | Globaler `_BUDGET_LOCK` serialisiert alle Preflight-Checks | **Behoben (5ee96345)** |
+| 112 | D09-M2 | MED | 4 | W6 | `.importlinter:51-58` | Zweiter Import-Contract + Transitivität ungeprüft, `import-linter` fehlt im CI | **Behoben (5ee96345)** |
+| 113 | D09-M3 | MED | 4 | W6 | `auth_service.py:142` u. a. (~100) | Implizite Optionals per `# type: ignore[assignment]` unterdrückt | **Behoben (5ee96345)** |
 | 114 | D15-M2 | MED | 4 | W4 | `org_hierarchy.json:11-18,854-868` | Zwei Tier-1-APEX-Knoten + falscher `hermes-orchestrator`-Alias | **Behoben (204470e4)** |
 | 115 | D15-M3 | MED | 4 | W4 | `agent_profiles.json:469`; `org_hierarchy.json:902-914` | `aggregation_lisa` deprecated vs aktiv; standby 39 vs 45 | **Behoben (204470e4)** |
 | 116 | D15-M4 | MED | 4 | W4 | `build_souls_ssot.py:147-186` | CrewAI-Templates erhalten fachfremde Rollen-Negativgrenzen | **Behoben (204470e4)** |
 | 117 | D15-M5 | MED | 4 | W4 | `eu_ai_act_inventory.py:26-86` | Kommentar 26 vs 28 HIGH_RISK; 3 Phantomer `CREDIT_RISK_AGENT_IDS` | **Behoben (204470e4)** |
-| 118 | D09-M4 | MED | 3 | W6 | `main.py:1563` | Letzter roher `payload: Dict = Body(...)` (501-Notbremse) | Offen |
+| 118 | D09-M4 | MED | 3 | W6 | `main.py:1563` | Letzter roher `payload: Dict = Body(...)` (501-Notbremse) | **Behoben (5ee96345)** |
 | 119 | D09-M7 | MED | 3 | W7 | `CHANGELOG.md:82`; `docs/SYSTEM_HANDBUCH.md:4047` u. a. | `/content-studio` in 5 Doku-Stellen weiterhin als Produktfläche | Offen |
-| 120 | D09-M8 | MED | 3 | W6 | `backend/requirements.txt:1-7` | Backend-Manifest enthält nur 3/38 Dependencies, irreführende SSOT | Offen |
+| 120 | D09-M8 | MED | 3 | W6 | `backend/requirements.txt:1-7` | Backend-Manifest enthält nur 3/38 Dependencies, irreführende SSOT | **Behoben (5ee96345)** |
 | 121 | D03-L1 | LOW | 1 | W1 | `offline_memory_vault.py:66-71` + `tenant_context.py:64` | Primärmandant `default` wird vom Offline-Vault abgelehnt | **Behoben (8a2cb037)** |
 
 > **Zählung:** 121 Zeilen = **2 BLOCKER + 36 HIGH + 82 MED + 1 LOW** (letztere: D03-L1).

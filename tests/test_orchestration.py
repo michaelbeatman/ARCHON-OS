@@ -9,7 +9,7 @@ import asyncio
 import json
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -70,7 +70,7 @@ def make_mock_update_mc():
         captured['data'] = data
         return data
 
-    _update_mc.captured = captured
+    setattr(_update_mc, "captured", captured)
     return _update_mc
 
 
@@ -1024,7 +1024,7 @@ class TestTgPingSynthesis:
         """Failure Path: Kein dossier_dir — nur Text-Message, kein Dokument."""
         _tg_ping_synthesis(
             "Parent Title", "parent-1", "Synthesis text", "/fake/draft.md",
-            app_id=None, dossier_dir=None,
+            app_id=None, dossier_dir=None,  # type: ignore[arg-type]
             send_doc=mock_tg_send_doc,
             send_msg=mock_tg_send_msg,
             build_dossier=mock_build_dossier,

@@ -44,8 +44,8 @@
 | 17 | D12-H3 | HIGH | 9 | W2 | `backend/email_service.py:192-210,243-248` | IMAP-Sanitizer-Exception → Rohtext mit `security_status="safe"` | **Behoben (4c7344bd)** |
 | 18 | D13-H1 | HIGH | 9 | W3 | `quickchat.py:147-155`; `telegram.py:147-154`; `agent_chat.py:271-280` | `task_id`-lose Dispatches → neue `traj-anonymous:<time>` pro Call, Caps wirkungslos | **Behoben (eb308bb5)** |
 | 19 | D14-H1 | HIGH | 9 | W3 | `backend/kanban_verifier.py:217-247`; `kanban.py:226-255` | HITL-Override mit Body-Freitext fälschbar, leerer Proof = `passed=True` | **Behoben (eb308bb5)** |
-| 20 | D01-H1 | HIGH | 8 | W4 | `backend/computer_use_pbd.py:437-502` | PbD-Skripte nur `print()`/`sleep()`, melden `completed` | Offen |
-| 21 | D01-H2 | HIGH | 8 | W4 | `static/js/agent_profiles.js:4376-4411` | „Anweisung an Agenten" schreibt nur Feed-Eintrag, kein Konsument | Offen |
+| 20 | D01-H1 | HIGH | 8 | W4 | `backend/computer_use_pbd.py:437-502` | PbD-Skripte nur `print()`/`sleep()`, melden `completed` | **Behoben (204470e4)** |
+| 21 | D01-H2 | HIGH | 8 | W4 | `static/js/agent_profiles.js:4376-4411` | „Anweisung an Agenten" schreibt nur Feed-Eintrag, kein Konsument | **Behoben (204470e4)** |
 | 22 | D02-H1 | HIGH | 8 | W3 | `backend/agent_router.py:1098-1112` | n8n `unconfirmed`/`blocked` → `blocked=False` + „ausgeführt" | **Behoben (eb308bb5)** |
 | 23 | D02-H3 | HIGH | 8 | W3 | `backend/workflow_dag_runner.py:1357-1369` | `and profiles` → Fail-Open bei leerer Profil-SSOT, Generik-Prompt | **Behoben (eb308bb5)** |
 | 24 | D03-H2 | HIGH | 8 | W1 | `backend/workflow_dag_runner.py:788-839` | DAG-Ledger in globaler `ops.db`, keine `tenant_id`-Spalte | **Behoben (8a2cb037)** |
@@ -54,10 +54,10 @@
 | 27 | D05-H1 | HIGH | 8 | W2 | `voice_pipeline.py:100-172`; `local_security_guard.py:219-340` | Echte LLM-Calls ohne `llm_dispatch`-Proof (nur Blockpfade signiert) | **Behoben (4c7344bd)** |
 | 28 | D08-H1 | HIGH | 8 | W6 | `backend/workflow_dag_runner.py:1645,1675,1705` | Sync-Idempotency (`timeout=15`) im `async`-Retry blockiert Event-Loop | Offen |
 | 29 | D12-H2 | HIGH | 8 | W2 | `scripts/archon_mcp_server.py:347-361` | Jeder PocketBase-Fehler → `success, count=0` | **Behoben (4c7344bd)** |
-| 30 | D15-H1 | HIGH | 8 | W4 | `delegation.py:2181-2191`; `operations_execution.py:608-612` | 3-Tier-SOUL erzeugt+gespeichert, Worker nutzt nur `prof["prompt"]` | Offen |
-| 31 | D15-H2 | HIGH | 8 | W4 | `eu_ai_act_inventory.py:151-176`; `hr.py:291-320` | SOUL-Pin hasht `souls/<id>/SOUL.md`, Dispatch nutzt abweichenden Prompt | Offen |
-| 32 | D15-H3 | HIGH | 8 | W4 | `agent_profiles.js:990-1163`; `profiles.py:827-846` | Pflicht-Warn-Dialoge nur Legacy-UI, wegklickbar, Domain 4 nur 2/7 | Offen |
-| 33 | D15-H4 | HIGH | 8 | W4 | `data/ai_act_literacy_register.json:2-18` | Einziger HIGH_RISK-Bediener: `certificate_sha256: null`, Bootstrap | Offen |
+| 30 | D15-H1 | HIGH | 8 | W4 | `delegation.py:2181-2191`; `operations_execution.py:608-612` | 3-Tier-SOUL erzeugt+gespeichert, Worker nutzt nur `prof["prompt"]` | **Behoben (204470e4)** |
+| 31 | D15-H2 | HIGH | 8 | W4 | `eu_ai_act_inventory.py:151-176`; `hr.py:291-320` | SOUL-Pin hasht `souls/<id>/SOUL.md`, Dispatch nutzt abweichenden Prompt | **Behoben (204470e4)** |
+| 32 | D15-H3 | HIGH | 8 | W4 | `agent_profiles.js:990-1163`; `profiles.py:827-846` | Pflicht-Warn-Dialoge nur Legacy-UI, wegklickbar, Domain 4 nur 2/7 | **Behoben (204470e4)** |
+| 33 | D15-H4 | HIGH | 8 | W4 | `data/ai_act_literacy_register.json:2-18` | Einziger HIGH_RISK-Bediener: `certificate_sha256: null`, Bootstrap | **Behoben (204470e4)** |
 | 34 | D16-H1 | HIGH | 8 | W5 | `archon/routers/container_ops.py:184-185` | `inject_headers()` ohne `child_span()` → Self-Parenting, nicht im AST-Test | Offen |
 | 35 | D09-H1 | HIGH | 7 | W6 | God-Objects + `docker-compose.yml:409` | 4 Monolithen bis 161 KB + 11.232-Zeilen-Patch im Produktivmount | Offen |
 | 36 | D03-M3 | MED | 7 | W1 | `gdpr_compliance_engine.py:139` | `*.db.bak`-Alt-Kopien außerhalb Art.15/17 + Backup + Restore-Test | **Behoben (8a2cb037)** |
@@ -83,9 +83,9 @@
 | 56 | D14-M1 | MED | 7 | W3 | `consensus_gate.py:319-352` | Tier-Veto `break` beim ersten anwesenden Tier, `tie_break` dekorativ | **Behoben (eb308bb5)** |
 | 57 | D14-M4 | MED | 7 | W3 | `mcp_gateway.py:541-546`; `approval_policy_engine.py:665-670` | Leerer `requester_id` → Ersteller-Sperre wirkungslos (Self-Approval) | **Behoben (eb308bb5)** |
 | 58 | D14-M5 | MED | 7 | W3 | `kanban_verifier.py:302-342` | Cross-Modell-Helfer nur Precheck ohne LLM-Call | **Behoben (eb308bb5)** |
-| 59 | D15-H5 | HIGH | 7 | W4 | `agent_profiles.json:4545-4588,1568-1592` | Prompt deklariert `terminal/filesystem/execute_code`, `tools` verbietet sie | Offen |
-| 60 | D15-H6 | HIGH | 7 | W4 | `eu_ai_act_inventory.py:64-66`; `org_hierarchy.json:837-852` | `founder` und CEO identisches Mandat/Budget; Eigentümer Tier 3 unter CEO | Offen |
-| 61 | D15-H7 | HIGH | 7 | W4 | `role_budget_engine.py:835-1043`; `compliance_engine.py:363-373` | `hired_*-Profile` nicht im Inventar → `COMPLIANCE_BLOCKED`, Budget gebucht | Offen |
+| 59 | D15-H5 | HIGH | 7 | W4 | `agent_profiles.json:4545-4588,1568-1592` | Prompt deklariert `terminal/filesystem/execute_code`, `tools` verbietet sie | **Behoben (204470e4)** |
+| 60 | D15-H6 | HIGH | 7 | W4 | `eu_ai_act_inventory.py:64-66`; `org_hierarchy.json:837-852` | `founder` und CEO identisches Mandat/Budget; Eigentümer Tier 3 unter CEO | **Behoben (204470e4)** |
+| 61 | D15-H7 | HIGH | 7 | W4 | `role_budget_engine.py:835-1043`; `compliance_engine.py:363-373` | `hired_*-Profile` nicht im Inventar → `COMPLIANCE_BLOCKED`, Budget gebucht | **Behoben (204470e4)** |
 | 62 | D03-M4 | MED | 6 | W1 | `db_backup_manager.py:263-284,860-877` | Restore meldet Erfolg ohne GoBD-Auditnachweis | **Behoben (8a2cb037)** |
 | 63 | D04-M2 | MED | 6 | W2 | `dual_llm_sanitizer.py:102-114` | Trust-Toggle-Auditfehler nur gewarnt, Quelle bleibt verifiziert | **Behoben (4c7344bd)** |
 | 64 | D04-M3 | MED | 6 | W2 | `privacy_router.py:238-255` | `save_privacy_config` toleriert fehlgeschlagenen Ketteneintrag | **Behoben (4c7344bd)** |
@@ -95,7 +95,7 @@
 | 68 | D07-M4 | MED | 6 | W3 | `background_loops.py:163-164,186-187,195-196` | Deadlock-/Synthese-/Alert-Loop-Fehler nur DEBUG | **Behoben (eb25d51e)** |
 | 69 | D07-M7 | MED | 6 | W3 | `archon/services/lifecycle.py:78-88` | Shutdown-Hooks ohne `wait_for`, hängender `aclose()` blockiert | **Behoben (eb25d51e)** |
 | 70 | D08-M1 | MED | 6 | W6 | `archon/core/delegation.py:1142,1197,1279` | Fan-in/Synthese-Trigger liest DB + schreibt Vault synchron im Event-Loop | Offen |
-| 71 | D08-M8 | MED | 6 | W4 | `delegation.py:548,2181`; `core_dispatcher.py:1338-1422` | 3-Tier-SOUL nur im Delegations-Handoff, nicht im zentralen Dispatch | Offen |
+| 71 | D08-M8 | MED | 6 | W4 | `delegation.py:548,2181`; `core_dispatcher.py:1338-1422` | 3-Tier-SOUL nur im Delegations-Handoff, nicht im zentralen Dispatch | **Behoben (204470e4)** |
 | 72 | D10-M4 | MED | 6 | W5 | `docker-compose.yml:147`; `alerts.yml:40-65` | Dead-Man-Switch ohne Konsument im Default-Stack | Offen |
 | 73 | D10-M6 | MED | 6 | W5 | `archon-os-rebuild.bat:12,21`; `update_archon.bat:24` | Drei `.bat` ohne `-f docker-compose.yml` → Override-Bypass | Offen |
 | 74 | D10-M7 | MED | 6 | W5 | `lifecycle.py:75-93`; `graceful_shutdown_coordinator.py:433-446` | Shutdown-Hooks ohne globales Zeitbudget (nur Background-Tasks 10 s) | Offen |
@@ -108,7 +108,7 @@
 | 81 | D13-M3 | MED | 6 | W3 | `dispatch_budget_cache.py:161-199` | Nur geschätzte Tokens, kein `record_tokens(set_total=True)` | **Behoben (eb308bb5)** |
 | 82 | D14-M2 | MED | 6 | W3 | `lossless_session_dag.py:632-647` | STORM-Panel M94 ohne Produktivkonsumenten, `requires_human_gate` tot | **Behoben (eb308bb5)** |
 | 83 | D14-M3 | MED | 6 | W3 | `boardroom.py:120-156,668-693` | Konsens-Begründung (`evidence`, Tie-Break) nicht in Archiv/Kette | **Behoben (eb308bb5)** |
-| 84 | D15-M1 | MED | 6 | W4 | `compliance_engine.py:390-417` | SOUL-Hash nur für HIGH_RISK geprüft, 43 Rollen ohne Drift-Erkennung | Offen |
+| 84 | D15-M1 | MED | 6 | W4 | `compliance_engine.py:390-417` | SOUL-Hash nur für HIGH_RISK geprüft, 43 Rollen ohne Drift-Erkennung | **Behoben (204470e4)** |
 | 85 | D16-M2 | MED | 6 | W5 | `delegation.py:211-230,2247-2278` | Delegations-Payload ohne serverseitiges `trace_id` → zweiter Root bei Resume | Offen |
 | 86 | D16-M3 | MED | 6 | W5 | `audit_log.py:538-741` | Audit speichert `trace_id`, aber kein `span_id` | Offen |
 | 87 | D01-M3 | MED | 5 | W7 | `agent_profiles.js:220`; `operations_bot_screen.py:156-161` | `computer_use` als Tool beworben, Endpoint liefert `simulated` | Offen |
@@ -138,10 +138,10 @@
 | 111 | D08-M9 | MED | 4 | W6 | `role_budget_engine.py:49,1182` | Globaler `_BUDGET_LOCK` serialisiert alle Preflight-Checks | Offen |
 | 112 | D09-M2 | MED | 4 | W6 | `.importlinter:51-58` | Zweiter Import-Contract + Transitivität ungeprüft, `import-linter` fehlt im CI | Offen |
 | 113 | D09-M3 | MED | 4 | W6 | `auth_service.py:142` u. a. (~100) | Implizite Optionals per `# type: ignore[assignment]` unterdrückt | Offen |
-| 114 | D15-M2 | MED | 4 | W4 | `org_hierarchy.json:11-18,854-868` | Zwei Tier-1-APEX-Knoten + falscher `hermes-orchestrator`-Alias | Offen |
-| 115 | D15-M3 | MED | 4 | W4 | `agent_profiles.json:469`; `org_hierarchy.json:902-914` | `aggregation_lisa` deprecated vs aktiv; standby 39 vs 45 | Offen |
-| 116 | D15-M4 | MED | 4 | W4 | `build_souls_ssot.py:147-186` | CrewAI-Templates erhalten fachfremde Rollen-Negativgrenzen | Offen |
-| 117 | D15-M5 | MED | 4 | W4 | `eu_ai_act_inventory.py:26-86` | Kommentar 26 vs 28 HIGH_RISK; 3 Phantomer `CREDIT_RISK_AGENT_IDS` | Offen |
+| 114 | D15-M2 | MED | 4 | W4 | `org_hierarchy.json:11-18,854-868` | Zwei Tier-1-APEX-Knoten + falscher `hermes-orchestrator`-Alias | **Behoben (204470e4)** |
+| 115 | D15-M3 | MED | 4 | W4 | `agent_profiles.json:469`; `org_hierarchy.json:902-914` | `aggregation_lisa` deprecated vs aktiv; standby 39 vs 45 | **Behoben (204470e4)** |
+| 116 | D15-M4 | MED | 4 | W4 | `build_souls_ssot.py:147-186` | CrewAI-Templates erhalten fachfremde Rollen-Negativgrenzen | **Behoben (204470e4)** |
+| 117 | D15-M5 | MED | 4 | W4 | `eu_ai_act_inventory.py:26-86` | Kommentar 26 vs 28 HIGH_RISK; 3 Phantomer `CREDIT_RISK_AGENT_IDS` | **Behoben (204470e4)** |
 | 118 | D09-M4 | MED | 3 | W6 | `main.py:1563` | Letzter roher `payload: Dict = Body(...)` (501-Notbremse) | Offen |
 | 119 | D09-M7 | MED | 3 | W7 | `CHANGELOG.md:82`; `docs/SYSTEM_HANDBUCH.md:4047` u. a. | `/content-studio` in 5 Doku-Stellen weiterhin als Produktfläche | Offen |
 | 120 | D09-M8 | MED | 3 | W6 | `backend/requirements.txt:1-7` | Backend-Manifest enthält nur 3/38 Dependencies, irreführende SSOT | Offen |

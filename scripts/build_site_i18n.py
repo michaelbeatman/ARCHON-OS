@@ -324,8 +324,8 @@ def _sec_for(lang: str) -> dict[str, object]:
     return secs.get(lang, secs["en"])
 
 
-def _subpage_prefix(lang: str) -> tuple[str, str, str, str, str]:
-    """Return (arch, gdpr, compare, frameworks, specialists) relative hrefs."""
+def _subpage_prefix(lang: str) -> tuple[str, str, str, str, str, str]:
+    """Return (arch, gdpr, compare, frameworks, specialists, second_brain) relative hrefs."""
     if lang == "de":
         return (
             "architektur/",
@@ -333,6 +333,7 @@ def _subpage_prefix(lang: str) -> tuple[str, str, str, str, str]:
             "vergleich/",
             "boardroom-frameworks/",
             "spezialisten/",
+            "second-brain-gedaechtnis/",
         )
     if lang == "en":
         return (
@@ -341,6 +342,7 @@ def _subpage_prefix(lang: str) -> tuple[str, str, str, str, str]:
             "compare/",
             "boardroom-frameworks/",
             "specialists/",
+            "second-brain/",
         )
     # Non-EN/DE languages have their own native boardroom-frameworks/ subpage locally!
     return (
@@ -349,11 +351,12 @@ def _subpage_prefix(lang: str) -> tuple[str, str, str, str, str]:
         "../compare/",
         "boardroom-frameworks/",
         "../specialists/",
+        "../second-brain/",
     )
 
 
 def build_nav_subpages(lang: str) -> str:
-    arch, gdpr, cmp_url, fw_url, _ = _subpage_prefix(lang)
+    arch, gdpr, cmp_url, fw_url, _, _ = _subpage_prefix(lang)
     nav = _sec_for(lang)["nav"]
     assert isinstance(nav, dict)
     return (
@@ -372,7 +375,7 @@ def build_geo_strip(lang: str) -> str:
 
 
 def build_arch_section(lang: str) -> str:
-    arch, gdpr, _, _, _ = _subpage_prefix(lang)
+    arch, gdpr, _, _, _, _ = _subpage_prefix(lang)
     arch_cfg = _sec_for(lang)["arch"]
     assert isinstance(arch_cfg, dict)
     svg_labels = arch_cfg["svg"]
@@ -391,7 +394,7 @@ def build_arch_section(lang: str) -> str:
 
 
 def build_compare_section(lang: str) -> str:
-    arch, _, cmp_url, _, _ = _subpage_prefix(lang)
+    arch, _, cmp_url, _, _, _ = _subpage_prefix(lang)
     cmp_cfg = _sec_for(lang)["compare"]
     assert isinstance(cmp_cfg, dict)
     rows = cmp_cfg["rows"]
@@ -435,8 +438,8 @@ def build_compare_section(lang: str) -> str:
 
 
 def build_hub_section(lang: str) -> str:
-    arch, gdpr, cmp_url, fw_url, sp_url = _subpage_prefix(lang)
-    hrefs = [arch, gdpr, cmp_url, fw_url, sp_url]
+    arch, gdpr, cmp_url, fw_url, sp_url, sb_url = _subpage_prefix(lang)
+    hrefs = [arch, gdpr, cmp_url, fw_url, sp_url, sb_url]
     hub_cfg = _sec_for(lang)["hub"]
     assert isinstance(hub_cfg, dict)
     cards = hub_cfg["cards"]
@@ -652,6 +655,8 @@ def build_llms_txt(base_url: str, version: str) -> str:
 - [AI Boardroom — 80 Frameworks (DE)]({b}de/boardroom-frameworks/): Alle 80 strukturierten Decision-Engine-Methodiken alphabetisch durchsuchbar
 - [71 Agent Profiles (EN)]({b}specialists/): Alphabetical, filterable directory of all 71 agent profiles across 8 domains
 - [71 Agenten-Profile (DE)]({b}de/spezialisten/): Alle 71 Agenten-Profile aus 8 Domänen inkl. Guardrails
+- [2nd Brain, Vector RAG & Self-Improving Agents (EN)]({b}second-brain/): Obsidian Vault, ChromaDB/AnythingLLM local RAG, Corrective RAG, Agent HR files (wins/scorecards) & Skill Synthesis
+- [2nd Brain, Vektor-RAG & Self-Improving Agents (DE)]({b}de/second-brain-gedaechtnis/): Obsidian Vault, ChromaDB/AnythingLLM Wissensdatenbank, Personalakten, Epistemic Hygiene & Skill-Synthese
 
 ## Core Architecture & Differentiators
 

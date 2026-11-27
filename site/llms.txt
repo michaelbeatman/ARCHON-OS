@@ -22,6 +22,8 @@
 - [AI Boardroom — 80 Frameworks (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/): Alle 80 strukturierten Decision-Engine-Methodiken alphabetisch durchsuchbar
 - [71 Agent Profiles (EN)](https://michaelbeatman.github.io/ARCHON-OS/specialists/): Alphabetical, filterable directory of all 71 agent profiles across 8 domains
 - [71 Agenten-Profile (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/spezialisten/): Alle 71 Agenten-Profile aus 8 Domänen inkl. Guardrails
+- [2nd Brain, Vector RAG & Self-Improving Agents (EN)](https://michaelbeatman.github.io/ARCHON-OS/second-brain/): Obsidian Vault, ChromaDB/AnythingLLM local RAG, Corrective RAG, Agent HR files (wins/scorecards) & Skill Synthesis
+- [2nd Brain, Vektor-RAG & Self-Improving Agents (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/second-brain-gedaechtnis/): Obsidian Vault, ChromaDB/AnythingLLM Wissensdatenbank, Personalakten, Epistemic Hygiene & Skill-Synthese
 
 ## Core Architecture & Differentiators
 

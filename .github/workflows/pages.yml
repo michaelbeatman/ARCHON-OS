@@ -77,6 +77,8 @@ jobs:
             "https://${HOST}/ARCHON-OS/zh/boardroom-frameworks/"
             "https://${HOST}/ARCHON-OS/specialists/"
             "https://${HOST}/ARCHON-OS/de/spezialisten/"
+            "https://${HOST}/ARCHON-OS/second-brain/"
+            "https://${HOST}/ARCHON-OS/de/second-brain-gedaechtnis/"
           )
           for url in "${URLS[@]}"; do
             echo "Pinging IndexNow for: $url"

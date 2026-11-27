@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Generate Phase 3 indexable SEO/GEO HTML subpages from real repo data.
 
-Pages generated (19 HTML subpages total):
-  - 4 EN <-> DE deep-dive guides (8 pages):
+Pages generated (21 HTML subpages total):
+  - 5 EN <-> DE deep-dive guides (10 pages):
       architecture/       <-> de/architektur/
       gdpr-zero-egress/   <-> de/dsgvo-zero-egress/
       compare/            <-> de/vergleich/
       specialists/        <-> de/spezialisten/
+      second-brain/       <-> de/second-brain-gedaechtnis/
   - 11 fully localized AI Boardroom Frameworks catalogs (11 pages, 80 methods each, A-Z sorted):
       boardroom-frameworks/          (EN)
       <lang>/boardroom-frameworks/   (de, es, fr, it, ja, ko, nl, pt, ru, zh)
@@ -86,6 +87,7 @@ SUBPAGE_PAIRS: list[tuple[str, str]] = [
     ("compare/", "de/vergleich/"),
     ("boardroom-frameworks/", "de/boardroom-frameworks/"),
     ("specialists/", "de/spezialisten/"),
+    ("second-brain/", "de/second-brain-gedaechtnis/"),
 ]
 
 _SECTIONS_CACHE: dict[str, dict[str, Any]] | None = None
@@ -826,13 +828,81 @@ def _page_specialists(lang: str) -> tuple[str, str, str, str, str, str]:
     return title, desc, eyebrow, h1, lead, body
 
 
+def _page_second_brain(lang: str) -> tuple[str, str, str, str, str, str]:
+    if lang == "de":
+        title = "2nd Brain, Obsidian-RAG, Personalakte & Self-Improving Agents — Archon OS"
+        desc = "Wie Archon OS mit Obsidian Vault, ChromaDB/AnythingLLM Vektor-RAG, Corrective RAG, Agenten-Personalakten und Skill-Synthese auf eigenen Daten arbeitet."
+        eyebrow = "2nd Brain, RAG & Self-Evolution"
+        h1 = "Agenten, die auf deinen eigenen Daten arbeiten — und mit jedem Auftrag dazugelernt haben."
+        lead = "Statt flüchtiger Chat-Verläufe verbindet Archon OS einen lokalen Obsidian Markdown Vault mit vektorisiertem AnythingLLM/ChromaDB-RAG, Personalakten pro Agent (Wins, Scorecards, Learnings) und kontrollierter Skill-Synthese."
+        body = """
+<h2 class="sec">Die 5 Säulen des Wissens- &amp; Lernsystems</h2>
+<div class="feats">
+  <div class="feat"><h3>1. Obsidian Vault als 2nd Brain</h3><p>Alle Projektergebnisse, Dossiers, Radar-Berichte und Entscheidungen landen als saubere Markdown-Dateien in <code>obsidian_vault/</code> (<code>00_HR_Agenten</code>, <code>01_PROJEKTE</code>, <code>02_Wissensbibliothek</code>, <code>04_Radar</code>, <code>05_Content</code>) — lesbar für Mensch und Agent, ohne Vendor-Lock-in.</p></div>
+  <div class="feat"><h3>2. Lokale Wissensdatenbank (AnythingLLM + ChromaDB)</h3><p>Über <code>backend/rag_bridge.py</code> greifen Agenten direkt auf tausende lokal vektorisierte Dokumente (Verträge, PDFs, interne Handbücher, Research-Dossiers) in <code>ChromaDB</code> &amp; <code>AnythingLLM</code> zu. Dein Wissen verlässt niemals deinen Server.</p></div>
+  <div class="feat"><h3>3. Corrective RAG (CRAG) &amp; Hybrid Search</h3><p><code>backend/corrective_rag.py</code> prüft abgerufene Dokumente vor der Antwort gegen einen Relevanz-Schwellenwert (Standard <code>0.45</code>), verwirft Rauschen und formuliert Suchanfragen automatisch um — kombiniert mit Wissensgraph und hybrider Suche.</p></div>
+  <div class="feat"><h3>4. Personalakte, Wins &amp; Agent-Scorecards</h3><p><code>backend/agent_scorecard_engine.py</code> erfasst pro Rolle 8 operative Kennzahlen, 4-Augen-Reviews, Durchlaufzeiten, Wins und Erkenntnisse in <code>memory.db</code> und synchronisiert qualitative Beurteilungen direkt in die Markdown-Personalakte unter <code>00_HR_Agenten/Personalakten/</code>.</p></div>
+  <div class="feat"><h3>5. Self-Improving Agents &amp; Skill-Synthese</h3><p><code>backend/skill_synthesizer.py</code> und Hermes Agent erkennen wiederkehrende erfolgreiche Abläufe, erzeugen daraus neue wiederverwendbare <code>SKILL.md</code>-Entwürfe unter <code>.agents/skills/drafts/</code>, dokumentieren sie in der Personalakte und legen sie zur Freigabe vor.</p></div>
+  <div class="feat"><h3>6. Epistemic Hygiene &amp; Offline AEAD Vault</h3><p><code>backend/epistemic_hygiene.py</code> (M53) erkennt widersprüchliche Preise/Fristen, abgelaufene Vertragsstände und verwaiste Notizen im Vault. Sensibles Langzeitwissen liegt zudem AEAD-verschlüsselt im <code>compartment_vault.db</code> (<code>backend/offline_memory_vault.py</code>) mit ACL-Scopes.</p></div>
+</div>
+
+<h2 class="sec">Gedächtnis-Ebenen im Vergleich</h2>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Ebene</th><th>Speicherort &amp; Modul</th><th>Zweck</th><th>Datenschutz</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Working Memory (Pinned)</strong></td><td><code>backend/core_memory_manager.py</code></td><td>Aktive Projektfakten &amp; Persona-Blöcke mit Scope (<code>private/shared/project/global</code>) &amp; TTL</td><td>Mandanten- &amp; ACL-isoliert</td></tr>
+      <tr><td><strong>Vektor-RAG (Wissensdatenbank)</strong></td><td><code>ChromaDB</code> + <code>AnythingLLM</code> + <code>rag_bridge.py</code></td><td>Semantische Suche über tausende eigene Dokumente, Verträge &amp; PDFs</td><td>100 % lokal im Docker-Netz</td></tr>
+      <tr><td><strong>Personalakte &amp; Learnings</strong></td><td><code>memory.db</code> + <code>Personalakten/</code></td><td>Wins, Fehler-Prävention, Scorecards &amp; Wissenszuwachs je Agent</td><td>Revisionssicher &amp; menschenlesbar</td></tr>
+      <tr><td><strong>Self-Improving Skills</strong></td><td><code>.agents/skills/</code> + <code>skill_synthesizer.py</code></td><td>Automatisch abgeleitete <code>SKILL.md</code>-Workflows nach erfolgreichen Läufen</td><td>Freigabe-Gate vor Aktivierung</td></tr>
+      <tr><td><strong>Offline AEAD Vault</strong></td><td><code>compartment_vault.db</code> + <code>lossless_session_dag.py</code></td><td>Verschlüsseltes Langzeitgedächtnis &amp; verlustfreie Session-Historie</td><td>Lokal verschlüsselt, Zero-Egress</td></tr>
+    </tbody>
+  </table>
+</div>
+"""
+        return title, desc, eyebrow, h1, lead, body
+
+    title = "2nd Brain, Obsidian Vector RAG, Agent HR Files & Self-Improving Skills — Archon OS"
+    desc = "How Archon OS grounds agents on your own vectorized documents using Obsidian Vault, ChromaDB/AnythingLLM RAG, Corrective RAG, Agent Scorecards & Skill Synthesis."
+    eyebrow = "2nd Brain, RAG & Self-Evolution"
+    h1 = "Agents grounded on your own data — with persistent memory and self-improving skills."
+    lead = "Instead of ephemeral chat logs, Archon OS combines a local Obsidian Markdown vault with vectorized ChromaDB/AnythingLLM RAG, per-agent HR files (wins, scorecards, learnings), and human-gated skill synthesis."
+    body = """
+<h2 class="sec">Six Pillars of the Knowledge &amp; Self-Evolution Layer</h2>
+<div class="feats">
+  <div class="feat"><h3>1. Obsidian Vault as 2nd Brain</h3><p>Project deliverables, research dossiers, radar digests, and boardroom decisions are stored as clean Markdown inside <code>obsidian_vault/</code> (<code>00_HR_Agenten</code>, <code>01_PROJEKTE</code>, <code>02_Wissensbibliothek</code>, <code>04_Radar</code>, <code>05_Content</code>) — readable by both humans and agents with zero lock-in.</p></div>
+  <div class="feat"><h3>2. Local Knowledge Base (AnythingLLM + ChromaDB)</h3><p>Via <code>backend/rag_bridge.py</code>, agents query thousands of locally vectorized company documents (contracts, PDFs, internal manuals, dossiers) stored in <code>ChromaDB</code> &amp; <code>AnythingLLM</code> without sending your knowledge base to cloud vector APIs.</p></div>
+  <div class="feat"><h3>3. Corrective RAG (CRAG) &amp; Hybrid Search</h3><p><code>backend/corrective_rag.py</code> scores retrieved chunks against <code>relevance_threshold</code> (default <code>0.45</code>) before generation, discards noise, and automatically rewrites queries across hybrid search and the local knowledge graph.</p></div>
+  <div class="feat"><h3>4. Agent HR Files, Wins &amp; Scorecards</h3><p><code>backend/agent_scorecard_engine.py</code> tracks 8 operational KPIs, 4-eyes review scores, cycle times, wins, and operator notes per role in <code>memory.db</code>, syncing qualitative assessments into each agent's Markdown HR file.</p></div>
+  <div class="feat"><h3>5. Self-Improving Agents &amp; Skill Synthesis</h3><p><code>backend/skill_synthesizer.py</code> and Hermes Agent detect recurring successful workflows, draft reusable <code>SKILL.md</code> packages under <code>.agents/skills/drafts/</code>, log them in the agent's HR file, and submit them for human approval.</p></div>
+  <div class="feat"><h3>6. Epistemic Hygiene &amp; Offline AEAD Vault</h3><p><code>backend/epistemic_hygiene.py</code> (M53) flags conflicting prices/terms, expired contract dates, and orphaned notes across the vault, while <code>backend/offline_memory_vault.py</code> encrypts sensitive archival memory in <code>compartment_vault.db</code>.</p></div>
+</div>
+
+<h2 class="sec">Memory &amp; Knowledge Layers</h2>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Layer</th><th>Storage &amp; Module</th><th>Purpose</th><th>Privacy &amp; Control</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Working Memory (Pinned)</strong></td><td><code>backend/core_memory_manager.py</code></td><td>Active project facts &amp; persona blocks with ACL scopes (<code>private/shared/project/global</code>) &amp; TTL</td><td>Tenant- &amp; ACL-isolated</td></tr>
+      <tr><td><strong>Vector RAG (Knowledge Base)</strong></td><td><code>ChromaDB</code> + <code>AnythingLLM</code> + <code>rag_bridge.py</code></td><td>Semantic retrieval across thousands of private contracts, PDFs &amp; notes</td><td>100% local inside Docker network</td></tr>
+      <tr><td><strong>Agent HR File &amp; Learnings</strong></td><td><code>memory.db</code> + <code>Personalakten/</code></td><td>Wins, failure prevention, scorecards &amp; domain insights per specialist</td><td>Auditable &amp; human-readable Markdown</td></tr>
+      <tr><td><strong>Self-Improving Skills</strong></td><td><code>.agents/skills/</code> + <code>skill_synthesizer.py</code></td><td>Synthesized reusable <code>SKILL.md</code> workflows from proven runs</td><td>Human approval gate before activation</td></tr>
+      <tr><td><strong>Offline AEAD Vault</strong></td><td><code>compartment_vault.db</code> + <code>lossless_session_dag.py</code></td><td>AEAD-encrypted archival memory &amp; lossless session summary DAG</td><td>Offline encrypted, Zero-Egress</td></tr>
+    </tbody>
+  </table>
+</div>
+"""
+    return title, desc, eyebrow, h1, lead, body
+
+
 def build_all(base_url: str, lastmod: str) -> list[tuple[str, str]]:
-    """Build 4 DE/EN Phase 3 HTML guides + 11 localized Boardroom-Frameworks catalogs."""
+    """Build 5 DE/EN Phase 3 HTML guides + 11 localized Boardroom-Frameworks catalogs."""
     bilingual_builders = [
         ("architecture/", "de/architektur/", _page_architecture, "TechArticle"),
         ("gdpr-zero-egress/", "de/dsgvo-zero-egress/", _page_gdpr, "TechArticle"),
         ("compare/", "de/vergleich/", _page_compare, "TechArticle"),
         ("specialists/", "de/spezialisten/", _page_specialists, "CollectionPage"),
+        ("second-brain/", "de/second-brain-gedaechtnis/", _page_second_brain, "TechArticle"),
     ]
     for en_rel, de_rel, fn, schema_type in bilingual_builders:
         for lang, rel in (("en", en_rel), ("de", de_rel)):

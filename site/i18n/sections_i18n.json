@@ -112,6 +112,11 @@
           "05 / Fleet",
           "71 Specialists",
           "Filterable directory of all specialist agent profiles across 8 domains."
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG, HR Files &amp; Self-Evolution",
+          "Obsidian Vault, ChromaDB vector knowledge base, agent win/scorecard files &amp; skill synthesis."
         ]
       ]
     },
@@ -247,6 +252,11 @@
           "05 / Flotte",
           "71 Spezialisten",
           "Alle Agenten-Profile aus 8 Domänen inkl. Budget-Grenzen &amp; Guardrails."
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG, Personalakte &amp; Self-Evolution",
+          "Obsidian Vault, ChromaDB-Wissensdatenbank, Agenten-Personalakten (Wins/Learnings) &amp; Skill-Synthese."
         ]
       ]
     },
@@ -382,6 +392,11 @@
           "05 / Flota",
           "71 Especialistas",
           "Directorio filtrable de los 71 perfiles de agentes en 8 dominios."
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG, Expediente y Auto-Evolución",
+          "Obsidian Vault, base vectorial ChromaDB, historial de logros por agente y síntesis de skills."
         ]
       ]
     },
@@ -517,6 +532,11 @@
           "05 / Flotte",
           "71 Spécialistes",
           "Annuaire filtrable des 71 profils d'agents répartis sur 8 domaines."
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG, Dossier RH &amp; Auto-Évolution",
+          "Obsidian Vault, base vectorielle ChromaDB, dossiers de performance par agent et synthèse de skills."
         ]
       ]
     },
@@ -652,6 +672,11 @@
           "05 / Flotta",
           "71 Specialisti",
           "Directory filtrabile dei 71 profili di agenti in 8 domini."
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG, Fascicolo &amp; Auto-Evoluzione",
+          "Obsidian Vault, knowledge base vettoriale ChromaDB, schede risultati per agente e sintesi skill."
         ]
       ]
     },
@@ -787,6 +812,11 @@
           "05 / 艦隊",
           "71 専門家プロファイル",
           "8領域にわたる71体の専門エージェント一覧とガードレール。"
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG・人事記録・自己進化",
+          "Obsidian Vault、ChromaDB ベクトル知識基盤、エージェント実績ファイルとスキル自動合成。"
         ]
       ]
     },
@@ -922,6 +952,11 @@
           "05 / 플릿",
           "71 전문가 프로필",
           "8개 도메인의 71개 전문 에이전트 역할과 가드레일 디렉터리."
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG, 인사 파일 &amp; 자기 진화",
+          "Obsidian Vault, ChromaDB 벡터 지식 DB, 에이전트 성과·학습 기록 및 스킬 자동 합성."
         ]
       ]
     },
@@ -1057,6 +1092,11 @@
           "05 / Vloot",
           "71 Specialisten",
           "Filterbaar overzicht van alle 71 agentprofielen over 8 domeinen."
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG, Dossier &amp; Zelfevolutie",
+          "Obsidian Vault, lokale ChromaDB-kennisbank, agentdossiers (wins/learnings) &amp; skill-synthese."
         ]
       ]
     },
@@ -1192,6 +1232,11 @@
           "05 / Frota",
           "71 Especialistas",
           "Diretório filtrável dos 71 perfis de agentes em 8 domínios."
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG, Dossiê &amp; Autoevolução",
+          "Obsidian Vault, base vetorial ChromaDB, dossiês de conquistas por agente e síntese de skills."
         ]
       ]
     },
@@ -1327,6 +1372,11 @@
           "05 / Флот",
           "71 специалистов",
           "Справочник всех 71 профилей агентов в 8 бизнес-доменах."
+        ],
+        [
+          "06 / 2nd Brain",
+          "RAG, личное дело и саморазвитие",
+          "Obsidian Vault, векторная база ChromaDB, карточки достижений агентов и синтез навыков."
         ]
       ]
     },
@@ -1462,6 +1512,11 @@
           "05 / 舰队",
           "71 专家角色",
           "覆盖 8 大企业领域的 71 个智能体角色与安全护栏索引。"
+        ],
+        [
+          "06 / 第二大脑",
+          "RAG、档案与自我进化",
+          "Obsidian 知识库、ChromaDB 本地向量检索、智能体战绩档案与技能自动合成。"
         ]
       ]
     },

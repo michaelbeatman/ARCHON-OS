@@ -116,8 +116,8 @@ def test_m5_socket_proxy_is_hardened_and_targets_are_narrow():
     assert "- ALL" in proxy
     assert 'no-new-privileges:true' in proxy
     assert "pids: 128" in proxy
-    assert "/run:rw,nosuid,size=8m" in proxy
-    assert "/var/lib/haproxy:rw,nosuid,size=8m" in proxy
+    assert "/run:rw,nosuid,mode=1777,size=8m" in proxy
+    assert "/var/lib/haproxy:rw,nosuid,mode=1777,size=8m" in proxy
     assert "/var/run/docker.sock:/var/run/docker.sock:ro" in proxy
 
     acl = _read("deploy/docker-socket-proxy/haproxy.cfg")

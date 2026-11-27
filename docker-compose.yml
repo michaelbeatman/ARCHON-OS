@@ -375,9 +375,9 @@ services:
     # W5-C/D10-M5: Container-Haertung analog archon-os / archon-autoheal.
     read_only: true
     tmpfs:
-      - /run:rw,nosuid,size=8m
-      - /tmp:rw,nosuid,size=8m
-      - /var/lib/haproxy:rw,nosuid,size=8m
+      - /run:rw,nosuid,mode=1777,size=8m
+      - /tmp:rw,nosuid,mode=1777,size=8m
+      - /var/lib/haproxy:rw,nosuid,mode=1777,size=8m
     cap_drop:
       - ALL
     security_opt:

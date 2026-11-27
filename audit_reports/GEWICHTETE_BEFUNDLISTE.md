@@ -111,8 +111,8 @@
 | 84 | D15-M1 | MED | 6 | W4 | `compliance_engine.py:390-417` | SOUL-Hash nur für HIGH_RISK geprüft, 43 Rollen ohne Drift-Erkennung | **Behoben (204470e4)** |
 | 85 | D16-M2 | MED | 6 | W5 | `delegation.py:211-230,2247-2278` | Delegations-Payload ohne serverseitiges `trace_id` → zweiter Root bei Resume | **Behoben (0a8fcf8a)** |
 | 86 | D16-M3 | MED | 6 | W5 | `audit_log.py:538-741` | Audit speichert `trace_id`, aber kein `span_id` | **Behoben (0a8fcf8a)** |
-| 87 | D01-M3 | MED | 5 | W7 | `agent_profiles.js:220`; `operations_bot_screen.py:156-161` | `computer_use` als Tool beworben, Endpoint liefert `simulated` | Offen |
-| 88 | D01-M5 | MED | 5 | W7 | `MissionControlCockpit.js:306-320,428-446` | Status-Map unvollständig (`queued`/`awaiting_gate`/`cancelled`/`paused`) | Offen |
+| 87 | D01-M3 | MED | 5 | W7 | `agent_profiles.js:220`; `operations_bot_screen.py:156-161` | `computer_use` als Tool beworben, Endpoint liefert `simulated` | **Behoben (a600605e)** |
+| 88 | D01-M5 | MED | 5 | W7 | `MissionControlCockpit.js:306-320,428-446` | Status-Map unvollständig (`queued`/`awaiting_gate`/`cancelled`/`paused`) | **Behoben (a600605e)** |
 | 89 | D02-M1 | MED | 5 | W3 | `workflow_dag_runner.py:2017-2024` | DAG-Run-Cap erst nach erstem Token wirksam | **Behoben (eb308bb5)** |
 | 90 | D02-M2 | MED | 5 | W3 | `agent_router.py:1086-1090` | Router/Dispatcher füttern Routing-Guard mit unterschiedlichem Text | **Behoben (eb308bb5)** |
 | 91 | D03-M1 | MED | 5 | W1 | `orchestration.py:1139-1152` | Finalbericht nicht-atomar, Teilfehler nur `logger.warning` | **Behoben (8a2cb037)** |
@@ -131,10 +131,10 @@
 | 104 | D16-M1 | MED | 5 | W5 | `runtime_endpoints.py:107-113` | CORS erlaubt/exponiert `traceparent`/`tracestate`/`X-Trace-Id` nicht | **Behoben (0a8fcf8a)** |
 | 105 | D16-M4 | MED | 5 | W5 | `trace_log_filter.py:29-47`; `promtail-config.yml:25-29` | Log-Brücke/Promtail nur `trace_id`, kein `span_id` | **Behoben (0a8fcf8a)** |
 | 106 | D16-M5 | MED | 5 | W5 | `delegation.py:1841-1868`; `dossier_builder.py` | Vault-Dossier/Sidecar ohne Trace-Frontmatter | **Behoben (0a8fcf8a)** |
-| 107 | D01-M4 | MED | 4 | W7 | `ExecutiveCockpit.tsx:96-98`; `operations_kanban.js:382` | SSE-Filter ignorieren `task_cancelled`/`task_status` | Offen |
-| 108 | D01-M6 | MED | 4 | W7 | `backend/docker_services.py:271-279` | Immer `{"status":"success"}` auch ohne `save_services` | Offen |
-| 109 | D01-M7 | MED | 4 | W7 | `orchestration.py:1099-1100,1447-1448` | `folder_namer(x) -> ""` Fallback ohne Fehler/Log | Offen |
-| 110 | D01-M8 | MED | 4 | W7 | `audit_log.py:252-257`; `autonomy_settings.py:404-412` | Zwei hartcodierte `return True`-Audit-Flags ohne Rückkopplung | Offen |
+| 107 | D01-M4 | MED | 4 | W7 | `ExecutiveCockpit.tsx:96-98`; `operations_kanban.js:382` | SSE-Filter ignorieren `task_cancelled`/`task_status` | **Behoben (a600605e)** |
+| 108 | D01-M6 | MED | 4 | W7 | `backend/docker_services.py:271-279` | Immer `{"status":"success"}` auch ohne `save_services` | **Behoben (a600605e)** |
+| 109 | D01-M7 | MED | 4 | W7 | `orchestration.py:1099-1100,1447-1448` | `folder_namer(x) -> ""` Fallback ohne Fehler/Log | **Behoben (a600605e)** |
+| 110 | D01-M8 | MED | 4 | W7 | `audit_log.py:252-257`; `autonomy_settings.py:404-412` | Zwei hartcodierte `return True`-Audit-Flags ohne Rückkopplung | **Behoben (a600605e)** |
 | 111 | D08-M9 | MED | 4 | W6 | `role_budget_engine.py:49,1182` | Globaler `_BUDGET_LOCK` serialisiert alle Preflight-Checks | **Behoben (5ee96345)** |
 | 112 | D09-M2 | MED | 4 | W6 | `.importlinter:51-58` | Zweiter Import-Contract + Transitivität ungeprüft, `import-linter` fehlt im CI | **Behoben (5ee96345)** |
 | 113 | D09-M3 | MED | 4 | W6 | `auth_service.py:142` u. a. (~100) | Implizite Optionals per `# type: ignore[assignment]` unterdrückt | **Behoben (5ee96345)** |
@@ -143,7 +143,7 @@
 | 116 | D15-M4 | MED | 4 | W4 | `build_souls_ssot.py:147-186` | CrewAI-Templates erhalten fachfremde Rollen-Negativgrenzen | **Behoben (204470e4)** |
 | 117 | D15-M5 | MED | 4 | W4 | `eu_ai_act_inventory.py:26-86` | Kommentar 26 vs 28 HIGH_RISK; 3 Phantomer `CREDIT_RISK_AGENT_IDS` | **Behoben (204470e4)** |
 | 118 | D09-M4 | MED | 3 | W6 | `main.py:1563` | Letzter roher `payload: Dict = Body(...)` (501-Notbremse) | **Behoben (5ee96345)** |
-| 119 | D09-M7 | MED | 3 | W7 | `CHANGELOG.md:82`; `docs/SYSTEM_HANDBUCH.md:4047` u. a. | `/content-studio` in 5 Doku-Stellen weiterhin als Produktfläche | Offen |
+| 119 | D09-M7 | MED | 3 | W7 | `CHANGELOG.md:82`; `docs/SYSTEM_HANDBUCH.md:4047` u. a. | `/content-studio` in 5 Doku-Stellen weiterhin als Produktfläche | **Behoben (a600605e)** |
 | 120 | D09-M8 | MED | 3 | W6 | `backend/requirements.txt:1-7` | Backend-Manifest enthält nur 3/38 Dependencies, irreführende SSOT | **Behoben (5ee96345)** |
 | 121 | D03-L1 | LOW | 1 | W1 | `offline_memory_vault.py:66-71` + `tenant_context.py:64` | Primärmandant `default` wird vom Offline-Vault abgelehnt | **Behoben (8a2cb037)** |
 

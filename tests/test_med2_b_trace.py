@@ -8,7 +8,6 @@ monkeypatchten ENV/Logger.
 from __future__ import annotations
 
 import logging
-import os
 
 import pytest
 
@@ -53,8 +52,8 @@ def test_start_trace_context_error_is_counted(monkeypatch, tmp_path):
 
     tracer.start_trace("probe")
 
-    assert tracer._record_stats["failures"] == before + 1
-    assert "start_trace-context" in tracer._record_stats["last_error"]
+    assert tracer._record_stats["failures"] == before + 1  # type: ignore[operator]
+    assert "start_trace-context" in tracer._record_stats["last_error"]  # type: ignore[operator]
 
 
 def test_end_trace_bad_start_time_is_counted(tmp_path):
@@ -70,8 +69,8 @@ def test_end_trace_bad_start_time_is_counted(tmp_path):
 
     tracer.end_trace(tid, status="OK")
 
-    assert tracer._record_stats["failures"] == before + 1
-    assert "end_trace-duration" in tracer._record_stats["last_error"]
+    assert tracer._record_stats["failures"] == before + 1  # type: ignore[operator]
+    assert "end_trace-duration" in tracer._record_stats["last_error"]  # type: ignore[operator]
 
 
 # ---------------------------------------------------------------------------
@@ -99,14 +98,24 @@ def test_fleet_self_healing_audit_failure_is_visible(monkeypatch, caplog):
 
     monkeypatch.setattr("backend.notification_hub.notification_hub", _Hub())
 
+    # D05-M1: Default ARCHON_AUDIT_STRICT=1 bricht fail-closed mit RuntimeError ab,
+    # statt ohne GoBD-Ketteneintrag Erfolg zu quittieren. Zaehler + ERROR-Log
+    # muessen trotzdem sichtbar sein.
+    monkeypatch.delenv("ARCHON_AUDIT_STRICT", raising=False)
     counts_before = fsh.get_audit_error_counts().get("FLEET_SELF_HEALING_RESTART", 0)
     with caplog.at_level(logging.ERROR, logger="archon.fleet_self_healing"):
-        result = fsh.restart_service_container("n8n")
+        with pytest.raises(RuntimeError, match="audit_write_failed"):
+            fsh.restart_service_container("n8n")
 
-    assert result["audit_write_failed"] is True
-    assert result["audit_status"] == "error"
     assert fsh.get_audit_error_counts().get("FLEET_SELF_HEALING_RESTART", 0) == counts_before + 1
     assert any("FLEET_SELF_HEALING_RESTART" in r.message for r in caplog.records)
+
+    # Explizites Opt-out (ARCHON_AUDIT_STRICT=0) liefert weiterhin sichtbares Fehler-Flag.
+    monkeypatch.setenv("ARCHON_AUDIT_STRICT", "0")
+    result = fsh.restart_service_container("n8n")
+    assert result["audit_write_failed"] is True
+    assert result["audit_status"] == "error"
+    assert fsh.get_audit_error_counts().get("FLEET_SELF_HEALING_RESTART", 0) == counts_before + 2
 
 
 def test_event_mesh_webhook_audit_error_is_counted(monkeypatch, caplog):

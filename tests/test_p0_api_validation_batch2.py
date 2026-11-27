@@ -20,12 +20,12 @@ from archon.routers import system as system_router  # noqa: E402
 
 def test_system_models_exist_and_validate_types():
     with pytest.raises(ValidationError):
-        system_router.SystemLanguageRequest(language=123)
+        system_router.SystemLanguageRequest(language=123)  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
-        system_router.DrainStartRequest(grace_seconds="not-a-number")
+        system_router.DrainStartRequest(grace_seconds="not-a-number")  # type: ignore[arg-type]
 
 
-def test_system_language_endpoint_rejects_wrong_type_with_422():
+def test_system_language_endpoint_rejects_wrong_type_with_422(admin_rbac_bypass):
     old_deps = dict(system_router._DEPS)
     system_router.configure(require_admin=lambda request: None)
     try:
@@ -40,11 +40,11 @@ def test_system_language_endpoint_rejects_wrong_type_with_422():
 
 def test_plugin_tool_model_validates_tool_name():
     with pytest.raises(ValidationError):
-        plugins_router.PluginToolExecuteRequest(tool_name=123)
+        plugins_router.PluginToolExecuteRequest(tool_name=123)  # type: ignore[arg-type]
 
 
 def test_plugin_settings_keeps_arbitrary_config_fields():
-    model = plugins_router.PluginSettingsRequest(custom_option="keep-me", nested={"a": 1})
+    model = plugins_router.PluginSettingsRequest(custom_option="keep-me", nested={"a": 1})  # type: ignore[call-arg]
     dumped = model.model_dump()
     assert dumped["custom_option"] == "keep-me"
     assert dumped["nested"] == {"a": 1}

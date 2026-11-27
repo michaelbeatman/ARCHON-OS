@@ -9,7 +9,6 @@ P1 Distributed Tracing Tests (D16):
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
 
 
 def _span_id_of(traceparent: str) -> str:
@@ -134,14 +133,14 @@ def test_n8n_execution_injects_trace_id_and_traceparent(monkeypatch):
 
 
 def test_agent_router_injects_traceparent_and_records_audit_trace_id(tmp_path, monkeypatch):
+    import datetime
+    import sqlite3
+
+    import backend.role_budget_engine as rbe
+    from backend import privacy_router as pr
     from backend import trace_context as tc
     from backend.agent_router import AgentRouter
     from backend.audit_log import ChainedAuditLog
-    from backend import privacy_router as pr
-
-    import datetime
-    import sqlite3
-    import backend.role_budget_engine as rbe
 
     tid, sid = tc.start_trace()
     alog = ChainedAuditLog(db_path=str(tmp_path / "router_p1.db"))
@@ -206,6 +205,7 @@ def test_agent_router_injects_traceparent_and_records_audit_trace_id(tmp_path, m
 
 def test_hermes_proxy_propagates_traceparent(monkeypatch):
     from starlette.requests import Request
+
     from archon.routers import hermes_proxy as hp
     from backend import trace_context as tc
 
@@ -247,8 +247,9 @@ def test_hermes_proxy_propagates_traceparent(monkeypatch):
     assert resp.headers.get("traceparent") == captured["headers"]["traceparent"]
 
 
-def test_operations_dag_tracing_status_endpoint():
+def test_operations_dag_tracing_status_endpoint(admin_rbac_bypass):
     from fastapi.testclient import TestClient
+
     import main as app_main
 
     client = TestClient(app_main.app)

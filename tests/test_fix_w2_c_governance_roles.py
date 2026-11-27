@@ -93,7 +93,6 @@ def test_status_force_done_with_proof_writes_actor_and_evidence(monkeypatch):
 
     monkeypatch.setattr(ops, "_update_task_status_db", _fake_db)
     monkeypatch.setattr(ops, "_sync_to_memory_bridge", lambda *a, **k: None)
-    monkeypatch.setattr(ops, "get_provider", lambda name: None)
 
     result = asyncio.run(ops.update_task_status(
         None, "t-1", TaskStatusUpdateRequest(  # type: ignore[arg-type]

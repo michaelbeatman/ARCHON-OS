@@ -5,8 +5,6 @@ den Task NICHT auf 'done' laufen lassen. Vor dem Fix wurden beide Fehlerfaelle
 als {"verdict": "approved", "score": 75/80} erfunden (R-16).
 """
 
-import asyncio
-import json
 import os
 import sqlite3
 import sys
@@ -59,7 +57,7 @@ def _temp_kanban_db(task_status="review"):
 
 
 @pytest.mark.asyncio
-async def test_reviewer_exception_verdict_changes_requested():
+async def test_reviewer_exception_verdict_changes_requested(admin_rbac_bypass):
     """Exception im Reviewer-Dispatch → changes_requested, Task bleibt in review."""
     from backend.operations_api import QualityReviewRequest
     open_db, db_path = _temp_kanban_db()
@@ -70,11 +68,10 @@ async def test_reviewer_exception_verdict_changes_requested():
 
     with mock.patch.object(ops, "_get_kanban_connection", side_effect=open_db), \
          mock.patch.object(ops, "_load_profiles_map", return_value={}), \
-         mock.patch.object(ops, "require_admin_or_503", return_value={"role": "admin"}), \
          mock.patch.dict(sys.modules, {"core_dispatcher": dispatcher}), \
          mock.patch("backend.agent_aliases.resolve_agent_id", side_effect=lambda a: a), \
          mock.patch("backend.kanban_sidecar.update_kanban_meta", side_effect=lambda m: ({"tasks": {}}, None)):
-        res = await ops.trigger_quality_review("t-a", None, QualityReviewRequest())
+        res = await ops.trigger_quality_review("t-a", None, QualityReviewRequest())  # type: ignore[arg-type]
 
     assert res["quality_review"]["status"] == "changes_requested"
     assert res["quality_review"]["score"] == 0
@@ -84,7 +81,7 @@ async def test_reviewer_exception_verdict_changes_requested():
 
 
 @pytest.mark.asyncio
-async def test_reviewer_prose_answer_no_json_fail_closed():
+async def test_reviewer_prose_answer_no_json_fail_closed(admin_rbac_bypass):
     """Antwort ohne JSON (Prosa/Timeout) → changes_requested statt invented approval."""
     from backend.operations_api import QualityReviewRequest
     open_db, db_path = _temp_kanban_db()
@@ -95,11 +92,10 @@ async def test_reviewer_prose_answer_no_json_fail_closed():
 
     with mock.patch.object(ops, "_get_kanban_connection", side_effect=open_db), \
          mock.patch.object(ops, "_load_profiles_map", return_value={}), \
-         mock.patch.object(ops, "require_admin_or_503", return_value={"role": "admin"}), \
          mock.patch.dict(sys.modules, {"core_dispatcher": dispatcher}), \
          mock.patch("backend.agent_aliases.resolve_agent_id", side_effect=lambda a: a), \
          mock.patch("backend.kanban_sidecar.update_kanban_meta", side_effect=lambda m: ({"tasks": {}}, None)):
-        res = await ops.trigger_quality_review("t-a", None, QualityReviewRequest())
+        res = await ops.trigger_quality_review("t-a", None, QualityReviewRequest())  # type: ignore[arg-type]
 
     assert res["quality_review"]["status"] == "changes_requested"
     assert res["quality_review"]["score"] == 0
@@ -109,7 +105,9 @@ async def test_reviewer_prose_answer_no_json_fail_closed():
 
 
 @pytest.mark.asyncio
-async def test_body_force_verdict_cannot_approve_and_four_eyes_override_still_works():
+async def test_body_force_verdict_cannot_approve_and_four_eyes_override_still_works(
+    admin_rbac_bypass,
+):
     """W2-C/W5: `force_verdict` ist wirkungslos; Freigabe nur ueber 4 Augen.
 
     Der alte Test erwartete, dass ein Body-Feld ``force_verdict='approved'``
@@ -130,15 +128,14 @@ async def test_body_force_verdict_cannot_approve_and_four_eyes_override_still_wo
     dispatcher.dispatch_to_omniroute_or_container = _boom
 
     # 1) Body-Override darf nichts bewirken — das Review bleibt fail-closed.
-    req = QualityReviewRequest(force_verdict="approved", comment="Freigegeben")
+    req = QualityReviewRequest(force_verdict="approved", comment="Freigegeben")  # type: ignore[call-arg]
     assert not hasattr(req, "force_verdict")
     with mock.patch.object(ops, "_get_kanban_connection", side_effect=open_db), \
          mock.patch.object(ops, "_load_profiles_map", return_value={}), \
-         mock.patch.object(ops, "require_admin_or_503", return_value={"role": "admin"}), \
          mock.patch.dict(sys.modules, {"core_dispatcher": dispatcher}), \
          mock.patch("backend.agent_aliases.resolve_agent_id", side_effect=lambda a: a), \
          mock.patch("backend.kanban_sidecar.update_kanban_meta", side_effect=lambda m: ({"tasks": {}}, None)):
-        res = await ops.trigger_quality_review("t-a", None, req)
+        res = await ops.trigger_quality_review("t-a", None, req)  # type: ignore[arg-type]
     assert res["quality_review"]["status"] == "changes_requested"
 
     # 2) Der vorgesehene 4-Augen-Weg funktioniert weiterhin — aber nur mit
@@ -155,14 +152,13 @@ async def test_body_force_verdict_cannot_approve_and_four_eyes_override_still_wo
         reason="Zweiter Reviewer hat den Einwand geprueft", passkey_proof_token="proof-token"
     )
     with mock.patch.object(ops, "_get_kanban_connection", side_effect=open_db), \
-         mock.patch.object(ops, "require_admin_or_503", return_value=None), \
          mock.patch.object(ops, "require_session_actor", return_value="supervisor-b"), \
          mock.patch.object(ops, "_current_quality_review", return_value=dict(meta["tasks"]["t-a"]["quality_review"])), \
          mock.patch.object(ops, "_task_created_by", return_value="katharina"), \
          mock.patch("backend.passkey_hitl.consume_hitl_proof_token", return_value=True) as proof, \
          mock.patch("backend.audit_log._require_audit_event", lambda *a, **k: None), \
          mock.patch("backend.kanban_sidecar.update_kanban_meta", side_effect=_apply_meta):
-        override = await ops.override_quality_review(None, "t-a", override_req)
+        override = await ops.override_quality_review(None, "t-a", override_req)  # type: ignore[arg-type]
 
     assert override["quality_review"]["status"] == "approved"
     assert override["quality_review"]["source"] == "four_eyes_override"

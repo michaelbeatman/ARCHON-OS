@@ -16,7 +16,7 @@ import archon.core.dispatch_budget_cache as dbc
 import backend.flightlog_backtester as flb
 import backend.role_budget_engine as rbe
 import backend.trajectory_budget as tb
-from backend.trace_context import use_trace_context
+from backend.trace_context import current_trace_id, use_trace_context
 
 # ---------------------------------------------------------------------------
 # D13-H1 — stabile Trajectory-Root-Korrelation
@@ -44,7 +44,11 @@ def test_trajectory_root_scope_is_stable_per_session() -> None:
     with tb.trajectory_root_scope("quickchat:session-43") as other:  # noqa: F841
         assert tb.normalize_trajectory_id() != a
     # Scope wurde zurueckgesetzt — kein Leak in den naechsten Request.
-    assert tb.current_trajectory_root() == ""
+    # Ohne aktiven W3C-Trace ist der Root leer, mit aktivem Trace gilt der
+    # deterministische Fallback `trace:<id>` (nie der vorherige Session-Scope).
+    tid = current_trace_id()
+    expected_root = f"trace:{tid}" if tid else ""
+    assert tb.current_trajectory_root() == expected_root
 
 
 def test_dispatch_without_root_is_counted(tmp_path, monkeypatch) -> None:

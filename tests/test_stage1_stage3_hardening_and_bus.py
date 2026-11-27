@@ -9,13 +9,11 @@ import asyncio
 import json
 import os
 import sqlite3
-import tempfile
 import uuid
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
 
 # =====================================================================
 # STUFE 1: P0 Security, Data & Workflow Fixes
@@ -303,7 +301,7 @@ def test_event_bus_hitl_approve_and_replay(tmp_path, monkeypatch):
     monkeypatch.setattr(ws, "_create_hitl_decision", lambda *a, **kw: created_decisions.append(a[0]))
 
     triggered = []
-    monkeypatch.setattr(ws, "_execute_schedule_row", lambda conn, row, now, extra_inputs=None: (triggered.append(row["id"]) or {"run_id": "run-123"}))
+    monkeypatch.setattr(ws, "_execute_schedule_row", lambda conn, row, now, extra_inputs=None: (triggered.append(row["id"]) or {"run_id": "run-123"}))  # type: ignore[func-returns-value]
 
     # 1. Dispatch wird wegen require_hitl geparkt
     res1 = ws.dispatch_workflow_event(source="watchdog", event_type="finding", title="Neuer KI-Trend", summary="Details")
@@ -359,7 +357,7 @@ def test_kanban_router_uses_resolve_active_db(monkeypatch):
     from backend.tenant_context import tenant_context
 
     called = []
-    monkeypatch.setattr(tenant_context, "resolve_active_db", lambda fname, cid=None: (called.append(fname) or "/tmp/ops.db"))
+    monkeypatch.setattr(tenant_context, "resolve_active_db", lambda fname, cid=None: (called.append(fname) or "/tmp/ops.db"))  # type: ignore[func-returns-value]
     res = kb._resolve_active_kanban_db()
     assert res == "/tmp/ops.db"
     assert called == ["kanban.db"]
@@ -449,7 +447,7 @@ def test_workflow_node_plugins_vst_discovery_and_execution(tmp_path, monkeypatch
         encoding="utf-8",
     )
     monkeypatch.setattr(wnp, "PLUGINS_NODES_DIR", str(pdir))
-    assert wnp.get_workflow_node_plugin("elevenlabs_custom")["third_party"] is True
+    assert wnp.get_workflow_node_plugin("elevenlabs_custom")["third_party"] is True  # type: ignore[index]
 
     # 3. Upstream-Template-Aufloesung + FFmpeg Dry-Run im DAG-Runner
     async def _run_ffmpeg():
@@ -542,8 +540,13 @@ def test_mcp_orchestrator_workflow_builder_tools(tmp_path, monkeypatch):
 
 
 def test_llm_kernel_unification_and_role_budget_conn_close(tmp_path):
-    from backend.llm_kernel import AUTO_MODEL_MAP, estimate_model_cost_usd, finalize_llm_output, resolve_auto_model
     import backend.role_budget_engine as rbe
+    from backend.llm_kernel import (
+        AUTO_MODEL_MAP,
+        estimate_model_cost_usd,
+        finalize_llm_output,
+        resolve_auto_model,
+    )
 
     assert resolve_auto_model("auto/best-coding") == AUTO_MODEL_MAP["auto/best-coding"]
     assert estimate_model_cost_usd("deepseek/deepseek-chat", 1000, 1000) > 0.0
@@ -565,8 +568,9 @@ def test_llm_kernel_unification_and_role_budget_conn_close(tmp_path):
 
 
 def test_safe_http_blocks_redirects():
-    from utils.safe_http import _RejectAllRedirectsHandler
     import urllib.error
+
+    from utils.safe_http import _RejectAllRedirectsHandler
 
     handler = _RejectAllRedirectsHandler()
     with pytest.raises(urllib.error.HTTPError) as exc_info:
@@ -576,8 +580,9 @@ def test_safe_http_blocks_redirects():
 
 def test_unified_kanban_workflow_materialization(tmp_path, monkeypatch):
     import sqlite3
-    import backend.workflow_templates as wt
+
     import backend.operations_api as ops
+    import backend.workflow_templates as wt
 
     ops_db = str(tmp_path / "ops.db")
     with sqlite3.connect(ops_db) as _c:
@@ -795,11 +800,14 @@ def test_dag_runner_schema_preserved_and_event_driven_recovery(tmp_path):
     # 2. Event-Driven Ready-Queue + on_failure Recovery
     db_file = str(tmp_path / "dag_event.db")
     order = []
+    recovery_done = asyncio.Event()
 
     async def _exec(node, _up):
         nid = node["id"]
         if nid == "slow":
-            await asyncio.sleep(0.15)
+            # Deterministisch statt 0.15 s gegen den 2–6 s Retry-Backoff zu
+            # racing: der Recovery-Pfad setzt das Event, bevor slow fertig wird.
+            await asyncio.wait_for(recovery_done.wait(), timeout=20.0)
             order.append("slow")
             return {"status": "success", "content": "slow done"}
         if nid == "fast":
@@ -808,6 +816,7 @@ def test_dag_runner_schema_preserved_and_event_driven_recovery(tmp_path):
             return {"status": "error", "error": "boom"}
         if nid == "fast_recover":
             order.append("fast_recover")
+            recovery_done.set()
             return {"status": "success", "content": "recovered"}
         return {"status": "success", "content": "ok"}
 

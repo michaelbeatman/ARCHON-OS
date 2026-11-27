@@ -1,7 +1,7 @@
-import os
 import sqlite3
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 
 @pytest.mark.asyncio
@@ -76,7 +76,20 @@ async def test_m14_execute_kanban_task_registers_with_shutdown_coordinator(tmp_p
     monkeypatch.setattr(graceful_shutdown_coordinator, "register_task", reg_mock)
     monkeypatch.setattr(graceful_shutdown_coordinator, "unregister_task", unreg_mock)
 
-    # Mock autonomy & dispatch
+    # Mock autonomy, lease & dispatch
+    from backend.deadlock_supervisor import deadlock_supervisor
+
+    monkeypatch.setattr(
+        deadlock_supervisor,
+        "acquire_lease",
+        lambda tid, *_a, **_kw: {"acquired": True, "lease_token": f"lease-{tid}", "task_exists": True},
+    )
+    monkeypatch.setattr(deadlock_supervisor, "heartbeat", lambda *_a, **_kw: True)
+    monkeypatch.setattr(deadlock_supervisor, "release_lease", lambda *_a, **_kw: True)
+    monkeypatch.setattr(
+        "archon.core.delegation.build_dispatch_soul_context",
+        lambda *_a, **_kw: {"pin_ok": True, "inventory_known": True, "tier": "compact", "text": ""},
+    )
     monkeypatch.setattr("backend.model_routing.autonomy_level", lambda domain: "autonomous")
     import core_dispatcher
     monkeypatch.setattr(core_dispatcher, "dispatch_to_omniroute_or_container", AsyncMock(return_value={"status": "success"}))

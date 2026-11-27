@@ -45,7 +45,6 @@ if str(ROOT) not in sys.path:
 
 import main as app_main  # noqa: E402
 
-
 # ------------------------------------------------------------------- Z-04
 
 def test_parse_gateway_list_liest_json():
@@ -97,7 +96,7 @@ def test_broadcast_event_behaelt_subscriber_bei_vollem_puffer():
     from archon.core.runtime import _SSE_SUBSCRIBERS, broadcast_event
 
     async def scenario():
-        queue = asyncio.Queue()
+        queue = asyncio.Queue()  # type: ignore[var-annotated]
         _SSE_SUBSCRIBERS.append(queue)
         try:
             for i in range(500):
@@ -185,26 +184,26 @@ def test_telegram_relay_ueberlebt_dispatch_fehler(monkeypatch):
 
 # ------------------------------------------------------------------- D-08
 
-def test_save_full_html_schreibt_atomar_und_meldet_fehler(monkeypatch, tmp_path):
+def test_save_full_html_schreibt_atomar_und_meldet_fehler(
+    monkeypatch, tmp_path, admin_rbac_bypass
+):
     target = tmp_path / "index.html"
     target.write_text("ALT", encoding="utf-8")
 
     monkeypatch.setattr(app_main, "add_ticker", lambda *a, **k: None)
-    monkeypatch.setattr(app_main, "require_admin", lambda request: None)
     monkeypatch.setattr(app_main, "_full_html_target_files", lambda: [str(target)])
 
     html = "<html>" + ("x" * 300) + "</html>"
-    result = app_main.api_save_full_html(None, app_main.FullHtmlSaveRequest(html=html))
+    result = app_main.api_save_full_html(None, app_main.FullHtmlSaveRequest(html=html))  # type: ignore[arg-type]
     assert result["status"] == "success"
     assert target.read_text(encoding="utf-8") == html
 
 
-def test_save_full_html_meldet_schreibfehler(monkeypatch, tmp_path):
+def test_save_full_html_meldet_schreibfehler(monkeypatch, tmp_path, admin_rbac_bypass):
     target = tmp_path / "index.html"
     target.write_text("ALT", encoding="utf-8")
 
     monkeypatch.setattr(app_main, "add_ticker", lambda *a, **k: None)
-    monkeypatch.setattr(app_main, "require_admin", lambda request: None)
     monkeypatch.setattr(app_main, "_full_html_target_files", lambda: [str(target)])
 
     def boom(*_args, **_kwargs):
@@ -213,20 +212,19 @@ def test_save_full_html_meldet_schreibfehler(monkeypatch, tmp_path):
     monkeypatch.setattr(app_main.os, "replace", boom)
     html = "<html>" + ("x" * 300) + "</html>"
     with pytest.raises(HTTPException) as exc:
-        app_main.api_save_full_html(None, app_main.FullHtmlSaveRequest(html=html))
+        app_main.api_save_full_html(None, app_main.FullHtmlSaveRequest(html=html))  # type: ignore[arg-type]
     assert exc.value.status_code == 500
     # Zieldatei unveraendert (kein Truncate-before-Write)
     assert target.read_text(encoding="utf-8") == "ALT"
 
 
-def test_save_full_html_lehnt_zu_kurzes_html_ab(monkeypatch, tmp_path):
+def test_save_full_html_lehnt_zu_kurzes_html_ab(monkeypatch, tmp_path, admin_rbac_bypass):
     target = tmp_path / "index.html"
     target.write_text("ALT", encoding="utf-8")
     monkeypatch.setattr(app_main, "add_ticker", lambda *a, **k: None)
-    monkeypatch.setattr(app_main, "require_admin", lambda request: None)
     monkeypatch.setattr(app_main, "_full_html_target_files", lambda: [str(target)])
     with pytest.raises(HTTPException) as exc:
-        app_main.api_save_full_html(None, app_main.FullHtmlSaveRequest(html="kurz"))
+        app_main.api_save_full_html(None, app_main.FullHtmlSaveRequest(html="kurz"))  # type: ignore[arg-type]
     assert exc.value.status_code == 400
     assert target.read_text(encoding="utf-8") == "ALT"
 
@@ -238,44 +236,43 @@ def _gateway_request():
     return make_request("/api/v1/gateway/start", "POST", token="tok"), ADMIN
 
 
-def test_gateway_start_setzt_zustand_nur_bei_erfolg(monkeypatch):
+def test_gateway_start_setzt_zustand_nur_bei_erfolg(monkeypatch, admin_rbac_bypass):
     calls = {"exec": 0, "saved": 0}
 
-    monkeypatch.setattr(app_main, "require_admin", lambda request: None)
-    monkeypatch.setattr(app_main, "_run_docker_exec", lambda cmd: (calls.__setitem__("exec", calls["exec"] + 1), (1, "", "kaputt"))[1])
+    monkeypatch.setattr(app_main, "_run_docker_exec", lambda cmd: (calls.__setitem__("exec", calls["exec"] + 1), (1, "", "kaputt"))[1])  # type: ignore[func-returns-value]
     monkeypatch.setattr(app_main, "_save_gateway_config", lambda cfg: calls.__setitem__("saved", calls["saved"] + 1))
     monkeypatch.setattr(app_main, "_update_profile_status", lambda *a, **k: None)
 
     request, _ = _gateway_request()
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(app_main.api_gateway_start(request, {"profile_id": "p1"}))
+        asyncio.run(app_main.api_gateway_start(request, {"profile_id": "p1"}))  # type: ignore[arg-type]
     assert exc.value.status_code == 502
     assert calls["saved"] == 0, "der Zustand wurde trotz Fehlschlag gesetzt"
 
 
-def test_gateway_start_setzt_zustand_bei_erfolg(monkeypatch):
+def test_gateway_start_setzt_zustand_bei_erfolg(monkeypatch, admin_rbac_bypass):
     saved = {}
-    monkeypatch.setattr(app_main, "require_admin", lambda request: None)
     monkeypatch.setattr(app_main, "_run_docker_exec", lambda cmd: (0, "ok", ""))
     monkeypatch.setattr(app_main, "_save_gateway_config", lambda cfg: saved.update(cfg))
     monkeypatch.setattr(app_main, "_update_profile_status", lambda *a, **k: None)
 
     request, _ = _gateway_request()
-    result = asyncio.run(app_main.api_gateway_start(request, {"profile_id": "p1"}))
+    result = asyncio.run(app_main.api_gateway_start(request, {"profile_id": "p1"}))  # type: ignore[arg-type]
     assert result["ok"] is True
     assert saved["active_gateways"]["p1"] is True
 
 
-def test_gateway_stop_meldet_fehler_und_aendert_den_zustand_nicht(monkeypatch):
+def test_gateway_stop_meldet_fehler_und_aendert_den_zustand_nicht(
+    monkeypatch, admin_rbac_bypass
+):
     saved = {"n": 0}
-    monkeypatch.setattr(app_main, "require_admin", lambda request: None)
     monkeypatch.setattr(app_main, "_run_docker_exec", lambda cmd: (1, "", "stop kaputt"))
     monkeypatch.setattr(app_main, "_save_gateway_config", lambda cfg: saved.__setitem__("n", saved["n"] + 1))
     monkeypatch.setattr(app_main, "_update_profile_status", lambda *a, **k: None)
 
     request, _ = _gateway_request()
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(app_main.api_gateway_stop(request, {"profile_id": "p1"}))
+        asyncio.run(app_main.api_gateway_stop(request, {"profile_id": "p1"}))  # type: ignore[arg-type]
     assert exc.value.status_code == 502
     assert saved["n"] == 0
 
@@ -310,7 +307,7 @@ def test_oracle_triage_ohne_signal_id_ist_400(monkeypatch):
                         type("_M", (), {"OracleNewsRadar": _FakeRadar}))
 
     with pytest.raises(HTTPException) as exc:
-        app_main.api_triage_oracle_signal({})
+        app_main.api_triage_oracle_signal({})  # type: ignore[arg-type]
     assert exc.value.status_code == 400
 
 
@@ -324,7 +321,7 @@ def test_design_themes_meldet_fehler_wenn_kein_ziel_schreibbar_ist(monkeypatch, 
 
     monkeypatch.setattr(app_main, "_save_json", boom)
     with pytest.raises(HTTPException) as exc:
-        app_main.api_save_design_themes({"active_theme_id": "x"})
+        app_main.api_save_design_themes({"active_theme_id": "x"})  # type: ignore[arg-type]
     assert exc.value.status_code == 500
 
 
@@ -338,7 +335,7 @@ def test_design_thomes_meldet_teilfehler(monkeypatch, tmp_path):
         Path(path).write_text("{}", encoding="utf-8")
 
     monkeypatch.setattr(app_main, "_save_json", fake_save)
-    result = app_main.api_save_design_themes({"active_theme_id": "x"})
+    result = app_main.api_save_design_themes({"active_theme_id": "x"})  # type: ignore[arg-type]
     assert result["status"] == "success"
     assert result["written_to"] == [str(ok)]
     assert result["failed"]
@@ -368,26 +365,28 @@ def test_kein_kaputter_default_im_frontend():
 # ------------------------------------------------------------------- D-13
 
 def test_theme_upload_lehnt_svg_ab(monkeypatch):
-    from starlette.datastructures import UploadFile
     import io
+
+    from starlette.datastructures import UploadFile
 
     monkeypatch.setattr(app_main, "require_admin", lambda request: None)
     upload = UploadFile(filename="evil.svg", file=io.BytesIO(b"<svg onload=alert(1)>"))
 
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(app_main.api_upload_theme_background(object(), upload))
+        asyncio.run(app_main.api_upload_theme_background(object(), upload))  # type: ignore[arg-type]
     assert exc.value.status_code == 400
 
 
 def test_theme_upload_lehnt_grosse_datei_ab(monkeypatch):
-    from starlette.datastructures import UploadFile
     import io
+
+    from starlette.datastructures import UploadFile
 
     monkeypatch.setattr(app_main, "require_admin", lambda request: None)
     upload = UploadFile(filename="big.png", file=io.BytesIO(b"0" * (9 * 1024 * 1024)))
 
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(app_main.api_upload_theme_background(object(), upload))
+        asyncio.run(app_main.api_upload_theme_background(object(), upload))  # type: ignore[arg-type]
     assert exc.value.status_code == 400
 
 

@@ -121,7 +121,7 @@ def test_m83_flightlog_and_policy_backtester(tmp_path):
     diag = detect_silent_failures("r-1", final_status="success", final_output="ok", db_path=db)
     assert diag["silent_failure"] is True
     assert "hidden_tool_errors:3" in diag["flags"]
-    assert "tool_loop:terminal" in diag["flags"]
+    assert any(f.startswith("tool_loop:terminal") for f in diag["flags"]), diag["flags"]
     assert "effort_collapse" in diag["flags"]
 
     bt = backtest_policy({"blocked_tools": ["terminal"]}, db_path=db)
@@ -145,7 +145,7 @@ def test_m86_quota_and_verification_escalation():
     fake = _FakeRouter()
     out = asyncio.run(
         chat_with_verification_escalation(
-            router_instance=fake,
+            router_instance=fake,  # type: ignore[arg-type]
             messages=[{"role": "user", "content": "hi"}],
             provider="omniroute",
             primary_model="deepseek/deepseek-chat",

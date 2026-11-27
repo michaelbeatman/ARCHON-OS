@@ -18,9 +18,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
-import http.client
 import json
-import os
 import socket
 import sqlite3
 import sys
@@ -147,8 +145,8 @@ def _start_redirect_server(port_holder):
 
 
 def test_jev_redirect_to_imds_is_blocked(monkeypatch):
-    import utils.egress_guard as eg
     import jev_router
+    import utils.egress_guard as eg
 
     ports: dict = {}
     srv = _start_redirect_server(ports)
@@ -174,18 +172,27 @@ def test_jev_redirect_to_imds_is_blocked(monkeypatch):
 def test_jev_blocked_result_becomes_http_400(monkeypatch):
     from fastapi import HTTPException
     from starlette.requests import Request
+
     import archon.routers.core_settings as cs
 
     monkeypatch.setattr(cs, "_require_admin", lambda request: None)
+    # Offline-deterministisch: die echte SSRF-Pruefung wuerde example.org per
+    # DNS aufloesen und bei fehlendem Netz eine String-400 statt des
+    # Dict-Details liefern. Der Block-Vertrag wird hier ueber den gemockten
+    # Connect geprueft, nicht ueber DNS-Verfuegbarkeit.
+    monkeypatch.setattr(
+        "utils.egress_guard.check_public_url",
+        lambda url, **kw: _validated(url, "93.184.216.34"),
+    )
     monkeypatch.setattr(
         "jev_router.test_jev_connection",
         lambda **kw: {"status": "blocked", "error_code": "REDIRECT_BLOCKED", "code": 302},
     )
     request = Request({"type": "http", "method": "POST", "path": "/", "headers": [], "query_string": b""})
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(cs.api_test_jev(request, {"base_url": "https://example.org/api"}))
+        asyncio.run(cs.api_test_jev(request, {"base_url": "https://example.org/api"}))  # type: ignore[arg-type]
     assert exc.value.status_code == 400
-    assert exc.value.detail["code"] == "REDIRECT_BLOCKED"
+    assert exc.value.detail["code"] == "REDIRECT_BLOCKED"  # type: ignore[index]
 
 
 # ---------------------------------------------------------------------------
@@ -299,10 +306,10 @@ def test_validated_url_carries_checked_ip(monkeypatch):
 
 
 def test_safe_http_pins_ip_and_keeps_original_host_header(monkeypatch):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
     import utils.egress_guard as eg
     import utils.safe_http as sh
-
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     seen = {}
 
@@ -347,7 +354,7 @@ def test_peer_ip_deviation_fails_closed():
     conn = object.__new__(sh._PinnedHTTPConnection)
     conn._pinned_ip = "93.184.216.34"
     conn.sock = FakeSock()
-    conn.close = lambda: None  # type: ignore[assignment]
+    conn.close = lambda: None  # type: ignore[assignment,unused-ignore]
     with pytest.raises(sh._PinnedPeerError):
         conn._verify_pinned_peer()
 
@@ -426,7 +433,7 @@ def test_event_mesh_derives_dedup_key_server_side(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(
         "backend.workflow_scheduler.dispatch_workflow_event",
-        lambda **kwargs: (calls.append(kwargs) or {"status": "no_match", "triggered": []}),
+        lambda **kwargs: (calls.append(kwargs) or {"status": "no_match", "triggered": []}),  # type: ignore[func-returns-value]
     )
     monkeypatch.setattr(em, "_current_tenant_id", lambda: "tenant-a")
 
@@ -448,8 +455,8 @@ def test_event_mesh_derives_dedup_key_server_side(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_purge_integration_retention_deletes_old_keeps_open(monkeypatch, tmp_path):
-    from backend import event_mesh as em
     from backend import dead_letter_queue as dlq
+    from backend import event_mesh as em
     from backend import workflow_scheduler as ws
 
     db = tmp_path / "retention.db"

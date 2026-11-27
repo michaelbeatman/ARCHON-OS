@@ -21,7 +21,9 @@ Aufruf:  .\scripts\run_tests_isolated.ps1
 import atexit
 import os
 import shutil
+import sys
 import tempfile
+from typing import Any, Dict
 
 import pytest
 
@@ -56,6 +58,85 @@ def _reset_graceful_shutdown_gate():
             _coord.cancel_draining()
     except Exception:
         pass
+
+
+_TEST_ADMIN_USER: Dict[str, Any] = {
+    "id": "usr_test_admin",
+    "username": "test-actor",
+    "display_name": "Test Admin",
+    "role": "admin",
+    "permissions": ["*"],
+    "is_service": False,
+    "auth_enabled": False,
+}
+
+
+@pytest.fixture
+def admin_rbac_bypass(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
+    """Explizite (nicht-autouse) Fixture fuer Tests, die Fachlogik hinter
+    fail-closed Auth-/RBAC-Guards pruefen.
+
+    Patched sauber via ``monkeypatch`` (automatisches Teardown nach dem Test):
+    - ``archon.routers._rbac`` (``_checker``, ``require_admin_or_503``,
+      ``forbid_viewer_writes``, ``require_session_actor``)
+    - ``archon.routers.auth`` (``get_current_user_from_request``, ``require_admin``)
+    - ``backend.rbac_guards`` (``_GUARDS``-Registry und Modul-Wrapper)
+    - ``backend.auth_service.auth_service.is_auth_enabled`` (fuer ``auth_gate``-Middleware)
+    - bereits importiertes ``main``-Modul (inkl. ``app.dependency_overrides``)
+    """
+    from archon.routers import _rbac
+    from archon.routers import auth as auth_router
+    from backend import rbac_guards
+    from backend.auth_service import auth_service
+
+    def _allow_admin(_request: Any = None) -> None:
+        return None
+
+    def _allow_write(_request: Any = None) -> None:
+        return None
+
+    def _admin_user(_request: Any = None) -> Dict[str, Any]:
+        return dict(_TEST_ADMIN_USER)
+
+    def _session_actor(_request: Any = None) -> str:
+        return "test-actor"
+
+    orig_forbid_viewer_writes = _rbac.forbid_viewer_writes
+
+    monkeypatch.setattr(_rbac, "_checker", _allow_admin)
+    monkeypatch.setattr(_rbac, "require_admin_or_503", _allow_admin)
+    monkeypatch.setattr(_rbac, "forbid_viewer_writes", _allow_write)
+    monkeypatch.setattr(_rbac, "require_session_actor", _session_actor)
+
+    monkeypatch.setattr(auth_router, "get_current_user_from_request", _admin_user)
+    monkeypatch.setattr(auth_router, "require_admin", _admin_user)
+
+    monkeypatch.setitem(rbac_guards._GUARDS, "require_admin_or_503", _allow_admin)
+    monkeypatch.setitem(rbac_guards._GUARDS, "forbid_viewer_writes", _allow_write)
+    monkeypatch.setitem(rbac_guards._GUARDS, "require_session_actor", _session_actor)
+    monkeypatch.setitem(rbac_guards._GUARDS, "get_current_user_from_request", _admin_user)
+    monkeypatch.setattr(rbac_guards, "require_admin_or_503", _allow_admin)
+    monkeypatch.setattr(rbac_guards, "forbid_viewer_writes", _allow_write)
+    monkeypatch.setattr(rbac_guards, "require_session_actor", _session_actor)
+    monkeypatch.setattr(rbac_guards, "get_current_user_from_request", _admin_user)
+
+    monkeypatch.setattr(auth_service, "is_auth_enabled", lambda: False)
+
+    main_mod = sys.modules.get("main")
+    if main_mod is not None:
+        if hasattr(main_mod, "require_admin"):
+            monkeypatch.setattr(main_mod, "require_admin", _admin_user)
+        if hasattr(main_mod, "require_admin_or_503"):
+            monkeypatch.setattr(main_mod, "require_admin_or_503", _allow_admin)
+        if hasattr(main_mod, "get_current_user_from_request"):
+            monkeypatch.setattr(main_mod, "get_current_user_from_request", _admin_user)
+        app_obj = getattr(main_mod, "app", None)
+        dep_overrides = getattr(app_obj, "dependency_overrides", None)
+        if isinstance(dep_overrides, dict):
+            monkeypatch.setitem(dep_overrides, orig_forbid_viewer_writes, _allow_write)
+
+    return dict(_TEST_ADMIN_USER)
+
 
 _FLAG = os.getenv("ARCHON_TEST_DB_ISOLATION", "").strip().lower()
 if _FLAG in ("1", "true", "yes", "on"):

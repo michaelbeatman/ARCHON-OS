@@ -25,34 +25,28 @@ if str(ROOT) not in sys.path:
 
 import main as app_main  # noqa: E402
 
-
 # ------------------------------------------------------------------- F-25
 
-def test_diff_preview_lehnt_pfade_ausserhalb_des_repos_ab(monkeypatch, tmp_path):
+def test_diff_preview_lehnt_pfade_ausserhalb_des_repos_ab(tmp_path, admin_rbac_bypass):
     secret = tmp_path / "secret.env"
     secret.write_text("SECRET=1", encoding="utf-8")
 
-    monkeypatch.setattr(app_main, "require_admin_or_503", lambda request: None)
-
     with pytest.raises(HTTPException) as exc:
-        app_main.api_diff_preview(None, {"file_path": str(secret), "new_content": "x"})
+        app_main.api_diff_preview(None, {"file_path": str(secret), "new_content": "x"})  # type: ignore[arg-type]
     assert exc.value.status_code == 403
 
 
-def test_diff_preview_lehnt_systempfade_ab(monkeypatch):
-    monkeypatch.setattr(app_main, "require_admin_or_503", lambda request: None)
-
+def test_diff_preview_lehnt_systempfade_ab(admin_rbac_bypass):
     for path in ("/etc/passwd", "/opt/data/.env", "/root/.hermes/config.yaml"):
         with pytest.raises(HTTPException) as exc:
-            app_main.api_diff_preview(None, {"file_path": path, "new_content": "x"})
+            app_main.api_diff_preview(None, {"file_path": path, "new_content": "x"})  # type: ignore[arg-type]
         assert exc.value.status_code == 403, f"{path} wurde nicht blockiert"
 
 
-def test_diff_preview_erlaubt_repo_dateien(monkeypatch, tmp_path):
+def test_diff_preview_erlaubt_repo_dateien(tmp_path, admin_rbac_bypass):
     target = tmp_path / "datei.py"
     target.write_text("print('alt')\n", encoding="utf-8")
     repo_root = str(ROOT)
-    monkeypatch.setattr(app_main, "require_admin_or_503", lambda request: None)
 
     # Der Jail-Wurzelbaum des Handlers ist der Repo-Wurzelbaum; die Testdatei
     # liegt darunter, damit der echte Pfad geprueft wird.
@@ -61,7 +55,7 @@ def test_diff_preview_erlaubt_repo_dateien(monkeypatch, tmp_path):
     inside.write_text("print('alt')\n", encoding="utf-8")
     try:
         result = app_main.api_diff_preview(
-            None, {"file_path": str(inside), "new_content": "print('neu')\n"}
+            None, {"file_path": str(inside), "new_content": "print('neu')\n"}  # type: ignore[arg-type]
         )
         assert result is not None
     finally:
@@ -69,10 +63,9 @@ def test_diff_preview_erlaubt_repo_dateien(monkeypatch, tmp_path):
     assert repo_root
 
 
-def test_diff_preview_verlangt_einen_pfad(monkeypatch):
-    monkeypatch.setattr(app_main, "require_admin_or_503", lambda request: None)
+def test_diff_preview_verlangt_einen_pfad(admin_rbac_bypass):
     with pytest.raises(HTTPException) as exc:
-        app_main.api_diff_preview(None, {"file_path": "", "new_content": "x"})
+        app_main.api_diff_preview(None, {"file_path": "", "new_content": "x"})  # type: ignore[arg-type]
     assert exc.value.status_code == 400
 
 
@@ -97,7 +90,7 @@ def test_healing_attempt_verlangt_admin(monkeypatch):
 
     import asyncio
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(app_main.api_attempt_task_healing(None, {"task_id": "t1"}))
+        asyncio.run(app_main.api_attempt_task_healing(None, {"task_id": "t1"}))  # type: ignore[arg-type]
     assert exc.value.status_code == 403
     assert calls["healer"] == 0, "die Selbstheilung lief trotz fehlender Berechtigung"
 

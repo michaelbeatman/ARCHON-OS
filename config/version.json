@@ -1,10 +1,11 @@
 {
-  "version": "v0.6.0",
-  "codename": "Full-Scan Hardening & Operational Resilience",
-  "released_at": "2026-11-26 20:20",
-  "previous_version": "v0.5.7.8",
-  "commit": "v0.6.0",
+  "version": "v0.6.0.1",
+  "codename": "Audit Remediation W0–W7 & Full-Suite Green",
+  "released_at": "2026-11-27 10:45",
+  "previous_version": "v0.6.0",
+  "commit": "v0.6.0.1",
   "features": [
+    "v0.6.0.1 Audit Remediation (W0–W7): 121/121 gewichtete Audit-Funde behoben (0 offen), alle 21 vorbestehenden Baseline-Testfehler & Windows-Teardown-Flake bereinigt — 2961 passed / 16 skipped / 0 failed, Ruff/MyPy/lint-imports/tsc Exit 0",
     "v0.6.0 Security & Hardening: workspace path-jail with case/symlink/sensitive-file checks, PocketBase filter escaping, atomic cost-guard persistence, and fail-closed HMAC audit startup gate",
     "Runtime & Type Safety: async background-loop timeout/cancel-drain escalation, MyPy clean across 439 files (0 errors), 13/13 machine gates & 2538+ tests",
     "Hermes Marketplace Integration: 18 Skills (.agents/skills/) & 6 MCP Servers (.mcp.json) assigned to specialist profiles",

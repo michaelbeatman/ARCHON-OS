@@ -7,7 +7,7 @@
 **Self-Hosted Multi-Agent Operating System voor oprichters, teams & domeinspecialisten**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Release: v0.6.0](https://img.shields.io/badge/Release-v0.6.0-6366f1.svg)](../../CHANGELOG.md)
+[![Release: v0.6.0.1](https://img.shields.io/badge/Release-v0.6.0.1-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
@@ -36,7 +36,7 @@ Wat dat in de praktijk betekent:
 
 **Pre-1.0, en dat zeggen we vooraf:** interfaces en configuratiesleutels veranderen tussen releases, de ERP/CRM-module is alpha, en de handhaving van rollen voor meerdere gebruikers wordt nog verder aangescherpt. Als dat voor jou werkt, zijn issues en PRs welkom.
 
-### Huidige release-status (`v0.6.0`, 24-11-2026)
+### Huidige release-status (`v0.6.0.1`, 24-11-2026)
 
 De officiële release-status staat in [CHANGELOG.md](../../CHANGELOG.md). Belangrijkste toevoegingen sinds `v0.5.6.0`:
 
@@ -47,9 +47,9 @@ De officiële release-status staat in [CHANGELOG.md](../../CHANGELOG.md). Belang
 - **Observability & tooling:** OTel-traces in de LLM-kernel en DAG, trace-to-eval replay-fixtures, Python 3.13, gesplitste testvereisten.
 - **Workspace:** 4-staps onboarding-wizard v2, operations-kalender en 11 LinkedIn-vaardigheden.
 
-> **Configuratie- & beveiligingsnotitie (audit 23-11-2026):** de meegeleverde `settings.json` bevat **totaal geen `auth` blok**. Het systeem draait daarom in een bewuste **lokale modus voor één gebruiker** (fallback admin, geen login) wanneer gebonden aan `127.0.0.1`. **Deze modus is uitsluitend voor lokaal desktopgebruik.** Niet-loopback bindingen forceren al authenticatie via `_must_force_auth()`, maar u moet `"auth": {"enabled": true}` toevoegen vóór enige blootstelling aan LAN of productie. Egress-vlaggen staan standaard ook uit (`privacy.zero_egress = false`, `zero_egress_strict = false`; alleen `hard_block_on_local_offline = true`). `config/version.json` rapporteert **v0.6.0**; de PDF-handleiding richt zich nog op v0.5.2.1 — *PDF basiert weiter op v0.5.2.1, zie [CHANGELOG.md](../../CHANGELOG.md) voor v0.6.0*.
+> **Configuratie- & beveiligingsnotitie (audit 23-11-2026):** de meegeleverde `settings.json` bevat **totaal geen `auth` blok**. Het systeem draait daarom in een bewuste **lokale modus voor één gebruiker** (fallback admin, geen login) wanneer gebonden aan `127.0.0.1`. **Deze modus is uitsluitend voor lokaal desktopgebruik.** Niet-loopback bindingen forceren al authenticatie via `_must_force_auth()`, maar u moet `"auth": {"enabled": true}` toevoegen vóór enige blootstelling aan LAN of productie. Egress-vlaggen staan standaard ook uit (`privacy.zero_egress = false`, `zero_egress_strict = false`; alleen `hard_block_on_local_offline = true`). `config/version.json` rapporteert **v0.6.0.1**; de PDF-handleiding richt zich nog op v0.5.2.1 — *PDF basiert weiter op v0.5.2.1, zie [CHANGELOG.md](../../CHANGELOG.md) voor v0.6.0.1*.
 
-> **Aantallen gemeten in deze checkout:** 71 items in `agent_profiles.json`, 71 rollen in `roles.json`, 71 gesynchroniseerde profielen in `.hermes/profiles/`, 312 portret-assets in `static/avatars/`, 832 prompt-templates en 11 UI-talen. De PDF-handleidingen zijn gegenereerd voor `v0.5.2.1` en zijn nog niet opnieuw gegenereerd voor `v0.6.0` — zie [CHANGELOG.md](../../CHANGELOG.md) voor v0.6.0.
+> **Aantallen gemeten in deze checkout:** 71 items in `agent_profiles.json`, 71 rollen in `roles.json`, 71 gesynchroniseerde profielen in `.hermes/profiles/`, 312 portret-assets in `static/avatars/`, 832 prompt-templates en 11 UI-talen. De PDF-handleidingen zijn gegenereerd voor `v0.5.2.1` en zijn nog niet opnieuw gegenereerd voor `v0.6.0.1` — zie [CHANGELOG.md](../../CHANGELOG.md) voor v0.6.0.1.
 
 ### Producttour
 
@@ -68,7 +68,7 @@ De officiële release-status staat in [CHANGELOG.md](../../CHANGELOG.md). Belang
 | Document | Engels (EN) | Duits (DE) | Reikwijdte |
 |---|---|---|---|
 | **Gebruikers- & Bedrijfshandleiding** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 pag., 1,9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 pag., 1,9 MB)* | Installatie, Hoofdstukken 1–19, 5 Use Cases, Overzicht Versleuteling/AVG & A–Z Woordenlijst |
-| **Volledige Functielijst (PDF: v0.5.2.1 — zie CHANGELOG voor v0.6.0)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Volledige modulecatalogus, Tweetalige Global Edition, Live Demo-modus, First-Run Wizard, FinOps & Beveiliging |
+| **Volledige Functielijst (PDF: v0.5.2.1 — zie CHANGELOG voor v0.6.0.1)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Volledige modulecatalogus, Tweetalige Global Edition, Live Demo-modus, First-Run Wizard, FinOps & Beveiliging |
 | **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Alle 80 gestructureerde Decision Engine-methodologieën (EN & DE) & index |
 
 *Meer technische & beveiligingshandleidingen:* [Systeemarchitectuur & Audit](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M113)](../system/ROADMAP_2026.md) · [EU AI Act, GoBD PDF & Multi-Tenant Gids (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Enterprise Functies & Playbooks Gids](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP Server (`/mcp`) Gids](../system/ARCHON_MCP_SERVER_GUIDE.md) · [Live Demo Modus Gids](../system/LIVE_DEMO_MODE_GUIDE.md) · [Eerste Installatie Wizard Gids](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Ecosysteem & Migratie Gids](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Beveiligingsbeleid](../../SECURITY.md) · [Wijzigingslogboek](../../CHANGELOG.md)
@@ -238,7 +238,7 @@ ARCHON-OS/
 ```
 
 - **Gebruikers- & Bedrijfshandleiding (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(Duits: [DE PDF](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
-- **Volledige lijst met functies & Systeemcatalogus (PDF: v0.5.2.1 — zie CHANGELOG voor v0.6.0, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
+- **Volledige lijst met functies & Systeemcatalogus (PDF: v0.5.2.1 — zie CHANGELOG voor v0.6.0.1, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
 - **Besluitvormingsengine & 80 Boardroom Frameworks (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
 - **Gedetailleerde roadmap (M0–M113):** [docs/system/ROADMAP_2026.md](../system/ROADMAP_2026.md)
 - **Handleiding voor Live Demo-modus (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](../system/LIVE_DEMO_MODE_GUIDE.md)

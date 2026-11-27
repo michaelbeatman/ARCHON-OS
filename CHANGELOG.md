@@ -2,6 +2,14 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [v0.6.0.1] — 2026-11-27 (Audit Remediation W0–W7 & Full-Suite Green)
+
+### Fixed & Verified
+- **Audit-Sanierung W0–W7 vollständig abgeschlossen:** Alle **121 gewichteten Funde** der Wellen W0–W7 behoben und dokumentiert (`0` offen, `0` teilweise); `docs/system/NEVER_DO_LIST.md` in allen Wellen eingehalten.
+- **Testsuite auf 0 Fehler gebracht:** Alle 21 vorbestehenden Baseline-Testfehler über eine explizite, nicht-`autouse` Auth-/RBAC-Fixture (`admin_rbac_bypass`) und aktualisierte Einzelverträge behoben (`5fcbc352`), Produktiv-Guards unverändert fail-closed; zusätzlich Windows-Teardown-Flake (`WinError 32`) in `tests/test_m49_eu_ai_act_compliance.py` behoben (`3d174692`).
+- **Qualität & Gates:** Full-Suite **2961 passed / 16 skipped / 0 failed**, Ruff (`E,F,I`), MyPy (`mypy.ini`), `lint-imports` (2/2 Verträge KEPT) und Frontend `tsc --noEmit` jeweils **Exit 0**.
+- **Dokumentation & Landing Page:** `config/version.json`, `README.md`, `README.de.md`, Sprach-Readmes, `docs/SYSTEM_HANDBUCH.md` und `site/index.html` auf **v0.6.0.1** synchronisiert.
+
 ## [v0.6.0] — 2026-11-26 (Full-Scan Hardening, Red-Team Verification & Operational Resilience)
 
 ### Added & Hardened

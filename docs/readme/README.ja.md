@@ -7,7 +7,7 @@
 **創業者、チーム、専門家のためのセルフホスト型マルチエージェントオペレーティングシステム**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Release: v0.6.0](https://img.shields.io/badge/Release-v0.6.0-6366f1.svg)](../../CHANGELOG.md)
+[![Release: v0.6.0.1](https://img.shields.io/badge/Release-v0.6.0.1-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
@@ -36,7 +36,7 @@ Archon OSは、[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nou
 
 **1.0未満であり、あらかじめお伝えしておきます：** インターフェースや設定キーはリリースごとに変更される可能性があり、ERP/CRMモジュールはアルファ版であり、マルチユーザーのロール強制は現在も強化中です。これをご理解いただける場合、IssueやPRを歓迎します。
 
-### 現在のリリース状態 (`v0.6.0`, 2026-11-24)
+### 現在のリリース状態 (`v0.6.0.1`, 2026-11-24)
 
 公式のリリース状態は [CHANGELOG.md](../../CHANGELOG.md) です。`v0.5.6.0` 以降の主な追加機能:
 
@@ -47,9 +47,9 @@ Archon OSは、[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nou
 - **可観測性とツール:** LLM カーネルと DAG における OTel トレース、トレースから評価へのリプレイフィクスチャ、Python 3.13、分割テスト要件。
 - **ワークスペース:** 4ステップのオンボーディングウィザード v2、オペレーションカレンダー、11の LinkedIn スキル。
 
-> **設定とセキュリティに関する注意 (2026年11月23日の監査):** 出荷時の `settings.json` には **`auth` ブロックが一切含まれていません**。そのため、システムは `127.0.0.1` にバインドされている場合、意図的に **ローカルシングルユーザーモード**（フォールバック管理者、ログインなし）で動作します。**このモードはローカルデスクトップでの使用専用です。** ループバック以外へのバインドは `_must_force_auth()` により強制的に認証されますが、LAN や本番環境で公開する前に必ず `"auth": {"enabled": true}` を追加してください。Egress フラグもデフォルトでオフになっています (`privacy.zero_egress = false`, `zero_egress_strict = false`; `hard_block_on_local_offline = true` のみ有効)。`config/version.json` は **v0.6.0** を報告します。PDF マニュアルは依然として v0.5.2.1 を対象としています — *PDF basiert weiter auf v0.5.2.1, siehe [CHANGELOG.md](../../CHANGELOG.md) für v0.6.0*.
+> **設定とセキュリティに関する注意 (2026年11月23日の監査):** 出荷時の `settings.json` には **`auth` ブロックが一切含まれていません**。そのため、システムは `127.0.0.1` にバインドされている場合、意図的に **ローカルシングルユーザーモード**（フォールバック管理者、ログインなし）で動作します。**このモードはローカルデスクトップでの使用専用です。** ループバック以外へのバインドは `_must_force_auth()` により強制的に認証されますが、LAN や本番環境で公開する前に必ず `"auth": {"enabled": true}` を追加してください。Egress フラグもデフォルトでオフになっています (`privacy.zero_egress = false`, `zero_egress_strict = false`; `hard_block_on_local_offline = true` のみ有効)。`config/version.json` は **v0.6.0.1** を報告します。PDF マニュアルは依然として v0.5.2.1 を対象としています — *PDF basiert weiter auf v0.5.2.1, siehe [CHANGELOG.md](../../CHANGELOG.md) für v0.6.0.1*.
 
-> **このチェックアウトで計測された数:** `agent_profiles.json` に71エントリ、`roles.json` に71ロール、`.hermes/profiles/` に71の同期済みプロファイル、`static/avatars/` に312のポートレートアセット、832のプロンプトテンプレート、11のUIロケール。PDF マニュアルは `v0.5.2.1` 用に生成されており、`v0.6.0` 用にはまだ再生成されていません — v0.6.0 については [CHANGELOG.md](../../CHANGELOG.md) を参照してください。
+> **このチェックアウトで計測された数:** `agent_profiles.json` に71エントリ、`roles.json` に71ロール、`.hermes/profiles/` に71の同期済みプロファイル、`static/avatars/` に312のポートレートアセット、832のプロンプトテンプレート、11のUIロケール。PDF マニュアルは `v0.5.2.1` 用に生成されており、`v0.6.0.1` 用にはまだ再生成されていません — v0.6.0.1 については [CHANGELOG.md](../../CHANGELOG.md) を参照してください。
 
 ### 製品ツアー
 
@@ -68,7 +68,7 @@ Archon OSは、[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nou
 | ドキュメント | 英語 (EN) | ドイツ語 (DE) | 範囲 |
 |---|---|---|---|
 | **ユーザーおよび企業向けマニュアル** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97ページ、1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97ページ、1.9 MB)* | インストール、第1章～第19章、5つのユースケース、暗号化/GDPRの概要およびA–Z用語集 |
-| **完全な機能リスト (PDF: v0.5.2.1 — v0.6.0 の CHANGELOG を参照)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | 全モジュールカタログ、バイリンガルグローバル版、ライブデモモード、初回実行ウィザード、FinOpsおよびセキュリティ |
+| **完全な機能リスト (PDF: v0.5.2.1 — v0.6.0.1 の CHANGELOG を参照)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | 全モジュールカタログ、バイリンガルグローバル版、ライブデモモード、初回実行ウィザード、FinOpsおよびセキュリティ |
 | **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | 80種類の構造化された意思決定エンジン手法（英語・ドイツ語）およびインデックス |
 
 *その他の技術・セキュリティガイド:* [システムアーキテクチャと監査](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [ロードマップ (M0–M113)](../system/ROADMAP_2026.md) · [EU AI Act、GoBD PDFおよびマルチテナントガイド (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [エンタープライズ機能とプレイブックガイド](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCPサーバー (`/mcp`) ガイド](../system/ARCHON_MCP_SERVER_GUIDE.md) · [ライブデモモードガイド](../system/LIVE_DEMO_MODE_GUIDE.md) · [初回セットアップウィザードガイド](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [エコシステムと移行ガイド](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [セキュリティポリシー](../../SECURITY.md) · [変更履歴](../../CHANGELOG.md)
@@ -238,7 +238,7 @@ ARCHON-OS/
 ```
 
 - **ユーザーおよび会社マニュアル (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(ドイツ語: [DE PDF](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
-- **完全な機能リストおよびシステムカタログ (PDF: v0.5.2.1 — v0.6.0 の CHANGELOG を参照, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
+- **完全な機能リストおよびシステムカタログ (PDF: v0.5.2.1 — v0.6.0.1 の CHANGELOG を参照, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
 - **意思決定エンジンおよび80のボードルームフレームワーク (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
 - **詳細ロードマップ (M0–M113):** [docs/system/ROADMAP_2026.md](../system/ROADMAP_2026.md)
 - **ライブデモモードガイド (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](../system/LIVE_DEMO_MODE_GUIDE.md)

@@ -7,7 +7,7 @@
 **自主式多智能体操作系统 для创始人、团队和领域专家**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Release: v0.6.0](https://img.shields.io/badge/Release-v0.6.0-6366f1.svg)](../../CHANGELOG.md)
+[![Release: v0.6.0.1](https://img.shields.io/badge/Release-v0.6.0.1-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
@@ -36,7 +36,7 @@ Archon OS 是一个基于 [Hermes Agent](https://github.com/NousResearch/hermes-
 
 **处于 1.0 版本之前，我们在此提前说明：** 接口和配置键在不同版本间会发生变化，ERP/CRM 模块处于 alpha 阶段，多用户角色强制执行功能仍在加固中。如果您能接受这些，欢迎提交 issues 和 PR。
 
-### 当前发布状态 (`v0.6.0`, 2026-11-24)
+### 当前发布状态 (`v0.6.0.1`, 2026-11-24)
 
 授权发布状态见 [CHANGELOG.md](../../CHANGELOG.md)。自 `v0.5.6.0` 起的关键添加：
 
@@ -47,9 +47,9 @@ Archon OS 是一个基于 [Hermes Agent](https://github.com/NousResearch/hermes-
 - **可观察性 & 工具:** LLM 内核和 DAG 中的 OTEL 跟踪，trace-to-eval 回放 fixtures，Python 3.13，split 测试要求。
 - **工作区:** 4 步 onboarding 综述 v2，操作日历和 11 LinkedIn 技能。
 
-> **配置 & 安全注意 (audit 23.11.2026):** 寄存的 `settings.json` 中 **没有 `auth` 块**。因此，系统将在绑定到 `127.0.0.1` 时运行在意图的 **本地单用户模式** (fallback admin，no login)。**这模式仅供本地桌面使用**。非环回绑已经强制 auth 通过 `_must_force_auth()`，但您必须添加 `"auth": {"enabled": true}` 之前在 LAN 或生产环境中使用。Egress 标志默认关闭 (`privacy.zero_egress = false`，`zero_egress_strict = false`；只有 `hard_block_on_local_offline = true`)。`config/version.json` 报告 **v0.6.0**； PDF 手册仍然目标 v0.5.2.1 — *PDF 仍然基于 v0.5.2.1, 请见 [CHANGELOG.md](../../CHANGELOG.md) 对 v0.6.0*。
+> **配置 & 安全注意 (audit 23.11.2026):** 寄存的 `settings.json` 中 **没有 `auth` 块**。因此，系统将在绑定到 `127.0.0.1` 时运行在意图的 **本地单用户模式** (fallback admin，no login)。**这模式仅供本地桌面使用**。非环回绑已经强制 auth 通过 `_must_force_auth()`，但您必须添加 `"auth": {"enabled": true}` 之前在 LAN 或生产环境中使用。Egress 标志默认关闭 (`privacy.zero_egress = false`，`zero_egress_strict = false`；只有 `hard_block_on_local_offline = true`)。`config/version.json` 报告 **v0.6.0.1**； PDF 手册仍然目标 v0.5.2.1 — *PDF 仍然基于 v0.5.2.1, 请见 [CHANGELOG.md](../../CHANGELOG.md) 对 v0.6.0.1*。
 
-> **在本次检出中测量的计数:** 71 项在 `agent_profiles.json` 中，71 个角色在 `roles.json` 中，71 个同步-profiles 在 `.hermes/profiles/` 中，312 个肖像资产在 `static/avatars/` 中，832 个提示模板和 11 个 UI 地区。PDF 手册为 `v0.5.2.1` 生成，并尚未为 `v0.6.0` 重新生成 — 请见 [CHANGELOG.md](../../CHANGELOG.md) 对 v0.6.0。
+> **在本次检出中测量的计数:** 71 项在 `agent_profiles.json` 中，71 个角色在 `roles.json` 中，71 个同步-profiles 在 `.hermes/profiles/` 中，312 个肖像资产在 `static/avatars/` 中，832 个提示模板和 11 个 UI 地区。PDF 手册为 `v0.5.2.1` 生成，并尚未为 `v0.6.0.1` 重新生成 — 请见 [CHANGELOG.md](../../CHANGELOG.md) 对 v0.6.0.1。
 
 ### 产品导览
 
@@ -68,7 +68,7 @@ Archon OS 是一个基于 [Hermes Agent](https://github.com/NousResearch/hermes-
 | 文档 | 英语 (EN) | 德语 (DE) | 范围 |
 |---|---|---|---|
 | **用户与公司手册** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 页, 1.9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 页, 1.9 MB)* | 安装、第 1–19 章、5 个用例、加密/GDPR 概述及 A–Z 术语表 |
-| **完整功能列表 (PDF: v0.5.2.1 — 参见 v0.6.0 的 CHANGELOG)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | 完整模块目录、双语全球版、实时演示模式、首次运行向导、FinOps 与安全性 |
+| **完整功能列表 (PDF: v0.5.2.1 — 参见 v0.6.0.1 的 CHANGELOG)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | 完整模块目录、双语全球版、实时演示模式、首次运行向导、FinOps 与安全性 |
 | **AI 會議廳：80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | All 80 structured Decision Engine methodologies (EN & DE) & index |
 
 *更多技术和安全指南：* [系统架构与审核](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [路线图（M0–M113）](../system/ROADMAP_2026.md) · [EU AI 法律法规、GoBD PDF & 多租户指南（M43/M49）](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [企业功能与playbooks 指南](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [MCP 服务器（/mcp）指南](../system/ARCHON_MCP_SERVER_GUIDE.md) · [实时演示模式指南](../system/LIVE_DEMO_MODE_GUIDE.md) · [首次设置向导指南](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [生态系统与迁移指南](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [安全政策](../../SECURITY.md) · [变更记录](../../CHANGELOG.md)
@@ -238,7 +238,7 @@ ARCHON-OS/
 ```
 
 - **用户 & 公司手册（EN，PDF）：** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(德语：[DE PDF](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
-- **完整功能列表 & 系统目录（PDF：v0.5.2.1 — 参见 CHANGELOG 对 v0.6.0, EN）：** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
+- **完整功能列表 & 系统目录（PDF：v0.5.2.1 — 参见 CHANGELOG 对 v0.6.0.1, EN）：** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
 - **决策引擎 & 80 Boardroom Frameworks（EN，PDF）：** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
 - **详细路线图（M0–M113）：** [docs/system/ROADMAP_2026.md](../system/ROADMAP_2026.md)
 - **实时演示模式指南 (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](../system/LIVE_DEMO_MODE_GUIDE.md)

@@ -7,7 +7,7 @@
 **Самостоятельная МногоАгентная Операционная Система для Фондеров, Команд и Специалистов по Доменам**
 
 [![Лицензия: MIT](https://img.shields.io/badge/License-MIT-синий.svg)](../../LICENSE)
-[![Выпуск: v0.6.0](https://img.shields.io/badge/Выпуск-v0.6.0-6366f1.svg)](../../CHANGELOG.md)
+[![Выпуск: v0.6.0.1](https://img.shields.io/badge/Выпуск-v0.6.0.1-6366f1.svg)](../../CHANGELOG.md)
 [![Агенты: 71 Профили](https://img.shields.io/badge/Профили-71%20в%208%20Доменах%20(EN%2FDE)-емerald.svg)](../../agent_profiles.json)
 [![Повестки & Фреймворки](https://img.shields.io/badge/Повестки-832%20%7C%2080%20Фреймворки-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Многоплатформенность](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
@@ -36,7 +36,7 @@ Archon OS — это самохостируемое мультиагентное
 
 **Версия до 1.0, и мы сразу об этом предупреждаем:** интерфейсы и ключи конфигурации меняются между релизами, модуль ERP/CRM находится в стадии альфа-тестирования, а принудительное разграничение ролей для нескольких пользователей все еще дорабатывается. Если вас это устраивает, мы приветствуем сообщения об ошибках и PR.
 
-### Текущее состояние выпуска (`v0.6.0`, 2026-11-24)
+### Текущее состояние выпуска (`v0.6.0.1`, 2026-11-24)
 
 Авторитетное состояние выпуска - [CHANGELOG.md](../../CHANGELOG.md). Основные добавления с `v0.5.6.0`:
 
@@ -47,9 +47,9 @@ Archon OS — это самохостируемое мультиагентное
 - **Наблюдаемость & инструментарий:** OTel-трейсы в ядре LLM и DAG, фикстуры replay для отладки, Python 3.13, разделенные требования для тестирования.
 - **Рабочее место:** 4-этапный визард настройки v2, календарь операций и 11 навык LinkedIn.
 
-> **Параметры конфигурации & безопасность (аудит 23.11.2026):** доставляемый `settings.json` имеет **никакого блока `auth` вообще**. Система поэтому работает в намеренном **локальном режиме для одного пользователя** (fallback администратор, без входа) при привязке к `127.0.0.1`. **Этот режим предназначен только для локального десктопного использования**. Непересыльные привязки уже заставляют аутентификацию через `_must_force_auth()`, но вам нужно добавить `"auth": {"enabled": true}` перед любым LAN или производственным использованием. Флаги выхода также отключены по умолчанию (`privacy.zero_egress = false`, `zero_egress_strict = false`; только `hard_block_on_local_offline = true`). `config/version.json` отображает **v0.6.0**; PDF-руководство все еще целится на v0.5.2.1 — *PDF основано на v0.5.2.1, см. [CHANGELOG.md](../../CHANGELOG.md) для v0.6.0*.
+> **Параметры конфигурации & безопасность (аудит 23.11.2026):** доставляемый `settings.json` имеет **никакого блока `auth` вообще**. Система поэтому работает в намеренном **локальном режиме для одного пользователя** (fallback администратор, без входа) при привязке к `127.0.0.1`. **Этот режим предназначен только для локального десктопного использования**. Непересыльные привязки уже заставляют аутентификацию через `_must_force_auth()`, но вам нужно добавить `"auth": {"enabled": true}` перед любым LAN или производственным использованием. Флаги выхода также отключены по умолчанию (`privacy.zero_egress = false`, `zero_egress_strict = false`; только `hard_block_on_local_offline = true`). `config/version.json` отображает **v0.6.0.1**; PDF-руководство все еще целится на v0.5.2.1 — *PDF основано на v0.5.2.1, см. [CHANGELOG.md](../../CHANGELOG.md) для v0.6.0.1*.
 
-> **Счетчики измерены в этом чекайте:** 71 записей в `agent_profiles.json`, 71 ролей в `roles.json`, 71 синхронизированных профилей в `.hermes/profiles/`, 312 портретных ресурсов в `static/avatars/`, 832 шаблоны запросов и 11 языков UI. PDF-руководства были сгенерированы для `v0.5.2.1` и не были еще регенерированы для `v0.6.0` — см. [CHANGELOG.md](../../CHANGELOG.md) для v0.6.0.
+> **Счетчики измерены в этом чекайте:** 71 записей в `agent_profiles.json`, 71 ролей в `roles.json`, 71 синхронизированных профилей в `.hermes/profiles/`, 312 портретных ресурсов в `static/avatars/`, 832 шаблоны запросов и 11 языков UI. PDF-руководства были сгенерированы для `v0.5.2.1` и не были еще регенерированы для `v0.6.0.1` — см. [CHANGELOG.md](../../CHANGELOG.md) для v0.6.0.1.
 
 ### Обзор продукта
 
@@ -68,7 +68,7 @@ Archon OS — это самохостируемое мультиагентное
 | Документ | Английский (EN) | Немецкий (DE) | Область применения |
 |---|---|---|---|
 | **Руководство пользователя и компании** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 стр., 1.9 МБ)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 стр., 1.9 МБ)* | Установка, главы 1–19, 5 вариантов использования, обзор шифрования/GDPR и глоссарий от А до Я |
-| **Полный список функций (PDF: v0.5.2.1 — см. CHANGELOG для v0.6.0)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Полный каталог модулей, двуязычное глобальное издание, режим живой демонстрации, мастер первого запуска, FinOps и безопасность |
+| **Полный список функций (PDF: v0.5.2.1 — см. CHANGELOG для v0.6.0.1)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Полный каталог модулей, двуязычное глобальное издание, режим живой демонстрации, мастер первого запуска, FinOps и безопасность |
 | **Бортовая комната AI: 80 фреймворков** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Все 80 структурированные методологии Decision Engine (EN & DE) и индекс |
 
 *Более технические и безопасные руководства:* [Системная архитектура и аудит](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Маршрут (M0–M113)](../system/ROADMAP_2026.md) · [Европейское законодательство о ИИ, GoBD PDF и руководство по мульти-тенинту (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Руководство по функциям предприятия и игрокам](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [Гuide к серверу MCP (`/mcp`)](../system/ARCHON_MCP_SERVER_GUIDE.md) · [Руководство по режиму живой демонстрации](../system/LIVE_DEMO_MODE_GUIDE.md) · [Руководство по первому запуску визарда](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Руководство по экосистеме и миграции](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Безопасность](../../SECURITY.md) · [Журнал изменений](../../CHANGELOG.md)
@@ -238,7 +238,7 @@ ARCHON-OS/
 ```
 
 7: - **Руководство пользователя & компания (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(немецкий: [DE PDF](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
-8: - **Полный список функций & каталог системы (PDF: v0.5.2.1 — см. CHANGELOG для v0.6.0, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
+8: - **Полный список функций & каталог системы (PDF: v0.5.2.1 — см. CHANGELOG для v0.6.0.1, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
 9: - **Движок принятия решений & 80 рамок для совета (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
 10: - **Подробный план развития (M0–M113):** [docs/system/ROADMAP_2026.md](../system/ROADMAP_2026.md)
 - **Руководство по режиму демонстрации в реальном времени (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](../system/LIVE_DEMO_MODE_GUIDE.md)

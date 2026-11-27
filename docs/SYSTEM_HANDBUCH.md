@@ -1,7 +1,7 @@
 # ARCHON AGENTIC OS 2026
 ## Offizielles System-Handbuch, Modul-Referenz & Praxisführer
 
-> **System-Version:** v0.6.0 (Full-Scan Hardening & Operational Resilience)  
+> **System-Version:** v0.6.0.1 (Full-Scan Hardening & Operational Resilience)  
 > **Klassifizierung:** Intern / Streng Vertraulich (GoBD, EU AI Act & ISO 27001 konform)  
 > **Stand:** 26. November 2026  
 > **Geltungsbereich:** Gesamtes Archon OS Ökosystem (71 Agenten-Profile, 3 konsolidierte Domänen-Datenbanken `ops.db`/`business.db`/`memory.db`, Multi-Channel Content-Maschine v2, Workflow-DAG-Engine, Next.js 16 Cockpits, Daemon-Kernel, Governance & Spezialleitfäden)
@@ -3293,8 +3293,8 @@ In `.github/workflows/ci.yml` ist der automatisierte Ablauf für Pull Requests u
 # AgenticOS-2026 (Archon OS) – Systemarchitektur & Technisches Audit (v0.5.2.1, historischer Audit-Stand)
 
 *Stand: 13. November 2026 | Audit-Release: v0.5.2.1 (Global Release Edition)*  
-*Aktueller Code-Stand: **v0.6.0** (`config/version.json`, 26.11.2026).*  
-*Hinweis: Dieses eingebettete Audit-Kapitel und die PDF-Manuale basieren weiter auf v0.5.2.1 — siehe [CHANGELOG.md](../CHANGELOG.md) für v0.6.0.*  
+*Aktueller Code-Stand: **v0.6.0.1** (`config/version.json`, 26.11.2026).*  
+*Hinweis: Dieses eingebettete Audit-Kapitel und die PDF-Manuale basieren weiter auf v0.5.2.1 — siehe [CHANGELOG.md](../CHANGELOG.md) für v0.6.0.1.*  
 *Maschinenlesbares Gegenstück:* [`docs/system/system_architecture_spec.json`](system_architecture_spec.json)  
 *Endbenutzer-Handbuch (PDF):* [`docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf`](ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf)  
 *Vollständige Featureliste (PDF):* [`docs/system/ARCHON_OS_FEATURELISTE_2026.pdf`](ARCHON_OS_FEATURELISTE_2026.pdf) | *55 Boardroom-Frameworks:* [`docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf`](ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf)

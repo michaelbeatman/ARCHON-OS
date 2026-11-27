@@ -7,7 +7,7 @@
 **Sistema Operativo Multi-Agente Self-Hosted per Fondatori, Team e Specialisti di Dominio**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
-[![Release: v0.6.0](https://img.shields.io/badge/Release-v0.6.0-6366f1.svg)](../../CHANGELOG.md)
+[![Release: v0.6.0.1](https://img.shields.io/badge/Release-v0.6.0.1-6366f1.svg)](../../CHANGELOG.md)
 [![Agents: 71 Profiles](https://img.shields.io/badge/Profiles-71%20in%208%20Domains%20(EN%2FDE)-emerald.svg)](../../agent_profiles.json)
 [![Prompts & Frameworks](https://img.shields.io/badge/Prompts-832%20%7C%2080%20Frameworks-0ea5e9.svg)](../../prompt_studio_catalog.json)
 [![Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED.svg)](../../Dockerfile)
@@ -36,7 +36,7 @@ Cosa significa in pratica:
 
 **Pre-1.0, e lo diciamo chiaramente:** le interfacce e le chiavi di configurazione cambiano tra le versioni, il modulo ERP/CRM è in fase alpha e l'applicazione dei ruoli multi-utente è ancora in fase di consolidamento. Se questo ti va bene, segnalazioni di problemi e PR sono benvenute.
 
-### Stato attuale della release (`v0.6.0`, 24-11-2026)
+### Stato attuale della release (`v0.6.0.1`, 24-11-2026)
 
 Lo stato autorevole della release è [CHANGELOG.md](../../CHANGELOG.md). Principali aggiunte dalla `v0.5.6.0`:
 
@@ -47,9 +47,9 @@ Lo stato autorevole della release è [CHANGELOG.md](../../CHANGELOG.md). Princip
 - **Osservabilità e strumenti:** tracce OTel nel kernel LLM e nel DAG, fixture di replay trace-to-eval, Python 3.13, requisiti di split test.
 - **Area di lavoro:** procedura guidata di onboarding v2 in 4 passaggi, calendario delle operazioni e 11 competenze LinkedIn.
 
-> **Nota su configurazione e sicurezza (audit 23.11.2026):** il file `settings.json` fornito **non contiene alcun blocco `auth`**. Il sistema viene quindi eseguito in una **modalità locale a utente singolo** intenzionale (admin di fallback, nessun login) quando associato a `127.0.0.1`. **Questa modalità è destinata esclusivamente all'uso desktop locale.** I bind non loopback forzano già l'autenticazione tramite `_must_force_auth()`, ma è necessario aggiungere `"auth": {"enabled": true}` prima di qualsiasi esposizione su LAN o in produzione. Anche i flag di egress sono disattivati per impostazione predefinita (`privacy.zero_egress = false`, `zero_egress_strict = false`; solo `hard_block_on_local_offline = true`). `config/version.json` riporta **v0.6.0**; il manuale PDF fa ancora riferimento a v0.5.2.1 — *PDF basiert weiter auf v0.5.2.1, siehe [CHANGELOG.md](../../CHANGELOG.md) für v0.6.0*.
+> **Nota su configurazione e sicurezza (audit 23.11.2026):** il file `settings.json` fornito **non contiene alcun blocco `auth`**. Il sistema viene quindi eseguito in una **modalità locale a utente singolo** intenzionale (admin di fallback, nessun login) quando associato a `127.0.0.1`. **Questa modalità è destinata esclusivamente all'uso desktop locale.** I bind non loopback forzano già l'autenticazione tramite `_must_force_auth()`, ma è necessario aggiungere `"auth": {"enabled": true}` prima di qualsiasi esposizione su LAN o in produzione. Anche i flag di egress sono disattivati per impostazione predefinita (`privacy.zero_egress = false`, `zero_egress_strict = false`; solo `hard_block_on_local_offline = true`). `config/version.json` riporta **v0.6.0.1**; il manuale PDF fa ancora riferimento a v0.5.2.1 — *PDF basiert weiter auf v0.5.2.1, siehe [CHANGELOG.md](../../CHANGELOG.md) für v0.6.0.1*.
 
-> **Conteggi misurati in questo checkout:** 71 voci in `agent_profiles.json`, 71 ruoli in `roles.json`, 71 profili sincronizzati in `.hermes/profiles/`, 312 risorse ritratto in `static/avatars/`, 832 modelli di prompt e 11 localizzazioni dell'interfaccia utente. I manuali PDF sono stati generati per `v0.5.2.1` e non sono ancora stati rigenerati per `v0.6.0` — vedere [CHANGELOG.md](../../CHANGELOG.md) per v0.6.0.
+> **Conteggi misurati in questo checkout:** 71 voci in `agent_profiles.json`, 71 ruoli in `roles.json`, 71 profili sincronizzati in `.hermes/profiles/`, 312 risorse ritratto in `static/avatars/`, 832 modelli di prompt e 11 localizzazioni dell'interfaccia utente. I manuali PDF sono stati generati per `v0.5.2.1` e non sono ancora stati rigenerati per `v0.6.0.1` — vedere [CHANGELOG.md](../../CHANGELOG.md) per v0.6.0.1.
 
 ### Tour del prodotto
 
@@ -68,7 +68,7 @@ Lo stato autorevole della release è [CHANGELOG.md](../../CHANGELOG.md). Princip
 | Documento | Inglese (EN) | Tedesco (DE) | Ambito |
 |---|---|---|---|
 | **Manuale utente e aziendale** | [**ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf**](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(97 pag., 1,9 MB)* | [ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf) *(97 pag., 1,9 MB)* | Installazione, Capitoli 1–19, 5 casi d'uso, Panoramica crittografia/GDPR e glossario A–Z |
-| **Elenco completo delle funzionalità (PDF: v0.5.2.1 — vedi CHANGELOG per v0.6.0)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Catalogo completo dei moduli, Edizione globale bilingue, Modalità demo live, Configurazione guidata al primo avvio, FinOps e sicurezza |
+| **Elenco completo delle funzionalità (PDF: v0.5.2.1 — vedi CHANGELOG per v0.6.0.1)** | [**ARCHON_OS_FEATURE_LIST_2026_EN.pdf**](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf) | [ARCHON_OS_FEATURELISTE_2026.pdf](../system/ARCHON_OS_FEATURELISTE_2026.pdf) | Catalogo completo dei moduli, Edizione globale bilingue, Modalità demo live, Configurazione guidata al primo avvio, FinOps e sicurezza |
 | **AI Boardroom: 80 Frameworks** | [**ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf**](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf) | [ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf) | Tutte le 80 metodologie strutturate del Decision Engine (EN & DE) e indice |
 
 *Altre guide tecniche e di sicurezza:* [Architettura di sistema e audit](../system/SYSTEM_ARCHITEKTUR_UND_AUDIT_2026.md) · [Roadmap (M0–M113)](../system/ROADMAP_2026.md) · [Guida EU AI Act, GoBD PDF e Multi-Tenant (M43/M49)](../system/EU_AI_ACT_GOBD_COMPLIANCE_GUIDE.md) · [Guida alle funzionalità Enterprise e Playbook](../system/ENTERPRISE_FEATURES_2026_GUIDE.md) · [Guida al server MCP (`/mcp`)](../system/ARCHON_MCP_SERVER_GUIDE.md) · [Guida alla modalità Live Demo](../system/LIVE_DEMO_MODE_GUIDE.md) · [Guida alla procedura guidata di primo avvio](../system/FIRST_RUN_SETUP_WIZARD_GUIDE.md) · [Guida all'ecosistema e alla migrazione](../system/ECOSYSTEM_AND_MIGRATION_GUIDE.md) · [Policy di sicurezza](../../SECURITY.md) · [Registro delle modifiche](../../CHANGELOG.md)
@@ -238,7 +238,7 @@ ARCHON-OS/
 ```
 
 - **Manuale utente e aziendale (EN, PDF):** [docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf](../system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf) *(Tedesco: [DE PDF](../system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf))*
-- **Elenco completo delle funzionalità e catalogo di sistema (PDF: v0.5.2.1 — vedere CHANGELOG per v0.6.0, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
+- **Elenco completo delle funzionalità e catalogo di sistema (PDF: v0.5.2.1 — vedere CHANGELOG per v0.6.0.1, EN):** [docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf](../system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf)
 - **Motore decisionale e 80 framework per sale riunioni (EN, PDF):** [docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf](../system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf)
 - **Roadmap dettagliata (M0–M113):** [docs/system/ROADMAP_2026.md](../system/ROADMAP_2026.md)
 - **Guida alla modalità demo live (`ARCHON_DEMO_MODE`):** [docs/system/LIVE_DEMO_MODE_GUIDE.md](../system/LIVE_DEMO_MODE_GUIDE.md)

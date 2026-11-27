@@ -33,10 +33,10 @@
 | 6 | D04-H3 | HIGH | 9 | W2 | `backend/privacy_router.py:97-112` | Merge überschreibt härtere settings.json-Werte mit `false` | **Behoben (4c7344bd)** |
 | 7 | D03-H1 | HIGH | 9 | W1 | `archon/routers/vault.py:115-120,137-144` | Tenant-Resolverfehler → still `default` / gemeinsame Vault-Wurzel | **Behoben (8a2cb037)** |
 | 8 | D05-H2 | HIGH | 9 | W1 | `.env:18`; `docker-compose.yml:124,171-172` | „Externer" Audit-Anker liegt im selben DB-Mount | **Behoben (8a2cb037)** |
-| 9 | D06-H1 | HIGH | 9 | W5 | `backend/workflow_scheduler.py:1586-1625` | 30-s-Outbox-Drainer ohne `tenant_id` → Sekundärmandanten nie zugestellt | Offen |
+| 9 | D06-H1 | HIGH | 9 | W5 | `backend/workflow_scheduler.py:1586-1625` | 30-s-Outbox-Drainer ohne `tenant_id` → Sekundärmandanten nie zugestellt | **Behoben (0a8fcf8a)** |
 | 10 | D07-H1 | HIGH | 9 | W3 | `backend/operations_api.py:361-372` | Zombie-Reset bei Importfehler fail-open → Duplikat-Side-Effects | **Behoben (eb308bb5)** |
 | 11 | D07-H2 | HIGH | 9 | W3 | `backend/operations_execution.py:427-439`; `archon/core/orchestration.py:426` | `ARCHON_LEASE_FAIL_OPEN` / `task_exists=False` → Dispatch ohne CAS | **Behoben (eb308bb5; Rest eb25d51e)** |
-| 12 | D10-H1 | HIGH | 9 | W5 | `scripts/chaos_tester.py:182-218,329-338` | Restart-SLA < 15 s nie gemessen (real ≥ 150 s), Dry-Run = `passed` | Offen |
+| 12 | D10-H1 | HIGH | 9 | W5 | `scripts/chaos_tester.py:182-218,329-338` | Restart-SLA < 15 s nie gemessen (real ≥ 150 s), Dry-Run = `passed` | **Behoben (0a8fcf8a)** |
 | 13 | D11-H1 | HIGH | 9 | W3 | `archon/core/delegation.py:298-299` | Delegations-HMAC produktiv nie geprüft, Signatur vor Prüfung überschrieben | **Behoben (eb308bb5)** |
 | 14 | D11-H2 | HIGH | 9 | W3 | `delegation.py:2145-2191` vs `operations_execution.py:179-191` | Zwei Payloads: volle signierte Fassung tote Daten, Kind erhält `auftrag[:80]` | **Behoben (eb308bb5)** |
 | 15 | D11-H3 | HIGH | 9 | W3 | `backend/handoff_desk.py:518-523` | `no_handoff_for_task` → `allowed=True`; Gate greift für Delegation nie | **Behoben (eb308bb5)** |
@@ -58,21 +58,21 @@
 | 31 | D15-H2 | HIGH | 8 | W4 | `eu_ai_act_inventory.py:151-176`; `hr.py:291-320` | SOUL-Pin hasht `souls/<id>/SOUL.md`, Dispatch nutzt abweichenden Prompt | **Behoben (204470e4)** |
 | 32 | D15-H3 | HIGH | 8 | W4 | `agent_profiles.js:990-1163`; `profiles.py:827-846` | Pflicht-Warn-Dialoge nur Legacy-UI, wegklickbar, Domain 4 nur 2/7 | **Behoben (204470e4)** |
 | 33 | D15-H4 | HIGH | 8 | W4 | `data/ai_act_literacy_register.json:2-18` | Einziger HIGH_RISK-Bediener: `certificate_sha256: null`, Bootstrap | **Behoben (204470e4)** |
-| 34 | D16-H1 | HIGH | 8 | W5 | `archon/routers/container_ops.py:184-185` | `inject_headers()` ohne `child_span()` → Self-Parenting, nicht im AST-Test | Offen |
+| 34 | D16-H1 | HIGH | 8 | W5 | `archon/routers/container_ops.py:184-185` | `inject_headers()` ohne `child_span()` → Self-Parenting, nicht im AST-Test | **Behoben (0a8fcf8a)** |
 | 35 | D09-H1 | HIGH | 7 | W6 | God-Objects + `docker-compose.yml:409` | 4 Monolithen bis 161 KB + 11.232-Zeilen-Patch im Produktivmount | Offen |
 | 36 | D03-M3 | MED | 7 | W1 | `gdpr_compliance_engine.py:139` | `*.db.bak`-Alt-Kopien außerhalb Art.15/17 + Backup + Restore-Test | **Behoben (8a2cb037)** |
 | 37 | D03-M5 | MED | 7 | W1 | `backend/erp_manager.py:382-395` | GoBD-Trigger schützt nur 2 Spalten, Status/Betrag per SQL änderbar | **Behoben (8a2cb037)** |
 | 38 | D04-M1 | MED | 7 | W2 | `backend/session_taint_guard.py:380-396` | HITL-Freigabe bleibt `approved`, Auditfehler nur gewarnt | **Behoben (4c7344bd)** |
 | 39 | D04-M4 | MED | 7 | W2 | `archon/routers/_rbac.py:43-54` | `get_session_actor(fallback="admin")` gibt bei Exception `admin` | **Behoben (4c7344bd)** |
 | 40 | D05-M1 | MED | 7 | W2 | `agent_router.py:1395`; `fleet_self_healing.py:258-285` | Audit-/Receipt-Schreibfehler nur geloggt, Erfolg quittiert | **Behoben (eb308bb5)** |
-| 41 | D06-M1 | MED | 7 | W5 | `core_dispatcher.py:541-654` | Container-Hop ruft Firewall, aber nicht `sanitize_outbound_llm_payload` | Offen |
+| 41 | D06-M1 | MED | 7 | W5 | `core_dispatcher.py:541-654` | Container-Hop ruft Firewall, aber nicht `sanitize_outbound_llm_payload` | **Behoben (0a8fcf8a)** |
 | 42 | D06-M2 | MED | 7 | W2 | `erp_manager.py:3238-3241`; `sync_inbox_to_pocketbase.py:54-105` | `urlopen` folgt Redirects → IMDS-SSRF-Pfad | **Behoben (4c7344bd)** |
 | 43 | D07-M1 | MED | 7 | W3 | `workflow_dag_runner.py:1672-1685` | Idempotency-Check-/Record-Fehler nur DEBUG → Seiteneffekt erneut | **Behoben (eb308bb5)** |
 | 44 | D08-M6 | MED | 7 | W6 | `scripts/chaos_tester.py:184-191,331-338` | Dry-Run liefert `passed`, SLA nie gemessen, Exit 0 | Offen |
-| 45 | D10-M1 | MED | 7 | W5 | `scripts/chaos_tester.py:227-274` | Watchdog-Test liest nie erstellte Logdatei → immer `skipped` | Offen |
-| 46 | D10-M2 | MED | 7 | W5 | `automated_restore_test.py:88-130,357-383` | Restore-Test prüft nur Config-Präsenz, nie echtes Litestream-Replikat | Offen |
-| 47 | D10-M3 | MED | 7 | W5 | `ansible/vars/main.yml:75`; `tasks/main.yml:232-249` | DR/Chaos-Cron im Default-Deploy (`archon_observability: off`) abgeschaltet | Offen |
-| 48 | D10-M5 | MED | 7 | W5 | `docker-compose.yml:324-367`; `haproxy.cfg:67-102` | Socket-Proxy (roher Socket) ohne Non-Root/read_only/cap_drop | Offen |
+| 45 | D10-M1 | MED | 7 | W5 | `scripts/chaos_tester.py:227-274` | Watchdog-Test liest nie erstellte Logdatei → immer `skipped` | **Behoben (0a8fcf8a)** |
+| 46 | D10-M2 | MED | 7 | W5 | `automated_restore_test.py:88-130,357-383` | Restore-Test prüft nur Config-Präsenz, nie echtes Litestream-Replikat | **Behoben (0a8fcf8a)** |
+| 47 | D10-M3 | MED | 7 | W5 | `ansible/vars/main.yml:75`; `tasks/main.yml:232-249` | DR/Chaos-Cron im Default-Deploy (`archon_observability: off`) abgeschaltet | **Behoben (0a8fcf8a)** |
+| 48 | D10-M5 | MED | 7 | W5 | `docker-compose.yml:324-367`; `haproxy.cfg:67-102` | Socket-Proxy (roher Socket) ohne Non-Root/read_only/cap_drop | **Behoben (0a8fcf8a)** |
 | 49 | D11-M1 | MED | 7 | W3 | `operations_execution.py:614-627` | `exclude_defaults=True` verliert taint/soul/budget/trace/warrant im Kind | **Behoben (eb308bb5)** |
 | 50 | D12-H4 | HIGH | 7 | W2 | `backend/system_updater.py:587-627` | GitHub-API-Teilfehler → „System ist auf dem neuesten Stand" | **Behoben (4c7344bd)** |
 | 51 | D12-M1 | MED | 7 | W2 | `structured_output_enforcer.py:71-77` | Schema-Validator deaktiviert → `valid=True, bypassed=True` | **Behoben (4c7344bd)** |
@@ -96,10 +96,10 @@
 | 69 | D07-M7 | MED | 6 | W3 | `archon/services/lifecycle.py:78-88` | Shutdown-Hooks ohne `wait_for`, hängender `aclose()` blockiert | **Behoben (eb25d51e)** |
 | 70 | D08-M1 | MED | 6 | W6 | `archon/core/delegation.py:1142,1197,1279` | Fan-in/Synthese-Trigger liest DB + schreibt Vault synchron im Event-Loop | Offen |
 | 71 | D08-M8 | MED | 6 | W4 | `delegation.py:548,2181`; `core_dispatcher.py:1338-1422` | 3-Tier-SOUL nur im Delegations-Handoff, nicht im zentralen Dispatch | **Behoben (204470e4)** |
-| 72 | D10-M4 | MED | 6 | W5 | `docker-compose.yml:147`; `alerts.yml:40-65` | Dead-Man-Switch ohne Konsument im Default-Stack | Offen |
-| 73 | D10-M6 | MED | 6 | W5 | `archon-os-rebuild.bat:12,21`; `update_archon.bat:24` | Drei `.bat` ohne `-f docker-compose.yml` → Override-Bypass | Offen |
-| 74 | D10-M7 | MED | 6 | W5 | `lifecycle.py:75-93`; `graceful_shutdown_coordinator.py:433-446` | Shutdown-Hooks ohne globales Zeitbudget (nur Background-Tasks 10 s) | Offen |
-| 75 | D10-M8 | MED | 6 | W5 | `docker-compose.yml:338`; `haproxy.cfg:175` | `NETWORKS=0` → Worker-Netz-Isolation nicht prüfbar | Offen |
+| 72 | D10-M4 | MED | 6 | W5 | `docker-compose.yml:147`; `alerts.yml:40-65` | Dead-Man-Switch ohne Konsument im Default-Stack | **Behoben (0a8fcf8a)** |
+| 73 | D10-M6 | MED | 6 | W5 | `archon-os-rebuild.bat:12,21`; `update_archon.bat:24` | Drei `.bat` ohne `-f docker-compose.yml` → Override-Bypass | **Behoben (0a8fcf8a)** |
+| 74 | D10-M7 | MED | 6 | W5 | `lifecycle.py:75-93`; `graceful_shutdown_coordinator.py:433-446` | Shutdown-Hooks ohne globales Zeitbudget (nur Background-Tasks 10 s) | **Behoben (0a8fcf8a)** |
+| 75 | D10-M8 | MED | 6 | W5 | `docker-compose.yml:338`; `haproxy.cfg:175` | `NETWORKS=0` → Worker-Netz-Isolation nicht prüfbar | **Behoben (0a8fcf8a)** |
 | 76 | D11-M2 | MED | 6 | W3 | `delegation.py:2181-2190` | SOUL-Tier als System-Nachricht gespeichert, kein Konsument | **Behoben (eb308bb5)** |
 | 77 | D11-M3 | MED | 6 | W3 | `lossless_session_dag.py:342-363,179-198` | Dedup-Key ohne Sequenz + Session-Fingerprint kollidiert | **Behoben (eb25d51e)** |
 | 78 | D12-M3 | MED | 6 | W2 | `consensus_gate.py:462-478,564` | Fehlender Juror-Score → Default 7, fehlende risks → `[]` | **Behoben (4c7344bd)** |
@@ -109,8 +109,8 @@
 | 82 | D14-M2 | MED | 6 | W3 | `lossless_session_dag.py:632-647` | STORM-Panel M94 ohne Produktivkonsumenten, `requires_human_gate` tot | **Behoben (eb308bb5)** |
 | 83 | D14-M3 | MED | 6 | W3 | `boardroom.py:120-156,668-693` | Konsens-Begründung (`evidence`, Tie-Break) nicht in Archiv/Kette | **Behoben (eb308bb5)** |
 | 84 | D15-M1 | MED | 6 | W4 | `compliance_engine.py:390-417` | SOUL-Hash nur für HIGH_RISK geprüft, 43 Rollen ohne Drift-Erkennung | **Behoben (204470e4)** |
-| 85 | D16-M2 | MED | 6 | W5 | `delegation.py:211-230,2247-2278` | Delegations-Payload ohne serverseitiges `trace_id` → zweiter Root bei Resume | Offen |
-| 86 | D16-M3 | MED | 6 | W5 | `audit_log.py:538-741` | Audit speichert `trace_id`, aber kein `span_id` | Offen |
+| 85 | D16-M2 | MED | 6 | W5 | `delegation.py:211-230,2247-2278` | Delegations-Payload ohne serverseitiges `trace_id` → zweiter Root bei Resume | **Behoben (0a8fcf8a)** |
+| 86 | D16-M3 | MED | 6 | W5 | `audit_log.py:538-741` | Audit speichert `trace_id`, aber kein `span_id` | **Behoben (0a8fcf8a)** |
 | 87 | D01-M3 | MED | 5 | W7 | `agent_profiles.js:220`; `operations_bot_screen.py:156-161` | `computer_use` als Tool beworben, Endpoint liefert `simulated` | Offen |
 | 88 | D01-M5 | MED | 5 | W7 | `MissionControlCockpit.js:306-320,428-446` | Status-Map unvollständig (`queued`/`awaiting_gate`/`cancelled`/`paused`) | Offen |
 | 89 | D02-M1 | MED | 5 | W3 | `workflow_dag_runner.py:2017-2024` | DAG-Run-Cap erst nach erstem Token wirksam | **Behoben (eb308bb5)** |
@@ -128,9 +128,9 @@
 | 101 | D09-M6 | MED | 5 | W6 | `operations_bulk.py:25-51,273` | Modulglobaler Undo-Token-Store ohne Lock | Offen |
 | 102 | D11-M4 | MED | 5 | W3 | `boardroom.py:498-505` | `critique`/`synthesis` mit `[:1500]` gekappt ohne `mark_truncated` | **Behoben (eb25d51e)** |
 | 103 | D11-M5 | MED | 5 | W3 | `role_budget_engine.py:733-776` | `complexity_weight`/`budget_share_pct` nicht im Kind-Prompt | **Behoben (eb308bb5)** |
-| 104 | D16-M1 | MED | 5 | W5 | `runtime_endpoints.py:107-113` | CORS erlaubt/exponiert `traceparent`/`tracestate`/`X-Trace-Id` nicht | Offen |
-| 105 | D16-M4 | MED | 5 | W5 | `trace_log_filter.py:29-47`; `promtail-config.yml:25-29` | Log-Brücke/Promtail nur `trace_id`, kein `span_id` | Offen |
-| 106 | D16-M5 | MED | 5 | W5 | `delegation.py:1841-1868`; `dossier_builder.py` | Vault-Dossier/Sidecar ohne Trace-Frontmatter | Offen |
+| 104 | D16-M1 | MED | 5 | W5 | `runtime_endpoints.py:107-113` | CORS erlaubt/exponiert `traceparent`/`tracestate`/`X-Trace-Id` nicht | **Behoben (0a8fcf8a)** |
+| 105 | D16-M4 | MED | 5 | W5 | `trace_log_filter.py:29-47`; `promtail-config.yml:25-29` | Log-Brücke/Promtail nur `trace_id`, kein `span_id` | **Behoben (0a8fcf8a)** |
+| 106 | D16-M5 | MED | 5 | W5 | `delegation.py:1841-1868`; `dossier_builder.py` | Vault-Dossier/Sidecar ohne Trace-Frontmatter | **Behoben (0a8fcf8a)** |
 | 107 | D01-M4 | MED | 4 | W7 | `ExecutiveCockpit.tsx:96-98`; `operations_kanban.js:382` | SSE-Filter ignorieren `task_cancelled`/`task_status` | Offen |
 | 108 | D01-M6 | MED | 4 | W7 | `backend/docker_services.py:271-279` | Immer `{"status":"success"}` auch ohne `save_services` | Offen |
 | 109 | D01-M7 | MED | 4 | W7 | `orchestration.py:1099-1100,1447-1448` | `folder_namer(x) -> ""` Fallback ohne Fehler/Log | Offen |

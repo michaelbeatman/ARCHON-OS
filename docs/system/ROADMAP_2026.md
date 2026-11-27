@@ -20,6 +20,7 @@
 | **M100** | **KPI-Dashboard für Output-Wirtschaftlichkeit** | Hoch | Geplant | Kosten-/Aufwands-Rollup pro Projekt, Agenten-Profil und Deliverable-Typ (inkl. Zeitreihen-Vergleich) |
 | **M109** | **Code Mode (Deferred Discovery → Isolierte Sandbox)** | Hoch | Geplant | `search`/`describe`/`call`-Discovery (~800–1.000 Token Footprint) für ~200+ Endpunkte + isolierte Wasm-/Prozess-Sandbox mit Capability-Broker |
 | **M111** | **Isolation & Resilience: Bulkheads, Tool-Output-Caps & Circuit-Breaker** | Hoch | Geplant | Getrennte Scheduling-Klassen, harte Tool-Output-Größenlimits vor Kontext-Injektion & Provider-Circuit-Breaker mit Backpressure |
+| **M112** | **Unveränderliches Event-Ledger & Verifizierbare Hash-Chain** | Mittel | Geplant | Crash-sicheres Event-Sourcing-Ledger + Merkle-Log mit externem WORM-/Timestamping-Anker |
 
 ---
 
@@ -82,6 +83,9 @@
 ### M111: Isolation & Resilience — Bulkheads, Tool-Output-Caps & Circuit-Breaker (Geplant – Hoch)
 - **Zielbild:** Getrennte Scheduling-Klassen (Chat vs. Background-DAG vs. Eval), harte Tool-Output-Größenlimits vor Kontext-Injektion und Provider-Circuit-Breaker mit Fallback-Hierarchie und Backpressure.
 
+### M112: Unveränderliches Event-Ledger & Verifizierbare Hash-Chain (Geplant – Mittel)
+- **Zielbild:** Ausbau der bestehenden HMAC-Audit-Kette zu einem vollständigen, crash-sicheren Event-Sourcing-Ledger (atomare Vor-/Nach-Einträge pro Transaktion + periodischer Merkle-Root-Anker auf WORM-Storage oder optionalem Timestamping/Blockchain-Anchor) für lückenlose Business- und Compliance-Nachvollziehbarkeit auch bei Abbrüchen.
+
 ---
 
 ## Ideen-Pool (beobachten, noch nicht geplant)
@@ -89,4 +93,3 @@
 - **Externe Website-MCP-Endpunkte (Policy-gesteuert):** Optionale Anbindung externer Web-zu-MCP-Adapter nur für unkritische Recherche-Domänen (strikt ausgeschlossen für Finanzen/Compliance/Zero-Egress).
 - **Vektorisierter Code-Index (lokales RAG für Agenten-Navigation):** Indexierung des Code-Stands nach grünen Commits in AnythingLLM/Chroma (mit `Dateipfad:Zeile:Commit` als Kompass, niemals als alleiniger Audit-Nachweis) oder deterministischer AST-/Call-Graph-Index.
 - **Konfigurierbarer Docker-Build-Cache-Deckel & Wartungs-Optionen:** Konfigurierbares `ARCHON_DOCKER_BUILD_CACHE_LIMIT` in Update-/Rebuild-Skripten inkl. optionaler Dangling-Image-Bereinigung (ohne Volumes).
-- **Unveränderliches Event-Ledger / Verifizierbare Hash-Chain (Merkle-Log & externes Anchoring):** Ausbau der bestehenden HMAC-Audit-Kette zu einem vollständigen, crash-sicheren Event-Sourcing-Ledger (atomare Vor-/Nach-Einträge pro Transaktion + periodischer Merkle-Root-Anker auf WORM-Storage oder optionalem Timestamping/Blockchain-Anchor) für lückenlose Business- und Compliance-Nachvollziehbarkeit auch bei Abbrüchen.

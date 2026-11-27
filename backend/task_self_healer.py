@@ -4,17 +4,15 @@ Autonome Task-Selbstheilung mit Git/Snapshot-Rollback (Pillar 1 & 6).
 Überwacht fehlerhafte Task-Läufe, rollt fehlerhafte Datei-Patches automatisch zurück
 und startet eine iterative Reparatur-Schleife (max. 3 Retries) vor der Eskalation ins HITL-Board.
 """
+import asyncio
 import logging
-_archon_exc_logger = logging.getLogger("task_self_healer")
-
 import os
 import re
-import sys
-import json
 import sqlite3
 import subprocess
-import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
+_archon_exc_logger = logging.getLogger("task_self_healer")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -51,6 +49,54 @@ def validate_affected_file(file_path: Optional[str]) -> str:
     if not os.path.isfile(target):
         raise ValueError(f"affected_file existiert nicht: {raw!r}")
     return os.path.relpath(target, root)
+
+
+def _apply_patch_sync(affected_file: str, candidate: str) -> str:
+    """D08-M4: Validierung, Backup und Patch als EINE Einheit im Worker-Thread.
+
+    Die Reihenfolge bleibt erhalten: erst das Original sichern, dann den
+    Kandidaten schreiben. Ein Fehler beim Backup darf nie den Target ueberschreiben.
+    """
+    rel_path = validate_affected_file(affected_file)
+    target = os.path.join(WORKSPACE_DIR, rel_path)
+    with open(target, "r", encoding="utf-8") as fh:
+        original = fh.read()
+    with open(target + ".archon_heal_backup", "w", encoding="utf-8") as fh:
+        fh.write(original)
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.write(candidate + "\n")
+    return target
+
+
+def _log_healing_sync(
+    get_conn,
+    task_id: str,
+    attempt: int,
+    error_trace: str,
+    action_desc: str,
+    rollback_ok: bool,
+    repaired_ok: bool,
+) -> None:
+    """D08-M4: SQLite-Log des Heilungsversuchs ausserhalb des Event-Loops."""
+    conn = get_conn()
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO task_healing_logs
+                (task_id, attempt, error_trace, action_taken, rollback_success, repaired_successfully, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (
+                task_id,
+                attempt,
+                error_trace,
+                action_desc,
+                1 if rollback_ok else 0,
+                1 if repaired_ok else 0,
+            ))
+            conn.commit()
+    finally:
+        conn.close()
+
 
 class TaskSelfHealer:
     def __init__(self, db_path: str = DB_PATH):
@@ -204,14 +250,8 @@ Antworte strukturiert mit der korrigierten Fassung."""
                 candidate = _block.group(1).strip() if _block else ""
                 if not candidate:
                     raise ValueError("Kein Codeblock in der LLM-Antwort — Patch nicht angewandt.")
-                rel_path = validate_affected_file(affected_file)
-                target = os.path.join(WORKSPACE_DIR, rel_path)
-                with open(target, "r", encoding="utf-8") as fh:
-                    original = fh.read()
-                with open(target + ".archon_heal_backup", "w", encoding="utf-8") as fh:
-                    fh.write(original)
-                with open(target, "w", encoding="utf-8") as fh:
-                    fh.write(candidate + "\n")
+                # D08-M4: Datei-I/O (Validierung inkl. stat()) gehoert in den Worker-Thread.
+                target = await asyncio.to_thread(_apply_patch_sync, affected_file, candidate)
                 patch_applied = True
                 _archon_exc_logger.warning(
                     "[task_self_healer] Patch nach %s geschrieben (Backup: %s.archon_heal_backup)",
@@ -223,24 +263,12 @@ Antworte strukturiert mit der korrigierten Fassung."""
 
         # 3. Loggen
         action_desc = f"Rollback {affected_file}" if rollback_applied else ("Rollback übersprungen (keine Datei)" if not affected_file else f"Rollback {affected_file} ({rollback_res.get('status')})")
-        conn = self._get_conn()
-        try:
-            with conn:
-                conn.execute("""
-                    INSERT INTO task_healing_logs 
-                    (task_id, attempt, error_trace, action_taken, rollback_success, repaired_successfully, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """, (
-                    task_id,
-                    attempt,
-                    error_output[:1000],
-                    f"{action_desc} + Reflection Prompt",
-                    1 if rollback_ok else 0,
-                    1 if repaired_ok else 0
-                ))
-                conn.commit()
-        finally:
-            conn.close()
+        # D08-M4: der Log-Insert ist der zweite sync Block im Heilungspfad.
+        await asyncio.to_thread(
+            _log_healing_sync, self._get_conn, task_id, attempt,
+            error_output[:1000], f"{action_desc} + Reflection Prompt",
+            rollback_ok, repaired_ok,
+        )
 
         # 4. Wenn max_attempts erreicht und nicht repariert -> Task auf 'blocked' setzen
         if attempt >= max_attempts and not repaired_ok:

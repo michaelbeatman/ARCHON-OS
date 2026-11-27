@@ -52,6 +52,9 @@ try:
 except Exception:
     BUDGET_DB_PATH = os.path.join(WORKSPACE_DIR, "data", "agentic_memory.db")
 
+# D08-M9: ausschliesslich fuer die einmalige Schema-Init (init_budget_tables).
+# Alle Lese-/Schreibpfade (check/get_role_usage_today/reserve/settle/Hiring)
+# verlassen sich auf SQLite WAL + busy_timeout (SSOT 5000 ms) bzw. BEGIN IMMEDIATE.
 _BUDGET_LOCK = threading.RLock()
 
 _AUTHORITY_CACHE: Dict[str, Any] = {"mtime": 0.0, "exec": frozenset(), "lead": frozenset(), "aliases": {}}
@@ -405,36 +408,37 @@ def set_role_budget_policy(
     new_pause = bool(auto_pause_on_exceed) if auto_pause_on_exceed is not None else current["auto_pause_on_exceed"]
     now_iso = datetime.datetime.now().isoformat()
 
-    with _BUDGET_LOCK:
-        with _get_conn(db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO role_budget_policies (
-                    agent_id, daily_token_budget, daily_cost_limit_eur,
-                    monthly_cost_limit_eur, hard_cap_enabled, auto_pause_on_exceed, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(agent_id) DO UPDATE SET
-                    daily_token_budget = excluded.daily_token_budget,
-                    daily_cost_limit_eur = excluded.daily_cost_limit_eur,
-                    monthly_cost_limit_eur = excluded.monthly_cost_limit_eur,
-                    hard_cap_enabled = excluded.hard_cap_enabled,
-                    auto_pause_on_exceed = excluded.auto_pause_on_exceed,
-                    updated_at = excluded.updated_at
-                """,
-                (aid, new_tok, new_eur, new_month, int(new_hard), int(new_pause), now_iso),
+    # D08-M9: kein globales Lock im Schreibpfad — die UPSERTs sind bereits
+    # atomar und SQLite WAL + busy_timeout regeln die Contention.
+    with _get_conn(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO role_budget_policies (
+                agent_id, daily_token_budget, daily_cost_limit_eur,
+                monthly_cost_limit_eur, hard_cap_enabled, auto_pause_on_exceed, updated_at
             )
-            # Clear paused_at for today if budget was raised
-            today = _today_str()
-            conn.execute(
-                """
-                UPDATE role_daily_budget_ledger
-                SET paused_at = NULL, updated_at = ?
-                WHERE agent_id = ? AND usage_date = ? AND tokens_used < ? AND cost_eur < ?
-                """,
-                (now_iso, aid, today, new_tok, new_eur),
-            )
-            conn.commit()
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(agent_id) DO UPDATE SET
+                daily_token_budget = excluded.daily_token_budget,
+                daily_cost_limit_eur = excluded.daily_cost_limit_eur,
+                monthly_cost_limit_eur = excluded.monthly_cost_limit_eur,
+                hard_cap_enabled = excluded.hard_cap_enabled,
+                auto_pause_on_exceed = excluded.auto_pause_on_exceed,
+                updated_at = excluded.updated_at
+            """,
+            (aid, new_tok, new_eur, new_month, int(new_hard), int(new_pause), now_iso),
+        )
+        # Clear paused_at for today if budget was raised
+        today = _today_str()
+        conn.execute(
+            """
+            UPDATE role_daily_budget_ledger
+            SET paused_at = NULL, updated_at = ?
+            WHERE agent_id = ? AND usage_date = ? AND tokens_used < ? AND cost_eur < ?
+            """,
+            (now_iso, aid, today, new_tok, new_eur),
+        )
+        conn.commit()
 
     return get_role_budget_policy(aid, db_path=db_path)
 
@@ -766,23 +770,23 @@ def allocate_task_budget_to_subagents(
 
     if not subtasks:
         now_iso = datetime.datetime.now().isoformat()
-        with _BUDGET_LOCK:
-            with _get_conn(db_path) as conn:
-                conn.execute(
-                    """
-                    INSERT INTO task_budget_allocations (
-                        task_id, parent_task_id, agent_id, token_budget, cost_limit_eur,
-                        complexity_weight, budget_share_pct, status, created_at, updated_at
-                    )
-                    VALUES (?, NULL, ?, ?, ?, 1.0, 100.0, 'active', ?, ?)
-                    ON CONFLICT(task_id) DO UPDATE SET
-                        token_budget = excluded.token_budget,
-                        cost_limit_eur = excluded.cost_limit_eur,
-                        updated_at = excluded.updated_at
-                    """,
-                    (parent_task_id, "default", tot_tokens, tot_eur, now_iso, now_iso),
+        # D08-M9: atomarer UPSERT, kein globales Lock noetig.
+        with _get_conn(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO task_budget_allocations (
+                    task_id, parent_task_id, agent_id, token_budget, cost_limit_eur,
+                    complexity_weight, budget_share_pct, status, created_at, updated_at
                 )
-                conn.commit()
+                VALUES (?, NULL, ?, ?, ?, 1.0, 100.0, 'active', ?, ?)
+                ON CONFLICT(task_id) DO UPDATE SET
+                    token_budget = excluded.token_budget,
+                    cost_limit_eur = excluded.cost_limit_eur,
+                    updated_at = excluded.updated_at
+                """,
+                (parent_task_id, "default", tot_tokens, tot_eur, now_iso, now_iso),
+            )
+            conn.commit()
         return {
             "parent_task_id": parent_task_id,
             "total_token_budget": tot_tokens,
@@ -825,69 +829,70 @@ def allocate_task_budget_to_subagents(
     now_iso = datetime.datetime.now().isoformat()
     allocations: List[Dict[str, Any]] = []
 
-    with _BUDGET_LOCK:
-        with _get_conn(db_path) as conn:
-            # Record parent task allocation
+    # D08-M9: alle Buchungen laufen in EINER Transaktion; das globale Lock
+    # wurde auf die Schema-Init reduziert (siehe init_budget_tables).
+    with _get_conn(db_path) as conn:
+        # Record parent task allocation
+        conn.execute(
+            """
+            INSERT INTO task_budget_allocations (
+                task_id, parent_task_id, agent_id, token_budget, cost_limit_eur,
+                complexity_weight, budget_share_pct, status, created_at, updated_at
+            )
+            VALUES (?, NULL, 'orchestrator', ?, ?, 1.0, ?, 'active', ?, ?)
+            ON CONFLICT(task_id) DO UPDATE SET
+                token_budget = excluded.token_budget,
+                cost_limit_eur = excluded.cost_limit_eur,
+                updated_at = excluded.updated_at
+            """,
+            (parent_task_id, tot_tokens, tot_eur, round(reserve_pct * 100.0, 1), now_iso, now_iso),
+        )
+
+        for idx, (sub, w) in enumerate(zip(subtasks, weights)):
+            share = w / weight_sum
+            sub_tok = max(2000, int(round(pool_tokens * share)))
+            sub_eur = max(0.01, round(pool_eur * share, 4))
+            share_pct = round(share * (1.0 - reserve_pct) * 100.0, 1)
+            sub_id = str(sub.get("id") or sub.get("task_id") or f"{parent_task_id}-sub{idx+1}")
+            sub_agent = str(sub.get("agent_id") or sub.get("assignee") or "default")
+
+            sub["token_budget"] = sub_tok
+            sub["estimated_tokens"] = sub_tok
+            sub["cost_limit_eur"] = round(sub_eur, 2)
+            sub["estimated_cost_eur"] = round(sub_eur, 2)
+            sub["cost_limit_usd"] = round(sub_eur / USD_TO_EUR_RATE, 2)
+            sub["complexity_weight"] = w
+            sub["budget_share_pct"] = share_pct
+
             conn.execute(
                 """
                 INSERT INTO task_budget_allocations (
                     task_id, parent_task_id, agent_id, token_budget, cost_limit_eur,
                     complexity_weight, budget_share_pct, status, created_at, updated_at
                 )
-                VALUES (?, NULL, 'orchestrator', ?, ?, 1.0, ?, 'active', ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
                 ON CONFLICT(task_id) DO UPDATE SET
+                    parent_task_id = excluded.parent_task_id,
+                    agent_id = excluded.agent_id,
                     token_budget = excluded.token_budget,
                     cost_limit_eur = excluded.cost_limit_eur,
+                    complexity_weight = excluded.complexity_weight,
+                    budget_share_pct = excluded.budget_share_pct,
                     updated_at = excluded.updated_at
                 """,
-                (parent_task_id, tot_tokens, tot_eur, round(reserve_pct * 100.0, 1), now_iso, now_iso),
+                (sub_id, parent_task_id, sub_agent, sub_tok, sub_eur, w, share_pct, now_iso, now_iso),
             )
 
-            for idx, (sub, w) in enumerate(zip(subtasks, weights)):
-                share = w / weight_sum
-                sub_tok = max(2000, int(round(pool_tokens * share)))
-                sub_eur = max(0.01, round(pool_eur * share, 4))
-                share_pct = round(share * (1.0 - reserve_pct) * 100.0, 1)
-                sub_id = str(sub.get("id") or sub.get("task_id") or f"{parent_task_id}-sub{idx+1}")
-                sub_agent = str(sub.get("agent_id") or sub.get("assignee") or "default")
-
-                sub["token_budget"] = sub_tok
-                sub["estimated_tokens"] = sub_tok
-                sub["cost_limit_eur"] = round(sub_eur, 2)
-                sub["estimated_cost_eur"] = round(sub_eur, 2)
-                sub["cost_limit_usd"] = round(sub_eur / USD_TO_EUR_RATE, 2)
-                sub["complexity_weight"] = w
-                sub["budget_share_pct"] = share_pct
-
-                conn.execute(
-                    """
-                    INSERT INTO task_budget_allocations (
-                        task_id, parent_task_id, agent_id, token_budget, cost_limit_eur,
-                        complexity_weight, budget_share_pct, status, created_at, updated_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
-                    ON CONFLICT(task_id) DO UPDATE SET
-                        parent_task_id = excluded.parent_task_id,
-                        agent_id = excluded.agent_id,
-                        token_budget = excluded.token_budget,
-                        cost_limit_eur = excluded.cost_limit_eur,
-                        complexity_weight = excluded.complexity_weight,
-                        budget_share_pct = excluded.budget_share_pct,
-                        updated_at = excluded.updated_at
-                    """,
-                    (sub_id, parent_task_id, sub_agent, sub_tok, sub_eur, w, share_pct, now_iso, now_iso),
-                )
-
-                allocations.append({
-                    "subtask_id": sub_id,
-                    "agent_id": sub_agent,
-                    "role": sub.get("role") or sub_agent,
-                    "complexity_weight": w,
-                    "budget_share_pct": share_pct,
-                    "token_budget": sub_tok,
-                    "cost_limit_eur": round(sub_eur, 2),
-                })
-            conn.commit()
+            allocations.append({
+                "subtask_id": sub_id,
+                "agent_id": sub_agent,
+                "role": sub.get("role") or sub_agent,
+                "complexity_weight": w,
+                "budget_share_pct": share_pct,
+                "token_budget": sub_tok,
+                "cost_limit_eur": round(sub_eur, 2),
+            })
+        conn.commit()
 
     return {
         "parent_task_id": parent_task_id,
@@ -1000,41 +1005,42 @@ def ceo_autonomous_hire_specialist(
         f"Arbeite präzise, faktenbasiert, ohne KI-Floskeln und liefere ein direkt verwertbares Ergebnis."
     )
 
-    with _BUDGET_LOCK:
-        with _get_conn(db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO autonomous_hired_agents (
-                    agent_id, parent_task_id, subtask_id, person_name, role_title,
-                    category, skills_json, token_budget, cost_limit_eur, status,
-                    hired_by, created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'executive_decision_architect', ?)
-                """,
-                (
-                    agent_id,
-                    parent_task_id,
-                    subtask_id,
-                    p_name,
-                    clean_role,
-                    category,
-                    json.dumps(skills, ensure_ascii=False),
-                    int(token_budget),
-                    float(cost_limit_eur),
-                    now_iso,
-                ),
+    # D08-M9: Fail-closed (register_in_profiles_json) steht VOR jeder Buchung;
+    # das globale Lock wurde auf die Schema-Init reduziert.
+    with _get_conn(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO autonomous_hired_agents (
+                agent_id, parent_task_id, subtask_id, person_name, role_title,
+                category, skills_json, token_budget, cost_limit_eur, status,
+                hired_by, created_at
             )
-            conn.commit()
-
-        set_role_budget_policy(
-            agent_id=agent_id,
-            daily_token_budget=int(token_budget),
-            daily_cost_limit_eur=float(cost_limit_eur),
-            monthly_cost_limit_eur=float(cost_limit_eur) * 5.0,
-            hard_cap_enabled=True,
-            auto_pause_on_exceed=True,
-            db_path=db_path,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'executive_decision_architect', ?)
+            """,
+            (
+                agent_id,
+                parent_task_id,
+                subtask_id,
+                p_name,
+                clean_role,
+                category,
+                json.dumps(skills, ensure_ascii=False),
+                int(token_budget),
+                float(cost_limit_eur),
+                now_iso,
+            ),
         )
+        conn.commit()
+
+    set_role_budget_policy(
+        agent_id=agent_id,
+        daily_token_budget=int(token_budget),
+        daily_cost_limit_eur=float(cost_limit_eur),
+        monthly_cost_limit_eur=float(cost_limit_eur) * 5.0,
+        hard_cap_enabled=True,
+        auto_pause_on_exceed=True,
+        db_path=db_path,
+    )
 
     return {
         "agent_id": agent_id,
@@ -1070,33 +1076,33 @@ def revoke_autonomous_hire(
     if not aid:
         return False
     init_budget_tables(db_path)
-    with _BUDGET_LOCK:
-        with _get_conn(db_path) as conn:
-            now_iso = datetime.datetime.now().isoformat()
-            if parent_task_id:
-                cur = conn.execute(
-                    "UPDATE autonomous_hired_agents SET status = 'revoked', dissolved_at = ? "
-                    "WHERE agent_id = ? AND parent_task_id = ?",
-                    (now_iso, aid, parent_task_id),
-                )
-            else:
-                cur = conn.execute(
-                    "UPDATE autonomous_hired_agents SET status = 'revoked', dissolved_at = ? "
-                    "WHERE agent_id = ?",
-                    (now_iso, aid),
-                )
-            conn.commit()
-            if not int(cur.rowcount or 0):
-                return False
-        set_role_budget_policy(
-            agent_id=aid,
-            daily_token_budget=0,
-            daily_cost_limit_eur=0.0,
-            monthly_cost_limit_eur=0.0,
-            hard_cap_enabled=True,
-            auto_pause_on_exceed=True,
-            db_path=db_path,
-        )
+    # D08-M9: atomares UPDATE + Policy-Reset (UPSERT); kein globales Lock.
+    with _get_conn(db_path) as conn:
+        now_iso = datetime.datetime.now().isoformat()
+        if parent_task_id:
+            cur = conn.execute(
+                "UPDATE autonomous_hired_agents SET status = 'revoked', dissolved_at = ? "
+                "WHERE agent_id = ? AND parent_task_id = ?",
+                (now_iso, aid, parent_task_id),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE autonomous_hired_agents SET status = 'revoked', dissolved_at = ? "
+                "WHERE agent_id = ?",
+                (now_iso, aid),
+            )
+        conn.commit()
+        if not int(cur.rowcount or 0):
+            return False
+    set_role_budget_policy(
+        agent_id=aid,
+        daily_token_budget=0,
+        daily_cost_limit_eur=0.0,
+        monthly_cost_limit_eur=0.0,
+        hard_cap_enabled=True,
+        auto_pause_on_exceed=True,
+        db_path=db_path,
+    )
     return True
 
 
@@ -1239,15 +1245,15 @@ def plan_and_decompose_task_with_budgets(
                 db_path=db_path,
             )
             now_iso = datetime.datetime.now().isoformat()
-            with _BUDGET_LOCK:
-                with _get_conn(db_path) as conn:
-                    conn.execute(
-                        "UPDATE task_budget_allocations SET agent_id = ?, updated_at = ? "
-                        "WHERE task_id = ? AND agent_id = ?",
-                        (hired_specialist["agent_id"], now_iso,
-                         alloc.get("subtask_id") or parent_task_id, placeholder_id),
-                    )
-                    conn.commit()
+            # D08-M9: CAS-UPDATE in einer Transaktion, kein globales Lock.
+            with _get_conn(db_path) as conn:
+                conn.execute(
+                    "UPDATE task_budget_allocations SET agent_id = ?, updated_at = ? "
+                    "WHERE task_id = ? AND agent_id = ?",
+                    (hired_specialist["agent_id"], now_iso,
+                     alloc.get("subtask_id") or parent_task_id, placeholder_id),
+                )
+                conn.commit()
             placeholder_entry = next(
                 (s for s in nominated if s.get("agent_id") == placeholder_id), None
             )
@@ -1421,49 +1427,54 @@ class BudgetBank:
         now = datetime.datetime.now().isoformat()
         est_tok = max(0, int(estimated_tokens or 0))
         est_eur = max(0.0, float(estimated_cost_eur or 0.0))
-        with _BUDGET_LOCK:
-            with _get_conn(self.db_path) as conn:
-                policy = self._policy(conn, aid)
-                used_tok, used_eur = self._usage(conn, aid)
-                # FRUEHER: nur Reservierungen DESSELBEN task_id -> parallele
-                # Tasks desselben Agenten reservierten sich gegenseitig nicht
-                # und das harte Tages-Cap war wirkungslos.
-                res_tok, res_eur = self._reserved(conn, aid, None, now)
-                usage = get_role_usage_today(aid, db_path=self.db_path)
+        # D08-M9: Preflight ist read-only. Das globale _BUDGET_LOCK war hier
+        # der Serialisierungspunkt fuer alle parallelen Dispatch-Slots — ein
+        # zweiter Connection-Aufbau (usage) lief sogar unter diesem Lock.
+        # reserve/settle verlassen sich bereits auf BEGIN IMMEDIATE +
+        # busy_timeout; der Check tut das jetzt ebenfalls. usage wird VOR der
+        # Connection und ohne globales Lock geholt.
+        usage = get_role_usage_today(aid, db_path=self.db_path)
+        with _get_conn(self.db_path) as conn:
+            policy = self._policy(conn, aid)
+            used_tok, used_eur = self._usage(conn, aid)
+            # FRUEHER: nur Reservierungen DESSELBEN task_id -> parallele
+            # Tasks desselben Agenten reservierten sich gegenseitig nicht
+            # und das harte Tages-Cap war wirkungslos.
+            res_tok, res_eur = self._reserved(conn, aid, None, now)
 
-                if policy["hard_cap_enabled"]:
-                    if used_tok + res_tok + est_tok > policy["daily_token_budget"]:
+            if policy["hard_cap_enabled"]:
+                if used_tok + res_tok + est_tok > policy["daily_token_budget"]:
+                    return {
+                        "allowed": False, "agent_id": aid, "task_id": task_id,
+                        "error_code": "ROLE_TOKEN_BUDGET_EXCEEDED", "usage": usage,
+                        "reason": f"Tages-Tokenbudget für Rolle '{aid}' einschließlich Reservierungen überschritten.",
+                    }
+                if used_eur + res_eur + est_eur > policy["daily_cost_limit_eur"]:
+                    return {
+                        "allowed": False, "agent_id": aid, "task_id": task_id,
+                        "error_code": "ROLE_EUR_BUDGET_EXCEEDED", "usage": usage,
+                        "reason": f"Tages-Kostenbudget für Rolle '{aid}' einschließlich Reservierungen überschritten.",
+                    }
+
+            if task_id:
+                t = conn.execute(
+                    "SELECT token_budget, cost_limit_eur, tokens_used, cost_used_eur "
+                    "FROM task_budget_allocations WHERE task_id = ?",
+                    (task_id,),
+                ).fetchone()
+                if t:
+                    if int(t["token_budget"] or 0) > 0 and int(t["tokens_used"] or 0) + res_tok + est_tok > int(t["token_budget"]):
                         return {
                             "allowed": False, "agent_id": aid, "task_id": task_id,
-                            "error_code": "ROLE_TOKEN_BUDGET_EXCEEDED", "usage": usage,
-                            "reason": f"Tages-Tokenbudget für Rolle '{aid}' einschließlich Reservierungen überschritten.",
+                            "error_code": "TASK_TOKEN_BUDGET_EXCEEDED", "usage": usage,
+                            "reason": f"Aufgaben-Tokenlimit für Task '{task_id}' überschritten.",
                         }
-                    if used_eur + res_eur + est_eur > policy["daily_cost_limit_eur"]:
+                    if float(t["cost_limit_eur"] or 0) > 0.0 and float(t["cost_used_eur"] or 0.0) + res_eur + est_eur > float(t["cost_limit_eur"]):
                         return {
                             "allowed": False, "agent_id": aid, "task_id": task_id,
-                            "error_code": "ROLE_EUR_BUDGET_EXCEEDED", "usage": usage,
-                            "reason": f"Tages-Kostenbudget für Rolle '{aid}' einschließlich Reservierungen überschritten.",
+                            "error_code": "TASK_EUR_BUDGET_EXCEEDED", "usage": usage,
+                            "reason": f"Aufgaben-Kostenlimit für Task '{task_id}' überschritten.",
                         }
-
-                if task_id:
-                    t = conn.execute(
-                        "SELECT token_budget, cost_limit_eur, tokens_used, cost_used_eur "
-                        "FROM task_budget_allocations WHERE task_id = ?",
-                        (task_id,),
-                    ).fetchone()
-                    if t:
-                        if int(t["token_budget"] or 0) > 0 and int(t["tokens_used"] or 0) + res_tok + est_tok > int(t["token_budget"]):
-                            return {
-                                "allowed": False, "agent_id": aid, "task_id": task_id,
-                                "error_code": "TASK_TOKEN_BUDGET_EXCEEDED", "usage": usage,
-                                "reason": f"Aufgaben-Tokenlimit für Task '{task_id}' überschritten.",
-                            }
-                        if float(t["cost_limit_eur"] or 0) > 0.0 and float(t["cost_used_eur"] or 0.0) + res_eur + est_eur > float(t["cost_limit_eur"]):
-                            return {
-                                "allowed": False, "agent_id": aid, "task_id": task_id,
-                                "error_code": "TASK_EUR_BUDGET_EXCEEDED", "usage": usage,
-                                "reason": f"Aufgaben-Kostenlimit für Task '{task_id}' überschritten.",
-                            }
         return {"allowed": True, "agent_id": aid, "task_id": task_id, "usage": usage}
 
     def reserve(

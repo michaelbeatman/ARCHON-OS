@@ -246,6 +246,10 @@ def _ensure_mc_tables(conn: sqlite3.Connection) -> None:
             updated_at REAL NOT NULL
         )""",
         "CREATE INDEX IF NOT EXISTS idx_mc_events_kind ON task_events(kind, id)",
+        # D08-M7: task_id ist der selektive Filter aller Event-Lookups
+        # (delegation.py:1601/1888, operations_review.py). Der (kind, id)-Index
+        # allein erzwingt einen Full Table Scan pro Taskabschluss.
+        "CREATE INDEX IF NOT EXISTS idx_events_task_kind ON task_events(task_id, kind, id)",
     )
     for _ddl in _DDL:
         conn.execute(_ddl)

@@ -20,7 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / ".importlinter"
 BACKEND = ROOT / "backend"
+CORE = ROOT / "archon" / "core"
 CONTRACT_SECTION = "importlinter:contract:backend-no-router-imports"
+CORE_CONTRACT_SECTION = "importlinter:contract:core-no-router-imports"
 
 ImportHit = tuple[str, str, str, int]  # (quellmodul, zielmodul, datei, zeile)
 
@@ -91,6 +93,32 @@ def _router_imports() -> list[ImportHit]:
         found.extend(
             _imports_from_tree(tree, _module_name(path), str(path.relative_to(ROOT)))
         )
+    return found
+
+
+def _core_router_or_service_imports() -> list[ImportHit]:
+    """D09-M2: archon.core darf weder archon.routers noch den Umweg
+    archon.services importieren (transitiv gesperrt durch allow_indirect=False).
+    """
+    found: list[ImportHit] = []
+    for path in sorted(CORE.rglob("*.py")):
+        try:
+            tree = ast.parse(
+                path.read_text(encoding="utf-8", errors="replace"), filename=str(path)
+            )
+        except SyntaxError:
+            continue
+        src = _module_name(path)
+        rel = str(path.relative_to(ROOT))
+        for node in ast.walk(tree):
+            targets: list[str] = []
+            if isinstance(node, ast.ImportFrom) and node.module:
+                targets = [node.module]
+            elif isinstance(node, ast.Import):
+                targets = [alias.name for alias in node.names]
+            for target in targets:
+                if target.startswith(("archon.routers", "archon.services")):
+                    found.append((src, target, rel, getattr(node, "lineno", 0)))
     return found
 
 
@@ -207,6 +235,29 @@ def test_layer_gate_detects_a_violation() -> None:
     violations = _violations(imports, allowed)
     assert len(violations) == 1, violations
     assert "backend.operations_api -> archon.routers.brand_new" in violations[0]
+
+
+# ---------------------------------------------------------------------------
+# D09-M2 — zweiter Contract: archon.core -> archon.routers (auch transitiv)
+# ---------------------------------------------------------------------------
+
+
+def test_core_contract_is_well_formed() -> None:
+    cp = _config()
+    assert cp.has_section(CORE_CONTRACT_SECTION)
+    assert cp.get(CORE_CONTRACT_SECTION, "type") == "forbidden"
+    assert _multi(cp, CORE_CONTRACT_SECTION, "source_modules") == ["archon.core"]
+    assert _multi(cp, CORE_CONTRACT_SECTION, "forbidden_modules") == ["archon.routers"]
+    assert cp.get(CORE_CONTRACT_SECTION, "allow_indirect_imports").lower() == "false"
+
+
+def test_archon_core_has_no_router_or_service_import() -> None:
+    """Der Umweg über archon.services ist transitiv ebenfalls gesperrt."""
+    hits = _core_router_or_service_imports()
+    assert not hits, (
+        "D09-M2: archon.core importiert archon.routers/services:\n  "
+        + "\n  ".join(f"{file}:{line}: {src} -> {dst}" for src, dst, file, line in hits)
+    )
 
 
 def test_documented_debt_is_bounded() -> None:

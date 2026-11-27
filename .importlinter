@@ -20,14 +20,14 @@ source_modules =
     backend
 forbidden_modules =
     archon.routers
-# Die Regel betrifft DIREKTE Importe (Wortlaut: "backend darf archon.routers
-# nicht importieren"). import-linter prueft standardmaessig transitiv; der
-# transitive Pfad backend.operations_api -> archon.core.delegation ->
-# archon.core.orchestration -> archon.routers.decisions (l.1432) ist eine
-# archon-interne Core->Router-Verletzung und damit ein EIGENER S1-Neubefund
-# (Tilgung S2/S3 mit eigener Regel), kein backend->routers-Import.
-# Bewusst gesetzt und im Schritt-Report begruendet - kein stilles Aufweichen.
-# Das harte Ratchet-Gate bleibt tests/test_import_layer_contracts.py.
+# D09-M2: allow_indirect_imports=false = STRENG. import-linter akzeptiert
+# damit auch keine transitiven Pfade (z. B. backend.X -> archon.core.Y ->
+# archon.routers.Z). Der fruehere Hinweis "nur direkte Importe" ist ueberholt:
+# der archon-interne Pfad orchestration:1432 -> archon.routers.decisions ist
+# seit A1 getilgt; archon/core/** enthaelt 0 Router-Importe.
+# Das harte Gate ist jetzt ZWEIFACH: tests/test_import_layer_contracts.py
+# (AST-SSOT) UND `lint-imports` hash-gepinnt aus requirements-ci.lock.txt,
+# verdrahtet als harter Schritt in ci.yml. Kein stilles Aufweichen.
 allow_indirect_imports = false
 
 # Altschuld VOLLSTAENDIG getilgt (F5, 25.11.2026).
@@ -39,15 +39,18 @@ allow_indirect_imports = false
 #   seit A1 aufgeloest; archon/core/** enthaelt 0 Router-Importe.
 #   NEUE Importe backend -> archon.routers sind ab sofort ein Verstoss
 #   (Ratchet; allow_indirect_imports=false = streng transitiv).
-#   tests/test_import_layer_contracts.py liest diese Datei als SSOT und enforced
-#   sie in CI (ci.yml:305 / :555); import-linter selbst ist nicht in
-#   requirements-ci.lock.txt und bleibt daher ein lokales Tool.
+#   tests/test_import_layer_contracts.py liest diese Datei als AST-SSOT und
+#   enforced sie in CI. D09-M2 ergaenzt den echten `lint-imports`-Gate aus
+#   requirements-ci.lock.txt: BEIDE Contracts werden jetzt inkl. transitiver
+#   Kanten geprueft (kein "lokales Tool" mehr, kein Theater).
 ignore_imports =
 
 # A2 / Invariante #2: archon.core kennt keine HTTP-Schicht. 0 direkte Treffer
-# (verifiziert gegen archon/core/**). allow_indirect_imports=true beschraenkt
-# diesen Contract auf direkte Kanten; transitive Pfade ueber archon.services
-# sind nicht Gegenstand dieser Regel.
+# (verifiziert gegen archon/core/**). D09-M2: der Contract ist jetzt STRENG
+# (allow_indirect_imports=false) und laeuft im selben `lint-imports`-Gate wie
+# der backend-Contract. Von archon.core fuehrt kein Pfad ueber archon.services
+# nach archon.routers (archon/core/** importiert weder archon.services noch
+# archon.routers). Negativprobe: siehe tests/test_w6_e_ci.py.
 [importlinter:contract:core-no-router-imports]
 name = archon.core darf archon.routers nicht importieren (Invariante #2)
 type = forbidden
@@ -55,4 +58,4 @@ source_modules =
     archon.core
 forbidden_modules =
     archon.routers
-allow_indirect_imports = true
+allow_indirect_imports = false

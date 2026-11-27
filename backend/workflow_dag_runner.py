@@ -1919,6 +1919,64 @@ def _enqueue_dag_node_dlq(
         logger.warning("[WorkflowDAG] DLQ-Eintrag für Node '%s' fehlgeschlagen: %s", node.get("id"), exc)
 
 
+# ---------------------------------------------------------------------------
+# D08-H1 (HIGH 8): Idempotency-Claim und -Record sind SQLite-Calls mit
+# timeout=15.0 und liefen frueher direkt im async-Retry-Pfad. Bei Lock-
+# Contention blockierten sie genau den Event-Loop, auf dem alle parallelen
+# DAGs, /livez und der SSE-Bus laufen. Fix:
+#   1) sync Hilfsfunktionen + asyncio.to_thread (echte Thread-Grenze),
+#   2) asyncio.shield im finally — ein bereits gestarteter Claim/Record
+#      ueberlebt CancelledError/Timeout des umgebenden DAG-Runs.
+# Die CAS-/Lease-Semantik bleibt vollstaendig im idempotency_guard; der
+# Fail-Closed-Guard (kein Executor ohne erfolgreichen Claim) bleibt erhalten.
+# ---------------------------------------------------------------------------
+
+def _idem_claim_sync(
+    scope: str, params: Dict[str, Any], explicit_key: str
+) -> Dict[str, Any]:
+    """Sync Idempotency-Claim — ausschliesslich ueber _idem_io aufrufen."""
+    from backend.idempotency_guard import idempotency_guard
+
+    return idempotency_guard.check_or_register(
+        scope, params, explicit_key=explicit_key
+    )
+
+
+def _idem_record_sync(key: str, result: Dict[str, Any]) -> bool:
+    """Sync Idempotency-Record — ausschliesslich ueber _idem_io aufrufen."""
+    from backend.idempotency_guard import idempotency_guard
+
+    return idempotency_guard.record_execution_result(key, result)
+
+
+async def _idem_io(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """Blocking Idempotency-IO im Worker-Thread, Cancel-sicher abgeschlossen.
+
+    Der Ledger-Schreibvorgang laeuft in einer eigenen Task; ``asyncio.shield``
+    schuetzt sie vor dem Cancel des DAG-Runs. Im ``finally`` wird ihr Abschluss
+    abgewartet, damit ein Cancel-/Timeout-Pfad den Claim bzw. Record nicht
+    mitten in der SQLite-Transaktion verliert. Eine aufgetretene
+    CancelledError wird danach unveraendert weitergegeben.
+    """
+    task = asyncio.ensure_future(asyncio.to_thread(func, *args, **kwargs))
+    try:
+        return await asyncio.shield(task)
+    finally:
+        if not task.done():
+            # Ein weiterer Cancel darf den Ledger-Write nicht erneut
+            # unterbrechen — der Claim darf nicht halb geschrieben bleiben.
+            while not task.done():
+                try:
+                    await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    continue
+            if not task.cancelled():
+                # Ergebnis/Exception konsumieren (kein "Task exception was
+                # never retrieved"); der Normalpfad lasst die Task bereits
+                # erfolgreich abschliessen.
+                task.exception()
+
+
 async def _exec_with_retry_and_timeout(
     executor_fn: ExecutorFn,
     node: Dict[str, Any],
@@ -1948,8 +2006,10 @@ async def _exec_with_retry_and_timeout(
                     return _blocked_node_result(node, str(_hop.get("reason") or "HOP_CAP_REACHED"))
             if idempotency_key:
                 try:
-                    from backend.idempotency_guard import idempotency_guard
-                    idem = idempotency_guard.check_or_register(
+                    # D08-H1: Claim (SQLite, timeout=15) im Worker-Thread —
+                    # Lock-Contention blockiert nicht den Event-Loop.
+                    idem = await _idem_io(
+                        _idem_claim_sync,
                         "dag_node",
                         {"key": idempotency_key, "attempt": attempt},
                         explicit_key=idempotency_key,
@@ -1990,8 +2050,9 @@ async def _exec_with_retry_and_timeout(
             if out.get("status") != "error":
                 if idempotency_key:
                     try:
-                        from backend.idempotency_guard import idempotency_guard
-                        idempotency_guard.record_execution_result(idempotency_key, out)
+                        # D08-H1: Record im Worker-Thread; das shield in
+                        # _idem_io sichert den Abschluss bei Cancel/Timeout.
+                        await _idem_io(_idem_record_sync, idempotency_key, out)
                     except Exception as _idem_exc:
                         # D07/M4: ohne erfolgreich persistiertes Result ist der
                         # naechste Retry nicht dedupliziert. Node als Fehler

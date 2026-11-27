@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "_zweck": "SSOT fuer den HERMES-Telegram-Adapter-Patch. Haelt den Image-Digest, den Read-Only-Mount und die API-Signatur fest, die scripts/telegram_adapter_smoke_test.py als hartes CI-Gate (Exit 0/1) gegen scripts/patches/hermes_telegram_adapter.py prueft. Bei einem Hermes-Image-Bump MUESSEN Digest hier und in docker-compose.yml gemeinsam geaendert werden; der Smoke-Test bricht bei jeder Drift ab. Die Adapterdatei selbst ist unveraendert zu lassen.",
+  "hermes_image": {
+    "reference": "nousresearch/hermes-agent:v0.23.1",
+    "digest": "sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08",
+    "services": ["hermes", "hermes-dashboard"],
+    "compose_default": "image: ${HERMES_IMAGE:-<reference>@<digest>}",
+    "_hinweis": "Der Wert ist der Default der Env-Interpolation. Partition E / ci.yml prueft zusaetzlich den aufgeloesten Compose-Wert (Negativprobe :latest)."
+  },
+  "adapter_mount": {
+    "service": "hermes",
+    "source": "./scripts/patches/hermes_telegram_adapter.py",
+    "target": "/opt/hermes/plugins/platforms/telegram/adapter.py",
+    "mode": "ro"
+  },
+  "adapter_api_contract": {
+    "_hinweis": "Minimale, aber echte Signatur des gepinnten Hermes-Images: Plugin-Entry-Point register(ctx), die vom Plugin-Registry verdrahteten Hook-Funktionen, die Adapterklasse mit ihrer Basisklasse, die Image-seitigen Importmodule und die Archon-Patch-Marker. Positional args muessen exakt passen (keyword-only Parameter sind zulaessig).",
+    "module_functions": [
+      {"name": "register", "positional_args": ["ctx"]},
+      {"name": "telegram_deps_present", "positional_args": []},
+      {"name": "check_telegram_requirements", "positional_args": []},
+      {"name": "_is_connected", "positional_args": ["config"]},
+      {"name": "_build_adapter", "positional_args": ["config"]},
+      {"name": "_standalone_send", "positional_args": ["pconfig", "chat_id", "message"]},
+      {"name": "_resolve_notifications_mode", "positional_args": []},
+      {"name": "_apply_yaml_config", "positional_args": ["yaml_cfg", "telegram_cfg"]}
+    ],
+    "classes": [
+      {"name": "TelegramAdapter", "bases": ["BasePlatformAdapter"]}
+    ],
+    "register_platform_kwargs": [
+      "name",
+      "label",
+      "adapter_factory",
+      "check_fn",
+      "ensure_deps_fn",
+      "is_connected",
+      "setup_fn",
+      "apply_yaml_config_fn",
+      "standalone_sender_fn"
+    ],
+    "required_import_modules": [
+      "gateway.authz_mixin",
+      "gateway.config",
+      "gateway.platforms.base",
+      "plugins.platforms.telegram.telegram_ids",
+      "plugins.platforms.telegram.telegram_network",
+      "utils"
+    ],
+    "archon_patch_markers": {
+      "_mirror_to_archon_inbox": 1,
+      "_archon_req": 5,
+      "gate:approve": 1,
+      "gate:reject": 1
+    }
+  }
+}

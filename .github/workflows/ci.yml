@@ -163,8 +163,26 @@ jobs:
             node --check "$f"
           done
 
-      - name: Python Syntax Check (compileall)
-        run: python -m compileall -q archon backend scripts tools utils core_dispatcher.py main.py
+      - name: Python Syntax Check (compileall, D09-M5)
+        # Das Image uebernimmt per Dockerfile:38 ALLE Root-*.py. Der Gate muss
+        # deshalb explizit auch die grossen Root-Monolithen pruefen, nicht nur
+        # main.py und core_dispatcher.py.
+        run: |
+          python -m compileall -q archon backend scripts tools utils \
+            main.py core_dispatcher.py api_provider.py views_core.py \
+            core_skills_engine.py watchdog_daemon.py local_security_guard.py \
+            backup_archon.py dossier_builder.py jev_router.py \
+            local_memory_bridge.py oracle_news_radar.py archon_crm_mcp.py \
+            apollo_voice_engine.py create_lang_pages.py \
+            research_engine.py research_engine_v2.py \
+            seo_execution_agent.py telegram_notify.py update_dist.py
+
+      - name: Import-Layer-Contracts (lint-imports, D09-M2, HARTES GATE)
+        # Beide Contracts aus .importlinter (backend UND archon.core) werden
+        # inklusiv transitiver Kanten geprueft. Kein continue-on-error:
+        # jeder gebrochene Contract macht den Job rot. Das Binary kommt
+        # hash-geprueft aus requirements-ci.lock.txt (siehe Install-Schritt).
+        run: lint-imports --no-logo .importlinter
 
       - name: SQLite busy_timeout SSOT (D03/M2 — HARTES GATE, Ratchet bis 2026-12-31)
         # D03/M2: audit_busy_timeout_ssot()/CLI existierten, waren aber nicht
@@ -426,6 +444,13 @@ jobs:
       - name: Router Tests ausführen
         run: python -m unittest tests/test_jev_router.py
 
+      - name: Telegram-Adapter Smoke-Test (W6-D, HARTES GATE)
+        # Verbindlicher Vertrag mit Partition W6-D: das Skript wird dort
+        # angelegt (D09-H1, Patch-Mount des Hermes-Adapters). Exit 1 = rot,
+        # ausdruecklich KEIN continue-on-error. Dieser Job installiert die
+        # Root-Locks, daher stehen alle Laufzeit-Abhaengigkeiten bereit.
+        run: python scripts/telegram_adapter_smoke_test.py
+
   e2e-lifecycle:
     name: 3. End-to-End Lebenszyklus (Telegram -> Triage -> Task -> Fan-In -> Freigabe)
     needs: test-suites
@@ -561,11 +586,22 @@ jobs:
         # Hartes Gate: keine bekannten CVEs in der hash-geprüften Lockdatei.
         run: pip-audit -r requirements.lock.txt
 
-      - name: Static Application Security Testing (bandit)
+      - name: Static Application Security Testing (bandit, D09-M5)
         # Hartes Gate auf HIGH-Severity-Funde (lokaler Lauf: 0 Funde).
+        # Dieselbe explizite Root-Dateiliste wie compileall/Ruff — die per
+        # *.py ins Image kopierten Monolithen duerfen nicht unsichtbar bleiben.
         env:
           PYTHONIOENCODING: utf-8
-        run: bandit -q -lll -r main.py core_dispatcher.py backend archon -x tests,scripts
+        run: |
+          bandit -q -lll -r \
+            main.py core_dispatcher.py api_provider.py views_core.py \
+            core_skills_engine.py watchdog_daemon.py local_security_guard.py \
+            backup_archon.py dossier_builder.py jev_router.py \
+            local_memory_bridge.py oracle_news_radar.py archon_crm_mcp.py \
+            apollo_voice_engine.py create_lang_pages.py \
+            research_engine.py research_engine_v2.py \
+            seo_execution_agent.py telegram_notify.py update_dist.py \
+            backend archon -x tests,scripts
 
   quality-gates:
     name: 6. Quality Gates (scharf)
@@ -609,10 +645,21 @@ jobs:
           pip install --require-hashes --no-deps -r requirements-ci.lock.txt
           mkdir -p data inbox
 
-      - name: Ruff – kritische Fehlerklassen (HARTES GATE)
+      - name: Ruff – kritische Fehlerklassen (HARTES GATE, D09-M5)
         # E9 = Syntaxfehler, F63/F7/F82 = ungültige Syntax/undefinierte Namen.
         # Diese Klassen bedeuten kaputten Code, nicht Style – null Toleranz.
-        run: ruff check --select E9,F63,F7,F82 --output-format=concise archon backend scripts tools utils core_dispatcher.py main.py
+        # Root-Module explizit wie in compileall/bandit, damit alle drei
+        # statischen Gates denselben ausgelieferten Code erfassen.
+        run: |
+          ruff check --select E9,F63,F7,F82 --output-format=concise \
+            archon backend scripts tools utils \
+            main.py core_dispatcher.py api_provider.py views_core.py \
+            core_skills_engine.py watchdog_daemon.py local_security_guard.py \
+            backup_archon.py dossier_builder.py jev_router.py \
+            local_memory_bridge.py oracle_news_radar.py archon_crm_mcp.py \
+            apollo_voice_engine.py create_lang_pages.py \
+            research_engine.py research_engine_v2.py \
+            seo_execution_agent.py telegram_notify.py update_dist.py
 
       - name: Doku-Versionsabgleich gegen config/version.json (HARTES GATE, F12)
         run: python scripts/check_doc_version_sync.py
@@ -644,8 +691,8 @@ jobs:
           fi
 
       - name: mypy – geänderte Dateien (HARTES RATCHET-GATE)
-        # F002: mypy.ini ist die SSOT (python_version 3.11, warn_unused_ignores).
-        # Kein Flag überschreibt die Konfiguration mehr.
+        # F002/D09-M1: mypy.ini ist die SSOT (python_version 3.13,
+        # warn_unused_ignores). Kein Flag überschreibt die Konfiguration mehr.
         shell: bash
         run: |
           FILES="${{ steps.changed.outputs.py }}"

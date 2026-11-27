@@ -1721,6 +1721,23 @@ async def workflow_scheduler_background_loop() -> None:
         await asyncio.sleep(30)
 
 
+def _load_task_status_sync(task_id: str) -> Optional[str]:
+    """D08-M3: Task-Status aus kanban.db lesen — nur aus dem Worker-Thread.
+
+    Der DLQ-Replay ist ein Entlastungspfad; ein SQLite-Lock darf dort nicht
+    den Event-Loop des Dead-Outbox-Drainers blockieren. Die Connection wird
+    auch bei Lesefehlern geschlossen. ``None`` bedeutet: Task nicht gefunden.
+    """
+    from backend.operations_api import _get_kanban_connection
+
+    conn = _get_kanban_connection()
+    try:
+        row = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    finally:
+        conn.close()
+    return str(row[0]) if row else None
+
+
 async def _handle_delegation_result(payload: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
     """Echter Handler: re-dispatched eine fehlgeschlagene Delegation.
 
@@ -1733,14 +1750,11 @@ async def _handle_delegation_result(payload: Dict[str, Any], item: Dict[str, Any
     if not task_id:
         raise ValueError("delegation_result ohne task_id — kein Re-Dispatch moeglich.")
 
-    from backend.operations_api import _execute_kanban_task_async, _get_kanban_connection
-    conn = _get_kanban_connection()
-    try:
-        row = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
-    finally:
-        conn.close()
-    status = str(row[0]) if row else ""
-    if not row:
+    from backend.operations_api import _execute_kanban_task_async
+
+    # D08-M3: der einzige sync DB-Read dieses Handlers hinter der Thread-Grenze.
+    status = await asyncio.to_thread(_load_task_status_sync, task_id)
+    if status is None:
         raise KeyError(f"Kanban-Task '{task_id}' nicht gefunden — Delegation nicht wiederholbar.")
     # Nicht in eine laufende/abgeschlossene Ausfuehrung greifen (idempotent).
     if status in ("in_progress", "done", "review"):

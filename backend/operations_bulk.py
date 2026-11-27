@@ -14,6 +14,7 @@ import datetime
 import json
 import secrets
 import sys
+import threading
 import time
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Set
 
@@ -22,8 +23,13 @@ from pydantic import BaseModel
 
 from archon.core.provider_registry import get_provider
 
+# D09-M6: der Store bleibt bewusst ein reines Dict (operations_api re-exportiert
+# ihn by identity, tests/test_d3_bulk_characterization.py prueft das). Alle
+# Mutationen laufen jetzt ueber _UNDO_LOCK. RLock statt Lock, damit
+# _prune_undo_store() aus bereits gesperrten Pfaden reentrant gerufen werden kann.
 _KANBAN_UNDO_STORE: Dict[str, Dict[str, Any]] = {}
 _KANBAN_UNDO_STORE_MAX_SIZE = 100
+_UNDO_LOCK = threading.RLock()
 
 
 class BulkActionDeps(NamedTuple):
@@ -37,18 +43,24 @@ class BulkActionDeps(NamedTuple):
 
 def _prune_undo_store() -> None:
     """Fix-Sprint Paket A (Punkt 7): raeumt den Undo-Store bei jedem Zugriff auf —
-    TTL-Abfluss + Hartes Maximum von 100 Eintraegen (aelteste werden verworfen)."""
-    now_ts = time.time()
-    for tok in list(_KANBAN_UNDO_STORE.keys()):
-        entry = _KANBAN_UNDO_STORE.get(tok)
-        if not entry or float(entry.get("expires_at") or 0) < now_ts:
-            _KANBAN_UNDO_STORE.pop(tok, None)
-    while len(_KANBAN_UNDO_STORE) > _KANBAN_UNDO_STORE_MAX_SIZE:
-        oldest_tok = min(
-            _KANBAN_UNDO_STORE,
-            key=lambda t: float(_KANBAN_UNDO_STORE[t].get("created_at") or 0.0),
-        )
-        _KANBAN_UNDO_STORE.pop(oldest_tok, None)
+    TTL-Abfluss + Hartes Maximum von 100 Eintraegen (aelteste werden verworfen).
+
+    D09-M6: Iteration, TTL-Pruefung und Pop laufen atomisch unter _UNDO_LOCK.
+    Sonst konnten zwei Request-Threads dieselbe Map gleichzeitig veraendern
+    (RuntimeError: dictionary changed size during iteration / verlorene Tokens).
+    """
+    with _UNDO_LOCK:
+        now_ts = time.time()
+        for tok in list(_KANBAN_UNDO_STORE.keys()):
+            entry = _KANBAN_UNDO_STORE.get(tok)
+            if not entry or float(entry.get("expires_at") or 0) < now_ts:
+                _KANBAN_UNDO_STORE.pop(tok, None)
+        while len(_KANBAN_UNDO_STORE) > _KANBAN_UNDO_STORE_MAX_SIZE:
+            oldest_tok = min(
+                _KANBAN_UNDO_STORE,
+                key=lambda t: float(_KANBAN_UNDO_STORE[t].get("created_at") or 0.0),
+            )
+            _KANBAN_UNDO_STORE.pop(oldest_tok, None)
 
 
 class KanbanBulkActionRequest(BaseModel):
@@ -269,16 +281,18 @@ def execute_kanban_bulk_action(
                 file=sys.stderr,
             )
 
-        # 3. Snapshot im Undo-Puffer speichern (10 Minuten TTL)
-        _KANBAN_UNDO_STORE[undo_token] = {
-            "snapshot": snapshot,
-            "action": action,
-            "created_at": now_ts,
-            "expires_at": now_ts + 600.0,  # 10 Minuten
-        }
-
-        # Abgelaufene Eintraege bereinigen + Max-Size durchsetzen (Punkt 7)
-        _prune_undo_store()
+        # 3. Snapshot im Undo-Puffer speichern (10 Minuten TTL).
+        # Schreiben + Pruning in EINEM kritischen Abschnitt: der neue Token
+        # darf nicht zwischen Pruning und Insert von einem anderen Thread
+        # wieder entfernt werden (D09-M6).
+        with _UNDO_LOCK:
+            _KANBAN_UNDO_STORE[undo_token] = {
+                "snapshot": snapshot,
+                "action": action,
+                "created_at": now_ts,
+                "expires_at": now_ts + 600.0,  # 10 Minuten
+            }
+            _prune_undo_store()  # RLock: reentrant, kein Deadlock
 
         # Broadcast WebSocket Event
         try:
@@ -314,22 +328,31 @@ def execute_kanban_bulk_undo(
     deps: BulkActionDeps,
 ) -> Dict[str, Any]:
     """Macht eine Mehrfachaktion innerhalb des 10-Minuten-Zeitfensters rueckgaengig."""
-    _prune_undo_store()
     token = req.undo_token.strip()
-    entry = _KANBAN_UNDO_STORE.get(token)
-    if not entry:
-        raise HTTPException(
-            status_code=404,
-            detail="Undo-Transaktion nicht gefunden oder bereits abgelaufen.",
-        )
+    with _UNDO_LOCK:
+        # D09-M6: das explizite TTL-Urteil (400) MUSS vor dem generellen
+        # Pruning stehen — sonst ist der Token bereits weg und der Aufrufer
+        # bekommt fälschlich 404 „nicht gefunden" statt „abgelaufen".
+        entry = _KANBAN_UNDO_STORE.get(token)
+        if entry and time.time() > float(entry.get("expires_at") or 0):
+            _KANBAN_UNDO_STORE.pop(token, None)
+            raise HTTPException(
+                status_code=400,
+                detail="Das 10-Minuten-Zeitfenster für diese Aktion ist abgelaufen.",
+            )
 
-    now_ts = time.time()
-    if now_ts > entry["expires_at"]:
+        _prune_undo_store()  # RLock: reentrant, kein Deadlock
+        entry = _KANBAN_UNDO_STORE.get(token)
+        if not entry:
+            raise HTTPException(
+                status_code=404,
+                detail="Undo-Transaktion nicht gefunden oder bereits abgelaufen.",
+            )
+
+        # CAS: atomisch verbrauchen, BEVOR die DB-Arbeit beginnt. Ein zweiter,
+        # paralleler Request sieht den Token nicht mehr und laeuft in den
+        # 404-Pfad — genau ein Aufrufer darf den Snapshot zurueckspielen.
         _KANBAN_UNDO_STORE.pop(token, None)
-        raise HTTPException(
-            status_code=400,
-            detail="Das 10-Minuten-Zeitfenster für diese Aktion ist abgelaufen.",
-        )
 
     snapshot = entry.get("snapshot") or []
     conn = deps.get_kanban_connection(maintenance=True)
@@ -381,8 +404,9 @@ def execute_kanban_bulk_undo(
 
         update_kanban_meta(_restore_tags)
 
-        # Transaktion verbraucht
-        _KANBAN_UNDO_STORE.pop(token, None)
+        # Token wurde bereits beim Eintritt atomisch verbraucht (CAS).
+        # Kein zweites pop(): das koennte einen zwischenzeitlich neu
+        # angelegten Token mit gleichem Wert loeschen (D09-M6).
         try:
             from backend.audit_log import chained_audit_log
 

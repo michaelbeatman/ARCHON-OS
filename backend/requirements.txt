@@ -1,7 +1,0 @@
-# W5: identische Major-Obergrenzen wie die Root-requirements.txt.
-# Vorher standen hier nur untere Schranken (fastapi>=0.100.0, ...), wodurch
-# je nach Installationspfad unterschiedliche FastAPI-/Pydantic-Majors im
-# Image landeten (Breaking Changes, nicht reproduzierbare Builds).
-fastapi>=0.110.0,<1.0.0
-uvicorn[standard]>=0.28.0,<1.0.0
-pydantic>=2.0.0,<3.0.0

@@ -8,7 +8,6 @@ import argparse
 import json
 import os
 import shutil
-import sqlite3
 import sys
 import tempfile
 import threading
@@ -52,6 +51,42 @@ os.makedirs(os.path.dirname(RESULTS_FILE), exist_ok=True)
 # Der Probe-Timeout gilt nur fuer EINEN HTTP-Poll, nicht das Gesamtfenster
 # (LIVEZ_WAIT_TIMEOUT_S).
 PROBE_TIMEOUT = max(1.0, float(os.getenv("CHAOS_LIVEZ_PROBE_TIMEOUT_S", "2")))
+
+# D08-M6: Der Concurrency-Test muss gegen die PRODUKTIVE DB-Aufloesung und
+# Verbindungsfabrik laufen (backend/db_paths.py), sonst prueft die Suite nur
+# nacktes sqlite3 und nicht Archon OS. Fehlt die Fabrik, ist das ein harter
+# Fehler (fail-closed), kein stiller Fallback auf die Temp-DB.
+CHAOS_DB_FILENAME = "chaos_concurrency.db"
+resolve_db: Optional[Callable[[str], str]] = None
+get_db_connection: Optional[Callable[[str], Any]] = None
+_DB_FACTORY_AVAILABLE = False
+_DB_IMPORT_ERROR = ""
+try:
+    if WORKSPACE_DIR not in sys.path:
+        sys.path.insert(0, WORKSPACE_DIR)
+    from backend.db_paths import (
+        DB_BUSY_TIMEOUT_MS,
+    )
+    from backend.db_paths import (
+        get_db_connection as _db_connection_factory,
+    )
+    from backend.db_paths import (
+        resolve_db as _db_resolver,
+    )
+
+    resolve_db = _db_resolver
+    get_db_connection = _db_connection_factory
+    _DB_FACTORY_AVAILABLE = True
+except Exception as _db_import_exc:  # pragma: no cover - nur bei falschem Arbeitsverzeichnis
+    DB_BUSY_TIMEOUT_MS = 5000
+    _DB_IMPORT_ERROR = str(_db_import_exc)
+
+
+def resolve_chaos_db_path() -> str:
+    """D08-M6: produktiver Pfad ueber ``backend.db_paths.resolve_db``."""
+    if not _DB_FACTORY_AVAILABLE or resolve_db is None:
+        raise RuntimeError(f"[chaos_tester] backend.db_paths nicht verfuegbar: {_DB_IMPORT_ERROR}")
+    return str(resolve_db(CHAOS_DB_FILENAME))
 
 
 def livez_ok(url: str = LIVEZ_URL) -> bool:
@@ -164,28 +199,48 @@ class ArchonChaosTester:
                 return c
         return candidates[0]
 
-    def test_database_concurrency(self, num_threads: int = 8, ops_per_thread: int = 50) -> Dict[str, Any]:
+    def test_database_concurrency(
+        self,
+        num_threads: int = 8,
+        ops_per_thread: int = 50,
+        db_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Echte WAL-Schreiblast: 8 Threads × 50 ``BEGIN IMMEDIATE``-Transaktionen.
 
         D10/MED: frueher wurden nur reine SELECTs auf ``./data/kanban.db``
         ausgefuehrt — kein Effekt, keine Lock-Contention, kein Nachweis.
-        Jetzt: dedizierte Temp-DB (nie ``./data``), WAL + busy_timeout, echte
-        INSERTs mit BEGIN IMMEDIATE/COMMIT und ``PRAGMA integrity_check``.
+        D08-M6: der Test läuft jetzt ueber ``backend.db_paths.resolve_db()``
+        und ``get_db_connection()`` — damit werden busy_timeout (SSOT),
+        ClosingConnection und WAL der *produktiven* Fabrik geprueft, nicht
+        nacktes sqlite3. ``db_path`` erlaubt weiterhin Isolation in Tests.
         """
-        tmp_dir = tempfile.mkdtemp(prefix="archon_chaos_db_")
-        db_path = os.path.join(tmp_dir, "chaos_concurrency.db")
+        temp_dir: Optional[str] = None
+        if db_path:
+            target_db = os.path.abspath(db_path)
+        else:
+            temp_dir = tempfile.mkdtemp(prefix="archon_chaos_db_")
+            target_db = os.path.join(temp_dir, CHAOS_DB_FILENAME)
         try:
-            init_conn = sqlite3.connect(db_path, timeout=5.0)
-            try:
+            if not _DB_FACTORY_AVAILABLE or get_db_connection is None:
+                return {
+                    "status": "failed",
+                    "reason": "db_factory_unavailable",
+                    "error": _DB_IMPORT_ERROR,
+                    "db_path": target_db,
+                }
+            factory = get_db_connection
+            with factory(target_db) as init_conn:
                 journal_mode = str(init_conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]).lower()
-                init_conn.execute("PRAGMA busy_timeout=5000")
+                busy_timeout_ms = int(init_conn.execute("PRAGMA busy_timeout").fetchone()[0])
+                # Wiederholte Laeufe gegen dieselbe produktive DB muessen
+                # deterministisch sein (alte Chaos-Zeilen duerfen den
+                # Row-Count-Vergleich nicht verfaelschen).
+                init_conn.execute("DROP TABLE IF EXISTS chaos_writes")
                 init_conn.execute(
                     "CREATE TABLE chaos_writes ("
                     "id INTEGER PRIMARY KEY AUTOINCREMENT, thread INTEGER, seq INTEGER, payload TEXT)"
                 )
                 init_conn.commit()
-            finally:
-                init_conn.close()
 
             errors: List[str] = []
             latencies: List[float] = []
@@ -196,25 +251,20 @@ class ArchonChaosTester:
                 nonlocal committed
                 for i in range(ops_per_thread):
                     t0 = time.time()
-                    conn = None
                     try:
-                        conn = sqlite3.connect(db_path, timeout=5.0)
-                        conn.execute("PRAGMA busy_timeout=5000")
-                        conn.execute("BEGIN IMMEDIATE")
-                        conn.execute(
-                            "INSERT INTO chaos_writes (thread, seq, payload) VALUES (?, ?, ?)",
-                            (thread_id, i, f"chaos-{thread_id}-{i}"),
-                        )
-                        conn.commit()
+                        with factory(target_db) as conn:
+                            conn.execute("BEGIN IMMEDIATE")
+                            conn.execute(
+                                "INSERT INTO chaos_writes (thread, seq, payload) VALUES (?, ?, ?)",
+                                (thread_id, i, f"chaos-{thread_id}-{i}"),
+                            )
+                            conn.commit()
                         with lock:
                             committed += 1
                             latencies.append(time.time() - t0)
                     except Exception as e:
                         with lock:
                             errors.append(f"Thread {thread_id} op {i}: {e}")
-                    finally:
-                        if conn is not None:
-                            conn.close()
 
             threads = [threading.Thread(target=worker, args=(t,)) for t in range(num_threads)]
             t_start = time.time()
@@ -227,12 +277,9 @@ class ArchonChaosTester:
             integrity = "unknown"
             row_count = -1
             try:
-                check_conn = sqlite3.connect(db_path, timeout=5.0)
-                try:
+                with factory(target_db) as check_conn:
                     integrity = str(check_conn.execute("PRAGMA integrity_check").fetchone()[0])
                     row_count = int(check_conn.execute("SELECT COUNT(*) FROM chaos_writes").fetchone()[0])
-                finally:
-                    check_conn.close()
             except Exception as e:
                 integrity = f"error: {e}"
 
@@ -245,6 +292,7 @@ class ArchonChaosTester:
                 and row_count == expected
                 and integrity == "ok"
                 and journal_mode == "wal"
+                and busy_timeout_ms == DB_BUSY_TIMEOUT_MS
             )
             return {
                 "status": "passed" if passed else "failed",
@@ -254,6 +302,9 @@ class ArchonChaosTester:
                 "successful_commits": committed,
                 "row_count": row_count,
                 "journal_mode": journal_mode,
+                "busy_timeout_ms": busy_timeout_ms,
+                "connection_factory": "backend.db_paths.get_db_connection",
+                "db_path": target_db,
                 "integrity_check": integrity,
                 "errors_count": len(errors),
                 "errors": errors[:5],
@@ -262,7 +313,8 @@ class ArchonChaosTester:
                 "max_latency_ms": round(max_latency_ms, 2),
             }
         finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
     def test_container_discovery_and_health(self) -> Dict[str, Any]:
         """Prüft die Erreichbarkeit und Status der Kern-Container über den Docker-Proxy."""
@@ -450,9 +502,20 @@ class ArchonChaosTester:
         """Führt die gesamte Chaos- & Resilienz-Testsuite aus."""
         print(f"=== Starte Archon OS Chaos & Resilience Suite (dry_run={self.dry_run}) ===")
 
-        # 1. DB Concurrency
+        # 1. DB Concurrency — D08-M6: immer gegen die produktive resolve_db()
+        # und die gehaertete Verbindungsfabrik, nicht gegen eine Temp-DB.
         print("[1/4] Teste SQLite Concurrency & Lock Resilience...")
-        db_res = self.test_database_concurrency(num_threads=8, ops_per_thread=50)
+        try:
+            prod_db_path = resolve_chaos_db_path()
+            db_res = self.test_database_concurrency(
+                num_threads=8, ops_per_thread=50, db_path=prod_db_path
+            )
+        except Exception as exc:
+            db_res = {
+                "status": "failed",
+                "reason": "db_resolve_failed",
+                "error": str(exc),
+            }
         self.results["details"]["db_concurrency"] = db_res
         self._record_result(db_res["status"])
 
@@ -484,6 +547,7 @@ class ArchonChaosTester:
         print("\n=== Chaos Suite Ergebnis ===")
         print(f"Tests ausgeführt: {self.results['tests_run']}")
         print(f"Bestanden:        {self.results['tests_passed']}")
+        print(f"Übersprungen:     {self.results['tests_skipped']}")
         print(f"Fehlgeschlagen:   {self.results['tests_failed']}")
 
         return self.results

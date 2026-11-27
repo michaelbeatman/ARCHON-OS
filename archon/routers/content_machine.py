@@ -15,14 +15,31 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from archon.routers._rbac import forbid_viewer_writes, require_admin_or_503, require_session_actor
 
 logger = logging.getLogger("archon.routers.content_machine")
 router = APIRouter(dependencies=[Depends(forbid_viewer_writes)], tags=["content_machine"])
+
+
+def _mark_campaign_failed_sync(campaign_id: str) -> None:
+    """D08-M5: Kampagnenstatus 'failed' ausserhalb des Event-Loops persistieren.
+
+    Der Background-DAG ist eine asyncio-Task; ein SQLite-Lock im Fehlerpfad
+    wuerde genau den Loop blockieren, der den Fehler melden soll.
+    """
+    from backend.content_machine import _conn
+
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE content_campaigns SET status = 'failed', updated_at = ? WHERE id = ?",
+            (__import__("datetime").datetime.now().isoformat(), campaign_id),
+        )
+        conn.commit()
 
 
 # =========================================================================
@@ -48,12 +65,7 @@ def api_cm_campaigns_list(limit: int = 50):
 
 
 # --- Etappe 4: Pydantic-v2-Requestmodelle fuer die ersten 9 Raw-Body-Endpunkte ---
-# Import bewusst lokal in diesem Abschnitt: der Rest der Datei wird in Etappe 5
-# von einem anderen Agenten bearbeitet.
-from typing import List
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
+# Typing/Pydantic-Imports stehen jetzt am Dateianfang (Ruff E402/F811).
 
 def _normalize_channels(value: Any) -> Any:
     """Einzelkanal als String ('linkedin') -> ['linkedin'] (alter Client-Shape)."""
@@ -262,22 +274,20 @@ async def api_cm_campaign_generate(
                     gate_approvals=gate_approvals,
                     dry_run=False,
                 )
-            except Exception as exc:  # pragma: no cover - Hintergrundpfad
-                import logging
-                logging.getLogger("archon_os").error(
+            except Exception as exc:
+                logger.error(
                     "[ContentMachine] Hintergrund-DAG '%s' fehlgeschlagen: %s",
                     campaign_id, exc, exc_info=exc,
                 )
+                # D08-M5: kein nacktes `except: pass` mehr — ein Scheitern des
+                # Status-Updates wird selbst sichtbar protokolliert.
                 try:
-                    from backend.content_machine import _conn
-                    with _conn() as conn:
-                        conn.execute(
-                            "UPDATE content_campaigns SET status = 'failed', updated_at = ? WHERE id = ?",
-                            (__import__("datetime").datetime.now().isoformat(), campaign_id),
-                        )
-                        conn.commit()
-                except Exception:
-                    pass
+                    await asyncio.to_thread(_mark_campaign_failed_sync, campaign_id)
+                except Exception as mark_exc:
+                    logger.error(
+                        "[ContentMachine] Status 'failed' fuer Kampagne '%s' nicht persistiert: %s",
+                        campaign_id, mark_exc, exc_info=mark_exc,
+                    )
 
         _spawn_tracked(_run_tracked(), name=f"content_dag_{campaign_id}")
         return {"status": "accepted", "campaign_id": campaign_id, "execution": "background_dag"}
@@ -491,11 +501,6 @@ def api_cm_publish_due(request: Request, req: Optional[PublishDueRequest] = Body
 # ETAPPE 5: typisierte Request-Modelle (ab crm-inbox-preview bis Dateiende)
 # ---------------------------------------------------------------------------
 
-from typing import List, Union  # noqa: E402
-
-from pydantic import BaseModel, ConfigDict  # noqa: E402
-
-
 class ImportCrmIdeasRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     sync_to_kanban: bool = True
@@ -576,6 +581,7 @@ def api_cm_import_crm_ideas(request: Request, payload: ImportCrmIdeasRequest = B
 @router.get("/api/v2/content-machine/voice-profile")
 def api_cm_get_voice_profile():
     import os
+
     from archon.core.runtime import APP_ROOT
     voice_path = os.path.join(APP_ROOT, "config", "voice.md")
     content = ""
@@ -589,6 +595,7 @@ def api_cm_get_voice_profile():
 def api_cm_save_voice_profile(request: Request, payload: VoiceProfileSaveRequest):
     require_admin_or_503(request)
     import os
+
     from archon.core.runtime import APP_ROOT
     content = str(payload.content or "").strip()
     if not content:
@@ -656,7 +663,11 @@ def api_cm_decide_experiment(request: Request, asset_id: str, payload: DecideExp
 
 @router.post("/api/v2/content-machine/validate-channel")
 def api_cm_validate_channel(payload: ValidateChannelRequest):
-    from backend.content_machine import validate_channel_constraints, evaluate_fact_check, evaluate_asset_quality
+    from backend.content_machine import (
+        evaluate_asset_quality,
+        evaluate_fact_check,
+        validate_channel_constraints,
+    )
     asset = payload.model_dump()
     return {
         "status": "ok",

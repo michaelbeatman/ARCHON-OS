@@ -479,6 +479,12 @@ def _get_kanban_connection(company_id: Optional[str] = None, maintenance: bool =
                     payload TEXT,
                     created_at INTEGER NOT NULL
                 );
+                -- D08-M7: der einzige Index war (kind, id) in mission_control.py;
+                -- alle heissen Lesepfade filtern aber zuerst nach task_id
+                -- (delegation.py:1601/1888, operations_review.py). Ohne diesen
+                -- Prefix ist jeder Taskabschluss ein Full Table Scan.
+                CREATE INDEX IF NOT EXISTS idx_events_task_kind
+                    ON task_events(task_id, kind, id);
             """)
             # Schema-Migration fuer aeltere kanban.db-Instanzen ohne kind/created_at auf task_links
             tl_cols = {r[1] for r in conn.execute("PRAGMA table_info(task_links)").fetchall()}

@@ -397,6 +397,10 @@ services:
 
   # -------------------------------------------------------------
   # HERMES AGENT ORCHESTRATOR (Pinned v0.23.1 Multi-Arch)
+  # W6-D / D09-H1: Der Image-Digest ist verbindlich auch in
+  # scripts/patches/MANIFEST.json gepinnt. Beide NUR gemeinsam bumpen;
+  # python scripts/telegram_adapter_smoke_test.py prueft Digest, Mount und
+  # Adapter-API als hartes Gate (Exit 0/1) — keine Patch-Zerlegung.
   # -------------------------------------------------------------
   hermes:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:v0.23.1@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08}
@@ -430,6 +434,8 @@ services:
       - ${ARCHON_HERMES_DIR:-./.hermes}:/opt/data
       - ${ARCHON_OBSIDIAN_DIR:-./obsidian_vault}:/opt/data/obsidian
       - ./agent_workspace:/projects
+      # W6-D / D09-H1: API-Signatur dieses Read-Only-Patches gegen das
+      # gepinnte Hermes-Image wird per telegram_adapter_smoke_test.py geprueft.
       - ./scripts/patches/hermes_telegram_adapter.py:/opt/hermes/plugins/platforms/telegram/adapter.py:ro
     environment:
       - DOCKER_HOST=tcp://docker-socket-proxy:2375

@@ -1485,29 +1485,33 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
     """Prüft, ob alle Teilaufgaben eines Projekts abgeschlossen sind.
     Wenn ja, synthetisiert Robert (executive_decision_architect) die Ergebnisse,
     erstellt das finale HTML-Dokument in 03_Endprodukte/ und informiert den Nutzer."""
-    try:
+    def _fan_in_context_sync() -> None:
+        """D08-M1: Kanban-Reads, Approval-Pruefung, Vault-Write und MC-Update
+        gebuendelt ausserhalb des Event-Loops. Der Aufrufer sichert die
+        Thread-Grenze mit genau einem ``await asyncio.to_thread``."""
+        _fan_pid = parent_project_id
         from backend.operations_api import _get_kanban_connection
         kc = _get_kanban_connection()
         try:
-            if not parent_project_id:
+            if not _fan_pid:
                 r = kc.execute("SELECT project_id FROM tasks WHERE id = ?", (task_id,)).fetchone()
-                parent_project_id = r[0] if r else None
+                _fan_pid = r[0] if r else None
             
-            if not parent_project_id:
+            if not _fan_pid:
                 return
 
             pending = kc.execute(
                 "SELECT COUNT(*) FROM tasks WHERE project_id = ? AND status NOT IN ('done', 'review', 'failed', 'blocked')",
-                (parent_project_id,)
+                (_fan_pid,)
             ).fetchone()[0]
 
             if pending > 0:
-                logger.info(f"[AutoOrchestrator] Projekt {parent_project_id}: noch {pending} Aufgaben ausstehend.")
+                logger.info(f"[AutoOrchestrator] Projekt {_fan_pid}: noch {pending} Aufgaben ausstehend.")
                 return
 
             rows = kc.execute(
                 "SELECT id, title, assignee, result, status FROM tasks WHERE project_id = ? ORDER BY rowid ASC",
-                (parent_project_id,)
+                (_fan_pid,)
             ).fetchall()
         finally:
             kc.close()
@@ -1516,7 +1520,7 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
             return
 
         # H-15-6/F023: Freigabe NIE erfinden — nur mit echtem approval_id.
-        _approval = _project_approval_evidence(parent_project_id)
+        _approval = _project_approval_evidence(_fan_pid)
         _is_approved = bool(_approval["approval_id"])
         if _is_approved:
             _approval_line = (
@@ -1537,12 +1541,12 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
         proj_folder = None
         if obs_dir:
             for d in os.listdir(obs_dir):
-                if parent_project_id.lower() in d.lower():
+                if _fan_pid.lower() in d.lower():
                     proj_folder = os.path.join(obs_dir, d)
                     break
             if not proj_folder:
                 date_prefix = datetime.date.today().strftime("%Y%m%d")
-                clean_name = parent_project_id.lower()
+                clean_name = _fan_pid.lower()
                 if not clean_name.startswith("projekt-"):
                     clean_name = f"projekt-{clean_name}"
                 proj_folder = os.path.join(obs_dir, f"{date_prefix}-{clean_name}")
@@ -1558,7 +1562,7 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
         )
         if end_dir:
             os.makedirs(end_dir, exist_ok=True)
-            clean_proj_name = parent_project_id.replace("projekt-", "").title()
+            clean_proj_name = _fan_pid.replace("projekt-", "").title()
             html_filename = (
                 f"{clean_proj_name}_Abschlussbericht.html" if _is_approved
                 else f"{clean_proj_name}_ENTWURF.html"
@@ -1624,9 +1628,9 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
         if session_id:
             _final_dir = "03_Endprodukte" if _is_approved else "01_Zwischenberichte"
             _lead = (
-                f"🎉 **Projekt '{parent_project_id}' ist vollständig abgeschlossen!**"
+                f"🎉 **Projekt '{_fan_pid}' ist vollständig abgeschlossen!**"
                 if _is_approved else
-                f"◐ **Projekt '{parent_project_id}': ENTWURF — keine Freigabe vorhanden.**\n\n"
+                f"◐ **Projekt '{_fan_pid}': ENTWURF — keine Freigabe vorhanden.**\n\n"
                 "Finalisierung blockiert: es existiert kein verifizierter `approval_id`-Nachweis. "
                 "Bitte Freigabe über das HITL-Gate einholen."
             )
@@ -1634,7 +1638,7 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
                 f"{_lead}\n\n"
                 f"Alle {len(rows)} Teilaufgaben wurden von den Fachagenten erfolgreich abgearbeitet und von mir zusammengeführt.\n\n"
                 f"📄 **{'Finaler Abschlussbericht' if _is_approved else 'Entwurfsbericht'}:**\n"
-                f"- Gespeichert in: `01_PROJEKTE/{os.path.basename(proj_folder) if proj_folder else parent_project_id}/{_final_dir}/`\n"
+                f"- Gespeichert in: `01_PROJEKTE/{os.path.basename(proj_folder) if proj_folder else _fan_pid}/{_final_dir}/`\n"
                 f"- Direkter Link im Showroom & Operations-Dashboard verfügbar.\n\n"
                 f"Die Fachagenten wurden nach erfolgreichem Projektabschluss wieder in den Standby versetzt."
             )
@@ -1643,9 +1647,12 @@ async def _trigger_autonomous_orchestrator_followup(delegator_id, session_id, ta
                 "session_id": session_id,
                 "agent_id": "executive_decision_architect",
                 "content": summary_msg,
-                "project_completed": parent_project_id
+                "project_completed": _fan_pid
             })
-            logger.info(f"[AutoOrchestrator] Projekt {parent_project_id} erfolgreich autonom abgeschlossen!")
+            logger.info(f"[AutoOrchestrator] Projekt {_fan_pid} erfolgreich autonom abgeschlossen!")
+
+    try:
+        await asyncio.to_thread(_fan_in_context_sync)
     except Exception as e:
         logger.error(f"[AutoOrchestrator] Fehler bei autonomem Followup: {e}")
 
@@ -1669,6 +1676,37 @@ def _poll_kanban_row(task_id: str):
     kc = _kgc()
     try:
         return kc.execute("SELECT status, result, title FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    finally:
+        kc.close()
+
+
+def _write_cancelled_event_sync(task_id: str, result: Optional[str], mc_status: str) -> None:
+    """D08-M2: cancelled-Event idempotent und ausserhalb des Event-Loops schreiben.
+
+    Zwei parallele Watcher duerfen nur EIN Event erzeugen. Die Connection wird
+    auch bei DB-Fehlern geschlossen (``finally``), damit kein FD-Leak entsteht.
+    """
+    from backend.operations_api import _get_kanban_connection as _kgc3
+
+    kc = _kgc3()
+    try:
+        # BEGIN IMMEDIATE serialisiert parallele Watcher: der zweite liest das
+        # bereits committete Event und erzeugt keinen zweiten INSERT.
+        kc.execute("BEGIN IMMEDIATE")
+        _exists = kc.execute(
+            "SELECT 1 FROM task_events WHERE task_id = ? AND kind = 'cancelled' LIMIT 1",
+            (task_id,),
+        ).fetchone()
+        if not _exists:
+            kc.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
+                (task_id, "cancelled", json.dumps({
+                    "reason": (result or "Delegation abgebrochen")[:400],
+                    "via": "delegation_watcher",
+                    "mc_status": mc_status,
+                }), time.time()),
+            )
+        kc.commit()
     finally:
         kc.close()
 
@@ -2234,23 +2272,11 @@ async def _watch_delegated_task(
                 )
                 if status == "cancelled":
                     try:
-                        from backend.operations_api import _get_kanban_connection as _kgc3
-                        _kc = _kgc3()
-                        _exists = _kc.execute(
-                            "SELECT 1 FROM task_events WHERE task_id = ? AND kind = 'cancelled' LIMIT 1",
-                            (task_id,),
-                        ).fetchone()
-                        if not _exists:
-                            _kc.execute(
-                                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?,?,?,?)",
-                                (task_id, "cancelled", json.dumps({
-                                    "reason": (result or "Delegation abgebrochen")[:400],
-                                    "via": "delegation_watcher",
-                                    "mc_status": mc_status,
-                                }), time.time()),
-                            )
-                            _kc.commit()
-                        _kc.close()
+                        # D08-M2: der DB-Schreibpfad gehoert in den Worker-Thread,
+                        # sonst staut ein Write-Lock den Fan-in-Ruecklauf.
+                        await asyncio.to_thread(
+                            _write_cancelled_event_sync, task_id, result, mc_status
+                        )
                     except Exception as _cancelled_ev_exc:
                         logger.warning(
                             "[Delegation] cancelled-Event für %s nicht geschrieben: %s",

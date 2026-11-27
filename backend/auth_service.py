@@ -14,7 +14,6 @@ import os
 import re
 import secrets
 import sqlite3
-import sys
 import threading
 import time
 import uuid
@@ -139,7 +138,13 @@ def _get_db() -> sqlite3.Connection:
     return conn
 
 
-def _hash_password(password: str, salt: str = None, iterations: int = _PBKDF2_ITERATIONS) -> tuple:  # type: ignore[assignment]
+# D09-M3: echtes Optional statt implizitem Optional per type:ignore.
+_PasswordHash = tuple[str, str]  # (stored_hash, salt)
+
+
+def _hash_password(
+    password: str, salt: Optional[str] = None, iterations: int = _PBKDF2_ITERATIONS
+) -> _PasswordHash:
     if not salt:
         salt = uuid.uuid4().hex
     pwd_bytes = password.encode("utf-8")

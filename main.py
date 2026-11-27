@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 import httpx as httpx
 import yaml as yaml
 from fastapi import BackgroundTasks as BackgroundTasks
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi import File as File
 from fastapi import Form as Form
 from fastapi import Query as Query
@@ -31,7 +31,7 @@ from fastapi.responses import (
 )
 from fastapi.responses import HTMLResponse as HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 import core_dispatcher
 from archon.core.cache import invalidate as invalidate_ttl_cache
@@ -1559,8 +1559,20 @@ _register_router(app, _deals_router, '_deals_router')
 
 _register_router(app, _vault_router, '_vault_router')
 
+class SandboxLegacyRequest(BaseModel):
+    """D09-M4: Ersatz für den letzten rohen ``Dict = Body(...)``.
+
+    Der Endpunkt ist eine Notbremse und liest den Body nie; das Modell
+    erzwingt nur ein valides JSON-Objekt und ignoriert unbekannte Felder
+    (Kompatibilität mit alten Clients), statt ein unvalidiertes FastAPI-
+    Schema zu erzeugen.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+
 @app.post("/api/sandbox")
-def api_run_python_sandbox(request: Request, payload: Dict = Body(...)):
+def api_run_python_sandbox(request: Request, payload: SandboxLegacyRequest):
     # NOTBREMSE S6: Nutzer-Code-Ausführung mit Host-Python deaktiviert.
     # Isolierte Ausführung: POST /api/sandbox/execute (backend/ephemeral_sandbox, Docker, --network none).
     require_admin(request)  # RBAC: Admin-Sache

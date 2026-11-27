@@ -36,6 +36,9 @@ RUN pip install --no-cache-dir --require-hashes --no-deps -r requirements.lock.t
 
 # Complete application code & static assets (runs standalone even without bind-mount)
 COPY --chown=streamlituser:streamlitgroup *.py ./
+# D09-M5: alle Root-*.py landen im Image und müssen auch im Build selbst
+# syntaxgeprüft sein — nicht erst in einem CI-Job, der einzelne Dateien listet.
+RUN python -m compileall -q *.py
 COPY --chown=streamlituser:streamlitgroup agent_profiles.json agents.json roles.json settings.json prompt_studio_catalog.json hermes_skills_index.json hermes_skills_cache.json ./
 COPY --chown=streamlituser:streamlitgroup archon/ archon/
 COPY --chown=streamlituser:streamlitgroup backend/ backend/

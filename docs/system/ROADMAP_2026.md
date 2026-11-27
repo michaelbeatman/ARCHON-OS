@@ -95,7 +95,7 @@
 | **105** | **Event-Bus Governance (Trigger-Matrix, Rate-Limits, Replay)** | Hoch | Abgeschlossen | Policy-Matrix (`allow`/`require_hitl`/`deny`), Loop-Schutz & Dead-Letter-Replay (`backend/workflow_scheduler.py`) |
 | **106** | **SQLite-Datenbank-Konsolidierung (`28 → 3` Domänen-DBs)** | Kritisch | Abgeschlossen | Zusammenführung von 28 SQLite-Dateien in `ops.db`, `business.db` & `memory.db` inkl. Mandanten- & Backup-Integration (`backend/db_consolidation.py`, `backend/db_paths.py`) |
 | **107** | **Multi-Channel Content-Maschine v1 & v2 (LinkedIn, YouTube, TikTok, X)** | Sehr hoch | Abgeschlossen | Repurposing-DAG, Anti-AI-Slop-Quality-Gate, Quellen-Ingestion (URL/Obsidian/Transkript), 9:16-Clip-Matrix & Publishing-Bridge (`backend/content_machine.py`) |
-| **108** | **Next.js 16 UI-Konsolidierung auf Archon FastAPI** | Hoch | Abgeschlossen | Direkter FastAPI-Proxy (`/api/archon/[...path]`) ohne PocketBase-Zwang für `/content-studio`, `/workflows` und `/cockpit` (`frontend/`) |
+| **108** | **Next.js 16 UI-Konsolidierung auf Archon FastAPI** | Hoch | Abgeschlossen | Direkter FastAPI-Proxy (`/api/archon/[...path]`) ohne PocketBase-Zwang für `/workflows` und `/cockpit` (`frontend/`). Produktmodell-Korrektur 23.11.2026 (D09-M7): keine eigene Content-Domäne; die ehemalige separate Content-Oberfläche ist in `/workflows` aufgegangen, alte Deeplinks nur als Legacy-Alias weitergeleitet. |
 | **109** | **Code Mode (M109a Deferred Discovery → M109b Isolierte Sandbox)** | Hoch | Geplant | Token-Reduktion für ~200+ Endpunkte: erst Deferred Catalog (`search`/`describe`/`call` über `tool_runtime.py`), danach optional isolierte Sandbox mit Capability-Broker |
 | **110** | **Execution Hardening: Idempotency, Effect-Ledger, Leases & Plan-Validator** | Sehr hoch | Abgeschlossen (v0.5.7) | Umgesetzt in `event_mesh.py` (Effect-Ledger + Outbox), `deadlock_supervisor.py` (Leases/Heartbeats) und `workflow_dag_runner.py` (Plan-Validator, `replan_count`=2) |
 | **111** | **Isolation & Resilience: Bulkheads, Tool-Output-Caps, Circuit-Breaker & Queues** | Hoch | Geplant | Getrennte Scheduling-Klassen (Chat vs. Background vs. DAG), Tool-Output-Größenlimits vor Kontext-Injektion, Provider-Circuit-Breaker & Backpressure |
@@ -688,7 +688,7 @@
 - **Ausgangslage / Ziel:** Direkte Anbindung des Next.js-16-Frontends (`frontend/`) an Archon FastAPI ohne PocketBase-Abhängigkeit.
 - **Umgesetzte Architektur:**
   - Server-seitiger Proxy `frontend/src/app/api/archon/[...path]/route.ts` und typisierter Client `frontend/src/lib/archon-api.ts`.
-  - Neue Arbeitsplätze: `/content-studio` (`ContentMachineCockpit.tsx`), `/workflows` (`WorkflowDagCockpit.tsx`) und `/cockpit` (`ExecutiveCockpit.tsx` für Health, 28→3 DB-Status, Kanban, HITL-Freigaben, DAG-Runs, Content-Pipeline & CRM).
+  - Neue Arbeitsplätze: `/workflows` (`WorkflowDagCockpit.tsx`) und `/cockpit` (`ExecutiveCockpit.tsx` für Health, 28→3 DB-Status, Kanban, HITL-Freigaben, DAG-Runs, Content-Pipeline & CRM). Gemäß Produktmodell-Korrektur 23.11.2026 (D09-M7) keine eigene Content-Domäne: Content-Arbeit läuft im Workflow-Studio (Task → Workflow → Agent → Gate → Artefakt), alte Deeplinks nur als Legacy-Alias.
 
 ### Meilenstein 109: Code Mode — Token-Effizienz ohne Sicherheitsverlust (Geplant)
 - **Ausgangslage / Ziel:** ~180–250 REST-Endpunkte + MCP-Tools verbrauchen als vollständige JSON-Schemas im Kontext der 70 Spezialisten unnötig viele Tokens.

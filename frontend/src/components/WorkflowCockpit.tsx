@@ -10,6 +10,7 @@ import {
   WorkflowTemplate,
 } from '@/lib/archon-api';
 import { useArchonEvents } from '@/lib/useArchonEvents';
+import { ARCHON_KANBAN_SSE_EVENTS } from './ExecutiveCockpit';
 import {
   Check,
   Database,
@@ -58,13 +59,10 @@ export function WorkflowCockpit() {
 
   // Live-DAG-Status und HITL-Gates über den gemeinsamen SSE-Bus.
   useArchonEvents((event) => {
-    // Echte Backend-Typen (broadcast_event): kanban_updated, ticker_update,
-    // workflow_node_state, event_bus, delegation_failed, tool_runtime.
-    // workflow_node_state ist der echte DAG-Knoten-Event (statt dag_node_completed).
-    if (!['kanban_updated', 'ticker_update', 'workflow_node_state', 'event_bus',
-          'delegation_failed', 'tool_runtime',
-          'gate_reached', 'workflow_completed', 'workflow_failed',
-          'dag_node_completed'].includes(event.type)) return;
+    // D01-M5: gemeinsame Konstante mit ExecutiveCockpit und Legacy-Board.
+    // task_status/task_cancelled sind echte broadcast_events; der Reload
+    // der DAG-Runs verhindert stale Status nach Abbruch/Pause.
+    if (!ARCHON_KANBAN_SSE_EVENTS.includes(event.type)) return;
     archonApi.listDagRuns()
       .then((res) => setRuns(res.runs || []))
       .catch(() => undefined);

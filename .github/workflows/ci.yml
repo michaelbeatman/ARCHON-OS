@@ -664,6 +664,25 @@ jobs:
       - name: Doku-Versionsabgleich gegen config/version.json (HARTES GATE, F12)
         run: python scripts/check_doc_version_sync.py
 
+      - name: D09-M7 — keine Content-Domäne / kein /content-studio als Produktfläche (HARTES GATE)
+        shell: bash
+        run: |
+          # Produktmodell-Korrektur 23.11.2026: Content läuft als
+          # Task -> Workflow -> Agent -> Gate -> Artefakt. Erlaubt sind nur
+          # (a) normative/ HISTORISCHE Audit-Dokumente, die das VERBOT benennen,
+          # (b) der kommentierte LEGACY-ALIAS in static/index.html.
+          WHITELIST='00_SOLL_SPEC\.md|domain_09\.md|HANDOFF_W4_W7\.md|GEWICHTETE_BEFUNDLISTE\.md|MASTER_PLAN\.md|AUDIT_ABSCHLUSS_2026_11_23\.md|fix_w1_d_tenant_ledger\.md|SYSTEM_AUDIT_2026_KONSOLIDIERT\.md|SYSTEM_ARCHITEKTUR_UND_AUDIT_2026\.md|w7_[a-z]_report\.md'
+          HITS=$(grep -rnF '/content-studio' CHANGELOG.md docs audit_reports static/index.html \
+            --exclude-dir=node_modules \
+            | grep -vE "$WHITELIST" \
+            | grep -vF 'LEGACY-ALIAS' || true)
+          if [ -n "$HITS" ]; then
+            echo "D09-M7: /content-studio weiterhin als Produktfläche beschrieben:"
+            echo "$HITS"
+            exit 1
+          fi
+          echo "D09-M7: keine eigene Content-Domäne — nur kommentierter Legacy-Alias erlaubt."
+
       - name: Changed-Files-Ratchet – Diff-Bereich bestimmen
         id: changed
         shell: bash

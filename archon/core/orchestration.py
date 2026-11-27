@@ -1132,9 +1132,13 @@ async def _finalize_synthesis_after_approval(
     if folder_namer is None:
         try:
             from backend.post_task_pipeline import project_folder_name as folder_namer
-        except Exception:
-            def folder_namer(x):
-                return ""
+        except Exception as exc:
+            # D01-M7: kein stiller Empty-Path-Fallback. Ohne den echten
+            # Ordner-Namer landet der Bericht ausserhalb 01_PROJEKTE bzw. in
+            # einem leeren Pfad. Fail-closed statt "" als Ordnername.
+            raise RuntimeError(
+                "project_folder_name unavailable — synthesis aborted"
+            ) from exc
     if set_status is None:
         set_status = _set_agent_profile_status
     if tg_ping is None:
@@ -1168,8 +1172,12 @@ async def _finalize_synthesis_after_approval(
         # 12.10.2026 (Ordnerflut-Fix): finaler Bericht in den EINEN Projekt-Ordner.
         try:
             _fan_ordner = folder_namer({"parent_project_id": parent_pid, "parent_project_title": parent_title})
-        except Exception:
-            _fan_ordner = ""
+        except Exception as exc:
+            # D01-M7: Ausfall des Namers darf nicht als leerer Zielordner
+            # durchgewinkt werden. Kein Artefakt, kein "completed".
+            raise RuntimeError(
+                "Projektordner nicht bestimmbar — Synthese abgebrochen (D01-M7)"
+            ) from exc
         final_obs_path = (os.path.join(PROJEKTE_DIR, _fan_ordner, "03_Endprodukte", final_name)
                           if _fan_ordner else os.path.join(PROJEKTE_DIR, final_name))
         # D03-M1: derselbe atomare, verifizierte Writer wie im Entwurfspfad
@@ -1515,9 +1523,13 @@ async def _run_synthesis_cascade(
     if folder_namer is None:
         try:
             from backend.post_task_pipeline import project_folder_name as folder_namer
-        except Exception:
-            def folder_namer(x):
-                return ""
+        except Exception as exc:
+            # D01-M7: kein stiller Empty-Path-Fallback. Ohne den echten
+            # Ordner-Namer landet der Bericht ausserhalb 01_PROJEKTE bzw. in
+            # einem leeren Pfad. Fail-closed statt "" als Ordnername.
+            raise RuntimeError(
+                "project_folder_name unavailable — synthesis aborted"
+            ) from exc
     if build_dossier is None:
         try:
             from dossier_builder import build_dossier_from_report as build_dossier
@@ -1803,8 +1815,11 @@ ein Satz Begruendung. Keine weiteren Absaetze, keine Begruessung."""
     # EINEN Projekt-Ordner des Eltern-Projekts, nicht als lose Dateien daneben.
     try:
         _fan_ordner = folder_namer({"parent_project_id": parent_project_id, "parent_project_title": parent_title})
-    except Exception:
-        _fan_ordner = ""
+    except Exception as exc:
+        # D01-M7: kein stiller Fallback auf einen leeren Zielordner.
+        raise RuntimeError(
+            "Projektordner nicht bestimmbar — Synthese abgebrochen (D01-M7)"
+        ) from exc
     # 2a: Ablageordner fuer das Synthese-Dossier im Projektordner
     _tg_doss_dir = None
     try:

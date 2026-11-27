@@ -37,11 +37,43 @@ class LiabilityAckRequest(BaseModel):
     disclaimer_sha256: str = Field(default="", max_length=64)
 
 
+# D01-M3 (W7-A): `computer_use` wurde als direkt ausführbares Tool beworben,
+# obwohl keine CUA-Runtime angebunden ist (der Bot-Screen-Endpoint meldet
+# ausdruecklich `simulated`). Das Tool bleibt als bekannt registriert, wird aber
+# nicht mehr automatisch zugewiesen und ist zentral als unavailable markiert.
 DEFAULT_HERMES_TOOLS = [
     "web_search", "browser", "terminal", "filesystem", "execute_code", "vision_analyze",
     "image_generate", "bfl_flux3", "text_to_speech", "speech_to_text", "skills", "task_planning",
-    "memory", "session_search", "clarify", "delegate_task", "cronjob", "computer_use"
+    "memory", "session_search", "clarify", "delegate_task", "cronjob"
 ]
+
+# Zentrale SSOT fuer Tool-Verfuegbarkeit. Weitere nicht ausfuehrbare Tools
+# hier ergaenzen — niemals in den einzelnen Consumern duplizieren.
+UNAVAILABLE_TOOLS: Dict[str, str] = {
+    "computer_use": (
+        "Keine Computer-Use-Runtime angebunden — "
+        "Maus/Klick/Tastatur werden nicht ausgeführt."
+    ),
+}
+COMPUTER_USE_UNAVAILABLE_REASON = UNAVAILABLE_TOOLS["computer_use"]
+
+
+def is_tool_available(tool_id: str) -> bool:
+    """D01-M3: False fuer Tools ohne angebundene Runtime."""
+    return tool_id not in UNAVAILABLE_TOOLS
+
+
+def tool_availability(tool_id: str) -> Dict[str, Any]:
+    """Maschinenlesbarer Verfuegbarkeitsstatus (UI-Katalog und API-Response)."""
+    reason = UNAVAILABLE_TOOLS.get(tool_id)
+    if reason is None:
+        return {"id": tool_id, "available": True}
+    return {
+        "id": tool_id,
+        "available": False,
+        "runtime": "unavailable",
+        "reason": reason,
+    }
 
 # --------------------------------------------------
 # Avatare: data:-URI -> Datei unter /static/avatars
@@ -698,6 +730,8 @@ ALL_HERMES_TOOLS = [
     "video_analyze", "image_generate", "video_generate", "bfl_flux3", "x_search", "text_to_speech",
     "speech_to_text", "skills", "task_planning", "memory", "context_engine", "session_search",
     "clarify", "delegate_task", "cronjob", "home_assistant", "spotify", "discord",
+    # computer_use bleibt als bekanntes Tool gelistet, ist aber ueber
+    # UNAVAILABLE_TOOLS / is_tool_available() als nicht ausfuehrbar markiert (D01-M3).
     "discord_admin", "yuanbao", "computer_use", "a2a"
 ]
 
@@ -1246,6 +1280,8 @@ def get_liability_router() -> Any:
 
 __all__ = [
     "DEFAULT_HERMES_TOOLS", "ALL_HERMES_TOOLS", "AgentProfileValidationSchema",
+    "UNAVAILABLE_TOOLS", "COMPUTER_USE_UNAVAILABLE_REASON",
+    "is_tool_available", "tool_availability",
     "get_hermes_profiles_base_dirs", "get_primary_hermes_profiles_dir",
     "invalidate_hermes_profiles_cache", "api_get_hermes_profiles",
     "append_negative_scope", "sanitize_prompt_tool_declaration",

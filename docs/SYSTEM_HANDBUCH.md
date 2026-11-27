@@ -4044,7 +4044,7 @@ Alle im Architektur-Audit definierten Konsolidierungs- und Härtungsschritte sin
 ### 17.3 Next.js 16 UI-Konsolidierung gegen Archon FastAPI (M108)
 - **Direkte FastAPI-Bridge ohne PocketBase:** Über `frontend/src/app/api/archon/[...path]/route.ts` und `frontend/src/lib/archon-api.ts` kommuniziert das Next.js-16-Frontend direkt mit Archon FastAPI (`127.0.0.1:8420`).
 - **Neue Cockpits in `frontend/src/`:**
-  - `/content-studio` (`ContentMachineCockpit.tsx`): Kampagnen, Quellen-Ingestion, 1-Klick-Repurposing-DAG, 9:16-Clip-Matrix, Quality-Score-Badges, HITL-Freigabe, Publishing-Queue & Analytics.
+  - Content-Arbeit im Workflow-Studio (`/workflows`, `ContentMachineCockpit`-Bausteine): Kampagnen, Quellen-Ingestion, 1-Klick-Repurposing-DAG, 9:16-Clip-Matrix, Quality-Score-Badges, HITL-Freigabe, Publishing-Queue & Analytics. **Produktmodell-Korrektur 23.11.2026 (D09-M7):** Keine eigene Content-Domäne; die frühere separate Content-Oberfläche ist in `Operations → Workflows` aufgegangen, alte Deeplinks werden nur als Legacy-Alias dorthin weitergeleitet. Content läuft als Task → Workflow → Agent → Gate → Artefakt.
   - `/workflows` (`WorkflowDagCockpit.tsx`): Starter- & Custom-DAG-Templates, Run-Start, HITL-Gate-Resume & DB-Konsolidierungs-Steuerung.
   - `/cockpit` (`ExecutiveCockpit.tsx`): Konsolidiertes Führungs-Cockpit für System-Health, `28 → 3` DB-Status, Kanban-Board, HITL-Entscheidungen, aktive DAG-Runs, Content-Pipeline und CRM-Kontakte.
 

@@ -1,22 +1,32 @@
-import logging
-_archon_exc_logger = logging.getLogger("operations_bot_screen")
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 """Sub-Router fuer Bot Screen & Human Takeover (Virtual Desktop Integration).
 
 Ausgelagert aus backend/operations_api.py.
 """
-
 import datetime
 import json
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 from pydantic import BaseModel
 
-from archon.routers._rbac import require_admin_or_503
+from archon.core.profiles import tool_availability
+from archon.routers._rbac import (
+    forbid_viewer_writes as _forbid_viewer_writes,
+)
+from archon.routers._rbac import (
+    require_admin_or_503,
+)
+
+_archon_exc_logger = logging.getLogger("operations_bot_screen")
 
 router = APIRouter(dependencies=[_ArchonDepends(_forbid_viewer_writes)])
+
+
+def computer_use_runtime_available() -> bool:
+    """D01-M3: echte CUA-Runtime ist nicht angebunden (SSOT in profiles.py)."""
+    return bool(tool_availability("computer_use")["available"])
 
 _bot_screen_state = {
     "active": True,
@@ -153,10 +163,16 @@ def interact_with_bot_screen(request: Request, action_data: ScreenInteractionMod
     _bot_screen_state["last_interaction"] = datetime.datetime.now().isoformat()
     # Ehrlicher Status: ohne angebundene Computer-Use-Runtime findet keine
     # echte Interaktion statt. "success" wäre hier Theater (Audit 23.11.).
+    # D01-M3 (W7-A): Verfuegbarkeit kommt aus der zentralen SSOT, damit API
+    # und UI-Tool-Katalog nicht auseinanderlaufen.
+    availability = tool_availability("computer_use")
     return {
         "status": "simulated",
         "simulation": True,
-        "reason": "Keine Computer-Use-Runtime angebunden — Interaktion nicht ausgeführt.",
+        "tool": "computer_use",
+        "available": availability["available"],
+        "runtime": availability["runtime"],
+        "reason": availability["reason"],
         "echo": action_data.model_dump(),
     }
 

@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import sqlite3
+import tempfile
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -248,11 +249,50 @@ def _verify_hash(raw_str: str, stored: str, block_id=None) -> bool:
 
 
 # d05 F-01: Der Abschalter ``sha256_dispatch_audit_enforced`` wurde aus dem
-# Schreibpfad entfernt. Diese Funktion bleibt nur als kompatible Konstante
-# erhalten; der Kryptopfad liest keine settings.json mehr (ein direkter
-# Datei-Editorwert `false` durfte nie zu ungeschuetzten Bloecken fuehren).
+# Schreibpfad entfernt; es gibt bewusst KEINEN neuen Schalter. D01-M8: die
+# Invariante ist nicht mehr eine blinde Konstante, sondern wird aus einer
+# echten, isolierten Kette via ``verify_integrity()`` nachgewiesen. Damit
+# schlaegt das Flag fehl, wenn der Kryptopfad manipuliert ist oder der Key
+# fehlt — der Schreibpfad selbst bleibt unabhaengig davon fail-closed.
+def _dispatch_audit_integrity() -> Dict[str, Any]:
+    """Schreibt einen echten llm_dispatch-Block und verifiziert seine Kette."""
+    try:
+        with tempfile.TemporaryDirectory(prefix="archon_dispatch_audit_") as tmp_dir:
+            probe = ChainedAuditLog(db_path=os.path.join(tmp_dir, "probe.db"))
+            event = probe.record_event(
+                category="llm_dispatch",
+                action="enforcement_probe",
+                agent_id="system",
+                payload={
+                    "provider": "local-probe",
+                    "model": "probe-model",
+                    "target_host": "127.0.0.1",
+                    "target_endpoint": "/probe",
+                    "egress_zone": "LOCAL_ON_PREM",
+                    "prompt_version": "v1",
+                    "canary_version": "v1",
+                },
+            )
+            status = dict(probe.verify_integrity())
+            status["probe_hash"] = str(event.get("current_hash") or "")
+            return status
+    except Exception as exc:
+        logger.error("[Audit] Dispatch-Audit-Probe fehlgeschlagen: %s", exc)
+        return {
+            "valid": False,
+            "hmac_active": bool(_hmac_epochs()),
+            "reason": f"probe_failed: {exc}",
+        }
+
+
 def _dispatch_audit_enforced() -> bool:
-    return True
+    """HMAC-Dispatch-Audit ist aktiv — aus verify_integrity() abgeleitet."""
+    status = _dispatch_audit_integrity()
+    return (
+        bool(status.get("valid"))
+        and bool(status.get("hmac_active"))
+        and str(status.get("probe_hash") or "").startswith(HMAC_PREFIX)
+    )
 
 
 # F-029: substring-basierte Erkennung statt exakter Matchliste. Die alte

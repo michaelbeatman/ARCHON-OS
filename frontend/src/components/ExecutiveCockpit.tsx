@@ -20,6 +20,20 @@ import {
   XCircle,
 } from 'lucide-react';
 
+/**
+ * D01-M5 (W7-A): zentrale Liste aller SSE-Event-Typen, die fuer die Kanban-
+ * und Workflow-Cockpits relevant sind. Identisch mit ARCHON_KANBAN_SSE_EVENTS
+ * in static/js/operations_kanban.js (Paritaet wird per Test ueberwacht).
+ * `task_status` und `task_cancelled` sind echte broadcast_events; ohne sie
+ * bleibt ein abgebrochener/pausierter Task im Cockpit stale.
+ */
+export const ARCHON_KANBAN_SSE_EVENTS: readonly string[] = [
+  'kanban_updated', 'task_status', 'task_cancelled', 'mission_created',
+  'ticker_update', 'workflow_node_state', 'event_bus', 'delegation_failed',
+  'tool_runtime', 'gate_reached', 'synthesis_ready', 'workflow_completed',
+  'workflow_failed', 'asset_ready', 'dag_node_completed',
+];
+
 interface KanbanTask {
   id: string;
   title?: string;
@@ -90,12 +104,10 @@ export function ExecutiveCockpit() {
 
   // Echtzeit-Kanban/HITL statt manueller Refresh.
   useArchonEvents((event) => {
-    // Echte Backend-Typen (broadcast_event): kanban_updated, ticker_update,
-    // workflow_node_state, event_bus, delegation_failed, tool_runtime.
-    // Die alten Namen bleiben nur der Rueckwaertskompatibilitaet wegen.
-    if (!['kanban_updated', 'ticker_update', 'workflow_node_state', 'event_bus',
-          'delegation_failed', 'tool_runtime',
-          'gate_reached', 'synthesis_ready', 'workflow_completed', 'asset_ready'].includes(event.type)) return;
+    // D01-M5: zentrale Konstante statt dreier auseinanderlaufender Literale.
+    // task_cancelled loest ueber das bestehende Promise.all einen Kanban-
+    // Reload aus — der Status `cancelled` wird damit sichtbar persistiert.
+    if (!ARCHON_KANBAN_SSE_EVENTS.includes(event.type)) return;
     Promise.all([
       archonApi.listKanbanTasks().catch(() => ({ tasks: [] })),
       archonApi.listDagRuns().catch(() => ({ runs: [] })),

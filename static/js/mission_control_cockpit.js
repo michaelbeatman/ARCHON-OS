@@ -303,11 +303,14 @@
     // Operations (gleiche Gruppierung wie OPS_COLUMN_GROUPS), gespeist aus
     // kanban.db. MC-Engine-Status entfallen; Steuerung nur ueber bestehende
     // Endpoints (PATCH status, POST decide, POST tasks). Kein Fetch ohne Timeout.
+    // D01-M4 (W7-A): identisch mit OPS_COLUMN_GROUPS in operations_kanban.js.
+    // 'queued'/'awaiting_gate' und 'cancelled'/'paused'/'failed' hatten keine
+    // Spalte und waren in Mission Control unsichtbar.
     const MC_KANBAN_GROUPS = {
-      todo: ['todo', 'ready', 'triage', 'scheduled'],
+      todo: ['todo', 'ready', 'triage', 'scheduled', 'queued', 'awaiting_gate'],
       in_progress: ['in_progress'],
       review: ['review'],
-      blocked: ['blocked'],
+      blocked: ['blocked', 'failed', 'cancelled', 'paused'],
       done: ['done']
     };
     // Key-Map statt Literalen: beim Parsen ist der Katalog noch leer, deshalb
@@ -315,9 +318,24 @@
     const MC_KANBAN_BADGE_KEYS = {
       ready: ['ui.mission_control_cockpit.badge_ready', '⚡ bereit'],
       triage: ['ui.mission_control_cockpit.badge_triage', '🔍 Triage'],
-      scheduled: ['ui.mission_control_cockpit.badge_scheduled', '⏱ geplant']
+      scheduled: ['ui.mission_control_cockpit.badge_scheduled', '⏱ geplant'],
+      queued: ['ui.mission_control_cockpit.badge_queued', '⏳ Warteschlange'],
+      awaiting_gate: ['ui.mission_control_cockpit.badge_awaiting_gate', '🔐 Gate'],
+      cancelled: ['ui.mission_control_cockpit.badge_cancelled', '🚫 abgebrochen'],
+      paused: ['ui.mission_control_cockpit.badge_paused', '⏸ pausiert'],
+      failed: ['ui.mission_control_cockpit.badge_failed', '⛔ fehlgeschlagen']
     };
     const MC_KANBAN_COLS = ['todo', 'in_progress', 'review', 'blocked', 'done'];
+    // Echter Helper: liefert die Spalte fuer einen Maschinen-Status (oder null).
+    // Wird in mcKanbanCard() als Badge-Fallback genutzt, damit kein Status
+    // mehr ungerendert bleibt.
+    function mcKanbanColumnForStatus(status) {
+      for (const col of MC_KANBAN_COLS) {
+        if ((MC_KANBAN_GROUPS[col] || []).includes(status)) return col;
+      }
+      return null;
+    }
+    window.mcKanbanColumnForStatus = mcKanbanColumnForStatus;
     let mcKanbanCache = null;
 
     async function fetchMissionControlKanban() {
@@ -377,7 +395,12 @@
     }
     function mcKanbanCard(t, col) {
       const badgeDef = MC_KANBAN_BADGE_KEYS[t.status];
-      const badge = badgeDef ? `<span class="shadcn-badge shadcn-badge-outline text-[8.5px] py-0 px-1 font-mono">${mcT(badgeDef[0], badgeDef[1])}</span>` : '';
+      // D01-M4: Fallback ueber den echten Gruppierungs-Helper — auch ein
+      // bislang unbekannter Status bekommt ein sichtbares Badge.
+      const badgeText = badgeDef
+        ? mcT(badgeDef[0], badgeDef[1])
+        : (mcKanbanColumnForStatus(t.status) ? String(t.status) : '');
+      const badge = badgeText ? `<span class="shadcn-badge shadcn-badge-outline text-[8.5px] py-0 px-1 font-mono">${escapeHtmlMC(badgeText)}</span>` : '';
       const dec = (t.decision && t.decision.status === 'offen') ? t.decision : null;
       const decBanner = dec ? `<div class="mb-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]">🗳️ ${escapeHtmlMC(dec.titel || mcT('ui.mission_control_cockpit.decision_fallback', 'Entscheidung'))}</div>` : '';
       let stopwatch = '';

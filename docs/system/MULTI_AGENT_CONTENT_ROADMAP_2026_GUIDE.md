@@ -43,7 +43,7 @@
 | 12 | Editorial Calendar & Rollen | `author`/`reviewer`/`publisher`, Tabelle `content_asset_approvals`, `approval_history()`, `decision_id` auch bei manueller Freigabe, Router-Endpunkt. |
 | 13 | Skills injizieren | `li-human`-Regeln aus `.agents/skills/li-human/SKILL.md` (path-jail) in Kanal-Prompts + verpflichtender Review-Knoten `n_li_human_review` vor dem HITL-Gate. |
 | 14 | GEO als Fähigkeit | `build_geo_jsonld()` (Article/FAQ), `append_llms_txt()`, `geo_jsonld_json`, `check_geo_citations(hours=48)` mit persistiertem `citation_check_json`. |
-| 15 | Frontend vereinigen | `/content-studio` zeigt `ContentMachineCockpit`; Media-Handoff `?media=…` aus `ContentStudioView` (`/crm`) inkl. `frontend/src/lib/content-flow.ts`. |
+| 15 | Frontend vereinigen | Content-Arbeit läuft im Workflow-Studio `/workflows` (`ContentMachineCockpit`-Bausteine); Media-Handoff `?media=…` aus `ContentStudioView` (`/crm`) inkl. `frontend/src/lib/content-flow.ts`. Produktmodell-Korrektur 23.11.2026 (D09-M7): keine eigene Content-Domäne, alte Deeplinks nur als Legacy-Alias weitergeleitet. |
 | 16 | SSRF-Schutz & dynamische Daten | `oracle_news_radar.py` nutzt `utils.safe_http.safe_http_json(..., public_only=True)` und einen dynamischen 30-Tage-GitHub-Cutoff. |
 
 ---
@@ -68,7 +68,7 @@ Neue Testfiles (`tests/test_p2_*.py`): `oracle_ssrf`, `research_verdict`, `conte
 ## 6. Bewusste Vereinfachungen / offene Folgearbeiten
 
 - **Kein echtes Coroutine-Replay** im Durable Kernel: Resume nutzt persistierte Node-States und Checkpoints (pragmatisch, aber strukturell abgesichert).
-- **Frontend** ist ein Media-Handoff zwischen `/crm` und `/content-studio`, kein vollständiger Komponenten-Merge.
+- **Frontend** ist ein Media-Handoff zwischen `/crm` und dem Workflow-Studio (`/workflows`), kein vollständiger Komponenten-Merge und keine eigene Content-Domäne (Produktmodell-Korrektur 23.11.2026, D09-M7).
 - **`supervisor_id`** wurde auf sechs Leitrollen explizit gesetzt; alle anderen Supervisoren kommen aus den 69 echten `links` der Hierarchie.
 - **Kontext-Kompression** beim Handoff ist eine deterministische Kopf-/Schwanz-Kürzung, keine semantische Zusammenfassung.
 - **M111 (Bulkheads/Circuit-Breaker), M112 (OTel-Tracing) und M113 (Kill-Switch/Asset-Retirement)** bleiben eigenständige Meilensteine und sind nicht Teil von M114.

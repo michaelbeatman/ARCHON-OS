@@ -330,6 +330,21 @@
     // In-Flight-Sperre) — ueberlappende Antworten ueberschrieben das Board.
     // Jetzt: Buendeln per Debounce, hoechstens ein Lauf gleichzeitig; ein
     // waehrend des Laufs eingetroffenes Event wird genau einmal nachgeholt.
+    // D01-M5 (W7-A): zentrale Event-Typ-Liste. Muss mit ARCHON_KANBAN_SSE_EVENTS
+    // in frontend/src/components/ExecutiveCockpit.tsx identisch sein (Test wacht).
+    // task_cancelled und task_status sind echte broadcast_events und muessen
+    // konsumiert werden, sonst bleibt das Board nach Abbruch/Statuswechsel stale.
+    const ARCHON_KANBAN_SSE_EVENTS = Object.freeze([
+      'kanban_updated', 'task_status', 'task_cancelled', 'mission_created',
+      'ticker_update', 'workflow_node_state', 'event_bus', 'delegation_failed',
+      'tool_runtime', 'gate_reached', 'synthesis_ready', 'workflow_completed',
+      'workflow_failed', 'asset_ready', 'dag_node_completed'
+    ]);
+    window.ARCHON_KANBAN_SSE_EVENTS = ARCHON_KANBAN_SSE_EVENTS;
+    // Teilmenge, die tatsaechlich einen Board-Reload ausloest (wie vorher).
+    const ARCHON_KANBAN_BOARD_RELOAD_EVENTS = Object.freeze([
+      'kanban_updated', 'task_status', 'task_cancelled', 'mission_created'
+    ]);
     let _opsReloadTimer = null;
     let _opsReloadInFlight = false;
     let _opsReloadPending = false;
@@ -379,9 +394,10 @@
           const evType = msg.type || '';
           const evData = msg.data || {};
 
-          if (evType === 'kanban_updated' || evType === 'task_status' || evType === 'mission_created') {
+          if (ARCHON_KANBAN_BOARD_RELOAD_EVENTS.includes(evType)) {
             console.log('[Archon SSE] Board-Aenderung empfangen:', evType, evData);
             scheduleOpsKanbanReload();   // F-16: gebuendelt statt pro Event ein Voll-Reload
+                                          // D01-M5: auch task_cancelled (Abbruch) refresht das Board
           } else if (evType === 'task_chunk') {
             const outEl = document.getElementById(`ops-task-stream-${evData.task_id}`);
             if (outEl && evData.chunk) {

@@ -2930,7 +2930,10 @@ print('Ausführung erfolgreich!')</textarea>
         setTab("operations", "automation");
         return;
       }
-      if (tabId === "content-machine" || tabId === "content-studio") {
+      // D09-M7 / Produktmodell-Korrektur 23.11.2026: keine eigene
+      // Content-Domaene. Der LEGACY-ALIAS in der naechsten Zeile dient nur
+      // der Weiterleitung alter Deeplinks nach operations/workflows.
+      if (tabId === "content-machine" || tabId === "content-studio") { // LEGACY-ALIAS (D09-M7): nur Redirect -> workflows
         setTab("operations", "workflows");
         return;
       }

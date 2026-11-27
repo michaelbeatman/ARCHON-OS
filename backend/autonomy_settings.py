@@ -5,10 +5,9 @@ Stellt sicher, dass sämtliche Schutz-, Resilienz-, Sandbox-, Governance- und Wa
 über settings.json und das System Control Center (UI) ein-/ausgeschaltet und feinjustiert werden können.
 """
 
-import os
-import json
 import logging
-from typing import Dict, Any
+import os
+from typing import Any, Dict
 
 logger = logging.getLogger("archon.autonomy_settings")
 
@@ -390,10 +389,13 @@ def load_all_settings() -> Dict[str, Any]:
         ):
             if k in pcfg:
                 ze_sec[k] = pcfg[k]
-        ze_sec["sha256_dispatch_audit_enforced"] = True
+        # D01-M8: kein blindes `True` mehr — der Wert kommt aus der
+        # verifizierten Krypto-Kette (verify_integrity()) und nicht aus
+        # settings.json. Ein Abschalter wird nicht wieder eingefuehrt.
+        ze_sec["sha256_dispatch_audit_enforced"] = is_sha256_dispatch_audit_enforced()
         data["zero_egress_governance"] = ze_sec
     except Exception:
-        data["zero_egress_governance"]["sha256_dispatch_audit_enforced"] = True
+        data["zero_egress_governance"]["sha256_dispatch_audit_enforced"] = is_sha256_dispatch_audit_enforced()
 
     return data
 
@@ -402,14 +404,17 @@ load_autonomy_settings = load_all_settings
 
 
 def is_sha256_dispatch_audit_enforced() -> bool:
-    """GoBD-Invariante: HMAC-Audit ist unveraenderbar aktiv (d05 F-01).
+    """GoBD-Invariante: HMAC-Audit ist unveraenderbar aktiv (d05 F-01, D01-M8).
 
     Der fruehere Abschalter in settings.json wurde entfernt: ein direkter
     Datei-Editorwert `false` durfte nie zu ungeschuetzten SHA-256-Bloecken
-    fuehren. Diese Funktion bleibt als kompatible Konstante erhalten; der
-    Kryptopfad in ``backend/audit_log.py`` liest keine settings.json mehr.
+    fuehren. Statt einer blinden Konstante liefert jetzt der verifizierte
+    Kryptopfad in ``backend.audit_log`` den Wert (echter Dispatch-Block +
+    ``verify_integrity()``). Es wird kein Schalter wieder eingefuehrt.
     """
-    return True
+    from backend.audit_log import _dispatch_audit_enforced
+
+    return _dispatch_audit_enforced()
 
 
 def get_module_config(section: str) -> Dict[str, Any]:
@@ -434,7 +439,7 @@ def save_autonomy_settings(updates: Dict[str, Any]) -> Dict[str, Any]:
                 current[key] = val
         if isinstance(current.get("zero_egress_governance"), dict):
             # Unveränderbare GoBD-Invariante erzwingen
-            current["zero_egress_governance"]["sha256_dispatch_audit_enforced"] = True
+            current["zero_egress_governance"]["sha256_dispatch_audit_enforced"] = is_sha256_dispatch_audit_enforced()
             if current["zero_egress_governance"].get("zero_egress_strict"):
                 current["zero_egress_governance"]["sensitive_local_routing"] = True
                 current["zero_egress_governance"]["hard_block_on_local_offline"] = True

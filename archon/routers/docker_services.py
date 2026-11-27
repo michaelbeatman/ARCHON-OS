@@ -1,7 +1,5 @@
 """Router fuer Docker-Services & Model-Listing."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import json
 import logging
@@ -9,12 +7,15 @@ import os
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from archon.core.cache import invalidate as invalidate_ttl_cache, ttl_cache
+from archon.core.cache import invalidate as invalidate_ttl_cache
+from archon.core.cache import ttl_cache
 from archon.core.paths import COUPLED_AGENTS_FILE
 from archon.core.runtime import _load_json
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 from utils.docker_client import DockerError, docker_client
 
 logger = logging.getLogger("archon.routers.docker_services")
@@ -270,13 +271,45 @@ def api_docker_stop(payload: DockerContainerActionRequest, request: Request):
 
 @router.post("/api/v1/services")
 def api_save_services(request: Request, services: List[ServiceConfigEntry]):
+    """Persistiert Service-Konfigurationen — Erfolg nur nach verifiziertem Schreibvorgang.
+
+    D01-M6: frueher wurde auch ohne ``save_services`` am Provider bedingungslos
+    ``{"status": "success"}`` geliefert (stiller No-op). Jetzt fail-closed:
+    fehlender Writer/Reader -> 503, Schreib-/Lesefehler oder Abweichung -> 500.
+    """
     _require_admin(request)
     from archon.core.provider_registry import get_provider
     app_main = get_provider("app_main")
 
-    if hasattr(app_main, "save_services"):
-        app_main.save_services([svc.model_dump() for svc in services])
-    return {"status": "success"}
+    writer = getattr(app_main, "save_services", None)
+    if not callable(writer):
+        raise HTTPException(status_code=503, detail="service persistence unavailable")
+
+    payload = [svc.model_dump() for svc in services]
+    try:
+        writer(payload)
+    except Exception as exc:
+        logger.error("[Services] Persistenz der Service-Konfiguration fehlgeschlagen: %s", exc)
+        raise HTTPException(status_code=500, detail=f"service persistence failed: {exc}") from exc
+
+    # Ruecklesen gegen den echten Provider: ohne Effekt kein Erfolg (§0).
+    reader = getattr(app_main, "load_services", None)
+    if not callable(reader):
+        raise HTTPException(status_code=503, detail="service verification unavailable")
+    try:
+        stored = reader()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"service verification failed: {exc}") from exc
+    if (
+        not isinstance(stored, list)
+        or len(stored) != len(payload)
+        or any(dict(a) != dict(b) for a, b in zip(stored, payload))
+    ):
+        raise HTTPException(status_code=500, detail="service verification mismatch")
+
+    # Der TTL-Cache der Container-Liste wuerde sonst bis zu 10 s alte Daten zeigen.
+    invalidate_ttl_cache(get_docker_containers_from_socket)
+    return {"status": "success", "saved": True, "count": len(payload)}
 
 
 def _configured_model_ids() -> list:

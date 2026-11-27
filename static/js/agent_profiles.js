@@ -217,14 +217,27 @@
       { id: "discord", name: "Discord Messenger", icon: "message-circle", desc: "Liest Nachrichten, durchsucht Server-Kanäle und sendet Beiträge in Discord-Threads.", subtools: ["discord"], mode: "sandbox", timeout: 45 },
       { id: "discord_admin", name: "Discord Server-Admin", icon: "shield", desc: "Verwaltet Rollen, Berechtigungen und Kanalstrukturen auf autorisierten Discord-Servern.", subtools: ["discord_admin"], mode: "sandbox", timeout: 45 },
       { id: "yuanbao", name: "Yuanbao Integration", icon: "messages-square", desc: "Interagiert mit Tencent Yuanbao Workflows, Gruppeninformationen und Kommunikationskanälen.", subtools: ["yb_query_group_info", "yb_query_group_members", "yb_search_sticker", "yb_send_dm", "yb_send_sticker"], mode: "sandbox", timeout: 45 },
-      { id: "computer_use", name: "Desktop CUA-Automation", icon: "monitor", desc: "Autonome Steuerung von Mauszeiger, Klicks und Tastatureingaben für grafische Betriebssystem-Aufgaben.", subtools: ["computer_use"], mode: "direct", timeout: 120 },
+      // D01-M3 (W7-A): keine CUA-Runtime angebunden. Ehrlich als Demo markieren
+      // statt autonome Steuerung zu behaupten (Endpoint liefert `simulated`).
+      { id: "computer_use", name: "Desktop CUA-Automation (Demo)", icon: "monitor", desc: "Demo — keine Computer-Use-Runtime angebunden. Mauszeiger, Klicks und Tastatureingaben werden nicht ausgeführt.", subtools: ["computer_use"], mode: "direct", timeout: 120, available: false, runtime: "unavailable" },
       { id: "a2a", name: "A2A Inter-Agent Protokoll", icon: "network", desc: "Standardisierte Peer-to-Peer Kommunikation für kooperative Agententeams und Föderationen.", subtools: ["a2a_call", "a2a_discover", "a2a_history", "a2a_list", "a2a_orchestrate"], mode: "direct", timeout: 60 }
     ];
+    // D01-M3: computer_use nicht mehr automatisch zuweisen (keine Runtime).
     const DEFAULT_HERMES_TOOLS = [
       "web_search", "browser", "terminal", "filesystem", "execute_code", "vision_analyze",
       "image_generate", "bfl_flux3", "text_to_speech", "speech_to_text", "skills", "task_planning",
-      "memory", "session_search", "clarify", "delegate_task", "cronjob", "computer_use"
+      "memory", "session_search", "clarify", "delegate_task", "cronjob"
     ];
+    // Zentrale Verfuegbarkeitskarte im Legacy-UI (entspricht UNAVAILABLE_TOOLS in
+    // archon/core/profiles.py). Nicht ausfuehrbare Tools bleiben sichtbar, sind
+    // aber deaktiviert und zeigen einen ehrlichen Grund.
+    const UNAVAILABLE_HERMES_TOOLS = Object.freeze({
+      computer_use: "Demo: keine Computer-Use-Runtime angebunden — Maus/Klick/Tastatur werden nicht ausgeführt."
+    });
+    function isHermesToolAvailable(toolId) {
+      return !Object.prototype.hasOwnProperty.call(UNAVAILABLE_HERMES_TOOLS, toolId);
+    }
+    window.isHermesToolAvailable = isHermesToolAvailable;
     let dynamicPaperclipAgentIds = [];
     let dynamicPaperclipAgents = [];
     async function loadPaperclipActiveAgents() {
@@ -3234,16 +3247,21 @@
         activeTools.forEach(toolId => {
           const tool = AVAILABLE_SYSTEM_TOOLS.find(t => t.id === toolId) || { id: toolId, name: toolId, icon: "wrench", desc: "System Tool" };
           const isSelected = currentInspectedToolId === toolId;
+          // D01-M3: Altprofile koennen computer_use bereits zugewiesen haben —
+          // dann sichtbar als nicht ausfuehrbar kennzeichnen, nicht als aktiv.
+          const unavailable = tool.available === false || !isHermesToolAvailable(toolId);
           
           const pill = document.createElement("div");
           pill.className = `prof-tool-pill-assigned group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-blue-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
-          pill.title = profT('ui.agent_profiles.tool_details_hint', 'Klicken für Spezifikation & Parameter');
+          pill.title = unavailable
+            ? (tool.reason || UNAVAILABLE_HERMES_TOOLS[toolId] || 'Tool nicht verfügbar.')
+            : profT('ui.agent_profiles.tool_details_hint', 'Klicken für Spezifikation & Parameter');
           pill.onclick = () => selectToolForInspector(toolId);
           
           pill.innerHTML = `
             <div class="flex items-center gap-1.5 min-w-0">
               <i data-lucide="${tool.icon || 'wrench'}" class="w-3.5 h-3.5 shrink-0 text-blue-500"></i>
-              <span class="truncate max-w-[110px]">${tool.name}</span>
+              <span class="truncate max-w-[110px]">${tool.name}${unavailable ? ' ⚠' : ''}</span>
             </div>
             <button type="button" onclick="removeToolFromProfile('${tool.id}', event)" class="w-4 h-4 rounded hover:bg-rose-500/20 text-rose-500 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="${profT('ui.agent_profiles.unassign', 'Zuweisung lösen')}">
               −
@@ -3294,19 +3312,24 @@
       
       available.forEach(tool => {
         const isSelected = currentInspectedToolId === tool.id;
+        // D01-M3: nicht ausfuehrbare Tools deaktiviert zeigen statt zu bewerben.
+        const unavailable = tool.available === false || !isHermesToolAvailable(tool.id);
+        const reason = tool.reason || UNAVAILABLE_HERMES_TOOLS[tool.id] || '';
         const pill = document.createElement("div");
-        pill.className = `prof-tool-pill-available group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${isSelected ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'} hover:border-blue-500/60 cursor-pointer transition select-none shadow-2xs max-w-full`;
-        pill.title = profT('ui.agent_profiles.tool_details_hint', 'Klicken für Spezifikation & Parameter');
+        pill.className = `prof-tool-pill-available group flex items-center justify-between gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${unavailable ? 'border-dashed opacity-60 cursor-not-allowed border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)]' : (isSelected ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold' : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]')} ${unavailable ? '' : 'hover:border-blue-500/60 cursor-pointer'} transition select-none shadow-2xs max-w-full`;
+        pill.title = unavailable ? reason : profT('ui.agent_profiles.tool_details_hint', 'Klicken für Spezifikation & Parameter');
         pill.onclick = () => selectToolForInspector(tool.id);
         
         pill.innerHTML = `
           <div class="flex items-center gap-1.5 min-w-0">
             <i data-lucide="${tool.icon || 'wrench'}" class="w-3.5 h-3.5 shrink-0 text-blue-500"></i>
-            <span class="truncate max-w-[110px]">${tool.name}</span>
+            <span class="truncate max-w-[110px]">${tool.name}${unavailable ? ' ⚠' : ''}</span>
           </div>
-          <button type="button" onclick="addToolToProfileById('${tool.id}', event)" class="w-4 h-4 rounded hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="${profT('ui.agent_profiles.assign_tool', 'Tool zuweisen')}">
+          ${unavailable
+            ? `<span class="text-[9px] font-mono text-[var(--muted-foreground)] shrink-0" title="${reason}">nicht verfügbar</span>`
+            : `<button type="button" onclick="addToolToProfileById('${tool.id}', event)" class="w-4 h-4 rounded hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-xs shrink-0 cursor-pointer transition p-0 leading-none" title="${profT('ui.agent_profiles.assign_tool', 'Tool zuweisen')}">
             +
-          </button>
+          </button>`}
         `;
         container.appendChild(pill);
       });
@@ -3368,6 +3391,12 @@
         event.stopPropagation();
       }
       if (!toolId) return;
+      // D01-M3: ein Tool ohne Runtime darf nicht zugewiesen werden — auch nicht
+      // ueber einen alten Aufrufpfad, der das deaktivierte UI-Pill umgeht.
+      if (!isHermesToolAvailable(toolId)) {
+        showArchonToast(UNAVAILABLE_HERMES_TOOLS[toolId] || "Tool nicht verfügbar.", "error");
+        return;
+      }
       const prof = hermesProfilesData.find(p => p.id === currentSelectedProfileId);
       if (!prof) {
         showArchonToast("Bitte wähle zuerst einen Agenten aus.", "error");

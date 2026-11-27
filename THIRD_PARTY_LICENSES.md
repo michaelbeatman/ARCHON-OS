@@ -4,15 +4,15 @@ Archon OS is committed to open-source transparency, intellectual property compli
 
 ---
 
-## 1. Archon OS Core & Prompt Studio (Enterprise Prompt Templates)
+## 1. Archon OS Core, Specialist Profiles & Prompt Studio
 
 - **Author / Copyright**: Michael Keller / Archon OS Project
 - **License**: MIT License (see `LICENSE`)
-- **Description**: The 824+ parametric prompt templates in `prompt_studio_catalog.json` and the 70 specialist `SOUL.md` directives are clean-room prompt architectures developed for Archon OS.
+- **Description**: The 824+ parametric prompt templates in `prompt_studio_catalog.json`, the 70 specialist `SOUL.md` directives, and the Archon OS orchestration prompts are clean-room prompt architectures curated and maintained for Archon OS.
 
 ---
 
-## 2. Hermes Agent Runtime & Orchestration Prompts (Nous Research)
+## 2. Hermes Agent Runtime & CLI (Nous Research)
 
 - **Project**: Hermes Agent (`https://github.com/NousResearch/hermes-agent`)
 - **Author**: Nous Research

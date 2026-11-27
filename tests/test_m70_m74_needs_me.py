@@ -395,3 +395,16 @@ def test_rbac_admin_und_operator_erhalten_buendel_200(
     assert response["status"] == "success"
     assert response["bundle"]["total"] == 5
     assert response["bundle"]["invariants"]["no_auto_approval"] is True
+
+
+# ---------------------------------------------------------------------------
+# Zentrale Verdrahtung (Integrationsvertrag statt dynamischer Adapter-Suche)
+# ---------------------------------------------------------------------------
+
+
+def test_main_wires_m68_and_m69_explicitly() -> None:
+    import main  # noqa: F401  — registriert die Adapter beim Import
+    from archon.routers import needs_me as router
+
+    assert callable(router._DEPS.get("collect"))
+    assert callable(router._DEPS.get("review"))

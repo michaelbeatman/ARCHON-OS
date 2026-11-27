@@ -34,7 +34,14 @@ from backend import rbac_guards
 
 
 def _readyz() -> Any:
-    """Ruft /readyz real auf; mockt NUR die blockierende Sync-DB-Pruefung."""
+    """Ruft /readyz real auf; mockt NUR die blockierende Sync-DB-Proeung.
+
+    Test-Isolation: andere Tests hinterlassen absichtlich fehlgeschlagene
+    Cancels im globalen Registry; /readyz wuerde dafuer korrekt 503 liefern.
+    Hier vor dem Aufruf zuruecksetzen, damit der saubere Zustand geprueft wird.
+    """
+    app_main._FAILED_CANCELS.clear()
+
     async def _invoke() -> Any:
         with patch.object(app_main, "_readiness_sync_checks", return_value=[]):
             return await app_main.readiness_check()
@@ -91,7 +98,9 @@ def test_c1_fail_fast_hook_set_and_audit_compromise_degrades_readyz():
 
     # Negativprobe gegen die echte Logik: ohne Kompromittierung KEIN 503.
     clean = _readyz()
-    assert not isinstance(clean, app_main.JSONResponse), "sauberer Zustand darf nicht 503 sein"
+    assert not isinstance(clean, app_main.JSONResponse), (
+        "sauberer Zustand darf nicht 503 sein: " + str(bytes(clean.body)[:600])
+    )
     assert clean["status"] == "ready"
     with pytest.raises(AssertionError):
         _assert_problems(clean, "audit_compromised")
@@ -110,7 +119,7 @@ def test_c2_shutdown_hooks_run_in_reversed_order():
     """
     hooks = list(app_main._SHUTDOWN_HOOKS)
     rev = list(reversed(hooks))
-    assert len(hooks) == 7, f"Shutdown-Hooks: {len(hooks)} (Referenz = 7)"
+    assert len(hooks) == 8, f"Shutdown-Hooks: {len(hooks)} (Referenz = 8, inkl. M112-Anker-Stopp)"
     assert hooks[-1] is app_main.on_shutdown_graceful
     assert rev[0] is app_main.on_shutdown_graceful
     assert rev.index(app_main._close_all_http_clients) < rev.index(app_main._cancel_tracked_tasks)
@@ -145,7 +154,7 @@ def test_c3_n8n_startup_status_degrades_readyz():
 
     # Negativprobe: Default-Zustand darf keinen n8n-Fehler melden.
     clean = _readyz()
-    assert not isinstance(clean, app_main.JSONResponse)
+    assert not isinstance(clean, app_main.JSONResponse), str(bytes(clean.body)[:600])
     with pytest.raises(AssertionError):
         _assert_problems(clean, "n8n_startup_import")
 
@@ -167,7 +176,7 @@ def test_c4_router_registration_and_rbac_wiring():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         paths = sorted(app_main.app.openapi()["paths"])
-    assert len(paths) == 801, f"Pfade: {len(paths)} (Referenz ee18373a=799 + W4-C + W4-D = 801)"
+    assert len(paths) == 840, f"Pfade: {len(paths)} (Referenz 801 + M67/M68/M69/M70/M74/M112 = 840)"
 
     # Fail-closed Negativprobe: absichtlich defekter Router MUSS raisen.
     app_main._ROUTER_LOAD_ERRORS.append("NEGATIVPROBE: broken router")

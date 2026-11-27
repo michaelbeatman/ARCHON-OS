@@ -302,3 +302,19 @@ def test_rbac_guards_on_m67_endpoints(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(HTTPException) as denied:
         _rbac.forbid_viewer_writes(request)
     assert denied.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Tenant-Trennung (logische Isolation über kv_store-Key + tenant_id-Abgleich)
+# ---------------------------------------------------------------------------
+
+
+def test_tenant_states_are_not_visible_across_tenants(tmp_path: Path) -> None:
+    store = HostStateStore(db_path=str(tmp_path / "tenant.db"))
+    own = initial_state("session-t", job_id="job-t", tenant_id="tenant-a")
+    store.save(own)
+
+    assert store.load("session-t", "tenant-a") is not None
+    # Fremder Tenant sieht weder den Key noch den Zustand.
+    assert store.load("session-t", "tenant-b") is None
+    assert state_key("session-t", "tenant-a") != state_key("session-t", "tenant-b")

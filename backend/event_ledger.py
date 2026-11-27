@@ -265,6 +265,10 @@ class FileAnchorStore:
     ``worm=True`` erzeugt pro Merkle-Root eine Datei mit O_EXCL und 0400;
     ein erneuter Schreibversuch mit gleichem Root ist idempotent, eine
     Aenderung eines bestehenden Ankers ist nicht moeglich.
+
+    Einschaenkung: unter Windows ersetzt O_EXCL/0400 kein echtes WORM-Storage
+    (Dateiattribute sind umgehbar). Fuer compliance-relevante Unveraenderlichkeit
+    ist ein dedizierter WORM-/Timestamping-Adapter zu konfigurieren.
     """
 
     def __init__(self, path: str | Path, *, worm: bool = False) -> None:
@@ -1240,3 +1244,58 @@ class EventLedger:
 
 # Modul-Level-Singleton wird bewusst NICHT angelegt: der Router injiziert die
 # Instanz per configure(), damit Tests und Integration eigene DB-Pfade nutzen.
+_ANCHOR_WORKER: Dict[str, Any] = {"stopper": None, "thread": None}
+
+
+def start_anchor_worker(interval_sec: float = 60.0) -> Callable[[], None]:
+    """Startet den periodischen Merkle-Anker als daemonischen Hintergrund-Thread.
+
+    Ein laufender Worker wird nicht dupliziert; die zurueckgegebene Funktion
+    stoppt ihn (Join mit Timeout). Ohne konfigurierten Adapter wird der Lauf
+    uebersprungen — die Verification bleibt dann bewusst fail-closed (M112).
+    """
+    existing_stopper = _ANCHOR_WORKER.get("stopper")
+    existing_thread = _ANCHOR_WORKER.get("thread")
+    if existing_thread is not None and existing_thread.is_alive() and existing_stopper is not None:
+        return existing_stopper
+
+    stop = threading.Event()
+    delay = max(1.0, float(interval_sec or 60.0))
+
+    def _loop() -> None:
+        while not stop.is_set():
+            try:
+                ledger = EventLedger()
+                if ledger.anchor_store is None:
+                    logger.debug(
+                        "[EventLedger] Kein Anker-Adapter konfiguriert — "
+                        "periodischer Anker uebersprungen (Verification fail-closed)."
+                    )
+                else:
+                    ledger.anchor_batch()
+            except Exception as exc:
+                # Fehlschlaege sind zusaetzlich in ledger_anchor_failures sichtbar.
+                logger.warning("[EventLedger] Periodischer Anker fehlgeschlagen: %s", exc)
+            stop.wait(delay)
+
+    def _stop() -> None:
+        stop.set()
+        thread.join(timeout=5.0)
+
+    thread = threading.Thread(target=_loop, daemon=True, name="m112-anchor-worker")
+    _ANCHOR_WORKER["stopper"] = _stop
+    _ANCHOR_WORKER["thread"] = thread
+    thread.start()
+    return _stop
+
+
+def stop_anchor_worker() -> None:
+    """Stoppt den periodischen Anker (Shutdown-Hook)."""
+    stopper = _ANCHOR_WORKER.get("stopper")
+    if stopper is not None:
+        stopper()
+    thread = _ANCHOR_WORKER.get("thread")
+    if thread is not None:
+        thread.join(timeout=5.0)
+    _ANCHOR_WORKER["stopper"] = None
+    _ANCHOR_WORKER["thread"] = None

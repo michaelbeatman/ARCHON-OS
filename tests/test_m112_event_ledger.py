@@ -25,6 +25,8 @@ from backend.event_ledger import (
     FileAnchorStore,
     LedgerStateError,
     compute_merkle_root,
+    start_anchor_worker,
+    stop_anchor_worker,
 )
 
 
@@ -306,3 +308,26 @@ def _all_events(db_path: Path) -> List[Dict[str, Any]]:
         ]
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Periodischer Anker (Integration in den Lifespan)
+# ---------------------------------------------------------------------------
+
+
+def test_periodic_anchor_worker_starts_and_stops_cleanly() -> None:
+    stop_anchor_worker()
+    stopper = start_anchor_worker(interval_sec=60.0)
+    try:
+        import backend.event_ledger as el
+
+        thread = el._ANCHOR_WORKER.get("thread")
+        assert thread is not None and thread.is_alive()
+        # Kein zweiter Worker pro Prozess.
+        assert start_anchor_worker(interval_sec=60.0) is stopper
+    finally:
+        stopper()
+    import backend.event_ledger as el
+
+    thread = el._ANCHOR_WORKER.get("thread")
+    assert thread is None or not thread.is_alive()

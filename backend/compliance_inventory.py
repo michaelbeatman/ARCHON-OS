@@ -115,9 +115,27 @@ def retention_label(category: str) -> str:
 # Deterministische Feldpseudonymisierung
 # ---------------------------------------------------------------------------
 
+# Ohne ENV-Salt bewusst prozesslokal: zwei Deployments duerfen nicht dieselben
+# Pseudonyme erzeugen (sonst ueberdeployment-weit korrelierbar). Ein Restart
+# aendert den Salt — dafuer ist in Produktion ARCHON_DPIA_PSEUDONYM_SALT Pflicht.
+_DEV_SALT = hashlib.sha256(os.urandom(16)).hexdigest()[:16]
+_PROD_ENV = frozenset({"production", "prod", "live"})
+
+
 def _pseudonym_salt() -> str:
-    """Optionaler PEPPER aus der ENV; ohne Konfiguration stabiler Fallback (kein Secret)."""
-    return os.environ.get("ARCHON_DPIA_PSEUDONYM_SALT", "").strip() or "archon-m68-no-env-salt"
+    """PEPPER aus der ENV; Produktion ohne Salt fail-closed, Dev prozesslokal."""
+    salt = os.environ.get("ARCHON_DPIA_PSEUDONYM_SALT", "").strip()
+    if salt:
+        return salt
+    env_name = str(
+        os.environ.get("ENVIRONMENT") or os.environ.get("ARCHON_ENV") or ""
+    ).strip().lower()
+    if env_name in _PROD_ENV:
+        raise RuntimeError(
+            "ARCHON_DPIA_PSEUDONYM_SALT fehlt in Produktion — "
+            "Pseudonymisierung fail-closed (kein deployweiter Default-Salt)."
+        )
+    return f"archon-m68-dev-{_DEV_SALT}"
 
 
 def pseudonymize_field(value: Any, field: str = "", salt: Optional[str] = None) -> str:
@@ -827,3 +845,26 @@ def export_policy_pdf(
     )
     pdf_bytes = pdf.finalize_bytes()
     return pdf_bytes, hashlib.sha256(pdf_bytes).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Expliziter Beleg-Adapter fuer M70/M74 (statt dynamischer Namenssuche)
+# ---------------------------------------------------------------------------
+
+
+def collect_evidence(subject: Mapping[str, Any]) -> List[Dict[str, str]]:
+    """M68 -> NeedsMe/Auto-Review: Compliance-Policy-Export als Pruefsummen-Beleg.
+
+    Der Beleg ist PII-frei und zeigt auf die versionierte Policy-SSOT; die
+    Pruefsumme wird ueber den exportierten Text gebildet. Ersetzt nicht die
+    menschliche Freigabe und erzeugt kein Agent-Fallback.
+    """
+    tenant = str(subject.get("tenant_id") or "default").strip() or "default"
+    text = export_policy_markdown(tenant)
+    return [
+        {
+            "kind": "compliance_policy",
+            "reference": "config/approval_policy.yaml",
+            "checksum": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        }
+    ]

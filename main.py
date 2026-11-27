@@ -815,6 +815,26 @@ _ROUTER_LOAD_ERRORS: List[str] = []
 _STARTUP_HOOKS: List[Any] = []
 _SHUTDOWN_HOOKS: List[Any] = []
 
+
+def _m112_start_anchor_worker():
+    """M112: periodischen Merkle-Anker starten (fail-closed ohne Adapter)."""
+    try:
+        from backend.event_ledger import start_anchor_worker
+
+        start_anchor_worker()
+    except Exception as _exc:
+        logger.error(f"[M112] Anker-Worker nicht gestartet: {_exc}")
+
+
+def _m112_stop_anchor_worker():
+    """M112: Anker-Thread beim Shutdown verifiziert stoppen."""
+    try:
+        from backend.event_ledger import stop_anchor_worker
+
+        stop_anchor_worker()
+    except Exception as _exc:
+        logger.error(f"[M112] Anker-Worker nicht gestoppt: {_exc}")
+
 # KRITISCH (Audit 23.11.2026): Sicherheits-Hooks duerfen niemals nur geloggt
 # werden. Ein fehlgeschlagener Router-Health- oder Audit-HMAC-Check muss den
 # Start abbrechen — sonst laeuft die Anwendung mit fälschbarer Revisionskette
@@ -1758,6 +1778,7 @@ _STARTUP_HOOKS.extend([
     _start_gateway_idle_loop,    # 4. IMAP/Inbox/Internet-Watchdog-Loops
     _warm_hermes_skill_caches,   # 4. Skills-Cache vorwärmen (Thread)
     _check_rag_api_key_config,   # 5. RAG-Key vorhanden? Fehlt er -> ERROR-Zeile
+    _m112_start_anchor_worker,   # 6. M112: periodischer Merkle-Anker (daemonisch)
 ])
 
 def _stop_watchdog_daemon():
@@ -1793,6 +1814,7 @@ _SHUTDOWN_HOOKS.extend([
     _stop_watchdog_daemon,       # Watchdog-Thread stoppen
     _cancel_background_tasks,    # Hintergrund-Loops stoppen
     _close_all_http_clients,     # reversed: frueh — alle HTTP-Pools vor Cancel schliessen
+    _m112_stop_anchor_worker,    # reversed: nach Drain — Anker-Thread stoppen
     on_shutdown_graceful,        # reversed: ZUERST — Drain & Checkpoint vor Cancel
 ])
 
@@ -1890,7 +1912,29 @@ except Exception as _e_policy_gates:
 
 try:
     from archon.routers import needs_me as _m70_needs_me_router
+    from backend.approval_policy_engine import evaluate_policy_gate as _m69_policy_gate
+    from backend.auto_review import run_auto_review as _m70_run_auto_review
+    from backend.compliance_inventory import collect_evidence as _m68_collect_evidence
+    from backend.needs_me_panel import collect_needs_me as _m70_collect_needs_me
 
+    # M70/M74: M68-Belege und M69-Policy-Gate EXPLIZIT verdrahten (keine
+    # dynamische Namenssuche mehr, kein erfundener Beleg, kein Agent-Fallback).
+    def _m70_collect(actor: str, tenant: str) -> Any:
+        return _m70_collect_needs_me(
+            actor,
+            tenant,
+            evidence_provider=_m68_collect_evidence,
+            policy_evaluator=_m69_policy_gate,
+        )
+
+    def _m70_review(request: Any) -> Any:
+        return _m70_run_auto_review(
+            request,
+            evidence_provider=_m68_collect_evidence,
+            policy_evaluator=_m69_policy_gate,
+        )
+
+    _m70_needs_me_router.configure(collect=_m70_collect, review=_m70_review)
     app.include_router(_m70_needs_me_router.router, prefix="/api/needs-me")
 except Exception as _e_needs_me:
     _ROUTER_LOAD_ERRORS.append(f"needs_me_router: {_e_needs_me}")

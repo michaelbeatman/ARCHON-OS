@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, List, Optional
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi import Depends as _ArchonDepends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 import api_provider
 import core_dispatcher
@@ -507,10 +507,12 @@ class HostStateSaveRequest(BaseModel):
 
 
 class HostStateAdvanceRequest(BaseModel):
+    # Wire-Name bleibt 'schema'; das Python-Feld heisst response_schema, damit
+    # BaseModel.schema nicht ueberschattet wird (Pydantic-Warnung eliminert).
+    model_config = ConfigDict(populate_by_name=True)
     expected_version: int = Field(..., ge=0, le=2_000_000_000)
     response: Any
-    # 'schema' ist der gewuenschte Wire-Name, kollidiert aber mit BaseModel.schema.
-    schema: Dict[str, Any]  # type: ignore[assignment]
+    response_schema: Dict[str, Any] = Field(..., alias="schema")
 
 
 def _m67_tenant_id() -> str:
@@ -617,7 +619,7 @@ def api_advance_host_state(session_id: str, req: HostStateAdvanceRequest, reques
             session_id=session_id,
             tenant_id=_m67_tenant_id(),
             response=req.response,
-            schema=req.schema,
+            schema=req.response_schema,
             expected_version=req.expected_version,
         )
     except HostStateError as exc:

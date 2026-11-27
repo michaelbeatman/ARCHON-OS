@@ -6,7 +6,8 @@ All notable changes to **Archon OS** are documented in this file.
 
 ### Added & Verified
 - **M67/M68/M69/M70/M74/M71/M72/M111/M112:** Host-State & Prompt-Kompression, Compliance-Inventar/DPIA/Audit-Replay, Policy-as-Code (YAML, 24h-Vendor-Limits, signierte Tokens), „Braucht mich"-Panel + Auto-Review, Eval-Attestierung, modellabhängiges Task-Sizing/Skills-Leihe, Bulkheads/Tool-Output-Caps/Circuit-Breaker und unveränderliches Event-Ledger mit Merkle-Anker. Neue Router zentral in `main.py` registriert; `NeedsMePanel` im Cockpit eingehängt.
-- **Qualität & Gates:** `ruff check --select E,F,I --ignore E501` und `mypy --config-file mypy.ini` über 35 geänderte/neue Python-Dateien jeweils Exit 0; gezielte Suite **603 passed** (2 bekannte Warnungen: Starlette/httpx, Pydantic-Feldname `schema`); `npx tsc --noEmit` Exit 0. Bestehende Router-Sequenz- und Pfad-Ratchets auf die neuen Endpunkte aktualisiert.
+- **Qualität & Gates:** `ruff check --select E,F,I --ignore E501` und `mypy --config-file mypy.ini` über 35 geänderte/neue Python-Dateien jeweils Exit 0; gezielte Suite **611 passed** (1 bekannte Starlette-/httpx-Warnung); `npm run build` und `npx tsc --noEmit` Exit 0. Bestehende Router-Sequenz-, Pfad- und Hook-Ratchets auf die neuen Endpunkte aktualisiert.
+- **Risiko-Abschluss:** periodischer Merkle-Anker als Startup-/Shutdown-Hook (M112), DPIA-Salt in Produktion fail-closed statt deployweit identisch (M68), explizite M68/M69-Adapterverdrahtung im Needs-Me-Router (M70/M74), Cross-Tenant-Test für den Host-State (M67), Pydantic-Feld `response_schema` mit Wire-Alias `schema` (Warnung eliminiert), Node-Engine auf `>=22 <25` erweitert.
 - **Roadmap:** Status der umgesetzten Meilensteine auf `Umgesetzt` gesetzt; M96, M2/M34 und M66 bleiben bewusst `Geplant`.
 
 ## [v0.6.0.1] — 2026-11-27 (Audit Remediation W0–W7 & Full-Suite Green)

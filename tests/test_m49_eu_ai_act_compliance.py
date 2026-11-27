@@ -6,10 +6,12 @@ SOUL.md-SHA-256-Pinning, Art.-4-KI-Kompetenzregister (inkl. GoBD-Audit-Log) und
 prüferfertigen mehrseitigen GoBD- & EU-AI-Act-Verfahrensdokumentations-PDF-Export.
 """
 
+import gc
 import io
 import os
 import tempfile
 import unittest
+from typing import Any
 from unittest.mock import patch
 
 from fastapi import FastAPI
@@ -18,13 +20,25 @@ from pypdf import PdfReader
 
 
 class TestM49EUAIActCompliance(unittest.TestCase):
+    _prev_insecure_audit_dev: Any
+    tmpdir: tempfile.TemporaryDirectory[str]
+    inv_file: str
+    lit_file: str
+    audit_db: str
+    corp_file: str
+    audit_log: Any
+    corp_mgr: Any
+    tenant_mgr: Any
+    inv_mgr: Any
+    engine: Any
+
     @classmethod
     def setUpClass(cls):
         # A2: Anker-Strukturpruefung unbedingt — dieser Test nutzt keine externe
         # Ankerdatei, daher expliziter Dev-Opt-out (in Produktion wirkungslos).
         cls._prev_insecure_audit_dev = os.environ.get("ARCHON_ALLOW_INSECURE_AUDIT_DEV")
         os.environ["ARCHON_ALLOW_INSECURE_AUDIT_DEV"] = "1"
-        cls.tmpdir = tempfile.TemporaryDirectory()
+        cls.tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         cls.inv_file = os.path.join(cls.tmpdir.name, "eu_ai_act_inventory.json")
         cls.lit_file = os.path.join(cls.tmpdir.name, "ai_act_literacy_register.json")
         cls.audit_db = os.path.join(cls.tmpdir.name, "audit_test.db")
@@ -71,6 +85,7 @@ class TestM49EUAIActCompliance(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        gc.collect()
         cls.tmpdir.cleanup()
         if cls._prev_insecure_audit_dev is None:
             os.environ.pop("ARCHON_ALLOW_INSECURE_AUDIT_DEV", None)

@@ -2,6 +2,13 @@
 
 All notable changes to **Archon OS** are documented in this file.
 
+## [Unreleased] — 2026-11-27 (Roadmap-Welle M67–M72, M95, M97–M100, M109, M111, M112)
+
+### Added & Verified
+- **M67/M68/M69/M70/M74/M71/M72/M111/M112:** Host-State & Prompt-Kompression, Compliance-Inventar/DPIA/Audit-Replay, Policy-as-Code (YAML, 24h-Vendor-Limits, signierte Tokens), „Braucht mich"-Panel + Auto-Review, Eval-Attestierung, modellabhängiges Task-Sizing/Skills-Leihe, Bulkheads/Tool-Output-Caps/Circuit-Breaker und unveränderliches Event-Ledger mit Merkle-Anker. Neue Router zentral in `main.py` registriert; `NeedsMePanel` im Cockpit eingehängt.
+- **Qualität & Gates:** `ruff check --select E,F,I --ignore E501` und `mypy --config-file mypy.ini` über 35 geänderte/neue Python-Dateien jeweils Exit 0; gezielte Suite **603 passed** (2 bekannte Warnungen: Starlette/httpx, Pydantic-Feldname `schema`); `npx tsc --noEmit` Exit 0. Bestehende Router-Sequenz- und Pfad-Ratchets auf die neuen Endpunkte aktualisiert.
+- **Roadmap:** Status der umgesetzten Meilensteine auf `Umgesetzt` gesetzt; M96, M2/M34 und M66 bleiben bewusst `Geplant`.
+
 ## [v0.6.0.1] — 2026-11-27 (Audit Remediation W0–W7 & Full-Suite Green)
 
 ### Fixed & Verified

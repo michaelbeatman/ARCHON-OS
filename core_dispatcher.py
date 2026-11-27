@@ -35,6 +35,29 @@ def set_structured_output_schema(schema: Optional[Dict[str, Any]]) -> None:
     _STRUCTURED_OUTPUT_SCHEMA_CTX.set(dict(schema) if isinstance(schema, dict) else None)
 
 
+# M111: task-lokale Scheduling-Klasse (chat | background_dag | eval). Der
+# ContextVar ist bewusst NEU und beruehrt weder Prompt- noch Schema-Context.
+_SCHEDULING_CLASS_CTX: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "archon_dispatch_scheduling_class", default="chat"
+)
+
+
+def set_scheduling_class(value: str) -> str:
+    """Setzt die Bulkhead-Klasse fuer nachfolgende Dispatches (task-lokal)."""
+    from backend.scheduling_bulkheads import set_scheduling_class as _set
+
+    cls = _set(value)
+    _SCHEDULING_CLASS_CTX.set(cls)
+    return cls
+
+
+def current_scheduling_class() -> str:
+    """Liefert die Bulkhead-Klasse des aktuellen Tasks."""
+    from backend.scheduling_bulkheads import current_scheduling_class as _current
+
+    return _current() or _SCHEDULING_CLASS_CTX.get()
+
+
 # Audit-Schreibpfade sind sync SQLite. Serialisiert ueber einen Thread-Lock und
 # aus dem Event-Loop via asyncio.to_thread ausgelagert (kein Event-Loop-Block).
 _AUDIT_WRITE_LOCK = threading.Lock()
@@ -1011,6 +1034,13 @@ async def dispatch_to_omniroute_or_container(
             "task_id": task_id,
         })
 
+    # M111: Vorbereitung der Bulkhead-Akquisition. Die eigentliche Akquisition
+    # liegt im aeusseren try/finally (unten), damit JEDER Rueckpfad den Slot
+    # freigibt — auch der Concurrency-Gate-Block direkt davor.
+    bulkhead_lease: Any = None
+    bulkhead_gate: Any = None
+    scheduling_class = current_scheduling_class()
+
     try:
         from backend.concurrency_throttle import concurrency_throttle
         acquired = await concurrency_throttle.acquire_slot(agent_id, slot_id, priority=2)
@@ -1035,6 +1065,42 @@ async def dispatch_to_omniroute_or_container(
     # d07: try/finally MUSS unmittelbar nach acquire_slot beginnen, damit ein
     # Abbruch (CancelledError) waehrend des Cache-Lookups den Slot niemals leakt.
     try:
+        # M111: Bulkhead VOR Cache/Budget/Provider. Ueberlast wird abgelehnt
+        # (Backpressure) statt die Klasse zu ueberbuchen.
+        try:
+            from backend.scheduling_bulkheads import scheduling_bulkheads
+
+            bulkhead_gate = scheduling_bulkheads
+            bulkhead_lease = await scheduling_bulkheads.acquire(scheduling_class, owner_id=slot_id)
+        except Exception as bh_exc:
+            # Fail-CLOSED: ohne auswertbares Bulkhead-Gate kein unbegrenzter Dispatch.
+            logger.error("[Dispatcher] Bulkhead-Gate nicht verfuegbar - Dispatch blockiert: %s", bh_exc)
+            return _with_prompt_info({
+                "status": "blocked",
+                "error": f"bulkhead_gate_unavailable: {bh_exc}",
+                "error_code": "BULKHEAD_GATE_UNAVAILABLE",
+                "content": "🛑 [BULKHEAD-GATE]: Kapazitaetspruefung nicht verfuegbar — Dispatch blockiert (fail-closed).",
+                "scheduling_class": scheduling_class,
+                "backpressure": True,
+            })
+        if not bulkhead_lease.granted:
+            logger.warning(
+                "[Dispatcher] Bulkhead-Reject: class=%s code=%s owner=%s",
+                scheduling_class, bulkhead_lease.error_code, slot_id,
+            )
+            return _with_prompt_info({
+                "status": "blocked",
+                "error": str(bulkhead_lease.detail or bulkhead_lease.error_code),
+                "error_code": bulkhead_lease.error_code,
+                "content": (
+                    f"🛑 [BULKHEAD-BACKPRESSURE]: {scheduling_class} ist ueberlastet "
+                    f"({bulkhead_lease.error_code})."
+                ),
+                "scheduling_class": scheduling_class,
+                "backpressure": True,
+                "retry_after_seconds": bulkhead_lease.retry_after_seconds,
+            })
+
         # Semantischer Cache VOR dem LLM-Call: ein Treffer erspart Budget-Reservierung
         # und Provider-Aufruf. D02/HIGH: Scope umfasst jetzt Tenant/Agent plus die
         # wirksame Policy (data_category, canary, zero_egress_active).
@@ -1383,6 +1449,11 @@ async def dispatch_to_omniroute_or_container(
             # D11: der im Provider-Pfad geloeste Prompt-Ref gehoert in JEDEN Return.
             return _with_prompt_info(res)
     finally:
+        if bulkhead_lease is not None and bulkhead_gate is not None:
+            try:
+                bulkhead_gate.release(bulkhead_lease)
+            except Exception as bh_rel_exc:
+                logger.warning("[Dispatcher] Bulkhead-Slot konnte nicht freigegeben werden: %s", bh_rel_exc)
         if budget_reservation_id:
             # Reservierung darf nie hängen bleiben (früher Return, Exception,
             # Zero-Egress-Block) — sonst wird Budget dauerhaft blockiert.
@@ -1728,6 +1799,20 @@ async def _dispatch_to_omniroute_or_container_impl(
     else:
         selected_model = model.strip() if (model and model not in ("free-forever", "default")) else "deepseek/deepseek-chat"
 
+    # M111: Fallback-Hierarchie aus der Breaker-SSOT (rein lesend). Die Kette
+    # selbst bleibt unverändert; der Plan wird nur sichtbar gemacht. Ein
+    # Half-Open-Probe wird erst beim echten Provider-Hop in _audited_post
+    # verbraucht — dieser Plan darf ihn nicht vorab stehlen.
+    try:
+        from backend.provider_circuit_breaker import provider_breaker
+
+        _fallback_plan = provider_breaker.select_provider(
+            preferred=prov_lower or "omniroute"
+        )[1]
+    except Exception as fb_plan_exc:
+        logger.debug("[Dispatcher] Fallback-Plan nicht verfuegbar: %s", fb_plan_exc)
+        _fallback_plan = {"chain": [], "skipped": [], "backpressure_active": False}
+
     # Zero-Egress & Privacy-Router Pre-Flight Gate + EU AI Act + DataClassifier
     from backend.llm_egress_guard import (
         ZeroEgressBlockedError,
@@ -1959,9 +2044,16 @@ async def _dispatch_to_omniroute_or_container_impl(
                 extra={"effective_prompt_info": prompt_version_info} if prompt_version_info else None,
             )
 
+        # M111: Backpressure-Signal des Breakers in die Fehlermeldung. Keine
+        # Secrets, nur Provider-Name, Zustand und Restzeit bis zum Probe.
+        bp = provider_breaker.backpressure(provider_id)
         if not provider_breaker.allow(provider_id):
             await _audit_dispatch_blocked(0)
-            raise RuntimeError(f"Provider '{provider_id}' ist circuit-open (Fail-Fast).")
+            raise RuntimeError(
+                f"Provider '{provider_id}' ist circuit-open (Fail-Fast, "
+                f"Backpressure={bp['backpressure_active']}, "
+                f"Retry-After={bp['retry_after_seconds']}s)."
+            )
         try:
             r = await http_client.post(url, **post_kwargs)
         except Exception:
@@ -2417,6 +2509,9 @@ async def _dispatch_to_omniroute_or_container_impl(
         "content": err_msg,
         "error": "No LLM provider available",
         "error_code": "NO_LLM_PROVIDER_AVAILABLE",
+        # M111: sichtbare Fallback-/Backpressure-Diagnose (keine Secrets).
+        "fallback_chain": list(_fallback_plan.get("chain") or []),
+        "provider_backpressure": bool(_fallback_plan.get("backpressure_active")),
     })
 
 async def dispatch_to_external_agent(

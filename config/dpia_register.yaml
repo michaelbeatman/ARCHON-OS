@@ -1,0 +1,16 @@
+# M68 — Art.-35-DSGVO-DPIA-Register (versionierte SSOT-Datei, keine DB-Tabelle).
+# Der Fingerprint ist SHA-256 ueber die sortierten Mengen {modelle, datenklassen}.
+# Eintragsstatus PENDING_ASSESSMENT bedeutet: Change-Trigger erkannt, die
+# Datenschutz-Folgenabschaetzung ist durch den Verantwortlichen noch zu bewerten.
+schema: archon-m68-dpia/v1
+version: 1
+fingerprint: 943654595ca5a8d12c2caa579256677f721a2679c2af9a8d3c20fd892e1399f1
+updated_at: "2026-11-27T00:00:00Z"
+entries: []
+history:
+  - version: 1
+    timestamp: "2026-11-27T00:00:00Z"
+    fingerprint_before: ""
+    fingerprint_after: 943654595ca5a8d12c2caa579256677f721a2679c2af9a8d3c20fd892e1399f1
+    trigger_count: 0
+    note: "Initiales leeres Register; erste SSOT-Synchronisation legt DPIA-Faelle an."

@@ -9,6 +9,7 @@ import {
 } from '@/lib/archon-api';
 import { useArchonEvents } from '@/lib/useArchonEvents';
 import { OutputEconomicsDashboard } from '@/components/OutputEconomicsDashboard';
+import { NeedsMePanel } from '@/components/NeedsMePanel';
 import {
   Activity,
   CheckCircle2,
@@ -175,6 +176,9 @@ export function ExecutiveCockpit() {
             </button>
           </div>
         </header>
+
+        {/* M70/M74: Braucht-mich-Panel (Read-only, kein Freigabe-Button) */}
+        <NeedsMePanel tenant="default" limit={20} />
 
         {error && (
           <div className="p-3 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-200 text-xs">

@@ -494,6 +494,181 @@ def api_get_chat_session_messages(session_id: str):
         return {"session_id": session_id, "messages": []}
 
 
+# ============================================================================
+# M67 (additiv): Host-Zustand, deterministische Antwortprüfung, Step-Prompt.
+# Die M99-Compaction-SSE und die Marker-Karte bleiben unverändert.
+# ============================================================================
+
+class HostStateSaveRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=200)
+    goal: str = Field(default="", max_length=4000)
+    status: str = Field(default="pending", max_length=64)
+    version: int = Field(default=1, ge=0, le=2_000_000_000)
+
+
+class HostStateAdvanceRequest(BaseModel):
+    expected_version: int = Field(..., ge=0, le=2_000_000_000)
+    response: Any
+    # 'schema' ist der gewuenschte Wire-Name, kollidiert aber mit BaseModel.schema.
+    schema: Dict[str, Any]  # type: ignore[assignment]
+
+
+def _m67_tenant_id() -> str:
+    """Mandant ausschließlich aus dem Request-Kontext — niemals aus dem Body."""
+    try:
+        from backend.tenant_context import tenant_context
+
+        tid = str(tenant_context.get_active_tenant_id() or "").strip()
+        if not tid:
+            raise RuntimeError("tenant_context ohne Mandant")
+        return tid
+    except Exception as exc:
+        logger.error("[M67] Mandantenkontext nicht verfuegbar: %s", exc)
+        raise HTTPException(status_code=503, detail="tenant_context_unavailable") from exc
+
+
+def _m67_stream_host_state(session_id: str) -> Optional[Dict[str, Any]]:
+    """Kompakter Host-State-Schatten für den SSE-Stream (rein additiv)."""
+    try:
+        from backend.host_state_store import HostStateStore
+        from backend.prompt_compressor import format_host_state_marker
+
+        state = HostStateStore().load(session_id, _m67_tenant_id())
+        if state is None:
+            return None
+        # Nur Status-Metadaten in den Stream — kein Zustandsinhalt/keine Ziele.
+        return {
+            'type': 'host_state',
+            "marker": format_host_state_marker(state),
+            "version": state.version,
+            "status": state.status,
+        }
+    except Exception as exc:
+        logger.debug("[M67] Host-State-Schatten nicht verfuegbar: %s", exc)
+        return None
+
+
+@router.get("/api/chat/host-state/{session_id}")
+def api_get_host_state(session_id: str, request: Request):
+    """Liest den versionierten Host-Zustand einer Sitzung (RBAC-geschützt)."""
+    require_admin_or_503(request)
+    from backend.host_state_store import HostStateError, HostStateStore
+    from backend.prompt_compressor import format_host_state_marker
+
+    try:
+        state = HostStateStore().load(session_id, _m67_tenant_id())
+    except HostStateError as exc:
+        raise HTTPException(
+            status_code=400, detail={"code": "host_state_invalid", "params": {"reason": type(exc).__name__}}
+        ) from exc
+    if state is None:
+        raise HTTPException(status_code=404, detail={"code": "host_state_not_found", "params": {}})
+    return {
+        "status": "success",
+        "state": state.to_dict(),
+        "marker": format_host_state_marker(state),
+    }
+
+
+@router.post("/api/chat/host-state/{session_id}")
+def api_save_host_state(session_id: str, req: HostStateSaveRequest, request: Request):
+    """Legt den initialen Host-Zustand an (einmalig, versionsmonoton)."""
+    require_admin_or_503(request)
+    from backend.host_state_store import (
+        HostState,
+        HostStateConflict,
+        HostStateError,
+        HostStateStore,
+    )
+
+    tid = _m67_tenant_id()
+    state = HostState(
+        session_id=session_id,
+        job_id=req.job_id,
+        version=req.version,
+        status=req.status,
+        goal=req.goal,
+        tenant_id=tid,
+        updated_at=time.time(),
+    )
+    try:
+        saved = HostStateStore().save(state)
+    except HostStateConflict as exc:
+        raise HTTPException(
+            status_code=409, detail={"code": "host_state_version_conflict", "params": {}}
+        ) from exc
+    except HostStateError as exc:
+        raise HTTPException(
+            status_code=400, detail={"code": "host_state_invalid", "params": {"reason": type(exc).__name__}}
+        ) from exc
+    return {"status": "success", "state": saved.to_dict()}
+
+
+@router.post("/api/chat/host-state/{session_id}/advance")
+def api_advance_host_state(session_id: str, req: HostStateAdvanceRequest, request: Request):
+    """Prüft eine Modellantwort und übernimmt sie NUR bei Erfolg atomar."""
+    require_admin_or_503(request)
+    from backend.host_state_store import HostStateError, HostStateStore
+    from backend.prompt_compressor import advance_from_response
+
+    try:
+        outcome = advance_from_response(
+            HostStateStore(),
+            session_id=session_id,
+            tenant_id=_m67_tenant_id(),
+            response=req.response,
+            schema=req.schema,
+            expected_version=req.expected_version,
+        )
+    except HostStateError as exc:
+        raise HTTPException(
+            status_code=400, detail={"code": "host_state_invalid", "params": {"reason": type(exc).__name__}}
+        ) from exc
+    except RuntimeError as exc:
+        if str(exc) == "audit_write_failed":
+            raise HTTPException(status_code=503, detail="audit_write_failed") from exc
+        raise
+    if not outcome["accepted"]:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "host_state_response_rejected",
+                "params": {"errors": outcome["errors"][:12], "audit": outcome["audit"]},
+            },
+        )
+    return {"status": "success", "state": outcome["state"], "audit": outcome["audit"]}
+
+
+@router.get("/api/chat/host-state/{session_id}/step-prompt")
+def api_get_host_step_prompt(
+    session_id: str,
+    request: Request,
+    model: Optional[str] = None,
+    token_budget: Optional[int] = None,
+):
+    """Erzeugt einen frischen Step-Prompt aus dem Host-Zustand statt aus Chat-Historie."""
+    require_admin_or_503(request)
+    from backend.host_state_store import HostStateError, HostStateStore
+    from backend.prompt_compressor import build_step_prompt
+
+    try:
+        state = HostStateStore().load(session_id, _m67_tenant_id())
+    except HostStateError as exc:
+        raise HTTPException(
+            status_code=400, detail={"code": "host_state_invalid", "params": {"reason": type(exc).__name__}}
+        ) from exc
+    if state is None:
+        raise HTTPException(status_code=404, detail={"code": "host_state_not_found", "params": {}})
+    return {
+        "status": "success",
+        **build_step_prompt(
+            state,
+            (model or "").strip() or None,
+            token_budget=token_budget,
+        ),
+    }
+
+
 class RenameSessionRequest(BaseModel):
     title: str
 
@@ -1134,6 +1309,15 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
         # M99: Sichtbarer Compaction-Marker bei automatischer Verdichtung im Live-Stream
         if _auto_compaction_result:
             yield f"data: {json.dumps({'type': 'compaction_marker', 'marker': _auto_compaction_result.get('compaction_marker', ''), 'original_tokens': _auto_compaction_result.get('original_tokens', 0), 'compacted_tokens': _auto_compaction_result.get('compacted_tokens', 0), 'saved_tokens': _auto_compaction_result.get('saved_tokens', 0), 'saved_pct': _auto_compaction_result.get('saved_pct', 0.0), 'compacted_messages': _auto_compaction_result.get('compacted_messages', 0), 'kept_recent': _auto_compaction_result.get('kept_recent', 0), 'model': _auto_compaction_result.get('model'), 'max_context_tokens': _auto_compaction_result.get('max_context_tokens')}, ensure_ascii=False)}\n\n"
+
+        # M67 (additiv): kompakter Host-State im selben Stream. Der M99-Marker
+        # oben bleibt unverändert und wird weiterhin zuerst gesendet.
+        try:
+            _m67_event = await asyncio.to_thread(_m67_stream_host_state, session_id)
+            if _m67_event:
+                yield f"data: {json.dumps(_m67_event, ensure_ascii=False)}\n\n"
+        except Exception as m67_exc:
+            logger.debug("[M67] Host-State-Schatten im Stream uebersprungen: %s", m67_exc)
 
         # Direkte System-Antwort bei Management-Befehlen (/skill list, /skill clear)
         if direct_skill_notice:

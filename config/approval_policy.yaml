@@ -1,0 +1,61 @@
+# M69 — Policy-as-Code für Freigaben.
+# Versionierte SSOT für Freigabestufen, Domino-/Vendor-Limits und Rollen.
+# Aenderungen nur mit Versionssprung; der SHA-256-Fingerprint wird zur Laufzeit
+# ueber der kanonisierten, validierten Policy gebildet (kompatibel zu M71).
+# Fehlerhafte Dateien fuehren zum Fail-Closed (kein Gate wird geoeffnet).
+schema_version: 1
+policy_version: "1.0.0"
+effective_from: "2026-11-27T00:00:00Z"
+
+approval_levels:
+  auto:
+    max_amount_eur: 50.00
+  four_eyes:
+    min_amount_eur: 500.00
+    min_distinct_approvers: 2
+  admin:
+    min_amount_eur: 5000.00
+
+domino_limits:
+  max_chain_depth: 6
+  max_actions_per_chain: 24
+  allowed_domains:
+    - finance
+    - email
+    - system
+    - governance
+    - boardroom
+    - agent_dispatch
+    - workflow_authoring
+    - context_hygiene
+
+vendor_limits:
+  window_hours: 24
+  max_spend_usd: 100.00
+  max_calls: 3
+  vendors:
+    openai:
+      max_spend_usd: 100.00
+      max_calls: 3
+    anthropic:
+      max_spend_usd: 150.00
+      max_calls: 3
+    deepseek:
+      max_spend_usd: 25.00
+      max_calls: 10
+
+roles:
+  approver_roles:
+    - admin
+    - operator
+  admin_only_domains:
+    - system
+    - governance
+    - boardroom
+  forbidden_deputy_roles:
+    - viewer
+    - anonymous
+
+token:
+  ttl_seconds: 300
+  max_uses: 1

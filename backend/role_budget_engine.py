@@ -1819,3 +1819,49 @@ class BudgetBank:
 
 
 budget_bank = BudgetBank()
+
+
+# =========================================================================
+# 4. M72 — ADDITIVES TASK-SIZING (KEINE BUDGET-LOGIK, KEINE CEILING-AENDERUNG)
+# =========================================================================
+
+def estimate_task_sizing(
+    text: str,
+    model: Optional[str] = None,
+    *,
+    token_budget: Optional[int] = None,
+    overlap: Optional[int] = None,
+    provider_metadata: Optional[Dict[str, Any]] = None,
+    configured_override: Optional[int] = None,
+    max_chunk_tokens: Optional[int] = None,
+) -> Dict[str, Any]:
+    """M72: reine Vorschau der modellgerechten Zerlegung ohne Buchung.
+
+    Die Funktion liest ausschließlich ``backend.task_sizing`` und berührt
+    weder ``init_budget_tables`` noch Reservierungen/Ledger. Vorhandene
+    Budget-SSOT (``TASK_BUDGET_*_CEILING``, Allokation, Gate) bleibt exakt wie
+    sie ist; ``token_budget`` wird nur als Vergleichswert annotiert.
+    """
+    from backend.task_sizing import size_chunks
+
+    kwargs: Dict[str, Any] = {
+        "provider_metadata": provider_metadata,
+        "configured_override": configured_override,
+        "max_chunk_tokens": max_chunk_tokens,
+    }
+    if overlap is not None:
+        kwargs["overlap"] = int(overlap)
+
+    sizing: Dict[str, Any] = dict(size_chunks(text, model, **kwargs))
+    estimated = int(sizing.get("total_estimated_tokens") or 0)
+
+    if token_budget is None:
+        sizing.update({"token_budget": None, "fits_budget": None, "budget_utilization_pct": None})
+    else:
+        budget = max(0, int(token_budget))
+        sizing.update({
+            "token_budget": budget,
+            "fits_budget": estimated <= budget,
+            "budget_utilization_pct": round((estimated / budget) * 100.0, 1) if budget else 100.0,
+        })
+    return sizing

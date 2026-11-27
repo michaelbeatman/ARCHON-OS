@@ -6,21 +6,21 @@
 |---|---|---|---|---|
 | **M2 / M34** | **Mobile Steuerapp für Android** | Mittel | Geplant | PWA vs. Native Client, sichere Remote-Anbindung (WireGuard/Tailscale/Tunnel), Push-Freigaben (HITL) & Kamera-Beleg-Scan |
 | **M66** | **Hardware-gebundene Agent-Authentifizierung** | Mittel | Geplant | Agentenprozesse ohne eigene Secrets, TPM-2.0-/Secure-Enclave-Authenticator, Step-Up-Passkey-Freigabe & Action-Records |
-| **M67** | **Host-seitige Zustandsführung & Prompt-Kompression** | Mittel | Geplant | Schlanker Step-Prompt aus Host-Zustand + deterministischer Antwort-Prüfung (Ergänzung zu OmniRoute/Dispatch-Budgets) |
-| **M68** | **Compliance-Inventar, DPIA-Register & Replay-Nachweis** | Mittel | Geplant | Tenant-Compliance-Inventar, Art.-35-DPIA-Register, Aufbewahrungsfristen je Log-Typ, getesteter Audit-Replay & 1-Seiten-Policy-Export |
-| **M69** | **Policy-as-Code für Freigaben (YAML & Vendor-Limits)** | Mittel | Geplant | Versionierbare YAML-Regeln in `approval_policy_engine.py`, rollende 24h-Vendor-Limits, Telegram Approve/Deny-Buttons & signierte Freigabe-Tokens |
-| **M70 / M74** | **Auto-Review-Runden, Validierungs-Agenten & „Braucht mich“-Panel** | Hoch | Geplant | Einheitliche Freigabe-Oberfläche (Missions-/Policy-/HITL-Gates), Auto-Review vor Menschen-Gate & Beleg-Sammlung durch Validierungs-Agenten |
-| **M71** | **Eval-Attestierung (Konfig-Fingerprint je Eval-Lauf)** | Niedrig | Geplant | SHA-256-Fingerprint über Profile/SOUL, Prompts, Policy & Routing-Config je Eval-Arena-Lauf |
-| **M72** | **Modellabhängiges Task-Sizing & Skills auf Leihbasis** | Niedrig | Geplant | Dynamische Paketgröße je Modell-Kontextfenster & temporäre Skill-Zuweisung pro Task |
-| **M95** | **Multi-User Urlaubs-/Vertretungs-Modus & User-Telegram-Kanäle** | Hoch | Geplant | Menschliche Stellvertreter-Eskalation bei Timeout/Abwesenheit (nie Agent-Fallback) & benutzerspezifische Telegram-Kanäle |
+| **M67** | **Host-seitige Zustandsführung & Prompt-Kompression** | Mittel | Umgesetzt | Schlanker Step-Prompt aus Host-Zustand + deterministischer Antwort-Prüfung (Ergänzung zu OmniRoute/Dispatch-Budgets) |
+| **M68** | **Compliance-Inventar, DPIA-Register & Replay-Nachweis** | Mittel | Umgesetzt | Tenant-Compliance-Inventar, Art.-35-DPIA-Register, Aufbewahrungsfristen je Log-Typ, getesteter Audit-Replay & 1-Seiten-Policy-Export |
+| **M69** | **Policy-as-Code für Freigaben (YAML & Vendor-Limits)** | Mittel | Umgesetzt | Versionierbare YAML-Regeln in `approval_policy_engine.py`, rollende 24h-Vendor-Limits, Telegram Approve/Deny-Buttons & signierte Freigabe-Tokens |
+| **M70 / M74** | **Auto-Review-Runden, Validierungs-Agenten & „Braucht mich“-Panel** | Hoch | Umgesetzt | Einheitliche Freigabe-Oberfläche (Missions-/Policy-/HITL-Gates), Auto-Review vor Menschen-Gate & Beleg-Sammlung durch Validierungs-Agenten |
+| **M71** | **Eval-Attestierung (Konfig-Fingerprint je Eval-Lauf)** | Niedrig | Umgesetzt | SHA-256-Fingerprint über Profile/SOUL, Prompts, Policy & Routing-Config je Eval-Arena-Lauf |
+| **M72** | **Modellabhängiges Task-Sizing & Skills auf Leihbasis** | Niedrig | Umgesetzt | Dynamische Paketgröße je Modell-Kontextfenster & temporäre Skill-Zuweisung pro Task |
+| **M95** | **Multi-User Urlaubs-/Vertretungs-Modus & User-Telegram-Kanäle** | Hoch | Umgesetzt | Menschliche Stellvertreter-Eskalation bei Timeout/Abwesenheit (nie Agent-Fallback) & benutzerspezifische Telegram-Kanäle |
 | **M96** | **Visueller Ergebnis-Template- & Report-Designer** | Sehr hoch | Geplant | Zweigeteilter Canvas-Editor mit Drag-&-Drop-Variablen-Pool und individuellen Typografie-/Farb-Properties |
-| **M97** | **Einheitliche Modal-, Header- & Blur-Overlay-UI-Überarbeitung** | Hoch | Geplant | Systemweite Vereinheitlichung aller Detail-Modals (Größe, Z-Index, Backdrop-Blur) |
-| **M98** | **Vereinheitlichte API-Key- & OmniRoute-Scope-Verwaltung** | Hoch | Geplant | Konsolidierte Sicht auf eingehende Archon-API-Tokens und ausgehende Provider-Keys inkl. OmniRoute-Scope-Steuerung |
-| **M99** | **Context-Compaction Audit & modell-dynamische Fenster** | Hoch | Geplant | Dynamisches `max_context_tokens` je Modell (128k/200k/1M) statt pauschal 32k + Settings-UI-Steuerung |
-| **M100** | **KPI-Dashboard für Output-Wirtschaftlichkeit** | Hoch | Geplant | Kosten-/Aufwands-Rollup pro Projekt, Agenten-Profil und Deliverable-Typ (inkl. Zeitreihen-Vergleich) |
-| **M109** | **Code Mode (Deferred Discovery → Isolierte Sandbox)** | Hoch | Geplant | `search`/`describe`/`call`-Discovery (~800–1.000 Token Footprint) für ~200+ Endpunkte + isolierte Wasm-/Prozess-Sandbox mit Capability-Broker |
-| **M111** | **Isolation & Resilience: Bulkheads, Tool-Output-Caps & Circuit-Breaker** | Hoch | Geplant | Getrennte Scheduling-Klassen, harte Tool-Output-Größenlimits vor Kontext-Injektion & Provider-Circuit-Breaker mit Backpressure |
-| **M112** | **Unveränderliches Event-Ledger & Verifizierbare Hash-Chain** | Mittel | Geplant | Crash-sicheres Event-Sourcing-Ledger + Merkle-Log mit externem WORM-/Timestamping-Anker |
+| **M97** | **Einheitliche Modal-, Header- & Blur-Overlay-UI-Überarbeitung** | Hoch | Umgesetzt | Systemweite Vereinheitlichung aller Detail-Modals (Größe, Z-Index, Backdrop-Blur) |
+| **M98** | **Vereinheitlichte API-Key- & OmniRoute-Scope-Verwaltung** | Hoch | Umgesetzt | Konsolidierte Sicht auf eingehende Archon-API-Tokens und ausgehende Provider-Keys inkl. OmniRoute-Scope-Steuerung |
+| **M99** | **Context-Compaction Audit & modell-dynamische Fenster** | Hoch | Umgesetzt | Dynamisches `max_context_tokens` je Modell (128k/200k/1M) statt pauschal 32k + Settings-UI-Steuerung |
+| **M100** | **KPI-Dashboard für Output-Wirtschaftlichkeit** | Hoch | Umgesetzt | Kosten-/Aufwands-Rollup pro Projekt, Agenten-Profil und Deliverable-Typ (inkl. Zeitreihen-Vergleich) |
+| **M109** | **Code Mode (Deferred Discovery → Isolierte Sandbox)** | Hoch | Umgesetzt | `search`/`describe`/`call`-Discovery (~800–1.000 Token Footprint) für ~200+ Endpunkte + isolierte Wasm-/Prozess-Sandbox mit Capability-Broker |
+| **M111** | **Isolation & Resilience: Bulkheads, Tool-Output-Caps & Circuit-Breaker** | Hoch | Umgesetzt | Getrennte Scheduling-Klassen, harte Tool-Output-Größenlimits vor Kontext-Injektion & Provider-Circuit-Breaker mit Backpressure |
+| **M112** | **Unveränderliches Event-Ledger & Verifizierbare Hash-Chain** | Mittel | Umgesetzt | Crash-sicheres Event-Sourcing-Ledger + Merkle-Log mit externem WORM-/Timestamping-Anker |
 
 ---
 

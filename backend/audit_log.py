@@ -2018,3 +2018,26 @@ def _require_audit_event(
 
 # Singleton Instanz
 chained_audit_log = ChainedAuditLog()
+
+
+# ---------------------------------------------------------------------------
+# M112: Additive Bruecke fuer das Event-Ledger.
+# Reine Weiterleitung an die bestehende HMAC-Kette — keine Aenderung an
+# Signatur-, Epochen- oder Verify-Logik. Das Ledger nutzt dieselben ENV-Keys
+# (ARCHON_AUDIT_HMAC_KEY / _EPOCHS) und damit dieselbe Key-Rotation wie die
+# Zentralkette. Ohne Key bleibt das Schreiben fail-closed (_chain_hash raises).
+# ---------------------------------------------------------------------------
+def ledger_block_hash(raw_str: str, block_id: int) -> str:
+    """Signiert einen Ledger-Block mit der SSOT-HMAC-Kette (M112)."""
+    return _chain_hash(raw_str, block_id=block_id)
+
+
+def ledger_verify_block_hash(raw_str: str, stored_hash: str, block_id: int) -> bool:
+    """Verifiziert einen Ledger-Block mit der SSOT-HMAC-Kette (M112)."""
+    return _verify_hash(raw_str, stored_hash, block_id=block_id)
+
+
+def ledger_hmac_active() -> bool:
+    """True, wenn mindestens ein HMAC-Key fuer die Ledger-Kette konfiguriert ist."""
+    return bool(_hmac_epochs())
+

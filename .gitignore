@@ -70,6 +70,7 @@ chroma_db/
 paperclip_data/
 pb_data/
 data/
+audit_anchor/
 
 # Node & Frontend
 node_modules/

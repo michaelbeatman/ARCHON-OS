@@ -117,6 +117,10 @@ _EXPECTED_INCLUDE_SEQUENCE = [
     ('/api/v1/calendar/events', 'APIRoute'),
     ('/api/v1/calendar/ws', 'APIWebSocketRoute'),
     ('/api/v1/profiles/liability-ack', 'APIRoute'),  # W4-C / D15-H3
+    ('/api/event-ledger/status', 'APIRoute'),  # M112
+    ('/api/v1/compliance/inventory', 'APIRoute'),  # M68
+    ('/api/policy-gates/policy', 'APIRoute'),  # M69
+    ('', 'APIRoute'),  # M70/M74 (Prefix /api/needs-me wird am Include gesetzt)
 ]
 
 # Fund 2: Feldname -> main-Symbol. Bindet die an der Aufrufstelle gebauten
@@ -194,8 +198,8 @@ def test_s1_full_include_sequence_is_pinned() -> None:
         "import main",
         f"_expected = {expected!r}",
         "assert _calls == _expected, 'Include-Reihenfolge gekippt'",
-        "assert len(_calls) == 76",
-        "assert _calls[-1] == ['/api/v1/profiles/liability-ack', 'APIRoute']",
+        "assert len(_calls) == 80",
+        "assert _calls[-1] == ['', 'APIRoute']",
         "assert ['/api/v1/calendar/ws', 'APIWebSocketRoute'] in _calls",
         "assert sum(1 for x in _calls if 'WebSocket' in x[1]) == 1",
         "# Negativprobe gegen eine vertauschte Reihenfolge (echte Mutation).",

@@ -615,3 +615,40 @@ def replay_and_evaluate(
         "items_count": len(results), "passed_items": passed_items,
         "results": results,
     }
+
+
+# =========================================================================
+# M71 — Attestierte Eval-Läufe (additiv; bestehende Funktionen unverändert)
+# =========================================================================
+
+async def run_attested_evaluation(
+    *args: Any,
+    attestation_root: Optional[str] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Eval-Arena-Lauf mit Konfig-Fingerprint vor dem Start.
+
+    Reicht alle Argumente unverändert an :func:`run_evaluation` durch und
+    ergänzt das Result um ``attestation``. Ohne Attestation-Root wird die
+    Workspace-Wurzel aus ``backend.eval_attestation`` verwendet.
+    """
+    from backend.eval_attestation import attest_eval_run
+
+    return await attest_eval_run(
+        lambda: run_evaluation(*args, **kwargs),
+        root=attestation_root,
+    )
+
+
+def replay_and_evaluate_attested(
+    *args: Any,
+    attestation_root: Optional[str] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Synchrone Replay-Variante mit derselben Attestation wie M71."""
+    from backend.eval_attestation import attest_eval_run_sync
+
+    return attest_eval_run_sync(
+        lambda: replay_and_evaluate(*args, **kwargs),
+        root=attestation_root,
+    )

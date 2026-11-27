@@ -199,7 +199,7 @@ def test_v3_broken_operations_import_fails_closed(
 def test_v4_real_app_pins_special_block_position() -> None:
     assert app_main._ROUTER_LOAD_ERRORS == [], "echte App darf keine Ladefehler haben"
     paths = _paths(app_main.app)
-    assert len(paths) == 801, f"Pfade: {len(paths)} (Referenz 799 + W4-C/W4-D = 801)"
+    assert len(paths) == 840, f"Pfade: {len(paths)} (Referenz 801 + M67/M68/M69/M70/M74/M112 = 840)"
     assert _is_subsequence(_ORDER_SENTINELS, paths), "Router-Reihenfolge gekippt"
 
     # Mount-Reihenfolge: /builds/apps VOR /static/avatars VOR /static.

@@ -544,4 +544,19 @@ class ContextCompactor:
         }
 
 
+def estimate_tokens(value: Any) -> int:
+    """M67 (additiv): öffentlicher Token-Schätzer für harte Prompt-Budgets.
+
+    M99 nutzt weiterhin unverändert ``_estimate_tokens`` für Nachrichtenlisten;
+    diese Funktion reicht Listen dorthin durch und zählt Strings mit derselben
+    4-Zeichen-Regel. Keine neue Fenster- oder Preislogik — ``resolve_model_context_window``
+    bleibt die einzige SSOT für modell-dynamische Kontextfenster.
+    """
+    if isinstance(value, (list, tuple)):
+        return _estimate_tokens([m for m in value if isinstance(m, dict)])
+    if isinstance(value, str):
+        return max(1, len(value) // 4)
+    return max(1, len(str(value or "")) // 4)
+
+
 context_compactor = ContextCompactor()

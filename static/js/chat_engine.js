@@ -154,6 +154,10 @@
                 selectMasterChatSession(currentMasterChatSessionId);
               }
             }
+            // M67 (additiv): kompakter Host-State als System-Karte im Chat.
+            if (msg && msg.type === "host_state" && typeof msg.marker === "string" && msg.marker) {
+              appendMasterChatMessageBubble("system", msg.marker, Date.now() / 1000, "m67");
+            }
           } catch(err) {}
         });
       }
@@ -842,7 +846,40 @@ async function initMasterChat() {
         `;
       } else if (role === "system") {
         const markerMatch = safeContent.match(/^\[COMPACTION_MARKER\s*\|\s*([^\]]+)\]\s*\n?([\s\S]*)$/);
-        if (markerMatch || safeContent.includes("[HIERARCHICAL_MEMORY_STATE")) {
+        // M67 (additiv): eigene Karte für Host-State-Marker. Die M99-Compaction-
+        // Karte im else-if darunter bleibt unverändert.
+        const hostStateMatch = safeContent.match(/^\[HOST_STATE_MARKER\s*\|\s*([^\]]+)\]\s*\n?([\s\S]*)$/);
+        if (hostStateMatch) {
+          const hsMeta = {};
+          hostStateMatch[1].split("|").forEach(pair => {
+            const idx = pair.indexOf("=");
+            if (idx > 0) hsMeta[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
+          });
+          const hsParts = [];
+          if (hsMeta.v) hsParts.push(`v${escapeHtml(hsMeta.v)}`);
+          if (hsMeta.job) hsParts.push(escapeHtml(hsMeta.job));
+          if (hsMeta.status) hsParts.push(escapeHtml(hsMeta.status));
+          if (hsMeta.steps) hsParts.push(`${escapeHtml(hsMeta.steps)} Schritte`);
+          if (hsMeta.results) hsParts.push(`${escapeHtml(hsMeta.results)} Ergebnisse`);
+          bubbleWrap.className = "flex justify-center my-2";
+          bubbleWrap.innerHTML = `
+            <div class="w-full max-w-2xl bg-indigo-500/10 border border-indigo-500/30 rounded-xl px-4 py-2.5 text-xs text-[var(--foreground)] space-y-1 shadow-2xs" data-host-state-marker="true">
+              <div class="flex flex-wrap items-center gap-1.5 font-mono font-bold text-[11px] text-indigo-700 dark:text-indigo-300">
+                <i data-lucide="server" class="w-3.5 h-3.5"></i>
+                <span>Host-Zustand</span>
+                <span class="px-2 py-0.5 rounded-full bg-indigo-500/15 text-[10px]">${hsParts.join(" · ")}</span>
+              </div>
+              <details class="text-left">
+                <summary class="cursor-pointer text-[10.5px] font-mono text-indigo-700 dark:text-indigo-300 hover:underline select-none">Details anzeigen</summary>
+                <div class="mt-1 p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] whitespace-pre-wrap font-mono text-[10.5px]">${escapeHtml(hostStateMatch[2].trim())}</div>
+              </details>
+              <div class="pt-1 border-t border-indigo-500/20 flex items-center justify-between text-[9px] font-mono text-[var(--muted-foreground)]">
+                <span>${dateFormatted}</span>
+                <span>${displayMsgId}</span>
+              </div>
+            </div>
+          `;
+        } else if (markerMatch || safeContent.includes("[HIERARCHICAL_MEMORY_STATE")) {
           const meta = {};
           if (markerMatch) {
             markerMatch[1].split("|").forEach(pair => {

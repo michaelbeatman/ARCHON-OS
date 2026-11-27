@@ -9,13 +9,21 @@ Revisionssicheres Freigabesystem mit:
 - Append-Only SHA-256 Hash-Kette für GoBD- und ISO-27001-Nachweisführung
 """
 
+import base64
+import copy
 import datetime
+import functools
+import hashlib
+import hmac
 import json
 import logging
+import math
 import os
+import re
 import sqlite3
 import threading
-from typing import Any, Dict, FrozenSet, List, Optional
+import time
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 
 logger = logging.getLogger("archon.approval_policy_engine")
 
@@ -93,6 +101,271 @@ def is_agent_or_system_identity(actor: Optional[str]) -> bool:
     return any(clean.startswith(prefix) for prefix in _FORBIDDEN_AGENT_PREFIXES)
 
 
+# ---------------------------------------------------------------------------
+# M69: Policy-as-Code — versionierte YAML-Regeln mit Hash-Fingerprint.
+# Die Datei ist die SSOT; Lesefehler oder Schema-Verletzungen sperren jeden
+# Gate (fail-closed). Die Kanonisierung entspricht der von M71
+# `build_config_fingerprint`: SHA-256 ueber sortiertes, kompaktes UTF-8-JSON.
+# ---------------------------------------------------------------------------
+POLICY_FILE = os.path.join(WORKSPACE_DIR, "config", "approval_policy.yaml")
+POLICY_SCHEMA_VERSION = 1
+_POLICY_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+_POLICY_CACHE: Dict[str, Tuple[int, Dict[str, Any]]] = {}
+
+
+class PolicyValidationError(ValueError):
+    """Ungueltige, fehlende oder nicht lesbare Policy (immer fail-closed)."""
+
+
+class ApprovalTokenError(ValueError):
+    """Ungueltiges, abgelaufenes oder bereits verbrauchtes Freigabe-Token."""
+
+
+def _now_epoch() -> int:
+    """Sekunden-Zeitstempel; zentral, damit TTL-Pruefung deterministisch testbar ist."""
+    return int(time.time())
+
+
+def _canonical_policy_bytes(policy: Dict[str, Any]) -> bytes:
+    payload = {key: value for key, value in policy.items() if key != "fingerprint"}
+    return json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+
+
+def build_policy_fingerprint(policy: Dict[str, Any]) -> str:
+    """SHA-256 ueber die kanonisierte Policy (M71-kompatible Fingerprint-Form)."""
+    return hashlib.sha256(_canonical_policy_bytes(policy)).hexdigest()
+
+
+def policy_source_digest(path: Optional[str] = None) -> str:
+    """SHA-256 der Policy-Datei in der M71-Kanonisierung (UTF-8/LF/Zeilenfassung).
+
+    M71 kann damit ``config/approval_policy.yaml`` als weitere Quelle in
+    ``build_config_fingerprint`` aufnehmen, ohne dieses Modul zu editieren.
+    """
+    source = str(path or POLICY_FILE)
+    try:
+        with open(source, "rb") as handle:
+            text = handle.read().decode("utf-8")
+    except Exception as exc:
+        raise PolicyValidationError(f"Policy-Datei nicht lesbar: {source}") from exc
+    text = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.rstrip() for line in text.split("\n")]
+    while lines and not lines[-1]:
+        lines.pop()
+    canonical = "\n".join(lines) + ("\n" if lines else "")
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _require_number(value: Any, label: str, *, minimum: float, maximum: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise PolicyValidationError(f"{label} muss eine Zahl sein.")
+    numeric = float(value)
+    if not math.isfinite(numeric) or not (minimum <= numeric <= maximum):
+        raise PolicyValidationError(
+            f"{label} liegt ausserhalb der erlaubten Spanne ({minimum}..{maximum})."
+        )
+    return numeric
+
+
+def _require_int(value: Any, label: str, *, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise PolicyValidationError(f"{label} muss eine ganze Zahl sein.")
+    if not (minimum <= value <= maximum):
+        raise PolicyValidationError(
+            f"{label} liegt ausserhalb der erlaubten Spanne ({minimum}..{maximum})."
+        )
+    return value
+
+
+def _require_dict(value: Any, label: str) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        raise PolicyValidationError(f"{label} muss ein Mapping sein.")
+    return value
+
+
+def _require_str_list(value: Any, label: str) -> List[str]:
+    if not isinstance(value, list) or not value:
+        raise PolicyValidationError(f"{label} muss eine nicht-leere Liste sein.")
+    items: List[str] = []
+    for entry in value:
+        text = str(entry or "").strip().lower()
+        if not text:
+            raise PolicyValidationError(f"{label} enthaelt einen leeren Eintrag.")
+        items.append(text)
+    return items
+
+
+def _validate_policy(raw: Any) -> Dict[str, Any]:
+    """Normalisiert und validiert die Policy strikt; nie still Default-Werte ergaenzen."""
+    data = _require_dict(raw, "Policy")
+    schema = _require_int(
+        data.get("schema_version"), "schema_version", minimum=1, maximum=POLICY_SCHEMA_VERSION
+    )
+    version = str(data.get("policy_version") or "").strip()
+    if not _POLICY_VERSION_RE.match(version):
+        raise PolicyValidationError("policy_version muss der Form X.Y.Z sein.")
+
+    levels = _require_dict(data.get("approval_levels"), "approval_levels")
+    auto = _require_dict(levels.get("auto"), "approval_levels.auto")
+    four = _require_dict(levels.get("four_eyes"), "approval_levels.four_eyes")
+    admin = _require_dict(levels.get("admin"), "approval_levels.admin")
+    auto_max = _require_number(
+        auto.get("max_amount_eur"), "auto.max_amount_eur", minimum=0.0, maximum=1_000_000.0
+    )
+    four_min = _require_number(
+        four.get("min_amount_eur"), "four_eyes.min_amount_eur",
+        minimum=0.0, maximum=1_000_000.0,
+    )
+    admin_min = _require_number(
+        admin.get("min_amount_eur"), "admin.min_amount_eur",
+        minimum=0.0, maximum=1_000_000.0,
+    )
+    # Gleiche harte Invariante wie in der DB-Seite: mindestens ein Cent Abstand.
+    if four_min - auto_max + _GAP_EPSILON < FINANCE_THRESHOLD_MIN_GAP:
+        raise PolicyValidationError(
+            "Invariante verletzt: four_eyes.min_amount_eur muss mindestens "
+            f"{FINANCE_THRESHOLD_MIN_GAP:.2f} EUR ueber auto.max_amount_eur liegen."
+        )
+    if admin_min < four_min:
+        raise PolicyValidationError(
+            "Invariante verletzt: admin.min_amount_eur darf nicht unter "
+            "four_eyes.min_amount_eur liegen."
+        )
+    min_distinct = _require_int(
+        four.get("min_distinct_approvers"), "four_eyes.min_distinct_approvers",
+        minimum=2, maximum=10,
+    )
+
+    domino = _require_dict(data.get("domino_limits"), "domino_limits")
+    max_depth = _require_int(
+        domino.get("max_chain_depth"), "domino_limits.max_chain_depth", minimum=1, maximum=32
+    )
+    max_actions = _require_int(
+        domino.get("max_actions_per_chain"), "domino_limits.max_actions_per_chain",
+        minimum=1, maximum=1000,
+    )
+    domains = _require_str_list(domino.get("allowed_domains"), "domino_limits.allowed_domains")
+
+    vendor = _require_dict(data.get("vendor_limits"), "vendor_limits")
+    window = _require_int(
+        vendor.get("window_hours"), "vendor_limits.window_hours", minimum=24, maximum=24
+    )
+    default_spend = _require_number(
+        vendor.get("max_spend_usd"), "vendor_limits.max_spend_usd",
+        minimum=0.01, maximum=1_000_000.0,
+    )
+    default_calls = _require_int(
+        vendor.get("max_calls"), "vendor_limits.max_calls", minimum=1, maximum=100_000
+    )
+    vendors_raw = _require_dict(vendor.get("vendors"), "vendor_limits.vendors")
+    vendors: Dict[str, Dict[str, Any]] = {}
+    for name, cfg in vendors_raw.items():
+        key = str(name or "").strip().lower()
+        if not key:
+            raise PolicyValidationError("vendor_limits.vendors enthaelt einen leeren Namen.")
+        entry = _require_dict(cfg, f"vendor_limits.vendors.{key}")
+        vendors[key] = {
+            "window_hours": _require_int(
+                entry.get("window_hours", window),
+                f"vendor_limits.vendors.{key}.window_hours", minimum=24, maximum=24,
+            ),
+            "max_spend_usd": _require_number(
+                entry.get("max_spend_usd", default_spend),
+                f"vendor_limits.vendors.{key}.max_spend_usd",
+                minimum=0.01, maximum=1_000_000.0,
+            ),
+            "max_calls": _require_int(
+                entry.get("max_calls", default_calls),
+                f"vendor_limits.vendors.{key}.max_calls", minimum=1, maximum=100_000,
+            ),
+        }
+
+    roles = _require_dict(data.get("roles"), "roles")
+    approver_roles = _require_str_list(roles.get("approver_roles"), "roles.approver_roles")
+    # M95 darf durch YAML niemals aufgeweicht werden: keine Viewer, keine Agenten.
+    if not set(approver_roles).issubset(ALLOWED_DEPUTY_ROLES):
+        raise PolicyValidationError(
+            "roles.approver_roles enthaelt Rollen, die M95 verletzen "
+            "(erlaubt: admin, operator)."
+        )
+    admin_only = _require_str_list(roles.get("admin_only_domains"), "roles.admin_only_domains")
+    if not set(admin_only).issubset(set(domains)):
+        raise PolicyValidationError(
+            "roles.admin_only_domains enthaelt Domains ausserhalb von "
+            "domino_limits.allowed_domains."
+        )
+    forbidden = _require_str_list(
+        roles.get("forbidden_deputy_roles"), "roles.forbidden_deputy_roles"
+    )
+    if "viewer" not in forbidden:
+        raise PolicyValidationError(
+            "roles.forbidden_deputy_roles muss 'viewer' enthalten (M95)."
+        )
+
+    token = _require_dict(data.get("token"), "token")
+    ttl = _require_int(token.get("ttl_seconds"), "token.ttl_seconds", minimum=30, maximum=900)
+    max_uses = _require_int(token.get("max_uses"), "token.max_uses", minimum=1, maximum=1)
+
+    return {
+        "schema_version": schema,
+        "policy_version": version,
+        "effective_from": str(data.get("effective_from") or "").strip(),
+        "approval_levels": {
+            "auto": {"max_amount_eur": auto_max},
+            "four_eyes": {
+                "min_amount_eur": four_min,
+                "min_distinct_approvers": min_distinct,
+            },
+            "admin": {"min_amount_eur": admin_min},
+        },
+        "domino_limits": {
+            "max_chain_depth": max_depth,
+            "max_actions_per_chain": max_actions,
+            "allowed_domains": domains,
+        },
+        "vendor_limits": {
+            "window_hours": window,
+            "max_spend_usd": default_spend,
+            "max_calls": default_calls,
+            "vendors": vendors,
+        },
+        "roles": {
+            "approver_roles": approver_roles,
+            "admin_only_domains": admin_only,
+            "forbidden_deputy_roles": forbidden,
+        },
+        "token": {"ttl_seconds": ttl, "max_uses": max_uses},
+    }
+
+
+def load_approval_policy(
+    path: Optional[str] = None, *, use_cache: bool = True
+) -> Dict[str, Any]:
+    """Laedt und validiert die Policy; Bei jedem Fehler fail-closed."""
+    policy_path = str(path or POLICY_FILE)
+    try:
+        stat = os.stat(policy_path)
+        cached = _POLICY_CACHE.get(policy_path)
+        if use_cache and cached is not None and cached[0] == stat.st_mtime_ns:
+            return copy.deepcopy(cached[1])
+        import yaml
+
+        with open(policy_path, "r", encoding="utf-8") as handle:
+            raw = yaml.safe_load(handle)
+        policy = _validate_policy(raw)
+        policy["fingerprint"] = build_policy_fingerprint(policy)
+        _POLICY_CACHE[policy_path] = (stat.st_mtime_ns, copy.deepcopy(policy))
+        return policy
+    except PolicyValidationError:
+        raise
+    except Exception as exc:
+        raise PolicyValidationError(
+            f"Policy '{policy_path}' nicht ladbar (fail-closed): {exc}"
+        ) from exc
+
+
 def _record_central_audit(category: str, action: str, actor: str, details: Dict[str, Any]) -> None:
     """Protokolliert M95-Urlaubs- und Eskalationsereignisse zusaetzlich in backend/audit_log.py."""
     try:
@@ -101,6 +374,529 @@ def _record_central_audit(category: str, action: str, actor: str, details: Dict[
         chained_audit_log.record_event(category, action, actor, details)
     except Exception as exc:
         logger.warning("[ApprovalPolicyEngine] Zentrales Audit-Event (%s/%s) nicht geschrieben: %s", category, action, exc)
+
+
+# ---------------------------------------------------------------------------
+# M69: Kurzlebige, HMAC-signierte Freigabe-Tokens mit Einmalverbrauch.
+# Das Token ist ein kompaktes Binaerformat (<= 46 Zeichen inkl. Signatur),
+# damit es samt `hitl:`-Praefix in eine Telegram-callback_data passt.
+# Der Klartext wird NIE geloggt; Logs/Responses enthalten nur ID/Fingerprint.
+# ---------------------------------------------------------------------------
+_TOKEN_MAGIC = b"M69"
+_TOKEN_VERSION = 1
+_TOKEN_BODY_LEN = 3 + 1 + 4 + 5 + 1 + 4 + 4  #magic, Version, exp, jti, Aktion, req-, Policy-FP
+_TOKEN_SIG_LEN = 12
+_TOKEN_KEY_CONTEXT = b"archon-m69-approval-token-v1"
+_TOKEN_ACTION_CODES: Dict[str, int] = {"approve": 1, "deny": 2}
+_TOKEN_ACTIONS_BY_CODE: Dict[int, str] = {1: "approve", 2: "deny"}
+
+
+def _token_key() -> bytes:
+    """HMAC-Schluessel mit Domain-Separation; ohne Key fail-closed."""
+    secret = str(os.environ.get("ARCHON_AUDIT_HMAC_KEY") or "")
+    if len(secret) < 16:
+        raise ApprovalTokenError(
+            "ARCHON_AUDIT_HMAC_KEY fehlt oder ist zu kurz — Freigabe-Tokens gesperrt."
+        )
+    return hmac.new(secret.encode("utf-8"), _TOKEN_KEY_CONTEXT, hashlib.sha256).digest()
+
+
+def _policy_db_path(db_path: Optional[str] = None) -> str:
+    if db_path:
+        return str(db_path)
+    engine = globals().get("approval_engine")
+    return str(getattr(engine, "db_path", DB_FILE))
+
+
+def _init_token_db(db_path: str) -> sqlite3.Connection:
+    conn = sqlite3.connect(db_path, timeout=15.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL;")
+    with conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS m69_approval_tokens (
+                jti TEXT PRIMARY KEY,
+                request_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                policy_fingerprint TEXT NOT NULL,
+                actor TEXT DEFAULT '',
+                issued_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                expires_at_epoch INTEGER NOT NULL,
+                used_at TEXT
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_m69_tokens_request "
+            "ON m69_approval_tokens(request_id)"
+        )
+    return conn
+
+
+def issue_approval_token(
+    request_id: str,
+    action: str,
+    *,
+    actor: str = "",
+    ttl_seconds: Optional[int] = None,
+    policy: Optional[Dict[str, Any]] = None,
+    policy_path: Optional[str] = None,
+    db_path: Optional[str] = None,
+    now_epoch: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Stellt ein Einmal-Token fuer eine EXISTIERENDE Freigabeanfrage aus."""
+    pol = policy or load_approval_policy(policy_path)
+    ttl = int(ttl_seconds) if ttl_seconds is not None else int(pol["token"]["ttl_seconds"])
+    if not (30 <= ttl <= 900):
+        raise ApprovalTokenError("Token-TTL liegt ausserhalb der Spanne (30..900 s).")
+    act = str(action or "").strip().lower()
+    if act not in _TOKEN_ACTION_CODES:
+        raise ApprovalTokenError(f"Ungueltige Token-Aktion '{act}'.")
+    rid = str(request_id or "").strip()
+    if not rid:
+        raise ApprovalTokenError("request_id darf nicht leer sein.")
+    engine = approval_engine if db_path is None else ApprovalPolicyEngine(db_path=db_path)
+    if engine.get_request(rid) is None:
+        raise ApprovalTokenError("Freigabeanfrage nicht gefunden — kein Token ausgestellt.")
+
+    issued = _now_epoch() if now_epoch is None else int(now_epoch)
+    expires = issued + ttl
+    jti_raw = os.urandom(5)
+    fingerprint = str(pol.get("fingerprint") or build_policy_fingerprint(pol))
+    body = (
+        _TOKEN_MAGIC
+        + bytes([_TOKEN_VERSION])
+        + expires.to_bytes(4, "big")
+        + jti_raw
+        + bytes([_TOKEN_ACTION_CODES[act]])
+        + hashlib.sha256(rid.encode("utf-8")).digest()[:4]
+        + hashlib.sha256(fingerprint.encode("utf-8")).digest()[:4]
+    )
+    signature = hmac.new(_token_key(), body, hashlib.sha256).digest()[:_TOKEN_SIG_LEN]
+    token = base64.urlsafe_b64encode(body + signature).rstrip(b"=").decode("ascii")
+    conn = _init_token_db(_policy_db_path(db_path))
+    try:
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT INTO m69_approval_tokens
+                (jti, request_id, action, policy_fingerprint, actor,
+                 issued_at, expires_at, expires_at_epoch, used_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                """,
+                (
+                    jti_raw.hex(), rid, act, fingerprint, str(actor or "").strip(),
+                    datetime.datetime.fromtimestamp(issued, datetime.timezone.utc).isoformat(),
+                    datetime.datetime.fromtimestamp(expires, datetime.timezone.utc).isoformat(),
+                    expires,
+                ),
+            )
+    finally:
+        conn.close()
+    return {
+        "token": token,
+        "token_id": jti_raw.hex(),
+        "fingerprint": hashlib.sha256(token.encode("ascii")).hexdigest()[:16],
+        "request_id": rid,
+        "action": act,
+        "actor": str(actor or "").strip(),
+        "issued_at": datetime.datetime.fromtimestamp(issued, datetime.timezone.utc).isoformat(),
+        "expires_at": datetime.datetime.fromtimestamp(expires, datetime.timezone.utc).isoformat(),
+        "ttl_seconds": ttl,
+        "callback_data": f"hitl:{act}:{token}",
+    }
+
+
+def verify_approval_token(
+    token: str,
+    *,
+    expected_action: Optional[str] = None,
+    expected_request_id: Optional[str] = None,
+    consume: bool = False,
+    policy: Optional[Dict[str, Any]] = None,
+    policy_path: Optional[str] = None,
+    db_path: Optional[str] = None,
+    now_epoch: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Prueft Signatur, TTL, Policy-Bindung und Einmalverbrauch — nie ein Allow-Fallback."""
+    result: Dict[str, Any] = {
+        "valid": False, "reason": "", "request_id": "", "action": "", "actor": "",
+        "token_id": "", "fingerprint": "", "expires_at": "", "consumed": False,
+    }
+
+    def _reject(reason: str) -> Dict[str, Any]:
+        result["reason"] = reason
+        return result
+
+    try:
+        raw_token = str(token or "").strip()
+        if not raw_token or len(raw_token) > 128:
+            return _reject("invalid_token")
+        try:
+            blob = base64.urlsafe_b64decode(raw_token + "=" * (-len(raw_token) % 4))
+        except Exception:
+            return _reject("invalid_encoding")
+        if len(blob) != _TOKEN_BODY_LEN + _TOKEN_SIG_LEN:
+            return _reject("invalid_length")
+        body, signature = blob[:_TOKEN_BODY_LEN], blob[_TOKEN_BODY_LEN:]
+        expected_sig = hmac.new(_token_key(), body, hashlib.sha256).digest()[:_TOKEN_SIG_LEN]
+        if not hmac.compare_digest(signature, expected_sig):
+            return _reject("invalid_signature")
+        if body[:3] != _TOKEN_MAGIC or body[3] != _TOKEN_VERSION:
+            return _reject("unsupported_version")
+
+        expires = int.from_bytes(body[4:8], "big")
+        jti_hex = body[8:13].hex()
+        action = _TOKEN_ACTIONS_BY_CODE.get(body[13], "")
+        request_fp, policy_fp = body[14:18], body[18:22]
+        if not action:
+            return _reject("invalid_action")
+        result["token_id"] = jti_hex
+        result["fingerprint"] = hashlib.sha256(raw_token.encode("ascii")).hexdigest()[:16]
+        now = _now_epoch() if now_epoch is None else int(now_epoch)
+        if expires <= now:
+            return _reject("expired")
+
+        pol = policy or load_approval_policy(policy_path)
+        fingerprint = str(pol.get("fingerprint") or build_policy_fingerprint(pol))
+        if not hmac.compare_digest(
+            policy_fp, hashlib.sha256(fingerprint.encode("utf-8")).digest()[:4]
+        ):
+            return _reject("policy_fingerprint_mismatch")
+        if expected_action and expected_action != action:
+            return _reject("action_mismatch")
+
+        conn = _init_token_db(_policy_db_path(db_path))
+        try:
+            with conn:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT * FROM m69_approval_tokens WHERE jti = ?", (jti_hex,)
+                ).fetchone()
+                if row is None:
+                    return _reject("unknown_token")
+                if row["used_at"] is not None:
+                    return _reject("already_used")
+                req_id = str(row["request_id"] or "")
+                if not hmac.compare_digest(
+                    request_fp, hashlib.sha256(req_id.encode("utf-8")).digest()[:4]
+                ):
+                    return _reject("request_mismatch")
+                if expected_request_id and expected_request_id != req_id:
+                    return _reject("request_mismatch")
+                if str(row["action"]) != action or int(row["expires_at_epoch"]) != expires:
+                    return _reject("token_record_mismatch")
+                if consume:
+                    cur = conn.execute(
+                        "UPDATE m69_approval_tokens SET used_at = ? "
+                        "WHERE jti = ? AND used_at IS NULL AND expires_at_epoch > ?",
+                        (
+                            datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                            jti_hex,
+                            now,
+                        ),
+                    )
+                    if cur.rowcount != 1:
+                        return _reject("already_used_or_expired")
+                    result["consumed"] = True
+                result.update({
+                    "valid": True,
+                    "reason": "ok",
+                    "request_id": req_id,
+                    "action": action,
+                    "actor": str(row["actor"] or ""),
+                    "expires_at": datetime.datetime.fromtimestamp(
+                        expires, datetime.timezone.utc
+                    ).isoformat(),
+                })
+                return result
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.warning("[M69] Token-Pruefung fehlgeschlagen (fail-closed): %s", exc)
+        return _reject("verification_error")
+
+
+def parse_policy_callback(callback_data: str) -> Optional[Dict[str, str]]:
+    """Zerlegt eine Telegram-callback_data in Aktion und signiertes Token."""
+    parts = str(callback_data or "").strip().split(":", 2)
+    if len(parts) != 3 or parts[0] not in ("hitl", "app"):
+        return None
+    action = parts[1].strip().lower()
+    if action not in ("approve", "reject", "deny"):
+        return None
+    token = parts[2].strip()
+    if not token:
+        return None
+    return {"action": "reject" if action == "deny" else action, "token": token}
+
+
+def _policy_gate_result() -> Dict[str, Any]:
+    """Stabiler Rueckgabe-Vertrag fuer M70/M74 (niemals das Roh-Token enthalten)."""
+    return {
+        "allowed": False,
+        "decision": "deny",
+        "reason": "",
+        "reason_code": "",
+        "policy_version": "",
+        "policy_fingerprint": "",
+        "required_level": "",
+        "domain": "",
+        "action": "",
+        "amount_eur": 0.0,
+        "vendor": "",
+        "domino": {
+            "chain_depth": 0, "max_chain_depth": 0,
+            "actions_in_chain": 0, "max_actions_per_chain": 0, "within_limits": False,
+        },
+        "vendor_limit": None,
+        "m95": {
+            "human_approver_required": False, "approver": "", "deputy": None,
+            "deputy_valid": None, "role_required": "",
+        },
+        "token": {
+            "present": False, "valid": False, "token_id": "", "fingerprint": "",
+            "expires_at": "", "consumed": False, "reason": "",
+        },
+        "checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+
+
+def _fail_closed_gate(
+    func: Callable[..., Dict[str, Any]],
+) -> Callable[..., Dict[str, Any]]:
+    """Jeder unerwartete Fehler wird zur Ablehnung, nie zu einem Allow."""
+
+    @functools.wraps(func)
+    def _wrapped(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            logger.error("[M69] Policy-Gate nicht auswertbar (fail-closed): %s", exc)
+            gate = _policy_gate_result()
+            gate["decision"] = "deny"
+            gate["reason_code"] = "policy_evaluation_error"
+            gate["reason"] = "Policy-Gate nicht auswertbar (fail-closed)."
+            return gate
+
+    return _wrapped
+
+
+@_fail_closed_gate
+def evaluate_policy_gate(
+    *,
+    domain: str,
+    action: str = "dispatch",
+    amount_eur: float = 0.0,
+    vendor: str = "",
+    estimated_cost_usd: float = 0.0,
+    actor: str = "",
+    approver: str = "",
+    request_id: str = "",
+    approval_token: str = "",
+    chain_depth: int = 0,
+    actions_in_chain: int = 0,
+    policy_path: Optional[str] = None,
+    db_path: Optional[str] = None,
+    now_epoch: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Zentraler Policy-Gate fuer M70/M74.
+
+    Vertrag: siehe ``_policy_gate_result()``. ``decision`` ist ``allow``,
+    ``require_approval`` oder ``deny``; ``allowed`` ist NUR bei ``allow`` True.
+    Ein Token wird ausschliesslich nach allen uebrigen Pruefungen und vor der
+    Rueckgabe atomar verbraucht. Das Roh-Token erscheint nie im Ergebnis.
+    """
+    gate = _policy_gate_result()
+
+    def _finish(decision: str, code: str, reason: str) -> Dict[str, Any]:
+        gate["decision"] = decision
+        gate["reason_code"] = code
+        gate["reason"] = reason
+        gate["allowed"] = decision == "allow"
+        return gate
+
+    clean_domain = str(domain or "").strip().lower()
+    clean_action = str(action or "").strip().lower()
+    gate["domain"] = clean_domain
+    gate["action"] = clean_action
+    try:
+        amount = float(amount_eur)
+        cost = float(estimated_cost_usd)
+        depth = int(chain_depth)
+        actions = int(actions_in_chain)
+    except (TypeError, ValueError):
+        return _finish("deny", "invalid_numeric_input", "Numerische Gate-Parameter ungueltig.")
+    if not all(math.isfinite(x) for x in (amount, cost)) or amount < 0 or cost < 0:
+        return _finish("deny", "invalid_numeric_input", "Betraege muessen endlich und >= 0 sein.")
+    gate["amount_eur"] = amount
+    gate["vendor"] = str(vendor or "").strip().lower()
+
+    try:
+        policy = load_approval_policy(policy_path)
+    except PolicyValidationError as exc:
+        return _finish("deny", "policy_invalid", f"Policy ungültig (fail-closed): {exc}")
+    gate["policy_version"] = str(policy["policy_version"])
+    gate["policy_fingerprint"] = str(policy["fingerprint"])
+
+    levels = policy["approval_levels"]
+    # Validierung der Pflichtfelder (fail-closed) ohne ungenutzte Beleg-variable.
+    float(levels["auto"]["max_amount_eur"])
+    four_min = float(levels["four_eyes"]["min_amount_eur"])
+    admin_min = float(levels["admin"]["min_amount_eur"])
+    if clean_domain not in policy["domino_limits"]["allowed_domains"]:
+        return _finish("deny", "domain_not_allowed", f"Domain '{clean_domain}' ist nicht freigegeben.")
+    required = (
+        "admin" if amount >= admin_min
+        else "four_eyes" if amount >= four_min
+        else "auto"
+    )
+    gate["required_level"] = required
+
+    domino = policy["domino_limits"]
+    gate["domino"] = {
+        "chain_depth": depth,
+        "max_chain_depth": int(domino["max_chain_depth"]),
+        "actions_in_chain": actions,
+        "max_actions_per_chain": int(domino["max_actions_per_chain"]),
+        "within_limits": (
+            0 <= depth <= int(domino["max_chain_depth"])
+            and 0 <= actions <= int(domino["max_actions_per_chain"])
+        ),
+    }
+    if not gate["domino"]["within_limits"]:
+        return _finish("deny", "domino_limit_exceeded", "Domino-/Kettenlimit ueberschritten.")
+
+    human_required = required in ("four_eyes", "admin") or clean_domain in HITL_REQUIRED_DOMAINS
+    m95 = gate["m95"]
+    m95["human_approver_required"] = human_required
+    m95["approver"] = str(approver or "").strip()
+    eff_approver = m95["approver"] or str(actor or "").strip()
+    if human_required:
+        if is_agent_or_system_identity(eff_approver):
+            return _finish(
+                "deny", "m95_human_approver_required",
+                "Freigabe erfordert einen verifizierten menschlichen Genehmiger (M95).",
+            )
+        roles_cfg = policy["roles"]
+        required_roles = (
+            frozenset({"admin"})
+            if clean_domain in roles_cfg["admin_only_domains"]
+            else frozenset(roles_cfg["approver_roles"])
+        )
+        m95["role_required"] = ",".join(sorted(required_roles))
+        engine = approval_engine if db_path is None else ApprovalPolicyEngine(db_path=db_path)
+        delegation = engine.get_delegation(eff_approver or "admin")
+        if delegation.get("is_active"):
+            esc = engine.resolve_human_escalation_target(
+                eff_approver or "admin",
+                domain=clean_domain,
+                requester_id=request_id or None,
+                strict_rbac=True,
+            )
+            if not esc["resolved"] or not esc["deputy"]:
+                return _finish(
+                    "deny", "m95_deputy_invalid",
+                    f"M95-Stellvertretung ungueltig (fail-closed): {esc['reason']}",
+                )
+            m95["deputy"] = str(esc["deputy"]["username"])
+            m95["deputy_valid"] = True
+            eff_approver = m95["deputy"]
+        m95["approver"] = eff_approver
+        with engine._get_conn() as conn:
+            user = engine._lookup_human_user(conn, eff_approver)
+        if user is not None:
+            if not user["is_active"] or user["role"] not in required_roles:
+                return _finish(
+                    "deny", "m95_insufficient_role",
+                    f"Rolle '{user['role']}' darf Domain '{clean_domain}' nicht freigeben.",
+                )
+
+    token_info = gate["token"]
+    token_info["present"] = bool(approval_token)
+    expected_action = (
+        "approve" if clean_action == "approve"
+        else "deny" if clean_action in ("deny", "reject")
+        else None
+    )
+    if approval_token:
+        pre = verify_approval_token(
+            approval_token,
+            expected_action=expected_action,
+            expected_request_id=request_id or None,
+            consume=False,
+            policy=policy,
+            db_path=db_path,
+            now_epoch=now_epoch,
+        )
+        token_info.update({
+            "valid": bool(pre["valid"]), "token_id": str(pre["token_id"]),
+            "fingerprint": str(pre["fingerprint"]), "expires_at": str(pre["expires_at"]),
+            "reason": str(pre["reason"]),
+        })
+        if not pre["valid"]:
+            return _finish(
+                "deny", "approval_token_invalid",
+                f"Freigabe-Token abgelehnt ({pre['reason']}).",
+            )
+        if request_id and request_id != pre["request_id"]:
+            return _finish(
+                "deny", "approval_token_request_mismatch",
+                "Freigabe-Token gehoert zu einer anderen Anfrage.",
+            )
+        if pre["actor"] and m95["approver"] and not (
+            _actor_identity_tokens(str(pre["actor"]))
+            & _actor_identity_tokens(m95["approver"])
+        ):
+            return _finish(
+                "deny", "approval_token_actor_mismatch",
+                "Freigabe-Token ist an eine andere Person gebunden.",
+            )
+
+    if gate["vendor"]:
+        from backend import cost_estimator as _cost_estimator
+
+        vendor_check = _cost_estimator.check_vendor_limit(
+            gate["vendor"],
+            planned_cost_usd=cost,
+            policy=policy,
+            db_path=db_path,
+            now_epoch=now_epoch,
+        )
+        gate["vendor_limit"] = vendor_check
+        if not vendor_check["allowed"]:
+            return _finish(
+                "deny", "vendor_limit_exceeded",
+                f"24h-Vendor-Limit fuer '{gate['vendor']}' ueberschritten.",
+            )
+
+    if human_required and not approval_token:
+        return _finish(
+            "require_approval", "approval_token_required",
+            "Freigabe erforderlich: kein gueltiges Freigabe-Token uebergeben.",
+        )
+
+    if approval_token:
+        final = verify_approval_token(
+            approval_token,
+            expected_action=expected_action,
+            expected_request_id=request_id or None,
+            consume=True,
+            policy=policy,
+            db_path=db_path,
+            now_epoch=now_epoch,
+        )
+        token_info["consumed"] = bool(final["consumed"])
+        if not final["valid"]:
+            token_info["valid"] = False
+            token_info["reason"] = str(final["reason"])
+            return _finish(
+                "deny", "approval_token_consumption_failed",
+                f"Token konnte nicht einmalig verbraucht werden ({final['reason']}).",
+            )
+
+    return _finish("allow", "ok", "Policy-Gate freigegeben.")
 
 
 def _actor_identity_tokens(actor: str) -> set:
@@ -143,6 +939,12 @@ class ApprovalPolicyEngine:
         return conn
 
     def _init_db(self):
+        # Import VOR dem Oeffnen der Schreib-Transaktion, damit ChainedAuditLog._init_db()
+        # beim Kaltstart auf einer frischen DB keinen Re-Entrancy-Lock ('database is locked') ausloest.
+        from backend.audit_log import _chain_hash
+
+        seeded_head = ""
+        seeded_count = 0
         with self._get_conn() as conn:
             # 1. Policies table
             conn.execute("""
@@ -299,7 +1101,6 @@ class ApprovalPolicyEngine:
                     """, (domain, key, val, label, desc, now, user))
 
                     # Chained audit log (HMAC-SHA256 wenn ARCHON_AUDIT_HMAC_KEY gesetzt, sonst SHA-256)
-                    from backend.audit_log import _chain_hash
                     payload = f"{prev_h}|{now}|{user}|INIT|{domain}|{key}|{val}"
                     curr_h = _chain_hash(payload, next_audit_id)
                     cur.execute("""
@@ -315,8 +1116,26 @@ class ApprovalPolicyEngine:
                     INSERT OR IGNORE INTO delegation_settings (user_id, is_active, substitute_id, substitute_name, updated_at)
                     VALUES ('admin', 0, 'katharina', 'Katharina Völk (QM & Compliance)', ?)
                 """, (now,))
+                seeded_head = prev_h
+                seeded_count = len(default_policies)
 
             conn.commit()
+
+        # Kaltstart-Fix: Bei erstmaligem Seeding der zentralen DB den initialen Head-Anker
+        # sofort verankern, damit ENVIRONMENT=production beim allerersten Start nicht fail-closed abbricht.
+        if seeded_head and seeded_count > 0:
+            try:
+                from backend import audit_log as _audit_mod
+
+                if os.path.abspath(self.db_path) == os.path.abspath(_audit_mod.DB_PATH):
+                    _audit_mod.record_chain_anchor(
+                        "approval_policy_audit_chain",
+                        seeded_head,
+                        seeded_count,
+                        db_path=self.db_path,
+                    )
+            except Exception as exc:
+                logger.warning("[ApprovalPolicyEngine] Initialer Head-Anker konnte nicht geschrieben werden: %s", exc)
 
     # --------------------------------------------------------------------------
     # Audit Chain Helper

@@ -1863,6 +1863,39 @@ except Exception as _e_liability:
     _ROUTER_LOAD_ERRORS.append(f"liability_router: {_e_liability}")
     logger.error(f"[Router] Liability-Router nicht registriert: {_e_liability}")
 
+# M112/M68/M69/M70-M74: neue Router nach dem RBAC-Zaun registrieren.
+try:
+    from archon.routers.event_ledger import router as _m112_event_ledger_router
+
+    app.include_router(_m112_event_ledger_router)
+except Exception as _e_event_ledger:
+    _ROUTER_LOAD_ERRORS.append(f"event_ledger_router: {_e_event_ledger}")
+    logger.error(f"[Router] Event-Ledger-Router nicht registriert: {_e_event_ledger}")
+
+try:
+    from archon.routers import compliance as _m68_compliance_router
+
+    app.include_router(_m68_compliance_router.router)
+except Exception as _e_compliance:
+    _ROUTER_LOAD_ERRORS.append(f"compliance_router: {_e_compliance}")
+    logger.error(f"[Router] Compliance-Router nicht registriert: {_e_compliance}")
+
+try:
+    from archon.routers import policy_gates as _m69_policy_gates_router
+
+    app.include_router(_m69_policy_gates_router.router)
+except Exception as _e_policy_gates:
+    _ROUTER_LOAD_ERRORS.append(f"policy_gates_router: {_e_policy_gates}")
+    logger.error(f"[Router] Policy-Gates-Router nicht registriert: {_e_policy_gates}")
+
+try:
+    from archon.routers import needs_me as _m70_needs_me_router
+
+    app.include_router(_m70_needs_me_router.router, prefix="/api/needs-me")
+except Exception as _e_needs_me:
+    _ROUTER_LOAD_ERRORS.append(f"needs_me_router: {_e_needs_me}")
+    logger.error(f"[Router] Needs-Me-Router nicht registriert: {_e_needs_me}")
+
 
 # M4: _assert_router_health liegt in archon/services/runtime_endpoints.py.
 _STARTUP_HOOKS.insert(0, _assert_router_health)

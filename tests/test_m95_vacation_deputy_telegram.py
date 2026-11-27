@@ -13,7 +13,9 @@ from fastapi.testclient import TestClient
 
 from archon.routers import telegram as telegram_router
 from backend import approval_policy_engine as ape
+from backend import audit_log as audit_mod
 from backend import auth_service as auth_mod
+from backend import telegram_gateway_v2 as tg_gw
 from backend.approval_policy_engine import ApprovalPolicyEngine
 from backend.auth_service import AuthService
 from backend.telegram_gateway_v2 import (
@@ -30,11 +32,19 @@ def _setup_multi_user_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tu
     monkeypatch.setattr(auth_mod, "DB_PATH", db_path)
 
     audit_events: List[Dict[str, Any]] = []
+    monkeypatch.setattr(audit_mod.chained_audit_log, "db_path", db_path)
     monkeypatch.setattr(
         ape,
         "_record_central_audit",
         lambda category, action, actor, details: audit_events.append(
             {"category": category, "action": action, "actor": actor, "details": details}
+        ),
+    )
+    monkeypatch.setattr(
+        tg_gw,
+        "_audit_telegram_auth",
+        lambda action, actor, details: audit_events.append(
+            {"category": "telegram_hitl", "action": action, "actor": actor, "details": details}
         ),
     )
 

@@ -11,6 +11,8 @@ import os
 import sqlite3
 from typing import Any, Dict, Optional
 
+from backend.db_paths import DB_BUSY_TIMEOUT_S
+
 MODEL_PRICING = {
     "deepseek/deepseek-chat": {"in_per_m": 0.14, "out_per_m": 0.28},
     "deepseek-chat": {"in_per_m": 0.14, "out_per_m": 0.28},
@@ -102,7 +104,7 @@ def _vendor_db_path(db_path: Optional[str] = None) -> str:
 
 
 def _init_vendor_db(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path, timeout=15.0)
+    conn = sqlite3.connect(db_path, timeout=DB_BUSY_TIMEOUT_S)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL;")
     with conn:

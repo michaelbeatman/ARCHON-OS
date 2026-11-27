@@ -2491,7 +2491,9 @@
       "placeholder_weise_den_agenten_an_z_b_pruef": "에이전트에게 지시... (예: '지원서 12건을 모두 검토하고 시니어 코더로 필터링해 요약해줘')",
       "placeholder_vorlagen_durchsuchen": "템플릿 검색...",
       "placeholder_skills_durchsuchen": "스킬 검색...",
-      "placeholder_architektur_coding_review": "아키텍처, 코딩, 리뷰"
+      "placeholder_architektur_coding_review": "아키텍처, 코딩, 리뷰",
+      "haftung_dialog_pflicht_badge": "필수",
+      "haftung_dialog_bestaetigungstext_label": "확인 문구:"
     },
     "log_stream": {
       "title_help": "텔레메트리 및 로그 도움말",

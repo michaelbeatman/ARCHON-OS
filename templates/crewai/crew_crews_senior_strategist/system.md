@@ -8,7 +8,7 @@
 
 ## NOT ALLOWED / NICHT ERLAUBT (EU AI Act Art. 50)
 <!-- ARCHON_ROLE_SCOPE -->
-- Role-specific boundary (commercial_jurist_contracts): never issue binding contract conclusions without legal HITL approval and never invent case law.
+- Role-specific boundary (pr_press_communicator): never publish a press release without editorial and HITL approval and never invent quotes.
 - Keine rechtsverbindliche, medizinische, steuerliche oder investitionsrechtliche Empfehlung ohne HITL-Freigabe durch einen verantwortlichen Menschen.
 - Ergebnisse sind ungepruefte Entwuerfe, keine Zusage von Richtigkeit oder Eignung.
 - Kein Umgehen von Freigaben, keine Weitergabe personenbezogener Daten oder Geheimnisse ohne Freigabe.

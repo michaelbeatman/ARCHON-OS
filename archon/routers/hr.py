@@ -1,16 +1,18 @@
 """Router fuer HR-Personalakten und Hermes-SOUL-Direktiven."""
 from __future__ import annotations
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 import datetime
+import json
 import logging
 import os
 import sys
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 from pydantic import BaseModel
+
+from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 
 logger = logging.getLogger("archon.routers.hr")
 
@@ -193,7 +195,7 @@ def api_get_hermes_soul(agent_id: str):
     """Liest die echte SOUL.md Direktive des Hermes-Profils aus."""
     from archon.core.provider_registry import get_provider
     app_main = get_provider("app_main")
-    from utils.path_jail import safe_identifier, PathJailError
+    from utils.path_jail import PathJailError, safe_identifier
 
     try:
         clean_id = safe_identifier(agent_id, "agent_id")
@@ -273,7 +275,15 @@ def api_get_hermes_soul(agent_id: str):
 
 @router.post("/api/v1/hermes/soul/{agent_id}")
 def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
-    """Speichert die SOUL.md Datei fuer ein Hermes-Profil und synchronisiert Cache + agent_profiles.json."""
+    """Speichert die SOUL.md und aktualisiert die EINE Prompt-SSOT inkl. Pin.
+
+    D15-H2: ``agent_profiles.json.prompt`` ist die SSOT des tatsaechlich
+    dispatchen Prompts. Der UI-Edit schreibt zwingend dorthin und muss im
+    Anschluss ``refresh_soul_pin_for_agents(agent_id)`` ausfuehren, damit der
+    EU-AI-Act-Pin (Inventar = Manifest der gepinnten Hashes) dem ausgefuehrten
+    Prompt entspricht. Scheitert Sync oder Pin-Refresh, wird der Edit
+    zurueckgerollt und hart abgelehnt (kein success bei veraltetem Pin).
+    """
     _require_admin(request)
     _validate_agent_id(agent_id)
     from archon.core.provider_registry import get_provider
@@ -287,6 +297,35 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
     target_dir = app_main.profile_dir(agent_id)
     os.makedirs(target_dir, exist_ok=True)
     target_path = os.path.join(target_dir, "SOUL.md")
+
+    # Rollback-Snapshot vor jeder Persistierung (fail-closed).
+    old_markdown: Optional[str] = None
+    if os.path.isfile(target_path):
+        try:
+            with open(target_path, "r", encoding="utf-8") as fh:
+                old_markdown = fh.read()
+        except Exception as exc:
+            logger.warning("[HR SOUL] Rollback-Snapshot SOUL.md nicht lesbar: %s", exc)
+    try:
+        profiles = api_get_hermes_profiles()
+        old_profiles = json.loads(json.dumps(profiles))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "soul_pin_refresh_failed", "code": "PROFILE_SSOT_UNREADABLE", "detail": str(exc)},
+        ) from exc
+
+    def _rollback() -> None:
+        try:
+            if old_markdown is None:
+                if os.path.isfile(target_path):
+                    os.remove(target_path)
+            else:
+                with open(target_path, "w", encoding="utf-8") as fh:
+                    fh.write(old_markdown)
+            save_all_agent_profiles(old_profiles)
+        except Exception as exc:
+            logger.error("[HR SOUL] Rollback nach fehlgeschlagenem Pin-Refresh: %s", exc)
 
     try:
         with open(target_path, "w", encoding="utf-8") as f:
@@ -304,24 +343,50 @@ def api_save_hermes_soul(request: Request, agent_id: str, req: SaveSoulReq):
                     except OSError as exc:
                         logger.warning(f"[HR] HR-Spiegeldatei {m_path} konnte nicht geschrieben werden: {exc}")
 
-        # Synchronisiere prompt/system_prompt in agent_profiles.json und leere den 30s-Cache
-        try:
-            profiles = api_get_hermes_profiles()
-            changed = False
-            for p in profiles:
-                if isinstance(p, dict) and p.get("id") == agent_id:
-                    p["prompt"] = req.markdown
-                    p["system_prompt"] = req.markdown
-                    changed = True
-            if changed:
-                save_all_agent_profiles(profiles)
-        except Exception as sync_err:
-            logger.warning(f"[HR SOUL] Cache/Profile Sync fehlgeschlagen: {sync_err}")
+        # SSOT-Sync ist Pflicht: ohne aktualisierten Prompt waere der Pin
+        # zwar "frisch", wuerde aber den alten Dispatch-Text pinnen.
+        changed = False
+        for p in profiles:
+            if isinstance(p, dict) and p.get("id") == agent_id:
+                p["prompt"] = req.markdown
+                p["system_prompt"] = req.markdown
+                changed = True
+        if changed:
+            save_all_agent_profiles(profiles)
+        else:
+            raise RuntimeError(f"agent_profiles.json enthaelt keinen Eintrag fuer {agent_id}")
         invalidate_hermes_profiles_cache()
 
-        return {"status": "success", "agent_id": agent_id, "file_path": target_path}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Pflicht-Pin-Refresh nach dem SSOT-Edit — bei Fehler hart ablehnen.
+        from scripts.sync_soul_modes import refresh_soul_pin_for_agents
+        pin_info = refresh_soul_pin_for_agents(target_agent_id=agent_id)
+        if not pin_info.get("pin_refreshed"):
+            raise RuntimeError("refresh_soul_pin_for_agents meldete keinen aktualisierten Pin")
+        from backend.eu_ai_act_inventory import compute_live_soul_sha256
+        new_pin = compute_live_soul_sha256(agent_id)
+        if not new_pin:
+            raise RuntimeError("Prompt-SSOT liefert nach dem Edit keinen SOUL-Hash")
+        return {
+            "status": "success",
+            "agent_id": agent_id,
+            "file_path": target_path,
+            "pin_refreshed": True,
+            "soul_sha256": new_pin,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _rollback()
+        logger.error("[HR SOUL] SOUL-Edit/Pin-Refresh fehlgeschlagen: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "soul_pin_refresh_failed",
+                "code": "SOUL_PIN_REFRESH_FAILED",
+                "agent_id": agent_id,
+                "detail": str(exc),
+            },
+        ) from exc
 
 
 @router.post("/api/v1/hr/personalakte/{agent_id}/log_activity")

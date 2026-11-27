@@ -1840,6 +1840,17 @@ _late_router_deps = _LateRouterDeps(
 )
 _register_late_routers(app, _ROUTER_LOAD_ERRORS, _late_router_deps)
 
+# W4-C (D15-H3): audited Pflicht-Bestaetigung für haftungsrelevante Rollen.
+# Der Router liegt bewusst bei der Helper-SSOT in archon.core.profiles; ohne
+# Registrierung bleibt der Prompt-Gate fail-closed (keine Bestaetigung).
+try:
+    from archon.core.profiles import get_liability_router as _get_liability_router
+
+    app.include_router(_get_liability_router())
+except Exception as _e_liability:
+    _ROUTER_LOAD_ERRORS.append(f"liability_router: {_e_liability}")
+    logger.error(f"[Router] Liability-Router nicht registriert: {_e_liability}")
+
 
 # M4: _assert_router_health liegt in archon/services/runtime_endpoints.py.
 _STARTUP_HOOKS.insert(0, _assert_router_health)

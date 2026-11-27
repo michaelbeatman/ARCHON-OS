@@ -5,6 +5,7 @@ Kein Replay, keine Postgres-Migration. Alle DB-Zeilen liegen in tmp_path.
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import time
 
 import pytest
@@ -194,7 +195,14 @@ def test_allocate_endpoint_returns_409_and_hires_nothing_on_blocked(tmp_path, mo
     assert hired == 0
 
 
-def test_hiring_happens_after_allocation_with_exact_share(tmp_path, monkeypatch) -> None:
+def test_autonomous_hiring_without_registered_profile_is_not_configured(tmp_path, monkeypatch) -> None:
+    """W4-C/D15-H7: der alte Test glaubte an „Hiring bucht Budget".
+
+    `hired_<slug>_<hash>`-Profile sind nicht im EU-AI-Act-Inventar registriert
+    und damit nicht ausführbar. Seit W4 wird das Hiring als `not_configured`
+    ausgewiesen, bucht KEIN Budget und erzeugt keinen Dispatch-Auftrag
+    (fail-closed statt Rollen-Theater mit echten Kosten).
+    """
     budget_db = str(tmp_path / "agentic_memory.db")
     monkeypatch.setattr(rbe, "BUDGET_DB_PATH", budget_db)
     rbe._INITIALIZED_BUDGET_DBS.discard(budget_db)
@@ -203,15 +211,24 @@ def test_hiring_happens_after_allocation_with_exact_share(tmp_path, monkeypatch)
         "t-hire", "Bauprojekt.prüfen", "Technische und kaufmännische Prüfung",
         total_token_budget=100_000, allow_autonomous_hiring=True, db_path=budget_db,
     )
-    assert plan.get("status") != "blocked"
-    hired = plan["hired_specialist"]
-    assert hired is not None and hired["agent_id"].startswith("hired_")
-    alloc = next(
-        a for a in plan["budget_plan"]["allocations"] if a["agent_id"] == hired["agent_id"]
-    )
-    assert hired["token_budget"] == alloc["token_budget"]
-    assert all(not a["agent_id"].startswith("hired_placeholder_")
-               for a in plan["budget_plan"]["allocations"])
+    assert plan["status"] == "not_configured", plan
+    assert plan["error_code"] == "COMPLIANCE_BLOCKED", plan
+    assert plan["hired_specialist"] is None, plan
+    assert plan["allocations"] == [], plan
+
+    # Kein Hiring-Eintrag und keine Budgetbuchung angelegt.
+    conn = sqlite3.connect(budget_db)
+    try:
+        tables = {row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )}
+        if "autonomous_hired_agents" in tables:
+            assert conn.execute(
+                "SELECT COUNT(*) FROM autonomous_hired_agents WHERE parent_task_id = ?",
+                ("t-hire",),
+            ).fetchone()[0] == 0
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------

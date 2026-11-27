@@ -2491,7 +2491,9 @@
       "placeholder_weise_den_agenten_an_z_b_pruef": "向智能体下达指令…（例如“检查全部 12 份申请，筛选资深程序员并汇总”）",
       "placeholder_vorlagen_durchsuchen": "搜索模板…",
       "placeholder_skills_durchsuchen": "搜索技能…",
-      "placeholder_architektur_coding_review": "架构、编码、评审"
+      "placeholder_architektur_coding_review": "架构、编码、评审",
+      "haftung_dialog_pflicht_badge": "必需",
+      "haftung_dialog_bestaetigungstext_label": "确认文本："
     },
     "log_stream": {
       "title_help": "遥测与日志帮助",

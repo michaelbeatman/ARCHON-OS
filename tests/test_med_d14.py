@@ -10,15 +10,15 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-import archon.routers.operations_approvals as approvals
 import archon.routers.boardroom as boardroom
+import archon.routers.operations_approvals as approvals
 from backend.approval_policy_engine import ApprovalPolicyEngine
 from backend.role_budget_engine import get_default_role_budget
 
 
 class _Req:
     headers = {"host": "localhost"}
-    cookies = {}
+    cookies = {}  # type: ignore[var-annotated]
     state = SimpleNamespace(user={"id": "usr_test", "username": "tester", "role": "admin"})
 
     class _URL:
@@ -29,7 +29,7 @@ class _Req:
 
 def _actor(actor: str):
     req = _Req()
-    req._actor = actor
+    req._actor = actor  # type: ignore[attr-defined]
     return req
 
 
@@ -62,7 +62,7 @@ def test_auto_approval_max_single_admin_change_blocked(tmp_path, monkeypatch):
             ),
         )
     assert exc.value.status_code == 400
-    assert exc.value.detail["code"] == "approvals_policy_auto_max_fixed"
+    assert exc.value.detail["code"] == "approvals_policy_auto_max_fixed"  # type: ignore[index]
     assert _policy(eng, "finance_auto_approval_max") == "50.00"
 
     # Reparaturpfad: Rücksetzen auf den fixierten Wert bleibt erlaubt.
@@ -105,7 +105,7 @@ def test_policy_change_proposal_endpoint_four_eyes(tmp_path, monkeypatch):
     with pytest.raises(HTTPException) as exc:
         approvals.api_approve_policy_change_proposal(_actor("alice"), proposal_id)
     assert exc.value.status_code == 403
-    assert exc.value.detail["code"] == "approvals_proposal_four_eyes_violation"
+    assert exc.value.detail["code"] == "approvals_proposal_four_eyes_violation"  # type: ignore[index]
     assert _policy(eng, "finance_four_eyes_min") == "500.00"
 
     # Zweite, unabhängige Session → Schwelle wird wirksam.
@@ -120,7 +120,7 @@ def test_policy_change_proposal_endpoint_requires_admin(monkeypatch):
 
     monkeypatch.setattr(approvals, "require_admin_or_503", deny)
     with pytest.raises(HTTPException) as exc:
-        approvals.api_approve_policy_change_proposal(_Req(), "policy-change-x")
+        approvals.api_approve_policy_change_proposal(_Req(), "policy-change-x")  # type: ignore[arg-type]
     assert exc.value.status_code == 403
 
 
@@ -151,7 +151,7 @@ def _run_boardroom(monkeypatch, tmp_path, result):
     monkeypatch.setattr("backend.workflow_scheduler.dispatch_workflow_event", lambda **kw: None)
     _stub_dispatch(monkeypatch, result)
     res = asyncio.run(boardroom.api_run_boardroom(
-        boardroom.BoardroomRequest(task="Konfliktfall"), _Req()
+        boardroom.BoardroomRequest(task="Konfliktfall"), _Req()  # type: ignore[arg-type]
     ))
     notes = glob.glob(os.path.join(str(tmp_path / "vault"), "*.md"))
     assert notes, "Vault-Notiz wurde nicht geschrieben"
@@ -220,4 +220,6 @@ def test_boardroom_slot_profile_must_be_registered(monkeypatch):
     slot = agents[1]
     assert slot["id"] == "senior_coder"
     assert slot["tier"] == get_default_role_budget("senior_coder")["tier"] == "specialist"
-    assert agents[0]["tier"] == "executive"
+    # W4-C/D15-H6: CEO ist nicht mehr automatisch APEX/executive — die
+    # hoheitliche Instanz ist `default`. Der Tier kommt aus der SSOT.
+    assert agents[0]["tier"] == get_default_role_budget("executive_decision_architect")["tier"]

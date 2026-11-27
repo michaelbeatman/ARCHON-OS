@@ -2491,7 +2491,9 @@
       "placeholder_weise_den_agenten_an_z_b_pruef": "Donnez une instruction à l'agent... (p. ex. « Examinez les 12 candidatures, filtrez sur senior coder et résumez-les »)",
       "placeholder_vorlagen_durchsuchen": "Rechercher des modèles...",
       "placeholder_skills_durchsuchen": "Rechercher des skills...",
-      "placeholder_architektur_coding_review": "Architecture, coding, review"
+      "placeholder_architektur_coding_review": "Architecture, coding, review",
+      "haftung_dialog_pflicht_badge": "Obligatoire",
+      "haftung_dialog_bestaetigungstext_label": "Texte de confirmation :"
     },
     "log_stream": {
       "title_help": "Aide sur la télémétrie et les journaux",

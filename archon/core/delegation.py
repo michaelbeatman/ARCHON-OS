@@ -733,6 +733,130 @@ def active_soul_tier_text(agent_id: str, soul_mode: str, max_chars: int = 6000) 
         return ""
 
 
+# D15-H1 / D08-M8: Der effektive Tier muss am Ort der Token-Kosten konsumiert
+# werden. Der Profile-Wert `soul_mode` bleibt die deklarierte Baseline;
+# `resolve_effective_soul_mode()` ist die autoritative Auflösung (HIGH_RISK ->
+# full, LEAD -> pro). Damit ist "compact in der SSOT" kein toter Wert mehr.
+_SOUL_TIER_MAX_CHARS = {"compact": 1200, "pro": 3000, "full": 6000}
+_SOUL_TIER_MARKER = "AKTIVER_SOUL_TIER"
+
+
+def soul_tier_max_chars(tier: str) -> int:
+    """D08-M8: tier-abhängiges Zeichenbudget (compact < pro < full)."""
+    key = str(tier or "compact").strip().lower()
+    return int(_SOUL_TIER_MAX_CHARS.get(key, _SOUL_TIER_MAX_CHARS["compact"]))
+
+
+def format_soul_tier_block(tier: Optional[str], text: Optional[str]) -> str:
+    """Einziger Produzent des in den System-Prompt injizierbaren SOUL-Blocks."""
+    clean = str(text or "").strip()
+    if not clean:
+        return ""
+    return (
+        f"[{_SOUL_TIER_MARKER}: {str(tier or 'compact').strip().upper()}]\n"
+        f"{clean}\n[/{_SOUL_TIER_MARKER}]"
+    )
+
+
+def soul_tier_already_injected(system_prompt: str) -> bool:
+    """Duplex-Schutz: der SOUL-Block darf nie zweimal im Prompt stehen.
+
+    Beide historischen Schreibweisen werden erkannt (Handoff nutzte
+    ``AKTIVER SOUL-TIER``, der W3-Worker ``AKTIVER_SOUL_TIER``).
+    """
+    value = str(system_prompt or "")
+    return _SOUL_TIER_MARKER in value or "AKTIVER SOUL-TIER" in value
+
+
+def _canonical_soul_sha256_for_dispatch(agent_id: str) -> str:
+    """Live-Hash aus ``souls/<id>/SOUL.md``.
+
+    Normalisierung identisch zu
+    ``backend.eu_ai_act_inventory._compute_soul_sha256`` bzw.
+    ``backend.compliance_engine.ComplianceEngine._canonical_soul_sha256``,
+    damit der im Inventar gepinnte Hash direkt vergleichbar ist.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    canon = os.path.join(repo_root, "souls", str(agent_id or "").strip(), "SOUL.md")
+    if not os.path.isfile(canon):
+        return ""
+    try:
+        with open(canon, "r", encoding="utf-8", newline="") as fh:
+            text = fh.read().replace("\r\n", "\n").replace("\r", "\n").strip()
+    except Exception as exc:
+        logger.warning("[Delegation] kanonisches SOUL %s nicht lesbar: %s", agent_id, exc)
+        return ""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest() if text else ""
+
+
+def build_dispatch_soul_context(agent_id: str, profile_soul_mode: str = "") -> Dict[str, Any]:
+    """D15-H1/D08-M8: kanonischer KONSUMENT der 3-Tier-SOUL-Auflösung.
+
+    Liefert effektiven Tier, tier-limitierten Text und das Ergebnis der
+    SOUL-Pin-Prüfung gegen das EU-AI-Act-Inventar. Bei vorhandenem, aber
+    abweichendem Pin (Drift) bzw. nicht verifizierbarem Pin ist
+    ``pin_ok=False`` und ``error_code`` gesetzt — der Aufrufer muss dann
+    fail-closed abbrechen. Für Agenten OHNE Inventar-Pin gibt es keinen
+    Driftbegriff; der Default-Deny solcher Rollen bleibt beim zentralen
+    Compliance-Gate (``core_dispatcher``), nicht in diesem Helper.
+    """
+    aid = str(agent_id or "").strip()
+    ctx: Dict[str, Any] = {
+        "agent_id": aid,
+        "lookup_id": aid,
+        "tier": "compact",
+        "text": "",
+        "max_chars": soul_tier_max_chars("compact"),
+        "pin_ok": False,
+        "pin_error": "",
+        "error_code": "",
+        "inventory_known": False,
+    }
+    if not aid:
+        ctx["error_code"] = "SOUL_AGENT_ID_MISSING"
+        ctx["pin_error"] = "agent_id leer"
+        return ctx
+
+    inv: List[Dict[str, Any]] = []
+    try:
+        from backend.eu_ai_act_inventory import eu_ai_act_inventory_manager
+
+        inv = list(eu_ai_act_inventory_manager.get_inventory() or [])
+        known_ids = {str(x.get("agent_id") or "") for x in inv}
+        from backend.role_budget_engine import canonical_agent_id
+
+        ctx["lookup_id"] = str(canonical_agent_id(aid, known_ids) or aid)
+    except Exception as exc:
+        logger.debug("[Delegation] Inventar/Alias für SOUL-Prüfung nicht lesbar: %s", exc)
+
+    item = next((x for x in inv if x.get("agent_id") == ctx["lookup_id"]), None)
+    if not item:
+        ctx["pin_error"] = "agent_not_in_ai_act_inventory"
+        return ctx
+    ctx["inventory_known"] = True
+
+    pinned = str(item.get("soul_sha256") or "").strip()
+    live = _canonical_soul_sha256_for_dispatch(ctx["lookup_id"])
+    if not pinned or not live:
+        ctx["pin_error"] = "soul_sha256_not_verifiable"
+        ctx["error_code"] = "SOUL_SHA256_NOT_VERIFIABLE"
+        return ctx
+    if live != pinned:
+        ctx["pin_error"] = f"soul_sha256_mismatch ({pinned[:12]})"
+        ctx["error_code"] = "SOUL_SHA256_MISMATCH"
+        return ctx
+
+    tier = resolve_effective_soul_mode(ctx["lookup_id"], profile_soul_mode)
+    max_chars = soul_tier_max_chars(tier)
+    ctx.update(
+        tier=tier,
+        text=active_soul_tier_text(ctx["lookup_id"], tier, max_chars=max_chars),
+        max_chars=max_chars,
+        pin_ok=True,
+    )
+    return ctx
+
+
 def _apex_ids() -> frozenset:
     """D15/MED: APEX-Menge hat genau EINE SSOT — Tier 1 in org_hierarchy.json.
 

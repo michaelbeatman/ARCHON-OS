@@ -2491,7 +2491,9 @@
       "placeholder_weise_den_agenten_an_z_b_pruef": "エージェントに指示する...（例: 「12 件の応募をすべて確認し、シニアコーダーで絞り込んで要約して」）",
       "placeholder_vorlagen_durchsuchen": "テンプレートを検索...",
       "placeholder_skills_durchsuchen": "スキルを検索...",
-      "placeholder_architektur_coding_review": "アーキテクチャ、コーディング、レビュー"
+      "placeholder_architektur_coding_review": "アーキテクチャ、コーディング、レビュー",
+      "haftung_dialog_pflicht_badge": "必須",
+      "haftung_dialog_bestaetigungstext_label": "確認テキスト:"
     },
     "log_stream": {
       "title_help": "テレメトリとログのヘルプ",

@@ -120,6 +120,144 @@ def _build(profiles: list[dict]) -> dict[str, str]:
     return files
 
 
+# D15-M4: explizite, fachlich gepruefte Zuordnung CrewAI-Template -> Profil-ID.
+# Ein fehlender Eintrag ist bewusst KEIN Fehler: dann gilt die generische,
+# korrekte Grenze ohne erfundene Rollen-Zuordnung.
+CREWAI_ROLE_MAP: dict[str, str] = {
+    "crew_crews_analyst": "bi_controller",
+    "crew_crews_chief_creative_director": "brand_uiux_director",
+    "crew_crews_chief_marketing_strategist": "linkedin_social_media_specialist",
+    "crew_crews_chief_qa_engineer_agent": "qa_test_engineer",
+    "crew_crews_communicator": "hr_recruiter",
+    "crew_crews_creative_content_creator": "content_repurposing_specialist",
+    "crew_crews_cv_reader": "hr_recruiter",
+    "crew_crews_financial_analyst": "finance_lead",
+    "crew_crews_formatter": "content_repurposing_specialist",
+    "crew_crews_investment_advisor": "arbitrage_market_analyst",
+    "crew_crews_itinerary_compiler": "personal_life_strategist",
+    "crew_crews_job_opportunities_parser": "hr_recruiter",
+    "crew_crews_lead_market_analyst": "bi_controller",
+    "crew_crews_matcher": "hr_recruiter",
+    "crew_crews_meta_quest_expert": "research_scout",
+    "crew_crews_personalized_activity_planner": "personal_life_strategist",
+    "crew_crews_qa_engineer_agent": "qa_test_engineer",
+    "crew_crews_reporter": "hr_recruiter",
+    "crew_crews_requirements_manager": "product_requirements_engineer",
+    "crew_crews_research_agent": "research_scout",
+    "crew_crews_research_analyst": "research_scout",
+    "crew_crews_researcher": "hr_recruiter",
+    "crew_crews_review_agent": "qa_test_engineer",
+    "crew_crews_scorer": "qa_test_engineer",
+    "crew_crews_scriptwriter": "storyteller_ghostwriter",
+    "crew_crews_senior_content_editor": "content_repurposing_specialist",
+    "crew_crews_senior_engineer_agent": "senior_fullstack_engineer",
+    "crew_crews_senior_idea_analyst": "research_scout",
+    "crew_crews_senior_react_engineer": "senior_fullstack_engineer",
+    "crew_crews_senior_strategist": "pr_press_communicator",
+    "crew_crews_spamfilter": "knowledge_librarian",
+    "crew_crews_writer_agent": "hr_recruiter",
+    "crew_flows_email_followup_agent": "hr_recruiter",
+    "crew_flows_hr_evaluation_agent": "hr_recruiter",
+    "crew_flows_meeting_analyzer": "agile_scrum_master",
+    "crew_flows_outliner": "storyteller_ghostwriter",
+    "crew_flows_researcher": "research_scout",
+    "crew_flows_shakespearean_bard": "storyteller_ghostwriter",
+    "crew_flows_writer": "storyteller_ghostwriter",
+    "crew_flows_x_post_verifier": "linkedin_social_media_specialist",
+    "crew_integrations_chief_creative_director": "brand_uiux_director",
+    "crew_integrations_chief_marketing_strategist": "linkedin_social_media_specialist",
+    "crew_integrations_creative_content_creator": "content_repurposing_specialist",
+    "crew_integrations_lead_market_analyst": "bi_controller",
+}
+
+# Nur diese Templates haben echte Aussenwirkung (Veroeffentlichung/Kommunikation
+# nach aussen) und duerfen den EU-AI-Act-Art.-50-Header tragen.
+CREWAI_EXTERNAL_EFFECT_STEMS = frozenset({
+    "crew_crews_chief_creative_director", "crew_crews_chief_marketing_strategist",
+    "crew_crews_communicator", "crew_crews_creative_content_creator",
+    "crew_crews_formatter", "crew_crews_reporter", "crew_crews_scriptwriter",
+    "crew_crews_senior_strategist", "crew_flows_email_followup_agent",
+    "crew_flows_writer", "crew_flows_x_post_verifier",
+    "crew_integrations_chief_creative_director",
+    "crew_integrations_chief_marketing_strategist",
+    "crew_integrations_creative_content_creator",
+})
+
+CREWAI_GENERIC_BOUNDARY = (
+    "Keine rechtsverbindliche Aussage ohne HITL-Freigabe durch einen verantwortlichen Menschen."
+)
+CREWAI_MARKER = "<!-- ARCHON_ROLE_SCOPE -->"
+CREWAI_ART50_HEADER = "## NOT ALLOWED / NICHT ERLAUBT (EU AI Act Art. 50)\n"
+CREWAI_PLAIN_HEADER = "## NOT ALLOWED / NICHT ERLAUBT\n"
+CREWAI_ART50_OUTPUT = "- Outputs sind als KI-generiert zu kennzeichnen (Art. 50).\n"
+
+
+def crewai_role_and_boundary(stem: str, profiles: list[dict]) -> tuple[str, str]:
+    """Liefert (id|'', Grenztext). Keine Substring-Heuristik, kein Fallback auf eine fremde Rolle."""
+    pid = CREWAI_ROLE_MAP.get(stem, "")
+    if pid:
+        scope = ssm.ROLE_NEGATIVE_SCOPES_EN.get(pid, "").strip()
+        if scope:
+            return pid, scope
+    return "", CREWAI_GENERIC_BOUNDARY
+
+
+def crewai_template_text(text: str, stem: str, profiles: list[dict]) -> str:
+    """Erzeugt den kanonischen Template-Text (Producer fuer `--sync-downstream`)."""
+    pid, boundary = crewai_role_and_boundary(stem, profiles)
+    external = stem in CREWAI_EXTERNAL_EFFECT_STEMS
+    lines = [
+        line for line in text.splitlines()
+        if not line.startswith("- Role-specific boundary")
+        and line.strip() != CREWAI_MARKER
+        and (external or line.strip() != CREWAI_ART50_OUTPUT.strip())
+    ]
+    header = CREWAI_ART50_HEADER.rstrip("\n") if external else CREWAI_PLAIN_HEADER.rstrip("\n")
+    out: list[str] = []
+    inserted = False
+    for line in lines:
+        out.append(line)
+        if line.strip() == header and not inserted:
+            out.append(CREWAI_MARKER)
+            suffix = f" ({pid})" if pid else ""
+            out.append(f"- Role-specific boundary{suffix}: {boundary}")
+            inserted = True
+    if not inserted:
+        out.extend(["", CREWAI_MARKER,
+                    f"- Role-specific boundary{f' ({pid})' if pid else ''}: {boundary}"])
+    return "\n".join(out).rstrip() + "\n"
+
+
+def apply_crewai_boundaries(profiles: list[dict]) -> int:
+    changed = 0
+    for path in sorted((ROOT / "templates" / "crewai").glob("*/system.md")):
+        text = path.read_text(encoding="utf-8")
+        expected = crewai_template_text(text, path.parent.name, profiles)
+        if expected != text:
+            path.write_text(expected, encoding="utf-8", newline="\n")
+            changed += 1
+    return changed
+
+
+def validate_crewai_boundaries(profiles: list[dict]) -> list[str]:
+    """CI-Gate: jede Role-specific boundary (id) muss fachlich zur ROLE-Zeile passen."""
+    problems: list[str] = []
+    for path in sorted((ROOT / "templates" / "crewai").glob("*/system.md")):
+        text = path.read_text(encoding="utf-8")
+        expected = crewai_template_text(text, path.parent.name, profiles)
+        if text != expected:
+            problems.append(f"{path.parent.name}: Template weicht von SSOT ab")
+        for line in text.splitlines():
+            if not line.startswith("- Role-specific boundary ("):
+                continue
+            pid = line.split("(", 1)[1].split(")", 1)[0]
+            if pid != CREWAI_ROLE_MAP.get(path.parent.name, ""):
+                problems.append(f"{path.parent.name}: fachfremde Grenze {pid}")
+        if "Art. 50" in text and path.parent.name not in CREWAI_EXTERNAL_EFFECT_STEMS:
+            problems.append(f"{path.parent.name}: Art.-50-Header ohne Aussenwirkung")
+    return problems
+
+
 def sync_downstream(profiles: list[dict]) -> dict:
     """D15: alle abgeleiteten Artefakte nach einem SOUL-Rebuild nachziehen.
 
@@ -141,50 +279,10 @@ def sync_downstream(profiles: list[dict]) -> dict:
     finally:
         sys.path.remove(str(ROOT))
 
-    # CrewAI-Templates: konstante Sperre behalten (Kompatibilitaet zum
-    # bestehenden Test), aber je Template eine DISTINCTE rollenspezifische
-    # Zeile aus der SSOT ergaenzen.
-    hint_map = {
-        "research": "research_scout", "analyst": "bi_controller", "writer": "storyteller_ghostwriter",
-        "marketing": "linkedin_social_media_specialist", "creative": "brand_uiux_director",
-        "qa": "qa_test_engineer", "engineer": "senior_fullstack_engineer", "hr": "hr_recruiter",
-        "financial": "finance_lead", "investment": "arbitrage_market_analyst",
-        "email": "b2b_outreach_specialist", "spam": "knowledge_librarian",
-        "scorer": "qa_test_engineer", "restaurant": "ecommerce_shopify_lead",
-        "itinerary": "personal_life_strategist", "meeting": "agile_scrum_master",
-        "outliner": "storyteller_ghostwriter", "shakespeare": "storyteller_ghostwriter",
-        "formatter": "content_repurposing_specialist", "reporter": "pr_press_communicator",
-        "communicator": "pr_press_communicator", "matcher": "lead_enrichment_analyst",
-        "cv": "hr_recruiter", "job": "hr_recruiter", "scriptwriter": "video_script_architect",
-        "strategist": "executive_decision_architect", "meta": "research_scout",
-        "quest": "research_scout",
-    }
-    used: set[str] = set()
-    remaining = [str(p.get("id")) for p in profiles if p.get("id")]
-    changed = 0
-    for path in sorted((ROOT / "templates" / "crewai").glob("*/system.md")):
-        text = path.read_text(encoding="utf-8")
-        if "ARCHON_ROLE_SCOPE" in text:
-            continue
-        stem = path.parent.name
-        pid = next((v for k, v in hint_map.items() if k in stem and v not in used), None)
-        if pid is None:
-            pid = next((p for p in remaining if p not in used), None)
-        if pid is None:
-            continue
-        used.add(pid)
-        scope = ssm.ROLE_NEGATIVE_SCOPES_EN.get(pid, "").strip()
-        if not scope:
-            continue
-        marker = "<!-- ARCHON_ROLE_SCOPE -->"
-        line = f"{marker}\n- Role-specific boundary ({pid}): {scope}\n"
-        anchor = "## NOT ALLOWED / NICHT ERLAUBT (EU AI Act Art. 50)\n"
-        if anchor in text:
-            text = text.replace(anchor, anchor + line, 1)
-        else:
-            text = text.rstrip() + "\n\n" + line
-        path.write_text(text, encoding="utf-8", newline="\n")
-        changed += 1
+    # D15-M4: NUR explizite, fachlich passende Zuordnungen. Der fruehere
+    # `hint_map`-Substring-Abgleich und der `remaining[0]`-Fallback haben
+    # fachfremde Grenzen (z. B. E-Commerce an einen Restaurant-Scout) erlaubt.
+    changed = apply_crewai_boundaries(profiles)
     report["crewai_templates_updated"] = changed
     return report
 

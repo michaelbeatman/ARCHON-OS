@@ -8,14 +8,14 @@
   "aliases": {
     "robert": "executive_decision_architect",
     "ceo": "executive_decision_architect",
-    "apex": "executive_decision_architect",
+    "apex": "default",
     "dr. robert neumann": "system_architect_orchestrator",
     "robert neumann": "system_architect_orchestrator",
     "cloud_architect": "system_architect_orchestrator",
     "system_architect": "system_architect_orchestrator",
     "system-architect": "system_architect_orchestrator",
-    "hermes-orchestrator": "system_architect_orchestrator",
-    "hermes_orchestrator": "system_architect_orchestrator",
+    "hermes-orchestrator": "default",
+    "hermes_orchestrator": "default",
     "lisa": "aggregation_lisa",
     "synthese": "aggregation_lisa",
     "aggregation": "aggregation_lisa",
@@ -78,7 +78,8 @@
       "id": "executive_decision_architect",
       "x": 20,
       "y": 20,
-      "tier": 1,
+      "tier": 2,
+      "supervisor_id": "default",
       "team_id": "team_strategy",
       "name": "CEO — Chief Executive Officer",
       "role": "CEO — Chief Executive Officer",
@@ -89,7 +90,8 @@
       "status": "active",
       "person_name": "Jenson",
       "provider": "omniroute",
-      "reasoning_level": "high"
+      "reasoning_level": "high",
+      "is_approval_authority": true
     },
     {
       "id": "system_architect_orchestrator",
@@ -313,7 +315,7 @@
       "avatar": "/static/avatars/custom_labor_law_hr_governance.png",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
+      "status": "active",
       "person_name": "Dr. Sandra Hofer",
       "provider": "omniroute"
     },
@@ -362,7 +364,7 @@
       "avatar": "/static/avatars/custom_construction_project_manager.png",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
+      "status": "active",
       "person_name": "Dipl.-Ing. Bastian Braun",
       "provider": "omniroute"
     },
@@ -410,7 +412,7 @@
       "avatar": "/static/avatars/custom_realestate_concept_strategist.png?v=1792619165752",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
+      "status": "active",
       "person_name": "Dipl.-Ing. Roland Mertens",
       "provider": "omniroute"
     },
@@ -523,7 +525,7 @@
       "avatar": "/static/avatars/avatar_108.jpg",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
+      "status": "active",
       "person_name": "David Stein",
       "provider": "omniroute"
     },
@@ -555,7 +557,7 @@
       "avatar": "/static/avatars/avatar_082.jpg?v=20260913_rev4",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
+      "status": "active",
       "person_name": "Vincent Larson",
       "provider": "omniroute"
     },
@@ -683,7 +685,7 @@
       "avatar": "/static/avatars/avatar_070.jpg",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
+      "status": "active",
       "person_name": "Clara Moreau",
       "provider": "omniroute",
       "reasoning_level": "high"
@@ -749,7 +751,7 @@
       "avatar": "/static/avatars/avatar_037.jpg",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "standby",
+      "status": "active",
       "person_name": "Sarah Lindemann",
       "provider": "omniroute"
     },
@@ -838,6 +840,7 @@
       "x": 20,
       "y": 2000,
       "tier": 3,
+      "supervisor_id": "executive_decision_architect",
       "team_id": "team_strategy",
       "name": "Strategic Founder & System Architect",
       "role": "Strategic Founder & System Architect",
@@ -848,7 +851,9 @@
       "status": "active",
       "person_name": "Alex Rivera",
       "provider": "omniroute",
-      "reasoning_level": "high"
+      "reasoning_level": "high",
+      "mandate": "advisory_only",
+      "is_approval_authority": false
     },
     {
       "id": "default",
@@ -864,7 +869,8 @@
       "active_tasks": 0,
       "status": "active",
       "person_name": "Default",
-      "provider": "omniroute"
+      "provider": "omniroute",
+      "is_approval_authority": false
     },
     {
       "id": "growth_hacker_lead",
@@ -910,9 +916,29 @@
       "avatar": "/static/avatars/avatar_006.jpg",
       "model": "strict-free-tier-combo-Reasoning",
       "active_tasks": 0,
-      "status": "active",
+      "status": "deprecated",
       "person_name": "Lisa",
-      "provider": "omniroute"
+      "provider": "omniroute",
+      "is_approval_authority": false
+    },
+    {
+      "id": "linkedin_social_media_specialist",
+      "x": 920,
+      "y": 1820,
+      "tier": 3,
+      "supervisor_id": "executive_decision_architect",
+      "team_id": "team_growth",
+      "name": "LinkedIn & Social Media Growth Specialist",
+      "role": "5. Kreation, Medien & Content",
+      "category": "5. Kreation, Medien & Content",
+      "avatar": "/static/avatars/avatar_082.jpg",
+      "model": "strict-free-tier-combo-Reasoning",
+      "active_tasks": 0,
+      "status": "standby",
+      "person_name": "Maya Lin",
+      "provider": "omniroute",
+      "reasoning_level": "high",
+      "is_approval_authority": false
     },
     {
       "id": "hr_recruiter",
@@ -1400,10 +1426,6 @@
     {
       "from": "executive_decision_architect",
       "to": "construction_project_manager"
-    },
-    {
-      "from": "executive_decision_architect",
-      "to": "aggregation_lisa"
     },
     {
       "from": "executive_decision_architect",

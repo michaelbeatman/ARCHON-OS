@@ -713,6 +713,52 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
         or f"Du bist {agent_name} in Archon OS. Bearbeite die Aufgabe präzise, lösungsorientiert und strukturiert."
     )
 
+    # D15-H1/D08-M8: der 3-Tier-SOUL-Text wird HIER konsumiert — im echten
+    # Worker, nicht nur als Systemnachricht in state.db. Der effektive Tier
+    # wird aus Risikoklasse/Organigramm aufgelöst; der SOUL-Pin gegen das
+    # Inventar geprüft. Bei Drift fail-closed VOR dem kostenpflichtigen
+    # Dispatch. Rollen ohne Inventar-Pin bleiben dem Default-Deny des
+    # zentralen Compliance-Gates überlassen (kein Pin -> kein Driftbegriff).
+    from archon.core.delegation import (
+        build_dispatch_soul_context,
+        format_soul_tier_block,
+        soul_tier_already_injected,
+    )
+
+    _soul_ctx = await asyncio.to_thread(
+        build_dispatch_soul_context, assignee, str(prof.get("soul_mode") or "")
+    )
+    if not _soul_ctx.get("pin_ok", False) and _soul_ctx.get("inventory_known"):
+        _soul_error_code = str(_soul_ctx.get("error_code") or "SOUL_SHA256_MISMATCH")
+        _soul_reason = (
+            f"SOUL-Pin nicht verifiziert: "
+            f"{_soul_ctx.get('pin_error') or _soul_error_code}"
+        )
+        logger.error("[KanbanWorker] %s — Task %s wird nicht dispatched.", _soul_reason, task_id)
+        await asyncio.to_thread(
+            _persist_kanban_result_sync,
+            task_id,
+            mode="result",
+            title=title,
+            assignee=assignee,
+            target_status="blocked",
+            verdict={
+                "block_kind": "SOUL_PIN_DRIFT",
+                "hitl_options": ["retry", "abort"],
+                "reason": _soul_reason,
+                "error_code": _soul_error_code,
+            },
+            reply=f"Dispatch verweigert: {_soul_reason}"[:500],
+        )
+        return {
+            "blocked": "SOUL_PIN_DRIFT",
+            "error_code": _soul_error_code,
+            "task_id": task_id,
+        }
+    _soul_block = format_soul_tier_block(_soul_ctx.get("tier"), _soul_ctx.get("text"))
+    if _soul_block and not soul_tier_already_injected(system_prompt):
+        system_prompt = f"{system_prompt}\n\n{_soul_block}"
+
     _delegation_model = t_dict.get("_delegation_payload_model")
     _dispatch_reasoning = "medium"
     if _delegation_model is not None:
@@ -745,17 +791,24 @@ async def _execute_kanban_task_inner(task_id: str, *, lease_token: str = "") -> 
             from archon.core.delegation import active_soul_tier_text
 
             _soul_mode = str(structured.get("soul_mode") or "compact")
-            _soul_text = active_soul_tier_text(assignee, _soul_mode)
-            if _soul_text:
-                system_prompt += (
-                    f"\n\n[AKTIVER_SOUL_TIER: {_soul_mode.upper()}]\n{_soul_text}\n"
-                    "[/AKTIVER_SOUL_TIER]"
+            if soul_tier_already_injected(system_prompt):
+                # D15-H1/D08-M8: der kanonische Konsument hat den effektiven
+                # Tier bereits injiziert — kein doppelter SOUL-Block.
+                logger.debug(
+                    "[KanbanWorker] SOUL-Tier fuer %s bereits im System-Prompt.", assignee
                 )
-            elif _soul_mode in ("pro", "full"):
-                logger.error(
-                    "[KanbanWorker] SOUL-Tier '%s' fuer %s nicht gefunden — kompakter Fallback sichtbar.",
-                    _soul_mode, assignee,
-                )
+            else:
+                _soul_text = active_soul_tier_text(assignee, _soul_mode)
+                if _soul_text:
+                    system_prompt += (
+                        f"\n\n[AKTIVER_SOUL_TIER: {_soul_mode.upper()}]\n{_soul_text}\n"
+                        "[/AKTIVER_SOUL_TIER]"
+                    )
+                elif _soul_mode in ("pro", "full"):
+                    logger.error(
+                        "[KanbanWorker] SOUL-Tier '%s' fuer %s nicht gefunden — kompakter Fallback sichtbar.",
+                        _soul_mode, assignee,
+                    )
         except Exception as _soul_exc:
             logger.error("[KanbanWorker] SOUL-Tier nicht konsumierbar: %s", _soul_exc)
 

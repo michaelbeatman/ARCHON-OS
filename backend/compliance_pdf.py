@@ -299,6 +299,21 @@ class _PDFDocumentBuilder:
         return bytes(buf)
 
 
+def _ai_act_summary_line(stats: Dict[str, Any]) -> str:
+    """D15-M5: Konsument der aus der Positivliste abgeleiteten Zaehlungen.
+
+    Als eigene Funktion testbar, ohne das PDF parsen zu muessen; der Text
+    wird unveraendert in Kapitel 4 der Verfahrensdokumentation eingebettet.
+    """
+    return (
+        f"Gesamtzahl registrierter Spezialisten: {stats.get('total_agents', 0)}  |  "
+        f"Anhang-III-Hochrisiko (Art. 6): {stats.get('high_risk_count', 0)}  |  "
+        f"Art.-50-Transparenzpflicht: {stats.get('transparency_risk_count', 0)}  |  "
+        f"Art.-95-Minimalrisiko: {stats.get('minimal_risk_count', 0)}  |  "
+        f"Gepinnte SOUL-SHA-256-Hashes: {stats.get('soul_hashes_pinned', 0)}"
+    )
+
+
 def build_verfahrensdokumentation_pdf(snapshot: Dict[str, Any]) -> Tuple[bytes, str]:
     """
     Erzeugt aus dem Live-Compliance-Snapshot ein prüferfertiges mehrseitiges PDF
@@ -434,13 +449,7 @@ def build_verfahrensdokumentation_pdf(snapshot: Dict[str, Any]) -> Tuple[bytes, 
     # Kapitel 4: EU AI Act Risikoklassifizierungs-Register (Verordnung (EU) 2024/1689)
     pdf.add_section_heading("4. EU AI Act KI-Systemregister & SOUL-Prompt-Prüfsummen (VO 2024/1689)")
     stats = snapshot.get("ai_act_stats") or {}
-    pdf.add_paragraph(
-        f"Gesamtzahl registrierter Spezialisten: {stats.get('total_agents', 0)}  |  "
-        f"Anhang-III-Hochrisiko (Art. 6): {stats.get('high_risk_count', 0)}  |  "
-        f"Art.-50-Transparenzpflicht: {stats.get('transparency_risk_count', 0)}  |  "
-        f"Art.-95-Minimalrisiko: {stats.get('minimal_risk_count', 0)}  |  "
-        f"Gepinnte SOUL-SHA-256-Hashes: {stats.get('soul_hashes_pinned', 0)}"
-    )
+    pdf.add_paragraph(_ai_act_summary_line(stats))
 
     inv_rows = []
     for item in snapshot.get("ai_act_inventory") or []:

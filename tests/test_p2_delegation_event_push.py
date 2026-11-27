@@ -52,9 +52,11 @@ def test_watcher_uses_event_driven_wait_and_persisted_config():
         "watcher_retry_count",
     ):
         assert key in src
-    # 1200 kommt nur noch als Konfigurations-Default vor, nie als Konstante.
-    assert src.count("1200") == 1
+    # 1200 kommt als Konfigurations-Default und seit W4-B als tier-abhängiges
+    # compact-Zeichenbudget (`_SOUL_TIER_MAX_CHARS`) vor — nie als Watchdog-Konstante.
+    assert src.count("1200") == 2
     assert '"watcher_deadline_seconds", 1200' in src
+    assert '"compact": 1200' in src
     assert "20 Minuten" not in src
 
 
@@ -132,7 +134,7 @@ async def test_watcher_finalizes_on_terminal_event_without_waiting(tmp_path, mon
     monkeypatch.setattr(delegation, "_register_decision", lambda *a, **k: None)
 
     fake_notify = types.ModuleType("telegram_notify")
-    fake_notify.notify_task_status = lambda *a, **k: None
+    fake_notify.notify_task_status = lambda *a, **k: None  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "telegram_notify", fake_notify)
 
     delegation._ACTIVE_WATCHERS.discard(task_id)
@@ -204,7 +206,7 @@ async def test_watcher_ignores_foreign_and_non_terminal_events(tmp_path, monkeyp
     )
     monkeypatch.setattr(delegation, "mc_update_task_sqlite", lambda *a, **k: None)
     fake_notify = types.ModuleType("telegram_notify")
-    fake_notify.notify_task_status = lambda *a, **k: None
+    fake_notify.notify_task_status = lambda *a, **k: None  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "telegram_notify", fake_notify)
 
     delegation._ACTIVE_WATCHERS.discard(task_id)

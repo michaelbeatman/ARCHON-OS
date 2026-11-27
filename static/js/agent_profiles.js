@@ -1046,7 +1046,7 @@
           ]
         };
       }
-      if (LIABILITY_CONSTRUCTION_IDS.has(pid)) {
+      if (LIABILITY_CONSTRUCTION_IDS.has(pid) || cat.startsWith("4.")) {
         return {
           group: "construction_permit",
           icon: "🏗️",
@@ -1063,16 +1063,12 @@
       return null;
     }
 
+    const LIABILITY_CONFIRMATION_PHRASE = "Ich habe den Haftungs- und Berufsrechts-Hinweis gelesen und bestätige die Nutzung ausschließlich als Entscheidungshilfe.";
+
     function openLiabilityDisclaimerModal(profileId, forceShow = false) {
       const prof = hermesProfilesData.find(p => p.id === (profileId || currentSelectedProfileId));
       const info = getProfileLiabilityInfo(prof);
       if (!info) return;
-      const ackKey = `archon_liability_ack_${prof.id}`;
-      if (!forceShow) {
-        try {
-          if (sessionStorage.getItem(ackKey) === "1") return;
-        } catch (e) {}
-      }
       const modal = document.getElementById("archon-liability-disclaimer-modal");
       if (!modal) return;
       const iconBox = document.getElementById("liability-modal-icon-box");
@@ -1081,28 +1077,68 @@
       const pillEl = document.getElementById("liability-modal-law-pill");
       const bodyEl = document.getElementById("liability-modal-body");
       const bulletsEl = document.getElementById("liability-modal-bullets");
+      const phraseEl = document.getElementById("liability-modal-confirm-phrase");
+      const statusEl = document.getElementById("liability-modal-status");
       if (iconBox) iconBox.innerText = info.icon;
       if (titleEl) titleEl.innerText = info.title;
       if (subEl) subEl.innerText = `${prof.person_name || prof.name} — ${prof.name}`;
       if (pillEl) pillEl.innerText = info.lawPill;
       if (bodyEl) bodyEl.innerText = info.body;
       if (bulletsEl) bulletsEl.innerHTML = info.bullets.map(b => `<div>${b}</div>`).join("");
-      modal.setAttribute("data-ack-key", ackKey);
+      if (phraseEl) phraseEl.innerText = LIABILITY_CONFIRMATION_PHRASE;
+      if (statusEl) {
+        statusEl.classList.remove("hidden");
+        statusEl.innerText = forceShow
+          ? "Pflicht-Bestätigung erforderlich (serverseitig protokolliert)."
+          : "Die Bestätigung wird serverseitig mit approval_id, actor und Zeitstempel protokolliert.";
+      }
+      // Kein sessionStorage-Ack mehr: der Ack liegt ausschliesslich im
+      // signierten Server-Store und wird im Prompt-Gate geprueft.
+      modal.setAttribute("data-agent-id", prof.id);
       modal.classList.remove("hidden");
       if (window.lucide) lucide.createIcons();
     }
     window.openLiabilityDisclaimerModal = openLiabilityDisclaimerModal;
 
-    function closeLiabilityDisclaimerModal(markAcknowledged = true) {
+    async function confirmLiabilityDisclaimer() {
       const modal = document.getElementById("archon-liability-disclaimer-modal");
-      if (!modal) return;
-      if (markAcknowledged) {
-        const ackKey = modal.getAttribute("data-ack-key");
-        if (ackKey) {
-          try { sessionStorage.setItem(ackKey, "1"); } catch (e) {}
+      if (!modal) return false;
+      const agentId = modal.getAttribute("data-agent-id") || "";
+      const statusEl = document.getElementById("liability-modal-status");
+      if (statusEl) statusEl.innerText = "Bestätigung wird serverseitig gespeichert …";
+      try {
+        const res = await fetch("/api/v1/profiles/liability-ack", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agent_id: agentId,
+            actor: (window.currentUser && (window.currentUser.id || window.currentUser.username)) || "ui-operator",
+            confirmation_phrase: LIABILITY_CONFIRMATION_PHRASE
+          })
+        });
+        if (!res.ok) {
+          const detail = await res.text().catch(() => "");
+          if (statusEl) statusEl.innerText = `Bestätigung fehlgeschlagen (HTTP ${res.status}): ${detail.slice(0, 200)}`;
+          return false;
         }
+        const data = await res.json().catch(() => ({}));
+        if (!data || !data.approval_id) {
+          if (statusEl) statusEl.innerText = "Bestätigung ohne approval_id — nicht freigegeben.";
+          return false;
+        }
+        modal.classList.add("hidden");
+        return true;
+      } catch (err) {
+        if (statusEl) statusEl.innerText = `Bestätigung nicht möglich: ${err.message}`;
+        return false;
       }
-      modal.classList.add("hidden");
+    }
+    window.confirmLiabilityDisclaimer = confirmLiabilityDisclaimer;
+
+    // Nur noch Alias: schliesst NIE ohne erfolgreiche Server-Bestaetigung.
+    async function closeLiabilityDisclaimerModal(markAcknowledged = true) {
+      if (markAcknowledged) return confirmLiabilityDisclaimer();
+      return false;
     }
     window.closeLiabilityDisclaimerModal = closeLiabilityDisclaimerModal;
 
@@ -4393,24 +4429,40 @@ window.openToolConfigModalFromInspector = typeof openToolConfigModalFromInspecto
       testCadreAgentCursor();
 
       try {
-        const agentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "orchestrator";
-        const res = await fetch("/api/operations/comm-feed/broadcast", {
+        const agentId = (typeof currentSelectedProfileId !== "undefined" && currentSelectedProfileId) ? currentSelectedProfileId : "default";
+        const message = `[Bot-Screen Anweisung an ${agentId}]: ${prompt} (Ziel: ${urlInput?.value || 'aktuelle Seite'})`;
+        // D01-H2: echter Task-Endpunkt (Konsument: Kanban-/Dispatch-Loop).
+        // Erfolg NUR bei 2xx UND vorhandener task_id — kein Feed-Theater.
+        const res = await fetch("/api/operations/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             author: "commander",
-            message: `[Bot-Screen Anweisung an ${agentId}]: ${prompt} (Ziel: ${urlInput?.value || 'aktuelle Seite'})`,
-            target: agentId
+            agent_id: agentId,
+            message: message,
+            title: `Bot-Screen Anweisung an ${agentId}`.slice(0, 200)
           })
         });
+        if (!res.ok) {
+          throw new Error(`Task-Endpunkt antwortete HTTP ${res.status}`);
+        }
+        const result = await res.json().catch(() => null);
+        const taskId = result && typeof result.task_id === "string" ? result.task_id.trim() : "";
+        if (!taskId) {
+          throw new Error("Task-Endpunkt lieferte keine task_id — keine Anweisung übergeben.");
+        }
         promptInput.value = "";
         if (typeof showArchonToast === 'function') {
-          showArchonToast(`Anweisung an ${agentId} übergeben! Live-Navigation aktiv.`, "info");
+          showArchonToast(`Task ${taskId} für ${agentId} angelegt (Status: Freigabe).`, "info");
         } else {
-          alert(`Anweisung an ${agentId} übergeben! Der Agent führt die Schritte jetzt autonom aus und berichtet im Funkverkehr.`);
+          alert(`Task ${taskId} für ${agentId} angelegt. Der Agent startet nach Freigabe.`);
         }
       } catch (err) {
-        alert("Fehler beim Übergeben der Instruktion: " + err.message);
+        if (typeof showArchonToast === 'function') {
+          showArchonToast(`Anweisung NICHT übergeben: ${err.message}`, "error");
+        } else {
+          alert("Anweisung NICHT übergeben: " + err.message);
+        }
       } finally {
         if (sendBtn) {
           sendBtn.disabled = false;

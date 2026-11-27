@@ -14,13 +14,28 @@ import os
 import re
 import shutil
 import time
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import yaml
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 from archon.core.config import config
 from archon.core.paths import HERMES_PROFILES_BASE, OPT_DATA_DIR
 from archon.core.runtime import APP_ROOT, MEMORY_DIR, logger
+
+
+class LiabilityAckRequest(BaseModel):
+    """D15-H3: cockpit-seitige Bestaetigung (Actor kommt aus der Session)."""
+
+    model_config = ConfigDict(extra="ignore")
+    agent_id: str = Field(min_length=1, max_length=120)
+    actor: str = Field(min_length=1, max_length=120)
+    confirmation_phrase: str = Field(default="", max_length=500)
+    disclaimer_sha256: str = Field(default="", max_length=64)
+
 
 DEFAULT_HERMES_TOOLS = [
     "web_search", "browser", "terminal", "filesystem", "execute_code", "vision_analyze",
@@ -678,8 +693,6 @@ def create_rolling_backup(filepath: str, max_backups: int = 3):
         logger.warning(f"[Rolling Backup] Could not create backup for {filepath}: {e}")
 
 
-from pydantic import BaseModel
-
 ALL_HERMES_TOOLS = [
     "web_search", "browser", "terminal", "filesystem", "execute_code", "vision_analyze",
     "video_analyze", "image_generate", "video_generate", "bfl_flux3", "x_search", "text_to_speech",
@@ -824,32 +837,422 @@ def save_all_agent_profiles(profiles_list: List[Dict[str, Any]]):
         logger.error(f"[Profiles] profile.yaml/SOUL.md-Rueckschreiben fehlgeschlagen: {exc}")
 
 
-def append_negative_scope(system_prompt: str, prof: Optional[Dict[str, Any]]) -> str:
-    """Haengt den strukturierten `negative_scope` eines Profils idempotent an den System-Prompt an."""
+# ---------------------------------------------------------------------------
+# D15-H3: Pflicht-Haftungs-/Berufsrechts-Hinweis (serverseitig, auditiert)
+# ---------------------------------------------------------------------------
+# Der Hinweis ist KEIN wegklickbares UI-Element: er wird in jedem Produktiv-
+# Prompt-Pfad ueber `append_negative_scope()` injiziert (chat, agent_chat,
+# quickchat, telegram, governance, orchestration) und ist nur durch eine
+# signierte, im Audit-Log dokumentierte Bestaetigung freigeschaltet.
+LIABILITY_MARKER = "ARCHON_LIABILITY_DISCLAIMER_v1"
+
+_LIABILITY_LEGAL_IDS = frozenset({
+    "commercial_jurist_contracts", "legal_counsel", "tax_holding_advisor",
+    "vvgmbh_immo_tax_lead", "compliance_gdpr_auditor", "liability_risk_analyst",
+    "labor_law_hr_governance", "ip_patent_analyst", "finance_lead",
+    "debt_financing_specialist", "insurance_claims_manager",
+})
+_LIABILITY_MED_CHEM_IDS = frozenset({
+    "clinical_medical_advisor", "medtech_regulatory_lead",
+    "chemistry_materials_specialist", "pharma_biotech_scientist",
+    "industrial_process_engineer",
+})
+_LIABILITY_CONSTRUCTION_IDS = frozenset({
+    "baugb_permit_expert", "construction_project_manager",
+    "urban_planning_architect", "realestate_concept_strategist",
+    "realestate_dcf_calculator", "facility_asset_manager",
+})
+
+_LIABILITY_GROUPS: Dict[str, Dict[str, Any]] = {
+    "legal_tax_finance": {
+        "icon": "⚖️",
+        "title": "Hinweis zu Rechts-, Steuer- & Finanz-Profilen",
+        "law_pill": "Gemäß § 3 RDG, § 5 StBerG, § 2 WpHG & § 34d GewO",
+        "bullets": (
+            "Keine Rechts- oder Steuerberatung: Ausgaben ersetzen keine Prüfung durch zugelassene Rechtsanwälte, Steuerberater oder Wirtschaftsprüfer.",
+            "Keine Finanz- oder Versicherungsvermittlung: Kalkulationen (DSCR, DCF, Policen-Prüfungen) sind unverbindliche Modellrechnungen.",
+            "Freigabevorbehalt: Vertragsentwürfe, Klauseln und Schreiben dürfen erst nach fachlicher Endkontrolle im Rechtsverkehr verwendet werden.",
+        ),
+    },
+    "med_chem_science": {
+        "icon": "⚕️",
+        "title": "Hinweis zu Medizin-, Chemie- & Ingenieur-Profilen",
+        "law_pill": "Gemäß Art. 2 EU-MDR (2017/745), HWG, Heilberufsrecht & REACH/CLP",
+        "bullets": (
+            "Kein Medizinprodukt: Archon OS ist kein zugelassenes Medizinprodukt im Sinne der EU-MDR (2017/745) oder IVDR.",
+            "Keine Heilbehandlung oder Diagnose: Ausgaben stellen keine ärztliche Diagnose, Therapieempfehlung oder Arzneimittelverordnung dar.",
+            "Gefahrstoff- & Anlagensicherheit: Chemische Rezepturen, Sicherheitsdatenblätter (REACH/CLP) und CE-/Normenprüfungen erfordern zwingend die Freigabe durch befähigte Personen.",
+        ),
+    },
+    "construction_permit": {
+        "icon": "🏗️",
+        "title": "Hinweis zu Baurechts- & Bauvorlage-Profilen",
+        "law_pill": "Gemäß BauGB, Landesbauordnung (LBO) & HOAI",
+        "bullets": (
+            "Keine Bauvorlageberechtigung: Ausgaben ersetzen keinen bauvorlageberechtigten Entwurfsverfasser, Tragwerksplaner oder öffentlich bestellten Vermessungsingenieur.",
+            "Behördliche Verbindlichkeit: Rechtsverbindliche Aussagen zur Bebaubarkeit erfolgen ausschließlich durch positiven Bauvorbescheid oder Baugenehmigung.",
+        ),
+    },
+}
+
+LIABILITY_CONFIRMATION_PHRASE = (
+    "Ich habe den Haftungs- und Berufsrechts-Hinweis gelesen und bestätige "
+    "die Nutzung ausschließlich als Entscheidungshilfe."
+)
+
+
+def liability_group_for_profile(prof: Optional[Dict[str, Any]]) -> Optional[str]:
+    """D15-H3: Domäne 4 vollstaendig — `category.startswith('4.')` fuer alle Baurollen."""
+    if not isinstance(prof, dict):
+        return None
+    pid = str(prof.get("id") or "")
+    cat = str(prof.get("category") or "").lower()
+    if cat.startswith("4.") or pid in _LIABILITY_CONSTRUCTION_IDS:
+        return "construction_permit"
+    if cat.startswith("3.") or pid in _LIABILITY_LEGAL_IDS:
+        return "legal_tax_finance"
+    if cat.startswith("8.") or pid in _LIABILITY_MED_CHEM_IDS:
+        return "med_chem_science"
+    return None
+
+
+def liability_disclaimer_for_profile(prof: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Liefert den kanonischen Hinweis inkl. SHA-256 ueber seinen Text."""
+    group = liability_group_for_profile(prof)
+    if group is None or not isinstance(prof, dict):
+        return None
+    data = _LIABILITY_GROUPS[group]
+    canonical = "\n".join(
+        [str(data["title"]), str(data["law_pill"]), *[str(b) for b in data["bullets"]]]
+    )
+    return {
+        "group": group,
+        "icon": str(data["icon"]),
+        "title": str(data["title"]),
+        "law_pill": str(data["law_pill"]),
+        "bullets": tuple(str(b) for b in data["bullets"]),
+        "confirmation_phrase": LIABILITY_CONFIRMATION_PHRASE,
+        "sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+    }
+
+
+def _liability_store_path(store_path: Optional[str] = None) -> str:
+    return str(store_path or os.environ.get("ARCHON_LIABILITY_ACK_STORE")
+               or os.path.join(OPT_DATA_DIR, "liability_acknowledgements.json"))
+
+
+def _load_liability_acks(store_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    path = _liability_store_path(store_path)
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return [r for r in data if isinstance(r, dict)] if isinstance(data, list) else []
+    except Exception as exc:
+        # Korrupt/unlesbar => keine gueltige Bestaetigung (fail-closed).
+        logger.error("[Liability] Ack-Store %s nicht lesbar: %s", path, exc)
+        return []
+
+
+def _write_liability_acks(records: List[Dict[str, Any]], store_path: Optional[str] = None) -> None:
+    path = _liability_store_path(store_path)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = f"{path}.tmp-{os.getpid()}"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(records, fh, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+def _default_liability_audit_event(record: Dict[str, Any]) -> None:
+    from backend.audit_log import chained_audit_log
+
+    chained_audit_log.record_event(
+        category="compliance",
+        action="liability_disclaimer_acknowledged",
+        agent_id=str(record["agent_id"]),
+        payload={
+            "approval_id": record["approval_id"],
+            "actor": record["actor"],
+            "agent_id": record["agent_id"],
+            "group": record["group"],
+            "disclaimer_sha256": record["disclaimer_sha256"],
+            "confirmation_phrase": record["confirmation_phrase"],
+        },
+    )
+
+
+def record_liability_acknowledgement(
+    prof: Dict[str, Any],
+    actor: str,
+    *,
+    store_path: Optional[str] = None,
+    audit_event_fn: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Serverseitige, signierte Pflicht-Bestaetigung mit Audit-Event.
+
+    Ein fehlgeschlagenes Audit-Event bricht die Bestaetigung ab (fail-closed):
+    ohne Audit gibt es keinen acknowledgement record.
+    """
+    disclaimer = liability_disclaimer_for_profile(prof)
+    if disclaimer is None:
+        raise ValueError("Profil ist nicht haftungsrelevant — keine Bestaetigung noetig.")
+    actor_clean = str(actor or "").strip()
+    if not actor_clean:
+        raise ValueError("Bestaetigung ohne verifizierten actor ist ungueltig (fail-closed).")
+    record = {
+        "approval_id": uuid.uuid4().hex,
+        "agent_id": str(prof.get("id") or ""),
+        "actor": actor_clean,
+        "group": str(disclaimer["group"]),
+        "disclaimer_sha256": str(disclaimer["sha256"]),
+        "confirmation_phrase": LIABILITY_CONFIRMATION_PHRASE,
+        "confirmed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    event_fn = audit_event_fn if audit_event_fn is not None else _default_liability_audit_event
+    try:
+        event_fn(dict(record))
+    except Exception as exc:
+        raise RuntimeError(f"Haftungs-Bestaetigung nicht auditiert: {exc}") from exc
+    records = _load_liability_acks(store_path)
+    records.append(record)
+    _write_liability_acks(records, store_path)
+    return record
+
+
+def active_liability_acknowledgement(
+    prof: Dict[str, Any], store_path: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Nur Bestaetigungen zum AKTUELLEN Hinweis-Text zaehlen (Drift = fail-closed)."""
+    disclaimer = liability_disclaimer_for_profile(prof)
+    if disclaimer is None:
+        return None
+    matches = [
+        r for r in _load_liability_acks(store_path)
+        if r.get("agent_id") == str(prof.get("id") or "")
+        and r.get("disclaimer_sha256") == disclaimer["sha256"]
+        and r.get("approval_id")
+        and r.get("actor")
+        and r.get("confirmed_at")
+    ]
+    return matches[-1] if matches else None
+
+
+def require_liability_acknowledgement(
+    prof: Dict[str, Any], store_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """HITL-Gate: ohne audited acknowledgement hart ablehnen."""
+    ack = active_liability_acknowledgement(prof, store_path=store_path)
+    if ack is None:
+        disclaimer = liability_disclaimer_for_profile(prof)
+        raise PermissionError(
+            "LIABILITY_ACK_REQUIRED: " + str((disclaimer or {}).get("title") or "Pflicht-Hinweis")
+        )
+    return ack
+
+
+def liability_notice_block(
+    prof: Dict[str, Any], store_path: Optional[str] = None
+) -> str:
+    """Prompt-Block mit Hinweis und maschinenlesbarem Ack-Status."""
+    disclaimer = liability_disclaimer_for_profile(prof)
+    if disclaimer is None:
+        return ""
+    ack = active_liability_acknowledgement(prof, store_path=store_path)
+    lines = [
+        LIABILITY_MARKER + " (Pflicht, nicht abdingbar): " + str(disclaimer["title"]),
+        str(disclaimer["law_pill"]),
+        *[f"- {b}" for b in disclaimer["bullets"]],
+    ]
+    if ack:
+        lines.append(
+            f"LIABILITY_ACK_OK approval_id={ack['approval_id']} actor={ack['actor']} "
+            f"at={ack['confirmed_at']} sha256={disclaimer['sha256']}"
+        )
+    else:
+        lines.append(
+            f"LIABILITY_ACK_REQUIRED sha256={disclaimer['sha256']}: "
+            "Keine substantielle Antwort, keine externally wirksame Aussage und keine Tool-Aktion, "
+            "bevor die Bestaetigung im Server-Log vorliegt. Nur den Hinweis ausgeben."
+        )
+    return "\n".join(lines)
+
+
+_PROMPT_TOOLS_LINE_RE = re.compile(
+    r"^- \*\*Authorized System Tools & MCP Servers:\*\*.*$", re.MULTILINE
+)
+
+
+def sanitize_prompt_tool_declaration(system_prompt: str, prof: Optional[Dict[str, Any]]) -> str:
+    """D15-H5: Tool-Deklaration im Prompt aus der `tools`-SSOT neu erzeugen."""
     base = str(system_prompt or "")
     if not isinstance(prof, dict):
         return base
+    try:
+        from backend.delegation_isolation import declared_tools_from_prompt, effective_profile_tools
+
+        actual = effective_profile_tools(prof)
+        if declared_tools_from_prompt(base) == actual:
+            return base
+        line = "- **Authorized System Tools & MCP Servers:** " + ", ".join(
+            f"`{t}`" for t in actual
+        )
+        if _PROMPT_TOOLS_LINE_RE.search(base):
+            return _PROMPT_TOOLS_LINE_RE.sub(line, base, count=1)
+    except Exception as exc:
+        logger.error("[Profiles] Prompt-Tool-Deklaration nicht normalisiert: %s", exc)
+    return base
+
+
+def append_negative_scope(
+    system_prompt: str, prof: Optional[Dict[str, Any]]
+) -> str:
+    """Haengt `negative_scope` und den Pflicht-Haftungshinweis idempotent an.
+
+    Produktiv-Konsument in chat/agent_chat/quickchat/telegram/governance und
+    orchestration. Die Tool-Deklaration wird dabei aus der SSOT regeneriert.
+    """
+    base = sanitize_prompt_tool_declaration(str(system_prompt or ""), prof)
+    if not isinstance(prof, dict):
+        return base
     neg = prof.get("negative_scope")
-    if not neg:
-        return base
-    if isinstance(neg, (list, tuple, set)):
-        items = [str(x).strip() for x in neg if str(x).strip()]
-        neg_text = "; ".join(items)
-    else:
-        neg_text = str(neg).strip()
-    if not neg_text:
-        return base
+    neg_text = ""
+    if neg:
+        if isinstance(neg, (list, tuple, set)):
+            neg_text = "; ".join(str(x).strip() for x in neg if str(x).strip())
+        else:
+            neg_text = str(neg).strip()
     marker = "NEGATIVE_SCOPE (Strikt verboten / Nicht-Zustaendigkeiten):"
-    if marker in base or neg_text in base:
-        return base
-    sep = "\n\n" if base else ""
-    return f"{base}{sep}{marker}\n{neg_text}"
+    if neg_text and marker not in base and neg_text not in base:
+        sep = "\n\n" if base else ""
+        base = f"{base}{sep}{marker}\n{neg_text}"
+    notice = liability_notice_block(prof)
+    if notice and LIABILITY_MARKER not in base:
+        base = f"{base}\n\n{notice}"
+    return base
+
+
+def effective_budget_for_profile(prof: Dict[str, Any]) -> Dict[str, Any]:
+    """D15-M3: `status != active` bedeutet eine effektive Budget-NULL.
+
+    Die Rohwerte in der SSOT bleiben als Aktivierungs-Vorlage erhalten; der
+    Produktivpfad darf sie ohne `status=active` nicht ausgeben.
+    """
+    if str(prof.get("status") or "") == "active":
+        return {
+            "daily_token_budget": prof.get("daily_token_budget") or 0,
+            "daily_cost_limit_eur": prof.get("daily_cost_limit_eur") or 0.0,
+            "monthly_cost_limit_eur": prof.get("monthly_cost_limit_eur") or 0.0,
+        }
+    return {
+        "daily_token_budget": 0,
+        "daily_cost_limit_eur": 0.0,
+        "monthly_cost_limit_eur": 0.0,
+    }
+
+
+def validate_status_budget_ssot(
+    profiles: Optional[List[Dict[str, Any]]] = None,
+    profiles_path: Optional[str] = None,
+    org_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """D15-M3 CI-Gate: Status-SSOT und `status != active ⇒ budget = 0`."""
+    if profiles is None:
+        with open(profiles_path or os.path.join(APP_ROOT, "agent_profiles.json"),
+                  "r", encoding="utf-8") as fh:
+            profiles = json.load(fh)
+    with open(org_path or os.path.join(APP_ROOT, "config", "org_hierarchy.json"),
+              "r", encoding="utf-8") as fh:
+        org = json.load(fh)
+    org_nodes = {str(n.get("id")): n for n in org.get("nodes", []) if isinstance(n, dict)}
+    status_mismatches = [
+        str(p.get("id")) for p in profiles
+        if str(p.get("id")) in org_nodes
+        and str(p.get("status") or "") != str(org_nodes[str(p.get("id"))].get("status") or "")
+    ]
+    budget_violations = [
+        str(p.get("id")) for p in profiles
+        if any(effective_budget_for_profile(p)[key] for key in (
+            "daily_token_budget", "daily_cost_limit_eur", "monthly_cost_limit_eur"
+        )) and str(p.get("status") or "") != "active"
+    ]
+    return {
+        "status_mismatches": status_mismatches,
+        "budget_violations": budget_violations,
+        "ok": not status_mismatches and not budget_violations,
+    }
+
+
+def get_approval_authority_ids() -> frozenset:
+    """D15-H6: einzige Freigabeinstanz ist die im Organigramm markierte Rolle."""
+    path = os.path.join(APP_ROOT, "config", "org_hierarchy.json")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            org = json.load(fh)
+        return frozenset(
+            str(n.get("id")) for n in org.get("nodes", [])
+            if isinstance(n, dict)
+            and n.get("is_approval_authority") is True
+            and str(n.get("status") or "") == "active"
+        )
+    except Exception as exc:
+        logger.error("[Profiles] Organigramm fuer Freigabeinstanz nicht lesbar: %s", exc)
+        return frozenset()
+
+
+def get_liability_router() -> Any:
+    """D15-H3: HTTP-Fassade fuer die audited acknowledgement.
+
+    Der Router wird bewusst hier (neben der Helper-SSOT) definiert und muss
+    vom Router-Owner einmalig per ``app.include_router(get_liability_router())``
+    eingebunden werden. Ohne Einbindung bleibt der Prompt-Gate aktiv: Es gibt
+    keine Bestaetigung und damit keine Freigabe (fail-closed).
+    """
+    router = APIRouter()
+
+    @router.post("/api/v1/profiles/liability-ack")
+    def api_record_liability_ack(request: Request, req: LiabilityAckRequest) -> Dict[str, Any]:
+        from backend.rbac_guards import require_session_actor
+
+        # Actor NIE aus dem Body: nur die verifizierte Session ist quellhaft.
+        actor = require_session_actor(request)
+        prof = next(
+            (p for p in api_get_hermes_profiles() if str(p.get("id") or "") == req.agent_id),
+            None,
+        )
+        if prof is None:
+            raise HTTPException(status_code=404, detail="Profil nicht gefunden.")
+        disclaimer = liability_disclaimer_for_profile(prof)
+        if disclaimer is None:
+            raise HTTPException(status_code=422, detail="Profil ist nicht haftungsrelevant.")
+        if req.confirmation_phrase.strip() != LIABILITY_CONFIRMATION_PHRASE:
+            raise HTTPException(status_code=422, detail="Bestaetigungstext stimmt nicht.")
+        if (
+            req.disclaimer_sha256.strip()
+            and req.disclaimer_sha256.strip() != disclaimer["sha256"]
+        ):
+            raise HTTPException(status_code=422, detail="Hinweis-Hash stimmt nicht.")
+        record = record_liability_acknowledgement(prof, actor)
+        return {
+            "status": "success",
+            "approval_id": record["approval_id"],
+            "agent_id": record["agent_id"],
+            "actor": record["actor"],
+            "confirmed_at": record["confirmed_at"],
+        }
+
+    return router
 
 
 __all__ = [
     "DEFAULT_HERMES_TOOLS", "ALL_HERMES_TOOLS", "AgentProfileValidationSchema",
     "get_hermes_profiles_base_dirs", "get_primary_hermes_profiles_dir",
     "invalidate_hermes_profiles_cache", "api_get_hermes_profiles",
-    "append_negative_scope",
+    "append_negative_scope", "sanitize_prompt_tool_declaration",
+    "liability_group_for_profile", "liability_disclaimer_for_profile",
+    "liability_notice_block", "record_liability_acknowledgement",
+    "active_liability_acknowledgement", "require_liability_acknowledgement",
+    "effective_budget_for_profile", "validate_status_budget_ssot",
+    "get_approval_authority_ids", "get_liability_router",
     "create_rolling_backup", "save_all_agent_profiles", "_HERMES_PROFILES_CACHE",
 ]

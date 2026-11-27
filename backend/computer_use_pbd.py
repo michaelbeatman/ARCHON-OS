@@ -13,22 +13,37 @@ Autonomous Computer-Use & Programming by Demonstration (PbD) Engine (Meilenstein
    - Zeichnet Bediener-Aktionen (Klicks, Eingaben, Navigationen) und gesprochene/getippte
      Sprachkommentare ("Hier filtere ich nach Senior Coder...") live im Bot-Screen auf.
    - Synthetisiert den Demonstrations-Trace vollautomatisch in einen wiederverwendbaren
-     Archon OS Skill (.agents/skills/<skill_name>/SKILL.md) sowie ein lauffähiges Python-Skript.
+     Archon OS Skill (.agents/skills/<skill_name>/SKILL.md) sowie ein Python-Skript (Demo-Aufzeichnung, nicht ausfuehrbar).
 
 3. ObservationPruner & Set-of-Marks (a11y Tree):
    - Reduziert rohen HTML-DOM-Müll (SVGs, Tracking-Skripte, tiefe Div-Verschachtelungen)
      um bis zu 90% auf einen kompakten, semantischen Accessibility-Tree.
    - Erzeugt Set-of-Marks (SoM) Markierungen für multimodale Vision-Agenten.
+
+WICHTIG (D01-H1): Diese Datei ist eine Aufzeichnungs-/Geometrie-Bibliothek.
+Es ist KEINE CUA-Runtime angebunden: es gibt hier keinen Browser- oder
+Desktop-Treiber, der Klicks, Tastatureingaben oder Navigationen tatsaechlich
+ausfuehrt. Synthetisierte Skills sind daher explizit als Demo/Aufzeichnung
+gekennzeichnet und ihre execute_*()-Funktionen scheitern fail-closed.
 """
 
-import os
-import re
-import math
-import random
-import time
-import json
 import datetime
-from typing import Dict, Any, List, Optional, Tuple
+import json
+import math
+import os
+import random
+import re
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+# D01-H1: Ehrlicher Fail-Closed-Fehler fuer alle synthetisierten Skripte.
+# Solange keine echte CUA-Runtime (Browser-/Desktop-Treiber) im Chokepoint
+# angebunden ist, darf ein execute_*() NIEMALS "completed" zurueckgeben.
+CUA_RUNTIME_UNAVAILABLE_MESSAGE = (
+    "Keine CUA-Runtime angebunden: Dieses PbD-Skript ist eine Aufzeichnung, "
+    "keine ausfuehrbare Automatisierung. Es wurden keine Klicks, Tastatureingaben "
+    "oder Navigationen ausgefuehrt."
+)
 
 
 def _mask_trace_values(value: Any) -> Any:
@@ -424,82 +439,80 @@ class DemonstrationRecorder:
 
         self._current_session = None
 
+        # D01-H1: "synthesized" beschreibt den ECHTEN Effekt (SKILL.md, Skript
+        # und Trace wurden geschrieben), nicht eine CUA-Ausführung. Die
+        # Ausfuehrbarkeit wird deshalb explizit verneint — das generierte
+        # Skript wirft bei execute_*() fail-closed (siehe
+        # CUA_RUNTIME_UNAVAILABLE_MESSAGE). Nie "completed"/"success" ohne
+        # echte Ausführung melden.
         return {
             "status": "synthesized",
+            "demo_only": True,
+            "simulated": True,
+            "executable": False,
+            "runtime": "unavailable",
             "skill_name": slug,
             "skill_path": skill_path,
             "script_path": script_path,
             "trace_path": trace_file,
             "steps_count": len(session["events"]),
-            "message": f"Demonstration erfolgreich in Skill '{slug}' mit Ghost-Cursor und Anti-Bot-Varianz überführt."
+            "message": (
+                f"Demonstration '{slug}' aufgezeichnet und als Demo-Skill synthetisiert. "
+                "Keine CUA-Runtime angebunden: das Skript fuehrt keine Aktionen aus."
+            ),
         }
 
     def _synthesize_python_script(self, slug: str, session: Dict[str, Any]) -> str:
+        """Synthetisiert eine Aufzeichnung — KEINE ausfuehrbare CUA-Automatisierung.
+
+        D01-H1: Der alte Generator erzeugte print()/sleep()-Kosmetik und liess
+        execute_*() ``{"status": "completed"}`` zurueckgeben, obwohl kein
+        Klick, keine Eingabe und keine Navigation stattfand. Jetzt werden die
+        aufgezeichneten Schritte nur als Daten dokumentiert; execute_*()
+        scheitert fail-closed, solange keine echte Runtime angebunden ist.
+        """
         events = session["events"]
+        # json-Runde normalisiert alle aufgezeichneten Werte auf repr-sichere
+        # Python-Literale (str/int/float/bool/None/list/dict) — verhindert
+        # Code-Injection durch aufgezeichnete Werte im generierten Quelltext.
+        recorded_steps = json.loads(json.dumps([
+            {
+                "step": ev["step"],
+                "type": ev["type"],
+                "details": ev["details"],
+                "commentary": ev.get("commentary", ""),
+            }
+            for ev in events
+        ], ensure_ascii=False, default=str))
+
         lines = [
             "# -*- coding: utf-8 -*-",
-            f'"""Autonome Ausführung für Skill: {slug}',
+            f'"""Demo-Aufzeichnung fuer Skill: {slug} — NICHT ausfuehrbar.',
             f'Synthetisiert aus Demonstration: {session["title"]}',
             f'Erstellt am: {session["start_time"]}',
-            'Enthält biomechanische Bézier-Trajektorien und Bounding-Box Jitter.',
+            "demo_only: True | simulated: True | executable: False",
+            "",
+            "Es ist keine CUA-Runtime angebunden. Dieses Artefakt dokumentiert nur",
+            "die aufgezeichneten Schritte; es fuehrt keine Klicks, Tastatureingaben",
+            "oder Navigationen aus. execute_*() wirft daher RuntimeError.",
             '"""',
             "",
-            "import time",
-            "import random",
-            "from backend.computer_use_pbd import GhostCursorEngine",
+            "from backend.computer_use_pbd import CUA_RUNTIME_UNAVAILABLE_MESSAGE",
+            "",
+            "DEMO_ONLY = True",
+            "SIMULATED = True",
+            "EXECUTABLE = False",
+            "",
+            f"RECORDED_STEPS = {recorded_steps!r}",
             "",
             f"def execute_{slug}(target_url: str = {session.get('target_url', '')!r}):",
-            f'    print(f"[PbD Execution] Starte Ausführung von {slug} auf {{target_url}}...")',
-            "    cursor_engine = GhostCursorEngine()",
-            ""
+            '    """Fail-closed: ohne echte CUA-Runtime nie Erfolg melden."""',
+            "    raise RuntimeError(CUA_RUNTIME_UNAVAILABLE_MESSAGE)",
+            "",
+            "if __name__ == '__main__':",
+            f"    execute_{slug}()",
         ]
-
-        for ev in events:
-            ev_type = ev["type"]
-            det = ev["details"]
-            comm = ev.get("commentary", "")
-            if comm:
-                lines.append(f'    # Kommentar des Nutzers: {comm!r}')
-
-            # Alle externen Werte werden mit repr() in Python-Literale
-            # uebersetzt. f-String-Interpolation in generierten Quelltext
-            # ermoeglichte之前 Code-Injection ueber aufgezeichnete Werte.
-            if ev_type == "navigate":
-                url = det.get("url", session.get("target_url", ""))
-                lines.append("    print(" + repr(f"[Aktion] Navigiere zu {url}") + ")")
-                lines.append('    time.sleep(random.uniform(0.6, 1.2))')
-            elif ev_type == "click":
-                target = det.get("target", det.get("selector", "button"))
-                x = det.get("x", 50)
-                y = det.get("y", 50)
-                lines.append(f'    # Klick auf: {target!r}')
-                lines.append(f'    jx, jy = cursor_engine.apply_bounding_box_jitter({x}, {y}, 40, 20)')
-                lines.append('    traj = cursor_engine.calculate_bezier_trajectory((50, 50), (jx, jy), steps=18)')
-                lines.append(
-                    "    print(" + repr(f"[Aktion] Bewege Maus biomechanisch nach ({{jx}}, {{jy}}) und klicke auf {target}") + ")"
-                )
-                lines.append('    time.sleep(random.uniform(0.4, 0.9))')
-            elif ev_type == "type":
-                val = det.get("value", det.get("text", ""))
-                field = det.get("field", "Eingabefeld")
-                lines.append(f'    # Text tippen: {val!r} in {field!r}')
-                lines.append(f'    delays = cursor_engine.generate_keystroke_delays({val!r})')
-                lines.append(
-                    "    print(" + repr(f"[Aktion] Tippe Text in {field} mit variierender menschlicher Kadenz ({{len(delays)}} Anschläge)...") + ")"
-                )
-                lines.append('    time.sleep(sum(d["delay_ms"] for d in delays) / 1000.0 * 0.4)')
-            elif ev_type == "scroll":
-                lines.append(f'    print("[Aktion] Scrolle Seite mit natürlicher Verzögerung...")')
-                lines.append(f'    time.sleep(random.uniform(0.3, 0.7))')
-
-            lines.append("")
-
-        lines.append(f'    print("[PbD Execution] Skill {slug} erfolgreich abgeschlossen.")')
-        lines.append(f'    return {{"status": "completed", "skill": "{slug}", "steps": {len(events)}}}')
-        lines.append("")
-        lines.append("if __name__ == '__main__':")
-        lines.append(f"    execute_{slug}()")
-        return "\n".join(lines)
+        return "\n".join(lines) + "\n"
 
     def _synthesize_skill_md(self, slug: str, session: Dict[str, Any], script_path: str) -> str:
         events = session["events"]
@@ -515,6 +528,10 @@ name: {slug}
 description: {session['title']} (Autonom erzeugt via Programming by Demonstration / PbD)
 author: {session.get('creator_agent', 'default')}
 created_at: {session['start_time']}
+demo_only: true
+simulated: true
+executable: false
+runtime: unavailable
 ---
 
 # {session['title']}
@@ -524,16 +541,18 @@ Dieser Skill wurde durch menschliches Vormachen im Bot-Screen (Programming by De
 ## Ziel-Kontext
 - **Ursprüngliche Ziel-URL:** `{session.get('target_url', '')}`
 - **Anzahl aufgezeichneter Interaktionsschritte:** {len(events)}
-- **Anti-Bot Schutz:** Biomechanischer Ghost-Cursor (Bézier-Kurven), Gauss-verteilter Klick-Jitter & variable Tasten-Kadenzen.
+- **Anti-Bot Schutz (nur aufgezeichnet, nicht ausgefuehrt):** Biomechanischer Ghost-Cursor (Bézier-Kurven), Gauss-verteilter Klick-Jitter & variable Tasten-Kadenzen.
 
 ## Aufgezeichneter Handlungsablauf
 {chr(10).join(steps_md)}
 
 ## Ausführung
-Führe das generierte Automations-Skript aus:
-```bash
-python {os.path.relpath(script_path, WORKSPACE_DIR)}
-```
+**Keine CUA-Runtime angebunden — dieses Skill ist eine Aufzeichnung, keine
+ausfuehrbare Automatisierung.** Der Aufruf des generierten Skripts
+(`{os.path.relpath(script_path, WORKSPACE_DIR)}`) wirft `RuntimeError`
+(`CUA_RUNTIME_UNAVAILABLE_MESSAGE`); es werden keine Klicks, Tastatureingaben
+oder Navigationen ausgefuehrt. Fuer echten Betrieb muss zuerst ein
+Browser-/Desktop-Treiber im Chokepoint angebunden und verifiziert werden.
 """
 
 

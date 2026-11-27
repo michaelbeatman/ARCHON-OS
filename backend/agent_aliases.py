@@ -9,14 +9,61 @@ Diese Zuordnung ist die einzige Stelle, an der die Altnamen übersetzt werden.
 
 from __future__ import annotations
 
+import json
+import os
+
+_WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ORG_HIERARCHY_PATH = os.path.join(_WORKSPACE_DIR, "config", "org_hierarchy.json")
+
+# D15-H5: historische Tool-Namen aus Prompt-Freitext sind keine eigenen Tools.
+# Die Normalisierung liest die SSOT (`tool_aliases`) und kennt nur diese drei
+# Legacy-Zuordnungen. Ein unbekanntes Tool bleibt unveraendert und wird damit
+# im Gate als Abweichung sichtbar (fail-closed, kein stilles Map auf web_search).
+_FALLBACK_TOOL_ALIASES = {
+    "FileSystem_MCP": "filesystem",
+    "Calculator": "execute_code",
+    "WebSearch": "web_search",
+}
+
+# D15-H5: beratende HIGH_RISK-Rollen duerfen keine Exekutivwerkzeuge fuehren.
+# Positivliste bewusst hier (nicht im Inventar) — das Inventar gehoert einer
+# anderen Wellen-Partition. Diese IDs sind die beratenden Rollen aus
+# HIGH_RISK_AGENT_IDS von backend/eu_ai_act_inventory.py.
+ADVISORY_HIGH_RISK_AGENT_IDS = frozenset({
+    "hr_recruiter",
+    "labor_law_hr_governance",
+    "legal_counsel",
+    "commercial_jurist_contracts",
+    "ip_patent_analyst",
+    "compliance_gdpr_auditor",
+    "tax_holding_advisor",
+    "vvgmbh_immo_tax_lead",
+    "finance_lead",
+    "debt_financing_specialist",
+    "insurance_claims_manager",
+    "liability_risk_analyst",
+    "bi_controller",
+    "realestate_dcf_calculator",
+    "clinical_medical_advisor",
+    "medtech_regulatory_lead",
+    "pharma_biotech_scientist",
+    "scientific_literature_synthesizer",
+    "chemistry_materials_specialist",
+    "urban_planning_architect",
+    "industrial_process_engineer",
+    "facility_asset_manager",
+    "vendor_contract_negotiator",
+    "founder",
+})
+
 _LEGACY_ALIASES = {
     "hermes-researcher": "research_scout",
     "hermes_researcher": "research_scout",
     "research_scout": "research_scout",
     "hermes-coder": "senior_fullstack_engineer",
     "hermes_coder": "senior_fullstack_engineer",
-    "hermes-orchestrator": "system_architect_orchestrator",
-    "hermes_orchestrator": "system_architect_orchestrator",
+    "hermes-orchestrator": "default",
+    "hermes_orchestrator": "default",
     "finance_lead": "finance_lead",
     "legal_counsel": "legal_counsel",
     # Kurz-Handles aus Workflow-Templates & Content-Pipelines
@@ -60,6 +107,22 @@ def _load_ssot_aliases() -> dict:
     return merged
 
 
+def _load_tool_aliases() -> dict:
+    """D15-H5: Tool-Aliase stammen ausschliesslich aus der Organigramm-SSOT."""
+    aliases = dict(_FALLBACK_TOOL_ALIASES)
+    try:
+        with open(_ORG_HIERARCHY_PATH, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        ssot = {str(k): str(v) for k, v in (data.get("tool_aliases") or {}).items()}
+        aliases.update(ssot)
+    except Exception:
+        # Fallback auf die eingebauten Aliase; das Gate bleibt trotzdem aktiv.
+        pass
+    return aliases
+
+
+TOOL_ALIASES = _load_tool_aliases()
+
 ALIASES = _load_ssot_aliases()
 
 # W2-B/D04-M6: Ein eindeutiger, nicht mit einem echten Kader-Profil
@@ -89,3 +152,19 @@ def resolve_agent_id(agent_id: str | None, known_ids: set[str] | None = None) ->
     if known_ids is not None and mapped not in known_ids:
         return UNKNOWN_AGENT_ID
     return mapped
+
+
+def canonical_tool_name(name: str) -> str:
+    """Normalisiert einen Tool-Namen ueber die Alias-SSOT (D15-H5)."""
+    raw = str(name or "").strip()
+    return TOOL_ALIASES.get(raw, raw)
+
+
+def canonical_tool_names(names: list[str] | tuple[str, ...] | set[str]) -> list[str]:
+    """Normalisiert eine Tool-Menge und entfernt Duplikate ohne Reihenfolge zu aendern."""
+    result: list[str] = []
+    for name in names:
+        canonical = canonical_tool_name(name)
+        if canonical and canonical not in result:
+            result.append(canonical)
+    return result

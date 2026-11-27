@@ -156,8 +156,9 @@ def test_c3_n8n_startup_status_degrades_readyz():
 
 
 def test_c4_router_registration_and_rbac_wiring():
-    """75 include_router -> 799 Pfade; F2-RBAC vor den Routern konfiguriert;
-    ``_assert_router_health`` fail-closed inkl. dokumentiertem Opt-Out.
+    """Pfade 801 = Referenz 799 + W4-C Liability-Ack + W4-D Task-Endpunkt;
+    F2-RBAC vor den Routern konfiguriert; ``_assert_router_health`` fail-closed
+    inkl. dokumentiertem Opt-Out.
     """
     assert rbac_guards.is_configured(), "F2-Wiring (rbac_guards.configure) verloren"
     assert not app_main._ROUTER_LOAD_ERRORS
@@ -166,7 +167,7 @@ def test_c4_router_registration_and_rbac_wiring():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         paths = sorted(app_main.app.openapi()["paths"])
-    assert len(paths) == 799, f"Pfade: {len(paths)} (Referenz ee18373a = 799)"
+    assert len(paths) == 801, f"Pfade: {len(paths)} (Referenz ee18373a=799 + W4-C + W4-D = 801)"
 
     # Fail-closed Negativprobe: absichtlich defekter Router MUSS raisen.
     app_main._ROUTER_LOAD_ERRORS.append("NEGATIVPROBE: broken router")

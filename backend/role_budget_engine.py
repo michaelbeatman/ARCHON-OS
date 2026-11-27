@@ -645,6 +645,47 @@ def _budget_ceiling_block(parent_task_id: str, reason: str) -> Dict[str, Any]:
     }
 
 
+def _hiring_not_configured_result(
+    agent_id: str, parent_task_id: str, reason: str
+) -> Dict[str, Any]:
+    """D15-H7: Hiring ohne registriertes/ausfuehrbares Profil.
+
+    Kein Budget, kein Profil, kein Dispatch. Status/Reason sind explizit und
+    werden auditiert — nicht nur als internes `blocked` verschluckt.
+    """
+    try:
+        from backend.trajectory_budget import _audit
+
+        _audit(str(parent_task_id), f"HIRING_NOT_CONFIGURED: {reason}", str(parent_task_id))
+    except Exception:
+        pass
+    return {
+        "agent_id": agent_id,
+        "person_name": "",
+        "name": "",
+        "role": "",
+        "category": "",
+        "skills": [],
+        "model": "",
+        "system_prompt": "",
+        "token_budget": 0,
+        "cost_limit_eur": 0.0,
+        "parent_task_id": parent_task_id,
+        "subtask_id": "",
+        "hired_by": "executive_decision_architect",
+        "ephemeral": True,
+        "status": "not_configured",
+        "error_code": "COMPLIANCE_BLOCKED",
+        "block_kind": "hiring_not_configured",
+        "failure_reason": "HIRING_NOT_CONFIGURED",
+        "reason": reason,
+        "hired_specialist": None,
+        "subtasks": [],
+        "allocations": [],
+        "created_at": "",
+    }
+
+
 def _finalize_bank_trajectory_tokens(
     reservation_row: Any,
     actual_tokens: int,
@@ -920,12 +961,27 @@ def ceo_autonomous_hire_specialist(
     """
     Spawns a temporary specialist agent hired by the CEO (`executive_decision_architect`)
     for a specific task, complete with tailored skills, system prompt, and hard token/EUR budget.
+
+    D15-H7: ohne Registrierung in der Rollen-/Compliance-SSOT ist das Profil
+    nicht ausfuehrbar (Dispatcher-Default-Deny). Dann wird VOR jeder
+    Tabellen-/Policy-Buchung fail-closed abgebrochen.
     """
-    init_budget_tables(db_path)
     clean_role = (role_title or "Project Task-Force Specialist").strip()
     slug = re.sub(r"[^a-z0-9]+", "_", clean_role.lower()).strip("_")[:24] or "specialist"
     short_hash = hashlib.sha256(f"{parent_task_id}:{clean_role}:{uuid.uuid4().hex[:6]}".encode()).hexdigest()[:6]
     agent_id = f"hired_{slug}_{short_hash}"
+
+    # Fail-closed VOR init_budget_tables / INSERT / set_role_budget_policy.
+    if not register_in_profiles_json:
+        reason = (
+            "hired profile is not registered in agent_profiles.json / "
+            "EU-AI-Act-Inventar (register_in_profiles_json=False) — "
+            "Dispatcher-Default-Deny; kein ausfuehrbares Profil"
+        )
+        logger.error("[Budget] CEO-Hiring verweigert (not_configured): %s", reason)
+        return _hiring_not_configured_result(agent_id, parent_task_id, reason)
+
+    init_budget_tables(db_path)
 
     first_names = ["Dr. Lukas", "Maya", "Jonas", "Elena", "Rafael", "Nora", "Leonard", "Viktor"]
     last_names = ["Vance", "Berg", "Keller", "Lindqvist", "Sterling", "Moreau", "Falk", "Novak"]
@@ -1053,6 +1109,7 @@ def plan_and_decompose_task_with_budgets(
     allow_autonomous_hiring: bool = False,
     db_path: Optional[str] = None,
     trajectory_id: Optional[str] = None,
+    register_in_profiles_json: bool = False,
 ) -> Dict[str, Any]:
     """
     Analyzes a task, selects the optimal 2-3 existing roster specialists,
@@ -1103,6 +1160,19 @@ def plan_and_decompose_task_with_budgets(
     custom_role_title = ""
     custom_mandate = ""
     placeholder_id = ""
+
+    # D15-H7: kein registriertes Profil -> kein ausfuehrbarer Agent. Der
+    # Platzhalter darf deshalb gar nicht erst alloziert werden (kein
+    # `hired_*`-Budget ohne Dispatch-Möglichkeit = Rollen-Theater mit Kosten).
+    if allow_autonomous_hiring and not register_in_profiles_json:
+        reason = (
+            "autonomes Hiring ist nicht konfiguriert: kein registriertes "
+            "agent_profiles.json-/Inventar-Profil -> Dispatcher-Default-Deny; "
+            "es darf kein Budget gebucht werden"
+        )
+        logger.error("[Budget] %s", reason)
+        return _hiring_not_configured_result("", parent_task_id, reason)
+
     if allow_autonomous_hiring:
         custom_role_title = f"Ad-hoc Task-Force Specialist: {title[:42]}"
         custom_mandate = (
@@ -1165,6 +1235,7 @@ def plan_and_decompose_task_with_budgets(
                 token_budget=int(alloc["token_budget"]),
                 cost_limit_eur=float(alloc["cost_limit_eur"]),
                 subtask_id=str(alloc.get("subtask_id") or ""),
+                register_in_profiles_json=register_in_profiles_json,
                 db_path=db_path,
             )
             now_iso = datetime.datetime.now().isoformat()

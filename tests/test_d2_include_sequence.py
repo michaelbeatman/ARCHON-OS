@@ -37,8 +37,9 @@ import main as app_main
 from archon.routers import register_late_routers
 
 # Gemessen per Spy auf FastAPI.include_router VOR ``import main`` (75 Aufrufe).
-# Signatur = (erster Route-Pfad, Typ der ersten Route). Der letzte Eintrag ist
-# die WebSocket-Route des operations_calendar-Blocks (Fund 4).
+# Signatur = (erster Route-Pfad, Typ der ersten Route). Die WebSocket-Route des
+# operations_calendar-Blocks (Fund 4) bleibt enthalten; der letzte Eintrag ist
+# seit W4-C der audited Liability-Ack-Router.
 _EXPECTED_INCLUDE_SEQUENCE = [
     ('/api/v1/agent/{agent_id}/activity', 'APIRoute'),
     ('/api/settings', 'APIRoute'),
@@ -115,6 +116,7 @@ _EXPECTED_INCLUDE_SEQUENCE = [
     ('/api/v1/vault/epistemic-hygiene', 'APIRoute'),
     ('/api/v1/calendar/events', 'APIRoute'),
     ('/api/v1/calendar/ws', 'APIWebSocketRoute'),
+    ('/api/v1/profiles/liability-ack', 'APIRoute'),  # W4-C / D15-H3
 ]
 
 # Fund 2: Feldname -> main-Symbol. Bindet die an der Aufrufstelle gebauten
@@ -192,8 +194,9 @@ def test_s1_full_include_sequence_is_pinned() -> None:
         "import main",
         f"_expected = {expected!r}",
         "assert _calls == _expected, 'Include-Reihenfolge gekippt'",
-        "assert len(_calls) == 75",
-        "assert _calls[-1] == ['/api/v1/calendar/ws', 'APIWebSocketRoute']",
+        "assert len(_calls) == 76",
+        "assert _calls[-1] == ['/api/v1/profiles/liability-ack', 'APIRoute']",
+        "assert ['/api/v1/calendar/ws', 'APIWebSocketRoute'] in _calls",
         "assert sum(1 for x in _calls if 'WebSocket' in x[1]) == 1",
         "# Negativprobe gegen eine vertauschte Reihenfolge (echte Mutation).",
         "_swapped = list(_expected)",

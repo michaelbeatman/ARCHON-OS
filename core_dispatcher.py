@@ -928,6 +928,31 @@ async def dispatch_to_omniroute_or_container(
     budget_reservation_id: str | None = None
     # Kein Stale-Prompt-Ref aus einer vorherigen Dispatch-Generation.
     _PROMPT_VERSION_CTX.set(None)
+
+    # D15-H7: `hired_<slug>_<hash>` ist ohne Registrierung in der Rollen-/
+    # Compliance-SSOT nicht ausfuehrbar (Default-Deny im Inventar). Expliziter,
+    # auditierter Fail-closed-Pfad VOR Throttle, Cache und Budget-Reservierung —
+    # kein Dispatch ohne ausfuehrbares Profil.
+    if str(agent_id or "").strip().startswith("hired_"):
+        _hire_reason = "hired_profile_not_configured (no executable profile in profiles/inventory)"
+        logger.error("[Dispatcher] %s — Dispatch fuer '%s' verweigert.", _hire_reason, agent_id)
+        try:
+            from backend.audit_log import _require_audit_event
+
+            _require_audit_event(
+                "dispatch", "hiring_not_configured", "system",
+                {"agent_id": agent_id, "task_id": task_id, "reason": _hire_reason},
+            )
+        except Exception as _hire_audit_exc:
+            logger.error("[Dispatcher] Audit hiring_not_configured fehlgeschlagen: %s", _hire_audit_exc)
+        return _with_prompt_info({
+            "status": "blocked",
+            "error": _hire_reason,
+            "error_code": "COMPLIANCE_BLOCKED",
+            "content": f"🛑 [COMPLIANCE GUARDRAIL BLOCK]: {_hire_reason}",
+            "task_id": task_id,
+        })
+
     try:
         from backend.concurrency_throttle import concurrency_throttle
         acquired = await concurrency_throttle.acquire_slot(agent_id, slot_id, priority=2)
@@ -1389,6 +1414,10 @@ def _build_dispatch_context_sync(
         "core_mem_addon": "",
         "system_prompt": system_prompt,
         "model": model,
+        "soul_tier_info": {
+            "tier": "compact", "chars": 0, "injected": False,
+            "pin_ok": False, "error_code": "",
+        },
     }
 
     # 1. Spekulatives Vorladen (CRM/ERP/Learnings) — SQLite + os.path.exists.
@@ -1464,6 +1493,35 @@ def _build_dispatch_context_sync(
                 result["model"] = b_res["selected_model"]
         except Exception as bn_err:
             logger.debug("[Dispatcher] Bandit-Router Auswahl uebersprungen: %s", bn_err)
+
+    # 5. D15-H1/D08-M8: 3-Tier-SOUL am Ort der Token-Kosten konsumieren.
+    #    Der effektive Tier kommt aus der kanonischen Auflösung (HIGH_RISK ->
+    #    full) und wird tier-abhängig gekürzt. Duplex-Schutz verhindert den
+    #    zweiten Block, wenn der Worker ihn bereits injiziert hat. Pin-Drift
+    #    wird hier nur REPORTED; der harte Abbruch liegt im Worker-Gate und
+    #    im bestehenden HIGH_RISK-Compliance-Gate des Impl (siehe unten).
+    try:
+        from archon.core.delegation import (
+            build_dispatch_soul_context,
+            format_soul_tier_block,
+            soul_tier_already_injected,
+        )
+
+        _soul = build_dispatch_soul_context(agent_id, "")
+        result["soul_tier_info"] = {
+            "tier": str(_soul.get("tier") or "compact"),
+            "chars": len(str(_soul.get("text") or "")),
+            "pin_ok": bool(_soul.get("pin_ok")),
+            "error_code": str(_soul.get("error_code") or ""),
+            "injected": False,
+        }
+        if _soul.get("pin_ok"):
+            _soul_block = format_soul_tier_block(_soul.get("tier"), _soul.get("text"))
+            if _soul_block and not soul_tier_already_injected(result["system_prompt"]):
+                result["system_prompt"] = f"{result['system_prompt']}\n\n{_soul_block}"
+                result["soul_tier_info"]["injected"] = True
+    except Exception as soul_err:
+        logger.debug("[Dispatcher] SOUL-Tier-Kontext nicht verfuegbar: %s", soul_err)
 
     return result
 

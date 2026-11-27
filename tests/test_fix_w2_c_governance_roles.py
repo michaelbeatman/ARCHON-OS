@@ -14,7 +14,6 @@ import json
 import os
 import sys
 from pathlib import Path
-from unittest import mock
 
 import pytest
 from fastapi import HTTPException
@@ -55,13 +54,13 @@ def test_status_force_done_without_hitl_proof_is_blocked(monkeypatch):
     monkeypatch.setattr("backend.passkey_hitl.consume_hitl_proof_token", lambda *a, **k: False)
 
     calls = []
-    monkeypatch.setattr(ops, "_update_task_status_db", lambda *a, **k: calls.append((a, k)) or {
+    monkeypatch.setattr(ops, "_update_task_status_db", lambda *a, **k: calls.append((a, k)) or {  # type: ignore[func-returns-value]
         "old_status": "review", "title": "T", "assignee": "alice", "now_iso": "now",
     })
 
     async def _run():
         return await ops.update_task_status(
-            None, "t-1", TaskStatusUpdateRequest(status="done", force=True, reason="Einvernehmen")
+            None, "t-1", TaskStatusUpdateRequest(status="done", force=True, reason="Einvernehmen")  # type: ignore[arg-type]
         )
 
     with pytest.raises(HTTPException) as exc:
@@ -89,7 +88,7 @@ def test_status_force_done_with_proof_writes_actor_and_evidence(monkeypatch):
 
     def _fake_db(*args, **kwargs):
         captured["args"] = args
-        captured["kwargs"] = kwargs
+        captured["kwargs"] = kwargs  # type: ignore[assignment]
         return {"old_status": "review", "title": "T", "assignee": "alice", "now_iso": "now"}
 
     monkeypatch.setattr(ops, "_update_task_status_db", _fake_db)
@@ -97,7 +96,7 @@ def test_status_force_done_with_proof_writes_actor_and_evidence(monkeypatch):
     monkeypatch.setattr(ops, "get_provider", lambda name: None)
 
     result = asyncio.run(ops.update_task_status(
-        None, "t-1", TaskStatusUpdateRequest(
+        None, "t-1", TaskStatusUpdateRequest(  # type: ignore[arg-type]
             status="done", force=True, reason="Zweite Person hat geprüft",
             passkey_proof_token="proof-1", approval_id="apr-1",
         )
@@ -178,7 +177,7 @@ def test_reclassify_downgrade_uses_four_eyes_proposal(monkeypatch):
     monkeypatch.setattr(gov, "_audit_or_503", lambda *a, **k: None)
 
     res = gov.api_ai_act_reclassify(
-        None, "x", gov.AiActReclassifyRequest(
+        None, "x", gov.AiActReclassifyRequest(  # type: ignore[arg-type]
             risk_tier="MINIMAL_RISK", override_reason="Begründung laenger als zehn Zeichen"
         )
     )
@@ -201,7 +200,7 @@ def test_reclassify_prohibited_downgrade_forbidden(monkeypatch):
     monkeypatch.setattr(gov, "_audit_or_503", lambda *a, **k: None)
     with pytest.raises(HTTPException) as exc:
         gov.api_ai_act_reclassify(
-            None, "x", gov.AiActReclassifyRequest(
+            None, "x", gov.AiActReclassifyRequest(  # type: ignore[arg-type]
                 risk_tier="MINIMAL_RISK", override_reason="Begründung laenger als zehn Zeichen"
             )
         )
@@ -329,10 +328,12 @@ def test_no_fabricated_approval_text():
 # ---------------------------------------------------------------------------
 
 def test_single_authority_source_of_truth():
-    from backend.role_budget_engine import LEAD_ROLE_IDS, EXECUTIVE_ROLE_IDS, authority_tier
+    from backend.role_budget_engine import EXECUTIVE_ROLE_IDS, LEAD_ROLE_IDS, authority_tier
 
+    # W4-C/D15-H6: `default` bleibt einzige executive APEX-Instanz; der CEO
+    # (`robert`) ist Tier 2/lead und hat kein alleiniges Freigabemandat mehr.
     assert authority_tier("default") == "executive"
-    assert authority_tier("robert") == "executive"
+    assert authority_tier("robert") == "lead"
     assert authority_tier("scientific_literature_synthesizer") == "lead"
     assert authority_tier("labor_law_hr_governance") == "specialist"
     assert "labor_law_hr_governance" not in EXECUTIVE_ROLE_IDS

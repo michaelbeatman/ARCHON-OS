@@ -23,10 +23,14 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROFILES_FILE = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
 INVENTORY_FILE = os.path.join(WORKSPACE_DIR, "data", "eu_ai_act_inventory.json")
 
-# Audit D15: explizite Positivliste als SSOT (Soll: 26 HIGH_RISK-Rollen).
+# Audit D15: explizite Positivliste als SSOT. Die fruehere Zahl "26" in einem
+# Kommentar war veraltet: die gepruefte Positivliste und das behoerdliche
+# Inventar enthalten 28 HIGH_RISK-Rollen. EXPECTED_HIGH_RISK_COUNT wird unten
+# aus der Positivliste abgeleitet, damit Kommentar, Zahl und Klassifikation
+# nicht erneut auseinanderlaufen (D15-M5).
 # Frueher lieferte eine substringsuche basierte Klassifikation 21 Rollen und
 # False Positives ueber "tax" in "taxonomy". Wortgrenzen werden zusaetzlich
-# geprueft (siehe _HIGH_RISK_TERM_RE), sind aber nicht mehr klassifikations-
+# geprueft (siehe _REGULATED_TERM_RE), sind aber nicht mehr klassifikations-
 # entscheidend — nur die gepruefte Liste ist hoheitlich.
 HIGH_RISK_AGENT_IDS = frozenset({
     # Anhang III Nr. 4 — Beschaeftigung & Personal
@@ -61,13 +65,22 @@ HIGH_RISK_AGENT_IDS = frozenset({
     "executive_decision_architect",
     "vendor_contract_negotiator",
     "facility_asset_manager",
-    # H-15-3/F023: funktional identisch zum CEO (Strategie-/Kapital-/Haftungs-
-    # mandate) — keine SPECIFIC_TRANSPARENCY-Rolle trotz 'cold-email'-Skill.
+    # D15-H6: NICHT mehr "funktional identisch zum CEO". Der CEO
+    # (executive_decision_architect) ist die einzige hoheitliche
+    # Freigabeinstanz; der founder ist reine Strategieberatung OHNE
+    # Freigaberecht. Beide bleiben HIGH_RISK, aber die Mandate sind
+    # disambiguiiert (4-Augen-Freigaben laufen ausschliesslich ueber den CEO).
+    # Die SSOT-Aenderungen in agent_profiles.json / org_hierarchy.json macht
+    # Partition C; dieses Modul dokumentiert und konsumiert die Regel.
     "founder",
     # D15/MED: Containment-/Credential-/Sperraktionen mit realem Exekutivtool.
     "crisis_escalation_lead",
 })
-EXPECTED_HIGH_RISK_COUNT = 28
+# D15-M5: Zahl aus der Positivliste ableiten, statt sie redundant zu pflegen.
+EXPECTED_HIGH_RISK_COUNT = len(HIGH_RISK_AGENT_IDS)
+
+# D15-H6: einzige ID mit hoheitlicher Freigabebefugnis (Konsument: classify_agent).
+APPROVAL_AUTHORITY_AGENT_ID = "executive_decision_architect"
 
 # Hoheits-Reihenfolge fuer Reklassifikations-Gates (tiefer = strenger).
 RISK_TIER_ORDER = {
@@ -79,11 +92,19 @@ RISK_TIER_ORDER = {
 }
 VALID_RISK_TIERS = frozenset(RISK_TIER_ORDER)
 
-CREDIT_RISK_AGENT_IDS = frozenset({
+# D15-M5: die drei frueheren IDs existieren in keinem der 71 Profile der SSOT
+# und waren tote Klassifikationsziele. Sie sind nun als *validierte historische
+# Aliase* markiert: ein Alias wird nur dann als HIGH_RISK klassifiziert, wenn
+# die ID in der jeweiigen Profil-SSOT real vorhanden ist (siehe
+# classify_agent(known_ids=...)). In der Produktiv-SSOT greift damit keiner
+# der Aliase mehr; Profile mit solchen IDs werden weiterhin korrekt nach
+# Anhang III Nr. 5(b) eingestuft, falls sie jemals inventarisiert werden.
+HISTORICAL_CREDIT_RISK_ALIASES: frozenset[str] = frozenset({
     "credit_risk_scorer",
     "loan_underwriter",
     "bonitaetspruefung",
 })
+CREDIT_RISK_AGENT_IDS: frozenset[str] = frozenset(HISTORICAL_CREDIT_RISK_ALIASES)
 
 _PROHIBITED_MARKERS = (
     "social_scoring",
@@ -148,32 +169,126 @@ _TRANSPARENCY_PURPOSE_RE = re.compile(
 )
 
 
+# D15-H2: EINZIGE Prompt-SSOT ist ``agent_profiles.json.prompt`` (bzw.
+# ``system_prompt``) — genau der Text, den der Dispatch als System-Prompt
+# verwendet. ``souls/<id>/SOUL.md`` ist ein abgeleitetes Artefakt und darf
+# nicht laengst dispatchen Prompt-Bytes pinnen. Beide Seiten (Pin in
+# generate_inventory und Live-Pruefung in compliance_engine) normalisieren
+# den Text identisch, damit der Vergleich bytesicher funktioniert.
+SOUL_HASH_SOURCE = "profile_prompt_v2"
+
+
+def _normalize_soul_text(text: str) -> str:
+    return str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _hash_soul_text(text: str) -> Optional[str]:
+    normalized = _normalize_soul_text(text)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest() if normalized else None
+
+
+def _canonical_soul_file(agent_id: str) -> str:
+    return os.path.join(WORKSPACE_DIR, "souls", agent_id, "SOUL.md")
+
+
+def compute_live_soul_sha256(agent_id: str, profiles_file: Optional[str] = None) -> Optional[str]:
+    """Live-Hash der Prompt-SSOT (agent_profiles.json) fuer ``agent_id``.
+
+    Nur wenn die SSOT keinen Prompt enthaelt, wird das kanonische
+    ``souls/<id>/SOUL.md``-Artefakt als Fallback herangezogen. Fehlt beides,
+    wird bewusst ``None`` geliefert (fail-closed). ``profiles_file`` ist
+   override-bar, damit Produktivpfad und Tests dieselbe Quelle verwenden.
+    """
+    aid = str(agent_id or "").strip()
+    if not aid:
+        return None
+    source = profiles_file if profiles_file is not None else PROFILES_FILE
+    try:
+        if os.path.isfile(source):
+            with open(source, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            profiles = data if isinstance(data, list) else list(data.values())
+            for prof in profiles:
+                if isinstance(prof, dict) and str(prof.get("id") or "").strip() == aid:
+                    prompt = prof.get("prompt") or prof.get("system_prompt") or ""
+                    hashed = _hash_soul_text(prompt)
+                    if hashed:
+                        return hashed
+                    break
+    except Exception as exc:
+        print(f"[EUAIAct] Prompt-SSOT {source} nicht lesbar: {exc}", file=sys.stderr)
+    try:
+        canon = _canonical_soul_file(aid)
+        if os.path.isfile(canon):
+            with open(canon, "r", encoding="utf-8", newline="") as fh:
+                return _hash_soul_text(fh.read())
+    except Exception as exc:
+        print(f"[EUAIAct] kanonisches SOUL {aid} nicht lesbar: {exc}", file=sys.stderr)
+    return None
+
+
+def validate_classification_ids(profiles: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """D15-M5: CI-Gate — alle hoheitlichen ID-Sets sind subset der Profil-SSOT.
+
+    Prueft zusaetzlich, dass die aus der Positivliste abgeleitete erwartete
+    HIGH_RISK-Anzahl mit der Positivliste uebereinstimmt und dass keine
+    historischen Phantomer als aktive Klassifikationsziele gepflegt werden.
+    """
+    if profiles is None:
+        try:
+            with open(PROFILES_FILE, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            profiles = data if isinstance(data, list) else list(data.values())
+        except Exception:
+            profiles = []
+    known = {str(p.get("id") or "").strip() for p in profiles if isinstance(p, dict)}
+    unknown_high = sorted(HIGH_RISK_AGENT_IDS - known)
+    unknown_transparency = sorted(TRANSPARENCY_AGENT_IDS - known)
+    # Kredit-Aliase duerfen nur als markierte historische Aliase gefuehrt
+    # werden; ein aktiver, nicht in der SSOT vorhandener Pin waere ein Phantom.
+    active_credit = sorted(CREDIT_RISK_AGENT_IDS & known)
+    aliases_outside_ssot = sorted(CREDIT_RISK_AGENT_IDS - known)
+    ok = (
+        not unknown_high
+        and not unknown_transparency
+        and CREDIT_RISK_AGENT_IDS.issubset(HISTORICAL_CREDIT_RISK_ALIASES)
+        and EXPECTED_HIGH_RISK_COUNT == len(HIGH_RISK_AGENT_IDS)
+    )
+    return {
+        "ok": ok,
+        "profile_count": len(known),
+        "high_risk_count": len(HIGH_RISK_AGENT_IDS),
+        "expected_high_risk_count": EXPECTED_HIGH_RISK_COUNT,
+        "unknown_high_risk_ids": unknown_high,
+        "unknown_transparency_ids": unknown_transparency,
+        "active_credit_risk_ids": active_credit,
+        "historical_credit_aliases_outside_ssot": aliases_outside_ssot,
+    }
+
+
 def _compute_soul_sha256(agent: Dict[str, Any]) -> Optional[str]:
-    """Berechnet den SHA-256-Hash einer ECHTEN SOLL-QUELLE.
+    """Berechnet den Pin aus der EINEN Prompt-SSOT (agent_profiles.json).
 
     Audit D15: frueher wurde bei fehlender Quelle ein Hash aus id/name/
     description erfunden und in der behoerdlichen PDF als "gepinnt" gefuehrt.
-    Quellen sind ausschliesslich die kanonische SSOT souls/<id>/SOUL.md
-    (normalisierte Zeilenenden) oder prompt/system_prompt aus
-    agent_profiles.json. Ohne echte Quelle wird bewusst None geliefert;
-    guardrails_verified wird damit false und die HIGH_RISK-Aktivierung bleibt
-    fail-closed blockiert (compliance_engine.check_activation_allowed).
+    Jetzt ist der tatsaechlich dispatche Prompt maengeblich; das kanonische
+    SOUL-Artefakt ist nur Fallback. Ohne echte Quelle wird bewusst None
+    geliefert (fail-closed in compliance_engine.check_activation_allowed).
     """
+    prompt_text = agent.get("prompt") or agent.get("system_prompt") or ""
+    hashed = _hash_soul_text(prompt_text)
+    if hashed:
+        return hashed
     aid = str(agent.get("id") or "").strip()
-    prompt_text = ""
     if aid:
-        canon = os.path.join(WORKSPACE_DIR, "souls", aid, "SOUL.md")
-        if os.path.isfile(canon):
-            try:
+        try:
+            canon = _canonical_soul_file(aid)
+            if os.path.isfile(canon):
                 with open(canon, "r", encoding="utf-8", newline="") as fh:
-                    prompt_text = fh.read().replace("\r\n", "\n").replace("\r", "\n").strip()
-            except Exception as exc:
-                print(f"[EUAIAct] kanonisches SOUL {aid} nicht lesbar: {exc}", file=sys.stderr)
-    if not prompt_text:
-        prompt_text = str(agent.get("prompt") or agent.get("system_prompt") or "").strip()
-    if not prompt_text:
-        return None
-    return hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+                    return _hash_soul_text(fh.read())
+        except Exception as exc:
+            print(f"[EUAIAct] kanonisches SOUL {aid} nicht lesbar: {exc}", file=sys.stderr)
+    return None
 
 
 def _is_zero_egress_category(category: str, aid: str) -> bool:
@@ -219,8 +334,16 @@ class EUAIActInventoryManager:
             print(f"[EUAIAct] Fehler beim Laden von agent_profiles.json: {e}", file=sys.stderr)
             return []
 
-    def classify_agent(self, agent: Dict[str, Any]) -> Dict[str, Any]:
-        """Klassifiziert einen Agenten präzise nach den Kriterien der Verordnung (EU) 2024/1689."""
+    def classify_agent(
+        self, agent: Dict[str, Any], known_ids: Optional[set[str]] = None
+    ) -> Dict[str, Any]:
+        """Klassifiziert einen Agenten präzise nach VO (EU) 2024/1689.
+
+        ``known_ids`` ist die Profil-SSOT der laufenden Inventarisierung.
+        Historische Kredit-Aliase (D15-M5) werden nur beruecksichtigt, wenn
+        ihre ID dort tatsaechlich existiert — sonst waeren sie tote
+        Klassifikationsziele ohne Profil.
+        """
         aid = str(agent.get("id") or agent.get("name", "unknown")).strip()
         name = str(agent.get("name") or aid).strip()
         category = str(agent.get("category", "General")).strip()
@@ -242,8 +365,15 @@ class EUAIActInventoryManager:
         zero_egress = _is_zero_egress_category(category, aid)
 
         is_prohibited = any(m in f"{aid} {desc}".lower() for m in _PROHIBITED_MARKERS)
-        is_credit_risk = (not is_prohibited) and (aid in CREDIT_RISK_AGENT_IDS)
-        # Audit D15: die explizite Positivliste (26 Rollen) ist hoheitlich.
+        # D15-M5: historische Aliase sind nur gueltig, wenn die ID in der
+        # Profil-SSOT existiert. Ohne ``known_ids`` (Einzelaufruf) gilt der
+        # uebergebene Agent selbst als SSOT-Beleg.
+        ssot_ids = known_ids if known_ids is not None else {aid}
+        is_credit_risk = (
+            (not is_prohibited) and (aid in CREDIT_RISK_AGENT_IDS) and (aid in ssot_ids)
+        )
+        # Audit D15: die explizite Positivliste (28 Rollen, aus EXPECTED_HIGH_RISK_COUNT
+        # abgeleitet) ist hoheitlich.
         # Die Wortgrenzen-Regex wird nur auf isolierte Kontextfelder angewendet
         # und dient als Audit-Hinweis, nicht als Klassifikationsersatz — damit
         # gibt es keine False Positives mehr durch Skill-Namen ("taxonomy").
@@ -335,10 +465,18 @@ class EUAIActInventoryManager:
             "underlying_model": f"{provider} / {model}",
             "primary_purpose": desc or "Autonome Fachassistenz im Archon OS Ökosystem",
             "soul_sha256": soul_sha256,
+            "soul_hash_source": SOUL_HASH_SOURCE,
             "regulated_term_signal": regulated_signal,  # Audit-Hinweis (Wortgrenzen, isolierte Felder)
             "zero_egress_protected": zero_egress,
             "required_guardrails": required_guardrails,
-            "guardrails_verified": bool(soul_sha256) and ("HITL" in human_oversight if is_high_risk else True),
+            # D15-H6: nur der CEO besitzt hoheitliche Freigabebefugnis; der
+            # founder ist Strategieberatung ohne Freigaberecht.
+            "approval_authority": aid == APPROVAL_AUTHORITY_AGENT_ID,
+            # D15-M1: nicht mehr bool(pin), sondern echter Vergleich gegen die
+            # aktuelle Prompt-SSOT. Drift macht guardrails_verified=false.
+            "guardrails_verified": bool(soul_sha256)
+            and soul_sha256 == compute_live_soul_sha256(aid)
+            and ("HITL" in human_oversight if is_high_risk else True),
             "last_classified_at": datetime.datetime.now().strftime("%Y-%m-%d"),
         }
 
@@ -358,9 +496,10 @@ class EUAIActInventoryManager:
             except Exception as exc:
                 print(f"[EUAIAct] Bestehendes Inventar konnte nicht geladen werden, manuelle Overrides bleiben unberuecksichtigt: {exc}", file=sys.stderr)
 
+        known_ids = {str(p.get("id") or p.get("name") or "").strip() for p in profiles}
         for p in profiles:
             aid = p.get("id") or p.get("name")
-            classified = self.classify_agent(p)
+            classified = self.classify_agent(p, known_ids=known_ids)
             if aid in overrides:
                 merged = dict(classified)
                 merged.update(overrides[aid])
@@ -398,6 +537,10 @@ class EUAIActInventoryManager:
                     if (
                         loaded and isinstance(loaded, list)
                         and "soul_sha256" in loaded[0]
+                        # D15-H2: ein mit alter Hash-Quelle (souls/<id>/SOUL.md)
+                        # geschriebenes Inventar darf nicht als "aktuell" gelten,
+                        # sonst wuerde der geprinnte Prompt dauerhaft driftieren.
+                        and loaded[0].get("soul_hash_source") == SOUL_HASH_SOURCE
                         and len(loaded) == len(profiles)
                     ):
                         return loaded

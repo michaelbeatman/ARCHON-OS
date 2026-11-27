@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import sys
+import uuid
 import weakref
 from typing import Any, Dict, List, NamedTuple, Optional
 
@@ -225,6 +226,113 @@ def broadcast_comm_message(req: CommBroadcastRequest):
         return {"status": "success", "created_at": now_iso}
     finally:
         conn.close()
+
+
+class AgentInstructionRequest(BaseModel):
+    """D01-H2: echte Aufgabe statt reines Funkverkehr-Event.
+
+    Der JS-Konsument (Partition C) muss den Erfolg ausschliesslich am
+    zurueckgegebenen ``task_id`` erkennen — nicht an ``status``.
+    """
+
+    author: str = "commander"
+    message: str
+    agent_id: str
+    parent_project_id: Optional[str] = None
+    title: Optional[str] = None
+    priority: int = 2
+
+
+@router.post("/tasks")
+def create_agent_instruction_task(req: AgentInstructionRequest):
+    """Erzeugt einen ECHTEN Agenten-Task und liefert ``task_id`` zurueck.
+
+    D01-H2: Die fruehere UI-Schaltflaeche rief ``POST /comm-feed/broadcast``
+    auf; dort wurde nur eine ``task_events``-Zeile geschrieben und Erfolg
+    gemeldet, ohne dass ein Task existierte. Dieser Endpunkt legt jetzt eine
+    echte Zeile in ``tasks`` an (Konsument: regulärer Kanban-/Dispatch-Loop),
+    schreibt zusaetzlich den Feed-Eintrag mit der echten Task-ID und
+    verifiziert den Task vor der Antwort. Bei jedem Fehler: HTTPException,
+    kein Erfolg, keine ``task_id``.
+    """
+    message = str(req.message or "").strip()
+    agent_id = str(req.agent_id or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Nachricht darf nicht leer sein.")
+    if not agent_id:
+        raise HTTPException(status_code=400, detail="agent_id darf nicht leer sein.")
+
+    title = str(req.title or message).strip()[:200] or message[:200]
+    task_id = f"task-{uuid.uuid4().hex[:12]}"
+    now_iso = datetime.datetime.now().isoformat()
+    priority = max(0, min(5, int(req.priority or 0)))
+    author = str(req.author or "commander")
+
+    deps = _get_ops_deps()
+    conn = deps.get_kanban_connection()
+    try:
+        cur = conn.cursor()
+        # Echter Seiteneffekt: Task-Zeile in der Kanban-DB. Status "review"
+        # entspricht dem MC-Gate "approval" (_mc_status_to_db in
+        # archon/core/mission_control.py) — kein Auto-Start ohne Freigabe.
+        cur.execute(
+            """
+            INSERT INTO tasks (id, title, body, assignee, status, priority, created_by, created_at, project_id)
+            VALUES (?, ?, ?, ?, 'review', ?, ?, ?, ?)
+            """,
+            (task_id, title, message, agent_id, priority, author, now_iso, req.parent_project_id),
+        )
+        # Feed-Eintrag bleibt erhalten, zeigt jetzt aber auf den echten Task.
+        payload = json.dumps({
+            "author": author,
+            "message": message,
+            "target": agent_id,
+            "broadcast": False,
+            "instruction_task_id": task_id,
+        }, ensure_ascii=False)
+        cur.execute(
+            """
+            INSERT INTO task_events (task_id, kind, payload, created_at)
+            VALUES (?, 'broadcast', ?, ?)
+            """,
+            (task_id, payload, now_iso),
+        )
+        conn.commit()
+
+        # Verifikation im Produktivpfad: der Task muss lesbar und dem
+        # angegebenen Agenten zugewiesen sein, sonst fail-closed.
+        proof = cur.execute(
+            "SELECT 1 FROM tasks WHERE id = ? AND assignee = ?",
+            (task_id, agent_id),
+        ).fetchone()
+        if proof is None:
+            raise HTTPException(status_code=500, detail="Task-Verifikation fehlgeschlagen.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        _archon_exc_logger.error("[D01-H2] Task-Erzeugung fehlgeschlagen: %s", exc)
+        raise HTTPException(status_code=500, detail="Agenten-Task konnte nicht angelegt werden.") from exc
+    finally:
+        conn.close()
+
+    # Best-Effort UI-Refresh; darf den bereits verifizierten Task nicht
+    # nachtraeglich als Fehler markieren.
+    try:
+        broadcast_event("task_captured", {
+            "action": "agent_instruction",
+            "task_id": task_id,
+            "agent_id": agent_id,
+            "status": "review",
+        })
+    except Exception as exc:
+        _archon_exc_logger.debug("[D01-H2] task_captured Event nicht zugestellt: %s", exc)
+
+    # Vertrag fuer Partition C: Erfolg NUR bei nicht leerem ``task_id``.
+    return {"status": "success", "task_id": task_id, "agent_id": agent_id, "created_at": now_iso}
 
 
 @router.get("/comm-feed")
@@ -943,10 +1051,13 @@ def api_allocate_task_budget(request: Request, task_id: str, req: TaskBudgetAllo
         allow_autonomous_hiring=bool(req.allow_autonomous_hiring),
         trajectory_id=traj_id,
     )
-    if str(res.get("status") or "") == "blocked":
+    _status = str(res.get("status") or "")
+    # D15-H7: `not_configured` ist kein Erfolg — sonst wuerde die API einen
+    # nicht ausfuehrbaren Hiring-Plan als gebucht quittieren.
+    if _status in ("blocked", "not_configured") or str(res.get("error_code") or "") == "COMPLIANCE_BLOCKED":
         raise HTTPException(status_code=409, detail={
-            "status": "blocked",
-            "code": res.get("failure_reason") or "NO_PARENT_BUDGET",
+            "status": _status or "blocked",
+            "code": res.get("failure_reason") or res.get("error_code") or "NO_PARENT_BUDGET",
             "budget_plan": res.get("budget_plan"),
         })
     return {"status": "success", **res}

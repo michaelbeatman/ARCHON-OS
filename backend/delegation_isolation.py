@@ -16,7 +16,16 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional
+
+# D15-H5: Tool-Alias-Normalisierung und die Positivliste beratender HIGH_RISK-
+# Rollen kommen aus der zentralen Alias-SSOT (keine zweite lokale Liste).
+from backend.agent_aliases import (
+    ADVISORY_HIGH_RISK_AGENT_IDS,
+    canonical_tool_name,
+    canonical_tool_names,
+)
 
 # D04/MED: SSOT für Pfad-/Betrags-Aliase liegt in backend.tool_warrants.
 from backend.tool_warrants import AMOUNT_ARG_KEYS, PATH_ARG_KEYS
@@ -41,6 +50,67 @@ DEFAULT_PROFILES_PATH = os.path.join(WORKSPACE_DIR, "agent_profiles.json")
 # Fail-closed Minimal-Set, falls ein Profil keine expliziten Tools definiert hat
 MINIMAL_FALLBACK_TOOLS: List[str] = ["web_search"]
 PRIVILEGED_TOOLS = frozenset({"terminal", "execute_code", "filesystem", "mcp", "computer_use", "pay", "pay-cli"})
+
+# D15-H5: Exekutivwerkzeuge, die beratende HIGH_RISK-Rollen dauerhaft nicht
+# fuehren duerfen — weder im tools-Array noch in der Prompt-Deklaration.
+ADVISORY_FORBIDDEN_TOOLS = frozenset({"terminal", "filesystem", "execute_code", "computer_use"})
+_PROMPT_TOOLS_RE = re.compile(r"Authorized System Tools & MCP Servers:\s*(.+)", re.IGNORECASE)
+_BACKTICK_RE = re.compile(r"`([^`]+)`")
+
+
+def declared_tools_from_prompt(prompt: str) -> List[str]:
+    """Liest die Tool-Deklaration aus einem Prompt (D15-H5, Konsument im Gate)."""
+    match = _PROMPT_TOOLS_RE.search(str(prompt or ""))
+    if not match:
+        return []
+    return canonical_tool_names([m.strip() for m in _BACKTICK_RE.findall(match.group(1))])
+
+
+def effective_profile_tools(prof: Dict[str, Any]) -> List[str]:
+    """Einzige SSOT für erlaubte Tools: `tools`-Array nach Alias-Normalisierung.
+
+    Beratende HIGH_RISK-Rollen verlieren Exekutivwerkzeuge dauerhaft, selbst
+    wenn ein veraltetes Profil sie noch im Array fuehrt (fail-closed).
+    """
+    raw = prof.get("tools")
+    if isinstance(raw, (list, tuple, set)):
+        tools = canonical_tool_names([str(t) for t in raw])
+    else:
+        tools = []
+    if str(prof.get("id") or "") in ADVISORY_HIGH_RISK_AGENT_IDS:
+        tools = [t for t in tools if canonical_tool_name(t) not in ADVISORY_FORBIDDEN_TOOLS]
+    return tools or list(MINIMAL_FALLBACK_TOOLS)
+
+
+def validate_prompt_tool_declaration(prof: Dict[str, Any]) -> Dict[str, Any]:
+    """CI-Gate Prompt ≡ tools (D15-H5). Liefert Abweichungen statt sie zu schlucken."""
+    source = str(prof.get("prompt") or prof.get("system_prompt") or "")
+    declared = declared_tools_from_prompt(source)
+    actual = effective_profile_tools(prof)
+    missing = [t for t in actual if t not in declared]
+    extra = [t for t in declared if t not in actual]
+    return {
+        "agent_id": str(prof.get("id") or ""),
+        "declared": declared,
+        "tools": actual,
+        "missing": missing,
+        "extra": extra,
+        "ok": not missing and not extra,
+    }
+
+
+def validate_all_prompt_tool_declarations(
+    profiles: Optional[List[Dict[str, Any]]] = None,
+    profiles_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Liefert ALLE Profile mit Prompt-/Tool-Abweichung (leer = Gate gruen)."""
+    prof_list = profiles if profiles is not None else _load_profiles(profiles_path)
+    mismatches: List[Dict[str, Any]] = []
+    for prof in prof_list:
+        result = validate_prompt_tool_declaration(prof)
+        if not result["ok"]:
+            mismatches.append(result)
+    return mismatches
 
 
 def _load_profiles(profiles_path: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -94,11 +164,9 @@ def resolve_isolated_execution_scope(
             "isolated": True,
         }
 
-    raw_tools = prof.get("tools")
-    if isinstance(raw_tools, list) and len(raw_tools) > 0:
-        allowed_tools = [str(t).strip() for t in raw_tools if str(t).strip()]
-    else:
-        allowed_tools = list(MINIMAL_FALLBACK_TOOLS)
+    # D15-H5: ausschliesslich die normalisierte SSOT — niemals die
+    # Prompt-Deklaration (die war widerspruechlich und wirkungslos).
+    allowed_tools = effective_profile_tools(prof)
 
     raw_skills = prof.get("skills")
     allowed_skills = (

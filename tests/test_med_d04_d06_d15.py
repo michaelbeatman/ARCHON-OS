@@ -23,8 +23,8 @@ if str(ROOT) not in sys.path:
 
 def _load_script(name: str, relative: str):
     spec = importlib.util.spec_from_file_location(name, ROOT / relative)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
     return module
 
 
@@ -212,4 +212,7 @@ def test_d15_crewai_templates_have_negative_scope_and_hitl():
         text = path.read_text(encoding="utf-8")
         assert "## NOT ALLOWED / NICHT ERLAUBT" in text, f"{path}: keine Negativabgrenzung"
         assert "HITL-Freigabe" in text, f"{path}: kein HITL-Hinweis"
-        assert "KI-generiert" in text, f"{path}: kein Art.-50-Hinweis"
+    # D15-M4: Art. 50 nur bei echter Außenwirkung, nicht mehr in jedem Template.
+    assert any(
+        "KI-generiert" in path.read_text(encoding="utf-8") for path in files
+    ), "mindestens ein Außenwirkung-Template muss den Art.-50-Hinweis tragen"

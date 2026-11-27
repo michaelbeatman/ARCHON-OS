@@ -2491,7 +2491,9 @@
       "placeholder_weise_den_agenten_an_z_b_pruef": "Instruct the agent... (e.g. 'Review all 12 applications, filter for senior coder and summarise them')",
       "placeholder_vorlagen_durchsuchen": "Search templates...",
       "placeholder_skills_durchsuchen": "Search skills...",
-      "placeholder_architektur_coding_review": "Architecture, coding, review"
+      "placeholder_architektur_coding_review": "Architecture, coding, review",
+      "haftung_dialog_pflicht_badge": "Required",
+      "haftung_dialog_bestaetigungstext_label": "Confirmation text:"
     },
     "log_stream": {
       "title_help": "Help on telemetry & logs",

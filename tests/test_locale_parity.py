@@ -274,7 +274,7 @@ SETTINGS_MODAL_DONE = frozenset({
     "jev", "memory", "email", "validate", "cost",
 })
 
-SETTINGS_MODAL_PENDING = frozenset()
+SETTINGS_MODAL_PENDING = frozenset()  # type: ignore[var-annotated]
 
 # Nicht uebersetzbare Knoten: Laufzeitwerte aus JS/Backend, technische
 # Identifier und Einheiten. Textgleichheit ist hier eindeutig genug.
@@ -468,7 +468,7 @@ VIEWS_DONE = frozenset({
 # weiterhin eine Zuordnung jeder Datei - eine neue View muss also entweder
 # fertig annotiert in ``VIEWS_DONE`` stehen oder hier bewusst als Tranche
 # eingetragen werden.
-VIEWS_PENDING = frozenset()
+VIEWS_PENDING = frozenset()  # type: ignore[var-annotated]
 
 # Nicht uebersetzbare Knoten je View: Laufzeitwerte aus JS/Backend, technische
 # Identifier, Einheiten, Beispielwerte. Textgleichheit ist eindeutig genug.
@@ -831,6 +831,9 @@ VIEW_EXCEPTIONS = {
         "Logge dich hier ein. Sobald du fertig bist, autorisiere unten den Agenten und gib ihm den Arbeitsauftrag.": "Demo-Hinweis der Login-Kachel (Z. 1031)",
         # Beispiel-Belegung des Formularfelds
         "z.B. Alexander Richter": "Beispiel-Name im Placeholder (Demo-Daten)",
+        # W4-C/D15-H3: der Satz muss EXAKT dem serverseitigen
+        # LIABILITY_CONFIRMATION_PHRASE entsprechen — daher bewusst nicht lokalisiert.
+        "Ich habe den Haftungs- und Berufsrechts-Hinweis gelesen und bestätige die Nutzung ausschließlich als Entscheidungshilfe.": "Pflicht-Bestaetigungssatz, von agent_profiles.js aus der SSOT gesetzt",
     },
 # --- Telemetrie & Logs (Views-Tranche B2) --------------------------
 # Titel/Untertitel und Badges schreibt das Inline-Skript in static/index.html;
@@ -1436,7 +1439,7 @@ def _validate(instance, schema: dict, root: dict, path: str = "$") -> list[str]:
     declared = schema.get("type")
     if declared is not None:
         allowed = declared if isinstance(declared, list) else [declared]
-        if not any(isinstance(instance, _JSON_TYPES[name]) for name in allowed):
+        if not any(isinstance(instance, _JSON_TYPES[name]) for name in allowed):  # type: ignore[arg-type]
             return [f"{path}: Typ {type(instance).__name__}, erwartet {allowed}"]
 
     if isinstance(instance, str) and "minLength" in schema:
@@ -1474,7 +1477,7 @@ def test_catalogs_validate_against_schema():
     schema = load_catalog(SCHEMA_PATH)
     assert "$schema" in schema and "properties" in schema, "schema.json unbrauchbar"
 
-    problems = []
+    problems = []  # type: ignore[var-annotated]
     for path in locale_files():
         errors = _validate(load_catalog(path), schema, schema)
         problems.extend(f"{path.name} {error}" for error in errors)

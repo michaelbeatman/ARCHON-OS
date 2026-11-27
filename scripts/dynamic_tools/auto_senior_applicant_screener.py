@@ -1,44 +1,25 @@
 # -*- coding: utf-8 -*-
-"""Autonome Ausführung für Skill: auto_senior_applicant_screener
+"""Demo-Aufzeichnung fuer Skill: auto_senior_applicant_screener — NICHT ausfuehrbar.
 Synthetisiert aus Demonstration: Bewerbungen Prüfen und Senior Coder Selektieren
 Erstellt am: 2026-11-05T14:06:05.936541
-Enthält biomechanische Bézier-Trajektorien und Bounding-Box Jitter.
+demo_only: True | simulated: True | executable: False
+
+Es ist keine CUA-Runtime angebunden. Dieses Artefakt dokumentiert nur
+die aufgezeichneten Schritte; es fuehrt keine Klicks, Tastatureingaben
+oder Navigationen aus. execute_*() wirft daher RuntimeError.
 """
 
-import time
-import random
-from backend.computer_use_pbd import GhostCursorEngine
+from backend.computer_use_pbd import CUA_RUNTIME_UNAVAILABLE_MESSAGE
+
+DEMO_ONLY = True
+SIMULATED = True
+EXECUTABLE = False
+
+RECORDED_STEPS = [{'step': 1, 'type': 'navigate', 'details': {'url': 'https://karriere.portal.internal'}, 'commentary': 'Navigiere zum Karriereportal'}, {'step': 2, 'type': 'click', 'details': {'selector': '#btn-filter-senior', 'x': 65, 'y': 42}, 'commentary': 'Klicke auf Filter für Senior-Profile'}, {'step': 3, 'type': 'type', 'details': {'field': 'Suche', 'text': 'Python Fullstack'}, 'commentary': 'Tippe Suchbegriff mit natürlicher Kadenz'}, {'step': 4, 'type': 'click', 'details': {'selector': '#btn-submit-review', 'x': 80, 'y': 70}, 'commentary': 'Bewerbungen freigeben'}]
 
 def execute_auto_senior_applicant_screener(target_url: str = 'https://karriere.portal.internal'):
-    print(f"[PbD Execution] Starte Ausführung von auto_senior_applicant_screener auf {target_url}...")
-    cursor_engine = GhostCursorEngine()
-
-    # Kommentar des Nutzers: 'Navigiere zum Karriereportal'
-    print('[Aktion] Navigiere zu https://karriere.portal.internal')
-    time.sleep(random.uniform(0.6, 1.2))
-
-    # Kommentar des Nutzers: 'Klicke auf Filter für Senior-Profile'
-    # Klick auf: '#btn-filter-senior'
-    jx, jy = cursor_engine.apply_bounding_box_jitter(65, 42, 40, 20)
-    traj = cursor_engine.calculate_bezier_trajectory((50, 50), (jx, jy), steps=18)
-    print('[Aktion] Bewege Maus biomechanisch nach ({jx}, {jy}) und klicke auf #btn-filter-senior')
-    time.sleep(random.uniform(0.4, 0.9))
-
-    # Kommentar des Nutzers: 'Tippe Suchbegriff mit natürlicher Kadenz'
-    # Text tippen: 'Python Fullstack' in 'Suche'
-    delays = cursor_engine.generate_keystroke_delays('Python Fullstack')
-    print('[Aktion] Tippe Text in Suche mit variierender menschlicher Kadenz ({len(delays)} Anschläge)...')
-    time.sleep(sum(d["delay_ms"] for d in delays) / 1000.0 * 0.4)
-
-    # Kommentar des Nutzers: 'Bewerbungen freigeben'
-    # Klick auf: '#btn-submit-review'
-    jx, jy = cursor_engine.apply_bounding_box_jitter(80, 70, 40, 20)
-    traj = cursor_engine.calculate_bezier_trajectory((50, 50), (jx, jy), steps=18)
-    print('[Aktion] Bewege Maus biomechanisch nach ({jx}, {jy}) und klicke auf #btn-submit-review')
-    time.sleep(random.uniform(0.4, 0.9))
-
-    print("[PbD Execution] Skill auto_senior_applicant_screener erfolgreich abgeschlossen.")
-    return {"status": "completed", "skill": "auto_senior_applicant_screener", "steps": 4}
+    """Fail-closed: ohne echte CUA-Runtime nie Erfolg melden."""
+    raise RuntimeError(CUA_RUNTIME_UNAVAILABLE_MESSAGE)
 
 if __name__ == '__main__':
     execute_auto_senior_applicant_screener()

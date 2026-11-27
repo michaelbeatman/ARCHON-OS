@@ -2491,7 +2491,9 @@
       "placeholder_weise_den_agenten_an_z_b_pruef": "Weise den Agenten an... (z. B. 'Prüfe alle 12 Bewerbungen, filtere nach Senior Coder und fasse sie zusammen')",
       "placeholder_vorlagen_durchsuchen": "Vorlagen durchsuchen...",
       "placeholder_skills_durchsuchen": "Skills durchsuchen...",
-      "placeholder_architektur_coding_review": "Architektur, Coding, Review"
+      "placeholder_architektur_coding_review": "Architektur, Coding, Review",
+      "haftung_dialog_pflicht_badge": "Pflicht",
+      "haftung_dialog_bestaetigungstext_label": "Bestätigungstext:"
     },
     "log_stream": {
       "title_help": "Hilfe zu Telemetrie & Logs",

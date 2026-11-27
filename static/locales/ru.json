@@ -2491,7 +2491,9 @@
       "placeholder_weise_den_agenten_an_z_b_pruef": "Дайте указание агенту... (напр. «Проверь все 12 заявок, отфильтруй senior coder и суммируй»)",
       "placeholder_vorlagen_durchsuchen": "Поиск шаблонов...",
       "placeholder_skills_durchsuchen": "Поиск навыков...",
-      "placeholder_architektur_coding_review": "Архитектура, программирование, ревью"
+      "placeholder_architektur_coding_review": "Архитектура, программирование, ревью",
+      "haftung_dialog_pflicht_badge": "Обязательно",
+      "haftung_dialog_bestaetigungstext_label": "Текст подтверждения:"
     },
     "log_stream": {
       "title_help": "Справка по телеметрии и журналам",

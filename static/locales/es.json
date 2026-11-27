@@ -2491,7 +2491,9 @@
       "placeholder_weise_den_agenten_an_z_b_pruef": "Instruye al agente... (p. ej. 'Revisa las 12 candidaturas, filtra por senior coder y resúmelas')",
       "placeholder_vorlagen_durchsuchen": "Buscar plantillas...",
       "placeholder_skills_durchsuchen": "Buscar skills...",
-      "placeholder_architektur_coding_review": "Arquitectura, coding, review"
+      "placeholder_architektur_coding_review": "Arquitectura, coding, review",
+      "haftung_dialog_pflicht_badge": "Obligatorio",
+      "haftung_dialog_bestaetigungstext_label": "Texto de confirmación:"
     },
     "log_stream": {
       "title_help": "Ayuda sobre telemetría y registros",

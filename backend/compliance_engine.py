@@ -37,6 +37,13 @@ def _audit_strict() -> bool:
 
 
 DEFAULT_LITERACY_FILE = os.path.join(WORKSPACE_DIR, "data", "ai_act_literacy_register.json")
+# D15-H2: dieselbe Prompt-SSOT wie im Inventar, damit Pin und Live-Hash
+# bitgleich verglichen werden koennen. WICHTIG: archon.core.runtime.WORKSPACE_DIR
+# ist der Agent-Workspace (./agent_workspace), NICHT der Repo-Root — die
+# Profile liegen am Repo-Root. Frueher griff _canonical_soul_sha256() direkt
+# auf souls/<id>/SOUL.md zu und hat diesen Unterschied nie sichtbar gemacht.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROFILES_FILE = os.path.join(_REPO_ROOT, "agent_profiles.json")
 
 
 class ComplianceEngine:
@@ -228,14 +235,48 @@ class ComplianceEngine:
     # Pflicht-Guardrail-Prüfung (Anhang III / Art. 50)
     # ------------------------------------------------------------------
 
+    # D15-H4: Bootstrap-/Seed-Erzeuger sind keine fachlich verantwortlichen
+    # Aktoren. Ein "Nachweis" aus diesen Quellen ist ein Schein-Nachweis.
+    _UNSIGNED_LITERACY_ACTORS = frozenset({
+        "system_bootstrap",
+        "fix_a8_roles_bootstrap",
+        "bootstrap",
+        "seed",
+        "system",
+    })
+
     @staticmethod
     def _is_valid_literacy_entry(entry: Dict[str, Any], today_iso: str) -> bool:
+        """Art.-4-Nachweis NUR mit gueltigem, herkunftssigniertem SHA-256-Zertifikat.
+
+        Der Hash wird von ``add_literacy_entry()`` aus den Entry-Feldern
+        berechnet und dort zusammen mit dem verantwortlichen Actor im
+        GoBD-Audit-Log verankert. Ein ``null``-Hash oder ein Bootstrap-Actor
+        ist damit kein Nachweis und darf HIGH_RISK nie freischalten.
+        """
         if entry.get("status") != "ACTIVE":
             return False
         valid_until = str(entry.get("valid_until") or "").strip()[:10]
         if valid_until and valid_until < today_iso:
             return False
-        return True
+        cert = str(entry.get("certificate_sha256") or "").strip().lower()
+        if len(cert) != 64 or any(c not in "0123456789abcdef" for c in cert):
+            return False
+        actor = str(entry.get("recorded_by") or "").strip()
+        if not actor or actor in ComplianceEngine._UNSIGNED_LITERACY_ACTORS:
+            return False
+        completed_at = str(entry.get("completed_at") or "").strip()[:10]
+        if not completed_at:
+            return False
+        # Herkunfts-/Integritaetscheck: der Certificate-Hash muss exakt der
+        # von add_literacy_entry() erzeugten Signatur ueber den Entry-Feldern
+        # entsprechen. Ein beliebiger 64-Zeichen-String reicht nicht.
+        raw = "|".join(
+            str(entry.get(field) or "").strip()
+            for field in ("id", "person_name", "role", "training_module", "completed_at", "valid_until")
+        )
+        expected = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        return cert == expected
 
     def evaluate_guardrails(self) -> Dict[str, Any]:
         inv_mgr = self._get_inventory_mgr()
@@ -262,6 +303,20 @@ class ComplianceEngine:
                     "reason": "Art. 5 EU AI Act: Verbotene KI-Praktik darf nicht betrieben werden.",
                 })
                 continue
+
+            # D15-M1: Drift in der Prompt-SSOT ist fuer JEDEN Tier sichtbar —
+            # previously wurde nur HIGH_RISK geprueft und Nicht-HIGH_RISK
+            # pauschal als "verifiziert" markiert.
+            pinned = str(item.get("soul_sha256") or "").strip()
+            if pinned:
+                from backend.eu_ai_act_inventory import compute_live_soul_sha256
+                live = compute_live_soul_sha256(str(aid or ""))
+                if live and live != pinned:
+                    violations.append({
+                        "agent_id": aid,
+                        "risk_tier": tier,
+                        "reason": "SOUL-SHA256-Mismatch: Prompt-SSOT weicht vom Inventar-Pin ab (D15-M1).",
+                    })
 
             if tier == "HIGH_RISK":
                 if "HITL" not in oversight and "4-Augen" not in oversight:
@@ -307,31 +362,42 @@ class ComplianceEngine:
 
     @staticmethod
     def _canonical_soul_sha256(agent_id: str) -> Optional[str]:
-        """Kanonischer Live-Hash AUSSCHLIESSLICH aus ``souls/<id>/SOUL.md``.
+        """Live-Hash der EINEN Prompt-SSOT (D15-H2).
 
-        A15/F-05 (D6): Der an ``check_activation_allowed()`` uebergebene
-        ``system_prompt`` stammt aus ``agent_profiles.json`` und ist nicht die
-        SSOT — ein Abgleich gegen ihn wuerde den echten SOUL-Pin falsch
-        blockieren oder eine manipulierte Prompt-Variante zulassen. Die
-        Zeilenenden-Normalisierung ist identisch zu
-        ``backend.eu_ai_act_inventory._compute_soul_sha256()``, damit der im
-        Inventar gepinnte Hash direkt vergleichbar ist. Fehlt die Datei, ist
-        sie nicht lesbar oder leer, wird ``None`` geliefert (fail-closed).
+        Frueher wurde ausschliesslich ``souls/<id>/SOUL.md`` gehasht, waehrend
+        der Dispatch den abweichenden Prompt aus ``agent_profiles.json``
+        ausfuehrte. Jetzt kommt der Live-Hash aus exakt derselben Quelle wie
+        der Inventar-Pin (``compute_live_soul_sha256``). Der uebergebene
+        ``system_prompt`` bleibt bewusst unberuecksichtigt: er ist eine
+        Kopie und koennte die Pruefung umgehen. Fehlt die SSOT-Quelle, wird
+        ``None`` geliefert (fail-closed).
         """
-        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        canon = os.path.join(repo_root, "souls", agent_id, "SOUL.md")
-        if not os.path.isfile(canon):
-            return None
+        from backend.eu_ai_act_inventory import compute_live_soul_sha256
+
+        return compute_live_soul_sha256(agent_id, profiles_file=PROFILES_FILE)
+
+    def _record_soul_drift_audit(
+        self, agent_id: str, risk_tier: str, pinned_hash: str, live_hash: str
+    ) -> None:
+        """D15-M1: SOUL-Drift ist auditierbar — auch ausserhalb von HIGH_RISK."""
         try:
-            with open(canon, "r", encoding="utf-8", newline="") as fh:
-                text = fh.read().replace("\r\n", "\n").replace("\r", "\n").strip()
-        except Exception as exc:
-            print(
-                f"[Compliance] kanonisches SOUL {agent_id} nicht verifizierbar: {exc}",
-                file=sys.stderr,
+            self._get_audit_log().record_event(
+                category="compliance",
+                action="soul_sha256_drift_detected",
+                agent_id=agent_id,
+                payload={
+                    "risk_tier": risk_tier,
+                    "pinned_sha256": pinned_hash,
+                    "live_sha256": live_hash,
+                    "reclassification_required": True,
+                    "hash_source": "agent_profiles.json.prompt",
+                },
             )
-            return None
-        return hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None
+        except Exception as exc:
+            # Die Aktivierung bleibt trotzdem fail-closed blockiert; ein
+            # fehlgeschlagener Audit-Schreibversuch darf nicht verschluckt
+            # werden.
+            logger.error("[Compliance] SOUL-Drift-Audit fehlgeschlagen: %s", exc)
 
     def check_activation_allowed(self, agent_id: str, system_prompt: str = "") -> Dict[str, Any]:
         """Prüft vor Aktivierung/Dispatch eines Spezialisten, ob alle EU-AI-Act-Pflicht-Guardrails erfüllt sind.
@@ -387,34 +453,39 @@ class ComplianceEngine:
                 "reason": "Aktivierung gesperrt: Agent ist im EU-AI-Act-Register als NON_COMPLIANT markiert.",
             }
 
+        # D15-M1: Hash-Verifikation fuer ALLE Tiers. Ein uebergebener Prompt
+        # darf die Pruefung weder ausloesen noch umgehen — autoritativ ist
+        # ausschliesslich die Prompt-SSOT (agent_profiles.json).
         pinned_hash = str(item.get("soul_sha256") or "").strip()
-        if item.get("risk_tier") == "HIGH_RISK":
-            # A15/F-05: ein uebergebener Prompt darf die Pruefung weder
-            # ausloesen noch umgehen. Autoritativ ist immer die SSOT-Datei.
-            live_hash = self._canonical_soul_sha256(lookup_id)
-            if not pinned_hash or not live_hash:
-                return {
-                    "allowed": False,
-                    "agent_id": agent_id,
-                    "risk_tier": item.get("risk_tier"),
-                    "error_code": "SOUL_SHA256_NOT_VERIFIABLE",
-                    "reason": (
-                        "Aktivierung gesperrt: kanonischer SOUL-Hash aus "
-                        f"souls/{lookup_id}/SOUL.md nicht verifizierbar "
-                        "(Datei fehlt, nicht lesbar oder leer)."
-                    ),
-                }
-            if live_hash != pinned_hash:
-                return {
-                    "allowed": False,
-                    "agent_id": agent_id,
-                    "risk_tier": item.get("risk_tier"),
-                    "error_code": "SOUL_SHA256_MISMATCH",
-                    "reason": (
-                        f"Aktivierung gesperrt: SOUL-Hash weicht vom gepinnten "
-                        f"SOUL-SHA-256 ({pinned_hash[:12]}) ab."
-                    ),
-                }
+        live_hash = self._canonical_soul_sha256(lookup_id) or ""
+        if not pinned_hash or not live_hash:
+            return {
+                "allowed": False,
+                "agent_id": agent_id,
+                "risk_tier": item.get("risk_tier"),
+                "error_code": "SOUL_SHA256_NOT_VERIFIABLE",
+                "reason": (
+                    "Aktivierung gesperrt: SOUL-Hash der Prompt-SSOT "
+                    f"(agent_profiles.json[{lookup_id}]) oder Inventar-Pin "
+                    "nicht verifizierbar (fehlt, nicht lesbar oder leer)."
+                ),
+            }
+        if live_hash != pinned_hash:
+            self._record_soul_drift_audit(
+                lookup_id, str(item.get("risk_tier") or ""), pinned_hash, live_hash
+            )
+            return {
+                "allowed": False,
+                "agent_id": agent_id,
+                "risk_tier": item.get("risk_tier"),
+                "error_code": "SOUL_SHA256_MISMATCH",
+                "guardrails_verified": False,
+                "reclassification_required": True,
+                "reason": (
+                    f"Aktivierung gesperrt: SOUL-Hash weicht vom gepinnten "
+                    f"SOUL-SHA-256 ({pinned_hash[:12]}) ab (Drift in der Prompt-SSOT)."
+                ),
+            }
 
         if item.get("risk_tier") == "HIGH_RISK":
             oversight = str(item.get("human_oversight_measure") or "")
@@ -444,6 +515,7 @@ class ComplianceEngine:
             "agent_id": agent_id,
             "risk_tier": risk_tier,
             "soul_sha256": pinned_hash,
+            "guardrails_verified": bool(item.get("guardrails_verified", True)),
             "disclosure_required": risk_tier in ("HIGH_RISK", "LIMITED_RISK", "SPECIFIC_TRANSPARENCY"),
         }
 

@@ -32,7 +32,12 @@ echo 3. Container mit neuem Image neu erstellen und starten...
 docker compose -f docker-compose.yml up -d --force-recreate archon-os
 
 echo.
-echo 4. Pruefe Container Status...
+echo 4. Bereinige alte Dangling-Images und begrenze Build-Cache auf 4 GB...
+docker image prune -f >nul 2>&1
+docker builder prune -f --keep-storage 4GB >nul 2>&1
+
+echo.
+echo 5. Pruefe Container Status...
 docker ps --filter "name=ARCHON"
 
 echo.

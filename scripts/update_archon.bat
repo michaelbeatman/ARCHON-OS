@@ -28,15 +28,21 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/3] Synchronisiere Docker Container...
-docker restart ARCHON-OS 2>nul
+echo [2/4] Baue und synchronisiere Docker Container (mit Image-Rebuild)...
+docker compose -f docker-compose.yml up -d --build --remove-orphans archon-os
 if errorlevel 1 (
-  echo [INFO] ARCHON-OS laeuft lokal oder Docker Compose wird genutzt:
-  docker compose -f docker-compose.yml up -d --remove-orphans archon-os 2>nul
+  echo [FEHLER] Docker-Rebuild oder Container-Start fehlgeschlagen.
+  pause
+  exit /b 1
 )
 
 echo.
-echo [3/3] Pruefe Service Health...
+echo [3/4] Bereinige alte Dangling-Images und begrenze Build-Cache auf 4 GB...
+docker image prune -f >nul 2>&1
+docker builder prune -f --keep-storage 4GB >nul 2>&1
+
+echo.
+echo [4/4] Pruefe Service Health...
 timeout /t 3 >nul
 python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/api/v1/research/providers', timeout=5); print('Archon OS API ist online und bereit!')" 2>nul
 

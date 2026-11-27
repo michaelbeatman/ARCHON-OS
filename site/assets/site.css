@@ -319,26 +319,35 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   display: block;
 }
 
-/* Circular Da-Vinci Sovereign Wheel filling the empty card slot in the FAQ grid */
-.faq-zone { position: relative; }
+/* Circular Da-Vinci Sovereign Wheel anchored top-left in FAQ slot, expanding +150% diagonally down-right behind Docs */
+.faq-zone { position: relative; overflow: visible; }
 .faq-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
+  overflow: visible;
+}
+.faq-grid .feat {
+  position: relative;
+  z-index: 2;
 }
 .faq-davinci-slot {
   grid-column: 2 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.25rem 0.5rem;
+  position: relative;
+  min-height: 220px;
   pointer-events: none;
   user-select: none;
-  overflow: hidden;
+  overflow: visible;
+  z-index: 1;
 }
 .faq-davinci-frame {
-  position: relative;
-  width: min(100%, 440px);
+  position: absolute;
+  top: -1.5rem;
+  left: -1rem;
+  width: clamp(540px, 72vw, 1080px);
   aspect-ratio: 1024 / 764;
+  z-index: 1;
+  mask-image: radial-gradient(ellipse 78% 76% at 48% 48%, rgba(0, 0, 0, 0.95) 45%, rgba(0, 0, 0, 0.35) 78%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 78% 76% at 48% 48%, rgba(0, 0, 0, 0.95) 45%, rgba(0, 0, 0, 0.35) 78%, transparent 100%);
 }
 .faq-davinci-frame .davinci-layer-under,
 .faq-davinci-frame .davinci-layer-plate,
@@ -349,9 +358,9 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   mask-image: none;
   -webkit-mask-image: none;
 }
-.faq-davinci-frame .davinci-layer-under { opacity: 0.62; transform: none; }
-.faq-davinci-frame .davinci-plate-img { opacity: 0.82; }
-.faq-davinci-frame .davinci-layer-over { opacity: 0.85; }
+.faq-davinci-frame .davinci-layer-under { opacity: 0.56; transform: none; }
+.faq-davinci-frame .davinci-plate-img { opacity: var(--davinci-opacity); }
+.faq-davinci-frame .davinci-layer-over { opacity: 0.78; }
 
 /* Subtle circular wheel band for Phase 3 subpages above footer */
 .subpage-wheel-stage {
@@ -934,6 +943,8 @@ h2.sec::before, h3.sec::before {
 
 /* Responsive Tables (Zero horizontal clipping on 390px) */
 .table-wrap {
+  position: relative;
+  z-index: 2;
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -1108,7 +1119,8 @@ footer a:hover { color: var(--fg); }
   .install { grid-template-columns: 1fr; }
   .governance-showcase { grid-template-columns: 1fr; }
   .faq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .faq-davinci-slot { grid-column: 1 / -1; padding: 0.75rem 0; }
+  .faq-davinci-slot { grid-column: 1 / -1; min-height: 180px; }
+  .faq-davinci-frame { width: clamp(420px, 82vw, 720px); top: -0.75rem; left: 0; }
   .geo-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shots-thumbs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hero-davinci-stage { width: 420px; right: -10%; opacity: 0.42; }
@@ -1123,7 +1135,8 @@ footer a:hover { color: var(--fg); }
   .creation-davinci-stage { width: 132vw; opacity: 0.72; }
   .logo-showcase { padding: 0.75rem 1.25rem; }
   .faq-grid { grid-template-columns: 1fr; }
-  .faq-davinci-frame { width: min(100%, 340px); }
+  .faq-davinci-slot { min-height: auto; padding: 0.5rem 0; }
+  .faq-davinci-frame { position: relative; top: 0; left: 0; width: min(100%, 340px); margin: 0 auto; }
   .geo-strip { grid-template-columns: 1fr 1fr; }
   .shots-thumbs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

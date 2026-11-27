@@ -358,11 +358,43 @@ jobs:
           tenant_dir = os.path.join("data", "tenants", "ci_verify")
           os.makedirs(tenant_dir, exist_ok=True)
           con = sqlite3.connect(os.path.join(tenant_dir, "tenant.db"))
+          con.execute("PRAGMA journal_mode=WAL")
           con.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+          con.execute("INSERT INTO t DEFAULT VALUES")
           con.commit()
           con.close()
           PY
-          python scripts/automated_restore_test.py --json > restore_report.json
+          # D10-M2: Echtes Litestream-Replikat + Restore via gepinntem Image erzeugen.
+          LITESTREAM_IMG="litestream/litestream:0.5.1@sha256:b6b174e740f00e624fe15053f65348ab7e42daa3cc3ce1fa4cf6b89db5e3788d"
+          mkdir -p "$PWD/dr_replicas/tenants/ci_verify"
+          cat > /tmp/ci_litestream.yml <<'YAML'
+          dbs:
+            - path: /app/data/tenants/ci_verify/tenant.db
+              replica:
+                type: file
+                path: /opt/litestream_replicas/tenants/ci_verify/tenant.db
+                sync-interval: 1s
+          YAML
+          docker run --rm -u "$(id -u):$(id -g)" \
+            -v "$PWD/data:/app/data" \
+            -v "$PWD/dr_replicas:/opt/litestream_replicas" \
+            -v /tmp/ci_litestream.yml:/etc/litestream.yml:ro \
+            "$LITESTREAM_IMG" replicate -exec "sleep 2" -config /etc/litestream.yml
+          cat > /tmp/ci_litestream.sh <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker run --rm -u "$(id -u):$(id -g)" \
+            -v "$PWD/dr_replicas:/opt/litestream_replicas:ro" \
+            -v /tmp:/tmp \
+            -v /tmp/ci_litestream.yml:/etc/litestream.yml:ro \
+            litestream/litestream:0.5.1@sha256:b6b174e740f00e624fe15053f65348ab7e42daa3cc3ce1fa4cf6b89db5e3788d \
+            restore -o "$3" -config /etc/litestream.yml "$6"
+          SH
+          chmod +x /tmp/ci_litestream.sh
+          ARCHON_AUDIT_HMAC_KEY="ci-test-key-not-for-production" \
+          ARCHON_LITESTREAM_REPLICA_DIR="$PWD/dr_replicas" \
+          ARCHON_LITESTREAM_BIN="/tmp/ci_litestream.sh" \
+            python scripts/automated_restore_test.py --json > restore_report.json
           python - <<'PY'
           import json
           import sys

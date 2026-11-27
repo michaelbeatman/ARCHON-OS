@@ -421,7 +421,7 @@ class AutomatedRestoreTester:
                         continue
                 if src_path.endswith(".gz"):
                     # Reales Backup-Artefakt: erst in der Sandbox dekomprimieren.
-                    raw_path = os.path.join(sandbox_dir, f"source_{db_name}")
+                    raw_path = os.path.join(sandbox_dir, f"source_{safe_dest_name}")
                     with gzip.open(src_path, "rb") as f_src, open(raw_path, "wb") as f_dst:
                         shutil.copyfileobj(f_src, f_dst)
                     src_path = raw_path

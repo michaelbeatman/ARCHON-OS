@@ -205,7 +205,7 @@ export const WatchdogModal: React.FC<WatchdogModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+    <div className="fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
       <div 
         className={`w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden transition-all duration-150 ${
           isLight ? "bg-white border-slate-200 text-slate-800" : "bg-slate-900 border-slate-800 text-slate-100"

@@ -1,18 +1,24 @@
-from fastapi import Depends as _ArchonDepends
-
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
-
 """Sub-Router fuer API-Keys & Scopes Access Management (t-6fad7a).
 
 Ausgelagert aus backend/operations_api.py.
 """
 
-from typing import Any, Dict, List
+import logging
+from typing import List
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 from pydantic import BaseModel, ConfigDict, Field
 
-from archon.routers._rbac import get_session_actor, require_admin_or_503, require_session_actor
+from archon.routers._rbac import (
+    forbid_viewer_writes as _forbid_viewer_writes,
+)
+from archon.routers._rbac import (
+    require_admin_or_503,
+    require_session_actor,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ApiKeyCreateRequest(BaseModel):
@@ -73,6 +79,47 @@ def api_create_key(request: Request, req: ApiKeyCreateRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/keys/scopes")
+def api_list_key_scopes(request: Request):
+    """Liefert den Scope-Katalog der eingehenden Archon-Tokens (read-only)."""
+    require_admin_or_503(request)  # RBAC: Scope-Katalog ist Admin-Wissen
+    require_session_actor(request)
+    from backend.api_key_manager import VALID_SCOPES
+
+    return {
+        "status": "success",
+        "scopes": [
+            {"scope": scope, "description": description}
+            for scope, description in VALID_SCOPES.items()
+        ],
+    }
+
+
+@router.post("/keys/{key_id}/rotate")
+def api_rotate_key(request: Request, key_id: str):
+    """Rotiert einen Key; Name/Scopes/Rate-Limits bleiben erhalten.
+
+    Der frische Token erscheint ausschliesslich in dieser einen Antwort und
+    darf nicht in Listen-, Detail- oder Aggregationsendpunkte gelangen.
+    """
+    require_admin_or_503(request)  # RBAC: Admin-Sache
+    rotated_by = require_session_actor(request)
+    try:
+        from backend.api_key_manager import AuditWriteFailedError, api_key_manager
+        result = api_key_manager.rotate_key(key_id, rotated_by=rotated_by)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Key nicht gefunden oder bereits inaktiv.")
+        return {"status": "success", "result": result}
+    except AuditWriteFailedError as exc:
+        # Wie bei create_key: Audit-Ausfall ist 503, kein generischer 500er.
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("API-Key-Rotation fehlgeschlagen")
+        raise HTTPException(status_code=500, detail="Key-Rotation fehlgeschlagen.")
 
 
 @router.post("/keys/{key_id}/revoke")

@@ -7,20 +7,19 @@ Extrahiert aus main.py zur Modularisierung.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
-import json
-import time
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from backend.auth_service import auth_service
 from archon.core.config import config
 from archon.core.paths import SETTINGS_FILE
 from archon.core.runtime import atomic_write_json, logger
+from backend.auth_service import auth_service
 
 router = APIRouter(tags=["auth"])
 
@@ -483,6 +482,46 @@ def api_auth_update_user(user_id: str, request: Request, payload: AuthUpdateUser
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class AuthTelegramChannelRequest(BaseModel):
+    telegram_chat_id: str = ""
+    telegram_bot_token: Optional[str] = None
+
+
+@router.post("/api/auth/users/{user_id}/telegram")
+def api_auth_set_user_telegram_channel(
+    user_id: str,
+    request: Request,
+    payload: AuthTelegramChannelRequest = Body(...),
+):
+    """M95: Hinterlegt benutzerspezifische Telegram-Chat-ID (optional eigener Bot-Token)."""
+    curr = get_current_user_from_request(request)
+    if not curr or curr.get("id") in (None, "", "usr_anonymous"):
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+    is_self = str(curr.get("id") or "") == str(user_id) or str(curr.get("username") or "").lower() == str(user_id).lower()
+    if not is_self and curr.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Nur der Benutzer selbst oder ein Administrator darf den Telegram-Kanal aendern.",
+        )
+    try:
+        updated = auth_service.set_user_telegram_channel(
+            user_identifier=user_id,
+            telegram_chat_id=payload.telegram_chat_id,
+            telegram_bot_token=payload.telegram_bot_token,
+        )
+        _audit_auth_event(
+            "telegram_channel_updated",
+            actor=str(curr.get("username") or curr.get("id") or "admin"),
+            request=request,
+            user_id=str(updated.get("id") or user_id),
+            role=str(updated.get("role") or ""),
+            reason="self" if is_self else "admin_updated_telegram_channel",
+        )
+        return {"status": "success", "user": updated}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/api/auth/change-password")
 def api_auth_change_password(request: Request, payload: AuthChangePasswordRequest = Body(...)):
     """Passwort ändern: eigener Account (mit aktuellem Passwort) oder als Admin für andere."""
@@ -572,7 +611,11 @@ def api_get_passkey_config(request: Request, user_id: Optional[str] = None):
 @router.post("/api/auth/passkey/config")
 def api_update_passkey_config(request: Request, payload: PasskeyConfigRequest = Body(...)):
     data = payload.model_dump()
-    from backend.passkey_hitl import consume_hitl_proof_token, is_passkey_required, update_user_passkey_config
+    from backend.passkey_hitl import (
+        consume_hitl_proof_token,
+        is_passkey_required,
+        update_user_passkey_config,
+    )
     target_id, _ = _resolve_target_passkey_user(request, data.get("user_id"))
     if data.get("enabled") is False and is_passkey_required(target_id, "system"):
         proof = str(data.get("passkey_proof_token") or request.headers.get("x-passkey-proof") or "").strip()
@@ -649,7 +692,11 @@ def api_passkey_register_verify(request: Request, payload: PasskeyRegisterVerify
 
 @router.delete("/api/auth/passkey/credentials/{cred_id}")
 def api_passkey_delete_credential(cred_id: str, request: Request, user_id: Optional[str] = None):
-    from backend.passkey_hitl import consume_hitl_proof_token, delete_user_credential, is_passkey_required
+    from backend.passkey_hitl import (
+        consume_hitl_proof_token,
+        delete_user_credential,
+        is_passkey_required,
+    )
     target_id, _ = _resolve_target_passkey_user(request, user_id)
     if is_passkey_required(target_id, "system"):
         proof = str(request.headers.get("x-passkey-proof") or request.query_params.get("passkey_proof_token") or "").strip()

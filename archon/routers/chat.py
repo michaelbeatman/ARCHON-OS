@@ -341,7 +341,7 @@ def _db_get_session_messages(session_id: str) -> List[Dict[str, Any]]:
     with _get_state_db() as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("""
-            SELECT id, role, content, timestamp, token_count
+            SELECT id, role, content, timestamp, token_count, compacted
             FROM messages
             WHERE session_id = ? AND active = 1
             ORDER BY id ASC
@@ -972,11 +972,13 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
     except Exception as db_err:
         logger.warning(f"[Chat Stream] Session/Message DB init warning: {db_err}")
 
-    # M73 Teil 3: Auto-Kompaktierung, wenn die Historie das Kontextfenster zu stark fuellt
+    # M73 Teil 3 + M99: Auto-Kompaktierung gegen das modell-dynamische Kontextfenster
+    _auto_compaction_result: Optional[Dict[str, Any]] = None
     try:
         from archon.routers.context_meter import maybe_auto_compact_session
-        _auto = await asyncio.to_thread(maybe_auto_compact_session, session_id)
+        _auto = await asyncio.to_thread(maybe_auto_compact_session, session_id, model)
         if _auto.get("compacted"):
+            _auto_compaction_result = _auto
             logger.info(
                 f"[Chat Stream] Auto-Kompaktierung: Session {session_id} "
                 f"{_auto.get('original_tokens')} -> {_auto.get('compacted_tokens')} Tokens "
@@ -1128,6 +1130,10 @@ async def api_chat_stream(req: ChatStreamRequest, request: Request = None):  # t
         mission_task_id = task_id if mode == "mission" else None
         prompt_tokens = len(user_msg.split()) * 2
         completion_tokens = 0
+
+        # M99: Sichtbarer Compaction-Marker bei automatischer Verdichtung im Live-Stream
+        if _auto_compaction_result:
+            yield f"data: {json.dumps({'type': 'compaction_marker', 'marker': _auto_compaction_result.get('compaction_marker', ''), 'original_tokens': _auto_compaction_result.get('original_tokens', 0), 'compacted_tokens': _auto_compaction_result.get('compacted_tokens', 0), 'saved_tokens': _auto_compaction_result.get('saved_tokens', 0), 'saved_pct': _auto_compaction_result.get('saved_pct', 0.0), 'compacted_messages': _auto_compaction_result.get('compacted_messages', 0), 'kept_recent': _auto_compaction_result.get('kept_recent', 0), 'model': _auto_compaction_result.get('model'), 'max_context_tokens': _auto_compaction_result.get('max_context_tokens')}, ensure_ascii=False)}\n\n"
 
         # Direkte System-Antwort bei Management-Befehlen (/skill list, /skill clear)
         if direct_skill_notice:

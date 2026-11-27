@@ -307,6 +307,14 @@ class AuthService:
                 conn.execute("ALTER TABLE user_sessions ADD COLUMN last_seen_at TEXT DEFAULT ''")
             except sqlite3.OperationalError as exc:
                 logger.warning(f"Migration last_seen_at uebersprungen (vermutlich bereits vorhanden): {exc}")
+            # M95: Benutzerspezifische Telegram-Kanaele (Chat-ID + optional eigener Bot-Token)
+            user_cols = {
+                str(r["name"]) for r in conn.execute("PRAGMA table_info(users)").fetchall()
+            }
+            if "telegram_chat_id" not in user_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN telegram_chat_id TEXT DEFAULT ''")
+            if "telegram_bot_token" not in user_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN telegram_bot_token TEXT DEFAULT ''")
             conn.commit()
 
     def _seed_default_admin(self):
@@ -590,7 +598,9 @@ class AuthService:
         with _get_db() as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT id, username, display_name, email, role, is_active, created_at, last_login 
+                SELECT id, username, display_name, email, role, is_active, created_at, last_login,
+                       COALESCE(telegram_chat_id, '') AS telegram_chat_id,
+                       COALESCE(telegram_bot_token, '') AS telegram_bot_token
                 FROM users ORDER BY created_at ASC
             """)
             return [
@@ -602,7 +612,9 @@ class AuthService:
                     "role": r["role"],
                     "is_active": bool(r["is_active"]),
                     "created_at": r["created_at"],
-                    "last_login": r["last_login"]
+                    "last_login": r["last_login"],
+                    "telegram_chat_id": str(r["telegram_chat_id"] or ""),
+                    "has_custom_bot_token": bool(str(r["telegram_bot_token"] or "").strip()),
                 }
                 for r in cur.fetchall()
             ]
@@ -703,7 +715,9 @@ class AuthService:
         with _get_db() as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT id, username, display_name, email, role, is_active, created_at, last_login 
+                SELECT id, username, display_name, email, role, is_active, created_at, last_login,
+                       COALESCE(telegram_chat_id, '') AS telegram_chat_id,
+                       COALESCE(telegram_bot_token, '') AS telegram_bot_token
                 FROM users WHERE id = ?
             """, (user_id,))
             r = cur.fetchone()
@@ -718,7 +732,143 @@ class AuthService:
                 "is_active": bool(r["is_active"]),
                 "created_at": r["created_at"],
                 "last_login": r["last_login"],
-                "permissions": self.get_permissions_for_role(r["role"])
+                "telegram_chat_id": str(r["telegram_chat_id"] or ""),
+                "has_custom_bot_token": bool(str(r["telegram_bot_token"] or "").strip()),
+                "permissions": self.get_permissions_for_role(r["role"]),
+            }
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        clean = (username or "").strip().lower()
+        if not clean:
+            return None
+        with _get_db() as conn:
+            r = conn.execute(
+                """
+                SELECT id, username, display_name, email, role, is_active, created_at, last_login,
+                       COALESCE(telegram_chat_id, '') AS telegram_chat_id,
+                       COALESCE(telegram_bot_token, '') AS telegram_bot_token
+                FROM users WHERE lower(username) = ?
+                """,
+                (clean,),
+            ).fetchone()
+            if not r:
+                return None
+            return {
+                "id": r["id"],
+                "username": r["username"],
+                "display_name": r["display_name"],
+                "email": r["email"],
+                "role": r["role"],
+                "is_active": bool(r["is_active"]),
+                "created_at": r["created_at"],
+                "last_login": r["last_login"],
+                "telegram_chat_id": str(r["telegram_chat_id"] or ""),
+                "has_custom_bot_token": bool(str(r["telegram_bot_token"] or "").strip()),
+                "permissions": self.get_permissions_for_role(r["role"]),
+            }
+
+    def get_user_by_identifier(self, identifier: str) -> Optional[Dict[str, Any]]:
+        clean = (identifier or "").strip()
+        if not clean:
+            return None
+        return self.get_user_by_id(clean) or self.get_user_by_username(clean)
+
+    def get_user_by_telegram_chat_id(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        clean = str(chat_id or "").strip()
+        if not clean or not re.match(r"^-?[0-9]{1,20}$", clean):
+            return None
+        with _get_db() as conn:
+            r = conn.execute(
+                """
+                SELECT id, username, display_name, email, role, is_active, created_at, last_login,
+                       COALESCE(telegram_chat_id, '') AS telegram_chat_id,
+                       COALESCE(telegram_bot_token, '') AS telegram_bot_token
+                FROM users WHERE telegram_chat_id = ? LIMIT 1
+                """,
+                (clean,),
+            ).fetchone()
+            if not r:
+                return None
+            return {
+                "id": r["id"],
+                "username": r["username"],
+                "display_name": r["display_name"],
+                "email": r["email"],
+                "role": r["role"],
+                "is_active": bool(r["is_active"]),
+                "created_at": r["created_at"],
+                "last_login": r["last_login"],
+                "telegram_chat_id": str(r["telegram_chat_id"] or ""),
+                "has_custom_bot_token": bool(str(r["telegram_bot_token"] or "").strip()),
+                "permissions": self.get_permissions_for_role(r["role"]),
+            }
+
+    def set_user_telegram_channel(
+        self,
+        user_identifier: str,
+        telegram_chat_id: str = "",
+        telegram_bot_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Speichert die benutzerspezifische Telegram-Chat-ID (und optional eigenen Bot-Token)."""
+        user = self.get_user_by_identifier(user_identifier)
+        if not user:
+            raise ValueError(f"Benutzer '{user_identifier}' nicht gefunden.")
+        clean_chat = str(telegram_chat_id or "").strip()
+        if clean_chat and not re.match(r"^-?[0-9]{1,20}$", clean_chat):
+            raise ValueError(
+                "Ungueltige telegram_chat_id: erwartet numerische Telegram-ID (z. B. '123456789' oder '-1001234567890')."
+            )
+        with _get_db() as conn:
+            if clean_chat:
+                conflict = conn.execute(
+                    "SELECT id, username FROM users WHERE telegram_chat_id = ? AND id != ?",
+                    (clean_chat, user["id"]),
+                ).fetchone()
+                if conflict:
+                    raise ValueError(
+                        f"Telegram-Chat-ID '{clean_chat}' ist bereits Benutzer '{conflict['username']}' zugeordnet."
+                    )
+            if telegram_bot_token is not None:
+                clean_tok = str(telegram_bot_token).strip()
+                conn.execute(
+                    "UPDATE users SET telegram_chat_id = ?, telegram_bot_token = ? WHERE id = ?",
+                    (clean_chat, clean_tok, user["id"]),
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET telegram_chat_id = ? WHERE id = ?",
+                    (clean_chat, user["id"]),
+                )
+            conn.commit()
+        return self.get_user_by_id(user["id"])  # type: ignore[return-value]
+
+    def get_user_telegram_channel(self, user_identifier: str) -> Optional[Dict[str, Any]]:
+        """Liefert den hinterlegten Telegram-Kanal (inkl. optionalem Bot-Token) fuer internen Versand."""
+        clean = (user_identifier or "").strip()
+        if not clean:
+            return None
+        with _get_db() as conn:
+            r = conn.execute(
+                """
+                SELECT id, username, display_name, role, is_active,
+                       COALESCE(telegram_chat_id, '') AS telegram_chat_id,
+                       COALESCE(telegram_bot_token, '') AS telegram_bot_token
+                FROM users
+                WHERE id = ? OR lower(username) = ?
+                LIMIT 1
+                """,
+                (clean, clean.lower()),
+            ).fetchone()
+            if not r:
+                return None
+            return {
+                "user_id": r["id"],
+                "username": r["username"],
+                "display_name": r["display_name"],
+                "role": r["role"],
+                "is_active": bool(r["is_active"]),
+                "chat_id": str(r["telegram_chat_id"] or "").strip(),
+                "bot_token": str(r["telegram_bot_token"] or "").strip(),
             }
 
     @staticmethod

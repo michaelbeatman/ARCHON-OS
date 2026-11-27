@@ -79,6 +79,43 @@
   --studio-tab-active-border: #ef4444;
 }
 
+/* M97: Spiegelung der Modal-Tokens aus static/css/design_system_v2.css.
+   SSOT bleibt die Static-Datei; diese Werte müssen identisch bleiben, damit
+   Next.js-Dialoge und Static-Dialoge gleich aussehen und gleich stapeln. */
+:root {
+  --archon-modal-w-sm: 32rem;
+  --archon-modal-w-md: 44rem;
+  --archon-modal-w-lg: 60rem;
+  --archon-modal-w-xl: 77.5rem;
+  --archon-modal-w-2xl: 80rem;
+  --archon-modal-max-w: 96vw;
+  --archon-modal-h: 92vh;
+  --archon-modal-max-h: 92vh;
+
+  --archon-modal-pad: 1.5rem;
+  --archon-modal-pad-sm: 1rem;
+  --archon-modal-header-pad: 0.75rem;
+  --archon-modal-close-pad: 0.25rem;
+  --archon-modal-backdrop-pad: 1rem;
+
+  --archon-modal-title-size: 0.875rem;
+  --archon-modal-title-weight: 700;
+  --archon-modal-title-tracking: 0.05em;
+  --archon-modal-body-size: 0.75rem;
+  --archon-modal-line-height: 1.5;
+
+  --archon-shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --archon-modal-backdrop-color: rgba(0, 0, 0, 0.72);
+  --archon-modal-blur: 4px;
+
+  /* Inhalt < Header < Backdrop < Dialog < Toast/Overlay-Hinweise */
+  --archon-z-content: 0;
+  --archon-z-header: 20;
+  --archon-z-backdrop: 100;
+  --archon-z-dialog: 110;
+  --archon-z-toast: 130;
+}
+
 [data-accent="blue"], html[data-accent="blue"] {
   --accent-primary: #2563eb;
   --accent-primary-hover: #1d4ed8;
@@ -503,6 +540,73 @@ div#contact-drawer-header {
 .chat-card-root .whitespace-pre-line,
 .chat-card-root .whitespace-pre-wrap {
   color: var(--contact-message-text) !important;
+}
+
+/* M97: Einheitliche Modal-Schicht, deckungsgleich mit design_system_v2.css.
+   `hidden` muss geschlossene Dialoge zuverlässig ausblenden, sonst greift
+   der Fokus-Trap von modal_a11y.js auf unsichtbare Elemente zu. */
+.archon-modal-layer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--archon-modal-backdrop-pad);
+  z-index: var(--archon-z-backdrop);
+}
+
+.archon-modal-layer.hidden {
+  display: none !important;
+}
+
+.archon-modal-shade {
+  background-color: var(--archon-modal-backdrop-color);
+  -webkit-backdrop-filter: blur(var(--archon-modal-blur));
+  backdrop-filter: blur(var(--archon-modal-blur));
+}
+
+.archon-modal-surface {
+  box-sizing: border-box;
+  padding: var(--archon-modal-pad);
+  border-radius: var(--archon-radius-lg, 1rem);
+  box-shadow: var(--archon-shadow-modal);
+  font-size: var(--archon-modal-body-size);
+  line-height: var(--archon-modal-line-height);
+}
+
+.archon-modal-header {
+  padding-bottom: var(--archon-modal-header-pad);
+  border-bottom: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+}
+
+.archon-modal-title {
+  font-size: var(--archon-modal-title-size);
+  font-weight: var(--archon-modal-title-weight);
+  letter-spacing: var(--archon-modal-title-tracking);
+  text-transform: uppercase;
+}
+
+.archon-modal-close {
+  padding: var(--archon-modal-close-pad);
+  border-radius: var(--archon-radius-sm, 0.5rem);
+  cursor: pointer;
+}
+
+.archon-z-backdrop { z-index: var(--archon-z-backdrop); }
+.archon-z-dialog { z-index: var(--archon-z-dialog); }
+.archon-z-header { z-index: var(--archon-z-header); }
+.archon-z-toast { z-index: var(--archon-z-toast); }
+
+.archon-toast-stack,
+.archon-overlay-hint {
+  position: fixed;
+  z-index: var(--archon-z-toast);
+}
+
+/* M97: Sticky Header immer unter den Modal-Backdrop. */
+.header-root,
+header.sticky.top-0 {
+  z-index: var(--archon-z-header);
 }
 
 

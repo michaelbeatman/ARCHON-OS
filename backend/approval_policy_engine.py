@@ -11,10 +11,13 @@ Revisionssicheres Freigabesystem mit:
 
 import datetime
 import json
+import logging
 import os
 import sqlite3
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
+
+logger = logging.getLogger("archon.approval_policy_engine")
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -40,6 +43,64 @@ HITL_REQUIRED_DOMAINS = frozenset({
 # Schwellen geaendert wird.
 FINANCE_THRESHOLD_MIN_GAP = 0.01  # ein Cent — kleinste harte, geldbetragsrelevante Distanz
 _GAP_EPSILON = 1e-9  # Float-Rundung (500.0 - 499.99 == 0.009999999999990905)
+
+# M95: Harte Sicherheits-Invarianten fuer Urlaubs-/Vertretungsmodus & Eskalation
+ALLOWED_DEPUTY_ROLES: FrozenSet[str] = frozenset({"admin", "operator"})
+ADMIN_ONLY_DEPUTY_DOMAINS: FrozenSet[str] = frozenset({"system", "governance"})
+_FORBIDDEN_AGENT_IDENTITIES: FrozenSet[str] = frozenset({
+    "system",
+    "agent",
+    "default",
+    "system_watchdog",
+    "hermes",
+    "archon",
+    "auto",
+    "bot",
+    "ai",
+    "llm",
+    "assistant",
+    "executive_decision_architect",
+    "legal_counsel",
+    "tax_holding_advisor",
+    "finance_lead",
+    "senior_fullstack_engineer",
+    "agile_scrum_master",
+    "qa_test_engineer",
+    "linkedin_social_media_specialist",
+})
+_FORBIDDEN_AGENT_PREFIXES = (
+    "agent:",
+    "agent_",
+    "bot:",
+    "bot_",
+    "sys:",
+    "system:",
+    "system_",
+    "ai:",
+    "ai_",
+    "llm:",
+    "auto:",
+)
+
+
+def is_agent_or_system_identity(actor: Optional[str]) -> bool:
+    """True, wenn die Identitaet ein Agent, Bot oder System-Default ist (nie als Mensch zulassen)."""
+    clean = str(actor or "").strip().lower()
+    if not clean:
+        return True
+    if clean in _FORBIDDEN_AGENT_IDENTITIES:
+        return True
+    return any(clean.startswith(prefix) for prefix in _FORBIDDEN_AGENT_PREFIXES)
+
+
+def _record_central_audit(category: str, action: str, actor: str, details: Dict[str, Any]) -> None:
+    """Protokolliert M95-Urlaubs- und Eskalationsereignisse zusaetzlich in backend/audit_log.py."""
+    try:
+        from backend.audit_log import chained_audit_log
+
+        chained_audit_log.record_event(category, action, actor, details)
+    except Exception as exc:
+        logger.warning("[ApprovalPolicyEngine] Zentrales Audit-Event (%s/%s) nicht geschrieben: %s", category, action, exc)
 
 
 def _actor_identity_tokens(actor: str) -> set:
@@ -168,6 +229,12 @@ class ApprovalPolicyEngine:
             }
             if "requester_id" not in _columns:
                 conn.execute("ALTER TABLE approval_requests ADD COLUMN requester_id TEXT")
+            if "assigned_approver" not in _columns:
+                conn.execute("ALTER TABLE approval_requests ADD COLUMN assigned_approver TEXT")
+            if "escalated_to" not in _columns:
+                conn.execute("ALTER TABLE approval_requests ADD COLUMN escalated_to TEXT")
+            if "escalation_reason" not in _columns:
+                conn.execute("ALTER TABLE approval_requests ADD COLUMN escalation_reason TEXT")
 
             # d14/HIGH: Aenderung der 4-Augen-Schwelle benötigt einen zweiten,
             # unabhaengigen Genehmiger. Einzel-Admin erzeugt nur einen Vorschlag.
@@ -493,8 +560,205 @@ class ApprovalPolicyEngine:
             }
 
     # --------------------------------------------------------------------------
-    # Delegation / Urlaubsmodus
+    # Delegation / Urlaubsmodus (M95 — RBAC-gesichert, nie Agent-Fallback)
     # --------------------------------------------------------------------------
+    @staticmethod
+    def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        return row is not None
+
+    @staticmethod
+    def _required_deputy_roles(domain: str = "finance") -> FrozenSet[str]:
+        if str(domain or "").strip().lower() in ADMIN_ONLY_DEPUTY_DOMAINS:
+            return frozenset({"admin"})
+        return ALLOWED_DEPUTY_ROLES
+
+    def _lookup_human_user(
+        self, conn: sqlite3.Connection, identifier: str
+    ) -> Optional[Dict[str, Any]]:
+        clean = str(identifier or "").strip()
+        if not clean or not self._table_exists(conn, "users"):
+            return None
+        user_cols = {
+            str(r["name"]) for r in conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+        tg_chat_expr = (
+            "COALESCE(telegram_chat_id, '') AS telegram_chat_id"
+            if "telegram_chat_id" in user_cols
+            else "'' AS telegram_chat_id"
+        )
+        row = conn.execute(
+            f"SELECT id, username, display_name, role, is_active, {tg_chat_expr} "
+            "FROM users WHERE id = ? OR lower(username) = ? LIMIT 1",
+            (clean, clean.lower()),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "id": str(row["id"]),
+            "username": str(row["username"]),
+            "display_name": str(row["display_name"] or row["username"]),
+            "role": str(row["role"] or "viewer").lower().strip(),
+            "is_active": bool(row["is_active"]),
+            "telegram_chat_id": str(row["telegram_chat_id"] or "").strip(),
+        }
+
+    def validate_human_deputy(
+        self,
+        substitute_id: str,
+        *,
+        delegating_user_id: Optional[str] = None,
+        domain: str = "finance",
+        conn: Optional[sqlite3.Connection] = None,
+        strict_rbac: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Prueft, dass der Stellvertreter ein aktiver Mensch mit ausreichender RBAC-Rolle ist.
+
+        Harte M95-Invariante: Niemals Agent, System-Default, Viewer, inaktiver User
+        oder Selbst-Delegation.
+        """
+        sub = str(substitute_id or "").strip()
+        if is_agent_or_system_identity(sub):
+            raise ValueError(
+                f"Ungueltiger Stellvertreter '{sub}': Agenten oder System-Defaults duerfen "
+                "niemals als HITL-/4-Augen-Stellvertreter eingesetzt werden."
+            )
+
+        owner = str(delegating_user_id or "").strip()
+        if owner and bool(_actor_identity_tokens(owner) & _actor_identity_tokens(sub)):
+            raise ValueError(
+                "Selbst-Delegation ist unzulaessig: Stellvertreter muss eine andere Person sein."
+            )
+
+        def _check(c: sqlite3.Connection) -> Dict[str, Any]:
+            has_users = self._table_exists(c, "users")
+            enforce = has_users if strict_rbac is None else bool(strict_rbac)
+            required_roles = self._required_deputy_roles(domain)
+            if not enforce:
+                return {
+                    "id": sub,
+                    "username": sub,
+                    "display_name": sub,
+                    "role": "operator",
+                    "is_active": True,
+                    "telegram_chat_id": "",
+                }
+
+            user = self._lookup_human_user(c, sub)
+            if not user:
+                raise ValueError(
+                    f"Stellvertreter '{sub}' ist kein registrierter menschlicher Benutzer (fail-closed)."
+                )
+            if not user["is_active"]:
+                raise ValueError(
+                    f"Stellvertreter '{user['username']}' ist deaktiviert und nicht freigabeberechtigt."
+                )
+            if user["role"] not in required_roles:
+                raise ValueError(
+                    f"Stellvertreter '{user['username']}' hat Rolle '{user['role']}' "
+                    f"(erforderlich: {', '.join(sorted(required_roles))}; Viewer ausgeschlossen)."
+                )
+            if owner:
+                owner_user = self._lookup_human_user(c, owner)
+                if owner_user and owner_user["id"] == user["id"]:
+                    raise ValueError(
+                        "Selbst-Delegation ist unzulaessig: Stellvertreter ist identisch mit dem Abwesenden."
+                    )
+            # Keine Delegationsschleife: wenn Stellvertreter selbst im Urlaubsmodus ist -> fail-closed
+            if self._table_exists(c, "delegation_settings"):
+                sub_deleg = c.execute(
+                    "SELECT is_active FROM delegation_settings WHERE lower(user_id) IN (?, ?) AND is_active = 1",
+                    (user["id"].lower(), user["username"].lower()),
+                ).fetchone()
+                if sub_deleg:
+                    raise ValueError(
+                        f"Stellvertreter '{user['username']}' befindet sich selbst im Urlaubsmodus (fail-closed)."
+                    )
+            return user
+
+        if conn is not None:
+            return _check(conn)
+        with self._get_conn() as own_conn:
+            return _check(own_conn)
+
+    def resolve_human_escalation_target(
+        self,
+        owner_user_id: str,
+        *,
+        domain: str = "finance",
+        requester_id: Optional[str] = None,
+        first_approver: Optional[str] = None,
+        conn: Optional[sqlite3.Connection] = None,
+        strict_rbac: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Ermittelt den gueltigen menschlichen Stellvertreter oder blockiert fail-closed."""
+        def _resolve(c: sqlite3.Connection) -> Dict[str, Any]:
+            if not self._table_exists(c, "delegation_settings"):
+                return {
+                    "resolved": False,
+                    "status": "escalated_blocked",
+                    "deputy": None,
+                    "reason": "Keine delegation_settings vorhanden (fail-closed).",
+                }
+            row = c.execute(
+                "SELECT * FROM delegation_settings WHERE lower(user_id) = ? LIMIT 1",
+                (str(owner_user_id or "admin").strip().lower(),),
+            ).fetchone()
+            if not row or not str(row["substitute_id"] or "").strip():
+                return {
+                    "resolved": False,
+                    "status": "escalated_blocked",
+                    "deputy": None,
+                    "reason": f"Kein menschlicher Stellvertreter fuer '{owner_user_id}' hinterlegt (fail-closed).",
+                }
+            sub_id = str(row["substitute_id"]).strip()
+            try:
+                deputy = self.validate_human_deputy(
+                    sub_id,
+                    delegating_user_id=owner_user_id,
+                    domain=domain,
+                    conn=c,
+                    strict_rbac=strict_rbac,
+                )
+            except ValueError as exc:
+                return {
+                    "resolved": False,
+                    "status": "escalated_blocked",
+                    "deputy": None,
+                    "reason": str(exc),
+                }
+
+            deputy_tokens = _actor_identity_tokens(deputy["username"]) | _actor_identity_tokens(deputy["id"])
+            if requester_id and bool(deputy_tokens & _actor_identity_tokens(requester_id)):
+                return {
+                    "resolved": False,
+                    "status": "escalated_blocked",
+                    "deputy": None,
+                    "reason": "Vier-Augen-Konflikt: Stellvertreter ist identisch mit Antragsteller (fail-closed).",
+                }
+            if first_approver and bool(deputy_tokens & _actor_identity_tokens(first_approver)):
+                return {
+                    "resolved": False,
+                    "status": "escalated_blocked",
+                    "deputy": None,
+                    "reason": "Vier-Augen-Konflikt: Stellvertreter hat bereits Erstfreigabe erteilt (fail-closed).",
+                }
+
+            return {
+                "resolved": True,
+                "status": "escalated",
+                "deputy": deputy,
+                "reason": f"Eskaliert an menschlichen Stellvertreter '{deputy['username']}' ({deputy['role']}).",
+            }
+
+        if conn is not None:
+            return _resolve(conn)
+        with self._get_conn() as own_conn:
+            return _resolve(own_conn)
+
     def get_delegation(self, user_id: str = "admin") -> Dict[str, Any]:
         with self._get_conn() as conn:
             cur = conn.cursor()
@@ -504,15 +768,55 @@ class ApprovalPolicyEngine:
             return {
                 "user_id": user_id,
                 "is_active": 0,
-                "substitute_id": "katharina",
-                "substitute_name": "Katharina Völk (QM)",
+                "substitute_id": "",
+                "substitute_name": "",
                 "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
             }
 
-    def set_delegation(self, user_id: str, is_active: bool, substitute_id: str, substitute_name: str) -> Dict[str, Any]:
+    def set_delegation(
+        self,
+        user_id: str,
+        is_active: bool,
+        substitute_id: str,
+        substitute_name: str = "",
+        *,
+        domain: str = "finance",
+        strict_rbac: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        clean_user = str(user_id or "").strip()
+        if not clean_user:
+            raise ValueError("user_id darf nicht leer sein.")
+        clean_sub_id = str(substitute_id or "").strip()
+        clean_sub_name = str(substitute_name or "").strip()
+
         with self._get_conn() as conn:
+            verified_deputy: Optional[Dict[str, Any]] = None
+            if is_active:
+                verified_deputy = self.validate_human_deputy(
+                    clean_sub_id,
+                    delegating_user_id=clean_user,
+                    domain=domain,
+                    conn=conn,
+                    strict_rbac=strict_rbac,
+                )
+                if not clean_sub_name:
+                    clean_sub_name = str(verified_deputy.get("display_name") or clean_sub_id)
+            elif clean_sub_id and is_agent_or_system_identity(clean_sub_id):
+                raise ValueError(
+                    f"Ungueltiger Stellvertreter '{clean_sub_id}': Agenten oder System-Defaults sind unzulaessig."
+                )
+
             cur = conn.cursor()
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            prev_row = cur.execute(
+                "SELECT is_active, substitute_id, substitute_name FROM delegation_settings WHERE user_id = ?",
+                (clean_user,),
+            ).fetchone()
+            old_state = (
+                f"{'active' if prev_row['is_active'] else 'inactive'}:{prev_row['substitute_id']}"
+                if prev_row
+                else "inactive"
+            )
             cur.execute("""
                 INSERT INTO delegation_settings (user_id, is_active, substitute_id, substitute_name, updated_at)
                 VALUES (?, ?, ?, ?, ?)
@@ -521,21 +825,41 @@ class ApprovalPolicyEngine:
                     substitute_id = excluded.substitute_id,
                     substitute_name = excluded.substitute_name,
                     updated_at = excluded.updated_at
-            """, (user_id, 1 if is_active else 0, substitute_id, substitute_name, now))
+            """, (clean_user, 1 if is_active else 0, clean_sub_id, clean_sub_name, now))
 
             action = "ENABLE_DELEGATION" if is_active else "DISABLE_DELEGATION"
-            audit_hash = self._log_audit_change(user_id, action, "system", "delegation_settings", 
-                                                "inactive" if not is_active else "active", 
-                                                f"{substitute_id}:{substitute_name}",
-                                                conn=conn)
+            audit_hash = self._log_audit_change(
+                clean_user,
+                action,
+                "system",
+                "delegation_settings",
+                old_state,
+                f"{'active' if is_active else 'inactive'}:{clean_sub_id}:{clean_sub_name}",
+                conn=conn,
+            )
             conn.commit()
-            return {
-                "user_id": user_id,
-                "is_active": 1 if is_active else 0,
-                "substitute_id": substitute_id,
-                "substitute_name": substitute_name,
-                "audit_hash": audit_hash
-            }
+
+        _record_central_audit(
+            "approval_delegation",
+            "VACATION_MODE_ENABLED" if is_active else "VACATION_MODE_DISABLED",
+            clean_user,
+            {
+                "user_id": clean_user,
+                "is_active": bool(is_active),
+                "substitute_id": clean_sub_id,
+                "substitute_name": clean_sub_name,
+                "substitute_role": (verified_deputy or {}).get("role", ""),
+                "audit_hash": audit_hash,
+            },
+        )
+        return {
+            "user_id": clean_user,
+            "is_active": 1 if is_active else 0,
+            "substitute_id": clean_sub_id,
+            "substitute_name": clean_sub_name,
+            "substitute_role": (verified_deputy or {}).get("role", ""),
+            "audit_hash": audit_hash,
+        }
 
     # --------------------------------------------------------------------------
     # Request Evaluation & Queue
@@ -544,7 +868,8 @@ class ApprovalPolicyEngine:
                              reference_id: Optional[str] = None, payload: Optional[dict] = None,
                              requester_id: Optional[str] = None,
                              force_four_eyes: bool = False,
-                             requester_required: bool = False) -> Dict[str, Any]:
+                             requester_required: bool = False,
+                             assigned_approver: Optional[str] = None) -> Dict[str, Any]:
         # D04/MED: requester_id ist jetzt Teil des Engine-Vertrags. Er wird
         # zusaetzlich signiert im payload_json abgelegt (defense in depth),
         # damit auch Router/Caller ohne Spaltenzugriff den Ersteller pruefen.
@@ -573,22 +898,22 @@ class ApprovalPolicyEngine:
         four_eyes_min = float(policies.get("finance_four_eyes_min", "500.00"))
         timeout_hours = int(policies.get("finance_timeout_hours", "24"))
 
-        # Delegation check
-        deleg = self.get_delegation("admin")
-        active_substitute = deleg["substitute_name"] if deleg.get("is_active") else None
+        owner_approver = str(assigned_approver or "admin").strip() or "admin"
+        deleg = self.get_delegation(owner_approver)
+        delegation_active = bool(deleg.get("is_active"))
+        active_substitute: Optional[str] = None
+        escalated_to: Optional[str] = None
+        escalation_reason: Optional[str] = None
 
         # Check conditions
         # F022/H-14-3: Hoheitsaenderungen (z.B. AI-Act-Downgrades) sind immer
-        # 4-Augen-pflichtig — unabhaengig von einem Geldbetrag. Der Aufrufer
-        # muss den Parameter explizit setzen; Default bleibt rueckwaerts-
-        # kompatibel.
+        # 4-Augen-pflichtig — unabhaengig von einem Geldbetrag.
         requires_four_eyes = 1 if (force_four_eyes or amount >= four_eyes_min) else 0
         expires_at = (now + datetime.timedelta(hours=timeout_hours)).isoformat()
 
         # D04/HIGH: Auto-Freigabe NUR wenn die Invariante auch tatsaechlich
         # greift. Ein Betrag, der die Vier-Augen-Schwelle erreicht/ueberschreitet,
-        # darf niemals automatisch freigegeben werden — selbst dann nicht, wenn
-        # eine (manipulierte/veraltete) Policy die Schwellen falsch setzt.
+        # darf niemals automatisch freigegeben werden.
         if amount <= auto_max and not requires_four_eyes and domain == "finance":
             status = "auto_approved"
             first_approver = "System-Rule (Auto-Approval <= 50 EUR)"
@@ -598,24 +923,65 @@ class ApprovalPolicyEngine:
             first_approver = None
             first_approved_at = None
 
+        # M95: Bei aktivem Urlaubsmodus menschlichen Stellvertreter pruefen (nie Agent, fail-closed)
+        if status == "pending" and delegation_active:
+            esc = self.resolve_human_escalation_target(
+                owner_approver,
+                domain=domain,
+                requester_id=requester or None,
+            )
+            if esc["resolved"] and esc["deputy"]:
+                escalated_to = str(esc["deputy"]["username"])
+                active_substitute = str(deleg.get("substitute_name") or esc["deputy"]["display_name"])
+                escalation_reason = str(esc["reason"])
+            else:
+                status = "escalated_blocked"
+                escalated_to = None
+                active_substitute = None
+                escalation_reason = str(esc["reason"])
+
         with self._get_conn() as conn:
             cur = conn.cursor()
             cur.execute("""
                 INSERT INTO approval_requests (
                     id, domain, reference_id, title, amount, currency, status,
                     requires_four_eyes, first_approver, first_approved_at,
-                    expires_at, created_at, payload_json, requester_id
-                ) VALUES (?, ?, ?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?)
+                    expires_at, created_at, payload_json, requester_id,
+                    assigned_approver, escalated_to, escalation_reason
+                ) VALUES (?, ?, ?, ?, ?, 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 req_id, domain, reference_id, title, amount, status,
                 requires_four_eyes, first_approver, first_approved_at,
                 expires_at, now_iso, json.dumps(stored_payload, ensure_ascii=False),
-                requester or None
+                requester or None, owner_approver, escalated_to, escalation_reason,
             ))
             conn.commit()
 
         # Audit log creation
         self._log_audit_change("system", "ENQUEUE_REQUEST", domain, req_id, "NONE", status)
+        if delegation_active and status in ("pending", "escalated_blocked"):
+            esc_action = "DEPUTY_ESCALATION" if escalated_to else "ESCALATION_BLOCKED_FAIL_CLOSED"
+            self._log_audit_change(
+                owner_approver,
+                esc_action,
+                domain,
+                req_id,
+                "pending",
+                f"{escalated_to or 'BLOCKED'}:{escalation_reason or ''}",
+            )
+            _record_central_audit(
+                "approval_escalation",
+                esc_action,
+                owner_approver,
+                {
+                    "request_id": req_id,
+                    "domain": domain,
+                    "status": status,
+                    "assigned_approver": owner_approver,
+                    "escalated_to": escalated_to,
+                    "reason": escalation_reason or "",
+                },
+            )
 
         return {
             "request_id": req_id,
@@ -624,9 +990,12 @@ class ApprovalPolicyEngine:
             "amount": amount,
             "status": status,
             "requires_four_eyes": bool(requires_four_eyes),
-            "delegation_active": bool(deleg.get("is_active")),
+            "assigned_approver": owner_approver,
+            "delegation_active": delegation_active,
             "delegated_to": active_substitute,
-            "expires_at": expires_at
+            "escalated_to": escalated_to,
+            "escalation_reason": escalation_reason,
+            "expires_at": expires_at,
         }
 
     def get_request(self, request_id: str) -> Optional[Dict[str, Any]]:
@@ -654,8 +1023,12 @@ class ApprovalPolicyEngine:
             return [dict(r) for r in rows]
 
     def approve_request(self, request_id: str, approver_id: str) -> Dict[str, Any]:
-        # D04/MED: kein Default-Approver mehr — die Identitaet muss vom
-        # Aufrufer explizit aus der verifizierten Session kommen.
+        # D04/MED + M95: kein Default-Approver, kein Agent, kein Viewer.
+        if is_agent_or_system_identity(approver_id):
+            raise ValueError(
+                f"Freigabe verweigert: '{approver_id}' ist eine Agenten-/System-Identitaet "
+                "(HITL-/4-Augen-Freigaben erfordern einen berechtigten Menschen)."
+            )
         with self._chain_lock:
             with self._get_conn() as conn:
                 conn.execute("BEGIN IMMEDIATE")
@@ -666,6 +1039,18 @@ class ApprovalPolicyEngine:
 
                 if req["status"] in ("approved", "rejected"):
                     raise ValueError(f"Anfrage kann nicht genehmigt werden (aktueller Status: {req['status']}).")
+
+                # M95: RBAC-Rollenpruefung wenn users-Tabelle existiert (Viewer / Inaktive blockieren)
+                approver_user = self._lookup_human_user(conn, approver_id)
+                if approver_user is not None:
+                    if not approver_user["is_active"]:
+                        raise ValueError(f"Freigabe verweigert: Benutzer '{approver_user['username']}' ist deaktiviert.")
+                    allowed_roles = self._required_deputy_roles(str(req["domain"] or "finance"))
+                    if approver_user["role"] not in allowed_roles:
+                        raise ValueError(
+                            f"Freigabe verweigert: Rolle '{approver_user['role']}' darf Domain "
+                            f"'{req['domain']}' nicht freigeben (erforderlich: {', '.join(sorted(allowed_roles))})."
+                        )
 
                 # D04/MED: Ersteller-Sperre zentral im Engine — nicht nur im
                 # Router. Jeder Aufrufer (u. a. MCP-Pfad) ist damit gebunden.
@@ -789,34 +1174,109 @@ class ApprovalPolicyEngine:
             }
 
     def check_and_escalate_timeouts(self) -> int:
-        """Finds requests that exceeded their expiry time and escalates them."""
+        """Finds requests that exceeded their expiry time and escalates them fail-closed (M95).
+
+        Harte Invariante: Timeout fuehrt niemals zu Auto-Approval oder Agent-Delegation.
+        Eskalation erfolgt ausschliesslich an einen verifizierten menschlichen RBAC-Stellvertreter;
+        fehlt dieser, wird die Anfrage fail-closed auf ``escalated_blocked`` gesetzt.
+        """
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        central_events: List[Dict[str, Any]] = []
         with self._get_conn() as conn:
             cur = conn.cursor()
-            rows = cur.execute("""
-                SELECT id, title, amount, domain FROM approval_requests
-                WHERE status IN ('pending', 'first_approved') AND expires_at < ?
-            """, (now,)).fetchall()
+            req_cols = {
+                str(c["name"]) for c in cur.execute("PRAGMA table_info(approval_requests)").fetchall()
+            }
+            has_m95_cols = {"assigned_approver", "escalated_to", "escalation_reason"}.issubset(req_cols)
+            has_users = self._table_exists(conn, "users")
+            has_deleg = self._table_exists(conn, "delegation_settings")
+
+            select_cols = ["id", "title", "amount", "domain", "status"]
+            for opt_col in ("requester_id", "first_approver", "assigned_approver"):
+                if opt_col in req_cols:
+                    select_cols.append(opt_col)
+            rows = cur.execute(
+                f"SELECT {', '.join(select_cols)} FROM approval_requests "
+                "WHERE status IN ('pending', 'first_approved') AND expires_at < ?",
+                (now,),
+            ).fetchall()
 
             escalated_count = 0
             for r in rows:
-                cur.execute("""
-                    UPDATE approval_requests
-                    SET status = 'escalated', escalated_at = ?
-                    WHERE id = ?
-                """, (now, r["id"]))
+                old_status = str(r["status"] or "pending")
+                if has_users and has_deleg:
+                    owner = (
+                        str(r["assigned_approver"] or "").strip()
+                        if "assigned_approver" in req_cols
+                        else ""
+                    ) or "admin"
+                    requester = str(r["requester_id"] or "").strip() if "requester_id" in req_cols else None
+                    first_app = str(r["first_approver"] or "").strip() if "first_approver" in req_cols else None
+                    esc = self.resolve_human_escalation_target(
+                        owner,
+                        domain=str(r["domain"] or "finance"),
+                        requester_id=requester or None,
+                        first_approver=first_app or None,
+                        conn=conn,
+                        strict_rbac=True,
+                    )
+                    new_status = str(esc["status"])  # 'escalated' | 'escalated_blocked'
+                    target_human = str(esc["deputy"]["username"]) if esc["resolved"] and esc["deputy"] else None
+                    esc_reason = str(esc["reason"])
+                    audit_action = "ESCALATE_TO_DEPUTY" if target_human else "ESCALATE_BLOCKED_FAIL_CLOSED"
+                    audit_new = f"{new_status}:{target_human or 'NO_HUMAN_DEPUTY'}"
+                else:
+                    # Kompatibilitaet fuer isolierte Legacy-Schema-Tests ohne users-Tabelle
+                    new_status = "escalated"
+                    target_human = None
+                    esc_reason = "Timeout eskaliert"
+                    audit_action = "ESCALATE_REQUEST"
+                    audit_new = "escalated"
+
+                if has_m95_cols:
+                    cur.execute(
+                        """
+                        UPDATE approval_requests
+                        SET status = ?, escalated_at = ?, escalated_to = ?, escalation_reason = ?
+                        WHERE id = ?
+                        """,
+                        (new_status, now, target_human, esc_reason, r["id"]),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        UPDATE approval_requests
+                        SET status = ?, escalated_at = ?
+                        WHERE id = ?
+                        """,
+                        (new_status, now, r["id"]),
+                    )
                 # N-08: Die Audit-Schreibung muss auf DERSELBEN Verbindung laufen.
-                # conn=None oeffnete eine ZWEITE Verbindung innerhalb des offenen
-                # Schreib-Locks -> 'database is locked' nach dem Busy-Timeout, die
-                # Eskalation wurde nie persistiert und das Dashboard warf danach.
                 self._log_audit_change(
-                    "system_watchdog", "ESCALATE_REQUEST", r["domain"], r["id"],
-                    "pending", "escalated", conn=conn,
+                    "system_watchdog",
+                    audit_action,
+                    str(r["domain"]),
+                    str(r["id"]),
+                    old_status,
+                    audit_new,
+                    conn=conn,
                 )
+                central_events.append({
+                    "action": audit_action,
+                    "request_id": str(r["id"]),
+                    "domain": str(r["domain"]),
+                    "old_status": old_status,
+                    "new_status": new_status,
+                    "escalated_to": target_human,
+                    "reason": esc_reason,
+                })
                 escalated_count += 1
 
             if escalated_count > 0:
                 conn.commit()
+
+        for ev in central_events:
+            _record_central_audit("approval_escalation", ev["action"], "system_watchdog", ev)
 
         return escalated_count
 

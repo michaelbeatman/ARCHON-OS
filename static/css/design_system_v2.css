@@ -1,11 +1,51 @@
-/* M6: Archon OS Ergonomisches Designsystem v2 (Typografie, Fokus-Ringe, Dark/Light-Verfeinerung) */
+/* M6 + M97: Archon OS Ergonomisches Designsystem v2 (Typografie, Fokus-Ringe, Dark/Light-Verfeinerung) */
 :root {
+  /* Grundtokens (M6) */
   --archon-radius-sm: 0.5rem;
   --archon-radius-md: 0.75rem;
   --archon-radius-lg: 1rem;
   --archon-space-card: 1.25rem;
   --archon-font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --archon-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* M97: Feste Modal-Größen. Maßstab ist das System Control Center (xl). */
+  --archon-modal-w-sm: 32rem;
+  --archon-modal-w-md: 44rem;
+  --archon-modal-w-lg: 60rem;
+  --archon-modal-w-xl: 77.5rem; /* 1240 px, System Control Center */
+  --archon-modal-w-2xl: 80rem; /* 1280 px, Ops-New-Task */
+  --archon-modal-max-w: 96vw;
+  --archon-modal-h: 92vh;
+  --archon-modal-max-h: 92vh;
+
+  /* M97: Einheitliche Innenabstände */
+  --archon-modal-pad: 1.5rem;
+  --archon-modal-pad-sm: 1rem;
+  --archon-modal-header-pad: 0.75rem;
+  --archon-modal-close-pad: 0.25rem;
+  --archon-modal-backdrop-pad: 1rem;
+
+  /* M97: Titel- und Body-Typografie */
+  --archon-modal-title-size: 0.875rem;
+  --archon-modal-title-weight: 700;
+  --archon-modal-title-tracking: 0.05em;
+  --archon-modal-body-size: 0.75rem;
+  --archon-modal-line-height: 1.5;
+
+  /* M97: Schatten und Blur des Backdrops */
+  --archon-shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --archon-modal-backdrop-color: rgba(0, 0, 0, 0.72);
+  --archon-modal-blur: 4px;
+
+  /* M97: Dokumentierte z-index-Skala (aufsteigend):
+     Inhalt < Header < Backdrop < Dialog < Toast/Overlay-Hinweise.
+     Der Header liegt bewusst unter dem Backdrop: bei geöffnetem Dialog
+     wird er vom Blur erfasst und kann nie über dem Overlay liegen. */
+  --archon-z-content: 0;
+  --archon-z-header: 20;
+  --archon-z-backdrop: 100;
+  --archon-z-dialog: 110;
+  --archon-z-toast: 130;
 }
 
 body {
@@ -21,6 +61,92 @@ body {
 
 .os-modal {
   border-radius: var(--archon-radius-lg);
+}
+
+/* M97: Einheitliche Modal-Schicht. Layout-Klassen (fixed/inset-0/flex)
+   bleiben an den Elementen; diese Klasse zentralisiert z-index, Blur und
+   Abstand. `hidden` muss Vorrang haben, sonst wären geschlossene Dialoge
+   sichtbar und der Fokus-Trap von modal_a11y.js würde brechen. */
+.archon-modal-layer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--archon-modal-backdrop-pad);
+  z-index: var(--archon-z-backdrop);
+}
+
+.archon-modal-layer.hidden {
+  display: none !important;
+}
+
+/* M97: Abdunklung + Blur. Auch auf eigenständige Backdrop-Divs anwendbar. */
+.archon-modal-shade {
+  background-color: var(--archon-modal-backdrop-color);
+  -webkit-backdrop-filter: blur(var(--archon-modal-blur));
+  backdrop-filter: blur(var(--archon-modal-blur));
+}
+
+/* M97: Dialog-Oberfläche ohne Breiten-/Höhenvorgabe, damit bestehende
+   Layout-Klassen (max-w-*, Drawer-Ausrichtung) erhalten bleiben. */
+.archon-modal-surface {
+  box-sizing: border-box;
+  padding: var(--archon-modal-pad);
+  border-radius: var(--archon-radius-lg);
+  box-shadow: var(--archon-shadow-modal);
+  font-size: var(--archon-modal-body-size);
+  line-height: var(--archon-modal-line-height);
+}
+
+/* M97: Feste Größen für die großen Detail-Dialoge. */
+.archon-modal-size-xl,
+.archon-modal-size-2xl {
+  box-sizing: border-box;
+  max-width: var(--archon-modal-max-w);
+  height: var(--archon-modal-h);
+  max-height: var(--archon-modal-max-h);
+}
+
+.archon-modal-size-xl {
+  width: var(--archon-modal-w-xl);
+}
+
+.archon-modal-size-2xl {
+  width: var(--archon-modal-w-2xl);
+}
+
+/* M97: Header-Leiste, Titel und Close-Button nach dem Control-Center-Maßstab. */
+.archon-modal-header {
+  padding-bottom: var(--archon-modal-header-pad);
+  border-bottom: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+}
+
+.archon-modal-title {
+  font-size: var(--archon-modal-title-size);
+  font-weight: var(--archon-modal-title-weight);
+  letter-spacing: var(--archon-modal-title-tracking);
+  text-transform: uppercase;
+}
+
+.archon-modal-close {
+  padding: var(--archon-modal-close-pad);
+  border-radius: var(--archon-radius-sm);
+  color: var(--muted-foreground, #94a3b8);
+  cursor: pointer;
+}
+
+/* M97: Stufenweise Z-Order ohne magische Zahlen in Individualdateien. */
+.archon-z-backdrop { z-index: var(--archon-z-backdrop); }
+.archon-z-dialog { z-index: var(--archon-z-dialog); }
+.archon-z-header { z-index: var(--archon-z-header); }
+.archon-z-toast { z-index: var(--archon-z-toast); }
+
+/* M97: Toast-Stapel und Lade-Hinweise liegen über allen Dialogen. */
+.archon-toast-stack,
+.archon-overlay-hint {
+  position: fixed;
+  z-index: var(--archon-z-toast);
 }
 
 .custom-scrollbar::-webkit-scrollbar {

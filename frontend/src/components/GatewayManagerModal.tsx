@@ -161,10 +161,10 @@ export const GatewayManagerModal: React.FC<GatewayManagerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 flex items-center justify-center archon-z-backdrop">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 archon-modal-shade"
         onClick={onClose}
       />
 

@@ -103,7 +103,10 @@ def api_save_autonomy_modules_settings(request: Request, payload: PassthroughBod
     app_main = get_provider("app_main")
     from backend.autonomy_settings import save_autonomy_settings
 
-    updated = save_autonomy_settings(data)
+    try:
+        updated = save_autonomy_settings(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     try:
         import yaml
 
@@ -149,6 +152,8 @@ def api_save_autonomy_modules_settings(request: Request, payload: PassthroughBod
                     comp["enabled"] = bool(cc["enabled"])
                 if "keep_recent_turns" in cc:
                     comp["protect_last_n"] = int(cc["keep_recent_turns"])
+                if "auto_compact_pct" in cc:
+                    comp["threshold"] = round(float(cc["auto_compact_pct"]) / 100.0, 2)
             cg = data.get("consensus_gate", {})
             if isinstance(cg, dict) and "enabled" in cg:
                 hdata.setdefault("moa", {})["enabled"] = bool(cg["enabled"])

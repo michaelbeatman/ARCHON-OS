@@ -363,6 +363,28 @@ OMNIROUTE_URL = os.getenv("OMNIROUTE_URL", "http://omniroute:20128/v1")
 OMNIROUTE_API_KEY = os.getenv("OMNIROUTE_API_KEY", "").strip()
 N8N_URL = os.getenv("N8N_URL", "http://n8n:5678")
 
+
+def refresh_cached_provider_keys() -> Dict[str, bool]:
+    """Aktualisiert importzeitlich gecachte Provider-Keys nach Live-Rotation/Revoke ohne Neustart."""
+    global OMNIROUTE_API_KEY
+    OMNIROUTE_API_KEY = os.getenv("OMNIROUTE_API_KEY", "").strip()
+    return {"omniroute_key_present": bool(OMNIROUTE_API_KEY)}
+
+
+def _get_omniroute_api_key() -> str:
+    """Liefert den aktuellen OMNIROUTE_API_KEY dynamisch (Env -> Modul-Konstante -> Key-Cache)."""
+    live = os.getenv("OMNIROUTE_API_KEY", "").strip()
+    if live:
+        return live
+    if OMNIROUTE_API_KEY:
+        return OMNIROUTE_API_KEY
+    try:
+        import api_provider
+
+        return str(api_provider.collect_keys().get("OMNIROUTE_API_KEY") or "").strip()
+    except Exception:
+        return ""
+
 def detect_target_action(text: str, frontmatter: str = "") -> str:
     """
     Erkennt operative Folgeaktionen aus Prompt-Payload oder Frontmatter.
@@ -2257,14 +2279,15 @@ async def _dispatch_to_omniroute_or_container_impl(
             logger.error("[Dispatcher] Fallback-Kettendeadline erreicht — kein weiterer OmniRoute-Hop.")
             break
         try:
+            omni_api_key = _get_omniroute_api_key()
             resp = await _audited_post(
                 client,
                 omni_url,
                 provider_id="omniroute",
                 model_id=omni_model,
                 headers=(
-                    {"Authorization": f"Bearer {OMNIROUTE_API_KEY}", "Content-Type": "application/json"}
-                    if OMNIROUTE_API_KEY else {"Content-Type": "application/json"}
+                    {"Authorization": f"Bearer {omni_api_key}", "Content-Type": "application/json"}
+                    if omni_api_key else {"Content-Type": "application/json"}
                 ),
                 json_body=omni_payload,
                 timeout=timeout,

@@ -258,7 +258,10 @@ def _dispatch_audit_integrity() -> Dict[str, Any]:
     """Schreibt einen echten llm_dispatch-Block und verifiziert seine Kette."""
     try:
         with tempfile.TemporaryDirectory(prefix="archon_dispatch_audit_") as tmp_dir:
-            probe = ChainedAuditLog(db_path=os.path.join(tmp_dir, "probe.db"))
+            probe = ChainedAuditLog(
+                db_path=os.path.join(tmp_dir, "probe.db"),
+                start_anchor=False,
+            )
             event = probe.record_event(
                 category="llm_dispatch",
                 action="enforcement_probe",
@@ -497,7 +500,7 @@ def _span_id_from_event_context(
 
 
 class ChainedAuditLog:
-    def __init__(self, db_path: str = DB_PATH):
+    def __init__(self, db_path: str = DB_PATH, start_anchor: bool = True):
         self.db_path = db_path
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._lock = threading.Lock()
@@ -506,7 +509,8 @@ class ChainedAuditLog:
         # -> halb geschriebene Integritätsdatei.
         self._anchor_stop = threading.Event()
         self._init_db()
-        self._start_anchor_worker()
+        if start_anchor:
+            self._start_anchor_worker()
 
     def _start_anchor_worker(self) -> None:
         """Optionaler externer Anker. Läuft als Daemon-Thread und schreibt

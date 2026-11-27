@@ -217,6 +217,33 @@
       }
       document.getElementById("system-settings-modal").classList.add("hidden");
     }
+
+    // M98: Credentials-Fragment einmalig laden. innerHTML fuehrt keine
+    // <script>-Tags aus, daher werden diese nach dem Einhaengen re-executiert.
+    async function mountM98Credentials() {
+      const mount = document.getElementById("m98-credentials-mount");
+      if (!mount || mount.dataset.m98Loaded === "1" || window._m98MountInFlight) return;
+      window._m98MountInFlight = (async () => {
+        try {
+          const res = await fetch("/static/views/api_credentials_view.html?v=20261127");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          mount.innerHTML = await res.text();
+          mount.querySelectorAll("script").forEach((old) => {
+            const replacement = document.createElement("script");
+            replacement.textContent = old.textContent;
+            document.head.appendChild(replacement);
+          });
+          mount.dataset.m98Loaded = "1";
+        } catch (err) {
+          console.error("[M98] Credentials-View konnte nicht geladen werden", err);
+        } finally {
+          window._m98MountInFlight = null;
+        }
+      })();
+      return window._m98MountInFlight;
+    }
+    window.mountM98Credentials = mountM98Credentials;
+
     function setSettingsTab(tabName) {
       // Wenn Suchergebnis aktiv war, beim Tab-Klick Suche sauber zurücksetzen
       const searchPane = document.getElementById("settings-tab-search-results");
@@ -240,7 +267,7 @@
       }
 
       activeSettingsTab = targetTab;
-      const tabs = ["kernel", "jev", "memory", "email-guard", "validate", "cost", "services", "routing", "keys", "frameworks", "comm", "design", "corporate", "users", "update"];
+      const tabs = ["kernel", "jev", "memory", "email-guard", "validate", "cost", "services", "routing", "keys", "credentials", "frameworks", "comm", "design", "corporate", "users", "update"];
       tabs.forEach(t => {
         const pane = document.getElementById(`settings-tab-${t}`);
         const btn = document.getElementById(`btn-tab-${t}`);
@@ -272,6 +299,11 @@
       if (targetTab === "keys") {
         if (typeof loadApiKeys === "function") {
           loadApiKeys();
+        }
+      }
+      if (targetTab === "credentials") {
+        if (typeof mountM98Credentials === "function") {
+          mountM98Credentials();
         }
       }
       if (targetTab === "update") {
@@ -833,6 +865,9 @@
         // Sektion 7: Native Tool-Loop-Guardrails
         setChk("hermes-cfg-loop-warn-enabled", s.loop_warnings_enabled, true);
         setChk("hermes-cfg-loop-stop-enabled", s.loop_hard_stop_enabled, false);
+        if (typeof window.loadContextCompactorSettings === "function") {
+          window.loadContextCompactorSettings();
+        }
         setVal("hermes-cfg-warn-exact", s.warn_exact_failure, 2);
         setVal("hermes-cfg-warn-same", s.warn_same_tool_failure, 3);
         setVal("hermes-cfg-warn-noprog", s.warn_idempotent_no_progress, 2);
@@ -1004,8 +1039,8 @@
           stop_exact_failure: el("hermes-cfg-stop-exact") ? parseInt(el("hermes-cfg-stop-exact").value, 10) : 5,
           stop_same_tool_failure: el("hermes-cfg-stop-same") ? parseInt(el("hermes-cfg-stop-same").value, 10) : 8,
           stop_idempotent_no_progress: el("hermes-cfg-stop-noprog") ? parseInt(el("hermes-cfg-stop-noprog").value, 10) : 5,
-          // Sektion 8
-          compression_enabled: el("hermes-cfg-comp-enabled") ? el("hermes-cfg-comp-enabled").checked : true,
+        // Sektion 8
+        compression_enabled: el("hermes-cfg-comp-enabled") ? el("hermes-cfg-comp-enabled").checked : true,
           compression_codex_autoraise: el("hermes-cfg-comp-autoraise") ? el("hermes-cfg-comp-autoraise").checked : true,
           compression_threshold: el("hermes-cfg-comp-threshold") ? parseFloat(el("hermes-cfg-comp-threshold").value) : 0.5,
           compression_target_ratio: el("hermes-cfg-comp-ratio") ? parseFloat(el("hermes-cfg-comp-ratio").value) : 0.2,
@@ -1465,6 +1500,10 @@
         if (el('perf-compact-enabled')) el('perf-compact-enabled').checked = cc.enabled !== false;
         if (el('perf-compact-threshold') && cc.trigger_token_threshold) el('perf-compact-threshold').value = cc.trigger_token_threshold;
         if (el('perf-compact-keep') && cc.keep_recent_turns) el('perf-compact-keep').value = cc.keep_recent_turns;
+        if (el('cc-cfg-enabled')) el('cc-cfg-enabled').checked = cc.enabled !== false;
+        if (el('cc-cfg-trigger-threshold') && cc.trigger_token_threshold !== undefined) el('cc-cfg-trigger-threshold').value = cc.trigger_token_threshold;
+        if (el('cc-cfg-auto-compact-pct') && cc.auto_compact_pct !== undefined) el('cc-cfg-auto-compact-pct').value = cc.auto_compact_pct;
+        if (el('cc-cfg-keep-recent') && cc.keep_recent_turns !== undefined) el('cc-cfg-keep-recent').value = cc.keep_recent_turns;
 
         const wb = s.write_batcher || {};
         if (el('perf-batch-enabled')) el('perf-batch-enabled').checked = wb.enabled !== false;
@@ -1693,9 +1732,10 @@
           fallback_model: el('perf-hedge-model')?.value || "deepseek/deepseek-chat"
         },
         context_compactor: {
-          enabled: !!el('perf-compact-enabled')?.checked,
-          trigger_token_threshold: parseInt(el('perf-compact-threshold')?.value || "6000", 10),
-          keep_recent_turns: parseInt(el('perf-compact-keep')?.value || "4", 10)
+          enabled: !!(el('cc-cfg-enabled') ? el('cc-cfg-enabled').checked : el('perf-compact-enabled')?.checked),
+          trigger_token_threshold: parseInt(el('cc-cfg-trigger-threshold')?.value || el('perf-compact-threshold')?.value || "6000", 10),
+          auto_compact_pct: parseFloat(el('cc-cfg-auto-compact-pct')?.value || "85"),
+          keep_recent_turns: parseInt(el('cc-cfg-keep-recent')?.value || el('perf-compact-keep')?.value || "4", 10)
         },
         write_batcher: {
           enabled: !!el('perf-batch-enabled')?.checked,
@@ -3402,3 +3442,74 @@ window.addModelRouteRow = addModelRouteRow;
 window.removeModelRouteRow = removeModelRouteRow;
 window.collectModelRoutingRows = collectModelRoutingRows;
 window.saveModelRoutingSettings = saveModelRoutingSettings;
+
+// ===== M99: Archon Context-Compactor Settings im System-Settings-Modal =====
+async function loadContextCompactorSettings() {
+  try {
+    const res = await fetch("/api/settings/autonomy-modules");
+    if (!res.ok) return;
+    const data = await res.json();
+    const cc = ((data && data.settings) || {}).context_compactor || {};
+    const el = (id) => document.getElementById(id);
+    if (el("cc-cfg-enabled")) el("cc-cfg-enabled").checked = cc.enabled !== false;
+    if (el("cc-cfg-trigger-threshold") && cc.trigger_token_threshold !== undefined) {
+      el("cc-cfg-trigger-threshold").value = cc.trigger_token_threshold;
+    }
+    if (el("cc-cfg-auto-compact-pct") && cc.auto_compact_pct !== undefined) {
+      el("cc-cfg-auto-compact-pct").value = cc.auto_compact_pct;
+    }
+    if (el("cc-cfg-keep-recent") && cc.keep_recent_turns !== undefined) {
+      el("cc-cfg-keep-recent").value = cc.keep_recent_turns;
+    }
+  } catch (e) {
+    console.warn("[ContextCompactor] Laden fehlgeschlagen:", e);
+  }
+}
+
+async function saveContextCompactorSettings() {
+  const el = (id) => document.getElementById(id);
+  const statusEl = el("cc-cfg-save-status");
+  const payload = {
+    context_compactor: {
+      enabled: !!(el("cc-cfg-enabled") ? el("cc-cfg-enabled").checked : true),
+      trigger_token_threshold: parseInt(el("cc-cfg-trigger-threshold")?.value || "6000", 10),
+      auto_compact_pct: parseFloat(el("cc-cfg-auto-compact-pct")?.value || "85"),
+      keep_recent_turns: parseInt(el("cc-cfg-keep-recent")?.value || "4", 10),
+    },
+  };
+  if (statusEl) {
+    statusEl.textContent = "Speichere...";
+    statusEl.className = "text-[10.5px] font-mono text-[var(--muted-foreground)]";
+  }
+  try {
+    const res = await fetch("/api/settings/autonomy-modules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data.detail || ("HTTP " + res.status);
+      if (statusEl) {
+        statusEl.textContent = "Fehler: " + msg;
+        statusEl.className = "text-[10.5px] font-mono text-rose-500 font-bold";
+      }
+      return;
+    }
+    if (statusEl) {
+      statusEl.textContent = "Gespeichert " + new Date().toLocaleTimeString();
+      statusEl.className = "text-[10.5px] font-mono text-emerald-600 dark:text-emerald-400 font-bold";
+    }
+    if (typeof window.loadAutonomyModulesSettings === "function") {
+      window.loadAutonomyModulesSettings();
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.textContent = "Netzwerkfehler";
+      statusEl.className = "text-[10.5px] font-mono text-rose-500 font-bold";
+    }
+  }
+}
+
+window.loadContextCompactorSettings = loadContextCompactorSettings;
+window.saveContextCompactorSettings = saveContextCompactorSettings;

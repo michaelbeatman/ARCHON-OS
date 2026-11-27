@@ -1,10 +1,10 @@
 <!-- MODAL: SYSTEM SETTINGS CONTROL CENTER -->
-  <div id="system-settings-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-    <div id="system-settings-modal-card" class="os-modal bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 flex flex-col shadow-2xl overflow-hidden transition-all duration-200" style="width: 1240px; max-width: 96vw; height: 92vh; max-height: 92vh; box-sizing: border-box;">
+  <div id="system-settings-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-150 archon-modal-layer archon-modal-shade">
+    <div id="system-settings-modal-card" class="os-modal bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] flex flex-col overflow-hidden transition-all duration-200 archon-modal-surface archon-modal-size-xl">
       <!-- Modal Header -->
-      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3 gap-3">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3 gap-3 archon-modal-header">
         <div class="flex items-center gap-2 shrink-0">
-          <h3 class="text-sm font-bold uppercase text-[var(--foreground)] tracking-wider flex items-center gap-2">
+          <h3 class="text-sm font-bold uppercase text-[var(--foreground)] tracking-wider flex items-center gap-2 archon-modal-title">
             <i data-lucide="settings" class="w-4 h-4 text-black dark:text-white"></i> <span data-i18n="settings.general.modal_title">System Control Center</span>
           </h3>
         </div>
@@ -47,7 +47,7 @@
           <button type="button" onclick="openContextHelp('system_settings')" title="Hilfe zu Systemeinstellungen" data-i18n-title="settings.general.help_title" class="text-[var(--muted-foreground)] hover:text-sky-500 p-1 rounded-lg hover:bg-[var(--secondary)] transition cursor-pointer">
             <i data-lucide="help-circle" class="w-4 h-4"></i>
           </button>
-          <button onclick="closeSystemSettingsModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1 rounded-lg hover:bg-[var(--secondary)] transition cursor-pointer">
+          <button onclick="closeSystemSettingsModal()" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1 rounded-lg hover:bg-[var(--secondary)] transition cursor-pointer archon-modal-close">
             <i data-lucide="x" class="w-4 h-4 text-black dark:text-white"></i>
           </button>
         </div>
@@ -71,6 +71,9 @@
         <button onclick="setSettingsTab('routing')" id="btn-tab-routing" class="py-1 px-1.5 text-[10.5px] font-normal border rounded-md transition-all cursor-pointer relative whitespace-nowrap shrink-0 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" style="border-color: transparent; background-color: transparent; padding-left: 6px; padding-right: 6px; font-size: 10.5px;" data-i18n="settings.general.tab_routing_short">PROVIDER</button>
         <span class="text-[var(--border)] text-[10px] select-none" aria-hidden="true">|</span>
         <button onclick="setSettingsTab('keys')" id="btn-tab-keys" class="py-1 px-1.5 text-[10.5px] font-normal border rounded-md transition-all cursor-pointer relative whitespace-nowrap shrink-0 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" style="border-color: transparent; background-color: transparent; padding-left: 6px; padding-right: 6px; font-size: 10.5px;" data-i18n="settings.general.tab_keys_short">API-KEYS</button>
+        <span class="text-[var(--border)] text-[10px] select-none" aria-hidden="true">|</span>
+        <!-- M98: gemeinsame Credential-Verwaltung (Tokens + Provider-Keys) -->
+        <button onclick="setSettingsTab('credentials')" id="btn-tab-credentials" class="py-1 px-1.5 text-[10.5px] font-normal border rounded-md transition-all cursor-pointer relative whitespace-nowrap shrink-0 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" style="border-color: transparent; background-color: transparent; padding-left: 6px; padding-right: 6px; font-size: 10.5px;">CREDENTIALS</button>
         <span class="text-[var(--border)] text-[10px] select-none" aria-hidden="true">|</span>
         <button onclick="setSettingsTab('frameworks')" id="btn-tab-frameworks" class="py-1 px-1.5 text-[10.5px] font-normal border rounded-md transition-all cursor-pointer relative whitespace-nowrap shrink-0 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" style="border-color: transparent; background-color: transparent; padding-left: 6px; padding-right: 6px; font-size: 10.5px;" data-i18n="settings.general.tab_frameworks">METHODIKEN</button>
         <span class="text-[var(--border)] text-[10px] select-none" aria-hidden="true">|</span>
@@ -143,6 +146,9 @@
               </div>
             </div>
             <div class="flex items-center gap-2">
+              <button type="button" onclick="window.authManager.openOwnPasswordDialog()" class="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-300 transition cursor-pointer flex items-center gap-1.5 shadow-2xs">
+                <i data-lucide="key-round" class="w-3.5 h-3.5"></i> <span data-i18n="settings.users.change_own_pw_btn">Eigenes Passwort ändern</span>
+              </button>
               <button type="button" onclick="window.authManager.renderSettingsUsersTable()" class="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--foreground)] transition cursor-pointer flex items-center gap-1.5 shadow-2xs">
                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> <span data-i18n="common.refresh">Aktualisieren</span>
               </button>
@@ -230,8 +236,8 @@
         </div>
 
         <!-- MODAL: NEUEN BENUTZER ANLEGEN -->
-        <div id="new-user-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div class="w-full max-w-md bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl p-6 text-sans text-[var(--foreground)] space-y-4">
+        <div id="new-user-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
+          <div class="w-full max-w-md bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl p-6 text-sans text-[var(--foreground)] space-y-4 archon-modal-surface">
             <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <h4 class="text-sm font-black flex items-center gap-2">
                 <i data-lucide="user-plus" class="w-4 h-4 text-sky-500"></i> <span data-i18n="settings.users.new_user_title">Neuen Benutzer anlegen</span>
@@ -386,8 +392,8 @@
           </div>
 
           <!-- Creation Modal (Embedded Overlay) -->
-          <div id="modal-create-api-key" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-            <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 w-full max-w-lg shadow-2xl space-y-4">
+          <div id="modal-create-api-key" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
+            <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 w-full max-w-lg shadow-2xl space-y-4 archon-modal-surface">
               <div class="flex items-center justify-between border-b border-[var(--border)] pb-2.5">
                 <h4 class="font-bold text-xs uppercase font-mono text-[var(--foreground)] flex items-center gap-2">
                   <i data-lucide="key" class="w-4 h-4 text-indigo-500"></i> <span data-i18n="settings.keys.create_title">Neuen API-Key anlegen</span>
@@ -609,7 +615,7 @@
             </div>
           </div>
           <!-- Modal: Lokale Änderungen (Git Status Inspector) -->
-          <div id="modal-local-changes" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div id="modal-local-changes" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-150 archon-modal-layer archon-modal-shade">
             <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden" onclick="event.stopPropagation()">
               <!-- Header -->
               <div class="p-4 border-b border-[var(--border)] flex items-center justify-between bg-[var(--muted)]/20">
@@ -1363,6 +1369,40 @@
                   <option value="1h" data-i18n="settings.kernel.1_stunde_1h_extended">1 Stunde (1h – Extended)</option>
                   <option value="off" data-i18n="settings.kernel.deaktiviert_off">Deaktiviert (off)</option>
                 </select>
+              </div>
+            </div>
+
+            <!-- M99: Archon Context-Compactor Parameter (dynamisches Modell-Kontextfenster) -->
+            <div id="archon-context-compactor-settings" class="mt-3 pt-3 border-t border-[var(--border)] space-y-2.5">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-mono font-bold text-[var(--foreground)]">Archon Context-Compactor (M99)</span>
+                  <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[9.5px] font-mono font-bold">Dynamisches Fenster (128k / 200k / 1M · Fallback 32k)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="cc-cfg-save-status" class="text-[10.5px] font-mono text-[var(--muted-foreground)]"></span>
+                  <button type="button" onclick="window.saveContextCompactorSettings && window.saveContextCompactorSettings()" class="px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-mono font-bold transition cursor-pointer shadow-2xs">
+                    Compactor speichern
+                  </button>
+                </div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <label class="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                  <span class="text-xs font-mono font-bold text-[var(--foreground)]">Compactor aktiv</span>
+                  <input type="checkbox" id="cc-cfg-enabled" checked class="w-4 h-4 rounded text-emerald-600">
+                </label>
+                <div>
+                  <label for="cc-cfg-trigger-threshold" class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Trigger-Schwelle (Tokens)</label>
+                  <input type="number" id="cc-cfg-trigger-threshold" min="1000" max="1000000" step="1000" value="6000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                </div>
+                <div>
+                  <label for="cc-cfg-auto-compact-pct" class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Auto-Compact ab (%)</label>
+                  <input type="number" id="cc-cfg-auto-compact-pct" min="10" max="99" step="1" value="85" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                </div>
+                <div>
+                  <label for="cc-cfg-keep-recent" class="block text-[10px] font-mono uppercase text-[var(--muted-foreground)] mb-1">Letzte Turns behalten</label>
+                  <input type="number" id="cc-cfg-keep-recent" min="1" max="100" step="1" value="4" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono">
+                </div>
               </div>
             </div>
           </div>
@@ -2207,6 +2247,10 @@
               </button>
             </div>
           </div>
+        </div>
+        <!-- M98: Gemeinsame Credential-Verwaltung (Archon-Tokens + Provider-Keys) -->
+        <div id="settings-tab-credentials" class="hidden space-y-4 text-xs p-1">
+          <div id="m98-credentials-mount"></div>
         </div>
         <!-- Tab 5: Methodik-Frameworks (Boardroom Framework Registry) -->
         <div id="settings-tab-frameworks" class="hidden space-y-4">

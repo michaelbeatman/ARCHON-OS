@@ -1,18 +1,21 @@
-from fastapi import Depends as _ArchonDepends
-from archon.routers._rbac import forbid_viewer_writes as _forbid_viewer_writes
 """Sub-Router fuer Approval Policies & 4-Augen-Prinzip (t-5596bd).
 
 Ausgelagert aus backend/operations_api.py.
 """
 import json
 import logging
-logger = logging.getLogger("archon.routers.operations_approvals")
-
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Body, HTTPException, Request
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi import Depends as _ArchonDepends
 from pydantic import BaseModel, ConfigDict, Field
 
+from archon.routers._rbac import (
+    forbid_viewer_writes as _forbid_viewer_writes,
+)
 from archon.routers._rbac import require_admin_or_503, require_session_actor
+
+logger = logging.getLogger("archon.routers.operations_approvals")
 
 
 class ApprovalPolicyUpdateRequest(BaseModel):
@@ -339,6 +342,8 @@ def api_set_delegation(request: Request, req: DelegationSetRequest):
             substitute_name=substitute_name,
         )
         return {"status": "success", "result": res}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -93,7 +93,7 @@ export function AuthModal({ isOpen, onLoginSuccess, onClose, themeMode = 'light'
   const isLight = themeMode === 'light';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 overflow-hidden flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
       <div
         ref={dialogRef}
         role="dialog"

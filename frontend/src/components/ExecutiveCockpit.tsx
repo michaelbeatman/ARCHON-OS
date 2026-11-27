@@ -8,6 +8,7 @@ import {
   WorkflowRunSummary,
 } from '@/lib/archon-api';
 import { useArchonEvents } from '@/lib/useArchonEvents';
+import { OutputEconomicsDashboard } from '@/components/OutputEconomicsDashboard';
 import {
   Activity,
   CheckCircle2,
@@ -74,6 +75,7 @@ export function ExecutiveCockpit() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'economics'>('overview');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -180,6 +182,33 @@ export function ExecutiveCockpit() {
           </div>
         )}
 
+        {/* M100: Output-Oekonomie als weiteres Panel im Cockpit */}
+        <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+              activeTab === 'overview'
+                ? 'bg-indigo-600 text-white'
+                : 'border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            Übersicht
+          </button>
+          <button
+            onClick={() => setActiveTab('economics')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+              activeTab === 'economics'
+                ? 'bg-indigo-600 text-white'
+                : 'border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            Output-Ökonomie
+          </button>
+        </div>
+        {activeTab === 'economics' ? (
+          <OutputEconomicsDashboard />
+        ) : (
+          <>
         {/* Top KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/70">
@@ -286,6 +315,8 @@ export function ExecutiveCockpit() {
             </div>
           </section>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

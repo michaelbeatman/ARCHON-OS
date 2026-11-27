@@ -294,6 +294,18 @@ class AuthManager {
     }
   }
 
+  async openOwnPasswordDialog() {
+    if (!this.currentUser || !this.currentUser.id || this.currentUser.id === 'usr_anonymous') {
+      await this.loadCurrentUser();
+    }
+    const u = this.currentUser;
+    if (!u || !u.id || u.id === 'usr_anonymous') {
+      alert(authT('ui.auth_manager.err_not_logged_in', 'Bitte zuerst mit einem Benutzerkonto anmelden.'));
+      return;
+    }
+    this.openPasswordDialog(u.id, u.username || u.display_name || 'user', true);
+  }
+
   openPasswordDialog(userId, username, isSelf) {
     const old = document.getElementById('archon-pw-modal');
     if (old) old.remove();
@@ -301,7 +313,7 @@ class AuthManager {
     modal.id = 'archon-pw-modal';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
-    modal.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,.88);backdrop-filter:blur(4px)';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:20000050;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,.88);backdrop-filter:blur(4px)';
     modal.innerHTML = `
       <form id="archon-pw-form" style="width:340px;max-width:92vw;background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:10px">
         <div style="font-size:13px;font-weight:800;color:#e2e8f0">${authT('ui.auth_manager.pw_title', 'Passwort ändern')}</div>

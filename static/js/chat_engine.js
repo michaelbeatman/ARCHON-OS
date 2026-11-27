@@ -841,17 +841,65 @@ async function initMasterChat() {
           </div>
         `;
       } else if (role === "system") {
-        bubbleWrap.className = "flex justify-center";
-        bubbleWrap.innerHTML = `
-          <div class="max-w-xl bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-4 py-2 text-xs text-[var(--foreground)] space-y-0.5 shadow-xs text-center leading-relaxed font-sans">
-            <div class="font-bold text-[9px] uppercase tracking-wider font-mono text-[var(--muted-foreground)]">${chatT('ui.chat_engine.system_event', 'System-Ereignis')}</div>
-            <div class="whitespace-pre-wrap font-mono">${escapeHtml(safeContent)}</div>
-            <div class="pt-1 border-t border-[var(--border)] flex items-center justify-between text-[9px] font-mono text-[var(--muted-foreground)]">
-              <span>${dateFormatted}</span>
-              <span>${displayMsgId}</span>
+        const markerMatch = safeContent.match(/^\[COMPACTION_MARKER\s*\|\s*([^\]]+)\]\s*\n?([\s\S]*)$/);
+        if (markerMatch || safeContent.includes("[HIERARCHICAL_MEMORY_STATE")) {
+          const meta = {};
+          if (markerMatch) {
+            markerMatch[1].split("|").forEach(pair => {
+              const idx = pair.indexOf("=");
+              if (idx > 0) meta[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
+            });
+          }
+          const beforeTok = Number(meta.before || 0);
+          const afterTok = Number(meta.after || 0);
+          const savedTok = meta.saved !== undefined ? Number(meta.saved) : Math.max(0, beforeTok - afterTok);
+          const savedPct = meta.saved_pct !== undefined ? Number(meta.saved_pct) : null;
+          const compactedMsgs = meta.compacted_messages ? Number(meta.compacted_messages) : null;
+          const maxCtx = meta.max_context_tokens ? Number(meta.max_context_tokens) : null;
+          const modelTag = meta.model && meta.model !== "auto" ? meta.model : "";
+          const summaryBody = markerMatch ? markerMatch[2].trim() : safeContent;
+          const loc = chatLocale();
+          const tokenBadge = (beforeTok > 0 && afterTok > 0)
+            ? `${beforeTok.toLocaleString(loc)} → ${afterTok.toLocaleString(loc)} Tokens (${savedTok.toLocaleString(loc)} / ${savedPct !== null ? savedPct.toFixed(1).replace(".", ",") : "0"}% gespart)`
+            : "Verlauf verdichtet";
+          const metaParts = [];
+          if (compactedMsgs !== null) metaParts.push(`${compactedMsgs} Nachrichten verdichtet`);
+          if (maxCtx) metaParts.push(`Fenster: ${fmtCtxK(maxCtx)}`);
+          if (modelTag) metaParts.push(modelTag);
+          bubbleWrap.className = "flex justify-center my-2";
+          bubbleWrap.innerHTML = `
+            <div class="w-full max-w-2xl bg-sky-500/10 border border-sky-500/30 rounded-xl px-4 py-2.5 text-xs text-[var(--foreground)] space-y-1.5 shadow-2xs" data-compaction-marker="true">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 font-mono font-bold text-[11px] text-sky-700 dark:text-sky-300">
+                  <i data-lucide="minimize-2" class="w-3.5 h-3.5"></i>
+                  <span>Kontext kompaktiert</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-[10.5px] font-mono font-bold">${escapeHtml(tokenBadge)}</span>
+              </div>
+              ${metaParts.length ? `<div class="text-[10px] font-mono text-[var(--muted-foreground)]">${escapeHtml(metaParts.join(" · "))}</div>` : ""}
+              <details class="text-left">
+                <summary class="cursor-pointer text-[10.5px] font-mono text-sky-700 dark:text-sky-300 hover:underline select-none">Verdichteten Memory-State anzeigen</summary>
+                <div class="mt-1.5 p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] whitespace-pre-wrap font-mono text-[10.5px] text-[var(--foreground)]">${escapeHtml(summaryBody)}</div>
+              </details>
+              <div class="pt-1 border-t border-sky-500/20 flex items-center justify-between text-[9px] font-mono text-[var(--muted-foreground)]">
+                <span>${dateFormatted}</span>
+                <span>${displayMsgId}</span>
+              </div>
             </div>
-          </div>
-        `;
+          `;
+        } else {
+          bubbleWrap.className = "flex justify-center";
+          bubbleWrap.innerHTML = `
+            <div class="max-w-xl bg-[var(--secondary)] border border-[var(--border)] rounded-lg px-4 py-2 text-xs text-[var(--foreground)] space-y-0.5 shadow-xs text-center leading-relaxed font-sans">
+              <div class="font-bold text-[9px] uppercase tracking-wider font-mono text-[var(--muted-foreground)]">${chatT('ui.chat_engine.system_event', 'System-Ereignis')}</div>
+              <div class="whitespace-pre-wrap font-mono">${escapeHtml(safeContent)}</div>
+              <div class="pt-1 border-t border-[var(--border)] flex items-center justify-between text-[9px] font-mono text-[var(--muted-foreground)]">
+                <span>${dateFormatted}</span>
+                <span>${displayMsgId}</span>
+              </div>
+            </div>
+          `;
+        }
       } else {
         bubbleWrap.className = "flex justify-start";
         const isGroup = currentMasterChatProfileId === "__group__";
@@ -1216,14 +1264,17 @@ async function initMasterChat() {
       const sid = currentMasterChatSessionId;
       if (!sid) { bar.style.width = "0%"; bar.className = ctxBarClass(0); label.textContent = "—"; return; }
       try {
-        const res = await fetch(`/api/chat/context-status?session_id=${encodeURIComponent(sid)}`);
+        const selectedModel = (document.getElementById("master-chat-model-select")?.value || "").trim();
+        const modelQs = selectedModel ? `&model=${encodeURIComponent(selectedModel)}` : "";
+        const res = await fetch(`/api/chat/context-status?session_id=${encodeURIComponent(sid)}${modelQs}`);
         if (!res.ok) throw new Error("HTTP " + res.status);
         const d = await res.json();
         const pct = Math.max(0, Math.min(100, d.fill_pct || 0));
         bar.style.width = pct + "%";
         bar.className = ctxBarClass(pct);
         label.textContent = fmtCtxK(d.used_tokens) + "/" + fmtCtxK(d.max_context_tokens);
-        label.title = `Kontextfenster: ${d.used_tokens} von ${d.max_context_tokens} Tokens (${d.fill_pct}%) · ${d.message_count} Nachrichten`;
+        const modelInfo = d.model ? ` · Modell: ${d.model}` : "";
+        label.title = `Kontextfenster: ${d.used_tokens} von ${d.max_context_tokens} Tokens (${d.fill_pct}%) · ${d.message_count} Nachrichten${modelInfo}`;
         fillMasterChatContextPanel(d);
       } catch (e) {
         label.textContent = "—";
@@ -1258,10 +1309,11 @@ async function initMasterChat() {
       btn.textContent = "Komprimiere...";
       if (resEl) { resEl.classList.remove("hidden"); resEl.textContent = "Arbeite..."; }
       try {
+        const selectedModel = (document.getElementById("master-chat-model-select")?.value || "").trim();
         const res = await fetch("/api/chat/compact-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sid }),
+          body: JSON.stringify({ session_id: sid, model: selectedModel || null }),
         });
         const d = await res.json();
         if (d.compacted) {

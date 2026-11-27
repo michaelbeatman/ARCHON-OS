@@ -615,3 +615,9 @@ async def execute_agent_tool(
             "status": "error", "source": "mcp",
             "error": str(exc), "error_code": "TOOL_EXECUTION_ERROR",
         }, str(exc), error_code="TOOL_EXECUTION_ERROR", tool_ok=False)
+
+
+def get_code_mode_meta_tools() -> List[Dict[str, Any]]:
+    """M109a: kompakte Meta-Tool-Definitionen (Deferred Discovery)."""
+    from backend.code_mode_discovery import CODE_MODE_META_TOOLS
+    return list(CODE_MODE_META_TOOLS)

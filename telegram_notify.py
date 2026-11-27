@@ -23,10 +23,12 @@ Callback-Daten (vom telegram_bot-Gateway verarbeitet, siehe Skill
   app:reject:<task_id>    -> Verbieten (Kanban: review->backlog | Mission: dismissed)
 """
 
-import os
-import json
 import contextlib
+import json
 import logging
+import os
+from typing import Any, Dict, Optional
+
 import httpx
 
 logger = logging.getLogger("archon_os")
@@ -67,7 +69,7 @@ def telegram_enabled() -> bool:
 
     now = _time.time()
     if now - _ENABLED_CACHE["ts"] < 30:
-        return _ENABLED_CACHE["value"]
+        return bool(_ENABLED_CACHE["value"])
 
     enabled = False
     for path in ("/app/settings.json", "/app/agent_workspace/settings.json"):
@@ -117,8 +119,8 @@ def decision_message(*, typ, titel="", projekt="", von="", ref="", kurzfassung="
         kontext.append(("Von", von))
     if ref:
         kontext.append(("Referenz", ref))
-    breite = max(len(l) for l, _ in kontext)
-    block = "\n".join(f"{l.ljust(breite)}  {v}" for l, v in kontext)
+    breite = max(len(lbl) for lbl, _ in kontext)
+    block = "\n".join(f"{lbl.ljust(breite)}  {v}" for lbl, v in kontext)
     teile = [kopf, f"<pre>{e(block)}</pre>"]
     if kurzfassung:
         teile.append("<b>Worum es geht</b>")
@@ -132,12 +134,19 @@ def decision_message(*, typ, titel="", projekt="", von="", ref="", kurzfassung="
     return "\n\n".join(teile)
 
 
-def _api_url(method: str) -> str:
-    return _TELEGRAM_API_BASE.format(token=_TELEGRAM_BOT_TOKEN, method=method)
+def _api_url(method: str, bot_token: Optional[str] = None) -> str:
+    token = (bot_token or "").strip() or _TELEGRAM_BOT_TOKEN
+    return _TELEGRAM_API_BASE.format(token=token, method=method)
 
 
-def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
-    """Sendet eine Textnachricht an den Owner-Chat. Gibt True bei Erfolg zurück.
+def send_telegram_message(
+    text: str,
+    reply_markup: Optional[Dict[str, Any]] = None,
+    *,
+    chat_id: Optional[str] = None,
+    bot_token: Optional[str] = None,
+) -> bool:
+    """Sendet eine Textnachricht an den angegebenen User-Chat (Fallback: Owner-Chat).
 
     Fehlschläge werden als WARNING geloggt (nie still) und geben False zurück.
     """
@@ -146,8 +155,12 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
             logger.info("[Telegram] Versand deaktiviert (settings.json -> telegram.enabled = false).")
             _WARNED_ONCE["done"] = True
         return False
+    target_chat = str(chat_id or "").strip() or _TELEGRAM_CHAT_ID
+    if not target_chat:
+        logger.warning("[Telegram] sendMessage übersprungen: keine Ziel-chat_id konfiguriert.")
+        return False
     payload = {
-        "chat_id": _TELEGRAM_CHAT_ID,
+        "chat_id": target_chat,
         "text": text[:4000],  # Telegram-Limit: 4096 Zeichen
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
@@ -156,19 +169,14 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
         payload["reply_markup"] = reply_markup
     try:
         with httpx.Client(timeout=_TELEGRAM_TIMEOUT) as client, _telegram_trace_headers() as trace_headers:
-            resp = client.post(_api_url("sendMessage"), json=payload, headers=trace_headers)
+            resp = client.post(_api_url("sendMessage", bot_token=bot_token), json=payload, headers=trace_headers)
             data = resp.json()
             if resp.status_code == 200 and data.get("ok"):
                 return True
-            # 12.10.2026: Markdown-Entities-400 (z.B. Unterstrich in Tool-Namen
-            # 'x_search_probe' -> unvollstaendige Kursiv-Entity) -> EINMAL retry
-            # OHNE parse_mode, NOCH INNERHALB des with-Blocks (sonst:
-            # "client has been closed"). So kommt jede Nachricht an,
-            # Markdown bleibt fuer alle anderen Nachrichten aktiv.
             if resp.status_code == 400 and "parse" in str(data.get("description", "")):
                 clean = {k: v for k, v in payload.items() if k != "parse_mode"}
                 try:
-                    resp2 = client.post(_api_url("sendMessage"), json=clean, headers=trace_headers)
+                    resp2 = client.post(_api_url("sendMessage", bot_token=bot_token), json=clean, headers=trace_headers)
                     data2 = resp2.json()
                     if resp2.status_code == 200 and data2.get("ok"):
                         logger.info("[Telegram] Nachricht ohne Markdown-Rendern zugestellt (Parse-Fallback).")
@@ -185,9 +193,9 @@ def send_telegram_message(text: str, reply_markup: dict = None) -> bool:
         return False
 
 
-def send_telegram_document(file_path: str, caption: str = "", filename: str = None,
-                           mime: str = None, reply_markup: dict = None,
-                           parse_mode: str = None) -> bool:
+def send_telegram_document(file_path: str, caption: str = "", filename: Optional[str] = None,
+                           mime: Optional[str] = None, reply_markup: Optional[Dict[str, Any]] = None,
+                           parse_mode: Optional[str] = None) -> bool:
     """Sendet eine Datei (z.B. PDF oder HTML) als Dokument an den Owner-Chat."""
     if not telegram_enabled():
         logger.warning("[Telegram] Dokument-Ping übersprungen: Token/Chat-ID nicht konfiguriert.")
@@ -264,7 +272,7 @@ def _excerpt(text: str, limit: int = 350) -> str:
 
 
 def notify_task_status(task_id: str, status: str, title: str, result: str = "",
-                       obsidian_rel: str = None, dossier_dir: str = None) -> bool:
+                       obsidian_rel: Optional[str] = None, dossier_dir: Optional[str] = None) -> bool:
     """Delegations-Ping: done / blocked / review aus _bg_watch_task.
 
     12.10.2026 (User-Wunsch "2a"): Bei review/blocked wird der VOLLE Bericht als

@@ -38,7 +38,14 @@ def _redact_telegram_secrets(text: object) -> str:
 class TelegramSendPayload(BaseModel):
     text: str
     chat_id: Optional[str] = ""
+    user_id: Optional[str] = None
     parse_mode: Optional[str] = "Markdown"
+
+
+class TelegramHitlCallbackPayload(BaseModel):
+    callback_data: str
+    chat_id: str
+    reason: Optional[str] = "Per Telegram abgelehnt"
 
 
 def _prepare_telegram_relay_payload(
@@ -306,9 +313,63 @@ def api_telegram_send(request: Request, payload: TelegramSendPayload):
             "detail": "Telegram-Versand ist aus (settings.json -> telegram.enabled = false).",
         }
     try:
-        res = telegram_notify.send_telegram_message(payload.text)
+        target_chat = (payload.chat_id or "").strip() or None
+        bot_token: Optional[str] = None
+        if payload.user_id:
+            from backend.telegram_gateway_v2 import resolve_user_telegram_channel
+
+            ch = resolve_user_telegram_channel(payload.user_id)
+            if ch.get("resolved"):
+                target_chat = ch["chat_id"] or target_chat
+                bot_token = ch.get("bot_token") or None
+        res = telegram_notify.send_telegram_message(
+            payload.text,
+            chat_id=target_chat,
+            bot_token=bot_token,
+        )
         return {"status": "success" if res else "failed", "result": res}
     except Exception as e:
         redacted = _redact_telegram_secrets(e)
         logger.warning(f"[TelegramSend] Fehler: {redacted}")
         return JSONResponse(status_code=500, content={"status": "error", "message": redacted})
+
+
+@router.post("/hitl-callback")
+def api_telegram_hitl_callback(payload: TelegramHitlCallbackPayload):
+    """Verarbeitet HITL-Approve/Reject-Callbacks mit strikter chat_id-/RBAC-Pruefung (M95)."""
+    from backend.approval_policy_engine import approval_engine
+    from backend.telegram_gateway_v2 import authorize_hitl_callback, parse_hitl_callback
+
+    parsed = parse_hitl_callback(payload.callback_data)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Ungueltige callback_data.")
+
+    approval_id = str(parsed["approval_id"])
+    req_record = approval_engine.get_request(approval_id)
+    if not req_record:
+        raise HTTPException(status_code=404, detail="Freigabeanfrage nicht gefunden.")
+
+    authz = authorize_hitl_callback(
+        payload.callback_data,
+        payload.chat_id,
+        approval_record=req_record,
+    )
+    if not authz.get("authorized"):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Telegram-Callback nicht autorisiert: {authz.get('reason', 'unauthorized')}",
+        )
+
+    actor = str(authz["actor"])
+    try:
+        if parsed["approved"]:
+            result = approval_engine.approve_request(approval_id, approver_id=actor)
+        else:
+            result = approval_engine.reject_request(
+                approval_id,
+                rejected_by=actor,
+                reason=str(payload.reason or "Per Telegram abgelehnt"),
+            )
+        return {"status": "success", "actor": actor, "result": result}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

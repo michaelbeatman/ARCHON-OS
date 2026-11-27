@@ -213,8 +213,8 @@ export function CsvImportModal({
   const previewRows = csvRows.slice(0, 5);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-      <div className={`w-full max-w-2xl rounded-2xl border p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 ${
+    <div className="fixed inset-0 overflow-hidden flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
+      <div className={`w-full max-w-2xl rounded-2xl border p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 archon-modal-surface ${
         isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
       }`}>
 

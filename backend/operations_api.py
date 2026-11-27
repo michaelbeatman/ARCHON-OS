@@ -950,6 +950,34 @@ def kanban_stats():
     return _compute_kanban_stats(_build_kanban_meta_deps())
 
 
+@router.get("/kpi/output-economics")
+def get_output_economics(
+    group_by: Literal["project", "agent_profile", "period", "output_type"] = Query("project"),
+    project: Optional[str] = Query(None),
+    agent: Optional[str] = Query(None),
+    output_type: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    period: Literal["day", "week", "month"] = Query("day"),
+):
+    """M100: Output-Wirtschaftlichkeit (done + Deliverable), rein lesend.
+
+    Rollups nach Projekt/Agenten-Profil/Zeitraum/Output-Typ inklusive
+    Zeitreihe je Output-Typ. Nutzenbewertung bleibt bewusst manuell.
+    """
+    from backend.output_economics import aggregate_output_economics
+
+    return aggregate_output_economics(
+        group_by=group_by,
+        project=project,
+        agent=agent,
+        output_type=output_type,
+        date_from=date_from,
+        date_to=date_to,
+        period=period,
+    )
+
+
 @router.get("/kanban/tasks/{task_id}")
 def get_task_details(task_id: str):
     """Gibt Detailinformationen, Kommentare und Event-Logs eines Tasks zurück."""

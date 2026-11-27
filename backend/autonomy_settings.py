@@ -126,10 +126,11 @@ DEFAULT_AUTONOMY_SETTINGS: Dict[str, Dict[str, Any]] = {
         "fallback_model": "deepseek/deepseek-chat",
         "max_hedged_calls_per_minute": 20
     },
-    # Paket 1 (Feature 4): Dynamisches Context-Compaction & Hierarchisches Summarizing
+    # Paket 1 (Feature 4) + M99: Dynamisches Context-Compaction & Hierarchisches Summarizing
     "context_compactor": {
         "enabled": True,
         "trigger_token_threshold": 6000,
+        "auto_compact_pct": 85,
         "keep_recent_turns": 4,
         "target_compression_ratio": 0.30
     },
@@ -431,8 +432,16 @@ def save_autonomy_settings(updates: Dict[str, Any]) -> Dict[str, Any]:
     """
     from backend.settings_json import atomic_update_settings
 
+    normalized_updates = dict(updates)
+    if "context_compactor" in normalized_updates:
+        from backend.context_compactor import validate_context_compactor_config
+
+        normalized_updates["context_compactor"] = validate_context_compactor_config(
+            normalized_updates["context_compactor"]
+        )
+
     def _apply(current: Dict[str, Any]):
-        for key, val in updates.items():
+        for key, val in normalized_updates.items():
             if isinstance(val, dict) and isinstance(current.get(key), dict):
                 current[key].update(val)
             else:

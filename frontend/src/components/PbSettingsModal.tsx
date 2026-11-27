@@ -232,7 +232,7 @@ export function PbSettingsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 overflow-hidden flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
       <div className={`w-full max-w-5xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col h-[85vh] animate-in zoom-in-95 duration-150 ${
         isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
       }`}>

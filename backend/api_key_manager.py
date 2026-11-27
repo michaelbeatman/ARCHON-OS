@@ -16,6 +16,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from backend.credential_masking import mask_secret
+
 logger = logging.getLogger(__name__)
 
 
@@ -400,6 +402,78 @@ class ApiKeyManager:
             "created_at": now_iso,
             "created_by": created_by,
             # F-031: Audit-Fehler im Aktions-Result sichtbar.
+            **global_audit,
+        }
+
+    def rotate_key(self, key_id: str, rotated_by: str = "admin") -> Optional[Dict[str, Any]]:
+        """Rotiert einen aktiven Key unter Beibehaltung seiner Metadaten.
+
+        Name, Scopes und Rate-Limits bleiben unveraendert; der alte Hash wird
+        verworfen, damit das bisherige Token sofort ungueltig ist. Der neue
+        Klartext-Token wird bewusst EXAKT EINMALIG zurueckgegeben (wie
+        ``create_key``). Auditierung wie bei ``create_key``: lokale Kette im
+        selben Commit, danach Zentralkette -- ein Fehler dort eskaliert zu
+        ``AuditWriteFailedError`` (HTTP 503 im Router).
+        """
+        if not key_id or not key_id.strip():
+            raise ValueError("key_id darf nicht leer sein.")
+
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        raw_token = f"archon_live_{secrets.token_hex(24)}"
+        key_hash = self._hash_token(raw_token)
+        key_prefix = raw_token[:18] + "..."
+
+        with self._get_conn() as conn:
+            row = conn.execute("""
+                SELECT key_id, name, scopes, rate_limit_rpm, rate_limit_rpd, created_at, is_active
+                FROM api_keys WHERE key_id = ?
+            """, (key_id,)).fetchone()
+            if row is None or not row["is_active"]:
+                return None
+
+            conn.execute("""
+                UPDATE api_keys SET key_hash = ?, key_prefix = ? WHERE key_id = ?
+            """, (key_hash, key_prefix, key_id))
+
+            try:
+                scopes_list = json.loads(row["scopes"])
+            except Exception:
+                scopes_list = []
+            if not isinstance(scopes_list, list):
+                scopes_list = []
+
+            # Kein Klartext, kein Hash und kein langer Prefix im Audit-Details-Feld.
+            audit_details: Dict[str, Any] = {
+                "name": row["name"],
+                "scopes": scopes_list,
+                "rate_limit_rpm": row["rate_limit_rpm"],
+                "rate_limit_rpd": row["rate_limit_rpd"],
+                "token_masked": mask_secret(raw_token),
+                "rotated_at": now_iso,
+                "rotated_by": rotated_by,
+            }
+            self._log_audit(
+                key_id, "KEY_ROTATED", audit_details,
+                created_by=rotated_by, conn=conn, emit_global=False,
+            )
+            conn.commit()
+
+        global_audit = self._emit_global_audit(key_id, "KEY_ROTATED", audit_details, rotated_by)
+        _raise_if_audit_failed(global_audit, "api_key_rotate")
+
+        return {
+            "key_id": key_id,
+            "name": row["name"],
+            # Einmalanzeige: nur die Rotation-Antwort enthaelt den frischen Token.
+            "raw_token": raw_token,
+            "key_masked": mask_secret(raw_token),
+            "key_prefix_masked": mask_secret(key_prefix),
+            "scopes": scopes_list,
+            "rate_limit_rpm": row["rate_limit_rpm"],
+            "rate_limit_rpd": row["rate_limit_rpd"],
+            "created_at": row["created_at"],
+            "rotated_at": now_iso,
+            "rotated_by": rotated_by,
             **global_audit,
         }
 

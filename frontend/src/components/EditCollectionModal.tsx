@@ -196,7 +196,7 @@ export function EditCollectionModal({ isOpen, onClose, themeMode = 'light' }: Ed
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end">
+    <div className="fixed inset-0 overflow-hidden flex justify-end archon-z-backdrop archon-modal-shade">
       
       {/* Backdrop overlay click to close */}
       <div className="fixed inset-0" onClick={onClose} />

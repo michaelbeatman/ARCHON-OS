@@ -14,7 +14,7 @@
   <!-- Custom Studio CSS Overrides -->
   <!-- Archon OS Unified B2B SaaS Design System (Border-First / Shadcn-Slate) -->
   <link rel="stylesheet" href="/static/custom.css?v=2026111113">
-  <link rel="stylesheet" href="/static/css/design_system_v2.css?v=2026111901">
+  <link rel="stylesheet" href="/static/css/design_system_v2.css?v=2026112701">
   <!-- Custom Studio CSS Overrides (Active live edits only — loaded after themes.css) -->
   <script src="/static/vendor/lucide.min.js"></script>
   <script>
@@ -553,7 +553,7 @@
         <!-- ========================================================================= -->
         <!-- 1. TOP-HEADER (80px FLUCHTLINIE, VOLLE BREITE, DURCHGEHEND)                -->
         <!-- ========================================================================= -->
-        <div id="mission-control-global-header" data-archon-view-header="mission-control" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+        <div id="mission-control-global-header" data-archon-view-header="mission-control" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible archon-z-header">
           <!-- LINKSBÜNDIG: ÜBERSCHRIFT AUF LOGOHÖHE + HOCHGESTELLTES ? + KOMPAKTER UNTERTITEL -->
           <div class="flex flex-col justify-center min-w-0 flex-1 pr-4">
             <div class="flex items-start gap-0.5 min-w-0">
@@ -978,7 +978,7 @@
         </div>
       </div>
       <!-- MISSION CONTROL ARTEFAKT MODAL (ERGEBNIS-VORSCHAU) -->
-      <div id="mc-artifact-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      <div id="mc-artifact-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
         <div class="shadcn-card w-[720px] max-w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
           <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--secondary)]">
             <div class="flex items-center gap-2">
@@ -1001,7 +1001,7 @@
         </div>
       </div>
       <!-- MISSION CONTROL KPI DETAIL MODAL (LEICHTGEWICHTIGES TELEMETRIE-OVERLAY) -->
-      <div id="mc-kpi-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      <div id="mc-kpi-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
         <div class="shadcn-card w-[640px] max-w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl font-sans">
           <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--secondary)]">
             <div class="flex items-center gap-2">
@@ -1030,7 +1030,7 @@
         <!-- ========================================================================= -->
         <!-- 1. OPERATIONS HEADER (80px FLUCHTLINIE MIT DEN 6 ICON-TABS)               -->
         <!-- ========================================================================= -->
-        <div id="operations-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b-0 shrink-0 flex items-center justify-between relative overflow-visible z-20" style="border-bottom-width: 0px;">
+        <div id="operations-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b-0 shrink-0 flex items-center justify-between relative overflow-visible archon-z-header" style="border-bottom-width: 0px;">
 
           <!-- LINKSBÜNDIG: ÜBERSCHRIFT (AUF LOGOHÖHE) + ? OBEN RECHTS + UNTERTITEL DARUNTER -->
           <div class="min-w-0 flex-1 pr-3">
@@ -1468,7 +1468,7 @@
         <!-- ========================================================================= -->
         <!-- 2-ELEMENT ARCHITEKTUR: CONTINUOUS 80px HEADER FÜR DECISION ENGINE         -->
         <!-- ========================================================================= -->
-        <div id="boardroom-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible z-20">
+        <div id="boardroom-global-header" class="h-[80px] min-h-[80px] max-h-[80px] w-full px-5 bg-[var(--card)] border-b border-[var(--border)] shrink-0 flex items-center justify-between relative overflow-visible archon-z-header">
           <!-- Links: Titel & Subtitel -->
           <div class="flex items-center gap-3 min-w-0 flex-1">
             <div class="hidden" aria-hidden="true">
@@ -1822,7 +1822,7 @@
         <!-- ========================================================================= -->
         <!-- MODAL: LIVE-DIALOGFELD WENN DEBATTE AUS DEM DEBATTE-TAB GESTARTET WIRD -->
         <!-- ========================================================================= -->
-        <div id="boardroom-live-dialog-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div id="boardroom-live-dialog-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
           <div class="w-full max-w-3xl h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <!-- Modal Header -->
             <div class="flex items-center justify-between p-3.5 border-b border-[var(--border)] bg-[var(--secondary)] shrink-0">
@@ -1866,7 +1866,7 @@
         <!-- ========================================================================= -->
         <!-- MODAL: DETAIL-DIALOG FÜR HISTORISCHE DEBATTEN AUS DER ÜBERSICHT -->
         <!-- ========================================================================= -->
-        <div id="boardroom-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div id="boardroom-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
           <div class="w-full max-w-2xl max-h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <!-- Modal Header -->
             <div class="flex items-center justify-between p-4 border-b border-[var(--border)] bg-[var(--secondary)] shrink-0">
@@ -1923,7 +1923,7 @@
       <!-- ========================================================================= -->
       <!-- MODAL: OPENROUTER & LLM MODELL-PREISLISTE / KATALOG MIT DOLLAR-ICON AUFRUF -->
       <!-- ========================================================================= -->
-      <div id="llm-price-catalog-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div id="llm-price-catalog-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
           <div class="w-full max-w-4xl h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <!-- Modal Header -->
             <div class="flex items-center justify-between p-4 border-b border-[var(--border)] bg-[var(--secondary)] shrink-0">
@@ -2170,7 +2170,7 @@ print('Ausführung erfolgreich!')</textarea>
         if (!container) {
           container = document.createElement("div");
           container.id = "archon-global-toast-container";
-          container.className = "fixed bottom-5 right-5 z-[999999] flex flex-col gap-2 pointer-events-none";
+          container.className = "fixed bottom-5 right-5 flex flex-col gap-2 pointer-events-none archon-toast-stack";
           document.body.appendChild(container);
         }
         const toast = document.createElement("div");
@@ -10060,9 +10060,9 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- ARCHON OS NATIVE GATEWAY MANAGER MODAL (AGENTEN & PROFIL STEUERUNG)      -->
   <!-- ========================================================================= -->
-  <div id="gateway-manager-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
+  <div id="gateway-manager-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center archon-modal-layer">
     <!-- Backdrop -->
-    <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs" onclick="closeGatewayManagerModal()"></div>
+    <div class="absolute inset-0 archon-modal-shade" onclick="closeGatewayManagerModal()"></div>
     <!-- Dialog (Striktes Hell-Design) -->
     <div class="relative w-[720px] max-w-[95vw] max-h-[85vh] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden border border-slate-200 z-10 font-sans" style="background-color: #ffffff !important; border-color: #cbd5e1 !important;">
       <!-- Header -->
@@ -10120,9 +10120,9 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- OPERATIONS: NEUE AUFGABE MODAL                                            -->
   <!-- ========================================================================= -->
-  <div id="ops-new-task-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center p-4">
-    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeNewTaskModal()"></div>
-    <div id="ops-new-task-modal-card" class="relative bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal" style="width: 1280px; max-width: 96vw; height: 92vh; max-height: 92vh; box-sizing: border-box;">
+  <div id="ops-new-task-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer">
+    <div class="absolute inset-0 archon-modal-shade" onclick="closeNewTaskModal()"></div>
+    <div id="ops-new-task-modal-card" class="relative bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal archon-modal-size-2xl">
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)] shrink-0">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-xl bg-[#d42a2b] text-white flex items-center justify-center shadow-xs">
@@ -10373,8 +10373,8 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- OPERATIONS: TASK DETAIL & INTERACTION MODAL                               -->
   <!-- ========================================================================= -->
-  <div id="ops-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
-    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeTaskDetailModal()"></div>
+  <div id="ops-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center archon-modal-layer">
+    <div class="absolute inset-0 archon-modal-shade" onclick="closeTaskDetailModal()"></div>
     <div id="ops-detail-card" class="relative w-[760px] max-w-[95vw] max-h-[90vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans os-modal transition-transform duration-150">
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]">
         <div class="flex items-center gap-3 min-w-0">
@@ -10638,8 +10638,8 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- OPERATIONS: AGENT / NODE DETAIL & PROPERTIES MODAL                        -->
   <!-- ========================================================================= -->
-  <div id="ops-node-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[999999] flex items-center justify-center">
-    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeOrgNodeDetailModal()"></div>
+  <div id="ops-node-detail-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center archon-modal-layer">
+    <div class="absolute inset-0 archon-modal-shade" onclick="closeOrgNodeDetailModal()"></div>
     <div class="relative w-[840px] max-w-[95vw] max-h-[90vh] bg-[var(--card)] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] z-10 text-[var(--foreground)] font-sans">
       
       <!-- Header -->
@@ -10884,7 +10884,7 @@ ${logExcerpt}
       <!-- ========================================================================= -->
   <!-- MODAL: LADEBILDSCHIRM (VERSCHWOMMEN & VERDUNKELT, HELLE KARTE & MINIMALE ANIMATION) -->
   <!-- ========================================================================= -->
-  <div id="global-loading-overlay" role="status" aria-live="polite" class="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-md transition-opacity duration-150 opacity-0 pointer-events-none">
+  <div id="global-loading-overlay" role="status" aria-live="polite" class="fixed inset-0 flex items-center justify-center transition-opacity duration-150 opacity-0 pointer-events-none archon-overlay-hint archon-modal-shade">
     <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-3.5 text-center max-w-[280px] w-full mx-auto">
       
       <!-- Schlichte, elegante Ladeanimation: Ball / Ring im Kreis -->
@@ -10904,7 +10904,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: ROLE MANAGER (CREATE, EDIT, LOAD, DELETE, RESET) -->
-  <div id="role-manager-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/65 flex items-center justify-center p-4 z-50">
+  <div id="role-manager-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
     <div class="bg-[var(--card-bg)] text-[var(--text-primary)] border border-[var(--border)] rounded-lg p-6 w-full max-w-lg space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
         <h3 class="text-sm font-bold uppercase text-[var(--accent)] tracking-wider flex items-center gap-2">
@@ -10959,7 +10959,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: PROMPT-TEMPLATES & METHODEN-VORLAGEN (5-FELDER-STRUKTUR) -->
-  <div id="prompt-template-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closePromptTemplateModal()" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
+  <div id="prompt-template-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closePromptTemplateModal()" class="fixed inset-0 flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200 archon-modal-layer archon-modal-shade">
     <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl w-[72vw] max-w-6xl max-h-[88vh] min-w-[700px] flex flex-col overflow-hidden text-[var(--foreground)] font-sans">
       
       <!-- Modal Header -->
@@ -11203,7 +11203,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: ARCHON PROMPT STUDIO (824 ENTERPRISE TEMPLATES + 255 FABRIC SOPS = 1.079) -->
-  <div id="sureprompts-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeSurePromptsModal()" class="fixed inset-0 z-[1000005] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
+  <div id="sureprompts-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeSurePromptsModal()" class="fixed inset-0 flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200 archon-modal-layer archon-modal-shade">
     <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl w-[90vw] max-w-[1600px] h-[92vh] max-h-[92vh] min-w-[900px] flex flex-col overflow-hidden text-[var(--foreground)] font-sans">
       
       <!-- Modal Header -->
@@ -11617,7 +11617,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: WATCHDOG SICHERHEITS-AUDITOR -->
-  <div id="watchdog-auditor-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeWatchdogAuditorModal()" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
+  <div id="watchdog-auditor-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeWatchdogAuditorModal()" class="fixed inset-0 flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200 archon-modal-layer archon-modal-shade">
     <div class="bg-[#111827] border border-rose-500/40 rounded-2xl shadow-2xl w-full max-w-[780px] max-h-[92vh] flex flex-col overflow-hidden text-slate-100 font-sans shadow-rose-950/40">
       
       <!-- Modal Header -->
@@ -11769,7 +11769,7 @@ ${logExcerpt}
   </div>
 
   <!-- DIALOG MODAL: ISOLIERTER AD-HOC SICHERHEITSKANAL MIT DR. HENDRIK SASSE -->
-  <div id="adhoc-security-chat-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeAdhocSecurityChatModal()" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200">
+  <div id="adhoc-security-chat-modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeAdhocSecurityChatModal()" class="fixed inset-0 flex items-center justify-center p-3 sm:p-6 hidden animate-in fade-in duration-200 archon-modal-layer archon-modal-shade">
     <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-[960px] h-[92vh] max-h-[92vh] flex flex-col overflow-hidden text-[var(--foreground)] font-sans">
       
       <!-- Header -->
@@ -11864,7 +11864,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: BRAIN THEME & PARAMETER STUDIO (3D GALAXY + QUARTZ OBSIDIAN) -->
-  <div id="brain-theme-studio-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+  <div id="brain-theme-studio-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-200 archon-modal-layer archon-modal-shade">
     <div class="bg-[var(--card-bg)] text-[var(--text-primary)] border border-cyan-500/40 rounded-2xl p-6 w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden space-y-4">
       
       <!-- Modal Header -->
@@ -12345,7 +12345,7 @@ ${logExcerpt}
   </div>
 
   <!-- MODAL: PLUGIN CONFIGURATION DIALOG -->
-  <div id="plugin-config-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[60] animate-in fade-in duration-150">
+  <div id="plugin-config-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-150 archon-modal-layer archon-modal-shade">
     <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
       <!-- Header -->
       <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--secondary)]/40">
@@ -12385,7 +12385,7 @@ ${logExcerpt}
   <!-- ========================================================================= -->
   <!-- ❓ CONTEXT HELP & SYSTEM-ASSISTENT MODAL -->
   <!-- ========================================================================= -->
-  <div id="context-help-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-[999999] animate-in fade-in duration-150" onclick="if(event.target === this) closeContextHelp()">
+  <div id="context-help-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150 archon-modal-layer archon-modal-shade" onclick="if(event.target === this) closeContextHelp()">
     <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden" onclick="event.stopPropagation()">
       <!-- Header -->
       <div class="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between bg-[var(--background)]/60">
@@ -12462,7 +12462,7 @@ ${logExcerpt}
 
 
 <!-- MODAL: ATTACH VAULT DOCUMENT TO NOTEBOOK -->
-<div id="modal-attach-vault-doc" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 z-[99999]" onclick="if(event.target === this) closeAttachVaultModal()">
+<div id="modal-attach-vault-doc" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade" onclick="if(event.target === this) closeAttachVaultModal()">
   <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh] overflow-hidden" onclick="event.stopPropagation()">
     <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--background)]/60">
       <h3 class="font-mono font-bold text-sm text-[var(--foreground)]" data-i18n="ui.vault.attach_doc_title">Dokument aus Wissensbibliothek verknüpfen</h3>
@@ -12475,7 +12475,7 @@ ${logExcerpt}
 </div>
 
 <!-- DRAWER: 3D GALAXY NODE INSPECTOR -->
-<div id="galaxy-node-drawer" class="hidden fixed top-16 right-6 bottom-6 w-96 max-w-[90vw] bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl z-[99990] flex flex-col overflow-hidden backdrop-blur-md">
+<div id="galaxy-node-drawer" class="hidden fixed top-16 right-6 bottom-6 w-96 max-w-[90vw] bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl archon-z-dialog flex flex-col overflow-hidden backdrop-blur-md">
   <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
     <div class="flex items-center gap-2 min-w-0">
       <span id="galaxy-drawer-badge" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase shrink-0" data-i18n="drawer.node_badge">NODE</span>
@@ -12498,7 +12498,7 @@ ${logExcerpt}
 .archon-filelink:hover { background:rgba(79,156,255,.22); color:#7fb8ff; }
 .archon-filelink::after { content:" ↗"; font-size:.85em; opacity:.75; }
 </style>
-<div id="archon-file-preview" class="hidden fixed inset-0 z-[95] items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true">
+<div id="archon-file-preview" class="hidden fixed inset-0 items-center justify-center p-6 archon-modal-layer archon-modal-shade" role="dialog" aria-modal="true">
   <div class="w-full max-w-3xl max-h-[86vh] flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl" onclick="event.stopPropagation()">
     <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
       <span id="afp-title" class="text-[11px] font-mono font-bold text-primary-custom truncate">…</span>
@@ -13491,7 +13491,7 @@ ${logExcerpt}
 </script>
 
 <!-- PRIVACY & LOCAL LLM SETTINGS MODAL (t-c4489c) -->
-<div id="privacy-settings-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+<div id="privacy-settings-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 archon-modal-layer archon-modal-shade">
   <div class="w-full max-w-xl bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
     <div class="px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between gap-3 bg-[var(--card)]">
       <div class="flex items-center gap-2.5">
@@ -13642,7 +13642,7 @@ ${logExcerpt}
 </div>
 
   <!-- MODAL: HERMES AGENT CORE UPDATE (Dialog) -->
-  <div id="system-update-dialog-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 z-[99999] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150" onclick="if(event.target === this) closeSystemUpdateDialog()">
+  <div id="system-update-dialog-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-150 archon-modal-layer archon-modal-shade" onclick="if(event.target === this) closeSystemUpdateDialog()">
     <div class="w-full max-w-xl bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl p-5 text-sans text-[var(--foreground)] space-y-4 animate-in zoom-in-95 duration-150">
       
       <!-- Modal Header -->
@@ -13723,7 +13723,7 @@ ${logExcerpt}
   <script src="/static/js/eu_ai_act_studio.js" defer></script>
   <script src="/static/js/archon_version_badge.js?v=20261117" defer></script>
   <!-- MODAL: MIXTURE OF AGENTS (MoA) KONFIGURATION -->
-  <div id="boardroom-moa-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+  <div id="boardroom-moa-modal" role="dialog" aria-modal="true" class="hidden fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-150 archon-modal-layer archon-modal-shade">
     <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl p-5 w-[92vw] max-w-lg shadow-2xl overflow-hidden flex flex-col space-y-4 font-sans">
       <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
         <div class="flex items-center gap-2">

@@ -17,7 +17,9 @@ Allow: /
 User-agent: Applebot
 Allow: /
 
-# Optional training & grounding crawlers (allowed for open-source discoverability)
+# Training/grounding crawlers are allowed on this PUBLIC DOCUMENTATION SITE only.
+# This policy has no effect on the software runtime network isolation (Zero-Egress) 
+# — the runtime is self-hosted and configured by the operator.
 User-agent: GPTBot
 Allow: /
 

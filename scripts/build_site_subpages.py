@@ -344,6 +344,7 @@ def _render_shell(
                 },
                 {
                     "@type": schema_type,
+                    "@id": can_url + "#article",
                     "headline": h1,
                     "name": title,
                     "description": description,
@@ -368,6 +369,7 @@ def _render_shell(
                     },
                     "about": {
                         "@type": "SoftwareApplication",
+                        "@id": can_url + "#software",
                         "name": "Archon OS",
                         "softwareVersion": version_bare,
                     },
@@ -523,7 +525,7 @@ def _page_architecture(lang: str) -> tuple[str, str, str, str, str, str]:
         return title, desc, eyebrow, h1, lead, body
 
     title = "Archon OS Architecture: PolicyEngine, BudgetBank & Docker Stack"
-    desc = "Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & 7-container Docker stack."
+    desc = "Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & 8-container Docker stack."
     eyebrow = "Architecture & Stack"
     h1 = "System architecture built for accountable multi-agent fleets."
     lead = "Archon OS decouples agent reasoning from governance, cost control, and external side effects. Every model and tool invocation clears deterministic safety gates backed by 3 consolidated SQLite WAL databases."
@@ -540,6 +542,23 @@ def _page_architecture(lang: str) -> tuple[str, str, str, str, str, str]:
   <div class="feat"><h3>5. Three Consolidated SQLite WAL Databases</h3><p>No bloated database cluster required: <code>ops.db</code> (tasks, budgets, warrants, audit hash-chain), <code>business.db</code> (CRM, contracts, ERP alpha), and <code>memory.db</code> (learnings) run in WAL mode with optional Litestream replication.</p></div>
   <div class="feat"><h3>6. 8 Default Containers (up to 24 with Profiles)</h3><p>The default Docker Compose stack (amd64 / arm64) runs Archon OS Core, Hermes Agent, OmniRoute, AnythingLLM, ChromaDB (local vector RAG), Litestream (WAL replication), Docker Socket Proxy, and <code>archon-autoheal</code> — expandable with 16 optional profile services (Prometheus, Alertmanager, Grafana, Loki, OTel/Tempo, Uptime Kuma, Caddy, Authelia, n8n, Metabase, DocuSeal, and more).</p></div>
 </div>
+
+<h2 class="sec" id="source-map">One Request, End to End</h2>
+<p>No black box: each gate has a deterministic implementation you can inspect in the repository.</p>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Stage</th><th>Enforcement</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Admission &amp; tool policy</td><td>Default-deny, scoped warrants</td><td><code>backend/approval_policy_engine.py</code></td></tr>
+      <tr><td>Budget reservation</td><td><code>BEGIN IMMEDIATE</code>, atomic settle/release</td><td><code>backend/role_budget_engine.py</code></td></tr>
+      <tr><td>External side effects</td><td>Effect-Ledger with idempotency keys</td><td><code>core_dispatcher.py</code></td></tr>
+      <tr><td>Audit integrity</td><td>HMAC-SHA256 chained records</td><td><code>local_security_guard.py</code></td></tr>
+      <tr><td>Liveness &amp; restart</td><td><code>/livez</code> heartbeat, autoheal</td><td><code>watchdog_daemon.py</code></td></tr>
+    </tbody>
+  </table>
+</div>
+<pre data-lang="bash">curl -sS http://localhost:8420/livez -w "\nHTTP %{{http_code}}\n"
+# 200 = healthy · 503 = heartbeat stalled, autoheal restarts the container</pre>
 
 <h2 class="sec" id="hardware">Hardware &amp; Sizing Baseline</h2>
 <div class="table-wrap">
@@ -616,10 +635,10 @@ def _page_gdpr(lang: str) -> tuple[str, str, str, str, str, str]:
 
 def _page_compare(lang: str) -> tuple[str, str, str, str, str, str]:
     if lang == "de":
-        title = "Archon OS vs. LangGraph, CrewAI, AutoGen, n8n & Dify"
+        title = "Archon OS vs. LangGraph, CrewAI, AutoGen, n8n & Dify – Vergleich"
         desc = "Objektiver Systemvergleich: Archon OS vs. LangGraph, CrewAI, AutoGen, n8n und Dify bei Zero-Egress, Budgetkontrolle, Passkey-HITL & Audit-Logs."
         eyebrow = "Systemvergleich"
-        h1 = "Archon OS vs. LangGraph, CrewAI, AutoGen, n8n & Dify."
+        h1 = "Archon OS im Vergleich: LangGraph, CrewAI, AutoGen, n8n & Dify."
         lead = "Orchestrierungs-Bibliotheken sind stark für eigene Agenten-Prototypen. Archon OS liefert das komplette selbstgehostete Betriebssystem mit Governance, Budgets, Zero-Egress und Audit-Chain out of the box."
         body = """
 <h2 class="sec">Enterprise-Governance-Matrix</h2>

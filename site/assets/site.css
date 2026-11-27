@@ -1149,3 +1149,160 @@ footer a:hover { color: var(--fg); }
   .creation-davinci-stage { transform: translate(-50%, -50%) !important; }
   [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
 }
+
+
+/* =========================================================================
+ * BATCH 2 — A11y (WCAG AA), Overlay-Hygiene, Theme-Image-Sync, Copy-CTA
+ * ========================================================================= */
+
+/* A08 F2 — Kontrast-Tokens (WCAG 1.4.3 / 1.4.11) */
+:root {
+  --fg-subtle: #a1a1aa;
+  --line: rgba(255, 255, 255, 0.38);
+  --line-strong: rgba(255, 255, 255, 0.48);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --fg-subtle: #52525b;
+    --line: rgba(9, 9, 11, 0.45);
+    --line-strong: rgba(9, 9, 11, 0.50);
+    --emerald: #047857;
+  }
+}
+:root[data-theme="light"] {
+  --fg-subtle: #52525b;
+  --line: rgba(9, 9, 11, 0.45);
+  --line-strong: rgba(9, 9, 11, 0.50);
+  --emerald: #047857;
+}
+
+/* A08 F1 — Skip-Link (WCAG 2.4.1, Level A) */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  padding: .6rem 1rem;
+  background: var(--fg);
+  color: var(--bg);
+  border-radius: var(--radius-sm);
+}
+
+/* A08 F3 — sichtbarer Fokus (WCAG 2.4.7 AA) */
+:where(a, button, select, input, [tabindex]):focus-visible {
+  outline: 3px solid var(--fg);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.lang-switch:focus,
+.lang-switch:focus-visible,
+.theme-btn:focus-visible,
+.filter-input:focus-visible {
+  outline: 3px solid var(--fg);
+  outline-offset: 2px;
+  border-color: var(--silver-bright);
+}
+.cockpit-tab:focus-visible,
+.shot-thumb:focus-visible {
+  outline: 3px solid var(--fg);
+  outline-offset: -3px;
+}
+.cockpit-tabs { overflow-x: auto; overflow-y: visible; padding-block: .25rem; }
+
+/* A04 Fix 1 — FAQ-Rad eindämmen, Text darüber */
+.faq-davinci-slot { z-index: 0; }
+.faq-davinci-frame { top: -0.5rem; left: 0; width: min(100%, 760px); z-index: 0; }
+.status,
+.table-wrap,
+.arch-box,
+.arch-box p {
+  position: relative;
+  z-index: 2;
+}
+@media (max-width: 960px) {
+  .faq-davinci-frame { width: min(100%, 640px); top: 0; left: 0; }
+}
+
+/* A04 Fix 2 — Creation-Stage hinter das Architektur-Panel */
+.creation-davinci-stage { width: min(100vw, 1180px); z-index: 0; }
+.arch-box { position: relative; z-index: 2; }
+
+/* A13 — Hero Copy-Button */
+.copy-btn-hero {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--line-strong);
+  cursor: pointer;
+}
+.copy-btn-hero:hover { border-color: var(--silver-bright); }
+
+
+/* =========================================================================
+ * BATCH 3 — A05: Touch-Targets (WCAG 2.5.5) + Mobile-Navigation
+ * ========================================================================= */
+.nav-toggle { display: none; }
+
+header nav a,
+.btn,
+.copy-btn,
+.copy-btn-hero,
+.lang-switch,
+.theme-btn,
+.cockpit-tab,
+.shot-thumb,
+.filter-input,
+.filter-pill,
+.nav-toggle {
+  min-height: 44px;
+}
+header nav a,
+.cockpit-tab,
+.shot-thumb,
+.copy-btn,
+.copy-btn-hero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lang-switch, .theme-btn { min-width: 44px; padding: 0.55rem 0.75rem; }
+
+@media (max-width: 720px) {
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    margin-left: auto;
+    background: var(--card-solid);
+    color: var(--fg);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  header nav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    padding: 1rem 1.5rem 1.25rem;
+    background: var(--bg-glass);
+    border-bottom: 1px solid var(--line);
+    box-shadow: var(--shadow-md);
+  }
+  header nav.is-open { display: flex; }
+  header nav a { min-height: 44px; display: flex; align-items: center; }
+  header nav .lang-switch, header nav .theme-btn { width: 100%; }
+  .btn { min-width: 44px; }
+}

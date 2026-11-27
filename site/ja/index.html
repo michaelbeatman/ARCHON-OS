@@ -18,7 +18,7 @@
 <link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/">
 <link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/">
 <link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/">
-<link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/">
+<link rel="alternate" hreflang="zh-CN" href="https://michaelbeatman.github.io/ARCHON-OS/zh/">
 <link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/">
 <link rel="icon" type="image/png" href="../archon_hand.png">
 <link rel="preload" href="../assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -77,7 +77,7 @@
     },
     {
       "@type": "WebSite",
-      "@id": "https://michaelbeatman.github.io/ARCHON-OS/#website",
+      "@id": "https://michaelbeatman.github.io/ARCHON-OS/ja/#website",
       "name": "Archon OS",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/",
       "inLanguage": "ja",
@@ -96,7 +96,7 @@
       "inLanguage": "ja",
       "applicationCategory": "DeveloperApplication, BusinessApplication",
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
-      "softwareVersion": "0.6.0.1",
+      "softwareVersion": "0.6.0.2",
       "dateModified": "2026-11-27",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/ja/",
@@ -121,12 +121,54 @@
         "codeRepository": "https://github.com/NousResearch/hermes-agent"
       },
       "featureList": [
-        "AI Boardroom意思決定は、批判役の反対尋問と統合を伴う独立した多視点ディベートとして実行されます。OKR から Pre-Mortem まで 55 のフレームワークを利用できます。",
+        "AI Boardroom意思決定は、批判役の反対尋問と統合を伴う独立した多視点ディベートとして実行されます。OKR から Pre-Mortem まで 80 のフレームワークを利用できます。",
         "Zero-Egress & GDPR財務・人事・契約・CRM データは、インターネット経路のない隔離 Docker ネットワーク内のローカルモデルに留まります。フェイルクローズにより、GDPR の厳格なデータ residency を保証します。",
         "Atomic BudgetBank & 署名付き Warrantトークンとコストの予算は実行前にトランザクションで確保されます（BEGIN IMMEDIATE）。特権ツールには期限付き HMAC-SHA256 Warrant が必要です。",
         "パスキー / WebAuthn HITL高リスク承認（支払い、予算超過、破壊的操作）には Windows Hello、Touch ID、ハードウェアパスキーによる暗号署名が必要です。モデルは承認を偽造できません。",
         "クラッシュ安全な Effect-Ledger外部副作用は、冪等キーと未知状態後の必須リコンシリエーションを備えたトランザクション台帳で追跡され、重複実行を防ぎます。",
         "監査ログ、EU AI Act & GoBDSHA-256 ハッシュチェーンログがすべてのディスパッチ（プロバイダー、モデル、ホスト）を改ざん検知可能に記録し、EU AI Act リスク登録簿とワンクリックの GoBD 手続き文書エクスポートを備えます。"
+      ],
+      "additionalProperty": [
+        {
+          "@type": "PropertyValue",
+          "name": "Specialist profiles",
+          "value": 71
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "Enterprise domains",
+          "value": 8
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "Boardroom frameworks",
+          "value": 80
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "Prompt templates",
+          "value": 832
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "Skills",
+          "value": 39
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "MCP servers",
+          "value": 6
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "Supported languages",
+          "value": 11
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "Default Docker containers",
+          "value": 8
+        }
       ],
       "offers": {
         "@type": "Offer",
@@ -168,7 +210,7 @@
           "name": "GDPR & EU AI Act に対応していますか？",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "はい。機密業務ワークロードはフェイルクローズ型 Zero-Egress でサーバー内に留まり、EU AI Act リスク登録簿、改ざん検知可能な SHA-256 監査ログ、ワンクリックの GoBD 手続き文書エクスポートで支えられます。"
+            "text": "設定に依存します。機密業務ワークロードはフェイルクローズ型 Zero-Egress でサーバー内に留まり、EU AI Act リスク登録簿、改ざん検知可能な SHA-256 監査ログ、ワンクリックの GoBD 手続き文書エクスポートで支えられます。"
           }
         }
       ]
@@ -178,6 +220,7 @@
 </script>
 </head>
 <body data-copy="コピー" data-copied="コピーしました">
+<a class="skip-link" href="#main">本文へスキップ</a>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
@@ -241,8 +284,7 @@
   </g>
 </svg></div>
     <div class="davinci-layer-plate">
-      <img class="davinci-plate-img img-dark-only" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager">
-      <img class="davinci-plate-img img-light-only" src="../assets/img/davinci_vertical_light.webp" width="764" height="1024" alt="" loading="eager">
+      <img class="davinci-plate-img" data-theme-dark="../assets/img/davinci_vertical_dark.webp" data-theme-light="../assets/img/davinci_vertical_light.webp" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" decoding="async">
     </div>
     <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <!-- Real sweeping chronometer hands on BUDGET BANK dial (442, 324) -->
@@ -280,10 +322,11 @@
         <span class="tag">セルフホスト型エージェントOS · MIT</span>
       </span>
     </a>
-    <nav aria-label="Main navigation">
+    <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="main-nav" aria-label="メニュー">メニュー</button>
+    <nav id="main-nav" aria-label="Main navigation">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       <a href="#install">インストール</a>
-      <a href="../architecture/">アーキテクチャ</a><a href="../gdpr-zero-egress/">GDPR</a><a href="../compare/">比較</a><a href="boardroom-frameworks/">フレームワーク</a>
+      <a href="../architecture/" hreflang="en">アーキテクチャ (EN)</a><a href="../gdpr-zero-egress/" hreflang="en">GDPR (EN)</a><a href="../compare/" hreflang="en">比較 (EN)</a><a href="boardroom-frameworks/" hreflang="en">フレームワーク</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">変更履歴</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">セキュリティ</a>
       <select class="lang-switch" aria-label="言語" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/" selected>JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
@@ -292,25 +335,26 @@
   </div>
 </header>
 
-<main>
+<main id="main" tabindex="-1">
   <section class="hero">
     <div class="wrap">
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.1 &middot; Zero-Egress &middot; MIT Open Source</span></div>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.2 &middot; Zero-Egress &middot; MIT Open Source</span></div>
         <h1>GDPR準拠・Zero-Egress のマルチエージェントOS。ビジネスのため、そしてあなたのために。</h1>
         <p class="hero-lead">Archon OS は Hermes Agent を GDPR準拠のエージェントOSへと拡張します：8ドメイン・71の専門家プロファイル、フェイルクローズ型ローカル Zero-Egress ルーティング、Atomic BudgetBank によるコスト上限、WebAuthn パスキー承認、構造化された AI Boardroom ディベート、GoBD 対応の SHA-256 監査ログ。あなたの文書、あなたの Obsidian Vault、あなたのモデル。</p>
         <div class="btnrow">
-          <a class="btn primary" href="https://github.com/michaelbeatman/ARCHON-OS">GitHub で見る</a>
+          <a class="btn primary" href="#install">クイックスタート</a>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; docker compose up -d" aria-label="コピー">コピー</button>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.ja.md">日本語の README</a>
-          <a class="btn" href="#install">クイックスタート</a>
+          <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">GitHub で見る</a>
         </div>
         <div class="badges">
-          <span class="badge">v0.6.0.1 &middot; pre-1.0</span>
-          <span class="badge">GDPR &amp; EU AI Act 対応</span>
+          <span class="badge">v0.6.0.2 &middot; pre-1.0</span>
+          <span class="badge">GDPR / EU AI Act に準拠した運用をサポート</span>
           <span class="badge">フェイルクローズ Zero-Egress</span>
           <span class="badge">MIT ライセンス</span>
           <span class="badge">71専門家 · 8ドメイン</span>
-          <span class="badge">55の意思決定フレームワーク</span>
+          <span class="badge">80の意思決定フレームワーク</span>
           <span class="badge">Docker amd64 / arm64</span>
           <span class="badge">11言語</span>
         </div>
@@ -324,7 +368,7 @@
     <div class="creation-stage-wrap">
       <div class="creation-davinci-stage" aria-hidden="true">
         <div class="davinci-layer-plate">
-          <img class="davinci-creation-img" src="../assets/img/davinci_creation.png" width="1024" height="686" alt="" loading="eager">
+          <img class="davinci-creation-img" src="../assets/img/davinci_creation.webp" width="1024" height="686" alt="" loading="eager" fetchpriority="high" decoding="async">
         </div>
         <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 1024 686" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <circle class="creation-spark-wave" cx="495" cy="348" r="18" style="transform-origin:495px 348px"/>
@@ -334,8 +378,7 @@
 </svg></div>
       </div>
       <div class="logo-showcase" data-reveal>
-        <img class="img-dark-only" src="../assets/img/archon_banner_dark.webp" width="924" height="146" alt="Archon OS - エージェントOS" loading="eager">
-        <img class="img-light-only" src="../assets/img/archon_banner_light.webp" width="924" height="146" alt="Archon OS - エージェントOS" loading="eager">
+        <img class="banner-img" data-theme-dark="../assets/img/archon_banner_dark.webp" data-theme-light="../assets/img/archon_banner_light.webp" src="../assets/img/archon_banner_dark.webp" width="924" height="146" alt="Archon OS - エージェントOS" loading="eager" decoding="async">
       </div>
     </div>
 
@@ -347,29 +390,29 @@
         <span class="cockpit-badge">ZERO-EGRESS · LOCAL</span>
       </div>
       <div class="cockpit-tabs" role="tablist">
-        <button type="button" class="cockpit-tab is-active" role="tab" aria-selected="true" data-shot-tab>Mission Control</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>エージェント艦隊</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>AI Boardroom</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>ワークフロー</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>Token Guard</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>組織階層</button>
+        <button type="button" class="cockpit-tab is-active" role="tab" id="shot-tab-1" aria-selected="true" aria-controls="shot-panel-1" tabindex="0" data-shot-tab>Mission Control</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-2" aria-selected="false" aria-controls="shot-panel-2" tabindex="-1" data-shot-tab>エージェント艦隊</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-3" aria-selected="false" aria-controls="shot-panel-3" tabindex="-1" data-shot-tab>AI Boardroom</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-4" aria-selected="false" aria-controls="shot-panel-4" tabindex="-1" data-shot-tab>ワークフロー</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-5" aria-selected="false" aria-controls="shot-panel-5" tabindex="-1" data-shot-tab>Token Guard</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-6" aria-selected="false" aria-controls="shot-panel-6" tabindex="-1" data-shot-tab>組織階層</button>
       </div>
       <div class="cockpit-stage">
-        <figure class="is-active" data-shot-panel><img loading="eager" src="../assets/img/mission_control.webp" width="1024" height="559" alt="Mission Control ダッシュボード"><figcaption>Mission Control - リアルタイムテレメトリ、トークンスパークライン &amp; HITL ボード</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="../assets/img/kader.webp" width="1024" height="559" alt="エージェント艦隊の概要"><figcaption>エージェント艦隊 - 専門家プロファイル、OmniRoute バインディング &amp; ライブフィード</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="1024" height="559" alt="AI Boardroom ディベート"><figcaption>AI Boardroom - フレームワーク &amp; スロットによる多視点ディベート</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="../assets/img/workflows.webp" width="1024" height="557" alt="ビジュアル・マルチエージェントワークフロービルダー"><figcaption>Workflows - HITL ゲート付きビジュアル・マルチエージェント DAG エディター</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="../assets/img/guardian.webp" width="1280" height="800" alt="Token Guard と Atomic BudgetBank 分析ダッシュボード"><figcaption>Token Guard - リアルタイムトークン消費、日次コスト上限、エージェント別予算管理</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="../assets/img/org.webp" width="1024" height="559" alt="組織図と階層"><figcaption>組織階層 - インタラクティブなフロー図 &amp; 承認境界</figcaption></figure>
+        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" src="../assets/img/mission_control.webp" width="1024" height="559" alt="Mission Control ダッシュボード"><figcaption>Mission Control - リアルタイムテレメトリ、トークンスパークライン &amp; HITL ボード</figcaption></figure>
+        <figure id="shot-panel-2" role="tabpanel" aria-labelledby="shot-tab-2" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/kader.webp" width="1024" height="559" alt="エージェント艦隊の概要"><figcaption>エージェント艦隊 - 専門家プロファイル、OmniRoute バインディング &amp; ライブフィード</figcaption></figure>
+        <figure id="shot-panel-3" role="tabpanel" aria-labelledby="shot-tab-3" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="1024" height="559" alt="AI Boardroom ディベート"><figcaption>AI Boardroom - フレームワーク &amp; スロットによる多視点ディベート</figcaption></figure>
+        <figure id="shot-panel-4" role="tabpanel" aria-labelledby="shot-tab-4" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/workflows.webp" width="1024" height="557" alt="ビジュアル・マルチエージェントワークフロービルダー"><figcaption>Workflows - HITL ゲート付きビジュアル・マルチエージェント DAG エディター</figcaption></figure>
+        <figure id="shot-panel-5" role="tabpanel" aria-labelledby="shot-tab-5" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/guardian.webp" width="1280" height="800" alt="Token Guard と Atomic BudgetBank 分析ダッシュボード"><figcaption>Token Guard - リアルタイムトークン消費、日次コスト上限、エージェント別予算管理</figcaption></figure>
+        <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/org.webp" width="1024" height="559" alt="組織図と階層"><figcaption>組織階層 - インタラクティブなフロー図 &amp; 承認境界</figcaption></figure>
       </div>
     </div>
     <div class="shots-thumbs" data-reveal>
-      <button type="button" class="shot-thumb is-active" data-shot-thumb><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>エージェント艦隊</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="200" height="109" alt=""><span>AI Boardroom</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="../assets/img/workflows.webp" width="200" height="109" alt=""><span>ワークフロー</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="../assets/img/guardian.webp" width="200" height="125" alt=""><span>Token Guard</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="../assets/img/org.webp" width="200" height="109" alt=""><span>組織階層</span></button>
+      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>エージェント艦隊</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="200" height="109" alt=""><span>AI Boardroom</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="../assets/img/workflows.webp" width="200" height="109" alt=""><span>ワークフロー</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="../assets/img/guardian.webp" width="200" height="125" alt=""><span>Token Guard</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="../assets/img/org.webp" width="200" height="109" alt=""><span>組織階層</span></button>
     </div>
 
     <h2 class="sec" id="architecture">アーキテクチャと Zero-Egress データフロー</h2>
@@ -411,7 +454,7 @@
   <g class="arch-node">
     <rect x="16" y="116" width="132" height="72" rx="10"/>
     <text class="arch-node-title" x="82" y="148" text-anchor="middle">タスク / エージェント</text>
-    <text class="arch-node-sub" x="82" y="168" text-anchor="middle">70 Profiles · MCP</text>
+    <text class="arch-node-sub" x="82" y="168" text-anchor="middle">71 Profiles · MCP</text>
   </g>
 
   <g class="arch-node arch-node-silver">
@@ -459,7 +502,7 @@
 
     <h2 class="sec">主な機能</h2>
     <div class="feats" data-reveal>
-      <div class="feat"><h3>AI Boardroom</h3><p>意思決定は、批判役の反対尋問と統合を伴う独立した多視点ディベートとして実行されます。OKR から Pre-Mortem まで 55 のフレームワークを利用できます。</p></div>
+      <div class="feat"><h3>AI Boardroom</h3><p>意思決定は、批判役の反対尋問と統合を伴う独立した多視点ディベートとして実行されます。OKR から Pre-Mortem まで 80 のフレームワークを利用できます。</p></div>
       <div class="feat"><h3>OmniRoute コスト管理</h3><p>中央のスイッチボードがすべてのリクエストをローカル（Ollama、LM Studio）またはクラウドモデルへ振り分けます。予算は送信前に確認され、モデル単位・タスク単位で割り当てられます。</p></div>
       <div class="feat"><h3>Zero-Egress &amp; GDPR</h3><p>財務・人事・契約・CRM データは、インターネット経路のない隔離 Docker ネットワーク内のローカルモデルに留まります。フェイルクローズにより、GDPR の厳格なデータ residency を保証します。</p></div>
       <div class="feat"><h3>監査ログ、EU AI Act &amp; GoBD</h3><p>SHA-256 ハッシュチェーンログがすべてのディスパッチ（プロバイダー、モデル、ホスト）を改ざん検知可能に記録し、EU AI Act リスク登録簿とワンクリックの GoBD 手続き文書エクスポートを備えます。</p></div>
@@ -473,7 +516,7 @@
       <div class="feat"><h3>クラッシュ安全な Effect-Ledger</h3><p>外部副作用は、冪等キーと未知状態後の必須リコンシリエーションを備えたトランザクション台帳で追跡され、重複実行を防ぎます。</p></div>
       <div class="feat"><h3>Autoheal・Chroma・Litestream</h3><p>標準8コンテナ構成：<code>archon-autoheal</code>が<code>/livez</code>監視で自動復旧し、<code>ChromaDB</code>がローカルRAG、<code>Litestream</code>がSQLite WALを複製します。</p></div>
       <div class="feat"><h3>Alertmanager と統合監視</h3><p>任意プロファイルで<code>Prometheus</code>、<code>Alertmanager</code>、<code>Grafana</code>、<code>Loki</code>、<code>OTel</code>/<code>Tempo</code>、<code>Uptime Kuma</code>、<code>Caddy</code>/<code>Authelia</code> SSO、<code>Metabase</code>、<code>DocuSeal</code>を追加できます。</p></div>
-      <div class="feat"><h3>832プロンプト・マルチテナント</h3><p>832のPrompt Studioテンプレート、39スキル、6 MCPサーバー、法人別DB分離、GDPR第17条消去、音声同意ゲート、オフラインAEAD Vaultを備えます。</p></div>
+      <div class="feat"><h3>832プロンプト・マルチテナント</h3><p>832のPrompt Studioテンプレート、39スキル、6 MCPサーバー、法人別DB分離、GDPR第17条消去、§ 201 StGB 同意ゲート、オフラインAEAD Vaultを備えます。</p></div>
     </div>
 
     <h2 class="sec" id="compare">アーキテクチャ比較と推奨ハードウェア</h2>
@@ -517,7 +560,9 @@
     </div>
 
     <h2 class="sec">技術ガイド＆ディレクトリ (HTML)</h2>
-<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/"><span class="hub-kicker">01 / システム</span><strong>アーキテクチャ＆スタック</strong><span>OmniRoute、PolicyEngine、Atomic BudgetBank、Effect-Ledger、3× SQLite WAL。</span></a><a class="hub-card" href="../gdpr-zero-egress/"><span class="hub-kicker">02 / コンプライアンス</span><strong>GDPR &amp; Zero-Egress</strong><span>Fail-closed Docker分離、EU AI Actリスク台帳、GoBD監査出力。</span></a><a class="hub-card" href="../compare/"><span class="hub-kicker">03 / 比較評価</span><strong>フレームワーク比較</strong><span>Archon OS vs. LangGraph、CrewAI、AutoGen、n8n、Dify の機能比較表。</span></a><a class="hub-card" href="boardroom-frameworks/"><span class="hub-kicker">04 / Boardroom</span><strong>80 フレームワーク</strong><span>多視点ディベート手法を検索・フィルタできるHTMLカタログ。</span></a><a class="hub-card" href="../specialists/"><span class="hub-kicker">05 / 艦隊</span><strong>71 専門家プロファイル</strong><span>8領域にわたる71体の専門エージェント一覧とガードレール。</span></a><a class="hub-card" href="../second-brain/"><span class="hub-kicker">06 / 2nd Brain</span><strong>RAG・人事記録・自己進化</strong><span>Obsidian Vault、ChromaDB ベクトル知識基盤、エージェント実績ファイルとスキル自動合成。</span></a></div>
+<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/" hreflang="en"><span class="hub-kicker">01 / システム</span><strong>アーキテクチャ＆スタック (EN)</strong><span>OmniRoute、PolicyEngine、Atomic BudgetBank、Effect-Ledger、3× SQLite WAL。</span></a><a class="hub-card" href="../gdpr-zero-egress/" hreflang="en"><span class="hub-kicker">02 / コンプライアンス</span><strong>GDPR &amp; Zero-Egress (EN)</strong><span>Fail-closed Docker分離、EU AI Actリスク台帳、GoBD監査出力。</span></a><a class="hub-card" href="../compare/" hreflang="en"><span class="hub-kicker">03 / 比較評価</span><strong>フレームワーク比較 (EN)</strong><span>Archon OS vs. LangGraph、CrewAI、AutoGen、n8n、Dify の機能比較表。</span></a><a class="hub-card" href="boardroom-frameworks/" hreflang="en"><span class="hub-kicker">04 / Boardroom</span><strong>80 フレームワーク (EN)</strong><span>多視点ディベート手法を検索・フィルタできるHTMLカタログ。</span></a><a class="hub-card" href="../specialists/" hreflang="en"><span class="hub-kicker">05 / 艦隊</span><strong>71 専門家プロファイル (EN)</strong><span>8領域にわたる71体の専門エージェント一覧とガードレール。</span></a><a class="hub-card" href="../second-brain/" hreflang="en"><span class="hub-kicker">06 / 2nd Brain</span><strong>RAG・人事記録・自己進化 (EN)</strong><span>Obsidian Vault、ChromaDB ベクトル知識基盤、エージェント実績ファイルとスキル自動合成。</span></a></div>
+
+    <div class="wrap b2b-section"><h3>規制環境での利用</h3><p><strong>調達：</strong>サプライヤー比較と契約草案は Passkey 承認を経由し、予算上限が支出を抑制します。<strong>管理会計：</strong>呼び出しごとにプロバイダー、モデル、コストをハッシュチェーンで記録 — GoBD エクスポートはワンクリック。<strong>コンプライアンス：</strong>TOM マトリクス、EU AI Act リスク登録簿、§ 201 StGB 同意ゲートは設定であり、追加オプションではありません。</p><p><strong>経済性：</strong>ライセンス 0 €（MIT）。インフラ・設定・運用はあなたの責任です。Zero-Egress は明示的なオプションであり、保証ではありません。</p></div>
 
     <h2 class="sec" id="install">インストール</h2>
     <div class="install" data-reveal>
@@ -646,7 +691,8 @@ docker compose -f docker-compose.demo.yml up --build -d
         <div class="feat"><h3>Archon OS とは？</h3><p>Archon OS は Hermes Agent ベースの、MIT ライセンス・セルフホスト型エージェントOSです。8ドメインに71の専門 AI ロールを編成し、実行前の予算確保、ローカル Zero-Egress LLM ルーティング、WebAuthn パスキー承認、SHA-256 ハッシュチェーン監査ログを備えます。</p></div>
         <div class="feat"><h3>機密データの漏洩をどう防ぎますか？</h3><p>OmniRoute がフェイルクローズ型 Zero-Egress ポリシーを適用します：財務、契約、CRM、人事、GDPR ワークロードは、インターネット経路のない内部 Docker ネットワーク内のローカルモデル（Ollama または LM Studio）でのみ実行されます。</p></div>
         <div class="feat"><h3>トークンコスト &amp; 危険な操作はどう管理されますか？</h3><p>中央の PolicyEngine が送信前に権限を検証し、特権ツールには期限付き署名 Warrant が必要で、BudgetBank が資金を原子的に確保し、高リスク承認には WebAuthn パスキー署名が必要です。</p></div>
-        <div class="feat"><h3>GDPR &amp; EU AI Act に対応していますか？</h3><p>はい。機密業務ワークロードはフェイルクローズ型 Zero-Egress でサーバー内に留まり、EU AI Act リスク登録簿、改ざん検知可能な SHA-256 監査ログ、ワンクリックの GoBD 手続き文書エクスポートで支えられます。</p></div>
+        <div class="feat"><h3>GDPR &amp; EU AI Act に対応していますか？</h3><p>設定に依存します。機密業務ワークロードはフェイルクローズ型 Zero-Egress でサーバー内に留まり、EU AI Act リスク登録簿、改ざん検知可能な SHA-256 監査ログ、ワンクリックの GoBD 手続き文書エクスポートで支えられます。</p></div>
+        <div class="feat"><h3>通常のチャットボットと Archon OS はどう違う？</h3><p>チャットボットは回答します。Archon OS は<strong>ルールを強制します</strong>：呼び出し前の予算ゲート、高リスク操作の Passkey 承認、検証可能な監査チェーン。違いは会話ではなく強制です。</p></div>
         <div class="faq-davinci-slot" aria-hidden="true">
           <div class="faq-davinci-frame">
             <div class="davinci-layer-under"><svg class="davinci-underlayer-svg" viewBox="0 0 1024 764" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -671,8 +717,7 @@ docker compose -f docker-compose.demo.yml up --build -d
   </g>
 </svg></div>
             <div class="davinci-layer-plate">
-              <img class="davinci-plate-img img-dark-only" src="../assets/img/davinci_wheel_dark.webp" width="1024" height="764" alt="" loading="lazy">
-              <img class="davinci-plate-img img-light-only" src="../assets/img/davinci_wheel_light.webp" width="1024" height="764" alt="" loading="lazy">
+              <img class="davinci-plate-img" data-theme-dark="../assets/img/davinci_wheel_dark.webp" data-theme-light="../assets/img/davinci_wheel_light.webp" src="../assets/img/davinci_wheel_dark.webp" width="1024" height="764" alt="" loading="lazy" decoding="async">
             </div>
             <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 1024 764" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <g class="cw-hand-sweep" style="transform-origin:424px 200px">
@@ -696,7 +741,7 @@ docker compose -f docker-compose.demo.yml up --build -d
         <tbody>
           <tr><td><strong>システムマニュアル（97ページ）</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf">EN</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf">DE</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ES.pdf">ES</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_FR.pdf">FR</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_IT.pdf">IT</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_JA.pdf">JA</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_KO.pdf">KO</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_NL.pdf">NL</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_PT.pdf">PT</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_RU.pdf">RU</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_ZH.pdf">ZH</a></td><td>インストール、第1〜19章、5つのユースケース、暗号化/GDPR 概要、A–Z 用語集</td></tr>
           <tr><td><strong>完全な機能一覧</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf">EN</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026.pdf">DE</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ES.pdf">ES</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_FR.pdf">FR</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_IT.pdf">IT</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_JA.pdf">JA</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_KO.pdf">KO</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_NL.pdf">NL</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_PT.pdf">PT</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_RU.pdf">RU</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURELISTE_2026_ZH.pdf">ZH</a></td><td>全モジュールカタログ、デモモード、初回起動ウィザード、FinOps、セキュリティ</td></tr>
-          <tr><td><strong>AI Boardroom：55フレームワーク</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf">EN</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf">DE</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ES.pdf">ES</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_FR.pdf">FR</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_IT.pdf">IT</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_JA.pdf">JA</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.pdf">KO</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_NL.pdf">NL</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_PT.pdf">PT</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf">RU</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ZH.pdf">ZH</a></td><td>意思決定エンジンの全55メソドロジーを索引付きで収録</td></tr>
+          <tr><td><strong>AI Boardroom：80フレームワーク</strong></td><td><a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_EN.pdf">EN</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026.pdf">DE</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ES.pdf">ES</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_FR.pdf">FR</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_IT.pdf">IT</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_JA.pdf">JA</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_KO.pdf">KO</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_NL.pdf">NL</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_PT.pdf">PT</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_RU.pdf">RU</a> &middot; <a href="https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_BOARDROOM_FRAMEWORKS_2026_ZH.pdf">ZH</a></td><td>意思決定エンジンの全80メソドロジーを索引付きで収録</td></tr>
           <tr><td><strong>ロードマップ &amp; マイルストーン</strong></td><td><a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/system/ROADMAP_2026.md">EN</a></td><td>ガバナンス、プロンプト圧縮 &amp; 承認ゲートを含む完全なマイルストーン計画</td></tr>
         </tbody>
       </table>
@@ -713,6 +758,9 @@ docker compose -f docker-compose.demo.yml up --build -d
     <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md">サードパーティライセンス</a>
     <a href="https://www.linkedin.com/in/michael-keller-a43b6611b/" rel="noopener me">LinkedIn</a>
     <a href="mailto:archon.os.system@gmail.com">archon.os.system@gmail.com</a>
+    <a href="../impressum/">運営者情報</a>
+    <a href="../datenschutz/">プライバシー</a>
+    <span>商標はそれぞれの所有者に属します。</span>
     <a href="../llms.txt">llms.txt</a>
   </div>
 </footer>

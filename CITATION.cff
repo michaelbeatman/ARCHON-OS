@@ -9,9 +9,9 @@ authors:
 repository-code: "https://github.com/michaelbeatman/ARCHON-OS"
 url: "https://michaelbeatman.github.io/ARCHON-OS/"
 license: MIT
-version: "0.5.7"
-date-released: "2026-11-22"
-abstract: "Self-hosted, MIT-licensed multi-agent workspace built on Hermes Agent with 70 domain specialist profiles, 55-framework AI Boardroom decision engine, Zero-Egress local LLM routing, Obsidian RAG, and SHA-256 hash-chained audit logging."
+version: "0.6.0.2"
+date-released: "2026-11-27"
+abstract: "Self-hosted, MIT-licensed multi-agent workspace built on Hermes Agent with 71 domain specialist profiles, 80-framework AI Boardroom decision engine, Zero-Egress local LLM routing, Obsidian RAG, and SHA-256 hash-chained audit logging."
 keywords:
   - multi-agent-systems
   - ai-agents

@@ -179,5 +179,8 @@ static/hermes-webui/static/
 !audit_reports/
 !audit_reports/2026-11-24_*.md
 
+# Lokale Audit-Artefakte – nicht veröffentlichen
+.audit-landing/
+
 # Generierter Cost-Guard-Test-Stand
 plugins/cost_guard/daily_burn.json

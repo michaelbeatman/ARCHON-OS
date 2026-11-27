@@ -30,6 +30,7 @@
       root.setAttribute("data-theme", next);
       try { localStorage.setItem("archon-theme", next); } catch (_) {}
       syncLabel();
+      applyThemeImages();
     });
   }
 
@@ -76,10 +77,17 @@
         var on = i === idx;
         el.classList.toggle("is-active", on);
         el.setAttribute("aria-selected", on ? "true" : "false");
+        el.setAttribute("tabindex", on ? "0" : "-1");
         if (on && titleEl) titleEl.textContent = "ARCHON OS // " + el.textContent.toUpperCase();
       });
-      figures.forEach(function (el, i) { el.classList.toggle("is-active", i === idx); });
-      thumbs.forEach(function (el, i) { el.classList.toggle("is-active", i === idx); });
+      figures.forEach(function (el, i) {
+        el.classList.toggle("is-active", i === idx);
+        el.hidden = i !== idx;
+      });
+      thumbs.forEach(function (el, i) {
+        el.classList.toggle("is-active", i === idx);
+        el.setAttribute("aria-pressed", i === idx ? "true" : "false");
+      });
     };
     tabs.forEach(function (el, i) { el.addEventListener("click", function () { activate(i); }); });
     thumbs.forEach(function (el, i) { el.addEventListener("click", function () { activate(i); cockpit.scrollIntoView({ behavior: "smooth", block: "nearest" }); }); });
@@ -143,6 +151,72 @@
     }
   } else {
     document.querySelectorAll("[data-reveal]").forEach(function (el) { el.classList.add("is-visible"); });
+  }
+
+
+  // 6b. Theme-synchronisierte Bilder: nur die aktive Variante wird geladen
+  var themeImages = Array.prototype.slice.call(document.querySelectorAll("[data-theme-dark]"));
+  var applyThemeImages = function () {
+    var theme = root.getAttribute("data-theme");
+    if (!theme) {
+      theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    }
+    themeImages.forEach(function (img) {
+      var target = img.getAttribute(theme === "light" ? "data-theme-light" : "data-theme-dark");
+      if (target && img.getAttribute("src") !== target) img.setAttribute("src", target);
+    });
+  };
+  applyThemeImages();
+  var themeQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+  if (themeQuery && themeQuery.addEventListener) themeQuery.addEventListener("change", applyThemeImages);
+
+  // 8. Hero Quickstart Copy (mit Fallback ohne Clipboard-API)
+  var copyCmdBtn = document.querySelector("[data-copy-cmd]");
+  if (copyCmdBtn) {
+    var copyDone = function () {
+      var old = copyCmdBtn.textContent;
+      copyCmdBtn.textContent = copiedLabel;
+      setTimeout(function () { copyCmdBtn.textContent = old; }, 1600);
+    };
+    copyCmdBtn.addEventListener("click", function () {
+      var text = copyCmdBtn.getAttribute("data-copy-cmd") || "";
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(copyDone, function () { fallbackCopy(text, copyDone); });
+      } else {
+        fallbackCopy(text, copyDone);
+      }
+    });
+  }
+  function fallbackCopy(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch (_) {}
+    document.body.removeChild(ta);
+  }
+
+
+  // 6c. Mobile Navigation (Hamburger, ARIA, Escape)
+  var navToggle = document.querySelector("[data-nav-toggle]");
+  var mainNav = document.getElementById("main-nav");
+  if (navToggle && mainNav) {
+    var setNav = function (open) {
+      mainNav.classList.toggle("is-open", open);
+      navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    navToggle.addEventListener("click", function () {
+      setNav(navToggle.getAttribute("aria-expanded") !== "true");
+    });
+    mainNav.addEventListener("click", function (e) {
+      if (e.target.closest("a")) setNav(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") setNav(false);
+    });
   }
 
   // 7. Live Search & Category Filter on Phase 3 Directory Subpages

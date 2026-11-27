@@ -50,6 +50,7 @@
     },
     {
       "@type": "TechArticle",
+      "@id": "https://michaelbeatman.github.io/ARCHON-OS/de/architektur/#article",
       "headline": "Systemarchitektur für verlässliche Multi-Agenten-Flotten.",
       "name": "Archon OS Architektur: PolicyEngine, BudgetBank & Docker-Stack",
       "description": "Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & 7-Container-Docker-Stack.",
@@ -74,8 +75,9 @@
       },
       "about": {
         "@type": "SoftwareApplication",
+        "@id": "https://michaelbeatman.github.io/ARCHON-OS/de/architektur/#software",
         "name": "Archon OS",
-        "softwareVersion": "0.6.0.1"
+        "softwareVersion": "0.6.0.2"
       }
     }
   ]
@@ -181,7 +183,7 @@
       <img class="hand-avatar" src="../../archon_hand.png" width="40" height="40" alt="Archon OS">
       <span>
         <span class="brand-name">Archon OS</span>
-        <span class="tag">v0.6.0.1 &middot; Selbstgehostetes Multi-Agenten-OS</span>
+        <span class="tag">v0.6.0.2 &middot; Selbstgehostetes Multi-Agenten-OS</span>
       </span>
     </a>
     <nav aria-label="Main navigation"><a href="../../de/">Startseite</a><a href="../../de/architektur/">Architektur</a><a href="../../de/dsgvo-zero-egress/">DSGVO</a><a href="../../de/vergleich/">Vergleich</a><a href="../../de/boardroom-frameworks/">Frameworks</a><a href="../../de/spezialisten/">Spezialisten</a><a href="../../architecture/" class="lang-switch">EN · English</a><button type="button" class="theme-btn" data-theme-toggle>Light</button></nav>
@@ -195,7 +197,7 @@
         <a href="../../de/">Archon OS</a><span>/</span><span>Architektur &amp; Stack</span>
       </nav>
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>Architektur &amp; Stack &middot; v0.6.0.1</span></div>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>Architektur &amp; Stack &middot; v0.6.0.2</span></div>
         <h1>Systemarchitektur für verlässliche Multi-Agenten-Flotten.</h1>
         <p class="hero-lead">Archon OS trennt Agenten-Logik strikt von Governance, Kostenkontrolle und Seiteneffekten. Jeder Tool- und LLM-Aufruf durchläuft deterministische Sicherheits-Gates auf 3 konsolidierten SQLite-WAL-Datenbanken.</p>
         <div class="btnrow">
@@ -246,7 +248,7 @@
   <g class="arch-node">
     <rect x="16" y="116" width="132" height="72" rx="10"/>
     <text class="arch-node-title" x="82" y="148" text-anchor="middle">Anfrage / Agent</text>
-    <text class="arch-node-sub" x="82" y="168" text-anchor="middle">70 Profiles · MCP</text>
+    <text class="arch-node-sub" x="82" y="168" text-anchor="middle">71 Profiles · MCP</text>
   </g>
 
   <g class="arch-node arch-node-silver">
@@ -297,17 +299,8 @@
   <div class="feat"><h3>2. Atomic BudgetBank (BEGIN IMMEDIATE)</h3><p>Bevor ein LLM-Call startet, reserviert die BudgetBank Token- und Euro-Kontingente transaktional in SQLite. Parallele Agenten können Tages- oder Task-Limits nicht per Race-Condition überschreiten; ungenutzte Reservierungen werden nach Abschluss atomar freigegeben.</p></div>
   <div class="feat"><h3>3. OmniRoute Fail-Closed Switchboard</h3><p>Die zentrale Routing-Weiche trennt sensible Datenklassen (Finanzen, Verträge, HR, CRM, DSGVO) hardwareseitig auf lokale Modelle (Ollama, LM Studio) in einem internen Docker-Netz ohne Internet-Gateway. Bei Ausfall greift Fail-Closed statt Cloud-Fallback.</p></div>
   <div class="feat"><h3>4. Crash-sicherer Effect-Ledger &amp; Outbox</h3><p>Externe Seiteneffekte (E-Mails, Webhooks, ERP-Buchungen) werden über Zustände (<code>PENDING &rarr; COMMITTED / FAILED / UNKNOWN</code>) und Idempotency-Keys protokolliert. Nach einem Absturz erzwingt die Reconciliation eine Prüfung statt doppelter Ausführung.</p></div>
-  <div class="feat"><h3>5. 3 konsolidierte SQLite-WAL-Datenbanken</h3><p>Kein schweres Postgres/Redis-Cluster nötig: <code>ops.db</code> (Tasks, Budgets, Warrants, Audit-Chain), <code>business.db</code> (CRM, Kontakte, Verträge) und <code>memory.db</code> (Wissen, Learnings) laufen im Write-Ahead-Logging-Modus und lassen sich per Litestream replizieren.</p></div>
+  <div class="feat"><h3>5. 3 konsolidierte SQLite-WAL-Datenbanken</h3><p>Kein schweres Postgres/Redis-Cluster nötig: <code>ops.db</code> (Tasks, Budgets, Warrants, Audit-Chain), <code>business.db</code> (CRM, Verträge, ERP-Alpha) und <code>memory.db</code> (Wissen, Learnings) laufen im Write-Ahead-Logging-Modus und lassen sich per Litestream replizieren.</p></div>
   <div class="feat"><h3>6. 8 Standard-Container (bis 24 mit Profilen)</h3><p>Der Default-Docker-Stack (amd64 / arm64) umfasst Archon OS Core, Hermes Agent, OmniRoute, AnythingLLM, ChromaDB (lokales Vektor-RAG), Litestream (WAL-Replikation), Docker Socket Proxy und <code>archon-autoheal</code> — optional erweiterbar um 16 Profil-Services (Prometheus, Alertmanager, Grafana, Loki, OTel/Tempo, Uptime Kuma, Caddy, Authelia, n8n, Metabase, DocuSeal u. a.).</p></div>
-</div>
-
-<h2 class="sec">Operative Module, Erweiterbarkeit &amp; Telemetrie</h2>
-<div class="feats">
-  <div class="feat"><h3>Internet-Watchdog &amp; Oracle-Radar</h3><p>Periodische Überwachung von Web-Quellen, RSS-Feeds und Suchzielen inklusive automatischer Alarmierung und Übergabe an Agenten-Workflows.</p></div>
-  <div class="feat"><h3>Forschungslabor &amp; Notebooks</h3><p>Strukturierte Multi-Quellen-Triangulation mit nachvollziehbaren Dossiers und Quellenverweisen für komplexe Analysen.</p></div>
-  <div class="feat"><h3>DAG-Workflows &amp; 3rd-Party-Plugins</h3><p>Deterministische Task-Graphen (DAG) kombiniert mit einem erweiterbaren Plugin-System, MCP-Gateway und n8n-Automations-Mesh.</p></div>
-  <div class="feat"><h3>Autonomie-Stufen &amp; Token-Guards</h3><p>Konfigurierbare Autonomie-Freigaben je Domäne sowie Context-Meter, Repeat-Budgets und Trajectory-Caps gegen unkontrollierte Agenten-Schleifen.</p></div>
-  <div class="feat"><h3>Telemetrie &amp; Agent-Kommunikation</h3><p>Zentrale Telemetrie-Ansicht für Latenzen, Kosten, Live-Logs und die direkte Nachverfolgung von Nachrichten zwischen Agenten im Mesh/Schwarm.</p></div>
 </div>
 
 <h2 class="sec" id="hardware">Hardware- &amp; Ressourcen-Empfehlungen</h2>

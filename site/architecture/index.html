@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Archon OS Architecture: PolicyEngine, BudgetBank &amp; Docker Stack</title>
-<meta name="description" content="Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; 7-container Docker stack.">
+<meta name="description" content="Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; 8-container Docker stack.">
 <meta name="author" content="Michael Keller (Michael Beatman)">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <link rel="canonical" href="https://michaelbeatman.github.io/ARCHON-OS/architecture/">
@@ -19,13 +19,13 @@
 <meta property="og:locale" content="en_US">
 <meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/architecture/">
 <meta property="og:title" content="Archon OS Architecture: PolicyEngine, BudgetBank &amp; Docker Stack">
-<meta property="og:description" content="Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; 7-container Docker stack.">
+<meta property="og:description" content="Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; 8-container Docker stack.">
 <meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Archon OS Architecture: PolicyEngine, BudgetBank &amp; Docker Stack">
-<meta name="twitter:description" content="Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; 7-container Docker stack.">
+<meta name="twitter:description" content="Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL &amp; 8-container Docker stack.">
 <meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
 <script type="application/ld+json">
 {
@@ -50,9 +50,10 @@
     },
     {
       "@type": "TechArticle",
+      "@id": "https://michaelbeatman.github.io/ARCHON-OS/architecture/#article",
       "headline": "System architecture built for accountable multi-agent fleets.",
       "name": "Archon OS Architecture: PolicyEngine, BudgetBank & Docker Stack",
-      "description": "Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & 7-container Docker stack.",
+      "description": "Technical architecture of Archon OS: OmniRoute Zero-Egress, HMAC warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & 8-container Docker stack.",
       "inLanguage": "en",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/architecture/",
       "dateModified": "2026-11-27",
@@ -74,8 +75,9 @@
       },
       "about": {
         "@type": "SoftwareApplication",
+        "@id": "https://michaelbeatman.github.io/ARCHON-OS/architecture/#software",
         "name": "Archon OS",
-        "softwareVersion": "0.6.0.1"
+        "softwareVersion": "0.6.0.2"
       }
     }
   ]
@@ -181,7 +183,7 @@
       <img class="hand-avatar" src="../archon_hand.png" width="40" height="40" alt="Archon OS">
       <span>
         <span class="brand-name">Archon OS</span>
-        <span class="tag">v0.6.0.1 &middot; Self-Hosted Agentic OS</span>
+        <span class="tag">v0.6.0.2 &middot; Self-Hosted Agentic OS</span>
       </span>
     </a>
     <nav aria-label="Main navigation"><a href="../">Home</a><a href="../architecture/">Architecture</a><a href="../gdpr-zero-egress/">GDPR</a><a href="../compare/">Compare</a><a href="../boardroom-frameworks/">Frameworks</a><a href="../specialists/">Specialists</a><a href="../de/architektur/" class="lang-switch">DE · Deutsch</a><button type="button" class="theme-btn" data-theme-toggle>Light</button></nav>
@@ -195,7 +197,7 @@
         <a href="../">Archon OS</a><span>/</span><span>Architecture &amp; Stack</span>
       </nav>
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>Architecture &amp; Stack &middot; v0.6.0.1</span></div>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>Architecture &amp; Stack &middot; v0.6.0.2</span></div>
         <h1>System architecture built for accountable multi-agent fleets.</h1>
         <p class="hero-lead">Archon OS decouples agent reasoning from governance, cost control, and external side effects. Every model and tool invocation clears deterministic safety gates backed by 3 consolidated SQLite WAL databases.</p>
         <div class="btnrow">
@@ -246,7 +248,7 @@
   <g class="arch-node">
     <rect x="16" y="116" width="132" height="72" rx="10"/>
     <text class="arch-node-title" x="82" y="148" text-anchor="middle">Task / Agent Call</text>
-    <text class="arch-node-sub" x="82" y="168" text-anchor="middle">70 Profiles · MCP</text>
+    <text class="arch-node-sub" x="82" y="168" text-anchor="middle">71 Profiles · MCP</text>
   </g>
 
   <g class="arch-node arch-node-silver">
@@ -297,18 +299,28 @@
   <div class="feat"><h3>2. Atomic BudgetBank (BEGIN IMMEDIATE)</h3><p>Before any LLM dispatch runs, BudgetBank reserves token and currency budgets transactionally in SQLite. Parallel agents cannot race past daily or per-task caps; unused reservations settle back atomically.</p></div>
   <div class="feat"><h3>3. OmniRoute Fail-Closed Switchboard</h3><p>Routes sensitive domains (finance, contracts, HR, CRM, GDPR) exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route. Fails closed rather than falling back to cloud APIs.</p></div>
   <div class="feat"><h3>4. Crash-Safe Effect-Ledger &amp; Outbox</h3><p>External side effects track explicit state transitions (<code>PENDING &rarr; COMMITTED / FAILED / UNKNOWN</code>) with idempotency keys and mandatory reconciliation after crashes, eliminating duplicate webhooks or payouts.</p></div>
-  <div class="feat"><h3>5. Three Consolidated SQLite WAL Databases</h3><p>No bloated database cluster required: <code>ops.db</code> (tasks, budgets, warrants, audit hash-chain), <code>business.db</code> (CRM, contacts, contracts), and <code>memory.db</code> (learnings) run in WAL mode with optional Litestream replication.</p></div>
+  <div class="feat"><h3>5. Three Consolidated SQLite WAL Databases</h3><p>No bloated database cluster required: <code>ops.db</code> (tasks, budgets, warrants, audit hash-chain), <code>business.db</code> (CRM, contracts, ERP alpha), and <code>memory.db</code> (learnings) run in WAL mode with optional Litestream replication.</p></div>
   <div class="feat"><h3>6. 8 Default Containers (up to 24 with Profiles)</h3><p>The default Docker Compose stack (amd64 / arm64) runs Archon OS Core, Hermes Agent, OmniRoute, AnythingLLM, ChromaDB (local vector RAG), Litestream (WAL replication), Docker Socket Proxy, and <code>archon-autoheal</code> — expandable with 16 optional profile services (Prometheus, Alertmanager, Grafana, Loki, OTel/Tempo, Uptime Kuma, Caddy, Authelia, n8n, Metabase, DocuSeal, and more).</p></div>
 </div>
 
-<h2 class="sec">Operational Modules, Extensibility &amp; Telemetry</h2>
-<div class="feats">
-  <div class="feat"><h3>Internet Watchdog &amp; Oracle Radar</h3><p>Scheduled monitoring of web sources, RSS feeds, and search targets with automated alerting and handoff into agent workflows.</p></div>
-  <div class="feat"><h3>Research Lab &amp; Notebooks</h3><p>Structured multi-source triangulation producing traceable dossiers and citations for deep analysis tasks.</p></div>
-  <div class="feat"><h3>DAG Workflows &amp; 3rd-Party Plugins</h3><p>Deterministic task graphs (DAGs) paired with an extensible plugin architecture, MCP gateway, and n8n automation mesh.</p></div>
-  <div class="feat"><h3>Autonomy Tiers &amp; Token Guards</h3><p>Configurable autonomy approvals per domain alongside Context Meter, repeat budgets, and trajectory caps to halt runaway loops.</p></div>
-  <div class="feat"><h3>Telemetry &amp; Inter-Agent Communication</h3><p>Built-in telemetry view for latency, cost, live log streams, and direct inspection of messages exchanged between agents in a mesh or swarm.</p></div>
+<h2 class="sec" id="source-map">One Request, End to End</h2>
+<p>No black box: each gate has a deterministic implementation you can inspect in the repository.</p>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Stage</th><th>Enforcement</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Admission &amp; tool policy</td><td>Default-deny, scoped warrants</td><td><code>backend/approval_policy_engine.py</code></td></tr>
+      <tr><td>Budget reservation</td><td><code>BEGIN IMMEDIATE</code>, atomic settle/release</td><td><code>backend/role_budget_engine.py</code></td></tr>
+      <tr><td>External side effects</td><td>Effect-Ledger with idempotency keys</td><td><code>core_dispatcher.py</code></td></tr>
+      <tr><td>Audit integrity</td><td>HMAC-SHA256 chained records</td><td><code>local_security_guard.py</code></td></tr>
+      <tr><td>Liveness &amp; restart</td><td><code>/livez</code> heartbeat, autoheal</td><td><code>watchdog_daemon.py</code></td></tr>
+    </tbody>
+  </table>
 </div>
+<pre data-lang="bash">curl -sS http://localhost:8420/livez -w "
+HTTP %{http_code}
+"
+# 200 = healthy · 503 = heartbeat stalled, autoheal restarts the container</pre>
 
 <h2 class="sec" id="hardware">Hardware &amp; Sizing Baseline</h2>
 <div class="table-wrap">

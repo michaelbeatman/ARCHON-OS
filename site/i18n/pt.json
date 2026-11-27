@@ -1,5 +1,5 @@
 {
-  "meta.title": "Archon OS: SO Multiagente Open Source (Zero-Egress)",
+  "meta.title": "Archon OS: SO Multiagente de Código Aberto (Zero-Egress)",
   "meta.description": "SO multiagente MIT auto-hospedado no Hermes Agent: 71 especialistas, 80 frameworks Boardroom, roteamento local Zero-Egress, BudgetBank, Passkey HITL e auditoria SHA-256.",
   "meta.ogDescription": "Sistema Operativo Agentístico auto-hospedado baseado no Hermes Agent: 71 perfis especialistas, roteamento Zero-Egress conforme ao RGPD, Atomic BudgetBank, Passkey HITL e registos de auditoria SHA-256.",
   "meta.twitterDescription": "Sistema Operativo Agentístico auto-hospedado baseado no Hermes Agent: 71 perfis especialistas, roteamento Zero-Egress RGPD, Atomic BudgetBank, Passkey HITL &amp; registos SHA-256.",
@@ -13,7 +13,7 @@
   "hero.buttonGithub": "Ver no GitHub",
   "hero.buttonDocs": "README em português",
   "hero.buttonQuickstart": "Início rápido",
-  "badge.gdpr": "RGPD &amp; EU AI Act pronto",
+  "badge.gdpr": "RGPD e EU AI Act: operação conforme suportada",
   "badge.zeroEgress": "Zero-Egress fail-closed",
   "badge.mit": "Licença MIT",
   "badge.specialists": "71 especialistas · 8 domínios",
@@ -67,7 +67,7 @@
   "faq.what": "<h3>O que é o Archon OS?</h3><p>O Archon OS é um Sistema Operativo Agentístico auto-hospedado com licença MIT, baseado no Hermes Agent. Organiza 71 funções de IA especialistas em 8 domínios com reservas orçamentais antes da execução, roteamento LLM local Zero-Egress, aprovações com Passkey WebAuthn e um registo de auditoria encadeado por hash SHA-256.</p>",
   "faq.leaks": "<h3>Como evita fugas de dados sensíveis?</h3><p>O OmniRoute aplica uma política Zero-Egress fail-closed: finanças, contratos, CRM, RH e cargas RGPD correm exclusivamente em modelos locais (Ollama ou LM Studio) dentro de uma rede Docker interna sem rota de internet.</p>",
   "faq.costs": "<h3>Como são controlados os custos de tokens &amp; as ações de risco?</h3><p>Uma PolicyEngine central valida permissões antes do envio, ferramentas privilegiadas exigem warrants assinados com prazo, o BudgetBank reserva fundos atomicamente e aprovações de alto risco requerem assinaturas Passkey WebAuthn.</p>",
-  "faq.gdpr": "<h3>Está pronto para RGPD &amp; EU AI Act?</h3><p>Sim. As cargas de negócio sensíveis permanecem no seu servidor com Zero-Egress fail-closed, apoiadas por um registo de riscos EU AI Act, registos de auditoria SHA-256 à prova de manipulação e exportação de documentação GoBD num clique.</p>",
+  "faq.gdpr": "<h3>Está pronto para RGPD &amp; EU AI Act?</h3><p>A conformidade depende da sua configuração. As cargas de negócio sensíveis permanecem no seu servidor com Zero-Egress fail-closed, apoiadas por um registo de riscos EU AI Act, registos de auditoria SHA-256 à prova de manipulação e exportação de documentação GoBD num clique.</p>",
   "status.title": "<h2 class=\"sec\">Estado honesto</h2>",
   "status.text": "Pré-1.0. Interfaces e chaves de configuração mudam entre versões. O módulo ERP/CRM é alpha, a aplicação de funções multiusuário ainda está a ser reforçada e o resultado dos especialistas é apoio à decisão, não aconselhamento licenciado. Issues e PRs são bem-vindos.",
   "docs.title": "<h2 class=\"sec\">Documentação (11 idiomas)</h2>",
@@ -77,7 +77,7 @@
   "docs.featureList.name": "<strong>Lista completa de funcionalidades</strong>",
   "docs.featureList.scope": "Catálogo completo de módulos, modo demo, assistente de primeiro arranque, FinOps, segurança",
   "docs.boardroom.name": "<strong>AI Boardroom: 80 frameworks</strong>",
-  "docs.boardroom.scope": "As 55 metodologias do motor de decisões, indexadas",
+  "docs.boardroom.scope": "As 80 metodologias do motor de decisões, indexadas",
   "docs.roadmap.name": "<strong>Roadmap &amp; marcos</strong>",
   "docs.roadmap.scope": "Plano completo de marcos incl. governação, compressão de prompts &amp; portões de aprovação",
   "footer.builtOn": "Baseado no <a href=\"https://github.com/NousResearch/hermes-agent\">Hermes Agent</a> da Nous Research",
@@ -90,5 +90,12 @@
   "js.copied": "Copiado",
   "features.stackOps": "<h3>Autoheal, Chroma &amp; Litestream</h3><p>8 contentores padrão: <code>archon-autoheal</code> reinicia serviços via <code>/livez</code>, <code>ChromaDB</code> executa RAG vetorial local e <code>Litestream</code> replica o SQLite WAL.</p>",
   "features.observability": "<h3>Alertmanager e Observabilidade</h3><p>Perfis opcionais incluem <code>Prometheus</code>, <code>Alertmanager</code>, <code>Grafana</code>, <code>Loki</code>/<code>Promtail</code>, <code>OTel</code>/<code>Tempo</code>, <code>Uptime Kuma</code>, <code>Caddy</code>/<code>Authelia</code> SSO, <code>Metabase</code> e <code>DocuSeal</code>.</p>",
-  "features.enterprise": "<h3>832 Prompts, Multi-Tenant &amp; Vault</h3><p>832 modelos Prompt Studio, 39 skills, 6 servidores MCP, isolamento físico por empresa, eliminação RGPD Art. 17, consentimento de áudio e AEAD Vault offline.</p>"
+  "features.enterprise": "<h3>832 Prompts, Multi-Tenant &amp; Vault</h3><p>832 modelos Prompt Studio, 39 skills, 6 servidores MCP, isolamento físico por empresa, eliminação RGPD Art. 17, consentimento § 201 StGB e AEAD Vault offline.</p>",
+  "footer.imprint": "Informação legal",
+  "footer.privacy": "Privacidade",
+  "nav.skip": "Ir para o conteúdo",
+  "faq.chatbot": "<h3>Como o Archon OS se difere de um chatbot comum?</h3><p>Um chatbot responde. O Archon OS <strong>aplica regras</strong>: limites de orçamento antes de cada chamada, aprovações por Passkey e uma cadeia de auditoria verificável. A diferença é a aplicação, não a conversa.</p>",
+  "b2b.section": "<h3>Uso em ambientes regulados</h3><p><strong>Compras:</strong> comparações de fornecedores e rascunhos de contratos passam por aprovação Passkey; limites de orçamento travam gastos. <strong>Controlling:</strong> cada chamada é registada com fornecedor, modelo e custo numa cadeia de hash — exportação GoBD num clique. <strong>Compliance:</strong> matriz TOM, registo de riscos EU AI Act e consentimento § 201 StGB são configuração, não extras.</p><p><strong>Economia:</strong> 0 € de licença (MIT). Tu deténs infraestrutura, configuração e operação; Zero-Egress é uma opção explícita, não uma garantia.</p>",
+  "footer.trademarks": "As marcas pertencem aos respetivos proprietários.",
+  "nav.menu": "Abrir menu"
 }

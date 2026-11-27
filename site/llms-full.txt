@@ -1,0 +1,90 @@
+# Archon OS
+
+> Archon OS is a self-hosted, MIT-licensed Agentic Operating System (multi-agent enterprise suite) built on Hermes Agent. It enforces fail-closed Zero-Egress local LLM routing, atomic pre-dispatch token budget reservations, WebAuthn Passkey human-in-the-loop approvals, crash-safe Effect-Ledger execution, and a SHA-256 hash-chained audit log on your own Docker server.
+
+- Website (EN): https://michaelbeatman.github.io/ARCHON-OS/
+- Website (DE): https://michaelbeatman.github.io/ARCHON-OS/de/
+- Source Code (MIT License): https://github.com/michaelbeatman/ARCHON-OS
+- Author: Michael Keller (Michael Beatman) — https://github.com/michaelbeatman | https://www.linkedin.com/in/michael-keller-a43b6611b/
+- Contact: archon.os.system@gmail.com
+- Current Release: v0.6.0.2 (pre-1.0, Docker amd64 / arm64)
+- Updated: 2026-11-27
+
+## Indexable HTML Guides & Directories
+
+- [Architecture & Stack (EN)](https://michaelbeatman.github.io/ARCHON-OS/architecture/): OmniRoute, PolicyEngine, HMAC Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL, hardware specs
+- [Architektur & Stack (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/architektur/): Technische Systemarchitektur, 8-Container-Docker-Stack & Hardware-Anforderungen
+- [GDPR / DSGVO & Zero-Egress (EN)](https://michaelbeatman.github.io/ARCHON-OS/gdpr-zero-egress/): Fail-closed internal Docker network isolation, EU AI Act risk registry, GoBD export
+- [DSGVO & Zero-Egress (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/dsgvo-zero-egress/): Datenresidenz ohne Cloud-Abfluss, EU AI Act Art. 50/Annex III & GoBD-Dokumentation
+- [Framework Comparison (EN)](https://michaelbeatman.github.io/ARCHON-OS/compare/): Archon OS vs. LangGraph, CrewAI, AutoGen, n8n & Dify
+- [Systemvergleich (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/vergleich/): Objektiver Enterprise-Vergleich (Archon OS vs. LangGraph, CrewAI, AutoGen, n8n, Dify)
+- [AI Boardroom — 80 Frameworks (EN)](https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/): Structured multi-perspective debate frameworks catalog — all 80 methodologies sorted A–Z (also localized in DE, ES, FR, IT, JA, KO, NL, PT, RU, ZH at `/<lang>/boardroom-frameworks/`)
+- [AI Boardroom — 80 Frameworks (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/boardroom-frameworks/): Alle 80 strukturierten Decision-Engine-Methodiken alphabetisch durchsuchbar
+- [71 Agent Profiles (EN)](https://michaelbeatman.github.io/ARCHON-OS/specialists/): Alphabetical, filterable directory of all 71 agent profiles across 8 domains
+- [71 Agenten-Profile (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/spezialisten/): Alle 71 Agenten-Profile aus 8 Domänen inkl. Guardrails
+- [2nd Brain, Vector RAG & Self-Improving Agents (EN)](https://michaelbeatman.github.io/ARCHON-OS/second-brain/): Obsidian Vault, ChromaDB/AnythingLLM local RAG, Corrective RAG, Agent HR files (wins/scorecards) & Skill Synthesis
+- [2nd Brain, Vektor-RAG & Self-Improving Agents (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/second-brain-gedaechtnis/): Obsidian Vault, ChromaDB/AnythingLLM Wissensdatenbank, Personalakten, Epistemic Hygiene & Skill-Synthese
+
+## Core Architecture & Differentiators
+
+- **71 Agent Profiles across 8 Domains:** Strategy & Leadership (13), Law/Tax/Finance (11), Sales/CRM/Marketing (11), Creation/Media (8), Tech/Software/QA (8), Commerce/Procurement (7), Real Estate/Construction (7), and Medicine/Chemistry/Engineering (6).
+- **PolicyEngine & Signed Tool Warrants:** Default-deny tool access. Privileged tools require HMAC-SHA256 signed, time-limited warrants with parameter bounds. Delegated sub-agents never inherit privileged tools.
+- **Atomic BudgetBank:** Pre-execution transactional budget reservations (`BEGIN IMMEDIATE`) prevent parallel agents from exceeding daily or per-task cost caps.
+- **Passkey / WebAuthn HITL:** High-risk approvals (payments, budget overruns, destructive actions) require cryptographic verification via Windows Hello, Touch ID, Face ID, or hardware keys.
+- **Fail-Closed Zero-Egress Routing:** OmniRoute sends finance, HR, contract, CRM, and GDPR workloads exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route.
+- **Crash-Safe Execution (Effect-Ledger):** Transactional Effect-Ledger (`PENDING -> COMMITTED / FAILED / UNKNOWN`) with Outbox idempotency keys and mandatory reconciliation prevents duplicate external side effects.
+- **Auditability & Compliance:** SHA-256 hash-chained audit log, 3 consolidated SQLite WAL databases (`ops.db`, `business.db`, `memory.db`) with Litestream replication, EU AI Act risk registry, GDPR Art. 17 erasure, § 201 StGB audio consent gate, physical multi-tenant DB isolation (Holding/GmbH/SPV), and 1-click GoBD procedural documentation export.
+- **Security Hardening (v0.6.0.1):** Workspace path-jail, Delegation Isolation, Session Taint Guard (HITL), Offline AEAD Vault, and Flightlog policy backtester.
+- **AI Boardroom & Knowledge Base:** 80 structured multi-perspective decision frameworks across 9 categories, 832 Prompt Studio templates, 39 skills, 6 MCP servers, local Obsidian Markdown vault + AnythingLLM/ChromaDB vector RAG, and embedded n8n webhook automation.
+- **Self-Healing & Observability Stack:** `archon-autoheal` 24/7 `/livez` container recovery plus optional Docker Compose profiles for `Prometheus`, `Alertmanager`, `Grafana`, `Loki`/`Promtail`, `OTel`/`Tempo`, `Uptime Kuma`, `Caddy`/`Authelia` SSO, `Metabase` BI, and `DocuSeal` e-signature.
+
+## Quick Start
+
+- Full stack (8 default containers, expandable to 24 with optional profiles): `git clone https://github.com/michaelbeatman/ARCHON-OS.git && cd ARCHON-OS && docker compose up -d`
+- Zero-key demo mode: `ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d`
+
+## PDF Documentation & Changelog
+
+- System Manual (EN, page count varies by language): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
+- Systemhandbuch (DE, Seitenzahl je nach Sprache): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
+- Complete Feature List (EN): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf
+- Changelog: https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md
+
+
+## Full Text Reference (EN)
+
+### hero.headline
+
+Multi-agent automation for regulated environments - self-hosted, open source.
+
+### hero.subline
+
+Archon OS brings 71 specialist profiles, hard budget caps, passkey approvals and a tamper-evident audit log to your operations. Zero-Egress is designed in and can be enabled with local models or EU-based providers - currently disabled by default in the running deployment. You keep documents, vault and models under your control.
+
+### faq.what
+
+What is Archon OS?Archon OS is a self-hosted, MIT-licensed Agentic Operating System built on Hermes Agent. It organizes 71 specialist AI roles across 8 domains with pre-execution budget reservations, Zero-Egress local LLM routing, WebAuthn Passkey approvals, and a SHA-256 hash-chained audit log.
+
+### faq.leaks
+
+How does it prevent sensitive data leaks?OmniRoute enforces a fail-closed Zero-Egress policy: finance, contracts, CRM, HR, and GDPR workloads run exclusively on local models (Ollama or LM Studio) inside an internal Docker network without an internet route.
+
+### faq.costs
+
+How are token costs & risky actions controlled?A central PolicyEngine validates permissions before dispatch, privileged tools require signed time-bound warrants, BudgetBank reserves funds atomically, and high-risk approvals require WebAuthn Passkey signatures.
+
+### faq.gdpr
+
+Is it GDPR (DSGVO) & EU AI Act ready?Compliance depends on your configuration. Sensitive business workloads stay on your server with fail-closed Zero-Egress, backed by an EU AI Act risk registry, tamper-evident SHA-256 audit logs, and 1-click GoBD procedural documentation export.
+
+### faq.chatbot
+
+How is Archon OS different from a regular chatbot?A chatbot answers. Archon OS enforces: budget gates before every model call, passkey approvals for high-risk actions, and a verifiable audit trail. The difference is enforcement, not conversation.
+
+### b2b.section
+
+Built for regulated environmentsProcurement: supplier comparisons and contract drafts run behind passkey approvals; budget caps stop uncontrolled agent spend. Controlling: every dispatch is logged with provider, model and cost in a hash-chained trail — one-click GoBD export. Compliance: TOM matrix, EU AI Act risk register and § 201 StGB consent gate are configuration, not add-ons.Economics: €0 licence (MIT). You own infrastructure, configuration and operation; Zero-Egress is explicitly an option, not a guarantee.
+
+### status.text
+
+Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome.

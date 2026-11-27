@@ -29,13 +29,13 @@
 {{JSON_LD}}
 </head>
 <body data-copy="{{js.copy}}" data-copied="{{js.copied}}">
+<a class="skip-link" href="#main">{{nav.skip}}</a>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
     <div class="davinci-layer-under">{{DAVINCI_VERT_UNDERLAYER_SVG}}</div>
     <div class="davinci-layer-plate">
-      <img class="davinci-plate-img img-dark-only" src="{{BASE}}assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager">
-      <img class="davinci-plate-img img-light-only" src="{{BASE}}assets/img/davinci_vertical_light.webp" width="764" height="1024" alt="" loading="eager">
+      <img class="davinci-plate-img" data-theme-dark="{{BASE}}assets/img/davinci_vertical_dark.webp" data-theme-light="{{BASE}}assets/img/davinci_vertical_light.webp" src="{{BASE}}assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" decoding="async">
     </div>
     <div class="davinci-layer-over">{{DAVINCI_VERT_OVERLAY_SVG}}</div>
   </div>
@@ -50,7 +50,8 @@
         <span class="tag">{{header.tagline}}</span>
       </span>
     </a>
-    <nav aria-label="Main navigation">
+    <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="main-nav" aria-label="{{nav.menu}}">{{nav.menu}}</button>
+    <nav id="main-nav" aria-label="Main navigation">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       {{nav.install}}
       {{NAV_SUBPAGES}}
@@ -62,7 +63,7 @@
   </div>
 </header>
 
-<main>
+<main id="main" tabindex="-1">
   <section class="hero">
     <div class="wrap">
       <div class="hero-inner">
@@ -70,9 +71,10 @@
         <h1>{{hero.headline}}</h1>
         <p class="hero-lead">{{hero.subline}}</p>
         <div class="btnrow">
-          <a class="btn primary" href="https://github.com/michaelbeatman/ARCHON-OS">{{hero.buttonGithub}}</a>
+          <a class="btn primary" href="#install">{{hero.buttonQuickstart}}</a>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; docker compose up -d" aria-label="{{js.copy}}">{{js.copy}}</button>
           <a class="btn" href="{{DOC_HREF}}">{{hero.buttonDocs}}</a>
-          <a class="btn" href="#install">{{hero.buttonQuickstart}}</a>
+          <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">{{hero.buttonGithub}}</a>
         </div>
         <div class="badges">
           <span class="badge">{{VERSION}} &middot; pre-1.0</span>
@@ -94,13 +96,12 @@
     <div class="creation-stage-wrap">
       <div class="creation-davinci-stage" aria-hidden="true">
         <div class="davinci-layer-plate">
-          <img class="davinci-creation-img" src="{{BASE}}assets/img/davinci_creation.png" width="1024" height="686" alt="" loading="eager">
+          <img class="davinci-creation-img" src="{{BASE}}assets/img/davinci_creation.webp" width="1024" height="686" alt="" loading="eager" fetchpriority="high" decoding="async">
         </div>
         <div class="davinci-layer-over">{{DAVINCI_CREATION_OVERLAY_SVG}}</div>
       </div>
       <div class="logo-showcase" data-reveal>
-        <img class="img-dark-only" src="{{BASE}}assets/img/archon_banner_dark.webp" width="924" height="146" alt="{{banner.alt}}" loading="eager">
-        <img class="img-light-only" src="{{BASE}}assets/img/archon_banner_light.webp" width="924" height="146" alt="{{banner.alt}}" loading="eager">
+        <img class="banner-img" data-theme-dark="{{BASE}}assets/img/archon_banner_dark.webp" data-theme-light="{{BASE}}assets/img/archon_banner_light.webp" src="{{BASE}}assets/img/archon_banner_dark.webp" width="924" height="146" alt="{{banner.alt}}" loading="eager" decoding="async">
       </div>
     </div>
 
@@ -112,29 +113,29 @@
         <span class="cockpit-badge">ZERO-EGRESS · LOCAL</span>
       </div>
       <div class="cockpit-tabs" role="tablist">
-        <button type="button" class="cockpit-tab is-active" role="tab" aria-selected="true" data-shot-tab>{{SHOT_TAB_1}}</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>{{SHOT_TAB_2}}</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>{{SHOT_TAB_3}}</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>{{SHOT_TAB_4}}</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>{{SHOT_TAB_5}}</button>
-        <button type="button" class="cockpit-tab" role="tab" aria-selected="false" data-shot-tab>{{SHOT_TAB_6}}</button>
+        <button type="button" class="cockpit-tab is-active" role="tab" id="shot-tab-1" aria-selected="true" aria-controls="shot-panel-1" tabindex="0" data-shot-tab>{{SHOT_TAB_1}}</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-2" aria-selected="false" aria-controls="shot-panel-2" tabindex="-1" data-shot-tab>{{SHOT_TAB_2}}</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-3" aria-selected="false" aria-controls="shot-panel-3" tabindex="-1" data-shot-tab>{{SHOT_TAB_3}}</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-4" aria-selected="false" aria-controls="shot-panel-4" tabindex="-1" data-shot-tab>{{SHOT_TAB_4}}</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-5" aria-selected="false" aria-controls="shot-panel-5" tabindex="-1" data-shot-tab>{{SHOT_TAB_5}}</button>
+        <button type="button" class="cockpit-tab" role="tab" id="shot-tab-6" aria-selected="false" aria-controls="shot-panel-6" tabindex="-1" data-shot-tab>{{SHOT_TAB_6}}</button>
       </div>
       <div class="cockpit-stage">
-        <figure class="is-active" data-shot-panel><img loading="eager" src="{{BASE}}assets/img/mission_control.webp" width="1024" height="559" alt="{{shots.missionControl.alt}}"><figcaption>{{shots.missionControl.caption}}</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/kader.webp" width="1024" height="559" alt="{{shots.fleet.alt}}"><figcaption>{{shots.fleet.caption}}</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/boardroom_debate.webp" width="1024" height="559" alt="{{shots.boardroom.alt}}"><figcaption>{{shots.boardroom.caption}}</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/workflows.webp" width="1024" height="557" alt="{{shots.workflows.alt}}"><figcaption>{{shots.workflows.caption}}</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/guardian.webp" width="1280" height="800" alt="{{shots.n8n.alt}}"><figcaption>{{shots.n8n.caption}}</figcaption></figure>
-        <figure data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/org.webp" width="1024" height="559" alt="{{shots.org.alt}}"><figcaption>{{shots.org.caption}}</figcaption></figure>
+        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" src="{{BASE}}assets/img/mission_control.webp" width="1024" height="559" alt="{{shots.missionControl.alt}}"><figcaption>{{shots.missionControl.caption}}</figcaption></figure>
+        <figure id="shot-panel-2" role="tabpanel" aria-labelledby="shot-tab-2" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/kader.webp" width="1024" height="559" alt="{{shots.fleet.alt}}"><figcaption>{{shots.fleet.caption}}</figcaption></figure>
+        <figure id="shot-panel-3" role="tabpanel" aria-labelledby="shot-tab-3" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/boardroom_debate.webp" width="1024" height="559" alt="{{shots.boardroom.alt}}"><figcaption>{{shots.boardroom.caption}}</figcaption></figure>
+        <figure id="shot-panel-4" role="tabpanel" aria-labelledby="shot-tab-4" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/workflows.webp" width="1024" height="557" alt="{{shots.workflows.alt}}"><figcaption>{{shots.workflows.caption}}</figcaption></figure>
+        <figure id="shot-panel-5" role="tabpanel" aria-labelledby="shot-tab-5" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/guardian.webp" width="1280" height="800" alt="{{shots.n8n.alt}}"><figcaption>{{shots.n8n.caption}}</figcaption></figure>
+        <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/org.webp" width="1024" height="559" alt="{{shots.org.alt}}"><figcaption>{{shots.org.caption}}</figcaption></figure>
       </div>
     </div>
     <div class="shots-thumbs" data-reveal>
-      <button type="button" class="shot-thumb is-active" data-shot-thumb><img loading="lazy" src="{{BASE}}assets/img/mission_control.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_1}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="{{BASE}}assets/img/kader.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_2}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="{{BASE}}assets/img/boardroom_debate.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_3}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="{{BASE}}assets/img/workflows.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_4}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="{{BASE}}assets/img/guardian.webp" width="200" height="125" alt=""><span>{{SHOT_TAB_5}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb><img loading="lazy" src="{{BASE}}assets/img/org.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_6}}</span></button>
+      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="{{BASE}}assets/img/mission_control.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_1}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="{{BASE}}assets/img/kader.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_2}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="{{BASE}}assets/img/boardroom_debate.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_3}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="{{BASE}}assets/img/workflows.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_4}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="{{BASE}}assets/img/guardian.webp" width="200" height="125" alt=""><span>{{SHOT_TAB_5}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="{{BASE}}assets/img/org.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_6}}</span></button>
     </div>
 
     {{ARCH_SECTION_HTML}}
@@ -179,6 +180,8 @@
 
     {{HUB_SECTION_HTML}}
 
+    <div class="wrap b2b-section">{{b2b.section}}</div>
+
     {{install.title}}
     <div class="install" data-reveal>
       <div class="card">{{install.fullstack}}
@@ -212,12 +215,12 @@ docker compose -f docker-compose.demo.yml up --build -d
         <div class="feat">{{faq.leaks}}</div>
         <div class="feat">{{faq.costs}}</div>
         <div class="feat">{{faq.gdpr}}</div>
+        <div class="feat">{{faq.chatbot}}</div>
         <div class="faq-davinci-slot" aria-hidden="true">
           <div class="faq-davinci-frame">
             <div class="davinci-layer-under">{{DAVINCI_WHEEL_UNDERLAYER_SVG}}</div>
             <div class="davinci-layer-plate">
-              <img class="davinci-plate-img img-dark-only" src="{{BASE}}assets/img/davinci_wheel_dark.webp" width="1024" height="764" alt="" loading="lazy">
-              <img class="davinci-plate-img img-light-only" src="{{BASE}}assets/img/davinci_wheel_light.webp" width="1024" height="764" alt="" loading="lazy">
+              <img class="davinci-plate-img" data-theme-dark="{{BASE}}assets/img/davinci_wheel_dark.webp" data-theme-light="{{BASE}}assets/img/davinci_wheel_light.webp" src="{{BASE}}assets/img/davinci_wheel_dark.webp" width="1024" height="764" alt="" loading="lazy" decoding="async">
             </div>
             <div class="davinci-layer-over">{{DAVINCI_WHEEL_OVERLAY_SVG}}</div>
           </div>
@@ -252,6 +255,9 @@ docker compose -f docker-compose.demo.yml up --build -d
     <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md">{{footer.thirdParty}}</a>
     <a href="https://www.linkedin.com/in/michael-keller-a43b6611b/" rel="noopener me">LinkedIn</a>
     <a href="mailto:archon.os.system@gmail.com">archon.os.system@gmail.com</a>
+    <a href="{{BASE}}impressum/">{{footer.imprint}}</a>
+    <a href="{{BASE}}datenschutz/">{{footer.privacy}}</a>
+    <span>{{footer.trademarks}}</span>
     <a href="{{BASE}}llms.txt">llms.txt</a>
   </div>
 </footer>

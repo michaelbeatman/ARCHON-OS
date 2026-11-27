@@ -181,7 +181,7 @@ def lang_options(page_lang: str) -> str:
 def hreflang_tags(base_url: str | None = None) -> str:
     b = (base_url or BASE_URL).rstrip("/") + "/"
     lines = [
-        f'<link rel="alternate" hreflang="{code}" href="{canonical(code, b)}">'
+        f'<link rel="alternate" hreflang="{LANGS[code][0]}" href="{canonical(code, b)}">'
         for code in LANGS
     ]
     lines.append(f'<link rel="alternate" hreflang="x-default" href="{b}">')
@@ -260,7 +260,7 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
             },
             {
                 "@type": "WebSite",
-                "@id": b + "#website",
+                "@id": page_url + "#website",
                 "name": "Archon OS",
                 "url": b,
                 "inLanguage": html_lang,
@@ -290,6 +290,16 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
                     "codeRepository": "https://github.com/NousResearch/hermes-agent",
                 },
                 "featureList": feature_list,
+                "additionalProperty": [
+                    {"@type": "PropertyValue", "name": "Specialist profiles", "value": 71},
+                    {"@type": "PropertyValue", "name": "Enterprise domains", "value": 8},
+                    {"@type": "PropertyValue", "name": "Boardroom frameworks", "value": 80},
+                    {"@type": "PropertyValue", "name": "Prompt templates", "value": 832},
+                    {"@type": "PropertyValue", "name": "Skills", "value": 39},
+                    {"@type": "PropertyValue", "name": "MCP servers", "value": 6},
+                    {"@type": "PropertyValue", "name": "Supported languages", "value": 11},
+                    {"@type": "PropertyValue", "name": "Default Docker containers", "value": 8},
+                ],
                 "offers": {
                     "@type": "Offer",
                     "price": "0",
@@ -359,11 +369,12 @@ def build_nav_subpages(lang: str) -> str:
     arch, gdpr, cmp_url, fw_url, _, _ = _subpage_prefix(lang)
     nav = _sec_for(lang)["nav"]
     assert isinstance(nav, dict)
+    mark = "" if lang in ("en", "de") else " (EN)"
     return (
-        f'<a href="{arch}">{nav["arch"]}</a>'
-        f'<a href="{gdpr}">{nav["gdpr"]}</a>'
-        f'<a href="{cmp_url}">{nav["compare"]}</a>'
-        f'<a href="{fw_url}">{nav["frameworks"]}</a>'
+        f'<a href="{arch}" hreflang="en">{nav["arch"]}{mark}</a>'
+        f'<a href="{gdpr}" hreflang="en">{nav["gdpr"]}{mark}</a>'
+        f'<a href="{cmp_url}" hreflang="en">{nav["compare"]}{mark}</a>'
+        f'<a href="{fw_url}" hreflang="en">{nav["frameworks"]}</a>'
     )
 
 
@@ -442,10 +453,11 @@ def build_hub_section(lang: str) -> str:
     hrefs = [arch, gdpr, cmp_url, fw_url, sp_url, sb_url]
     hub_cfg = _sec_for(lang)["hub"]
     assert isinstance(hub_cfg, dict)
+    mark = "" if lang in ("en", "de") else " (EN)"
     cards = hub_cfg["cards"]
     assert isinstance(cards, list)
     html_cards = "".join(
-        f'<a class="hub-card" href="{hrefs[i]}"><span class="hub-kicker">{c[0]}</span><strong>{c[1]}</strong><span>{c[2]}</span></a>'
+        f'<a class="hub-card" href="{hrefs[i]}" hreflang="en"><span class="hub-kicker">{c[0]}</span><strong>{c[1]}{mark}</strong><span>{c[2]}</span></a>'
         for i, c in enumerate(cards)
     )
     return f'<h2 class="sec">{hub_cfg["title"]}</h2>\n<div class="hub-grid" data-reveal>{html_cards}</div>'
@@ -565,7 +577,9 @@ Allow: /
 User-agent: Applebot
 Allow: /
 
-# Optional training & grounding crawlers (allowed for open-source discoverability)
+# Training/grounding crawlers are allowed on this PUBLIC DOCUMENTATION SITE only.
+# This policy has no effect on the software runtime network isolation (Zero-Egress) 
+# — the runtime is self-hosted and configured by the operator.
 User-agent: GPTBot
 Allow: /
 
@@ -592,7 +606,7 @@ def build_sitemap_xml(base_url: str, subpage_pairs: list[tuple[str, str]]) -> st
         lines.append(f"    <loc>{loc}</loc>")
         lines.append(f"    <lastmod>{LASTMOD}</lastmod>")
         for alt_code in LANGS:
-            lines.append(f'    <xhtml:link rel="alternate" hreflang="{alt_code}" href="{canonical(alt_code, b)}"/>')
+            lines.append(f'    <xhtml:link rel="alternate" hreflang="{LANGS[alt_code][0]}" href="{canonical(alt_code, b)}"/>')
         lines.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{b}"/>')
         lines.append("  </url>")
 
@@ -621,8 +635,15 @@ def build_sitemap_xml(base_url: str, subpage_pairs: list[tuple[str, str]]) -> st
         lines.append(f"    <loc>{loc}</loc>")
         lines.append(f"    <lastmod>{LASTMOD}</lastmod>")
         for alt_code, alt_url in fw_urls.items():
-            lines.append(f'    <xhtml:link rel="alternate" hreflang="{alt_code}" href="{alt_url}"/>')
+            lines.append(f'    <xhtml:link rel="alternate" hreflang="{LANGS[alt_code][0]}" href="{alt_url}"/>')
         lines.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{fw_urls["en"]}"/>')
+        lines.append("  </url>")
+
+    # Statische Rechtsseiten (deutsch, keine Locale-Varianten)
+    for rel in ("impressum/", "datenschutz/"):
+        lines.append("  <url>")
+        lines.append(f"    <loc>{b}{rel}</loc>")
+        lines.append(f"    <lastmod>{LASTMOD}</lastmod>")
         lines.append("  </url>")
 
     lines.append("</urlset>\n")
@@ -646,7 +667,7 @@ def build_llms_txt(base_url: str, version: str) -> str:
 ## Indexable HTML Guides & Directories
 
 - [Architecture & Stack (EN)]({b}architecture/): OmniRoute, PolicyEngine, HMAC Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL, hardware specs
-- [Architektur & Stack (DE)]({b}de/architektur/): Technische Systemarchitektur, 6-Container-Docker-Stack & Hardware-Anforderungen
+- [Architektur & Stack (DE)]({b}de/architektur/): Technische Systemarchitektur, 8-Container-Docker-Stack & Hardware-Anforderungen
 - [GDPR / DSGVO & Zero-Egress (EN)]({b}gdpr-zero-egress/): Fail-closed internal Docker network isolation, EU AI Act risk registry, GoBD export
 - [DSGVO & Zero-Egress (DE)]({b}de/dsgvo-zero-egress/): Datenresidenz ohne Cloud-Abfluss, EU AI Act Art. 50/Annex III & GoBD-Dokumentation
 - [Framework Comparison (EN)]({b}compare/): Archon OS vs. LangGraph, CrewAI, AutoGen, n8n & Dify
@@ -678,8 +699,8 @@ def build_llms_txt(base_url: str, version: str) -> str:
 
 ## PDF Documentation & Changelog
 
-- System Manual (EN, 97 pp.): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
-- Systemhandbuch (DE, 97 S.): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
+- System Manual (EN, page count varies by language): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
+- Systemhandbuch (DE, Seitenzahl je nach Sprache): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
 - Complete Feature List (EN): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf
 - Changelog: {REPO_BLOB}CHANGELOG.md
 """
@@ -740,10 +761,18 @@ def main(argv: list[str]) -> int:
     (SITE / "llms.txt").write_text(llms, encoding="utf-8")
     (SITE / "sitemap.xml").write_text(sitemap, encoding="utf-8")
 
+    llms_full = llms + "\n\n## Full Text Reference (EN)\n\n" + "\n\n".join(
+        f"### {key}\n\n{_plain(catalogs['en'][key])}"
+        for key in ("hero.headline", "hero.subline", "faq.what", "faq.leaks",
+                    "faq.costs", "faq.gdpr", "faq.chatbot", "b2b.section", "status.text")
+    ) + "\n"
+    (SITE / "llms-full.txt").write_text(llms_full, encoding="utf-8")
+
     # Keep docs/ robots.txt & llms.txt synced so no stale v0.5.7.8 / 55-framework drift remains
     if DOCS.is_dir():
         (DOCS / "robots.txt").write_text(robots, encoding="utf-8")
         (DOCS / "llms.txt").write_text(llms, encoding="utf-8")
+        (DOCS / "llms-full.txt").write_text(llms_full, encoding="utf-8")
         (DOCS / "sitemap.xml").write_text(sitemap, encoding="utf-8")
 
     print(

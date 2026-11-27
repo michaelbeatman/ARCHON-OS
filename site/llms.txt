@@ -7,13 +7,13 @@
 - Source Code (MIT License): https://github.com/michaelbeatman/ARCHON-OS
 - Author: Michael Keller (Michael Beatman) — https://github.com/michaelbeatman | https://www.linkedin.com/in/michael-keller-a43b6611b/
 - Contact: archon.os.system@gmail.com
-- Current Release: v0.6.0.1 (pre-1.0, Docker amd64 / arm64)
+- Current Release: v0.6.0.2 (pre-1.0, Docker amd64 / arm64)
 - Updated: 2026-11-27
 
 ## Indexable HTML Guides & Directories
 
 - [Architecture & Stack (EN)](https://michaelbeatman.github.io/ARCHON-OS/architecture/): OmniRoute, PolicyEngine, HMAC Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL, hardware specs
-- [Architektur & Stack (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/architektur/): Technische Systemarchitektur, 6-Container-Docker-Stack & Hardware-Anforderungen
+- [Architektur & Stack (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/architektur/): Technische Systemarchitektur, 8-Container-Docker-Stack & Hardware-Anforderungen
 - [GDPR / DSGVO & Zero-Egress (EN)](https://michaelbeatman.github.io/ARCHON-OS/gdpr-zero-egress/): Fail-closed internal Docker network isolation, EU AI Act risk registry, GoBD export
 - [DSGVO & Zero-Egress (DE)](https://michaelbeatman.github.io/ARCHON-OS/de/dsgvo-zero-egress/): Datenresidenz ohne Cloud-Abfluss, EU AI Act Art. 50/Annex III & GoBD-Dokumentation
 - [Framework Comparison (EN)](https://michaelbeatman.github.io/ARCHON-OS/compare/): Archon OS vs. LangGraph, CrewAI, AutoGen, n8n & Dify
@@ -45,7 +45,7 @@
 
 ## PDF Documentation & Changelog
 
-- System Manual (EN, 97 pp.): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
-- Systemhandbuch (DE, 97 S.): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
+- System Manual (EN, page count varies by language): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
+- Systemhandbuch (DE, Seitenzahl je nach Sprache): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
 - Complete Feature List (EN): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf
 - Changelog: https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md

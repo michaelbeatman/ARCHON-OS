@@ -297,8 +297,17 @@
   <div class="feat"><h3>2. Atomic BudgetBank (BEGIN IMMEDIATE)</h3><p>Before any LLM dispatch runs, BudgetBank reserves token and currency budgets transactionally in SQLite. Parallel agents cannot race past daily or per-task caps; unused reservations settle back atomically.</p></div>
   <div class="feat"><h3>3. OmniRoute Fail-Closed Switchboard</h3><p>Routes sensitive domains (finance, contracts, HR, CRM, GDPR) exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route. Fails closed rather than falling back to cloud APIs.</p></div>
   <div class="feat"><h3>4. Crash-Safe Effect-Ledger &amp; Outbox</h3><p>External side effects track explicit state transitions (<code>PENDING &rarr; COMMITTED / FAILED / UNKNOWN</code>) with idempotency keys and mandatory reconciliation after crashes, eliminating duplicate webhooks or payouts.</p></div>
-  <div class="feat"><h3>5. Three Consolidated SQLite WAL Databases</h3><p>No bloated database cluster required: <code>ops.db</code> (tasks, budgets, warrants, audit hash-chain), <code>business.db</code> (CRM, contracts, ERP alpha), and <code>memory.db</code> (learnings) run in WAL mode with optional Litestream replication.</p></div>
+  <div class="feat"><h3>5. Three Consolidated SQLite WAL Databases</h3><p>No bloated database cluster required: <code>ops.db</code> (tasks, budgets, warrants, audit hash-chain), <code>business.db</code> (CRM, contacts, contracts), and <code>memory.db</code> (learnings) run in WAL mode with optional Litestream replication.</p></div>
   <div class="feat"><h3>6. 8 Default Containers (up to 24 with Profiles)</h3><p>The default Docker Compose stack (amd64 / arm64) runs Archon OS Core, Hermes Agent, OmniRoute, AnythingLLM, ChromaDB (local vector RAG), Litestream (WAL replication), Docker Socket Proxy, and <code>archon-autoheal</code> — expandable with 16 optional profile services (Prometheus, Alertmanager, Grafana, Loki, OTel/Tempo, Uptime Kuma, Caddy, Authelia, n8n, Metabase, DocuSeal, and more).</p></div>
+</div>
+
+<h2 class="sec">Operational Modules, Extensibility &amp; Telemetry</h2>
+<div class="feats">
+  <div class="feat"><h3>Internet Watchdog &amp; Oracle Radar</h3><p>Scheduled monitoring of web sources, RSS feeds, and search targets with automated alerting and handoff into agent workflows.</p></div>
+  <div class="feat"><h3>Research Lab &amp; Notebooks</h3><p>Structured multi-source triangulation producing traceable dossiers and citations for deep analysis tasks.</p></div>
+  <div class="feat"><h3>DAG Workflows &amp; 3rd-Party Plugins</h3><p>Deterministic task graphs (DAGs) paired with an extensible plugin architecture, MCP gateway, and n8n automation mesh.</p></div>
+  <div class="feat"><h3>Autonomy Tiers &amp; Token Guards</h3><p>Configurable autonomy approvals per domain alongside Context Meter, repeat budgets, and trajectory caps to halt runaway loops.</p></div>
+  <div class="feat"><h3>Telemetry &amp; Inter-Agent Communication</h3><p>Built-in telemetry view for latency, cost, live log streams, and direct inspection of messages exchanged between agents in a mesh or swarm.</p></div>
 </div>
 
 <h2 class="sec" id="hardware">Hardware &amp; Sizing Baseline</h2>

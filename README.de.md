@@ -168,10 +168,10 @@ flowchart LR
     UI <-->|Webhooks| N8N["n8n Automation & RSS-Watchdog"]
 ```
 
-1. **Steuerung & Operation:** Mission Control, Master Chat, Triage-Postfach (Webhooks, E-Mail, Messenger, Freigaben), **71-Profil-Kader** (inkl. Bot Screen PbD & 3-Stufen-SOUL), Showroom Sandbox.
-2. **Kognition & Wissen:** Internet-Watchdog (RSS/Web-Radar), Research Lab (Quellen-Triangulation & Dossiers), Zentralbibliothek (Obsidian Vault + AnythingLLM RAG), AI-Boardroom.
-3. **Wirtschaft & ERP *(Alpha)*:** CRM (Adressen, Kontakte, Pipeline), ERP-Suite (Angebote, Verträge, Rechnungen, OPOS/Mahnwesen, Belege), OmniRoute Token-FinOps mit Kostenkontrolle je Modell.
-4. **Infrastruktur & Governance:** Org-Chart & Teams, Guardian (Parallelität, Sitzungen, Rate-Limits), System Control Center (API-Keys, Modell-Routing, Kernel-Watchdog, In-App-Update), manipulationssicherer Revisions-Audit-Log.
+1. **Steuerung & Operation:** Mission Control, Master Chat, DAG-Workflows & Erweiterbarkeit über 3rd-Party-Plugins/MCP-Server, Triage-Postfach (Webhooks, E-Mail, Messenger, gestufte Autonomie-Freigaben), **71-Profil-Kader** (inkl. Bot Screen PbD & 3-Stufen-SOUL), Showroom Sandbox.
+2. **Kognition & Wissen:** Internet-Watchdog & Oracle-Radar (RSS/Web-Monitoring & Alarme), Research Lab & Notebooks (Quellen-Triangulation & Dossiers), Zentralbibliothek (Obsidian Vault + AnythingLLM/Chroma RAG + Agenten-Personalakten & Self-Evolution), AI-Boardroom (80 Frameworks).
+3. **Wirtschaft & Token-Guards:** CRM (Adressen, Kontakte, Pipeline), OmniRoute Token-FinOps mit Kostenkontrolle je Modell, Atomic BudgetBank (`BEGIN IMMEDIATE`), Context-Meter, Repeat-Budgets und Trajectory-Caps gegen Endlosschleifen.
+4. **Infrastruktur, Telemetrie & Governance:** Org-Chart & Teams, Telemetrie & einsehbare Inter-Agent-Kommunikation (Live-Traces, Latenzen, Mesh-/Schwarm-Nachrichten), Guardian (Parallelität, Sitzungen, Rate-Limits), System Control Center (API-Keys, Modell-Routing, Kernel-Watchdog, In-App-Update), manipulationssicherer Revisions-Audit-Log.
 
 ---
 

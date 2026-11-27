@@ -179,10 +179,10 @@ flowchart LR
 ```
 
 ### The 4 Navigation Pillars
-1. **Command & Operations:** Operations Command Center, Master Chat, Triage Inbox (Webhooks, Email, Messenger, Approvals), **71-Profile Agent Fleet** (incl. Bot Screen PbD & 3-tier SOUL), **832-Template Prompt Studio**, Showroom Sandbox.
-2. **Cognition & Knowledge:** Internet-Watchdog (RSS/Web Radar), Research Lab (multi-source triangulation & dossiers), Central Library (Obsidian Vault + AnythingLLM RAG), AI Boardroom (4-phase debate + optional MoA across 80 frameworks).
-3. **Economy & ERP *(Alpha)*:** CRM (addresses, contacts, pipeline), ERP suite (offers, contracts, invoices, receivables/dunning, receipts), OmniRoute token FinOps with per-model cost control.
-4. **Infrastructure & Governance:** Org-Chart & Teams, Guardian (Concurrency, Sessions, Rate Limits), System Control Center (First-Run Wizard, API Keys, Routing, Kernel Watchdog, Updates), Tamper-Evident Audit Log Stream.
+1. **Command & Operations:** Operations Command Center, Master Chat, DAG Workflows & 3rd-Party Plugin/MCP Extensibility, Triage Inbox (Webhooks, Email, Messenger, Tiered Autonomy Approvals), **71-Profile Agent Fleet** (incl. Bot Screen PbD & 3-tier SOUL), **832-Template Prompt Studio**, Showroom Sandbox.
+2. **Cognition & Knowledge:** Internet-Watchdog & Oracle Radar (RSS/Web monitoring & alerts), Research Lab & Notebooks (multi-source triangulation & dossiers), Central Library (Obsidian Vault + AnythingLLM/Chroma RAG + Agent HR Files & Self-Evolution), AI Boardroom (4-phase debate + optional MoA across 80 frameworks).
+3. **Economy & Token Guards:** CRM (addresses, contacts, pipeline), OmniRoute token FinOps with per-model cost control, Atomic BudgetBank (`BEGIN IMMEDIATE`), Context Meter, repeat budgets, and trajectory caps against runaway agent loops.
+4. **Infrastructure, Telemetry & Governance:** Org-Chart & Teams, Telemetry & Inter-Agent Communication View (live traces, latency/cost, swarm/mesh messages), Guardian (Concurrency, Sessions, Rate Limits), System Control Center (First-Run Wizard, API Keys, Routing, Kernel Watchdog, Updates), Tamper-Evident Audit Log Stream.
 
 ---
 

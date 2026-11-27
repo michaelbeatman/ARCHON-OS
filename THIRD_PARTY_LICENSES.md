@@ -81,15 +81,7 @@ von Archon OS importiert und nicht in `requirements.lock.txt` (Produktiv-Lock) g
 Wo ein Eintrag in `requirements-ci.lock.txt` existiert, ist das Artefakt dort per
 `--hash=sha256:…` fixiert; Installation nur via
 `pip install --require-hashes --no-deps -r requirements-ci.lock.txt`.
-Die Lizenzangaben folgen den Upstream-Projektmetadaten; die Pakete werden nicht
-im Repo vendoriert, sondern zur Laufzeit der CI aus dem Hash-Lock installiert.
-
-**Versionshinweis:** In dieser Dokumentations-Session war die Shell gesperrt
-(`pwsh.exe: Zugriff verweigert, os error 5`). `.venv\Scripts\*.exe --version`
-konnte daher **nicht** ausgeführt werden. Bei Tools ohne Hash-Lock-Eintrag steht
-deshalb ehrlich „lokal installiert, Version im Scan-Log" — es wird keine Version
-erfunden. Bei Tools mit Eintrag ist die Version die des tatsächlich im Lockfile
-stehenden pins. Details: `docs/system/STATIC_ANALYSIS_TOOLCHAIN_GUIDE.md`.
+Die Lizenzangaben folgen den Upstream-Projektmetadaten; die Pakete werden nicht im Repo vendoriert, sondern zur Laufzeit der CI aus dem Hash-Lock installiert. Details: `docs/system/STATIC_ANALYSIS_TOOLCHAIN_GUIDE.md`.
 
 **Alle Zeilen dieser Tabelle sind Dev-only = „ja"**: kein Runtime-Import, kein
 Eintrag im Produktiv-Lock. Der Scanner-Lauf ist read-only und schreibt ausschliesslich
@@ -129,10 +121,37 @@ nicht erfunden; sie sind als offene Aufgabe im
 „Clean-Code-Zertifikat" wird erst bei vollständig sauberem Stand ausgestellt —
 der aktuelle Stand ist es nicht (siehe Ideen-Pool in `docs/system/ROADMAP_2026.md`).
 
-### Frontend Vendor Assets (`static/`)
-- **Lucide Icons (`static/vendor/lucide.min.js`)**: ISC License (`(c) Lucide Contributors`)
-- **Tailwind CSS (`static/js/tailwind.cdn.js`)**: MIT License (`(c) Tailwind Labs, Inc.`)
-- **Marked (`static/marked.min.js`)**: MIT License (`(c) Christopher Jeffrey`)
-- **DOMPurify (`static/vendor/dompurify.min.js`)**: Apache-2.0 OR MPL-2.0 (`(c) Cure53`)
-- **Chart.js (`static/vendor/chart.umd.min.js`)**: MIT License (`(c) Chart.js Contributors`)
+### Frontend & Website Vendor Assets (`static/` & `site/assets/`)
+- **Geist & Geist Mono Fonts (`site/assets/fonts/`)**: SIL Open Font License 1.1 (`(c) Vercel` — https://github.com/vercel/geist-font)
+- **Lucide Icons (`static/vendor/lucide.min.js`)**: ISC License (`(c) Lucide Contributors` — https://lucide.dev)
+- **Tailwind CSS (`static/js/tailwind.cdn.js`)**: MIT License (`(c) Tailwind Labs, Inc.` — https://tailwindcss.com)
+- **Marked (`static/marked.min.js`)**: MIT License (`(c) Christopher Jeffrey` — https://github.com/markedjs/marked)
+- **DOMPurify (`static/vendor/dompurify.min.js`)**: Apache-2.0 OR MPL-2.0 (`(c) Cure53` — https://github.com/cure53/DOMPurify)
+- **Chart.js (`static/vendor/chart.umd.min.js`)**: MIT License (`(c) Chart.js Contributors` — https://www.chartjs.org)
 - **3d-force-graph / Three.js (optional interactive graph views)**: MIT License (`(c) Vasco Asturiano / Three.js Authors`)
+
+---
+
+## 7. Integrated Docker Stack & Ecosystem Services (`docker-compose.yml`)
+
+Archon OS orchestrates external open-source services as isolated Docker containers (not vendored into the Archon Python codebase; each container runs under its own upstream license):
+
+### Default Stack Services
+- **Hermes Agent (`nousresearch/hermes-agent`)**: Apache-2.0 — https://github.com/NousResearch/hermes-agent
+- **OmniRoute (`diegosouzapw/omniroute`)**: MIT — https://github.com/diegosouzapw/OmniRoute
+- **AnythingLLM (`mintplexlabs/anythingllm`)**: MIT — https://github.com/Mintplex-Labs/anything-llm
+- **ChromaDB (`chromadb/chroma`)**: Apache-2.0 — https://github.com/chroma-core/chroma
+- **Litestream (`litestream/litestream`)**: Apache-2.0 — https://github.com/benbjohnson/litestream
+- **Docker Socket Proxy (`tecnativa/docker-socket-proxy`)**: Apache-2.0 — https://github.com/Tecnativa/docker-socket-proxy
+
+### Optional Profile Services
+- **n8n (`n8nio/n8n`)**: Sustainable Use License (Fair-Code) — https://github.com/n8n-io/n8n
+- **Ollama (`ollama/ollama`)**: MIT — https://github.com/ollama/ollama
+- **Prometheus & Alertmanager (`prom/prometheus`, `prom/alertmanager`)**: Apache-2.0 — https://github.com/prometheus/prometheus
+- **Grafana, Loki, Promtail & Tempo (`grafana/*`)**: AGPL-3.0 / Apache-2.0 — https://github.com/grafana/grafana
+- **OpenTelemetry Collector (`otel/opentelemetry-collector-contrib`)**: Apache-2.0 — https://github.com/open-telemetry/opentelemetry-collector-contrib
+- **Uptime Kuma (`louislam/uptime-kuma`)**: MIT — https://github.com/louislam/uptime-kuma
+- **Caddy (`caddy`)**: Apache-2.0 — https://github.com/caddyserver/caddy
+- **Authelia (`authelia/authelia`)**: Apache-2.0 — https://github.com/authelia/authelia
+- **Metabase (`metabase/metabase`)**: AGPL-3.0 (OSS Edition) — https://github.com/metabase/metabase
+- **DocuSeal (`docuseal/docuseal`)**: AGPL-3.0 (OSS Edition) — https://github.com/docusealco/docuseal

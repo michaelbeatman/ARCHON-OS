@@ -46,7 +46,7 @@
   "features.passkey": "<h3>Passkey / WebAuthn HITL (pro Nutzer)</h3><p>Nachdem ein Nutzer einen Passkey registriert hat (<code>config/passkey_hitl.json</code>), erfordern Hochrisiko-Freigaben (Zahlungen, Budget-Überschreitungen, destruktive Aktionen) eine kryptografische Signatur via Windows Hello, Touch ID oder Hardware-Passkey. Ohne Registrierung ist die Funktion für diesen Nutzer aus – vor dem Produktiveinsatz aktivieren.</p>",
   "features.budgetbank": "<h3>Atomic BudgetBank &amp; signierte Warrants</h3><p>Token- und Kostenbudgets werden transaktional vor der Ausführung reserviert (<code>BEGIN IMMEDIATE</code>). Privilegierte Tools erfordern zeitlich begrenzte HMAC-SHA256-Warrants.</p>",
   "features.ledger": "<h3>Keine doppelten Aktionen</h3><p>Externe Effekte werden vor dem Senden gespeichert und nach einem Absturz abgeglichen. Eine Zahlung wird nicht zweimal ausgeführt.</p>",
-  "fleet.title": "<h2 class=\"sec\">Die 70 Domänen-Spezialisten + 1 Root-Orchestrator - 8 Domänen</h2>",
+  "fleet.title": "<h2 class=\"sec\">71 Spezialisten-Profile in 8 Domänen</h2>",
   "fleet.head": "<tr><th>Domäne</th><th>Anzahl</th><th>Fokus</th></tr>",
   "fleet.strategy": "<tr><td>Strategie, Leadership &amp; Leben</td><td>13</td><td>CEO-Copilot, OKRs, M&amp;A-Entscheidungen, domänenübergreifende Synthese und finales QA</td></tr>",
   "fleet.law": "<tr><td>Recht, Steuern, Finanzen &amp; Versicherungen</td><td>11</td><td>Verträge, DSGVO, IP, Holdings, Fremdfinanzierung - mit obligatorischem Rechts-/Steuer-Warndialog</td></tr>",
@@ -65,9 +65,9 @@
   "why.text": "<strong>Gebaut für kommerzielle Verantwortung und DSGVO-Konformität, nicht für Spielzeug-Demos.</strong> Im Gegensatz zu Prompt-Chaining-Bibliotheken, die Kostenlimits, Datenabfluss und Compliance-Grenzen an individuellen Klebecode delegieren, sind bei Archon OS integriert: Atomic-BudgetBank-Reservierungen, WebAuthn-Passkey-Freigaben, EU-AI-Act-/GoBD-Dokumentation und SHA-256-Audit-Trails - Zero-Egress ist standardmäßig aus - auf 3 konsolidierten SQLite-WAL-Datenbanken (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>). Zero-Egress ist standardmäßig aus und muss mit lokalen Modellen aktiviert werden (siehe <code>settings.json</code>: <code>privacy.zero_egress</code>, <code>zero_egress_strict</code>).",
   "faq.title": "<h2 class=\"sec\">Häufige Fragen</h2>",
   "faq.what": "<h3>Was ist Archon OS?</h3><p>Archon OS ist ein selbstgehostetes, MIT-lizenziertes Agentic Operating System auf Basis von Hermes Agent. Es organisiert 71 spezialisierte KI-Rollen in 8 Domänen mit Budgetreservierungen vor der Ausführung, lokalem Zero-Egress-LLM-Routing, WebAuthn-Passkey-Freigaben und einem SHA-256 hash-geketteten Audit-Log.</p>",
-  "faq.leaks": "<h3>Wie verhindert es Datenabfluss sensibler Daten?</h3><p>OmniRoute erzwingt eine Fail-Closed Zero-Egress-Policy: Finanzen, Verträge, CRM, HR und DSGVO-Workloads laufen ausschließlich auf lokalen Modellen (Ollama oder LM Studio) in einem internen Docker-Netz ohne Internet-Route. Fail-Closed greift erst nach Aktivierung – im shipped Default (<code>privacy.zero_egress = false</code>) ist er aus.</p>",
+  "faq.leaks": "<h3>Wie verhindert es Datenabfluss sensibler Daten?</h3><p>OmniRoute kann eine Fail-Closed Zero-Egress-Policy erzwingen: Finanzen, Verträge, CRM, HR und DSGVO-Workloads laufen nach Aktivierung ausschließlich auf lokalen Modellen (Ollama oder LM Studio) in einem internen Docker-Netz ohne Internet-Route. Fail-Closed greift erst nach Aktivierung von <code>privacy.zero_egress</code> und <code>zero_egress_strict</code> – im shipped Default (<code>privacy.zero_egress = false</code>) ist er aus.</p>",
   "faq.costs": "<h3>Wie werden Token-Kosten &amp; riskante Aktionen kontrolliert?</h3><p>Eine zentrale PolicyEngine prüft Berechtigungen vor dem Dispatch, privilegierte Tools benötigen signierte, zeitlich begrenzte Warrants, die BudgetBank reserviert Mittel atomar, und Hochrisiko-Freigaben erfordern WebAuthn-Passkey-Signaturen.</p>",
-  "faq.gdpr": "<h3>Ist es DSGVO- &amp; EU-AI-Act-ready?</h3><p>Konformität ist konfigurationsabhängig. Sensible Business-Workloads bleiben mit Fail-Closed Zero-Egress auf deinem Server, gestützt durch ein EU-AI-Act-Risikoregister, manipulationssichere SHA-256-Audit-Logs und den 1-Klick-Export der GoBD-Verfahrensdokumentation.</p>",
+  "faq.gdpr": "<h3>Ist es DSGVO- &amp; EU-AI-Act-ready?</h3><p>Konformität ist konfigurationsabhängig. Im Auslieferungszustand ist Zero-Egress aus (<code>privacy.zero_egress = false</code>); erst nach Aktivierung mit lokalen Modellen bleiben sensible Workloads mit Fail-Closed Zero-Egress auf deinem Server, gestützt durch ein EU-AI-Act-Risikoregister, manipulationssichere SHA-256-Audit-Logs und den 1-Klick-Export der GoBD-Verfahrensdokumentation.</p>",
   "status.title": "<h2 class=\"sec\" id=\"status\">Ehrlicher Status</h2>",
   "status.text": "Pre-1.0. Interfaces und Config-Keys ändern sich zwischen Releases. Das ERP/CRM-Modul ist Alpha, die Mehrbenutzer-Rollendurchsetzung wird noch gehärtet, und Spezialisten-Output ist Entscheidungsunterstützung, keine lizenzierte Beratung. Issues und PRs sind willkommen. Authentisierung: Die ausgelieferte <code>settings.json</code> enthält keinen <code>auth</code>-Block; auf <code>127.0.0.1</code> läuft Archon OS als lokaler Single-User. Vor LAN-/Produktivbetrieb <code>auth.enabled = true</code> setzen.",
   "docs.title": "<h2 class=\"sec\">Dokumentation (11 Sprachen)</h2>",
@@ -108,5 +108,9 @@
   "js.themeDark": "Dunkel",
   "js.copyFailed": "Kopieren fehlgeschlagen – bitte Befehl manuell markieren und kopieren.",
   "js.themeToggleLight": "Zum hellen Design wechseln",
-  "js.themeToggleDark": "Zum dunklen Design wechseln"
+  "js.themeToggleDark": "Zum dunklen Design wechseln",
+  "install.cmdHint": "<p class=\"hero-cmd-hint\">Hinweis: <code>example.invalid</code> ist ein Platzhalter – vor dem Start durch deinen eigenen Webhook-Empfänger ersetzen.</p>",
+  "a11y.tablist": "Systemansichten",
+  "js.themeOnLight": "Helles Design aktiviert",
+  "js.themeOnDark": "Dunkles Design aktiviert"
 }

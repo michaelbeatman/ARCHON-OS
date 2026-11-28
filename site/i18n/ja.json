@@ -108,5 +108,9 @@
   "js.themeDark": "ダーク",
   "js.copyFailed": "コピーできませんでした – コマンドを手動で選択してコピーしてください。",
   "js.themeToggleLight": "ライトテーマに切り替える",
-  "js.themeToggleDark": "ダークテーマに切り替える"
+  "js.themeToggleDark": "ダークテーマに切り替える",
+  "install.cmdHint": "<p class=\"hero-cmd-hint\">注意: <code>example.invalid</code> はプレースホルダーです。起動前に置き換えてください。</p>",
+  "a11y.tablist": "システム画面",
+  "js.themeOnLight": "ライトテーマを有効化しました",
+  "js.themeOnDark": "ダークテーマを有効化しました"
 }

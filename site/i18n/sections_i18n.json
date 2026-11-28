@@ -558,7 +558,7 @@
           "Registros verificables en lugar de documentación manual."
         ]
       ],
-      "tcoNote": "",
+      "tcoNote": "Cálculo de ejemplo: <a href=\"../architecture/#hardware\">hardware</a> · <a href=\"../gdpr-zero-egress/\">TOM</a>",
       "useTitle": "Use Cases",
       "useCards": [
         [
@@ -575,7 +575,7 @@
         ]
       ],
       "tom": "Está documentada una matriz TOM (art. 32 RGPD), un registro de riesgos de la EU AI Act y una prueba de supresión del art. 17. Zero-Egress está implementado, pero desactivado por defecto.",
-      "demoCta": "<a class=\"btn primary\" href=\"https://calendly.com/archon-os/demo\" target=\"_blank\" rel=\"noopener noreferrer\">Solicitar demo</a> <a class=\"btn\" href=\"#status\">Estado completo &rarr;</a>"
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">Solicitar demo</a> <a class=\"btn\" href=\"#status\">Estado completo &rarr;</a>"
     }
   },
   "fr": {
@@ -751,7 +751,7 @@
           "Traces vérifiables au lieu d'une documentation manuelle."
         ]
       ],
-      "tcoNote": "",
+      "tcoNote": "Exemple de calcul : <a href=\"../architecture/#hardware\">matériel</a> · <a href=\"../gdpr-zero-egress/\">TOM</a>",
       "useTitle": "Use Cases",
       "useCards": [
         [
@@ -768,7 +768,7 @@
         ]
       ],
       "tom": "Une matrice TOM (art. 32 RGPD), un registre de risques EU AI Act et une preuve d'effacement art. 17 sont documentés. Zero-Egress est implémenté mais désactivé par défaut.",
-      "demoCta": "<a class=\"btn primary\" href=\"https://calendly.com/archon-os/demo\" target=\"_blank\" rel=\"noopener noreferrer\">Demander une démo</a> <a class=\"btn\" href=\"#status\">Statut complet &rarr;</a>"
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">Demander une démo</a> <a class=\"btn\" href=\"#status\">Statut complet &rarr;</a>"
     }
   },
   "it": {
@@ -944,7 +944,7 @@
           "Registrazioni verificabili invece di documentazione manuale."
         ]
       ],
-      "tcoNote": "",
+      "tcoNote": "Esempio di calcolo: <a href=\"../architecture/#hardware\">hardware</a> · <a href=\"../gdpr-zero-egress/\">TOM</a>",
       "useTitle": "Use Cases",
       "useCards": [
         [
@@ -961,7 +961,7 @@
         ]
       ],
       "tom": "Sono documentati una matrice TOM (art. 32 GDPR), un registro dei rischi EU AI Act e una prova di cancellazione dell'art. 17. Zero-Egress è implementato ma disattivato di default.",
-      "demoCta": "<a class=\"btn primary\" href=\"https://calendly.com/archon-os/demo\" target=\"_blank\" rel=\"noopener noreferrer\">Richiedi una demo</a> <a class=\"btn\" href=\"#status\">Stato completo &rarr;</a>"
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">Richiedi una demo</a> <a class=\"btn\" href=\"#status\">Stato completo &rarr;</a>"
     }
   },
   "ja": {
@@ -1137,7 +1137,7 @@
           "手作業の文書化に代わる検証可能な記録。"
         ]
       ],
-      "tcoNote": "",
+      "tcoNote": "計算例: <a href=\"../architecture/#hardware\">ハードウェア</a> · <a href=\"../gdpr-zero-egress/\">TOM</a>",
       "useTitle": "ユースケース",
       "useCards": [
         [
@@ -1154,7 +1154,7 @@
         ]
       ],
       "tom": "TOM マトリクス（GDPR 第32条）、EU AI Act リスク登録簿、第17条削除証跡を文書化しています。Zero-Egress は実装済みですが、既定でオフです。",
-      "demoCta": "<a class=\"btn primary\" href=\"https://calendly.com/archon-os/demo\" target=\"_blank\" rel=\"noopener noreferrer\">デモを予約</a> <a class=\"btn\" href=\"#status\">完全なステータス &rarr;</a>"
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">デモを予約</a> <a class=\"btn\" href=\"#status\">完全なステータス &rarr;</a>"
     }
   },
   "ko": {
@@ -1330,7 +1330,7 @@
           "수동 문서화를 대체하는 검증 가능한 기록."
         ]
       ],
-      "tcoNote": "",
+      "tcoNote": "계산 예: <a href=\"../architecture/#hardware\">하드웨어</a> · <a href=\"../gdpr-zero-egress/\">TOM</a>",
       "useTitle": "사용 사례",
       "useCards": [
         [
@@ -1347,7 +1347,7 @@
         ]
       ],
       "tom": "TOM 매트릭스(GDPR 제32조), EU AI Act 위험 등록부 및 제17조 삭제 증거가 문서화되었습니다. Zero-Egress는 구현되었지만 기본값은 꺼져 있습니다.",
-      "demoCta": "<a class=\"btn primary\" href=\"https://calendly.com/archon-os/demo\" target=\"_blank\" rel=\"noopener noreferrer\">데모 요청</a> <a class=\"btn\" href=\"#status\">전체 상태 &rarr;</a>"
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">데모 요청</a> <a class=\"btn\" href=\"#status\">전체 상태 &rarr;</a>"
     }
   },
   "nl": {
@@ -1523,7 +1523,7 @@
           "Verifieerbare registraties in plaats van handmatige documentatie."
         ]
       ],
-      "tcoNote": "",
+      "tcoNote": "Voorbeeld: <a href=\"../architecture/#hardware\">hardware</a> · <a href=\"../gdpr-zero-egress/\">TOM</a>",
       "useTitle": "Use Cases",
       "useCards": [
         [
@@ -1540,7 +1540,7 @@
         ]
       ],
       "tom": "Een TOM-matrix (art. 32 AVG), een EU AI Act-risicoregister en een art. 17-wisbewijs zijn gedocumenteerd. Zero-Egress is geïmplementeerd maar standaard uitgeschakeld.",
-      "demoCta": "<a class=\"btn primary\" href=\"https://calendly.com/archon-os/demo\" target=\"_blank\" rel=\"noopener noreferrer\">Demo aanvragen</a> <a class=\"btn\" href=\"#status\">Volledige status &rarr;</a>"
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">Demo aanvragen</a> <a class=\"btn\" href=\"#status\">Volledige status &rarr;</a>"
     }
   },
   "pt": {
@@ -1716,7 +1716,7 @@
           "Registos verificáveis em vez de documentação manual."
         ]
       ],
-      "tcoNote": "",
+      "tcoNote": "Exemplo: <a href=\"../architecture/#hardware\">hardware</a> · <a href=\"../gdpr-zero-egress/\">TOM</a>",
       "useTitle": "Use Cases",
       "useCards": [
         [
@@ -1733,7 +1733,7 @@
         ]
       ],
       "tom": "Estão documentados uma matriz TOM (art. 32 RGPD), um registo de riscos da EU AI Act e uma prova de eliminação do art. 17. O Zero-Egress está implementado, mas desativado por padrão.",
-      "demoCta": "<a class=\"btn primary\" href=\"https://calendly.com/archon-os/demo\" target=\"_blank\" rel=\"noopener noreferrer\">Solicitar demonstração</a> <a class=\"btn\" href=\"#status\">Estado completo &rarr;</a>"
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">Solicitar demonstração</a> <a class=\"btn\" href=\"#status\">Estado completo &rarr;</a>"
     }
   },
   "ru": {
@@ -1909,7 +1909,7 @@
           "Проверяемые записи вместо ручной документации."
         ]
       ],
-      "tcoNote": "",
+      "tcoNote": "Пример: <a href=\"../architecture/#hardware\">оборудование</a> · <a href=\"../gdpr-zero-egress/\">TOM</a>",
       "useTitle": "Use Cases",
       "useCards": [
         [
@@ -1926,7 +1926,7 @@
         ]
       ],
       "tom": "Матрица TOM (ст. 32 GDPR), реестр рисков EU AI Act и доказательство удаления по ст. 17 задокументированы. Zero-Egress реализован, но по умолчанию отключён.",
-      "demoCta": "<a class=\"btn primary\" href=\"https://calendly.com/archon-os/demo\" target=\"_blank\" rel=\"noopener noreferrer\">Запросить демо</a> <a class=\"btn\" href=\"#status\">Полный статус &rarr;</a>"
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">Запросить демо</a> <a class=\"btn\" href=\"#status\">Полный статус &rarr;</a>"
     }
   },
   "zh": {
@@ -2102,7 +2102,7 @@
           "可验证记录替代手工文档。"
         ]
       ],
-      "tcoNote": "",
+      "tcoNote": "计算示例：<a href=\"../architecture/#hardware\">硬件</a> · <a href=\"../gdpr-zero-egress/\">TOM</a>",
       "useTitle": "使用案例",
       "useCards": [
         [
@@ -2119,7 +2119,7 @@
         ]
       ],
       "tom": "已记录 TOM 矩阵（GDPR 第32条）、EU AI Act 风险登记册和第17条删除证据。Zero-Egress 已实现，但默认关闭。",
-      "demoCta": "<a class=\"btn primary\" href=\"https://calendly.com/archon-os/demo\" target=\"_blank\" rel=\"noopener noreferrer\">申请演示</a> <a class=\"btn\" href=\"#status\">完整状态 &rarr;</a>"
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">申请演示</a> <a class=\"btn\" href=\"#status\">完整状态 &rarr;</a>"
     }
   }
 }

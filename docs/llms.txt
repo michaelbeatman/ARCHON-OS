@@ -8,7 +8,9 @@
 - Author: Michael Keller (Michael Beatman) — https://github.com/michaelbeatman | https://www.linkedin.com/in/michael-keller-a43b6611b/
 - Contact: archon.os.system@gmail.com
 - Current Release: v0.6.0.2 (pre-1.0, Docker amd64 / arm64)
-- Updated: 2026-11-27
+- Updated: 2026-11-28
+- Full text reference (EN): https://michaelbeatman.github.io/ARCHON-OS/llms-full.txt
+- Preferred citation: Archon OS (v0.6.0.2), Michael Keller, https://michaelbeatman.github.io/ARCHON-OS/ (retrieved 2026-11-28)
 
 ## Indexable HTML Guides & Directories
 

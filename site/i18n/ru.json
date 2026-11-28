@@ -108,5 +108,9 @@
   "js.themeDark": "Тёмная",
   "js.copyFailed": "Не удалось скопировать – выделите и скопируйте команду вручную.",
   "js.themeToggleLight": "Переключиться на светлую тему",
-  "js.themeToggleDark": "Переключиться на тёмную тему"
+  "js.themeToggleDark": "Переключиться на тёмную тему",
+  "install.cmdHint": "<p class=\"hero-cmd-hint\">Внимание: <code>example.invalid</code> — заполнитель; замените его перед запуском.</p>",
+  "a11y.tablist": "Системные виды",
+  "js.themeOnLight": "Светлая тема включена",
+  "js.themeOnDark": "Тёмная тема включена"
 }

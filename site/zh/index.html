@@ -104,7 +104,7 @@
       ],
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
       "softwareVersion": "0.6.0.2",
-      "dateModified": "2026-11-27",
+      "dateModified": "2026-11-28",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/zh/",
       "codeRepository": "https://github.com/michaelbeatman/ARCHON-OS",
@@ -304,9 +304,7 @@
     <line class="eng-spoke" x1="319.0" y1="916.0" x2="339.0" y2="916.0"/><circle class="eng-rivet" cx="330.5" cy="916.0" r="2.1"/><line class="eng-spoke" x1="312.8" y1="924.6" x2="319.0" y2="943.6"/><circle class="eng-rivet" cx="316.3" cy="935.5" r="2.1"/><line class="eng-spoke" x1="302.7" y1="921.3" x2="286.5" y2="933.0"/><circle class="eng-rivet" cx="293.4" cy="928.1" r="2.1"/><line class="eng-spoke" x1="302.7" y1="910.7" x2="286.5" y2="899.0"/><circle class="eng-rivet" cx="293.4" cy="903.9" r="2.1"/><line class="eng-spoke" x1="312.8" y1="907.4" x2="319.0" y2="888.4"/><circle class="eng-rivet" cx="316.3" cy="896.5" r="2.1"/>
   </g>
 </svg></div>
-    <div class="davinci-layer-plate">
-      <img class="davinci-plate-img" data-theme-dark="../assets/img/davinci_vertical_dark.webp" data-theme-light="../assets/img/davinci_vertical_light.webp" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" fetchpriority="low" decoding="async">
-    </div>
+    <div class="davinci-layer-plate hero-plate-theme" role="img" aria-label=""></div>
     <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <!-- Real sweeping chronometer hands on BUDGET BANK dial (442, 324) -->
   <g class="cw-hand-slow" style="transform-origin:442px 324px">
@@ -347,11 +345,11 @@
     <nav id="main-nav" aria-label="主导航">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       <a href="#install">安装部署</a>
-      <a href="../architecture/" hreflang="en">系统架构 (EN)</a><a href="../gdpr-zero-egress/" hreflang="en">GDPR合规 (EN)</a><a href="../compare/" hreflang="en">框架对比 (EN)</a><a href="boardroom-frameworks/" hreflang="en">决策框架</a>
+      <a href="../architecture/" 系统架构 (EN)</a><a href="../gdpr-zero-egress/" GDPR合规 (EN)</a><a href="../compare/" 框架对比 (EN)</a><a href="boardroom-frameworks/" 决策框架</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">更新日志</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">安全</a>
       <select class="lang-switch" aria-label="语言" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/" selected>ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="浅色" data-dark="深色" data-toggle-light-label="切换到浅色主题" data-toggle-dark-label="切换到深色主题">浅色</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="浅色" data-dark="深色" data-toggle-light-label="切换到浅色主题" data-toggle-dark-label="切换到深色主题" data-theme-on-light="浅色主题已启用" data-theme-on-dark="深色主题已启用">浅色</button>
     </nav>
   </div>
 </header>
@@ -362,14 +360,15 @@
       <div class="hero-inner">
         <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.2 &middot; Zero-Egress optional &middot; MIT Open Source</span></div>
         <h1>自托管多智能体操作系统——是否符合 GDPR 取决于配置。</h1>
-        <p class="hero-lead">Archon OS 将 Hermes Agent 扩展为符合 GDPR 的智能体操作系统：8 大领域的 71 个专家档案、故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 成本上限、WebAuthn 通行密钥审批、结构化的 AI Boardroom 辩论，以及符合 GoBD 的 SHA-256 审计日志。你的文档、你的 Obsidian 知识库、你的模型。 合规取决于配置：Zero-Egress 已实现，但当前关闭。</p>
+        <p class="hero-lead">Archon OS 将 Hermes Agent 扩展为是否符合 GDPR 取决于配置的 的智能体操作系统：8 大领域的 71 个专家档案、故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 成本上限、WebAuthn 通行密钥审批、结构化的 AI Boardroom 辩论，以及符合 GoBD 的 SHA-256 审计日志。你的文档、你的 Obsidian 知识库、你的模型。 合规取决于配置：Zero-Egress 已实现，但当前关闭。</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">快速开始</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; (test -f install.sh &amp;&amp; ./install.sh || powershell -ExecutionPolicy Bypass -File setup.ps1) &amp;&amp; docker compose up -d &amp;&amp; curl -fsS http://localhost:8501/livez</code>
           <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="复制" title="复制安装命令">复制</button>
-          <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.zh.md">中文 README</a>
+          <a class="btn" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo-Anfrage">中文 README</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">在 GitHub 查看</a>
         </div>
+        <p class="hero-cmd-hint">注意：<code>example.invalid</code> 是占位符，启动前请替换。</p>
         <div class="badges">
           <span class="badge">v0.6.0.2 &middot; pre-1.0</span>
           <span class="badge">符合 GDPR 与 EU AI Act 的运行取决于配置</span>
@@ -411,7 +410,7 @@
         <span class="cockpit-title" data-cockpit-title>ARCHON OS // MISSION CONTROL</span>
         <span class="cockpit-badge">ZERO-EGRESS · OPTIONAL</span>
       </div>
-      <div class="cockpit-tabs" role="tablist">
+      <div class="cockpit-tabs" role="tablist" aria-label="系统视图">
         <button type="button" class="cockpit-tab is-active" role="tab" id="shot-tab-1" aria-selected="true" aria-controls="shot-panel-1" tabindex="0" data-shot-tab>Mission Control</button>
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-2" aria-selected="false" aria-controls="shot-panel-2" tabindex="-1" data-shot-tab>智能体舰队</button>
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-3" aria-selected="false" aria-controls="shot-panel-3" tabindex="-1" data-shot-tab>AI Boardroom</button>
@@ -420,7 +419,7 @@
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-6" aria-selected="false" aria-controls="shot-panel-6" tabindex="-1" data-shot-tab>组织架构</button>
       </div>
       <div class="cockpit-stage">
-        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="../assets/img/mission_control.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control-768.webp 768w, ../assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 92vw, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="Mission Control 仪表盘"><figcaption>Mission Control - 实时遥测、令牌走势图 &amp; HITL 看板</figcaption></figure>
+        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="../assets/img/mission_control.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control-768.webp 768w, ../assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 740px, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="Mission Control 仪表盘"><figcaption>Mission Control - 实时遥测、令牌走势图 &amp; HITL 看板</figcaption></figure>
         <figure id="shot-panel-2" role="tabpanel" aria-labelledby="shot-tab-2" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/kader.webp" width="1024" height="559" alt="智能体舰队概览"><figcaption>智能体舰队 - 专家档案、OmniRoute 绑定 &amp; 实时动态</figcaption></figure>
         <figure id="shot-panel-3" role="tabpanel" aria-labelledby="shot-tab-3" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="1024" height="559" alt="AI Boardroom 辩论"><figcaption>AI Boardroom - 带框架 &amp; 席位的多视角辩论</figcaption></figure>
         <figure id="shot-panel-4" role="tabpanel" aria-labelledby="shot-tab-4" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/workflows.webp" width="1024" height="557" alt="可视化多智能体工作流构建器"><figcaption>Workflows - 带 HITL 闸门的可视化多智能体 DAG 编辑器</figcaption></figure>
@@ -430,12 +429,12 @@
     </div>
     <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">装饰插图使用 Google Gemini (Nano Banana) 生成。系统视图是包含演示数据的 Archon OS 界面真实截图；第三方名称归各自权利人所有。 Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">图片来源与 AI 生成图像</a>.</p>
     <div class="shots-thumbs" data-reveal>
-      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>智能体舰队</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="200" height="109" alt=""><span>AI Boardroom</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="../assets/img/workflows.webp" width="200" height="109" alt=""><span>工作流</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="../assets/img/guardian.webp" width="200" height="125" alt=""><span>Token Guard</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="../assets/img/org.webp" width="200" height="109" alt=""><span>组织架构</span></button>
+      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control-480.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>Mission Control</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader-480.webp" srcset="../assets/img/kader-480.webp 480w, ../assets/img/kader.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>智能体舰队</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="../assets/img/boardroom_debate-480.webp" srcset="../assets/img/boardroom_debate-480.webp 480w, ../assets/img/boardroom_debate.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>AI Boardroom</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="../assets/img/workflows-480.webp" srcset="../assets/img/workflows-480.webp 480w, ../assets/img/workflows.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>工作流</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="../assets/img/guardian-480.webp" srcset="../assets/img/guardian-480.webp 480w, ../assets/img/guardian.webp 1024w" sizes="200px" width="200" height="125" alt=""><span>Token Guard</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="../assets/img/org-480.webp" srcset="../assets/img/org-480.webp 480w, ../assets/img/org.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>组织架构</span></button>
     </div>
 
     <h2 class="sec" id="architecture">系统架构与 Zero-Egress 数据流</h2>
@@ -583,7 +582,7 @@
     </div>
 
     <h2 class="sec">深度技术指南与索引目录 (HTML)</h2>
-<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/" hreflang="en"><span class="hub-kicker">01 / 系统</span><strong>架构与技术栈 (EN)</strong><span>OmniRoute、PolicyEngine、Atomic BudgetBank、Effect-Ledger 与 3× SQLite WAL。</span></a><a class="hub-card" href="../gdpr-zero-egress/" hreflang="en"><span class="hub-kicker">02 / 合规</span><strong>GDPR 与 Zero-Egress (EN)</strong><span>Fail-closed Docker 网络隔离、欧盟 AI 法案风险台账与 GoBD 审计导出。</span></a><a class="hub-card" href="../compare/" hreflang="en"><span class="hub-kicker">03 / 评估</span><strong>主流框架对比 (EN)</strong><span>Archon OS 与 LangGraph、CrewAI、AutoGen、n8n、Dify 全维度对比。</span></a><a class="hub-card" href="boardroom-frameworks/" hreflang="zh-CN"><span class="hub-kicker">04 / Boardroom</span><strong>80 决策框架</strong><span>可搜索筛选的多视角结构化辩论方法论 HTML 目录。</span></a><a class="hub-card" href="../specialists/" hreflang="en"><span class="hub-kicker">05 / 舰队</span><strong>71 专家角色 (EN)</strong><span>覆盖 8 大企业领域的 71 个智能体角色与安全护栏索引。</span></a><a class="hub-card" href="../second-brain/" hreflang="en"><span class="hub-kicker">06 / 第二大脑</span><strong>RAG、档案与自我进化 (EN)</strong><span>Obsidian 知识库、ChromaDB 本地向量检索、智能体战绩档案与技能自动合成。</span></a></div>
+<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/"><span class="hub-kicker">01 / 系统</span><strong>架构与技术栈 (EN)</strong><span>OmniRoute、PolicyEngine、Atomic BudgetBank、Effect-Ledger 与 3× SQLite WAL。</span></a><a class="hub-card" href="../gdpr-zero-egress/"><span class="hub-kicker">02 / 合规</span><strong>GDPR 与 Zero-Egress (EN)</strong><span>Fail-closed Docker 网络隔离、欧盟 AI 法案风险台账与 GoBD 审计导出。</span></a><a class="hub-card" href="../compare/"><span class="hub-kicker">03 / 评估</span><strong>主流框架对比 (EN)</strong><span>Archon OS 与 LangGraph、CrewAI、AutoGen、n8n、Dify 全维度对比。</span></a><a class="hub-card" href="boardroom-frameworks/"><span class="hub-kicker">04 / Boardroom</span><strong>80 决策框架</strong><span>可搜索筛选的多视角结构化辩论方法论 HTML 目录。</span></a><a class="hub-card" href="../specialists/"><span class="hub-kicker">05 / 舰队</span><strong>71 专家角色 (EN)</strong><span>覆盖 8 大企业领域的 71 个智能体角色与安全护栏索引。</span></a><a class="hub-card" href="../second-brain/"><span class="hub-kicker">06 / 第二大脑</span><strong>RAG、档案与自我进化 (EN)</strong><span>Obsidian 知识库、ChromaDB 本地向量检索、智能体战绩档案与技能自动合成。</span></a></div>
 
     <div class="wrap b2b-section"><h3>面向受监管环境的使用场景</h3><p><strong>采购：</strong>供应商比选与合同草案需经 Passkey 批准；预算上限抑制失控支出。<strong> Controlling：</strong>每次调用均记录提供商、模型与成本并写入哈希链 — 一键导出 GoBD 文档。<strong>合规：</strong>TOM 矩阵、EU AI Act 风险登记册与 § 201 StGB 同意门控属于配置，而非附加组件。</p><p><strong>经济性：</strong>许可费 0 €（MIT）。基础设施、配置与运维由你承担；Zero-Egress 明确为可选项，而非保证。</p></div>
 
@@ -591,11 +590,11 @@
 <div class="table-wrap" data-reveal>
   <table><thead><tr><th>项目</th><th>Archon OS</th><th>说明</th></tr></thead><tbody><tr><td>许可证</td><td>0 € (MIT)</td><td>无许可费或席位费。</td></tr><tr><td>硬件（中小企业）</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>本地模型 7B–14B；32B–70B: 64 GB RAM / 24–48 GB VRAM。</td></tr><tr><td>运维</td><td>您自行负责（Docker、备份、更新）</td><td>无需外部服务；运维与文档责任在您。</td></tr><tr><td>持续 AI 成本</td><td>本地模型 0 €，云 Token 可设上限</td><td>每代理每日上限 1.50–2.50 EUR，执行前封顶。</td></tr><tr><td>证据价值</td><td>SHA-256 审计链 + GoBD 导出</td><td>可验证记录替代手工文档。</td></tr></tbody></table>
 </div>
-<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)">计算示例：<a href="../architecture/#hardware">硬件</a> · <a href="../gdpr-zero-egress/">TOM</a></p>
 <h2 class="sec" id="use-cases-fachbereiche">使用案例</h2>
 <div class="feats" data-reveal><div class="feat"><h3>采购 · 供应商比较</h3><p>在 Vault 中比较报价，仅 Passkey 签名后发送；设有每日上限。</p></div><div class="feat"><h3> Controlling · 流动性</h3><p>13周现金流计划；每次调用记录提供商、模型和成本；一键导出 GoBD。</p></div><div class="feat"><h3>合规 · 证据</h3><p>TOM 矩阵（GDPR 第32条）、EU AI Act 风险登记册和第17条删除证据。</p></div></div>
 <p class="status" style="margin-top:0.9rem">已记录 TOM 矩阵（GDPR 第32条）、EU AI Act 风险登记册和第17条删除证据。Zero-Egress 已实现，但默认关闭。</p>
-<p style="margin-top:0.9rem"><a class="btn primary" href="https://calendly.com/archon-os/demo" target="_blank" rel="noopener noreferrer">申请演示</a> <a class="btn" href="#status">完整状态 &rarr;</a></p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request">申请演示</a> <a class="btn" href="#status">完整状态 &rarr;</a></p>
 
 
     <h2 class="sec" id="install">安装部署</h2>
@@ -605,7 +604,9 @@
 cd ARCHON-OS
 cp .env.example .env
 # 必需：在 .env 中将 ARCHON_HEARTBEAT_WEBHOOK_URL 设置为真实接收端
-docker compose up -d</pre></div>
+# Pruefe den Smoke-Test: curl -fsS http://localhost:8501/livez
+docker compose up -d
+curl -fsS http://localhost:8501/livez -w "\nHTTP %{http_code}\n"</pre></div>
       <div class="card"><h3>零密钥演示</h3><p>无需 API 密钥与令牌成本的只读展示，适合初次了解。</p>
 <pre data-lang="bash">ARCHON_DEMO_MODE=true \
 docker compose -f docker-compose.demo.yml up --build -d

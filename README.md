@@ -29,7 +29,7 @@ What that means in practice:
 
 - **Structured decisions, not one-shot answers.** An AI Boardroom runs isolated multi-perspective debates with a critique prompt and synthesis across 80 frameworks (OKR, Pre-Mortem, Six Thinking Hats, …).
 - **Cost control per model and per task.** OmniRoute routes each request to local (Ollama, LM Studio) or cloud providers and attributes cost before dispatch (`cost_estimator.py` checks budgets).
-- **Data sovereignty.** Zero-Egress routing keeps finance, contract and CRM work on local models; worker containers run in an `internal: true` Docker network without an internet route.
+- **Data sovereignty.** Zero-Egress routing **can be enabled** to keep finance, contract and CRM work on local models; worker containers run in an `internal: true` Docker network without an internet route **once enabled**. Shipped default: `privacy.zero_egress = false`. Enable in `settings.json` before relying on it.
 - **Tamper-evident audit trail.** An HMAC-SHA256 hash-chained audit log (external anchor + startup key check) records every dispatch, including provider, model and host.
 - **Your documents.** An Obsidian vault plus AnythingLLM/Chroma RAG indexes your library locally.
 - **Business operations.** Kanban with four-eyes approval gates, email triage, CRM, and an ERP suite (offers, contracts, invoices, receivables) — **alpha**.

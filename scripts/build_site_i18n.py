@@ -47,7 +47,7 @@ REPO_URL = "https://github.com/michaelbeatman/ARCHON-OS"
 REPO_BLOB = REPO_URL + "/blob/main/"
 LINKEDIN_URL = "https://www.linkedin.com/in/michael-keller-a43b6611b/"
 CONTACT_EMAIL = "archon.os.system@gmail.com"
-LASTMOD = "2026-11-27"
+LASTMOD = "2026-11-28"
 
 # code -> (html lang, native label, og:locale)
 LANGS: dict[str, tuple[str, str]] = {
@@ -375,10 +375,10 @@ def build_nav_subpages(lang: str) -> str:
     assert isinstance(nav, dict)
     mark = "" if lang in ("en", "de") else " (EN)"
     return (
-        f'<a href="{arch}" hreflang="en">{nav["arch"]}{mark}</a>'
-        f'<a href="{gdpr}" hreflang="en">{nav["gdpr"]}{mark}</a>'
-        f'<a href="{cmp_url}" hreflang="en">{nav["compare"]}{mark}</a>'
-        f'<a href="{fw_url}" hreflang="en">{nav["frameworks"]}</a>'
+        f'<a href="{arch}" {nav["arch"]}{mark}</a>'
+        f'<a href="{gdpr}" {nav["gdpr"]}{mark}</a>'
+        f'<a href="{cmp_url}" {nav["compare"]}{mark}</a>'
+        f'<a href="{fw_url}" {nav["frameworks"]}</a>'
     )
 
 
@@ -463,7 +463,7 @@ def build_hub_section(lang: str) -> str:
         local = i == 3  # Boardroom-Katalog existiert in allen 11 Sprachen
         code = LANGS[lang][0] if local else "en"
         mark = "" if (lang in ("en", "de") or local) else " (EN)"
-        return (f'<a class="hub-card" href="{hrefs[i]}" hreflang="{code}">'
+        return (f'<a class="hub-card" href="{hrefs[i]}">'
                 f'<span class="hub-kicker">{c[0]}</span><strong>{c[1]}{mark}</strong><span>{c[2]}</span></a>')
     html_cards = "".join(_card(i, c) for i, c in enumerate(cards))
     return f'<h2 class="sec">{hub_cfg["title"]}</h2>\n<div class="hub-grid" data-reveal>{html_cards}</div>'
@@ -696,8 +696,21 @@ def build_sitemap_xml(base_url: str, subpage_pairs: list[tuple[str, str]]) -> st
         lines.append(f"    <lastmod>{LASTMOD}</lastmod>")
         lines.append("  </url>")
 
+    for llms_rel in ("llms.txt", "llms-full.txt"):
+        lines.append("  <url>")
+        lines.append(f"    <loc>{b}{llms_rel}</loc>")
+        lines.append(f"    <lastmod>{LASTMOD}</lastmod>")
+        lines.append("  </url>")
     lines.append("</urlset>\n")
     return "\n".join(lines)
+
+
+
+def _qa_pair(text: str) -> str:
+    m = re.match(r"^(.*?[?？])\s*(.*)$", text, re.S)
+    if not m:
+        return text
+    return f"Q: {m.group(1)}\nA: {m.group(2)}"
 
 
 def build_llms_txt(base_url: str, version: str) -> str:
@@ -713,6 +726,8 @@ def build_llms_txt(base_url: str, version: str) -> str:
 - Contact: {CONTACT_EMAIL}
 - Current Release: {version} (pre-1.0, Docker amd64 / arm64)
 - Updated: {LASTMOD}
+- Full text reference (EN): {b}llms-full.txt
+- Preferred citation: Archon OS (v0.6.0.2), Michael Keller, {b} (retrieved 2026-11-28)
 
 ## Indexable HTML Guides & Directories
 
@@ -812,7 +827,7 @@ def main(argv: list[str]) -> int:
     (SITE / "sitemap.xml").write_text(sitemap, encoding="utf-8")
 
     llms_full = llms + "\n\n## Full Text Reference (EN)\n\n" + "\n\n".join(
-        f"### {key}\n\n{_plain(catalogs['en'][key])}"
+        f"### {key}\n\n" + _qa_pair(_plain(catalogs['en'][key]))
         for key in ("hero.headline", "hero.subline", "faq.what", "faq.leaks",
                     "faq.costs", "faq.gdpr", "faq.chatbot", "b2b.section", "status.text")
     ) + "\n"

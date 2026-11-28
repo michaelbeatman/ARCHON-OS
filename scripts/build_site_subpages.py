@@ -20,6 +20,13 @@ import json
 import re
 import unicodedata
 from pathlib import Path
+
+def _og_alt(lang: str) -> str:
+    try:
+        data = json.loads((Path(__file__).resolve().parent.parent / "site" / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
+        return data.get("meta.twitterImageAlt", "Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional")
+    except Exception:
+        return "Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional"
 from typing import Any
 
 from site_svg_assets import (
@@ -384,7 +391,7 @@ def _render_shell(
     menu_lbl = "Menü" if og_locale.startswith("de") else "Menu"
     nav_lbl = "Hauptnavigation" if og_locale.startswith("de") else "Main navigation"
     scope_note = (
-        '<aside class="feat" style="border-left:3px solid var(--emerald);padding:0.9rem 1rem;margin:1rem 0"><strong>Geltungsbereich:</strong> Diese Seite beschreibt technische Mechanismen, keine Rechtsberatung und keine Konformitätsgarantie. Ob eine Verarbeitung DSGVO-konform ist, hängt von deiner Konfiguration und deinem Betrieb ab. Die Datenschutzerklärung für diese statische Website findest du unter <a href="../../datenschutz/">Datenschutz</a>; sie gilt nicht für die selbst gehostete Software.</aside>' if og_locale.startswith("de") else '<aside class="feat" style="border-left:3px solid var(--emerald);padding:0.9rem 1rem;margin:1rem 0"><strong>Scope:</strong> This page describes technical mechanisms, not legal advice or a compliance guarantee. Whether processing is GDPR-compliant depends on your configuration and operation. The privacy notice for this static site is at <a href="../../datenschutz/">Privacy</a>; it does not cover the self-hosted software.</aside>'
+        '<aside class="feat" style="border-left:3px solid var(--emerald);padding:0.9rem 1rem;margin:1rem 0"><strong>Geltungsbereich:</strong> Diese Seite beschreibt technische Mechanismen, keine Rechtsberatung und keine Konformitätsgarantie. Ob eine Verarbeitung DSGVO-konform ist, hängt von deiner Konfiguration und deinem Betrieb ab. Die Datenschutzerklärung für diese statische Website findest du unter <a href="../../datenschutz/">Datenschutz</a>; sie gilt nicht für die selbst gehostete Software.</aside>' if og_locale.startswith("de") else '<aside class="feat" style="border-left:3px solid var(--emerald);padding:0.9rem 1rem;margin:1rem 0"><strong>Scope:</strong> This page describes technical mechanisms, not legal advice or a compliance guarantee. Whether processing is GDPR-compliant depends on your configuration and operation. The privacy notice for this static site is at <a href="../datenschutz/">Privacy</a>; it does not cover the self-hosted software.</aside>'
     )
 
     return f"""<!doctype html>
@@ -411,8 +418,8 @@ def _render_shell(
 <meta property="og:image" content="{og_img}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready">
-<meta name="twitter:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready">
+<meta property="og:image:alt" content="{_og_alt(lang)}">
+<meta name="twitter:image:alt" content="{_og_alt(lang)}">
 <meta property="article:published_time" content="2026-11-28T00:00:00+01:00">
 <meta property="article:modified_time" content="2026-11-28T00:00:00+01:00">
 <meta property="article:author" content="Michael Keller (Michael Beatman)">
@@ -776,6 +783,8 @@ def _page_frameworks(lang: str) -> tuple[str, str, str, str, str, str]:
     ph = fw_meta["placeholder"]
     cnt_lbl = fw_meta["countLabel"]
     body = f"""
+<h2 class="sec" id="framework-catalog">Framework-Katalog (A–Z)</h2>
+<h2 class="sec" id="specialist-directory">Specialist directory (A–Z)</h2>
 <div class="filter-bar">
   <input type="search" class="filter-input" placeholder="{_esc(ph)}" data-dir-search aria-label="{_esc(ph)}">
   <span style="font-family:var(--font-mono);font-size:0.8rem;color:var(--fg-muted)">{_esc(cnt_lbl)} <strong data-dir-count>{total_loaded}</strong> &middot; A–Z</span>

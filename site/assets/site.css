@@ -1378,7 +1378,7 @@ main [id], .hero [id], section [id] { scroll-margin-top: 5.5rem; }
   .cockpit-stage img { width: 740px; max-width: none; height: auto; scroll-snap-align: center; }
   .cockpit-stage figcaption { width: 740px; font-size: 0.8rem; }
   .cockpit-stage::after {
-    content: "← Wischen für Details →"; display: block; font: 0.72rem var(--font-mono);
+    content: "← " var(--swipe-hint) " →"; display: block; font: 0.72rem var(--font-mono);
     color: var(--fg-subtle); padding-top: 0.4rem;
   }
 }
@@ -1417,3 +1417,22 @@ main [id], .hero [id], section [id] { scroll-margin-top: 5.5rem; }
 .hero-davinci-stage .cw-gear,
 .faq-davinci-frame .cw-gear { animation-play-state: running !important; }
 .cmd-note { margin: 0.35rem 0 0; font-size: 0.78rem; color: var(--fg-muted); }
+
+/* Top-10 fixes */
+:root { --swipe-hint: "Swipe for details"; }
+:root[lang="de"] { --swipe-hint: "Wischen für Details"; }
+:root[lang="es"] { --swipe-hint: "Desliza para ver detalles"; }
+:root[lang="fr"] { --swipe-hint: "Glissez pour les détails"; }
+:root[lang="it"] { --swipe-hint: "Scorri per i dettagli"; }
+:root[lang="ja"] { --swipe-hint: "詳細を見るにはスワイプ"; }
+:root[lang="ko"] { --swipe-hint: "자세히 보려면 스와이프"; }
+:root[lang="nl"] { --swipe-hint: "Veeg voor details"; }
+:root[lang="pt"] { --swipe-hint: "Deslize para ver detalhes"; }
+:root[lang="ru"] { --swipe-hint: "Свайпните для подробностей"; }
+:root[lang="zh"] { --swipe-hint: "滑动查看详情"; }
+.hero-plate-theme { aspect-ratio: 764/1024; background: url("./img/davinci_vertical_dark.webp") center/contain no-repeat; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .hero-plate-theme { background-image: url("./img/davinci_vertical_light.webp"); } }
+:root[data-theme="light"] .hero-plate-theme { background-image: url("./img/davinci_vertical_light.webp"); }
+html.js.reveal-ready [data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity 840ms var(--ease-out), transform 840ms var(--ease-out); }
+html.js.reveal-ready [data-reveal].is-visible { opacity: 1; transform: translateY(0); }
+.hero-cmd-hint { font-size: 0.78rem; color: var(--fg-muted); margin: 0.35rem 0 0; }

@@ -8,7 +8,9 @@
 - Author: Michael Keller (Michael Beatman) — https://github.com/michaelbeatman | https://www.linkedin.com/in/michael-keller-a43b6611b/
 - Contact: archon.os.system@gmail.com
 - Current Release: v0.6.0.2 (pre-1.0, Docker amd64 / arm64)
-- Updated: 2026-11-27
+- Updated: 2026-11-28
+- Full text reference (EN): https://michaelbeatman.github.io/ARCHON-OS/llms-full.txt
+- Preferred citation: Archon OS (v0.6.0.2), Michael Keller, https://michaelbeatman.github.io/ARCHON-OS/ (retrieved 2026-11-28)
 
 ## Indexable HTML Guides & Directories
 
@@ -63,23 +65,28 @@ Multi-agent automation that won't act without approval - self-hosted, open sourc
 
 ### faq.what
 
-What is Archon OS?Archon OS is a self-hosted, MIT-licensed Agentic Operating System built on Hermes Agent. It organizes 71 specialist AI roles across 8 domains with pre-execution budget reservations, Zero-Egress local LLM routing, WebAuthn Passkey approvals, and a SHA-256 hash-chained audit log.
+Q: What is Archon OS?
+A: Archon OS is a self-hosted, MIT-licensed Agentic Operating System built on Hermes Agent. It organizes 71 specialist AI roles across 8 domains with pre-execution budget reservations, Zero-Egress local LLM routing, WebAuthn Passkey approvals, and a SHA-256 hash-chained audit log.
 
 ### faq.leaks
 
-How does it prevent sensitive data leaks?OmniRoute enforces a fail-closed Zero-Egress policy: finance, contracts, CRM, HR, and GDPR workloads run exclusively on local models (Ollama or LM Studio) inside an internal Docker network without an internet route. Fail-closed applies only when enabled; the shipped default is privacy.zero_egress = false.
+Q: How does it prevent sensitive data leaks?
+A: OmniRoute enforces a fail-closed Zero-Egress policy: finance, contracts, CRM, HR, and GDPR workloads run exclusively on local models (Ollama or LM Studio) inside an internal Docker network without an internet route. Fail-closed applies only when enabled; the shipped default is privacy.zero_egress = false.
 
 ### faq.costs
 
-How are token costs & risky actions controlled?A central PolicyEngine validates permissions before dispatch, privileged tools require signed time-bound warrants, BudgetBank reserves funds atomically, and high-risk approvals require WebAuthn Passkey signatures.
+Q: How are token costs & risky actions controlled?
+A: A central PolicyEngine validates permissions before dispatch, privileged tools require signed time-bound warrants, BudgetBank reserves funds atomically, and high-risk approvals require WebAuthn Passkey signatures.
 
 ### faq.gdpr
 
-Is it GDPR (DSGVO) & EU AI Act ready?Compliance depends on your configuration. Sensitive business workloads stay on your server with fail-closed Zero-Egress, backed by an EU AI Act risk registry, tamper-evident SHA-256 audit logs, and 1-click GoBD procedural documentation export.
+Q: Is it GDPR / EU AI Act ready?
+A: Compliance depends on configuration. Zero-Egress is off in the shipped state (privacy.zero_egress = false); only once enabled with local models do sensitive workloads stay on your server under fail-closed Zero-Egress, backed by an EU AI Act risk register, tamper-evident SHA-256 audit logs and one-click GoBD export.
 
 ### faq.chatbot
 
-How is Archon OS different from a regular chatbot?A chatbot answers. Archon OS enforces: budget gates before every model call, passkey approvals for high-risk actions, and a verifiable audit trail. The difference is enforcement, not conversation.
+Q: How is Archon OS different from a regular chatbot?
+A: A chatbot answers. Archon OS enforces: budget gates before every model call, passkey approvals for high-risk actions, and a verifiable audit trail. The difference is enforcement, not conversation.
 
 ### b2b.section
 

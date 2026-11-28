@@ -9,7 +9,7 @@
   "nav.changelog": "<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md\">Novedades</a>",
   "nav.security": "<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md\">Seguridad</a>",
   "hero.headline": "Un SO multiagente autoalojado: cumplimiento del RGPD según configuración.",
-  "hero.subline": "Archon OS convierte Hermes Agent en un Sistema Operativo Agentico conforme al RGPD: 71 perfiles especialistas en 8 dominios, enrutamiento local Zero-Egress a prueba de fallos, límites de coste con Atomic BudgetBank, aprobaciones con Passkey WebAuthn, debates estructurados en el AI Boardroom y un registro de auditoría SHA-256 listo para GoBD. Tus documentos, tu vault de Obsidian, tus modelos. El cumplimiento depende de la configuración: Zero-Egress está implementado, pero actualmente desactivado.",
+  "hero.subline": "Archon OS convierte Hermes Agent en un Sistema Operativo Agentico cuya conformidad depende de la configuración: 71 perfiles especialistas en 8 dominios, enrutamiento local Zero-Egress a prueba de fallos, límites de coste con Atomic BudgetBank, aprobaciones con Passkey WebAuthn, debates estructurados en el AI Boardroom y un registro de auditoría SHA-256 listo para GoBD. Tus documentos, tu vault de Obsidian, tus modelos. El cumplimiento depende de la configuración: Zero-Egress está implementado, pero actualmente desactivado.",
   "hero.buttonGithub": "Ver en GitHub",
   "hero.buttonDocs": "README en español",
   "hero.buttonQuickstart": "Inicio rápido",
@@ -108,5 +108,9 @@
   "js.themeDark": "Oscuro",
   "js.copyFailed": "Copia fallida – selecciona y copia el comando manualmente.",
   "js.themeToggleLight": "Cambiar a tema claro",
-  "js.themeToggleDark": "Cambiar a tema oscuro"
+  "js.themeToggleDark": "Cambiar a tema oscuro",
+  "install.cmdHint": "<p class=\"hero-cmd-hint\">Nota: <code>example.invalid</code> es un marcador de posición; sustitúyelo por tu receptor antes de iniciar.</p>",
+  "a11y.tablist": "Vistas del sistema",
+  "js.themeOnLight": "Tema claro activado",
+  "js.themeOnDark": "Tema oscuro activado"
 }

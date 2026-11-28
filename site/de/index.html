@@ -104,7 +104,7 @@
       ],
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
       "softwareVersion": "0.6.0.2",
-      "dateModified": "2026-11-27",
+      "dateModified": "2026-11-28",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/de/",
       "codeRepository": "https://github.com/michaelbeatman/ARCHON-OS",
@@ -206,7 +206,7 @@
           "name": "Wie verhindert es Datenabfluss sensibler Daten?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "OmniRoute erzwingt eine Fail-Closed Zero-Egress-Policy: Finanzen, Verträge, CRM, HR und DSGVO-Workloads laufen ausschließlich auf lokalen Modellen (Ollama oder LM Studio) in einem internen Docker-Netz ohne Internet-Route. Fail-Closed greift erst nach Aktivierung – im shipped Default (privacy.zero_egress = false) ist er aus."
+            "text": "OmniRoute kann eine Fail-Closed Zero-Egress-Policy erzwingen: Finanzen, Verträge, CRM, HR und DSGVO-Workloads laufen nach Aktivierung ausschließlich auf lokalen Modellen (Ollama oder LM Studio) in einem internen Docker-Netz ohne Internet-Route. Fail-Closed greift erst nach Aktivierung von privacy.zero_egress und zero_egress_strict – im shipped Default (privacy.zero_egress = false) ist er aus."
           }
         },
         {
@@ -222,7 +222,7 @@
           "name": "Ist es DSGVO- & EU-AI-Act-ready?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Konformität ist konfigurationsabhängig. Sensible Business-Workloads bleiben mit Fail-Closed Zero-Egress auf deinem Server, gestützt durch ein EU-AI-Act-Risikoregister, manipulationssichere SHA-256-Audit-Logs und den 1-Klick-Export der GoBD-Verfahrensdokumentation."
+            "text": "Konformität ist konfigurationsabhängig. Im Auslieferungszustand ist Zero-Egress aus (privacy.zero_egress = false); erst nach Aktivierung mit lokalen Modellen bleiben sensible Workloads mit Fail-Closed Zero-Egress auf deinem Server, gestützt durch ein EU-AI-Act-Risikoregister, manipulationssichere SHA-256-Audit-Logs und den 1-Klick-Export der GoBD-Verfahrensdokumentation."
           }
         },
         {
@@ -304,9 +304,7 @@
     <line class="eng-spoke" x1="319.0" y1="916.0" x2="339.0" y2="916.0"/><circle class="eng-rivet" cx="330.5" cy="916.0" r="2.1"/><line class="eng-spoke" x1="312.8" y1="924.6" x2="319.0" y2="943.6"/><circle class="eng-rivet" cx="316.3" cy="935.5" r="2.1"/><line class="eng-spoke" x1="302.7" y1="921.3" x2="286.5" y2="933.0"/><circle class="eng-rivet" cx="293.4" cy="928.1" r="2.1"/><line class="eng-spoke" x1="302.7" y1="910.7" x2="286.5" y2="899.0"/><circle class="eng-rivet" cx="293.4" cy="903.9" r="2.1"/><line class="eng-spoke" x1="312.8" y1="907.4" x2="319.0" y2="888.4"/><circle class="eng-rivet" cx="316.3" cy="896.5" r="2.1"/>
   </g>
 </svg></div>
-    <div class="davinci-layer-plate">
-      <img class="davinci-plate-img" data-theme-dark="../assets/img/davinci_vertical_dark.webp" data-theme-light="../assets/img/davinci_vertical_light.webp" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" fetchpriority="low" decoding="async">
-    </div>
+    <div class="davinci-layer-plate hero-plate-theme" role="img" aria-label=""></div>
     <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <!-- Real sweeping chronometer hands on BUDGET BANK dial (442, 324) -->
   <g class="cw-hand-slow" style="transform-origin:442px 324px">
@@ -347,11 +345,11 @@
     <nav id="main-nav" aria-label="Hauptnavigation">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       <a href="#install">Installation</a>
-      <a href="architektur/" hreflang="en">Architektur</a><a href="dsgvo-zero-egress/" hreflang="en">DSGVO</a><a href="vergleich/" hreflang="en">Vergleich</a><a href="boardroom-frameworks/" hreflang="en">Frameworks</a>
+      <a href="architektur/" Architektur</a><a href="dsgvo-zero-egress/" DSGVO</a><a href="vergleich/" Vergleich</a><a href="boardroom-frameworks/" Frameworks</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Änderungen</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Sicherheit</a>
       <select class="lang-switch" aria-label="Sprache" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/" selected>DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="Hell" data-dark="Dunkel" data-toggle-light-label="Zum hellen Design wechseln" data-toggle-dark-label="Zum dunklen Design wechseln">Hell</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="Hell" data-dark="Dunkel" data-toggle-light-label="Zum hellen Design wechseln" data-toggle-dark-label="Zum dunklen Design wechseln" data-theme-on-light="Helles Design aktiviert" data-theme-on-dark="Dunkles Design aktiviert">Hell</button>
     </nav>
   </div>
 </header>
@@ -365,11 +363,12 @@
         <p class="hero-lead">71 KI-Spezialisten erledigen Aufgaben in deinem Betrieb – mit hartem Budget-Limit, Passkey-Freigabe und manipulationssicherem Audit-Log. Ein Chatbot antwortet; Archon OS führt aus. Zero-Egress ist vollständig implementiert, hier aber noch nicht aktiv – lokale KI oder EU-Anbieter schalten ihn ein.</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">In 3 Schritten installieren</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; (test -f install.sh &amp;&amp; ./install.sh || powershell -ExecutionPolicy Bypass -File setup.ps1) &amp;&amp; docker compose up -d &amp;&amp; curl -fsS http://localhost:8501/livez</code>
           <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="Kopieren" title="Installationsbefehl in die Zwischenablage kopieren">Kopieren</button>
-          <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/README.de.md">Anleitung lesen (DE)</a>
+          <a class="btn" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo-Anfrage">Anleitung lesen (DE)</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
         </div>
+        <p class="hero-cmd-hint">Hinweis: <code>example.invalid</code> ist ein Platzhalter – vor dem Start durch deinen eigenen Webhook-Empfänger ersetzen.</p>
         <div class="badges">
           <span class="badge">v0.6.0.2 &middot; pre-1.0</span>
           <span class="badge">DSGVO &amp; EU AI Act: konformer Betrieb konfigurationsabhängig</span>
@@ -411,7 +410,7 @@
         <span class="cockpit-title" data-cockpit-title>ARCHON OS // MISSION CONTROL</span>
         <span class="cockpit-badge">ZERO-EGRESS · OPTIONAL</span>
       </div>
-      <div class="cockpit-tabs" role="tablist">
+      <div class="cockpit-tabs" role="tablist" aria-label="Systemansichten">
         <button type="button" class="cockpit-tab is-active" role="tab" id="shot-tab-1" aria-selected="true" aria-controls="shot-panel-1" tabindex="0" data-shot-tab>Mission Control</button>
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-2" aria-selected="false" aria-controls="shot-panel-2" tabindex="-1" data-shot-tab>Agenten-Flotte</button>
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-3" aria-selected="false" aria-controls="shot-panel-3" tabindex="-1" data-shot-tab>AI Boardroom</button>
@@ -420,7 +419,7 @@
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-6" aria-selected="false" aria-controls="shot-panel-6" tabindex="-1" data-shot-tab>Organigramm</button>
       </div>
       <div class="cockpit-stage">
-        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="../assets/img/mission_control.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control-768.webp 768w, ../assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 92vw, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="Mission Control Dashboard"><figcaption>Mission Control - Live-Telemetrie, Token-Sparkline &amp; HITL-Board</figcaption></figure>
+        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="../assets/img/mission_control.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control-768.webp 768w, ../assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 740px, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="Mission Control Dashboard"><figcaption>Mission Control - Live-Telemetrie, Token-Sparkline &amp; HITL-Board</figcaption></figure>
         <figure id="shot-panel-2" role="tabpanel" aria-labelledby="shot-tab-2" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/kader.webp" width="1024" height="559" alt="Übersicht der Agenten-Flotte"><figcaption>Agenten-Flotte - Spezialisten-Profile, OmniRoute-Bindung &amp; Live-Feed</figcaption></figure>
         <figure id="shot-panel-3" role="tabpanel" aria-labelledby="shot-tab-3" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="1024" height="559" alt="AI Boardroom Debatte"><figcaption>AI Boardroom - Multi-Perspektiven-Debatte mit Framework &amp; Slots</figcaption></figure>
         <figure id="shot-panel-4" role="tabpanel" aria-labelledby="shot-tab-4" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/workflows.webp" width="1024" height="557" alt="Visueller Multi-Agenten-Workflow-Builder"><figcaption>Workflows - visueller Multi-Agenten-DAG-Editor mit HITL-Gates</figcaption></figure>
@@ -430,12 +429,12 @@
     </div>
     <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">Die Dekor-Grafiken wurden mit Google Gemini (Nano Banana) KI-generiert. Die Systemansichten sind echte Screenshots der Archon OS Oberfläche mit Demo-Daten; Firmen- und Produktnamen Dritter bleiben Eigentum ihrer respective Inhaber. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">Bildnachweise &amp; KI-Visuals</a>.</p>
     <div class="shots-thumbs" data-reveal>
-      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>Agenten-Flotte</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="200" height="109" alt=""><span>AI Boardroom</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="../assets/img/workflows.webp" width="200" height="109" alt=""><span>Workflows</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="../assets/img/guardian.webp" width="200" height="125" alt=""><span>Token Guard</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="../assets/img/org.webp" width="200" height="109" alt=""><span>Organigramm</span></button>
+      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control-480.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>Mission Control</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader-480.webp" srcset="../assets/img/kader-480.webp 480w, ../assets/img/kader.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>Agenten-Flotte</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="../assets/img/boardroom_debate-480.webp" srcset="../assets/img/boardroom_debate-480.webp 480w, ../assets/img/boardroom_debate.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>AI Boardroom</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="../assets/img/workflows-480.webp" srcset="../assets/img/workflows-480.webp 480w, ../assets/img/workflows.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>Workflows</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="../assets/img/guardian-480.webp" srcset="../assets/img/guardian-480.webp 480w, ../assets/img/guardian.webp 1024w" sizes="200px" width="200" height="125" alt=""><span>Token Guard</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="../assets/img/org-480.webp" srcset="../assets/img/org-480.webp 480w, ../assets/img/org.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>Organigramm</span></button>
     </div>
 
     <h2 class="sec" id="architektur">Architektur &amp; Zero-Egress-Datenfluss</h2>
@@ -565,7 +564,7 @@
 </div>
 <p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="vergleich/">Vollständiger Vergleich (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify) &rarr;</a> &middot; <a href="architektur/#hardware">Hardware- &amp; Container-Specs &rarr;</a></p>
 
-    <h2 class="sec">Die 70 Domänen-Spezialisten + 1 Root-Orchestrator - 8 Domänen</h2>
+    <h2 class="sec">71 Spezialisten-Profile in 8 Domänen</h2>
     <div class="table-wrap" data-reveal>
       <table>
         <thead><tr><th>Domäne</th><th>Anzahl</th><th>Fokus</th></tr></thead>
@@ -583,7 +582,7 @@
     </div>
 
     <h2 class="sec">Vertiefende Wissensseiten (HTML)</h2>
-<div class="hub-grid" data-reveal><a class="hub-card" href="architektur/" hreflang="en"><span class="hub-kicker">01 / System</span><strong>Architektur &amp; Stack</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger &amp; 3× SQLite WAL.</span></a><a class="hub-card" href="dsgvo-zero-egress/" hreflang="en"><span class="hub-kicker">02 / Compliance</span><strong>DSGVO &amp; Zero-Egress</strong><span>Fail-Closed Docker-Isolation, EU-AI-Act-Register &amp; GoBD-Verfahrensdoku.</span></a><a class="hub-card" href="vergleich/" hreflang="en"><span class="hub-kicker">03 / Bewertung</span><strong>Systemvergleich</strong><span>Archon OS vs. LangGraph, CrewAI, AutoGen, n8n &amp; Dify im Direktvergleich.</span></a><a class="hub-card" href="boardroom-frameworks/" hreflang="de"><span class="hub-kicker">04 / Boardroom</span><strong>80 Frameworks</strong><span>Durchsuchbarer Katalog aller Decision-Engine-Methodiken von OKR bis Pre-Mortem.</span></a><a class="hub-card" href="spezialisten/" hreflang="en"><span class="hub-kicker">05 / Flotte</span><strong>71 Spezialisten</strong><span>Alle Agenten-Profile aus 8 Domänen inkl. Budget-Grenzen &amp; Guardrails.</span></a><a class="hub-card" href="second-brain-gedaechtnis/" hreflang="en"><span class="hub-kicker">06 / 2nd Brain</span><strong>RAG, Personalakte &amp; Self-Evolution</strong><span>Obsidian Vault, ChromaDB-Wissensdatenbank, Agenten-Personalakten (Wins/Learnings) &amp; Skill-Synthese.</span></a></div>
+<div class="hub-grid" data-reveal><a class="hub-card" href="architektur/"><span class="hub-kicker">01 / System</span><strong>Architektur &amp; Stack</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger &amp; 3× SQLite WAL.</span></a><a class="hub-card" href="dsgvo-zero-egress/"><span class="hub-kicker">02 / Compliance</span><strong>DSGVO &amp; Zero-Egress</strong><span>Fail-Closed Docker-Isolation, EU-AI-Act-Register &amp; GoBD-Verfahrensdoku.</span></a><a class="hub-card" href="vergleich/"><span class="hub-kicker">03 / Bewertung</span><strong>Systemvergleich</strong><span>Archon OS vs. LangGraph, CrewAI, AutoGen, n8n &amp; Dify im Direktvergleich.</span></a><a class="hub-card" href="boardroom-frameworks/"><span class="hub-kicker">04 / Boardroom</span><strong>80 Frameworks</strong><span>Durchsuchbarer Katalog aller Decision-Engine-Methodiken von OKR bis Pre-Mortem.</span></a><a class="hub-card" href="spezialisten/"><span class="hub-kicker">05 / Flotte</span><strong>71 Spezialisten</strong><span>Alle Agenten-Profile aus 8 Domänen inkl. Budget-Grenzen &amp; Guardrails.</span></a><a class="hub-card" href="second-brain-gedaechtnis/"><span class="hub-kicker">06 / 2nd Brain</span><strong>RAG, Personalakte &amp; Self-Evolution</strong><span>Obsidian Vault, ChromaDB-Wissensdatenbank, Agenten-Personalakten (Wins/Learnings) &amp; Skill-Synthese.</span></a></div>
 
     <div class="wrap b2b-section"><h3>Einsatz in regulierten Umgebungen</h3><p><strong>Einkauf:</strong> Lieferantenvergleiche und Vertragsentwürfe laufen hinter Passkey-Freigaben; Budget-Limits bremsen unkontrollierte Agentenausgaben. <strong>Controlling:</strong> Jeder Dispatch wird mit Provider, Modell und Kosten hash-gekettet protokolliert – GoBD-Export mit einem Klick. <strong>Compliance:</strong> TOM-Matrix, EU-AI-Act-Risikoregister und Einwilligungs-Gate nach § 201 StGB sind Konfiguration, kein Add-on.</p><p><strong>Wirtschaftlichkeit:</strong> 0 € Lizenz (MIT). Du trägst Infrastruktur, Konfiguration und Betrieb; Zero-Egress ist bewusst als Option ausgewiesen, nicht als Garantie.</p><p style="margin-top:0.75rem;font-size:0.86rem;color:var(--fg-muted)"><strong>Einschränkung (Ehrlicher Status):</strong> Zero-Egress ist derzeit standardmäßig deaktiviert und muss mit lokaler KI oder EU-Anbietern aktiviert werden. ERP/CRM-Modul ist Alpha, die Mehrbenutzer-Rollendurchsetzung wird noch gehärtet. Agenten-Output ist Entscheidungsunterstützung, keine lizenzierte Beratung. <a href="#status">Vollständiger Status →</a></p></div>
 
@@ -605,7 +604,9 @@
 cd ARCHON-OS
 cp .env.example .env
 # Pflicht: ARCHON_HEARTBEAT_WEBHOOK_URL in .env auf einen echten Empfänger setzen
-docker compose up -d</pre></div>
+# Pruefe den Smoke-Test: curl -fsS http://localhost:8501/livez
+docker compose up -d
+curl -fsS http://localhost:8501/livez -w "\nHTTP %{http_code}\n"</pre></div>
       <div class="card"><h3>Zero-Key-Demo</h3><p>Read-only-Showcase ohne API-Keys und Token-Kosten, für den ersten Blick.</p>
 <pre data-lang="bash">ARCHON_DEMO_MODE=true \
 docker compose -f docker-compose.demo.yml up --build -d
@@ -725,9 +726,9 @@ docker compose -f docker-compose.demo.yml up --build -d
       <h2 class="sec">Häufige Fragen</h2>
       <div class="feats faq-grid" data-reveal>
         <div class="feat"><h3>Was ist Archon OS?</h3><p>Archon OS ist ein selbstgehostetes, MIT-lizenziertes Agentic Operating System auf Basis von Hermes Agent. Es organisiert 71 spezialisierte KI-Rollen in 8 Domänen mit Budgetreservierungen vor der Ausführung, lokalem Zero-Egress-LLM-Routing, WebAuthn-Passkey-Freigaben und einem SHA-256 hash-geketteten Audit-Log.</p></div>
-        <div class="feat"><h3>Wie verhindert es Datenabfluss sensibler Daten?</h3><p>OmniRoute erzwingt eine Fail-Closed Zero-Egress-Policy: Finanzen, Verträge, CRM, HR und DSGVO-Workloads laufen ausschließlich auf lokalen Modellen (Ollama oder LM Studio) in einem internen Docker-Netz ohne Internet-Route. Fail-Closed greift erst nach Aktivierung – im shipped Default (<code>privacy.zero_egress = false</code>) ist er aus.</p></div>
+        <div class="feat"><h3>Wie verhindert es Datenabfluss sensibler Daten?</h3><p>OmniRoute kann eine Fail-Closed Zero-Egress-Policy erzwingen: Finanzen, Verträge, CRM, HR und DSGVO-Workloads laufen nach Aktivierung ausschließlich auf lokalen Modellen (Ollama oder LM Studio) in einem internen Docker-Netz ohne Internet-Route. Fail-Closed greift erst nach Aktivierung von <code>privacy.zero_egress</code> und <code>zero_egress_strict</code> – im shipped Default (<code>privacy.zero_egress = false</code>) ist er aus.</p></div>
         <div class="feat"><h3>Wie werden Token-Kosten &amp; riskante Aktionen kontrolliert?</h3><p>Eine zentrale PolicyEngine prüft Berechtigungen vor dem Dispatch, privilegierte Tools benötigen signierte, zeitlich begrenzte Warrants, die BudgetBank reserviert Mittel atomar, und Hochrisiko-Freigaben erfordern WebAuthn-Passkey-Signaturen.</p></div>
-        <div class="feat"><h3>Ist es DSGVO- &amp; EU-AI-Act-ready?</h3><p>Konformität ist konfigurationsabhängig. Sensible Business-Workloads bleiben mit Fail-Closed Zero-Egress auf deinem Server, gestützt durch ein EU-AI-Act-Risikoregister, manipulationssichere SHA-256-Audit-Logs und den 1-Klick-Export der GoBD-Verfahrensdokumentation.</p></div>
+        <div class="feat"><h3>Ist es DSGVO- &amp; EU-AI-Act-ready?</h3><p>Konformität ist konfigurationsabhängig. Im Auslieferungszustand ist Zero-Egress aus (<code>privacy.zero_egress = false</code>); erst nach Aktivierung mit lokalen Modellen bleiben sensible Workloads mit Fail-Closed Zero-Egress auf deinem Server, gestützt durch ein EU-AI-Act-Risikoregister, manipulationssichere SHA-256-Audit-Logs und den 1-Klick-Export der GoBD-Verfahrensdokumentation.</p></div>
         <div class="feat"><h3>Worin unterscheidet sich Archon OS von einem normalen Chatbot?</h3><p>Ein Chatbot antwortet. Archon OS <strong>führt aus</strong>: Budget-Gates vor jedem Modellaufruf, Passkey-Freigaben für riskante Aktionen und eine prüfbare Audit-Kette. Der Unterschied ist Durchsetzung, nicht Konversation.</p></div>
         <div class="faq-davinci-slot" aria-hidden="true">
           <div class="faq-davinci-frame">

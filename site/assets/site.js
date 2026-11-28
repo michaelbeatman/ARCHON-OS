@@ -6,7 +6,9 @@
   root.classList.add("js");
   var announce = function (msg) {
     var s = document.getElementById("a11y-status");
-    if (s) s.textContent = msg;
+    if (!s) return;
+    s.textContent = "";
+    window.setTimeout(function () { s.textContent = msg; }, 30);
   };
   try {
     var savedTheme = localStorage.getItem("archon-theme");
@@ -37,6 +39,10 @@
       root.setAttribute("data-theme", next);
       try { localStorage.setItem("archon-theme", next); } catch (_) {}
       syncLabel();
+      var stateMsg = cur === "light"
+        ? (themeBtn.getAttribute("data-theme-on-light") || "Light theme enabled")
+        : (themeBtn.getAttribute("data-theme-on-dark") || "Dark theme enabled");
+      announce(stateMsg);
       applyThemeImages();
     });
   }
@@ -165,6 +171,7 @@
 
     // 6. Subtle Scroll Reveals
     if ("IntersectionObserver" in window) {
+      document.documentElement.classList.add("reveal-ready");
       var io = new IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
           if (entry.isIntersecting) {

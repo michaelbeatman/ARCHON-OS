@@ -104,7 +104,7 @@
       ],
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
       "softwareVersion": "0.6.0.2",
-      "dateModified": "2026-11-27",
+      "dateModified": "2026-11-28",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/ru/",
       "codeRepository": "https://github.com/michaelbeatman/ARCHON-OS",
@@ -304,9 +304,7 @@
     <line class="eng-spoke" x1="319.0" y1="916.0" x2="339.0" y2="916.0"/><circle class="eng-rivet" cx="330.5" cy="916.0" r="2.1"/><line class="eng-spoke" x1="312.8" y1="924.6" x2="319.0" y2="943.6"/><circle class="eng-rivet" cx="316.3" cy="935.5" r="2.1"/><line class="eng-spoke" x1="302.7" y1="921.3" x2="286.5" y2="933.0"/><circle class="eng-rivet" cx="293.4" cy="928.1" r="2.1"/><line class="eng-spoke" x1="302.7" y1="910.7" x2="286.5" y2="899.0"/><circle class="eng-rivet" cx="293.4" cy="903.9" r="2.1"/><line class="eng-spoke" x1="312.8" y1="907.4" x2="319.0" y2="888.4"/><circle class="eng-rivet" cx="316.3" cy="896.5" r="2.1"/>
   </g>
 </svg></div>
-    <div class="davinci-layer-plate">
-      <img class="davinci-plate-img" data-theme-dark="../assets/img/davinci_vertical_dark.webp" data-theme-light="../assets/img/davinci_vertical_light.webp" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" fetchpriority="low" decoding="async">
-    </div>
+    <div class="davinci-layer-plate hero-plate-theme" role="img" aria-label=""></div>
     <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <!-- Real sweeping chronometer hands on BUDGET BANK dial (442, 324) -->
   <g class="cw-hand-slow" style="transform-origin:442px 324px">
@@ -347,11 +345,11 @@
     <nav id="main-nav" aria-label="Основная навигация">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       <a href="#install">Установка</a>
-      <a href="../architecture/" hreflang="en">Архитектура (EN)</a><a href="../gdpr-zero-egress/" hreflang="en">GDPR (EN)</a><a href="../compare/" hreflang="en">Сравнение (EN)</a><a href="boardroom-frameworks/" hreflang="en">Фреймворки</a>
+      <a href="../architecture/" Архитектура (EN)</a><a href="../gdpr-zero-egress/" GDPR (EN)</a><a href="../compare/" Сравнение (EN)</a><a href="boardroom-frameworks/" Фреймворки</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Изменения</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Безопасность</a>
       <select class="lang-switch" aria-label="Язык" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/" selected>RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="Светлая" data-dark="Тёмная" data-toggle-light-label="Переключиться на светлую тему" data-toggle-dark-label="Переключиться на тёмную тему">Светлая</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="Светлая" data-dark="Тёмная" data-toggle-light-label="Переключиться на светлую тему" data-toggle-dark-label="Переключиться на тёмную тему" data-theme-on-light="Светлая тема включена" data-theme-on-dark="Тёмная тема включена">Светлая</button>
     </nav>
   </div>
 </header>
@@ -365,11 +363,12 @@
         <p class="hero-lead">Archon OS превращает Hermes Agent в агентную операционную систему, соответствующую GDPR: 71 профилей специалистов в 8 доменах, отказоустойчивая локальная маршрутизация Zero-Egress, лимиты затрат Atomic BudgetBank, подтверждения через Passkey WebAuthn, структурированные дебаты AI Boardroom и журнал аудита SHA-256, готовый к GoBD. Ваши документы, ваш хранилище Obsidian, ваши модели. Соответствие зависит от конфигурации: Zero-Egress реализован, но сейчас выключен.</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">Быстрый старт</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; (test -f install.sh &amp;&amp; ./install.sh || powershell -ExecutionPolicy Bypass -File setup.ps1) &amp;&amp; docker compose up -d &amp;&amp; curl -fsS http://localhost:8501/livez</code>
           <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="Копировать" title="Скопировать команду установки">Копировать</button>
-          <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.ru.md">README на русском</a>
+          <a class="btn" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo-Anfrage">README на русском</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">Смотреть на GitHub</a>
         </div>
+        <p class="hero-cmd-hint">Внимание: <code>example.invalid</code> — заполнитель; замените его перед запуском.</p>
         <div class="badges">
           <span class="badge">v0.6.0.2 &middot; pre-1.0</span>
           <span class="badge">GDPR и EU AI Act: соответствие зависит от конфигурации</span>
@@ -411,7 +410,7 @@
         <span class="cockpit-title" data-cockpit-title>ARCHON OS // MISSION CONTROL</span>
         <span class="cockpit-badge">ZERO-EGRESS · OPTIONAL</span>
       </div>
-      <div class="cockpit-tabs" role="tablist">
+      <div class="cockpit-tabs" role="tablist" aria-label="Системные виды">
         <button type="button" class="cockpit-tab is-active" role="tab" id="shot-tab-1" aria-selected="true" aria-controls="shot-panel-1" tabindex="0" data-shot-tab>Mission Control</button>
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-2" aria-selected="false" aria-controls="shot-panel-2" tabindex="-1" data-shot-tab>Флот агентов</button>
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-3" aria-selected="false" aria-controls="shot-panel-3" tabindex="-1" data-shot-tab>AI Boardroom</button>
@@ -420,7 +419,7 @@
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-6" aria-selected="false" aria-controls="shot-panel-6" tabindex="-1" data-shot-tab>Оргструктура</button>
       </div>
       <div class="cockpit-stage">
-        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="../assets/img/mission_control.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control-768.webp 768w, ../assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 92vw, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="Панель Mission Control"><figcaption>Mission Control — телеметрия в реальном времени, график токенов &amp; панель HITL</figcaption></figure>
+        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="../assets/img/mission_control.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control-768.webp 768w, ../assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 740px, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="Панель Mission Control"><figcaption>Mission Control — телеметрия в реальном времени, график токенов &amp; панель HITL</figcaption></figure>
         <figure id="shot-panel-2" role="tabpanel" aria-labelledby="shot-tab-2" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/kader.webp" width="1024" height="559" alt="Обзор флота агентов"><figcaption>Флот агентов — профили специалистов, привязка OmniRoute &amp; живая лента</figcaption></figure>
         <figure id="shot-panel-3" role="tabpanel" aria-labelledby="shot-tab-3" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="1024" height="559" alt="Дебаты AI Boardroom"><figcaption>AI Boardroom — многоперспективные дебаты с фреймворками &amp; слотами</figcaption></figure>
         <figure id="shot-panel-4" role="tabpanel" aria-labelledby="shot-tab-4" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/workflows.webp" width="1024" height="557" alt="Визуальный конструктор мультиагентных рабочих процессов"><figcaption>Workflows — визуальный редактор мультиагентных DAG с HITL-гейтами</figcaption></figure>
@@ -430,12 +429,12 @@
     </div>
     <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">Декоративные иллюстрации созданы с помощью ИИ Google Gemini (Nano Banana). Системные виды — реальные снимки интерфейса Archon OS с демонстрационными данными; названия третьих лиц остаются собственностью их владельцев. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">источники изображений и ИИ-визуалы</a>.</p>
     <div class="shots-thumbs" data-reveal>
-      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>Флот агентов</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="200" height="109" alt=""><span>AI Boardroom</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="../assets/img/workflows.webp" width="200" height="109" alt=""><span>Воркфлоу</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="../assets/img/guardian.webp" width="200" height="125" alt=""><span>Token Guard</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="../assets/img/org.webp" width="200" height="109" alt=""><span>Оргструктура</span></button>
+      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control-480.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>Mission Control</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader-480.webp" srcset="../assets/img/kader-480.webp 480w, ../assets/img/kader.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>Флот агентов</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="../assets/img/boardroom_debate-480.webp" srcset="../assets/img/boardroom_debate-480.webp 480w, ../assets/img/boardroom_debate.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>AI Boardroom</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="../assets/img/workflows-480.webp" srcset="../assets/img/workflows-480.webp 480w, ../assets/img/workflows.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>Воркфлоу</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="../assets/img/guardian-480.webp" srcset="../assets/img/guardian-480.webp 480w, ../assets/img/guardian.webp 1024w" sizes="200px" width="200" height="125" alt=""><span>Token Guard</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="../assets/img/org-480.webp" srcset="../assets/img/org-480.webp 480w, ../assets/img/org.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>Оргструктура</span></button>
     </div>
 
     <h2 class="sec" id="architecture">Архитектура и поток данных Zero-Egress</h2>
@@ -583,7 +582,7 @@
     </div>
 
     <h2 class="sec">Технические руководства и каталоги (HTML)</h2>
-<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/" hreflang="en"><span class="hub-kicker">01 / Система</span><strong>Архитектура и стек (EN)</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger и 3× SQLite WAL.</span></a><a class="hub-card" href="../gdpr-zero-egress/" hreflang="en"><span class="hub-kicker">02 / Комплаенс</span><strong>GDPR и Zero-Egress (EN)</strong><span>Изоляция Docker fail-closed, реестр EU AI Act и экспорт аудита GoBD.</span></a><a class="hub-card" href="../compare/" hreflang="en"><span class="hub-kicker">03 / Оценка</span><strong>Сравнение платформ (EN)</strong><span>Матрица Archon OS против LangGraph, CrewAI, AutoGen, n8n и Dify.</span></a><a class="hub-card" href="boardroom-frameworks/" hreflang="ru"><span class="hub-kicker">04 / Boardroom</span><strong>80 фреймворков</strong><span>Каталог методик многосторонних дебатов с поиском и фильтрами.</span></a><a class="hub-card" href="../specialists/" hreflang="en"><span class="hub-kicker">05 / Флот</span><strong>71 специалистов (EN)</strong><span>Справочник всех 71 профилей агентов в 8 бизнес-доменах.</span></a><a class="hub-card" href="../second-brain/" hreflang="en"><span class="hub-kicker">06 / 2nd Brain</span><strong>RAG, личное дело и саморазвитие (EN)</strong><span>Obsidian Vault, векторная база ChromaDB, карточки достижений агентов и синтез навыков.</span></a></div>
+<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/"><span class="hub-kicker">01 / Система</span><strong>Архитектура и стек (EN)</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger и 3× SQLite WAL.</span></a><a class="hub-card" href="../gdpr-zero-egress/"><span class="hub-kicker">02 / Комплаенс</span><strong>GDPR и Zero-Egress (EN)</strong><span>Изоляция Docker fail-closed, реестр EU AI Act и экспорт аудита GoBD.</span></a><a class="hub-card" href="../compare/"><span class="hub-kicker">03 / Оценка</span><strong>Сравнение платформ (EN)</strong><span>Матрица Archon OS против LangGraph, CrewAI, AutoGen, n8n и Dify.</span></a><a class="hub-card" href="boardroom-frameworks/"><span class="hub-kicker">04 / Boardroom</span><strong>80 фреймворков</strong><span>Каталог методик многосторонних дебатов с поиском и фильтрами.</span></a><a class="hub-card" href="../specialists/"><span class="hub-kicker">05 / Флот</span><strong>71 специалистов (EN)</strong><span>Справочник всех 71 профилей агентов в 8 бизнес-доменах.</span></a><a class="hub-card" href="../second-brain/"><span class="hub-kicker">06 / 2nd Brain</span><strong>RAG, личное дело и саморазвитие (EN)</strong><span>Obsidian Vault, векторная база ChromaDB, карточки достижений агентов и синтез навыков.</span></a></div>
 
     <div class="wrap b2b-section"><h3>Применение в регулируемых средах</h3><p><strong>Закупки:</strong> сравнения поставщиков и проекты договоров проходят через Passkey; бюджетные лимиты сдерживают расходы. <strong>Контроллинг:</strong> каждый вызов фиксируется с провайдером, моделью и стоимостью в цепочке хешей — экспорт GoBD в один клик. <strong>Комплаенс:</strong> матрица TOM, реестр рисков EU AI Act и согласие по § 201 StGB — это конфигурация, не дополнения.</p><p><strong>Экономика:</strong> лицензия 0 € (MIT). Вы отвечаете за инфраструктуру, настройку и эксплуатацию; Zero-Egress явно указан как опция, а не гарантия.</p></div>
 
@@ -591,11 +590,11 @@
 <div class="table-wrap" data-reveal>
   <table><thead><tr><th>Статья</th><th>Archon OS</th><th>Примечание</th></tr></thead><tbody><tr><td>Лицензия</td><td>0 € (MIT)</td><td>Нет лицензионных или пользовательских сборов.</td></tr><tr><td>Оборудование (СМП)</td><td>4–8 vCPU · 16–32 ГБ RAM · 8–12 ГБ VRAM</td><td>Локальные модели 7B–14B; для 32B–70B: 64 ГБ RAM / 24–48 ГБ VRAM.</td></tr><tr><td>Эксплуатация</td><td>Ваша ответственность (Docker, резервные копии, обновления)</td><td>Без DPA/SLA; внутренняя ответственность и документация.</td></tr><tr><td>Постоянные ИИ-затраты</td><td>0 € с локальной моделью; облачные токены с лимитом</td><td>Дневной лимит на агента 1,50–2,50 EUR, применяется до отправки.</td></tr><tr><td>Доказательная ценность</td><td>Цепочка SHA-256 + экспорт GoBD</td><td>Проверяемые записи вместо ручной документации.</td></tr></tbody></table>
 </div>
-<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)">Пример: <a href="../architecture/#hardware">оборудование</a> · <a href="../gdpr-zero-egress/">TOM</a></p>
 <h2 class="sec" id="use-cases-fachbereiche">Use Cases</h2>
 <div class="feats" data-reveal><div class="feat"><h3>Закупки · Сравнение</h3><p>Предложения сравниваются в хранилище; отправка только после подписи Passkey и дневного лимита.</p></div><div class="feat"><h3>Контроллинг · Ликвидность</h3><p>План на 13 недель; каждый вызов фиксируется с провайдером, моделью и стоимостью; экспорт GoBD в один клик.</p></div><div class="feat"><h3>Комплаенс · Доказательства</h3><p>Матрица TOM (ст. 32 GDPR), реестр рисков EU AI Act и доказательство удаления по ст. 17.</p></div></div>
 <p class="status" style="margin-top:0.9rem">Матрица TOM (ст. 32 GDPR), реестр рисков EU AI Act и доказательство удаления по ст. 17 задокументированы. Zero-Egress реализован, но по умолчанию отключён.</p>
-<p style="margin-top:0.9rem"><a class="btn primary" href="https://calendly.com/archon-os/demo" target="_blank" rel="noopener noreferrer">Запросить демо</a> <a class="btn" href="#status">Полный статус &rarr;</a></p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request">Запросить демо</a> <a class="btn" href="#status">Полный статус &rarr;</a></p>
 
 
     <h2 class="sec" id="install">Установка</h2>
@@ -605,7 +604,9 @@
 cd ARCHON-OS
 cp .env.example .env
 # Обязательно: задайте ARCHON_HEARTBEAT_WEBHOOK_URL в .env с реальным получателем
-docker compose up -d</pre></div>
+# Pruefe den Smoke-Test: curl -fsS http://localhost:8501/livez
+docker compose up -d
+curl -fsS http://localhost:8501/livez -w "\nHTTP %{http_code}\n"</pre></div>
       <div class="card"><h3>Демо без ключей</h3><p>Витрина только для чтения без API-ключей и затрат на токены, для первого знакомства.</p>
 <pre data-lang="bash">ARCHON_DEMO_MODE=true \
 docker compose -f docker-compose.demo.yml up --build -d

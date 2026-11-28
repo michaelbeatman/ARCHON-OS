@@ -67,7 +67,7 @@
   "faq.what": "<h3>What is Archon OS?</h3><p>Archon OS is a self-hosted, MIT-licensed Agentic Operating System built on Hermes Agent. It organizes 71 specialist AI roles across 8 domains with pre-execution budget reservations, Zero-Egress local LLM routing, WebAuthn Passkey approvals, and a SHA-256 hash-chained audit log.</p>",
   "faq.leaks": "<h3>How does it prevent sensitive data leaks?</h3><p>OmniRoute enforces a fail-closed Zero-Egress policy: finance, contracts, CRM, HR, and GDPR workloads run exclusively on local models (Ollama or LM Studio) inside an internal Docker network without an internet route. Fail-closed applies only when enabled; the shipped default is <code>privacy.zero_egress = false</code>.</p>",
   "faq.costs": "<h3>How are token costs &amp; risky actions controlled?</h3><p>A central PolicyEngine validates permissions before dispatch, privileged tools require signed time-bound warrants, BudgetBank reserves funds atomically, and high-risk approvals require WebAuthn Passkey signatures.</p>",
-  "faq.gdpr": "<h3>Is it GDPR (DSGVO) &amp; EU AI Act ready?</h3><p>Compliance depends on your configuration. Sensitive business workloads stay on your server with fail-closed Zero-Egress, backed by an EU AI Act risk registry, tamper-evident SHA-256 audit logs, and 1-click GoBD procedural documentation export.</p>",
+  "faq.gdpr": "<h3>Is it GDPR / EU AI Act ready?</h3><p>Compliance depends on configuration. Zero-Egress is off in the shipped state (<code>privacy.zero_egress = false</code>); only once enabled with local models do sensitive workloads stay on your server under fail-closed Zero-Egress, backed by an EU AI Act risk register, tamper-evident SHA-256 audit logs and one-click GoBD export.</p>",
   "status.title": "<h2 class=\"sec\" id=\"status\">Honest status</h2>",
   "status.text": "Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome. Authentication: the shipped <code>settings.json</code> has no <code>auth</code> block; on <code>127.0.0.1</code> Archon OS runs as a local single-user. Set <code>auth.enabled = true</code> before LAN or production use.",
   "docs.title": "<h2 class=\"sec\">Documentation (11 Languages)</h2>",
@@ -108,5 +108,9 @@
   "js.themeDark": "Dark",
   "js.copyFailed": "Copy failed — please select and copy the command manually.",
   "js.themeToggleLight": "Switch to light theme",
-  "js.themeToggleDark": "Switch to dark theme"
+  "js.themeToggleDark": "Switch to dark theme",
+  "install.cmdHint": "<p class=\"hero-cmd-hint\">Note: <code>example.invalid</code> is a placeholder — replace it with your own webhook receiver before starting.</p>",
+  "a11y.tablist": "System views",
+  "js.themeOnLight": "Light theme enabled",
+  "js.themeOnDark": "Dark theme enabled"
 }

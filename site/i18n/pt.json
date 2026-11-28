@@ -9,7 +9,7 @@
   "nav.changelog": "<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md\">Novidades</a>",
   "nav.security": "<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md\">Segurança</a>",
   "hero.headline": "Um SO multiagente autoalojado: conformidade com o RGPD depende da configuração.",
-  "hero.subline": "O Archon OS transforma o Hermes Agent num Sistema Operativo Agentístico conforme ao RGPD: 71 perfis especialistas em 8 domínios, roteamento local Zero-Egress fail-closed, limites de custo Atomic BudgetBank, aprovações com Passkey WebAuthn, debates estruturados no AI Boardroom e um registo de auditoria SHA-256 pronto para GoBD. Os seus documentos, o seu cofre Obsidian, os seus modelos. A conformidade depende da configuração: o Zero-Egress está implementado, mas atualmente desativado.",
+  "hero.subline": "O Archon OS transforma o Hermes Agent num Sistema Operativo Agentístico cuja conformidade depende da configuração: 71 perfis especialistas em 8 domínios, roteamento local Zero-Egress fail-closed, limites de custo Atomic BudgetBank, aprovações com Passkey WebAuthn, debates estruturados no AI Boardroom e um registo de auditoria SHA-256 pronto para GoBD. Os seus documentos, o seu cofre Obsidian, os seus modelos. A conformidade depende da configuração: o Zero-Egress está implementado, mas atualmente desativado.",
   "hero.buttonGithub": "Ver no GitHub",
   "hero.buttonDocs": "README em português",
   "hero.buttonQuickstart": "Início rápido",
@@ -108,5 +108,9 @@
   "js.themeDark": "Escuro",
   "js.copyFailed": "Falha ao copiar – selecione e copie o comando manualmente.",
   "js.themeToggleLight": "Mudar para tema claro",
-  "js.themeToggleDark": "Mudar para tema escuro"
+  "js.themeToggleDark": "Mudar para tema escuro",
+  "install.cmdHint": "<p class=\"hero-cmd-hint\">Nota: <code>example.invalid</code> é um marcador; substitua-o antes de iniciar.</p>",
+  "a11y.tablist": "Vistas do sistema",
+  "js.themeOnLight": "Tema claro ativado",
+  "js.themeOnDark": "Tema escuro ativado"
 }

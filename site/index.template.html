@@ -39,9 +39,7 @@
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
     <div class="davinci-layer-under">{{DAVINCI_VERT_UNDERLAYER_SVG}}</div>
-    <div class="davinci-layer-plate">
-      <img class="davinci-plate-img" data-theme-dark="{{BASE}}assets/img/davinci_vertical_dark.webp" data-theme-light="{{BASE}}assets/img/davinci_vertical_light.webp" src="{{BASE}}assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" fetchpriority="low" decoding="async">
-    </div>
+    <div class="davinci-layer-plate hero-plate-theme" role="img" aria-label=""></div>
     <div class="davinci-layer-over">{{DAVINCI_VERT_OVERLAY_SVG}}</div>
   </div>
 </div>
@@ -63,7 +61,7 @@
       {{nav.changelog}}
       {{nav.security}}
       <select class="lang-switch" aria-label="{{nav.languageLabel}}" onchange="if(this.value)window.location.href=this.value">{{LANG_OPTIONS}}</select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="{{js.themeLight}}" data-dark="{{js.themeDark}}" data-toggle-light-label="{{js.themeToggleLight}}" data-toggle-dark-label="{{js.themeToggleDark}}">{{js.themeLight}}</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="{{js.themeLight}}" data-dark="{{js.themeDark}}" data-toggle-light-label="{{js.themeToggleLight}}" data-toggle-dark-label="{{js.themeToggleDark}}" data-theme-on-light="{{js.themeOnLight}}" data-theme-on-dark="{{js.themeOnDark}}">{{js.themeLight}}</button>
     </nav>
   </div>
 </header>
@@ -77,11 +75,12 @@
         <p class="hero-lead">{{hero.subline}}</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">{{hero.buttonQuickstart}}</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; (test -f install.sh &amp;&amp; ./install.sh || powershell -ExecutionPolicy Bypass -File setup.ps1) &amp;&amp; docker compose up -d &amp;&amp; curl -fsS http://localhost:8501/livez</code>
           <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="{{js.copy}}" title="{{js.copyTitle}}">{{js.copy}}</button>
-          <a class="btn" href="{{DOC_HREF}}">{{hero.buttonDocs}}</a>
+          <a class="btn" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo-Anfrage">{{hero.buttonDocs}}</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">{{hero.buttonGithub}}</a>
         </div>
+        {{install.cmdHint}}
         <div class="badges">
           <span class="badge">{{VERSION}} &middot; pre-1.0</span>
           <span class="badge">{{badge.gdpr}}</span>
@@ -118,7 +117,7 @@
         <span class="cockpit-title" data-cockpit-title>ARCHON OS // MISSION CONTROL</span>
         <span class="cockpit-badge">ZERO-EGRESS · OPTIONAL</span>
       </div>
-      <div class="cockpit-tabs" role="tablist">
+      <div class="cockpit-tabs" role="tablist" aria-label="{{a11y.tablist}}">
         <button type="button" class="cockpit-tab is-active" role="tab" id="shot-tab-1" aria-selected="true" aria-controls="shot-panel-1" tabindex="0" data-shot-tab>{{SHOT_TAB_1}}</button>
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-2" aria-selected="false" aria-controls="shot-panel-2" tabindex="-1" data-shot-tab>{{SHOT_TAB_2}}</button>
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-3" aria-selected="false" aria-controls="shot-panel-3" tabindex="-1" data-shot-tab>{{SHOT_TAB_3}}</button>
@@ -127,7 +126,7 @@
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-6" aria-selected="false" aria-controls="shot-panel-6" tabindex="-1" data-shot-tab>{{SHOT_TAB_6}}</button>
       </div>
       <div class="cockpit-stage">
-        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="{{BASE}}assets/img/mission_control.webp" srcset="{{BASE}}assets/img/mission_control-480.webp 480w, {{BASE}}assets/img/mission_control-768.webp 768w, {{BASE}}assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 92vw, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="{{shots.missionControl.alt}}"><figcaption>{{shots.missionControl.caption}}</figcaption></figure>
+        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="{{BASE}}assets/img/mission_control.webp" srcset="{{BASE}}assets/img/mission_control-480.webp 480w, {{BASE}}assets/img/mission_control-768.webp 768w, {{BASE}}assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 740px, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="{{shots.missionControl.alt}}"><figcaption>{{shots.missionControl.caption}}</figcaption></figure>
         <figure id="shot-panel-2" role="tabpanel" aria-labelledby="shot-tab-2" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/kader.webp" width="1024" height="559" alt="{{shots.fleet.alt}}"><figcaption>{{shots.fleet.caption}}</figcaption></figure>
         <figure id="shot-panel-3" role="tabpanel" aria-labelledby="shot-tab-3" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/boardroom_debate.webp" width="1024" height="559" alt="{{shots.boardroom.alt}}"><figcaption>{{shots.boardroom.caption}}</figcaption></figure>
         <figure id="shot-panel-4" role="tabpanel" aria-labelledby="shot-tab-4" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/workflows.webp" width="1024" height="557" alt="{{shots.workflows.alt}}"><figcaption>{{shots.workflows.caption}}</figcaption></figure>
@@ -137,12 +136,12 @@
     </div>
     {{media.note}}
     <div class="shots-thumbs" data-reveal>
-      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="{{BASE}}assets/img/mission_control.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_1}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="{{BASE}}assets/img/kader.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_2}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="{{BASE}}assets/img/boardroom_debate.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_3}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="{{BASE}}assets/img/workflows.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_4}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="{{BASE}}assets/img/guardian.webp" width="200" height="125" alt=""><span>{{SHOT_TAB_5}}</span></button>
-      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="{{BASE}}assets/img/org.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_6}}</span></button>
+      <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="{{BASE}}assets/img/mission_control-480.webp" srcset="{{BASE}}assets/img/mission_control-480.webp 480w, {{BASE}}assets/img/mission_control.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>{{SHOT_TAB_1}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="{{BASE}}assets/img/kader-480.webp" srcset="{{BASE}}assets/img/kader-480.webp 480w, {{BASE}}assets/img/kader.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>{{SHOT_TAB_2}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-3"><img loading="lazy" src="{{BASE}}assets/img/boardroom_debate-480.webp" srcset="{{BASE}}assets/img/boardroom_debate-480.webp 480w, {{BASE}}assets/img/boardroom_debate.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>{{SHOT_TAB_3}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-4"><img loading="lazy" src="{{BASE}}assets/img/workflows-480.webp" srcset="{{BASE}}assets/img/workflows-480.webp 480w, {{BASE}}assets/img/workflows.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>{{SHOT_TAB_4}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-5"><img loading="lazy" src="{{BASE}}assets/img/guardian-480.webp" srcset="{{BASE}}assets/img/guardian-480.webp 480w, {{BASE}}assets/img/guardian.webp 1024w" sizes="200px" width="200" height="125" alt=""><span>{{SHOT_TAB_5}}</span></button>
+      <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-6"><img loading="lazy" src="{{BASE}}assets/img/org-480.webp" srcset="{{BASE}}assets/img/org-480.webp 480w, {{BASE}}assets/img/org.webp 1024w" sizes="200px" width="200" height="109" alt=""><span>{{SHOT_TAB_6}}</span></button>
     </div>
 
     {{ARCH_SECTION_HTML}}
@@ -198,7 +197,9 @@
 cd ARCHON-OS
 cp .env.example .env
 # {{install.webhookComment}}
-docker compose up -d</pre></div>
+# Pruefe den Smoke-Test: curl -fsS http://localhost:8501/livez
+docker compose up -d
+curl -fsS http://localhost:8501/livez -w "\nHTTP %{http_code}\n"</pre></div>
       <div class="card">{{install.demo}}
 <pre data-lang="bash">ARCHON_DEMO_MODE=true \
 docker compose -f docker-compose.demo.yml up --build -d

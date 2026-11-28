@@ -11,7 +11,7 @@
   "hero.headline": "셀프 호스팅 멀티에이전트 OS — GDPR 준수 여부는 구성에 따라 달라집니다.",
   "hero.subline": "Archon OS는 Hermes Agent를 GDPR 준수 여부는 구성에 따라 달라지는 에이전트 운영체제로 확장합니다: 8개 도메인의 71개 전문가 프로필, 페일 클로즈 로컬 Zero-Egress 라우팅, Atomic BudgetBank 비용 상한, WebAuthn 패스키 승인, 구조화된 AI Boardroom 토론, GoBD 대응 SHA-256 감사 로그. 당신의 문서, 당신의 Obsidian Vault, 당신의 모델. 준수 여부는 구성에 따라 달라집니다. Zero-Egress는 구현되었지만 현재 꺼져 있습니다.",
   "hero.buttonGithub": "GitHub에서 보기",
-  "hero.buttonDocs": "한국어 README",
+  "hero.buttonDocs": "README (KO)",
   "hero.buttonQuickstart": "빠른 시작",
   "badge.gdpr": "GDPR / EU AI Act: 설정에 따른 준수 운영",
   "badge.zeroEgress": "Zero-Egress 구현 완료 · 활성화 가능(현재 꺼짐)",
@@ -112,5 +112,6 @@
   "install.cmdHint": "<p class=\"hero-cmd-hint\">참고: <code>example.invalid</code>는 자리표시자입니다. 시작 전에 교체하세요.</p>",
   "a11y.tablist": "시스템 화면",
   "js.themeOnLight": "라이트 테마가 활성화되었습니다",
-  "js.themeOnDark": "다크 테마가 활성화되었습니다"
+  "js.themeOnDark": "다크 테마가 활성화되었습니다",
+  "hero.buttonDemo": "데모 요청"
 }

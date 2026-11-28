@@ -11,7 +11,7 @@
   "hero.headline": "Een self-hosted multi-agentbesturingssysteem: AVG-conformiteit afhankelijk van configuratie.",
   "hero.subline": "Archon OS breidt Hermes Agent uit tot een waarvan de naleving afhankelijk is van configuratie Agentic Operating System: 71 specialistprofielen in 8 domeinen, fail-closed lokale Zero-Egress-routing, Atomic BudgetBank kostenplafonds, WebAuthn-Passkey-goedkeuringen, gestructureerde AI Boardroom-debatten en een GoBD-klaar SHA-256-auditlog. Jouw documenten, jouw Obsidian-vault, jouw modellen. Conformiteit hangt af van configuratie: Zero-Egress is geïmplementeerd maar nu uit.",
   "hero.buttonGithub": "Bekijk op GitHub",
-  "hero.buttonDocs": "Nederlandse README",
+  "hero.buttonDocs": "README (NL)",
   "hero.buttonQuickstart": "Snelstart",
   "badge.gdpr": "AVG &amp; EU AI Act: conform gebruik afhankelijk van configuratie",
   "badge.zeroEgress": "Zero-Egress geïmplementeerd · in te schakelen (nu uit)",
@@ -112,5 +112,6 @@
   "install.cmdHint": "<p class=\"hero-cmd-hint\">Let op: <code>example.invalid</code> is een plaatshouder – vervang vóór het starten.</p>",
   "a11y.tablist": "Systeemweergaven",
   "js.themeOnLight": "Licht thema ingeschakeld",
-  "js.themeOnDark": "Donker thema ingeschakeld"
+  "js.themeOnDark": "Donker thema ingeschakeld",
+  "hero.buttonDemo": "Demo aanvragen"
 }

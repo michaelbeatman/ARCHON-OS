@@ -11,7 +11,7 @@
   "hero.headline": "Multi-Agent-Automatisierung, die nichts ohne Freigabe ausführt – selbst gehostet, Open Source.",
   "hero.subline": "71 KI-Spezialisten erledigen Aufgaben in deinem Betrieb – mit hartem Budget-Limit, Passkey-Freigabe und manipulationssicherem Audit-Log. Ein Chatbot antwortet; Archon OS führt aus. Zero-Egress ist vollständig implementiert, hier aber noch nicht aktiv – lokale KI oder EU-Anbieter schalten ihn ein.",
   "hero.buttonGithub": "Code auf GitHub",
-  "hero.buttonDocs": "Anleitung lesen (DE)",
+  "hero.buttonDocs": "Deutsches README",
   "hero.buttonQuickstart": "In 3 Schritten installieren",
   "badge.gdpr": "DSGVO &amp; EU AI Act: konformer Betrieb konfigurationsabhängig",
   "badge.zeroEgress": "Zero-Egress implementiert · aktivierbar (aktuell aus)",
@@ -112,5 +112,6 @@
   "install.cmdHint": "<p class=\"hero-cmd-hint\">Hinweis: <code>example.invalid</code> ist ein Platzhalter – vor dem Start durch deinen eigenen Webhook-Empfänger ersetzen.</p>",
   "a11y.tablist": "Systemansichten",
   "js.themeOnLight": "Helles Design aktiviert",
-  "js.themeOnDark": "Dunkles Design aktiviert"
+  "js.themeOnDark": "Dunkles Design aktiviert",
+  "hero.buttonDemo": "Demo anfragen"
 }

@@ -11,7 +11,7 @@
   "hero.headline": "Мультиагентная ОС с самохостингом: соответствие GDPR зависит от конфигурации.",
   "hero.subline": "Archon OS превращает Hermes Agent в агентную операционную систему, соответствующую GDPR: 71 профилей специалистов в 8 доменах, отказоустойчивая локальная маршрутизация Zero-Egress, лимиты затрат Atomic BudgetBank, подтверждения через Passkey WebAuthn, структурированные дебаты AI Boardroom и журнал аудита SHA-256, готовый к GoBD. Ваши документы, ваш хранилище Obsidian, ваши модели. Соответствие зависит от конфигурации: Zero-Egress реализован, но сейчас выключен.",
   "hero.buttonGithub": "Смотреть на GitHub",
-  "hero.buttonDocs": "README на русском",
+  "hero.buttonDocs": "README (RU)",
   "hero.buttonQuickstart": "Быстрый старт",
   "badge.gdpr": "GDPR и EU AI Act: соответствие зависит от конфигурации",
   "badge.zeroEgress": "Zero-Egress реализован · включается (сейчас выключен)",
@@ -112,5 +112,6 @@
   "install.cmdHint": "<p class=\"hero-cmd-hint\">Внимание: <code>example.invalid</code> — заполнитель; замените его перед запуском.</p>",
   "a11y.tablist": "Системные виды",
   "js.themeOnLight": "Светлая тема включена",
-  "js.themeOnDark": "Тёмная тема включена"
+  "js.themeOnDark": "Тёмная тема включена",
+  "hero.buttonDemo": "Запросить демо"
 }

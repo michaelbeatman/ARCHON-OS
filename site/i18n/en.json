@@ -11,7 +11,7 @@
   "hero.headline": "Multi-agent automation that won't act without approval - self-hosted, open source.",
   "hero.subline": "71 specialist agents get work done in your operation - with hard budget caps, passkey approvals and a tamper-evident audit log. A chatbot answers; Archon OS executes. Zero-Egress is fully implemented but not active here yet - local models or EU providers enable it.",
   "hero.buttonGithub": "View the code",
-  "hero.buttonDocs": "Read the docs (EN)",
+  "hero.buttonDocs": "README (EN)",
   "hero.buttonQuickstart": "Install in 3 steps",
   "badge.gdpr": "GDPR / EU AI Act: compliance depends on configuration",
   "badge.zeroEgress": "Zero-Egress implemented · activatable (currently off)",
@@ -112,5 +112,6 @@
   "install.cmdHint": "<p class=\"hero-cmd-hint\">Note: <code>example.invalid</code> is a placeholder — replace it with your own webhook receiver before starting.</p>",
   "a11y.tablist": "System views",
   "js.themeOnLight": "Light theme enabled",
-  "js.themeOnDark": "Dark theme enabled"
+  "js.themeOnDark": "Dark theme enabled",
+  "hero.buttonDemo": "Request a demo"
 }

@@ -11,7 +11,7 @@
   "hero.headline": "Un SO multiagente autoalojado: cumplimiento del RGPD según configuración.",
   "hero.subline": "Archon OS convierte Hermes Agent en un Sistema Operativo Agentico cuya conformidad depende de la configuración: 71 perfiles especialistas en 8 dominios, enrutamiento local Zero-Egress a prueba de fallos, límites de coste con Atomic BudgetBank, aprobaciones con Passkey WebAuthn, debates estructurados en el AI Boardroom y un registro de auditoría SHA-256 listo para GoBD. Tus documentos, tu vault de Obsidian, tus modelos. El cumplimiento depende de la configuración: Zero-Egress está implementado, pero actualmente desactivado.",
   "hero.buttonGithub": "Ver en GitHub",
-  "hero.buttonDocs": "README en español",
+  "hero.buttonDocs": "README (ES)",
   "hero.buttonQuickstart": "Inicio rápido",
   "badge.gdpr": "RGPD y EU AI Act: funcionamiento conforme según configuración",
   "badge.zeroEgress": "Zero-Egress implementado · activable (actualmente desactivado)",
@@ -112,5 +112,6 @@
   "install.cmdHint": "<p class=\"hero-cmd-hint\">Nota: <code>example.invalid</code> es un marcador de posición; sustitúyelo por tu receptor antes de iniciar.</p>",
   "a11y.tablist": "Vistas del sistema",
   "js.themeOnLight": "Tema claro activado",
-  "js.themeOnDark": "Tema oscuro activado"
+  "js.themeOnDark": "Tema oscuro activado",
+  "hero.buttonDemo": "Solicitar demo"
 }

@@ -11,7 +11,7 @@
   "hero.headline": "セルフホスト型マルチエージェントOS。GDPR準拠は構成に依存します。",
   "hero.subline": "Archon OS は Hermes Agent を GDPR準拠のエージェントOSへと拡張します：8ドメイン・71の専門家プロファイル、フェイルクローズ型ローカル Zero-Egress ルーティング、Atomic BudgetBank によるコスト上限、WebAuthn パスキー承認、構造化された AI Boardroom ディベート、GoBD 対応の SHA-256 監査ログ。あなたの文書、あなたの Obsidian Vault、あなたのモデル。 準拠は構成に依存します。Zero-Egress は実装済みですが、現在はオフです。",
   "hero.buttonGithub": "GitHub で見る",
-  "hero.buttonDocs": "日本語の README",
+  "hero.buttonDocs": "README (JA)",
   "hero.buttonQuickstart": "クイックスタート",
   "badge.gdpr": "GDPR / EU AI Act：設定に応じた準拠運用",
   "badge.zeroEgress": "Zero-Egress 実装済み · 有効化可能（現在オフ）",
@@ -112,5 +112,6 @@
   "install.cmdHint": "<p class=\"hero-cmd-hint\">注意: <code>example.invalid</code> はプレースホルダーです。起動前に置き換えてください。</p>",
   "a11y.tablist": "システム画面",
   "js.themeOnLight": "ライトテーマを有効化しました",
-  "js.themeOnDark": "ダークテーマを有効化しました"
+  "js.themeOnDark": "ダークテーマを有効化しました",
+  "hero.buttonDemo": "デモを申し込む"
 }

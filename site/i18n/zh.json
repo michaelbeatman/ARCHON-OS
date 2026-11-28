@@ -11,7 +11,7 @@
   "hero.headline": "自托管多智能体操作系统——是否符合 GDPR 取决于配置。",
   "hero.subline": "Archon OS 将 Hermes Agent 扩展为是否符合 GDPR 取决于配置的 的智能体操作系统：8 大领域的 71 个专家档案、故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 成本上限、WebAuthn 通行密钥审批、结构化的 AI Boardroom 辩论，以及符合 GoBD 的 SHA-256 审计日志。你的文档、你的 Obsidian 知识库、你的模型。 合规取决于配置：Zero-Egress 已实现，但当前关闭。",
   "hero.buttonGithub": "在 GitHub 查看",
-  "hero.buttonDocs": "中文 README",
+  "hero.buttonDocs": "README (ZH)",
   "hero.buttonQuickstart": "快速开始",
   "badge.gdpr": "符合 GDPR 与 EU AI Act 的运行取决于配置",
   "badge.zeroEgress": "Zero-Egress 已实现 · 可启用（当前关闭）",
@@ -112,5 +112,6 @@
   "install.cmdHint": "<p class=\"hero-cmd-hint\">注意：<code>example.invalid</code> 是占位符，启动前请替换。</p>",
   "a11y.tablist": "系统视图",
   "js.themeOnLight": "浅色主题已启用",
-  "js.themeOnDark": "深色主题已启用"
+  "js.themeOnDark": "深色主题已启用",
+  "hero.buttonDemo": "申请演示"
 }

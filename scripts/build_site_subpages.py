@@ -21,6 +21,7 @@ import re
 import unicodedata
 from pathlib import Path
 
+
 def _og_alt(lang: str) -> str:
     try:
         data = json.loads((Path(__file__).resolve().parent.parent / "site" / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))

@@ -20,14 +20,6 @@ import json
 import re
 import unicodedata
 from pathlib import Path
-
-
-def _og_alt(lang: str) -> str:
-    try:
-        data = json.loads((Path(__file__).resolve().parent.parent / "site" / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
-        return data.get("meta.twitterImageAlt", "Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional")
-    except Exception:
-        return "Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional"
 from typing import Any
 
 from site_svg_assets import (
@@ -37,6 +29,14 @@ from site_svg_assets import (
     build_davinci_vertical_underlayer_svg,
     build_zero_egress_diagram_svg,
 )
+
+
+def _og_alt(lang: str) -> str:
+    try:
+        data = json.loads((Path(__file__).resolve().parent.parent / "site" / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
+        return data.get("meta.twitterImageAlt", "Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional")
+    except Exception:
+        return "Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional"
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"

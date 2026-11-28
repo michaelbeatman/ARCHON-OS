@@ -461,7 +461,6 @@ def build_hub_section(lang: str) -> str:
     assert isinstance(cards, list)
     def _card(i: int, c: list[str]) -> str:
         local = i == 3  # Boardroom-Katalog existiert in allen 11 Sprachen
-        code = LANGS[lang][0] if local else "en"
         mark = "" if (lang in ("en", "de") or local) else " (EN)"
         return (f'<a class="hub-card" href="{hrefs[i]}">'
                 f'<span class="hub-kicker">{c[0]}</span><strong>{c[1]}{mark}</strong><span>{c[2]}</span></a>')

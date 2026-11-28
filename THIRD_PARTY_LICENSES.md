@@ -160,7 +160,7 @@ Archon OS orchestrates external open-source services as isolated Docker containe
 
 ## 8. Website Visual Assets
 
-All visual assets listed below were generated with **Google Gemini image generation (Nano Banana / Nano Banana 2)** from the project maintainer's own prompts and specifications. They are original compositions created for Archon OS, not reproductions of existing copyrighted works. Copyright: Michael Keller / Archon OS Project. Released under the MIT License together with this repository.
+Die **dekorativen Kompositionen** (`davinci_*`, `archon_banner_*`, `archon_hand_*`, `og-card-*`) wurden mit **Google Gemini image generation (Nano Banana / Nano Banana 2)** aus eigenen Prompts des Projektmaintainers erzeugt (Originalkompositionen, Copyright Michael Keller / Archon OS Project, MIT). Die unter „Website Visual Assets" aufgeführten **Systemansichten** sind demgegenüber echte Screenshots der Archon OS-Oberfläche mit Demo-Daten und nicht KI-generiert; es gelten die dort genannten Markenvorbehalte.
 
 - `davinci_vertical_*.webp`, `davinci_wheel_*.webp`, `davinci_creation.webp`, `archon_banner_*.webp`: Original compositions in the style of Leonardo da Vinci's copperplate engravings, generated from the maintainer's detailed prompts (about one hour of iteration per motif to reach the final result). The plates carry modern Archon OS labels (Policy Engine, Budget Bank, Passkey Gate, Audit Log / SHA-256) and are **not** reproductions of any work by Leonardo da Vinci.
 - `archon_hand.png` / `archon_hand.webp`: the maintainer's personal avatar, generated with Google Gemini (Nano Banana) from the maintainer's own prompt; also used as the site favicon. It may be replaced in a future release. The WebP is a resized derivative of the same generated image.

@@ -3,7 +3,7 @@
   "meta.description": "Self-hosted MIT multi-agent OS: 71 specialists, 80 Boardroom frameworks, Zero-Egress implemented and activatable with local models, BudgetBank, Passkey HITL, SHA-256 audit.",
   "meta.ogDescription": "Self-hosted MIT multi-agent OS: 71 specialists, 80 Boardroom frameworks, Zero-Egress implemented and activatable with local models, BudgetBank, Passkey HITL, SHA-256 audit.",
   "meta.twitterDescription": "Self-hosted MIT multi-agent OS: 71 specialists, 80 Boardroom frameworks, Zero-Egress implemented and activatable with local models, BudgetBank, Passkey HITL, SHA-256 audit.",
-  "meta.ogImageAlt": "Archon OS: dark infographic reading Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready, with a technical gear drawing",
+  "meta.ogImageAlt": "Archon OS infographic: enterprise multi-agent OS, Zero-Egress optional, compliance depends on configuration, with a technical gear drawing",
   "header.tagline": "Self-hosted Agentic Operating System &middot; MIT",
   "nav.install": "<a href=\"#install\">Install</a>",
   "nav.changelog": "<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md\">Changelog</a>",
@@ -69,7 +69,7 @@
   "faq.costs": "<h3>How are token costs &amp; risky actions controlled?</h3><p>A central PolicyEngine validates permissions before dispatch, privileged tools require signed time-bound warrants, BudgetBank reserves funds atomically, and high-risk approvals require WebAuthn Passkey signatures.</p>",
   "faq.gdpr": "<h3>Is it GDPR (DSGVO) &amp; EU AI Act ready?</h3><p>Compliance depends on your configuration. Sensitive business workloads stay on your server with fail-closed Zero-Egress, backed by an EU AI Act risk registry, tamper-evident SHA-256 audit logs, and 1-click GoBD procedural documentation export.</p>",
   "status.title": "<h2 class=\"sec\" id=\"status\">Honest status</h2>",
-  "status.text": "Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome.",
+  "status.text": "Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome. Authentication: the shipped <code>settings.json</code> has no <code>auth</code> block; on <code>127.0.0.1</code> Archon OS runs as a local single-user. Set <code>auth.enabled = true</code> before LAN or production use.",
   "docs.title": "<h2 class=\"sec\">Documentation (11 Languages)</h2>",
   "docs.head": "<tr><th>Document</th><th>Languages</th><th>Scope</th></tr>",
   "docs.manual.name": "<strong>System Manual (97 pp., v0.5.2.1 content)</strong>",
@@ -100,10 +100,13 @@
   "nav.menu": "Menu",
   "media.note": "<p class=\"shot-note\" style=\"font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0\">The decorative illustrations were AI-generated with Google Gemini (Nano Banana). The system views are real screenshots of the Archon OS UI containing demo data; third-party company and product names remain the property of their respective owners. Details: <a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets\">image credits &amp; AI-generated visuals</a>.</p>",
   "footer.mediaCredits": "Image credits &amp; AI-generated visuals",
-  "meta.twitterImageAlt": "Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready",
+  "meta.twitterImageAlt": "Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional, compliance depends on configuration",
   "nav.mainLabel": "Main navigation",
   "install.webhookComment": "Required: set ARCHON_HEARTBEAT_WEBHOOK_URL in .env to a real recipient",
   "js.copyTitle": "Copy install command to clipboard",
   "js.themeLight": "Light",
-  "js.themeDark": "Dark"
+  "js.themeDark": "Dark",
+  "js.copyFailed": "Copy failed — please select and copy the command manually.",
+  "js.themeToggleLight": "Switch to light theme",
+  "js.themeToggleDark": "Switch to dark theme"
 }

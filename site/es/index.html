@@ -35,12 +35,12 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:secure_url" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-es.png">
-<meta property="og:image:alt" content="Archon OS infografía: sistema multiagente empresarial, Zero-Egress, conforme al RGPD, con engranaje técnico">
+<meta property="og:image:alt" content="Archon OS infografía: SO multiagente empresarial, Zero-Egress opcional, cumplimiento según configuración, con engranaje técnico">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Archon OS: SO Multiagente Open Source (Zero-Egress)">
 <meta name="twitter:description" content="SO multiagente MIT autoalojado en Hermes Agent: 71 especialistas, 80 marcos Boardroom, Zero-Egress implementado y activable con modelos locales (actualmente desactivado), BudgetBank, Passkey HITL y auditoría SHA-256.">
 <meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-es.png">
-<meta name="twitter:image:alt" content="Archon OS: SO multiagente empresarial, Zero-Egress, conforme al RGPD">
+<meta name="twitter:image:alt" content="Archon OS: SO multiagente empresarial, Zero-Egress opcional, cumplimiento según configuración">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -239,7 +239,7 @@
 }
 </script>
 </head>
-<body data-copy="Copiar" data-copied="Copiado">
+<body data-copy="Copiar" data-copied="Copiado" data-copy-failed="Copia fallida – selecciona y copia el comando manualmente.">
 <a class="skip-link" href="#main">Saltar al contenido</a>
 <div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
@@ -351,7 +351,7 @@
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Novedades</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Seguridad</a>
       <select class="lang-switch" aria-label="Idioma" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/" selected>ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="Claro" data-dark="Oscuro">Claro</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="Claro" data-dark="Oscuro" data-toggle-light-label="Cambiar a tema claro" data-toggle-dark-label="Cambiar a tema oscuro">Claro</button>
     </nav>
   </div>
 </header>
@@ -362,11 +362,11 @@
       <div class="hero-inner">
         <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.2 &middot; Zero-Egress optional &middot; MIT Open Source</span></div>
         <h1>Un SO multiagente autoalojado: cumplimiento del RGPD según configuración.</h1>
-        <p class="hero-lead">Archon OS convierte Hermes Agent en un Sistema Operativo Agentico conforme al RGPD: 71 perfiles especialistas en 8 dominios, enrutamiento local Zero-Egress a prueba de fallos, límites de coste con Atomic BudgetBank, aprobaciones con Passkey WebAuthn, debates estructurados en el AI Boardroom y un registro de auditoría SHA-256 listo para GoBD. Tus documentos, tu vault de Obsidian, tus modelos.</p>
+        <p class="hero-lead">Archon OS convierte Hermes Agent en un Sistema Operativo Agentico conforme al RGPD: 71 perfiles especialistas en 8 dominios, enrutamiento local Zero-Egress a prueba de fallos, límites de coste con Atomic BudgetBank, aprobaciones con Passkey WebAuthn, debates estructurados en el AI Boardroom y un registro de auditoría SHA-256 listo para GoBD. Tus documentos, tu vault de Obsidian, tus modelos. El cumplimiento depende de la configuración: Zero-Egress está implementado, pero actualmente desactivado.</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">Inicio rápido</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d</code>
-          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d" aria-label="Copiar" title="Copiar el comando de instalación">Copiar</button>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="Copiar" title="Copiar el comando de instalación">Copiar</button>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.es.md">README en español</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">Ver en GitHub</a>
         </div>
@@ -589,13 +589,13 @@
 
     <h2 class="sec" id="wirtschaftlichkeit">Economía y TCO</h2>
 <div class="table-wrap" data-reveal>
-  <table><thead><tr><th>Position</th><th>Archon OS</th><th>Hinweis</th></tr></thead><tbody><tr><td>License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证</td><td>0 € (MIT)</td><td>Keine Seat-Gebühren; Betrieb selbst verantwortet.</td></tr><tr><td>Hardware</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Betrieb</td><td>Docker, Backups, Updates, Passkeys</td><td>Eigene Verantwortung; keine externen Dienste nötig.</td></tr></tbody></table>
+  <table><thead><tr><th>Concepto</th><th>Archon OS</th><th>Nota</th></tr></thead><tbody><tr><td>Licencia</td><td>0 € (MIT)</td><td>Sin tasas de licencia ni por puesto.</td></tr><tr><td>Hardware (PYME)</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Modelos locales 7B–14B; empresa 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Explotación</td><td>Tu responsabilidad (Docker, copias, actualizaciones)</td><td>Sin DPA/SLA; responsabilidad y documentación internas.</td></tr><tr><td>IA continua</td><td>0 € con modelo local; tokens cloud con límite</td><td>Límite diario por agente 1,50–2,50 EUR, aplicado antes del envío.</td></tr><tr><td>Valor probatorio</td><td>Cadena SHA-256 + exportación GoBD</td><td>Registros verificables en lugar de documentación manual.</td></tr></tbody></table>
 </div>
 <p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
-<h2 class="sec" id="use-cases-fachbereiche">Casos de uso en la empresa</h2>
-<div class="feats" data-reveal><div class="feat"><h3>Compras · Comparativa de proveedores</h3><p>Ofertas comparadas en el vault; envío solo tras firma Passkey y límite diario de tokens.</p></div><div class="feat"><h3>Controlling · Liquidez</h3><p>Plan de liquidez a 13 semanas; cada llamada registrada con proveedor, modelo y coste; exportación GoBD en un clic.</p></div><div class="feat"><h3>Compliance · Pruebas</h3><p>Matriz TOM (art. 32 RGPD), registro de riesgos de la EU AI Act y prueba de supresión del art. 17 en la cadena de auditoría.</p></div></div>
-<p class="status" style="margin-top:0.9rem">TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.</p>
-<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo">Demo anfragen</a></p>
+<h2 class="sec" id="use-cases-fachbereiche">Use Cases</h2>
+<div class="feats" data-reveal><div class="feat"><h3>Compras · Comparativa</h3><p>Ofertas comparadas en el vault; envío solo tras firma Passkey y límite diario.</p></div><div class="feat"><h3>Controlling · Liquidez</h3><p>Plan de liquidez a 13 semanas; cada llamada registrada con proveedor, modelo y coste; exportación GoBD en un clic.</p></div><div class="feat"><h3>Compliance · Pruebas</h3><p>Matriz TOM (art. 32 RGPD), registro EU AI Act y prueba de supresión del art. 17.</p></div></div>
+<p class="status" style="margin-top:0.9rem">Está documentada una matriz TOM (art. 32 RGPD), un registro de riesgos de la EU AI Act y una prueba de supresión del art. 17. Zero-Egress está implementado, pero desactivado por defecto.</p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="https://calendly.com/archon-os/demo" target="_blank" rel="noopener noreferrer">Solicitar demo</a> <a class="btn" href="#status">Estado completo &rarr;</a></p>
 
 
     <h2 class="sec" id="install">Instalación</h2>
@@ -616,7 +616,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     <h2 class="sec">¿Por qué Archon OS?</h2>
     <div class="governance-showcase" data-reveal>
       <div class="governance-copy">
-        <p><strong>Creado para la responsabilidad comercial y el cumplimiento del RGPD, no para demos de juguete.</strong> A diferencia de las bibliotecas de encadenamiento de prompts que delegan los límites de coste, la salida de datos y las fronteras de cumplimiento a código ad hoc, Archon OS aplica de serie enrutamiento local Zero-Egress a prueba de fallos, reservas Atomic BudgetBank, aprobaciones con Passkey WebAuthn, documentación EU AI Act / GoBD y trazas de auditoría SHA-256 - sobre 3 bases de datos SQLite WAL consolidadas (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>). Zero-Egress está desactivado por defecto y debe activarse con modelos locales.</p>
+        <p><strong>Creado para la responsabilidad comercial y el cumplimiento del RGPD, no para demos de juguete.</strong> A diferencia de las bibliotecas de encadenamiento de prompts que delegan los límites de coste, la salida de datos y las fronteras de cumplimiento a código ad hoc, Archon OS aplica de serie enrutamiento local Zero-Egress a prueba de fallos, reservas Atomic BudgetBank, aprobaciones con Passkey WebAuthn, documentación EU AI Act / GoBD y trazas de auditoría SHA-256 - sobre 3 bases de datos SQLite WAL consolidadas (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>). Zero-Egress está desactivado por defecto y debe activarse con modelos locales. Zero-Egress está implementado, pero se entrega desactivado y debe activarse con modelos locales.</p>
         <ul class="governance-pillars">
           <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny y Warrants HMAC-SHA256</li>
           <li><strong>II. PASSKEY LOCK</strong> &middot; Aprobación WebAuthn / Windows Hello / Touch ID</li>
@@ -768,7 +768,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     </section>
 
     <h2 class="sec" id="status">Estado honesto</h2>
-    <p class="status" data-reveal>Pre-1.0. Las interfaces y las claves de configuración cambian entre versiones. El módulo ERP/CRM es alpha, la aplicación de roles multiusuario se está reforzando y la salida de los especialistas es apoyo a la decisión, no asesoramiento licenciado. Issues y PRs son bienvenidos.</p>
+    <p class="status" data-reveal>Pre-1.0. Las interfaces y las claves de configuración cambian entre versiones. El módulo ERP/CRM es alpha, la aplicación de roles multiusuario se está reforzando y la salida de los especialistas es apoyo a la decisión, no asesoramiento licenciado. Issues y PRs son bienvenidos. Autenticación: el <code>settings.json</code> entregado no tiene bloque <code>auth</code>; en <code>127.0.0.1</code> se ejecuta como usuario único local. Configura <code>auth.enabled = true</code> antes de LAN o producción.</p>
 
     <h2 class="sec">Documentación (11 idiomas)</h2>
     <div class="table-wrap" data-reveal>

@@ -3,7 +3,7 @@
   "meta.description": "Selbstgehostetes MIT Multi-Agenten-OS: 71 Spezialisten, Passkey-Freigaben, Budget-Limit und Audit-Log. Zero-Egress vollständig implementiert und mit lokaler KI aktivierbar.",
   "meta.ogDescription": "Selbstgehostetes MIT Multi-Agenten-OS: 71 Spezialisten, Passkey-Freigaben, Budget-Limit und Audit-Log. Zero-Egress vollständig implementiert und mit lokaler KI aktivierbar.",
   "meta.twitterDescription": "Selbstgehostetes MIT Multi-Agenten-OS: 71 Spezialisten, Passkey-Freigaben, Budget-Limit und Audit-Log. Zero-Egress vollständig implementiert und mit lokaler KI aktivierbar.",
-  "meta.ogImageAlt": "Archon OS Infografik: Enterprise Multi-Agent OS, Zero-Egress, DSGVO-Ready mit Zahnrad-Entwurf",
+  "meta.ogImageAlt": "Archon OS Infografik: Enterprise Multi-Agent OS, Zero-Egress optional, DSGVO-konformer Betrieb konfigurationsabhängig, mit Zahnrad-Entwurf",
   "header.tagline": "Selbstgehostetes Agentic Operating System · MIT",
   "nav.install": "<a href=\"#install\">Installation</a>",
   "nav.changelog": "<a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md\">Änderungen</a>",
@@ -69,7 +69,7 @@
   "faq.costs": "<h3>Wie werden Token-Kosten &amp; riskante Aktionen kontrolliert?</h3><p>Eine zentrale PolicyEngine prüft Berechtigungen vor dem Dispatch, privilegierte Tools benötigen signierte, zeitlich begrenzte Warrants, die BudgetBank reserviert Mittel atomar, und Hochrisiko-Freigaben erfordern WebAuthn-Passkey-Signaturen.</p>",
   "faq.gdpr": "<h3>Ist es DSGVO- &amp; EU-AI-Act-ready?</h3><p>Konformität ist konfigurationsabhängig. Sensible Business-Workloads bleiben mit Fail-Closed Zero-Egress auf deinem Server, gestützt durch ein EU-AI-Act-Risikoregister, manipulationssichere SHA-256-Audit-Logs und den 1-Klick-Export der GoBD-Verfahrensdokumentation.</p>",
   "status.title": "<h2 class=\"sec\" id=\"status\">Ehrlicher Status</h2>",
-  "status.text": "Pre-1.0. Interfaces und Config-Keys ändern sich zwischen Releases. Das ERP/CRM-Modul ist Alpha, die Mehrbenutzer-Rollendurchsetzung wird noch gehärtet, und Spezialisten-Output ist Entscheidungsunterstützung, keine lizenzierte Beratung. Issues und PRs sind willkommen.",
+  "status.text": "Pre-1.0. Interfaces und Config-Keys ändern sich zwischen Releases. Das ERP/CRM-Modul ist Alpha, die Mehrbenutzer-Rollendurchsetzung wird noch gehärtet, und Spezialisten-Output ist Entscheidungsunterstützung, keine lizenzierte Beratung. Issues und PRs sind willkommen. Authentisierung: Die ausgelieferte <code>settings.json</code> enthält keinen <code>auth</code>-Block; auf <code>127.0.0.1</code> läuft Archon OS als lokaler Single-User. Vor LAN-/Produktivbetrieb <code>auth.enabled = true</code> setzen.",
   "docs.title": "<h2 class=\"sec\">Dokumentation (11 Sprachen)</h2>",
   "docs.head": "<tr><th>Dokument</th><th>Sprachen</th><th>Umfang</th></tr>",
   "docs.manual.name": "<strong>Systemhandbuch (97 S., Stand v0.5.2.1)</strong>",
@@ -100,10 +100,13 @@
   "nav.menu": "Menü",
   "media.note": "<p class=\"shot-note\" style=\"font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0\">Die Dekor-Grafiken wurden mit Google Gemini (Nano Banana) KI-generiert. Die Systemansichten sind echte Screenshots der Archon OS Oberfläche mit Demo-Daten; Firmen- und Produktnamen Dritter bleiben Eigentum ihrer respective Inhaber. Details: <a href=\"https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets\">Bildnachweise &amp; KI-Visuals</a>.</p>",
   "footer.mediaCredits": "Bildnachweise &amp; KI-Visuals",
-  "meta.twitterImageAlt": "Archon OS: Enterprise Multi-Agent OS, Zero-Egress, DSGVO-Ready",
+  "meta.twitterImageAlt": "Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional, DSGVO-konformer Betrieb konfigurationsabhängig",
   "nav.mainLabel": "Hauptnavigation",
   "install.webhookComment": "Pflicht: ARCHON_HEARTBEAT_WEBHOOK_URL in .env auf einen echten Empfänger setzen",
   "js.copyTitle": "Installationsbefehl in die Zwischenablage kopieren",
   "js.themeLight": "Hell",
-  "js.themeDark": "Dunkel"
+  "js.themeDark": "Dunkel",
+  "js.copyFailed": "Kopieren fehlgeschlagen – bitte Befehl manuell markieren und kopieren.",
+  "js.themeToggleLight": "Zum hellen Design wechseln",
+  "js.themeToggleDark": "Zum dunklen Design wechseln"
 }

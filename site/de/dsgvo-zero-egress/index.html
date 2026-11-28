@@ -207,7 +207,8 @@
       <div class="hero-inner">
         <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>DSGVO &amp; Compliance &middot; v0.6.0.2</span></div>
         <h1>Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD – nach Aktivierung (Default: aus).</h1>
-        <p class="hero-lead">Datenschutz entsteht nicht durch Prompt-Hinweise, sondern durch Netzwerkgrenzen und kryptografische Nachweise. Archon OS isoliert sensible Workloads technisch auf deinem Server.</p>
+        <p class="hero-lead">Datenschutz entsteht nicht durch Prompt-Hinweise, sondern durch Netzwerkgrenzen und kryptografische Nachweise. Die folgenden Mechanismen stehen bereit und wirken nach Aktivierung – im Auslieferungszustand ist Zero-Egress deaktiviert.</p>
+  <aside class="feat" style="border-left:3px solid var(--emerald);padding:0.9rem 1rem;margin:1rem 0"><strong>Geltungsbereich:</strong> Diese Seite beschreibt technische Mechanismen, keine Rechtsberatung und keine Konformitätsgarantie. Ob eine Verarbeitung DSGVO-konform ist, hängt von deiner Konfiguration und deinem Betrieb ab. Die Datenschutzerklärung für diese statische Website findest du unter <a href="../../datenschutz/">Datenschutz</a>; sie gilt nicht für die selbst gehostete Software.</aside>
         <div class="btnrow">
           <a class="btn primary" href="../../de/#install">Schnellstart (Docker)</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">Auf GitHub ansehen</a>
@@ -235,7 +236,7 @@
 
 <h2 class="sec">Warum Fail-Closed statt Best-Effort entscheidend ist</h2>
 <div class="feat why-callout">
-  <p>Viele KI-Wrapper schalten bei einem Timeout des lokalen Modells stillschweigend auf einen Cloud-Provider um („Fail-Open"). Genau dann fließen Gehaltslisten, Verträge oder Patientendaten unbemerkt ab. Archon OS bricht in sensiblen Kategorien bei nicht erreichbarem lokalem Modell hart ab (<strong>Fail-Closed</strong>) und protokolliert den Vorfall im Audit-Log.</p>
+  <p>Viele KI-Wrapper schalten bei einem Timeout des lokalen Modells stillschweigend auf einen Cloud-Provider um („Fail-Open"). Genau dann fließen Gehaltslisten, Verträge oder Patientendaten unbemerkt ab. <strong>Nach Aktivierung von Zero-Egress</strong> bricht Archon OS in sensiblen Kategorien bei nicht erreichbarem lokalem Modell hart ab (<strong>Fail-Closed</strong>) und protokolliert den Vorfall im Audit-Log.</p>
 </div>
 
   </div>

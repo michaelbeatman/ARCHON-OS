@@ -1362,15 +1362,12 @@ main [id], .hero [id], section [id] { scroll-margin-top: 5.5rem; }
   background-image: url("./img/davinci_wheel_light.webp");
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .hero-davinci-stage:not(:hover) .cw-gear,
-  .faq-davinci-frame:not(:hover) .cw-gear { animation-play-state: paused; }
-}
-
 /* Mobile: griffige Ziele, wischbare Screenshots, WebKit-Maske */
 .brand-link, footer a, .breadcrumb a { min-height: 44px; display: inline-flex; align-items: center; }
 .wrap .b2b-section { padding-left: 0; padding-right: 0; }
-.davinci-layers {
+.davinci-layer-under,
+.davinci-layer-plate,
+.davinci-layer-over {
   -webkit-mask-image:
     linear-gradient(to left, rgba(0,0,0,0.98) 46%, rgba(0,0,0,0.22) 78%, transparent 100%),
     linear-gradient(to bottom, rgba(0,0,0,0.98) 82%, transparent 100%);
@@ -1401,16 +1398,22 @@ main [id], .hero [id], section [id] { scroll-margin-top: 5.5rem; }
   .creation-davinci-stage { width: min(88vw, 1600px); }
 }
 
-/* Batch 6: reduced-motion fallback + laufende Zahnräder */
+/* Batch 8: AA-Kontrast, eine Gear-Regel, Reduced Motion */
+:root { --on-emerald: #050a08; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --on-emerald: #ffffff; }
+}
+:root[data-theme="light"] { --on-emerald: #ffffff; }
+.btn.primary:hover {
+  background: var(--emerald);
+  border-color: var(--emerald);
+  color: var(--on-emerald);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--emerald) 28%, transparent);
+}
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
   html.js [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
 }
 .hero-davinci-stage .cw-gear,
 .faq-davinci-frame .cw-gear { animation-play-state: running !important; }
 .cmd-note { margin: 0.35rem 0 0; font-size: 0.78rem; color: var(--fg-muted); }
-
-/* Batch 7: A11y/Visual */
-:root[data-theme="light"] .btn.primary:hover { color: #ffffff; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-.hero-davinci-stage .cw-gear,
-.faq-davinci-frame .cw-gear { animation-play-state: running !important; }

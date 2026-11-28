@@ -498,6 +498,25 @@ def build_b2b_extra(lang: str) -> str:
     )
 
 
+
+DE_MARKERS = (
+    "DSGVO", "Keine Seat-Gebühren", "Eigene Verantwortung",
+    "TOM-Matrix nach Art. 32", "Demo anfragen", "Hinweis für die Kalkulation",
+)
+
+
+def validate_sections_i18n() -> list[str]:
+    errors: list[str] = []
+    secs = load_sections_i18n()
+    for lang, cfg in secs.items():
+        if lang in ("en", "de"):
+            continue
+        blob = json.dumps(cfg.get("b2b_extra", {}), ensure_ascii=False)
+        for marker in DE_MARKERS:
+            if marker in blob:
+                errors.append(f"{lang}:b2b_extra: deutsches Fragment {marker!r}")
+    return errors
+
 def validate_catalog_values(catalogs: dict[str, dict[str, str]]) -> list[str]:
     errors: list[str] = []
     for lang, cat in catalogs.items():
@@ -515,6 +534,7 @@ def validate_catalog_values(catalogs: dict[str, dict[str, str]]) -> list[str]:
 
 def validate(template: str, catalogs: dict[str, dict[str, str]]) -> list[str]:
     errors = validate_catalog_values(catalogs)
+    errors.extend(validate_sections_i18n())
     keys = set(catalogs["en"])
     placeholders = set(PLACEHOLDER_RE.findall(template))
 

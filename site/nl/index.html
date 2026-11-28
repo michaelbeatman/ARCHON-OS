@@ -35,12 +35,12 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:secure_url" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-nl.png">
-<meta property="og:image:alt" content="Archon OS infografie: enterprise multi-agent OS, Zero-Egress, AVG-ready, met technisch tandwiel">
+<meta property="og:image:alt" content="Archon OS infografie: enterprise multi-agent OS, Zero-Egress optioneel, naleving afhankelijk van configuratie, met tandwiel">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Archon OS: Open-Source Multi-Agent OS (AVG/GDPR)">
 <meta name="twitter:description" content="Self-hosted MIT multi-agent OS op Hermes Agent: 71 specialisten, 80 Boardroom-frameworks, Zero-Egress geïmplementeerd en in te schakelen met lokale modellen (nu uit), BudgetBank, Passkey HITL en SHA-256 auditlog.">
 <meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-nl.png">
-<meta name="twitter:image:alt" content="Archon OS: enterprise multi-agent OS, Zero-Egress, AVG-ready">
+<meta name="twitter:image:alt" content="Archon OS: enterprise multi-agent OS, Zero-Egress optioneel, naleving afhankelijk van configuratie">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -239,7 +239,7 @@
 }
 </script>
 </head>
-<body data-copy="Kopiëren" data-copied="Gekopieerd">
+<body data-copy="Kopiëren" data-copied="Gekopieerd" data-copy-failed="Kopiëren mislukt – selecteer en kopieer het commando handmatig.">
 <a class="skip-link" href="#main">Naar inhoud springen</a>
 <div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
@@ -351,7 +351,7 @@
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Wijzigingen</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Beveiliging</a>
       <select class="lang-switch" aria-label="Taal" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/" selected>NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="Licht" data-dark="Donker">Licht</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="Licht" data-dark="Donker" data-toggle-light-label="Naar licht thema wisselen" data-toggle-dark-label="Naar donker thema wisselen">Licht</button>
     </nav>
   </div>
 </header>
@@ -362,11 +362,11 @@
       <div class="hero-inner">
         <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.2 &middot; Zero-Egress optional &middot; MIT Open Source</span></div>
         <h1>Een self-hosted multi-agentbesturingssysteem: AVG-conformiteit afhankelijk van configuratie.</h1>
-        <p class="hero-lead">Archon OS breidt Hermes Agent uit tot een AVG-conform Agentic Operating System: 71 specialistprofielen in 8 domeinen, fail-closed lokale Zero-Egress-routing, Atomic BudgetBank kostenplafonds, WebAuthn-Passkey-goedkeuringen, gestructureerde AI Boardroom-debatten en een GoBD-klaar SHA-256-auditlog. Jouw documenten, jouw Obsidian-vault, jouw modellen.</p>
+        <p class="hero-lead">Archon OS breidt Hermes Agent uit tot een AVG-conform Agentic Operating System: 71 specialistprofielen in 8 domeinen, fail-closed lokale Zero-Egress-routing, Atomic BudgetBank kostenplafonds, WebAuthn-Passkey-goedkeuringen, gestructureerde AI Boardroom-debatten en een GoBD-klaar SHA-256-auditlog. Jouw documenten, jouw Obsidian-vault, jouw modellen. Conformiteit hangt af van configuratie: Zero-Egress is geïmplementeerd maar nu uit.</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">Snelstart</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d</code>
-          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d" aria-label="Kopiëren" title="Installatiecommando kopiëren">Kopiëren</button>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="Kopiëren" title="Installatiecommando kopiëren">Kopiëren</button>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.nl.md">Nederlandse README</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">Bekijk op GitHub</a>
         </div>
@@ -589,13 +589,13 @@
 
     <h2 class="sec" id="wirtschaftlichkeit">Economie en TCO</h2>
 <div class="table-wrap" data-reveal>
-  <table><thead><tr><th>Position</th><th>Archon OS</th><th>Hinweis</th></tr></thead><tbody><tr><td>License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证</td><td>0 € (MIT)</td><td>Keine Seat-Gebühren; Betrieb selbst verantwortet.</td></tr><tr><td>Hardware</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Betrieb</td><td>Docker, Backups, Updates, Passkeys</td><td>Eigene Verantwortung; keine externen Dienste nötig.</td></tr></tbody></table>
+  <table><thead><tr><th>Post</th><th>Archon OS</th><th>Notitie</th></tr></thead><tbody><tr><td>Licentie</td><td>0 € (MIT)</td><td>Geen licentie- of seatkosten.</td></tr><tr><td>Hardware (MKB)</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Lokale modellen 7B–14B; enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Beheer</td><td>Uw verantwoordelijkheid (Docker, back-ups, updates)</td><td>Geen DPA/SLA; interne verantwoordelijkheid en documentatie.</td></tr><tr><td>Doorlopende AI</td><td>0 € met lokaal model; cloud-tokens met limiet</td><td>Daglimiet per agent 1,50–2,50 EUR, toegepast vóór verzending.</td></tr><tr><td>Bewijswaarde</td><td>SHA-256-keten + GoBD-export</td><td>Verifieerbare registraties in plaats van handmatige documentatie.</td></tr></tbody></table>
 </div>
 <p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
-<h2 class="sec" id="use-cases-fachbereiche">Use cases in het bedrijf</h2>
-<div class="feats" data-reveal><div class="feat"><h3>Inkoop · Leveranciersvergelijking</h3><p>Offers vergeleken in de vault; verzending pas na Passkey-handtekening en dagelijkse tokenlimiet.</p></div><div class="feat"><h3>Controlling · Liquiditeit</h3><p>13-weken liquiditeitsplanning; elke aanroep vastgelegd met provider, model en kosten; GoBD-export met één klik.</p></div><div class="feat"><h3>Compliance · Bewijs</h3><p>TOM-matrix (art. 32 AVG), EU AI Act-risicoregister en art. 17-wisbewijs in de auditketen.</p></div></div>
-<p class="status" style="margin-top:0.9rem">TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.</p>
-<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo">Demo anfragen</a></p>
+<h2 class="sec" id="use-cases-fachbereiche">Use Cases</h2>
+<div class="feats" data-reveal><div class="feat"><h3>Inkoop · Vergelijking</h3><p>Offers vergeleken in de vault; verzending pas na Passkey-handtekening en daglimiet.</p></div><div class="feat"><h3>Controlling · Liquiditeit</h3><p>13-wekenplanning; elke aanroep vastgelegd met provider, model en kosten; GoBD-export met één klik.</p></div><div class="feat"><h3>Compliance · Bewijs</h3><p>TOM-matrix (art. 32 AVG), EU AI Act-risicoregister en art. 17-wisbewijs.</p></div></div>
+<p class="status" style="margin-top:0.9rem">Een TOM-matrix (art. 32 AVG), een EU AI Act-risicoregister en een art. 17-wisbewijs zijn gedocumenteerd. Zero-Egress is geïmplementeerd maar standaard uitgeschakeld.</p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="https://calendly.com/archon-os/demo" target="_blank" rel="noopener noreferrer">Demo aanvragen</a> <a class="btn" href="#status">Volledige status &rarr;</a></p>
 
 
     <h2 class="sec" id="install">Installatie</h2>
@@ -616,7 +616,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     <h2 class="sec">Waarom Archon OS?</h2>
     <div class="governance-showcase" data-reveal>
       <div class="governance-copy">
-        <p><strong>Gebouwd voor commerciële verantwoordelijkheid en AVG-conformiteit, niet voor speelgoeddemo's.</strong> In tegenstelling tot prompt-chaining-bibliotheken die kostenplafonds, data-egress en compliance-grenzen overlaten aan maatwerk-lijmcode, handhaaft Archon OS standaard fail-closed lokale Zero-Egress-routing, Atomic BudgetBank-reserveringen, WebAuthn-Passkey-goedkeuringen, EU AI Act-/GoBD-documentatie en SHA-256-auditsporen - op 3 geconsolideerde SQLite WAL-databases (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>). Zero-Egress staat standaard uit en moet met lokale modellen worden ingeschakeld.</p>
+        <p><strong>Gebouwd voor commerciële verantwoordelijkheid en AVG-conformiteit, niet voor speelgoeddemo's.</strong> In tegenstelling tot prompt-chaining-bibliotheken die kostenplafonds, data-egress en compliance-grenzen overlaten aan maatwerk-lijmcode, handhaaft Archon OS standaard fail-closed lokale Zero-Egress-routing, Atomic BudgetBank-reserveringen, WebAuthn-Passkey-goedkeuringen, EU AI Act-/GoBD-documentatie en SHA-256-auditsporen - op 3 geconsolideerde SQLite WAL-databases (<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>). Zero-Egress staat standaard uit en moet met lokale modellen worden ingeschakeld. Zero-Egress is geïmplementeerd maar staat standaard uit en moet met lokale modellen worden ingeschakeld.</p>
         <ul class="governance-pillars">
           <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny &amp; HMAC-SHA256-warrants</li>
           <li><strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID HITL</li>
@@ -768,7 +768,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     </section>
 
     <h2 class="sec" id="status">Eerlijke status</h2>
-    <p class="status" data-reveal>Pre-1.0. Interfaces en config-sleutels veranderen tussen releases. De ERP/CRM-module is alpha, de handhaving van multi-user-rollen wordt nog versterkt en de output van specialisten is beslissingsondersteuning, geen erkend advies. Issues en PR's zijn welkom.</p>
+    <p class="status" data-reveal>Pre-1.0. Interfaces en config-sleutels veranderen tussen releases. De ERP/CRM-module is alpha, de handhaving van multi-user-rollen wordt nog versterkt en de output van specialisten is beslissingsondersteuning, geen erkend advies. Issues en PR's zijn welkom. Authentisatie: de geleverde <code>settings.json</code> heeft geen <code>auth</code>-blok; op <code>127.0.0.1</code> draait Archon OS als lokale enkele gebruiker. Stel <code>auth.enabled = true</code> in vóór LAN- of productiegebruik.</p>
 
     <h2 class="sec">Documentatie (11 talen)</h2>
     <div class="table-wrap" data-reveal>

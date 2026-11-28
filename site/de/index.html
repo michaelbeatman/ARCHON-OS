@@ -35,12 +35,12 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:secure_url" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-de.png">
-<meta property="og:image:alt" content="Archon OS Infografik: Enterprise Multi-Agent OS, Zero-Egress, DSGVO-Ready mit Zahnrad-Entwurf">
+<meta property="og:image:alt" content="Archon OS Infografik: Enterprise Multi-Agent OS, Zero-Egress optional, DSGVO-konformer Betrieb konfigurationsabhängig, mit Zahnrad-Entwurf">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Archon OS: Open-Source Multi-Agenten-OS (DSGVO)">
 <meta name="twitter:description" content="Selbstgehostetes MIT Multi-Agenten-OS: 71 Spezialisten, Passkey-Freigaben, Budget-Limit und Audit-Log. Zero-Egress vollständig implementiert und mit lokaler KI aktivierbar.">
 <meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-de.png">
-<meta name="twitter:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, DSGVO-Ready">
+<meta name="twitter:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional, DSGVO-konformer Betrieb konfigurationsabhängig">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -239,7 +239,7 @@
 }
 </script>
 </head>
-<body data-copy="Kopieren" data-copied="Kopiert">
+<body data-copy="Kopieren" data-copied="Kopiert" data-copy-failed="Kopieren fehlgeschlagen – bitte Befehl manuell markieren und kopieren.">
 <a class="skip-link" href="#main">Zum Inhalt springen</a>
 <div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
@@ -351,7 +351,7 @@
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Änderungen</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Sicherheit</a>
       <select class="lang-switch" aria-label="Sprache" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/" selected>DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="Hell" data-dark="Dunkel">Hell</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="Hell" data-dark="Dunkel" data-toggle-light-label="Zum hellen Design wechseln" data-toggle-dark-label="Zum dunklen Design wechseln">Hell</button>
     </nav>
   </div>
 </header>
@@ -365,8 +365,8 @@
         <p class="hero-lead">71 KI-Spezialisten erledigen Aufgaben in deinem Betrieb – mit hartem Budget-Limit, Passkey-Freigabe und manipulationssicherem Audit-Log. Ein Chatbot antwortet; Archon OS führt aus. Zero-Egress ist vollständig implementiert, hier aber noch nicht aktiv – lokale KI oder EU-Anbieter schalten ihn ein.</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">In 3 Schritten installieren</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d</code>
-          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d" aria-label="Kopieren" title="Installationsbefehl in die Zwischenablage kopieren">Kopieren</button>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="Kopieren" title="Installationsbefehl in die Zwischenablage kopieren">Kopieren</button>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/README.de.md">Anleitung lesen (DE)</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
         </div>
@@ -768,7 +768,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     </section>
 
     <h2 class="sec" id="status">Ehrlicher Status</h2>
-    <p class="status" data-reveal>Pre-1.0. Interfaces und Config-Keys ändern sich zwischen Releases. Das ERP/CRM-Modul ist Alpha, die Mehrbenutzer-Rollendurchsetzung wird noch gehärtet, und Spezialisten-Output ist Entscheidungsunterstützung, keine lizenzierte Beratung. Issues und PRs sind willkommen.</p>
+    <p class="status" data-reveal>Pre-1.0. Interfaces und Config-Keys ändern sich zwischen Releases. Das ERP/CRM-Modul ist Alpha, die Mehrbenutzer-Rollendurchsetzung wird noch gehärtet, und Spezialisten-Output ist Entscheidungsunterstützung, keine lizenzierte Beratung. Issues und PRs sind willkommen. Authentisierung: Die ausgelieferte <code>settings.json</code> enthält keinen <code>auth</code>-Block; auf <code>127.0.0.1</code> läuft Archon OS als lokaler Single-User. Vor LAN-/Produktivbetrieb <code>auth.enabled = true</code> setzen.</p>
 
     <h2 class="sec">Dokumentation (11 Sprachen)</h2>
     <div class="table-wrap" data-reveal>

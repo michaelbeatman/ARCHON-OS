@@ -32,7 +32,7 @@
 <meta name="twitter:image:alt" content="{{meta.twitterImageAlt}}">
 {{JSON_LD}}
 </head>
-<body data-copy="{{js.copy}}" data-copied="{{js.copied}}">
+<body data-copy="{{js.copy}}" data-copied="{{js.copied}}" data-copy-failed="{{js.copyFailed}}">
 <a class="skip-link" href="#main">{{nav.skip}}</a>
 <div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
@@ -63,7 +63,7 @@
       {{nav.changelog}}
       {{nav.security}}
       <select class="lang-switch" aria-label="{{nav.languageLabel}}" onchange="if(this.value)window.location.href=this.value">{{LANG_OPTIONS}}</select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="{{js.themeLight}}" data-dark="{{js.themeDark}}">{{js.themeLight}}</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="{{js.themeLight}}" data-dark="{{js.themeDark}}" data-toggle-light-label="{{js.themeToggleLight}}" data-toggle-dark-label="{{js.themeToggleDark}}">{{js.themeLight}}</button>
     </nav>
   </div>
 </header>
@@ -77,8 +77,8 @@
         <p class="hero-lead">{{hero.subline}}</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">{{hero.buttonQuickstart}}</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d</code>
-          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d" aria-label="{{js.copy}}" title="{{js.copyTitle}}">{{js.copy}}</button>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="{{js.copy}}" title="{{js.copyTitle}}">{{js.copy}}</button>
           <a class="btn" href="{{DOC_HREF}}">{{hero.buttonDocs}}</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">{{hero.buttonGithub}}</a>
         </div>

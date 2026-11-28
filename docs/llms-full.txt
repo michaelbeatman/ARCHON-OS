@@ -87,4 +87,4 @@ Built for regulated environmentsProcurement: supplier comparisons and contract d
 
 ### status.text
 
-Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome.
+Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome. Authentication: the shipped settings.json has no auth block; on 127.0.0.1 Archon OS runs as a local single-user. Set auth.enabled = true before LAN or production use.

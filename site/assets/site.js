@@ -23,7 +23,9 @@
         cur = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
       }
       themeBtn.textContent = themeBtn.getAttribute(cur === "dark" ? "data-light" : "data-dark") || (cur === "dark" ? "Light" : "Dark");
-      themeBtn.setAttribute("aria-label", cur === "dark" ? "Switch to light theme" : "Switch to dark theme");
+      themeBtn.setAttribute("aria-label", cur === "dark"
+        ? (themeBtn.getAttribute("data-toggle-light-label") || "Switch to light theme")
+        : (themeBtn.getAttribute("data-toggle-dark-label") || "Switch to dark theme"));
     };
     syncLabel();
     themeBtn.addEventListener("click", function () {
@@ -235,7 +237,7 @@
     try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
     document.body.removeChild(ta);
     if (ok) done();
-    else announce("Copy failed — please select and copy the command manually.");
+    else announce(document.body.getAttribute("data-copy-failed") || "Copy failed — please select and copy the command manually.");
   }
 
 

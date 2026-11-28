@@ -35,12 +35,12 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:secure_url" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-en.png">
-<meta property="og:image:alt" content="Archon OS: dark infographic reading Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready, with a technical gear drawing">
+<meta property="og:image:alt" content="Archon OS infographic: enterprise multi-agent OS, Zero-Egress optional, compliance depends on configuration, with a technical gear drawing">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Archon OS: Open-Source Multi-Agent OS (Zero-Egress)">
 <meta name="twitter:description" content="Self-hosted MIT multi-agent OS: 71 specialists, 80 Boardroom frameworks, Zero-Egress implemented and activatable with local models, BudgetBank, Passkey HITL, SHA-256 audit.">
 <meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-en.png">
-<meta name="twitter:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready">
+<meta name="twitter:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress optional, compliance depends on configuration">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -239,7 +239,7 @@
 }
 </script>
 </head>
-<body data-copy="Copy" data-copied="Copied">
+<body data-copy="Copy" data-copied="Copied" data-copy-failed="Copy failed — please select and copy the command manually.">
 <a class="skip-link" href="#main">Skip to content</a>
 <div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
@@ -351,7 +351,7 @@
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">Changelog</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">Security</a>
       <select class="lang-switch" aria-label="Language" onchange="if(this.value)window.location.href=this.value"><option value="./" selected>EN · English</option><option value="de/">DE · Deutsch</option><option value="es/">ES · Español</option><option value="fr/">FR · Français</option><option value="it/">IT · Italiano</option><option value="ja/">JA · 日本語</option><option value="ko/">KO · 한국어</option><option value="nl/">NL · Nederlands</option><option value="pt/">PT · Português</option><option value="ru/">RU · Русский</option><option value="zh/">ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="Light" data-dark="Dark">Light</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="Light" data-dark="Dark" data-toggle-light-label="Switch to light theme" data-toggle-dark-label="Switch to dark theme">Light</button>
     </nav>
   </div>
 </header>
@@ -365,8 +365,8 @@
         <p class="hero-lead">71 specialist agents get work done in your operation - with hard budget caps, passkey approvals and a tamper-evident audit log. A chatbot answers; Archon OS executes. Zero-Egress is fully implemented but not active here yet - local models or EU providers enable it.</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">Install in 3 steps</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d</code>
-          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d" aria-label="Copy" title="Copy install command to clipboard">Copy</button>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="Copy" title="Copy install command to clipboard">Copy</button>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/README.md">Read the docs (EN)</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">View the code</a>
         </div>
@@ -768,7 +768,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     </section>
 
     <h2 class="sec" id="status">Honest status</h2>
-    <p class="status" data-reveal>Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome.</p>
+    <p class="status" data-reveal>Pre-1.0. Interfaces and config keys change between releases. The ERP/CRM module is alpha, multi-user role enforcement is still being hardened, and specialist output is decision support, not licensed advice. Issues and PRs are welcome. Authentication: the shipped <code>settings.json</code> has no <code>auth</code> block; on <code>127.0.0.1</code> Archon OS runs as a local single-user. Set <code>auth.enabled = true</code> before LAN or production use.</p>
 
     <h2 class="sec">Documentation (11 Languages)</h2>
     <div class="table-wrap" data-reveal>

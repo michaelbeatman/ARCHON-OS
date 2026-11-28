@@ -383,6 +383,9 @@ def _render_shell(
     skip_lbl = "Zum Inhalt springen" if og_locale.startswith("de") else "Skip to content"
     menu_lbl = "Menü" if og_locale.startswith("de") else "Menu"
     nav_lbl = "Hauptnavigation" if og_locale.startswith("de") else "Main navigation"
+    scope_note = (
+        '<aside class="feat" style="border-left:3px solid var(--emerald);padding:0.9rem 1rem;margin:1rem 0"><strong>Geltungsbereich:</strong> Diese Seite beschreibt technische Mechanismen, keine Rechtsberatung und keine Konformitätsgarantie. Ob eine Verarbeitung DSGVO-konform ist, hängt von deiner Konfiguration und deinem Betrieb ab. Die Datenschutzerklärung für diese statische Website findest du unter <a href="../../datenschutz/">Datenschutz</a>; sie gilt nicht für die selbst gehostete Software.</aside>' if og_locale.startswith("de") else '<aside class="feat" style="border-left:3px solid var(--emerald);padding:0.9rem 1rem;margin:1rem 0"><strong>Scope:</strong> This page describes technical mechanisms, not legal advice or a compliance guarantee. Whether processing is GDPR-compliant depends on your configuration and operation. The privacy notice for this static site is at <a href="../../datenschutz/">Privacy</a>; it does not cover the self-hosted software.</aside>'
+    )
 
     return f"""<!doctype html>
 <html lang="{html_lang}">
@@ -458,6 +461,7 @@ def _render_shell(
         <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>{_esc(eyebrow)} &middot; {version}</span></div>
         <h1>{_esc(h1)}</h1>
         <p class="hero-lead">{_esc(lead)}</p>
+  {scope_note}
         <div class="btnrow">
           <a class="btn primary" href="{home_href}#install">{_esc(fw_meta["ctaQuickstart"])}</a>
           <a class="btn" href="{REPO_URL}" target="_blank" rel="noopener noreferrer">{_esc(fw_meta["ctaGithub"])}</a>
@@ -598,7 +602,7 @@ def _page_gdpr(lang: str) -> tuple[str, str, str, str, str, str]:
         desc = "Wie Archon OS DSGVO-Datenresidenz, Fail-Closed Zero-Egress im Docker-Netz, EU-AI-Act-Risikoregister, Passkey-HITL & GoBD-Exporte umsetzt."
         eyebrow = "DSGVO & Compliance"
         h1 = "Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD – nach Aktivierung (Default: aus)."
-        lead = "Datenschutz entsteht nicht durch Prompt-Hinweise, sondern durch Netzwerkgrenzen und kryptografische Nachweise. Archon OS isoliert sensible Workloads technisch auf deinem Server."
+        lead = "Datenschutz entsteht nicht durch Prompt-Hinweise, sondern durch Netzwerkgrenzen und kryptografische Nachweise. Die folgenden Mechanismen stehen bereit und wirken nach Aktivierung – im Auslieferungszustand ist Zero-Egress deaktiviert."
         body = """
 <h2 class="sec">Technische Schutzmaßnahmen (TOMs nach Art. 32 DSGVO)</h2>
 <div class="table-wrap">
@@ -617,7 +621,7 @@ def _page_gdpr(lang: str) -> tuple[str, str, str, str, str, str]:
 
 <h2 class="sec">Warum Fail-Closed statt Best-Effort entscheidend ist</h2>
 <div class="feat why-callout">
-  <p>Viele KI-Wrapper schalten bei einem Timeout des lokalen Modells stillschweigend auf einen Cloud-Provider um („Fail-Open"). Genau dann fließen Gehaltslisten, Verträge oder Patientendaten unbemerkt ab. Archon OS bricht in sensiblen Kategorien bei nicht erreichbarem lokalem Modell hart ab (<strong>Fail-Closed</strong>) und protokolliert den Vorfall im Audit-Log.</p>
+  <p>Viele KI-Wrapper schalten bei einem Timeout des lokalen Modells stillschweigend auf einen Cloud-Provider um („Fail-Open"). Genau dann fließen Gehaltslisten, Verträge oder Patientendaten unbemerkt ab. <strong>Nach Aktivierung von Zero-Egress</strong> bricht Archon OS in sensiblen Kategorien bei nicht erreichbarem lokalem Modell hart ab (<strong>Fail-Closed</strong>) und protokolliert den Vorfall im Audit-Log.</p>
 </div>
 """
         return title, desc, eyebrow, h1, lead, body
@@ -626,7 +630,7 @@ def _page_gdpr(lang: str) -> tuple[str, str, str, str, str, str]:
     desc = "How Archon OS enforces GDPR data residency via fail-closed Docker Zero-Egress, WebAuthn Passkey HITL, EU AI Act risk registry & SHA-256 audit trails."
     eyebrow = "GDPR & Compliance"
     h1 = "Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD – once enabled (default: off)."
-    lead = "Data sovereignty cannot rely on prompt instructions. Archon OS enforces hard Docker network boundaries, cryptographic human sign-offs, and tamper-evident SHA-256 audit chains on your own infrastructure."
+    lead = "Data sovereignty cannot rely on prompt instructions. Archon OS provides hard Docker network boundaries, cryptographic sign-offs and SHA-256 audit chains – effective once enabled; Zero-Egress ships disabled."
     body = """
 <h2 class="sec">Technical &amp; Organizational Safeguards</h2>
 <div class="table-wrap">
@@ -644,7 +648,7 @@ def _page_gdpr(lang: str) -> tuple[str, str, str, str, str, str]:
 
 <h2 class="sec">Why Fail-Closed Beats Best-Effort Routing</h2>
 <div class="feat why-callout">
-  <p>Typical LLM routers silently fall back to cloud APIs when a local model stalls (fail-open), leaking contracts or payroll records during transient hiccups. Archon OS aborts sensitive requests hard when local inference is unavailable (<strong>fail-closed</strong>) and logs the blocked dispatch.</p>
+  <p>Typical LLM routers silently fall back to cloud APIs when a local model stalls (fail-open), leaking contracts or payroll records during transient hiccups. <strong>With Zero-Egress enabled</strong>, Archon OS aborts sensitive requests hard when local inference is unavailable (<strong>fail-closed</strong>) and logs the blocked dispatch.</p>
 </div>
 """
     return title, desc, eyebrow, h1, lead, body

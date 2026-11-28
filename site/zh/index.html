@@ -35,12 +35,12 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:secure_url" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-zh.png">
-<meta property="og:image:alt" content="Archon OS 信息图：企业级多智能体操作系统、Zero-Egress、符合 GDPR，含齿轮技术插图">
+<meta property="og:image:alt" content="Archon OS 信息图：企业级多智能体操作系统、Zero-Egress 可选、合规性取决于配置，含齿轮插图">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Archon OS: 开源多智能体操作系统 (Zero-Egress)">
 <meta name="twitter:description" content="基于 Hermes Agent 的自托管 MIT 多智能体操作系统：71 位专家角色、80 个 Boardroom 决策框架、Zero-Egress 已实现，可用本地模型启用（当前关闭）、BudgetBank、Passkey HITL 与 SHA-256 审计日志。">
 <meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-zh.png">
-<meta name="twitter:image:alt" content="Archon OS: 企业级多智能体操作系统、Zero-Egress、符合 GDPR">
+<meta name="twitter:image:alt" content="Archon OS: 企业级多智能体操作系统、Zero-Egress 可选、合规性取决于配置">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -239,7 +239,7 @@
 }
 </script>
 </head>
-<body data-copy="复制" data-copied="已复制">
+<body data-copy="复制" data-copied="已复制" data-copy-failed="复制失败 – 请手动选择并复制命令。">
 <a class="skip-link" href="#main">跳到主要内容</a>
 <div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
@@ -351,7 +351,7 @@
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">更新日志</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">安全</a>
       <select class="lang-switch" aria-label="语言" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/" selected>ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle data-light="浅色" data-dark="深色">浅色</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="浅色" data-dark="深色" data-toggle-light-label="切换到浅色主题" data-toggle-dark-label="切换到深色主题">浅色</button>
     </nav>
   </div>
 </header>
@@ -362,11 +362,11 @@
       <div class="hero-inner">
         <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.2 &middot; Zero-Egress optional &middot; MIT Open Source</span></div>
         <h1>自托管多智能体操作系统——是否符合 GDPR 取决于配置。</h1>
-        <p class="hero-lead">Archon OS 将 Hermes Agent 扩展为符合 GDPR 的智能体操作系统：8 大领域的 71 个专家档案、故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 成本上限、WebAuthn 通行密钥审批、结构化的 AI Boardroom 辩论，以及符合 GoBD 的 SHA-256 审计日志。你的文档、你的 Obsidian 知识库、你的模型。</p>
+        <p class="hero-lead">Archon OS 将 Hermes Agent 扩展为符合 GDPR 的智能体操作系统：8 大领域的 71 个专家档案、故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 成本上限、WebAuthn 通行密钥审批、结构化的 AI Boardroom 辩论，以及符合 GoBD 的 SHA-256 审计日志。你的文档、你的 Obsidian 知识库、你的模型。 合规取决于配置：Zero-Egress 已实现，但当前关闭。</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">快速开始</a>
-          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d</code>
-          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d" aria-label="复制" title="复制安装命令">复制</button>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; echo 'ARCHON_HEARTBEAT_WEBHOOK_URL=https://example.invalid/hook' &gt;&gt; .env &amp;&amp; docker compose up -d</code>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="" aria-label="复制" title="复制安装命令">复制</button>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.zh.md">中文 README</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">在 GitHub 查看</a>
         </div>
@@ -589,13 +589,13 @@
 
     <h2 class="sec" id="wirtschaftlichkeit">经济性与 TCO</h2>
 <div class="table-wrap" data-reveal>
-  <table><thead><tr><th>Position</th><th>Archon OS</th><th>Hinweis</th></tr></thead><tbody><tr><td>License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证</td><td>0 € (MIT)</td><td>Keine Seat-Gebühren; Betrieb selbst verantwortet.</td></tr><tr><td>Hardware</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Betrieb</td><td>Docker, Backups, Updates, Passkeys</td><td>Eigene Verantwortung; keine externen Dienste nötig.</td></tr></tbody></table>
+  <table><thead><tr><th>项目</th><th>Archon OS</th><th>说明</th></tr></thead><tbody><tr><td>许可证</td><td>0 € (MIT)</td><td>无许可费或席位费。</td></tr><tr><td>硬件（中小企业）</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>本地模型 7B–14B；32B–70B: 64 GB RAM / 24–48 GB VRAM。</td></tr><tr><td>运维</td><td>您自行负责（Docker、备份、更新）</td><td>无需外部服务；运维与文档责任在您。</td></tr><tr><td>持续 AI 成本</td><td>本地模型 0 €，云 Token 可设上限</td><td>每代理每日上限 1.50–2.50 EUR，执行前封顶。</td></tr><tr><td>证据价值</td><td>SHA-256 审计链 + GoBD 导出</td><td>可验证记录替代手工文档。</td></tr></tbody></table>
 </div>
 <p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
-<h2 class="sec" id="use-cases-fachbereiche">企业中的使用案例</h2>
-<div class="feats" data-reveal><div class="feat"><h3>采购 · 供应商比较</h3><p>在 Vault 中比较报价，仅在 Passkey 签名后发送；设有每日 Token 上限。</p></div><div class="feat"><h3> Controlling · 流动性</h3><p>13周现金流计划；每次调用记录提供商、模型和成本；一键导出 GoBD。</p></div><div class="feat"><h3>合规 · 证据</h3><p>TOM 矩阵（GDPR 第32条）、EU AI Act 风险登记册和第17条删除证据写入审计链。</p></div></div>
-<p class="status" style="margin-top:0.9rem">TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.</p>
-<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo">Demo anfragen</a></p>
+<h2 class="sec" id="use-cases-fachbereiche">使用案例</h2>
+<div class="feats" data-reveal><div class="feat"><h3>采购 · 供应商比较</h3><p>在 Vault 中比较报价，仅 Passkey 签名后发送；设有每日上限。</p></div><div class="feat"><h3> Controlling · 流动性</h3><p>13周现金流计划；每次调用记录提供商、模型和成本；一键导出 GoBD。</p></div><div class="feat"><h3>合规 · 证据</h3><p>TOM 矩阵（GDPR 第32条）、EU AI Act 风险登记册和第17条删除证据。</p></div></div>
+<p class="status" style="margin-top:0.9rem">已记录 TOM 矩阵（GDPR 第32条）、EU AI Act 风险登记册和第17条删除证据。Zero-Egress 已实现，但默认关闭。</p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="https://calendly.com/archon-os/demo" target="_blank" rel="noopener noreferrer">申请演示</a> <a class="btn" href="#status">完整状态 &rarr;</a></p>
 
 
     <h2 class="sec" id="install">安装部署</h2>
@@ -616,7 +616,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     <h2 class="sec">为什么选择 Archon OS？</h2>
     <div class="governance-showcase" data-reveal>
       <div class="governance-copy">
-        <p><strong>为商业问责与 GDPR 合规而建，而非玩具演示。</strong> 与把成本上限、数据外发和合规边界交给自写胶水代码的提示链库不同，Archon OS 开箱即强制故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 预留、WebAuthn 通行密钥审批、EU AI Act / GoBD 文档和 SHA-256 审计轨迹 - 运行在 3 个整合的 SQLite WAL 数据库（<code>ops.db</code>、<code>business.db</code>、<code>memory.db</code>）之上。 Zero-Egress 默认关闭，需使用本地模型启用。</p>
+        <p><strong>为商业问责与 GDPR 合规而建，而非玩具演示。</strong> 与把成本上限、数据外发和合规边界交给自写胶水代码的提示链库不同，Archon OS 开箱即强制故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 预留、WebAuthn 通行密钥审批、EU AI Act / GoBD 文档和 SHA-256 审计轨迹 - 运行在 3 个整合的 SQLite WAL 数据库（<code>ops.db</code>、<code>business.db</code>、<code>memory.db</code>）之上。 Zero-Egress 默认关闭，需使用本地模型启用。 Zero-Egress 已实现但默认关闭，需用本地模型启用。</p>
         <ul class="governance-pillars">
           <li><strong>I. POLICY ENGINE</strong> &middot; 默认拒绝策略与 HMAC-SHA256 工具凭证</li>
           <li><strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID 加密审批</li>
@@ -768,7 +768,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     </section>
 
     <h2 class="sec" id="status">坦诚的状态</h2>
-    <p class="status" data-reveal>Pre-1.0。接口与配置键在版本间会变化。ERP/CRM 模块为 alpha，多用户角色强制仍在加固中，专家输出属于决策支持而非持牌咨询。欢迎提交 Issue 与 PR。</p>
+    <p class="status" data-reveal>Pre-1.0。接口与配置键在版本间会变化。ERP/CRM 模块为 alpha，多用户角色强制仍在加固中，专家输出属于决策支持而非持牌咨询。欢迎提交 Issue 与 PR。 认证：交付的 <code>settings.json</code> 没有 <code>auth</code> 块；在 <code>127.0.0.1</code> 上以本地单用户模式运行。在局域网或生产使用前请设置 <code>auth.enabled = true</code>。</p>
 
     <h2 class="sec">文档（11 种语言）</h2>
     <div class="table-wrap" data-reveal>

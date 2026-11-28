@@ -207,7 +207,8 @@
       <div class="hero-inner">
         <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>GDPR &amp; Compliance &middot; v0.6.0.2</span></div>
         <h1>Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD – once enabled (default: off).</h1>
-        <p class="hero-lead">Data sovereignty cannot rely on prompt instructions. Archon OS enforces hard Docker network boundaries, cryptographic human sign-offs, and tamper-evident SHA-256 audit chains on your own infrastructure.</p>
+        <p class="hero-lead">Data sovereignty cannot rely on prompt instructions. Archon OS provides hard Docker network boundaries, cryptographic sign-offs and SHA-256 audit chains – effective once enabled; Zero-Egress ships disabled.</p>
+  <aside class="feat" style="border-left:3px solid var(--emerald);padding:0.9rem 1rem;margin:1rem 0"><strong>Scope:</strong> This page describes technical mechanisms, not legal advice or a compliance guarantee. Whether processing is GDPR-compliant depends on your configuration and operation. The privacy notice for this static site is at <a href="../../datenschutz/">Privacy</a>; it does not cover the self-hosted software.</aside>
         <div class="btnrow">
           <a class="btn primary" href="../#install">Quick Start (Docker)</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">View on GitHub</a>
@@ -234,7 +235,7 @@
 
 <h2 class="sec">Why Fail-Closed Beats Best-Effort Routing</h2>
 <div class="feat why-callout">
-  <p>Typical LLM routers silently fall back to cloud APIs when a local model stalls (fail-open), leaking contracts or payroll records during transient hiccups. Archon OS aborts sensitive requests hard when local inference is unavailable (<strong>fail-closed</strong>) and logs the blocked dispatch.</p>
+  <p>Typical LLM routers silently fall back to cloud APIs when a local model stalls (fail-open), leaking contracts or payroll records during transient hiccups. <strong>With Zero-Egress enabled</strong>, Archon OS aborts sensitive requests hard when local inference is unavailable (<strong>fail-closed</strong>) and logs the blocked dispatch.</p>
 </div>
 
   </div>

@@ -3,7 +3,7 @@
   "codename": "Audit Remediation W0–W7 & Full-Suite Green",
   "released_at": "2026-11-27 12:18",
   "previous_version": "v0.6.0.1",
-  "commit": "v0.6.0.1",
+  "commit": "v0.6.0.2",
   "features": [
     "v0.6.0.1 Audit Remediation (W0–W7): 121/121 gewichtete Audit-Funde behoben (0 offen), alle 21 vorbestehenden Baseline-Testfehler & Windows-Teardown-Flake bereinigt — 2961 passed / 16 skipped / 0 failed, Ruff/MyPy/lint-imports/tsc Exit 0",
     "v0.6.0 Security & Hardening: workspace path-jail with case/symlink/sensitive-file checks, PocketBase filter escaping, atomic cost-guard persistence, and fail-closed HMAC audit startup gate",

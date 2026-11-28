@@ -14,7 +14,28 @@
     .legal h2 { font-size: 1.25rem; margin: 2rem 0 .6rem; }
     .legal p, .legal li { color: #c9d1d9; }
     .legal a { color: #58a6ff; }
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) .legal p,
+      :root:not([data-theme="dark"]) .legal li { color: #27272a; }
+      :root:not([data-theme="dark"]) .legal a { color: #065f46; }
+    }
+    :root[data-theme="light"] .legal p,
+    :root[data-theme="light"] .legal li { color: #27272a; }
+    :root[data-theme="light"] .legal a { color: #065f46; }
   </style>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Archon OS">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/datenschutz/">
+  <meta property="og:title" content="Datenschutzerklärung — Archon OS">
+  <meta property="og:description" content="Datenschutzerklärung für die statische Archon OS Projektseite: keine Cookies, keine Tracker, nur technisch notwendige Hosting-Daten.">
+  <meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Datenschutzerklärung — Archon OS">
+  <meta name="twitter:description" content="Datenschutzerklärung für die statische Archon OS Projektseite: keine Cookies, keine Tracker, nur technisch notwendige Hosting-Daten.">
+  <meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
 </head>
 <body>
 <main class="legal">
@@ -32,11 +53,13 @@
   <h2>Aufruf der Seite / Server-Logs</h2>
   <p>Beim Aufruf dieser Seite verarbeitet der Hostinganbieter (GitHub Pages, ein Dienst der GitHub, Inc. / Microsoft Corporation) technisch notwendige Verbindungsdaten: IP-Adresse, Datum und Uhrzeit, angeforderte URL, User-Agent und Referrer. Dies ist erforderlich, um die Seite auszuliefern und ihren sicheren Betrieb zu gewährleisten.</p>
   <p><strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse am störungsfreien und sicheren Betrieb).</p>
-  <p><strong>Empfänger:</strong> GitHub, Inc. / Microsoft Corporation als Hostinganbieter. Eine darüber hinausgehende Weitergabe an Dritte erfolgt nicht.</p>
-  <p><strong>Speicherdauer:</strong> Die Protokolldaten werden vom Hostinganbieter nur kurzfristig gespeichert.</p>
+  <p><strong>Empfänger und Drittlandtransfer:</strong> GitHub, Inc. / Microsoft Corporation (USA) als Hostinganbieter. Eine Übermittlung in die USA erfolgt, sofern die DPF-Zertifizierung des Anbieters greift, auf Grundlage des EU-US Data Privacy Framework (Art. 45 DSGVO); andernfalls auf Grundlage der EU-Standardvertragsklauseln (Art. 46 Abs. 2 lit. c DSGVO). Eine darüber hinausgehende Weitergabe an Dritte erfolgt nicht.</p>
+  <p><strong>Speicherdauer:</strong> Die Verbindungsdaten werden nur so lange verarbeitet, wie es für die Auslieferung der Seite und die Abwehr von Störungen und Angriffen technisch erforderlich ist (Kriterium: technische Notwendigkeit). Eine dauerhafte Speicherung, Zusammenführung oder Auswertung durch mich findet nicht statt; die konkrete Löschfrist liegt beim Hostinganbieter und ist nicht von mir beeinflussbar.</p>
 
   <h2>Keine Cookies, keine Tracker, keine Analyse</h2>
   <p>Diese Seite setzt <strong>keine Cookies</strong>, verwendet <strong>keine Tracking-Pixel</strong>, <strong>keine Analyse- oder Werbedienste</strong> und lädt <strong>keine externen Schriftarten oder Skripte</strong> von Drittanbietern. Alle Stylesheets, Skripte, Schriften und Bilder werden vom selben Hostinganbieter ausgeliefert.</p>
+  <p><strong>Lokale Speicherung (Theme):</strong> Wenn du den Hell/Dunkel-Umschalter nutzt, speichert das Script <code>assets/site.js</code> deine Auswahl als <code>localStorage</code>-Eintrag <code>archon-theme</code> ausschließlich in deinem Browser. Dies dient allein der von dir ausdrücklich gewünschten Darstellungsfunktion (§ 25 Abs. 2 Nr. 2 TDDDG), wird nicht an Dritte übertragen und kann jederzeit durch Löschen der Browserdaten entfernt werden.</p>
+  <p>Hinweis: Die im Projektwurzel liegenden Dateien <code>google36835167d0f38907.html</code>, <code>yandex_a92d2a31f9bb7e99.html</code>, <code>BingSiteAuth.xml</code> und <code>ecac6512cb55e5cf2c2cbc128fb011880d31a24bbf3e8fcbda3db80e2ecab3b6.txt</code> dienen ausschließlich der Inhaberverifikation bei Suchmaschinen. Sie setzen keine Cookies, laden keine Skripte und verarbeiten über die oben beschriebenen Server-Verbindungsdaten hinaus keine personenbezogenen Daten.</p>
 
   <h2>Externe Links</h2>
   <p>Beim Anklicken externer Links (GitHub, LinkedIn, Hermes Agent) verlässt du diese Seite. Für die Datenverarbeitung auf den verlinkten Plattformen gelten deren eigene Datenschutzerklärungen.</p>

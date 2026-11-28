@@ -1,6 +1,6 @@
 # Archon OS
 
-> Archon OS is a self-hosted, MIT-licensed Agentic Operating System (multi-agent enterprise suite) built on Hermes Agent. It enforces fail-closed Zero-Egress local LLM routing, atomic pre-dispatch token budget reservations, WebAuthn Passkey human-in-the-loop approvals, crash-safe Effect-Ledger execution, and a SHA-256 hash-chained audit log on your own Docker server.
+> Archon OS is a self-hosted, MIT-licensed Agentic Operating System (multi-agent enterprise suite) built on Hermes Agent. Fail-closed Zero-Egress local LLM routing is fully implemented and can be enabled in production with local models or EU-based providers (off by default in the running deployment), atomic pre-dispatch token budget reservations, WebAuthn Passkey human-in-the-loop approvals (per-user opt-in), crash-safe Effect-Ledger execution, and a SHA-256 hash-chained audit log on your own Docker server.
 
 - Website (EN): https://michaelbeatman.github.io/ARCHON-OS/
 - Website (DE): https://michaelbeatman.github.io/ARCHON-OS/de/
@@ -30,24 +30,24 @@
 - **71 Agent Profiles across 8 Domains:** Strategy & Leadership (13), Law/Tax/Finance (11), Sales/CRM/Marketing (11), Creation/Media (8), Tech/Software/QA (8), Commerce/Procurement (7), Real Estate/Construction (7), and Medicine/Chemistry/Engineering (6).
 - **PolicyEngine & Signed Tool Warrants:** Default-deny tool access. Privileged tools require HMAC-SHA256 signed, time-limited warrants with parameter bounds. Delegated sub-agents never inherit privileged tools.
 - **Atomic BudgetBank:** Pre-execution transactional budget reservations (`BEGIN IMMEDIATE`) prevent parallel agents from exceeding daily or per-task cost caps.
-- **Passkey / WebAuthn HITL:** High-risk approvals (payments, budget overruns, destructive actions) require cryptographic verification via Windows Hello, Touch ID, Face ID, or hardware keys.
-- **Fail-Closed Zero-Egress Routing:** OmniRoute sends finance, HR, contract, CRM, and GDPR workloads exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route.
+- **Passkey / WebAuthn HITL:** After per-user passkey registration, high-risk approvals (payments, budget overruns, destructive actions) require cryptographic verification via Windows Hello, Touch ID, Face ID, or hardware keys. Without registration the feature is off for that user.
+- **Fail-Closed Zero-Egress Routing (fully implemented):** OmniRoute routes finance, HR, contract, CRM, and GDPR workloads exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route once enabled. The implementation is complete; the shipped default is off because the operator must supply local models or EU providers.
 - **Crash-Safe Execution (Effect-Ledger):** Transactional Effect-Ledger (`PENDING -> COMMITTED / FAILED / UNKNOWN`) with Outbox idempotency keys and mandatory reconciliation prevents duplicate external side effects.
 - **Auditability & Compliance:** SHA-256 hash-chained audit log, 3 consolidated SQLite WAL databases (`ops.db`, `business.db`, `memory.db`) with Litestream replication, EU AI Act risk registry, GDPR Art. 17 erasure, § 201 StGB audio consent gate, physical multi-tenant DB isolation (Holding/GmbH/SPV), and 1-click GoBD procedural documentation export.
 - **Security Hardening (v0.6.0.1):** Workspace path-jail, Delegation Isolation, Session Taint Guard (HITL), Offline AEAD Vault, and Flightlog policy backtester.
-- **AI Boardroom & Knowledge Base:** 80 structured multi-perspective decision frameworks across 9 categories, 832 Prompt Studio templates, 39 skills, 6 MCP servers, local Obsidian Markdown vault + AnythingLLM/ChromaDB vector RAG, and embedded n8n webhook automation.
+- **AI Boardroom & Knowledge Base:** 80 structured multi-perspective decision frameworks across 9 categories, 832 Prompt Studio templates, 18 active skills (39 cataloged), 6 MCP servers, local Obsidian Markdown vault + AnythingLLM/ChromaDB vector RAG, and embedded n8n webhook automation.
 - **Self-Healing & Observability Stack:** `archon-autoheal` 24/7 `/livez` container recovery plus optional Docker Compose profiles for `Prometheus`, `Alertmanager`, `Grafana`, `Loki`/`Promtail`, `OTel`/`Tempo`, `Uptime Kuma`, `Caddy`/`Authelia` SSO, `Metabase` BI, and `DocuSeal` e-signature.
 
 ## Quick Start
 
-- Full stack (8 default containers, expandable to 24 with optional profiles): `git clone https://github.com/michaelbeatman/ARCHON-OS.git && cd ARCHON-OS && docker compose up -d`
+- Full stack (8 default containers, expandable to 24 with optional profiles): `git clone https://github.com/michaelbeatman/ARCHON-OS.git && cd ARCHON-OS && cp .env.example .env && docker compose up -d` (set `ARCHON_HEARTBEAT_WEBHOOK_URL` in `.env` first)
 - Zero-key demo mode: `ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d`
 
 ## PDF Documentation & Changelog
 
-- System Manual (EN, page count varies by language): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
-- Systemhandbuch (DE, Seitenzahl je nach Sprache): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
-- Complete Feature List (EN): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf
+- System Manual (EN, generated for v0.5.2.1, page count varies by language): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
+- Systemhandbuch (DE, erstellt für v0.5.2.1, Seitenzahl je nach Sprache): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
+- Complete Feature List (EN, generated for v0.5.2.1): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf
 - Changelog: https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md
 
 
@@ -55,11 +55,11 @@
 
 ### hero.headline
 
-Multi-agent automation for regulated environments - self-hosted, open source.
+Multi-agent automation that won't act without approval - self-hosted, open source.
 
 ### hero.subline
 
-Archon OS brings 71 specialist profiles, hard budget caps, passkey approvals and a tamper-evident audit log to your operations. Zero-Egress is designed in and can be enabled with local models or EU-based providers - currently disabled by default in the running deployment. You keep documents, vault and models under your control.
+71 specialist agents get work done in your operation - with hard budget caps, passkey approvals and a tamper-evident audit log. A chatbot answers; Archon OS executes. Zero-Egress is fully implemented but not active here yet - local models or EU providers enable it.
 
 ### faq.what
 
@@ -67,7 +67,7 @@ What is Archon OS?Archon OS is a self-hosted, MIT-licensed Agentic Operating Sys
 
 ### faq.leaks
 
-How does it prevent sensitive data leaks?OmniRoute enforces a fail-closed Zero-Egress policy: finance, contracts, CRM, HR, and GDPR workloads run exclusively on local models (Ollama or LM Studio) inside an internal Docker network without an internet route.
+How does it prevent sensitive data leaks?OmniRoute enforces a fail-closed Zero-Egress policy: finance, contracts, CRM, HR, and GDPR workloads run exclusively on local models (Ollama or LM Studio) inside an internal Docker network without an internet route. Fail-closed applies only when enabled; the shipped default is privacy.zero_egress = false.
 
 ### faq.costs
 
@@ -83,7 +83,7 @@ How is Archon OS different from a regular chatbot?A chatbot answers. Archon OS e
 
 ### b2b.section
 
-Built for regulated environmentsProcurement: supplier comparisons and contract drafts run behind passkey approvals; budget caps stop uncontrolled agent spend. Controlling: every dispatch is logged with provider, model and cost in a hash-chained trail — one-click GoBD export. Compliance: TOM matrix, EU AI Act risk register and § 201 StGB consent gate are configuration, not add-ons.Economics: €0 licence (MIT). You own infrastructure, configuration and operation; Zero-Egress is explicitly an option, not a guarantee.
+Built for regulated environmentsProcurement: supplier comparisons and contract drafts run behind passkey approvals; budget caps stop uncontrolled agent spend. Controlling: every dispatch is logged with provider, model and cost in a hash-chained trail — one-click GoBD export. Compliance: TOM matrix, EU AI Act risk register and a consent gate under § 201 StGB (confidentiality of speech) are configuration, not add-ons.Economics: €0 licence (MIT). You own infrastructure, configuration and operation; Zero-Egress is explicitly an option, not a guarantee.Scope limitation (honest status): Zero-Egress is off by default and must be enabled with local models or EU providers. The ERP/CRM module is alpha and multi-user role enforcement is still being hardened. Agent output is decision support, not licensed advice. Full status →
 
 ### status.text
 

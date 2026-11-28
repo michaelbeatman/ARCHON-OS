@@ -18,10 +18,11 @@
 <link rel="alternate" hreflang="nl" href="https://michaelbeatman.github.io/ARCHON-OS/nl/boardroom-frameworks/">
 <link rel="alternate" hreflang="pt" href="https://michaelbeatman.github.io/ARCHON-OS/pt/boardroom-frameworks/">
 <link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/">
-<link rel="alternate" hreflang="zh" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/">
+<link rel="alternate" hreflang="zh-CN" href="https://michaelbeatman.github.io/ARCHON-OS/zh/boardroom-frameworks/">
 <link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/boardroom-frameworks/">
-<link rel="icon" type="image/png" href="../../archon_hand.png">
+<link rel="icon" type="image/webp" href="../../archon_hand.webp">
 <link rel="preload" href="../../assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../../assets/fonts/geist-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../../assets/site.css">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Archon OS">
@@ -29,13 +30,18 @@
 <meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/">
 <meta property="og:title" content="AI Boardroom: 80 фреймворков решений в Archon OS">
 <meta property="og:description" content="Каталог структурированных методик AI Boardroom в Archon OS: изолированные дебаты экспертов, критическая проверка и итоговый синтез.">
-<meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+<meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-ru.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready">
+<meta name="twitter:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready">
+<meta property="article:published_time" content="2026-11-28T00:00:00+01:00">
+<meta property="article:modified_time" content="2026-11-28T00:00:00+01:00">
+<meta property="article:author" content="Michael Keller (Michael Beatman)">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="AI Boardroom: 80 фреймворков решений в Archon OS">
 <meta name="twitter:description" content="Каталог структурированных методик AI Boardroom в Archon OS: изолированные дебаты экспертов, критическая проверка и итоговый синтез.">
-<meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+<meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-ru.png">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -66,7 +72,7 @@
       "inLanguage": "ru",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/ru/boardroom-frameworks/",
       "dateModified": "2026-11-27",
-      "image": "https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png",
+      "image": "https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-ru.png",
       "author": {
         "@type": "Person",
         "name": "Michael Keller",
@@ -94,6 +100,8 @@
 </script>
 </head>
 <body data-copy="Копировать" data-copied="Скопировано">
+<a class="skip-link" href="#main">Skip to content</a>
+<div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
     <div class="davinci-layer-under"><svg class="davinci-underlayer-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -156,8 +164,7 @@
   </g>
 </svg></div>
     <div class="davinci-layer-plate">
-      <img class="davinci-plate-img img-dark-only" src="../../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager">
-      <img class="davinci-plate-img img-light-only" src="../../assets/img/davinci_vertical_light.webp" width="764" height="1024" alt="" loading="eager">
+      <div class="davinci-layer-plate" data-plate="vertical" aria-hidden="true"></div>
     </div>
     <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <!-- Real sweeping chronometer hands on BUDGET BANK dial (442, 324) -->
@@ -189,17 +196,18 @@
 <header>
   <div class="wrap">
     <a class="brand-link" href="../../ru/">
-      <img class="hand-avatar" src="../../archon_hand.png" width="40" height="40" alt="Archon OS">
+      <img class="hand-avatar" src="../../archon_hand.webp" width="40" height="40" alt="Archon OS" decoding="async">
       <span>
         <span class="brand-name">Archon OS</span>
         <span class="tag">v0.6.0.2 &middot; Локальная мультиагентная ОС</span>
       </span>
     </a>
-    <nav aria-label="Main navigation"><a href="../../ru/">Главная</a><a href="../../architecture/">Архитектура</a><a href="../../gdpr-zero-egress/">GDPR</a><a href="../../compare/">Сравнение</a><a href="../../ru/boardroom-frameworks/">Фреймворки</a><a href="../../specialists/">Специалисты</a><select class="lang-switch" aria-label="Language" onchange="if(this.value)window.location.href=this.value"><option value="../../boardroom-frameworks/">EN · English</option><option value="../../de/boardroom-frameworks/">DE · Deutsch</option><option value="../../es/boardroom-frameworks/">ES · Español</option><option value="../../fr/boardroom-frameworks/">FR · Français</option><option value="../../it/boardroom-frameworks/">IT · Italiano</option><option value="../../ja/boardroom-frameworks/">JA · 日本語</option><option value="../../ko/boardroom-frameworks/">KO · 한국어</option><option value="../../nl/boardroom-frameworks/">NL · Nederlands</option><option value="../../pt/boardroom-frameworks/">PT · Português</option><option value="../../ru/boardroom-frameworks/" selected>RU · Русский</option><option value="../../zh/boardroom-frameworks/">ZH · 中文</option></select><button type="button" class="theme-btn" data-theme-toggle>Light</button></nav>
+    <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="main-nav" aria-label="Menu">Menu</button>
+    <nav id="main-nav" aria-label="Main navigation"><a href="../../ru/">Главная</a><a href="../../architecture/">Архитектура</a><a href="../../gdpr-zero-egress/">GDPR</a><a href="../../compare/">Сравнение</a><a href="../../ru/boardroom-frameworks/">Фреймворки</a><a href="../../specialists/">Специалисты</a><select class="lang-switch" aria-label="Language" onchange="if(this.value)window.location.href=this.value"><option value="../../boardroom-frameworks/">EN · English</option><option value="../../de/boardroom-frameworks/">DE · Deutsch</option><option value="../../es/boardroom-frameworks/">ES · Español</option><option value="../../fr/boardroom-frameworks/">FR · Français</option><option value="../../it/boardroom-frameworks/">IT · Italiano</option><option value="../../ja/boardroom-frameworks/">JA · 日本語</option><option value="../../ko/boardroom-frameworks/">KO · 한국어</option><option value="../../nl/boardroom-frameworks/">NL · Nederlands</option><option value="../../pt/boardroom-frameworks/">PT · Português</option><option value="../../ru/boardroom-frameworks/" selected>RU · Русский</option><option value="../../zh/boardroom-frameworks/">ZH · 中文</option></select><button type="button" class="theme-btn" data-theme-toggle>Light</button></nav>
   </div>
 </header>
 
-<main>
+<main id="main" tabindex="-1">
   <section class="hero">
     <div class="wrap">
       <nav class="breadcrumb" aria-label="Breadcrumb">
@@ -210,8 +218,8 @@
         <h1>Структурированные многосторонние дебаты вместо ответов одного промпта.</h1>
         <p class="hero-lead">AI Boardroom проводит стратегические решения через изолированных профильных агентов, перекрёстную критику и итоговый синтез. Ниже представлены все 80 методик движка решений в 9 категориях в алфавитном порядке.</p>
         <div class="btnrow">
-          <a class="btn primary" href="https://github.com/michaelbeatman/ARCHON-OS">Открыть на GitHub</a>
-          <a class="btn" href="../../ru/#install">Быстрый старт (Docker)</a>
+          <a class="btn primary" href="../../ru/#install">Быстрый старт (Docker)</a>
+          <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">Открыть на GitHub</a>
         </div>
       </div>
     </div>
@@ -252,8 +260,7 @@
   </g>
 </svg></div>
       <div class="davinci-layer-plate">
-        <img class="davinci-plate-img img-dark-only" src="../../assets/img/davinci_wheel_dark.webp" width="1024" height="764" alt="" loading="lazy">
-        <img class="davinci-plate-img img-light-only" src="../../assets/img/davinci_wheel_light.webp" width="1024" height="764" alt="" loading="lazy">
+        <div class="davinci-layer-plate" data-plate="wheel" aria-hidden="true"></div>
       </div>
       <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 1024 764" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <g class="cw-hand-sweep" style="transform-origin:424px 200px">
@@ -273,6 +280,8 @@
     <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">MIT</a>
     <a href="https://www.linkedin.com/in/michael-keller-a43b6611b/" rel="noopener me">LinkedIn</a>
     <a href="mailto:archon.os.system@gmail.com">archon.os.system@gmail.com</a>
+    <a href="../../impressum/">Imprint</a>
+    <a href="../../datenschutz/">Privacy</a>
     <a href="../../llms.txt">llms.txt</a>
   </div>
 </footer>

@@ -104,7 +104,7 @@ Archon OS is built on four essential components working together. Both **Option 
 
 | Component | Role in Archon OS | How It Gets Installed |
 |---|---|---|
-| **1. Docker** *(Desktop / Engine v2)* | Runs 7 default containers (Archon OS, OmniRoute, Hermes Agent, AnythingLLM, Chroma, Socket Proxy, Autoheal — up to 24 with profiles) | **Auto-offered** via `winget` (Windows), `brew` (macOS), or `get.docker.com` (Linux) |
+| **1. Docker** *(Desktop / Engine v2)* | Runs 8 default containers (Archon OS, OmniRoute, Hermes Agent, AnythingLLM, Chroma, Socket Proxy, Autoheal — up to 24 with profiles) | **Auto-offered** via `winget` (Windows), `brew` (macOS), or `get.docker.com` (Linux) |
 | **2. Hermes Agent** *(`nousresearch/hermes-agent`)* | Core multi-agent runtime, session gateway (port `8644`), and Telegram interface | **Pulled & started automatically** by Docker Compose alongside Archon OS |
 | **3. AnythingLLM + Chroma** *(Vector RAG)* | Powers **Central Library → RAG** (`http://localhost:3001`) with semantic indexing | **Pulled & started automatically** in the default `Standard` stack |
 | **4. Obsidian** *(Desktop App + Mounted Vault)* | Persistent Markdown Second Brain (`/opt/data/obsidian`) storing reports, HR files, and graphs | Vault folders auto-initialized in `./obsidian_vault`; **Obsidian Desktop** install auto-offered (`winget` / `brew` / Flatpak) |

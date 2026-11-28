@@ -258,7 +258,7 @@ def _render_shell(
     asset_base = "../" * depth
     home_href = asset_base if lang == "en" else (asset_base + lang + "/")
     can_url = b + rel_path
-    og_img = b + "assets/img/og-card.png"
+    og_img = b + "assets/img/og-card-" + lang + ".png"
     version, version_bare = _load_version()
 
     html_lang = LANGS.get(lang, (lang, lang))[0]
@@ -279,7 +279,7 @@ def _render_shell(
 
     if hreflang_map:
         hreflang_lines = [
-            f'<link rel="alternate" hreflang="{code}" href="{b + rel}">'
+            f'<link rel="alternate" hreflang="{LANGS.get(code, (code,))[0]}" href="{b + rel}">'
             for code, rel in hreflang_map.items()
         ]
         hreflang_lines.append(
@@ -380,6 +380,10 @@ def _render_shell(
         indent=2,
     )
 
+    skip_lbl = "Zum Inhalt springen" if og_locale.startswith("de") else "Skip to content"
+    menu_lbl = "Menü" if og_locale.startswith("de") else "Menu"
+    nav_lbl = "Hauptnavigation" if og_locale.startswith("de") else "Main navigation"
+
     return f"""<!doctype html>
 <html lang="{html_lang}">
 <head>
@@ -391,8 +395,9 @@ def _render_shell(
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <link rel="canonical" href="{can_url}">
 {hreflang_html}
-<link rel="icon" type="image/png" href="{asset_base}archon_hand.png">
+<link rel="icon" type="image/webp" href="{asset_base}archon_hand.webp">
 <link rel="preload" href="{asset_base}assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{asset_base}assets/fonts/geist-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{asset_base}assets/site.css">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Archon OS">
@@ -403,6 +408,11 @@ def _render_shell(
 <meta property="og:image" content="{og_img}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready">
+<meta name="twitter:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready">
+<meta property="article:published_time" content="2026-11-28T00:00:00+01:00">
+<meta property="article:modified_time" content="2026-11-28T00:00:00+01:00">
+<meta property="article:author" content="Michael Keller (Michael Beatman)">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{_esc(title)}">
 <meta name="twitter:description" content="{_esc(description)}">
@@ -412,12 +422,13 @@ def _render_shell(
 </script>
 </head>
 <body data-copy="{_esc(copy_lbl)}" data-copied="{_esc(copied_lbl)}">
+<a class="skip-link" href="#main">{skip_lbl}</a>
+<div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
     <div class="davinci-layer-under">{build_davinci_vertical_underlayer_svg()}</div>
     <div class="davinci-layer-plate">
-      <img class="davinci-plate-img img-dark-only" src="{asset_base}assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager">
-      <img class="davinci-plate-img img-light-only" src="{asset_base}assets/img/davinci_vertical_light.webp" width="764" height="1024" alt="" loading="eager">
+      <div class="davinci-layer-plate" data-plate="vertical" aria-hidden="true"></div>
     </div>
     <div class="davinci-layer-over">{build_davinci_vertical_overlay_svg()}</div>
   </div>
@@ -426,17 +437,18 @@ def _render_shell(
 <header>
   <div class="wrap">
     <a class="brand-link" href="{home_href}">
-      <img class="hand-avatar" src="{asset_base}archon_hand.png" width="40" height="40" alt="Archon OS">
+      <img class="hand-avatar" src="{asset_base}archon_hand.webp" width="40" height="40" alt="Archon OS" decoding="async">
       <span>
         <span class="brand-name">Archon OS</span>
         <span class="tag">{version} &middot; {_esc(fw_meta["tagline"])}</span>
       </span>
     </a>
-    <nav aria-label="Main navigation">{nav_links}</nav>
+    <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="main-nav" aria-label="{menu_lbl}">{menu_lbl}</button>
+    <nav id="main-nav" aria-label="{nav_lbl}">{nav_links}</nav>
   </div>
 </header>
 
-<main>
+<main id="main" tabindex="-1">
   <section class="hero">
     <div class="wrap">
       <nav class="breadcrumb" aria-label="Breadcrumb">
@@ -447,8 +459,8 @@ def _render_shell(
         <h1>{_esc(h1)}</h1>
         <p class="hero-lead">{_esc(lead)}</p>
         <div class="btnrow">
-          <a class="btn primary" href="{REPO_URL}">{_esc(fw_meta["ctaGithub"])}</a>
-          <a class="btn" href="{home_href}#install">{_esc(fw_meta["ctaQuickstart"])}</a>
+          <a class="btn primary" href="{home_href}#install">{_esc(fw_meta["ctaQuickstart"])}</a>
+          <a class="btn" href="{REPO_URL}" target="_blank" rel="noopener noreferrer">{_esc(fw_meta["ctaGithub"])}</a>
         </div>
       </div>
     </div>
@@ -462,8 +474,7 @@ def _render_shell(
     <div class="subpage-wheel-wrap">
       <div class="davinci-layer-under">{build_davinci_underlayer_svg()}</div>
       <div class="davinci-layer-plate">
-        <img class="davinci-plate-img img-dark-only" src="{asset_base}assets/img/davinci_wheel_dark.webp" width="1024" height="764" alt="" loading="lazy">
-        <img class="davinci-plate-img img-light-only" src="{asset_base}assets/img/davinci_wheel_light.webp" width="1024" height="764" alt="" loading="lazy">
+        <div class="davinci-layer-plate" data-plate="wheel" aria-hidden="true"></div>
       </div>
       <div class="davinci-layer-over">{build_davinci_overlay_svg()}</div>
     </div>
@@ -477,6 +488,8 @@ def _render_shell(
     <a href="{REPO_URL}/blob/main/LICENSE">MIT</a>
     <a href="{LINKEDIN_URL}" rel="noopener me">LinkedIn</a>
     <a href="mailto:{CONTACT_EMAIL}">{CONTACT_EMAIL}</a>
+    <a href="{asset_base}impressum/">{"Impressum" if og_locale.startswith("de") else "Imprint"}</a>
+    <a href="{asset_base}datenschutz/">{"Datenschutz" if og_locale.startswith("de") else "Privacy"}</a>
     <a href="{asset_base}llms.txt">llms.txt</a>
   </div>
 </footer>
@@ -492,11 +505,13 @@ def _page_architecture(lang: str) -> tuple[str, str, str, str, str, str]:
     svg = build_zero_egress_diagram_svg(lang, svg_labels)
     if lang == "de":
         title = "Archon OS Architektur: PolicyEngine, BudgetBank & Docker-Stack"
-        desc = "Technische Architektur von Archon OS: OmniRoute Zero-Egress, HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & 7-Container-Docker-Stack."
+        desc = "Technische Architektur von Archon OS: OmniRoute Zero-Egress (optional), HMAC-Warrants, Atomic BudgetBank, Effect-Ledger, 3x SQLite WAL & 8-Container-Docker-Stack."
         eyebrow = "Architektur & Stack"
         h1 = "Systemarchitektur für verlässliche Multi-Agenten-Flotten."
         lead = "Archon OS trennt Agenten-Logik strikt von Governance, Kostenkontrolle und Seiteneffekten. Jeder Tool- und LLM-Aufruf durchläuft deterministische Sicherheits-Gates auf 3 konsolidierten SQLite-WAL-Datenbanken."
         body = f"""
+<p class="version-note">Release: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/config/version.json">v0.6.0.2</a> · deploytes Basis-Image-Tag: <code>agent-os-container:v0.5.7</code> (siehe <code>docker-compose.yml:36</code>).</p>
+
 <h2 class="sec">Zero-Egress- &amp; Governance-Datenfluss</h2>
 <div class="arch-box">{svg}</div>
 
@@ -530,6 +545,8 @@ def _page_architecture(lang: str) -> tuple[str, str, str, str, str, str]:
     h1 = "System architecture built for accountable multi-agent fleets."
     lead = "Archon OS decouples agent reasoning from governance, cost control, and external side effects. Every model and tool invocation clears deterministic safety gates backed by 3 consolidated SQLite WAL databases."
     body = f"""
+<p class="version-note">Release: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/config/version.json">v0.6.0.2</a> · deployed base image tag: <code>agent-os-container:v0.5.7</code> (see <code>docker-compose.yml:36</code>).</p>
+
 <h2 class="sec">Zero-Egress &amp; Governance Data Flow</h2>
 <div class="arch-box">{svg}</div>
 

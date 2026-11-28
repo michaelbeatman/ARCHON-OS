@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Archon OS: 开源多智能体操作系统 (Zero-Egress)</title>
-<meta name="description" content="基于 Hermes Agent 的自托管 MIT 多智能体操作系统：71 位专家角色、80 个 Boardroom 决策框架、Zero-Egress 本地路由、BudgetBank、Passkey HITL 与 SHA-256 审计日志。">
+<meta name="description" content="基于 Hermes Agent 的自托管 MIT 多智能体操作系统：71 位专家角色、80 个 Boardroom 决策框架、Zero-Egress 已实现，可用本地模型启用（当前关闭）、BudgetBank、Passkey HITL 与 SHA-256 审计日志。">
 <meta name="author" content="Michael Keller (Michael Beatman)">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <link rel="canonical" href="https://michaelbeatman.github.io/ARCHON-OS/zh/">
@@ -20,23 +20,27 @@
 <link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/">
 <link rel="alternate" hreflang="zh-CN" href="https://michaelbeatman.github.io/ARCHON-OS/zh/">
 <link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/">
-<link rel="icon" type="image/png" href="../archon_hand.png">
+<link rel="icon" type="image/webp" href="../archon_hand.webp">
 <link rel="preload" href="../assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../assets/fonts/geist-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../assets/site.css">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Archon OS">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/zh/">
 <meta property="og:title" content="Archon OS: 开源多智能体操作系统 (Zero-Egress)">
-<meta property="og:description" content="基于 Hermes Agent 的自托管智能体操作系统：71 个专家档案、符合 GDPR 的 Zero-Egress 路由、Atomic BudgetBank、通行密钥 HITL 与 SHA-256 审计日志。">
-<meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+<meta property="og:description" content="基于 Hermes Agent 的自托管 MIT 多智能体操作系统：71 位专家角色、80 个 Boardroom 决策框架、Zero-Egress 已实现，可用本地模型启用（当前关闭）、BudgetBank、Passkey HITL 与 SHA-256 审计日志。">
+<meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-zh.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Archon OS Mission Control 仪表盘">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:secure_url" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-zh.png">
+<meta property="og:image:alt" content="Archon OS 信息图：企业级多智能体操作系统、Zero-Egress、符合 GDPR，含齿轮技术插图">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Archon OS: 开源多智能体操作系统 (Zero-Egress)">
-<meta name="twitter:description" content="基于 Hermes Agent 的自托管智能体操作系统：71 个专家档案、GDPR Zero-Egress 路由、Atomic BudgetBank、通行密钥 HITL &amp; SHA-256 审计日志。">
-<meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+<meta name="twitter:description" content="基于 Hermes Agent 的自托管 MIT 多智能体操作系统：71 位专家角色、80 个 Boardroom 决策框架、Zero-Egress 已实现，可用本地模型启用（当前关闭）、BudgetBank、Passkey HITL 与 SHA-256 审计日志。">
+<meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-zh.png">
+<meta name="twitter:image:alt" content="Archon OS: 企业级多智能体操作系统、Zero-Egress、符合 GDPR">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -48,7 +52,7 @@
       "url": "https://michaelbeatman.github.io/ARCHON-OS/",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://michaelbeatman.github.io/ARCHON-OS/archon_hand.png"
+        "url": "https://michaelbeatman.github.io/ARCHON-OS/archon_hand.webp"
       },
       "founder": {
         "@type": "Person",
@@ -94,7 +98,10 @@
       "name": "Archon OS",
       "alternateName": "ARCHON-OS",
       "inLanguage": "zh-CN",
-      "applicationCategory": "DeveloperApplication, BusinessApplication",
+      "applicationCategory": [
+        "DeveloperApplication",
+        "BusinessApplication"
+      ],
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
       "softwareVersion": "0.6.0.2",
       "dateModified": "2026-11-27",
@@ -107,8 +114,8 @@
         "JavaScript",
         "Shell"
       ],
-      "image": "https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png",
-      "description": "基于 Hermes Agent 的自托管 MIT 多智能体操作系统：71 位专家角色、80 个 Boardroom 决策框架、Zero-Egress 本地路由、BudgetBank、Passkey HITL 与 SHA-256 审计日志。",
+      "image": "https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-zh.png",
+      "description": "基于 Hermes Agent 的自托管 MIT 多智能体操作系统：71 位专家角色、80 个 Boardroom 决策框架、Zero-Egress 已实现，可用本地模型启用（当前关闭）、BudgetBank、Passkey HITL 与 SHA-256 审计日志。",
       "author": {
         "@id": "https://michaelbeatman.github.io/ARCHON-OS/#founder"
       },
@@ -117,14 +124,18 @@
       },
       "isBasedOn": {
         "@type": "SoftwareSourceCode",
+        "@id": "https://github.com/NousResearch/hermes-agent",
         "name": "Hermes Agent",
-        "codeRepository": "https://github.com/NousResearch/hermes-agent"
+        "codeRepository": "https://github.com/NousResearch/hermes-agent",
+        "sameAs": [
+          "https://github.com/NousResearch/hermes-agent"
+        ]
       },
       "featureList": [
         "AI Boardroom决策以隔离的多视角辩论形式进行，包含批评者交叉质询与综合归纳，覆盖从 OKR 到 Pre-Mortem 的 80 种框架。",
         "Zero-Egress & GDPR财务、人事、合同与 CRM 数据留在无互联网路由的隔离 Docker 网络内的本地模型上。故障关闭，确保严格的 GDPR 数据驻留。",
         "Atomic BudgetBank & 签名 Warrant令牌与成本预算在执行前以事务方式预留（BEGIN IMMEDIATE）。特权工具需要有时限的 HMAC-SHA256 Warrant。",
-        "通行密钥 / WebAuthn HITL高风险审批（付款、预算超支、破坏性操作）需要 Windows Hello、Touch ID 或硬件密钥的加密签名。模型无法伪造审批。",
+        "通行密钥 / WebAuthn HITL高风险审批（付款、预算超支、破坏性操作）需要 Windows Hello、Touch ID 或硬件密钥的加密签名。模型无法伪造审批。 未注册时该功能对该用户关闭，请在正式使用前启用。",
         "崩溃安全的 Effect-Ledger外部副作用由带幂等键的事务账本跟踪，并在未知状态后强制对账，避免重复操作。",
         "审计日志、EU AI Act & GoBDSHA-256 哈希链日志以防篡改方式记录每次派发（供应商、模型、主机），并配有 EU AI Act 风险登记册和一键导出 GoBD 程序文档。"
       ],
@@ -151,8 +162,8 @@
         },
         {
           "@type": "PropertyValue",
-          "name": "Skills",
-          "value": 39
+          "name": "Active skills",
+          "value": 18
         },
         {
           "@type": "PropertyValue",
@@ -173,7 +184,8 @@
       "offers": {
         "@type": "Offer",
         "price": "0",
-        "priceCurrency": "EUR"
+        "priceCurrency": "EUR",
+        "description": "License fee 0 EUR (MIT). Infrastructure, configuration and operation are borne by the operator; optional cloud token costs are budget-capped."
       }
     },
     {
@@ -194,7 +206,7 @@
           "name": "如何防止敏感数据泄露？",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "OmniRoute 执行故障关闭的 Zero-Egress 策略：财务、合同、CRM、人事与 GDPR 工作负载仅在无互联网路由的内部 Docker 网络中的本地模型（Ollama 或 LM Studio）上运行。"
+            "text": "OmniRoute 执行故障关闭的 Zero-Egress 策略：财务、合同、CRM、人事与 GDPR 工作负载仅在无互联网路由的内部 Docker 网络中的本地模型（Ollama 或 LM Studio）上运行。 故障关闭仅在启用后生效，默认关闭。"
           }
         },
         {
@@ -212,6 +224,14 @@
             "@type": "Answer",
             "text": "取决于你的配置。敏感业务工作负载通过故障关闭的 Zero-Egress 留在你的服务器上，并有 EU AI Act 风险登记册、防篡改 SHA-256 审计日志与一键 GoBD 程序文档导出作为支撑。"
           }
+        },
+        {
+          "@type": "Question",
+          "name": "Archon OS 与普通聊天机器人有何不同？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "聊天机器人负责回答。Archon OS 负责执行约束：每次调用前的预算闸门、高风险操作的 Passkey 批准以及可验证的审计链。区别在于强制执行，而非对话。"
+          }
         }
       ]
     }
@@ -221,6 +241,7 @@
 </head>
 <body data-copy="复制" data-copied="已复制">
 <a class="skip-link" href="#main">跳到主要内容</a>
+<div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
@@ -284,7 +305,7 @@
   </g>
 </svg></div>
     <div class="davinci-layer-plate">
-      <img class="davinci-plate-img" data-theme-dark="../assets/img/davinci_vertical_dark.webp" data-theme-light="../assets/img/davinci_vertical_light.webp" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" decoding="async">
+      <img class="davinci-plate-img" data-theme-dark="../assets/img/davinci_vertical_dark.webp" data-theme-light="../assets/img/davinci_vertical_light.webp" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" fetchpriority="low" decoding="async">
     </div>
     <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <!-- Real sweeping chronometer hands on BUDGET BANK dial (442, 324) -->
@@ -316,21 +337,21 @@
 <header>
   <div class="wrap">
     <a class="brand-link" href="https://michaelbeatman.github.io/ARCHON-OS/zh/">
-      <img class="hand-avatar" src="../archon_hand.png" width="40" height="40" alt="Archon OS">
+      <img class="hand-avatar" src="../archon_hand.webp" width="40" height="40" alt="Archon OS" decoding="async">
       <span>
         <span class="brand-name">Archon OS</span>
         <span class="tag">自托管智能体操作系统 · MIT</span>
       </span>
     </a>
     <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="main-nav" aria-label="菜单">菜单</button>
-    <nav id="main-nav" aria-label="Main navigation">
+    <nav id="main-nav" aria-label="主导航">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       <a href="#install">安装部署</a>
       <a href="../architecture/" hreflang="en">系统架构 (EN)</a><a href="../gdpr-zero-egress/" hreflang="en">GDPR合规 (EN)</a><a href="../compare/" hreflang="en">框架对比 (EN)</a><a href="boardroom-frameworks/" hreflang="en">决策框架</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">更新日志</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">安全</a>
       <select class="lang-switch" aria-label="语言" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/">KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/" selected>ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle>Light</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="浅色" data-dark="深色">浅色</button>
     </nav>
   </div>
 </header>
@@ -339,19 +360,20 @@
   <section class="hero">
     <div class="wrap">
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.2 &middot; Zero-Egress &middot; MIT Open Source</span></div>
-        <h1>符合 GDPR 的 Zero-Egress 多智能体操作系统，为企业而生，也为你而生。</h1>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.2 &middot; Zero-Egress optional &middot; MIT Open Source</span></div>
+        <h1>自托管多智能体操作系统——是否符合 GDPR 取决于配置。</h1>
         <p class="hero-lead">Archon OS 将 Hermes Agent 扩展为符合 GDPR 的智能体操作系统：8 大领域的 71 个专家档案、故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 成本上限、WebAuthn 通行密钥审批、结构化的 AI Boardroom 辩论，以及符合 GoBD 的 SHA-256 审计日志。你的文档、你的 Obsidian 知识库、你的模型。</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">快速开始</a>
-          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; docker compose up -d" aria-label="复制">复制</button>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d</code>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d" aria-label="复制" title="复制安装命令">复制</button>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.zh.md">中文 README</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">在 GitHub 查看</a>
         </div>
         <div class="badges">
           <span class="badge">v0.6.0.2 &middot; pre-1.0</span>
-          <span class="badge">支持符合 GDPR 与 EU AI Act 的运行</span>
-          <span class="badge">故障关闭 Zero-Egress</span>
+          <span class="badge">符合 GDPR 与 EU AI Act 的运行取决于配置</span>
+          <span class="badge">Zero-Egress 已实现 · 可启用（当前关闭）</span>
           <span class="badge">MIT 许可证</span>
           <span class="badge">71 位专家 · 8 大领域</span>
           <span class="badge">80 种决策框架</span>
@@ -360,7 +382,7 @@
         </div>
       </div>
 
-      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>专家智能体角色 · 8 大领域</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom 决策框架</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress 本地隔离</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% 开源 · 8 个 Docker 容器</span></div></div>
+      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>专家智能体角色 · 8 大领域</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom 决策框架</span></div><div class="geo-kpi"><strong>已实现</strong><span>Zero-Egress · 可用本地模型启用（当前关闭）</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% 开源 · 8 个 Docker 容器</span></div></div>
     </div>
   </section>
 
@@ -368,7 +390,7 @@
     <div class="creation-stage-wrap">
       <div class="creation-davinci-stage" aria-hidden="true">
         <div class="davinci-layer-plate">
-          <img class="davinci-creation-img" src="../assets/img/davinci_creation.webp" width="1024" height="686" alt="" loading="eager" fetchpriority="high" decoding="async">
+          <img class="davinci-creation-img" src="../assets/img/davinci_creation.webp" width="1024" height="686" alt="" loading="lazy" fetchpriority="low" decoding="async">
         </div>
         <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 1024 686" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <circle class="creation-spark-wave" cx="495" cy="348" r="18" style="transform-origin:495px 348px"/>
@@ -387,7 +409,7 @@
       <div class="cockpit-bar">
         <span class="cockpit-dots" aria-hidden="true"><span></span><span></span><span></span></span>
         <span class="cockpit-title" data-cockpit-title>ARCHON OS // MISSION CONTROL</span>
-        <span class="cockpit-badge">ZERO-EGRESS · LOCAL</span>
+        <span class="cockpit-badge">ZERO-EGRESS · OPTIONAL</span>
       </div>
       <div class="cockpit-tabs" role="tablist">
         <button type="button" class="cockpit-tab is-active" role="tab" id="shot-tab-1" aria-selected="true" aria-controls="shot-panel-1" tabindex="0" data-shot-tab>Mission Control</button>
@@ -398,7 +420,7 @@
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-6" aria-selected="false" aria-controls="shot-panel-6" tabindex="-1" data-shot-tab>组织架构</button>
       </div>
       <div class="cockpit-stage">
-        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" src="../assets/img/mission_control.webp" width="1024" height="559" alt="Mission Control 仪表盘"><figcaption>Mission Control - 实时遥测、令牌走势图 &amp; HITL 看板</figcaption></figure>
+        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="../assets/img/mission_control.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control-768.webp 768w, ../assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 92vw, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="Mission Control 仪表盘"><figcaption>Mission Control - 实时遥测、令牌走势图 &amp; HITL 看板</figcaption></figure>
         <figure id="shot-panel-2" role="tabpanel" aria-labelledby="shot-tab-2" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/kader.webp" width="1024" height="559" alt="智能体舰队概览"><figcaption>智能体舰队 - 专家档案、OmniRoute 绑定 &amp; 实时动态</figcaption></figure>
         <figure id="shot-panel-3" role="tabpanel" aria-labelledby="shot-tab-3" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="1024" height="559" alt="AI Boardroom 辩论"><figcaption>AI Boardroom - 带框架 &amp; 席位的多视角辩论</figcaption></figure>
         <figure id="shot-panel-4" role="tabpanel" aria-labelledby="shot-tab-4" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/workflows.webp" width="1024" height="557" alt="可视化多智能体工作流构建器"><figcaption>Workflows - 带 HITL 闸门的可视化多智能体 DAG 编辑器</figcaption></figure>
@@ -406,6 +428,7 @@
         <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/org.webp" width="1024" height="559" alt="组织架构与层级"><figcaption>组织层级 - 交互式流程图 &amp; 审批边界</figcaption></figure>
       </div>
     </div>
+    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">图片包含演示数据，并使用 Google Gemini (Nano Banana) 生成；第三方公司和产品名称归各自权利人所有。 Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">图片来源与 AI 生成图像</a>.</p>
     <div class="shots-thumbs" data-reveal>
       <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
       <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>智能体舰队</span></button>
@@ -511,12 +534,12 @@
       <div class="feat"><h3>24/7 存活监测 &amp; 自愈</h3><p>异步事件循环心跳驱动 <code>/livez</code>（停滞时 503）与 Docker 自动重启，并可选配外部「死人开关」Webhook。</p></div>
       <div class="feat"><h3>加固 &amp; 可追踪</h3><p>SSRF 与提示注入防护、跨智能体调用的分布式 Trace ID，以及面向大型提示目录的批量 UI 渲染。</p></div>
       <div class="feat"><h3>Telegram、邮件 &amp; CRM</h3><p>将收到的邮件与 Telegram 消息分拣为看板任务，同步联系人，并在同一工作区管理报价与合同。</p></div>
-      <div class="feat"><h3>通行密钥 / WebAuthn HITL</h3><p>高风险审批（付款、预算超支、破坏性操作）需要 Windows Hello、Touch ID 或硬件密钥的加密签名。模型无法伪造审批。</p></div>
+      <div class="feat"><h3>通行密钥 / WebAuthn HITL</h3><p>高风险审批（付款、预算超支、破坏性操作）需要 Windows Hello、Touch ID 或硬件密钥的加密签名。模型无法伪造审批。 未注册时该功能对该用户关闭，请在正式使用前启用。</p></div>
       <div class="feat"><h3>Atomic BudgetBank &amp; 签名 Warrant</h3><p>令牌与成本预算在执行前以事务方式预留（<code>BEGIN IMMEDIATE</code>）。特权工具需要有时限的 HMAC-SHA256 Warrant。</p></div>
       <div class="feat"><h3>崩溃安全的 Effect-Ledger</h3><p>外部副作用由带幂等键的事务账本跟踪，并在未知状态后强制对账，避免重复操作。</p></div>
       <div class="feat"><h3>Autoheal、Chroma 与 Litestream</h3><p>8 个默认容器：<code>archon-autoheal</code> 通过 <code>/livez</code> 心跳自动重启自愈，<code>ChromaDB</code> 驱动本地向量 RAG，<code>Litestream</code> 持续复制 SQLite WAL。</p></div>
       <div class="feat"><h3>Alertmanager 与全栈可观测性</h3><p>可选 Docker 配置支持 <code>Prometheus</code>、<code>Alertmanager</code>、<code>Grafana</code>、<code>Loki</code>/<code>Promtail</code>、<code>OTel</code>/<code>Tempo</code>、<code>Uptime Kuma</code>、<code>Caddy</code>/<code>Authelia</code> SSO、<code>Metabase</code> 与 <code>DocuSeal</code>。</p></div>
-      <div class="feat"><h3>832 提示词、多租户与加密金库</h3><p>内置 832 个 Prompt Studio 模板、39 项技能、6 个 MCP 服务、物理级多主体数据库隔离、GDPR 第 17 条擦除、§ 201 StGB 同意门控与离线 AEAD 金库。</p></div>
+      <div class="feat"><h3>832 提示词、多租户与加密金库</h3><p>内置 832 个 Prompt Studio 模板、18 项启用技能（目录 39 项）、6 个 MCP 服务、物理级多主体数据库隔离、GDPR 第 17 条擦除、§ 201 StGB 同意门控与离线 AEAD 金库。</p></div>
     </div>
 
     <h2 class="sec" id="compare">架构对比与硬件配置基线</h2>
@@ -542,7 +565,7 @@
 </div>
 <p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="../compare/">完整对比矩阵 (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify) &rarr;</a> &middot; <a href="../architecture/#hardware">硬件与容器规格详情 &rarr;</a></p>
 
-    <h2 class="sec">71 位专家智能体 - 8 大领域</h2>
+    <h2 class="sec">70 位领域专家 + 1 个根编排器 - 8 大领域</h2>
     <div class="table-wrap" data-reveal>
       <table>
         <thead><tr><th>领域</th><th>数量</th><th>聚焦</th></tr></thead>
@@ -560,15 +583,19 @@
     </div>
 
     <h2 class="sec">深度技术指南与索引目录 (HTML)</h2>
-<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/" hreflang="en"><span class="hub-kicker">01 / 系统</span><strong>架构与技术栈 (EN)</strong><span>OmniRoute、PolicyEngine、Atomic BudgetBank、Effect-Ledger 与 3× SQLite WAL。</span></a><a class="hub-card" href="../gdpr-zero-egress/" hreflang="en"><span class="hub-kicker">02 / 合规</span><strong>GDPR 与 Zero-Egress (EN)</strong><span>Fail-closed Docker 网络隔离、欧盟 AI 法案风险台账与 GoBD 审计导出。</span></a><a class="hub-card" href="../compare/" hreflang="en"><span class="hub-kicker">03 / 评估</span><strong>主流框架对比 (EN)</strong><span>Archon OS 与 LangGraph、CrewAI、AutoGen、n8n、Dify 全维度对比。</span></a><a class="hub-card" href="boardroom-frameworks/" hreflang="en"><span class="hub-kicker">04 / Boardroom</span><strong>80 决策框架 (EN)</strong><span>可搜索筛选的多视角结构化辩论方法论 HTML 目录。</span></a><a class="hub-card" href="../specialists/" hreflang="en"><span class="hub-kicker">05 / 舰队</span><strong>71 专家角色 (EN)</strong><span>覆盖 8 大企业领域的 71 个智能体角色与安全护栏索引。</span></a><a class="hub-card" href="../second-brain/" hreflang="en"><span class="hub-kicker">06 / 第二大脑</span><strong>RAG、档案与自我进化 (EN)</strong><span>Obsidian 知识库、ChromaDB 本地向量检索、智能体战绩档案与技能自动合成。</span></a></div>
+<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/" hreflang="en"><span class="hub-kicker">01 / 系统</span><strong>架构与技术栈 (EN)</strong><span>OmniRoute、PolicyEngine、Atomic BudgetBank、Effect-Ledger 与 3× SQLite WAL。</span></a><a class="hub-card" href="../gdpr-zero-egress/" hreflang="en"><span class="hub-kicker">02 / 合规</span><strong>GDPR 与 Zero-Egress (EN)</strong><span>Fail-closed Docker 网络隔离、欧盟 AI 法案风险台账与 GoBD 审计导出。</span></a><a class="hub-card" href="../compare/" hreflang="en"><span class="hub-kicker">03 / 评估</span><strong>主流框架对比 (EN)</strong><span>Archon OS 与 LangGraph、CrewAI、AutoGen、n8n、Dify 全维度对比。</span></a><a class="hub-card" href="boardroom-frameworks/" hreflang="zh-CN"><span class="hub-kicker">04 / Boardroom</span><strong>80 决策框架</strong><span>可搜索筛选的多视角结构化辩论方法论 HTML 目录。</span></a><a class="hub-card" href="../specialists/" hreflang="en"><span class="hub-kicker">05 / 舰队</span><strong>71 专家角色 (EN)</strong><span>覆盖 8 大企业领域的 71 个智能体角色与安全护栏索引。</span></a><a class="hub-card" href="../second-brain/" hreflang="en"><span class="hub-kicker">06 / 第二大脑</span><strong>RAG、档案与自我进化 (EN)</strong><span>Obsidian 知识库、ChromaDB 本地向量检索、智能体战绩档案与技能自动合成。</span></a></div>
 
     <div class="wrap b2b-section"><h3>面向受监管环境的使用场景</h3><p><strong>采购：</strong>供应商比选与合同草案需经 Passkey 批准；预算上限抑制失控支出。<strong> Controlling：</strong>每次调用均记录提供商、模型与成本并写入哈希链 — 一键导出 GoBD 文档。<strong>合规：</strong>TOM 矩阵、EU AI Act 风险登记册与 § 201 StGB 同意门控属于配置，而非附加组件。</p><p><strong>经济性：</strong>许可费 0 €（MIT）。基础设施、配置与运维由你承担；Zero-Egress 明确为可选项，而非保证。</p></div>
+
+    
 
     <h2 class="sec" id="install">安装部署</h2>
     <div class="install" data-reveal>
       <div class="card"><h3>完整堆栈</h3><p>八个默认容器：Archon OS、OmniRoute、Hermes Agent、AnythingLLM、ChromaDB、Litestream、Docker socket proxy 与 Autoheal（可选配置最多 24 个服务）。</p>
 <pre data-lang="bash">git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
+cp .env.example .env
+# 必需：在 .env 中将 ARCHON_HEARTBEAT_WEBHOOK_URL 设置为真实接收端
 docker compose up -d</pre></div>
       <div class="card"><h3>零密钥演示</h3><p>无需 API 密钥与令牌成本的只读展示，适合初次了解。</p>
 <pre data-lang="bash">ARCHON_DEMO_MODE=true \
@@ -580,7 +607,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     <h2 class="sec">为什么选择 Archon OS？</h2>
     <div class="governance-showcase" data-reveal>
       <div class="governance-copy">
-        <p><strong>为商业问责与 GDPR 合规而建，而非玩具演示。</strong> 与把成本上限、数据外发和合规边界交给自写胶水代码的提示链库不同，Archon OS 开箱即强制故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 预留、WebAuthn 通行密钥审批、EU AI Act / GoBD 文档和 SHA-256 审计轨迹 - 运行在 3 个整合的 SQLite WAL 数据库（<code>ops.db</code>、<code>business.db</code>、<code>memory.db</code>）之上。</p>
+        <p><strong>为商业问责与 GDPR 合规而建，而非玩具演示。</strong> 与把成本上限、数据外发和合规边界交给自写胶水代码的提示链库不同，Archon OS 开箱即强制故障关闭的本地 Zero-Egress 路由、Atomic BudgetBank 预留、WebAuthn 通行密钥审批、EU AI Act / GoBD 文档和 SHA-256 审计轨迹 - 运行在 3 个整合的 SQLite WAL 数据库（<code>ops.db</code>、<code>business.db</code>、<code>memory.db</code>）之上。 Zero-Egress 默认关闭，需使用本地模型启用。</p>
         <ul class="governance-pillars">
           <li><strong>I. POLICY ENGINE</strong> &middot; 默认拒绝策略与 HMAC-SHA256 工具凭证</li>
           <li><strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID 加密审批</li>
@@ -689,7 +716,7 @@ docker compose -f docker-compose.demo.yml up --build -d
       <h2 class="sec">常见问题</h2>
       <div class="feats faq-grid" data-reveal>
         <div class="feat"><h3>什么是 Archon OS？</h3><p>Archon OS 是基于 Hermes Agent 的 MIT 许可自托管智能体操作系统。它在 8 大领域组织 71 个专业 AI 角色，具备执行前预算预留、本地 Zero-Egress LLM 路由、WebAuthn 通行密钥审批和 SHA-256 哈希链审计日志。</p></div>
-        <div class="feat"><h3>如何防止敏感数据泄露？</h3><p>OmniRoute 执行故障关闭的 Zero-Egress 策略：财务、合同、CRM、人事与 GDPR 工作负载仅在无互联网路由的内部 Docker 网络中的本地模型（Ollama 或 LM Studio）上运行。</p></div>
+        <div class="feat"><h3>如何防止敏感数据泄露？</h3><p>OmniRoute 执行故障关闭的 Zero-Egress 策略：财务、合同、CRM、人事与 GDPR 工作负载仅在无互联网路由的内部 Docker 网络中的本地模型（Ollama 或 LM Studio）上运行。 故障关闭仅在启用后生效，默认关闭。</p></div>
         <div class="feat"><h3>令牌成本 &amp; 高风险操作如何管控？</h3><p>中央 PolicyEngine 在派发前校验权限，特权工具需要有时限的签名 Warrant，BudgetBank 原子化预留资金，高风险审批需要 WebAuthn 通行密钥签名。</p></div>
         <div class="feat"><h3>是否符合 GDPR &amp; EU AI Act？</h3><p>取决于你的配置。敏感业务工作负载通过故障关闭的 Zero-Egress 留在你的服务器上，并有 EU AI Act 风险登记册、防篡改 SHA-256 审计日志与一键 GoBD 程序文档导出作为支撑。</p></div>
         <div class="feat"><h3>Archon OS 与普通聊天机器人有何不同？</h3><p>聊天机器人负责回答。Archon OS 负责<strong>执行约束</strong>：每次调用前的预算闸门、高风险操作的 Passkey 批准以及可验证的审计链。区别在于强制执行，而非对话。</p></div>
@@ -731,7 +758,7 @@ docker compose -f docker-compose.demo.yml up --build -d
       </div>
     </section>
 
-    <h2 class="sec">坦诚的状态</h2>
+    <h2 class="sec" id="status">坦诚的状态</h2>
     <p class="status" data-reveal>Pre-1.0。接口与配置键在版本间会变化。ERP/CRM 模块为 alpha，多用户角色强制仍在加固中，专家输出属于决策支持而非持牌咨询。欢迎提交 Issue 与 PR。</p>
 
     <h2 class="sec">文档（11 种语言）</h2>
@@ -761,7 +788,8 @@ docker compose -f docker-compose.demo.yml up --build -d
     <a href="../impressum/">法律声明</a>
     <a href="../datenschutz/">隐私政策</a>
     <span>商标归各自所有者所有。</span>
-    <a href="../llms.txt">llms.txt</a>
+    <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">图片来源与 AI 生成图像</a>
+    <a href="../llms.txt">llms.txt</a> · <a href="../llms-full.txt">llms-full.txt</a>
   </div>
 </footer>
 <script src="../assets/site.js" defer></script>

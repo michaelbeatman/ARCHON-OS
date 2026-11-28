@@ -3,6 +3,11 @@
 
   // 1. Theme toggle (persisted dark/light override, defaults to obsidian dark)
   var root = document.documentElement;
+  root.classList.add("js");
+  var announce = function (msg) {
+    var s = document.getElementById("a11y-status");
+    if (s) s.textContent = msg;
+  };
   try {
     var savedTheme = localStorage.getItem("archon-theme");
     if (savedTheme === "dark" || savedTheme === "light") {
@@ -17,7 +22,7 @@
       if (!cur) {
         cur = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
       }
-      themeBtn.textContent = cur === "dark" ? "Light" : "Dark";
+      themeBtn.textContent = themeBtn.getAttribute(cur === "dark" ? "data-light" : "data-dark") || (cur === "dark" ? "Light" : "Dark");
       themeBtn.setAttribute("aria-label", cur === "dark" ? "Switch to light theme" : "Switch to dark theme");
     };
     syncLabel();
@@ -51,11 +56,19 @@
     btn.textContent = copyLabel;
     btn.addEventListener("click", function () {
       var text = pre.textContent || "";
+      var done = function () {
+        btn.textContent = copiedLabel;
+        btn.setAttribute("aria-label", copiedLabel);
+        announce(copiedLabel);
+        setTimeout(function () {
+          btn.textContent = copyLabel;
+          btn.setAttribute("aria-label", copyLabel);
+        }, 1600);
+      };
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function () {
-          btn.textContent = copiedLabel;
-          setTimeout(function () { btn.textContent = copyLabel; }, 1600);
-        });
+        navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+      } else {
+        fallbackCopy(text, done);
       }
     });
     bar.appendChild(langSpan);
@@ -90,6 +103,19 @@
       });
     };
     tabs.forEach(function (el, i) { el.addEventListener("click", function () { activate(i); }); });
+    cockpit.querySelector(".cockpit-tabs").addEventListener("keydown", function (e) {
+      var current = 0;
+      tabs.forEach(function (t, i) { if (t.getAttribute("aria-selected") === "true") current = i; });
+      var next = current;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (current + 1) % tabs.length;
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (current - 1 + tabs.length) % tabs.length;
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = tabs.length - 1;
+      else return;
+      e.preventDefault();
+      activate(next);
+      tabs[next].focus();
+    });
     thumbs.forEach(function (el, i) { el.addEventListener("click", function () { activate(i); cockpit.scrollIntoView({ behavior: "smooth", block: "nearest" }); }); });
   }
 
@@ -172,14 +198,24 @@
 
   // 8. Hero Quickstart Copy (mit Fallback ohne Clipboard-API)
   var copyCmdBtn = document.querySelector("[data-copy-cmd]");
+  var quickstartEl = document.getElementById("quickstart-cmd");
+  if (quickstartEl && copyCmdBtn) {
+    copyCmdBtn.setAttribute("data-copy-cmd", quickstartEl.textContent.trim());
+  }
   if (copyCmdBtn) {
     var copyDone = function () {
       var old = copyCmdBtn.textContent;
       copyCmdBtn.textContent = copiedLabel;
-      setTimeout(function () { copyCmdBtn.textContent = old; }, 1600);
+      copyCmdBtn.setAttribute("aria-label", copiedLabel);
+      announce(copiedLabel);
+      setTimeout(function () {
+        copyCmdBtn.textContent = old;
+        copyCmdBtn.setAttribute("aria-label", old);
+      }, 1600);
     };
     copyCmdBtn.addEventListener("click", function () {
-      var text = copyCmdBtn.getAttribute("data-copy-cmd") || "";
+      var cmdEl = document.getElementById("quickstart-cmd");
+      var text = (cmdEl && cmdEl.textContent ? cmdEl.textContent : "") || copyCmdBtn.getAttribute("data-copy-cmd") || "";
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(copyDone, function () { fallbackCopy(text, copyDone); });
       } else {
@@ -195,8 +231,11 @@
     ta.style.opacity = "0";
     document.body.appendChild(ta);
     ta.select();
-    try { document.execCommand("copy"); done(); } catch (_) {}
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
     document.body.removeChild(ta);
+    if (ok) done();
+    else announce("Copy failed — please select and copy the command manually.");
   }
 
 

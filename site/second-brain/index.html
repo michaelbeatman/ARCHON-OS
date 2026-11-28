@@ -11,8 +11,9 @@
 <link rel="alternate" hreflang="en" href="https://michaelbeatman.github.io/ARCHON-OS/second-brain/">
 <link rel="alternate" hreflang="de" href="https://michaelbeatman.github.io/ARCHON-OS/de/second-brain-gedaechtnis/">
 <link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/second-brain/">
-<link rel="icon" type="image/png" href="../archon_hand.png">
+<link rel="icon" type="image/webp" href="../archon_hand.webp">
 <link rel="preload" href="../assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../assets/fonts/geist-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../assets/site.css">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Archon OS">
@@ -20,13 +21,18 @@
 <meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/second-brain/">
 <meta property="og:title" content="2nd Brain, Obsidian Vector RAG, Agent HR Files &amp; Self-Improving Skills — Archon OS">
 <meta property="og:description" content="How Archon OS grounds agents on your own vectorized documents using Obsidian Vault, ChromaDB/AnythingLLM RAG, Corrective RAG, Agent Scorecards &amp; Skill Synthesis.">
-<meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+<meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-en.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready">
+<meta name="twitter:image:alt" content="Archon OS: Enterprise Multi-Agent OS, Zero-Egress, GDPR-ready">
+<meta property="article:published_time" content="2026-11-28T00:00:00+01:00">
+<meta property="article:modified_time" content="2026-11-28T00:00:00+01:00">
+<meta property="article:author" content="Michael Keller (Michael Beatman)">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="2nd Brain, Obsidian Vector RAG, Agent HR Files &amp; Self-Improving Skills — Archon OS">
 <meta name="twitter:description" content="How Archon OS grounds agents on your own vectorized documents using Obsidian Vault, ChromaDB/AnythingLLM RAG, Corrective RAG, Agent Scorecards &amp; Skill Synthesis.">
-<meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+<meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-en.png">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -57,7 +63,7 @@
       "inLanguage": "en",
       "url": "https://michaelbeatman.github.io/ARCHON-OS/second-brain/",
       "dateModified": "2026-11-27",
-      "image": "https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png",
+      "image": "https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-en.png",
       "author": {
         "@type": "Person",
         "name": "Michael Keller",
@@ -85,6 +91,8 @@
 </script>
 </head>
 <body data-copy="Copy" data-copied="Copied">
+<a class="skip-link" href="#main">Skip to content</a>
+<div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
     <div class="davinci-layer-under"><svg class="davinci-underlayer-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -147,8 +155,7 @@
   </g>
 </svg></div>
     <div class="davinci-layer-plate">
-      <img class="davinci-plate-img img-dark-only" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager">
-      <img class="davinci-plate-img img-light-only" src="../assets/img/davinci_vertical_light.webp" width="764" height="1024" alt="" loading="eager">
+      <div class="davinci-layer-plate" data-plate="vertical" aria-hidden="true"></div>
     </div>
     <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <!-- Real sweeping chronometer hands on BUDGET BANK dial (442, 324) -->
@@ -180,17 +187,18 @@
 <header>
   <div class="wrap">
     <a class="brand-link" href="../">
-      <img class="hand-avatar" src="../archon_hand.png" width="40" height="40" alt="Archon OS">
+      <img class="hand-avatar" src="../archon_hand.webp" width="40" height="40" alt="Archon OS" decoding="async">
       <span>
         <span class="brand-name">Archon OS</span>
         <span class="tag">v0.6.0.2 &middot; Self-Hosted Agentic OS</span>
       </span>
     </a>
-    <nav aria-label="Main navigation"><a href="../">Home</a><a href="../architecture/">Architecture</a><a href="../gdpr-zero-egress/">GDPR</a><a href="../compare/">Compare</a><a href="../boardroom-frameworks/">Frameworks</a><a href="../specialists/">Specialists</a><a href="../de/second-brain-gedaechtnis/" class="lang-switch">DE · Deutsch</a><button type="button" class="theme-btn" data-theme-toggle>Light</button></nav>
+    <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="main-nav" aria-label="Menu">Menu</button>
+    <nav id="main-nav" aria-label="Main navigation"><a href="../">Home</a><a href="../architecture/">Architecture</a><a href="../gdpr-zero-egress/">GDPR</a><a href="../compare/">Compare</a><a href="../boardroom-frameworks/">Frameworks</a><a href="../specialists/">Specialists</a><a href="../de/second-brain-gedaechtnis/" class="lang-switch">DE · Deutsch</a><button type="button" class="theme-btn" data-theme-toggle>Light</button></nav>
   </div>
 </header>
 
-<main>
+<main id="main" tabindex="-1">
   <section class="hero">
     <div class="wrap">
       <nav class="breadcrumb" aria-label="Breadcrumb">
@@ -201,8 +209,8 @@
         <h1>Agents grounded on your own data — with persistent memory and self-improving skills.</h1>
         <p class="hero-lead">Instead of ephemeral chat logs, Archon OS combines a local Obsidian Markdown vault with vectorized ChromaDB/AnythingLLM RAG, per-agent HR files (wins, scorecards, learnings), and human-gated skill synthesis.</p>
         <div class="btnrow">
-          <a class="btn primary" href="https://github.com/michaelbeatman/ARCHON-OS">View on GitHub</a>
-          <a class="btn" href="../#install">Quick Start (Docker)</a>
+          <a class="btn primary" href="../#install">Quick Start (Docker)</a>
+          <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">View on GitHub</a>
         </div>
       </div>
     </div>
@@ -260,8 +268,7 @@
   </g>
 </svg></div>
       <div class="davinci-layer-plate">
-        <img class="davinci-plate-img img-dark-only" src="../assets/img/davinci_wheel_dark.webp" width="1024" height="764" alt="" loading="lazy">
-        <img class="davinci-plate-img img-light-only" src="../assets/img/davinci_wheel_light.webp" width="1024" height="764" alt="" loading="lazy">
+        <div class="davinci-layer-plate" data-plate="wheel" aria-hidden="true"></div>
       </div>
       <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 1024 764" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <g class="cw-hand-sweep" style="transform-origin:424px 200px">
@@ -281,6 +288,8 @@
     <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">MIT</a>
     <a href="https://www.linkedin.com/in/michael-keller-a43b6611b/" rel="noopener me">LinkedIn</a>
     <a href="mailto:archon.os.system@gmail.com">archon.os.system@gmail.com</a>
+    <a href="../impressum/">Imprint</a>
+    <a href="../datenschutz/">Privacy</a>
     <a href="../llms.txt">llms.txt</a>
   </div>
 </footer>

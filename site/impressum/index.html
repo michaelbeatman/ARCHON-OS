@@ -14,7 +14,28 @@
     .legal h2 { font-size: 1.25rem; margin: 2rem 0 .6rem; }
     .legal p, .legal li { color: #c9d1d9; }
     .legal a { color: #58a6ff; }
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) .legal p,
+      :root:not([data-theme="dark"]) .legal li { color: #27272a; }
+      :root:not([data-theme="dark"]) .legal a { color: #065f46; }
+    }
+    :root[data-theme="light"] .legal p,
+    :root[data-theme="light"] .legal li { color: #27272a; }
+    :root[data-theme="light"] .legal a { color: #065f46; }
   </style>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Archon OS">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/impressum/">
+  <meta property="og:title" content="Impressum — Archon OS">
+  <meta property="og:description" content="Impressum gemäß § 5 DDG für die Archon OS Projektseite.">
+  <meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Impressum — Archon OS">
+  <meta name="twitter:description" content="Impressum gemäß § 5 DDG für die Archon OS Projektseite.">
+  <meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
 </head>
 <body>
 <main class="legal">
@@ -39,7 +60,12 @@
   <p>Die auf dieser Seite dargestellten Inhalte sind, soweit nicht anders angegeben, urheberrechtlich geschützt. Der Quellcode von Archon OS steht unter der <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">MIT-Lizenz</a>. Marken und Namen Dritter bleiben Eigentum ihrer jeweiligen Inhaber.</p>
 
   <h2>Haftungsausschluss</h2>
-  <p>Archon OS befindet sich vor Version 1.0. Die Software wird ohne Gewährleistung bereitgestellt und ersetzt keine lizenzierte Beratung. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/DISCLAIMER.md">DISCLAIMER.md</a>.</p>
+  <p>Archon OS befindet sich vor Version 1.0 (aktuell v0.6.0.2). Die Software wird "AS IS" ohne Gewährleistung bereitgestellt — maßgeblich ist <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/LICENSE">LICENSE, Z. 15–21</a>. Die Ausgaben der Spezialisten-Profile ersetzen keine lizenzierte Beratung und dienen ausschließlich der Entscheidungsunterstützung; Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/DISCLAIMER.md">DISCLAIMER.md</a> (RDG / StBerG / WpHG / EU-MDR).</p>
+  <h2>Anbieterkennzeichnung (§ 5 DDG)</h2>
+  <p>Michael Keller, Eisenbahnstraße 8, 49074 Osnabrück, Deutschland.<br>
+  E-Mail: <a href="mailto:archon.os.system@gmail.com">archon.os.system@gmail.com</a></p>
+  <p>Diese Seite ist ein nicht-gewerbliches Open-Source-Projekt. Es werden keine Waren oder Dienstleistungen gegen Entgelt angeboten; auch die Zero-Key-Demo ist kostenlos und unverbindlich. Sollte künftig eine geschäftsmäßige Tätigkeit i. S. d. § 5 Abs. 1 DDG aufgenommen werden, werden Registergericht, Registernummer und Umsatzsteuer-Identifikationsnummer vor Aufnahme vollständig ergänzt.</p>
+  <p>Technische und inhaltliche Anfragen: <a href="mailto:archon.os.system@gmail.com?subject=Anfrage%20Archon%20OS">archon.os.system@gmail.com</a>. Eine Zero-Key-Demo ohne API-Keys und Token-Kosten steht für die erste Prüfung zur Verfügung.</p>
 
   <p><a href="../de/">Zurück zur Startseite</a> · <a href="../datenschutz/">Datenschutzerklärung</a></p>
 </main>

@@ -9,8 +9,9 @@
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <link rel="canonical" href="{{CANONICAL}}">
 {{HREFLANG}}
-<link rel="icon" type="image/png" href="{{BASE}}archon_hand.png">
+<link rel="icon" type="image/webp" href="{{BASE}}archon_hand.webp">
 <link rel="preload" href="{{BASE}}assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{BASE}}assets/fonts/geist-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{BASE}}assets/site.css">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Archon OS">
@@ -21,21 +22,25 @@
 <meta property="og:image" content="{{OG_IMAGE_URL}}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:secure_url" content="{{OG_IMAGE_URL}}">
 <meta property="og:image:alt" content="{{meta.ogImageAlt}}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{meta.title}}">
 <meta name="twitter:description" content="{{meta.twitterDescription}}">
 <meta name="twitter:image" content="{{OG_IMAGE_URL}}">
+<meta name="twitter:image:alt" content="{{meta.twitterImageAlt}}">
 {{JSON_LD}}
 </head>
 <body data-copy="{{js.copy}}" data-copied="{{js.copied}}">
 <a class="skip-link" href="#main">{{nav.skip}}</a>
+<div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
     <div class="davinci-layer-under">{{DAVINCI_VERT_UNDERLAYER_SVG}}</div>
     <div class="davinci-layer-plate">
-      <img class="davinci-plate-img" data-theme-dark="{{BASE}}assets/img/davinci_vertical_dark.webp" data-theme-light="{{BASE}}assets/img/davinci_vertical_light.webp" src="{{BASE}}assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" decoding="async">
+      <img class="davinci-plate-img" data-theme-dark="{{BASE}}assets/img/davinci_vertical_dark.webp" data-theme-light="{{BASE}}assets/img/davinci_vertical_light.webp" src="{{BASE}}assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" fetchpriority="low" decoding="async">
     </div>
     <div class="davinci-layer-over">{{DAVINCI_VERT_OVERLAY_SVG}}</div>
   </div>
@@ -44,21 +49,21 @@
 <header>
   <div class="wrap">
     <a class="brand-link" href="{{CANONICAL}}">
-      <img class="hand-avatar" src="{{BASE}}archon_hand.png" width="40" height="40" alt="Archon OS">
+      <img class="hand-avatar" src="{{BASE}}archon_hand.webp" width="40" height="40" alt="Archon OS" decoding="async">
       <span>
         <span class="brand-name">Archon OS</span>
         <span class="tag">{{header.tagline}}</span>
       </span>
     </a>
     <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="main-nav" aria-label="{{nav.menu}}">{{nav.menu}}</button>
-    <nav id="main-nav" aria-label="Main navigation">
+    <nav id="main-nav" aria-label="{{nav.mainLabel}}">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       {{nav.install}}
       {{NAV_SUBPAGES}}
       {{nav.changelog}}
       {{nav.security}}
       <select class="lang-switch" aria-label="{{nav.languageLabel}}" onchange="if(this.value)window.location.href=this.value">{{LANG_OPTIONS}}</select>
-      <button type="button" class="theme-btn" data-theme-toggle>Light</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="{{js.themeLight}}" data-dark="{{js.themeDark}}">{{js.themeLight}}</button>
     </nav>
   </div>
 </header>
@@ -67,12 +72,13 @@
   <section class="hero">
     <div class="wrap">
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>{{VERSION}} &middot; Zero-Egress &middot; MIT Open Source</span></div>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>{{VERSION}} &middot; Zero-Egress optional &middot; MIT Open Source</span></div>
         <h1>{{hero.headline}}</h1>
         <p class="hero-lead">{{hero.subline}}</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">{{hero.buttonQuickstart}}</a>
-          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; docker compose up -d" aria-label="{{js.copy}}">{{js.copy}}</button>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d</code>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d" aria-label="{{js.copy}}" title="{{js.copyTitle}}">{{js.copy}}</button>
           <a class="btn" href="{{DOC_HREF}}">{{hero.buttonDocs}}</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">{{hero.buttonGithub}}</a>
         </div>
@@ -96,7 +102,7 @@
     <div class="creation-stage-wrap">
       <div class="creation-davinci-stage" aria-hidden="true">
         <div class="davinci-layer-plate">
-          <img class="davinci-creation-img" src="{{BASE}}assets/img/davinci_creation.webp" width="1024" height="686" alt="" loading="eager" fetchpriority="high" decoding="async">
+          <img class="davinci-creation-img" src="{{BASE}}assets/img/davinci_creation.webp" width="1024" height="686" alt="" loading="lazy" fetchpriority="low" decoding="async">
         </div>
         <div class="davinci-layer-over">{{DAVINCI_CREATION_OVERLAY_SVG}}</div>
       </div>
@@ -110,7 +116,7 @@
       <div class="cockpit-bar">
         <span class="cockpit-dots" aria-hidden="true"><span></span><span></span><span></span></span>
         <span class="cockpit-title" data-cockpit-title>ARCHON OS // MISSION CONTROL</span>
-        <span class="cockpit-badge">ZERO-EGRESS · LOCAL</span>
+        <span class="cockpit-badge">ZERO-EGRESS · OPTIONAL</span>
       </div>
       <div class="cockpit-tabs" role="tablist">
         <button type="button" class="cockpit-tab is-active" role="tab" id="shot-tab-1" aria-selected="true" aria-controls="shot-panel-1" tabindex="0" data-shot-tab>{{SHOT_TAB_1}}</button>
@@ -121,7 +127,7 @@
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-6" aria-selected="false" aria-controls="shot-panel-6" tabindex="-1" data-shot-tab>{{SHOT_TAB_6}}</button>
       </div>
       <div class="cockpit-stage">
-        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" src="{{BASE}}assets/img/mission_control.webp" width="1024" height="559" alt="{{shots.missionControl.alt}}"><figcaption>{{shots.missionControl.caption}}</figcaption></figure>
+        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="{{BASE}}assets/img/mission_control.webp" srcset="{{BASE}}assets/img/mission_control-480.webp 480w, {{BASE}}assets/img/mission_control-768.webp 768w, {{BASE}}assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 92vw, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="{{shots.missionControl.alt}}"><figcaption>{{shots.missionControl.caption}}</figcaption></figure>
         <figure id="shot-panel-2" role="tabpanel" aria-labelledby="shot-tab-2" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/kader.webp" width="1024" height="559" alt="{{shots.fleet.alt}}"><figcaption>{{shots.fleet.caption}}</figcaption></figure>
         <figure id="shot-panel-3" role="tabpanel" aria-labelledby="shot-tab-3" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/boardroom_debate.webp" width="1024" height="559" alt="{{shots.boardroom.alt}}"><figcaption>{{shots.boardroom.caption}}</figcaption></figure>
         <figure id="shot-panel-4" role="tabpanel" aria-labelledby="shot-tab-4" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/workflows.webp" width="1024" height="557" alt="{{shots.workflows.alt}}"><figcaption>{{shots.workflows.caption}}</figcaption></figure>
@@ -129,6 +135,7 @@
         <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="{{BASE}}assets/img/org.webp" width="1024" height="559" alt="{{shots.org.alt}}"><figcaption>{{shots.org.caption}}</figcaption></figure>
       </div>
     </div>
+    {{media.note}}
     <div class="shots-thumbs" data-reveal>
       <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="{{BASE}}assets/img/mission_control.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_1}}</span></button>
       <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="{{BASE}}assets/img/kader.webp" width="200" height="109" alt=""><span>{{SHOT_TAB_2}}</span></button>
@@ -182,11 +189,15 @@
 
     <div class="wrap b2b-section">{{b2b.section}}</div>
 
+    {{B2B_EXTRA_HTML}}
+
     {{install.title}}
     <div class="install" data-reveal>
       <div class="card">{{install.fullstack}}
 <pre data-lang="bash">git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
+cp .env.example .env
+# {{install.webhookComment}}
 docker compose up -d</pre></div>
       <div class="card">{{install.demo}}
 <pre data-lang="bash">ARCHON_DEMO_MODE=true \
@@ -258,7 +269,8 @@ docker compose -f docker-compose.demo.yml up --build -d
     <a href="{{BASE}}impressum/">{{footer.imprint}}</a>
     <a href="{{BASE}}datenschutz/">{{footer.privacy}}</a>
     <span>{{footer.trademarks}}</span>
-    <a href="{{BASE}}llms.txt">llms.txt</a>
+    <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">{{footer.mediaCredits}}</a>
+    <a href="{{BASE}}llms.txt">llms.txt</a> · <a href="{{BASE}}llms-full.txt">llms-full.txt</a>
   </div>
 </footer>
 <script src="{{BASE}}assets/site.js" defer></script>

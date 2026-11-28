@@ -320,7 +320,7 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
 }
 
 /* Circular Da-Vinci Sovereign Wheel anchored top-left in FAQ slot, expanding +150% diagonally down-right behind Docs */
-.faq-zone { position: relative; overflow: visible; }
+.faq-zone { position: relative; overflow: visible; isolation: isolate; }
 .faq-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
@@ -336,7 +336,7 @@ header nav a:hover, header nav a[aria-current="page"] { color: var(--fg); }
   min-height: 220px;
   pointer-events: none;
   user-select: none;
-  overflow: visible;
+  overflow: clip;
   z-index: 1;
 }
 .faq-davinci-frame {
@@ -1111,8 +1111,9 @@ footer a { color: var(--fg-muted); }
 footer a:hover { color: var(--fg); }
 
 /* Subtle Scroll Reveal */
-[data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity 840ms var(--ease-out), transform 840ms var(--ease-out); }
-[data-reveal].is-visible { opacity: 1; transform: translateY(0); }
+[data-reveal] { opacity: 1; transform: none; }
+html.js [data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity 840ms var(--ease-out), transform 840ms var(--ease-out); }
+html.js [data-reveal].is-visible { opacity: 1; transform: translateY(0); }
 
 /* Responsive Breakpoints */
 @media (max-width: 960px) {
@@ -1213,19 +1214,35 @@ footer a:hover { color: var(--fg); }
 }
 .cockpit-tabs { overflow-x: auto; overflow-y: visible; padding-block: .25rem; }
 
-/* A04 Fix 1 — FAQ-Rad eindämmen, Text darüber */
-.faq-davinci-slot { z-index: 0; }
-.faq-davinci-frame { top: -0.5rem; left: 0; width: min(100%, 760px); z-index: 0; }
+/* A04 Fix 1 (P0) — FAQ-Rad eindämmen, Maske bis zur Boxkante ausblenden */
+.faq-zone { isolation: isolate; }
+.faq-davinci-slot {
+  position: relative;
+  z-index: 0;
+  overflow: clip;
+  min-height: 320px;
+}
+.faq-davinci-frame {
+  position: absolute;
+  top: -0.5rem;
+  left: 0;
+  width: auto;
+  height: min(340px, 100%);
+  aspect-ratio: 1024 / 764;
+  z-index: 0;
+  mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, #000 30%, rgba(0,0,0,.35) 70%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, #000 30%, rgba(0,0,0,.35) 70%, transparent 100%);
+}
+@media (max-width: 960px) {
+  .faq-davinci-frame { width: min(100%, 640px); height: auto; top: 0; left: 0; }
+}
+@media (max-width: 720px) {
+  .faq-davinci-frame { position: relative; width: min(100%, 340px); height: auto; margin: 0 auto; }
+}
 .status,
 .table-wrap,
 .arch-box,
-.arch-box p {
-  position: relative;
-  z-index: 2;
-}
-@media (max-width: 960px) {
-  .faq-davinci-frame { width: min(100%, 640px); top: 0; left: 0; }
-}
+.arch-box p { position: relative; z-index: 2; }
 
 /* A04 Fix 2 — Creation-Stage hinter das Architektur-Panel */
 .creation-davinci-stage { width: min(100vw, 1180px); z-index: 0; }
@@ -1306,3 +1323,88 @@ header nav a,
   header nav .lang-switch, header nav .theme-btn { width: 100%; }
   .btn { min-width: 44px; }
 }
+
+/* ---- Batch 5: A11y, Performance, Mobile, CTA ---- */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+html { scroll-padding-top: 5.5rem; }
+main [id], .hero [id], section [id] { scroll-margin-top: 5.5rem; }
+.hero-cmd {
+  font-family: var(--font-mono); font-size: 0.78rem; color: var(--fg-muted);
+  align-self: center; word-break: break-all;
+}
+.btnrow .copy-btn-hero { border-color: var(--emerald); color: var(--emerald); }
+.btnrow .btn:not(.primary):not(.copy-btn-hero) { background: transparent; box-shadow: none; }
+
+/* Theme-Bilder auf Unterseiten: eine Variante per CSS statt zwei <img> */
+.davinci-layer-plate[data-plate="vertical"] {
+  aspect-ratio: 764/1024;
+  background: url("./img/davinci_vertical_dark.webp") center/contain no-repeat;
+}
+.davinci-layer-plate[data-plate="wheel"] {
+  aspect-ratio: 1024/764;
+  background: url("./img/davinci_wheel_dark.webp") center/contain no-repeat;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .davinci-layer-plate[data-plate="vertical"] {
+    background-image: url("./img/davinci_vertical_light.webp");
+  }
+  :root:not([data-theme="dark"]) .davinci-layer-plate[data-plate="wheel"] {
+    background-image: url("./img/davinci_wheel_light.webp");
+  }
+}
+:root[data-theme="light"] .davinci-layer-plate[data-plate="vertical"] {
+  background-image: url("./img/davinci_vertical_light.webp");
+}
+:root[data-theme="light"] .davinci-layer-plate[data-plate="wheel"] {
+  background-image: url("./img/davinci_wheel_light.webp");
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-davinci-stage:not(:hover) .cw-gear,
+  .faq-davinci-frame:not(:hover) .cw-gear { animation-play-state: paused; }
+}
+
+/* Mobile: griffige Ziele, wischbare Screenshots, WebKit-Maske */
+.brand-link, footer a, .breadcrumb a { min-height: 44px; display: inline-flex; align-items: center; }
+.wrap .b2b-section { padding-left: 0; padding-right: 0; }
+.davinci-layers {
+  -webkit-mask-image:
+    linear-gradient(to left, rgba(0,0,0,0.98) 46%, rgba(0,0,0,0.22) 78%, transparent 100%),
+    linear-gradient(to bottom, rgba(0,0,0,0.98) 82%, transparent 100%);
+  -webkit-mask-composite: source-in;
+}
+@media (max-width: 720px) {
+  .cockpit-stage { overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; }
+  .cockpit-stage img { width: 740px; max-width: none; height: auto; scroll-snap-align: center; }
+  .cockpit-stage figcaption { width: 740px; font-size: 0.8rem; }
+  .cockpit-stage::after {
+    content: "← Wischen für Details →"; display: block; font: 0.72rem var(--font-mono);
+    color: var(--fg-subtle); padding-top: 0.4rem;
+  }
+}
+@media (min-width: 721px) and (max-width: 960px) {
+  header .wrap { gap: 0.6rem; }
+  header nav { gap: 0.6rem; font-size: 0.8rem; }
+  header .tag { display: none; }
+}
+@media (max-width: 360px) {
+  .wrap { padding: 0 0.75rem; }
+  .feats, .hub-grid { grid-template-columns: 1fr; min-width: 0; }
+}
+@media (min-width: 1800px) {
+  .wrap { max-width: 82rem; }
+  .hero h1 { font-size: clamp(3.25rem, 3.2vw, 4.25rem); }
+  .hero-davinci-stage { width: clamp(560px, 34vw, 760px); right: -2%; }
+  .creation-davinci-stage { width: min(88vw, 1600px); }
+}
+
+/* Batch 6: reduced-motion fallback + laufende Zahnräder */
+@media (prefers-reduced-motion: reduce) {
+  html.js [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
+}
+.hero-davinci-stage .cw-gear,
+.faq-davinci-frame .cw-gear { animation-play-state: running !important; }
+.cmd-note { margin: 0.35rem 0 0; font-size: 0.78rem; color: var(--fg-muted); }

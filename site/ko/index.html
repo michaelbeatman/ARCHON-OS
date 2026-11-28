@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Archon OS: 오픈소스 멀티에이전트 OS (Zero-Egress)</title>
-<meta name="description" content="Hermes Agent 기반 자체 호스팅 MIT 멀티에이전트 OS: 71개 전문가 프로필, 80개 Boardroom 프레임워크, Zero-Egress 로컬 라우팅, BudgetBank, Passkey HITL 및 SHA-256 감사 로그.">
+<meta name="description" content="Hermes Agent 기반 자체 호스팅 MIT 멀티에이전트 OS: 71개 전문가 프로필, 80개 Boardroom 프레임워크, Zero-Egress는 구현 완료이며 로컬 모델로 활성화 가능(현재 꺼짐), BudgetBank, Passkey HITL 및 SHA-256 감사 로그.">
 <meta name="author" content="Michael Keller (Michael Beatman)">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <link rel="canonical" href="https://michaelbeatman.github.io/ARCHON-OS/ko/">
@@ -20,23 +20,27 @@
 <link rel="alternate" hreflang="ru" href="https://michaelbeatman.github.io/ARCHON-OS/ru/">
 <link rel="alternate" hreflang="zh-CN" href="https://michaelbeatman.github.io/ARCHON-OS/zh/">
 <link rel="alternate" hreflang="x-default" href="https://michaelbeatman.github.io/ARCHON-OS/">
-<link rel="icon" type="image/png" href="../archon_hand.png">
+<link rel="icon" type="image/webp" href="../archon_hand.webp">
 <link rel="preload" href="../assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../assets/fonts/geist-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../assets/site.css">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Archon OS">
 <meta property="og:locale" content="ko_KR">
 <meta property="og:url" content="https://michaelbeatman.github.io/ARCHON-OS/ko/">
 <meta property="og:title" content="Archon OS: 오픈소스 멀티에이전트 OS (Zero-Egress)">
-<meta property="og:description" content="Hermes Agent 기반 자체 호스팅 에이전트 OS: 71개 전문가 프로필, GDPR 준수 Zero-Egress 라우팅, Atomic BudgetBank, 패스키 HITL, SHA-256 감사 로그.">
-<meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+<meta property="og:description" content="Hermes Agent 기반 자체 호스팅 MIT 멀티에이전트 OS: 71개 전문가 프로필, 80개 Boardroom 프레임워크, Zero-Egress는 구현 완료이며 로컬 모델로 활성화 가능(현재 꺼짐), BudgetBank, Passkey HITL 및 SHA-256 감사 로그.">
+<meta property="og:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-ko.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Archon OS Mission Control 대시보드">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:secure_url" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-ko.png">
+<meta property="og:image:alt" content="Archon OS 인포그래픽: 엔터프라이즈 멀티에이전트 OS, Zero-Egress, GDPR 준수, 기어 기술 일러스트 포함">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Archon OS: 오픈소스 멀티에이전트 OS (Zero-Egress)">
-<meta name="twitter:description" content="Hermes Agent 기반 자체 호스팅 에이전트 OS: 71개 전문가 프로필, GDPR Zero-Egress, Atomic BudgetBank, 패스키 HITL &amp; SHA-256 감사 로그.">
-<meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png">
+<meta name="twitter:description" content="Hermes Agent 기반 자체 호스팅 MIT 멀티에이전트 OS: 71개 전문가 프로필, 80개 Boardroom 프레임워크, Zero-Egress는 구현 완료이며 로컬 모델로 활성화 가능(현재 꺼짐), BudgetBank, Passkey HITL 및 SHA-256 감사 로그.">
+<meta name="twitter:image" content="https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-ko.png">
+<meta name="twitter:image:alt" content="Archon OS: 엔터프라이즈 멀티에이전트 OS, Zero-Egress, GDPR 준수">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -48,7 +52,7 @@
       "url": "https://michaelbeatman.github.io/ARCHON-OS/",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://michaelbeatman.github.io/ARCHON-OS/archon_hand.png"
+        "url": "https://michaelbeatman.github.io/ARCHON-OS/archon_hand.webp"
       },
       "founder": {
         "@type": "Person",
@@ -94,7 +98,10 @@
       "name": "Archon OS",
       "alternateName": "ARCHON-OS",
       "inLanguage": "ko",
-      "applicationCategory": "DeveloperApplication, BusinessApplication",
+      "applicationCategory": [
+        "DeveloperApplication",
+        "BusinessApplication"
+      ],
       "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
       "softwareVersion": "0.6.0.2",
       "dateModified": "2026-11-27",
@@ -107,8 +114,8 @@
         "JavaScript",
         "Shell"
       ],
-      "image": "https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card.png",
-      "description": "Hermes Agent 기반 자체 호스팅 MIT 멀티에이전트 OS: 71개 전문가 프로필, 80개 Boardroom 프레임워크, Zero-Egress 로컬 라우팅, BudgetBank, Passkey HITL 및 SHA-256 감사 로그.",
+      "image": "https://michaelbeatman.github.io/ARCHON-OS/assets/img/og-card-ko.png",
+      "description": "Hermes Agent 기반 자체 호스팅 MIT 멀티에이전트 OS: 71개 전문가 프로필, 80개 Boardroom 프레임워크, Zero-Egress는 구현 완료이며 로컬 모델로 활성화 가능(현재 꺼짐), BudgetBank, Passkey HITL 및 SHA-256 감사 로그.",
       "author": {
         "@id": "https://michaelbeatman.github.io/ARCHON-OS/#founder"
       },
@@ -117,14 +124,18 @@
       },
       "isBasedOn": {
         "@type": "SoftwareSourceCode",
+        "@id": "https://github.com/NousResearch/hermes-agent",
         "name": "Hermes Agent",
-        "codeRepository": "https://github.com/NousResearch/hermes-agent"
+        "codeRepository": "https://github.com/NousResearch/hermes-agent",
+        "sameAs": [
+          "https://github.com/NousResearch/hermes-agent"
+        ]
       },
       "featureList": [
         "AI Boardroom의사결정은 비판 역할의 반대 심문과 종합을 갖춘 독립된 다관점 토론으로 진행되며, OKR부터 Pre-Mortem까지 80개 프레임워크를 활용합니다.",
         "Zero-Egress & GDPR재무, 인사, 계약, CRM 데이터는 인터넷 경로가 없는 격리 Docker 네트워크의 로컬 모델에 머뭅니다. 페일 클로즈로 엄격한 GDPR 데이터 거주지를 보장합니다.",
         "Atomic BudgetBank & 서명된 Warrant토큰 및 비용 예산은 실행 전에 트랜잭션으로 예약됩니다(BEGIN IMMEDIATE). 권한 있는 도구는 시간 제한 HMAC-SHA256 Warrant가 필요합니다.",
-        "패스키 / WebAuthn HITL고위험 승인(결제, 예산 초과, 파괴적 작업)은 Windows Hello, Touch ID 또는 하드웨어 패스키의 암호화 서명을 요구합니다. 모델은 승인을 위조할 수 없습니다.",
+        "패스키 / WebAuthn HITL고위험 승인(결제, 예산 초과, 파괴적 작업)은 Windows Hello, Touch ID 또는 하드웨어 패스키의 암호화 서명을 요구합니다. 모델은 승인을 위조할 수 없습니다. 등록하지 않으면 해당 사용자는 기능이 꺼집니다. 운영 전에 활성화하세요.",
         "충돌 안전 Effect-Ledger외부 부작용은 멱등성 키와 알 수 없는 상태 이후의 필수 재조정을 갖춘 트랜잭션 원장에서 추적되어 중복 실행을 막습니다.",
         "감사 로그, EU AI Act & GoBDSHA-256 해시 체인 로그가 모든 디스패치(공급자, 모델, 호스트)를 위변조 탐지 가능하게 기록하며, EU AI Act 위험 등록부와 원클릭 GoBD 절차 문서 내보내기를 제공합니다."
       ],
@@ -151,8 +162,8 @@
         },
         {
           "@type": "PropertyValue",
-          "name": "Skills",
-          "value": 39
+          "name": "Active skills",
+          "value": 18
         },
         {
           "@type": "PropertyValue",
@@ -173,7 +184,8 @@
       "offers": {
         "@type": "Offer",
         "price": "0",
-        "priceCurrency": "EUR"
+        "priceCurrency": "EUR",
+        "description": "License fee 0 EUR (MIT). Infrastructure, configuration and operation are borne by the operator; optional cloud token costs are budget-capped."
       }
     },
     {
@@ -194,7 +206,7 @@
           "name": "민감한 데이터 유출을 어떻게 막나요?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "OmniRoute가 페일 클로즈 Zero-Egress 정책을 적용합니다: 재무, 계약, CRM, 인사, GDPR 워크로드는 인터넷 경로가 없는 내부 Docker 네트워크의 로컬 모델(Ollama 또는 LM Studio)에서만 실행됩니다."
+            "text": "OmniRoute가 페일 클로즈 Zero-Egress 정책을 적용합니다: 재무, 계약, CRM, 인사, GDPR 워크로드는 인터넷 경로가 없는 내부 Docker 네트워크의 로컬 모델(Ollama 또는 LM Studio)에서만 실행됩니다. 페일 클로즈는 활성화 후에만 적용됩니다. 기본값은 꺼짐입니다."
           }
         },
         {
@@ -212,6 +224,14 @@
             "@type": "Answer",
             "text": "설정에 따라 달라집니다. 민감한 업무 워크로드는 페일 클로즈 Zero-Egress로 서버에 남으며, EU AI Act 위험 등록부, 위변조 탐지 SHA-256 감사 로그, 원클릭 GoBD 절차 문서 내보내기로 뒷받침됩니다."
           }
+        },
+        {
+          "@type": "Question",
+          "name": "일반 챗봇과 Archon OS의 차이는 무엇인가요?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "챗봇은 답합니다. Archon OS는 규칙을 강제합니다: 호출 전 예산 게이트, 위험 작업의 Passkey 승인, 검증 가능한 감사 체인. 차이는 대화가 아니라 강제입니다."
+          }
         }
       ]
     }
@@ -221,6 +241,7 @@
 </head>
 <body data-copy="복사" data-copied="복사됨">
 <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+<div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <!-- Multi-Layer Vertical Da-Vinci Silver Copperplate Stage (Hero): 10 pixel-measured rotating silver gears + sweeping BUDGET BANK hands -->
 <div class="hero-davinci-stage" aria-hidden="true">
   <div class="davinci-layers">
@@ -284,7 +305,7 @@
   </g>
 </svg></div>
     <div class="davinci-layer-plate">
-      <img class="davinci-plate-img" data-theme-dark="../assets/img/davinci_vertical_dark.webp" data-theme-light="../assets/img/davinci_vertical_light.webp" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" decoding="async">
+      <img class="davinci-plate-img" data-theme-dark="../assets/img/davinci_vertical_dark.webp" data-theme-light="../assets/img/davinci_vertical_light.webp" src="../assets/img/davinci_vertical_dark.webp" width="764" height="1024" alt="" loading="eager" fetchpriority="low" decoding="async">
     </div>
     <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 764 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <!-- Real sweeping chronometer hands on BUDGET BANK dial (442, 324) -->
@@ -316,21 +337,21 @@
 <header>
   <div class="wrap">
     <a class="brand-link" href="https://michaelbeatman.github.io/ARCHON-OS/ko/">
-      <img class="hand-avatar" src="../archon_hand.png" width="40" height="40" alt="Archon OS">
+      <img class="hand-avatar" src="../archon_hand.webp" width="40" height="40" alt="Archon OS" decoding="async">
       <span>
         <span class="brand-name">Archon OS</span>
         <span class="tag">자체 호스팅 에이전트 OS · MIT</span>
       </span>
     </a>
     <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="main-nav" aria-label="메뉴">메뉴</button>
-    <nav id="main-nav" aria-label="Main navigation">
+    <nav id="main-nav" aria-label="주 탐색">
       <a href="https://github.com/michaelbeatman/ARCHON-OS">GitHub</a>
       <a href="#install">설치</a>
       <a href="../architecture/" hreflang="en">아키텍처 (EN)</a><a href="../gdpr-zero-egress/" hreflang="en">GDPR (EN)</a><a href="../compare/" hreflang="en">비교 (EN)</a><a href="boardroom-frameworks/" hreflang="en">프레임워크</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/CHANGELOG.md">변경 이력</a>
       <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/SECURITY.md">보안</a>
       <select class="lang-switch" aria-label="언어" onchange="if(this.value)window.location.href=this.value"><option value="../">EN · English</option><option value="../de/">DE · Deutsch</option><option value="../es/">ES · Español</option><option value="../fr/">FR · Français</option><option value="../it/">IT · Italiano</option><option value="../ja/">JA · 日本語</option><option value="../ko/" selected>KO · 한국어</option><option value="../nl/">NL · Nederlands</option><option value="../pt/">PT · Português</option><option value="../ru/">RU · Русский</option><option value="../zh/">ZH · 中文</option></select>
-      <button type="button" class="theme-btn" data-theme-toggle>Light</button>
+      <button type="button" class="theme-btn" data-theme-toggle data-light="라이트" data-dark="다크">라이트</button>
     </nav>
   </div>
 </header>
@@ -339,19 +360,20 @@
   <section class="hero">
     <div class="wrap">
       <div class="hero-inner">
-        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.2 &middot; Zero-Egress &middot; MIT Open Source</span></div>
-        <h1>GDPR 준수 · Zero-Egress 멀티에이전트 OS. 기업을 위해, 그리고 당신을 위해.</h1>
+        <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>v0.6.0.2 &middot; Zero-Egress optional &middot; MIT Open Source</span></div>
+        <h1>셀프 호스팅 멀티에이전트 OS — GDPR 준수 여부는 구성에 따라 달라집니다.</h1>
         <p class="hero-lead">Archon OS는 Hermes Agent를 GDPR 준수 에이전트 운영체제로 확장합니다: 8개 도메인의 71개 전문가 프로필, 페일 클로즈 로컬 Zero-Egress 라우팅, Atomic BudgetBank 비용 상한, WebAuthn 패스키 승인, 구조화된 AI Boardroom 토론, GoBD 대응 SHA-256 감사 로그. 당신의 문서, 당신의 Obsidian Vault, 당신의 모델.</p>
         <div class="btnrow">
           <a class="btn primary" href="#install">빠른 시작</a>
-          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; docker compose up -d" aria-label="복사">복사</button>
+          <code class="hero-cmd" id="quickstart-cmd">git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d</code>
+          <button type="button" class="btn copy-btn-hero" data-copy-cmd="git clone https://github.com/michaelbeatman/ARCHON-OS.git &amp;&amp; cd ARCHON-OS &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d" aria-label="복사" title="설치 명령 복사">복사</button>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/docs/readme/README.ko.md">한국어 README</a>
           <a class="btn" href="https://github.com/michaelbeatman/ARCHON-OS" target="_blank" rel="noopener noreferrer">GitHub에서 보기</a>
         </div>
         <div class="badges">
           <span class="badge">v0.6.0.2 &middot; pre-1.0</span>
-          <span class="badge">GDPR / EU AI Act 준수 운영 지원</span>
-          <span class="badge">페일 클로즈 Zero-Egress</span>
+          <span class="badge">GDPR / EU AI Act: 설정에 따른 준수 운영</span>
+          <span class="badge">Zero-Egress 구현 완료 · 활성화 가능(현재 꺼짐)</span>
           <span class="badge">MIT 라이선스</span>
           <span class="badge">71 전문가 · 8개 도메인</span>
           <span class="badge">80개 의사결정 프레임워크</span>
@@ -360,7 +382,7 @@
         </div>
       </div>
 
-      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>전문가 프로필 · 8개 도메인</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom 프레임워크</span></div><div class="geo-kpi"><strong>0 Bytes</strong><span>Fail-Closed Zero-Egress (로컬)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% 오픈소스 · 8개 Docker 컨테이너</span></div></div>
+      <div class="geo-strip"><div class="geo-kpi"><strong>71</strong><span>전문가 프로필 · 8개 도메인</span></div><div class="geo-kpi"><strong>80</strong><span>AI Boardroom 프레임워크</span></div><div class="geo-kpi"><strong>구현 완료</strong><span>Zero-Egress · 로컬 모델로 활성화 가능(현재 꺼짐)</span></div><div class="geo-kpi"><strong>MIT</strong><span>100% 오픈소스 · 8개 Docker 컨테이너</span></div></div>
     </div>
   </section>
 
@@ -368,7 +390,7 @@
     <div class="creation-stage-wrap">
       <div class="creation-davinci-stage" aria-hidden="true">
         <div class="davinci-layer-plate">
-          <img class="davinci-creation-img" src="../assets/img/davinci_creation.webp" width="1024" height="686" alt="" loading="eager" fetchpriority="high" decoding="async">
+          <img class="davinci-creation-img" src="../assets/img/davinci_creation.webp" width="1024" height="686" alt="" loading="lazy" fetchpriority="low" decoding="async">
         </div>
         <div class="davinci-layer-over"><svg class="davinci-overlay-svg" viewBox="0 0 1024 686" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <circle class="creation-spark-wave" cx="495" cy="348" r="18" style="transform-origin:495px 348px"/>
@@ -387,7 +409,7 @@
       <div class="cockpit-bar">
         <span class="cockpit-dots" aria-hidden="true"><span></span><span></span><span></span></span>
         <span class="cockpit-title" data-cockpit-title>ARCHON OS // MISSION CONTROL</span>
-        <span class="cockpit-badge">ZERO-EGRESS · LOCAL</span>
+        <span class="cockpit-badge">ZERO-EGRESS · OPTIONAL</span>
       </div>
       <div class="cockpit-tabs" role="tablist">
         <button type="button" class="cockpit-tab is-active" role="tab" id="shot-tab-1" aria-selected="true" aria-controls="shot-panel-1" tabindex="0" data-shot-tab>Mission Control</button>
@@ -398,7 +420,7 @@
         <button type="button" class="cockpit-tab" role="tab" id="shot-tab-6" aria-selected="false" aria-controls="shot-panel-6" tabindex="-1" data-shot-tab>조직 계층</button>
       </div>
       <div class="cockpit-stage">
-        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" src="../assets/img/mission_control.webp" width="1024" height="559" alt="Mission Control 대시보드"><figcaption>Mission Control - 실시간 텔레메트리, 토큰 스파크라인 &amp; HITL 보드</figcaption></figure>
+        <figure id="shot-panel-1" class="is-active" role="tabpanel" aria-labelledby="shot-tab-1" tabindex="0" data-shot-panel><img loading="eager" fetchpriority="high" decoding="async" src="../assets/img/mission_control.webp" srcset="../assets/img/mission_control-480.webp 480w, ../assets/img/mission_control-768.webp 768w, ../assets/img/mission_control.webp 1024w" sizes="(max-width: 720px) 92vw, (max-width: 960px) 90vw, 680px" width="1024" height="559" alt="Mission Control 대시보드"><figcaption>Mission Control - 실시간 텔레메트리, 토큰 스파크라인 &amp; HITL 보드</figcaption></figure>
         <figure id="shot-panel-2" role="tabpanel" aria-labelledby="shot-tab-2" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/kader.webp" width="1024" height="559" alt="에이전트 함대 개요"><figcaption>에이전트 함대 - 전문가 프로필, OmniRoute 바인딩 &amp; 실시간 피드</figcaption></figure>
         <figure id="shot-panel-3" role="tabpanel" aria-labelledby="shot-tab-3" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/boardroom_debate.webp" width="1024" height="559" alt="AI Boardroom 토론"><figcaption>AI Boardroom - 프레임워크 &amp; 슬롯 기반 다관점 토론</figcaption></figure>
         <figure id="shot-panel-4" role="tabpanel" aria-labelledby="shot-tab-4" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/workflows.webp" width="1024" height="557" alt="비주얼 멀티에이전트 워크플로 빌더"><figcaption>Workflows - HITL 게이트가 있는 비주얼 멀티에이전트 DAG 편집기</figcaption></figure>
@@ -406,6 +428,7 @@
         <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/org.webp" width="1024" height="559" alt="조직도와 계층 구조"><figcaption>조직 계층 - 인터랙티브 흐름도 &amp; 승인 경계</figcaption></figure>
       </div>
     </div>
+    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">이미지는 데모 데이터를 포함하며 Google Gemini (Nano Banana)로 AI 생성되었습니다. 타사 회사명 및 제품명은 각 권리자에게 속합니다. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">이미지 출처 및 AI 생성 이미지</a>.</p>
     <div class="shots-thumbs" data-reveal>
       <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
       <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>에이전트 플릿</span></button>
@@ -511,12 +534,12 @@
       <div class="feat"><h3>24/7 상태 감시 &amp; 자가 복구</h3><p>비동기 이벤트 루프 하트비트가 <code>/livez</code>(정지 시 503)와 Docker 자동 재시작을 구동하며, 선택적 외부 데드맨 스위치 웹훅이 보완합니다.</p></div>
       <div class="feat"><h3>강화 &amp; 추적</h3><p>SSRF 및 프롬프트 인젝션 가드, 에이전트 호출 전반의 분산 trace ID, 대형 프롬프트 카탈로그를 위한 배치 UI 렌더링.</p></div>
       <div class="feat"><h3>Telegram, 이메일 &amp; CRM</h3><p>수신 이메일과 Telegram 메시지를 칸반 작업으로 분류하고, 연락처를 동기화하며, 견적과 계약을 하나의 워크스페이스에서 관리합니다.</p></div>
-      <div class="feat"><h3>패스키 / WebAuthn HITL</h3><p>고위험 승인(결제, 예산 초과, 파괴적 작업)은 Windows Hello, Touch ID 또는 하드웨어 패스키의 암호화 서명을 요구합니다. 모델은 승인을 위조할 수 없습니다.</p></div>
+      <div class="feat"><h3>패스키 / WebAuthn HITL</h3><p>고위험 승인(결제, 예산 초과, 파괴적 작업)은 Windows Hello, Touch ID 또는 하드웨어 패스키의 암호화 서명을 요구합니다. 모델은 승인을 위조할 수 없습니다. 등록하지 않으면 해당 사용자는 기능이 꺼집니다. 운영 전에 활성화하세요.</p></div>
       <div class="feat"><h3>Atomic BudgetBank &amp; 서명된 Warrant</h3><p>토큰 및 비용 예산은 실행 전에 트랜잭션으로 예약됩니다(<code>BEGIN IMMEDIATE</code>). 권한 있는 도구는 시간 제한 HMAC-SHA256 Warrant가 필요합니다.</p></div>
       <div class="feat"><h3>충돌 안전 Effect-Ledger</h3><p>외부 부작용은 멱등성 키와 알 수 없는 상태 이후의 필수 재조정을 갖춘 트랜잭션 원장에서 추적되어 중복 실행을 막습니다.</p></div>
       <div class="feat"><h3>Autoheal, Chroma &amp; Litestream</h3><p>기본 8개 컨테이너: <code>archon-autoheal</code>이 <code>/livez</code>로 자동 복구하고, <code>ChromaDB</code>가 로컬 벡터 RAG, <code>Litestream</code>이 SQLite WAL을 복제합니다.</p></div>
       <div class="feat"><h3>Alertmanager &amp; 관측 스택</h3><p>선택 프로필로 <code>Prometheus</code>, <code>Alertmanager</code>, <code>Grafana</code>, <code>Loki</code>, <code>OTel</code>/<code>Tempo</code>, <code>Uptime Kuma</code>, <code>Caddy</code>/<code>Authelia</code> SSO, <code>Metabase</code>, <code>DocuSeal</code>을 확장합니다.</p></div>
-      <div class="feat"><h3>832 프롬프트, 멀티테넌트 &amp; Vault</h3><p>832개 Prompt Studio 템플릿, 39개 스킬, 6개 MCP 서버, 법인별 물리 DB 분리, GDPR 17조 삭제, § 201 StGB 동의 게이트 및 오프라인 AEAD Vault를 지원합니다.</p></div>
+      <div class="feat"><h3>832 프롬프트, 멀티테넌트 &amp; Vault</h3><p>832개 Prompt Studio 템플릿, 18개 활성 스킬(카탈로그 39개), 6개 MCP 서버, 법인별 물리 DB 분리, GDPR 17조 삭제, § 201 StGB 동의 게이트 및 오프라인 AEAD Vault를 지원합니다.</p></div>
     </div>
 
     <h2 class="sec" id="compare">아키텍처 비교 및 하드웨어 기준</h2>
@@ -542,7 +565,7 @@
 </div>
 <p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"><a href="../compare/">전체 비교 (Archon OS vs. CrewAI, LangGraph, AutoGen, n8n, Dify) &rarr;</a> &middot; <a href="../architecture/#hardware">하드웨어 및 컨테이너 사양 &rarr;</a></p>
 
-    <h2 class="sec">71개 전문가 함대 - 8개 도메인</h2>
+    <h2 class="sec">70개 도메인 전문가 + 1개 루트 오케스트레이터 - 8개 도메인</h2>
     <div class="table-wrap" data-reveal>
       <table>
         <thead><tr><th>도메인</th><th>수</th><th>중점 분야</th></tr></thead>
@@ -560,15 +583,19 @@
     </div>
 
     <h2 class="sec">심층 기술 가이드 및 디렉터리 (HTML)</h2>
-<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/" hreflang="en"><span class="hub-kicker">01 / 시스템</span><strong>아키텍처 &amp; 스택 (EN)</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger, 3× SQLite WAL.</span></a><a class="hub-card" href="../gdpr-zero-egress/" hreflang="en"><span class="hub-kicker">02 / 컴플라이언스</span><strong>GDPR &amp; Zero-Egress (EN)</strong><span>Fail-closed Docker 격리, EU AI Act 위험 등록부 및 GoBD 감사 내보내기.</span></a><a class="hub-card" href="../compare/" hreflang="en"><span class="hub-kicker">03 / 비교 평가</span><strong>프레임워크 비교 (EN)</strong><span>Archon OS vs. LangGraph, CrewAI, AutoGen, n8n, Dify 기능 비교표.</span></a><a class="hub-card" href="boardroom-frameworks/" hreflang="en"><span class="hub-kicker">04 / Boardroom</span><strong>80 프레임워크 (EN)</strong><span>다각도 토론 방법론을 검색·필터링할 수 있는 HTML 카탈로그.</span></a><a class="hub-card" href="../specialists/" hreflang="en"><span class="hub-kicker">05 / 플릿</span><strong>71 전문가 프로필 (EN)</strong><span>8개 도메인의 71개 전문 에이전트 역할과 가드레일 디렉터리.</span></a><a class="hub-card" href="../second-brain/" hreflang="en"><span class="hub-kicker">06 / 2nd Brain</span><strong>RAG, 인사 파일 &amp; 자기 진화 (EN)</strong><span>Obsidian Vault, ChromaDB 벡터 지식 DB, 에이전트 성과·학습 기록 및 스킬 자동 합성.</span></a></div>
+<div class="hub-grid" data-reveal><a class="hub-card" href="../architecture/" hreflang="en"><span class="hub-kicker">01 / 시스템</span><strong>아키텍처 &amp; 스택 (EN)</strong><span>OmniRoute, PolicyEngine, Atomic BudgetBank, Effect-Ledger, 3× SQLite WAL.</span></a><a class="hub-card" href="../gdpr-zero-egress/" hreflang="en"><span class="hub-kicker">02 / 컴플라이언스</span><strong>GDPR &amp; Zero-Egress (EN)</strong><span>Fail-closed Docker 격리, EU AI Act 위험 등록부 및 GoBD 감사 내보내기.</span></a><a class="hub-card" href="../compare/" hreflang="en"><span class="hub-kicker">03 / 비교 평가</span><strong>프레임워크 비교 (EN)</strong><span>Archon OS vs. LangGraph, CrewAI, AutoGen, n8n, Dify 기능 비교표.</span></a><a class="hub-card" href="boardroom-frameworks/" hreflang="ko"><span class="hub-kicker">04 / Boardroom</span><strong>80 프레임워크</strong><span>다각도 토론 방법론을 검색·필터링할 수 있는 HTML 카탈로그.</span></a><a class="hub-card" href="../specialists/" hreflang="en"><span class="hub-kicker">05 / 플릿</span><strong>71 전문가 프로필 (EN)</strong><span>8개 도메인의 71개 전문 에이전트 역할과 가드레일 디렉터리.</span></a><a class="hub-card" href="../second-brain/" hreflang="en"><span class="hub-kicker">06 / 2nd Brain</span><strong>RAG, 인사 파일 &amp; 자기 진화 (EN)</strong><span>Obsidian Vault, ChromaDB 벡터 지식 DB, 에이전트 성과·학습 기록 및 스킬 자동 합성.</span></a></div>
 
     <div class="wrap b2b-section"><h3>규제 환경에서의 활용</h3><p><strong>구매:</strong> 공급업체 비교와 계약 초안은 Passkey 승인을 거치며, 예산 상한이 지출을 억제합니다. <strong>관리회계:</strong> 모든 호출을 공급자, 모델, 비용과 함께 해시 체인에 기록 — GoBD 내보내기는 한 번의 클릭. <strong>컴플라이언스:</strong> TOM 매트릭스, EU AI Act 위험 등록부, § 201 StGB 동의 게이트는 설정이며 부가 기능이 아닙니다.</p><p><strong>경제성:</strong> 라이선스 0 €(MIT). 인프라, 설정, 운영은 사용자의 책임입니다. Zero-Egress는 명시적 옵션이며 보장이 아닙니다.</p></div>
+
+    
 
     <h2 class="sec" id="install">설치</h2>
     <div class="install" data-reveal>
       <div class="card"><h3>전체 스택</h3><p>기본 8개 컨테이너: Archon OS, OmniRoute, Hermes Agent, AnythingLLM, ChromaDB, Litestream, Docker socket proxy, Autoheal (선택 프로필로 최대 24개).</p>
 <pre data-lang="bash">git clone https://github.com/michaelbeatman/ARCHON-OS.git
 cd ARCHON-OS
+cp .env.example .env
+# 필수: .env의 ARCHON_HEARTBEAT_WEBHOOK_URL에 실제 수신자를 설정하세요
 docker compose up -d</pre></div>
       <div class="card"><h3>키 없는 데모</h3><p>API 키와 토큰 비용 없이 살펴볼 수 있는 읽기 전용 쇼케이스.</p>
 <pre data-lang="bash">ARCHON_DEMO_MODE=true \
@@ -580,7 +607,7 @@ docker compose -f docker-compose.demo.yml up --build -d
     <h2 class="sec">왜 Archon OS인가?</h2>
     <div class="governance-showcase" data-reveal>
       <div class="governance-copy">
-        <p><strong>장난감 데모가 아니라 상업적 책임과 GDPR 준수를 위해 만들어졌습니다.</strong> 비용 상한, 데이터 유출, 컴플라이언스 경계를 맞춤 접착 코드에 맡기는 프롬프트 체이닝 라이브러리와 달리, Archon OS는 페일 클로즈 로컬 Zero-Egress 라우팅, Atomic BudgetBank 예약, WebAuthn 패스키 승인, EU AI Act / GoBD 문서화, SHA-256 감사 추적을 기본으로 강제합니다 - 3개의 통합 SQLite WAL 데이터베이스(<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>) 위에서.</p>
+        <p><strong>장난감 데모가 아니라 상업적 책임과 GDPR 준수를 위해 만들어졌습니다.</strong> 비용 상한, 데이터 유출, 컴플라이언스 경계를 맞춤 접착 코드에 맡기는 프롬프트 체이닝 라이브러리와 달리, Archon OS는 페일 클로즈 로컬 Zero-Egress 라우팅, Atomic BudgetBank 예약, WebAuthn 패스키 승인, EU AI Act / GoBD 문서화, SHA-256 감사 추적을 기본으로 강제합니다 - 3개의 통합 SQLite WAL 데이터베이스(<code>ops.db</code>, <code>business.db</code>, <code>memory.db</code>) 위에서. Zero-Egress는 기본값이 꺼져 있으며 로컬 모델로 활성화해야 합니다.</p>
         <ul class="governance-pillars">
           <li><strong>I. POLICY ENGINE</strong> &middot; Default-Deny 및 HMAC-SHA256 영장</li>
           <li><strong>II. PASSKEY LOCK</strong> &middot; WebAuthn / Windows Hello / Touch ID 승인</li>
@@ -689,7 +716,7 @@ docker compose -f docker-compose.demo.yml up --build -d
       <h2 class="sec">자주 묻는 질문</h2>
       <div class="feats faq-grid" data-reveal>
         <div class="feat"><h3>Archon OS란 무엇인가요?</h3><p>Archon OS는 Hermes Agent 기반의 MIT 라이선스 자체 호스팅 에이전트 운영체제입니다. 8개 도메인에 71개 전문 AI 역할을 편성하며, 실행 전 예산 예약, 로컬 Zero-Egress LLM 라우팅, WebAuthn 패스키 승인, SHA-256 해시 체인 감사 로그를 갖추고 있습니다.</p></div>
-        <div class="feat"><h3>민감한 데이터 유출을 어떻게 막나요?</h3><p>OmniRoute가 페일 클로즈 Zero-Egress 정책을 적용합니다: 재무, 계약, CRM, 인사, GDPR 워크로드는 인터넷 경로가 없는 내부 Docker 네트워크의 로컬 모델(Ollama 또는 LM Studio)에서만 실행됩니다.</p></div>
+        <div class="feat"><h3>민감한 데이터 유출을 어떻게 막나요?</h3><p>OmniRoute가 페일 클로즈 Zero-Egress 정책을 적용합니다: 재무, 계약, CRM, 인사, GDPR 워크로드는 인터넷 경로가 없는 내부 Docker 네트워크의 로컬 모델(Ollama 또는 LM Studio)에서만 실행됩니다. 페일 클로즈는 활성화 후에만 적용됩니다. 기본값은 꺼짐입니다.</p></div>
         <div class="feat"><h3>토큰 비용 &amp; 위험한 작업은 어떻게 통제되나요?</h3><p>중앙 PolicyEngine이 디스패치 전 권한을 검증하고, 권한 있는 도구는 시간 제한 서명 Warrant가 필요하며, BudgetBank가 자금을 원자적으로 예약하고, 고위험 승인에는 WebAuthn 패스키 서명이 필요합니다.</p></div>
         <div class="feat"><h3>GDPR &amp; EU AI Act에 대응하나요?</h3><p>설정에 따라 달라집니다. 민감한 업무 워크로드는 페일 클로즈 Zero-Egress로 서버에 남으며, EU AI Act 위험 등록부, 위변조 탐지 SHA-256 감사 로그, 원클릭 GoBD 절차 문서 내보내기로 뒷받침됩니다.</p></div>
         <div class="feat"><h3>일반 챗봇과 Archon OS의 차이는 무엇인가요?</h3><p>챗봇은 답합니다. Archon OS는 <strong>규칙을 강제합니다</strong>: 호출 전 예산 게이트, 위험 작업의 Passkey 승인, 검증 가능한 감사 체인. 차이는 대화가 아니라 강제입니다.</p></div>
@@ -731,7 +758,7 @@ docker compose -f docker-compose.demo.yml up --build -d
       </div>
     </section>
 
-    <h2 class="sec">솔직한 상태</h2>
+    <h2 class="sec" id="status">솔직한 상태</h2>
     <p class="status" data-reveal>Pre-1.0. 인터페이스와 설정 키는 릴리스마다 바뀝니다. ERP/CRM 모듈은 alpha이며, 다중 사용자 역할 강제는 아직 보강 중이고, 전문가 출력은 의사결정 지원이지 공인된 자문이 아닙니다. 이슈와 PR을 환영합니다.</p>
 
     <h2 class="sec">문서 (11개 언어)</h2>
@@ -761,7 +788,8 @@ docker compose -f docker-compose.demo.yml up --build -d
     <a href="../impressum/">사업자 정보</a>
     <a href="../datenschutz/">개인정보 처리방침</a>
     <span>상표는 각각의 소유자에게 속합니다.</span>
-    <a href="../llms.txt">llms.txt</a>
+    <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">이미지 출처 및 AI 생성 이미지</a>
+    <a href="../llms.txt">llms.txt</a> · <a href="../llms-full.txt">llms-full.txt</a>
   </div>
 </footer>
 <script src="../assets/site.js" defer></script>

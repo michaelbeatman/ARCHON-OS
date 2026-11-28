@@ -97,6 +97,7 @@ _archive_legacy/
 test_logs.txt
 test_output.html
 *.png
+!site/assets/img/og-card-*.png
 !static/img/**
 !static/avatars/**
 !static/archon_os_logo.png

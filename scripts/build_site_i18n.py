@@ -122,6 +122,7 @@ STRUCTURAL_VARS = {
     "SHOT_TAB_4",
     "SHOT_TAB_5",
     "SHOT_TAB_6",
+    "B2B_EXTRA_HTML",
 }
 
 PLACEHOLDER_RE = re.compile(r"\{\{([A-Za-z0-9_.]+)\}\}")
@@ -196,11 +197,11 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
     """Build localized @graph JSON-LD (WebSite, Organization, SoftwareApplication/SourceCode, FAQPage)."""
     b = (base_url or BASE_URL).rstrip("/") + "/"
     page_url = canonical(lang, b)
-    og_img = b + "assets/img/og-card.png"
+    og_img = b + "assets/img/og-card-" + lang + ".png"
     html_lang = LANGS[lang][0]
 
     faq_entities = []
-    for key in ("faq.what", "faq.leaks", "faq.costs", "faq.gdpr"):
+    for key in ("faq.what", "faq.leaks", "faq.costs", "faq.gdpr", "faq.chatbot"):
         m = FAQ_PAIR_RE.search(cat[key])
         if m:
             faq_entities.append({
@@ -231,7 +232,7 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
                 "url": b,
                 "logo": {
                     "@type": "ImageObject",
-                    "url": b + "archon_hand.png",
+                    "url": b + "archon_hand.webp",
                 },
                 "founder": {
                     "@type": "Person",
@@ -272,7 +273,7 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
                 "name": "Archon OS",
                 "alternateName": "ARCHON-OS",
                 "inLanguage": html_lang,
-                "applicationCategory": "DeveloperApplication, BusinessApplication",
+                "applicationCategory": ["DeveloperApplication", "BusinessApplication"],
                 "operatingSystem": "Linux, Windows, macOS (Docker amd64 / arm64)",
                 "softwareVersion": version_bare,
                 "dateModified": LASTMOD,
@@ -286,8 +287,10 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
                 "publisher": {"@id": b + "#organization"},
                 "isBasedOn": {
                     "@type": "SoftwareSourceCode",
+                    "@id": "https://github.com/NousResearch/hermes-agent",
                     "name": "Hermes Agent",
                     "codeRepository": "https://github.com/NousResearch/hermes-agent",
+                    "sameAs": ["https://github.com/NousResearch/hermes-agent"],
                 },
                 "featureList": feature_list,
                 "additionalProperty": [
@@ -295,7 +298,7 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
                     {"@type": "PropertyValue", "name": "Enterprise domains", "value": 8},
                     {"@type": "PropertyValue", "name": "Boardroom frameworks", "value": 80},
                     {"@type": "PropertyValue", "name": "Prompt templates", "value": 832},
-                    {"@type": "PropertyValue", "name": "Skills", "value": 39},
+                    {"@type": "PropertyValue", "name": "Active skills", "value": 18},
                     {"@type": "PropertyValue", "name": "MCP servers", "value": 6},
                     {"@type": "PropertyValue", "name": "Supported languages", "value": 11},
                     {"@type": "PropertyValue", "name": "Default Docker containers", "value": 8},
@@ -304,6 +307,7 @@ def build_json_ld(lang: str, cat: dict[str, str], version_bare: str, base_url: s
                     "@type": "Offer",
                     "price": "0",
                     "priceCurrency": "EUR",
+                    "description": "License fee 0 EUR (MIT). Infrastructure, configuration and operation are borne by the operator; optional cloud token costs are budget-capped.",
                 },
             },
             {
@@ -453,13 +457,15 @@ def build_hub_section(lang: str) -> str:
     hrefs = [arch, gdpr, cmp_url, fw_url, sp_url, sb_url]
     hub_cfg = _sec_for(lang)["hub"]
     assert isinstance(hub_cfg, dict)
-    mark = "" if lang in ("en", "de") else " (EN)"
     cards = hub_cfg["cards"]
     assert isinstance(cards, list)
-    html_cards = "".join(
-        f'<a class="hub-card" href="{hrefs[i]}" hreflang="en"><span class="hub-kicker">{c[0]}</span><strong>{c[1]}{mark}</strong><span>{c[2]}</span></a>'
-        for i, c in enumerate(cards)
-    )
+    def _card(i: int, c: list[str]) -> str:
+        local = i == 3  # Boardroom-Katalog existiert in allen 11 Sprachen
+        code = LANGS[lang][0] if local else "en"
+        mark = "" if (lang in ("en", "de") or local) else " (EN)"
+        return (f'<a class="hub-card" href="{hrefs[i]}" hreflang="{code}">'
+                f'<span class="hub-kicker">{c[0]}</span><strong>{c[1]}{mark}</strong><span>{c[2]}</span></a>')
+    html_cards = "".join(_card(i, c) for i, c in enumerate(cards))
     return f'<h2 class="sec">{hub_cfg["title"]}</h2>\n<div class="hub-grid" data-reveal>{html_cards}</div>'
 
 
@@ -467,6 +473,29 @@ def build_gov_pillars(lang: str) -> str:
     pillars = _sec_for(lang)["pillars"]
     assert isinstance(pillars, list)
     return "\n          ".join(f"<li>{p}</li>" for p in pillars)
+
+
+
+def build_b2b_extra(lang: str) -> str:
+    """Render the localized TCO table, use-case cards and TOM note below the B2B section."""
+    cfg = _sec_for(lang).get("b2b_extra")
+    if not isinstance(cfg, dict) or not cfg:
+        return ""
+    head = "".join(f"<th>{x}</th>" for x in cfg["tcoHead"])
+    rows = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in row) + "</tr>" for row in cfg["tcoRows"])
+    cards = "".join(f'<div class="feat"><h3>{a}</h3><p>{b}</p></div>' for a, b in cfg["useCards"])
+    return (
+        f'<h2 class="sec" id="wirtschaftlichkeit">{cfg["tcoTitle"]}</h2>\n'
+        '<div class="table-wrap" data-reveal>\n'
+        f'  <table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>\n'
+        '</div>\n'
+        f'<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)">{cfg["tcoNote"]}</p>\n'
+        f'<h2 class="sec" id="use-cases-fachbereiche">{cfg["useTitle"]}</h2>\n'
+        f'<div class="feats" data-reveal>{cards}</div>\n'
+        f'<p class="status" style="margin-top:0.9rem">{cfg["tom"]}</p>\n'
+        + (f'<p style="margin-top:0.9rem">{cfg["demoCta"]}</p>\n' if cfg.get("demoCta") else "")
+
+    )
 
 
 def validate_catalog_values(catalogs: dict[str, dict[str, str]]) -> list[str]:
@@ -523,8 +552,9 @@ def render(template: str, lang: str, cat: dict[str, str], base_url: str | None =
         "LANG_OPTIONS": lang_options(lang),
         "DOC_HREF": doc_href(lang),
         "OG_LOCALE": OG_LOCALES.get(lang, "en_US"),
-        "OG_IMAGE_URL": b + "assets/img/og-card.png",
+        "OG_IMAGE_URL": b + "assets/img/og-card-" + lang + ".png",
         "JSON_LD": build_json_ld(lang, cat, version_bare, b),
+        "B2B_EXTRA_HTML": build_b2b_extra(lang),
         "DAVINCI_VERT_UNDERLAYER_SVG": build_davinci_vertical_underlayer_svg(),
         "DAVINCI_VERT_OVERLAY_SVG": build_davinci_vertical_overlay_svg(),
         "DAVINCI_WHEEL_UNDERLAYER_SVG": build_davinci_underlayer_svg(),
@@ -654,7 +684,7 @@ def build_llms_txt(base_url: str, version: str) -> str:
     b = base_url.rstrip("/") + "/"
     return f"""# Archon OS
 
-> Archon OS is a self-hosted, MIT-licensed Agentic Operating System (multi-agent enterprise suite) built on Hermes Agent. It enforces fail-closed Zero-Egress local LLM routing, atomic pre-dispatch token budget reservations, WebAuthn Passkey human-in-the-loop approvals, crash-safe Effect-Ledger execution, and a SHA-256 hash-chained audit log on your own Docker server.
+> Archon OS is a self-hosted, MIT-licensed Agentic Operating System (multi-agent enterprise suite) built on Hermes Agent. Fail-closed Zero-Egress local LLM routing is fully implemented and can be enabled in production with local models or EU-based providers (off by default in the running deployment), atomic pre-dispatch token budget reservations, WebAuthn Passkey human-in-the-loop approvals (per-user opt-in), crash-safe Effect-Ledger execution, and a SHA-256 hash-chained audit log on your own Docker server.
 
 - Website (EN): {b}
 - Website (DE): {b}de/
@@ -684,24 +714,24 @@ def build_llms_txt(base_url: str, version: str) -> str:
 - **71 Agent Profiles across 8 Domains:** Strategy & Leadership (13), Law/Tax/Finance (11), Sales/CRM/Marketing (11), Creation/Media (8), Tech/Software/QA (8), Commerce/Procurement (7), Real Estate/Construction (7), and Medicine/Chemistry/Engineering (6).
 - **PolicyEngine & Signed Tool Warrants:** Default-deny tool access. Privileged tools require HMAC-SHA256 signed, time-limited warrants with parameter bounds. Delegated sub-agents never inherit privileged tools.
 - **Atomic BudgetBank:** Pre-execution transactional budget reservations (`BEGIN IMMEDIATE`) prevent parallel agents from exceeding daily or per-task cost caps.
-- **Passkey / WebAuthn HITL:** High-risk approvals (payments, budget overruns, destructive actions) require cryptographic verification via Windows Hello, Touch ID, Face ID, or hardware keys.
-- **Fail-Closed Zero-Egress Routing:** OmniRoute sends finance, HR, contract, CRM, and GDPR workloads exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route.
+- **Passkey / WebAuthn HITL:** After per-user passkey registration, high-risk approvals (payments, budget overruns, destructive actions) require cryptographic verification via Windows Hello, Touch ID, Face ID, or hardware keys. Without registration the feature is off for that user.
+- **Fail-Closed Zero-Egress Routing (fully implemented):** OmniRoute routes finance, HR, contract, CRM, and GDPR workloads exclusively to local models (Ollama, LM Studio) inside an internal Docker network without an internet route once enabled. The implementation is complete; the shipped default is off because the operator must supply local models or EU providers.
 - **Crash-Safe Execution (Effect-Ledger):** Transactional Effect-Ledger (`PENDING -> COMMITTED / FAILED / UNKNOWN`) with Outbox idempotency keys and mandatory reconciliation prevents duplicate external side effects.
 - **Auditability & Compliance:** SHA-256 hash-chained audit log, 3 consolidated SQLite WAL databases (`ops.db`, `business.db`, `memory.db`) with Litestream replication, EU AI Act risk registry, GDPR Art. 17 erasure, § 201 StGB audio consent gate, physical multi-tenant DB isolation (Holding/GmbH/SPV), and 1-click GoBD procedural documentation export.
 - **Security Hardening (v0.6.0.1):** Workspace path-jail, Delegation Isolation, Session Taint Guard (HITL), Offline AEAD Vault, and Flightlog policy backtester.
-- **AI Boardroom & Knowledge Base:** 80 structured multi-perspective decision frameworks across 9 categories, 832 Prompt Studio templates, 39 skills, 6 MCP servers, local Obsidian Markdown vault + AnythingLLM/ChromaDB vector RAG, and embedded n8n webhook automation.
+- **AI Boardroom & Knowledge Base:** 80 structured multi-perspective decision frameworks across 9 categories, 832 Prompt Studio templates, 18 active skills (39 cataloged), 6 MCP servers, local Obsidian Markdown vault + AnythingLLM/ChromaDB vector RAG, and embedded n8n webhook automation.
 - **Self-Healing & Observability Stack:** `archon-autoheal` 24/7 `/livez` container recovery plus optional Docker Compose profiles for `Prometheus`, `Alertmanager`, `Grafana`, `Loki`/`Promtail`, `OTel`/`Tempo`, `Uptime Kuma`, `Caddy`/`Authelia` SSO, `Metabase` BI, and `DocuSeal` e-signature.
 
 ## Quick Start
 
-- Full stack (8 default containers, expandable to 24 with optional profiles): `git clone {REPO_URL}.git && cd ARCHON-OS && docker compose up -d`
+- Full stack (8 default containers, expandable to 24 with optional profiles): `git clone {REPO_URL}.git && cd ARCHON-OS && cp .env.example .env && docker compose up -d` (set `ARCHON_HEARTBEAT_WEBHOOK_URL` in `.env` first)
 - Zero-key demo mode: `ARCHON_DEMO_MODE=true docker compose -f docker-compose.demo.yml up --build -d`
 
 ## PDF Documentation & Changelog
 
-- System Manual (EN, page count varies by language): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
-- Systemhandbuch (DE, Seitenzahl je nach Sprache): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
-- Complete Feature List (EN): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf
+- System Manual (EN, generated for v0.5.2.1, page count varies by language): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_MANUAL_2026_EN.pdf
+- Systemhandbuch (DE, erstellt für v0.5.2.1, Seitenzahl je nach Sprache): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_SYSTEM_HANDBUCH_2026.pdf
+- Complete Feature List (EN, generated for v0.5.2.1): https://raw.githubusercontent.com/michaelbeatman/ARCHON-OS/main/docs/system/ARCHON_OS_FEATURE_LIST_2026_EN.pdf
 - Changelog: {REPO_BLOB}CHANGELOG.md
 """
 

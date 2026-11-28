@@ -33,7 +33,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: agent-os-container:v0.5.7
+    image: agent-os-container:v0.6.0.2
     container_name: ${ARCHON_CONTAINER_NAME:-ARCHON-OS}
     init: true
     restart: unless-stopped

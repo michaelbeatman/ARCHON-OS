@@ -138,6 +138,6 @@ def test_html_metadata_per_language(ctx: Ctx) -> None:
         )
         assert page.count(" selected>") == 1, f"{lang}: Sprachumschalter ohne Auswahl"
         assert f">{label}</option>" in page, f"{lang}: Eigenes Label fehlt im Umschalter"
-        asset = "archon_hand.png"
+        asset = "archon_hand.webp"
         expected = f'src="{asset}"' if lang == "en" else f'src="../{asset}"'
         assert expected in page, f"{lang}: Asset-Basis stimmt nicht"

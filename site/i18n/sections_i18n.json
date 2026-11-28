@@ -18,8 +18,8 @@
         "AI Boardroom Frameworks"
       ],
       [
-        "0 Bytes",
-        "Fail-Closed Zero-Egress (Local)"
+        "Implemented",
+        "Zero-Egress · activatable with local models (currently off here)"
       ],
       [
         "MIT",
@@ -28,7 +28,7 @@
     ],
     "arch": {
       "title": "Architecture &amp; Zero-Egress Flow",
-      "caption": "Every agent call clears <code>PolicyEngine</code> (HMAC warrant) and transactional <code>BudgetBank</code> before dispatch. Sensitive workloads stay inside the no-internet Docker zone.",
+      "caption": "Every agent call clears <code>PolicyEngine</code> (HMAC warrant) and the transactional <code>BudgetBank</code> before dispatch. Sensitive workloads stay inside the no-internet Docker zone once Zero-Egress is enabled; the shipped default is off.",
       "linkArch": "Architecture Deep-Dive",
       "linkGdpr": "GDPR &amp; EU AI Act",
       "svg": {
@@ -137,6 +137,59 @@
       "ctaGithub": "View on GitHub",
       "ctaQuickstart": "Quick Start (Docker)",
       "tagline": "Self-Hosted Agentic OS"
+    },
+    "b2b_extra": {
+      "tcoTitle": "Economics &amp; TCO",
+      "tcoHead": [
+        "Item",
+        "Archon OS",
+        "Note for your calculation"
+      ],
+      "tcoRows": [
+        [
+          "License",
+          "€0 (MIT)",
+          "No license or seat fees, no vendor lock-in notice period."
+        ],
+        [
+          "Hardware (SMB team)",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "E.g. RTX 4060 Ti or Apple M2–M4; enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Operation",
+          "Your responsibility (Docker, backups, updates, passkeys)",
+          "No DPA/SLA needed - instead internal operational responsibility and documentation duty."
+        ],
+        [
+          "Ongoing AI cost",
+          "€0 with a local model; optional capped cloud tokens",
+          "Per-agent daily limit configurable as a proxy at €1.50–2.50/day, hard-capped before dispatch."
+        ],
+        [
+          "Evidence value",
+          "SHA-256 audit chain + GoBD export",
+          "Verifiable records instead of manual documentation - an input parameter for the evaluation protocol."
+        ]
+      ],
+      "tcoNote": "Example calculation and assumptions: <a href=\"architecture/#hardware\">hardware profiles &rarr;</a> · <a href=\"gdpr-zero-egress/\">TOM evidence &rarr;</a>",
+      "useTitle": "Use cases in a commercial operation",
+      "useCards": [
+        [
+          "Procurement · Supplier comparison",
+          "Offers from several suppliers are compared in the vault, terms and lead times are set side by side, and a contract draft is created. Approval only after passkey signature; no dispatch without a HITL gate. A daily budget prevents uncontrolled token spend."
+        ],
+        [
+          "Controlling · Liquidity &amp; budget",
+          "13-week cash-flow planning and variance analysis from the Boardroom catalog; every dispatch is hash-chained with provider, model and cost. The one-click GoBD export supplies the audit protocol."
+        ],
+        [
+          "Compliance · Evidence duty",
+          "TOM matrix under GDPR Art. 32, EU AI Act risk register and Art. 17 erasure record in the audit chain. Once enabled, sensitive categories run locally only - hard-stopping on failure instead of silently falling back to the cloud."
+        ]
+      ],
+      "tom": "Technical and organisational measures (TOMs under GDPR Art. 32) are documented as a matrix with verifiable evidence: <a href=\"gdpr-zero-egress/\">TOM matrix, risk register &amp; GoBD &rarr;</a>. As the operator of your own instance you are responsible for configuration, operation and effectiveness - Archon OS supplies the mechanisms and the evidence.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20demo%20request\">Request a demo</a> <a class=\"btn\" href=\"#status\">Full status &rarr;</a>"
     }
   },
   "de": {
@@ -158,8 +211,8 @@
         "AI-Boardroom-Frameworks"
       ],
       [
-        "0 Bytes",
-        "Fail-Closed Zero-Egress (Lokal)"
+        "Implementiert",
+        "Zero-Egress · aktivierbar mit lokaler KI (hier aktuell aus)"
       ],
       [
         "MIT",
@@ -168,7 +221,7 @@
     ],
     "arch": {
       "title": "Architektur &amp; Zero-Egress-Datenfluss",
-      "caption": "Jede Agenten-Aktion passiert vor dem Dispatch die <code>PolicyEngine</code> (HMAC-Warrant) und die transaktionale <code>BudgetBank</code>. Sensible Kategorien laufen strikt lokal im isolierten Docker-Netz.",
+      "caption": "Jede Agenten-Aktion durchläuft vor dem Dispatch die <code>PolicyEngine</code> (HMAC-Warrant) und die transaktionale <code>BudgetBank</code>. Sensitive Kategorien laufen strikt lokal – sofern du Zero-Egress aktiviert hast; im Auslieferungszustand ist es deaktiviert.",
       "linkArch": "Architektur-Details",
       "linkGdpr": "DSGVO &amp; EU AI Act",
       "svg": {
@@ -277,6 +330,59 @@
       "ctaGithub": "Auf GitHub ansehen",
       "ctaQuickstart": "Schnellstart (Docker)",
       "tagline": "Selbstgehostetes Multi-Agenten-OS"
+    },
+    "b2b_extra": {
+      "tcoTitle": "Wirtschaftlichkeit &amp; TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis für die Kalkulation"
+      ],
+      "tcoRows": [
+        [
+          "Lizenz",
+          "0 € (MIT)",
+          "Keine Lizenz-/Seat-Gebühren, keine Vendor-Lock-in-Kündigungsfrist."
+        ],
+        [
+          "Hardware (Team/KMU)",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Z. B. RTX 4060 Ti oder Apple M2–M4; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Eigene Verantwortung (Docker, Backups, Updates, Passkeys)",
+          "Kein AVV/SLA nötig – dafür interne Betriebsverantwortung und Dokumentationspflicht."
+        ],
+        [
+          "Laufende KI-Kosten",
+          "0 € bei lokalem Modell; optional gedeckelte Cloud-Tokens",
+          "Pro-Agent-Tageslimit als Ersatzwert 1,50–2,50 EUR/d konfigurierbar, hart begrenzt vor dem Dispatch."
+        ],
+        [
+          "Nachweiswert",
+          "SHA-256-Audit-Chain + GoBD-Export",
+          "Prüfbare Belege statt manueller Dokumentation – Aufwandsparameter für das Evaluationsprotokoll."
+        ]
+      ],
+      "tcoNote": "Beispielrechnung und Annahmen: <a href=\"architektur/#hardware\">Hardware-Profile &rarr;</a> · <a href=\"dsgvo-zero-egress/\">TOM-Nachweise &rarr;</a>",
+      "useTitle": "Use Cases im Kaufmannsbetrieb",
+      "useCards": [
+        [
+          "Einkauf · Lieferantenvergleich",
+          "Angebote mehrerer Lieferanten werden im Vault verglichen, Konditionen und Lieferzeiten strukturiert gegenübergestellt und ein Vertragsentwurf erstellt. Freigabe erst nach Passkey-Signatur; kein Versand ohne HITL-Gate. Tagesbudget verhindert unkontrollierte Tokenausgaben."
+        ],
+        [
+          "Controlling · Liquidität &amp; Budget",
+          "13-Wochen-Liquiditätsplanung und Abweichungsanalyse aus dem Boardroom-Katalog; jeder Dispatch wird mit Provider, Modell und Kosten hash-gekettet protokolliert. Der 1-Klick-GoBD-Export liefert das Prüfprotokoll."
+        ],
+        [
+          "Compliance · Nachweispflicht",
+          "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg in der Audit-Chain. Sensible Kategorien laufen nach Aktivierung von Zero-Egress ausschließlich lokal – bei Ausfall hart abbrechend statt still in die Cloud."
+        ]
+      ],
+      "tom": "Technische Schutzmaßnahmen (TOMs nach Art. 32 DSGVO) sind als Matrix mit prüfbarem Nachweis dokumentiert: <a href=\"dsgvo-zero-egress/\">TOM-Matrix, Risikoregister &amp; GoBD &rarr;</a>. Als Betreiber deiner eigenen Instanz verantwortest du Konfiguration, Betrieb und Wirksamkeit der Maßnahmen – Archon OS liefert die Mechanismen und die Belege.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo-Anfrage\">Demo / Erstgespräch anfragen</a> <a class=\"btn\" href=\"#status\">Vollständiger Status &rarr;</a>"
     }
   },
   "es": {
@@ -298,8 +404,8 @@
         "Marcos AI Boardroom"
       ],
       [
-        "0 Bytes",
-        "Zero-Egress Fail-Closed (Local)"
+        "Implementado",
+        "Zero-Egress · activable con modelos locales (actualmente desactivado)"
       ],
       [
         "MIT",
@@ -438,8 +544,8 @@
         "Cadres AI Boardroom"
       ],
       [
-        "0 Octet",
-        "Zero-Egress Fail-Closed (Local)"
+        "Implémenté",
+        "Zero-Egress · activable avec des modèles locaux (actuellement désactivé)"
       ],
       [
         "MIT",
@@ -578,8 +684,8 @@
         "Framework AI Boardroom"
       ],
       [
-        "0 Byte",
-        "Zero-Egress Fail-Closed (Locale)"
+        "Implementato",
+        "Zero-Egress · attivabile con modelli locali (attualmente disattivato)"
       ],
       [
         "MIT",
@@ -718,8 +824,8 @@
         "AI Boardroom フレームワーク"
       ],
       [
-        "0 Bytes",
-        "Fail-Closed Zero-Egress (ローカル)"
+        "実装済み",
+        "Zero-Egress · ローカルモデルで有効化可能（現在はオフ）"
       ],
       [
         "MIT",
@@ -858,8 +964,8 @@
         "AI Boardroom 프레임워크"
       ],
       [
-        "0 Bytes",
-        "Fail-Closed Zero-Egress (로컬)"
+        "구현 완료",
+        "Zero-Egress · 로컬 모델로 활성화 가능(현재 꺼짐)"
       ],
       [
         "MIT",
@@ -998,8 +1104,8 @@
         "AI Boardroom Frameworks"
       ],
       [
-        "0 Bytes",
-        "Fail-Closed Zero-Egress (Lokaal)"
+        "Geïmplementeerd",
+        "Zero-Egress · in te schakelen met lokale modellen (nu uit)"
       ],
       [
         "MIT",
@@ -1138,8 +1244,8 @@
         "Frameworks AI Boardroom"
       ],
       [
-        "0 Bytes",
-        "Zero-Egress Fail-Closed (Local)"
+        "Implementado",
+        "Zero-Egress · ativável com modelos locais (atualmente desativado)"
       ],
       [
         "MIT",
@@ -1278,8 +1384,8 @@
         "Фреймворков AI Boardroom"
       ],
       [
-        "0 Байт",
-        "Fail-Closed Zero-Egress (Локально)"
+        "Реализовано",
+        "Zero-Egress · включается с локальными моделями (сейчас выключен)"
       ],
       [
         "MIT",
@@ -1418,8 +1524,8 @@
         "AI Boardroom 决策框架"
       ],
       [
-        "0 Bytes",
-        "Fail-Closed Zero-Egress 本地隔离"
+        "已实现",
+        "Zero-Egress · 可用本地模型启用（当前关闭）"
       ],
       [
         "MIT",

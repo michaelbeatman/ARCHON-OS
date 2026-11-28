@@ -133,7 +133,7 @@
       },
       "featureList": [
         "AI BoardroomBeslissingen verlopen als geïsoleerde multiperspectiefdebatten met kruisverhoor door een criticus en synthese, over 80 frameworks van OKR tot Pre-Mortem.",
-        "Zero-Egress & AVGFinanciële-, HR-, contract- en CRM-gegevens blijven op lokale modellen binnen een geïsoleerd Docker-netwerk zonder internetroute. Fails closed - voor strikte AVG-datalokalisatie.",
+        "Zero-Egress & AVGFinanciële, HR-, contract- en CRM-gegevens blijven op lokale modellen in een geïsoleerd Docker-netwerk zonder internetroute. Fail-closed geldt pas na activatie: Zero-Egress staat standaard uit en vereist lokale modellen of EU-leveranciers.",
         "Atomic BudgetBank & ondertekende WarrantsToken- en kostenbudgets worden transactioneel vóór uitvoering gereserveerd (BEGIN IMMEDIATE). Bevoorrechte tools vereisen tijdsgebonden HMAC-SHA256-warrants.",
         "Passkey / WebAuthn HITLGoedkeuringen met hoog risico (betalingen, budgetoverschrijdingen, destructieve acties) vereisen cryptografische handtekeningen via Windows Hello, Touch ID of hardware-passkeys. Modellen kunnen goedkeuringen niet vervalsen. Zonder registratie is de functie voor die gebruiker uit: schakel hem in vóór productie.",
         "Crashbestendige Effect-LedgerExterne neveneffecten worden bijgehouden in een transactioneel grootboek met idempotency-sleutels en verplichte reconciliatie na onbekende toestanden - voorkomt dubbele acties.",
@@ -428,7 +428,7 @@
         <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/org.webp" width="1024" height="559" alt="Organigram en hiërarchie"><figcaption>Organigramhiërarchie - interactief stroomdiagram &amp; goedkeuringsgrenzen</figcaption></figure>
       </div>
     </div>
-    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">Beelden tonen demogegevens en zijn AI-gegenereerd met Google Gemini (Nano Banana); namen van derde partijen blijven eigendom van hun houders. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">beeldcredits &amp; AI-visuals</a>.</p>
+    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">De decoratieve illustraties zijn AI-gegenereerd met Google Gemini (Nano Banana). De systeemweergaven zijn echte screenshots van de Archon OS-interface met demogegevens; namen van derden blijven eigendom van hun houders. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">beeldcredits &amp; AI-visuals</a>.</p>
     <div class="shots-thumbs" data-reveal>
       <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
       <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>Agentenvloot</span></button>
@@ -527,7 +527,7 @@
     <div class="feats" data-reveal>
       <div class="feat"><h3>AI Boardroom</h3><p>Beslissingen verlopen als geïsoleerde multiperspectiefdebatten met kruisverhoor door een criticus en synthese, over 80 frameworks van OKR tot Pre-Mortem.</p></div>
       <div class="feat"><h3>OmniRoute kostenbeheer</h3><p>Een centrale schakelcentrale routeert elke aanvraag naar lokale (Ollama, LM Studio) of cloudmodellen. Budgetten worden vóór verzending gecontroleerd en per model en per taak toegerekend.</p></div>
-      <div class="feat"><h3>Zero-Egress &amp; AVG</h3><p>Financiële-, HR-, contract- en CRM-gegevens blijven op lokale modellen binnen een geïsoleerd Docker-netwerk zonder internetroute. Fails closed - voor strikte AVG-datalokalisatie.</p></div>
+      <div class="feat"><h3>Zero-Egress &amp; AVG</h3><p>Financiële, HR-, contract- en CRM-gegevens blijven op lokale modellen in een geïsoleerd Docker-netwerk zonder internetroute. Fail-closed geldt pas na activatie: Zero-Egress staat standaard uit en vereist lokale modellen of EU-leveranciers.</p></div>
       <div class="feat"><h3>Auditlog, EU AI Act &amp; GoBD</h3><p>Een met SHA-256 hash-geketend logboek legt elke verzending (provider, model, host) manipulatiebestendig vast, samen met een EU AI Act-risicoregister en de export van GoBD-procesdocumentatie met één klik.</p></div>
       <div class="feat"><h3>Obsidian-vault + RAG</h3><p>Jouw vault is de kennisbank. Documenten en scans worden via OCR gelezen, naar Markdown omgezet en lokaal in AnythingLLM/Chroma geïndexeerd.</p></div>
       <div class="feat"><h3>Kanban met goedkeuringspoorten</h3><p>Taken doorlopen een vier-ogenpoort: goedkeuren, afwijzen met reden of escaleren bij verloop. E-mailtriage, CRM en een ERP-suite (alpha) zitten erbovenop.</p></div>
@@ -587,7 +587,16 @@
 
     <div class="wrap b2b-section"><h3>Gebruik in gereguleerde omgevingen</h3><p><strong>Inkoop:</strong> leveranciersvergelijkingen en conceptcontracten verlopen via Passkey-goedkeuring; budgetlimieten remmen uitgaven. <strong>Controlling:</strong> elke aanroep wordt met provider, model en kosten in een hashketen vastgelegd — GoBD-export met één klik. <strong>Compliance:</strong> TOM-matrix, EU AI Act-risicoregister en § 201 StGB-toestemming zijn configuratie, geen add-ons.</p><p><strong>Economie:</strong> 0 € licentie (MIT). Jij draagt infrastructuur, configuratie en beheer; Zero-Egress is expliciet een optie, geen garantie.</p></div>
 
-    
+    <h2 class="sec" id="wirtschaftlichkeit">Economie en TCO</h2>
+<div class="table-wrap" data-reveal>
+  <table><thead><tr><th>Position</th><th>Archon OS</th><th>Hinweis</th></tr></thead><tbody><tr><td>License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证</td><td>0 € (MIT)</td><td>Keine Seat-Gebühren; Betrieb selbst verantwortet.</td></tr><tr><td>Hardware</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Betrieb</td><td>Docker, Backups, Updates, Passkeys</td><td>Eigene Verantwortung; keine externen Dienste nötig.</td></tr></tbody></table>
+</div>
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
+<h2 class="sec" id="use-cases-fachbereiche">Use cases in het bedrijf</h2>
+<div class="feats" data-reveal><div class="feat"><h3>Inkoop · Leveranciersvergelijking</h3><p>Offers vergeleken in de vault; verzending pas na Passkey-handtekening en dagelijkse tokenlimiet.</p></div><div class="feat"><h3>Controlling · Liquiditeit</h3><p>13-weken liquiditeitsplanning; elke aanroep vastgelegd met provider, model en kosten; GoBD-export met één klik.</p></div><div class="feat"><h3>Compliance · Bewijs</h3><p>TOM-matrix (art. 32 AVG), EU AI Act-risicoregister en art. 17-wisbewijs in de auditketen.</p></div></div>
+<p class="status" style="margin-top:0.9rem">TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.</p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo">Demo anfragen</a></p>
+
 
     <h2 class="sec" id="install">Installatie</h2>
     <div class="install" data-reveal>

@@ -49,7 +49,7 @@
         {
           "@type": "ListItem",
           "position": 2,
-          "name": "Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD.",
+          "name": "Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD – nach Aktivierung (Default: aus).",
           "item": "https://michaelbeatman.github.io/ARCHON-OS/de/dsgvo-zero-egress/"
         }
       ]
@@ -57,7 +57,7 @@
     {
       "@type": "TechArticle",
       "@id": "https://michaelbeatman.github.io/ARCHON-OS/de/dsgvo-zero-egress/#article",
-      "headline": "Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD.",
+      "headline": "Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD – nach Aktivierung (Default: aus).",
       "name": "DSGVO, Zero-Egress & EU AI Act mit Archon OS",
       "description": "Wie Archon OS DSGVO-Datenresidenz, Fail-Closed Zero-Egress im Docker-Netz, EU-AI-Act-Risikoregister, Passkey-HITL & GoBD-Exporte umsetzt.",
       "inLanguage": "de",
@@ -206,7 +206,7 @@
       </nav>
       <div class="hero-inner">
         <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>DSGVO &amp; Compliance &middot; v0.6.0.2</span></div>
-        <h1>Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD.</h1>
+        <h1>Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD – nach Aktivierung (Default: aus).</h1>
         <p class="hero-lead">Datenschutz entsteht nicht durch Prompt-Hinweise, sondern durch Netzwerkgrenzen und kryptografische Nachweise. Archon OS isoliert sensible Workloads technisch auf deinem Server.</p>
         <div class="btnrow">
           <a class="btn primary" href="../../de/#install">Schnellstart (Docker)</a>
@@ -223,7 +223,7 @@
   <table>
     <thead><tr><th>Regulatorische Anforderung</th><th>Archon OS Mechanismus</th><th>Prüfbarer Nachweis</th></tr></thead>
     <tbody>
-      <tr><td><strong>Datenresidenz &amp; Drittlandtransfer (DSGVO)</strong></td><td>OmniRoute Fail-Closed Zero-Egress im <code>internal: true</code> Docker-Netz ohne Default-Gateway</td><td>Kein ausgehender Traffic aus Worker-Containern; lokales Ollama / LM Studio</td></tr>
+      <tr><td><strong>Datenresidenz &amp; Drittlandtransfer (DSGVO)</strong></td><td>OmniRoute Fail-Closed Zero-Egress im <code>internal: true</code> Docker-Netz ohne Default-Gateway</td><td>Nach Aktivierung: kein ausgehender Traffic aus Worker-Containern; lokales Ollama / LM Studio (Default: aus)</td></tr>
       <tr><td><strong>Recht auf Löschung (Art. 17 DSGVO)</strong></td><td>Integrierter Art.-17-Erasure-Workflow über <code>business.db</code>, <code>ops.db</code> und RAG-Index</td><td>Protokollierter Löschbeleg in der Audit-Chain</td></tr>
       <tr><td><strong>Menschliche Aufsicht (EU AI Act Art. 14 / Annex III)</strong></td><td>WebAuthn / Passkey HITL-Gates (Windows Hello, Touch ID, YubiKey) vor kritischen Aktionen</td><td>Kryptografisch verifizierte Signatur, vom LLM nicht fälschbar</td></tr>
       <tr><td><strong>Transparenz &amp; Risiko-Klassifikation (EU AI Act)</strong></td><td>Eingebautes EU-AI-Act-Risikoregister + Pflicht-Warndialoge für regulierte Domänen (Recht, Steuer, Medizin)</td><td>Exportierbare Risiko- &amp; Rollenmatrix</td></tr>

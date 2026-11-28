@@ -1408,3 +1408,9 @@ main [id], .hero [id], section [id] { scroll-margin-top: 5.5rem; }
 .hero-davinci-stage .cw-gear,
 .faq-davinci-frame .cw-gear { animation-play-state: running !important; }
 .cmd-note { margin: 0.35rem 0 0; font-size: 0.78rem; color: var(--fg-muted); }
+
+/* Batch 7: A11y/Visual */
+:root[data-theme="light"] .btn.primary:hover { color: #ffffff; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+.hero-davinci-stage .cw-gear,
+.faq-davinci-frame .cw-gear { animation-play-state: running !important; }

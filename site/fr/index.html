@@ -133,7 +133,7 @@
       },
       "featureList": [
         "AI BoardroomLes décisions se déroulent comme des débats isolés multiperspectives avec contre-interrogatoire par un critique et synthèse, sur 80 frameworks d'OKR au Pre-Mortem.",
-        "Zero-Egress & RGPDLes données financières, RH, contractuelles et CRM restent sur des modèles locaux dans un réseau Docker isolé sans route internet. Fail-closed - garantissant une résidence des données RGPD stricte.",
+        "Zero-Egress & RGPDLes données financières, RH, contractuelles et CRM restent sur des modèles locaux dans un réseau Docker isolé sans route internet. Le fail-closed ne s'applique qu'après activation : Zero-Egress est désactivé par défaut et nécessite des modèles locaux ou des fournisseurs de l'UE.",
         "Atomic BudgetBank & Warrants signésLes budgets de tokens et de coûts sont réservés transactionnellement avant exécution (BEGIN IMMEDIATE). Les outils privilégiés exigent des warrants HMAC-SHA256 à durée limitée.",
         "Passkey / WebAuthn HITLLes validations à haut risque (paiements, dépassements de budget, actions destructives) exigent des signatures cryptographiques via Windows Hello, Touch ID ou passkeys matérielles. Les modèles ne peuvent pas falsifier une validation. Sans enregistrement, la fonction est désactivée pour cet utilisateur : activez-la avant la production.",
         "Effect-Ledger résistant aux crashesLes effets externes sont suivis dans un registre transactionnel avec clés d'idempotence et réconciliation obligatoire après états inconnus - évite les actions en double.",
@@ -428,7 +428,7 @@
         <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/org.webp" width="1024" height="559" alt="Organigramme et hiérarchie"><figcaption>Hiérarchie de l'organigramme - schéma interactif &amp; limites de validation</figcaption></figure>
       </div>
     </div>
-    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">Les visuels contiennent des données de démonstration et ont été générés par IA avec Google Gemini (Nano Banana) ; les noms d'entreprises et de produits tiers restent la propriété de leurs titulaires. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">crédits d'images &amp; visuels IA</a>.</p>
+    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">Les illustrations décoratives ont été générées par IA avec Google Gemini (Nano Banana). Les vues système sont de vraies captures de l'interface Archon OS contenant des données de démonstration ; les noms de tiers restent la propriété de leurs titulaires. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">crédits d'images &amp; visuels IA</a>.</p>
     <div class="shots-thumbs" data-reveal>
       <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
       <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>Flotte d'Agents</span></button>
@@ -527,7 +527,7 @@
     <div class="feats" data-reveal>
       <div class="feat"><h3>AI Boardroom</h3><p>Les décisions se déroulent comme des débats isolés multiperspectives avec contre-interrogatoire par un critique et synthèse, sur 80 frameworks d'OKR au Pre-Mortem.</p></div>
       <div class="feat"><h3>Contrôle des coûts OmniRoute</h3><p>Un standard central achemine chaque requête vers des modèles locaux (Ollama, LM Studio) ou cloud. Les budgets sont vérifiés avant l'envoi et attribués par modèle et par tâche.</p></div>
-      <div class="feat"><h3>Zero-Egress &amp; RGPD</h3><p>Les données financières, RH, contractuelles et CRM restent sur des modèles locaux dans un réseau Docker isolé sans route internet. Fail-closed - garantissant une résidence des données RGPD stricte.</p></div>
+      <div class="feat"><h3>Zero-Egress &amp; RGPD</h3><p>Les données financières, RH, contractuelles et CRM restent sur des modèles locaux dans un réseau Docker isolé sans route internet. Le fail-closed ne s'applique qu'après activation : Zero-Egress est désactivé par défaut et nécessite des modèles locaux ou des fournisseurs de l'UE.</p></div>
       <div class="feat"><h3>Journal d'audit, EU AI Act &amp; GoBD</h3><p>Un journal chaîné par hachage SHA-256 consigne chaque envoi (fournisseur, modèle, hôte) de façon infalsifiable, associé à un registre des risques EU AI Act et à l'export de documentation procédurale GoBD en un clic.</p></div>
       <div class="feat"><h3>Coffre Obsidian + RAG</h3><p>Votre coffre est la base de connaissances. Documents et numérisations sont lus par OCR, convertis en Markdown et indexés dans AnythingLLM/Chroma - en local.</p></div>
       <div class="feat"><h3>Kanban avec portes de validation</h3><p>Les tâches passent par une porte à quatre yeux : approuver, refuser avec motif ou escalader à l'expiration. Le tri des e-mails, le CRM et une suite ERP (alpha) viennent s'y superposer.</p></div>
@@ -587,7 +587,16 @@
 
     <div class="wrap b2b-section"><h3>Usage en environnement réglementé</h3><p><strong>Achats :</strong> comparatifs fournisseurs et projets de contrat passent par validation Passkey ; les plafonds budgétaires limitent les dépenses. <strong>Contrôle de gestion :</strong> chaque appel est journalisé avec fournisseur, modèle et coût dans une chaîne de hachage — export GoBD en un clic. <strong>Conformité :</strong> matrice TOM, registre de risques EU AI Act et consentement § 201 StGB sont de la configuration, pas des options.</p><p><strong>Économie :</strong> 0 € de licence (MIT). Vous portez l'infrastructure, la configuration et l'exploitation ; Zero-Egress est une option explicite, pas une garantie.</p></div>
 
-    
+    <h2 class="sec" id="wirtschaftlichkeit">Économie et TCO</h2>
+<div class="table-wrap" data-reveal>
+  <table><thead><tr><th>Position</th><th>Archon OS</th><th>Hinweis</th></tr></thead><tbody><tr><td>License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证</td><td>0 € (MIT)</td><td>Keine Seat-Gebühren; Betrieb selbst verantwortet.</td></tr><tr><td>Hardware</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Betrieb</td><td>Docker, Backups, Updates, Passkeys</td><td>Eigene Verantwortung; keine externen Dienste nötig.</td></tr></tbody></table>
+</div>
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
+<h2 class="sec" id="use-cases-fachbereiche">Cas d'usage en entreprise</h2>
+<div class="feats" data-reveal><div class="feat"><h3>Achats · Comparatif fournisseurs</h3><p>Offres comparées dans le vault ; envoi uniquement après signature Passkey et plafond quotidien de jetons.</p></div><div class="feat"><h3>Contrôle de gestion · Liquidité</h3><p>Prévision de trésorerie à 13 semaines ; chaque appel horodaté avec fournisseur, modèle et coût ; export GoBD en un clic.</p></div><div class="feat"><h3>Conformité · Preuves</h3><p>Matrice TOM (art. 32 RGPD), registre de risques EU AI Act et preuve d'effacement art. 17 dans la chaîne d'audit.</p></div></div>
+<p class="status" style="margin-top:0.9rem">TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.</p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo">Demo anfragen</a></p>
+
 
     <h2 class="sec" id="install">Installation</h2>
     <div class="install" data-reveal>

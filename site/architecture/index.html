@@ -218,7 +218,7 @@
 
   <div class="wrap">
     
-<p class="version-note">Release: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/config/version.json">v0.6.0.2</a> · deployed base image tag: <code>agent-os-container:v0.5.7</code> (see <code>docker-compose.yml:36</code>).</p>
+<p class="version-note">Release: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/config/version.json">v0.6.0.2</a> · deployed base image tag: <code>agent-os-container:v0.6.0.2</code>.</p>
 
 <h2 class="sec">Zero-Egress &amp; Governance Data Flow</h2>
 <div class="arch-box"><svg class="arch-flow-svg" viewBox="0 0 980 310" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Archon OS Zero-Egress Architecture Flow">
@@ -327,7 +327,7 @@
     </tbody>
   </table>
 </div>
-<pre data-lang="bash">curl -sS http://localhost:8420/livez -w "
+<pre data-lang="bash">curl -sS http://localhost:8501/livez -w "
 HTTP %{http_code}
 "
 # 200 = healthy · 503 = heartbeat stalled, autoheal restarts the container</pre>

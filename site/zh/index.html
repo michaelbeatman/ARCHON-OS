@@ -133,7 +133,7 @@
       },
       "featureList": [
         "AI Boardroom决策以隔离的多视角辩论形式进行，包含批评者交叉质询与综合归纳，覆盖从 OKR 到 Pre-Mortem 的 80 种框架。",
-        "Zero-Egress & GDPR财务、人事、合同与 CRM 数据留在无互联网路由的隔离 Docker 网络内的本地模型上。故障关闭，确保严格的 GDPR 数据驻留。",
+        "Zero-Egress 与 GDPR财务、人事、合同和 CRM 数据保留在无互联网路由的隔离 Docker 网络中的本地模型上。故障关闭仅在启用后生效：Zero-Egress 默认关闭，需要本地模型或欧盟提供商。",
         "Atomic BudgetBank & 签名 Warrant令牌与成本预算在执行前以事务方式预留（BEGIN IMMEDIATE）。特权工具需要有时限的 HMAC-SHA256 Warrant。",
         "通行密钥 / WebAuthn HITL高风险审批（付款、预算超支、破坏性操作）需要 Windows Hello、Touch ID 或硬件密钥的加密签名。模型无法伪造审批。 未注册时该功能对该用户关闭，请在正式使用前启用。",
         "崩溃安全的 Effect-Ledger外部副作用由带幂等键的事务账本跟踪，并在未知状态后强制对账，避免重复操作。",
@@ -428,7 +428,7 @@
         <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/org.webp" width="1024" height="559" alt="组织架构与层级"><figcaption>组织层级 - 交互式流程图 &amp; 审批边界</figcaption></figure>
       </div>
     </div>
-    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">图片包含演示数据，并使用 Google Gemini (Nano Banana) 生成；第三方公司和产品名称归各自权利人所有。 Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">图片来源与 AI 生成图像</a>.</p>
+    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">装饰插图使用 Google Gemini (Nano Banana) 生成。系统视图是包含演示数据的 Archon OS 界面真实截图；第三方名称归各自权利人所有。 Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">图片来源与 AI 生成图像</a>.</p>
     <div class="shots-thumbs" data-reveal>
       <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
       <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>智能体舰队</span></button>
@@ -527,7 +527,7 @@
     <div class="feats" data-reveal>
       <div class="feat"><h3>AI Boardroom</h3><p>决策以隔离的多视角辩论形式进行，包含批评者交叉质询与综合归纳，覆盖从 OKR 到 Pre-Mortem 的 80 种框架。</p></div>
       <div class="feat"><h3>OmniRoute 成本控制</h3><p>中央交换台将每个请求路由到本地（Ollama、LM Studio）或云端模型。预算在派发前校验，并按模型与任务归集。</p></div>
-      <div class="feat"><h3>Zero-Egress &amp; GDPR</h3><p>财务、人事、合同与 CRM 数据留在无互联网路由的隔离 Docker 网络内的本地模型上。故障关闭，确保严格的 GDPR 数据驻留。</p></div>
+      <div class="feat"><h3>Zero-Egress 与 GDPR</h3><p>财务、人事、合同和 CRM 数据保留在无互联网路由的隔离 Docker 网络中的本地模型上。故障关闭仅在启用后生效：Zero-Egress 默认关闭，需要本地模型或欧盟提供商。</p></div>
       <div class="feat"><h3>审计日志、EU AI Act &amp; GoBD</h3><p>SHA-256 哈希链日志以防篡改方式记录每次派发（供应商、模型、主机），并配有 EU AI Act 风险登记册和一键导出 GoBD 程序文档。</p></div>
       <div class="feat"><h3>Obsidian 知识库 + RAG</h3><p>知识库就是你的 Vault。文档与扫描件经 OCR 识别，转换为 Markdown，并在本地索引到 AnythingLLM/Chroma。</p></div>
       <div class="feat"><h3>带审批闸门的看板</h3><p>任务需经过四眼闸门：批准、附理由驳回或超时升级。其上还有邮件分拣、CRM 与 ERP 套件（alpha）。</p></div>
@@ -587,7 +587,16 @@
 
     <div class="wrap b2b-section"><h3>面向受监管环境的使用场景</h3><p><strong>采购：</strong>供应商比选与合同草案需经 Passkey 批准；预算上限抑制失控支出。<strong> Controlling：</strong>每次调用均记录提供商、模型与成本并写入哈希链 — 一键导出 GoBD 文档。<strong>合规：</strong>TOM 矩阵、EU AI Act 风险登记册与 § 201 StGB 同意门控属于配置，而非附加组件。</p><p><strong>经济性：</strong>许可费 0 €（MIT）。基础设施、配置与运维由你承担；Zero-Egress 明确为可选项，而非保证。</p></div>
 
-    
+    <h2 class="sec" id="wirtschaftlichkeit">经济性与 TCO</h2>
+<div class="table-wrap" data-reveal>
+  <table><thead><tr><th>Position</th><th>Archon OS</th><th>Hinweis</th></tr></thead><tbody><tr><td>License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证</td><td>0 € (MIT)</td><td>Keine Seat-Gebühren; Betrieb selbst verantwortet.</td></tr><tr><td>Hardware</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Betrieb</td><td>Docker, Backups, Updates, Passkeys</td><td>Eigene Verantwortung; keine externen Dienste nötig.</td></tr></tbody></table>
+</div>
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
+<h2 class="sec" id="use-cases-fachbereiche">企业中的使用案例</h2>
+<div class="feats" data-reveal><div class="feat"><h3>采购 · 供应商比较</h3><p>在 Vault 中比较报价，仅在 Passkey 签名后发送；设有每日 Token 上限。</p></div><div class="feat"><h3> Controlling · 流动性</h3><p>13周现金流计划；每次调用记录提供商、模型和成本；一键导出 GoBD。</p></div><div class="feat"><h3>合规 · 证据</h3><p>TOM 矩阵（GDPR 第32条）、EU AI Act 风险登记册和第17条删除证据写入审计链。</p></div></div>
+<p class="status" style="margin-top:0.9rem">TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.</p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo">Demo anfragen</a></p>
+
 
     <h2 class="sec" id="install">安装部署</h2>
     <div class="install" data-reveal>

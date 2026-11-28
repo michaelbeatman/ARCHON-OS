@@ -510,7 +510,7 @@ def _page_architecture(lang: str) -> tuple[str, str, str, str, str, str]:
         h1 = "Systemarchitektur für verlässliche Multi-Agenten-Flotten."
         lead = "Archon OS trennt Agenten-Logik strikt von Governance, Kostenkontrolle und Seiteneffekten. Jeder Tool- und LLM-Aufruf durchläuft deterministische Sicherheits-Gates auf 3 konsolidierten SQLite-WAL-Datenbanken."
         body = f"""
-<p class="version-note">Release: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/config/version.json">v0.6.0.2</a> · deploytes Basis-Image-Tag: <code>agent-os-container:v0.5.7</code> (siehe <code>docker-compose.yml:36</code>).</p>
+<p class="version-note">Release: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/config/version.json">v0.6.0.2</a> · Basis-Image-Tag: <code>agent-os-container:v0.6.0.2</code>.</p>
 
 <h2 class="sec">Zero-Egress- &amp; Governance-Datenfluss</h2>
 <div class="arch-box">{svg}</div>
@@ -545,7 +545,7 @@ def _page_architecture(lang: str) -> tuple[str, str, str, str, str, str]:
     h1 = "System architecture built for accountable multi-agent fleets."
     lead = "Archon OS decouples agent reasoning from governance, cost control, and external side effects. Every model and tool invocation clears deterministic safety gates backed by 3 consolidated SQLite WAL databases."
     body = f"""
-<p class="version-note">Release: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/config/version.json">v0.6.0.2</a> · deployed base image tag: <code>agent-os-container:v0.5.7</code> (see <code>docker-compose.yml:36</code>).</p>
+<p class="version-note">Release: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/config/version.json">v0.6.0.2</a> · deployed base image tag: <code>agent-os-container:v0.6.0.2</code>.</p>
 
 <h2 class="sec">Zero-Egress &amp; Governance Data Flow</h2>
 <div class="arch-box">{svg}</div>
@@ -574,7 +574,7 @@ def _page_architecture(lang: str) -> tuple[str, str, str, str, str, str]:
     </tbody>
   </table>
 </div>
-<pre data-lang="bash">curl -sS http://localhost:8420/livez -w "\nHTTP %{{http_code}}\n"
+<pre data-lang="bash">curl -sS http://localhost:8501/livez -w "\nHTTP %{{http_code}}\n"
 # 200 = healthy · 503 = heartbeat stalled, autoheal restarts the container</pre>
 
 <h2 class="sec" id="hardware">Hardware &amp; Sizing Baseline</h2>
@@ -597,7 +597,7 @@ def _page_gdpr(lang: str) -> tuple[str, str, str, str, str, str]:
         title = "DSGVO, Zero-Egress & EU AI Act mit Archon OS"
         desc = "Wie Archon OS DSGVO-Datenresidenz, Fail-Closed Zero-Egress im Docker-Netz, EU-AI-Act-Risikoregister, Passkey-HITL & GoBD-Exporte umsetzt."
         eyebrow = "DSGVO & Compliance"
-        h1 = "Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD."
+        h1 = "Fail-Closed Zero-Egress für DSGVO, EU AI Act und GoBD – nach Aktivierung (Default: aus)."
         lead = "Datenschutz entsteht nicht durch Prompt-Hinweise, sondern durch Netzwerkgrenzen und kryptografische Nachweise. Archon OS isoliert sensible Workloads technisch auf deinem Server."
         body = """
 <h2 class="sec">Technische Schutzmaßnahmen (TOMs nach Art. 32 DSGVO)</h2>
@@ -605,7 +605,7 @@ def _page_gdpr(lang: str) -> tuple[str, str, str, str, str, str]:
   <table>
     <thead><tr><th>Regulatorische Anforderung</th><th>Archon OS Mechanismus</th><th>Prüfbarer Nachweis</th></tr></thead>
     <tbody>
-      <tr><td><strong>Datenresidenz &amp; Drittlandtransfer (DSGVO)</strong></td><td>OmniRoute Fail-Closed Zero-Egress im <code>internal: true</code> Docker-Netz ohne Default-Gateway</td><td>Kein ausgehender Traffic aus Worker-Containern; lokales Ollama / LM Studio</td></tr>
+      <tr><td><strong>Datenresidenz &amp; Drittlandtransfer (DSGVO)</strong></td><td>OmniRoute Fail-Closed Zero-Egress im <code>internal: true</code> Docker-Netz ohne Default-Gateway</td><td>Nach Aktivierung: kein ausgehender Traffic aus Worker-Containern; lokales Ollama / LM Studio (Default: aus)</td></tr>
       <tr><td><strong>Recht auf Löschung (Art. 17 DSGVO)</strong></td><td>Integrierter Art.-17-Erasure-Workflow über <code>business.db</code>, <code>ops.db</code> und RAG-Index</td><td>Protokollierter Löschbeleg in der Audit-Chain</td></tr>
       <tr><td><strong>Menschliche Aufsicht (EU AI Act Art. 14 / Annex III)</strong></td><td>WebAuthn / Passkey HITL-Gates (Windows Hello, Touch ID, YubiKey) vor kritischen Aktionen</td><td>Kryptografisch verifizierte Signatur, vom LLM nicht fälschbar</td></tr>
       <tr><td><strong>Transparenz &amp; Risiko-Klassifikation (EU AI Act)</strong></td><td>Eingebautes EU-AI-Act-Risikoregister + Pflicht-Warndialoge für regulierte Domänen (Recht, Steuer, Medizin)</td><td>Exportierbare Risiko- &amp; Rollenmatrix</td></tr>
@@ -625,7 +625,7 @@ def _page_gdpr(lang: str) -> tuple[str, str, str, str, str, str]:
     title = "GDPR, Zero-Egress & EU AI Act Compliance in Archon OS"
     desc = "How Archon OS enforces GDPR data residency via fail-closed Docker Zero-Egress, WebAuthn Passkey HITL, EU AI Act risk registry & SHA-256 audit trails."
     eyebrow = "GDPR & Compliance"
-    h1 = "Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD."
+    h1 = "Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD – once enabled (default: off)."
     lead = "Data sovereignty cannot rely on prompt instructions. Archon OS enforces hard Docker network boundaries, cryptographic human sign-offs, and tamper-evident SHA-256 audit chains on your own infrastructure."
     body = """
 <h2 class="sec">Technical &amp; Organizational Safeguards</h2>
@@ -633,7 +633,7 @@ def _page_gdpr(lang: str) -> tuple[str, str, str, str, str, str]:
   <table>
     <thead><tr><th>Regulatory Requirement</th><th>Archon OS Enforcement</th><th>Verifiable Artifact</th></tr></thead>
     <tbody>
-      <tr><td><strong>GDPR Data Residency</strong></td><td>OmniRoute fail-closed Zero-Egress inside an <code>internal: true</code> Docker network with no internet route</td><td>Zero outbound cloud packets for finance, HR, contracts &amp; CRM</td></tr>
+      <tr><td><strong>GDPR Data Residency</strong></td><td>OmniRoute fail-closed Zero-Egress inside an <code>internal: true</code> Docker network with no internet route</td><td>With Zero-Egress enabled: no outbound cloud packets for finance, HR, contracts &amp; CRM (shipped default: off)</td></tr>
       <tr><td><strong>Right to Erasure (GDPR Art. 17)</strong></td><td>Built-in erasure pipeline across <code>business.db</code>, <code>ops.db</code>, and local vector storage</td><td>Recorded erasure receipt in the audit chain</td></tr>
       <tr><td><strong>Human Oversight (EU AI Act Art. 14)</strong></td><td>WebAuthn / Passkey HITL gates (Windows Hello, Touch ID, hardware keys) for high-risk actions</td><td>Cryptographic signature unforgeable by any LLM</td></tr>
       <tr><td><strong>EU AI Act Risk Classification</strong></td><td>Integrated EU AI Act risk registry + mandatory regulated-domain guardrails (legal, tax, medical)</td><td>Exportable risk &amp; specialist scope register</td></tr>

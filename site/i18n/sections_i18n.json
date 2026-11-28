@@ -523,6 +523,49 @@
       "ctaGithub": "Ver en GitHub",
       "ctaQuickstart": "Inicio rápido (Docker)",
       "tagline": "SO Multiagente Autoalojado"
+    },
+    "b2b_extra": {
+      "tcoTitle": "Economía y TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis"
+      ],
+      "tcoRows": [
+        [
+          "License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证",
+          "0 € (MIT)",
+          "Keine Seat-Gebühren; Betrieb selbst verantwortet."
+        ],
+        [
+          "Hardware",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Docker, Backups, Updates, Passkeys",
+          "Eigene Verantwortung; keine externen Dienste nötig."
+        ]
+      ],
+      "tcoNote": "",
+      "useTitle": "Casos de uso en la empresa",
+      "useCards": [
+        [
+          "Compras · Comparativa de proveedores",
+          "Ofertas comparadas en el vault; envío solo tras firma Passkey y límite diario de tokens."
+        ],
+        [
+          "Controlling · Liquidez",
+          "Plan de liquidez a 13 semanas; cada llamada registrada con proveedor, modelo y coste; exportación GoBD en un clic."
+        ],
+        [
+          "Compliance · Pruebas",
+          "Matriz TOM (art. 32 RGPD), registro de riesgos de la EU AI Act y prueba de supresión del art. 17 en la cadena de auditoría."
+        ]
+      ],
+      "tom": "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo\">Demo anfragen</a>"
     }
   },
   "fr": {
@@ -663,6 +706,49 @@
       "ctaGithub": "Voir sur GitHub",
       "ctaQuickstart": "Démarrage rapide (Docker)",
       "tagline": "OS Multi-Agents Auto-Hébergé"
+    },
+    "b2b_extra": {
+      "tcoTitle": "Économie et TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis"
+      ],
+      "tcoRows": [
+        [
+          "License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证",
+          "0 € (MIT)",
+          "Keine Seat-Gebühren; Betrieb selbst verantwortet."
+        ],
+        [
+          "Hardware",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Docker, Backups, Updates, Passkeys",
+          "Eigene Verantwortung; keine externen Dienste nötig."
+        ]
+      ],
+      "tcoNote": "",
+      "useTitle": "Cas d'usage en entreprise",
+      "useCards": [
+        [
+          "Achats · Comparatif fournisseurs",
+          "Offres comparées dans le vault ; envoi uniquement après signature Passkey et plafond quotidien de jetons."
+        ],
+        [
+          "Contrôle de gestion · Liquidité",
+          "Prévision de trésorerie à 13 semaines ; chaque appel horodaté avec fournisseur, modèle et coût ; export GoBD en un clic."
+        ],
+        [
+          "Conformité · Preuves",
+          "Matrice TOM (art. 32 RGPD), registre de risques EU AI Act et preuve d'effacement art. 17 dans la chaîne d'audit."
+        ]
+      ],
+      "tom": "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo\">Demo anfragen</a>"
     }
   },
   "it": {
@@ -803,6 +889,49 @@
       "ctaGithub": "Vedi su GitHub",
       "ctaQuickstart": "Avvio rapido (Docker)",
       "tagline": "OS Multi-Agente Self-Hosted"
+    },
+    "b2b_extra": {
+      "tcoTitle": "Economia e TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis"
+      ],
+      "tcoRows": [
+        [
+          "License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证",
+          "0 € (MIT)",
+          "Keine Seat-Gebühren; Betrieb selbst verantwortet."
+        ],
+        [
+          "Hardware",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Docker, Backups, Updates, Passkeys",
+          "Eigene Verantwortung; keine externen Dienste nötig."
+        ]
+      ],
+      "tcoNote": "",
+      "useTitle": "Casi d'uso in azienda",
+      "useCards": [
+        [
+          "Acquisti · Confronto fornitori",
+          "Offerte confrontate nel vault; invio solo dopo firma Passkey e limite giornaliero di token."
+        ],
+        [
+          "Controlling · Liquidità",
+          "Piano di liquidità a 13 settimane; ogni chiamata registrata con provider, modello e costo; export GoBD in un clic."
+        ],
+        [
+          "Compliance · Prove",
+          "Matrice TOM (art. 32 GDPR), registro rischi EU AI Act e prova di cancellazione art. 17 nella catena di audit."
+        ]
+      ],
+      "tom": "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo\">Demo anfragen</a>"
     }
   },
   "ja": {
@@ -943,6 +1072,49 @@
       "ctaGithub": "GitHub で見る",
       "ctaQuickstart": "クイックスタート (Docker)",
       "tagline": "セルフホスト型エージェントOS"
+    },
+    "b2b_extra": {
+      "tcoTitle": "経済性と TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis"
+      ],
+      "tcoRows": [
+        [
+          "License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证",
+          "0 € (MIT)",
+          "Keine Seat-Gebühren; Betrieb selbst verantwortet."
+        ],
+        [
+          "Hardware",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Docker, Backups, Updates, Passkeys",
+          "Eigene Verantwortung; keine externen Dienste nötig."
+        ]
+      ],
+      "tcoNote": "",
+      "useTitle": "社内でのユースケース",
+      "useCards": [
+        [
+          "調達 · サプライヤー比較",
+          "提案を Vault で比較し、Passkey 署名後のみ送信。トークンの日次上限あり。"
+        ],
+        [
+          "管理会計 · 流動性",
+          "13週間の資金計画。各呼び出しをプロバイダー・モデル・コストと共に記録し、GoBD エクスポートはワンクリック。"
+        ],
+        [
+          "コンプライアンス · 証跡",
+          "TOM マトリクス（GDPR 第32条）、EU AI Act リスク登録簿、第17条削除証跡を監査チェーンに記録。"
+        ]
+      ],
+      "tom": "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo\">Demo anfragen</a>"
     }
   },
   "ko": {
@@ -1083,6 +1255,49 @@
       "ctaGithub": "GitHub에서 보기",
       "ctaQuickstart": "빠른 시작 (Docker)",
       "tagline": "자체 호스팅 에이전트 OS"
+    },
+    "b2b_extra": {
+      "tcoTitle": "경제성 및 TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis"
+      ],
+      "tcoRows": [
+        [
+          "License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证",
+          "0 € (MIT)",
+          "Keine Seat-Gebühren; Betrieb selbst verantwortet."
+        ],
+        [
+          "Hardware",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Docker, Backups, Updates, Passkeys",
+          "Eigene Verantwortung; keine externen Dienste nötig."
+        ]
+      ],
+      "tcoNote": "",
+      "useTitle": "기업 내 사용 사례",
+      "useCards": [
+        [
+          "구매 · 공급업체 비교",
+          "제안을 Vault에서 비교하고 Passkey 서명 후에만 전송. 일일 토큰 한도 적용."
+        ],
+        [
+          "관리회계 · 유동성",
+          "13주 현금흐름 계획. 모든 호출을 공급자·모델·비용과 함께 기록하고 GoBD 내보내기는 한 번의 클릭."
+        ],
+        [
+          "컴플라이언스 · 증거",
+          "TOM 매트릭스(GDPR 32조), EU AI Act 위험 등록부, 17조 삭제 증거를 감사 체인에 기록."
+        ]
+      ],
+      "tom": "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo\">Demo anfragen</a>"
     }
   },
   "nl": {
@@ -1223,6 +1438,49 @@
       "ctaGithub": "Bekijk op GitHub",
       "ctaQuickstart": "Snelstart (Docker)",
       "tagline": "Self-Hosted Multi-Agent OS"
+    },
+    "b2b_extra": {
+      "tcoTitle": "Economie en TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis"
+      ],
+      "tcoRows": [
+        [
+          "License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证",
+          "0 € (MIT)",
+          "Keine Seat-Gebühren; Betrieb selbst verantwortet."
+        ],
+        [
+          "Hardware",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Docker, Backups, Updates, Passkeys",
+          "Eigene Verantwortung; keine externen Dienste nötig."
+        ]
+      ],
+      "tcoNote": "",
+      "useTitle": "Use cases in het bedrijf",
+      "useCards": [
+        [
+          "Inkoop · Leveranciersvergelijking",
+          "Offers vergeleken in de vault; verzending pas na Passkey-handtekening en dagelijkse tokenlimiet."
+        ],
+        [
+          "Controlling · Liquiditeit",
+          "13-weken liquiditeitsplanning; elke aanroep vastgelegd met provider, model en kosten; GoBD-export met één klik."
+        ],
+        [
+          "Compliance · Bewijs",
+          "TOM-matrix (art. 32 AVG), EU AI Act-risicoregister en art. 17-wisbewijs in de auditketen."
+        ]
+      ],
+      "tom": "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo\">Demo anfragen</a>"
     }
   },
   "pt": {
@@ -1363,6 +1621,49 @@
       "ctaGithub": "Ver no GitHub",
       "ctaQuickstart": "Início rápido (Docker)",
       "tagline": "SO Multiagente Auto-hospedado"
+    },
+    "b2b_extra": {
+      "tcoTitle": "Economia e TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis"
+      ],
+      "tcoRows": [
+        [
+          "License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证",
+          "0 € (MIT)",
+          "Keine Seat-Gebühren; Betrieb selbst verantwortet."
+        ],
+        [
+          "Hardware",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Docker, Backups, Updates, Passkeys",
+          "Eigene Verantwortung; keine externen Dienste nötig."
+        ]
+      ],
+      "tcoNote": "",
+      "useTitle": "Casos de uso na empresa",
+      "useCards": [
+        [
+          "Compras · Comparação de fornecedores",
+          "Propostas comparadas no vault; envio apenas após assinatura Passkey e limite diário de tokens."
+        ],
+        [
+          "Controlling · Liquidez",
+          "Plano de liquidez a 13 semanas; cada chamada registada com fornecedor, modelo e custo; exportação GoBD num clique."
+        ],
+        [
+          "Compliance · Evidências",
+          "Matriz TOM (art. 32 RGPD), registo de riscos da EU AI Act e prova de eliminação do art. 17 na cadeia de auditoria."
+        ]
+      ],
+      "tom": "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo\">Demo anfragen</a>"
     }
   },
   "ru": {
@@ -1503,6 +1804,49 @@
       "ctaGithub": "Открыть на GitHub",
       "ctaQuickstart": "Быстрый старт (Docker)",
       "tagline": "Локальная мультиагентная ОС"
+    },
+    "b2b_extra": {
+      "tcoTitle": "Экономика и TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis"
+      ],
+      "tcoRows": [
+        [
+          "License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证",
+          "0 € (MIT)",
+          "Keine Seat-Gebühren; Betrieb selbst verantwortet."
+        ],
+        [
+          "Hardware",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Docker, Backups, Updates, Passkeys",
+          "Eigene Verantwortung; keine externen Dienste nötig."
+        ]
+      ],
+      "tcoNote": "",
+      "useTitle": "Сценарии использования в компании",
+      "useCards": [
+        [
+          "Закупки · Сравнение поставщиков",
+          "Предложения сравниваются в хранилище; отправка только после подписи Passkey и дневного лимита токенов."
+        ],
+        [
+          "Контроллинг · Ликвидность",
+          "План ликвидности на 13 недель; каждый вызов фиксируется с провайдером, моделью и стоимостью; экспорт GoBD в один клик."
+        ],
+        [
+          "Комплаенс · Доказательства",
+          "Матрица TOM (ст. 32 GDPR), реестр рисков EU AI Act и доказательство удаления по ст. 17 в цепочке аудита."
+        ]
+      ],
+      "tom": "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo\">Demo anfragen</a>"
     }
   },
   "zh": {
@@ -1643,6 +1987,49 @@
       "ctaGithub": "在 GitHub 查看",
       "ctaQuickstart": "快速开始 (Docker)",
       "tagline": "自托管多智能体操作系统"
+    },
+    "b2b_extra": {
+      "tcoTitle": "经济性与 TCO",
+      "tcoHead": [
+        "Position",
+        "Archon OS",
+        "Hinweis"
+      ],
+      "tcoRows": [
+        [
+          "License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证",
+          "0 € (MIT)",
+          "Keine Seat-Gebühren; Betrieb selbst verantwortet."
+        ],
+        [
+          "Hardware",
+          "4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM",
+          "Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM."
+        ],
+        [
+          "Betrieb",
+          "Docker, Backups, Updates, Passkeys",
+          "Eigene Verantwortung; keine externen Dienste nötig."
+        ]
+      ],
+      "tcoNote": "",
+      "useTitle": "企业中的使用案例",
+      "useCards": [
+        [
+          "采购 · 供应商比较",
+          "在 Vault 中比较报价，仅在 Passkey 签名后发送；设有每日 Token 上限。"
+        ],
+        [
+          " Controlling · 流动性",
+          "13周现金流计划；每次调用记录提供商、模型和成本；一键导出 GoBD。"
+        ],
+        [
+          "合规 · 证据",
+          "TOM 矩阵（GDPR 第32条）、EU AI Act 风险登记册和第17条删除证据写入审计链。"
+        ]
+      ],
+      "tom": "TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.",
+      "demoCta": "<a class=\"btn primary\" href=\"mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo\">Demo anfragen</a>"
     }
   }
 }

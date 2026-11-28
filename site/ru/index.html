@@ -133,7 +133,7 @@
       },
       "featureList": [
         "AI BoardroomРешения принимаются в виде изолированных многоперспективных дебатов с перекрёстным допросом критика и синтезом, на базе 80 фреймворков от OKR до Pre-Mortem.",
-        "Zero-Egress & GDPRФинансовые, HR, договорные и CRM-данные остаются на локальных моделях внутри изолированной сети Docker без маршрута в интернет. Отказ в закрытом состоянии — гарантия строгой локализации данных GDPR.",
+        "Zero-Egress и GDPRФинансовые, HR-, договорные и CRM-данные остаются на локальных моделях в изолированной сети Docker без маршрута в интернет. Fail-closed применяется только после включения: Zero-Egress по умолчанию выключен и требует локальных моделей или поставщиков из ЕС.",
         "Atomic BudgetBank & подписанные WarrantsБюджеты токенов и затрат резервируются транзакционно до выполнения (BEGIN IMMEDIATE). Привилегированные инструменты требуют ограниченных по времени HMAC-SHA256-варрантов.",
         "Passkey / WebAuthn HITLСогласования высокого риска (платежи, превышения бюджета, разрушительные действия) требуют криптографических подписей через Windows Hello, Touch ID или аппаратные passkey. Модели не могут подделать согласование. Без регистрации функция отключена для этого пользователя — включите её перед использованием в работе.",
         "Отказоустойчивый Effect-LedgerВнешние побочные эффекты учитываются в транзакционном реестре с ключами идемпотентности и обязательной сверкой после неопределённых состояний — исключает повторные действия.",
@@ -428,7 +428,7 @@
         <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/org.webp" width="1024" height="559" alt="Организационная схема и иерархия"><figcaption>Иерархия оргсхемы — интерактивная блок-схема &amp; границы согласований</figcaption></figure>
       </div>
     </div>
-    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">Изображения содержат демонстрационные данные и созданы с помощью ИИ Google Gemini (Nano Banana); названия сторонних компаний и продуктов остаются собственностью их владельцев. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">источники изображений и ИИ-визуалы</a>.</p>
+    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">Декоративные иллюстрации созданы с помощью ИИ Google Gemini (Nano Banana). Системные виды — реальные снимки интерфейса Archon OS с демонстрационными данными; названия третьих лиц остаются собственностью их владельцев. Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">источники изображений и ИИ-визуалы</a>.</p>
     <div class="shots-thumbs" data-reveal>
       <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
       <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>Флот агентов</span></button>
@@ -527,7 +527,7 @@
     <div class="feats" data-reveal>
       <div class="feat"><h3>AI Boardroom</h3><p>Решения принимаются в виде изолированных многоперспективных дебатов с перекрёстным допросом критика и синтезом, на базе 80 фреймворков от OKR до Pre-Mortem.</p></div>
       <div class="feat"><h3>Контроль затрат OmniRoute</h3><p>Центральный коммутатор направляет каждый запрос в локальные (Ollama, LM Studio) или облачные модели. Бюджеты проверяются до отправки и учитываются по модели и по задаче.</p></div>
-      <div class="feat"><h3>Zero-Egress &amp; GDPR</h3><p>Финансовые, HR, договорные и CRM-данные остаются на локальных моделях внутри изолированной сети Docker без маршрута в интернет. Отказ в закрытом состоянии — гарантия строгой локализации данных GDPR.</p></div>
+      <div class="feat"><h3>Zero-Egress и GDPR</h3><p>Финансовые, HR-, договорные и CRM-данные остаются на локальных моделях в изолированной сети Docker без маршрута в интернет. Fail-closed применяется только после включения: Zero-Egress по умолчанию выключен и требует локальных моделей или поставщиков из ЕС.</p></div>
       <div class="feat"><h3>Журнал аудита, EU AI Act &amp; GoBD</h3><p>Журнал с цепочкой хэшей SHA-256 защищённо от изменений фиксирует каждую отправку (провайдер, модель, хост), дополнен реестром рисков EU AI Act и экспортом процедурной документации GoBD в один клик.</p></div>
       <div class="feat"><h3>Хранилище Obsidian + RAG</h3><p>Ваше хранилище — база знаний. Документы и сканы распознаются через OCR, преобразуются в Markdown и индексируются в AnythingLLM/Chroma — локально.</p></div>
       <div class="feat"><h3>Kanban с гейтами согласования</h3><p>Задачи проходят гейт четырёх глаз: согласовать, отклонить с причиной или эскалировать по истечении срока. Сверху — триаж почты, CRM и ERP-модуль (alpha).</p></div>
@@ -587,7 +587,16 @@
 
     <div class="wrap b2b-section"><h3>Применение в регулируемых средах</h3><p><strong>Закупки:</strong> сравнения поставщиков и проекты договоров проходят через Passkey; бюджетные лимиты сдерживают расходы. <strong>Контроллинг:</strong> каждый вызов фиксируется с провайдером, моделью и стоимостью в цепочке хешей — экспорт GoBD в один клик. <strong>Комплаенс:</strong> матрица TOM, реестр рисков EU AI Act и согласие по § 201 StGB — это конфигурация, не дополнения.</p><p><strong>Экономика:</strong> лицензия 0 € (MIT). Вы отвечаете за инфраструктуру, настройку и эксплуатацию; Zero-Egress явно указан как опция, а не гарантия.</p></div>
 
-    
+    <h2 class="sec" id="wirtschaftlichkeit">Экономика и TCO</h2>
+<div class="table-wrap" data-reveal>
+  <table><thead><tr><th>Position</th><th>Archon OS</th><th>Hinweis</th></tr></thead><tbody><tr><td>License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证</td><td>0 € (MIT)</td><td>Keine Seat-Gebühren; Betrieb selbst verantwortet.</td></tr><tr><td>Hardware</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Betrieb</td><td>Docker, Backups, Updates, Passkeys</td><td>Eigene Verantwortung; keine externen Dienste nötig.</td></tr></tbody></table>
+</div>
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
+<h2 class="sec" id="use-cases-fachbereiche">Сценарии использования в компании</h2>
+<div class="feats" data-reveal><div class="feat"><h3>Закупки · Сравнение поставщиков</h3><p>Предложения сравниваются в хранилище; отправка только после подписи Passkey и дневного лимита токенов.</p></div><div class="feat"><h3>Контроллинг · Ликвидность</h3><p>План ликвидности на 13 недель; каждый вызов фиксируется с провайдером, моделью и стоимостью; экспорт GoBD в один клик.</p></div><div class="feat"><h3>Комплаенс · Доказательства</h3><p>Матрица TOM (ст. 32 GDPR), реестр рисков EU AI Act и доказательство удаления по ст. 17 в цепочке аудита.</p></div></div>
+<p class="status" style="margin-top:0.9rem">TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.</p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo">Demo anfragen</a></p>
+
 
     <h2 class="sec" id="install">Установка</h2>
     <div class="install" data-reveal>

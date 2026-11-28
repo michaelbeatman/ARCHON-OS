@@ -133,7 +133,7 @@
       },
       "featureList": [
         "AI Boardroom意思決定は、批判役の反対尋問と統合を伴う独立した多視点ディベートとして実行されます。OKR から Pre-Mortem まで 80 のフレームワークを利用できます。",
-        "Zero-Egress & GDPR財務・人事・契約・CRM データは、インターネット経路のない隔離 Docker ネットワーク内のローカルモデルに留まります。フェイルクローズにより、GDPR の厳格なデータ residency を保証します。",
+        "Zero-Egress と GDPR財務、人事、契約、CRM のデータは、インターネット経路のない隔離された Docker ネットワーク内のローカルモデルに留まります。フェイルクローズは有効化後にのみ適用されます。Zero-Egress は既定でオフで、ローカルモデルまたは EU の事業者が必要です。",
         "Atomic BudgetBank & 署名付き Warrantトークンとコストの予算は実行前にトランザクションで確保されます（BEGIN IMMEDIATE）。特権ツールには期限付き HMAC-SHA256 Warrant が必要です。",
         "パスキー / WebAuthn HITL高リスク承認（支払い、予算超過、破壊的操作）には Windows Hello、Touch ID、ハードウェアパスキーによる暗号署名が必要です。モデルは承認を偽造できません。 登録がない場合、このユーザーでは機能がオフになります。本番利用前に有効化してください。",
         "クラッシュ安全な Effect-Ledger外部副作用は、冪等キーと未知状態後の必須リコンシリエーションを備えたトランザクション台帳で追跡され、重複実行を防ぎます。",
@@ -428,7 +428,7 @@
         <figure id="shot-panel-6" role="tabpanel" aria-labelledby="shot-tab-6" tabindex="0" hidden data-shot-panel><img loading="lazy" src="../assets/img/org.webp" width="1024" height="559" alt="組織図と階層"><figcaption>組織階層 - インタラクティブなフロー図 &amp; 承認境界</figcaption></figure>
       </div>
     </div>
-    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">画像はデモデータを含み、Google Gemini (Nano Banana) でAI生成されています。第三者の社名・製品名は各権利者に属します。 Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">画像クレジットとAI生成ビジュアル</a>.</p>
+    <p class="shot-note" style="font-size:0.78rem;color:var(--fg-muted);margin:0.4rem 0 0">装飾イラストは Google Gemini (Nano Banana) で AI 生成されています。システム画面はデモデータを含む Archon OS UI の実際のスクリーンショットです。第三者の社名・製品名は各権利者に属します。 Details: <a href="https://github.com/michaelbeatman/ARCHON-OS/blob/main/THIRD_PARTY_LICENSES.md#8-website-visual-assets">画像クレジットとAI生成ビジュアル</a>.</p>
     <div class="shots-thumbs" data-reveal>
       <button type="button" class="shot-thumb is-active" data-shot-thumb aria-pressed="true" aria-controls="shot-panel-1"><img loading="lazy" src="../assets/img/mission_control.webp" width="200" height="109" alt=""><span>Mission Control</span></button>
       <button type="button" class="shot-thumb" data-shot-thumb aria-pressed="false" aria-controls="shot-panel-2"><img loading="lazy" src="../assets/img/kader.webp" width="200" height="109" alt=""><span>エージェント艦隊</span></button>
@@ -527,7 +527,7 @@
     <div class="feats" data-reveal>
       <div class="feat"><h3>AI Boardroom</h3><p>意思決定は、批判役の反対尋問と統合を伴う独立した多視点ディベートとして実行されます。OKR から Pre-Mortem まで 80 のフレームワークを利用できます。</p></div>
       <div class="feat"><h3>OmniRoute コスト管理</h3><p>中央のスイッチボードがすべてのリクエストをローカル（Ollama、LM Studio）またはクラウドモデルへ振り分けます。予算は送信前に確認され、モデル単位・タスク単位で割り当てられます。</p></div>
-      <div class="feat"><h3>Zero-Egress &amp; GDPR</h3><p>財務・人事・契約・CRM データは、インターネット経路のない隔離 Docker ネットワーク内のローカルモデルに留まります。フェイルクローズにより、GDPR の厳格なデータ residency を保証します。</p></div>
+      <div class="feat"><h3>Zero-Egress と GDPR</h3><p>財務、人事、契約、CRM のデータは、インターネット経路のない隔離された Docker ネットワーク内のローカルモデルに留まります。フェイルクローズは有効化後にのみ適用されます。Zero-Egress は既定でオフで、ローカルモデルまたは EU の事業者が必要です。</p></div>
       <div class="feat"><h3>監査ログ、EU AI Act &amp; GoBD</h3><p>SHA-256 ハッシュチェーンログがすべてのディスパッチ（プロバイダー、モデル、ホスト）を改ざん検知可能に記録し、EU AI Act リスク登録簿とワンクリックの GoBD 手続き文書エクスポートを備えます。</p></div>
       <div class="feat"><h3>Obsidian Vault + RAG</h3><p>Vault がナレッジベースです。文書やスキャンは OCR で読み取られ、Markdown に変換され、AnythingLLM/Chroma へローカルで索引付けされます。</p></div>
       <div class="feat"><h3>承認ゲート付き Kanban</h3><p>タスクは四眼ゲートを通過します：承認、理由付き却下、期限切れ時のエスカレーション。その上にメールトリアージ、CRM、ERP スイート（alpha）が載ります。</p></div>
@@ -587,7 +587,16 @@
 
     <div class="wrap b2b-section"><h3>規制環境での利用</h3><p><strong>調達：</strong>サプライヤー比較と契約草案は Passkey 承認を経由し、予算上限が支出を抑制します。<strong>管理会計：</strong>呼び出しごとにプロバイダー、モデル、コストをハッシュチェーンで記録 — GoBD エクスポートはワンクリック。<strong>コンプライアンス：</strong>TOM マトリクス、EU AI Act リスク登録簿、§ 201 StGB 同意ゲートは設定であり、追加オプションではありません。</p><p><strong>経済性：</strong>ライセンス 0 €（MIT）。インフラ・設定・運用はあなたの責任です。Zero-Egress は明示的なオプションであり、保証ではありません。</p></div>
 
-    
+    <h2 class="sec" id="wirtschaftlichkeit">経済性と TCO</h2>
+<div class="table-wrap" data-reveal>
+  <table><thead><tr><th>Position</th><th>Archon OS</th><th>Hinweis</th></tr></thead><tbody><tr><td>License / Licencia / Licence / Licença / Licentie / Лицензия / ライセンス / 라이선스 / 许可证</td><td>0 € (MIT)</td><td>Keine Seat-Gebühren; Betrieb selbst verantwortet.</td></tr><tr><td>Hardware</td><td>4–8 vCPU · 16–32 GB RAM · 8–12 GB VRAM</td><td>Lokale Modelle 7B–14B; Enterprise 32B–70B: 64 GB RAM / 24–48 GB VRAM.</td></tr><tr><td>Betrieb</td><td>Docker, Backups, Updates, Passkeys</td><td>Eigene Verantwortung; keine externen Dienste nötig.</td></tr></tbody></table>
+</div>
+<p style="margin:0.75rem 0 0;font-size:0.86rem;color:var(--fg-muted)"></p>
+<h2 class="sec" id="use-cases-fachbereiche">社内でのユースケース</h2>
+<div class="feats" data-reveal><div class="feat"><h3>調達 · サプライヤー比較</h3><p>提案を Vault で比較し、Passkey 署名後のみ送信。トークンの日次上限あり。</p></div><div class="feat"><h3>管理会計 · 流動性</h3><p>13週間の資金計画。各呼び出しをプロバイダー・モデル・コストと共に記録し、GoBD エクスポートはワンクリック。</p></div><div class="feat"><h3>コンプライアンス · 証跡</h3><p>TOM マトリクス（GDPR 第32条）、EU AI Act リスク登録簿、第17条削除証跡を監査チェーンに記録。</p></div></div>
+<p class="status" style="margin-top:0.9rem">TOM-Matrix nach Art. 32 DSGVO, EU-AI-Act-Risikoregister und Art.-17-Löschbeleg sind dokumentiert. Zero-Egress ist vollständig implementiert, aber standardmäßig deaktiviert.</p>
+<p style="margin-top:0.9rem"><a class="btn primary" href="mailto:archon.os.system@gmail.com?subject=Archon%20OS%20Demo">Demo anfragen</a></p>
+
 
     <h2 class="sec" id="install">インストール</h2>
     <div class="install" data-reveal>

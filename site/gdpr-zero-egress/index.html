@@ -49,7 +49,7 @@
         {
           "@type": "ListItem",
           "position": 2,
-          "name": "Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD.",
+          "name": "Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD – once enabled (default: off).",
           "item": "https://michaelbeatman.github.io/ARCHON-OS/gdpr-zero-egress/"
         }
       ]
@@ -57,7 +57,7 @@
     {
       "@type": "TechArticle",
       "@id": "https://michaelbeatman.github.io/ARCHON-OS/gdpr-zero-egress/#article",
-      "headline": "Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD.",
+      "headline": "Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD – once enabled (default: off).",
       "name": "GDPR, Zero-Egress & EU AI Act Compliance in Archon OS",
       "description": "How Archon OS enforces GDPR data residency via fail-closed Docker Zero-Egress, WebAuthn Passkey HITL, EU AI Act risk registry & SHA-256 audit trails.",
       "inLanguage": "en",
@@ -206,7 +206,7 @@
       </nav>
       <div class="hero-inner">
         <div class="hero-eyebrow"><span class="pulse-dot" aria-hidden="true"></span><span>GDPR &amp; Compliance &middot; v0.6.0.2</span></div>
-        <h1>Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD.</h1>
+        <h1>Fail-closed Zero-Egress for GDPR, EU AI Act, and GoBD – once enabled (default: off).</h1>
         <p class="hero-lead">Data sovereignty cannot rely on prompt instructions. Archon OS enforces hard Docker network boundaries, cryptographic human sign-offs, and tamper-evident SHA-256 audit chains on your own infrastructure.</p>
         <div class="btnrow">
           <a class="btn primary" href="../#install">Quick Start (Docker)</a>
@@ -223,7 +223,7 @@
   <table>
     <thead><tr><th>Regulatory Requirement</th><th>Archon OS Enforcement</th><th>Verifiable Artifact</th></tr></thead>
     <tbody>
-      <tr><td><strong>GDPR Data Residency</strong></td><td>OmniRoute fail-closed Zero-Egress inside an <code>internal: true</code> Docker network with no internet route</td><td>Zero outbound cloud packets for finance, HR, contracts &amp; CRM</td></tr>
+      <tr><td><strong>GDPR Data Residency</strong></td><td>OmniRoute fail-closed Zero-Egress inside an <code>internal: true</code> Docker network with no internet route</td><td>With Zero-Egress enabled: no outbound cloud packets for finance, HR, contracts &amp; CRM (shipped default: off)</td></tr>
       <tr><td><strong>Right to Erasure (GDPR Art. 17)</strong></td><td>Built-in erasure pipeline across <code>business.db</code>, <code>ops.db</code>, and local vector storage</td><td>Recorded erasure receipt in the audit chain</td></tr>
       <tr><td><strong>Human Oversight (EU AI Act Art. 14)</strong></td><td>WebAuthn / Passkey HITL gates (Windows Hello, Touch ID, hardware keys) for high-risk actions</td><td>Cryptographic signature unforgeable by any LLM</td></tr>
       <tr><td><strong>EU AI Act Risk Classification</strong></td><td>Integrated EU AI Act risk registry + mandatory regulated-domain guardrails (legal, tax, medical)</td><td>Exportable risk &amp; specialist scope register</td></tr>
